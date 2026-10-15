@@ -2,7 +2,6 @@ package dev.mikoto2000.rei;
 
 import java.io.IOException;
 import java.util.Properties;
-
 import picocli.CommandLine.IVersionProvider;
 
 /** Backend version, available before Spring starts and in the legacy Shell. */
@@ -11,7 +10,9 @@ public final class ReiVersionProvider implements IVersionProvider {
   private final String implementationVersion;
 
   public ReiVersionProvider() {
-    this(ReiVersionProvider.class.getClassLoader(), ReiVersionProvider.class.getPackage().getImplementationVersion());
+    this(
+        ReiVersionProvider.class.getClassLoader(),
+        ReiVersionProvider.class.getPackage().getImplementationVersion());
   }
 
   ReiVersionProvider(ClassLoader classLoader, String implementationVersion) {

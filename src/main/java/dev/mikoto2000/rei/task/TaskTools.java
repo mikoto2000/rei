@@ -2,11 +2,9 @@ package dev.mikoto2000.rei.task;
 
 import java.time.LocalDate;
 import java.util.List;
-
+import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
-
-import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
@@ -15,11 +13,23 @@ public class TaskTools {
   private final TaskService taskService;
   private dev.mikoto2000.rei.event.AgentEventPublisher publisher;
   private dev.mikoto2000.rei.event.AgentEventFactory events;
-  @org.springframework.beans.factory.annotation.Autowired(required=false)
-  public void setEvents(dev.mikoto2000.rei.event.AgentEventPublisher publisher,dev.mikoto2000.rei.event.AgentEventFactory events){this.publisher=publisher;this.events=events;}
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setEvents(
+      dev.mikoto2000.rei.event.AgentEventPublisher publisher,
+      dev.mikoto2000.rei.event.AgentEventFactory events) {
+    this.publisher = publisher;
+    this.events = events;
+  }
+
   private void publish(java.util.function.Supplier<dev.mikoto2000.rei.event.AgentEvent> event) {
-    if(publisher!=null&&events!=null)try{publisher.publish(event.get());}
-    catch(RuntimeException failure){org.slf4j.LoggerFactory.getLogger(getClass()).warn("Task lifecycle delivery failed: {}",failure.getClass().getSimpleName());}
+    if (publisher != null && events != null)
+      try {
+        publisher.publish(event.get());
+      } catch (RuntimeException failure) {
+        org.slf4j.LoggerFactory.getLogger(getClass())
+            .warn("Task lifecycle delivery failed: {}", failure.getClass().getSimpleName());
+      }
   }
 
   @Tool(name = "taskList", description = "未完了タスクを一覧します")
@@ -30,16 +40,17 @@ public class TaskTools {
 
   @Tool(name = "taskCreate", description = "タスクを作成します。dueDate は yyyy-MM-dd 形式です。")
   Task taskCreate(String title, String dueDate, int priority) {
-    IO.println(String.format("タスク %s を作成するよ。期限=%s、優先度=%d",
-        title,
-        dueDate,
-        priority));
+    IO.println(String.format("タスク %s を作成するよ。期限=%s、優先度=%d", title, dueDate, priority));
     try {
-      Task created=taskService.add(
-          title,
-          dueDate == null || dueDate.isBlank() ? null : LocalDate.parse(dueDate),
-          priority);
-      publish(()->events.taskCreated(Long.toString(created.id()),null,created.title(),created.status().name()));
+      Task created =
+          taskService.add(
+              title,
+              dueDate == null || dueDate.isBlank() ? null : LocalDate.parse(dueDate),
+              priority);
+      publish(
+          () ->
+              events.taskCreated(
+                  Long.toString(created.id()), null, created.title(), created.status().name()));
       return created;
     } catch (RuntimeException e) {
       IO.println("[error] " + userFacingMessage(e, "Google Tasks へのタスク追加に失敗しました"));
@@ -47,10 +58,14 @@ public class TaskTools {
     }
   }
 
-  @Tool(name = "taskUpdate", description = "タスクを更新します。title, dueDate, priority のうち必要な項目だけ指定できます。dueDate は yyyy-MM-dd 形式です。")
+  @Tool(
+      name = "taskUpdate",
+      description =
+          "タスクを更新します。title, dueDate, priority のうち必要な項目だけ指定できます。dueDate は yyyy-MM-dd 形式です。")
   Task taskUpdate(long id, String title, String dueDate, Integer priority) {
-    IO.println(String.format("タスク %d を更新するよ。title=%s、dueDate=%s、priority=%s",
-        id, title, dueDate, priority));
+    IO.println(
+        String.format(
+            "タスク %d を更新するよ。title=%s、dueDate=%s、priority=%s", id, title, dueDate, priority));
     return taskService.update(
         id,
         title,
@@ -61,23 +76,33 @@ public class TaskTools {
   @Tool(name = "taskComplete", description = "タスクを完了にします")
   Task taskComplete(long id) {
     IO.println(String.format("タスク %d を完了にするよ", id));
-    publish(()->events.taskStarted(Long.toString(id)));
+    publish(() -> events.taskStarted(Long.toString(id)));
     try {
-      Task completed=taskService.complete(id);
-      if(completed==null||completed.id()!=id||completed.status()!=TaskStatus.DONE)throw new IllegalStateException("Task completion was not confirmed");
-      publish(()->events.taskCompleted(Long.toString(id),null));return completed;
-    }catch(RuntimeException failure) {
-      publish(()->events.taskFailed(Long.toString(id),new dev.mikoto2000.rei.event.ErrorInformation(failure.getClass().getSimpleName(),"Task completion operation failed",null)));
+      Task completed = taskService.complete(id);
+      if (completed == null || completed.id() != id || completed.status() != TaskStatus.DONE)
+        throw new IllegalStateException("Task completion was not confirmed");
+      publish(() -> events.taskCompleted(Long.toString(id), null));
+      return completed;
+    } catch (RuntimeException failure) {
+      publish(
+          () ->
+              events.taskFailed(
+                  Long.toString(id),
+                  new dev.mikoto2000.rei.event.ErrorInformation(
+                      failure.getClass().getSimpleName(),
+                      "Task completion operation failed",
+                      null)));
       throw failure;
     }
   }
 
-  @Tool(name = "taskUpdateDeadline", description = "タスクの期限を更新します。dueDate は yyyy-MM-dd 形式です。null または空文字で期限をクリアします。")
+  @Tool(
+      name = "taskUpdateDeadline",
+      description = "タスクの期限を更新します。dueDate は yyyy-MM-dd 形式です。null または空文字で期限をクリアします。")
   Task taskUpdateDeadline(long id, String dueDate) {
     IO.println(String.format("タスク %d の期限を %s に更新するよ", id, dueDate));
     return taskService.updateDeadline(
-        id,
-        dueDate == null || dueDate.isBlank() ? null : LocalDate.parse(dueDate));
+        id, dueDate == null || dueDate.isBlank() ? null : LocalDate.parse(dueDate));
   }
 
   @Tool(name = "taskDelete", description = "タスクを削除します")

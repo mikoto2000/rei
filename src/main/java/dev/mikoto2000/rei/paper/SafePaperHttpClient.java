@@ -8,25 +8,37 @@ import org.springframework.stereotype.Component;
 public class SafePaperHttpClient implements PaperHttpClient {
   private final PaperProperties config;
   private final dev.mikoto2000.rei.http.SafeHttpFetcher fetcher;
+
   public SafePaperHttpClient(PaperProperties config) {
     this(config, new dev.mikoto2000.rei.http.SafeHttpFetcher());
   }
+
   @org.springframework.beans.factory.annotation.Autowired
-  public SafePaperHttpClient(PaperProperties config, dev.mikoto2000.rei.http.SafeHttpFetcher fetcher) {
-    config.validate(); this.config = config; this.fetcher = fetcher;
+  public SafePaperHttpClient(
+      PaperProperties config, dev.mikoto2000.rei.http.SafeHttpFetcher fetcher) {
+    config.validate();
+    this.config = config;
+    this.fetcher = fetcher;
   }
+
   public static void validateUri(URI uri) {
-    try { dev.mikoto2000.rei.http.PublicNetworkPolicy.validate(uri); }
-    catch (dev.mikoto2000.rei.http.HttpFetchException error) {
+    try {
+      dev.mikoto2000.rei.http.PublicNetworkPolicy.validate(uri);
+    } catch (dev.mikoto2000.rei.http.HttpFetchException error) {
       throw new PaperException(PaperException.Code.PDF_DOWNLOAD_FAILED, "許可されない URL");
     }
   }
+
   public static boolean isPublic(InetAddress address) {
     return dev.mikoto2000.rei.http.PublicNetworkPolicy.isPublic(address);
   }
+
   static final class PublicResolverGroup extends dev.mikoto2000.rei.http.ValidatingResolverGroup {
-    PublicResolverGroup() { super(SafePaperHttpClient::isPublic, java.util.concurrent.ConcurrentHashMap.newKeySet()); }
+    PublicResolverGroup() {
+      super(SafePaperHttpClient::isPublic, java.util.concurrent.ConcurrentHashMap.newKeySet());
+    }
   }
+
   record Response(int status, String location, String retryAfter, byte[] body) {}
 
   @Override
@@ -98,26 +110,53 @@ public class SafePaperHttpClient implements PaperHttpClient {
   }
 
   protected Response exchange(URI uri, String type, int maxBytes, PaperOperation op) {
-    int decoded = "application/pdf".equals(type) ? config.getMaxDecodedPdfBytes() : config.getMaxDecodedResponseBytes();
-    var policy = new dev.mikoto2000.rei.http.HttpFetchPolicy(maxBytes, decoded,
-        config.getConnectTimeout(), config.getReadTimeout(), config.getTimeout(), config.getMaxRedirects(), type, null, false);
+    int decoded =
+        "application/pdf".equals(type)
+            ? config.getMaxDecodedPdfBytes()
+            : config.getMaxDecodedResponseBytes();
+    var policy =
+        new dev.mikoto2000.rei.http.HttpFetchPolicy(
+            maxBytes,
+            decoded,
+            config.getConnectTimeout(),
+            config.getReadTimeout(),
+            config.getTimeout(),
+            config.getMaxRedirects(),
+            type,
+            null,
+            false);
     var operation = new dev.mikoto2000.rei.http.FetchOperation(op::check, op.deadlineNanos());
     try {
-      var response = fetcher.exchange(uri, Map.of("User-Agent", config.getUserAgent(), "Accept", type),
-          policy, operation, dev.mikoto2000.rei.http.HttpFetchObserver.NONE, false);
-      return new Response(response.status(), response.header("location"), response.header("retry-after"), response.body());
+      var response =
+          fetcher.exchange(
+              uri,
+              Map.of("User-Agent", config.getUserAgent(), "Accept", type),
+              policy,
+              operation,
+              dev.mikoto2000.rei.http.HttpFetchObserver.NONE,
+              false);
+      return new Response(
+          response.status(),
+          response.header("location"),
+          response.header("retry-after"),
+          response.body());
     } catch (dev.mikoto2000.rei.http.HttpFetchException failed) {
       if (failed.code() == dev.mikoto2000.rei.http.HttpFetchException.Code.NETWORK_ERROR)
-        throw new PaperException(PaperException.Code.SEARCH_FAILED, failed.code().name(),
+        throw new PaperException(
+            PaperException.Code.SEARCH_FAILED,
+            failed.code().name(),
             new java.util.concurrent.ExecutionException(failed));
-      boolean timeout = switch (failed.code()) {
-        case CONNECT_TIMEOUT, READ_TIMEOUT, TOTAL_TIMEOUT -> true;
-        default -> false;
-      };
-      throw new PaperException(timeout ? PaperException.Code.PROVIDER_TIMEOUT : PaperException.Code.PDF_DOWNLOAD_FAILED,
+      boolean timeout =
+          switch (failed.code()) {
+            case CONNECT_TIMEOUT, READ_TIMEOUT, TOTAL_TIMEOUT -> true;
+            default -> false;
+          };
+      throw new PaperException(
+          timeout ? PaperException.Code.PROVIDER_TIMEOUT : PaperException.Code.PDF_DOWNLOAD_FAILED,
           failed.code().name());
     }
   }
+
   private PaperException failure(String message) {
     return new PaperException(PaperException.Code.PDF_DOWNLOAD_FAILED, message);
   }

@@ -1,16 +1,14 @@
 package dev.mikoto2000.rei.briefing;
 
+import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
 import java.util.ArrayList;
 import java.util.List;
-
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
-import dev.mikoto2000.rei.core.service.ModelHolderService;
-import dev.mikoto2000.rei.llm.LlmFeature;
-import dev.mikoto2000.rei.llm.LlmModelProvider;
 
 @Component
 public class AiBriefingNarrator implements BriefingNarrator {
@@ -30,11 +28,13 @@ public class AiBriefingNarrator implements BriefingNarrator {
 
   @Override
   public BriefingNarration narrate(BriefingContext context) {
-    Prompt prompt = new Prompt(
-        buildPrompt(context),
-        modelProvider.chatOptions(LlmFeature.BRIEFING, modelHolderService.get()));
+    Prompt prompt =
+        new Prompt(
+            buildPrompt(context),
+            modelProvider.chatOptions(LlmFeature.BRIEFING, modelHolderService.get()));
 
-    String response = modelProvider.chatModel(LlmFeature.BRIEFING).call(prompt).getResult().getOutput().getText();
+    String response =
+        modelProvider.chatModel(LlmFeature.BRIEFING).call(prompt).getResult().getOutput().getText();
     return parse(response);
   }
 
@@ -61,7 +61,8 @@ public class AiBriefingNarrator implements BriefingNarrator {
 
         関連文書:
         %s
-        """.formatted(
+        """
+        .formatted(
             context.date(),
             formatEvents(context.events()),
             formatTasks(context.openTasks()),
@@ -69,7 +70,8 @@ public class AiBriefingNarrator implements BriefingNarrator {
             formatDocuments(context.relatedDocuments()));
   }
 
-  private String formatEvents(List<dev.mikoto2000.rei.googlecalendar.GoogleCalendarEventSummary> events) {
+  private String formatEvents(
+      List<dev.mikoto2000.rei.googlecalendar.GoogleCalendarEventSummary> events) {
     if (events.isEmpty()) {
       return "- なし";
     }
@@ -84,7 +86,14 @@ public class AiBriefingNarrator implements BriefingNarrator {
       return "- なし";
     }
     return tasks.stream()
-        .map(task -> "- " + task.id() + " | " + (task.dueDate() == null ? "" : task.dueDate()) + " | " + task.title())
+        .map(
+            task ->
+                "- "
+                    + task.id()
+                    + " | "
+                    + (task.dueDate() == null ? "" : task.dueDate())
+                    + " | "
+                    + task.title())
         .reduce((left, right) -> left + "\n" + right)
         .orElse("- なし");
   }

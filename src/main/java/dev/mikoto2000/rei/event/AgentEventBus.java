@@ -3,8 +3,7 @@ package dev.mikoto2000.rei.event;
 /**
  * Agent Event Bus。
  *
- * <p>複数 Listener の登録・購読解除・イベント発行を担う。
- * 同一プロセス内で完結する。</p>
+ * <p>複数 Listener の登録・購読解除・イベント発行を担う。 同一プロセス内で完結する。
  */
 public interface AgentEventBus {
 
@@ -15,16 +14,27 @@ public interface AgentEventBus {
    * @return 購読解除用の Subscription
    */
   Subscription subscribe(AgentEventListener listener);
-  default Subscription subscribeBoundary(AgentEventListener listener) { return subscribe(listener); }
+
+  default Subscription subscribeBoundary(AgentEventListener listener) {
+    return subscribe(listener);
+  }
 
   /** Atomically snapshots replay and registers a live listener beyond the snapshot boundary. */
-  default ReplaySubscription subscribe(String runId, long fromSequence, AgentEventListener listener) {
+  default ReplaySubscription subscribe(
+      String runId, long fromSequence, AgentEventListener listener) {
     throw new UnsupportedOperationException("Replay is not supported by this event bus");
   }
-  record ReplaySubscription(java.util.List<AgentEvent> replay, Subscription subscription,
-      long latestSequence, Long terminalSequence) {}
+
+  record ReplaySubscription(
+      java.util.List<AgentEvent> replay,
+      Subscription subscription,
+      long latestSequence,
+      Long terminalSequence) {}
+
   default void purgeRun(String runId) {}
+
   default void purgeExpired() {}
+
   default void purgeExpired(java.util.Set<String> protectedRuns) {}
 
   /**
@@ -37,9 +47,7 @@ public interface AgentEventBus {
   /** これまでに割り当てた最新の sequence。未発行の場合は 0。 */
   long lastSequence();
 
-  /**
-   * 購読解除を表すハンドル。
-   */
+  /** 購読解除を表すハンドル。 */
   interface Subscription {
     void unsubscribe();
   }

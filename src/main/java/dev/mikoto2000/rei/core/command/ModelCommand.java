@@ -1,14 +1,12 @@
 package dev.mikoto2000.rei.core.command;
 
+import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelUnloadService;
 import java.util.Optional;
-
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
-import dev.mikoto2000.rei.core.service.ModelHolderService;
-import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelUnloadService;
-import lombok.RequiredArgsConstructor;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 
@@ -38,7 +36,9 @@ public class ModelCommand implements Runnable {
         modelUnloadService.unload(currentModel);
       } catch (RuntimeException e) {
         log.warn("Failed to unload current model: {}", currentModel, e);
-        IO.println("[warning] 旧モデルの解放に失敗しました。モデル切替は続行します。 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));
+        IO.println(
+            "[warning] 旧モデルの解放に失敗しました。モデル切替は続行します。 原因: "
+                + dev.mikoto2000.rei.event.FailureMessages.describe(e));
       }
     }
 

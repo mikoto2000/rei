@@ -8,21 +8,23 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 
 class WebPageSummarizerServiceTest {
 
   @Test
   void fetchesExtractsSummarizesAndStoresConversationHistoryInOrder() {
-    RecordingFetcher fetcher = new RecordingFetcher(UrlFetch.success("""
+    RecordingFetcher fetcher =
+        new RecordingFetcher(
+            UrlFetch.success(
+                """
         <html><body><article>Article body only</article><nav>menu</nav></body></html>
         """));
     RecordingExtractor extractor = new RecordingExtractor("Article body only");
     RecordingSummarizationClient summarizationClient = new RecordingSummarizationClient("要約結果");
     RecordingConversationHistory history = new RecordingConversationHistory();
-    WebPageSummarizerService service = new DefaultWebPageSummarizerService(
-        fetcher, extractor, summarizationClient, history);
+    WebPageSummarizerService service =
+        new DefaultWebPageSummarizerService(fetcher, extractor, summarizationClient, history);
 
     SummaryResult result = service.summarize(URI.create("https://example.com/article"));
 
@@ -30,22 +32,25 @@ class WebPageSummarizerServiceTest {
     assertEquals(URI.create("https://example.com/article"), fetcher.uri);
     assertEquals("Article body only", summarizationClient.content);
     assertFalse(summarizationClient.content.contains("<article>"));
-    assertEquals(List.of(
-        "user:次のWebページを要約してください: https://example.com/article",
-        "assistant:要約結果"), history.messages);
+    assertEquals(
+        List.of("user:次のWebページを要約してください: https://example.com/article", "assistant:要約結果"),
+        history.messages);
   }
 
   @Test
   void doesNotCallLlmWhenFetchFails() {
     RecordingSummarizationClient summarizationClient = new RecordingSummarizationClient("unused");
-    WebPageSummarizerService service = new DefaultWebPageSummarizerService(
-        new RecordingFetcher(UrlFetch.failure("NETWORK_ERROR", "timeout")),
-        new RecordingExtractor("unused"),
-        summarizationClient,
-        new RecordingConversationHistory());
+    WebPageSummarizerService service =
+        new DefaultWebPageSummarizerService(
+            new RecordingFetcher(UrlFetch.failure("NETWORK_ERROR", "timeout")),
+            new RecordingExtractor("unused"),
+            summarizationClient,
+            new RecordingConversationHistory());
 
-    SummarizationException error = assertThrows(SummarizationException.class,
-        () -> service.summarize(URI.create("https://example.com/article")));
+    SummarizationException error =
+        assertThrows(
+            SummarizationException.class,
+            () -> service.summarize(URI.create("https://example.com/article")));
 
     assertEquals("NETWORK_ERROR", error.code());
     assertEquals(0, summarizationClient.calls);
@@ -54,14 +59,17 @@ class WebPageSummarizerServiceTest {
   @Test
   void doesNotCallLlmWhenExtractedContentIsEmpty() {
     RecordingSummarizationClient summarizationClient = new RecordingSummarizationClient("unused");
-    WebPageSummarizerService service = new DefaultWebPageSummarizerService(
-        new RecordingFetcher(UrlFetch.success("<html></html>")),
-        new RecordingExtractor(" "),
-        summarizationClient,
-        new RecordingConversationHistory());
+    WebPageSummarizerService service =
+        new DefaultWebPageSummarizerService(
+            new RecordingFetcher(UrlFetch.success("<html></html>")),
+            new RecordingExtractor(" "),
+            summarizationClient,
+            new RecordingConversationHistory());
 
-    SummarizationException error = assertThrows(SummarizationException.class,
-        () -> service.summarize(URI.create("https://example.com/article")));
+    SummarizationException error =
+        assertThrows(
+            SummarizationException.class,
+            () -> service.summarize(URI.create("https://example.com/article")));
 
     assertEquals("EMPTY_CONTENT", error.code());
     assertEquals(0, summarizationClient.calls);
@@ -72,14 +80,17 @@ class WebPageSummarizerServiceTest {
     RecordingConversationHistory history = new RecordingConversationHistory();
     RecordingSummarizationClient summarizationClient = new RecordingSummarizationClient("unused");
     summarizationClient.failure = new IllegalStateException("llm down");
-    WebPageSummarizerService service = new DefaultWebPageSummarizerService(
-        new RecordingFetcher(UrlFetch.success("<article>Article body</article>")),
-        new RecordingExtractor("Article body"),
-        summarizationClient,
-        history);
+    WebPageSummarizerService service =
+        new DefaultWebPageSummarizerService(
+            new RecordingFetcher(UrlFetch.success("<article>Article body</article>")),
+            new RecordingExtractor("Article body"),
+            summarizationClient,
+            history);
 
-    SummarizationException error = assertThrows(SummarizationException.class,
-        () -> service.summarize(URI.create("https://example.com/article")));
+    SummarizationException error =
+        assertThrows(
+            SummarizationException.class,
+            () -> service.summarize(URI.create("https://example.com/article")));
 
     assertEquals("LLM_ERROR", error.code());
     assertEquals(List.of("user:次のWebページを要約してください: https://example.com/article"), history.messages);

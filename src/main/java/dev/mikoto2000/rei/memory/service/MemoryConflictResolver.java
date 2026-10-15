@@ -1,15 +1,13 @@
 package dev.mikoto2000.rei.memory.service;
 
+import dev.mikoto2000.rei.memory.model.Memory;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 import java.util.stream.Collectors;
-
 import org.springframework.stereotype.Component;
-
-import dev.mikoto2000.rei.memory.model.Memory;
 
 @Component
 public class MemoryConflictResolver {

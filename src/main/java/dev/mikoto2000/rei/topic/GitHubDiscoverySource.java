@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.topic;
 
 import java.util.List;
-
 import org.springframework.stereotype.Component;
 
 @Component

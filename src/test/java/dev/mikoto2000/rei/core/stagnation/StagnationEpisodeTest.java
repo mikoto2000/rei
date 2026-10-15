@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core.stagnation;
 
 import static org.junit.jupiter.api.Assertions.*;
+
 import org.junit.jupiter.api.Test;
 
 class StagnationEpisodeTest {

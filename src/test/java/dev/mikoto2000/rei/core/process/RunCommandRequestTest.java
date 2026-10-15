@@ -16,13 +16,16 @@ class RunCommandRequestTest {
   @Test
   void acceptsEveryExecutionModeCaseInsensitively() {
     assertEquals(CommandExecutionMode.AUTO, new RunCommandRequest("cmd", "AUTO", null).mode());
-    assertEquals(CommandExecutionMode.FOREGROUND, new RunCommandRequest("cmd", "foreground", null).mode());
-    assertEquals(CommandExecutionMode.BACKGROUND, new RunCommandRequest("cmd", "background", null).mode());
+    assertEquals(
+        CommandExecutionMode.FOREGROUND, new RunCommandRequest("cmd", "foreground", null).mode());
+    assertEquals(
+        CommandExecutionMode.BACKGROUND, new RunCommandRequest("cmd", "background", null).mode());
   }
 
   @Test
   void rejectsBlankCommandAndUnknownMode() {
     assertThrows(IllegalArgumentException.class, () -> new RunCommandRequest(" ", "auto", null));
-    assertThrows(IllegalArgumentException.class, () -> new RunCommandRequest("cmd", "detached", null));
+    assertThrows(
+        IllegalArgumentException.class, () -> new RunCommandRequest("cmd", "detached", null));
   }
 }

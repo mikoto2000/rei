@@ -1,5 +1,11 @@
 package dev.mikoto2000.rei.core.process;
 
+import dev.mikoto2000.rei.core.service.SystemShellService;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
+import dev.mikoto2000.rei.temporal.MonotonicTimeSource;
+import jakarta.annotation.PreDestroy;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
@@ -10,7 +16,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
@@ -19,16 +24,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
-import dev.mikoto2000.rei.core.service.SystemShellService;
-import dev.mikoto2000.rei.event.AgentEventFactory;
-import dev.mikoto2000.rei.event.AgentEventPublisher;
-import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
-import dev.mikoto2000.rei.temporal.MonotonicTimeSource;
-import jakarta.annotation.PreDestroy;
 
 @Component
 public class BackgroundProcessManager {
@@ -41,16 +38,23 @@ public class BackgroundProcessManager {
   private final MonotonicTimeSource monotonicTimeSource;
   private final AgentEventFactory eventFactory;
   private final AgentEventPublisher eventPublisher;
-  private final ConcurrentMap<String, ManagedBackgroundProcess> processes = new ConcurrentHashMap<>();
-  private final ExecutorService executor = Executors.newCachedThreadPool(r -> {
-    Thread thread = new Thread(r, "rei-background-process");
-    thread.setDaemon(true);
-    return thread;
-  });
+  private final ConcurrentMap<String, ManagedBackgroundProcess> processes =
+      new ConcurrentHashMap<>();
+  private final ExecutorService executor =
+      Executors.newCachedThreadPool(
+          r -> {
+            Thread thread = new Thread(r, "rei-background-process");
+            thread.setDaemon(true);
+            return thread;
+          });
 
   @Autowired
-  public BackgroundProcessManager(SystemShellService systemShellService, Clock clock,
-      MonotonicTimeSource monotonicTimeSource, AgentEventFactory eventFactory, AgentEventPublisher eventPublisher) {
+  public BackgroundProcessManager(
+      SystemShellService systemShellService,
+      Clock clock,
+      MonotonicTimeSource monotonicTimeSource,
+      AgentEventFactory eventFactory,
+      AgentEventPublisher eventPublisher) {
     this.systemShellService = systemShellService;
     this.clock = clock;
     this.monotonicTimeSource = monotonicTimeSource;
@@ -58,9 +62,14 @@ public class BackgroundProcessManager {
     this.eventPublisher = eventPublisher;
   }
 
-  public BackgroundProcessManager(SystemShellService systemShellService, Clock clock,
-      MonotonicTimeSource monotonicTimeSource) {
-    this(systemShellService, clock, monotonicTimeSource, new AgentEventFactory(clock), new InMemoryAgentEventBus());
+  public BackgroundProcessManager(
+      SystemShellService systemShellService, Clock clock, MonotonicTimeSource monotonicTimeSource) {
+    this(
+        systemShellService,
+        clock,
+        monotonicTimeSource,
+        new AgentEventFactory(clock),
+        new InMemoryAgentEventBus());
   }
 
   public BackgroundProcessManager(SystemShellService systemShellService) {
@@ -78,40 +87,76 @@ public class BackgroundProcessManager {
   BackgroundProcessSnapshot spawnCommandLine(List<String> commandLine, Path workingDirectory) {
     String processId = "proc-" + UUID.randomUUID().toString().substring(0, 8);
     try {
-      Process process = new ProcessBuilder(commandLine)
-          .directory(workingDirectory.toFile())
-          .start();
-      ManagedBackgroundProcess managedProcess = new ManagedBackgroundProcess(
-          processId, process, commandLine, workingDirectory, LOG_LINE_CAPACITY, Instant.now(clock),
-          monotonicTimeSource.nanoTime());
+      Process process =
+          new ProcessBuilder(commandLine).directory(workingDirectory.toFile()).start();
+      ManagedBackgroundProcess managedProcess =
+          new ManagedBackgroundProcess(
+              processId,
+              process,
+              commandLine,
+              workingDirectory,
+              LOG_LINE_CAPACITY,
+              Instant.now(clock),
+              monotonicTimeSource.nanoTime());
       processes.put(processId, managedProcess);
       managedProcess.status.set(BackgroundProcessStatus.RUNNING);
-      eventPublisher.publish(eventFactory.backgroundProcessStarted(processId, process.pid(),
-          String.join(" ", commandLine), workingDirectory.toAbsolutePath().normalize().toString()));
-      managedProcess.stdoutReader = executor.submit(() -> readLines(process.getInputStream(), managedProcess.stdout));
-      managedProcess.stderrReader = executor.submit(() -> readLines(process.getErrorStream(), managedProcess.stderr));
+      eventPublisher.publish(
+          eventFactory.backgroundProcessStarted(
+              processId,
+              process.pid(),
+              String.join(" ", commandLine),
+              workingDirectory.toAbsolutePath().normalize().toString()));
+      managedProcess.stdoutReader =
+          executor.submit(() -> readLines(process.getInputStream(), managedProcess.stdout));
+      managedProcess.stderrReader =
+          executor.submit(() -> readLines(process.getErrorStream(), managedProcess.stderr));
       CompletableFuture.runAsync(() -> watchProcess(managedProcess), executor);
       return snapshot(managedProcess, DEFAULT_TAIL_LINES, "started");
     } catch (IOException e) {
-      eventPublisher.publish(eventFactory.backgroundProcessFailed(processId, String.join(" ", commandLine), e));
-      return new BackgroundProcessSnapshot(processId, -1, BackgroundProcessStatus.FAILED, null, null, null,
-          0.0d, List.of(), List.of(), false, e.getMessage());
+      eventPublisher.publish(
+          eventFactory.backgroundProcessFailed(processId, String.join(" ", commandLine), e));
+      return new BackgroundProcessSnapshot(
+          processId,
+          -1,
+          BackgroundProcessStatus.FAILED,
+          null,
+          null,
+          null,
+          0.0d,
+          List.of(),
+          List.of(),
+          false,
+          e.getMessage());
     }
   }
 
   /** 同じ管理対象 Process を指定時間だけ待つ。timeout しても終了しない。 */
-  public BackgroundProcessSnapshot await(String processId, Duration wait) throws InterruptedException {
+  public BackgroundProcessSnapshot await(String processId, Duration wait)
+      throws InterruptedException {
     ManagedBackgroundProcess managedProcess = processes.get(processId);
     if (managedProcess == null) {
-      return new BackgroundProcessSnapshot(processId, -1, BackgroundProcessStatus.FAILED, null, null, null,
-          0.0d, List.of(), List.of(), false, "process not found");
+      return new BackgroundProcessSnapshot(
+          processId,
+          -1,
+          BackgroundProcessStatus.FAILED,
+          null,
+          null,
+          null,
+          0.0d,
+          List.of(),
+          List.of(),
+          false,
+          "process not found");
     }
-    boolean completed = managedProcess.process.waitFor(Math.max(0L, wait.toMillis()), TimeUnit.MILLISECONDS);
+    boolean completed =
+        managedProcess.process.waitFor(Math.max(0L, wait.toMillis()), TimeUnit.MILLISECONDS);
     if (!completed && !managedProcess.process.isAlive()) completed = true;
     if (completed) {
       managedProcess.exitCode.compareAndSet(null, managedProcess.process.exitValue());
-      managedProcess.endedAt = managedProcess.endedAt == null ? Instant.now(clock) : managedProcess.endedAt;
-      managedProcess.status.compareAndSet(BackgroundProcessStatus.RUNNING, BackgroundProcessStatus.EXITED);
+      managedProcess.endedAt =
+          managedProcess.endedAt == null ? Instant.now(clock) : managedProcess.endedAt;
+      managedProcess.status.compareAndSet(
+          BackgroundProcessStatus.RUNNING, BackgroundProcessStatus.EXITED);
       awaitReader(managedProcess.stdoutReader);
       awaitReader(managedProcess.stderrReader);
       publishTerminalEvent(managedProcess);
@@ -122,32 +167,59 @@ public class BackgroundProcessManager {
 
   /** foreground 解決した終了済み Process を registry から除く。 */
   public void forgetCompleted(String processId) {
-    processes.computeIfPresent(processId, (id, process) -> process.process.isAlive() ? process : null);
+    processes.computeIfPresent(
+        processId, (id, process) -> process.process.isAlive() ? process : null);
   }
 
   private void awaitReader(java.util.concurrent.Future<?> reader) {
     if (reader == null) return;
     try {
       reader.get(1, TimeUnit.SECONDS);
-    } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException ignored) {
+    } catch (java.util.concurrent.ExecutionException
+        | java.util.concurrent.TimeoutException ignored) {
     } catch (InterruptedException exception) {
       Thread.currentThread().interrupt();
     }
   }
 
-  public BackgroundProcessSnapshot statusOwned(String processId,String project,String session,Path root) {
-    var process=processes.get(processId);
-    if(process==null||process.owner==null||!java.util.Objects.equals(process.owner.projectId(),project)
-        ||!process.owner.conversationId().equals(session)||!process.owner.projectRoot().equals(root))
-      return new BackgroundProcessSnapshot(processId,-1,BackgroundProcessStatus.FAILED,null,null,null,0,List.of(),List.of(),false,"process ownership unavailable");
-    return status(processId,0);
+  public BackgroundProcessSnapshot statusOwned(
+      String processId, String project, String session, Path root) {
+    var process = processes.get(processId);
+    if (process == null
+        || process.owner == null
+        || !java.util.Objects.equals(process.owner.projectId(), project)
+        || !process.owner.conversationId().equals(session)
+        || !process.owner.projectRoot().equals(root))
+      return new BackgroundProcessSnapshot(
+          processId,
+          -1,
+          BackgroundProcessStatus.FAILED,
+          null,
+          null,
+          null,
+          0,
+          List.of(),
+          List.of(),
+          false,
+          "process ownership unavailable");
+    return status(processId, 0);
   }
 
   public BackgroundProcessSnapshot status(String processId, Integer tailLines) {
     ManagedBackgroundProcess managedProcess = processes.get(processId);
     if (managedProcess == null) {
-      return new BackgroundProcessSnapshot(processId, -1, BackgroundProcessStatus.FAILED, null, null, null,
-          0.0d, List.of(), List.of(), false, "process not found");
+      return new BackgroundProcessSnapshot(
+          processId,
+          -1,
+          BackgroundProcessStatus.FAILED,
+          null,
+          null,
+          null,
+          0.0d,
+          List.of(),
+          List.of(),
+          false,
+          "process not found");
     }
     return snapshot(managedProcess, normalizeTailLines(tailLines), "ok");
   }
@@ -155,14 +227,25 @@ public class BackgroundProcessManager {
   public BackgroundProcessSnapshot kill(String processId) {
     ManagedBackgroundProcess managedProcess = processes.get(processId);
     if (managedProcess == null) {
-      return new BackgroundProcessSnapshot(processId, -1, BackgroundProcessStatus.FAILED, null, null, null,
-          0.0d, List.of(), List.of(), false, "process not found");
+      return new BackgroundProcessSnapshot(
+          processId,
+          -1,
+          BackgroundProcessStatus.FAILED,
+          null,
+          null,
+          null,
+          0.0d,
+          List.of(),
+          List.of(),
+          false,
+          "process not found");
     }
     managedProcess.status.set(BackgroundProcessStatus.KILLED);
     terminateProcessTree(managedProcess.process.toHandle());
     waitForMainProcess(managedProcess, Duration.ofSeconds(2));
     if (!managedProcess.process.isAlive()) {
-      managedProcess.endedAt = managedProcess.endedAt == null ? Instant.now(clock) : managedProcess.endedAt;
+      managedProcess.endedAt =
+          managedProcess.endedAt == null ? Instant.now(clock) : managedProcess.endedAt;
     }
     publishTerminalEvent(managedProcess);
     return snapshot(managedProcess, DEFAULT_TAIL_LINES, "killed");
@@ -183,8 +266,10 @@ public class BackgroundProcessManager {
         publishTerminalEvent(managedProcess);
         return;
       }
-      managedProcess.status.compareAndSet(BackgroundProcessStatus.RUNNING, BackgroundProcessStatus.EXITED);
-      managedProcess.status.compareAndSet(BackgroundProcessStatus.STARTING, BackgroundProcessStatus.EXITED);
+      managedProcess.status.compareAndSet(
+          BackgroundProcessStatus.RUNNING, BackgroundProcessStatus.EXITED);
+      managedProcess.status.compareAndSet(
+          BackgroundProcessStatus.STARTING, BackgroundProcessStatus.EXITED);
       publishTerminalEvent(managedProcess);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
@@ -192,18 +277,21 @@ public class BackgroundProcessManager {
   }
 
   private void terminateProcessTree(ProcessHandle root) {
-    List<ProcessHandle> handles = Stream.concat(root.descendants(), Stream.of(root)).distinct().toList();
-    handles.forEach(handle -> {
-      if (handle.isAlive()) {
-        handle.destroy();
-      }
-    });
+    List<ProcessHandle> handles =
+        Stream.concat(root.descendants(), Stream.of(root)).distinct().toList();
+    handles.forEach(
+        handle -> {
+          if (handle.isAlive()) {
+            handle.destroy();
+          }
+        });
     waitForExit(handles, KILL_GRACE_PERIOD);
-    handles.forEach(handle -> {
-      if (handle.isAlive()) {
-        handle.destroyForcibly();
-      }
-    });
+    handles.forEach(
+        handle -> {
+          if (handle.isAlive()) {
+            handle.destroyForcibly();
+          }
+        });
     waitForExit(handles, Duration.ofSeconds(1));
   }
 
@@ -224,7 +312,8 @@ public class BackgroundProcessManager {
 
   private void waitForMainProcess(ManagedBackgroundProcess managedProcess, Duration timeout) {
     try {
-      if (managedProcess.process.waitFor(timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)) {
+      if (managedProcess.process.waitFor(
+          timeout.toMillis(), java.util.concurrent.TimeUnit.MILLISECONDS)) {
         managedProcess.exitCode.compareAndSet(null, managedProcess.process.exitValue());
       }
     } catch (InterruptedException e) {
@@ -233,7 +322,8 @@ public class BackgroundProcessManager {
   }
 
   private void readLines(InputStream stream, BoundedLineBuffer buffer) {
-    try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+    try (BufferedReader reader =
+        new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
       String line;
       while ((line = reader.readLine()) != null) {
         buffer.add(line);
@@ -243,7 +333,8 @@ public class BackgroundProcessManager {
     }
   }
 
-  private BackgroundProcessSnapshot snapshot(ManagedBackgroundProcess managedProcess, int tailLines, String message) {
+  private BackgroundProcessSnapshot snapshot(
+      ManagedBackgroundProcess managedProcess, int tailLines, String message) {
     return new BackgroundProcessSnapshot(
         managedProcess.processId,
         managedProcess.process.pid(),
@@ -263,16 +354,25 @@ public class BackgroundProcessManager {
       return;
     }
     if (managedProcess.status.get() == BackgroundProcessStatus.KILLED) {
-      eventPublisher.publish(eventFactory.backgroundProcessKilled(managedProcess.processId, managedProcess.process.pid(),
-          managedProcess.exitCode.get(), elapsedSeconds(managedProcess)));
+      eventPublisher.publish(
+          eventFactory.backgroundProcessKilled(
+              managedProcess.processId,
+              managedProcess.process.pid(),
+              managedProcess.exitCode.get(),
+              elapsedSeconds(managedProcess)));
       return;
     }
-    eventPublisher.publish(eventFactory.backgroundProcessCompleted(managedProcess.processId, managedProcess.process.pid(),
-        managedProcess.exitCode.get(), elapsedSeconds(managedProcess)));
+    eventPublisher.publish(
+        eventFactory.backgroundProcessCompleted(
+            managedProcess.processId,
+            managedProcess.process.pid(),
+            managedProcess.exitCode.get(),
+            elapsedSeconds(managedProcess)));
   }
 
   private double elapsedSeconds(ManagedBackgroundProcess managedProcess) {
-    return Math.max(0.0d, (monotonicTimeSource.nanoTime() - managedProcess.startedAtNanos) / 1_000_000_000.0d);
+    return Math.max(
+        0.0d, (monotonicTimeSource.nanoTime() - managedProcess.startedAtNanos) / 1_000_000_000.0d);
   }
 
   private int normalizeTailLines(Integer tailLines) {

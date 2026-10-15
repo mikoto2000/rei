@@ -27,8 +27,16 @@ class PlanEventBoundaryTest {
             17);
     var payload = WebApiEventDto.from(event, false, "irrelevant-api-key").payload();
     assertEquals(
-        Set.of("parentRunId", "subAgentRunId", "agentId", "status", "duration",
-            "failureReason", "backendId", "modelId", "totalTokens"),
+        Set.of(
+            "parentRunId",
+            "subAgentRunId",
+            "agentId",
+            "status",
+            "duration",
+            "failureReason",
+            "backendId",
+            "modelId",
+            "totalTokens"),
         payload.keySet());
     assertEquals("parent", payload.get("parentRunId"));
     assertEquals("child", payload.get("subAgentRunId"));

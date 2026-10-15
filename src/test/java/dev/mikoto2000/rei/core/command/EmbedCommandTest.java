@@ -6,27 +6,24 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
+import dev.mikoto2000.rei.vectordocument.VectorDocumentEntry;
+import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
+import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
-
-import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
-import dev.mikoto2000.rei.vectordocument.VectorDocumentEntry;
-import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
-import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
 import picocli.CommandLine;
 
 @org.junit.jupiter.api.Tag("integration")
 class EmbedCommandTest {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void positionalArgumentsQueueAsyncEmbedding() throws Exception {
@@ -88,9 +85,7 @@ class EmbedCommandTest {
       System.setOut(originalOut);
     }
 
-    verify(asyncService).addAsync(List.of(
-        text.toString(),
-        markdown.toString()));
+    verify(asyncService).addAsync(List.of(text.toString(), markdown.toString()));
     assertTrue(out.toString().contains("docs/*"));
   }
 
@@ -111,22 +106,33 @@ class EmbedCommandTest {
       System.setProperty("user.dir", originalUserDir);
     }
 
-    verify(asyncService).addAsync(List.of(
-        text.toString(),
-        markdown.toString()));
+    verify(asyncService).addAsync(List.of(text.toString(), markdown.toString()));
   }
 
   @Test
   void searchCommandPrintsHits() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
-    when(service.search("spring ai", 2, 0.4d, "/tmp/docs/spec.md")).thenReturn(List.of(
-        new VectorDocumentSearchResult("doc-1", "/tmp/docs/spec.md", 0, 0.91d, "Spring AI guide")));
+    when(service.search("spring ai", 2, 0.4d, "/tmp/docs/spec.md"))
+        .thenReturn(
+            List.of(
+                new VectorDocumentSearchResult(
+                    "doc-1", "/tmp/docs/spec.md", 0, 0.91d, "Spring AI guide")));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      int exitCode = newCommand(service, Mockito.mock(AsyncVectorDocumentService.class)).execute("search", "--top-k", "2", "--threshold", "0.4", "--source", "/tmp/docs/spec.md", "spring ai");
+      int exitCode =
+          newCommand(service, Mockito.mock(AsyncVectorDocumentService.class))
+              .execute(
+                  "search",
+                  "--top-k",
+                  "2",
+                  "--threshold",
+                  "0.4",
+                  "--source",
+                  "/tmp/docs/spec.md",
+                  "spring ai");
       assertEquals(0, exitCode);
     } finally {
       System.setOut(originalOut);
@@ -141,16 +147,19 @@ class EmbedCommandTest {
   @Test
   void listCommandPrintsDocumentsGroupedBySource() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
-    when(service.list()).thenReturn(List.of(
-        new VectorDocumentEntry("doc-1", "/tmp/docs/spec.md", 3, "2026-03-28T00:00:00Z"),
-        new VectorDocumentEntry("doc-2", "/tmp/docs/spec.md", 2, "2026-03-29T00:00:00Z"),
-        new VectorDocumentEntry("doc-3", "/tmp/docs/other.md", 1, "2026-03-27T00:00:00Z")));
+    when(service.list())
+        .thenReturn(
+            List.of(
+                new VectorDocumentEntry("doc-1", "/tmp/docs/spec.md", 3, "2026-03-28T00:00:00Z"),
+                new VectorDocumentEntry("doc-2", "/tmp/docs/spec.md", 2, "2026-03-29T00:00:00Z"),
+                new VectorDocumentEntry("doc-3", "/tmp/docs/other.md", 1, "2026-03-27T00:00:00Z")));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      int exitCode = newCommand(service, Mockito.mock(AsyncVectorDocumentService.class)).execute("list");
+      int exitCode =
+          newCommand(service, Mockito.mock(AsyncVectorDocumentService.class)).execute("list");
       assertEquals(0, exitCode);
     } finally {
       System.setOut(originalOut);
@@ -158,8 +167,10 @@ class EmbedCommandTest {
 
     verify(service).list();
     String output = out.toString();
-    assertTrue(output.contains("/tmp/docs/spec.md | docs=2 | chunks=5 | latest=2026-03-29T00:00:00Z"));
-    assertTrue(output.contains("/tmp/docs/other.md | docs=1 | chunks=1 | latest=2026-03-27T00:00:00Z"));
+    assertTrue(
+        output.contains("/tmp/docs/spec.md | docs=2 | chunks=5 | latest=2026-03-29T00:00:00Z"));
+    assertTrue(
+        output.contains("/tmp/docs/other.md | docs=1 | chunks=1 | latest=2026-03-27T00:00:00Z"));
   }
 
   @Test
@@ -172,8 +183,14 @@ class EmbedCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      assertEquals(0, newCommand(service, Mockito.mock(AsyncVectorDocumentService.class)).execute("delete", "--doc-id", "doc-1"));
-      assertEquals(0, newCommand(service, Mockito.mock(AsyncVectorDocumentService.class)).execute("delete", "--source", "/tmp/docs/spec.md"));
+      assertEquals(
+          0,
+          newCommand(service, Mockito.mock(AsyncVectorDocumentService.class))
+              .execute("delete", "--doc-id", "doc-1"));
+      assertEquals(
+          0,
+          newCommand(service, Mockito.mock(AsyncVectorDocumentService.class))
+              .execute("delete", "--source", "/tmp/docs/spec.md"));
     } finally {
       System.setOut(originalOut);
     }
@@ -186,30 +203,36 @@ class EmbedCommandTest {
   @Test
   void useSubcommandIsNotAvailable() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
-    assertFalse(newCommand(service, Mockito.mock(AsyncVectorDocumentService.class)).getSubcommands().containsKey("use"));
+    assertFalse(
+        newCommand(service, Mockito.mock(AsyncVectorDocumentService.class))
+            .getSubcommands()
+            .containsKey("use"));
   }
 
-  private CommandLine newCommand(VectorDocumentService service, AsyncVectorDocumentService asyncService) {
-    return new CommandLine(new EmbedCommand(service, asyncService), new CommandLine.IFactory() {
-      @Override
-      public <K> K create(Class<K> cls) throws Exception {
-        if (cls == EmbedCommand.class) {
-          return cls.cast(new EmbedCommand(service, asyncService));
-        }
-        if (cls == EmbedCommand.AddCommand.class) {
-          return cls.cast(new EmbedCommand.AddCommand(asyncService));
-        }
-        if (cls == EmbedCommand.SearchCommand.class) {
-          return cls.cast(new EmbedCommand.SearchCommand(service));
-        }
-        if (cls == EmbedCommand.ListCommand.class) {
-          return cls.cast(new EmbedCommand.ListCommand(service));
-        }
-        if (cls == EmbedCommand.DeleteCommand.class) {
-          return cls.cast(new EmbedCommand.DeleteCommand(service));
-        }
-        return CommandLine.defaultFactory().create(cls);
-      }
-    });
+  private CommandLine newCommand(
+      VectorDocumentService service, AsyncVectorDocumentService asyncService) {
+    return new CommandLine(
+        new EmbedCommand(service, asyncService),
+        new CommandLine.IFactory() {
+          @Override
+          public <K> K create(Class<K> cls) throws Exception {
+            if (cls == EmbedCommand.class) {
+              return cls.cast(new EmbedCommand(service, asyncService));
+            }
+            if (cls == EmbedCommand.AddCommand.class) {
+              return cls.cast(new EmbedCommand.AddCommand(asyncService));
+            }
+            if (cls == EmbedCommand.SearchCommand.class) {
+              return cls.cast(new EmbedCommand.SearchCommand(service));
+            }
+            if (cls == EmbedCommand.ListCommand.class) {
+              return cls.cast(new EmbedCommand.ListCommand(service));
+            }
+            if (cls == EmbedCommand.DeleteCommand.class) {
+              return cls.cast(new EmbedCommand.DeleteCommand(service));
+            }
+            return CommandLine.defaultFactory().create(cls);
+          }
+        });
   }
 }

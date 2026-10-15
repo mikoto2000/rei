@@ -7,7 +7,8 @@ public record SkillSelectionCompletedPayload(
     String selectionId,
     List<String> explicitSkillNames,
     List<String> implicitSkillNames,
-    List<String> warnings) implements AgentEventPayload {
+    List<String> warnings)
+    implements AgentEventPayload {
 
   public SkillSelectionCompletedPayload {
     explicitSkillNames = explicitSkillNames == null ? List.of() : List.copyOf(explicitSkillNames);

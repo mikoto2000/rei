@@ -3,9 +3,9 @@ package dev.mikoto2000.rei.image;
 import org.springframework.ai.image.Image;
 import org.springframework.ai.image.ImageGeneration;
 import org.springframework.ai.image.ImageModel;
+import org.springframework.ai.image.ImageOptionsBuilder;
 import org.springframework.ai.image.ImagePrompt;
 import org.springframework.ai.image.ImageResponse;
-import org.springframework.ai.image.ImageOptionsBuilder;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -20,7 +20,8 @@ public class OpenAiImageGenerationClient implements ImageGenerationClient {
   }
 
   @Autowired
-  public OpenAiImageGenerationClient(ImageModelProvider imageModelProvider, ImageProperties properties) {
+  public OpenAiImageGenerationClient(
+      ImageModelProvider imageModelProvider, ImageProperties properties) {
     this.imageModelProvider = imageModelProvider;
     this.properties = properties;
   }
@@ -42,10 +43,11 @@ public class OpenAiImageGenerationClient implements ImageGenerationClient {
   }
 
   ImagePrompt buildPrompt(ImageGenerationRequest request) {
-    ImageOptionsBuilder options = ImageOptionsBuilder.builder()
-        .n(1)
-        .width(request.size().width())
-        .height(request.size().height());
+    ImageOptionsBuilder options =
+        ImageOptionsBuilder.builder()
+            .n(1)
+            .width(request.size().width())
+            .height(request.size().height());
     String model = imageModelProvider.model(request.model());
     if (model != null && !model.isBlank()) {
       options.model(model);
@@ -60,7 +62,9 @@ public class OpenAiImageGenerationClient implements ImageGenerationClient {
 
   private boolean shouldSendResponseFormat(String model) {
     String responseFormat = properties.getResponseFormat();
-    if (responseFormat == null || responseFormat.isBlank() || responseFormat.equalsIgnoreCase("auto")) {
+    if (responseFormat == null
+        || responseFormat.isBlank()
+        || responseFormat.equalsIgnoreCase("auto")) {
       return model != null && !model.isBlank() && !isGptImageModel(model);
     }
     if (responseFormat.equalsIgnoreCase("none") || responseFormat.equalsIgnoreCase("off")) {

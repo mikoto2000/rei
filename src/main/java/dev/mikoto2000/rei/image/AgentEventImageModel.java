@@ -1,13 +1,11 @@
 package dev.mikoto2000.rei.image;
 
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
 import java.util.UUID;
-
 import org.springframework.ai.image.ImageModel;
 import org.springframework.ai.image.ImagePrompt;
 import org.springframework.ai.image.ImageResponse;
-
-import dev.mikoto2000.rei.event.AgentEventFactory;
-import dev.mikoto2000.rei.event.AgentEventPublisher;
 
 /** Publishes lifecycle events around an image-model invocation. */
 final class AgentEventImageModel implements ImageModel {
@@ -17,7 +15,10 @@ final class AgentEventImageModel implements ImageModel {
   private final AgentEventFactory eventFactory;
   private final AgentEventPublisher eventPublisher;
 
-  AgentEventImageModel(String feature, ImageModel delegate, AgentEventFactory eventFactory,
+  AgentEventImageModel(
+      String feature,
+      ImageModel delegate,
+      AgentEventFactory eventFactory,
       AgentEventPublisher eventPublisher) {
     this.feature = feature;
     this.delegate = delegate;
@@ -32,12 +33,14 @@ final class AgentEventImageModel implements ImageModel {
     eventPublisher.publish(eventFactory.llmRequestStarted(null, requestId, feature));
     try {
       ImageResponse response = delegate.call(prompt);
-      eventPublisher.publish(eventFactory.llmResponseCompleted(null, requestId,
-          (System.nanoTime() - startedAtNanos) / 1_000_000L));
+      eventPublisher.publish(
+          eventFactory.llmResponseCompleted(
+              null, requestId, (System.nanoTime() - startedAtNanos) / 1_000_000L));
       return response;
     } catch (RuntimeException e) {
-      eventPublisher.publish(eventFactory.llmRequestFailed(null, requestId,
-          (System.nanoTime() - startedAtNanos) / 1_000_000L, e));
+      eventPublisher.publish(
+          eventFactory.llmRequestFailed(
+              null, requestId, (System.nanoTime() - startedAtNanos) / 1_000_000L, e));
       throw e;
     }
   }

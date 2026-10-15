@@ -2,26 +2,24 @@ package dev.mikoto2000.rei.event;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 @org.junit.jupiter.api.Tag("integration")
 class ProfileEventLogStoreTest {
 
-  private final Clock clock = Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));
+  private final Clock clock =
+      Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));
   private final AgentEventFactory events = new AgentEventFactory(clock);
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void appendWritesJsonLines() throws Exception {
@@ -34,7 +32,8 @@ class ProfileEventLogStoreTest {
     assertThat(Files.readAllLines(file)).hasSize(2);
     assertThat(store.readAll()).hasSize(2);
     assertThat(store.summarize().countsByType()).containsEntry("agent.run.completed", 1L);
-    assertThat(store.summarize().durationsByType().get("agent.run.completed").averageMillis()).isEqualTo(123L);
+    assertThat(store.summarize().durationsByType().get("agent.run.completed").averageMillis())
+        .isEqualTo(123L);
   }
 
   @Test
@@ -68,7 +67,17 @@ class ProfileEventLogStoreTest {
   }
 
   private AgentEvent eventAt(String id, Instant timestamp) {
-    return new AgentEvent(id, 0L, timestamp, AgentEventType.MESSAGE_STARTED, 1,
-        null, null, null, null, null, new MessageStartedPayload(id, "assistant"));
+    return new AgentEvent(
+        id,
+        0L,
+        timestamp,
+        AgentEventType.MESSAGE_STARTED,
+        1,
+        null,
+        null,
+        null,
+        null,
+        null,
+        new MessageStartedPayload(id, "assistant"));
   }
 }

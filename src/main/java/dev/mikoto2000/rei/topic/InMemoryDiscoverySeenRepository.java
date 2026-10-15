@@ -2,7 +2,6 @@ package dev.mikoto2000.rei.topic;
 
 import java.util.LinkedHashSet;
 import java.util.Set;
-
 import org.springframework.stereotype.Component;
 
 @Component

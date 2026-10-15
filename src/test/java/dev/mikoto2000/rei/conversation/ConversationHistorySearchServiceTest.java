@@ -8,7 +8,6 @@ import java.sql.Statement;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -17,8 +16,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 @org.junit.jupiter.api.Tag("integration")
 class ConversationHistorySearchServiceTest {
 
-  @TempDir
-  java.nio.file.Path tempDir;
+  @TempDir java.nio.file.Path tempDir;
 
   private DriverManagerDataSource dataSource;
   private ConversationHistorySearchService service;
@@ -26,12 +24,15 @@ class ConversationHistorySearchServiceTest {
 
   @BeforeEach
   void setUp() throws Exception {
-    dataSource = new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("conversation-search.db"));
+    dataSource =
+        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("conversation-search.db"));
     initializeSchema();
-    conversationLogStore = new ConversationLogStore(
-        tempDir.resolve("conversation-logs"), java.time.Clock.systemUTC(),
-        new com.fasterxml.jackson.databind.ObjectMapper()
-            .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    conversationLogStore =
+        new ConversationLogStore(
+            tempDir.resolve("conversation-logs"),
+            java.time.Clock.systemUTC(),
+            new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
     service = new ConversationHistorySearchService(dataSource, conversationLogStore);
   }
 
@@ -44,7 +45,8 @@ class ConversationHistorySearchServiceTest {
 
     var results = service.search("gantt.csv", "all", null, null, null, 10);
 
-    assertThat(results).extracting(ConversationSearchResult::conversationId)
+    assertThat(results)
+        .extracting(ConversationSearchResult::conversationId)
         .containsExactly("bluesky-reply:alice.bsky.social", "chat:c1");
     assertThat(results.get(0).scope()).isEqualTo("bluesky-reply");
     assertThat(results.get(1).speaker()).isEqualTo("user");
@@ -54,7 +56,8 @@ class ConversationHistorySearchServiceTest {
   void filtersByScopeSpeakerAndDate() throws Exception {
     insertChat("c1", "USER", "古い grep の話", Instant.parse("2026-08-01T00:00:00Z").toEpochMilli());
     insertChat("c2", "ASSISTANT", "grep の説明", Instant.parse("2026-08-14T00:00:00Z").toEpochMilli());
-    insertChat("c3", "USER", "grep ツールを追加したい", Instant.parse("2026-08-14T01:00:00Z").toEpochMilli());
+    insertChat(
+        "c3", "USER", "grep ツールを追加したい", Instant.parse("2026-08-14T01:00:00Z").toEpochMilli());
     insertBluesky("alice.bsky.social", "user", "grep の投稿", "2026-08-14T02:00:00Z");
 
     var results = service.search("grep", "chat", "user", "2026-08-14", "2026-08-14", 10);
@@ -73,7 +76,8 @@ class ConversationHistorySearchServiceTest {
     ConversationHistoryDetail detail = service.detail("chat:c1", 10);
 
     assertThat(detail.scope()).isEqualTo("chat");
-    assertThat(detail.messages()).extracting(ConversationHistoryMessage::content)
+    assertThat(detail.messages())
+        .extracting(ConversationHistoryMessage::content)
         .containsExactly("質問", "回答");
   }
 
@@ -85,7 +89,8 @@ class ConversationHistorySearchServiceTest {
     ConversationHistoryDetail detail = service.detail("bluesky-reply:alice.bsky.social", 10);
 
     assertThat(detail.scope()).isEqualTo("bluesky-reply");
-    assertThat(detail.messages()).extracting(ConversationHistoryMessage::content)
+    assertThat(detail.messages())
+        .extracting(ConversationHistoryMessage::content)
         .containsExactly("元投稿", "返信");
   }
 
@@ -94,11 +99,13 @@ class ConversationHistorySearchServiceTest {
     long now = Instant.parse("2026-08-14T00:00:00Z").toEpochMilli();
     insertChat("chat:main", "USER", "通常チャット", now);
     insertChat("tool:search", "USER", "tool チャット", now + 1_000);
-    insertChat("bluesky-manual:at://did:plc:xxx/app.bsky.feed.post/abc", "USER", "手動返信チャット", now + 2_000);
+    insertChat(
+        "bluesky-manual:at://did:plc:xxx/app.bsky.feed.post/abc", "USER", "手動返信チャット", now + 2_000);
 
     var results = service.search("チャット", "all", null, null, null, 10);
 
-    assertThat(results).extracting(ConversationSearchResult::scope)
+    assertThat(results)
+        .extracting(ConversationSearchResult::scope)
         .contains("chat", "tool", "bluesky-manual");
   }
 
@@ -107,7 +114,8 @@ class ConversationHistorySearchServiceTest {
     long now = Instant.parse("2026-08-14T00:00:00Z").toEpochMilli();
     insertChat("chat:main", "USER", "通常チャットの話", now);
     insertChat("tool:search", "USER", "tool の話", now + 1_000);
-    insertChat("bluesky-manual:at://did:plc:xxx/app.bsky.feed.post/abc", "USER", "手動返信の話", now + 2_000);
+    insertChat(
+        "bluesky-manual:at://did:plc:xxx/app.bsky.feed.post/abc", "USER", "手動返信の話", now + 2_000);
 
     var toolResults = service.search("話", "tool", null, null, null, 10);
     assertThat(toolResults).hasSize(1);
@@ -129,7 +137,8 @@ class ConversationHistorySearchServiceTest {
 
     ConversationHistoryDetail toolDetail = service.detail("tool:search", 10);
     assertThat(toolDetail.scope()).isEqualTo("tool");
-    assertThat(toolDetail.messages()).extracting(ConversationHistoryMessage::content)
+    assertThat(toolDetail.messages())
+        .extracting(ConversationHistoryMessage::content)
         .containsExactly("tool 質問", "tool 回答");
 
     ConversationHistoryDetail manualDetail = service.detail("bluesky-manual:abc", 10);
@@ -164,13 +173,16 @@ class ConversationHistorySearchServiceTest {
 
     assertThat(results).hasSize(1);
     assertThat(results.getFirst().conversationId()).isEqualTo("chat:main");
-    assertThat(detail.messages()).extracting(ConversationHistoryMessage::content)
+    assertThat(detail.messages())
+        .extracting(ConversationHistoryMessage::content)
         .containsExactly("永続ログだけに残った設計相談", "日次ログから検索できます");
   }
 
   private void initializeSchema() throws Exception {
-    try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
-      statement.executeUpdate("""
+    try (Connection connection = dataSource.getConnection();
+        Statement statement = connection.createStatement()) {
+      statement.executeUpdate(
+          """
           CREATE TABLE SPRING_AI_CHAT_MEMORY (
             conversation_id TEXT NOT NULL,
             content TEXT NOT NULL,
@@ -178,7 +190,8 @@ class ConversationHistorySearchServiceTest {
             timestamp INTEGER NOT NULL
           )
           """);
-      statement.executeUpdate("""
+      statement.executeUpdate(
+          """
           CREATE TABLE bluesky_reply_conversations (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             handle TEXT NOT NULL,
@@ -190,22 +203,30 @@ class ConversationHistorySearchServiceTest {
     }
   }
 
-  private void insertChat(String conversationId, String type, String content, long timestamp) throws Exception {
-    try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
-      statement.executeUpdate("""
+  private void insertChat(String conversationId, String type, String content, long timestamp)
+      throws Exception {
+    try (Connection connection = dataSource.getConnection();
+        Statement statement = connection.createStatement()) {
+      statement.executeUpdate(
+          """
           INSERT INTO SPRING_AI_CHAT_MEMORY(conversation_id, content, type, timestamp)
           VALUES ('%s', '%s', '%s', %d)
-          """.formatted(conversationId, content, type, timestamp));
+          """
+              .formatted(conversationId, content, type, timestamp));
     }
   }
 
-  private void insertBluesky(String handle, String role, String content, String createdAt) throws Exception {
+  private void insertBluesky(String handle, String role, String content, String createdAt)
+      throws Exception {
     OffsetDateTime.parse(createdAt).withOffsetSameInstant(ZoneOffset.UTC);
-    try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
-      statement.executeUpdate("""
+    try (Connection connection = dataSource.getConnection();
+        Statement statement = connection.createStatement()) {
+      statement.executeUpdate(
+          """
           INSERT INTO bluesky_reply_conversations(handle, role, content, created_at)
           VALUES ('%s', '%s', '%s', '%s')
-          """.formatted(handle, role, content, createdAt));
+          """
+              .formatted(handle, role, content, createdAt));
     }
   }
 }

@@ -1,12 +1,15 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
 import static org.assertj.core.api.Assertions.*;
+
 import java.util.*;
 import org.junit.jupiter.api.Test;
 
 class LosslessResultPagerTest {
   final TokenEstimator estimator = TokenEstimator.conservative();
-  @Test void pagesReassembleJapaneseUnicodeAndEscapedTextExactly() throws Exception {
+
+  @Test
+  void pagesReassembleJapaneseUnicodeAndEscapedTextExactly() throws Exception {
     String raw = "\uFEFF開始\r\n" + "教材🙂\"\\\t中間の誤り\n".repeat(600) + "末尾";
     var pager = new LosslessResultPager(estimator);
     var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -25,14 +28,18 @@ class LosslessResultPagerTest {
     } while (offset < raw.length());
     assertThat(assembled.toString()).isEqualTo(raw);
   }
-  @Test void metadataAndEscapingAreIncludedAndInsufficientBudgetStops() {
+
+  @Test
+  void metadataAndEscapingAreIncludedAndInsufficientBudgetStops() {
     var pager = new LosslessResultPager(estimator);
     assertThatThrownBy(() -> pager.page("日本語".repeat(100), "call", "tool", "x", 0, 100))
         .hasMessageContaining("CONTEXT_BUDGET_INSUFFICIENT");
   }
-  @Test void rejectsInvalidCursorRatherThanBreakingSurrogates() {
+
+  @Test
+  void rejectsInvalidCursorRatherThanBreakingSurrogates() {
     var pager = new LosslessResultPager(estimator);
-    for (int offset : new int[]{-1, 2, 5})
+    for (int offset : new int[] {-1, 2, 5})
       assertThatThrownBy(() -> pager.page("ref", "call", "tool", "a🙂b", offset, 256))
           .hasMessageContaining("INVALID_CURSOR");
   }

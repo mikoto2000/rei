@@ -1,2 +1,7 @@
 package dev.mikoto2000.rei.activity;
-public enum EntertainmentDisposition { ENTERTAINMENT, NON_ENTERTAINMENT, UNCERTAIN }
+
+public enum EntertainmentDisposition {
+  ENTERTAINMENT,
+  NON_ENTERTAINMENT,
+  UNCERTAIN
+}

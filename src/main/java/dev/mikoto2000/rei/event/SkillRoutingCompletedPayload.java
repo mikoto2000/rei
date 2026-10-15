@@ -13,7 +13,8 @@ public record SkillRoutingCompletedPayload(
     Long skillLoadDurationMs,
     List<String> explicitSkillNames,
     List<String> implicitSkillNames,
-    List<String> warnings) implements AgentEventPayload {
+    List<String> warnings)
+    implements AgentEventPayload {
 
   public SkillRoutingCompletedPayload {
     explicitSkillNames = explicitSkillNames == null ? List.of() : List.copyOf(explicitSkillNames);

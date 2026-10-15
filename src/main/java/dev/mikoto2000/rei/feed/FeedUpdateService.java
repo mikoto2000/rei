@@ -4,10 +4,8 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
-
-import org.springframework.stereotype.Service;
-
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
@@ -21,7 +19,8 @@ public class FeedUpdateService {
     OffsetDateTime fetchedAt = OffsetDateTime.now(ZoneOffset.UTC);
     try {
       FetchedFeed fetched = feedFetcher.fetch(feed.url());
-      feedService.updateFetchedMetadata(feedId, fetched.title(), fetched.siteUrl(), fetched.description(), fetchedAt);
+      feedService.updateFetchedMetadata(
+          feedId, fetched.title(), fetched.siteUrl(), fetched.description(), fetchedAt);
       int addedItems = feedService.saveFetchedItems(feedId, fetched.items(), fetchedAt);
       return new FeedUpdateResult(feedId, feedDisplayName(feed, fetched.title()), addedItems, null);
     } catch (FeedFetchException e) {

@@ -2,20 +2,17 @@ package dev.mikoto2000.rei.core.command;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import dev.mikoto2000.rei.core.service.SystemShellService;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import dev.mikoto2000.rei.core.service.SystemShellService;
 
 @org.junit.jupiter.api.Tag("integration")
 class ShCommandTest {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void startsInteractiveSystemShellInCurrentProject() {
@@ -24,8 +21,12 @@ class ShCommandTest {
     command.run();
 
     assertThat(command.started).isTrue();
-    assertThat(command.commandLine).isEqualTo(new SystemShellService().interactiveShellCommandLine(
-        new SystemShellService().resolveShell(System.getenv(), System.getProperty("os.name"))));
+    assertThat(command.commandLine)
+        .isEqualTo(
+            new SystemShellService()
+                .interactiveShellCommandLine(
+                    new SystemShellService()
+                        .resolveShell(System.getenv(), System.getProperty("os.name"))));
     assertThat(command.directory).isEqualTo(tempDir);
   }
 
@@ -74,7 +75,6 @@ class ShCommandTest {
     }
 
     @Override
-    public void destroy() {
-    }
+    public void destroy() {}
   }
 }

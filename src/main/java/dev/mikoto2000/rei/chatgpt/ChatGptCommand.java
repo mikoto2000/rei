@@ -162,7 +162,9 @@ public final class ChatGptCommand {
       out(dev.mikoto2000.rei.event.FailureMessages.describe(e));
       return 2;
     } catch (Exception e) {
-      out("ChatGPT plan operation unavailable 原因: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));
+      out(
+          "ChatGPT plan operation unavailable 原因: "
+              + dev.mikoto2000.rei.event.FailureMessages.describe(e));
       return 2;
     } finally {
       output().flush();

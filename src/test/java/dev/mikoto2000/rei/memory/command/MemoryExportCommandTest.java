@@ -5,13 +5,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.memory.service.MemoryExporter;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-
-import dev.mikoto2000.rei.memory.service.MemoryExporter;
 import picocli.CommandLine;
 
 class MemoryExportCommandTest {

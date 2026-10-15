@@ -4,13 +4,20 @@ import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-@Getter @Setter
+@Getter
+@Setter
 @ConfigurationProperties("rei.context-compression")
 public class ContextCompressionProperties {
   private boolean enabled = true;
   private int modelContextLimit = 128000;
   private java.util.Map<String, Integer> modelContextLimits = new java.util.HashMap<>();
-  public int contextLimit(String model) { return model == null ? modelContextLimit : modelContextLimits.getOrDefault(model, modelContextLimit); }
+
+  public int contextLimit(String model) {
+    return model == null
+        ? modelContextLimit
+        : modelContextLimits.getOrDefault(model, modelContextLimit);
+  }
+
   private int completionReserve = 8192;
   private int toolReserve = 4096;
   private int safetyMargin = 4000;
@@ -27,17 +34,31 @@ public class ContextCompressionProperties {
   private long standaloneSummaryMaxTotalTokens;
 
   public void validate() {
-    if(retryCooldownSeconds<1||retryCooldownSeconds>3600)
-      throw new IllegalArgumentException("rei.context-compression.retry-cooldown-seconds must be between 1 and 3600");
-    if (modelContextLimit <= 0 || completionReserve < 0 || toolReserve < 0 || safetyMargin < 0
-        || threshold <= 0 || hardLimit < threshold || recentTokens <= 0 || summaryTokens <= 0
-        || toolResultThreshold <= 0 || toolResultTokens <= 0 || toolResultTokens >= toolResultThreshold
-        || minimumCompressionGain <= 0 || minimumCompressionGain >= 1 || summaryTimeoutSeconds <= 0
-        || standaloneSummaryMaxLlmCalls<0 || standaloneSummaryMaxLlmCalls>1000 || standaloneSummaryMaxTotalTokens<0)
+    if (retryCooldownSeconds < 1 || retryCooldownSeconds > 3600)
+      throw new IllegalArgumentException(
+          "rei.context-compression.retry-cooldown-seconds must be between 1 and 3600");
+    if (modelContextLimit <= 0
+        || completionReserve < 0
+        || toolReserve < 0
+        || safetyMargin < 0
+        || threshold <= 0
+        || hardLimit < threshold
+        || recentTokens <= 0
+        || summaryTokens <= 0
+        || toolResultThreshold <= 0
+        || toolResultTokens <= 0
+        || toolResultTokens >= toolResultThreshold
+        || minimumCompressionGain <= 0
+        || minimumCompressionGain >= 1
+        || summaryTimeoutSeconds <= 0
+        || standaloneSummaryMaxLlmCalls < 0
+        || standaloneSummaryMaxLlmCalls > 1000
+        || standaloneSummaryMaxTotalTokens < 0)
       throw new IllegalArgumentException("Invalid context compression budgets");
     if ((long) completionReserve + toolReserve + safetyMargin >= modelContextLimit)
       throw new IllegalArgumentException("Context reserves exhaust model context limit");
-    if (modelContextLimits == null || modelContextLimits.values().stream().anyMatch(v -> v == null || v <= 0))
+    if (modelContextLimits == null
+        || modelContextLimits.values().stream().anyMatch(v -> v == null || v <= 0))
       throw new IllegalArgumentException("Invalid model context limits");
   }
 }

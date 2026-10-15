@@ -1,11 +1,9 @@
 package dev.mikoto2000.rei.summarize;
 
-import java.net.URI;
-
-import org.springframework.stereotype.Component;
-
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchResult;
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchService;
+import java.net.URI;
+import org.springframework.stereotype.Component;
 
 @Component
 public class UrlContentWebContentFetcher implements WebContentFetcher {

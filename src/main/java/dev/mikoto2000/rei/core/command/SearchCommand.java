@@ -1,20 +1,5 @@
 package dev.mikoto2000.rei.core.command;
 
-import java.io.IOException;
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Locale;
-import java.util.Set;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
-
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.llm.ConversationIds;
@@ -28,15 +13,27 @@ import dev.mikoto2000.rei.search.SearchKnowledgeService;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.websearch.WebSearchContext;
 import dev.mikoto2000.rei.websearch.WebSearchPage;
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Option;
-import picocli.CommandLine.Parameters;
-import reactor.core.Disposable;
-
+import java.io.IOException;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
+import reactor.core.Disposable;
 
 @Component
 @Command(name = "search", description = "ベクトルストアと Web 検索の結果をまとめて回答します")
@@ -49,22 +46,54 @@ public class SearchCommand implements Runnable {
   private final LlmModelProvider modelProvider;
   private final SearchKnowledgeService searchKnowledgeService;
   private final CommandCancellationService cancellationService;
-  private java.util.function.Consumer<String> output=value->System.out.print(value);
-  private void println(String value){output.accept(value+System.lineSeparator());}
-  public void report(String query,int vectorTopK,int webTopK,Double threshold,String source,java.util.function.Consumer<String> output){
-    var command=new SearchCommand(chatClientProvider,currentModelHolder,modelProvider,searchKnowledgeService,cancellationService);
-    command.queryParts=new String[]{query};command.vectorTopK=vectorTopK;command.webTopK=webTopK;command.threshold=threshold;command.source=source;command.output=java.util.Objects.requireNonNull(output);command.run();
+  private java.util.function.Consumer<String> output = value -> System.out.print(value);
+
+  private void println(String value) {
+    output.accept(value + System.lineSeparator());
   }
 
-  public SearchCommand(ChatClient chatClient, ModelHolderService currentModelHolder,
-      SearchKnowledgeService searchKnowledgeService, CommandCancellationService cancellationService) {
-    this(new FixedLlmChatClientProvider(chatClient), currentModelHolder,
-        new FixedLlmModelProvider(), searchKnowledgeService, cancellationService);
+  public void report(
+      String query,
+      int vectorTopK,
+      int webTopK,
+      Double threshold,
+      String source,
+      java.util.function.Consumer<String> output) {
+    var command =
+        new SearchCommand(
+            chatClientProvider,
+            currentModelHolder,
+            modelProvider,
+            searchKnowledgeService,
+            cancellationService);
+    command.queryParts = new String[] {query};
+    command.vectorTopK = vectorTopK;
+    command.webTopK = webTopK;
+    command.threshold = threshold;
+    command.source = source;
+    command.output = java.util.Objects.requireNonNull(output);
+    command.run();
+  }
+
+  public SearchCommand(
+      ChatClient chatClient,
+      ModelHolderService currentModelHolder,
+      SearchKnowledgeService searchKnowledgeService,
+      CommandCancellationService cancellationService) {
+    this(
+        new FixedLlmChatClientProvider(chatClient),
+        currentModelHolder,
+        new FixedLlmModelProvider(),
+        searchKnowledgeService,
+        cancellationService);
   }
 
   @Autowired
-  public SearchCommand(LlmChatClientProvider chatClientProvider, ModelHolderService currentModelHolder,
-      LlmModelProvider modelProvider, SearchKnowledgeService searchKnowledgeService,
+  public SearchCommand(
+      LlmChatClientProvider chatClientProvider,
+      ModelHolderService currentModelHolder,
+      LlmModelProvider modelProvider,
+      SearchKnowledgeService searchKnowledgeService,
       CommandCancellationService cancellationService) {
     this.chatClientProvider = chatClientProvider;
     this.currentModelHolder = currentModelHolder;
@@ -94,14 +123,21 @@ public class SearchCommand implements Runnable {
     String query = String.join(" ", queryParts);
     try {
       cancellationService.begin(Thread.currentThread());
-      SearchKnowledgeResult result = searchKnowledgeService.search(query, vectorTopK, webTopK, threshold, source);
+      SearchKnowledgeResult result =
+          searchKnowledgeService.search(query, vectorTopK, webTopK, threshold, source);
       List<VectorDocumentSearchResult> vectorResults = result.vectorResults();
       WebSearchContext webContext = result.webContext();
 
-      ChatClientRequestSpec requestSpec = chatClientProvider.chatClient(LlmFeature.SEARCH).prompt(new Prompt(
-          buildPrompt(query, vectorResults, webContext),
-          modelProvider.chatOptions(LlmFeature.SEARCH, currentModelHolder.get())))
-          .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.tool("search")));
+      ChatClientRequestSpec requestSpec =
+          chatClientProvider
+              .chatClient(LlmFeature.SEARCH)
+              .prompt(
+                  new Prompt(
+                      buildPrompt(query, vectorResults, webContext),
+                      modelProvider.chatOptions(LlmFeature.SEARCH, currentModelHolder.get())))
+              .advisors(
+                  advisor ->
+                      advisor.param(ChatMemory.CONVERSATION_ID, ConversationIds.tool("search")));
 
       if (result.webSearchSkippedMessage() != null) {
         println("[web search skipped] " + result.webSearchSkippedMessage());
@@ -109,20 +145,21 @@ public class SearchCommand implements Runnable {
       CountDownLatch latch = new CountDownLatch(1);
       AtomicReference<Throwable> errorRef = new AtomicReference<>();
       AtomicBoolean headerPrinted = new AtomicBoolean(false);
-      Disposable disposable = requestSpec.stream()
-          .content()
-          .subscribe(
-              chunk -> {
-                if (headerPrinted.compareAndSet(false, true)) {
-                  println(answerHeader(startedAtNanos));
-                }
-                output.accept(chunk);
-              },
-              error -> {
-                errorRef.set(error);
-                latch.countDown();
-              },
-              latch::countDown);
+      Disposable disposable =
+          requestSpec.stream()
+              .content()
+              .subscribe(
+                  chunk -> {
+                    if (headerPrinted.compareAndSet(false, true)) {
+                      println(answerHeader(startedAtNanos));
+                    }
+                    output.accept(chunk);
+                  },
+                  error -> {
+                    errorRef.set(error);
+                    latch.countDown();
+                  },
+                  latch::countDown);
       cancellationService.register(disposable);
 
       boolean completed = latch.await(streamTimeoutMillis(), TimeUnit.MILLISECONDS);
@@ -181,7 +218,8 @@ public class SearchCommand implements Runnable {
     return current;
   }
 
-  private String buildPrompt(String query, List<VectorDocumentSearchResult> vectorResults, WebSearchContext webContext) {
+  private String buildPrompt(
+      String query, List<VectorDocumentSearchResult> vectorResults, WebSearchContext webContext) {
     return """
         次の検索結果を材料に、日本語で回答してください。
         - まず結論を簡潔に示してください。
@@ -201,11 +239,12 @@ public class SearchCommand implements Runnable {
 
         Web 補足情報:
         %s
-        """.formatted(
-        query,
-        formatVectorResults(vectorResults),
-        formatWebResults(webContext.primaryResults()),
-        formatWebResults(webContext.secondaryResults()));
+        """
+        .formatted(
+            query,
+            formatVectorResults(vectorResults),
+            formatWebResults(webContext.primaryResults()),
+            formatWebResults(webContext.secondaryResults()));
   }
 
   private String formatVectorResults(List<VectorDocumentSearchResult> results) {
@@ -214,11 +253,17 @@ public class SearchCommand implements Runnable {
     }
     StringBuilder builder = new StringBuilder();
     for (VectorDocumentSearchResult result : results) {
-      builder.append("- source=").append(result.source())
-          .append(" | docId=").append(result.docId())
-          .append(" | chunk=").append(result.chunkIndex())
-          .append(" | score=").append(String.format(Locale.ROOT, "%.3f", result.score()))
-          .append(" | snippet=").append(result.snippet())
+      builder
+          .append("- source=")
+          .append(result.source())
+          .append(" | docId=")
+          .append(result.docId())
+          .append(" | chunk=")
+          .append(result.chunkIndex())
+          .append(" | score=")
+          .append(String.format(Locale.ROOT, "%.3f", result.score()))
+          .append(" | snippet=")
+          .append(result.snippet())
           .append('\n');
     }
     return builder.toString().trim();
@@ -230,17 +275,24 @@ public class SearchCommand implements Runnable {
     }
     StringBuilder builder = new StringBuilder();
     for (WebSearchPage result : results) {
-      builder.append("- title=").append(result.title())
-          .append(" | url=").append(result.url())
-          .append(" | publishedAt=").append(result.publishedAt())
-          .append(" | snippet=").append(result.snippet())
-          .append(" | content=").append(result.content())
+      builder
+          .append("- title=")
+          .append(result.title())
+          .append(" | url=")
+          .append(result.url())
+          .append(" | publishedAt=")
+          .append(result.publishedAt())
+          .append(" | snippet=")
+          .append(result.snippet())
+          .append(" | content=")
+          .append(result.content())
           .append('\n');
     }
     return builder.toString().trim();
   }
 
-  private void printSources(List<VectorDocumentSearchResult> vectorResults, WebSearchContext webContext) {
+  private void printSources(
+      List<VectorDocumentSearchResult> vectorResults, WebSearchContext webContext) {
     Set<String> sources = new LinkedHashSet<>();
     for (VectorDocumentSearchResult result : vectorResults) {
       sources.add(result.source());

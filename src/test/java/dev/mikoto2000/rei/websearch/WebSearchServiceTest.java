@@ -4,20 +4,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.sun.net.httpserver.HttpExchange;
+import com.sun.net.httpserver.HttpServer;
+import dev.mikoto2000.rei.websearch.WebSearchProperties.ProviderProperties;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-
-import com.sun.net.httpserver.HttpExchange;
-import com.sun.net.httpserver.HttpServer;
-
-import dev.mikoto2000.rei.websearch.WebSearchProperties.ProviderProperties;
 import tools.jackson.databind.json.JsonMapper;
 
 @org.junit.jupiter.api.Tag("integration")
@@ -37,15 +34,19 @@ class WebSearchServiceTest {
     AtomicReference<String> observedQuery = new AtomicReference<>();
     AtomicReference<String> observedHeader = new AtomicReference<>();
     server = HttpServer.create(new InetSocketAddress(0), 0);
-    server.createContext("/res/v1/web/search", exchange -> respondWithSearchResults(exchange, observedQuery, observedHeader));
+    server.createContext(
+        "/res/v1/web/search",
+        exchange -> respondWithSearchResults(exchange, observedQuery, observedHeader));
     server.start();
 
     WebSearchProperties properties = new WebSearchProperties();
     properties.setEnabled(true);
-    properties.setProviders(List.of(provider(
-        "brave",
-        "http://localhost:" + server.getAddress().getPort() + "/res/v1/web/search",
-        "test-key")));
+    properties.setProviders(
+        List.of(
+            provider(
+                "brave",
+                "http://localhost:" + server.getAddress().getPort() + "/res/v1/web/search",
+                "test-key")));
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
     List<WebSearchResult> results = service.search("spring ai", 2);
@@ -62,15 +63,17 @@ class WebSearchServiceTest {
     AtomicReference<String> observedQuery = new AtomicReference<>();
     AtomicReference<String> observedHeader = new AtomicReference<>();
     server = HttpServer.create(new InetSocketAddress(0), 0);
-    server.createContext("/html/", exchange -> respondWithDuckDuckGoResults(exchange, observedQuery, observedHeader));
+    server.createContext(
+        "/html/",
+        exchange -> respondWithDuckDuckGoResults(exchange, observedQuery, observedHeader));
     server.start();
 
     WebSearchProperties properties = new WebSearchProperties();
     properties.setEnabled(true);
-    properties.setProviders(List.of(provider(
-        "duckduckgo",
-        "http://localhost:" + server.getAddress().getPort() + "/html/",
-        "")));
+    properties.setProviders(
+        List.of(
+            provider(
+                "duckduckgo", "http://localhost:" + server.getAddress().getPort() + "/html/", "")));
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
     List<WebSearchResult> results = service.search("spring ai", 2);
@@ -88,15 +91,26 @@ class WebSearchServiceTest {
     AtomicReference<String> observedDuckQuery = new AtomicReference<>();
     AtomicReference<String> observedBraveQuery = new AtomicReference<>();
     server = HttpServer.create(new InetSocketAddress(0), 0);
-    server.createContext("/duck", exchange -> respondWithDuckDuckGoResults(exchange, observedDuckQuery, new AtomicReference<>()));
-    server.createContext("/brave", exchange -> respondWithSearchResults(exchange, observedBraveQuery, new AtomicReference<>()));
+    server.createContext(
+        "/duck",
+        exchange ->
+            respondWithDuckDuckGoResults(exchange, observedDuckQuery, new AtomicReference<>()));
+    server.createContext(
+        "/brave",
+        exchange ->
+            respondWithSearchResults(exchange, observedBraveQuery, new AtomicReference<>()));
     server.start();
 
     WebSearchProperties properties = new WebSearchProperties();
     properties.setEnabled(true);
-    properties.setProviders(List.of(
-        provider("duckduckgo", "http://localhost:" + server.getAddress().getPort() + "/duck", ""),
-        provider("brave", "http://localhost:" + server.getAddress().getPort() + "/brave", "test-key")));
+    properties.setProviders(
+        List.of(
+            provider(
+                "duckduckgo", "http://localhost:" + server.getAddress().getPort() + "/duck", ""),
+            provider(
+                "brave",
+                "http://localhost:" + server.getAddress().getPort() + "/brave",
+                "test-key")));
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
     List<WebSearchResult> results = service.search("spring ai", 2);
@@ -104,10 +118,12 @@ class WebSearchServiceTest {
     assertEquals("q=spring+ai", observedDuckQuery.get());
     assertEquals("q=spring+ai&count=2", observedBraveQuery.get());
     assertEquals(3, results.size());
-    assertEquals(List.of(
-        "https://example.com/spring-ai",
-        "https://example.com/duck",
-        "https://example.com/brave-search"), results.stream().map(WebSearchResult::url).toList());
+    assertEquals(
+        List.of(
+            "https://example.com/spring-ai",
+            "https://example.com/duck",
+            "https://example.com/brave-search"),
+        results.stream().map(WebSearchResult::url).toList());
   }
 
   @Test
@@ -115,15 +131,26 @@ class WebSearchServiceTest {
     AtomicReference<String> observedDuckQuery = new AtomicReference<>();
     AtomicReference<String> observedBraveQuery = new AtomicReference<>();
     server = HttpServer.create(new InetSocketAddress(0), 0);
-    server.createContext("/duck", exchange -> respondWithDuckDuckGoResults(exchange, observedDuckQuery, new AtomicReference<>()));
-    server.createContext("/brave", exchange -> respondWithBraveUniqueResults(exchange, observedBraveQuery, new AtomicReference<>()));
+    server.createContext(
+        "/duck",
+        exchange ->
+            respondWithDuckDuckGoResults(exchange, observedDuckQuery, new AtomicReference<>()));
+    server.createContext(
+        "/brave",
+        exchange ->
+            respondWithBraveUniqueResults(exchange, observedBraveQuery, new AtomicReference<>()));
     server.start();
 
     WebSearchProperties properties = new WebSearchProperties();
     properties.setEnabled(true);
-    properties.setProviders(List.of(
-        provider("duckduckgo", "http://localhost:" + server.getAddress().getPort() + "/duck", ""),
-        provider("brave", "http://localhost:" + server.getAddress().getPort() + "/brave", "test-key")));
+    properties.setProviders(
+        List.of(
+            provider(
+                "duckduckgo", "http://localhost:" + server.getAddress().getPort() + "/duck", ""),
+            provider(
+                "brave",
+                "http://localhost:" + server.getAddress().getPort() + "/brave",
+                "test-key")));
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
     List<WebSearchResult> results = service.search("spring ai", 2);
@@ -131,11 +158,13 @@ class WebSearchServiceTest {
     assertEquals("q=spring+ai", observedDuckQuery.get());
     assertEquals("q=spring+ai&count=2", observedBraveQuery.get());
     assertEquals(4, results.size());
-    assertEquals(List.of(
-        "https://example.com/spring-ai",
-        "https://example.com/duck",
-        "https://example.com/brave-one",
-        "https://example.com/brave-two"), results.stream().map(WebSearchResult::url).toList());
+    assertEquals(
+        List.of(
+            "https://example.com/spring-ai",
+            "https://example.com/duck",
+            "https://example.com/brave-one",
+            "https://example.com/brave-two"),
+        results.stream().map(WebSearchResult::url).toList());
   }
 
   @Test
@@ -143,14 +172,20 @@ class WebSearchServiceTest {
     AtomicReference<String> observedBraveQuery = new AtomicReference<>();
     AtomicReference<String> observedBraveHeader = new AtomicReference<>();
     server = HttpServer.create(new InetSocketAddress(0), 0);
-    server.createContext("/brave", exchange -> respondWithSearchResults(exchange, observedBraveQuery, observedBraveHeader));
+    server.createContext(
+        "/brave",
+        exchange -> respondWithSearchResults(exchange, observedBraveQuery, observedBraveHeader));
     server.start();
 
     WebSearchProperties properties = new WebSearchProperties();
     properties.setEnabled(true);
-    properties.setProviders(List.of(
-        provider("unsupported", "http://localhost/unused", ""),
-        provider("brave", "http://localhost:" + server.getAddress().getPort() + "/brave", "test-key")));
+    properties.setProviders(
+        List.of(
+            provider("unsupported", "http://localhost/unused", ""),
+            provider(
+                "brave",
+                "http://localhost:" + server.getAddress().getPort() + "/brave",
+                "test-key")));
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
     List<WebSearchResult> results = service.search("spring ai", 2);
@@ -166,7 +201,8 @@ class WebSearchServiceTest {
     properties.setProviders(List.of(provider("", "", "")));
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
-    IllegalStateException error = assertThrows(IllegalStateException.class, service::configuredProviders);
+    IllegalStateException error =
+        assertThrows(IllegalStateException.class, service::configuredProviders);
 
     assertTrue(error.getMessage().startsWith("No web search providers are configured."));
   }
@@ -175,10 +211,12 @@ class WebSearchServiceTest {
   void searchRequiresApiKeyForBrave() {
     WebSearchProperties properties = new WebSearchProperties();
     properties.setEnabled(true);
-    properties.setProviders(List.of(provider("brave", "https://api.search.brave.com/res/v1/web/search", "")));
+    properties.setProviders(
+        List.of(provider("brave", "https://api.search.brave.com/res/v1/web/search", "")));
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
-    IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.search("spring ai", 3));
+    IllegalStateException error =
+        assertThrows(IllegalStateException.class, () -> service.search("spring ai", 3));
 
     assertEquals("Web search API key is not configured for provider brave.", error.getMessage());
   }
@@ -186,12 +224,16 @@ class WebSearchServiceTest {
   @Test
   void searchRequiresFeatureFlag() {
     WebSearchProperties properties = new WebSearchProperties();
-    properties.setProviders(List.of(provider("brave", "https://api.search.brave.com/res/v1/web/search", "test-key")));
+    properties.setProviders(
+        List.of(provider("brave", "https://api.search.brave.com/res/v1/web/search", "test-key")));
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
-    IllegalStateException error = assertThrows(IllegalStateException.class, () -> service.search("spring ai", 3));
+    IllegalStateException error =
+        assertThrows(IllegalStateException.class, () -> service.search("spring ai", 3));
 
-    assertEquals("Web search is disabled. Set REI_WEB_SEARCH_ENABLED=true to enable it.", error.getMessage());
+    assertEquals(
+        "Web search is disabled. Set REI_WEB_SEARCH_ENABLED=true to enable it.",
+        error.getMessage());
   }
 
   @Test
@@ -217,21 +259,23 @@ class WebSearchServiceTest {
   @Test
   void searchReturnsEmptyListWhenProvidersAreConfiguredButNoResultsAreFound() throws Exception {
     server = HttpServer.create(new InetSocketAddress(0), 0);
-    server.createContext("/html/", exchange -> {
-      byte[] body = "<html><body></body></html>".getBytes(StandardCharsets.UTF_8);
-      exchange.sendResponseHeaders(200, body.length);
-      try (OutputStream outputStream = exchange.getResponseBody()) {
-        outputStream.write(body);
-      }
-    });
+    server.createContext(
+        "/html/",
+        exchange -> {
+          byte[] body = "<html><body></body></html>".getBytes(StandardCharsets.UTF_8);
+          exchange.sendResponseHeaders(200, body.length);
+          try (OutputStream outputStream = exchange.getResponseBody()) {
+            outputStream.write(body);
+          }
+        });
     server.start();
 
     WebSearchProperties properties = new WebSearchProperties();
     properties.setEnabled(true);
-    properties.setProviders(List.of(provider(
-        "duckduckgo",
-        "http://localhost:" + server.getAddress().getPort() + "/html/",
-        "")));
+    properties.setProviders(
+        List.of(
+            provider(
+                "duckduckgo", "http://localhost:" + server.getAddress().getPort() + "/html/", "")));
     WebSearchService service = new WebSearchService(properties, new JsonMapper());
 
     List<WebSearchResult> results = service.search("spring ai", 2);
@@ -247,11 +291,15 @@ class WebSearchServiceTest {
     return provider;
   }
 
-  private void respondWithSearchResults(HttpExchange exchange, AtomicReference<String> observedQuery,
-      AtomicReference<String> observedHeader) throws IOException {
+  private void respondWithSearchResults(
+      HttpExchange exchange,
+      AtomicReference<String> observedQuery,
+      AtomicReference<String> observedHeader)
+      throws IOException {
     observedQuery.set(exchange.getRequestURI().getRawQuery());
     observedHeader.set(exchange.getRequestHeaders().getFirst("X-Subscription-Token"));
-    byte[] body = """
+    byte[] body =
+        """
         {
           "web": {
             "results": [
@@ -270,18 +318,23 @@ class WebSearchServiceTest {
             ]
           }
         }
-        """.getBytes(StandardCharsets.UTF_8);
+        """
+            .getBytes(StandardCharsets.UTF_8);
     exchange.sendResponseHeaders(200, body.length);
     try (OutputStream outputStream = exchange.getResponseBody()) {
       outputStream.write(body);
     }
   }
 
-  private void respondWithDuckDuckGoResults(HttpExchange exchange, AtomicReference<String> observedQuery,
-      AtomicReference<String> observedHeader) throws IOException {
+  private void respondWithDuckDuckGoResults(
+      HttpExchange exchange,
+      AtomicReference<String> observedQuery,
+      AtomicReference<String> observedHeader)
+      throws IOException {
     observedQuery.set(exchange.getRequestURI().getRawQuery());
     observedHeader.set(exchange.getRequestHeaders().getFirst("User-Agent"));
-    byte[] body = """
+    byte[] body =
+        """
         <html>
           <body>
             <div class="result">
@@ -294,18 +347,23 @@ class WebSearchServiceTest {
             </div>
           </body>
         </html>
-        """.getBytes(StandardCharsets.UTF_8);
+        """
+            .getBytes(StandardCharsets.UTF_8);
     exchange.sendResponseHeaders(200, body.length);
     try (OutputStream outputStream = exchange.getResponseBody()) {
       outputStream.write(body);
     }
   }
 
-  private void respondWithBraveUniqueResults(HttpExchange exchange, AtomicReference<String> observedQuery,
-      AtomicReference<String> observedHeader) throws IOException {
+  private void respondWithBraveUniqueResults(
+      HttpExchange exchange,
+      AtomicReference<String> observedQuery,
+      AtomicReference<String> observedHeader)
+      throws IOException {
     observedQuery.set(exchange.getRequestURI().getRawQuery());
     observedHeader.set(exchange.getRequestHeaders().getFirst("X-Subscription-Token"));
-    byte[] body = """
+    byte[] body =
+        """
         {
           "web": {
             "results": [
@@ -324,7 +382,8 @@ class WebSearchServiceTest {
             ]
           }
         }
-        """.getBytes(StandardCharsets.UTF_8);
+        """
+            .getBytes(StandardCharsets.UTF_8);
     exchange.sendResponseHeaders(200, body.length);
     try (OutputStream outputStream = exchange.getResponseBody()) {
       outputStream.write(body);

@@ -2,7 +2,6 @@ package dev.mikoto2000.rei.llm;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "rei.llm")
@@ -109,15 +108,39 @@ public class LlmProperties {
     private Integer maxSubgoalsPerReplan = DEFAULT_MAX_SUBGOALS_PER_REPLAN;
     private Integer maxLlmCallsPerRun = DEFAULT_MAX_LLM_CALLS_PER_RUN;
     private boolean llmCallBudgetEnabled = true;
-    public boolean isLlmCallBudgetEnabled() { return llmCallBudgetEnabled; }
-    public void setLlmCallBudgetEnabled(boolean enabled) { llmCallBudgetEnabled = enabled; }
-    private Integer maxToolArgumentCorrectionsPerRun = OutputLimitRunBudget.DEFAULT_MAX_ARGUMENT_CORRECTIONS;
+
+    public boolean isLlmCallBudgetEnabled() {
+      return llmCallBudgetEnabled;
+    }
+
+    public void setLlmCallBudgetEnabled(boolean enabled) {
+      llmCallBudgetEnabled = enabled;
+    }
+
+    private Integer maxToolArgumentCorrectionsPerRun =
+        OutputLimitRunBudget.DEFAULT_MAX_ARGUMENT_CORRECTIONS;
     private long maxTotalTokensPerRun;
     private long maxTotalTokensPerGoal;
-    public long getMaxTotalTokensPerGoal(){return maxTotalTokensPerGoal;}
-    public void setMaxTotalTokensPerGoal(long value){if(value<0)throw new IllegalArgumentException("max-total-tokens-per-goal must be nonnegative");maxTotalTokensPerGoal=value;}
-    public long getMaxTotalTokensPerRun(){return maxTotalTokensPerRun;}
-    public void setMaxTotalTokensPerRun(long value){if(value<0)throw new IllegalArgumentException("max-total-tokens-per-run must be nonnegative");maxTotalTokensPerRun=value;}
+
+    public long getMaxTotalTokensPerGoal() {
+      return maxTotalTokensPerGoal;
+    }
+
+    public void setMaxTotalTokensPerGoal(long value) {
+      if (value < 0)
+        throw new IllegalArgumentException("max-total-tokens-per-goal must be nonnegative");
+      maxTotalTokensPerGoal = value;
+    }
+
+    public long getMaxTotalTokensPerRun() {
+      return maxTotalTokensPerRun;
+    }
+
+    public void setMaxTotalTokensPerRun(long value) {
+      if (value < 0)
+        throw new IllegalArgumentException("max-total-tokens-per-run must be nonnegative");
+      maxTotalTokensPerRun = value;
+    }
 
     public Integer getMaxReplansPerGoal() {
       return positiveOrDefault(maxReplansPerGoal, DEFAULT_MAX_REPLANS_PER_GOAL);
@@ -145,12 +168,14 @@ public class LlmProperties {
 
     public Integer getMaxToolArgumentCorrectionsPerRun() {
       return maxToolArgumentCorrectionsPerRun == null
-          ? OutputLimitRunBudget.DEFAULT_MAX_ARGUMENT_CORRECTIONS : maxToolArgumentCorrectionsPerRun;
+          ? OutputLimitRunBudget.DEFAULT_MAX_ARGUMENT_CORRECTIONS
+          : maxToolArgumentCorrectionsPerRun;
     }
 
     public void setMaxToolArgumentCorrectionsPerRun(Integer value) {
-      if(value != null && value < 0)
-        throw new IllegalArgumentException("max-tool-argument-corrections-per-run must be nonnegative");
+      if (value != null && value < 0)
+        throw new IllegalArgumentException(
+            "max-tool-argument-corrections-per-run must be nonnegative");
       maxToolArgumentCorrectionsPerRun = value;
     }
 

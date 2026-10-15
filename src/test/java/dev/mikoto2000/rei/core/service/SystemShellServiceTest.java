@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
 import java.util.Map;
-
 import org.junit.jupiter.api.Test;
 
 class SystemShellServiceTest {
@@ -13,7 +12,8 @@ class SystemShellServiceTest {
   void resolvesShellFromEnvironment() {
     SystemShellService service = new SystemShellService();
 
-    assertThat(service.resolveShell(Map.of("SHELL", "/bin/zsh"), "Windows 11")).isEqualTo("/bin/zsh");
+    assertThat(service.resolveShell(Map.of("SHELL", "/bin/zsh"), "Windows 11"))
+        .isEqualTo("/bin/zsh");
   }
 
   @Test
@@ -41,7 +41,8 @@ class SystemShellServiceTest {
   void buildsInteractiveShellCommandLine() {
     SystemShellService service = new SystemShellService();
 
-    assertThat(service.interactiveShellCommandLine("powershell")).isEqualTo(List.of("powershell", "-NoLogo"));
+    assertThat(service.interactiveShellCommandLine("powershell"))
+        .isEqualTo(List.of("powershell", "-NoLogo"));
     assertThat(service.interactiveShellCommandLine("pwsh")).isEqualTo(List.of("pwsh", "-NoLogo"));
     assertThat(service.interactiveShellCommandLine("cmd")).isEqualTo(List.of("cmd"));
     assertThat(service.interactiveShellCommandLine("/bin/bash")).isEqualTo(List.of("/bin/bash"));

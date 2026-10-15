@@ -1,13 +1,12 @@
 package dev.mikoto2000.rei.llm;
 
+import dev.mikoto2000.rei.core.service.ModelHolderService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
-import dev.mikoto2000.rei.core.service.ModelHolderService;
 
 @Component
 public class OutputLimitReplanner {
@@ -20,13 +19,18 @@ public class OutputLimitReplanner {
   private final OutputLimitReplanParser parser;
 
   @Autowired
-  public OutputLimitReplanner(LlmModelProvider modelProvider, ModelHolderService modelHolderService,
+  public OutputLimitReplanner(
+      LlmModelProvider modelProvider,
+      ModelHolderService modelHolderService,
       LlmProperties properties) {
     this(modelProvider, modelHolderService, properties, new OutputLimitReplanParser());
   }
 
-  OutputLimitReplanner(LlmModelProvider modelProvider, ModelHolderService modelHolderService,
-      LlmProperties properties, OutputLimitReplanParser parser) {
+  OutputLimitReplanner(
+      LlmModelProvider modelProvider,
+      ModelHolderService modelHolderService,
+      LlmProperties properties,
+      OutputLimitReplanParser parser) {
     this.modelProvider = modelProvider;
     this.modelHolderService = modelHolderService;
     this.properties = properties;
@@ -34,30 +38,37 @@ public class OutputLimitReplanner {
   }
 
   public OutputLimitReplanPlan replan(OutputLimitReplanRequest request) {
-    return replan(request,null);
+    return replan(request, null);
   }
-  public OutputLimitReplanPlan replan(OutputLimitReplanRequest request,java.util.function.Consumer<Integer> usageRecorder) {
-    log.info("Output limit replan planner started: replanCount={}, remainingLlmCalls={}",
-        request.replanCount(), request.remainingLlmCalls());
-    Prompt prompt = new Prompt(buildPrompt(request),
-        modelProvider.chatOptions(LlmFeature.OUTPUT_LIMIT_PLANNER, modelHolderService.get()));
+
+  public OutputLimitReplanPlan replan(
+      OutputLimitReplanRequest request, java.util.function.Consumer<Integer> usageRecorder) {
+    log.info(
+        "Output limit replan planner started: replanCount={}, remainingLlmCalls={}",
+        request.replanCount(),
+        request.remainingLlmCalls());
+    Prompt prompt =
+        new Prompt(
+            buildPrompt(request),
+            modelProvider.chatOptions(LlmFeature.OUTPUT_LIMIT_PLANNER, modelHolderService.get()));
     ChatResponse response;
     try {
-      var model=modelProvider.chatModel(LlmFeature.OUTPUT_LIMIT_PLANNER);
-      if(usageRecorder!=null)dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
-      response=model.call(prompt);
-    }
-    catch(RuntimeException error) {
+      var model = modelProvider.chatModel(LlmFeature.OUTPUT_LIMIT_PLANNER);
+      if (usageRecorder != null)
+        dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
+      response = model.call(prompt);
+    } catch (RuntimeException error) {
       dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
-      if(usageRecorder!=null)usageRecorder.accept(null);
+      if (usageRecorder != null) usageRecorder.accept(null);
       throw error;
     }
-    if(usageRecorder!=null) {
-      var usage=response==null?null:response.getMetadata().getUsage();
-      usageRecorder.accept(usage==null?null:usage.getTotalTokens());
+    if (usageRecorder != null) {
+      var usage = response == null ? null : response.getMetadata().getUsage();
+      usageRecorder.accept(usage == null ? null : usage.getTotalTokens());
     }
     String text = response.getResult().getOutput().getText();
-    OutputLimitReplanPlan plan = parser.parse(text, properties.getOutputLimit().getMaxSubgoalsPerReplan());
+    OutputLimitReplanPlan plan =
+        parser.parse(text, properties.getOutputLimit().getMaxSubgoalsPerReplan());
     log.info("Output limit replan planner completed: subgoals={}", plan.subgoals().size());
     return plan;
   }
@@ -96,7 +107,8 @@ public class OutputLimitReplanner {
         maxReplansPerGoal=%d
         remainingLlmCalls=%d
         maxSubgoalsPerReplan=%d
-        """.formatted(
+        """
+        .formatted(
             safe(request.originalUserRequest()),
             safe(request.currentGoal()),
             safe(request.progressSoFar()),

@@ -3,12 +3,6 @@ package dev.mikoto2000.rei.ui.shell;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-
-import org.junit.jupiter.api.Test;
-
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.ErrorInformation;
 import dev.mikoto2000.rei.event.SkillCandidatesEvaluatedPayload;
@@ -17,6 +11,10 @@ import dev.mikoto2000.rei.topic.TopicGenerationStage;
 import dev.mikoto2000.rei.topic.TopicRejectionReason;
 import dev.mikoto2000.rei.topic.TopicScoreBreakdown;
 import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import org.junit.jupiter.api.Test;
 
 class ShellAgentEventRendererTest {
   @Test
@@ -25,13 +23,25 @@ class ShellAgentEventRendererTest {
     var renderer = new ShellAgentEventRenderer(output);
     var notifications = new java.util.ArrayList<dev.mikoto2000.rei.event.AgentEvent>();
     notifications.add(events.checkpointSaved("task", "TURN_END", 2));
-    for (var type : java.util.List.of(
-        dev.mikoto2000.rei.event.AgentEventType.CHECKPOINT_RECONCILED,
-        dev.mikoto2000.rei.event.AgentEventType.CHECKPOINT_RESUMED,
-        dev.mikoto2000.rei.event.AgentEventType.CHECKPOINT_REVISION_SAVED)) {
-      notifications.add(new dev.mikoto2000.rei.event.AgentEvent("event", 0, Instant.EPOCH,
-          type, 1, null, null, "run", null, null,
-          new dev.mikoto2000.rei.event.CheckpointLifecyclePayload("task", 2, "previous", 1L, "CONTINUE")));
+    for (var type :
+        java.util.List.of(
+            dev.mikoto2000.rei.event.AgentEventType.CHECKPOINT_RECONCILED,
+            dev.mikoto2000.rei.event.AgentEventType.CHECKPOINT_RESUMED,
+            dev.mikoto2000.rei.event.AgentEventType.CHECKPOINT_REVISION_SAVED)) {
+      notifications.add(
+          new dev.mikoto2000.rei.event.AgentEvent(
+              "event",
+              0,
+              Instant.EPOCH,
+              type,
+              1,
+              null,
+              null,
+              "run",
+              null,
+              null,
+              new dev.mikoto2000.rei.event.CheckpointLifecyclePayload(
+                  "task", 2, "previous", 1L, "CONTINUE")));
     }
     for (var event : notifications) {
       renderer.onEvent(event);
@@ -52,149 +62,306 @@ class ShellAgentEventRendererTest {
     assertEquals(before + " second\n", output.text());
   }
 
-  @Test void cancellationShowsCodeAndSpecificRedactedReason() {
+  @Test
+  void cancellationShowsCodeAndSpecificRedactedReason() {
     var output = new RecordingOutput();
-    new ShellAgentEventRenderer(output).onEvent(events.runCancelled("run", new ErrorInformation("CancellationException", "approval denied token=hidden", "approval_denied")));
-    assertEquals("[agent] cancelled: [approval_denied] approval denied token=[REDACTED]\n", output.text());
-  }
-  @Test void compressionFailureIsVisibleAtStreamBoundary() {
-    var output = new RecordingOutput(); var renderer = new ShellAgentEventRenderer(output);
-    renderer.onEvent(events.messageStarted("m", "assistant")); renderer.onEvent(events.messageDelta("m", "answer"));
-    renderer.onEvent(events.contextCompression(dev.mikoto2000.rei.event.AgentEventType.CONTEXT_COMPRESSION_FAILED,
-        new dev.mikoto2000.rei.event.ContextCompressionPayload(100,100,2,1,"compression_unavailable")));
-    assertTrue(!output.text().contains("compression_unavailable"));
-    renderer.onEvent(events.messageCompleted("m", "assistant", "answer"));
-    assertTrue(output.text().contains("answer\n[context.compression] failed: compression_unavailable\n"));
+    new ShellAgentEventRenderer(output)
+        .onEvent(
+            events.runCancelled(
+                "run",
+                new ErrorInformation(
+                    "CancellationException", "approval denied token=hidden", "approval_denied")));
+    assertEquals(
+        "[agent] cancelled: [approval_denied] approval denied token=[REDACTED]\n", output.text());
   }
 
-  @Test void compressionDetailsAndRetryDelayWaitUntilAnswerCompletes() {
-    var output = new RecordingOutput(); var renderer = new ShellAgentEventRenderer(output);
+  @Test
+  void compressionFailureIsVisibleAtStreamBoundary() {
+    var output = new RecordingOutput();
+    var renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(events.messageStarted("m", "assistant"));
+    renderer.onEvent(events.messageDelta("m", "answer"));
+    renderer.onEvent(
+        events.contextCompression(
+            dev.mikoto2000.rei.event.AgentEventType.CONTEXT_COMPRESSION_FAILED,
+            new dev.mikoto2000.rei.event.ContextCompressionPayload(
+                100, 100, 2, 1, "compression_unavailable")));
+    assertTrue(!output.text().contains("compression_unavailable"));
+    renderer.onEvent(events.messageCompleted("m", "assistant", "answer"));
+    assertTrue(
+        output.text().contains("answer\n[context.compression] failed: compression_unavailable\n"));
+  }
+
+  @Test
+  void compressionDetailsAndRetryDelayWaitUntilAnswerCompletes() {
+    var output = new RecordingOutput();
+    var renderer = new ShellAgentEventRenderer(output);
     renderer.onEvent(events.messageStarted("m", "assistant"));
     renderer.onEvent(events.messageDelta("m", "先に"));
-    renderer.onEvent(events.contextCompression(dev.mikoto2000.rei.event.AgentEventType.CONTEXT_COMPRESSION_FAILED,
-        new dev.mikoto2000.rei.event.ContextCompressionPayload(100,100,2,1,"summary_timeout",
-            "timeoutSeconds=60\ntoken=hidden")));
-    renderer.onEvent(events.contextCompression(dev.mikoto2000.rei.event.AgentEventType.CONTEXT_COMPRESSION_SKIPPED,
-        new dev.mikoto2000.rei.event.ContextCompressionPayload(100,100,2,1,"retry_cooldown", "retryAfterSeconds=120")));
+    renderer.onEvent(
+        events.contextCompression(
+            dev.mikoto2000.rei.event.AgentEventType.CONTEXT_COMPRESSION_FAILED,
+            new dev.mikoto2000.rei.event.ContextCompressionPayload(
+                100, 100, 2, 1, "summary_timeout", "timeoutSeconds=60\ntoken=hidden")));
+    renderer.onEvent(
+        events.contextCompression(
+            dev.mikoto2000.rei.event.AgentEventType.CONTEXT_COMPRESSION_SKIPPED,
+            new dev.mikoto2000.rei.event.ContextCompressionPayload(
+                100, 100, 2, 1, "retry_cooldown", "retryAfterSeconds=120")));
     assertTrue(!output.text().contains("summary_timeout"));
     renderer.onEvent(events.messageDelta("m", "進めます。"));
     renderer.onEvent(events.messageCompleted("m", "assistant", "先に進めます。"));
-    assertTrue(output.text().contains("先に進めます。\n[context.compression] failed: summary_timeout (timeoutSeconds=60 token=[REDACTED])\n"
-        + "[context.compression] skipped: retry_cooldown (retryAfterSeconds=120)\n"));
+    assertTrue(
+        output
+            .text()
+            .contains(
+                "先に進めます。\n[context.compression] failed: summary_timeout (timeoutSeconds=60 token=[REDACTED])\n"
+                    + "[context.compression] skipped: retry_cooldown (retryAfterSeconds=120)\n"));
     assertTrue(!output.text().contains("hidden"));
   }
 
-  @Test void oldCompressionPayloadAndBlankSkippedDetailsDoNotAddEmptySuffix() {
-    var output = new RecordingOutput(); var renderer = new ShellAgentEventRenderer(output);
-    renderer.onEvent(events.contextCompression(dev.mikoto2000.rei.event.AgentEventType.CONTEXT_COMPRESSION_SKIPPED,
-        new dev.mikoto2000.rei.event.ContextCompressionPayload(100,100,2,1,"retry_cooldown", " ")));
+  @Test
+  void oldCompressionPayloadAndBlankSkippedDetailsDoNotAddEmptySuffix() {
+    var output = new RecordingOutput();
+    var renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(
+        events.contextCompression(
+            dev.mikoto2000.rei.event.AgentEventType.CONTEXT_COMPRESSION_SKIPPED,
+            new dev.mikoto2000.rei.event.ContextCompressionPayload(
+                100, 100, 2, 1, "retry_cooldown", " ")));
     assertEquals("[context.compression] skipped: retry_cooldown\n", output.text());
   }
 
-  @Test void subAgentFailureDisplaysTheSpecificFailureReason() {
-    var output=new RecordingOutput();
-    new ShellAgentEventRenderer(output).onEvent(new dev.mikoto2000.rei.event.AgentEvent("event",0,Instant.EPOCH,
-        dev.mikoto2000.rei.event.AgentEventType.SUBAGENT_FAILED,1,"subagent:child",null,"child",null,null,
-        new dev.mikoto2000.rei.event.SubAgentLifecyclePayload("parent","child","reviewer","review","FAILED",10,"SEND_LIMIT: 資料を分割してください。"),"project"));
+  @Test
+  void subAgentFailureDisplaysTheSpecificFailureReason() {
+    var output = new RecordingOutput();
+    new ShellAgentEventRenderer(output)
+        .onEvent(
+            new dev.mikoto2000.rei.event.AgentEvent(
+                "event",
+                0,
+                Instant.EPOCH,
+                dev.mikoto2000.rei.event.AgentEventType.SUBAGENT_FAILED,
+                1,
+                "subagent:child",
+                null,
+                "child",
+                null,
+                null,
+                new dev.mikoto2000.rei.event.SubAgentLifecyclePayload(
+                    "parent",
+                    "child",
+                    "reviewer",
+                    "review",
+                    "FAILED",
+                    10,
+                    "SEND_LIMIT: 資料を分割してください。"),
+                "project"));
     assertTrue(output.text().contains("原因: SEND_LIMIT: 資料を分割してください。"));
   }
-  @Test void distinguishesUnknownEvidenceFromConfirmedNoProgressInDiagnostics() {
-    var output=new RecordingOutput();var renderer=new ShellAgentEventRenderer(output);
-    renderer.onEvent(events.executionProgress(dev.mikoto2000.rei.event.AgentEventType.STAGNATION_UPDATED,"run",
-      new dev.mikoto2000.rei.event.ExecutionProgressPayload(null,0,4,0,2,"INFORMATION_UNKNOWN")));
+
+  @Test
+  void distinguishesUnknownEvidenceFromConfirmedNoProgressInDiagnostics() {
+    var output = new RecordingOutput();
+    var renderer = new ShellAgentEventRenderer(output);
+    renderer.onEvent(
+        events.executionProgress(
+            dev.mikoto2000.rei.event.AgentEventType.STAGNATION_UPDATED,
+            "run",
+            new dev.mikoto2000.rei.event.ExecutionProgressPayload(
+                null, 0, 4, 0, 2, "INFORMATION_UNKNOWN")));
     assertTrue(output.text().contains("reason=INFORMATION_UNKNOWN ledgerStatus=UNKNOWN"));
-    renderer.onEvent(events.executionProgress(dev.mikoto2000.rei.event.AgentEventType.STAGNATION_DETECTED,"run",
-      new dev.mikoto2000.rei.event.ExecutionProgressPayload(null,4,4,0,2,"REPEATED_READ")));
+    renderer.onEvent(
+        events.executionProgress(
+            dev.mikoto2000.rei.event.AgentEventType.STAGNATION_DETECTED,
+            "run",
+            new dev.mikoto2000.rei.event.ExecutionProgressPayload(
+                null, 4, 4, 0, 2, "REPEATED_READ")));
     assertTrue(output.text().contains("reason=REPEATED_READ ledgerStatus=HEALTHY"));
   }
-  @Test void defersNotificationsUntilAnswerIsComplete() {
+
+  @Test
+  void defersNotificationsUntilAnswerIsComplete() {
     var output = new RecordingOutput();
     var renderer = new ShellAgentEventRenderer(output);
     renderer.onEvent(events.messageStarted("m1", "assistant"));
     renderer.onEvent(events.messageDelta("m1", "[厚生労働省「ナルコレプシー治"));
     String beforeNotification = output.text();
-    renderer.onEvent(events.executionProgress(dev.mikoto2000.rei.event.AgentEventType.STAGNATION_UPDATED,
-        "run", new dev.mikoto2000.rei.event.ExecutionProgressPayload(null, 1, 4, 0, 2, null)));
-    renderer.onEvent(events.historySearchCompleted(
-        new dev.mikoto2000.rei.event.HistorySearchCompletedPayload("project-a", "CURRENT_PROJECT_PREFERRED", 3, 2, 1)));
+    renderer.onEvent(
+        events.executionProgress(
+            dev.mikoto2000.rei.event.AgentEventType.STAGNATION_UPDATED,
+            "run",
+            new dev.mikoto2000.rei.event.ExecutionProgressPayload(null, 1, 4, 0, 2, null)));
+    renderer.onEvent(
+        events.historySearchCompleted(
+            new dev.mikoto2000.rei.event.HistorySearchCompletedPayload(
+                "project-a", "CURRENT_PROJECT_PREFERRED", 3, 2, 1)));
     assertEquals(beforeNotification, output.text());
     renderer.onEvent(events.messageDelta("m1", "療薬」](https://www.mhlw.go.jp/)"));
     renderer.onEvent(events.messageCompleted("m1", "assistant", ""));
-    assertTrue(output.text().contains("[厚生労働省「ナルコレプシー治療薬」](https://www.mhlw.go.jp/)\n[stagnation] no progress: 1/4\n[history.search]"));
+    assertTrue(
+        output
+            .text()
+            .contains(
+                "[厚生労働省「ナルコレプシー治療薬」](https://www.mhlw.go.jp/)\n[stagnation] no progress: 1/4\n[history.search]"));
     String completed = output.text();
     renderer.onEvent(events.messageCompleted("m1", "assistant", ""));
     assertEquals(completed, output.text());
   }
 
-  @Test void flushesDeferredNotificationsOnCancellationWithoutLeakingIntoNextRun() {
+  @Test
+  void flushesDeferredNotificationsOnCancellationWithoutLeakingIntoNextRun() {
     var output = new RecordingOutput();
     var renderer = new ShellAgentEventRenderer(output);
     renderer.onEvent(events.messageStarted("m1", "assistant"));
     renderer.onEvent(events.messageDelta("m1", "途中\n"));
     String beforeNotification = output.text();
-    renderer.onEvent(events.executionProgress(dev.mikoto2000.rei.event.AgentEventType.STAGNATION_UPDATED,
-        "run-1", new dev.mikoto2000.rei.event.ExecutionProgressPayload(null, 1, 4, 0, 2, null)));
+    renderer.onEvent(
+        events.executionProgress(
+            dev.mikoto2000.rei.event.AgentEventType.STAGNATION_UPDATED,
+            "run-1",
+            new dev.mikoto2000.rei.event.ExecutionProgressPayload(null, 1, 4, 0, 2, null)));
     assertEquals(beforeNotification, output.text());
-    renderer.onEvent(events.runCancelled("run-1", new ErrorInformation("cancelled", "cancelled", null)));
-    assertTrue(output.text().contains("[stagnation] no progress: 1/4\n[agent] cancelled: cancelled\n"));
+    renderer.onEvent(
+        events.runCancelled("run-1", new ErrorInformation("cancelled", "cancelled", null)));
+    assertTrue(
+        output.text().contains("[stagnation] no progress: 1/4\n[agent] cancelled: cancelled\n"));
     String cancelled = output.text();
     renderer.onEvent(events.runStarted("run-2", "user", null));
     assertEquals(cancelled + "[agent] running\n", output.text());
   }
 
-  @Test void rendersVerifiedGoalStateAndBudgets() {
-    var output=new RecordingOutput();
-    new ShellAgentEventRenderer(output).onEvent(new dev.mikoto2000.rei.event.AgentEvent("event",0,Instant.EPOCH,
-        dev.mikoto2000.rei.event.AgentEventType.GOAL_UPDATED,1,"session",null,"run",null,null,
-        new dev.mikoto2000.rei.event.GoalLifecyclePayload("goal","COMPLETED",2,3,4,20,"file_digest_verified"),"project"));
-    assertEquals("[goal] goal COMPLETED runs=2/3 llm=4/20\n[goal] 理由: file_digest_verified\n",output.text());
-  }
-  @Test void rendersPersistentAttentionWithReviewCommand() {
-    var output=new RecordingOutput();
-    new ShellAgentEventRenderer(output).onEvent(new dev.mikoto2000.rei.event.AgentEvent("event",0,Instant.EPOCH,
-        dev.mikoto2000.rei.event.AgentEventType.ATTENTION_REQUIRED,1,"session",null,"run",null,null,
-        new dev.mikoto2000.rei.event.AttentionRequiredPayload("inbox-id","APPROVAL_REQUIRED","Review approval"),"project"));
-    assertEquals("+-- [APPROVAL REQUIRED] ----------------\n| Review approval\n/approval list\n+--------------------------------------\n", output.text());
-  }
-  @Test void approvalNoticeKeepsTheContinueCommandOnItsOwnLine() {
-    var output=new RecordingOutput();
-    String command="/approval approve ca880320-1482-4d84-8fb9-53c0b3234997 --continue";
-    new ShellAgentEventRenderer(output).onEvent(new dev.mikoto2000.rei.event.AgentEvent("event",0,Instant.EPOCH,
-        dev.mikoto2000.rei.event.AgentEventType.ATTENTION_REQUIRED,1,"session",null,"run",null,null,
-        new dev.mikoto2000.rei.event.AttentionRequiredPayload("inbox-id","APPROVAL_REQUIRED",
-            "承認待ち: runCommand\nこの操作を承認して続行するには、次のコマンドを入力してください:\n"+command+"\n拒否: /approval deny ca880320-1482-4d84-8fb9-53c0b3234997"),"project"));
-    assertTrue(output.text().contains("\n"+command+"\n"));
+  @Test
+  void rendersVerifiedGoalStateAndBudgets() {
+    var output = new RecordingOutput();
+    new ShellAgentEventRenderer(output)
+        .onEvent(
+            new dev.mikoto2000.rei.event.AgentEvent(
+                "event",
+                0,
+                Instant.EPOCH,
+                dev.mikoto2000.rei.event.AgentEventType.GOAL_UPDATED,
+                1,
+                "session",
+                null,
+                "run",
+                null,
+                null,
+                new dev.mikoto2000.rei.event.GoalLifecyclePayload(
+                    "goal", "COMPLETED", 2, 3, 4, 20, "file_digest_verified"),
+                "project"));
+    assertEquals(
+        "[goal] goal COMPLETED runs=2/3 llm=4/20\n[goal] 理由: file_digest_verified\n",
+        output.text());
   }
 
-  @Test void rendersDependencyWaitingSeparatelyFromStagnation() {
-    var output=new RecordingOutput();
-    new ShellAgentEventRenderer(output).onEvent(events.executionProgress(dev.mikoto2000.rei.event.AgentEventType.STAGNATION_UPDATED,"run",
-        new dev.mikoto2000.rei.event.ExecutionProgressPayload(null,1,4,0,2,"waiting_for_dependency")));
-    assertEquals("[waiting] awaiting dependency\n",output.text());
+  @Test
+  void rendersPersistentAttentionWithReviewCommand() {
+    var output = new RecordingOutput();
+    new ShellAgentEventRenderer(output)
+        .onEvent(
+            new dev.mikoto2000.rei.event.AgentEvent(
+                "event",
+                0,
+                Instant.EPOCH,
+                dev.mikoto2000.rei.event.AgentEventType.ATTENTION_REQUIRED,
+                1,
+                "session",
+                null,
+                "run",
+                null,
+                null,
+                new dev.mikoto2000.rei.event.AttentionRequiredPayload(
+                    "inbox-id", "APPROVAL_REQUIRED", "Review approval"),
+                "project"));
+    assertEquals(
+        "+-- [APPROVAL REQUIRED] ----------------\n| Review approval\n/approval list\n+--------------------------------------\n",
+        output.text());
   }
-  @Test void rendersShutdownNotification() {
+
+  @Test
+  void approvalNoticeKeepsTheContinueCommandOnItsOwnLine() {
+    var output = new RecordingOutput();
+    String command = "/approval approve ca880320-1482-4d84-8fb9-53c0b3234997 --continue";
+    new ShellAgentEventRenderer(output)
+        .onEvent(
+            new dev.mikoto2000.rei.event.AgentEvent(
+                "event",
+                0,
+                Instant.EPOCH,
+                dev.mikoto2000.rei.event.AgentEventType.ATTENTION_REQUIRED,
+                1,
+                "session",
+                null,
+                "run",
+                null,
+                null,
+                new dev.mikoto2000.rei.event.AttentionRequiredPayload(
+                    "inbox-id",
+                    "APPROVAL_REQUIRED",
+                    "承認待ち: runCommand\nこの操作を承認して続行するには、次のコマンドを入力してください:\n"
+                        + command
+                        + "\n拒否: /approval deny ca880320-1482-4d84-8fb9-53c0b3234997"),
+                "project"));
+    assertTrue(output.text().contains("\n" + command + "\n"));
+  }
+
+  @Test
+  void rendersDependencyWaitingSeparatelyFromStagnation() {
+    var output = new RecordingOutput();
+    new ShellAgentEventRenderer(output)
+        .onEvent(
+            events.executionProgress(
+                dev.mikoto2000.rei.event.AgentEventType.STAGNATION_UPDATED,
+                "run",
+                new dev.mikoto2000.rei.event.ExecutionProgressPayload(
+                    null, 1, 4, 0, 2, "waiting_for_dependency")));
+    assertEquals("[waiting] awaiting dependency\n", output.text());
+  }
+
+  @Test
+  void rendersShutdownNotification() {
     var output = new RecordingOutput();
     new ShellAgentEventRenderer(output).onEvent(events.applicationShutdownStarted("shell_exit"));
     assertEquals("[application] グレースフルシャットダウンを開始します。\n", output.text());
   }
-  @Test void rendersHistorySearchCountsWithoutMessageContent() {
+
+  @Test
+  void rendersHistorySearchCountsWithoutMessageContent() {
     var output = new RecordingOutput();
-    new ShellAgentEventRenderer(output).onEvent(events.historySearchCompleted(
-        new dev.mikoto2000.rei.event.HistorySearchCompletedPayload("project-a", "CURRENT_PROJECT_PREFERRED", 3, 2, 1)));
-    assertTrue(output.text().contains("[history.search] scope=CURRENT_PROJECT_PREFERRED currentHits=2 crossProjectHits=1 projectsSearched=3"));
+    new ShellAgentEventRenderer(output)
+        .onEvent(
+            events.historySearchCompleted(
+                new dev.mikoto2000.rei.event.HistorySearchCompletedPayload(
+                    "project-a", "CURRENT_PROJECT_PREFERRED", 3, 2, 1)));
+    assertTrue(
+        output
+            .text()
+            .contains(
+                "[history.search] scope=CURRENT_PROJECT_PREFERRED currentHits=2 crossProjectHits=1 projectsSearched=3"));
   }
+
   @Test
   void rendersProgressAndStagnationLifecycle() {
     RecordingOutput output = new RecordingOutput();
     var renderer = new ShellAgentEventRenderer(output);
-    var payload = new dev.mikoto2000.rei.event.ExecutionProgressPayload(
-        new dev.mikoto2000.rei.core.stagnation.ProgressEvidence(
-            dev.mikoto2000.rei.core.stagnation.ProgressEvent.STATE_CHANGED, "File changed", "A"),
-        4, 4, 1, 2, "stagnation");
-    for (var type : java.util.List.of(dev.mikoto2000.rei.event.AgentEventType.PROGRESS_DETECTED,
-        dev.mikoto2000.rei.event.AgentEventType.STAGNATION_REPLAN_REQUESTED,
-        dev.mikoto2000.rei.event.AgentEventType.STAGNATION_RECOVERED,
-        dev.mikoto2000.rei.event.AgentEventType.STAGNATION_STOPPED)) {
+    var payload =
+        new dev.mikoto2000.rei.event.ExecutionProgressPayload(
+            new dev.mikoto2000.rei.core.stagnation.ProgressEvidence(
+                dev.mikoto2000.rei.core.stagnation.ProgressEvent.STATE_CHANGED,
+                "File changed",
+                "A"),
+            4,
+            4,
+            1,
+            2,
+            "stagnation");
+    for (var type :
+        java.util.List.of(
+            dev.mikoto2000.rei.event.AgentEventType.PROGRESS_DETECTED,
+            dev.mikoto2000.rei.event.AgentEventType.STAGNATION_REPLAN_REQUESTED,
+            dev.mikoto2000.rei.event.AgentEventType.STAGNATION_RECOVERED,
+            dev.mikoto2000.rei.event.AgentEventType.STAGNATION_STOPPED)) {
       renderer.onEvent(events.executionProgress(type, "run", payload));
     }
     assertTrue(output.text().contains("[progress] STATE_CHANGED"));
@@ -202,10 +369,13 @@ class ShellAgentEventRendererTest {
     assertTrue(output.text().contains("recovered"));
     assertTrue(output.text().contains("STAGNATED"));
   }
-  private final String eventTime = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
-      .withZone(java.time.ZoneId.systemDefault()).format(Instant.parse("2026-08-23T00:00:00Z"));
-  private final AgentEventFactory events = new AgentEventFactory(
-      Clock.fixed(Instant.parse("2026-08-23T00:00:00Z"), ZoneOffset.UTC));
+
+  private final String eventTime =
+      java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
+          .withZone(java.time.ZoneId.systemDefault())
+          .format(Instant.parse("2026-08-23T00:00:00Z"));
+  private final AgentEventFactory events =
+      new AgentEventFactory(Clock.fixed(Instant.parse("2026-08-23T00:00:00Z"), ZoneOffset.UTC));
 
   @Test
   void rendersRunLifecycleAndFailureSummary() {
@@ -213,8 +383,11 @@ class ShellAgentEventRendererTest {
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
     renderer.onEvent(events.runStarted("run-1", "user", null));
     renderer.onEvent(events.runCompleted("run-1", 1_234, 456L, 123.45d, 78.94d, 65.43d));
-    renderer.onEvent(events.runFailed("run-2", new ErrorInformation("IO", "permission denied", "stack")));
-    assertEquals("[agent] running\n[agent] completed (1.2 s, 456 tokens, TTFT 123.5 ms, output 78.9 tok/s, end-to-end 65.4 tok/s)\n[agent] failed: [stack] permission denied\n", output.text());
+    renderer.onEvent(
+        events.runFailed("run-2", new ErrorInformation("IO", "permission denied", "stack")));
+    assertEquals(
+        "[agent] running\n[agent] completed (1.2 s, 456 tokens, TTFT 123.5 ms, output 78.9 tok/s, end-to-end 65.4 tok/s)\n[agent] failed: [stack] permission denied\n",
+        output.text());
   }
 
   @Test
@@ -222,7 +395,9 @@ class ShellAgentEventRendererTest {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
     renderer.onEvent(events.runCompleted("run-1", 20, null));
-    assertEquals("[agent] completed (0.0 s, tokens unavailable, TTFT unavailable, output speed unavailable, end-to-end speed unavailable)\n", output.text());
+    assertEquals(
+        "[agent] completed (0.0 s, tokens unavailable, TTFT unavailable, output speed unavailable, end-to-end speed unavailable)\n",
+        output.text());
   }
 
   @Test
@@ -231,7 +406,8 @@ class ShellAgentEventRendererTest {
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
     renderer.onEvent(events.llmRequestStarted("run-1", "request-1", "chat"));
     renderer.onEvent(events.llmResponseCompleted("run-1", "request-1", 1_234));
-    assertEquals("[llm] request sent (chat)\n[llm] response received (chat, 1234 ms)\n", output.text());
+    assertEquals(
+        "[llm] request sent (chat)\n[llm] response received (chat, 1234 ms)\n", output.text());
   }
 
   @Test
@@ -244,8 +420,12 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.llmResponseCompleted("run-1", "request-2", 20));
     renderer.onEvent(events.llmResponseCompleted("run-1", "request-1", 30));
     renderer.onEvent(events.messageCompleted("m1", "assistant", ""));
-    assertTrue(output.text().endsWith("[llm] response received (activity, 20 ms)\n"
-        + "[llm] response received (chat, 30 ms)\n"));
+    assertTrue(
+        output
+            .text()
+            .endsWith(
+                "[llm] response received (activity, 20 ms)\n"
+                    + "[llm] response received (chat, 30 ms)\n"));
   }
 
   @Test
@@ -259,7 +439,11 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.messageCompleted("other", "assistant", ""));
     renderer.onEvent(events.messageDelta("m1", "提案するよ。"));
     renderer.onEvent(events.messageCompleted("m1", "assistant", "もっと絞って提案するよ。"));
-    assertEquals("=== answer (" + eventTime + ") ===\nもっと絞って提案するよ。\n[llm] response received (request-1, 27682 ms)\n", output.text());
+    assertEquals(
+        "=== answer ("
+            + eventTime
+            + ") ===\nもっと絞って提案するよ。\n[llm] response received (request-1, 27682 ms)\n",
+        output.text());
   }
 
   @Test
@@ -271,7 +455,11 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.llmResponseCompleted("run-1", "request-1", 20));
     renderer.onEvent(events.thinkingDelta("t1", "します。"));
     renderer.onEvent(events.thinkingCompleted("t1", "確認します。"));
-    assertEquals("=== thinking (" + eventTime + ") ===\n確認します。\n[llm] response received (request-1, 20 ms)\n", output.text());
+    assertEquals(
+        "=== thinking ("
+            + eventTime
+            + ") ===\n確認します。\n[llm] response received (request-1, 20 ms)\n",
+        output.text());
   }
 
   @Test
@@ -281,11 +469,17 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.messageStarted("m1", "assistant"));
     renderer.onEvent(events.messageDelta("m1", "途中"));
     renderer.onEvent(events.llmResponseCompleted("run-1", "request-1", 20));
-    renderer.onEvent(events.runCancelled("run-1", new ErrorInformation("CancellationException", "cancelled", "cancelled")));
+    renderer.onEvent(
+        events.runCancelled(
+            "run-1", new ErrorInformation("CancellationException", "cancelled", "cancelled")));
     renderer.onEvent(events.runStarted("run-2", "user", null));
     renderer.onEvent(events.llmResponseCompleted("run-2", "request-2", 30));
-    assertEquals("=== answer (" + eventTime + ") ===\n途中\n[llm] response received (request-1, 20 ms)\n"
-        + "[agent] cancelled: [cancelled] cancelled\n[agent] running\n[llm] response received (request-2, 30 ms)\n", output.text());
+    assertEquals(
+        "=== answer ("
+            + eventTime
+            + ") ===\n途中\n[llm] response received (request-1, 20 ms)\n"
+            + "[agent] cancelled: [cancelled] cancelled\n[agent] running\n[llm] response received (request-2, 30 ms)\n",
+        output.text());
   }
 
   @Test
@@ -298,8 +492,12 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.toolStarted("c1", "readMultiFile", ""));
     renderer.onEvent(events.messageDelta("m1", "完了。"));
     renderer.onEvent(events.messageCompleted("m1", "assistant", "確認します。完了。"));
-    assertEquals("=== answer (" + eventTime + ") ===\n確認します。\n[llm] response received (request-1, 20 ms)\n"
-        + "  → readMultiFile\n\n完了。\n", output.text());
+    assertEquals(
+        "=== answer ("
+            + eventTime
+            + ") ===\n確認します。\n[llm] response received (request-1, 20 ms)\n"
+            + "  → readMultiFile\n\n完了。\n",
+        output.text());
   }
 
   @Test
@@ -325,7 +523,13 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.messageDelta("m1", "回答です。"));
     renderer.onEvent(events.messageCompleted("m1", "assistant", "回答です。"));
 
-    assertEquals("=== thinking (" + eventTime + ") ===\n状況を確認します。\n=== answer (" + eventTime + ") ===\n回答です。\n", output.text());
+    assertEquals(
+        "=== thinking ("
+            + eventTime
+            + ") ===\n状況を確認します。\n=== answer ("
+            + eventTime
+            + ") ===\n回答です。\n",
+        output.text());
   }
 
   @Test
@@ -338,7 +542,11 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.toolCompleted("c1", "readMultiFile", 121, "ok"));
     renderer.onEvent(events.messageDelta("m1", "続けます。"));
     renderer.onEvent(events.messageCompleted("m1", "assistant", "確認します。続けます。"));
-    assertEquals("=== answer (" + eventTime + ") ===\n確認します。\n  → readMultiFile files=8\n  ✓ readMultiFile (121 ms)\n\n続けます。\n", output.text());
+    assertEquals(
+        "=== answer ("
+            + eventTime
+            + ") ===\n確認します。\n  → readMultiFile files=8\n  ✓ readMultiFile (121 ms)\n\n続けます。\n",
+        output.text());
   }
 
   @Test
@@ -354,7 +562,8 @@ class ShellAgentEventRendererTest {
   void rendersToolFailureWithoutInventingMissingDuration() {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
-    renderer.onEvent(events.toolFailed("c1", "writeFile", new ErrorInformation("IO", "denied", null)));
+    renderer.onEvent(
+        events.toolFailed("c1", "writeFile", new ErrorInformation("IO", "denied", null)));
     assertEquals("  ✗ writeFile: denied\n", output.text());
   }
 
@@ -363,13 +572,21 @@ class ShellAgentEventRendererTest {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
     renderer.onEvent(events.skillSelectionStarted("selection-1"));
-    renderer.onEvent(events.skillSelectionCompleted("selection-1", java.util.List.of("explicit-skill"),
-        java.util.List.of("implicit-skill"), java.util.List.of("[warn] missing skill")));
-    renderer.onEvent(events.skillSelectionFailed("selection-2",
-        new ErrorInformation("IllegalStateException", "selection unavailable", null)));
-    assertEquals("[skill] selecting\n[warn] missing skill\n"
-        + "[skill] selected: explicit-skill (explicit), implicit-skill (implicit)\n"
-        + "[skill] selection failed: selection unavailable\n", output.text());
+    renderer.onEvent(
+        events.skillSelectionCompleted(
+            "selection-1",
+            java.util.List.of("explicit-skill"),
+            java.util.List.of("implicit-skill"),
+            java.util.List.of("[warn] missing skill")));
+    renderer.onEvent(
+        events.skillSelectionFailed(
+            "selection-2",
+            new ErrorInformation("IllegalStateException", "selection unavailable", null)));
+    assertEquals(
+        "[skill] selecting\n[warn] missing skill\n"
+            + "[skill] selected: explicit-skill (explicit), implicit-skill (implicit)\n"
+            + "[skill] selection failed: selection unavailable\n",
+        output.text());
   }
 
   @Test
@@ -377,46 +594,93 @@ class ShellAgentEventRendererTest {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
     renderer.onEvent(events.skillRoutingStarted("run-1", "routing-1", 27, 2));
-    renderer.onEvent(events.skillRoutingCompleted("run-1", "routing-1", 1_834, 27, "rspress", 2,
-        1_560L, null, null, java.util.List.of(), java.util.List.of("rspress"), java.util.List.of()));
-    renderer.onEvent(events.skillRoutingCompleted("run-1", "routing-2", 420, 27, null, 3,
-        390L, null, null, java.util.List.of(), java.util.List.of(), java.util.List.of()));
+    renderer.onEvent(
+        events.skillRoutingCompleted(
+            "run-1",
+            "routing-1",
+            1_834,
+            27,
+            "rspress",
+            2,
+            1_560L,
+            null,
+            null,
+            java.util.List.of(),
+            java.util.List.of("rspress"),
+            java.util.List.of()));
+    renderer.onEvent(
+        events.skillRoutingCompleted(
+            "run-1",
+            "routing-2",
+            420,
+            27,
+            null,
+            3,
+            390L,
+            null,
+            null,
+            java.util.List.of(),
+            java.util.List.of(),
+            java.util.List.of()));
 
-    assertEquals("[skill] selecting from 27 skills... (#2)\n"
-        + "[skill] rspress selected from 27 skills (1.83s, selector 1.56s)\n"
-        + "[skill] no skill selected from 27 skills (420ms, selector 390ms)\n", output.text());
+    assertEquals(
+        "[skill] selecting from 27 skills... (#2)\n"
+            + "[skill] rspress selected from 27 skills (1.83s, selector 1.56s)\n"
+            + "[skill] no skill selected from 27 skills (420ms, selector 390ms)\n",
+        output.text());
   }
 
   @Test
   void rendersSkillRoutingFailureAsBoundedSummary() {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
-    renderer.onEvent(events.skillRoutingFailed("run-1", "routing-1", 742, 27, 1,
-        new ErrorInformation("IllegalStateException", "selection unavailable\nsecret", null)));
-    assertEquals("[skill] selection failed after 742ms: selection unavailable secret\n", output.text());
+    renderer.onEvent(
+        events.skillRoutingFailed(
+            "run-1",
+            "routing-1",
+            742,
+            27,
+            1,
+            new ErrorInformation("IllegalStateException", "selection unavailable\nsecret", null)));
+    assertEquals(
+        "[skill] selection failed after 742ms: selection unavailable secret\n", output.text());
   }
 
   @Test
   void rendersSkillCandidateShadowEvaluationCompactly() {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
-    renderer.onEvent(events.skillCandidatesEvaluated("run-1", "routing-1", 42, 4, "rspress", true,
-        false, true, true, java.util.List.of(
-            new SkillCandidatesEvaluatedPayload.CandidateScore("typescript", 7),
-            new SkillCandidatesEvaluatedPayload.CandidateScore("rspress", 6))));
+    renderer.onEvent(
+        events.skillCandidatesEvaluated(
+            "run-1",
+            "routing-1",
+            42,
+            4,
+            "rspress",
+            true,
+            false,
+            true,
+            true,
+            java.util.List.of(
+                new SkillCandidatesEvaluatedPayload.CandidateScore("typescript", 7),
+                new SkillCandidatesEvaluatedPayload.CandidateScore("rspress", 6))));
 
-    assertEquals("[skill-candidate] 42 -> 2 skills (4ms), actual=rspress, top5=hit\n", output.text());
+    assertEquals(
+        "[skill-candidate] 42 -> 2 skills (4ms), actual=rspress, top5=hit\n", output.text());
   }
 
   @Test
   void rendersWorkingSetItemChangesWithExistingReasons() {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
-    renderer.onEvent(events.workingSetItemAdded("item-1", "file", "Foo.java", "/project/src/Foo.java",
-        "search selection"));
+    renderer.onEvent(
+        events.workingSetItemAdded(
+            "item-1", "file", "Foo.java", "/project/src/Foo.java", "search selection"));
     renderer.onEvent(events.workingSetItemRemoved("/project/src/Old.java", "capacity eviction"));
-    assertEquals("[working-set] + Foo.java (search selection)\n"
-        + "[working-set] - Old.java (capacity eviction)\n", output.text());
+    assertEquals(
+        "[working-set] + Foo.java (search selection)\n"
+            + "[working-set] - Old.java (capacity eviction)\n",
+        output.text());
   }
 
   @Test
@@ -436,10 +700,13 @@ class ShellAgentEventRendererTest {
   void rendersWorkingSetSearchLifecycleAsCompactSummaries() {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
-    renderer.onEvent(events.workingSetSearchStarted("search-1", "ToolCallbackProvider\nsecret", "searchAndRead", 1));
+    renderer.onEvent(
+        events.workingSetSearchStarted(
+            "search-1", "ToolCallbackProvider\nsecret", "searchAndRead", 1));
     renderer.onEvent(events.workingSetSearchCompleted("search-1", 91, 18, 5, 2, 1, 1, 2));
-    assertEquals("[working-set] → search \"ToolCallbackProvider secret\"\n"
-        + "[working-set] ✓ 18 hits → 5 candidates → 2 selected, 1 already present (91 ms)\n",
+    assertEquals(
+        "[working-set] → search \"ToolCallbackProvider secret\"\n"
+            + "[working-set] ✓ 18 hits → 5 candidates → 2 selected, 1 already present (91 ms)\n",
         output.text());
   }
 
@@ -457,9 +724,11 @@ class ShellAgentEventRendererTest {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
     renderer.onEvent(events.llmResponseFirstToken("run-1", "request-1", 42));
-    renderer.onEvent(events.llmRequestFailed("run-1", "request-1", 84, new IllegalStateException("boom")));
+    renderer.onEvent(
+        events.llmRequestFailed("run-1", "request-1", 84, new IllegalStateException("boom")));
     renderer.onEvent(events.contextInjected("task_state", null, 123));
-    renderer.onEvent(events.contextBudgetEvaluated(800, 700, java.util.List.of("SYSTEM"), java.util.List.of()));
+    renderer.onEvent(
+        events.contextBudgetEvaluated(800, 700, java.util.List.of("SYSTEM"), java.util.List.of()));
     renderer.onEvent(events.contextBudgetTrimmed(800, 700, java.util.List.of("OLD_HISTORY")));
     renderer.onEvent(events.fileSummarySaved("/project/src/Foo.java", 55));
     renderer.onEvent(events.fileSummaryInvalidated("/project/src/Foo.java"));
@@ -468,26 +737,30 @@ class ShellAgentEventRendererTest {
     renderer.onEvent(events.fileCreated("/project/src/New.java"));
     renderer.onEvent(events.fileModified("/project/src/Foo.java", 3, 1));
     renderer.onEvent(events.fileDeleted("/project/src/Old.java"));
-    renderer.onEvent(events.backgroundProcessStarted("proc-1", 1234L, "pwsh -Command test", "/project"));
+    renderer.onEvent(
+        events.backgroundProcessStarted("proc-1", 1234L, "pwsh -Command test", "/project"));
     renderer.onEvent(events.backgroundProcessCompleted("proc-1", 1234L, 0, 1.25d));
-    renderer.onEvent(events.backgroundProcessFailed("proc-2", "missing", new IllegalStateException("nope")));
+    renderer.onEvent(
+        events.backgroundProcessFailed("proc-2", "missing", new IllegalStateException("nope")));
     renderer.onEvent(events.backgroundProcessKilled("proc-3", 1235L, null, 2.5d));
 
-    assertEquals("[llm] first token (42 ms)\n"
-        + "[llm] request failed (84 ms): [invalid_state] 処理に必要な状態が整っていません。保存済みの状態と接続先の状態を確認してください。\n"
-        + "[context] injected task_state (123 chars)\n"
-        + "[context] budget evaluated: 700/800 tokens, included 1, dropped 0\n"
-        + "[context] budget trimmed: dropped OLD_HISTORY\n"
-        + "[file-summary] saved Foo.java (55 chars)\n"
-        + "[file-summary] invalidated Foo.java\n"
-        + "[file-summary] skipped stale Foo.java\n"
-        + "[file] created New.java\n"
-        + "[file] modified Foo.java (+3/-1)\n"
-        + "[file] deleted Old.java\n"
-        + "[process] started proc-1 pid=1234\n"
-        + "[process] completed proc-1 exit=0 (1.3 s)\n"
-        + "[process] failed proc-2: nope\n"
-        + "[process] killed proc-3 exit=null (2.5 s)\n", output.text());
+    assertEquals(
+        "[llm] first token (42 ms)\n"
+            + "[llm] request failed (84 ms): [invalid_state] 処理に必要な状態が整っていません。保存済みの状態と接続先の状態を確認してください。\n"
+            + "[context] injected task_state (123 chars)\n"
+            + "[context] budget evaluated: 700/800 tokens, included 1, dropped 0\n"
+            + "[context] budget trimmed: dropped OLD_HISTORY\n"
+            + "[file-summary] saved Foo.java (55 chars)\n"
+            + "[file-summary] invalidated Foo.java\n"
+            + "[file-summary] skipped stale Foo.java\n"
+            + "[file] created New.java\n"
+            + "[file] modified Foo.java (+3/-1)\n"
+            + "[file] deleted Old.java\n"
+            + "[process] started proc-1 pid=1234\n"
+            + "[process] completed proc-1 exit=0 (1.3 s)\n"
+            + "[process] failed proc-2: nope\n"
+            + "[process] killed proc-3 exit=null (2.5 s)\n",
+        output.text());
   }
 
   @Test
@@ -496,109 +769,157 @@ class ShellAgentEventRendererTest {
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
     renderer.onEvent(events.memoryConsolidationSuggested());
 
-    assertEquals("[memory] 記憶整理を実行することをお勧めします。/memory consolidate を実行してください。\n",
-        output.text());
+    assertEquals("[memory] 記憶整理を実行することをお勧めします。/memory consolidate を実行してください。\n", output.text());
   }
 
   @Test
   void rendersTopicEventsAndUnknownEventsDoNotBreakRenderer() {
     RecordingOutput output = new RecordingOutput();
-    ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output,
-        ShellAgentEventRenderer.TopicNotificationOptions.verbose());
+    ShellAgentEventRenderer renderer =
+        new ShellAgentEventRenderer(
+            output, ShellAgentEventRenderer.TopicNotificationOptions.verbose());
     TopicScoreBreakdown score = new TopicScoreBreakdown(0.16, 0.17, 0.27, 0.18, 0.05, 0.01, 0.82);
     renderer.onEvent(events.topicGenerationStarted("run-1", "tg-1", "agent-run"));
-    renderer.onEvent(events.topicIdleTriggerEvaluated(IdleTriggerRejectReason.INSUFFICIENT_IDLE, false,
-        java.time.Duration.ofSeconds(30), java.time.Duration.ofMinutes(2)));
-    renderer.onEvent(events.topicCandidatesRefreshed(2,
-        java.util.List.of("Working Set 測定", "前回の作業の続き")));
-    renderer.onEvent(events.topicCandidateGenerated("run-1", "tg-1", "topic-1", "UNFINISHED_WORK",
-        "WORKING_SET", "Working Set 測定", "効果測定が未実施", 1.0, 1.0, 1.0, 0.0, 1.0));
+    renderer.onEvent(
+        events.topicIdleTriggerEvaluated(
+            IdleTriggerRejectReason.INSUFFICIENT_IDLE,
+            false,
+            java.time.Duration.ofSeconds(30),
+            java.time.Duration.ofMinutes(2)));
+    renderer.onEvent(
+        events.topicCandidatesRefreshed(2, java.util.List.of("Working Set 測定", "前回の作業の続き")));
+    renderer.onEvent(
+        events.topicCandidateGenerated(
+            "run-1",
+            "tg-1",
+            "topic-1",
+            "UNFINISHED_WORK",
+            "WORKING_SET",
+            "Working Set 測定",
+            "効果測定が未実施",
+            1.0,
+            1.0,
+            1.0,
+            0.0,
+            1.0));
     renderer.onEvent(events.topicCandidateScored("run-1", "tg-1", "topic-1", score));
-    renderer.onEvent(events.topicCandidateRejected("run-1", "tg-1", "topic-2", TopicRejectionReason.LOW_SCORE, 0.43));
+    renderer.onEvent(
+        events.topicCandidateRejected(
+            "run-1", "tg-1", "topic-2", TopicRejectionReason.LOW_SCORE, 0.43));
     renderer.onEvent(events.topicSelected("run-1", "tg-1", "topic-1", 0.82, 1));
-    renderer.onEvent(events.topicSpeakSkipped("run-1", "tg-1", "topic-1", TopicSpeakSkipReason.COOLDOWN,
-        Instant.parse("2026-08-23T00:30:00Z")));
+    renderer.onEvent(
+        events.topicSpeakSkipped(
+            "run-1",
+            "tg-1",
+            "topic-1",
+            TopicSpeakSkipReason.COOLDOWN,
+            Instant.parse("2026-08-23T00:30:00Z")));
     renderer.onEvent(events.topicAutoSpeakSuppressed("stale activity"));
-    renderer.onEvent(events.topicSpoken("run-1", "tg-1", "topic-1", "m1",
-        Instant.parse("2026-08-23T00:00:00Z"), "話題です"));
-    renderer.onEvent(events.topicGenerationCompleted("run-1", "tg-1", 2, 2, 1, "topic-1", true, 184));
-    renderer.onEvent(events.topicGenerationFailed("run-1", "tg-2", TopicGenerationStage.RANKING,
-        new IllegalStateException("ranking failed")));
+    renderer.onEvent(
+        events.topicSpoken(
+            "run-1", "tg-1", "topic-1", "m1", Instant.parse("2026-08-23T00:00:00Z"), "話題です"));
+    renderer.onEvent(
+        events.topicGenerationCompleted("run-1", "tg-1", 2, 2, 1, "topic-1", true, 184));
+    renderer.onEvent(
+        events.topicGenerationFailed(
+            "run-1",
+            "tg-2",
+            TopicGenerationStage.RANKING,
+            new IllegalStateException("ranking failed")));
 
-    assertEquals("[topic] generation started\n"
-        + "        id: tg-1\n"
-        + "[topic] idle trigger skipped\n"
-        + "        idle: 30.00s\n"
-        + "        required: 120.00s\n"
-        + "        reason: INSUFFICIENT_IDLE\n"
-        + "[topic] candidates refreshed\n"
-        + "        candidates: 2\n"
-        + "        - Working Set 測定\n"
-        + "        - 前回の作業の続き\n"
-        + "[topic] candidate\n"
-        + "        id: topic-1\n"
-        + "        type: unfinished_work\n"
-        + "        source: working_set\n"
-        + "        topic: Working Set 測定\n"
-        + "        reason: 効果測定が未実施\n"
-        + "[topic] scored\n"
-        + "        id: topic-1\n"
-        + "        score: 0.82\n"
-        + "        priority: +0.16\n"
-        + "        freshness: +0.17\n"
-        + "        usefulness: +0.27\n"
-        + "        confidence: +0.18\n"
-        + "        intrusiveness: -0.05\n"
-        + "        repetition: -0.01\n"
-        + "[topic] rejected\n"
-        + "        id: topic-2\n"
-        + "        reason: LOW_SCORE\n"
-        + "        score: 0.43\n"
-        + "[topic] selected\n"
-        + "        id: topic-1\n"
-        + "        score: 0.82\n"
-        + "        rank: 1\n"
-        + "[topic] speak skipped\n"
-        + "        id: topic-1\n"
-        + "        reason: COOLDOWN\n"
-        + "        nextAllowedAt: 2026-08-23T00:30:00Z\n"
-        + "[topic] auto speak suppressed\n"
-        + "        reason: stale activity\n"
-        + "[topic] spoken\n"
-        + "        id: topic-1\n"
-        + "        message: m1\n"
-        + "[topic] generation completed\n"
-        + "        candidates: 2\n"
-        + "        scored: 2\n"
-        + "        rejected: 1\n"
-        + "        selected: topic-1\n"
-        + "        spoken: true\n"
-        + "        duration: 184ms\n"
-        + "[topic] generation failed\n"
-        + "        stage: RANKING\n"
-        + "        error: IllegalStateException: ranking failed\n", output.text());
+    assertEquals(
+        "[topic] generation started\n"
+            + "        id: tg-1\n"
+            + "[topic] idle trigger skipped\n"
+            + "        idle: 30.00s\n"
+            + "        required: 120.00s\n"
+            + "        reason: INSUFFICIENT_IDLE\n"
+            + "[topic] candidates refreshed\n"
+            + "        candidates: 2\n"
+            + "        - Working Set 測定\n"
+            + "        - 前回の作業の続き\n"
+            + "[topic] candidate\n"
+            + "        id: topic-1\n"
+            + "        type: unfinished_work\n"
+            + "        source: working_set\n"
+            + "        topic: Working Set 測定\n"
+            + "        reason: 効果測定が未実施\n"
+            + "[topic] scored\n"
+            + "        id: topic-1\n"
+            + "        score: 0.82\n"
+            + "        priority: +0.16\n"
+            + "        freshness: +0.17\n"
+            + "        usefulness: +0.27\n"
+            + "        confidence: +0.18\n"
+            + "        intrusiveness: -0.05\n"
+            + "        repetition: -0.01\n"
+            + "[topic] rejected\n"
+            + "        id: topic-2\n"
+            + "        reason: LOW_SCORE\n"
+            + "        score: 0.43\n"
+            + "[topic] selected\n"
+            + "        id: topic-1\n"
+            + "        score: 0.82\n"
+            + "        rank: 1\n"
+            + "[topic] speak skipped\n"
+            + "        id: topic-1\n"
+            + "        reason: COOLDOWN\n"
+            + "        nextAllowedAt: 2026-08-23T00:30:00Z\n"
+            + "[topic] auto speak suppressed\n"
+            + "        reason: stale activity\n"
+            + "[topic] spoken\n"
+            + "        id: topic-1\n"
+            + "        message: m1\n"
+            + "[topic] generation completed\n"
+            + "        candidates: 2\n"
+            + "        scored: 2\n"
+            + "        rejected: 1\n"
+            + "        selected: topic-1\n"
+            + "        spoken: true\n"
+            + "        duration: 184ms\n"
+            + "[topic] generation failed\n"
+            + "        stage: RANKING\n"
+            + "        error: IllegalStateException: ranking failed\n",
+        output.text());
   }
 
   @Test
   void rendersTopicSummaryWithoutFillingShellDuringIdleCooldown() {
     RecordingOutput output = new RecordingOutput();
     ShellAgentEventRenderer renderer = new ShellAgentEventRenderer(output);
-    renderer.onEvent(events.topicIdleTriggerEvaluated(null, true,
-        java.time.Duration.ofMinutes(3), java.time.Duration.ofMinutes(2)));
+    renderer.onEvent(
+        events.topicIdleTriggerEvaluated(
+            null, true, java.time.Duration.ofMinutes(3), java.time.Duration.ofMinutes(2)));
     renderer.onEvent(events.topicGenerationStarted("run-1", "tg-1", "idle"));
     renderer.onEvent(events.topicSelected("run-1", "tg-1", "topic-1", 0.82, 1));
-    renderer.onEvent(events.topicSpeakSkipped("run-1", "tg-1", "topic-1", TopicSpeakSkipReason.COOLDOWN,
-        Instant.parse("2026-08-23T00:30:00Z")));
-    renderer.onEvent(events.topicGenerationCompleted("run-1", "tg-1", 1, 1, 0, "topic-1", false, 184));
+    renderer.onEvent(
+        events.topicSpeakSkipped(
+            "run-1",
+            "tg-1",
+            "topic-1",
+            TopicSpeakSkipReason.COOLDOWN,
+            Instant.parse("2026-08-23T00:30:00Z")));
+    renderer.onEvent(
+        events.topicGenerationCompleted("run-1", "tg-1", 1, 1, 0, "topic-1", false, 184));
 
     assertEquals("", output.text());
   }
 
   private static final class RecordingOutput implements ShellEventOutput {
     private final StringBuilder value = new StringBuilder();
-    public void print(String text) { value.append(text); }
-    public void println(String text) { value.append(text).append('\n'); }
-    public void flush() { }
-    String text() { return value.toString(); }
+
+    public void print(String text) {
+      value.append(text);
+    }
+
+    public void println(String text) {
+      value.append(text).append('\n');
+    }
+
+    public void flush() {}
+
+    String text() {
+      return value.toString();
+    }
   }
 }

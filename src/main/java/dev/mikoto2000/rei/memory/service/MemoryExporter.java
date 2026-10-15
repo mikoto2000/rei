@@ -1,18 +1,15 @@
 package dev.mikoto2000.rei.memory.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import dev.mikoto2000.rei.memory.model.Memory;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-
 import org.springframework.stereotype.Component;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-
-import dev.mikoto2000.rei.memory.model.Memory;
 
 @Component
 public class MemoryExporter {
@@ -48,7 +45,13 @@ public class MemoryExporter {
   private String toMarkdown(List<Memory> memories) {
     StringBuilder b = new StringBuilder("# Memories\n\n");
     for (Memory memory : memories) {
-      b.append("- ").append(memory.id()).append(" [").append(memory.type()).append("] ").append(memory.content()).append("\n");
+      b.append("- ")
+          .append(memory.id())
+          .append(" [")
+          .append(memory.type())
+          .append("] ")
+          .append(memory.content())
+          .append("\n");
     }
     return b.toString();
   }

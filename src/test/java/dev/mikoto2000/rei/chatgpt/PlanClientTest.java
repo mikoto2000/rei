@@ -10,26 +10,64 @@ import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
 class PlanClientTest {
-  @Test void ownAccountLeaseIsInvalidatedByLogoutGenerationAndRejectsUnavailableModels() {
-    PlanTransport transport=(u,m,h,b,t,c)->PlanOAuthTest.reply(200,MODELS);
-    var client=new PlanClient(oauth(transport),transport,Clock.systemUTC());
-    var lease=client.lease("default","allowed");assertTrue(lease.valid().getAsBoolean());assertEquals("access-secret",lease.tokens().accessToken());assertFalse(lease.toString().contains("access-secret"));
-    client.stop("default");assertFalse(lease.valid().getAsBoolean());
-    assertEquals(ChatGptException.Code.MODEL_UNAVAILABLE,assertThrows(ChatGptException.class,()->client.lease("default","unknown")).code());
+  @Test
+  void ownAccountLeaseIsInvalidatedByLogoutGenerationAndRejectsUnavailableModels() {
+    PlanTransport transport = (u, m, h, b, t, c) -> PlanOAuthTest.reply(200, MODELS);
+    var client = new PlanClient(oauth(transport), transport, Clock.systemUTC());
+    var lease = client.lease("default", "allowed");
+    assertTrue(lease.valid().getAsBoolean());
+    assertEquals("access-secret", lease.tokens().accessToken());
+    assertFalse(lease.toString().contains("access-secret"));
+    client.stop("default");
+    assertFalse(lease.valid().getAsBoolean());
+    assertEquals(
+        ChatGptException.Code.MODEL_UNAVAILABLE,
+        assertThrows(ChatGptException.class, () -> client.lease("default", "unknown")).code());
   }
-  @Test void explicitHistoryUsesOnlySupportedInputAndNoServerContinuation() {
-    PlanTransport transport=(u,m,h,b,t,c)->{
-      if(m.equals("GET"))return PlanOAuthTest.reply(200,MODELS);
-      var body=parse(b);assertFalse(body.has("previous_response_id"));assertFalse(body.has("conversation"));
-      assertEquals(3,body.path("input").size());assertEquals("assistant",body.at("/input/1/role").asText());
-      assertEquals("previous answer",body.at("/input/1/content").asText());
-      return new PlanTransport.Response(200,PlanSseAssemblerTest.stream(PlanSseAssemblerTest.event("response.completed",PlanSseAssemblerTest.COMPLETED)),"req","text/event-stream");
-    };
-    var client=new PlanClient(oauth(transport),transport,Clock.systemUTC());
-    var history=List.of(new PlanClient.Input("user","task"),new PlanClient.Input("assistant","previous answer"),new PlanClient.Input("user","repair"));
-    assertEquals("hello",client.inferHistory("default","allowed","instructions",history,Duration.ofSeconds(1),262144,1048576,()->false,()->{}).text());
-    assertThrows(IllegalArgumentException.class,()->new PlanClient.Input("system","injected instructions"));
+
+  @Test
+  void explicitHistoryUsesOnlySupportedInputAndNoServerContinuation() {
+    PlanTransport transport =
+        (u, m, h, b, t, c) -> {
+          if (m.equals("GET")) return PlanOAuthTest.reply(200, MODELS);
+          var body = parse(b);
+          assertFalse(body.has("previous_response_id"));
+          assertFalse(body.has("conversation"));
+          assertEquals(3, body.path("input").size());
+          assertEquals("assistant", body.at("/input/1/role").asText());
+          assertEquals("previous answer", body.at("/input/1/content").asText());
+          return new PlanTransport.Response(
+              200,
+              PlanSseAssemblerTest.stream(
+                  PlanSseAssemblerTest.event("response.completed", PlanSseAssemblerTest.COMPLETED)),
+              "req",
+              "text/event-stream");
+        };
+    var client = new PlanClient(oauth(transport), transport, Clock.systemUTC());
+    var history =
+        List.of(
+            new PlanClient.Input("user", "task"),
+            new PlanClient.Input("assistant", "previous answer"),
+            new PlanClient.Input("user", "repair"));
+    assertEquals(
+        "hello",
+        client
+            .inferHistory(
+                "default",
+                "allowed",
+                "instructions",
+                history,
+                Duration.ofSeconds(1),
+                262144,
+                1048576,
+                () -> false,
+                () -> {})
+            .text());
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> new PlanClient.Input("system", "injected instructions"));
   }
+
   @TempDir Path root;
 
   PlanOAuth oauth(PlanTransport transport) {
@@ -387,7 +425,7 @@ class PlanClientTest {
     assertFalse(status.contains("access-secret"));
     assertFalse(status.contains("refresh-secret"));
     assertTrue(status.contains("[masked]"));
-    assertEquals(java.util.Set.of("default"),oauth.authorizedAccounts());
+    assertEquals(java.util.Set.of("default"), oauth.authorizedAccounts());
   }
 
   @Test

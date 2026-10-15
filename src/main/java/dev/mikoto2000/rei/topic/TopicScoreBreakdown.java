@@ -7,5 +7,4 @@ public record TopicScoreBreakdown(
     double confidenceContribution,
     double intrusivenessPenalty,
     double repetitionPenalty,
-    double finalScore) {
-}
+    double finalScore) {}

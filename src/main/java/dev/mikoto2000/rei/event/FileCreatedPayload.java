@@ -5,6 +5,4 @@ package dev.mikoto2000.rei.event;
  *
  * @param path ファイルのパス
  */
-public record FileCreatedPayload(String path)
-    implements AgentEventPayload {
-}
+public record FileCreatedPayload(String path) implements AgentEventPayload {}

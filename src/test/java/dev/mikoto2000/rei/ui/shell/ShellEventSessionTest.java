@@ -2,22 +2,20 @@ package dev.mikoto2000.rei.ui.shell;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.junit.jupiter.api.Test;
-
-import dev.mikoto2000.rei.event.AgentEventFactory;
-import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 
 class ShellEventSessionTest {
   @Test
   void forwardsShellEventsAndUnsubscribesOnClose() {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
-    AgentEventFactory events = new AgentEventFactory(
-        Clock.fixed(Instant.parse("2026-08-23T00:00:00Z"), ZoneOffset.UTC));
+    AgentEventFactory events =
+        new AgentEventFactory(Clock.fixed(Instant.parse("2026-08-23T00:00:00Z"), ZoneOffset.UTC));
     AtomicInteger received = new AtomicInteger();
     ShellEventSession session = new ShellEventSession(bus, event -> received.incrementAndGet());
 

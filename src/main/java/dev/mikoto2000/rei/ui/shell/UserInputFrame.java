@@ -9,7 +9,8 @@ import org.jline.utils.AttributedStyle;
 /** Shared keyboard/voice presentation. The time is the local time of submission display. */
 public final class UserInputFrame {
   private static final DateTimeFormatter TIME = DateTimeFormatter.ofPattern("HH:mm:ss");
-  private UserInputFrame() { }
+
+  private UserInputFrame() {}
 
   public static AttributedString format(String input, LocalTime time) {
     var builder = new AttributedStringBuilder();

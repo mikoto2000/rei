@@ -8,7 +8,6 @@ import java.io.PrintStream;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Stream;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
@@ -16,8 +15,8 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 /**
- * SoundNotificationService のプロパティテスト。
- * jqwik は JUnit 6 と互換性がないため、@ParameterizedTest + @MethodSource で代替する。
+ * SoundNotificationService のプロパティテスト。 jqwik は JUnit 6 と互換性がないため、@ParameterizedTest + @MethodSource
+ * で代替する。
  */
 @org.junit.jupiter.api.Tag("e2e")
 class SoundNotificationServicePropertyTest {
@@ -49,8 +48,7 @@ class SoundNotificationServicePropertyTest {
         "タブ\tを含む",
         "a".repeat(1000),
         "🎵音声通知🎵",
-        "  前後にスペース  "
-    );
+        "  前後にスペース  ");
   }
 
   @ParameterizedTest(name = "message={0}")
@@ -63,7 +61,8 @@ class SoundNotificationServicePropertyTest {
 
     service.notify(message);
 
-    assertTrue(outContent.toString().contains(message),
+    assertTrue(
+        outContent.toString().contains(message),
         "enabled=false のとき標準出力にメッセージが出力されるべき。message=" + message);
     outContent.reset();
   }
@@ -81,7 +80,8 @@ class SoundNotificationServicePropertyTest {
 
     service.notify(message);
 
-    assertTrue(outContent.toString().contains(message),
+    assertTrue(
+        outContent.toString().contains(message),
         "command が空のとき標準出力にメッセージが出力されるべき。message=" + message);
     outContent.reset();
   }
@@ -99,8 +99,7 @@ class SoundNotificationServicePropertyTest {
         "a".repeat(100),
         "🎵emoji🎵",
         "tab\there",
-        "quote\"here"
-    );
+        "quote\"here");
   }
 
   @ParameterizedTest(name = "message={0}")
@@ -112,22 +111,21 @@ class SoundNotificationServicePropertyTest {
     props.setCommand(List.of("echo", "{{MESSAGE}}", "--flag"));
 
     List<List<String>> capturedCommands = new ArrayList<>();
-    SoundNotificationService service = new SoundNotificationService(props) {
-      @Override
-      protected ProcessBuilder createProcessBuilder(List<String> command) {
-        capturedCommands.add(new ArrayList<>(command));
-        return new ProcessBuilder("cmd", "/c", "exit", "0");
-      }
-    };
+    SoundNotificationService service =
+        new SoundNotificationService(props) {
+          @Override
+          protected ProcessBuilder createProcessBuilder(List<String> command) {
+            capturedCommands.add(new ArrayList<>(command));
+            return new ProcessBuilder("cmd", "/c", "exit", "0");
+          }
+        };
 
     service.notify(message);
 
     assertFalse(capturedCommands.isEmpty(), "コマンドが実行されるべき");
     List<String> cmd = capturedCommands.getFirst();
-    assertTrue(cmd.contains(message),
-        "メッセージがコマンドに含まれるべき。message=" + message);
-    assertFalse(cmd.contains("{{MESSAGE}}"),
-        "{{MESSAGE}} プレースホルダーが残っていないべき");
+    assertTrue(cmd.contains(message), "メッセージがコマンドに含まれるべき。message=" + message);
+    assertFalse(cmd.contains("{{MESSAGE}}"), "{{MESSAGE}} プレースホルダーが残っていないべき");
   }
 
   // --- Property 4: 外部プログラム実行失敗時に標準出力にフォールバックする ---
@@ -140,16 +138,18 @@ class SoundNotificationServicePropertyTest {
     props.setEnabled(true);
     props.setCommand(List.of("echo", "{{MESSAGE}}"));
 
-    SoundNotificationService service = new SoundNotificationService(props) {
-      @Override
-      protected ProcessBuilder createProcessBuilder(List<String> command) {
-        return new ProcessBuilder("cmd", "/c", "exit", "1");
-      }
-    };
+    SoundNotificationService service =
+        new SoundNotificationService(props) {
+          @Override
+          protected ProcessBuilder createProcessBuilder(List<String> command) {
+            return new ProcessBuilder("cmd", "/c", "exit", "1");
+          }
+        };
 
     service.notify(message);
 
-    assertTrue(outContent.toString().contains(message),
+    assertTrue(
+        outContent.toString().contains(message),
         "外部プログラム失敗時に標準出力にメッセージが出力されるべき。message=" + message);
     outContent.reset();
   }

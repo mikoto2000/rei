@@ -2,10 +2,12 @@ package dev.mikoto2000.rei.launcher;
 
 /** Transitional Backend modes, parsed without Spring, persistence or scheduling. */
 public enum BackendMode {
-  SERVER, LEGACY_SHELL;
+  SERVER,
+  LEGACY_SHELL;
+
   public static BackendMode parse(String[] args) {
     String mode = null;
-    for (int i=0;i<args.length;i++) {
+    for (int i = 0; i < args.length; i++) {
       String value;
       if (args[i].equals("--mode")) {
         if (++i == args.length) throw new IllegalArgumentException("--mode requires a value");
@@ -17,6 +19,7 @@ public enum BackendMode {
     }
     if (mode == null || mode.equals("legacy-shell")) return LEGACY_SHELL;
     if (mode.equals("server")) return SERVER;
-    throw new IllegalArgumentException("Available modes: server, legacy-shell; lightweight CLI migration is not yet complete");
+    throw new IllegalArgumentException(
+        "Available modes: server, legacy-shell; lightweight CLI migration is not yet complete");
   }
 }

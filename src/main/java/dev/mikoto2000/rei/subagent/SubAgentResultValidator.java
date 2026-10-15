@@ -12,10 +12,20 @@ public final class SubAgentResultValidator {
     }
     return ValidationResult.of(errors);
   }
+
   private List<ValidationError> errors(List<com.networknt.schema.Error> errors, String prefix) {
     // Do not expose library messages: enum/const/property errors may echo instance values.
-    return errors.stream().limit(100).map(error -> new ValidationError(
-        bounded(prefix + error.getInstanceLocation()), "Schema constraint violated: " + error.getKeyword())).toList();
+    return errors.stream()
+        .limit(100)
+        .map(
+            error ->
+                new ValidationError(
+                    bounded(prefix + error.getInstanceLocation()),
+                    "Schema constraint violated: " + error.getKeyword()))
+        .toList();
   }
-  private String bounded(String path) { return path.length() <= 256 ? path : path.substring(0, 256) + "…"; }
+
+  private String bounded(String path) {
+    return path.length() <= 256 ? path : path.substring(0, 256) + "…";
+  }
 }

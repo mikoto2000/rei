@@ -6,8 +6,10 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -16,10 +18,6 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
-
-import dev.mikoto2000.rei.core.service.ModelHolderService;
-import dev.mikoto2000.rei.llm.LlmFeature;
-import dev.mikoto2000.rei.llm.LlmModelProvider;
 
 class LlmImagePromptEnhancerTest {
 
@@ -33,7 +31,8 @@ class LlmImagePromptEnhancerTest {
         .thenReturn(OpenAiChatOptions.builder().model("prompt-model").maxTokens(8192).build());
     when(modelProvider.chatModel(LlmFeature.IMAGE_PROMPT)).thenReturn(chatModel);
     when(chatModel.call(any(Prompt.class)))
-        .thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage("  enhanced prompt  ")))));
+        .thenReturn(
+            new ChatResponse(List.of(new Generation(new AssistantMessage("  enhanced prompt  ")))));
     LlmImagePromptEnhancer enhancer = new LlmImagePromptEnhancer(modelProvider, modelHolderService);
 
     String prompt = enhancer.enhance("猫の画像");

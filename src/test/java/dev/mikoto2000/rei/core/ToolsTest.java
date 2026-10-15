@@ -1,38 +1,15 @@
 package dev.mikoto2000.rei.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-
-import java.io.IOException;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.time.Duration;
-import java.nio.charset.Charset;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.util.List;
-import java.util.Map;
-import java.util.ArrayList;
-
-import org.apache.pdfbox.pdmodel.PDDocument;
-import org.apache.pdfbox.pdmodel.PDPage;
-import org.apache.pdfbox.pdmodel.PDPageContentStream;
-import org.apache.pdfbox.pdmodel.font.PDType1Font;
-import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.method.MethodToolCallbackProvider;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mikoto2000.rei.core.filesummary.FileSummary;
 import dev.mikoto2000.rei.core.filesummary.FileSummaryCache;
+import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
 import dev.mikoto2000.rei.core.process.BackgroundProcessStatus;
-import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import dev.mikoto2000.rei.core.process.RunCommandRequest;
 import dev.mikoto2000.rei.core.process.RunCommandResult;
 import dev.mikoto2000.rei.core.project.ProjectService;
@@ -45,12 +22,32 @@ import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.event.WorkingSetSearchCompletedPayload;
+import java.io.IOException;
+import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
 @org.junit.jupiter.api.Tag("e2e")
 class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void readPdfFileExtractsBodyText() throws IOException {
@@ -68,10 +65,19 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
     List<AgentEvent> events = new ArrayList<>();
     bus.subscribe(events::add);
-    Tools tools = new Tools(null, new SystemShellService(), new BackgroundProcessManager(new SystemShellService()),
-        Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZoneId.of("Asia/Tokyo")),
-        new WorkingSet(), new dev.mikoto2000.rei.core.recentchanges.RecentChanges(), new FileSummaryCache(),
-        new SearchResultCache(), new RelatedFileGraph(), new AgentEventFactory(Clock.systemUTC()), bus);
+    Tools tools =
+        new Tools(
+            null,
+            new SystemShellService(),
+            new BackgroundProcessManager(new SystemShellService()),
+            Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZoneId.of("Asia/Tokyo")),
+            new WorkingSet(),
+            new dev.mikoto2000.rei.core.recentchanges.RecentChanges(),
+            new FileSummaryCache(),
+            new SearchResultCache(),
+            new RelatedFileGraph(),
+            new AgentEventFactory(Clock.systemUTC()),
+            bus);
     Path path = tempDir.resolve("events.txt");
 
     tools.writeTextFile(path.toString(), "hello", false, "UTF-8");
@@ -85,11 +91,12 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
 
   @Test
   void legacySingleOperationToolsAreNotExposed() {
-    List<String> toolNames = java.util.Arrays.stream(Tools.class.getDeclaredMethods())
-        .map(method -> method.getAnnotation(Tool.class))
-        .filter(annotation -> annotation != null)
-        .map(Tool::name)
-        .toList();
+    List<String> toolNames =
+        java.util.Arrays.stream(Tools.class.getDeclaredMethods())
+            .map(method -> method.getAnnotation(Tool.class))
+            .filter(annotation -> annotation != null)
+            .map(Tool::name)
+            .toList();
 
     assertFalse(toolNames.contains("grep"));
     assertFalse(toolNames.contains("readTextFile"));
@@ -109,27 +116,43 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
 
   @Test
   void runCommandToolSchemaAndDescriptionsPreferAutoHighLevelEntry() throws Exception {
-    Tool run = Tools.class.getDeclaredMethod("runCommand", RunCommandRequest.class).getAnnotation(Tool.class);
-    assertEquals(null, Tools.class.getDeclaredMethod("executeShellCommand", String.class, Integer.class)
-        .getAnnotation(Tool.class));
-    assertEquals(null, Tools.class.getDeclaredMethod("spawnShellCommand", String.class).getAnnotation(Tool.class));
+    Tool run =
+        Tools.class
+            .getDeclaredMethod("runCommand", RunCommandRequest.class)
+            .getAnnotation(Tool.class);
+    assertEquals(
+        null,
+        Tools.class
+            .getDeclaredMethod("executeShellCommand", String.class, Integer.class)
+            .getAnnotation(Tool.class));
+    assertEquals(
+        null,
+        Tools.class.getDeclaredMethod("spawnShellCommand", String.class).getAnnotation(Tool.class));
     assertTrue(run.description().contains("default and primary tool"));
     assertTrue(run.description().contains("auto mode"));
     assertFalse(run.description().contains("executeShellCommand"));
     assertFalse(run.description().contains("spawnShellCommand"));
 
-    Tool status = Tools.class.getDeclaredMethod("getShellProcessStatus", String.class, Integer.class)
-        .getAnnotation(Tool.class);
-    Tool kill = Tools.class.getDeclaredMethod("killShellProcess", String.class).getAnnotation(Tool.class);
+    Tool status =
+        Tools.class
+            .getDeclaredMethod("getShellProcessStatus", String.class, Integer.class)
+            .getAnnotation(Tool.class);
+    Tool kill =
+        Tools.class.getDeclaredMethod("killShellProcess", String.class).getAnnotation(Tool.class);
     assertTrue(status.description().contains("runCommand"));
     assertTrue(kill.description().contains("runCommand"));
     assertFalse(status.description().contains("spawnShellCommand"));
     assertFalse(kill.description().contains("spawnShellCommand"));
 
-    var callback = java.util.Arrays.stream(MethodToolCallbackProvider.builder().toolObjects(new Tools()).build()
-        .getToolCallbacks())
-        .filter(candidate -> "runCommand".equals(candidate.getToolDefinition().name()))
-        .findFirst().orElseThrow();
+    var callback =
+        java.util.Arrays.stream(
+                MethodToolCallbackProvider.builder()
+                    .toolObjects(new Tools())
+                    .build()
+                    .getToolCallbacks())
+            .filter(candidate -> "runCommand".equals(candidate.getToolDefinition().name()))
+            .findFirst()
+            .orElseThrow();
     String schema = callback.getToolDefinition().inputSchema();
     assertTrue(schema.contains("command"));
     assertTrue(schema.contains("executionMode"));
@@ -147,22 +170,38 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
     Tools tools = new Tools();
     for (String name : List.of("readMultiFile", "grepMultiQuery", "writeMultiFile")) {
-      String description = Tools.class.getDeclaredMethod(name, List.class).getAnnotation(Tool.class).description();
-      String example = description.lines().filter(line -> line.startsWith("Example: ")).findFirst().orElseThrow().substring(9);
+      String description =
+          Tools.class.getDeclaredMethod(name, List.class).getAnnotation(Tool.class).description();
+      String example =
+          description
+              .lines()
+              .filter(line -> line.startsWith("Example: "))
+              .findFirst()
+              .orElseThrow()
+              .substring(9);
       var items = mapper.readTree(example).get(name.equals("grepMultiQuery") ? "queries" : "files");
       assertEquals(2, items.size());
       if (name.equals("readMultiFile")) {
-        var requests = mapper.convertValue(items, new tools.jackson.core.type.TypeReference<List<Tools.ReadFileRequest>>() {});
+        var requests =
+            mapper.convertValue(
+                items, new tools.jackson.core.type.TypeReference<List<Tools.ReadFileRequest>>() {});
         var results = tools.readMultiFile(requests, tempDir);
         assertEquals(2, results.size());
         assertTrue(results.stream().allMatch(result -> result.error() == null));
       } else if (name.equals("grepMultiQuery")) {
-        var requests = mapper.convertValue(items, new tools.jackson.core.type.TypeReference<List<Tools.GrepQuery>>() {});
+        var requests =
+            mapper.convertValue(
+                items, new tools.jackson.core.type.TypeReference<List<Tools.GrepQuery>>() {});
         var results = tools.grepMultiQuery(requests, tempDir);
         assertEquals(2, results.size());
-        assertTrue(results.stream().allMatch(result -> result.error() == null && !result.matches().isEmpty()));
+        assertTrue(
+            results.stream()
+                .allMatch(result -> result.error() == null && !result.matches().isEmpty()));
       } else {
-        var requests = mapper.convertValue(items, new tools.jackson.core.type.TypeReference<List<Tools.WriteFileRequest>>() {});
+        var requests =
+            mapper.convertValue(
+                items,
+                new tools.jackson.core.type.TypeReference<List<Tools.WriteFileRequest>>() {});
         assertEquals(2, tools.writeMultiFile(requests, tempDir).size());
         assertEquals("Alpha", Files.readString(tempDir.resolve("a.txt")));
         assertEquals("Beta", Files.readString(tempDir.resolve("b.txt")));
@@ -172,13 +211,21 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
 
   @Test
   void codeAndFileToolDescriptionsRouteByIntent() throws Exception {
-    Tool search = Tools.class.getDeclaredMethod("searchAndRead", Tools.SearchAndReadRequest.class)
-        .getAnnotation(Tool.class);
-    Tool grep = Tools.class.getDeclaredMethod("grepMultiQuery", List.class).getAnnotation(Tool.class);
-    Tool read = Tools.class.getDeclaredMethod("readMultiFile", List.class).getAnnotation(Tool.class);
-    Tool write = Tools.class.getDeclaredMethod("writeMultiFile", List.class).getAnnotation(Tool.class);
-    Tool diff = Tools.class.getDeclaredMethod("applyTextDiff", String.class, String.class, String.class, String.class)
-        .getAnnotation(Tool.class);
+    Tool search =
+        Tools.class
+            .getDeclaredMethod("searchAndRead", Tools.SearchAndReadRequest.class)
+            .getAnnotation(Tool.class);
+    Tool grep =
+        Tools.class.getDeclaredMethod("grepMultiQuery", List.class).getAnnotation(Tool.class);
+    Tool read =
+        Tools.class.getDeclaredMethod("readMultiFile", List.class).getAnnotation(Tool.class);
+    Tool write =
+        Tools.class.getDeclaredMethod("writeMultiFile", List.class).getAnnotation(Tool.class);
+    Tool diff =
+        Tools.class
+            .getDeclaredMethod(
+                "applyTextDiff", String.class, String.class, String.class, String.class)
+            .getAnnotation(Tool.class);
 
     assertTrue(search.description().contains("default tool"));
     assertTrue(search.description().contains("exact file locations are not known"));
@@ -231,8 +278,8 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Files.writeString(tempDir.resolve("src/FeedService.java"), "");
     Files.writeString(tempDir.resolve("src/SummaryGenerator.java"), "");
 
-    List<String> files = new Tools().findFile(
-        new FindFileRequest(List.of("FEED", "summary"), 10), tempDir);
+    List<String> files =
+        new Tools().findFile(new FindFileRequest(List.of("FEED", "summary"), 10), tempDir);
 
     assertEquals("src/FeedSummaryService.java", files.getFirst());
     assertTrue(files.contains("src/FeedService.java"));
@@ -248,10 +295,15 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     List<String> files = new Tools().findFile(new FindFileRequest(List.of("alpha"), 1), tempDir);
 
     assertEquals(1, files.size());
-    var callback = java.util.Arrays.stream(MethodToolCallbackProvider.builder().toolObjects(new Tools()).build()
-        .getToolCallbacks())
-        .filter(candidate -> "findFile".equals(candidate.getToolDefinition().name()))
-        .findFirst().orElseThrow();
+    var callback =
+        java.util.Arrays.stream(
+                MethodToolCallbackProvider.builder()
+                    .toolObjects(new Tools())
+                    .build()
+                    .getToolCallbacks())
+            .filter(candidate -> "findFile".equals(candidate.getToolDefinition().name()))
+            .findFirst()
+            .orElseThrow();
     assertTrue(callback.getToolDefinition().inputSchema().contains("keywords"));
     assertTrue(callback.getToolDefinition().inputSchema().contains("maxResults"));
   }
@@ -307,7 +359,8 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Files.writeString(tempDir.resolve("docs/note.txt"), "Hello [Spring]\nregex spring\n");
 
     Tools tools = new Tools();
-    List<String> results = tools.grep("[spring]", "docs", true, true, false, false, 0, 0, 100, true, tempDir);
+    List<String> results =
+        tools.grep("[spring]", "docs", true, true, false, false, 0, 0, 100, true, tempDir);
 
     assertEquals(List.of("docs/note.txt:1:Hello [Spring]"), results);
   }
@@ -320,7 +373,8 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Files.writeString(tempDir.resolve("docs/second.txt"), "spring\n");
 
     Tools tools = new Tools();
-    List<String> results = tools.grep("spring", "docs", false, false, false, true, 0, 0, 100, true, tempDir);
+    List<String> results =
+        tools.grep("spring", "docs", false, false, false, true, 0, 0, 100, true, tempDir);
 
     assertEquals(List.of("docs/first.txt", "docs/second.txt"), results);
   }
@@ -332,24 +386,37 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Files.writeString(tempDir.resolve("docs/note.txt"), "alpha\nbeta\ngamma\n");
 
     Tools tools = new Tools();
-    List<String> results = tools.grep("beta", "docs", false, false, true, false, 1, 1, 100, true, tempDir);
+    List<String> results =
+        tools.grep("beta", "docs", false, false, true, false, 1, 1, 100, true, tempDir);
 
-    assertEquals(List.of(
-        "docs/note.txt:1:alpha",
-        "docs/note.txt-2-beta",
-        "docs/note.txt:3:gamma"), results);
+    assertEquals(
+        List.of("docs/note.txt:1:alpha", "docs/note.txt-2-beta", "docs/note.txt:3:gamma"), results);
   }
 
   @Test
   void grepSupportsIncludeGlob() throws Exception {
     initGitRepo();
     Files.createDirectories(tempDir.resolve("docs"));
-    Files.writeString(tempDir.resolve("docs/App.java"), "class App { String value = \"spring\"; }\n");
+    Files.writeString(
+        tempDir.resolve("docs/App.java"), "class App { String value = \"spring\"; }\n");
     Files.writeString(tempDir.resolve("docs/note.txt"), "spring in text\n");
 
     Tools tools = new Tools();
-    List<String> results = tools.grep("spring", "docs", false, false, false, false, 0, 0, 100, true,
-        "**/*.java", null, tempDir);
+    List<String> results =
+        tools.grep(
+            "spring",
+            "docs",
+            false,
+            false,
+            false,
+            false,
+            0,
+            0,
+            100,
+            true,
+            "**/*.java",
+            null,
+            tempDir);
 
     assertEquals(List.of("docs/App.java:1:class App { String value = \"spring\"; }"), results);
   }
@@ -362,8 +429,21 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Files.writeString(tempDir.resolve("docs/target/Generated.java"), "spring generated\n");
 
     Tools tools = new Tools();
-    List<String> results = tools.grep("spring", "docs", false, false, false, false, 0, 0, 100, true,
-        "**/*.java", "**/target/**", tempDir);
+    List<String> results =
+        tools.grep(
+            "spring",
+            "docs",
+            false,
+            false,
+            false,
+            false,
+            0,
+            0,
+            100,
+            true,
+            "**/*.java",
+            "**/target/**",
+            tempDir);
 
     assertEquals(List.of("docs/App.java:1:spring source"), results);
   }
@@ -372,7 +452,8 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void grepRejectsInvalidRegex() throws Exception {
     Tools tools = new Tools();
 
-    assertThrows(IllegalArgumentException.class,
+    assertThrows(
+        IllegalArgumentException.class,
         () -> tools.grep("[", "docs", false, false, false, false, 0, 0, 100, true, tempDir));
   }
 
@@ -385,9 +466,12 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
-        new Tools.GrepQuery("spring", "docs", null, null, null, null, null, null, null, null, null, null)
-    ), tempDir);
+    List<Tools.GrepQueryResult> results =
+        tools.grepMultiQuery(
+            List.of(
+                new Tools.GrepQuery(
+                    "spring", "docs", null, null, null, null, null, null, null, null, null, null)),
+            tempDir);
 
     assertEquals(1, results.size());
     assertEquals(0, results.get(0).queryIndex());
@@ -406,9 +490,12 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
-        new Tools.GrepQuery("needle", ".", null, null, null, null, null, null, null, null, null, null)
-    ), tempDir);
+    List<Tools.GrepQueryResult> results =
+        tools.grepMultiQuery(
+            List.of(
+                new Tools.GrepQuery(
+                    "needle", ".", null, null, null, null, null, null, null, null, null, null)),
+            tempDir);
 
     assertEquals(1, results.size());
     assertEquals(1, results.get(0).matches().size());
@@ -424,9 +511,23 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
-        new Tools.GrepQuery("^# heading", "docs", null, null, null, null, null, null, null, null, null, null)
-    ), tempDir);
+    List<Tools.GrepQueryResult> results =
+        tools.grepMultiQuery(
+            List.of(
+                new Tools.GrepQuery(
+                    "^# heading",
+                    "docs",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null)),
+            tempDir);
 
     assertEquals(1, results.get(0).matches().size());
     assertTrue(results.get(0).fileErrors().isEmpty());
@@ -441,9 +542,12 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
-        new Tools.GrepQuery("検索対象", "docs", null, null, null, null, null, null, null, null, null, null)
-    ), tempDir);
+    List<Tools.GrepQueryResult> results =
+        tools.grepMultiQuery(
+            List.of(
+                new Tools.GrepQuery(
+                    "検索対象", "docs", null, null, null, null, null, null, null, null, null, null)),
+            tempDir);
 
     assertEquals(1, results.get(0).matches().size());
     assertTrue(results.get(0).fileErrors().isEmpty());
@@ -458,10 +562,13 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
-        new Tools.GrepQuery("検索対象", "docs", null, null, null, null, null, null, null, null, null, null,
-            "EUC-JP")
-    ), tempDir);
+    List<Tools.GrepQueryResult> results =
+        tools.grepMultiQuery(
+            List.of(
+                new Tools.GrepQuery(
+                    "検索対象", "docs", null, null, null, null, null, null, null, null, null, null,
+                    "EUC-JP")),
+            tempDir);
 
     assertEquals(1, results.get(0).matches().size());
     assertTrue(results.get(0).fileErrors().isEmpty());
@@ -476,9 +583,12 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
-        new Tools.GrepQuery("検索対象", "docs", null, null, null, null, null, null, null, null, null, null)
-    ), tempDir);
+    List<Tools.GrepQueryResult> results =
+        tools.grepMultiQuery(
+            List.of(
+                new Tools.GrepQuery(
+                    "検索対象", "docs", null, null, null, null, null, null, null, null, null, null)),
+            tempDir);
 
     assertEquals(1, results.get(0).matches().size());
     assertTrue(results.get(0).fileErrors().isEmpty());
@@ -493,9 +603,23 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
-        new Tools.GrepQuery("anything", "docs", null, null, null, null, null, null, null, null, null, null)
-    ), tempDir);
+    List<Tools.GrepQueryResult> results =
+        tools.grepMultiQuery(
+            List.of(
+                new Tools.GrepQuery(
+                    "anything",
+                    "docs",
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null,
+                    null)),
+            tempDir);
 
     assertTrue(results.get(0).matches().isEmpty());
     assertEquals(1, results.get(0).fileErrors().size());
@@ -511,10 +635,26 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
-        new Tools.SearchAndReadRequest(List.of(
-            new Tools.GrepQuery("anything", "docs", null, null, null, null, null, null, null, null, null, null)),
-            null, null), tempDir);
+    List<Tools.SearchAndReadResult> results =
+        tools.searchAndRead(
+            new Tools.SearchAndReadRequest(
+                List.of(
+                    new Tools.GrepQuery(
+                        "anything",
+                        "docs",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null)),
+                null,
+                null),
+            tempDir);
 
     assertEquals(1, results.size());
     assertEquals("docs/broken.txt", results.get(0).path());
@@ -531,10 +671,14 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
-        new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null),
-        new Tools.GrepQuery("baz", "docs", null, null, null, null, null, null, null, null, null, null)
-    ), tempDir);
+    List<Tools.GrepQueryResult> results =
+        tools.grepMultiQuery(
+            List.of(
+                new Tools.GrepQuery(
+                    "foo", "docs", null, null, null, null, null, null, null, null, null, null),
+                new Tools.GrepQuery(
+                    "baz", "docs", null, null, null, null, null, null, null, null, null, null)),
+            tempDir);
 
     assertEquals(2, results.size());
     assertEquals(0, results.get(0).queryIndex());
@@ -555,9 +699,12 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
-        new Tools.GrepQuery("missing", "docs", null, null, null, null, null, null, null, null, null, null)
-    ), tempDir);
+    List<Tools.GrepQueryResult> results =
+        tools.grepMultiQuery(
+            List.of(
+                new Tools.GrepQuery(
+                    "missing", "docs", null, null, null, null, null, null, null, null, null, null)),
+            tempDir);
 
     assertEquals(1, results.size());
     assertEquals(0, results.get(0).matches().size());
@@ -573,10 +720,14 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
-        new Tools.GrepQuery("alpha", "docs", null, null, null, null, null, null, null, null, null, null),
-        new Tools.GrepQuery("beta", "docs", null, null, null, null, null, null, null, null, null, null)
-    ), tempDir);
+    List<Tools.GrepQueryResult> results =
+        tools.grepMultiQuery(
+            List.of(
+                new Tools.GrepQuery(
+                    "alpha", "docs", null, null, null, null, null, null, null, null, null, null),
+                new Tools.GrepQuery(
+                    "beta", "docs", null, null, null, null, null, null, null, null, null, null)),
+            tempDir);
 
     assertEquals(2, results.size());
     assertEquals("docs/a.txt", results.get(0).matches().get(0).path());
@@ -593,11 +744,16 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
-        new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null),
-        new Tools.GrepQuery("[", "docs", null, null, null, null, null, null, null, null, null, null),
-        new Tools.GrepQuery("bar", "docs", null, null, null, null, null, null, null, null, null, null)
-    ), tempDir);
+    List<Tools.GrepQueryResult> results =
+        tools.grepMultiQuery(
+            List.of(
+                new Tools.GrepQuery(
+                    "foo", "docs", null, null, null, null, null, null, null, null, null, null),
+                new Tools.GrepQuery(
+                    "[", "docs", null, null, null, null, null, null, null, null, null, null),
+                new Tools.GrepQuery(
+                    "bar", "docs", null, null, null, null, null, null, null, null, null, null)),
+            tempDir);
 
     assertEquals(3, results.size());
     assertEquals(1, results.get(0).matches().size());
@@ -609,8 +765,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void grepMultiQueryRejectsEmptyQueries() throws Exception {
     Tools tools = new Tools();
-    assertThrows(IllegalArgumentException.class,
-        () -> tools.grepMultiQuery(List.of(), tempDir));
+    assertThrows(IllegalArgumentException.class, () -> tools.grepMultiQuery(List.of(), tempDir));
   }
 
   @Test
@@ -618,10 +773,11 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Tools tools = new Tools();
     List<Tools.GrepQuery> queries = new java.util.ArrayList<>();
     for (int i = 0; i < Tools.MAX_GREP_QUERIES + 1; i++) {
-      queries.add(new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null));
+      queries.add(
+          new Tools.GrepQuery(
+              "foo", "docs", null, null, null, null, null, null, null, null, null, null));
     }
-    assertThrows(IllegalArgumentException.class,
-        () -> tools.grepMultiQuery(queries, tempDir));
+    assertThrows(IllegalArgumentException.class, () -> tools.grepMultiQuery(queries, tempDir));
   }
 
   @Test
@@ -637,10 +793,16 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
-        new Tools.SearchAndReadRequest(
-            List.of(new Tools.GrepQuery("line 50", "docs", null, null, null, null, null, null, null, null, null, null)),
-            5, null), tempDir);
+    List<Tools.SearchAndReadResult> results =
+        tools.searchAndRead(
+            new Tools.SearchAndReadRequest(
+                List.of(
+                    new Tools.GrepQuery(
+                        "line 50", "docs", null, null, null, null, null, null, null, null, null,
+                        null)),
+                5,
+                null),
+            tempDir);
 
     assertEquals(1, results.size());
     assertEquals("docs/note.txt", results.get(0).path());
@@ -662,10 +824,16 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
-        new Tools.SearchAndReadRequest(
-            List.of(new Tools.GrepQuery("alpha", "docs", null, null, null, null, null, null, null, null, null, null)),
-            10, null), tempDir);
+    List<Tools.SearchAndReadResult> results =
+        tools.searchAndRead(
+            new Tools.SearchAndReadRequest(
+                List.of(
+                    new Tools.GrepQuery(
+                        "alpha", "docs", null, null, null, null, null, null, null, null, null,
+                        null)),
+                10,
+                null),
+            tempDir);
 
     assertEquals(1, results.size());
     assertEquals(1, results.get(0).sections().get(0).startLine());
@@ -682,10 +850,16 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
-        new Tools.SearchAndReadRequest(
-            List.of(new Tools.GrepQuery("gamma", "docs", null, null, null, null, null, null, null, null, null, null)),
-            10, null), tempDir);
+    List<Tools.SearchAndReadResult> results =
+        tools.searchAndRead(
+            new Tools.SearchAndReadRequest(
+                List.of(
+                    new Tools.GrepQuery(
+                        "gamma", "docs", null, null, null, null, null, null, null, null, null,
+                        null)),
+                10,
+                null),
+            tempDir);
 
     assertEquals(1, results.size());
     assertEquals(1, results.get(0).sections().get(0).startLine());
@@ -702,12 +876,17 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
-        new Tools.SearchAndReadRequest(
-            List.of(
-                new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null),
-                new Tools.GrepQuery("baz", "docs", null, null, null, null, null, null, null, null, null, null)),
-            1, null), tempDir);
+    List<Tools.SearchAndReadResult> results =
+        tools.searchAndRead(
+            new Tools.SearchAndReadRequest(
+                List.of(
+                    new Tools.GrepQuery(
+                        "foo", "docs", null, null, null, null, null, null, null, null, null, null),
+                    new Tools.GrepQuery(
+                        "baz", "docs", null, null, null, null, null, null, null, null, null, null)),
+                1,
+                null),
+            tempDir);
 
     assertEquals(1, results.size());
     assertEquals(2, results.get(0).matches().size());
@@ -727,10 +906,15 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
-        new Tools.SearchAndReadRequest(
-            List.of(new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null)),
-            0, null), tempDir);
+    List<Tools.SearchAndReadResult> results =
+        tools.searchAndRead(
+            new Tools.SearchAndReadRequest(
+                List.of(
+                    new Tools.GrepQuery(
+                        "foo", "docs", null, null, null, null, null, null, null, null, null, null)),
+                0,
+                null),
+            tempDir);
 
     assertEquals(2, results.size());
     assertEquals("docs/a.txt", results.get(0).path());
@@ -752,18 +936,35 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     WorkingSet workingSet = new WorkingSet(20, fixedClock, new AgentEventFactory(fixedClock), bus);
     workingSet.recordRead(tempDir.resolve("docs/a.txt"));
     received.clear();
-    Tools tools = new Tools(null, new SystemShellService(), new BackgroundProcessManager(new SystemShellService()),
-        fixedClock, workingSet);
+    Tools tools =
+        new Tools(
+            null,
+            new SystemShellService(),
+            new BackgroundProcessManager(new SystemShellService()),
+            fixedClock,
+            workingSet);
 
-    tools.searchAndRead(new Tools.SearchAndReadRequest(
-        List.of(new Tools.GrepQuery("needle", "docs", null, null, null, null, null, null, null, null, null, null)),
-        0, 2), tempDir);
+    tools.searchAndRead(
+        new Tools.SearchAndReadRequest(
+            List.of(
+                new Tools.GrepQuery(
+                    "needle", "docs", null, null, null, null, null, null, null, null, null, null)),
+            0,
+            2),
+        tempDir);
 
-    AgentEvent started = received.stream()
-        .filter(event -> event.type() == AgentEventType.WORKING_SET_SEARCH_STARTED).findFirst().orElseThrow();
-    AgentEvent completed = received.stream()
-        .filter(event -> event.type() == AgentEventType.WORKING_SET_SEARCH_COMPLETED).findFirst().orElseThrow();
-    WorkingSetSearchCompletedPayload payload = (WorkingSetSearchCompletedPayload) completed.payload();
+    AgentEvent started =
+        received.stream()
+            .filter(event -> event.type() == AgentEventType.WORKING_SET_SEARCH_STARTED)
+            .findFirst()
+            .orElseThrow();
+    AgentEvent completed =
+        received.stream()
+            .filter(event -> event.type() == AgentEventType.WORKING_SET_SEARCH_COMPLETED)
+            .findFirst()
+            .orElseThrow();
+    WorkingSetSearchCompletedPayload payload =
+        (WorkingSetSearchCompletedPayload) completed.payload();
     assertEquals(2, payload.hitCount());
     assertEquals(2, payload.candidateCount());
     assertEquals(2, payload.selectedCount());
@@ -771,8 +972,11 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(1, payload.workingSetSizeBefore());
     assertEquals(2, payload.workingSetSizeAfter());
     assertEquals(started.correlationId(), completed.correlationId());
-    AgentEvent added = received.stream()
-        .filter(event -> event.type() == AgentEventType.WORKING_SET_ITEM_ADDED).findFirst().orElseThrow();
+    AgentEvent added =
+        received.stream()
+            .filter(event -> event.type() == AgentEventType.WORKING_SET_ITEM_ADDED)
+            .findFirst()
+            .orElseThrow();
     assertEquals(started.correlationId(), added.correlationId());
   }
 
@@ -789,10 +993,26 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
-        new Tools.SearchAndReadRequest(
-            List.of(new Tools.GrepQuery("line 100|line 110", "docs", null, null, null, null, null, null, null, null, null, null)),
-            20, null), tempDir);
+    List<Tools.SearchAndReadResult> results =
+        tools.searchAndRead(
+            new Tools.SearchAndReadRequest(
+                List.of(
+                    new Tools.GrepQuery(
+                        "line 100|line 110",
+                        "docs",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null)),
+                20,
+                null),
+            tempDir);
 
     assertEquals(1, results.size());
     assertEquals(1, results.get(0).sections().size());
@@ -813,10 +1033,26 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
-        new Tools.SearchAndReadRequest(
-            List.of(new Tools.GrepQuery("line 100|line 200", "docs", null, null, null, null, null, null, null, null, null, null)),
-            20, null), tempDir);
+    List<Tools.SearchAndReadResult> results =
+        tools.searchAndRead(
+            new Tools.SearchAndReadRequest(
+                List.of(
+                    new Tools.GrepQuery(
+                        "line 100|line 200",
+                        "docs",
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null)),
+                20,
+                null),
+            tempDir);
 
     assertEquals(1, results.size());
     assertEquals(2, results.get(0).sections().size());
@@ -835,12 +1071,17 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
-        new Tools.SearchAndReadRequest(
-            List.of(
-                new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null),
-                new Tools.GrepQuery("bar", "docs", null, null, null, null, null, null, null, null, null, null)),
-            0, null), tempDir);
+    List<Tools.SearchAndReadResult> results =
+        tools.searchAndRead(
+            new Tools.SearchAndReadRequest(
+                List.of(
+                    new Tools.GrepQuery(
+                        "foo", "docs", null, null, null, null, null, null, null, null, null, null),
+                    new Tools.GrepQuery(
+                        "bar", "docs", null, null, null, null, null, null, null, null, null, null)),
+                0,
+                null),
+            tempDir);
 
     assertEquals(1, results.size());
     assertEquals("docs/a.txt", results.get(0).path());
@@ -860,10 +1101,15 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
-        new Tools.SearchAndReadRequest(
-            List.of(new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null)),
-            0, 2), tempDir);
+    List<Tools.SearchAndReadResult> results =
+        tools.searchAndRead(
+            new Tools.SearchAndReadRequest(
+                List.of(
+                    new Tools.GrepQuery(
+                        "foo", "docs", null, null, null, null, null, null, null, null, null, null)),
+                0,
+                2),
+            tempDir);
 
     assertEquals(2, results.size());
     assertTrue(results.get(0).filesTruncated());
@@ -879,13 +1125,19 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
-        new Tools.SearchAndReadRequest(
-            List.of(
-                new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null),
-                new Tools.GrepQuery("[", "docs", null, null, null, null, null, null, null, null, null, null),
-                new Tools.GrepQuery("bar", "docs", null, null, null, null, null, null, null, null, null, null)),
-            0, null), tempDir);
+    List<Tools.SearchAndReadResult> results =
+        tools.searchAndRead(
+            new Tools.SearchAndReadRequest(
+                List.of(
+                    new Tools.GrepQuery(
+                        "foo", "docs", null, null, null, null, null, null, null, null, null, null),
+                    new Tools.GrepQuery(
+                        "[", "docs", null, null, null, null, null, null, null, null, null, null),
+                    new Tools.GrepQuery(
+                        "bar", "docs", null, null, null, null, null, null, null, null, null, null)),
+                0,
+                null),
+            tempDir);
 
     assertEquals(3, results.size());
     assertEquals("docs/a.txt", results.get(0).path());
@@ -896,7 +1148,8 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void searchAndReadRejectsEmptyQueries() throws Exception {
     Tools tools = new Tools();
-    assertThrows(IllegalArgumentException.class,
+    assertThrows(
+        IllegalArgumentException.class,
         () -> tools.searchAndRead(new Tools.SearchAndReadRequest(List.of(), null, null), tempDir));
   }
 
@@ -905,9 +1158,12 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Tools tools = new Tools();
     List<Tools.GrepQuery> queries = new java.util.ArrayList<>();
     for (int i = 0; i < Tools.MAX_GREP_QUERIES + 1; i++) {
-      queries.add(new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null));
+      queries.add(
+          new Tools.GrepQuery(
+              "foo", "docs", null, null, null, null, null, null, null, null, null, null));
     }
-    assertThrows(IllegalArgumentException.class,
+    assertThrows(
+        IllegalArgumentException.class,
         () -> tools.searchAndRead(new Tools.SearchAndReadRequest(queries, null, null), tempDir));
   }
 
@@ -921,10 +1177,15 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
 
     Tools tools = new Tools();
     // 既存 grep と同じく、baseDir は workspace 内の相対パスで指定する
-    List<Tools.SearchAndReadResult> results = tools.searchAndRead(
-        new Tools.SearchAndReadRequest(
-            List.of(new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null)),
-            0, null), tempDir);
+    List<Tools.SearchAndReadResult> results =
+        tools.searchAndRead(
+            new Tools.SearchAndReadRequest(
+                List.of(
+                    new Tools.GrepQuery(
+                        "foo", "docs", null, null, null, null, null, null, null, null, null, null)),
+                0,
+                null),
+            tempDir);
 
     assertEquals(1, results.size());
     assertEquals("docs/a.txt", results.get(0).path());
@@ -933,9 +1194,12 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void grepMultiQueryRejectsBlankPattern() throws Exception {
     Tools tools = new Tools();
-    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
-        new Tools.GrepQuery("", "docs", null, null, null, null, null, null, null, null, null, null)
-    ), tempDir);
+    List<Tools.GrepQueryResult> results =
+        tools.grepMultiQuery(
+            List.of(
+                new Tools.GrepQuery(
+                    "", "docs", null, null, null, null, null, null, null, null, null, null)),
+            tempDir);
     assertEquals(1, results.size());
     assertTrue(results.get(0).error() != null);
   }
@@ -953,9 +1217,12 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
-        new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, 3, null, null, null)
-    ), tempDir);
+    List<Tools.GrepQueryResult> results =
+        tools.grepMultiQuery(
+            List.of(
+                new Tools.GrepQuery(
+                    "foo", "docs", null, null, null, null, null, null, 3, null, null, null)),
+            tempDir);
 
     assertEquals(3, results.get(0).matches().size());
   }
@@ -970,10 +1237,14 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    List<Tools.GrepQueryResult> results = tools.grepMultiQuery(List.of(
-        new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null),
-        new Tools.GrepQuery("foo", "docs", null, null, null, null, null, null, null, null, null, null)
-    ), tempDir);
+    List<Tools.GrepQueryResult> results =
+        tools.grepMultiQuery(
+            List.of(
+                new Tools.GrepQuery(
+                    "foo", "docs", null, null, null, null, null, null, null, null, null, null),
+                new Tools.GrepQuery(
+                    "foo", "docs", null, null, null, null, null, null, null, null, null, null)),
+            tempDir);
 
     // 合計制限は MAX_GREP_TOTAL_MATCHES だが、ここでは 2 query それぞれが 2 件ずつ返ることを確認する
     assertEquals(2, results.get(0).matches().size());
@@ -986,9 +1257,9 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Files.write(text, List.of("line1", "line2", "line3"));
     Tools tools = new Tools();
 
-    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
-        new Tools.ReadFileRequest(text.toString(), null, null)
-    ), tempDir);
+    List<Tools.ReadFileResult> results =
+        tools.readMultiFile(
+            List.of(new Tools.ReadFileRequest(text.toString(), null, null)), tempDir);
 
     assertEquals(1, results.size());
     assertEquals(text.toString(), results.get(0).path());
@@ -1005,10 +1276,12 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Files.write(b, List.of("beta"));
     Tools tools = new Tools();
 
-    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
-        new Tools.ReadFileRequest(a.toString(), null, null),
-        new Tools.ReadFileRequest(b.toString(), null, null)
-    ), tempDir);
+    List<Tools.ReadFileResult> results =
+        tools.readMultiFile(
+            List.of(
+                new Tools.ReadFileRequest(a.toString(), null, null),
+                new Tools.ReadFileRequest(b.toString(), null, null)),
+            tempDir);
 
     assertEquals(2, results.size());
     assertEquals(a.toString(), results.get(0).path());
@@ -1023,9 +1296,8 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Files.write(text, List.of("line1", "line2", "line3", "line4"));
     Tools tools = new Tools();
 
-    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
-        new Tools.ReadFileRequest(text.toString(), 2, 3)
-    ), tempDir);
+    List<Tools.ReadFileResult> results =
+        tools.readMultiFile(List.of(new Tools.ReadFileRequest(text.toString(), 2, 3)), tempDir);
 
     assertEquals(List.of("line2", "line3"), results.get(0).content());
     assertEquals(2, results.get(0).startLine());
@@ -1038,9 +1310,8 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Files.write(text, List.of("line1", "line2", "line3"));
     Tools tools = new Tools();
 
-    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
-        new Tools.ReadFileRequest(text.toString(), 2, null)
-    ), tempDir);
+    List<Tools.ReadFileResult> results =
+        tools.readMultiFile(List.of(new Tools.ReadFileRequest(text.toString(), 2, null)), tempDir);
 
     assertEquals(List.of("line2", "line3"), results.get(0).content());
   }
@@ -1051,9 +1322,9 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Files.write(text, List.of());
     Tools tools = new Tools();
 
-    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
-        new Tools.ReadFileRequest(text.toString(), null, null)
-    ), tempDir);
+    List<Tools.ReadFileResult> results =
+        tools.readMultiFile(
+            List.of(new Tools.ReadFileRequest(text.toString(), null, null)), tempDir);
 
     assertEquals(List.of(), results.get(0).content());
   }
@@ -1064,9 +1335,8 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Files.write(text, List.of("line1", "line2"));
     Tools tools = new Tools();
 
-    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
-        new Tools.ReadFileRequest(text.toString(), 2, 99)
-    ), tempDir);
+    List<Tools.ReadFileResult> results =
+        tools.readMultiFile(List.of(new Tools.ReadFileRequest(text.toString(), 2, 99)), tempDir);
 
     assertEquals(List.of("line2"), results.get(0).content());
   }
@@ -1077,11 +1347,13 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Files.write(a, List.of("alpha"));
     Tools tools = new Tools();
 
-    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
-        new Tools.ReadFileRequest(a.toString(), null, null),
-        new Tools.ReadFileRequest(tempDir.resolve("missing.txt").toString(), null, null),
-        new Tools.ReadFileRequest(a.toString(), null, null)
-    ), tempDir);
+    List<Tools.ReadFileResult> results =
+        tools.readMultiFile(
+            List.of(
+                new Tools.ReadFileRequest(a.toString(), null, null),
+                new Tools.ReadFileRequest(tempDir.resolve("missing.txt").toString(), null, null),
+                new Tools.ReadFileRequest(a.toString(), null, null)),
+            tempDir);
 
     assertEquals(3, results.size());
     assertEquals(List.of("alpha"), results.get(0).content());
@@ -1092,8 +1364,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void readMultiFileRejectsEmptyFiles() throws Exception {
     Tools tools = new Tools();
-    assertThrows(IllegalArgumentException.class,
-        () -> tools.readMultiFile(List.of()));
+    assertThrows(IllegalArgumentException.class, () -> tools.readMultiFile(List.of()));
   }
 
   @Test
@@ -1103,8 +1374,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     for (int i = 0; i < Tools.MAX_READ_FILES + 1; i++) {
       requests.add(new Tools.ReadFileRequest("a.txt", null, null));
     }
-    assertThrows(IllegalArgumentException.class,
-        () -> tools.readMultiFile(requests));
+    assertThrows(IllegalArgumentException.class, () -> tools.readMultiFile(requests));
   }
 
   @Test
@@ -1113,9 +1383,8 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Files.write(text, List.of("line1", "line2"));
     Tools tools = new Tools();
 
-    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
-        new Tools.ReadFileRequest(text.toString(), 3, 2)
-    ), tempDir);
+    List<Tools.ReadFileResult> results =
+        tools.readMultiFile(List.of(new Tools.ReadFileRequest(text.toString(), 3, 2)), tempDir);
 
     assertTrue(results.get(0).error() != null);
   }
@@ -1124,9 +1393,8 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void readMultiFileRejectsBlankPath() throws Exception {
     Tools tools = new Tools();
 
-    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
-        new Tools.ReadFileRequest("", null, null)
-    ), tempDir);
+    List<Tools.ReadFileResult> results =
+        tools.readMultiFile(List.of(new Tools.ReadFileRequest("", null, null)), tempDir);
 
     assertTrue(results.get(0).error() != null);
   }
@@ -1141,9 +1409,9 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Files.write(text, manyLines);
     Tools tools = new Tools();
 
-    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
-        new Tools.ReadFileRequest(text.toString(), null, null)
-    ), tempDir);
+    List<Tools.ReadFileResult> results =
+        tools.readMultiFile(
+            List.of(new Tools.ReadFileRequest(text.toString(), null, null)), tempDir);
 
     assertTrue(results.get(0).truncated());
     assertEquals(Tools.MAX_READ_LINES_PER_FILE, results.get(0).content().size());
@@ -1156,9 +1424,9 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Tools tools = new Tools();
 
     // Project 外の絶対パスは拒否し、明示された root 内の絶対パスは維持する。
-    List<Tools.ReadFileResult> results = tools.readMultiFile(List.of(
-        new Tools.ReadFileRequest(outside.toString(), null, null)
-    ), tempDir);
+    List<Tools.ReadFileResult> results =
+        tools.readMultiFile(
+            List.of(new Tools.ReadFileRequest(outside.toString(), null, null)), tempDir);
 
     assertTrue(results.get(0).content().isEmpty());
     assertTrue(results.get(0).error().contains("outside Project"));
@@ -1169,9 +1437,9 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Path text = tempDir.resolve("note.txt");
     Tools tools = new Tools();
 
-    List<Tools.WriteFileResult> results = tools.writeMultiFile(List.of(
-        new Tools.WriteFileRequest(text.toString(), "hello", false, null)
-    ));
+    List<Tools.WriteFileResult> results =
+        tools.writeMultiFile(
+            List.of(new Tools.WriteFileRequest(text.toString(), "hello", false, null)));
 
     assertEquals(1, results.size());
     assertTrue(results.get(0).success());
@@ -1184,10 +1452,11 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Path b = tempDir.resolve("b.txt");
     Tools tools = new Tools();
 
-    List<Tools.WriteFileResult> results = tools.writeMultiFile(List.of(
-        new Tools.WriteFileRequest(a.toString(), "alpha", false, null),
-        new Tools.WriteFileRequest(b.toString(), "beta", false, null)
-    ));
+    List<Tools.WriteFileResult> results =
+        tools.writeMultiFile(
+            List.of(
+                new Tools.WriteFileRequest(a.toString(), "alpha", false, null),
+                new Tools.WriteFileRequest(b.toString(), "beta", false, null)));
 
     assertEquals(2, results.size());
     assertTrue(results.get(0).success());
@@ -1203,10 +1472,11 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Path created = tempDir.resolve("created.txt");
     Tools tools = new Tools();
 
-    List<Tools.WriteFileResult> results = tools.writeMultiFile(List.of(
-        new Tools.WriteFileRequest(existing.toString(), "new", false, null),
-        new Tools.WriteFileRequest(created.toString(), "created", false, null)
-    ));
+    List<Tools.WriteFileResult> results =
+        tools.writeMultiFile(
+            List.of(
+                new Tools.WriteFileRequest(existing.toString(), "new", false, null),
+                new Tools.WriteFileRequest(created.toString(), "created", false, null)));
 
     assertEquals("new", Files.readString(existing));
     assertEquals("created", Files.readString(created));
@@ -1215,8 +1485,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void writeMultiFileRejectsEmptyFiles() throws Exception {
     Tools tools = new Tools();
-    assertThrows(IllegalArgumentException.class,
-        () -> tools.writeMultiFile(List.of()));
+    assertThrows(IllegalArgumentException.class, () -> tools.writeMultiFile(List.of()));
   }
 
   @Test
@@ -1224,21 +1493,23 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Path a = tempDir.resolve("a.txt");
     Tools tools = new Tools();
 
-    assertThrows(IllegalArgumentException.class,
-        () -> tools.writeMultiFile(List.of(
-            new Tools.WriteFileRequest(a.toString(), "one", false, null),
-            new Tools.WriteFileRequest(a.toString(), "two", false, null)
-        )));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            tools.writeMultiFile(
+                List.of(
+                    new Tools.WriteFileRequest(a.toString(), "one", false, null),
+                    new Tools.WriteFileRequest(a.toString(), "two", false, null))));
   }
 
   @Test
   void writeMultiFileRejectsBlankPath() throws Exception {
     Tools tools = new Tools();
 
-    assertThrows(IllegalArgumentException.class,
-        () -> tools.writeMultiFile(List.of(
-            new Tools.WriteFileRequest("", "content", false, null)
-        )));
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            tools.writeMultiFile(List.of(new Tools.WriteFileRequest("", "content", false, null))));
   }
 
   @Test
@@ -1248,8 +1519,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     for (int i = 0; i < Tools.MAX_WRITE_FILES + 1; i++) {
       requests.add(new Tools.WriteFileRequest("a" + i + ".txt", "content", false, null));
     }
-    assertThrows(IllegalArgumentException.class,
-        () -> tools.writeMultiFile(requests));
+    assertThrows(IllegalArgumentException.class, () -> tools.writeMultiFile(requests));
   }
 
   @Test
@@ -1257,10 +1527,9 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Tools tools = new Tools();
     String big = "x".repeat(Tools.MAX_WRITE_CHARS_PER_FILE + 1);
 
-    assertThrows(IllegalArgumentException.class,
-        () -> tools.writeMultiFile(List.of(
-            new Tools.WriteFileRequest("a.txt", big, false, null)
-        )));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> tools.writeMultiFile(List.of(new Tools.WriteFileRequest("a.txt", big, false, null))));
   }
 
   @Test
@@ -1268,10 +1537,9 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Tools tools = new Tools();
     String big = "x".repeat(Tools.MAX_WRITE_TOTAL_CHARS);
 
-    assertThrows(IllegalArgumentException.class,
-        () -> tools.writeMultiFile(List.of(
-            new Tools.WriteFileRequest("a.txt", big, false, null)
-        )));
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> tools.writeMultiFile(List.of(new Tools.WriteFileRequest("a.txt", big, false, null))));
   }
 
   @Test
@@ -1280,10 +1548,15 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Tools tools = new Tools();
 
     // 親ディレクトリは自動作成されるため、両方成功する
-    List<Tools.WriteFileResult> results = tools.writeMultiFile(List.of(
-        new Tools.WriteFileRequest(a.toString(), "alpha", false, null),
-        new Tools.WriteFileRequest(tempDir.resolve("missing").resolve("nested.txt").toString(), "beta", false, null)
-    ));
+    List<Tools.WriteFileResult> results =
+        tools.writeMultiFile(
+            List.of(
+                new Tools.WriteFileRequest(a.toString(), "alpha", false, null),
+                new Tools.WriteFileRequest(
+                    tempDir.resolve("missing").resolve("nested.txt").toString(),
+                    "beta",
+                    false,
+                    null)));
 
     assertEquals(2, results.size());
     assertTrue(results.get(0).success());
@@ -1296,9 +1569,9 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Tools tools = new Tools();
 
     // 既存 writeTextFile と同じく、絶対パスはそのまま解決される（workspace 制約は既存設計に合わせる）
-    List<Tools.WriteFileResult> results = tools.writeMultiFile(List.of(
-        new Tools.WriteFileRequest(outside.toString(), "outside", false, null)
-    ));
+    List<Tools.WriteFileResult> results =
+        tools.writeMultiFile(
+            List.of(new Tools.WriteFileRequest(outside.toString(), "outside", false, null)));
 
     assertTrue(results.get(0).success());
     assertEquals("outside", Files.readString(outside));
@@ -1326,10 +1599,13 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void shellCommandLineUsesShellSpecificExecutionOption() {
     Tools tools = new Tools();
 
-    assertEquals(List.of("powershell", "-NoProfile", "-Command", "Write-Output hello"),
+    assertEquals(
+        List.of("powershell", "-NoProfile", "-Command", "Write-Output hello"),
         tools.shellCommandLine("powershell", "Write-Output hello"));
     assertEquals(List.of("cmd", "/C", "echo hello"), tools.shellCommandLine("cmd", "echo hello"));
-    assertEquals(List.of("/bin/bash", "-lc", "printf hello"), tools.shellCommandLine("/bin/bash", "printf hello"));
+    assertEquals(
+        List.of("/bin/bash", "-lc", "printf hello"),
+        tools.shellCommandLine("/bin/bash", "printf hello"));
   }
 
   @Test
@@ -1348,12 +1624,14 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void runCommandForegroundReturnsExistingShellResultShape() throws Exception {
     Tools tools = new Tools();
-    String command = System.getProperty("os.name").toLowerCase().contains("win")
-        ? "Write-Output hello; [Console]::Error.WriteLine('warning'); exit 7"
-        : "printf 'hello\\n'; printf 'warning\\n' >&2; exit 7";
+    String command =
+        System.getProperty("os.name").toLowerCase().contains("win")
+            ? "Write-Output hello; [Console]::Error.WriteLine('warning'); exit 7"
+            : "printf 'hello\\n'; printf 'warning\\n' >&2; exit 7";
 
-    RunCommandResult result = tools.runCommand(
-        new RunCommandRequest(command, "foreground", 10), tempDir, Duration.ofMillis(10));
+    RunCommandResult result =
+        tools.runCommand(
+            new RunCommandRequest(command, "foreground", 10), tempDir, Duration.ofMillis(10));
 
     assertEquals("failed", result.status());
     assertEquals("foreground", result.resolvedExecutionMode());
@@ -1366,13 +1644,15 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void runCommandForegroundMatchesLegacyCommandSemantics() throws Exception {
     Tools tools = new Tools();
-    String command = System.getProperty("os.name").toLowerCase().contains("win")
-        ? "Write-Output (Get-Location).Path; Write-Output $env:PATH; [Console]::Error.WriteLine('warning'); exit 7"
-        : "pwd; printf '%s\n' \"$PATH\"; printf 'warning\n' >&2; exit 7";
+    String command =
+        System.getProperty("os.name").toLowerCase().contains("win")
+            ? "Write-Output (Get-Location).Path; Write-Output $env:PATH; [Console]::Error.WriteLine('warning'); exit 7"
+            : "pwd; printf '%s\n' \"$PATH\"; printf 'warning\n' >&2; exit 7";
 
     Tools.ShellCommandResult legacy = tools.executeShellCommand(command, 10, tempDir);
-    RunCommandResult unified = tools.runCommand(
-        new RunCommandRequest(command, "foreground", 10), tempDir, Duration.ofMillis(10));
+    RunCommandResult unified =
+        tools.runCommand(
+            new RunCommandRequest(command, "foreground", 10), tempDir, Duration.ofMillis(10));
 
     assertEquals(legacy.exitCode(), unified.exitCode());
     assertEquals(legacy.stdout(), unified.stdout());
@@ -1384,13 +1664,15 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void runCommandForegroundMatchesLegacyTimeoutSemantics() throws Exception {
     Tools tools = new Tools();
-    String command = System.getProperty("os.name").toLowerCase().contains("win")
-        ? "Start-Sleep -Seconds 3"
-        : "sleep 3";
+    String command =
+        System.getProperty("os.name").toLowerCase().contains("win")
+            ? "Start-Sleep -Seconds 3"
+            : "sleep 3";
 
     Tools.ShellCommandResult legacy = tools.executeShellCommand(command, 1, tempDir);
-    RunCommandResult unified = tools.runCommand(
-        new RunCommandRequest(command, "foreground", 1), tempDir, Duration.ofMillis(10));
+    RunCommandResult unified =
+        tools.runCommand(
+            new RunCommandRequest(command, "foreground", 1), tempDir, Duration.ofMillis(10));
 
     assertTrue(legacy.timedOut());
     assertEquals(legacy.exitCode(), unified.exitCode());
@@ -1403,12 +1685,14 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     SystemShellService shellService = new SystemShellService();
     BackgroundProcessManager manager = new BackgroundProcessManager(shellService);
     Tools tools = new Tools(null, shellService, manager);
-    String command = System.getProperty("os.name").toLowerCase().contains("win")
-        ? "Write-Output ready; Start-Sleep -Seconds 10"
-        : "printf 'ready\\n'; sleep 10";
+    String command =
+        System.getProperty("os.name").toLowerCase().contains("win")
+            ? "Write-Output ready; Start-Sleep -Seconds 10"
+            : "printf 'ready\\n'; sleep 10";
     try {
-      RunCommandResult result = tools.runCommand(
-          new RunCommandRequest(command, "background", null), tempDir, Duration.ofMillis(10));
+      RunCommandResult result =
+          tools.runCommand(
+              new RunCommandRequest(command, "background", null), tempDir, Duration.ofMillis(10));
 
       assertEquals("running", result.status());
       assertEquals("background", result.resolvedExecutionMode());
@@ -1426,20 +1710,24 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     SystemShellService shellService = new SystemShellService();
     BackgroundProcessManager manager = new BackgroundProcessManager(shellService);
     Tools tools = new Tools(null, shellService, manager);
-    String command = System.getProperty("os.name").toLowerCase().contains("win")
-        ? "Write-Output (Get-Location).Path; [Console]::Error.WriteLine('warning'); Start-Sleep -Seconds 10"
-        : "pwd; printf 'warning\n' >&2; sleep 10";
+    String command =
+        System.getProperty("os.name").toLowerCase().contains("win")
+            ? "Write-Output (Get-Location).Path; [Console]::Error.WriteLine('warning'); Start-Sleep -Seconds 10"
+            : "pwd; printf 'warning\n' >&2; sleep 10";
     try {
       BackgroundProcessSnapshot legacy = tools.spawnShellCommand(command);
-      RunCommandResult unified = tools.runCommand(
-          new RunCommandRequest(command, "background", null), tempDir, Duration.ofMillis(10));
+      RunCommandResult unified =
+          tools.runCommand(
+              new RunCommandRequest(command, "background", null), tempDir, Duration.ofMillis(10));
 
       assertTrue(legacy.processId().startsWith("proc-"));
       assertTrue(unified.processId().startsWith("proc-"));
-      BackgroundProcessSnapshot status = awaitToolOutput(tools, unified.processId(), tempDir.toString(), "warning");
+      BackgroundProcessSnapshot status =
+          awaitToolOutput(tools, unified.processId(), tempDir.toString(), "warning");
       assertTrue(status.found());
       assertTrue(status.stderr().stream().anyMatch(line -> line.contains("warning")));
-      assertEquals(BackgroundProcessStatus.KILLED, tools.killShellProcess(unified.processId()).status());
+      assertEquals(
+          BackgroundProcessStatus.KILLED, tools.killShellProcess(unified.processId()).status());
       tools.killShellProcess(legacy.processId());
     } finally {
       manager.shutdown();
@@ -1451,13 +1739,15 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     SystemShellService shellService = new SystemShellService();
     BackgroundProcessManager manager = new BackgroundProcessManager(shellService);
     Tools tools = new Tools(null, shellService, manager);
-    String command = System.getProperty("os.name").toLowerCase().contains("win")
-        ? "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Write-Output '短時間'"
-        : "printf '短時間\\n'";
+    String command =
+        System.getProperty("os.name").toLowerCase().contains("win")
+            ? "[Console]::OutputEncoding=[Text.Encoding]::UTF8; Write-Output '短時間'"
+            : "printf '短時間\\n'";
     try {
-      RunCommandResult result = tools.runCommand(
-          // Exercise auto completion, not a one-second PowerShell startup benchmark.
-          new RunCommandRequest(command, null, null), tempDir, Duration.ofSeconds(10));
+      RunCommandResult result =
+          tools.runCommand(
+              // Exercise auto completion, not a one-second PowerShell startup benchmark.
+              new RunCommandRequest(command, null, null), tempDir, Duration.ofSeconds(10));
 
       assertEquals("completed", result.status());
       assertEquals("auto", result.executionMode());
@@ -1477,12 +1767,16 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Tools tools = new Tools(null, shellService, manager);
     Path marker = tempDir.resolve("starts.txt");
     String escapedMarker = marker.toString().replace("'", "''");
-    String command = System.getProperty("os.name").toLowerCase().contains("win")
-        ? "Add-Content -LiteralPath '" + escapedMarker + "' -Value started; Write-Output ready; Start-Sleep -Seconds 10"
-        : "printf 'started\\n' >> '" + marker + "'; printf 'ready\\n'; sleep 10";
+    String command =
+        System.getProperty("os.name").toLowerCase().contains("win")
+            ? "Add-Content -LiteralPath '"
+                + escapedMarker
+                + "' -Value started; Write-Output ready; Start-Sleep -Seconds 10"
+            : "printf 'started\\n' >> '" + marker + "'; printf 'ready\\n'; sleep 10";
     try {
-      RunCommandResult result = tools.runCommand(
-          new RunCommandRequest(command, "auto", null), tempDir, Duration.ofMillis(200));
+      RunCommandResult result =
+          tools.runCommand(
+              new RunCommandRequest(command, "auto", null), tempDir, Duration.ofMillis(200));
 
       assertEquals("running", result.status());
       assertEquals("background", result.resolvedExecutionMode());
@@ -1506,19 +1800,21 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     // This fixture must exit inside the existing one-second observation window.
     // PowerShell/CLR startup can exceed that window under full-suite load.
     boolean windows = System.getProperty("os.name").toLowerCase().contains("win");
-    SystemShellService shellService = new SystemShellService() {
-      @Override public String resolveShell(java.util.Map<String,String> environment, String osName) {
-        return windows ? "cmd.exe" : super.resolveShell(environment, osName);
-      }
-    };
+    SystemShellService shellService =
+        new SystemShellService() {
+          @Override
+          public String resolveShell(java.util.Map<String, String> environment, String osName) {
+            return windows ? "cmd.exe" : super.resolveShell(environment, osName);
+          }
+        };
     BackgroundProcessManager manager = new BackgroundProcessManager(shellService);
     Tools tools = new Tools(null, shellService, manager);
-    String command = windows
-        ? "echo bad config 1>&2 & exit /b 9"
-        : "printf 'bad config\\n' >&2; exit 9";
+    String command =
+        windows ? "echo bad config 1>&2 & exit /b 9" : "printf 'bad config\\n' >&2; exit 9";
     try {
-      RunCommandResult result = tools.runCommand(
-          new RunCommandRequest(command, "auto", null), tempDir, Duration.ofSeconds(1));
+      RunCommandResult result =
+          tools.runCommand(
+              new RunCommandRequest(command, "auto", null), tempDir, Duration.ofSeconds(1));
 
       assertEquals("failed", result.status());
       assertEquals("foreground", result.resolvedExecutionMode());
@@ -1536,8 +1832,11 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     BackgroundProcessManager manager = new BackgroundProcessManager(shellService);
     Tools tools = new Tools(null, shellService, manager);
     try {
-      RunCommandResult result = tools.runCommand(new RunCommandRequest("echo hello", "auto", null),
-          tempDir.resolve("missing-directory"), Duration.ofMillis(10));
+      RunCommandResult result =
+          tools.runCommand(
+              new RunCommandRequest("echo hello", "auto", null),
+              tempDir.resolve("missing-directory"),
+              Duration.ofMillis(10));
 
       assertEquals("failed", result.status());
       assertEquals(null, result.processId());
@@ -1562,9 +1861,10 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void shellBackgroundProcessToolsSpawnStatusAndKill() throws Exception {
     Tools tools = new Tools();
     String osName = System.getProperty("os.name").toLowerCase();
-    String command = osName.contains("win")
-        ? "Write-Output ready; Start-Sleep -Seconds 10"
-        : "printf 'ready\\n'; sleep 10";
+    String command =
+        osName.contains("win")
+            ? "Write-Output ready; Start-Sleep -Seconds 10"
+            : "printf 'ready\\n'; sleep 10";
 
     BackgroundProcessSnapshot spawned = tools.spawnShellCommand(command);
     BackgroundProcessSnapshot ready = awaitToolStdout(tools, spawned.processId(), "ready");
@@ -1578,7 +1878,8 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void readTextFileUsesCurrentProjectForRelativePath() throws Exception {
     Path project = Files.createDirectories(tempDir.resolve("project-a"));
     Files.writeString(project.resolve("note.txt"), "project note");
-    ProjectService projectService = connect(new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects")));
+    ProjectService projectService =
+        connect(new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects")));
     projectService.add(project.toString());
     projectService.cd(project.toString());
 
@@ -1622,8 +1923,8 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void readTextFileRangeFallsBackToCp932() throws Exception {
     Path csv = tempDir.resolve("gantt.csv");
-    Files.write(csv, List.of("タスク,開始日", "設計,2026-08-07", "実装,2026-08-08"),
-        Charset.forName("windows-31j"));
+    Files.write(
+        csv, List.of("タスク,開始日", "設計,2026-08-07", "実装,2026-08-08"), Charset.forName("windows-31j"));
     Tools tools = new Tools();
 
     List<String> lines = tools.readTextFileRange(csv.toString(), 2, 2);
@@ -1677,7 +1978,8 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   @Test
   void createDirectoriesUsesCurrentProjectForRelativePath() throws Exception {
     Path project = Files.createDirectories(tempDir.resolve("project-a"));
-    ProjectService projectService = connect(new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects")));
+    ProjectService projectService =
+        connect(new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects")));
     projectService.add(project.toString());
     projectService.cd(project.toString());
     Tools tools = new Tools(projectService);
@@ -1791,7 +2093,9 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    Tools.GrepQuery query = new Tools.GrepQuery("spring", "docs", null, null, null, null, null, null, null, null, null, null);
+    Tools.GrepQuery query =
+        new Tools.GrepQuery(
+            "spring", "docs", null, null, null, null, null, null, null, null, null, null);
 
     tools.grepMultiQuery(List.of(query), tempDir);
     tools.grepMultiQuery(List.of(query), tempDir);
@@ -1840,18 +2144,23 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void searchDiscoversReferencesRelation() throws Exception {
     initGitRepo();
     Files.createDirectories(tempDir.resolve("src"));
-    Files.writeString(tempDir.resolve("src/UserController.java"), "class UserController { UserService service; }\n");
+    Files.writeString(
+        tempDir.resolve("src/UserController.java"),
+        "class UserController { UserService service; }\n");
     Files.writeString(tempDir.resolve("src/UserService.java"), "class UserService {}\n");
     runGit("add", "src");
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    tools.grepMultiQuery(List.of(
-        new Tools.GrepQuery("UserService", "src", null, null, null, null, null, null, null, null, null, null)
-    ), tempDir);
+    tools.grepMultiQuery(
+        List.of(
+            new Tools.GrepQuery(
+                "UserService", "src", null, null, null, null, null, null, null, null, null, null)),
+        tempDir);
 
-    assertTrue(tools.relatedFileGraph().getRelated("src/UserController.java").stream()
-        .anyMatch(r -> r.targetPath().equals("UserService")));
+    assertTrue(
+        tools.relatedFileGraph().getRelated("src/UserController.java").stream()
+            .anyMatch(r -> r.targetPath().equals("UserService")));
   }
 
   @Test
@@ -1863,9 +2172,15 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     runGit("commit", "-m", "initial");
 
     Tools tools = new Tools();
-    Tools.GrepQuery query = new Tools.GrepQuery("spring", "docs", null, null, null, null, null, null, null, null, null, null);
+    Tools.GrepQuery query =
+        new Tools.GrepQuery(
+            "spring", "docs", null, null, null, null, null, null, null, null, null, null);
     tools.grepMultiQuery(List.of(query), tempDir);
-    tools.searchResultCache().put(new dev.mikoto2000.rei.core.searchcache.SearchCacheKey("legacy","entry"),List.of("spring"));
+    tools
+        .searchResultCache()
+        .put(
+            new dev.mikoto2000.rei.core.searchcache.SearchCacheKey("legacy", "entry"),
+            List.of("spring"));
     assertTrue(tools.searchResultCache().size() >= 1);
 
     tools.writeTextFile(tempDir.resolve("docs/a.txt").toString(), "spring\nchanged\n", false, "");
@@ -1907,20 +2222,21 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     }
   }
 
-  private BackgroundProcessSnapshot awaitToolStdout(Tools tools, String processId, String expectedLine)
-      throws Exception {
+  private BackgroundProcessSnapshot awaitToolStdout(
+      Tools tools, String processId, String expectedLine) throws Exception {
     return awaitToolOutput(tools, processId, expectedLine, null);
   }
 
-  private BackgroundProcessSnapshot awaitToolOutput(Tools tools, String processId, String expectedLine, String expectedError)
-      throws Exception {
+  private BackgroundProcessSnapshot awaitToolOutput(
+      Tools tools, String processId, String expectedLine, String expectedError) throws Exception {
     long deadline = System.currentTimeMillis() + 5000;
     BackgroundProcessSnapshot snapshot;
     do {
       snapshot = tools.getShellProcessStatus(processId, 100);
       // stdout and stderr have independent reader tasks; wait for both assertions' observations.
       if (snapshot.stdout().contains(expectedLine)
-          && (expectedError == null || snapshot.stderr().stream().anyMatch(line -> line.contains(expectedError)))) {
+          && (expectedError == null
+              || snapshot.stderr().stream().anyMatch(line -> line.contains(expectedError)))) {
         return snapshot;
       }
       Thread.sleep(50);
@@ -1934,5 +2250,4 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     command.addAll(List.of(args));
     return command;
   }
-
 }

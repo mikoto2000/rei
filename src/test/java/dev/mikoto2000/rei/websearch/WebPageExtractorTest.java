@@ -11,9 +11,14 @@ class WebPageExtractorTest {
   @Test
   void extractBuildsReadablePageContentFromHtml() {
     WebPageExtractor extractor = new WebPageExtractor();
-    WebSearchResult result = new WebSearchResult("Fallback title", "https://example.com/article", "Fallback snippet", null);
+    WebSearchResult result =
+        new WebSearchResult(
+            "Fallback title", "https://example.com/article", "Fallback snippet", null);
 
-    WebSearchPage page = extractor.extract(result, """
+    WebSearchPage page =
+        extractor.extract(
+            result,
+            """
         <html>
           <head>
             <title>Spring AI Guide</title>

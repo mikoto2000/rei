@@ -1,9 +1,8 @@
 package dev.mikoto2000.rei.feed;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
-
-import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
@@ -17,7 +16,8 @@ public class FeedUpdateJob {
       if (result.errorMessage() == null || result.errorMessage().isBlank()) {
         System.out.println("feed update | " + result.feedName() + " | +" + result.addedItems());
       } else {
-        System.out.println("feed update | " + result.feedName() + " | error | " + result.errorMessage());
+        System.out.println(
+            "feed update | " + result.feedName() + " | error | " + result.errorMessage());
       }
     }
   }

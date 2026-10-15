@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.summarize;
 
 import java.net.URI;
-
 import org.springframework.stereotype.Service;
 
 @Service
@@ -14,8 +13,11 @@ public class DefaultWebPageSummarizerService implements WebPageSummarizerService
   private final SummarizationClient summarizationClient;
   private final ConversationHistoryAppender conversationHistory;
 
-  public DefaultWebPageSummarizerService(WebContentFetcher fetcher, WebPageContentExtractor extractor,
-      SummarizationClient summarizationClient, ConversationHistoryAppender conversationHistory) {
+  public DefaultWebPageSummarizerService(
+      WebContentFetcher fetcher,
+      WebPageContentExtractor extractor,
+      SummarizationClient summarizationClient,
+      ConversationHistoryAppender conversationHistory) {
     this.fetcher = fetcher;
     this.extractor = extractor;
     this.summarizationClient = summarizationClient;
@@ -50,8 +52,8 @@ public class DefaultWebPageSummarizerService implements WebPageSummarizerService
     try {
       summary = summarizationClient.summarize(content);
     } catch (RuntimeException e) {
-      throw new SummarizationException("LLM_ERROR",
-          e.getMessage() == null ? "要約生成に失敗しました" : e.getMessage(), e);
+      throw new SummarizationException(
+          "LLM_ERROR", e.getMessage() == null ? "要約生成に失敗しました" : e.getMessage(), e);
     }
     long llmDurationMillis = elapsedMillis(llmStartedAt);
     if (summary == null || summary.isBlank()) {
@@ -60,12 +62,15 @@ public class DefaultWebPageSummarizerService implements WebPageSummarizerService
 
     String strippedSummary = summary.strip();
     conversationHistory.appendAssistantMessage(strippedSummary);
-    return new SummaryResult(uri, strippedSummary, new SummaryMetrics(
-        fetchDurationMillis,
-        extractDurationMillis,
-        llmDurationMillis,
-        elapsedMillis(startedAt),
-        content.length()));
+    return new SummaryResult(
+        uri,
+        strippedSummary,
+        new SummaryMetrics(
+            fetchDurationMillis,
+            extractDurationMillis,
+            llmDurationMillis,
+            elapsedMillis(startedAt),
+            content.length()));
   }
 
   private long elapsedMillis(long startedAt) {

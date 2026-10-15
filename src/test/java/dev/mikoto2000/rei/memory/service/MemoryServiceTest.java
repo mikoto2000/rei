@@ -6,47 +6,52 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
+import dev.mikoto2000.rei.memory.model.Memory;
+import dev.mikoto2000.rei.memory.model.MemoryScope;
+import dev.mikoto2000.rei.memory.model.MemoryStatus;
+import dev.mikoto2000.rei.memory.model.MemoryType;
 import java.nio.file.Path;
-import java.time.Clock;
-import java.time.Instant;
+import java.sql.SQLException;
 import java.time.OffsetDateTime;
-import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.sql.SQLException;
-
 import javax.sql.DataSource;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
-import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
-import dev.mikoto2000.rei.memory.model.Memory;
-import dev.mikoto2000.rei.memory.model.MemoryScope;
-import dev.mikoto2000.rei.memory.model.MemoryStatus;
-import dev.mikoto2000.rei.memory.model.MemoryType;
-
 @org.junit.jupiter.api.Tag("integration")
 class MemoryServiceTest {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   private MemoryService service;
 
   @BeforeEach
   void setUp() {
     var ds = new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("memory-test.db"));
-    var props = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60,
-        new MemoryProperties.ExpiryDefaults(30, 365));
+    var props =
+        new MemoryProperties(
+            true, 20, 80, 10, 3, 2000, 60, new MemoryProperties.ExpiryDefaults(30, 365));
     service = new MemoryService(ds, props);
   }
 
   @Test
   void saveAndFindByIdRoundTrip() {
-    Memory saved = service.save(new Memory(null, "hello memory", MemoryType.KNOWLEDGE, MemoryScope.SHORT_TERM,
-        MemoryStatus.CANDIDATE, 0.9d, null, null, null));
+    Memory saved =
+        service.save(
+            new Memory(
+                null,
+                "hello memory",
+                MemoryType.KNOWLEDGE,
+                MemoryScope.SHORT_TERM,
+                MemoryStatus.CANDIDATE,
+                0.9d,
+                null,
+                null,
+                null));
 
     assertNotNull(saved.id());
     var found = service.findById(saved.id()).orElseThrow();
@@ -59,8 +64,20 @@ class MemoryServiceTest {
     OffsetDateTime observedAt = OffsetDateTime.parse("2026-08-16T16:30:00Z");
     OffsetDateTime validUntil = OffsetDateTime.parse("2026-08-16T16:35:00Z");
 
-    Memory saved = service.save(new Memory(null, "server is running", MemoryType.KNOWLEDGE, MemoryScope.SHORT_TERM,
-        MemoryStatus.CANDIDATE, 0.9d, null, null, null, observedAt, validUntil));
+    Memory saved =
+        service.save(
+            new Memory(
+                null,
+                "server is running",
+                MemoryType.KNOWLEDGE,
+                MemoryScope.SHORT_TERM,
+                MemoryStatus.CANDIDATE,
+                0.9d,
+                null,
+                null,
+                null,
+                observedAt,
+                validUntil));
 
     Memory found = service.findById(saved.id()).orElseThrow();
     assertEquals(observedAt, found.observedAt());
@@ -69,8 +86,18 @@ class MemoryServiceTest {
 
   @Test
   void searchReturnsActiveOnly() {
-    Memory saved = service.save(new Memory(null, "alpha beta gamma", MemoryType.KNOWLEDGE, MemoryScope.SHORT_TERM,
-        MemoryStatus.CANDIDATE, 0.9d, null, null, null));
+    Memory saved =
+        service.save(
+            new Memory(
+                null,
+                "alpha beta gamma",
+                MemoryType.KNOWLEDGE,
+                MemoryScope.SHORT_TERM,
+                MemoryStatus.CANDIDATE,
+                0.9d,
+                null,
+                null,
+                null));
     service.updateStatus(saved.id(), MemoryStatus.DELETED);
 
     List<Memory> results = service.search("alpha", 10);
@@ -79,8 +106,18 @@ class MemoryServiceTest {
 
   @Test
   void expiryCheckDeprecatesExpiredMemory() {
-    Memory saved = service.save(new Memory(null, "will expire", MemoryType.KNOWLEDGE, MemoryScope.SHORT_TERM,
-        MemoryStatus.CANDIDATE, 0.9d, OffsetDateTime.now(ZoneOffset.UTC).minusDays(1), null, null));
+    Memory saved =
+        service.save(
+            new Memory(
+                null,
+                "will expire",
+                MemoryType.KNOWLEDGE,
+                MemoryScope.SHORT_TERM,
+                MemoryStatus.CANDIDATE,
+                0.9d,
+                OffsetDateTime.now(ZoneOffset.UTC).minusDays(1),
+                null,
+                null));
 
     var active = service.listActiveWithExpiryCheck();
     assertTrue(active.isEmpty());
@@ -89,8 +126,18 @@ class MemoryServiceTest {
 
   @Test
   void tagsSourcesRelationsAndSummaryCanBeStored() {
-    Memory saved = service.save(new Memory(null, "with meta", MemoryType.KNOWLEDGE, MemoryScope.LONG_TERM,
-        MemoryStatus.CANDIDATE, 0.8d, null, null, null));
+    Memory saved =
+        service.save(
+            new Memory(
+                null,
+                "with meta",
+                MemoryType.KNOWLEDGE,
+                MemoryScope.LONG_TERM,
+                MemoryStatus.CANDIDATE,
+                0.8d,
+                null,
+                null,
+                null));
 
     service.saveTags(saved.id(), List.of("java", "memory"));
     service.saveSource(saved.id(), "chat");
@@ -110,52 +157,53 @@ class MemoryServiceTest {
 
   @Test
   void initializeSchemaThrowsIllegalStateWhenDataSourceFails() {
-    DataSource badDataSource = new DataSource() {
-      @Override
-      public java.sql.Connection getConnection() throws SQLException {
-        throw new SQLException("broken");
-      }
+    DataSource badDataSource =
+        new DataSource() {
+          @Override
+          public java.sql.Connection getConnection() throws SQLException {
+            throw new SQLException("broken");
+          }
 
-      @Override
-      public java.sql.Connection getConnection(String username, String password) throws SQLException {
-        throw new SQLException("broken");
-      }
+          @Override
+          public java.sql.Connection getConnection(String username, String password)
+              throws SQLException {
+            throw new SQLException("broken");
+          }
 
-      @Override
-      public <T> T unwrap(Class<T> iface) throws SQLException {
-        throw new SQLException("unsupported");
-      }
+          @Override
+          public <T> T unwrap(Class<T> iface) throws SQLException {
+            throw new SQLException("unsupported");
+          }
 
-      @Override
-      public boolean isWrapperFor(Class<?> iface) {
-        return false;
-      }
+          @Override
+          public boolean isWrapperFor(Class<?> iface) {
+            return false;
+          }
 
-      @Override
-      public java.io.PrintWriter getLogWriter() {
-        return null;
-      }
+          @Override
+          public java.io.PrintWriter getLogWriter() {
+            return null;
+          }
 
-      @Override
-      public void setLogWriter(java.io.PrintWriter out) {
-      }
+          @Override
+          public void setLogWriter(java.io.PrintWriter out) {}
 
-      @Override
-      public void setLoginTimeout(int seconds) {
-      }
+          @Override
+          public void setLoginTimeout(int seconds) {}
 
-      @Override
-      public int getLoginTimeout() {
-        return 0;
-      }
+          @Override
+          public int getLoginTimeout() {
+            return 0;
+          }
 
-      @Override
-      public java.util.logging.Logger getParentLogger() {
-        return java.util.logging.Logger.getGlobal();
-      }
-    };
-    var props = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60,
-        new MemoryProperties.ExpiryDefaults(30, 365));
+          @Override
+          public java.util.logging.Logger getParentLogger() {
+            return java.util.logging.Logger.getGlobal();
+          }
+        };
+    var props =
+        new MemoryProperties(
+            true, 20, 80, 10, 3, 2000, 60, new MemoryProperties.ExpiryDefaults(30, 365));
 
     assertThrows(IllegalStateException.class, () -> new MemoryService(badDataSource, props));
   }

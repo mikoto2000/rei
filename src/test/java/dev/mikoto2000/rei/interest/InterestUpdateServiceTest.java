@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -15,15 +14,15 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 @org.junit.jupiter.api.Tag("integration")
 class InterestUpdateServiceTest {
 
-  @TempDir
-  java.nio.file.Path tempDir;
+  @TempDir java.nio.file.Path tempDir;
 
   InterestUpdateService service;
 
   @BeforeEach
   void setUp() {
-    service = new InterestUpdateService(
-        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("test.db")));
+    service =
+        new InterestUpdateService(
+            new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("test.db")));
   }
 
   // --- existsByTopicWithinHours ---
@@ -55,7 +54,8 @@ class InterestUpdateServiceTest {
 
   // ヘルパー: 任意の createdAt で保存する
   private void saveWithCreatedAt(String topic, String searchQuery, OffsetDateTime createdAt) {
-    service.saveWithCreatedAt(topic, "reason", searchQuery, "summary", java.util.List.of(), createdAt);
+    service.saveWithCreatedAt(
+        topic, "reason", searchQuery, "summary", java.util.List.of(), createdAt);
   }
 
   // --- listRecentSearchQueries ---
@@ -90,4 +90,3 @@ class InterestUpdateServiceTest {
     assertFalse(result.contains("old-query"));
   }
 }
-

@@ -1,17 +1,16 @@
 package dev.mikoto2000.rei.core.relatedgraph;
 
 import java.time.Clock;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * Related File Graph の Bean 定義。
- */
+/** Related File Graph の Bean 定義。 */
 @Configuration(proxyBeanMethods = false)
 public class RelatedFileGraphConfiguration {
 
-  @org.springframework.context.annotation.Scope(value = "reiProject", proxyMode = org.springframework.context.annotation.ScopedProxyMode.TARGET_CLASS)
+  @org.springframework.context.annotation.Scope(
+      value = "reiProject",
+      proxyMode = org.springframework.context.annotation.ScopedProxyMode.TARGET_CLASS)
   @Bean
   public RelatedFileGraph relatedFileGraph(Clock clock) {
     return new RelatedFileGraph(RelatedFileGraph.DEFAULT_MAX_RELATIONS, clock);

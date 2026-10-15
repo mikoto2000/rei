@@ -4,13 +4,11 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.core.configuration.SqliteVecProperties;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
-
 import org.junit.jupiter.api.Test;
-
-import dev.mikoto2000.rei.core.configuration.SqliteVecProperties;
 
 @org.junit.jupiter.api.Tag("integration")
 class SqliteVecExtensionLoaderTest {
@@ -22,9 +20,8 @@ class SqliteVecExtensionLoaderTest {
     PreparedStatement preparedStatement = mock(PreparedStatement.class);
     when(connection.prepareStatement("SELECT load_extension(?)")).thenReturn(preparedStatement);
 
-    SqliteVecExtensionLoader loader = new SqliteVecExtensionLoader(
-        properties,
-        () -> Path.of("/tmp/vec0.so"));
+    SqliteVecExtensionLoader loader =
+        new SqliteVecExtensionLoader(properties, () -> Path.of("/tmp/vec0.so"));
 
     loader.load(connection);
 

@@ -1,5 +1,8 @@
 package dev.mikoto2000.rei.event;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -13,16 +16,9 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
-
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-
-import dev.mikoto2000.rei.core.datasource.ReiPaths;
 
 @Component
 public class ProfileEventLogStore implements AgentEventListener {
@@ -33,8 +29,11 @@ public class ProfileEventLogStore implements AgentEventListener {
   private final ObjectMapper objectMapper;
   private final Object writeLock = new Object();
   private dev.mikoto2000.rei.storage.ManagedActivityLog managed;
-  @org.springframework.beans.factory.annotation.Autowired(required=false)
-  public void setManagedActivityLog(dev.mikoto2000.rei.storage.ManagedActivityLog managed){this.managed=managed;}
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setManagedActivityLog(dev.mikoto2000.rei.storage.ManagedActivityLog managed) {
+    this.managed = managed;
+  }
 
   public ProfileEventLogStore() {
     this(null, new ObjectMapper().registerModule(new JavaTimeModule()));
@@ -46,8 +45,14 @@ public class ProfileEventLogStore implements AgentEventListener {
   }
 
   public Path file() {
-    if(managed!=null&&file==null){var project=dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();return managed.legacyFile(project==null?null:project.id());}
-    return file != null ? file : dev.mikoto2000.rei.core.project.ProjectStorage.currentDirectory().resolve("logs/activity.jsonl");
+    if (managed != null && file == null) {
+      var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
+      return managed.legacyFile(project == null ? null : project.id());
+    }
+    return file != null
+        ? file
+        : dev.mikoto2000.rei.core.project.ProjectStorage.currentDirectory()
+            .resolve("logs/activity.jsonl");
   }
 
   @Override
@@ -60,15 +65,26 @@ public class ProfileEventLogStore implements AgentEventListener {
       return;
     }
     ProfileEventLogEntry entry = toEntry(event);
-    if(managed!=null&&this.file==null){managed.append(event.projectId(),entry);return;}
-    Path file = this.file != null ? this.file : (event.projectId() != null
-        ? dev.mikoto2000.rei.core.project.ProjectStorage.directory(event.projectId())
-        : dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current()).resolve("logs/activity.jsonl");
+    if (managed != null && this.file == null) {
+      managed.append(event.projectId(), entry);
+      return;
+    }
+    Path file =
+        this.file != null
+            ? this.file
+            : (event.projectId() != null
+                    ? dev.mikoto2000.rei.core.project.ProjectStorage.directory(event.projectId())
+                    : dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current())
+                .resolve("logs/activity.jsonl");
     synchronized (writeLock) {
       try {
         Files.createDirectories(file.getParent());
-        Files.writeString(file, objectMapper.writeValueAsString(entry) + System.lineSeparator(), StandardCharsets.UTF_8,
-            StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        Files.writeString(
+            file,
+            objectMapper.writeValueAsString(entry) + System.lineSeparator(),
+            StandardCharsets.UTF_8,
+            StandardOpenOption.CREATE,
+            StandardOpenOption.APPEND);
       } catch (IOException e) {
         log.warn("Failed to append profile event log: {}", file, e);
       }
@@ -76,7 +92,10 @@ public class ProfileEventLogStore implements AgentEventListener {
   }
 
   public List<ProfileEventLogEntry> readAll() {
-    if(managed!=null&&this.file==null){var project=dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();return managed.read(project==null?null:project.id());}
+    if (managed != null && this.file == null) {
+      var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
+      return managed.read(project == null ? null : project.id());
+    }
     Path file = file();
     if (!Files.isRegularFile(file)) {
       return List.of();
@@ -129,7 +148,8 @@ public class ProfileEventLogStore implements AgentEventListener {
     Map<Long, Long> counts = new LinkedHashMap<>();
     long bucketMillis = bucketSize.toMillis();
     for (ProfileEventLogEntry entry : entries) {
-      long index = Math.max(0L, Duration.between(start, entry.timestamp()).toMillis() / bucketMillis);
+      long index =
+          Math.max(0L, Duration.between(start, entry.timestamp()).toMillis() / bucketMillis);
       counts.merge(index, 1L, Long::sum);
     }
     List<ProfileBucket> buckets = new ArrayList<>();
@@ -161,8 +181,8 @@ public class ProfileEventLogStore implements AgentEventListener {
     if (payload == null) {
       return Map.of();
     }
-    Map<String, Object> values = objectMapper.convertValue(payload, new TypeReference<Map<String, Object>>() {
-    });
+    Map<String, Object> values =
+        objectMapper.convertValue(payload, new TypeReference<Map<String, Object>>() {});
     replaceTextWithLength(values, "delta");
     replaceTextWithLength(values, "text");
     replaceTextWithLength(values, "argumentsSummary");
@@ -199,11 +219,9 @@ public class ProfileEventLogStore implements AgentEventListener {
       Instant first,
       Instant last,
       Map<String, Long> countsByType,
-      Map<String, DurationStats> durationsByType) {
-  }
+      Map<String, DurationStats> durationsByType) {}
 
-  public record ProfileBucket(Instant start, long count) {
-  }
+  public record ProfileBucket(Instant start, long count) {}
 
   public static final class DurationStats {
     private long count;

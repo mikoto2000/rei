@@ -3,18 +3,17 @@ package dev.mikoto2000.rei;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
-import org.jline.reader.LineReader;
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-
-import dev.mikoto2000.rei.ui.shell.RootCommand;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.CommandUserInputDisplayPolicy;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.ui.shell.RootCommand;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
+import org.jline.reader.LineReader;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import picocli.CommandLine;
 
 class ReiApplicationPasteModeTest {
@@ -29,7 +28,8 @@ class ReiApplicationPasteModeTest {
   }
 
   private ReiApplication newApp() {
-    AsyncVectorDocumentService asyncVectorDocumentService = Mockito.mock(AsyncVectorDocumentService.class);
+    AsyncVectorDocumentService asyncVectorDocumentService =
+        Mockito.mock(AsyncVectorDocumentService.class);
     when(asyncVectorDocumentService.hasActiveEmbeddings()).thenReturn(false);
     return new ReiApplication(
         Mockito.mock(RootCommand.class),

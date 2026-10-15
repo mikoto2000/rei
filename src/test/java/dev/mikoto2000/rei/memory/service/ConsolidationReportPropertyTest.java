@@ -11,7 +11,8 @@ class ConsolidationReportPropertyTest {
 
   // Feature: ai-memory-consolidation, Property 4: 整理結果レポートの件数一致
   @Property(tries = 100)
-  void reportCountsAlwaysMatch(@ForAll @IntRange(min = 0, max = 100) int total,
+  void reportCountsAlwaysMatch(
+      @ForAll @IntRange(min = 0, max = 100) int total,
       @ForAll @IntRange(min = 0, max = 100) int saved) {
     int normalizedSaved = Math.min(saved, total);
     int skipped = total - normalizedSaved;

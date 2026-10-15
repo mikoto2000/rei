@@ -1,13 +1,11 @@
 package dev.mikoto2000.rei.core.sqlitevec;
 
+import dev.mikoto2000.rei.core.configuration.SqliteVecProperties;
 import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.SQLException;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
-import dev.mikoto2000.rei.core.configuration.SqliteVecProperties;
 
 @Component
 public class SqliteVecExtensionLoader {
@@ -20,7 +18,8 @@ public class SqliteVecExtensionLoader {
     this(properties, installer::resolveExtensionPath);
   }
 
-  SqliteVecExtensionLoader(SqliteVecProperties properties, ExtensionPathResolver extensionPathResolver) {
+  SqliteVecExtensionLoader(
+      SqliteVecProperties properties, ExtensionPathResolver extensionPathResolver) {
     this.properties = properties;
     this.extensionPathResolver = extensionPathResolver;
   }

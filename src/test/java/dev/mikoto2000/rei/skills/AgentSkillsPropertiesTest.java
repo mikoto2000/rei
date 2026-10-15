@@ -11,7 +11,11 @@ class AgentSkillsPropertiesTest {
     AgentSkillsProperties properties = new AgentSkillsProperties();
 
     assertThat(properties.isEnabled()).isTrue();
-    assertThat(properties.getDirectories()).containsExactly(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().resolve("skills").toString());
+    assertThat(properties.getDirectories())
+        .containsExactly(
+            dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current()
+                .resolve("skills")
+                .toString());
     assertThat(properties.getMaxSelected()).isEqualTo(3);
   }
 

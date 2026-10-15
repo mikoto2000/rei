@@ -1,15 +1,13 @@
 package dev.mikoto2000.rei.summarize;
 
+import dev.mikoto2000.rei.conversation.ConversationLogStore;
+import dev.mikoto2000.rei.llm.ConversationIds;
 import java.util.List;
 import java.util.Optional;
-
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.stereotype.Component;
-
-import dev.mikoto2000.rei.conversation.ConversationLogStore;
-import dev.mikoto2000.rei.llm.ConversationIds;
 
 @Component
 public class CurrentConversationHistoryAppender implements ConversationHistoryAppender {
@@ -17,7 +15,8 @@ public class CurrentConversationHistoryAppender implements ConversationHistoryAp
   private final ChatMemory chatMemory;
   private final Optional<ConversationLogStore> conversationLogStore;
 
-  public CurrentConversationHistoryAppender(ChatMemory chatMemory, Optional<ConversationLogStore> conversationLogStore) {
+  public CurrentConversationHistoryAppender(
+      ChatMemory chatMemory, Optional<ConversationLogStore> conversationLogStore) {
     this.chatMemory = chatMemory;
     this.conversationLogStore = conversationLogStore;
   }
@@ -37,11 +36,14 @@ public class CurrentConversationHistoryAppender implements ConversationHistoryAp
   }
 
   private void appendLog(String speaker, String content) {
-    conversationLogStore.ifPresent(store -> store.append(ConversationIds.currentChat(), speaker, content));
+    conversationLogStore.ifPresent(
+        store -> store.append(ConversationIds.currentChat(), speaker, content));
   }
+
   private boolean nonConversationalWebRun() {
     var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
-    return run != null && run.requestSource() == dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.WEB
+    return run != null
+        && run.requestSource() == dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.WEB
         && run.conversationId().isEmpty();
   }
 }

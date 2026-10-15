@@ -6,6 +6,12 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties("rei")
 public final class ApiKeyProperties {
   private final String apiKey;
-  public ApiKeyProperties(String apiKey) { this.apiKey = apiKey; }
-  public String getApiKey() { return apiKey; }
+
+  public ApiKeyProperties(String apiKey) {
+    this.apiKey = apiKey;
+  }
+
+  public String getApiKey() {
+    return apiKey;
+  }
 }

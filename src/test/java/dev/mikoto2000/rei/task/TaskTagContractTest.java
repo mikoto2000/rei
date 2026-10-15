@@ -4,14 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.mockito.Mockito.mock;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 class TaskTagContractTest {
 
@@ -27,18 +25,23 @@ class TaskTagContractTest {
 
   @Test
   void taskAndQueryRecordsDoNotExposeTags() {
-    assertEquals(Set.of("id", "title", "dueDate", "priority", "status", "createdAt", "completedAt"),
+    assertEquals(
+        Set.of("id", "title", "dueDate", "priority", "status", "createdAt", "completedAt"),
         recordFields(Task.class));
     assertEquals(Set.of("priority", "dueBefore"), recordFields(TaskQuery.class));
   }
 
   private void assertToolFields(String name, Set<String> expected) throws Exception {
-    var definition = Arrays.stream(MethodToolCallbackProvider.builder()
-        .toolObjects(new TaskTools(mock(TaskService.class)))
-        .build().getToolCallbacks())
-        .map(callback -> callback.getToolDefinition())
-        .filter(candidate -> name.equals(candidate.name()))
-        .findFirst().orElseThrow();
+    var definition =
+        Arrays.stream(
+                MethodToolCallbackProvider.builder()
+                    .toolObjects(new TaskTools(mock(TaskService.class)))
+                    .build()
+                    .getToolCallbacks())
+            .map(callback -> callback.getToolDefinition())
+            .filter(candidate -> name.equals(candidate.name()))
+            .findFirst()
+            .orElseThrow();
     var properties = new ObjectMapper().readTree(definition.inputSchema()).path("properties");
     Set<String> fields = new java.util.HashSet<>();
     properties.fieldNames().forEachRemaining(fields::add);
@@ -47,6 +50,8 @@ class TaskTagContractTest {
   }
 
   private Set<String> recordFields(Class<?> type) {
-    return Arrays.stream(type.getRecordComponents()).map(component -> component.getName()).collect(Collectors.toSet());
+    return Arrays.stream(type.getRecordComponents())
+        .map(component -> component.getName())
+        .collect(Collectors.toSet());
   }
 }

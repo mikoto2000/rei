@@ -13,7 +13,9 @@ class BlueskyPostToolsTest {
   void postDelegatesToService() {
     BlueskyPostService service = mock(BlueskyPostService.class);
     when(service.post("hello"))
-        .thenReturn(new BlueskyPostResult(true, "Bluesky post created", "at://a/b/c", "https://bsky.app/profile/a/post/c"));
+        .thenReturn(
+            new BlueskyPostResult(
+                true, "Bluesky post created", "at://a/b/c", "https://bsky.app/profile/a/post/c"));
     BlueskyPostTools tools = new BlueskyPostTools(service);
 
     tools.post("hello");
@@ -37,7 +39,9 @@ class BlueskyPostToolsTest {
   void postReturnsUriAndUrlOnSuccess() {
     BlueskyPostService service = mock(BlueskyPostService.class);
     when(service.post("hello"))
-        .thenReturn(new BlueskyPostResult(true, "Bluesky post created", "at://a/b/c", "https://bsky.app/profile/a/post/c"));
+        .thenReturn(
+            new BlueskyPostResult(
+                true, "Bluesky post created", "at://a/b/c", "https://bsky.app/profile/a/post/c"));
     BlueskyPostTools tools = new BlueskyPostTools(service);
 
     String result = tools.post("hello");

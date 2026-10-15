@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.websearch;
 
 import java.util.List;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -22,14 +21,18 @@ public class WebSearchPropertiesLogger implements ApplicationRunner {
   @Override
   public void run(ApplicationArguments args) {
     List<WebSearchProperties.ProviderProperties> providers = properties.getProviders();
-    List<String> providerSummaries = providers == null
-        ? List.of()
-        : providers.stream()
-            .filter(provider -> provider != null)
-            .map(provider -> "%s(apiKeyConfigured=%s)".formatted(
-                provider.getName(),
-                provider.getApiKey() != null && !provider.getApiKey().isBlank()))
-            .toList();
+    List<String> providerSummaries =
+        providers == null
+            ? List.of()
+            : providers.stream()
+                .filter(provider -> provider != null)
+                .map(
+                    provider ->
+                        "%s(apiKeyConfigured=%s)"
+                            .formatted(
+                                provider.getName(),
+                                provider.getApiKey() != null && !provider.getApiKey().isBlank()))
+                .toList();
 
     log.info(
         "Web search config: enabled={}, timeoutSeconds={}, maxResults={}, providersCount={}, providers={}",

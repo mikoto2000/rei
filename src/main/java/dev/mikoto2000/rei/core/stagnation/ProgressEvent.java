@@ -1,8 +1,6 @@
 package dev.mikoto2000.rei.core.stagnation;
 
-/**
- * 進展を表す軽量な内部イベント。
- */
+/** 進展を表す軽量な内部イベント。 */
 public enum ProgressEvent {
   NEW_INFORMATION,
   INFORMATION_UNKNOWN,

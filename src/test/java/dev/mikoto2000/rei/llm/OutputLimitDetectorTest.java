@@ -3,7 +3,6 @@ package dev.mikoto2000.rei.llm;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
@@ -28,15 +27,15 @@ class OutputLimitDetectorTest {
 
   @Test
   void ignoresMissingFinishReason() {
-    ChatResponse response = new ChatResponse(List.of(new Generation(new AssistantMessage("answer"))));
+    ChatResponse response =
+        new ChatResponse(List.of(new Generation(new AssistantMessage("answer"))));
 
     assertThat(OutputLimitDetector.isOutputLimitReached(response)).isFalse();
   }
 
   private static ChatResponse responseWithFinishReason(String finishReason) {
-    ChatGenerationMetadata metadata = ChatGenerationMetadata.builder()
-        .finishReason(finishReason)
-        .build();
+    ChatGenerationMetadata metadata =
+        ChatGenerationMetadata.builder().finishReason(finishReason).build();
     return new ChatResponse(List.of(new Generation(new AssistantMessage("answer"), metadata)));
   }
 }

@@ -1,22 +1,16 @@
 package dev.mikoto2000.rei.core.command;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.PathMatcher;
-import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.stream.Stream;
-
-import org.springframework.stereotype.Component;
-
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentEntry;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
+import java.nio.file.Path;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -35,17 +29,48 @@ import picocli.CommandLine.Parameters;
 public class EmbedCommand implements Runnable {
   private abstract static class ReportCommand implements Runnable {
     private java.io.PrintWriter reportOutput;
-    java.io.PrintWriter out(){return reportOutput==null?new java.io.PrintWriter(System.out,true):reportOutput;}
+
+    java.io.PrintWriter out() {
+      return reportOutput == null ? new java.io.PrintWriter(System.out, true) : reportOutput;
+    }
   }
-  private static String report(ReportCommand command){var text=new java.io.StringWriter();command.reportOutput=new java.io.PrintWriter(text,true);command.run();return text.toString().replaceFirst("[\\r\\n]+$","");}
-  public static String reportSearch(VectorDocumentService service,String query,Integer topK,Double threshold,String source){var command=new SearchCommand(service);command.queryParts=new String[]{query};command.topK=topK;command.threshold=threshold;command.source=source;return report(command);}
-  public static String reportList(VectorDocumentService service){return report(new ListCommand(service));}
-  public static String reportDelete(VectorDocumentService service,String id,String source){var command=new DeleteCommand(service);command.docId=id;command.source=source;return report(command);}
+
+  private static String report(ReportCommand command) {
+    var text = new java.io.StringWriter();
+    command.reportOutput = new java.io.PrintWriter(text, true);
+    command.run();
+    return text.toString().replaceFirst("[\\r\\n]+$", "");
+  }
+
+  public static String reportSearch(
+      VectorDocumentService service, String query, Integer topK, Double threshold, String source) {
+    var command = new SearchCommand(service);
+    command.queryParts = new String[] {query};
+    command.topK = topK;
+    command.threshold = threshold;
+    command.source = source;
+    return report(command);
+  }
+
+  public static String reportList(VectorDocumentService service) {
+    return report(new ListCommand(service));
+  }
+
+  public static String reportDelete(VectorDocumentService service, String id, String source) {
+    var command = new DeleteCommand(service);
+    command.docId = id;
+    command.source = source;
+    return report(command);
+  }
 
   private final VectorDocumentService vectorDocumentService;
   private final AsyncVectorDocumentService asyncVectorDocumentService;
 
-  @Parameters(arity = "0..*", paramLabel = "DOCUMENTS...", description = "埋め込み対象ドキュメントのパス", completionCandidates = dev.mikoto2000.rei.core.completion.PathCompletionCandidates.Any.class)
+  @Parameters(
+      arity = "0..*",
+      paramLabel = "DOCUMENTS...",
+      description = "埋め込み対象ドキュメントのパス",
+      completionCandidates = dev.mikoto2000.rei.core.completion.PathCompletionCandidates.Any.class)
   String[] documents;
 
   @Override
@@ -66,7 +91,12 @@ public class EmbedCommand implements Runnable {
 
     private final AsyncVectorDocumentService asyncVectorDocumentService;
 
-    @Parameters(arity = "1..*", paramLabel = "DOCUMENTS...", description = "埋め込み対象ドキュメントのパス", completionCandidates = dev.mikoto2000.rei.core.completion.PathCompletionCandidates.Any.class)
+    @Parameters(
+        arity = "1..*",
+        paramLabel = "DOCUMENTS...",
+        description = "埋め込み対象ドキュメントのパス",
+        completionCandidates =
+            dev.mikoto2000.rei.core.completion.PathCompletionCandidates.Any.class)
     String[] documents;
 
     @Override
@@ -98,14 +128,24 @@ public class EmbedCommand implements Runnable {
 
     @Override
     public void run() {
-      List<VectorDocumentSearchResult> results = vectorDocumentService.search(String.join(" ", queryParts), topK, threshold, source);
+      List<VectorDocumentSearchResult> results =
+          vectorDocumentService.search(String.join(" ", queryParts), topK, threshold, source);
       if (results.isEmpty()) {
         out().println("一致する文書はありません");
         return;
       }
       for (VectorDocumentSearchResult result : results) {
-        out().println(result.docId() + " | " + result.source() + " | chunk=" + result.chunkIndex()
-            + " | score=" + formatScore(result.score()) + " | " + result.snippet());
+        out()
+            .println(
+                result.docId()
+                    + " | "
+                    + result.source()
+                    + " | chunk="
+                    + result.chunkIndex()
+                    + " | score="
+                    + formatScore(result.score())
+                    + " | "
+                    + result.snippet());
       }
     }
   }
@@ -127,15 +167,25 @@ public class EmbedCommand implements Runnable {
 
       LinkedHashMap<String, SourceSummary> grouped = new LinkedHashMap<>();
       for (VectorDocumentEntry entry : entries) {
-        grouped.compute(entry.source(), (source, current) -> current == null
-            ? new SourceSummary(1, entry.chunkCount(), entry.ingestedAt())
-            : current.add(entry.chunkCount(), entry.ingestedAt()));
+        grouped.compute(
+            entry.source(),
+            (source, current) ->
+                current == null
+                    ? new SourceSummary(1, entry.chunkCount(), entry.ingestedAt())
+                    : current.add(entry.chunkCount(), entry.ingestedAt()));
       }
 
       for (var groupedEntry : grouped.entrySet()) {
         SourceSummary summary = groupedEntry.getValue();
-        out().println(groupedEntry.getKey() + " | docs=" + summary.docCount()
-            + " | chunks=" + summary.chunkCount() + " | latest=" + summary.latestIngestedAt());
+        out()
+            .println(
+                groupedEntry.getKey()
+                    + " | docs="
+                    + summary.docCount()
+                    + " | chunks="
+                    + summary.chunkCount()
+                    + " | latest="
+                    + summary.latestIngestedAt());
       }
     }
   }
@@ -171,7 +221,8 @@ public class EmbedCommand implements Runnable {
 
   private static void printAdded(List<VectorDocumentEntry> entries) {
     for (VectorDocumentEntry entry : entries) {
-      System.out.println("追加: " + entry.docId() + " | " + entry.source() + " | chunks=" + entry.chunkCount());
+      System.out.println(
+          "追加: " + entry.docId() + " | " + entry.source() + " | chunks=" + entry.chunkCount());
     }
   }
 
@@ -180,8 +231,10 @@ public class EmbedCommand implements Runnable {
   }
 
   static List<String> resolveDocuments(List<String> documents) {
-    return dev.mikoto2000.rei.core.completion.DocumentPathResolver.resolve(documents,Path.of(System.getProperty("user.dir")));
+    return dev.mikoto2000.rei.core.completion.DocumentPathResolver.resolve(
+        documents, Path.of(System.getProperty("user.dir")));
   }
+
   private static String formatScore(Double score) {
     return score == null ? "n/a" : String.format(Locale.ROOT, "%.3f", score);
   }
@@ -189,8 +242,10 @@ public class EmbedCommand implements Runnable {
   private record SourceSummary(int docCount, int chunkCount, String latestIngestedAt) {
 
     SourceSummary add(int additionalChunks, String candidateLatest) {
-      String resolvedLatest = Comparator.nullsLast(String::compareTo)
-          .compare(candidateLatest, latestIngestedAt) > 0 ? candidateLatest : latestIngestedAt;
+      String resolvedLatest =
+          Comparator.nullsLast(String::compareTo).compare(candidateLatest, latestIngestedAt) > 0
+              ? candidateLatest
+              : latestIngestedAt;
       return new SourceSummary(docCount + 1, chunkCount + additionalChunks, resolvedLatest);
     }
   }

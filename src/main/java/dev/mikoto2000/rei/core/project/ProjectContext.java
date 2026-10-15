@@ -8,5 +8,8 @@ public record ProjectContext(String id, String name, Path root) {
     java.util.UUID.fromString(id);
     root = root.toAbsolutePath().normalize();
   }
-  public String conversationId(String logicalId) { return "project:" + id + ":" + logicalId; }
+
+  public String conversationId(String logicalId) {
+    return "project:" + id + ":" + logicalId;
+  }
 }

@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.SpringApplication;
@@ -14,14 +13,15 @@ import org.springframework.context.annotation.Configuration;
 @org.junit.jupiter.api.Tag("integration")
 class ExternalConfigLoadingTest {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void externalApplicationYamlOverridesClasspathDefaults() throws Exception {
     Path configFile = tempDir.resolve("application.yaml");
     Files.createDirectories(configFile.getParent());
-    Files.writeString(configFile, """
+    Files.writeString(
+        configFile,
+        """
         rei:
           web-search:
             enabled: false
@@ -30,12 +30,15 @@ class ExternalConfigLoadingTest {
     SpringApplication application = new SpringApplication(TestConfiguration.class);
     application.setDefaultProperties(ExternalConfigSupport.defaultProperties(tempDir));
 
-    try (ConfigurableApplicationContext context = application.run("--spring.main.web-application-type=none", "--rei.data-dir=" + tempDir, "--logging.file.name=target/test-external-config.log")) {
+    try (ConfigurableApplicationContext context =
+        application.run(
+            "--spring.main.web-application-type=none",
+            "--rei.data-dir=" + tempDir,
+            "--logging.file.name=target/test-external-config.log")) {
       assertEquals("false", context.getEnvironment().getProperty("rei.web-search.enabled"));
     }
   }
 
   @Configuration
-  static class TestConfiguration {
-  }
+  static class TestConfiguration {}
 }

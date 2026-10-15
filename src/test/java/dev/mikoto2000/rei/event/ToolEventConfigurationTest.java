@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 
 import java.time.Clock;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.mcp.SyncMcpToolCallbackProvider;
 
@@ -22,5 +21,4 @@ class ToolEventConfigurationTest {
 
     assertNotNull(result);
   }
-
 }

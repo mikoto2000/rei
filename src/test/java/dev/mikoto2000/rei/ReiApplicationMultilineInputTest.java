@@ -5,21 +5,20 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.core.service.CommandCancellationService;
+import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
+import dev.mikoto2000.rei.core.service.CommandUserInputDisplayPolicy;
+import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.ui.shell.RootCommand;
+import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
+import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
+import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import org.jline.reader.Buffer;
 import org.jline.reader.LineReader;
 import org.jline.terminal.Terminal;
 import org.jline.utils.NonBlockingReader;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-
-import dev.mikoto2000.rei.ui.shell.RootCommand;
-import dev.mikoto2000.rei.core.service.CommandCancellationService;
-import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
-import dev.mikoto2000.rei.core.service.CommandUserInputDisplayPolicy;
-import dev.mikoto2000.rei.core.service.ModelHolderService;
-import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
-import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
-import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
 import picocli.CommandLine;
 
 class ReiApplicationMultilineInputTest {
@@ -36,8 +35,12 @@ class ReiApplicationMultilineInputTest {
   void readPossiblyMultilineInput_preservesTrailingCommandPathSeparator() {
     ReiApplication app = newApp();
     LineReader reader = Mockito.mock(LineReader.class);
-    for (String line : java.util.List.of("/project cd F:\\", "/project cd .\\rei\\",
-        " /project add \"F:\\My Documents\\", "/embed add F:\\docs\\")) {
+    for (String line :
+        java.util.List.of(
+            "/project cd F:\\",
+            "/project cd .\\rei\\",
+            " /project add \"F:\\My Documents\\",
+            "/embed add F:\\docs\\")) {
       assertEquals(line, app.readPossiblyMultilineInput(line, reader));
     }
     Mockito.verifyNoInteractions(reader);
@@ -49,7 +52,9 @@ class ReiApplicationMultilineInputTest {
     LineReader reader = Mockito.mock(LineReader.class);
     when(reader.readLine("...> ")).thenReturn("world");
 
-    assertEquals("hello" + System.lineSeparator() + "world", app.readPossiblyMultilineInput("hello\\", reader));
+    assertEquals(
+        "hello" + System.lineSeparator() + "world",
+        app.readPossiblyMultilineInput("hello\\", reader));
   }
 
   @Test
@@ -94,14 +99,16 @@ class ReiApplicationMultilineInputTest {
     var bytes = new java.io.ByteArrayOutputStream();
     var encoding = java.nio.charset.Charset.forName("windows-31j");
     Terminal terminal = Mockito.mock(Terminal.class);
-    when(terminal.writer()).thenReturn(new java.io.PrintWriter(new java.io.OutputStreamWriter(bytes, encoding)));
+    when(terminal.writer())
+        .thenReturn(new java.io.PrintWriter(new java.io.OutputStreamWriter(bytes, encoding)));
     ReiApplication.configureCommandOutput(command, terminal);
     // Rebinding must not replace the shell's writer with a default-encoding writer.
     var rebound = new CommandLine(runs);
     var wrongOutput = new java.io.StringWriter();
     rebound.setOut(new java.io.PrintWriter(wrongOutput));
     assertEquals(0, command.execute("runs"));
-    org.junit.jupiter.api.Assertions.assertTrue(bytes.toString(encoding).contains("全 md ファイルをレビューしてください"));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        bytes.toString(encoding).contains("全 md ファイルをレビューしてください"));
     assertEquals("", wrongOutput.toString());
   }
 
@@ -111,8 +118,11 @@ class ReiApplicationMultilineInputTest {
     var command = Mockito.mock(CommandLine.class);
     var terminal = Mockito.mock(Terminal.class);
     var executor = Mockito.mock(java.util.concurrent.ExecutorService.class);
-    for (String[] args : java.util.List.of(new String[]{"history"}, new String[]{"history","show"},
-        new String[]{"history","search","needle"})) {
+    for (String[] args :
+        java.util.List.of(
+            new String[] {"history"},
+            new String[] {"history", "show"},
+            new String[] {"history", "search", "needle"})) {
       app.executeInterruptibly(command, terminal, executor, args);
       verify(command).execute(args);
     }
@@ -129,7 +139,8 @@ class ReiApplicationMultilineInputTest {
   }
 
   @Test
-  void clearPendingInputAfterInteractiveShellClearsBufferAndDrainsTerminalReader() throws Exception {
+  void clearPendingInputAfterInteractiveShellClearsBufferAndDrainsTerminalReader()
+      throws Exception {
     ReiApplication app = newApp();
     LineReader lineReader = Mockito.mock(LineReader.class);
     Buffer buffer = Mockito.mock(Buffer.class);
@@ -188,12 +199,12 @@ class ReiApplicationMultilineInputTest {
   @CommandLine.Command(name = "noop")
   static class NoopCommand implements Runnable {
     @Override
-    public void run() {
-    }
+    public void run() {}
   }
 
   private ReiApplication newApp() {
-    AsyncVectorDocumentService asyncVectorDocumentService = Mockito.mock(AsyncVectorDocumentService.class);
+    AsyncVectorDocumentService asyncVectorDocumentService =
+        Mockito.mock(AsyncVectorDocumentService.class);
     when(asyncVectorDocumentService.hasActiveEmbeddings()).thenReturn(false);
     return new ReiApplication(
         Mockito.mock(RootCommand.class),

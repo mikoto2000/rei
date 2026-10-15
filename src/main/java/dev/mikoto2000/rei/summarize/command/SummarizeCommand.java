@@ -1,18 +1,16 @@
 package dev.mikoto2000.rei.summarize.command;
 
-import java.net.URI;
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
-
 import dev.mikoto2000.rei.summarize.SummarizationException;
 import dev.mikoto2000.rei.summarize.SummaryResult;
 import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
+import java.net.URI;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
-import picocli.CommandLine.Model.CommandSpec;
 
 @Command(name = "summarize", description = "Web ページを要約します")
 @Component
@@ -24,43 +22,57 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
   private ChatResponseNarrator chatResponseNarrator;
   private dev.mikoto2000.rei.core.execution.BackgroundCommands background;
   private java.io.PrintWriter shellOutput;
-  @Autowired(required=false)
-  public void setBackgroundCommands(dev.mikoto2000.rei.core.execution.BackgroundCommands background) { this.background=background; }
-  public void setShellOutput(java.io.PrintWriter output) { shellOutput=output; }
+
+  @Autowired(required = false)
+  public void setBackgroundCommands(
+      dev.mikoto2000.rei.core.execution.BackgroundCommands background) {
+    this.background = background;
+  }
+
+  public void setShellOutput(java.io.PrintWriter output) {
+    shellOutput = output;
+  }
 
   @Parameters(index = "0", arity = "0..1", paramLabel = "URL", description = "要約する URL")
   private String url;
 
-  @Spec
-  private CommandSpec spec;
+  @Spec private CommandSpec spec;
 
-  public SummarizeCommand() {
-  }
+  public SummarizeCommand() {}
 
   public SummarizeCommand(WebPageSummarizerService summarizerService) {
     this(summarizerService, null);
   }
 
   @Autowired
-  public SummarizeCommand(WebPageSummarizerService summarizerService, ChatResponseNarrator chatResponseNarrator) {
+  public SummarizeCommand(
+      WebPageSummarizerService summarizerService, ChatResponseNarrator chatResponseNarrator) {
     this.summarizerService = summarizerService;
     this.chatResponseNarrator = chatResponseNarrator;
   }
 
   @Override
   public Integer call() {
-    if(background!=null) {
-      var out=shellOutput==null?spec.commandLine().getOut():shellOutput;
+    if (background != null) {
+      var out = shellOutput == null ? spec.commandLine().getOut() : shellOutput;
       try {
-        if(url==null || url.isBlank()) { background.showLastSummary(out::println); return 0; }
-        URI source=parseUrl();
-        if(source==null) return 2;
+        if (url == null || url.isBlank()) {
+          background.showLastSummary(out::println);
+          return 0;
+        }
+        URI source = parseUrl();
+        if (source == null) return 2;
         background.summarize(source);
         return 0;
-      } catch(RuntimeException error) {
-        out.println("要約処理を開始・表示できません: "+new dev.mikoto2000.rei.conversation.HistoryFormatter().label(dev.mikoto2000.rei.event.FailureMessages.describe(error)));
+      } catch (RuntimeException error) {
+        out.println(
+            "要約処理を開始・表示できません: "
+                + new dev.mikoto2000.rei.conversation.HistoryFormatter()
+                    .label(dev.mikoto2000.rei.event.FailureMessages.describe(error)));
         return 1;
-      } finally { out.flush(); }
+      } finally {
+        out.flush();
+      }
     }
     if (chatResponseNarrator != null) {
       chatResponseNarrator.reset();
@@ -108,6 +120,8 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
 
   private String errorMessage(SummarizationException e) {
     String message = e.getMessage();
-    return message == null || message.isBlank() ? "要約に失敗しました: " + e.code() : "要約に失敗しました: " + message;
+    return message == null || message.isBlank()
+        ? "要約に失敗しました: " + e.code()
+        : "要約に失敗しました: " + message;
   }
 }

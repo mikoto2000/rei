@@ -4,11 +4,9 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.List;
-
 import javax.xml.XMLConstants;
 import javax.xml.parsers.DocumentBuilderFactory;
 import javax.xml.parsers.ParserConfigurationException;
-
 import org.springframework.stereotype.Component;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
@@ -34,12 +32,18 @@ public class OpmlParser {
       factory.setXIncludeAware(false);
       factory.setExpandEntityReferences(false);
       var builder = factory.newDocumentBuilder();
-      builder.setErrorHandler(new DefaultHandler() {
-        @Override
-        public void error(SAXParseException exception) throws SAXException { throw exception; }
-        @Override
-        public void fatalError(SAXParseException exception) throws SAXException { throw exception; }
-      });
+      builder.setErrorHandler(
+          new DefaultHandler() {
+            @Override
+            public void error(SAXParseException exception) throws SAXException {
+              throw exception;
+            }
+
+            @Override
+            public void fatalError(SAXParseException exception) throws SAXException {
+              throw exception;
+            }
+          });
       Element root = builder.parse(input).getDocumentElement();
       if (!"opml".equals(root.getTagName())) {
         throw new OpmlImportException("not an OPML document");
@@ -65,13 +69,19 @@ public class OpmlParser {
     }
   }
 
-  private void collect(Element parent, List<String> categories, List<OpmlSubscription> subscriptions) {
+  private void collect(
+      Element parent, List<String> categories, List<OpmlSubscription> subscriptions) {
     for (Node node = parent.getFirstChild(); node != null; node = node.getNextSibling()) {
       if (!(node instanceof Element outline) || !"outline".equals(outline.getTagName())) continue;
       var childCategories = new ArrayList<>(categories);
       if (outline.hasAttribute("xmlUrl")) {
-        subscriptions.add(new OpmlSubscription(outline.getAttribute("title"), outline.getAttribute("text"),
-            outline.getAttribute("xmlUrl"), outline.getAttribute("htmlUrl"), categories));
+        subscriptions.add(
+            new OpmlSubscription(
+                outline.getAttribute("title"),
+                outline.getAttribute("text"),
+                outline.getAttribute("xmlUrl"),
+                outline.getAttribute("htmlUrl"),
+                categories));
       } else {
         String category = outline.getAttribute("text");
         if (category.isBlank()) category = outline.getAttribute("title");

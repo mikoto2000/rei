@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -15,16 +14,22 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 @org.junit.jupiter.api.Tag("integration")
 class FeedServiceTest {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void savesEmbeddedFeedContentForSummaryFallback() {
     FeedService service = newService();
     Feed feed = service.add("https://example.com/feed.xml", "Example");
-    service.saveFetchedItems(feed.id(), List.of(new FetchedFeedItem(
-        "Title", "https://example.com/article", OffsetDateTime.parse("2026-04-22T01:23:45Z"),
-        "Description marker", "Embedded content marker")), OffsetDateTime.parse("2026-04-22T02:00:00Z"));
+    service.saveFetchedItems(
+        feed.id(),
+        List.of(
+            new FetchedFeedItem(
+                "Title",
+                "https://example.com/article",
+                OffsetDateTime.parse("2026-04-22T01:23:45Z"),
+                "Description marker",
+                "Embedded content marker")),
+        OffsetDateTime.parse("2026-04-22T02:00:00Z"));
 
     FeedItem item = service.listItemsForFeed(feed.id()).getFirst();
 
@@ -50,8 +55,10 @@ class FeedServiceTest {
     FeedService service = newService();
     service.add("https://example.com/feed.xml", "Example Feed");
 
-    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-        () -> service.add("https://example.com/feed.xml", "Duplicate"));
+    IllegalArgumentException error =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> service.add("https://example.com/feed.xml", "Duplicate"));
 
     assertEquals("同じフィード URL は登録できません", error.getMessage());
   }
@@ -59,7 +66,10 @@ class FeedServiceTest {
   @Test
   void rejectsCredentialUrlsBeforeDatabaseStorage() {
     FeedService service = newService();
-    for (String url : List.of("https://user:secret@example.com/feed.xml", "https://example.com/feed.xml?token=secret")) {
+    for (String url :
+        List.of(
+            "https://user:secret@example.com/feed.xml",
+            "https://example.com/feed.xml?token=secret")) {
       var error = assertThrows(IllegalArgumentException.class, () -> service.add(url, "Private"));
       assertTrue(!error.toString().contains("secret"));
     }
@@ -70,17 +80,29 @@ class FeedServiceTest {
   void legacyCredentialUrlsAreRedactedOnReadAndCannotBeFetched() {
     FeedService service = newService();
     Feed feed = service.add("https://example.com/feed.xml", null);
-    var jdbc = org.springframework.jdbc.core.simple.JdbcClient.create(
-        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feed.db")));
+    var jdbc =
+        org.springframework.jdbc.core.simple.JdbcClient.create(
+            new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feed.db")));
     jdbc.sql("UPDATE feeds SET url = ?, display_name = ? WHERE id = ?")
-        .params("https://user:legacy-secret@example.com/feed.xml", "https://user:legacy-secret@example.com/feed.xml", feed.id()).update();
+        .params(
+            "https://user:legacy-secret@example.com/feed.xml",
+            "https://user:legacy-secret@example.com/feed.xml",
+            feed.id())
+        .update();
     assertTrue(!service.findById(feed.id()).toString().contains("legacy-secret"));
     assertTrue(!service.list().toString().contains("legacy-secret"));
-    var updater = new FeedUpdateService(service, new FeedFetcher(uri -> { throw new AssertionError("must not send"); }));
+    var updater =
+        new FeedUpdateService(
+            service,
+            new FeedFetcher(
+                uri -> {
+                  throw new AssertionError("must not send");
+                }));
     assertTrue(!updater.update(feed.id()).toString().contains("legacy-secret"));
   }
 
   private FeedService newService() {
-    return new FeedService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feed.db")));
+    return new FeedService(
+        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feed.db")));
   }
 }

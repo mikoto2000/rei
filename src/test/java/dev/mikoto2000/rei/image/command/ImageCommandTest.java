@@ -4,18 +4,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.io.PrintStream;
-import java.nio.file.Path;
-
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
-
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.image.ImageGenerationRequest;
 import dev.mikoto2000.rei.image.ImageGenerationResult;
 import dev.mikoto2000.rei.image.ImageGenerationService;
 import dev.mikoto2000.rei.image.ImageProperties;
+import java.io.PrintStream;
+import java.nio.file.Path;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
 import picocli.CommandLine;
 
 class ImageCommandTest {
@@ -23,7 +21,8 @@ class ImageCommandTest {
   @Test
   void directPromptUsesGenerateAndBareCommandOnlyShowsUsage() {
     ImageGenerationService service = Mockito.mock(ImageGenerationService.class);
-    when(service.generate(Mockito.any())).thenReturn(ImageGenerationResult.success(Path.of("out.png")));
+    when(service.generate(Mockito.any()))
+        .thenReturn(ImageGenerationResult.success(Path.of("out.png")));
     CommandLine command = newCommand(service);
     command.setErr(new java.io.PrintWriter(new java.io.StringWriter()));
     assertThat(command.execute()).isEqualTo(2);
@@ -41,12 +40,23 @@ class ImageCommandTest {
     when(service.generate(Mockito.any())).thenReturn(ImageGenerationResult.success(output));
     CommandLine commandLine = newCommand(service);
 
-    ExecutionResult execution = execute(commandLine, "generate", "--output", "out.png", "--model", "image-model",
-        "--size", "640x480", "a", "cat");
+    ExecutionResult execution =
+        execute(
+            commandLine,
+            "generate",
+            "--output",
+            "out.png",
+            "--model",
+            "image-model",
+            "--size",
+            "640x480",
+            "a",
+            "cat");
 
     assertThat(execution.exitCode()).isZero();
     assertThat(execution.output()).contains("画像を保存しました: " + output);
-    ArgumentCaptor<ImageGenerationRequest> captor = ArgumentCaptor.forClass(ImageGenerationRequest.class);
+    ArgumentCaptor<ImageGenerationRequest> captor =
+        ArgumentCaptor.forClass(ImageGenerationRequest.class);
     verify(service).generate(captor.capture());
     assertThat(captor.getValue().prompt()).isEqualTo("a cat");
     assertThat(captor.getValue().enhancePrompt()).isTrue();
@@ -66,7 +76,8 @@ class ImageCommandTest {
     ExecutionResult execution = execute(commandLine, "generate", "--raw", "a", "cat");
 
     assertThat(execution.exitCode()).isZero();
-    ArgumentCaptor<ImageGenerationRequest> captor = ArgumentCaptor.forClass(ImageGenerationRequest.class);
+    ArgumentCaptor<ImageGenerationRequest> captor =
+        ArgumentCaptor.forClass(ImageGenerationRequest.class);
     verify(service).generate(captor.capture());
     assertThat(captor.getValue().prompt()).isEqualTo("a cat");
     assertThat(captor.getValue().enhancePrompt()).isFalse();
@@ -99,15 +110,18 @@ class ImageCommandTest {
   private CommandLine newCommand(ImageGenerationService service) {
     ImageProperties properties = new ImageProperties();
     CommandCancellationService cancellationService = new CommandCancellationService();
-    CommandLine commandLine = new CommandLine(new ImageCommand(), new CommandLine.IFactory() {
-      @Override
-      public <K> K create(Class<K> cls) throws Exception {
-        if (cls.equals(GenerateCommand.class)) {
-          return cls.cast(new GenerateCommand(service, properties, cancellationService));
-        }
-        return CommandLine.defaultFactory().create(cls);
-      }
-    });
+    CommandLine commandLine =
+        new CommandLine(
+            new ImageCommand(),
+            new CommandLine.IFactory() {
+              @Override
+              public <K> K create(Class<K> cls) throws Exception {
+                if (cls.equals(GenerateCommand.class)) {
+                  return cls.cast(new GenerateCommand(service, properties, cancellationService));
+                }
+                return CommandLine.defaultFactory().create(cls);
+              }
+            });
     return commandLine;
   }
 
@@ -116,12 +130,12 @@ class ImageCommandTest {
     PrintStream originalOut = System.out;
     try {
       System.setOut(new PrintStream(out, true, java.nio.charset.StandardCharsets.UTF_8));
-      return new ExecutionResult(commandLine.execute(args), out.toString(java.nio.charset.StandardCharsets.UTF_8));
+      return new ExecutionResult(
+          commandLine.execute(args), out.toString(java.nio.charset.StandardCharsets.UTF_8));
     } finally {
       System.setOut(originalOut);
     }
   }
 
-  private record ExecutionResult(int exitCode, String output) {
-  }
+  private record ExecutionResult(int exitCode, String output) {}
 }

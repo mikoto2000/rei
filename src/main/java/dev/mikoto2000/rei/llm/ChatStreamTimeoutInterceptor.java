@@ -2,7 +2,6 @@ package dev.mikoto2000.rei.llm;
 
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
-
 import okhttp3.Interceptor;
 import okhttp3.Response;
 
@@ -24,7 +23,8 @@ final class ChatStreamTimeoutInterceptor implements Interceptor {
       asyncTimeout.exit();
     }
     timeout.clearTimeout().clearDeadline();
-    return chain.withReadTimeout(READ_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+    return chain
+        .withReadTimeout(READ_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
         .proceed(chain.request());
   }
 }

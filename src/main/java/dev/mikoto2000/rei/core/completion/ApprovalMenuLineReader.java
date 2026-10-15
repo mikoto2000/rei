@@ -14,19 +14,37 @@ public final class ApprovalMenuLineReader extends LineReaderImpl {
   private String menu = "", status = "";
   private final boolean interactive;
   private final Supplier<AttributedString> approvalPost = this::presentation;
-  public ApprovalMenuLineReader(Terminal terminal) throws IOException { this(terminal, ApprovalDisplayState.interactive(terminal)); }
+
+  public ApprovalMenuLineReader(Terminal terminal) throws IOException {
+    this(terminal, ApprovalDisplayState.interactive(terminal));
+  }
+
   /** Explicit capability for in-memory terminal verification. */
-  public ApprovalMenuLineReader(Terminal terminal, boolean interactive) throws IOException { super(terminal); this.interactive = interactive; }
+  public ApprovalMenuLineReader(Terminal terminal, boolean interactive) throws IOException {
+    super(terminal);
+    this.interactive = interactive;
+  }
+
   public void approvalMenu(String text) {
     lock.lock();
-    try { menu = text; post = approvalPost; }
-    finally { lock.unlock(); }
+    try {
+      menu = text;
+      post = approvalPost;
+    } finally {
+      lock.unlock();
+    }
   }
+
   public void clearApprovalMenu() {
     lock.lock();
-    try { if (post == approvalPost) post = null; menu = ""; }
-    finally { lock.unlock(); }
+    try {
+      if (post == approvalPost) post = null;
+      menu = "";
+    } finally {
+      lock.unlock();
+    }
   }
+
   public void approvalStatus(String text) {
     if (!interactive) text = "";
     lock.lock();
@@ -34,25 +52,38 @@ public final class ApprovalMenuLineReader extends LineReaderImpl {
       if (status.equals(text)) return;
       status = text;
       if (isReading()) redisplay();
-    } finally { lock.unlock(); }
+    } finally {
+      lock.unlock();
+    }
   }
+
   private AttributedString presentation() {
-    var result = new AttributedStringBuilder().append(status, AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW).bold());
+    var result =
+        new AttributedStringBuilder()
+            .append(status, AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW).bold());
     if (!menu.isEmpty()) result.append(status.isEmpty() ? "" : "\n").append(menu);
     return result.toAttributedString();
   }
-  @Override public AttributedString getDisplayedBufferWithPrompts(List<AttributedString> secondaryPrompts) {
+
+  @Override
+  public AttributedString getDisplayedBufferWithPrompts(List<AttributedString> secondaryPrompts) {
     lock.lock();
     Supplier<AttributedString> original = post;
     try {
       // readLine and completion replace post; compose at render time to retain status.
-      if (!status.isEmpty()) post = () -> {
-        AttributedString other = original == null || original == approvalPost ? null : original.get();
-        var result = new AttributedStringBuilder().append(presentation());
-        if (other != null) result.append("\n").append(other);
-        return result.toAttributedString();
-      };
+      if (!status.isEmpty())
+        post =
+            () -> {
+              AttributedString other =
+                  original == null || original == approvalPost ? null : original.get();
+              var result = new AttributedStringBuilder().append(presentation());
+              if (other != null) result.append("\n").append(other);
+              return result.toAttributedString();
+            };
       return super.getDisplayedBufferWithPrompts(secondaryPrompts);
-    } finally { post = original; lock.unlock(); }
+    } finally {
+      post = original;
+      lock.unlock();
+    }
   }
 }

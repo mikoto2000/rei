@@ -3,15 +3,13 @@ package dev.mikoto2000.rei.websearch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.util.List;
+import dev.mikoto2000.rei.urlfetch.UrlContentFetchResult;
+import dev.mikoto2000.rei.urlfetch.UrlContentFetchService;
 import java.io.IOException;
-
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-
-import dev.mikoto2000.rei.urlfetch.UrlContentFetchService;
-import dev.mikoto2000.rei.urlfetch.UrlContentFetchResult;
 
 class WebSearchAndReadServiceTest {
   private WebSearchAndReadService service;
@@ -24,79 +22,117 @@ class WebSearchAndReadServiceTest {
     properties.setMaxResults(5);
     webSearchService = Mockito.mock(WebSearchService.class);
     urlContentFetchService = Mockito.mock(UrlContentFetchService.class);
-    service = new WebSearchAndReadService(webSearchService, urlContentFetchService,
-        new WebPageExtractor(), properties);
+    service =
+        new WebSearchAndReadService(
+            webSearchService, urlContentFetchService, new WebPageExtractor(), properties);
   }
 
   @Test
   void rejectsBlankQuery() {
-    IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
-        () -> service.searchAndRead(new WebSearchAndReadRequest("  ", 5, 3)));
+    IllegalArgumentException error =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> service.searchAndRead(new WebSearchAndReadRequest("  ", 5, 3)));
     assertEquals("query must not be blank", error.getMessage());
   }
 
   @Test
   void rejectsMaxResultsOutsideConfiguredRange() {
-    assertThrows(IllegalArgumentException.class,
+    assertThrows(
+        IllegalArgumentException.class,
         () -> service.searchAndRead(new WebSearchAndReadRequest("query", 0, 0)));
-    assertThrows(IllegalArgumentException.class,
+    assertThrows(
+        IllegalArgumentException.class,
         () -> service.searchAndRead(new WebSearchAndReadRequest("query", 6, 0)));
   }
 
   @Test
   void rejectsReadTopOutsideMaxResults() {
-    assertThrows(IllegalArgumentException.class,
+    assertThrows(
+        IllegalArgumentException.class,
         () -> service.searchAndRead(new WebSearchAndReadRequest("query", 3, -1)));
-    assertThrows(IllegalArgumentException.class,
+    assertThrows(
+        IllegalArgumentException.class,
         () -> service.searchAndRead(new WebSearchAndReadRequest("query", 3, 4)));
   }
 
   @Test
   void returnsRankedSearchMetadataWithoutFetchingWhenReadTopIsZero() throws Exception {
-    org.mockito.Mockito.when(webSearchService.search("spring ai", 2)).thenReturn(List.of(
-        new WebSearchResult("First", "https://example.com/1", "Snippet 1", "2026-01-01"),
-        new WebSearchResult("Second", "https://example.com/2", "Snippet 2", null)));
+    org.mockito.Mockito.when(webSearchService.search("spring ai", 2))
+        .thenReturn(
+            List.of(
+                new WebSearchResult("First", "https://example.com/1", "Snippet 1", "2026-01-01"),
+                new WebSearchResult("Second", "https://example.com/2", "Snippet 2", null)));
 
-    WebSearchAndReadResponse response = service.searchAndRead(new WebSearchAndReadRequest("spring ai", 2, 0));
+    WebSearchAndReadResponse response =
+        service.searchAndRead(new WebSearchAndReadRequest("spring ai", 2, 0));
 
     assertEquals("spring ai", response.query());
-    assertEquals(List.of("First", "Second"), response.results().stream().map(WebSearchAndReadItem::title).toList());
-    assertEquals(List.of("https://example.com/1", "https://example.com/2"),
+    assertEquals(
+        List.of("First", "Second"),
+        response.results().stream().map(WebSearchAndReadItem::title).toList());
+    assertEquals(
+        List.of("https://example.com/1", "https://example.com/2"),
         response.results().stream().map(WebSearchAndReadItem::url).toList());
-    assertEquals(List.of("Snippet 1", "Snippet 2"),
+    assertEquals(
+        List.of("Snippet 1", "Snippet 2"),
         response.results().stream().map(WebSearchAndReadItem::snippet).toList());
-    assertEquals(List.of("not_requested", "not_requested"),
+    assertEquals(
+        List.of("not_requested", "not_requested"),
         response.results().stream().map(WebSearchAndReadItem::fetchStatus).toList());
     Mockito.verifyNoInteractions(urlContentFetchService);
   }
 
   @Test
   void fetchesAndNormalizesOnlyRequestedTopResult() throws Exception {
-    WebSearchResult first = new WebSearchResult("First", "https://example.com/1", "Snippet 1", null);
-    WebSearchResult second = new WebSearchResult("Second", "https://example.com/2", "Snippet 2", null);
-    org.mockito.Mockito.when(webSearchService.search("query", 2)).thenReturn(List.of(first, second));
-    org.mockito.Mockito.when(urlContentFetchService.fetch(Mockito.eq(first.url()), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class))).thenReturn(UrlContentFetchResult.success("""
+    WebSearchResult first =
+        new WebSearchResult("First", "https://example.com/1", "Snippet 1", null);
+    WebSearchResult second =
+        new WebSearchResult("Second", "https://example.com/2", "Snippet 2", null);
+    org.mockito.Mockito.when(webSearchService.search("query", 2))
+        .thenReturn(List.of(first, second));
+    org.mockito.Mockito.when(
+            urlContentFetchService.fetch(
+                Mockito.eq(first.url()),
+                Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
+        .thenReturn(
+            UrlContentFetchResult.success(
+                """
         <html><body><nav>menu</nav><article><p>Readable content.</p></article><script>ignore()</script></body></html>
-        """, "text/html"));
+        """,
+                "text/html"));
 
-    WebSearchAndReadResponse response = service.searchAndRead(new WebSearchAndReadRequest("query", 2, 1));
+    WebSearchAndReadResponse response =
+        service.searchAndRead(new WebSearchAndReadRequest("query", 2, 1));
 
     assertEquals("success", response.results().get(0).fetchStatus());
     assertEquals("Readable content.", response.results().get(0).content());
     assertEquals("text/html", response.results().get(0).contentType());
     assertEquals("not_requested", response.results().get(1).fetchStatus());
-    Mockito.verify(urlContentFetchService).fetch(Mockito.eq("https://example.com/1"), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class));
-    Mockito.verify(urlContentFetchService, Mockito.never()).fetch(Mockito.eq("https://example.com/2"), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class));
+    Mockito.verify(urlContentFetchService)
+        .fetch(
+            Mockito.eq("https://example.com/1"),
+            Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class));
+    Mockito.verify(urlContentFetchService, Mockito.never())
+        .fetch(
+            Mockito.eq("https://example.com/2"),
+            Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class));
   }
 
   @Test
   void marksContentTruncatedAtExtractorLimit() throws Exception {
-    WebSearchResult result = new WebSearchResult("Title", "https://example.com/long", "Snippet", null);
+    WebSearchResult result =
+        new WebSearchResult("Title", "https://example.com/long", "Snippet", null);
     org.mockito.Mockito.when(webSearchService.search("query", 1)).thenReturn(List.of(result));
-    org.mockito.Mockito.when(urlContentFetchService.fetch(Mockito.eq(result.url()), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
-        .thenReturn(UrlContentFetchResult.success("<html><body>" + "x".repeat(2_100) + "</body></html>"));
+    org.mockito.Mockito.when(
+            urlContentFetchService.fetch(
+                Mockito.eq(result.url()),
+                Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
+        .thenReturn(
+            UrlContentFetchResult.success("<html><body>" + "x".repeat(2_100) + "</body></html>"));
 
-    WebSearchAndReadItem item = service.searchAndRead(new WebSearchAndReadRequest("query", 1, 1)).results().getFirst();
+    WebSearchAndReadItem item =
+        service.searchAndRead(new WebSearchAndReadRequest("query", 1, 1)).results().getFirst();
 
     assertEquals(2_000, item.content().length());
     org.junit.jupiter.api.Assertions.assertTrue(item.truncated());
@@ -107,19 +143,32 @@ class WebSearchAndReadServiceTest {
     WebSearchResult first = new WebSearchResult("First", "https://example.com/1", "S1", null);
     WebSearchResult second = new WebSearchResult("Second", "https://example.com/2", "S2", null);
     WebSearchResult third = new WebSearchResult("Third", "https://example.com/3", "S3", null);
-    org.mockito.Mockito.when(webSearchService.search("query", 3)).thenReturn(List.of(first, second, third));
-    org.mockito.Mockito.when(urlContentFetchService.fetch(Mockito.eq(first.url()), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
+    org.mockito.Mockito.when(webSearchService.search("query", 3))
+        .thenReturn(List.of(first, second, third));
+    org.mockito.Mockito.when(
+            urlContentFetchService.fetch(
+                Mockito.eq(first.url()),
+                Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
         .thenReturn(UrlContentFetchResult.success("<p>one</p>"));
-    org.mockito.Mockito.when(urlContentFetchService.fetch(Mockito.eq(second.url()), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
+    org.mockito.Mockito.when(
+            urlContentFetchService.fetch(
+                Mockito.eq(second.url()),
+                Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
         .thenReturn(UrlContentFetchResult.failure("NETWORK_ERROR", "timeout"));
-    org.mockito.Mockito.when(urlContentFetchService.fetch(Mockito.eq(third.url()), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
+    org.mockito.Mockito.when(
+            urlContentFetchService.fetch(
+                Mockito.eq(third.url()),
+                Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
         .thenReturn(UrlContentFetchResult.success("<p>three</p>"));
 
-    List<WebSearchAndReadItem> items = service.searchAndRead(
-        new WebSearchAndReadRequest("query", 3, 3)).results();
+    List<WebSearchAndReadItem> items =
+        service.searchAndRead(new WebSearchAndReadRequest("query", 3, 3)).results();
 
-    assertEquals(List.of("First", "Second", "Third"), items.stream().map(WebSearchAndReadItem::title).toList());
-    assertEquals(List.of("success", "failed", "success"),
+    assertEquals(
+        List.of("First", "Second", "Third"),
+        items.stream().map(WebSearchAndReadItem::title).toList());
+    assertEquals(
+        List.of("success", "failed", "success"),
         items.stream().map(WebSearchAndReadItem::fetchStatus).toList());
     assertEquals("NETWORK_ERROR", items.get(1).errorType());
     assertEquals("timeout", items.get(1).errorMessage());
@@ -129,60 +178,87 @@ class WebSearchAndReadServiceTest {
   void returnsSearchMetadataWhenEveryFetchFails() throws Exception {
     WebSearchResult first = new WebSearchResult("First", "https://example.com/1", "S1", null);
     WebSearchResult second = new WebSearchResult("Second", "https://example.com/2", "S2", null);
-    org.mockito.Mockito.when(webSearchService.search("query", 2)).thenReturn(List.of(first, second));
-    org.mockito.Mockito.when(urlContentFetchService.fetch(Mockito.anyString(), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
+    org.mockito.Mockito.when(webSearchService.search("query", 2))
+        .thenReturn(List.of(first, second));
+    org.mockito.Mockito.when(
+            urlContentFetchService.fetch(
+                Mockito.anyString(), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
         .thenReturn(UrlContentFetchResult.failure("NETWORK_ERROR", "offline"));
 
-    List<WebSearchAndReadItem> items = service.searchAndRead(
-        new WebSearchAndReadRequest("query", 2, 2)).results();
+    List<WebSearchAndReadItem> items =
+        service.searchAndRead(new WebSearchAndReadRequest("query", 2, 2)).results();
 
     assertEquals(2, items.size());
-    assertEquals(List.of("failed", "failed"), items.stream().map(WebSearchAndReadItem::fetchStatus).toList());
+    assertEquals(
+        List.of("failed", "failed"),
+        items.stream().map(WebSearchAndReadItem::fetchStatus).toList());
     assertEquals(List.of("S1", "S2"), items.stream().map(WebSearchAndReadItem::snippet).toList());
   }
 
   @Test
   void fetchesDuplicateUrlOnlyOnceWhilePreservingCitationMetadata() throws Exception {
     WebSearchResult first = new WebSearchResult("First", "https://example.com/same", "S1", null);
-    WebSearchResult duplicate = new WebSearchResult("Duplicate", "https://example.com/same", "S2", null);
-    org.mockito.Mockito.when(webSearchService.search("query", 2)).thenReturn(List.of(first, duplicate));
-    org.mockito.Mockito.when(urlContentFetchService.fetch(Mockito.eq(first.url()), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
+    WebSearchResult duplicate =
+        new WebSearchResult("Duplicate", "https://example.com/same", "S2", null);
+    org.mockito.Mockito.when(webSearchService.search("query", 2))
+        .thenReturn(List.of(first, duplicate));
+    org.mockito.Mockito.when(
+            urlContentFetchService.fetch(
+                Mockito.eq(first.url()),
+                Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
         .thenReturn(UrlContentFetchResult.success("<p>shared</p>"));
 
-    List<WebSearchAndReadItem> items = service.searchAndRead(
-        new WebSearchAndReadRequest("query", 2, 2)).results();
+    List<WebSearchAndReadItem> items =
+        service.searchAndRead(new WebSearchAndReadRequest("query", 2, 2)).results();
 
     assertEquals(1, items.size());
-    assertEquals(List.of("First", "Duplicate"), items.getFirst().aliases().stream().map(WebSourceAlias::title).toList());
+    assertEquals(
+        List.of("First", "Duplicate"),
+        items.getFirst().aliases().stream().map(WebSourceAlias::title).toList());
     assertEquals("shared", items.getFirst().content());
-    Mockito.verify(urlContentFetchService, Mockito.times(1)).fetch(Mockito.eq("https://example.com/same"), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class));
+    Mockito.verify(urlContentFetchService, Mockito.times(1))
+        .fetch(
+            Mockito.eq("https://example.com/same"),
+            Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class));
   }
 
   @Test
   void defaultsToConfiguredMaxResultsAndThreePageReads() throws Exception {
-    List<WebSearchResult> results = java.util.stream.IntStream.rangeClosed(1, 5)
-        .mapToObj(index -> new WebSearchResult("T" + index, "https://example.com/" + index, "S" + index, null))
-        .toList();
+    List<WebSearchResult> results =
+        java.util.stream.IntStream.rangeClosed(1, 5)
+            .mapToObj(
+                index ->
+                    new WebSearchResult(
+                        "T" + index, "https://example.com/" + index, "S" + index, null))
+            .toList();
     org.mockito.Mockito.when(webSearchService.search("query", 5)).thenReturn(results);
-    org.mockito.Mockito.when(urlContentFetchService.fetch(Mockito.anyString(), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
+    org.mockito.Mockito.when(
+            urlContentFetchService.fetch(
+                Mockito.anyString(), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
         .thenReturn(UrlContentFetchResult.success("<p>content</p>"));
 
-    List<WebSearchAndReadItem> items = service.searchAndRead(
-        new WebSearchAndReadRequest("query", null, null)).results();
+    List<WebSearchAndReadItem> items =
+        service.searchAndRead(new WebSearchAndReadRequest("query", null, null)).results();
 
-    assertEquals(List.of("success", "not_requested", "not_requested"),
+    assertEquals(
+        List.of("success", "not_requested", "not_requested"),
         items.stream().map(WebSearchAndReadItem::fetchStatus).toList());
-    assertEquals(List.of("https://example.com/1", "https://example.com/2", "https://example.com/3"),
+    assertEquals(
+        List.of("https://example.com/1", "https://example.com/2", "https://example.com/3"),
         items.getFirst().aliases().stream().map(WebSourceAlias::url).toList());
-    Mockito.verify(urlContentFetchService, Mockito.times(3)).fetch(Mockito.anyString(), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class));
+    Mockito.verify(urlContentFetchService, Mockito.times(3))
+        .fetch(Mockito.anyString(), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class));
   }
 
   @Test
   void propagatesSearchFailureAsWholeToolFailure() throws Exception {
-    org.mockito.Mockito.when(webSearchService.search("query", 5)).thenThrow(new IOException("search offline"));
+    org.mockito.Mockito.when(webSearchService.search("query", 5))
+        .thenThrow(new IOException("search offline"));
 
-    IOException error = assertThrows(IOException.class,
-        () -> service.searchAndRead(new WebSearchAndReadRequest("query", 5, 3)));
+    IOException error =
+        assertThrows(
+            IOException.class,
+            () -> service.searchAndRead(new WebSearchAndReadRequest("query", 5, 3)));
 
     assertEquals("search offline", error.getMessage());
     Mockito.verifyNoInteractions(urlContentFetchService);
@@ -190,20 +266,28 @@ class WebSearchAndReadServiceTest {
 
   @Test
   void treatsContentExtractionExceptionAsIndividualFailure() throws Exception {
-    WebSearchResult result = new WebSearchResult("Title", "https://example.com/page", "Snippet", null);
+    WebSearchResult result =
+        new WebSearchResult("Title", "https://example.com/page", "Snippet", null);
     WebPageExtractor extractor = Mockito.mock(WebPageExtractor.class);
     WebSearchProperties properties = new WebSearchProperties();
     properties.setMaxResults(5);
-    WebSearchAndReadService extractingService = new WebSearchAndReadService(
-        webSearchService, urlContentFetchService, extractor, properties);
+    WebSearchAndReadService extractingService =
+        new WebSearchAndReadService(
+            webSearchService, urlContentFetchService, extractor, properties);
     org.mockito.Mockito.when(webSearchService.search("query", 1)).thenReturn(List.of(result));
-    org.mockito.Mockito.when(urlContentFetchService.fetch(Mockito.eq(result.url()), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
+    org.mockito.Mockito.when(
+            urlContentFetchService.fetch(
+                Mockito.eq(result.url()),
+                Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class)))
         .thenReturn(UrlContentFetchResult.success("broken content", "text/html"));
     org.mockito.Mockito.when(extractor.extract(result, "broken content"))
         .thenThrow(new IllegalStateException("cannot parse token=private-value"));
 
-    WebSearchAndReadItem item = extractingService.searchAndRead(
-        new WebSearchAndReadRequest("query", 1, 1)).results().getFirst();
+    WebSearchAndReadItem item =
+        extractingService
+            .searchAndRead(new WebSearchAndReadRequest("query", 1, 1))
+            .results()
+            .getFirst();
 
     assertEquals("failed", item.fetchStatus());
     assertEquals("EXTRACTION_ERROR", item.errorType());

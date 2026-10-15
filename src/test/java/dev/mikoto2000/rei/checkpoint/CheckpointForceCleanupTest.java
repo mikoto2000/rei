@@ -1,5 +1,15 @@
 package dev.mikoto2000.rei.checkpoint;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunContinuation;
 import dev.mikoto2000.rei.core.policy.ApprovalContinuationStore;
@@ -17,16 +27,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.sqlite.SQLiteDataSource;
-
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.Mockito.doAnswer;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 @Tag("integration")
 class CheckpointForceCleanupTest {
@@ -70,15 +70,25 @@ class CheckpointForceCleanupTest {
   }
 
   @Test
-  void forceApplyDeletesAllCheckpointStateButRetainsExactApprovalReceiptAndOtherTables() throws Exception {
+  void forceApplyDeletesAllCheckpointStateButRetainsExactApprovalReceiptAndOtherTables()
+      throws Exception {
     createMixedHistory();
     var store = new ApprovalContinuationStore(source);
     var owner = new AgentRunContext("run-waiting", "session", root, "project");
-    var call = new AssistantMessage.ToolCall("exact-call", "function", "runCommand",
-        "{\"request\":{\"command\":\"git status --short\"}}");
-    store.save("approval", owner, "request", List.of(),
+    var call =
+        new AssistantMessage.ToolCall(
+            "exact-call",
+            "function",
+            "runCommand",
+            "{\"request\":{\"command\":\"git status --short\"}}");
+    store.save(
+        "approval",
+        owner,
+        "request",
+        List.of(),
         new RunContinuation.PendingTools("", List.of(call), List.of()),
-        new OutputLimitRunBudget(2, 20).snapshot(), false);
+        new OutputLimitRunBudget(2, 20).snapshot(),
+        false);
     var receipt = store.find("approval").orElseThrow();
     execute("CREATE TABLE unrelated_data(id TEXT PRIMARY KEY, value TEXT)");
     execute("INSERT INTO unrelated_data VALUES('keep','unchanged')");
@@ -117,13 +127,16 @@ class CheckpointForceCleanupTest {
     var registry = mock(StorageObjectRegistry.class);
     repo.setStorageObjectRegistry(registry);
     Set<String> expected = Set.of("project:first:1", "project:first:2", "project:second:1");
-    doAnswer(invocation -> {
-      assertEquals(0, count("checkpoint_revisions"));
-      assertEquals(0, count("checkpoint_heads"));
-      List<String> owners = invocation.getArgument(0);
-      assertEquals(expected, new HashSet<>(owners));
-      return null;
-    }).when(registry).releaseCheckpointHistory(anyList());
+    doAnswer(
+            invocation -> {
+              assertEquals(0, count("checkpoint_revisions"));
+              assertEquals(0, count("checkpoint_heads"));
+              List<String> owners = invocation.getArgument(0);
+              assertEquals(expected, new HashSet<>(owners));
+              return null;
+            })
+        .when(registry)
+        .releaseCheckpointHistory(anyList());
 
     repo.cleanupHistory(true, true);
 
@@ -137,8 +150,9 @@ class CheckpointForceCleanupTest {
     long heads = count("checkpoint_heads");
     var registry = mock(StorageObjectRegistry.class);
     repo.setStorageObjectRegistry(registry);
-    execute("CREATE TRIGGER fail_force BEFORE DELETE ON checkpoint_heads "
-        + "WHEN OLD.task='live' BEGIN SELECT RAISE(ABORT,'injected failure'); END");
+    execute(
+        "CREATE TRIGGER fail_force BEFORE DELETE ON checkpoint_heads "
+            + "WHEN OLD.task='live' BEGIN SELECT RAISE(ABORT,'injected failure'); END");
 
     assertThrows(RuntimeException.class, () -> repo.cleanupHistory(true, true));
 
@@ -174,14 +188,17 @@ class CheckpointForceCleanupTest {
     var resumed = save("resumed", 2, "INTERRUPTED");
     repo.save(resumed.resume("resumed-run"), 2, "resumed-3");
     save("damaged", 2, "FAILED");
-    execute("UPDATE checkpoint_revisions SET snapshot='broken' WHERE task='damaged' AND revision=2");
-    execute("INSERT INTO checkpoint_revisions VALUES('other-project','orphan',7,'orphan-event',"
-        + "'orphan snapshot','2026-10-15T00:00:00Z')");
+    execute(
+        "UPDATE checkpoint_revisions SET snapshot='broken' WHERE task='damaged' AND revision=2");
+    execute(
+        "INSERT INTO checkpoint_revisions VALUES('other-project','orphan',7,'orphan-event',"
+            + "'orphan snapshot','2026-10-15T00:00:00Z')");
     execute("INSERT INTO checkpoint_heads(project,task,revision) VALUES('project','empty-head',0)");
   }
 
   private PersistentCheckpoint initial(String task) {
-    return PersistentCheckpoint.initial(task, "project", "session", "run-" + task, root, "request-" + task);
+    return PersistentCheckpoint.initial(
+        task, "project", "session", "run-" + task, root, "request-" + task);
   }
 
   private PersistentCheckpoint save(String task, int revisions, String status) {

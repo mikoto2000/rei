@@ -5,5 +5,4 @@ public record SummaryMetrics(
     long extractDurationMillis,
     long llmDurationMillis,
     long totalDurationMillis,
-    int inputChars) {
-}
+    int inputChars) {}

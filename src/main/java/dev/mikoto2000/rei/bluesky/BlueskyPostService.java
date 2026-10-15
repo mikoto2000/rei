@@ -1,10 +1,9 @@
 package dev.mikoto2000.rei.bluesky;
 
+import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-
-import lombok.RequiredArgsConstructor;
 
 @Service
 @RequiredArgsConstructor
@@ -27,16 +26,24 @@ public class BlueskyPostService {
       }
 
       log.debug("Bluesky authenticating: handle={}", properties.getHandle());
-      BlueskyApiClient.AuthResult authResult = blueskyApiClient.authenticate(properties.getHandle(), properties.getAppPassword());
-      log.debug("Bluesky authenticate result: success={}, hasAccessJwt={}, did={}",
-          authResult.success(), authResult.accessJwt() != null, authResult.did());
+      BlueskyApiClient.AuthResult authResult =
+          blueskyApiClient.authenticate(properties.getHandle(), properties.getAppPassword());
+      log.debug(
+          "Bluesky authenticate result: success={}, hasAccessJwt={}, did={}",
+          authResult.success(),
+          authResult.accessJwt() != null,
+          authResult.did());
       if (!authResult.success()) {
         log.warn("Bluesky post failed: authentication failed");
         return new BlueskyPostResult(false, "Bluesky authentication failed", null, null);
       }
 
-      BlueskyApiClient.PostResult postResult = blueskyApiClient.createPost(authResult.accessJwt(), authResult.did(), text);
-      log.debug("Bluesky createPost result: success={}, postUri={}", postResult.success(), postResult.postUri());
+      BlueskyApiClient.PostResult postResult =
+          blueskyApiClient.createPost(authResult.accessJwt(), authResult.did(), text);
+      log.debug(
+          "Bluesky createPost result: success={}, postUri={}",
+          postResult.success(),
+          postResult.postUri());
       if (!postResult.success()) {
         log.warn("Bluesky post failed: createPost failed");
         return new BlueskyPostResult(false, "Bluesky post failed", null, null);
@@ -46,13 +53,17 @@ public class BlueskyPostService {
       return new BlueskyPostResult(true, "Bluesky post created", postResult.postUri(), postUrl);
     } catch (Exception e) {
       log.warn("Bluesky post failed due to unexpected error: {}", e.getMessage(), e);
-      return new BlueskyPostResult(false, "Bluesky post failed due to unexpected error", null, null);
+      return new BlueskyPostResult(
+          false, "Bluesky post failed due to unexpected error", null, null);
     }
   }
 
   public BlueskyPostResult reply(String targetPostUriOrUrl, String text) {
     try {
-      log.debug("Bluesky reply requested: target={}, textLength={}", targetPostUriOrUrl, text == null ? null : text.length());
+      log.debug(
+          "Bluesky reply requested: target={}, textLength={}",
+          targetPostUriOrUrl,
+          text == null ? null : text.length());
       BlueskyPostResult validation = validatePostRequest(text);
       if (validation != null) {
         return validation;
@@ -61,38 +72,48 @@ public class BlueskyPostService {
         return new BlueskyPostResult(false, "Target post URI/URL must not be blank", null, null);
       }
 
-      BlueskyApiClient.AuthResult authResult = blueskyApiClient.authenticate(properties.getHandle(), properties.getAppPassword());
+      BlueskyApiClient.AuthResult authResult =
+          blueskyApiClient.authenticate(properties.getHandle(), properties.getAppPassword());
       if (!authResult.success()) {
         return new BlueskyPostResult(false, "Bluesky authentication failed", null, null);
       }
 
-      BlueskyApiClient.ReplyTarget target = blueskyApiClient.resolveReplyTarget(authResult.accessJwt(), targetPostUriOrUrl);
-      if (target == null || isBlank(target.parentUri()) || isBlank(target.parentCid()) || isBlank(target.rootUri()) || isBlank(target.rootCid())) {
+      BlueskyApiClient.ReplyTarget target =
+          blueskyApiClient.resolveReplyTarget(authResult.accessJwt(), targetPostUriOrUrl);
+      if (target == null
+          || isBlank(target.parentUri())
+          || isBlank(target.parentCid())
+          || isBlank(target.rootUri())
+          || isBlank(target.rootCid())) {
         return new BlueskyPostResult(false, "Failed to resolve reply target", null, null);
       }
 
       if (!replyStateRepository.tryClaimReply(target.parentUri())) {
-        return new BlueskyPostResult(false, "A reply has already been sent or attempted for this post", null, null);
+        return new BlueskyPostResult(
+            false, "A reply has already been sent or attempted for this post", null, null);
       }
-      BlueskyApiClient.PostResult replyResult = blueskyApiClient.createReply(
-          authResult.accessJwt(),
-          authResult.did(),
-          text,
-          target.parentUri(),
-          target.parentCid(),
-          target.rootUri(),
-          target.rootCid());
+      BlueskyApiClient.PostResult replyResult =
+          blueskyApiClient.createReply(
+              authResult.accessJwt(),
+              authResult.did(),
+              text,
+              target.parentUri(),
+              target.parentCid(),
+              target.rootUri(),
+              target.rootCid());
       if (!replyResult.success()) {
         replyStateRepository.releaseReplyClaim(target.parentUri());
         return new BlueskyPostResult(false, "Bluesky reply failed", null, null);
       }
-      replyStateRepository.markReplied(target.parentUri(), conversationHandle(target), replyResult.postUri());
+      replyStateRepository.markReplied(
+          target.parentUri(), conversationHandle(target), replyResult.postUri());
       appendConversation(target, text);
       String postUrl = toPostUrl(replyResult.postUri());
       return new BlueskyPostResult(true, "Bluesky reply created", replyResult.postUri(), postUrl);
     } catch (Exception e) {
       log.warn("Bluesky reply failed due to unexpected error: {}", e.getMessage(), e);
-      return new BlueskyPostResult(false, "Bluesky reply failed due to unexpected error", null, null);
+      return new BlueskyPostResult(
+          false, "Bluesky reply failed due to unexpected error", null, null);
     }
   }
 
@@ -107,19 +128,28 @@ public class BlueskyPostService {
       if (isBlank(targetPostUriOrUrl)) {
         return new BlueskyPostResult(false, "Target post URI/URL must not be blank", null, null);
       }
-      BlueskyApiClient.AuthResult authResult = blueskyApiClient.authenticate(properties.getHandle(), properties.getAppPassword());
+      BlueskyApiClient.AuthResult authResult =
+          blueskyApiClient.authenticate(properties.getHandle(), properties.getAppPassword());
       if (!authResult.success()) {
         return new BlueskyPostResult(false, "Bluesky authentication failed", null, null);
       }
-      BlueskyApiClient.ReplyTarget target = blueskyApiClient.resolveReplyTarget(authResult.accessJwt(), targetPostUriOrUrl);
-      if (target == null || isBlank(target.parentUri()) || isBlank(target.parentCid()) || isBlank(target.rootUri()) || isBlank(target.rootCid())) {
+      BlueskyApiClient.ReplyTarget target =
+          blueskyApiClient.resolveReplyTarget(authResult.accessJwt(), targetPostUriOrUrl);
+      if (target == null
+          || isBlank(target.parentUri())
+          || isBlank(target.parentCid())
+          || isBlank(target.rootUri())
+          || isBlank(target.rootCid())) {
         return new BlueskyPostResult(false, "Failed to resolve reply target", null, null);
       }
-      String generatedText = blueskyReplyTextGenerator.generateForManualReply(target.targetText(), conversationHandle(target), target.parentUri());
+      String generatedText =
+          blueskyReplyTextGenerator.generateForManualReply(
+              target.targetText(), conversationHandle(target), target.parentUri());
       return reply(targetPostUriOrUrl, generatedText);
     } catch (Exception e) {
       log.warn("Bluesky auto-reply failed due to unexpected error: {}", e.getMessage(), e);
-      return new BlueskyPostResult(false, "Bluesky reply failed due to unexpected error", null, null);
+      return new BlueskyPostResult(
+          false, "Bluesky reply failed due to unexpected error", null, null);
     }
   }
 
@@ -130,8 +160,10 @@ public class BlueskyPostService {
       return new BlueskyPostResult(false, "Bluesky posting is disabled", null, null);
     }
     if (isBlank(properties.getHandle()) || isBlank(properties.getAppPassword())) {
-      log.debug("Bluesky post skipped: credentials missing (handleBlank={}, appPasswordBlank={})",
-          isBlank(properties.getHandle()), isBlank(properties.getAppPassword()));
+      log.debug(
+          "Bluesky post skipped: credentials missing (handleBlank={}, appPasswordBlank={})",
+          isBlank(properties.getHandle()),
+          isBlank(properties.getAppPassword()));
       log.warn("Bluesky post skipped: credentials missing");
       return new BlueskyPostResult(false, "Bluesky credentials are not configured", null, null);
     }
@@ -141,9 +173,16 @@ public class BlueskyPostService {
       return new BlueskyPostResult(false, "Post text must not be blank", null, null);
     }
     if (text.length() > properties.getMaxPostLength()) {
-      log.debug("Bluesky post skipped: text too long (length={}, max={})", text.length(), properties.getMaxPostLength());
-      log.warn("Bluesky post skipped: text too long (length={}, max={})", text.length(), properties.getMaxPostLength());
-      return new BlueskyPostResult(false, "Post text exceeds max length: " + properties.getMaxPostLength(), null, null);
+      log.debug(
+          "Bluesky post skipped: text too long (length={}, max={})",
+          text.length(),
+          properties.getMaxPostLength());
+      log.warn(
+          "Bluesky post skipped: text too long (length={}, max={})",
+          text.length(),
+          properties.getMaxPostLength());
+      return new BlueskyPostResult(
+          false, "Post text exceeds max length: " + properties.getMaxPostLength(), null, null);
     }
     return null;
   }
@@ -170,7 +209,8 @@ public class BlueskyPostService {
     if (handle == null || handle.isBlank()) {
       return;
     }
-    conversationRepository.appendUserMessage(handle, target.targetText() == null ? "" : target.targetText());
+    conversationRepository.appendUserMessage(
+        handle, target.targetText() == null ? "" : target.targetText());
     conversationRepository.appendAssistantMessage(handle, replyText == null ? "" : replyText);
   }
 

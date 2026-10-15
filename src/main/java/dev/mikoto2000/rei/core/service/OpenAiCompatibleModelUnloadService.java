@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
@@ -23,18 +22,20 @@ public class OpenAiCompatibleModelUnloadService {
 
   public void unload(String modelName) {
     String payload = "{\"model\":\"" + escapeJson(modelName) + "\",\"keep_alive\":0}";
-    HttpRequest.Builder builder = HttpRequest.newBuilder(unloadUri())
-        .header("Accept", "application/json")
-        .header("Content-Type", "application/json")
-        .POST(HttpRequest.BodyPublishers.ofString(payload));
+    HttpRequest.Builder builder =
+        HttpRequest.newBuilder(unloadUri())
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(payload));
 
     if (apiKey != null && !apiKey.isBlank()) {
       builder.header("Authorization", "Bearer " + apiKey);
     }
 
     try {
-      HttpResponse<String> response = java.net.http.HttpClient.newHttpClient()
-          .send(builder.build(), HttpResponse.BodyHandlers.ofString());
+      HttpResponse<String> response =
+          java.net.http.HttpClient.newHttpClient()
+              .send(builder.build(), HttpResponse.BodyHandlers.ofString());
       if (response.statusCode() < 200 || response.statusCode() >= 300) {
         throw new IllegalStateException("model unload failed: HTTP " + response.statusCode());
       }
@@ -51,9 +52,11 @@ public class OpenAiCompatibleModelUnloadService {
   }
 
   static URI generateUri(String baseUrl) {
-    String normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+    String normalizedBaseUrl =
+        baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
     if (normalizedBaseUrl.endsWith("/v1")) {
-      return URI.create(normalizedBaseUrl.substring(0, normalizedBaseUrl.length() - 3) + "/api/generate");
+      return URI.create(
+          normalizedBaseUrl.substring(0, normalizedBaseUrl.length() - 3) + "/api/generate");
     }
     return URI.create(normalizedBaseUrl + "/api/generate");
   }

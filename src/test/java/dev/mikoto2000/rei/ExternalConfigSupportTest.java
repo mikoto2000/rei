@@ -3,7 +3,6 @@ package dev.mikoto2000.rei;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.nio.file.Path;
-
 import org.junit.jupiter.api.Test;
 
 class ExternalConfigSupportTest {

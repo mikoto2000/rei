@@ -5,6 +5,4 @@ package dev.mikoto2000.rei.event;
  *
  * @param taskId タスクの ID
  */
-public record TaskStartedPayload(String taskId)
-    implements AgentEventPayload {
-}
+public record TaskStartedPayload(String taskId) implements AgentEventPayload {}

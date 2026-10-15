@@ -3,9 +3,7 @@ package dev.mikoto2000.rei.core.contextbudget;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * Context Budget Manager の Bean 定義。
- */
+/** Context Budget Manager の Bean 定義。 */
 @Configuration(proxyBeanMethods = false)
 public class ContextBudgetConfiguration {
 
@@ -15,6 +13,7 @@ public class ContextBudgetConfiguration {
 
   @Bean
   public ContextBudgetManager contextBudgetManager() {
-    return new ContextBudgetManager(DEFAULT_MODEL_CONTEXT_LIMIT, DEFAULT_OUTPUT_RESERVE, DEFAULT_SAFETY_MARGIN);
+    return new ContextBudgetManager(
+        DEFAULT_MODEL_CONTEXT_LIMIT, DEFAULT_OUTPUT_RESERVE, DEFAULT_SAFETY_MARGIN);
   }
 }

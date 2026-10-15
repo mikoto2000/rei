@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core.chat;
 
 import static org.assertj.core.api.Assertions.*;
+
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -13,105 +14,195 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 
 class ToolLoopSupportTest {
-  @Test void missingFileDoesNotAbortRemainingToolCalls(@org.junit.jupiter.api.io.TempDir java.nio.file.Path root)
-      throws java.io.IOException {
+  @Test
+  void missingFileDoesNotAbortRemainingToolCalls(
+      @org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws java.io.IOException {
     java.nio.file.Files.writeString(root.resolve("present.md"), "hello");
     var tools = new SampleFileTools(root);
     var events = new java.util.ArrayList<dev.mikoto2000.rei.event.AgentEvent>();
-    var provider = org.springframework.ai.tool.method.MethodToolCallbackProvider.builder().toolObjects(tools).build();
-    var callback = new dev.mikoto2000.rei.event.ToolEventCallbackProvider(provider,
-        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), events::add)
-        .getToolCallbacks()[0];
-    var prompt = new Prompt("review all files", OpenAiChatOptions.builder().toolCallbacks(callback).build());
-    var response = new ChatResponse(List.of(new org.springframework.ai.chat.model.Generation(
-        org.springframework.ai.chat.messages.AssistantMessage.builder().content("").toolCalls(List.of(
-            new org.springframework.ai.chat.messages.AssistantMessage.ToolCall("missing", "function", "readBinaryFile", "{\"pathStr\":\"missing.md\"}"),
-            new org.springframework.ai.chat.messages.AssistantMessage.ToolCall("present", "function", "readBinaryFile", "{\"pathStr\":\"present.md\"}")))
-            .build())));
+    var provider =
+        org.springframework.ai.tool.method.MethodToolCallbackProvider.builder()
+            .toolObjects(tools)
+            .build();
+    var callback =
+        new dev.mikoto2000.rei.event.ToolEventCallbackProvider(
+                provider,
+                new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+                events::add)
+            .getToolCallbacks()[0];
+    var prompt =
+        new Prompt("review all files", OpenAiChatOptions.builder().toolCallbacks(callback).build());
+    var response =
+        new ChatResponse(
+            List.of(
+                new org.springframework.ai.chat.model.Generation(
+                    org.springframework.ai.chat.messages.AssistantMessage.builder()
+                        .content("")
+                        .toolCalls(
+                            List.of(
+                                new org.springframework.ai.chat.messages.AssistantMessage.ToolCall(
+                                    "missing",
+                                    "function",
+                                    "readBinaryFile",
+                                    "{\"pathStr\":\"missing.md\"}"),
+                                new org.springframework.ai.chat.messages.AssistantMessage.ToolCall(
+                                    "present",
+                                    "function",
+                                    "readBinaryFile",
+                                    "{\"pathStr\":\"present.md\"}")))
+                        .build())));
 
     var result = new ToolLoopSupport().execute(prompt, response);
-    var feedback = (org.springframework.ai.chat.messages.ToolResponseMessage) result.conversationHistory().getLast();
+    var feedback =
+        (org.springframework.ai.chat.messages.ToolResponseMessage)
+            result.conversationHistory().getLast();
     assertThat(feedback.getResponses()).hasSize(2);
     assertThat(feedback.getResponses().getFirst().responseData()).contains("source_missing");
-    assertThat(dev.mikoto2000.rei.core.stagnation.ProgressEvaluator.failedResult(
-        feedback.getResponses().getLast().responseData())).isFalse();
+    assertThat(
+            dev.mikoto2000.rei.core.stagnation.ProgressEvaluator.failedResult(
+                feedback.getResponses().getLast().responseData()))
+        .isFalse();
     assertThat(tools.attempted).containsExactly("missing.md", "present.md");
-    assertThat(events.stream().map(dev.mikoto2000.rei.event.AgentEvent::type).toList()).containsExactly(
-        dev.mikoto2000.rei.event.AgentEventType.TOOL_STARTED,
-        dev.mikoto2000.rei.event.AgentEventType.TOOL_FAILED,
-        dev.mikoto2000.rei.event.AgentEventType.TOOL_STARTED,
-        dev.mikoto2000.rei.event.AgentEventType.TOOL_COMPLETED);
+    assertThat(events.stream().map(dev.mikoto2000.rei.event.AgentEvent::type).toList())
+        .containsExactly(
+            dev.mikoto2000.rei.event.AgentEventType.TOOL_STARTED,
+            dev.mikoto2000.rei.event.AgentEventType.TOOL_FAILED,
+            dev.mikoto2000.rei.event.AgentEventType.TOOL_STARTED,
+            dev.mikoto2000.rei.event.AgentEventType.TOOL_COMPLETED);
   }
 
   public static class SampleFileTools {
     private final java.nio.file.Path root;
     final java.util.List<String> attempted = new java.util.ArrayList<>();
-    SampleFileTools(java.nio.file.Path root) { this.root = root; }
-    @org.springframework.ai.tool.annotation.Tool(name = "readBinaryFile", description = "read test file")
+
+    SampleFileTools(java.nio.file.Path root) {
+      this.root = root;
+    }
+
+    @org.springframework.ai.tool.annotation.Tool(
+        name = "readBinaryFile",
+        description = "read test file")
     public byte[] read(String pathStr) throws java.io.IOException {
       attempted.add(pathStr);
       return java.nio.file.Files.readAllBytes(root.resolve(pathStr));
     }
   }
 
-  @Test void rejectsDefaultCallbacks() {
-    ToolCallback callback = new ToolCallback() {
-      public ToolDefinition getToolDefinition() {
-        return ToolDefinition.builder().name("ambient").description("ambient").inputSchema("{}").build();
-      }
-      public String call(String input) { throw new AssertionError("must not execute"); }
-    };
-    assertThatThrownBy(() -> ToolLoopSupport.requireNoDefaultTools(model(
-        OpenAiChatOptions.builder().toolCallbacks(callback).build())))
+  @Test
+  void rejectsDefaultCallbacks() {
+    ToolCallback callback =
+        new ToolCallback() {
+          public ToolDefinition getToolDefinition() {
+            return ToolDefinition.builder()
+                .name("ambient")
+                .description("ambient")
+                .inputSchema("{}")
+                .build();
+          }
+
+          public String call(String input) {
+            throw new AssertionError("must not execute");
+          }
+        };
+    assertThatThrownBy(
+            () ->
+                ToolLoopSupport.requireNoDefaultTools(
+                    model(OpenAiChatOptions.builder().toolCallbacks(callback).build())))
         .isInstanceOf(IllegalArgumentException.class);
   }
-  @Test void rejectsRawToolsInOfficialSdkExtraBody() {
-    var options = OpenAiChatOptions.builder().extraBody(Map.of("tools", List.of(
-        Map.of("type", "function", "function", Map.of("name", "ambient"))))).build();
+
+  @Test
+  void rejectsRawToolsInOfficialSdkExtraBody() {
+    var options =
+        OpenAiChatOptions.builder()
+            .extraBody(
+                Map.of(
+                    "tools",
+                    List.of(Map.of("type", "function", "function", Map.of("name", "ambient")))))
+            .build();
     assertThatThrownBy(() -> ToolLoopSupport.requireNoDefaultTools(model(options)))
         .isInstanceOf(IllegalArgumentException.class);
   }
-  @Test void acceptsAbsentAndEmptyToolCollections() {
-    assertThatCode(() -> ToolLoopSupport.requireNoDefaultTools(model(OpenAiChatOptions.builder().build())))
+
+  @Test
+  void acceptsAbsentAndEmptyToolCollections() {
+    assertThatCode(
+            () -> ToolLoopSupport.requireNoDefaultTools(model(OpenAiChatOptions.builder().build())))
         .doesNotThrowAnyException();
-    assertThatCode(() -> ToolLoopSupport.requireNoDefaultTools(model(OpenAiChatOptions.builder()
-        .toolCallbacks(List.of()).extraBody(Map.of("tools", List.of(), "custom", "value")).build())))
+    assertThatCode(
+            () ->
+                ToolLoopSupport.requireNoDefaultTools(
+                    model(
+                        OpenAiChatOptions.builder()
+                            .toolCallbacks(List.of())
+                            .extraBody(Map.of("tools", List.of(), "custom", "value"))
+                            .build())))
         .doesNotThrowAnyException();
   }
-  @Test void existingRunBudgetOwnsPerToolLimit() {
+
+  @Test
+  void existingRunBudgetOwnsPerToolLimit() {
     executeAfterPriorResponses(40, 1);
   }
-  @Test void existingRunBudgetOwnsTotalToolLimit() {
+
+  @Test
+  void existingRunBudgetOwnsTotalToolLimit() {
     executeAfterPriorResponses(150, 5);
   }
+
   private void executeAfterPriorResponses(int priorCalls, int names) {
     var invocations = new java.util.concurrent.atomic.AtomicInteger();
-    ToolCallback callback = new ToolCallback() {
-      public ToolDefinition getToolDefinition() {
-        return ToolDefinition.builder().name("tool0").description("test").inputSchema("{}").build();
-      }
-      public String call(String input) { invocations.incrementAndGet(); return "done"; }
-    };
+    ToolCallback callback =
+        new ToolCallback() {
+          public ToolDefinition getToolDefinition() {
+            return ToolDefinition.builder()
+                .name("tool0")
+                .description("test")
+                .inputSchema("{}")
+                .build();
+          }
+
+          public String call(String input) {
+            invocations.incrementAndGet();
+            return "done";
+          }
+        };
     var messages = new java.util.ArrayList<org.springframework.ai.chat.messages.Message>();
     messages.add(new org.springframework.ai.chat.messages.UserMessage("bounded application run"));
     for (int i = 0; i < priorCalls; i++) {
-      messages.add(org.springframework.ai.chat.messages.ToolResponseMessage.builder().responses(List.of(
-          new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse("old-" + i,
-              "tool" + (i % names), "ok"))).build());
+      messages.add(
+          org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+              .responses(
+                  List.of(
+                      new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
+                          "old-" + i, "tool" + (i % names), "ok")))
+              .build());
     }
     var prompt = new Prompt(messages, OpenAiChatOptions.builder().toolCallbacks(callback).build());
-    var response = new ChatResponse(List.of(new org.springframework.ai.chat.model.Generation(
-        org.springframework.ai.chat.messages.AssistantMessage.builder().content("").toolCalls(List.of(
-            new org.springframework.ai.chat.messages.AssistantMessage.ToolCall("new", "function", "tool0", "{}")))
-            .build())));
+    var response =
+        new ChatResponse(
+            List.of(
+                new org.springframework.ai.chat.model.Generation(
+                    org.springframework.ai.chat.messages.AssistantMessage.builder()
+                        .content("")
+                        .toolCalls(
+                            List.of(
+                                new org.springframework.ai.chat.messages.AssistantMessage.ToolCall(
+                                    "new", "function", "tool0", "{}")))
+                        .build())));
     new ToolLoopSupport().execute(prompt, response);
     assertThat(invocations.get()).isEqualTo(1);
   }
 
   private ChatModel model(ChatOptions options) {
     return new ChatModel() {
-      public ChatOptions getOptions() { return options; }
-      public ChatResponse call(Prompt prompt) { throw new AssertionError("must not call model"); }
+      public ChatOptions getOptions() {
+        return options;
+      }
+
+      public ChatResponse call(Prompt prompt) {
+        throw new AssertionError("must not call model");
+      }
     };
   }
 }

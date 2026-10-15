@@ -2,7 +2,6 @@ package dev.mikoto2000.rei.core.stagnation;
 
 import java.util.ArrayList;
 import java.util.List;
-
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
@@ -12,9 +11,7 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 
-/**
- * Stagnation 検出時に replan を要求する内部コンテキストを注入する。
- */
+/** Stagnation 検出時に replan を要求する内部コンテキストを注入する。 */
 @Component
 public class StagnationAdvisor implements BaseAdvisor {
 
@@ -38,13 +35,15 @@ public class StagnationAdvisor implements BaseAdvisor {
       return request;
     }
     String context = replanNotice("unavailable", "unavailable");
-    UserMessage contextualMessage = userMessage.mutate()
-        .text(context + "\n\n" + userMessage.getText())
-        .build();
+    UserMessage contextualMessage =
+        userMessage.mutate().text(context + "\n\n" + userMessage.getText()).build();
     Prompt prompt = request.prompt();
-    return request.mutate()
-        .prompt(new Prompt(replaceUserMessage(prompt.getInstructions(), userMessage, contextualMessage),
-            prompt.getOptions()))
+    return request
+        .mutate()
+        .prompt(
+            new Prompt(
+                replaceUserMessage(prompt.getInstructions(), userMessage, contextualMessage),
+                prompt.getOptions()))
         .build();
   }
 
@@ -58,8 +57,13 @@ public class StagnationAdvisor implements BaseAdvisor {
         No-progress iterations: %d. Stagnation replan: %d/%d.
         Recent attempted actions (tool name and argument digest): %s
         Last failure: %s
-        """.formatted(stagnationDetector.stagnationCount(), stagnationDetector.replanCount() + 1,
-            stagnationDetector.maxReplans(), recentActions, lastError);
+        """
+        .formatted(
+            stagnationDetector.stagnationCount(),
+            stagnationDetector.replanCount() + 1,
+            stagnationDetector.maxReplans(),
+            recentActions,
+            lastError);
   }
 
   @Override
@@ -72,7 +76,8 @@ public class StagnationAdvisor implements BaseAdvisor {
     return -55;
   }
 
-  private List<Message> replaceUserMessage(List<Message> messages, UserMessage original, UserMessage replacement) {
+  private List<Message> replaceUserMessage(
+      List<Message> messages, UserMessage original, UserMessage replacement) {
     List<Message> replaced = new ArrayList<>(messages.size());
     boolean replacedFirst = false;
     for (Message message : messages) {

@@ -11,6 +11,7 @@ public record PathFragment(String parent, String prefix, String separator) {
     }
     return token;
   }
+
   public static PathFragment parse(String value, boolean windows) {
     int slash = value.lastIndexOf('/');
     int backslash = windows ? value.lastIndexOf('\\') : -1;

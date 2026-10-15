@@ -1,15 +1,17 @@
 package dev.mikoto2000.rei;
 
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+import dev.mikoto2000.rei.voice.VoiceCommand;
 import org.jline.terminal.Terminal;
 import org.jline.terminal.spi.*;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
-import dev.mikoto2000.rei.voice.VoiceCommand;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 class ReiApplicationVoiceAutoStartTest {
-  @Test void requiresActualInteractiveInputAndAUsableSystemTerminal() {
+  @Test
+  void requiresActualInteractiveInputAndAUsableSystemTerminal() {
     var terminal = mock(TerminalExt.class);
     var provider = mock(TerminalProvider.class);
     when(terminal.getType()).thenReturn("xterm-256color");
@@ -29,17 +31,20 @@ class ReiApplicationVoiceAutoStartTest {
     assertThat(ReiApplication.isInteractiveTerminal(null)).isFalse();
   }
 
-  @Test void terminalProbeFailureCannotAbortShellStartup() {
+  @Test
+  void terminalProbeFailureCannotAbortShellStartup() {
     var terminal = mock(TerminalExt.class);
     var provider = mock(TerminalProvider.class);
     when(terminal.getType()).thenReturn("xterm");
     when(terminal.getSystemStream()).thenReturn(SystemStream.Output);
     when(terminal.getProvider()).thenReturn(provider);
-    when(provider.isSystemStream(SystemStream.Input)).thenThrow(new UnsatisfiedLinkError("unavailable"));
+    when(provider.isSystemStream(SystemStream.Input))
+        .thenThrow(new UnsatisfiedLinkError("unavailable"));
     assertThat(ReiApplication.isInteractiveTerminal(terminal)).isFalse();
   }
 
-  @Test void shellStartupUsesConfiguredVoiceCommandAndPinnedShellWriter() {
+  @Test
+  void shellStartupUsesConfiguredVoiceCommandAndPinnedShellWriter() {
     var voice = mock(VoiceCommand.class);
     java.util.function.Consumer<String> output = line -> {};
     var root = new CommandLine(CommandLine.Model.CommandSpec.create().name("rei"));

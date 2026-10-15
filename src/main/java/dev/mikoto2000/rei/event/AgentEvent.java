@@ -5,7 +5,7 @@ import java.time.Instant;
 /**
  * Agent Event の共通 Envelope。
  *
- * <p>すべてのイベントが共通して持つ属性を表す。append-only な「発生した事実」として扱う。</p>
+ * <p>すべてのイベントが共通して持つ属性を表す。append-only な「発生した事実」として扱う。
  *
  * @param id イベント自体を一意に識別する ID
  * @param sequence イベントの正規の発生順序を表す単調増加番号
@@ -33,20 +33,67 @@ public record AgentEvent(
     AgentEventPayload payload,
     String projectId) {
 
-  public AgentEvent(String id, long sequence, Instant timestamp, AgentEventType type, int version,
-      String sessionId, String turnId, String runId, String correlationId, String parentEventId, AgentEventPayload payload) {
-    this(id, sequence, timestamp, type, version, sessionId, turnId, runId, correlationId, parentEventId, payload, null);
+  public AgentEvent(
+      String id,
+      long sequence,
+      Instant timestamp,
+      AgentEventType type,
+      int version,
+      String sessionId,
+      String turnId,
+      String runId,
+      String correlationId,
+      String parentEventId,
+      AgentEventPayload payload) {
+    this(
+        id,
+        sequence,
+        timestamp,
+        type,
+        version,
+        sessionId,
+        turnId,
+        runId,
+        correlationId,
+        parentEventId,
+        payload,
+        null);
   }
+
   public AgentEvent withOwnership(dev.mikoto2000.rei.core.chat.AgentRunContext context) {
     if (context == null) return this;
     boolean conversation = !context.conversationId().isEmpty();
-    return new AgentEvent(id, sequence, timestamp, type, version, conversation ? context.conversationId() : null, conversation ? context.runId() : null,
-        runId == null ? context.runId() : runId, correlationId, parentEventId, payload, context.projectId());
+    return new AgentEvent(
+        id,
+        sequence,
+        timestamp,
+        type,
+        version,
+        conversation ? context.conversationId() : null,
+        conversation ? context.runId() : null,
+        runId == null ? context.runId() : runId,
+        correlationId,
+        parentEventId,
+        payload,
+        context.projectId());
   }
-  public AgentEvent withExecutionOwnership(dev.mikoto2000.rei.core.execution.ActiveExecution execution) {
-    if(execution==null) return this;
-    return new AgentEvent(id,sequence,timestamp,type,version,execution.conversationId(),turnId,
-        execution.id(),correlationId,parentEventId,payload,execution.projectId());
+
+  public AgentEvent withExecutionOwnership(
+      dev.mikoto2000.rei.core.execution.ActiveExecution execution) {
+    if (execution == null) return this;
+    return new AgentEvent(
+        id,
+        sequence,
+        timestamp,
+        type,
+        version,
+        execution.conversationId(),
+        turnId,
+        execution.id(),
+        correlationId,
+        parentEventId,
+        payload,
+        execution.projectId());
   }
 
   public AgentEvent {
@@ -64,11 +111,20 @@ public record AgentEvent(
     }
   }
 
-  /**
-   * sessionId と turnId を設定した複製を返す。
-   */
+  /** sessionId と turnId を設定した複製を返す。 */
   public AgentEvent withContext(String sessionId, String turnId) {
-    return new AgentEvent(id, sequence, timestamp, type, version, sessionId, turnId, runId,
-        correlationId, parentEventId, payload, projectId);
+    return new AgentEvent(
+        id,
+        sequence,
+        timestamp,
+        type,
+        version,
+        sessionId,
+        turnId,
+        runId,
+        correlationId,
+        parentEventId,
+        payload,
+        projectId);
   }
 }

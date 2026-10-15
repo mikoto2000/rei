@@ -9,6 +9,6 @@ package dev.mikoto2000.rei.event;
  * @param path アイテムのパス（任意）
  * @param reason 追加理由
  */
-public record WorkingSetItemAddedPayload(String itemId, String kind, String identifier, String path, String reason)
-    implements AgentEventPayload {
-}
+public record WorkingSetItemAddedPayload(
+    String itemId, String kind, String identifier, String path, String reason)
+    implements AgentEventPayload {}

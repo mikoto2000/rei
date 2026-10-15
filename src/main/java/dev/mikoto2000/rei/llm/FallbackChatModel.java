@@ -8,7 +8,6 @@ import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.web.reactive.function.client.WebClientResponseException;
-
 import reactor.core.publisher.Flux;
 
 class FallbackChatModel implements ChatModel {
@@ -42,16 +41,18 @@ class FallbackChatModel implements ChatModel {
 
   @Override
   public Flux<ChatResponse> stream(Prompt prompt) {
-    return Flux.defer(() -> {
-      dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
-      return primary.stream(prompt);
-    })
-        .onErrorResume(error -> {
-          dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
-          dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
-          logFeatureFailure("stream", error);
-          return fallback.stream(fallbackPrompt(prompt));
-        });
+    return Flux.defer(
+            () -> {
+              dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
+              return primary.stream(prompt);
+            })
+        .onErrorResume(
+            error -> {
+              dev.mikoto2000.rei.core.chat.RunCancellation.checkActive(prompt);
+              dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
+              logFeatureFailure("stream", error);
+              return fallback.stream(fallbackPrompt(prompt));
+            });
   }
 
   @Override
@@ -68,10 +69,7 @@ class FallbackChatModel implements ChatModel {
       return prompt;
     }
     ChatOptions fallbackOptions = fallbackOptionsWithoutPrimaryModel(options);
-    return Prompt.builder()
-        .messages(prompt.getInstructions())
-        .chatOptions(fallbackOptions)
-        .build();
+    return Prompt.builder().messages(prompt.getInstructions()).chatOptions(fallbackOptions).build();
   }
 
   private ChatOptions fallbackOptionsWithoutPrimaryModel(ChatOptions options) {
@@ -81,7 +79,9 @@ class FallbackChatModel implements ChatModel {
     }
     if (options instanceof org.springframework.ai.model.tool.ToolCallingChatOptions toolOptions) {
       return org.springframework.ai.model.tool.ToolCallingChatOptions.builder()
-          .combineWith(toolOptions.mutate()).model(fallbackModel).build();
+          .combineWith(toolOptions.mutate())
+          .model(fallbackModel)
+          .build();
     }
     return ChatOptions.builder()
         .model(fallbackModel)
@@ -98,7 +98,11 @@ class FallbackChatModel implements ChatModel {
   private void logFeatureFailure(String operation, Throwable error) {
     WebClientResponseException responseException = findResponseException(error);
     if (responseException == null) {
-      log.warn("Feature LLM {} failed. Falling back to default LLM: feature={}", operation, feature, error);
+      log.warn(
+          "Feature LLM {} failed. Falling back to default LLM: feature={}",
+          operation,
+          feature,
+          error);
       return;
     }
     log.warn(

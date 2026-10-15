@@ -1,33 +1,40 @@
 package dev.mikoto2000.rei.core.working;
 
+import dev.mikoto2000.rei.event.AgentEventBus;
+import dev.mikoto2000.rei.event.AgentEventFactory;
 import java.time.Clock;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-import dev.mikoto2000.rei.event.AgentEventBus;
-import dev.mikoto2000.rei.event.AgentEventFactory;
-
-/**
- * Working Set の Bean 定義。
- */
+/** Working Set の Bean 定義。 */
 @Configuration(proxyBeanMethods = false)
 public class WorkingSetConfiguration {
 
-  @org.springframework.context.annotation.Scope(value = "reiConversation", proxyMode = org.springframework.context.annotation.ScopedProxyMode.TARGET_CLASS)
+  @org.springframework.context.annotation.Scope(
+      value = "reiConversation",
+      proxyMode = org.springframework.context.annotation.ScopedProxyMode.TARGET_CLASS)
   @Bean
   public WorkingSet workingSet(Clock clock, AgentEventFactory events, AgentEventBus eventBus) {
     var workingSet = new WorkingSet(WorkingSet.DEFAULT_MAX_FILES, clock, events, eventBus);
-    var run=dev.mikoto2000.rei.core.chat.AgentRunScope.current();
-    if(run!=null && run.mode()!=dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE)return workingSet;
-    var directory = dev.mikoto2000.rei.core.project.ProjectStorage.currentDirectory().resolve("working-set");
+    var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+    if (run != null && run.mode() != dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE)
+      return workingSet;
+    var directory =
+        dev.mikoto2000.rei.core.project.ProjectStorage.currentDirectory().resolve("working-set");
     var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
     String conversation = dev.mikoto2000.rei.llm.ConversationIds.currentChat();
-    String cli = project == null ? dev.mikoto2000.rei.llm.ConversationIds.chat()
-        : project.conversationId(dev.mikoto2000.rei.llm.ConversationIds.chat());
+    String cli =
+        project == null
+            ? dev.mikoto2000.rei.llm.ConversationIds.chat()
+            : project.conversationId(dev.mikoto2000.rei.llm.ConversationIds.chat());
     // Preserve the CLI's existing file while giving each other conversation its own storage.
-    String filename = conversation.equals(cli) ? "files.json"
-        : "sessions/" + java.util.UUID.nameUUIDFromBytes(conversation.getBytes(java.nio.charset.StandardCharsets.UTF_8)) + ".json";
+    String filename =
+        conversation.equals(cli)
+            ? "files.json"
+            : "sessions/"
+                + java.util.UUID.nameUUIDFromBytes(
+                    conversation.getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                + ".json";
     workingSet.enablePersistence(directory.resolve(filename));
     return workingSet;
   }

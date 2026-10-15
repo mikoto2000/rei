@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -19,9 +18,8 @@ class RuntimeContextAdvisorTest {
   void prependsCurrentRuntimeContextForEachRequest() {
     Clock fixed = Clock.fixed(Instant.parse("2026-08-16T16:35:42.152Z"), ZoneId.of("Asia/Tokyo"));
     RuntimeContextAdvisor advisor = new RuntimeContextAdvisor(fixed);
-    ChatClientRequest request = ChatClientRequest.builder()
-        .prompt(new Prompt(new UserMessage("hello")))
-        .build();
+    ChatClientRequest request =
+        ChatClientRequest.builder().prompt(new Prompt(new UserMessage("hello"))).build();
 
     ChatClientRequest actual = advisor.before(request, Mockito.mock(AdvisorChain.class));
 

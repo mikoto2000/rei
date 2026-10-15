@@ -1,20 +1,18 @@
 package dev.mikoto2000.rei.skills;
 
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
-import dev.mikoto2000.rei.llm.LlmFeature;
-import dev.mikoto2000.rei.llm.LlmModelProvider;
 
 @Component
 public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
@@ -30,50 +28,75 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
   }
 
   @Autowired
-  public AgentSkillImplicitSelector(LlmModelProvider modelProvider, AgentSkillRepository repository) {
+  public AgentSkillImplicitSelector(
+      LlmModelProvider modelProvider, AgentSkillRepository repository) {
     this.modelProvider = modelProvider;
     this.repository = repository;
   }
 
   @Override
-  public List<AgentSkill> select(String prompt, Set<String> excludedSkillNames, List<AgentSkill> providedCandidates) {
+  public List<AgentSkill> select(
+      String prompt, Set<String> excludedSkillNames, List<AgentSkill> providedCandidates) {
     return select(prompt, excludedSkillNames, providedCandidates, null);
   }
 
   @Override
-  public List<AgentSkill> select(String prompt, Set<String> excludedSkillNames,
-      List<AgentSkill> providedCandidates, Runnable beforeModelCall) {
-    List<AgentSkill> candidates = (providedCandidates == null ? repository.findEnabled() : providedCandidates).stream()
-        .sorted(providedCandidates == null ? java.util.Comparator.comparing(AgentSkill::name) : (a, b) -> 0)
-        .filter(skill -> excludedSkillNames == null || !excludedSkillNames.contains(skill.name()))
-        .toList();
+  public List<AgentSkill> select(
+      String prompt,
+      Set<String> excludedSkillNames,
+      List<AgentSkill> providedCandidates,
+      Runnable beforeModelCall) {
+    List<AgentSkill> candidates =
+        (providedCandidates == null ? repository.findEnabled() : providedCandidates)
+            .stream()
+                .sorted(
+                    providedCandidates == null
+                        ? java.util.Comparator.comparing(AgentSkill::name)
+                        : (a, b) -> 0)
+                .filter(
+                    skill ->
+                        excludedSkillNames == null || !excludedSkillNames.contains(skill.name()))
+                .toList();
     if (candidates.isEmpty()) {
       return List.of();
     }
     // Budget exhaustion must stop the run, rather than become a selection fallback.
     if (beforeModelCall != null) beforeModelCall.run();
-    if(beforeModelCall instanceof dev.mikoto2000.rei.llm.ModelCallBudget budget&&budget.tokenLimitEnabled()) {
+    if (beforeModelCall instanceof dev.mikoto2000.rei.llm.ModelCallBudget budget
+        && budget.tokenLimitEnabled()) {
       org.springframework.ai.chat.model.ChatResponse response;
       try {
-        var model=modelProvider.chatModel(LlmFeature.AGENT_SKILLS);
+        var model = modelProvider.chatModel(LlmFeature.AGENT_SKILLS);
         dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
         // AI 2 uses provider-specific request options without merging model defaults.
-        var options=modelProvider.chatOptions(LlmFeature.AGENT_SKILLS,null).mutate()
-            .toolCallbacks(List.of()).toolChoice("none").build();
+        var options =
+            modelProvider
+                .chatOptions(LlmFeature.AGENT_SKILLS, null)
+                .mutate()
+                .toolCallbacks(List.of())
+                .toolChoice("none")
+                .build();
         dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
-        response=model.call(new org.springframework.ai.chat.prompt.Prompt(buildSelectionPrompt(prompt,candidates),options));
-      }catch(Exception error) {
+        response =
+            model.call(
+                new org.springframework.ai.chat.prompt.Prompt(
+                    buildSelectionPrompt(prompt, candidates), options));
+      } catch (Exception error) {
         dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
         budget.recordTotalTokens(null);
         return List.of();
       }
-      var usage=response==null?null:response.getMetadata().getUsage();
-      budget.recordTotalTokens(usage==null?null:usage.getTotalTokens());
-      String content=response.getResult()==null?"":response.getResult().getOutput().getText();
-      return resolveSelectedSkills(parseJsonStringArray(content),candidates);
+      var usage = response == null ? null : response.getMetadata().getUsage();
+      budget.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+      String content =
+          response.getResult() == null ? "" : response.getResult().getOutput().getText();
+      return resolveSelectedSkills(parseJsonStringArray(content), candidates);
     }
     try {
-      String content = modelProvider.chatModel(LlmFeature.AGENT_SKILLS).call(buildSelectionPrompt(prompt, candidates));
+      String content =
+          modelProvider
+              .chatModel(LlmFeature.AGENT_SKILLS)
+              .call(buildSelectionPrompt(prompt, candidates));
       return resolveSelectedSkills(parseJsonStringArray(content), candidates);
     } catch (Exception e) {
       dev.mikoto2000.rei.core.chat.RunCancellation.propagate(e);
@@ -84,7 +107,8 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
 
   private String buildSelectionPrompt(String userPrompt, List<AgentSkill> candidates) {
     StringBuilder builder = new StringBuilder();
-    builder.append("""
+    builder.append(
+        """
         次のユーザー依頼に役立つ Agent Skill を選んでください。
         該当なしの場合は空配列を返してください。
         必ず JSON 配列のみを返してください。

@@ -7,5 +7,13 @@ import java.lang.annotation.*;
 @Target(ElementType.METHOD)
 public @interface ResultDelivery {
   Kind value();
-  enum Kind { FILE_CONTENT, LOSSLESS_RESULT, SEARCH_RESULT, DIAGNOSTIC_LOG, RAW_RESULT_PAGE, GENERAL }
+
+  enum Kind {
+    FILE_CONTENT,
+    LOSSLESS_RESULT,
+    SEARCH_RESULT,
+    DIAGNOSTIC_LOG,
+    RAW_RESULT_PAGE,
+    GENERAL
+  }
 }

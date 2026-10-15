@@ -3,7 +3,6 @@ package dev.mikoto2000.rei.core.service;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
-
 import org.springframework.stereotype.Component;
 
 @Component
@@ -23,7 +22,9 @@ public class SystemShellService {
 
   public List<String> shellCommandLine(String shell, String command) {
     String shellName = shellName(shell);
-    if (shellName.equals("powershell") || shellName.equals("powershell.exe") || shellName.equals("pwsh")
+    if (shellName.equals("powershell")
+        || shellName.equals("powershell.exe")
+        || shellName.equals("pwsh")
         || shellName.equals("pwsh.exe")) {
       return List.of(shell, "-NoProfile", "-Command", command);
     }
@@ -35,7 +36,9 @@ public class SystemShellService {
 
   public List<String> interactiveShellCommandLine(String shell) {
     String shellName = shellName(shell);
-    if (shellName.equals("powershell") || shellName.equals("powershell.exe") || shellName.equals("pwsh")
+    if (shellName.equals("powershell")
+        || shellName.equals("powershell.exe")
+        || shellName.equals("pwsh")
         || shellName.equals("pwsh.exe")) {
       return List.of(shell, "-NoLogo");
     }

@@ -4,11 +4,10 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
 
 /**
- * ToolCallbackProvider を Decorator でラップし、各 ToolCallback を
- * {@link ToolEventCallbackDecorator} で包んで返す Provider。
+ * ToolCallbackProvider を Decorator でラップし、各 ToolCallback を {@link ToolEventCallbackDecorator} で包んで返す
+ * Provider。
  *
- * <p>MCP の ToolCallbackProvider と defaultTools で登録された Tool の両方を
- * 同じ境界でイベント発行できるようにする。</p>
+ * <p>MCP の ToolCallbackProvider と defaultTools で登録された Tool の両方を 同じ境界でイベント発行できるようにする。
  */
 public class ToolEventCallbackProvider implements ToolCallbackProvider {
 
@@ -16,7 +15,9 @@ public class ToolEventCallbackProvider implements ToolCallbackProvider {
   private final AgentEventFactory eventFactory;
   private final AgentEventPublisher eventPublisher;
 
-  public ToolEventCallbackProvider(ToolCallbackProvider delegate, AgentEventFactory eventFactory,
+  public ToolEventCallbackProvider(
+      ToolCallbackProvider delegate,
+      AgentEventFactory eventFactory,
       AgentEventPublisher eventPublisher) {
     this.delegate = delegate;
     this.eventFactory = eventFactory;

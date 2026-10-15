@@ -1,30 +1,16 @@
 package dev.mikoto2000.rei.llm;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.api.Advisor;
-import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.tool.method.MethodToolCallbackProvider;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Component;
-
 import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.briefing.BriefingTools;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.core.configuration.CoreProperties;
+import dev.mikoto2000.rei.core.configuration.SystemPromptService;
 import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
-import dev.mikoto2000.rei.core.configuration.SystemPromptService;
-import dev.mikoto2000.rei.event.ToolEventCallbackProvider;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
+import dev.mikoto2000.rei.event.ToolEventCallbackProvider;
 import dev.mikoto2000.rei.feed.FeedTools;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
 import dev.mikoto2000.rei.reminder.ReminderTools;
@@ -33,59 +19,119 @@ import dev.mikoto2000.rei.skills.AgentSkillAdvisor;
 import dev.mikoto2000.rei.sound.SoundNotificationTools;
 import dev.mikoto2000.rei.summarize.SummaryTools;
 import dev.mikoto2000.rei.task.TaskTools;
-import dev.mikoto2000.rei.text.TextTools;
 import dev.mikoto2000.rei.temporal.RuntimeContextAdvisor;
+import dev.mikoto2000.rei.text.TextTools;
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchTools;
 import dev.mikoto2000.rei.websearch.WebSearchTools;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.stereotype.Component;
 
 @Component
 public class LlmChatClientProvider {
-  private org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.slack.SlackAgentTools> slackAgentTools;
+  private org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.slack.SlackAgentTools>
+      slackAgentTools;
+
   @org.springframework.beans.factory.annotation.Autowired
-  void setSlackAgentTools(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.slack.SlackAgentTools> tools){this.slackAgentTools=tools;}
+  void setSlackAgentTools(
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.slack.SlackAgentTools>
+          tools) {
+    this.slackAgentTools = tools;
+  }
+
   private dev.mikoto2000.rei.temporal.SchedulerTools schedulerTools;
-  @org.springframework.beans.factory.annotation.Autowired(required=false)
-  void setSchedulerTools(dev.mikoto2000.rei.temporal.SchedulerTools tools){this.schedulerTools=tools;}
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setSchedulerTools(dev.mikoto2000.rei.temporal.SchedulerTools tools) {
+    this.schedulerTools = tools;
+  }
+
   private dev.mikoto2000.rei.core.dependency.DependencyTools dependencyTools;
-  @org.springframework.beans.factory.annotation.Autowired(required=false)
-  void setDependencyTools(dev.mikoto2000.rei.core.dependency.DependencyTools tools){this.dependencyTools=tools;}
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setDependencyTools(dev.mikoto2000.rei.core.dependency.DependencyTools tools) {
+    this.dependencyTools = tools;
+  }
+
   private dev.mikoto2000.rei.core.FileDependencyTools fileDependencyTools;
-  @org.springframework.beans.factory.annotation.Autowired(required=false)
-  void setFileDependencyTools(dev.mikoto2000.rei.core.FileDependencyTools tools){this.fileDependencyTools=tools;}
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setFileDependencyTools(dev.mikoto2000.rei.core.FileDependencyTools tools) {
+    this.fileDependencyTools = tools;
+  }
+
   private dev.mikoto2000.rei.core.ProcessDependencyTools processDependencyTools;
-  @org.springframework.beans.factory.annotation.Autowired(required=false)
-  void setProcessDependencyTools(dev.mikoto2000.rei.core.ProcessDependencyTools tools){this.processDependencyTools=tools;}
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setProcessDependencyTools(dev.mikoto2000.rei.core.ProcessDependencyTools tools) {
+    this.processDependencyTools = tools;
+  }
+
   private ObjectProvider<dev.mikoto2000.rei.paper.PaperTools> paperTools;
+
   @org.springframework.beans.factory.annotation.Autowired
-  void setPaperTools(ObjectProvider<dev.mikoto2000.rei.paper.PaperTools> tools) { this.paperTools = tools; }
+  void setPaperTools(ObjectProvider<dev.mikoto2000.rei.paper.PaperTools> tools) {
+    this.paperTools = tools;
+  }
+
   private ObjectProvider<SummaryTools> summaryTools;
+
   @org.springframework.beans.factory.annotation.Autowired
-  void setSummaryTools(ObjectProvider<SummaryTools> tools) { this.summaryTools = tools; }
+  void setSummaryTools(ObjectProvider<SummaryTools> tools) {
+    this.summaryTools = tools;
+  }
+
   private ObjectProvider<dev.mikoto2000.rei.activity.ActivityTools> activityTools;
+
   @org.springframework.beans.factory.annotation.Autowired
-  void setActivityTools(ObjectProvider<dev.mikoto2000.rei.activity.ActivityTools> tools) { this.activityTools = tools; }
+  void setActivityTools(ObjectProvider<dev.mikoto2000.rei.activity.ActivityTools> tools) {
+    this.activityTools = tools;
+  }
+
   private dev.mikoto2000.rei.core.contextbudget.ContextAssembler contextAssembler;
   private dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor contextHistory;
-  @org.springframework.beans.factory.annotation.Autowired(required=false)
-  private dev.mikoto2000.rei.review.ReviewTools reviewTools;
-  private dev.mikoto2000.rei.core.contextbudget.RawToolResultTools rawResultTools;
+
   @org.springframework.beans.factory.annotation.Autowired(required = false)
-  void setContextCompression(dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler,
+  private dev.mikoto2000.rei.review.ReviewTools reviewTools;
+
+  private dev.mikoto2000.rei.core.contextbudget.RawToolResultTools rawResultTools;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setContextCompression(
+      dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler,
       dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor history,
       dev.mikoto2000.rei.core.contextbudget.RawToolResultTools rawTools,
       dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties properties) {
     // Session continuation must load persisted history even when compression is disabled.
     contextHistory = history;
-    contextAssembler = assembler; rawResultTools = rawTools;
+    contextAssembler = assembler;
+    rawResultTools = rawTools;
   }
+
   private ObjectProvider<dev.mikoto2000.rei.dot.DotTools> dotTools;
-  @org.springframework.beans.factory.annotation.Autowired void setDotTools(ObjectProvider<dev.mikoto2000.rei.dot.DotTools> tools){dotTools=tools;}
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void setDotTools(ObjectProvider<dev.mikoto2000.rei.dot.DotTools> tools) {
+    dotTools = tools;
+  }
+
   private dev.mikoto2000.rei.externalagent.ExternalAgentTools externalAgentTools;
   private dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService externalDelegation;
+
   @org.springframework.beans.factory.annotation.Autowired
-  void setExternalAgentTools(dev.mikoto2000.rei.externalagent.ExternalAgentTools tools,
+  void setExternalAgentTools(
+      dev.mikoto2000.rei.externalagent.ExternalAgentTools tools,
       dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService service) {
-    this.externalAgentTools = tools; this.externalDelegation = service;
+    this.externalAgentTools = tools;
+    this.externalDelegation = service;
   }
 
   private final LlmModelProvider modelProvider;
@@ -117,35 +163,73 @@ public class LlmChatClientProvider {
   private ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextAdvisor> workContext;
   private ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextTools> workTools;
   private ObjectProvider<dev.mikoto2000.rei.episode.EpisodeTools> episodeTools;
+
   @org.springframework.beans.factory.annotation.Autowired
-  void setEpisodeTools(ObjectProvider<dev.mikoto2000.rei.episode.EpisodeTools> tools){episodeTools=tools;}
+  void setEpisodeTools(ObjectProvider<dev.mikoto2000.rei.episode.EpisodeTools> tools) {
+    episodeTools = tools;
+  }
+
   private ObjectProvider<dev.mikoto2000.rei.checkpoint.ResumeContextAdvisor> resumeContext;
   private ObjectProvider<dev.mikoto2000.rei.checkpoint.CheckpointTools> checkpointTools;
-  @org.springframework.beans.factory.annotation.Autowired
-  void setCheckpoint(ObjectProvider<dev.mikoto2000.rei.checkpoint.ResumeContextAdvisor> advisor,
-      ObjectProvider<dev.mikoto2000.rei.checkpoint.CheckpointTools> tools){resumeContext=advisor;checkpointTools=tools;}
-  @org.springframework.beans.factory.annotation.Autowired
-  void setWorkContext(ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextAdvisor> advisor,
-      ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextTools> tools) {workContext=advisor;workTools=tools;}
-  @org.springframework.beans.factory.annotation.Autowired
-  void setMemoryContext(ObjectProvider<dev.mikoto2000.rei.memory.service.MemoryContextAdvisor> advisor) { memoryContext=advisor; }
-  private ObjectProvider<dev.mikoto2000.rei.computeruse.ComputerUseTools> computerUseTools;
-  @org.springframework.beans.factory.annotation.Autowired
-  void setComputerUseTools(ObjectProvider<dev.mikoto2000.rei.computeruse.ComputerUseTools> tools) { this.computerUseTools = tools; }
-  private ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> subAgentTools;
-  private dev.mikoto2000.rei.subagent.SubAgentProperties subAgentProperties=new dev.mikoto2000.rei.subagent.SubAgentProperties();
-  @org.springframework.beans.factory.annotation.Autowired(required=false)
-  public void setSubAgentProperties(dev.mikoto2000.rei.subagent.SubAgentProperties settings){this.subAgentProperties=settings;}
-  @org.springframework.beans.factory.annotation.Autowired
-  void setSubAgentTools(ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> tools) { this.subAgentTools = tools; }
 
-  public LlmChatClientProvider(LlmModelProvider modelProvider, CoreProperties coreProperties,
-      SystemPromptService systemPromptService, ChatMemory chatMemory,
-      ObjectProvider<Tools> tools, ObjectProvider<GoogleCalendarTools> googleCalendarTools,
-      ObjectProvider<TaskTools> taskTools, ObjectProvider<BriefingTools> briefingTools,
-      ObjectProvider<FeedTools> feedTools, ObjectProvider<ReminderTools> reminderTools,
-      ObjectProvider<SearchTools> searchTools, ObjectProvider<WebSearchTools> webSearchTools,
-      ObjectProvider<SoundNotificationTools> soundNotificationTools, ObjectProvider<BlueskyPostTools> blueskyPostTools,
+  @org.springframework.beans.factory.annotation.Autowired
+  void setCheckpoint(
+      ObjectProvider<dev.mikoto2000.rei.checkpoint.ResumeContextAdvisor> advisor,
+      ObjectProvider<dev.mikoto2000.rei.checkpoint.CheckpointTools> tools) {
+    resumeContext = advisor;
+    checkpointTools = tools;
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void setWorkContext(
+      ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextAdvisor> advisor,
+      ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextTools> tools) {
+    workContext = advisor;
+    workTools = tools;
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void setMemoryContext(
+      ObjectProvider<dev.mikoto2000.rei.memory.service.MemoryContextAdvisor> advisor) {
+    memoryContext = advisor;
+  }
+
+  private ObjectProvider<dev.mikoto2000.rei.computeruse.ComputerUseTools> computerUseTools;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void setComputerUseTools(ObjectProvider<dev.mikoto2000.rei.computeruse.ComputerUseTools> tools) {
+    this.computerUseTools = tools;
+  }
+
+  private ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> subAgentTools;
+  private dev.mikoto2000.rei.subagent.SubAgentProperties subAgentProperties =
+      new dev.mikoto2000.rei.subagent.SubAgentProperties();
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setSubAgentProperties(dev.mikoto2000.rei.subagent.SubAgentProperties settings) {
+    this.subAgentProperties = settings;
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void setSubAgentTools(ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> tools) {
+    this.subAgentTools = tools;
+  }
+
+  public LlmChatClientProvider(
+      LlmModelProvider modelProvider,
+      CoreProperties coreProperties,
+      SystemPromptService systemPromptService,
+      ChatMemory chatMemory,
+      ObjectProvider<Tools> tools,
+      ObjectProvider<GoogleCalendarTools> googleCalendarTools,
+      ObjectProvider<TaskTools> taskTools,
+      ObjectProvider<BriefingTools> briefingTools,
+      ObjectProvider<FeedTools> feedTools,
+      ObjectProvider<ReminderTools> reminderTools,
+      ObjectProvider<SearchTools> searchTools,
+      ObjectProvider<WebSearchTools> webSearchTools,
+      ObjectProvider<SoundNotificationTools> soundNotificationTools,
+      ObjectProvider<BlueskyPostTools> blueskyPostTools,
       ObjectProvider<UrlContentFetchTools> urlContentFetchTools,
       ObjectProvider<TextTools> textTools,
       ObjectProvider<RuntimeContextAdvisor> runtimeContextAdvisor,
@@ -154,7 +238,8 @@ public class LlmChatClientProvider {
       ObjectProvider<TaskStateAdvisor> taskStateAdvisor,
       ObjectProvider<TaskStateTools> taskStateTools,
       ObjectProvider<ToolEventCallbackProvider> toolEventCallbackProvider,
-      AgentEventFactory eventFactory, AgentEventPublisher eventPublisher) {
+      AgentEventFactory eventFactory,
+      AgentEventPublisher eventPublisher) {
     this.modelProvider = modelProvider;
     this.coreProperties = coreProperties;
     this.systemPromptService = systemPromptService;
@@ -187,33 +272,50 @@ public class LlmChatClientProvider {
 
   /** Restricted runs deliberately have no advisors that mutate conversation or task state. */
   public ChatClient parallelChatClient(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode) {
-    if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE) return chatClient(LlmFeature.CHAT);
-    return cache.computeIfAbsent("parallel-" + mode, ignored -> {
-      var options = modelProvider.chatOptions(LlmFeature.CHAT, null);
-      dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
-      var callbacks = new ArrayList<org.springframework.ai.tool.ToolCallback>();
-      if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY) {
-        var objects = new ArrayList<Object>();
-        addIfAvailable(objects, tools);
-        addIfAvailable(objects, searchTools);
-        addIfAvailable(objects, webSearchTools);
-        addIfAvailable(objects, urlContentFetchTools);
-        if(rawResultTools!=null)objects.add(rawResultTools);
-        if(reviewTools!=null)objects.add(reviewTools);
-        if (!objects.isEmpty()) {
-          for (var callback : dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(objects.toArray()).getToolCallbacks()) {
-            if (dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.intrinsicallyReadOnly(callback.getToolDefinition().name()))
-              callbacks.add(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(callback, eventFactory, eventPublisher));
+    if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE)
+      return chatClient(LlmFeature.CHAT);
+    return cache.computeIfAbsent(
+        "parallel-" + mode,
+        ignored -> {
+          var options = modelProvider.chatOptions(LlmFeature.CHAT, null);
+          dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
+          var callbacks = new ArrayList<org.springframework.ai.tool.ToolCallback>();
+          if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY) {
+            var objects = new ArrayList<Object>();
+            addIfAvailable(objects, tools);
+            addIfAvailable(objects, searchTools);
+            addIfAvailable(objects, webSearchTools);
+            addIfAvailable(objects, urlContentFetchTools);
+            if (rawResultTools != null) objects.add(rawResultTools);
+            if (reviewTools != null) objects.add(reviewTools);
+            if (!objects.isEmpty()) {
+              for (var callback :
+                  dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(
+                          objects.toArray())
+                      .getToolCallbacks()) {
+                if (dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.intrinsicallyReadOnly(
+                    callback.getToolDefinition().name()))
+                  callbacks.add(
+                      new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
+                          callback, eventFactory, eventPublisher));
+              }
+            }
           }
-        }
-      }
-      var builder = ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(modelProvider.subAgentChatModel(), contextAssembler))
-          .defaultAdvisors(new RunAwareToolCallingAdvisor())
-          .defaultOptions(options.mutate().toolCallbacks(callbacks).toolChoice(callbacks.isEmpty() ? "none" : "auto"));
-      if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY)
-        builder.defaultSystem(dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.INSTRUCTIONS);
-      return builder.build();
-    });
+          var builder =
+              ChatClient.builder(
+                      new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
+                          modelProvider.subAgentChatModel(), contextAssembler))
+                  .defaultAdvisors(new RunAwareToolCallingAdvisor())
+                  .defaultOptions(
+                      options
+                          .mutate()
+                          .toolCallbacks(callbacks)
+                          .toolChoice(callbacks.isEmpty() ? "none" : "auto"));
+          if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY)
+            builder.defaultSystem(
+                dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.INSTRUCTIONS);
+          return builder.build();
+        });
   }
 
   private ChatClient createChatClient(String feature) {
@@ -221,22 +323,33 @@ public class LlmChatClientProvider {
     if (LlmFeature.MEMORY.equals(feature) || LlmFeature.VOICE_CORRECTION.equals(feature)) {
       var options = modelProvider.chatOptions(feature, null);
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
-      return ChatClient.builder(LlmFeature.VOICE_CORRECTION.equals(feature) ? modelProvider.voiceCorrectionChatModel() : modelProvider.memoryChatModel())
+      return ChatClient.builder(
+              LlmFeature.VOICE_CORRECTION.equals(feature)
+                  ? modelProvider.voiceCorrectionChatModel()
+                  : modelProvider.memoryChatModel())
           .defaultOptions(options.mutate().toolCallbacks(List.of()).toolChoice("none"))
           .build();
     }
     List<Advisor> advisors = new ArrayList<>();
-    if(LlmFeature.CHAT.equals(feature)&&resumeContext!=null&&resumeContext.getIfAvailable()!=null)advisors.add(resumeContext.getObject());
-    if (LlmFeature.CHAT.equals(feature) && workContext != null && workContext.getIfAvailable() != null)
-      advisors.add(workContext.getObject());
-    if (LlmFeature.CHAT.equals(feature) && memoryContext != null && memoryContext.getIfAvailable() != null)
-      advisors.add(memoryContext.getObject());
+    if (LlmFeature.CHAT.equals(feature)
+        && resumeContext != null
+        && resumeContext.getIfAvailable() != null) advisors.add(resumeContext.getObject());
+    if (LlmFeature.CHAT.equals(feature)
+        && workContext != null
+        && workContext.getIfAvailable() != null) advisors.add(workContext.getObject());
+    if (LlmFeature.CHAT.equals(feature)
+        && memoryContext != null
+        && memoryContext.getIfAvailable() != null) advisors.add(memoryContext.getObject());
     if (LlmFeature.CHAT.equals(feature) && externalDelegation != null)
-      advisors.add(new dev.mikoto2000.rei.externalagent.ExternalAgentReviewAdvisor(externalDelegation, chatMemory));
+      advisors.add(
+          new dev.mikoto2000.rei.externalagent.ExternalAgentReviewAdvisor(
+              externalDelegation, chatMemory));
     if (LlmFeature.CHAT.equals(feature) && contextHistory != null) advisors.add(contextHistory);
-    else advisors.add(MessageChatMemoryAdvisor.builder(chatMemory)
-        .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
-        .build());
+    else
+      advisors.add(
+          MessageChatMemoryAdvisor.builder(chatMemory)
+              .scheduler(BaseAdvisor.DEFAULT_SCHEDULER)
+              .build());
     RuntimeContextAdvisor runtimeContextAdvisorInstance = runtimeContextAdvisor.getIfAvailable();
     if (runtimeContextAdvisorInstance != null) {
       advisors.add(runtimeContextAdvisorInstance);
@@ -255,23 +368,34 @@ public class LlmChatClientProvider {
     if (taskStateAdvisorInstance != null) {
       advisors.add(taskStateAdvisorInstance);
     }
-    ChatClient.Builder builder = ChatClient.builder(new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
-        modelProvider.chatModel(feature), LlmFeature.CHAT.equals(feature) ? contextAssembler : null))
-        .defaultAdvisors(new RunAwareToolCallingAdvisor())
-        .defaultSystem(dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.appendTo(systemPromptService.systemPrompt()))
-        .defaultOptions(modelProvider.chatOptions(feature, null).mutate())
-        .defaultAdvisors(dev.mikoto2000.rei.core.chat.RunScopedAdvisor.wrap(advisors));
+    ChatClient.Builder builder =
+        ChatClient.builder(
+                new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(
+                    modelProvider.chatModel(feature),
+                    LlmFeature.CHAT.equals(feature) ? contextAssembler : null))
+            .defaultAdvisors(new RunAwareToolCallingAdvisor())
+            .defaultSystem(
+                dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.appendTo(
+                    systemPromptService.systemPrompt()))
+            .defaultOptions(modelProvider.chatOptions(feature, null).mutate())
+            .defaultAdvisors(dev.mikoto2000.rei.core.chat.RunScopedAdvisor.wrap(advisors));
 
     // Reply generation returns text; only the caller may publish the reply.
     if (LlmFeature.BLUESKY_REPLY.equals(feature)) return builder.build();
 
     List<Object> toolObjects = new ArrayList<>();
-    if(LlmFeature.CHAT.equals(feature)&&checkpointTools!=null)addIfAvailable(toolObjects,checkpointTools);
-    if (LlmFeature.CHAT.equals(feature) && workTools != null) addIfAvailable(toolObjects, workTools);
-    if (LlmFeature.CHAT.equals(feature) && episodeTools != null) addIfAvailable(toolObjects, episodeTools);
-    if (LlmFeature.CHAT.equals(feature) && paperTools != null) addIfAvailable(toolObjects, paperTools);
-    if (LlmFeature.CHAT.equals(feature) && summaryTools != null) addIfAvailable(toolObjects, summaryTools);
-    if (LlmFeature.CHAT.equals(feature) && activityTools != null) addIfAvailable(toolObjects, activityTools);
+    if (LlmFeature.CHAT.equals(feature) && checkpointTools != null)
+      addIfAvailable(toolObjects, checkpointTools);
+    if (LlmFeature.CHAT.equals(feature) && workTools != null)
+      addIfAvailable(toolObjects, workTools);
+    if (LlmFeature.CHAT.equals(feature) && episodeTools != null)
+      addIfAvailable(toolObjects, episodeTools);
+    if (LlmFeature.CHAT.equals(feature) && paperTools != null)
+      addIfAvailable(toolObjects, paperTools);
+    if (LlmFeature.CHAT.equals(feature) && summaryTools != null)
+      addIfAvailable(toolObjects, summaryTools);
+    if (LlmFeature.CHAT.equals(feature) && activityTools != null)
+      addIfAvailable(toolObjects, activityTools);
     if (LlmFeature.CHAT.equals(feature) && rawResultTools != null) toolObjects.add(rawResultTools);
     if (LlmFeature.CHAT.equals(feature) && reviewTools != null) toolObjects.add(reviewTools);
     addIfAvailable(toolObjects, tools);
@@ -290,31 +414,51 @@ public class LlmChatClientProvider {
     if (taskStateToolsInstance != null) {
       toolObjects.add(taskStateToolsInstance);
     }
-    if(LlmFeature.CHAT.equals(feature) && processDependencyTools!=null)toolObjects.add(processDependencyTools);
-    if(LlmFeature.CHAT.equals(feature) && fileDependencyTools!=null)toolObjects.add(fileDependencyTools);
-    if(LlmFeature.CHAT.equals(feature) && dependencyTools!=null)toolObjects.add(dependencyTools);
-    if(LlmFeature.CHAT.equals(feature) && schedulerTools!=null)toolObjects.add(schedulerTools);
+    if (LlmFeature.CHAT.equals(feature) && processDependencyTools != null)
+      toolObjects.add(processDependencyTools);
+    if (LlmFeature.CHAT.equals(feature) && fileDependencyTools != null)
+      toolObjects.add(fileDependencyTools);
+    if (LlmFeature.CHAT.equals(feature) && dependencyTools != null)
+      toolObjects.add(dependencyTools);
+    if (LlmFeature.CHAT.equals(feature) && schedulerTools != null) toolObjects.add(schedulerTools);
     if (!toolObjects.isEmpty()) {
-      var methodTools = dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(toolObjects.toArray());
-      builder.defaultTools(new ToolEventCallbackProvider(methodTools, eventFactory, eventPublisher));
+      var methodTools =
+          dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(
+              toolObjects.toArray());
+      builder.defaultTools(
+          new ToolEventCallbackProvider(methodTools, eventFactory, eventPublisher));
     }
 
     ToolEventCallbackProvider toolCallbackProvider = toolEventCallbackProvider.getIfAvailable();
     if (toolCallbackProvider != null) {
       builder.defaultTools(toolCallbackProvider);
     }
-    if (LlmFeature.CHAT.equals(feature) && externalAgentTools != null) builder.defaultTools((Object[]) externalAgentTools.callbacks());
-    if(LlmFeature.CHAT.equals(feature)&&dotTools!=null&&dotTools.getIfAvailable()!=null)builder.defaultTools(java.util.Arrays.asList(dotTools.getObject().callbacks()));
-    if (LlmFeature.CHAT.equals(feature) && slackAgentTools != null && slackAgentTools.getIfAvailable()!=null) builder.defaultTools((Object[]) slackAgentTools.getObject().callbacks());
-    if (LlmFeature.CHAT.equals(feature) && subAgentTools != null && subAgentTools.getIfAvailable() != null) {
-      for(String name:dev.mikoto2000.rei.subagent.SubAgentParentToolCatalog.names(subAgentProperties))
-        builder.defaultTools(new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(subAgentTools.getObject().callback(name),eventFactory,eventPublisher));
+    if (LlmFeature.CHAT.equals(feature) && externalAgentTools != null)
+      builder.defaultTools((Object[]) externalAgentTools.callbacks());
+    if (LlmFeature.CHAT.equals(feature) && dotTools != null && dotTools.getIfAvailable() != null)
+      builder.defaultTools(java.util.Arrays.asList(dotTools.getObject().callbacks()));
+    if (LlmFeature.CHAT.equals(feature)
+        && slackAgentTools != null
+        && slackAgentTools.getIfAvailable() != null)
+      builder.defaultTools((Object[]) slackAgentTools.getObject().callbacks());
+    if (LlmFeature.CHAT.equals(feature)
+        && subAgentTools != null
+        && subAgentTools.getIfAvailable() != null) {
+      for (String name :
+          dev.mikoto2000.rei.subagent.SubAgentParentToolCatalog.names(subAgentProperties))
+        builder.defaultTools(
+            new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
+                subAgentTools.getObject().callback(name), eventFactory, eventPublisher));
     }
     if (LlmFeature.CHAT.equals(feature) && computerUseTools != null) {
       var computer = computerUseTools.getIfAvailable();
       if (computer != null) {
         builder.defaultTools(computer.callback());
-        builder.defaultSystem(dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.appendTo(systemPromptService.systemPrompt()) + "\n\n" + computer.orchestrationPrompt());
+        builder.defaultSystem(
+            dev.mikoto2000.rei.core.configuration.ToolUsagePolicy.appendTo(
+                    systemPromptService.systemPrompt())
+                + "\n\n"
+                + computer.orchestrationPrompt());
       }
     }
     return builder.build();

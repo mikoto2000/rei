@@ -1,14 +1,28 @@
 package dev.mikoto2000.rei.application.run;
 
-import java.time.Instant;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import java.time.Instant;
 
-public record RunSnapshot(AgentRunContext context, RunStatus status, Instant startedAt,
-    Instant completedAt, RunFailure failure, ChildOrigin childOrigin) {
-  public record ChildOrigin(String parentRunId,String sessionId,String agentId,String durableTaskId) {
-    public ChildOrigin(String parentRunId,String sessionId,String agentId){this(parentRunId,sessionId,agentId,null);}
+public record RunSnapshot(
+    AgentRunContext context,
+    RunStatus status,
+    Instant startedAt,
+    Instant completedAt,
+    RunFailure failure,
+    ChildOrigin childOrigin) {
+  public record ChildOrigin(
+      String parentRunId, String sessionId, String agentId, String durableTaskId) {
+    public ChildOrigin(String parentRunId, String sessionId, String agentId) {
+      this(parentRunId, sessionId, agentId, null);
+    }
   }
-  public RunSnapshot(AgentRunContext context,RunStatus status,Instant startedAt,Instant completedAt,RunFailure failure) {
-    this(context,status,startedAt,completedAt,failure,null);
+
+  public RunSnapshot(
+      AgentRunContext context,
+      RunStatus status,
+      Instant startedAt,
+      Instant completedAt,
+      RunFailure failure) {
+    this(context, status, startedAt, completedAt, failure, null);
   }
 }

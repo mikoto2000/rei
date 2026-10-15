@@ -1,13 +1,15 @@
 package dev.mikoto2000.rei.ui.shell;
 
-import java.time.Clock;
-import dev.mikoto2000.rei.event.*;
-import org.junit.jupiter.api.Test;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import dev.mikoto2000.rei.event.*;
+import java.time.Clock;
+import org.junit.jupiter.api.Test;
+
 class InterventionEventTest {
-  @Test void receivedAndAppliedAreTypedAndRendered() {
+  @Test
+  void receivedAndAppliedAreTypedAndRendered() {
     var factory = new AgentEventFactory(Clock.systemUTC());
     var output = mock(ShellEventOutput.class);
     var renderer = new ShellAgentEventRenderer(output);

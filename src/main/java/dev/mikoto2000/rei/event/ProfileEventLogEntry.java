@@ -15,5 +15,4 @@ public record ProfileEventLogEntry(
     String correlationId,
     String parentEventId,
     String payloadType,
-    Map<String, Object> payload) {
-}
+    Map<String, Object> payload) {}

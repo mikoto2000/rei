@@ -4,7 +4,6 @@ import java.time.Clock;
 import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.List;
-
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
@@ -28,13 +27,15 @@ public class RuntimeContextAdvisor implements BaseAdvisor {
     if (userMessage == null) {
       return request;
     }
-    UserMessage contextualMessage = userMessage.mutate()
-        .text(renderContext() + "\n\n" + userMessage.getText())
-        .build();
+    UserMessage contextualMessage =
+        userMessage.mutate().text(renderContext() + "\n\n" + userMessage.getText()).build();
     Prompt prompt = request.prompt();
-    return request.mutate()
-        .prompt(new Prompt(replaceUserMessage(prompt.getInstructions(), userMessage, contextualMessage),
-            prompt.getOptions()))
+    return request
+        .mutate()
+        .prompt(
+            new Prompt(
+                replaceUserMessage(prompt.getInstructions(), userMessage, contextualMessage),
+                prompt.getOptions()))
         .build();
   }
 
@@ -55,10 +56,13 @@ public class RuntimeContextAdvisor implements BaseAdvisor {
 
         Current time: %s
         Timezone: %s
-        """.formatted(now.toOffsetDateTime(), now.getZone().getId()).stripTrailing();
+        """
+        .formatted(now.toOffsetDateTime(), now.getZone().getId())
+        .stripTrailing();
   }
 
-  private List<Message> replaceUserMessage(List<Message> messages, UserMessage original, UserMessage replacement) {
+  private List<Message> replaceUserMessage(
+      List<Message> messages, UserMessage original, UserMessage replacement) {
     List<Message> replaced = new ArrayList<>(messages.size());
     boolean replacedFirst = false;
     for (Message message : messages) {

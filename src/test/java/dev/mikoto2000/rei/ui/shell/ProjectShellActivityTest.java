@@ -1,60 +1,117 @@
 package dev.mikoto2000.rei.ui.shell;
 
+import static org.assertj.core.api.Assertions.*;
+import static org.mockito.Mockito.*;
+
+import dev.mikoto2000.rei.core.chat.*;
+import dev.mikoto2000.rei.core.project.*;
+import dev.mikoto2000.rei.core.working.WorkingSet;
+import dev.mikoto2000.rei.event.*;
 import java.nio.file.*;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.memory.ChatMemory;
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.core.project.*;
-import dev.mikoto2000.rei.core.working.WorkingSet;
-import dev.mikoto2000.rei.event.*;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
 
 @org.junit.jupiter.api.Tag("integration")
 class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
-  @Test void approvalFramesReachStyledOutputOnlyForTheSelectedSession() throws Exception {
-    var projects = connect(new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json"))));
-    var repository = new dev.mikoto2000.rei.conversation.FileSessionRepository(temp.resolve("sessions.json"));
-    var shell = new dev.mikoto2000.rei.application.session.ShellConversationService(projects,
-        new dev.mikoto2000.rei.application.session.SessionLifecycle(repository, Clock.systemUTC()), (c,p)->{});
+  @Test
+  void approvalFramesReachStyledOutputOnlyForTheSelectedSession() throws Exception {
+    var projects =
+        connect(new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json"))));
+    var repository =
+        new dev.mikoto2000.rei.conversation.FileSessionRepository(temp.resolve("sessions.json"));
+    var shell =
+        new dev.mikoto2000.rei.application.session.ShellConversationService(
+            projects,
+            new dev.mikoto2000.rei.application.session.SessionLifecycle(
+                repository, Clock.systemUTC()),
+            (c, p) -> {});
     var first = shell.submit("first");
     var output = mock(ShellEventOutput.class);
-    var activity = new ProjectShellActivity(projects, new ProjectAgentEventStore(temp), new ProjectRunStateStore(temp), new WorkingSet(), mock(ChatMemory.class));
-    activity.attach(output); clearInvocations(output);
-    var event = new AgentEvent("fixture", 0, java.time.Instant.EPOCH, AgentEventType.ATTENTION_REQUIRED, 1,
-        "session", null, "run", null, null, new AttentionRequiredPayload("attention", "APPROVAL_REQUIRED", "fixture operation"), "project").withOwnership(first);
+    var activity =
+        new ProjectShellActivity(
+            projects,
+            new ProjectAgentEventStore(temp),
+            new ProjectRunStateStore(temp),
+            new WorkingSet(),
+            mock(ChatMemory.class));
+    activity.attach(output);
+    clearInvocations(output);
+    var event =
+        new AgentEvent(
+                "fixture",
+                0,
+                java.time.Instant.EPOCH,
+                AgentEventType.ATTENTION_REQUIRED,
+                1,
+                "session",
+                null,
+                "run",
+                null,
+                null,
+                new AttentionRequiredPayload("attention", "APPROVAL_REQUIRED", "fixture operation"),
+                "project")
+            .withOwnership(first);
     activity.onEvent(event);
     verify(output).approvalRequired("fixture operation");
-    clearInvocations(output); shell.newConversation(); shell.submit("second");
+    clearInvocations(output);
+    shell.newConversation();
+    shell.submit("second");
     activity.onEvent(event);
     verify(output, never()).approvalRequired(anyString());
   }
-  @Test void switchingSessionsHidesLateEventsFromPreviousRunEvenOnWorkerThread() throws Exception {
-    var projects = connect(new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json"))));
-    var repository = new dev.mikoto2000.rei.conversation.FileSessionRepository(temp.resolve("sessions.json"));
-    var shell = new dev.mikoto2000.rei.application.session.ShellConversationService(projects,
-        new dev.mikoto2000.rei.application.session.SessionLifecycle(repository, Clock.systemUTC()), (c,p)->{});
+
+  @Test
+  void switchingSessionsHidesLateEventsFromPreviousRunEvenOnWorkerThread() throws Exception {
+    var projects =
+        connect(new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json"))));
+    var repository =
+        new dev.mikoto2000.rei.conversation.FileSessionRepository(temp.resolve("sessions.json"));
+    var shell =
+        new dev.mikoto2000.rei.application.session.ShellConversationService(
+            projects,
+            new dev.mikoto2000.rei.application.session.SessionLifecycle(
+                repository, Clock.systemUTC()),
+            (c, p) -> {});
     var first = shell.submit("first");
     var text = new StringBuilder();
-    var activity = new ProjectShellActivity(projects, new ProjectAgentEventStore(temp), new ProjectRunStateStore(temp), new WorkingSet(), mock(ChatMemory.class));
-    activity.attach(new ShellEventOutput() {
-      public void print(String value) { text.append(value); }
-      public void println(String value) { text.append(value).append('\n'); }
-      public void flush() {}
-    });
+    var activity =
+        new ProjectShellActivity(
+            projects,
+            new ProjectAgentEventStore(temp),
+            new ProjectRunStateStore(temp),
+            new WorkingSet(),
+            mock(ChatMemory.class));
+    activity.attach(
+        new ShellEventOutput() {
+          public void print(String value) {
+            text.append(value);
+          }
+
+          public void println(String value) {
+            text.append(value).append('\n');
+          }
+
+          public void flush() {}
+        });
     var events = new AgentEventFactory(Clock.systemUTC());
     activity.onEvent(events.messageStarted("old-message", "assistant").withOwnership(first));
     shell.newConversation();
     var second = shell.submit("second");
     text.setLength(0);
     try (var worker = java.util.concurrent.Executors.newSingleThreadExecutor()) {
-      worker.submit(() -> {
-        activity.onEvent(events.messageDelta("old-message", "OLD-LEAK").withOwnership(first));
-        activity.onEvent(events.messageStarted("new-message", "assistant").withOwnership(second));
-        activity.onEvent(events.messageDelta("new-message", "NEW-CONTENT").withOwnership(second));
-      }).get();
+      worker
+          .submit(
+              () -> {
+                activity.onEvent(
+                    events.messageDelta("old-message", "OLD-LEAK").withOwnership(first));
+                activity.onEvent(
+                    events.messageStarted("new-message", "assistant").withOwnership(second));
+                activity.onEvent(
+                    events.messageDelta("new-message", "NEW-CONTENT").withOwnership(second));
+              })
+          .get();
     }
     assertThat(text.toString()).contains("NEW-CONTENT").doesNotContain("OLD-LEAK");
     shell.resume(first.conversationId());
@@ -64,43 +121,90 @@ class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectCl
     activity.onEvent(events.messageDelta("old-message", "FIRST-CONTENT").withOwnership(first));
     assertThat(text.toString()).contains("FIRST-CONTENT").doesNotContain("SECOND-LEAK");
   }
-  @Test void backgroundNotificationsRemainVisibleAfterProjectSwitch() throws Exception {
-    var projects=connect(new ProjectService(Files.createDirectory(temp.resolve("A")),new ProjectRegistry(temp.resolve("registry.json"))));
-    var a=projects.currentContext();
-    var router=new ConversationInputRouter(new java.util.ArrayList<Runnable>()::add,(c,p,q)->{});
-    var activity=new ProjectShellActivity(projects,new ProjectAgentEventStore(temp),new ProjectRunStateStore(temp),new WorkingSet(),mock(ChatMemory.class));
-    activity.setActiveRuns(new ActiveRunDisplay(router,projects,Clock.systemUTC()));
-    var out=mock(ShellEventOutput.class); activity.attach(out);
-    projects.cd(Files.createDirectory(temp.resolve("B")).toString()); activity.restore(projects.currentContext());
-    var events=new AgentEventFactory(Clock.systemUTC());
-    for(var type:java.util.List.of(dev.mikoto2000.rei.core.execution.ExecutionType.SUMMARIZE,dev.mikoto2000.rei.core.execution.ExecutionType.IMAGE)) {
-      var execution=new dev.mikoto2000.rei.core.execution.ActiveExecution("execution",a.id(),a.conversationId("chat:main"),a.root(),type,"request",java.time.Instant.now());
-      activity.onEvent(events.backgroundExecution(execution,"COMPLETED","結果"));
-      activity.onEvent(events.backgroundExecution(execution,"FAILED","失敗"));
-      verify(out).println("["+type.name().toLowerCase()+".completed] A (execution)");
-      verify(out).println("["+type.name().toLowerCase()+".failed] A (execution)");
+
+  @Test
+  void backgroundNotificationsRemainVisibleAfterProjectSwitch() throws Exception {
+    var projects =
+        connect(
+            new ProjectService(
+                Files.createDirectory(temp.resolve("A")),
+                new ProjectRegistry(temp.resolve("registry.json"))));
+    var a = projects.currentContext();
+    var router =
+        new ConversationInputRouter(new java.util.ArrayList<Runnable>()::add, (c, p, q) -> {});
+    var activity =
+        new ProjectShellActivity(
+            projects,
+            new ProjectAgentEventStore(temp),
+            new ProjectRunStateStore(temp),
+            new WorkingSet(),
+            mock(ChatMemory.class));
+    activity.setActiveRuns(new ActiveRunDisplay(router, projects, Clock.systemUTC()));
+    var out = mock(ShellEventOutput.class);
+    activity.attach(out);
+    projects.cd(Files.createDirectory(temp.resolve("B")).toString());
+    activity.restore(projects.currentContext());
+    var events = new AgentEventFactory(Clock.systemUTC());
+    for (var type :
+        java.util.List.of(
+            dev.mikoto2000.rei.core.execution.ExecutionType.SUMMARIZE,
+            dev.mikoto2000.rei.core.execution.ExecutionType.IMAGE)) {
+      var execution =
+          new dev.mikoto2000.rei.core.execution.ActiveExecution(
+              "execution",
+              a.id(),
+              a.conversationId("chat:main"),
+              a.root(),
+              type,
+              "request",
+              java.time.Instant.now());
+      activity.onEvent(events.backgroundExecution(execution, "COMPLETED", "結果"));
+      activity.onEvent(events.backgroundExecution(execution, "FAILED", "失敗"));
+      verify(out).println("[" + type.name().toLowerCase() + ".completed] A (execution)");
+      verify(out).println("[" + type.name().toLowerCase() + ".failed] A (execution)");
     }
-    verify(out,times(2)).println("結果");
+    verify(out, times(2)).println("結果");
   }
-  @Test void projectSwitchShowsCountAndHiddenRunCompletionIsVisible() throws Exception {
-    var projects = connect(new ProjectService(Files.createDirectory(temp.resolve("a")), new ProjectRegistry(temp.resolve("registry.json"))));
+
+  @Test
+  void projectSwitchShowsCountAndHiddenRunCompletionIsVisible() throws Exception {
+    var projects =
+        connect(
+            new ProjectService(
+                Files.createDirectory(temp.resolve("a")),
+                new ProjectRegistry(temp.resolve("registry.json"))));
     var a = projects.currentContext();
     var tasks = new java.util.ArrayList<Runnable>();
-    var runs = new ConversationInputRouter(tasks::add, (c,p,q) -> {});
+    var runs = new ConversationInputRouter(tasks::add, (c, p, q) -> {});
     runs.submit(a.root(), a.conversationId("chat:main"), "work");
-    var activity = new ProjectShellActivity(projects, new ProjectAgentEventStore(temp), new ProjectRunStateStore(temp), new WorkingSet(), mock(ChatMemory.class));
+    var activity =
+        new ProjectShellActivity(
+            projects,
+            new ProjectAgentEventStore(temp),
+            new ProjectRunStateStore(temp),
+            new WorkingSet(),
+            mock(ChatMemory.class));
     activity.setActiveRuns(new ActiveRunDisplay(runs, projects, Clock.systemUTC()));
-    var out = mock(ShellEventOutput.class); activity.attach(out);
+    var out = mock(ShellEventOutput.class);
+    activity.attach(out);
     projects.cd(Files.createDirectory(temp.resolve("b")).toString());
     activity.restore(projects.currentContext());
     verify(out).println("Active runs: 1 (/runs for details)");
-    activity.onEvent(new AgentEventFactory(Clock.systemUTC()).runCompleted("a", 1).withOwnership(new AgentRunContext("a", a, "chat:main")));
+    activity.onEvent(
+        new AgentEventFactory(Clock.systemUTC())
+            .runCompleted("a", 1)
+            .withOwnership(new AgentRunContext("a", a, "chat:main")));
     verify(out).println("[agent.run.completed] a");
   }
+
   @TempDir Path temp;
-  @Test void switchRestoresOnlyRecentOwnedActivityAndFiltersLiveEvents() throws Exception {
-    Path a = Files.createDirectory(temp.resolve("a")); Path b = Files.createDirectory(temp.resolve("b"));
-    var projects = connect(new ProjectService(a, new ProjectRegistry(temp.resolve("projects.json"))));
+
+  @Test
+  void switchRestoresOnlyRecentOwnedActivityAndFiltersLiveEvents() throws Exception {
+    Path a = Files.createDirectory(temp.resolve("a"));
+    Path b = Files.createDirectory(temp.resolve("b"));
+    var projects =
+        connect(new ProjectService(a, new ProjectRegistry(temp.resolve("projects.json"))));
     var runA = new AgentRunContext("run-a", projects.currentContext(), "chat:main");
     projects.cd(b.toString());
     var runB = new AgentRunContext("run-b", projects.currentContext(), "chat:main");
@@ -108,32 +212,56 @@ class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectCl
     var factory = new AgentEventFactory(Clock.systemUTC());
     var eventA = factory.toolCompleted("tool-a", "read-A", 1, "ok").withOwnership(runA);
     var eventB = factory.toolCompleted("tool-b", "read-B", 1, "ok").withOwnership(runB);
-    store.append(eventA); store.append(eventB);
-    var activity = new ProjectShellActivity(projects, store, new ProjectRunStateStore(temp), new WorkingSet(), mock(ChatMemory.class));
+    store.append(eventA);
+    store.append(eventB);
+    var activity =
+        new ProjectShellActivity(
+            projects,
+            store,
+            new ProjectRunStateStore(temp),
+            new WorkingSet(),
+            mock(ChatMemory.class));
     var text = new StringBuilder();
-    activity.attach(new ShellEventOutput() {
-      public void print(String value) { text.append(value); }
-      public void println(String value) { text.append(value).append('\n'); }
-      public void flush() {}
-    });
-    projects.cd(a.toString()); activity.restore(projects.currentContext());
-    assertThat(text.toString()).contains("read-A", "Conversation restored: chat:main", "Working Set restored: 0").doesNotContain("read-B");
+    activity.attach(
+        new ShellEventOutput() {
+          public void print(String value) {
+            text.append(value);
+          }
+
+          public void println(String value) {
+            text.append(value).append('\n');
+          }
+
+          public void flush() {}
+        });
+    projects.cd(a.toString());
+    activity.restore(projects.currentContext());
+    assertThat(text.toString())
+        .contains("read-A", "Conversation restored: chat:main", "Working Set restored: 0")
+        .doesNotContain("read-B");
     text.setLength(0);
-    projects.cd(b.toString()); activity.restore(projects.currentContext());
+    projects.cd(b.toString());
+    activity.restore(projects.currentContext());
     assertThat(text.toString()).contains("read-B").doesNotContain("read-A");
-    projects.cd(a.toString()); activity.restore(projects.currentContext());
+    projects.cd(a.toString());
+    activity.restore(projects.currentContext());
     activity.onEvent(factory.messageStarted("message-a", "assistant").withOwnership(runA));
-    projects.cd(b.toString()); activity.restore(projects.currentContext());
+    projects.cd(b.toString());
+    activity.restore(projects.currentContext());
     text.setLength(0);
     activity.onEvent(factory.messageDelta("message-a", "hidden").withOwnership(runA));
     assertThat(text).isEmpty();
-    projects.cd(a.toString()); activity.restore(projects.currentContext());
+    projects.cd(a.toString());
+    activity.restore(projects.currentContext());
     text.setLength(0);
     activity.onEvent(factory.messageDelta("message-a", "visible continuation").withOwnership(runA));
     assertThat(text.toString()).contains("visible continuation");
     text.setLength(0);
-    projects.cd(b.toString()); activity.restore(projects.currentContext()); text.setLength(0);
-    activity.onEvent(eventA); activity.onEvent(eventB);
+    projects.cd(b.toString());
+    activity.restore(projects.currentContext());
+    text.setLength(0);
+    activity.onEvent(eventA);
+    activity.onEvent(eventB);
     assertThat(text.toString()).contains("read-B").doesNotContain("read-A");
   }
 }

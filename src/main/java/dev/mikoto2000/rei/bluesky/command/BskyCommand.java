@@ -1,11 +1,10 @@
 package dev.mikoto2000.rei.bluesky.command;
 
-import org.springframework.stereotype.Component;
-
 import dev.mikoto2000.rei.bluesky.BlueskyPostResult;
 import dev.mikoto2000.rei.bluesky.BlueskyPostService;
 import dev.mikoto2000.rei.bluesky.BlueskyReplyConversationRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -20,11 +19,36 @@ import picocli.CommandLine.Parameters;
       BskyCommand.HistoryCommand.class
     })
 public class BskyCommand {
-  public static String reportReply(BlueskyPostService service,String target,java.util.List<String> parts){var command=new ReplyCommand(service);command.targetPost=target;command.textParts=parts.toArray(String[]::new);return report(command);}
-  public static String reportHistoryUsers(BlueskyReplyConversationRepository repository){return report(new HistoryUsersCommand(repository));}
-  public static String reportHistory(BlueskyReplyConversationRepository repository,String handle,int limit){var command=new HistoryCommand(repository);command.handle=handle;command.limit=limit;return report(command);}
-  private static String report(ReportCommand command){var text=new java.io.StringWriter();command.out=new java.io.PrintWriter(text,true);command.run();return text.toString().replaceAll("[\\r\\n]+$","");}
-  private abstract static class ReportCommand implements Runnable { protected java.io.PrintWriter out=new java.io.PrintWriter(System.out,true); }
+  public static String reportReply(
+      BlueskyPostService service, String target, java.util.List<String> parts) {
+    var command = new ReplyCommand(service);
+    command.targetPost = target;
+    command.textParts = parts.toArray(String[]::new);
+    return report(command);
+  }
+
+  public static String reportHistoryUsers(BlueskyReplyConversationRepository repository) {
+    return report(new HistoryUsersCommand(repository));
+  }
+
+  public static String reportHistory(
+      BlueskyReplyConversationRepository repository, String handle, int limit) {
+    var command = new HistoryCommand(repository);
+    command.handle = handle;
+    command.limit = limit;
+    return report(command);
+  }
+
+  private static String report(ReportCommand command) {
+    var text = new java.io.StringWriter();
+    command.out = new java.io.PrintWriter(text, true);
+    command.run();
+    return text.toString().replaceAll("[\\r\\n]+$", "");
+  }
+
+  private abstract static class ReportCommand implements Runnable {
+    protected java.io.PrintWriter out = new java.io.PrintWriter(System.out, true);
+  }
 
   @Component
   @RequiredArgsConstructor
@@ -33,17 +57,25 @@ public class BskyCommand {
 
     private final BlueskyPostService blueskyPostService;
 
-    @Parameters(index = "0", paramLabel = "TARGET_POST", description = "リプライ対象投稿の at:// URI または bsky.app URL")
+    @Parameters(
+        index = "0",
+        paramLabel = "TARGET_POST",
+        description = "リプライ対象投稿の at:// URI または bsky.app URL")
     String targetPost;
 
-    @Parameters(index = "1..*", arity = "0..*", paramLabel = "TEXT", description = "リプライ本文（省略時はAI生成）")
+    @Parameters(
+        index = "1..*",
+        arity = "0..*",
+        paramLabel = "TEXT",
+        description = "リプライ本文（省略時はAI生成）")
     String[] textParts;
 
     @Override
     public void run() {
-      BlueskyPostResult result = textParts == null || textParts.length == 0
-          ? blueskyPostService.reply(targetPost)
-          : blueskyPostService.reply(targetPost, String.join(" ", textParts));
+      BlueskyPostResult result =
+          textParts == null || textParts.length == 0
+              ? blueskyPostService.reply(targetPost)
+              : blueskyPostService.reply(targetPost, String.join(" ", textParts));
       if (!result.success()) {
         out.println(result.message());
         return;
@@ -94,8 +126,10 @@ public class BskyCommand {
         out.println("対象ユーザーの会話履歴はありません: " + handle);
         return;
       }
-      messages.forEach(message -> out.println(
-          message.createdAt() + " | " + message.role() + " | " + message.content()));
+      messages.forEach(
+          message ->
+              out.println(
+                  message.createdAt() + " | " + message.role() + " | " + message.content()));
     }
   }
 }

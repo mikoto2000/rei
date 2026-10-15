@@ -9,7 +9,6 @@ import java.util.Optional;
 import java.util.function.DoubleSupplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -39,7 +38,15 @@ public class BlueskyReplyService {
       BlueskyReplyConversationRepository conversationRepository,
       BlueskyReplyTextGenerator replyTextGenerator,
       BlueskyApiClient blueskyApiClient) {
-    this(properties, validator, authorFeedClient, repository, conversationRepository, replyTextGenerator, blueskyApiClient, Math::random,
+    this(
+        properties,
+        validator,
+        authorFeedClient,
+        repository,
+        conversationRepository,
+        replyTextGenerator,
+        blueskyApiClient,
+        Math::random,
         Clock.systemUTC());
   }
 
@@ -75,7 +82,8 @@ public class BlueskyReplyService {
     }
   }
 
-  private void processUser(BlueskyProperties.ReplyUser user, BlueskyProperties.BlueskyReplyProperties reply) {
+  private void processUser(
+      BlueskyProperties.ReplyUser user, BlueskyProperties.BlueskyReplyProperties reply) {
     try {
       String handle = user.getHandle();
       String did = authorFeedClient.resolveDid(handle);
@@ -88,14 +96,17 @@ public class BlueskyReplyService {
         log.warn("Bluesky reply skipped: authentication failed for handle={}", handle);
         return;
       }
-      List<BlueskyApiClient.FeedPost> feed = blueskyApiClient.getAuthorFeed(did, reply.getFetchLimit(), botAuth.accessJwt());
-      Optional<BlueskyApiClient.FeedPost> newest = feed.stream()
-          .filter(p -> p.indexedAt() != null)
-          .max(Comparator.comparing(BlueskyApiClient.FeedPost::indexedAt));
-      List<BlueskyApiClient.FeedPost> candidates = feed.stream()
-          .filter(post -> isNewPost(handle, post))
-          .sorted(Comparator.comparing(BlueskyApiClient.FeedPost::indexedAt))
-          .toList();
+      List<BlueskyApiClient.FeedPost> feed =
+          blueskyApiClient.getAuthorFeed(did, reply.getFetchLimit(), botAuth.accessJwt());
+      Optional<BlueskyApiClient.FeedPost> newest =
+          feed.stream()
+              .filter(p -> p.indexedAt() != null)
+              .max(Comparator.comparing(BlueskyApiClient.FeedPost::indexedAt));
+      List<BlueskyApiClient.FeedPost> candidates =
+          feed.stream()
+              .filter(post -> isNewPost(handle, post))
+              .sorted(Comparator.comparing(BlueskyApiClient.FeedPost::indexedAt))
+              .toList();
 
       int replied = 0;
       int skipped = 0;
@@ -104,7 +115,11 @@ public class BlueskyReplyService {
         String skipReason = skipReason(post, user, reply, forceReply);
         if (skipReason != null) {
           skipped++;
-          log.debug("Bluesky reply skipped: handle={}, postUri={}, reason={}", handle, post.uri(), skipReason);
+          log.debug(
+              "Bluesky reply skipped: handle={}, postUri={}, reason={}",
+              handle,
+              post.uri(),
+              skipReason);
           continue;
         }
         if (reply.isDryRun()) {
@@ -113,28 +128,37 @@ public class BlueskyReplyService {
           continue;
         }
         conversationRepository.appendUserMessage(handle, post.text() == null ? "" : post.text());
-        List<BlueskyReplyConversationRepository.ConversationMessage> history = conversationRepository.findRecent(handle, 10);
+        List<BlueskyReplyConversationRepository.ConversationMessage> history =
+            conversationRepository.findRecent(handle, 10);
         String text;
         BlueskyApiClient.PostResult result;
         try {
           text = replyTextGenerator.generate(handle, post.text(), history);
           if (!repository.tryClaimReply(post.uri())) {
             skipped++;
-            log.debug("Bluesky reply skipped: handle={}, postUri={}, reason=already_claimed", handle, post.uri());
+            log.debug(
+                "Bluesky reply skipped: handle={}, postUri={}, reason=already_claimed",
+                handle,
+                post.uri());
             continue;
           }
-          result = blueskyApiClient.createReply(
-              botAuth.accessJwt(),
-              botAuth.did(),
-              text,
-              post.uri(),
-              post.cid(),
-              post.rootUri() == null ? post.uri() : post.rootUri(),
-              post.rootCid() == null ? post.cid() : post.rootCid());
+          result =
+              blueskyApiClient.createReply(
+                  botAuth.accessJwt(),
+                  botAuth.did(),
+                  text,
+                  post.uri(),
+                  post.cid(),
+                  post.rootUri() == null ? post.uri() : post.rootUri(),
+                  post.rootCid() == null ? post.cid() : post.rootCid());
         } catch (Exception e) {
           skipped++;
-          log.warn("Bluesky reply skipped: handle={}, postUri={}, reason=reply_failed, message={}",
-              handle, post.uri(), e.getMessage(), e);
+          log.warn(
+              "Bluesky reply skipped: handle={}, postUri={}, reason=reply_failed, message={}",
+              handle,
+              post.uri(),
+              e.getMessage(),
+              e);
           continue;
         }
         if (result.success()) {
@@ -149,16 +173,23 @@ public class BlueskyReplyService {
       }
 
       newest.ifPresent(post -> repository.saveLastSeen(handle, post.uri(), post.indexedAt()));
-      log.info("Bluesky reply summary: handle={}, fetched={}, candidates={}, replied={}, skipped={}",
-          handle, feed.size(), candidates.size(), replied, skipped);
+      log.info(
+          "Bluesky reply summary: handle={}, fetched={}, candidates={}, replied={}, skipped={}",
+          handle,
+          feed.size(),
+          candidates.size(),
+          replied,
+          skipped);
     } catch (Exception e) {
       log.warn("Bluesky reply failed for handle={}: {}", user.getHandle(), e.getMessage(), e);
     }
   }
 
   private BlueskyApiClient.AuthResult authenticateBot() {
-    if (properties.getHandle() == null || properties.getHandle().isBlank()
-        || properties.getAppPassword() == null || properties.getAppPassword().isBlank()) {
+    if (properties.getHandle() == null
+        || properties.getHandle().isBlank()
+        || properties.getAppPassword() == null
+        || properties.getAppPassword().isBlank()) {
       return new BlueskyApiClient.AuthResult(false, null, null);
     }
     try {
@@ -184,16 +215,25 @@ public class BlueskyReplyService {
     if (post.indexedAt().isAfter(last.lastSeenIndexedAt())) {
       return true;
     }
-    return post.indexedAt().isEqual(last.lastSeenIndexedAt()) && !post.uri().equals(last.lastSeenPostUri());
+    return post.indexedAt().isEqual(last.lastSeenIndexedAt())
+        && !post.uri().equals(last.lastSeenPostUri());
   }
 
   private boolean mentionsRei(String text) {
-    if (text == null || text.isBlank() || properties.getHandle() == null || properties.getHandle().isBlank()) {
+    if (text == null
+        || text.isBlank()
+        || properties.getHandle() == null
+        || properties.getHandle().isBlank()) {
       return false;
     }
     String handle = properties.getHandle().toLowerCase();
     String shortHandle = handle.contains(".") ? handle.substring(0, handle.indexOf('.')) : handle;
-    String patternText = "(?i)(?<![\\p{Alnum}_])@(" + Pattern.quote(handle) + "|" + Pattern.quote(shortHandle) + ")(?![\\p{Alnum}_])";
+    String patternText =
+        "(?i)(?<![\\p{Alnum}_])@("
+            + Pattern.quote(handle)
+            + "|"
+            + Pattern.quote(shortHandle)
+            + ")(?![\\p{Alnum}_])";
     Pattern mentionPattern = Pattern.compile(patternText);
     Matcher matcher = mentionPattern.matcher(text);
     return matcher.find();
@@ -223,11 +263,11 @@ public class BlueskyReplyService {
         return "probability";
       }
       int maxRepliesPerDay = user.getMaxRepliesPerDay();
-      if (maxRepliesPerDay > 0 && repository.countToday(user.getHandle(), LocalDate.now(clock)) >= maxRepliesPerDay) {
+      if (maxRepliesPerDay > 0
+          && repository.countToday(user.getHandle(), LocalDate.now(clock)) >= maxRepliesPerDay) {
         return "daily_limit";
       }
     }
     return null;
   }
-
 }

@@ -10,5 +10,4 @@ public record InterestUpdate(
     String searchQuery,
     String summary,
     List<String> sourceUrls,
-    OffsetDateTime createdAt) {
-}
+    OffsetDateTime createdAt) {}

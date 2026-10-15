@@ -5,7 +5,6 @@ import java.time.OffsetDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
-
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
@@ -62,10 +61,11 @@ public class FeedFetcher {
     String title = text(channel, "title");
     String siteUrl = text(channel, "link");
     String description = text(channel, "description");
-    List<FetchedFeedItem> items = channel.children().stream()
-        .filter(element -> "item".equals(localName(element)))
-        .map(this::parseRssItem)
-        .toList();
+    List<FetchedFeedItem> items =
+        channel.children().stream()
+            .filter(element -> "item".equals(localName(element)))
+            .map(this::parseRssItem)
+            .toList();
     return new FetchedFeed(title, siteUrl, description, items);
   }
 
@@ -82,10 +82,11 @@ public class FeedFetcher {
     String title = text(root, "title");
     String siteUrl = atomLink(root);
     String description = firstNonBlank(text(root, "subtitle"), text(root, "description"));
-    List<FetchedFeedItem> items = root.children().stream()
-        .filter(element -> "entry".equals(localName(element)))
-        .map(this::parseAtomEntry)
-        .toList();
+    List<FetchedFeedItem> items =
+        root.children().stream()
+            .filter(element -> "entry".equals(localName(element)))
+            .map(this::parseAtomEntry)
+            .toList();
     return new FetchedFeed(title, siteUrl, description, items);
   }
 

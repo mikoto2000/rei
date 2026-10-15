@@ -8,5 +8,4 @@ package dev.mikoto2000.rei.event;
  * @param utilization 利用率（0.0〜1.0、任意）
  */
 public record ContextSnapshotUpdatedPayload(Long usedTokens, Long maxTokens, Double utilization)
-    implements AgentEventPayload {
-}
+    implements AgentEventPayload {}

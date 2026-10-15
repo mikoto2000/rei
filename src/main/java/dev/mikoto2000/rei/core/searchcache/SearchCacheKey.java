@@ -3,7 +3,7 @@ package dev.mikoto2000.rei.core.searchcache;
 /**
  * 検索キャッシュのキー。検索ツール名と正規化済み引数から決定的に作成する。
  *
- * @param tool              検索ツール名
+ * @param tool 検索ツール名
  * @param normalizedArguments 正規化済み引数（canonical な文字列表現）
  */
 public record SearchCacheKey(String tool, String normalizedArguments) {

@@ -3,21 +3,18 @@ package dev.mikoto2000.rei.core.command;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.mikoto2000.rei.config.ExternalConfigFileService;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Path;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
-import dev.mikoto2000.rei.config.ExternalConfigFileService;
-
 @org.junit.jupiter.api.Tag("integration")
 class ConfigCommandTest {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void pathPrintsExternalConfigFilePath() {
@@ -55,17 +52,19 @@ class ConfigCommandTest {
   }
 
   private CommandLine newCommand(ExternalConfigFileService service) {
-    return new CommandLine(new ConfigCommand(), new CommandLine.IFactory() {
-      @Override
-      public <K> K create(Class<K> cls) throws Exception {
-        if (cls == ConfigCommand.PathCommand.class) {
-          return cls.cast(new ConfigCommand.PathCommand(service));
-        }
-        if (cls == ConfigCommand.InitCommand.class) {
-          return cls.cast(new ConfigCommand.InitCommand(service));
-        }
-        return CommandLine.defaultFactory().create(cls);
-      }
-    });
+    return new CommandLine(
+        new ConfigCommand(),
+        new CommandLine.IFactory() {
+          @Override
+          public <K> K create(Class<K> cls) throws Exception {
+            if (cls == ConfigCommand.PathCommand.class) {
+              return cls.cast(new ConfigCommand.PathCommand(service));
+            }
+            if (cls == ConfigCommand.InitCommand.class) {
+              return cls.cast(new ConfigCommand.InitCommand(service));
+            }
+            return CommandLine.defaultFactory().create(cls);
+          }
+        });
   }
 }

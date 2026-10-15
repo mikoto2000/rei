@@ -1,27 +1,49 @@
 package dev.mikoto2000.rei.core.chat;
 
+import dev.mikoto2000.rei.core.execution.*;
+import dev.mikoto2000.rei.core.project.ProjectContext;
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.Executor;
 import java.util.function.*;
-import dev.mikoto2000.rei.core.execution.*;
-import dev.mikoto2000.rei.core.project.ProjectContext;
 
 /** Owns input mailboxes and active views; ProjectRunQueue owns all AGENT scheduling. */
 public final class ConversationInputRouter {
-  public enum Disposition { STARTED, QUEUED }
-  @FunctionalInterface public interface Runner {
+  public enum Disposition {
+    STARTED,
+    QUEUED
+  }
+
+  @FunctionalInterface
+  public interface Runner {
     void execute(AgentRunContext context, String prompt, UserInterventionQueue queue);
   }
-  @FunctionalInterface public interface Subscription extends AutoCloseable { void close(); }
+
+  @FunctionalInterface
+  public interface Subscription extends AutoCloseable {
+    void close();
+  }
+
   private dev.mikoto2000.rei.llm.capture.CaptureStore requestCaptures;
   private dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions;
-  @org.springframework.beans.factory.annotation.Autowired(required=false)
-  public void setAdmissions(dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions){this.admissions=admissions;}
-  @org.springframework.beans.factory.annotation.Autowired(required=false)
-  public void setRequestCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore captures){requestCaptures=captures;}
-  private final java.util.List<Consumer<AgentRunContext>> cleanupObservers=new java.util.concurrent.CopyOnWriteArrayList<>();
-  public void onCleanup(Consumer<AgentRunContext> observer){cleanupObservers.add(Objects.requireNonNull(observer));}
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setAdmissions(dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions) {
+    this.admissions = admissions;
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setRequestCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore captures) {
+    requestCaptures = captures;
+  }
+
+  private final java.util.List<Consumer<AgentRunContext>> cleanupObservers =
+      new java.util.concurrent.CopyOnWriteArrayList<>();
+
+  public void onCleanup(Consumer<AgentRunContext> observer) {
+    cleanupObservers.add(Objects.requireNonNull(observer));
+  }
+
   private final Executor executor;
   private final Runner runner;
   private final ProjectRunQueue projectQueue;
@@ -29,12 +51,15 @@ public final class ConversationInputRouter {
   private final Map<String, Slot> mailboxes = new HashMap<>();
   private final Map<String, Slot> agentSlots = new java.util.concurrent.ConcurrentHashMap<>();
   private final Map<String, ActiveRun> active = new java.util.concurrent.ConcurrentHashMap<>();
-  private final Map<String, ActiveExecution> background = new java.util.concurrent.ConcurrentHashMap<>();
+  private final Map<String, ActiveExecution> background =
+      new java.util.concurrent.ConcurrentHashMap<>();
   private final List<Runnable> listeners = new java.util.concurrent.CopyOnWriteArrayList<>();
-  private final Map<String, Runnable> beforeExecution = new java.util.concurrent.ConcurrentHashMap<>();
+  private final Map<String, Runnable> beforeExecution =
+      new java.util.concurrent.ConcurrentHashMap<>();
+
   /**
-   * Scoped presentation observer, captured before enqueue and run before lifecycle
-   * output. The observer must not reenter admission/selection APIs.
+   * Scoped presentation observer, captured before enqueue and run before lifecycle output. The
+   * observer must not reenter admission/selection APIs.
    */
   public Subscription beforeExecution(String runId, Runnable observer) {
     if (beforeExecution.putIfAbsent(runId, Objects.requireNonNull(observer)) != null)
@@ -44,46 +69,90 @@ public final class ConversationInputRouter {
 
   private record Slot(AgentRunContext context, String prompt, UserInterventionQueue queue) {}
 
-  public ConversationInputRouter(Executor executor, Runner runner) { this(executor, runner, (c, e) -> {}); }
-  public ConversationInputRouter(Executor executor, Runner runner,
+  public ConversationInputRouter(Executor executor, Runner runner) {
+    this(executor, runner, (c, e) -> {});
+  }
+
+  public ConversationInputRouter(
+      Executor executor,
+      Runner runner,
       BiConsumer<AgentRunContext, UserInterventionQueue.Entry> received) {
-    this.executor = executor; this.runner = runner; this.received = received;
+    this.executor = executor;
+    this.runner = runner;
+    this.received = received;
     this.projectQueue = new ProjectRunQueue(executor);
   }
+
   public Subscription onChange(Runnable listener) {
-    listeners.add(listener); return () -> listeners.remove(listener);
+    listeners.add(listener);
+    return () -> listeners.remove(listener);
   }
+
   public List<ActiveRun> activeRuns() {
-    return active.values().stream().sorted(Comparator.comparing(ActiveRun::startedAt).thenComparing(ActiveRun::runId)).toList();
+    return active.values().stream()
+        .sorted(Comparator.comparing(ActiveRun::startedAt).thenComparing(ActiveRun::runId))
+        .toList();
   }
+
   public List<ActiveExecution> activeExecutions() {
     var result = new ArrayList<>(background.values());
     active.values().forEach(run -> result.add(ActiveExecution.fromAgent(run)));
-    return result.stream().sorted(Comparator.comparing(ActiveExecution::startedAt).thenComparing(ActiveExecution::id)).toList();
+    return result.stream()
+        .sorted(Comparator.comparing(ActiveExecution::startedAt).thenComparing(ActiveExecution::id))
+        .toList();
   }
-  public void executeAuxiliary(Runnable work) { executor.execute(work); }
-  public ActiveExecution submitBackground(ProjectContext project, ExecutionType type, String summary,
-      Consumer<ActiveExecution> work) { return submitBackground(project, type, summary, e -> {}, work); }
-  public ActiveExecution submitBackground(ProjectContext project, ExecutionType type, String summary,
-      Consumer<ActiveExecution> registered, Consumer<ActiveExecution> work) {
-    if (type == ExecutionType.AGENT) throw new IllegalArgumentException("Agent input must use its intervention router");
+
+  public void executeAuxiliary(Runnable work) {
+    executor.execute(work);
+  }
+
+  public ActiveExecution submitBackground(
+      ProjectContext project, ExecutionType type, String summary, Consumer<ActiveExecution> work) {
+    return submitBackground(project, type, summary, e -> {}, work);
+  }
+
+  public ActiveExecution submitBackground(
+      ProjectContext project,
+      ExecutionType type,
+      String summary,
+      Consumer<ActiveExecution> registered,
+      Consumer<ActiveExecution> work) {
+    if (type == ExecutionType.AGENT)
+      throw new IllegalArgumentException("Agent input must use its intervention router");
     String conversation = dev.mikoto2000.rei.core.project.ProjectService.selectedShellSession();
     if (conversation == null || !conversation.startsWith("project:" + project.id() + ":")) {
       conversation = project.conversationId(dev.mikoto2000.rei.llm.ConversationIds.chat());
     }
-    var execution = new ActiveExecution(UUID.randomUUID().toString(), project.id(),
-        conversation, project.root(), type,
-        ActiveRun.summary(summary), java.time.Instant.now());
-    background.put(execution.id(), execution); changed();
+    var execution =
+        new ActiveExecution(
+            UUID.randomUUID().toString(),
+            project.id(),
+            conversation,
+            project.root(),
+            type,
+            ActiveRun.summary(summary),
+            java.time.Instant.now());
+    background.put(execution.id(), execution);
+    changed();
     try {
       registered.accept(execution);
-      executor.execute(() -> {
-        try (var scope = ExecutionScope.open(execution)) { work.accept(execution); }
-        finally { background.remove(execution.id()); changed(); }
-      });
-    } catch (RuntimeException error) { background.remove(execution.id()); changed(); throw error; }
+      executor.execute(
+          () -> {
+            try (var scope = ExecutionScope.open(execution)) {
+              work.accept(execution);
+            } finally {
+              background.remove(execution.id());
+              changed();
+            }
+          });
+    } catch (RuntimeException error) {
+      background.remove(execution.id());
+      changed();
+      throw error;
+    }
     return execution;
   }
+
   public Disposition submit(Path root, String conversation, String prompt) {
     Slot created;
     synchronized (mailboxes) {
@@ -95,94 +164,199 @@ public final class ConversationInputRouter {
     enqueue(created, Runnable::run);
     return Disposition.STARTED;
   }
+
   public Disposition submitNewRun(Path root, String conversation, String prompt) {
     return submit(cliContext(root, conversation), prompt);
   }
+
   public Disposition submit(AgentRunContext context, String prompt) {
     return submit(context, prompt, Runnable::run);
   }
-  /** Application lifecycle wraps the runner without reassigning its identity or enqueueing twice. */
+
+  /**
+   * Application lifecycle wraps the runner without reassigning its identity or enqueueing twice.
+   */
   public Disposition submit(AgentRunContext context, String prompt, Consumer<Runnable> lifecycle) {
     return enqueue(slot(context, prompt), lifecycle);
   }
-  public boolean containsRun(String projectId,String runId) {return projectQueue.containsRun(projectId,runId);}
-  public boolean offerIntervention(String projectId,String sessionId,String runId,String message) {
-    if(message==null || message.isBlank() || message.length()>16384)throw new IllegalArgumentException("Invalid guidance");
-    var slot=agentSlots.get(runId);
-    return slot!=null && Objects.equals(projectId,slot.context().projectId())
-        && Objects.equals(sessionId,slot.context().conversationId()) && slot.queue().offer(message);
+
+  public boolean containsRun(String projectId, String runId) {
+    return projectQueue.containsRun(projectId, runId);
   }
-  public boolean isQueued(String projectId,String runId) { return projectQueue.isQueued(projectId,runId); }
+
+  public boolean offerIntervention(
+      String projectId, String sessionId, String runId, String message) {
+    if (message == null || message.isBlank() || message.length() > 16384)
+      throw new IllegalArgumentException("Invalid guidance");
+    var slot = agentSlots.get(runId);
+    return slot != null
+        && Objects.equals(projectId, slot.context().projectId())
+        && Objects.equals(sessionId, slot.context().conversationId())
+        && slot.queue().offer(message);
+  }
+
+  public boolean isQueued(String projectId, String runId) {
+    return projectQueue.isQueued(projectId, runId);
+  }
+
   public boolean cancelQueued(String runId) {
     boolean removed = projectQueue.cancelQueued(runId);
     if (removed) {
-      if(requestCaptures!=null)requestCaptures.finish(runId,"CANCELLED");
+      if (requestCaptures != null) requestCaptures.finish(runId, "CANCELLED");
       var slot = agentSlots.remove(runId);
       if (slot != null) forget(slot);
     }
     return removed;
   }
-  /** Explicit application work shares the agent FIFO without entering the chat runner or mailbox. */
-  public void submitOperation(AgentRunContext context, Runnable operation, Consumer<Runnable> lifecycle) {
-    var slot=slot(context,"operation");
-    if(admissions!=null)admissions.reserveKnownSession(context);
+
+  /**
+   * Explicit application work shares the agent FIFO without entering the chat runner or mailbox.
+   */
+  public void submitOperation(
+      AgentRunContext context, Runnable operation, Consumer<Runnable> lifecycle) {
+    var slot = slot(context, "operation");
+    if (admissions != null) admissions.reserveKnownSession(context);
     try {
-      projectQueue.enqueue(context.projectId(),context.runId(),ProjectRunQueue.Access.valueOf(context.mode().name()),()->{
-        try {
-          if(admissions!=null)admissions.startExecution(context);
-          lifecycle.accept(operation);
-        } finally {forget(slot);}
-      },()->{active.put(context.runId(),ActiveRun.of(context,"operation"));changed();},
-        ()->{if(admissions!=null)admissions.transition(context.runId(),dev.mikoto2000.rei.application.run.RunStatus.CANCELLED);forget(slot);},
-        error->{
-          if(admissions!=null)admissions.transition(context.runId(),dev.mikoto2000.rei.application.run.RunStatus.FAILED);
-          try{lifecycle.accept(()->{throw error;});}finally{forget(slot);}
-        },context.requestSource()==AgentRunContext.RequestSource.MCP);
-    } catch(RuntimeException error){if(admissions!=null)admissions.transition(context.runId(),dev.mikoto2000.rei.application.run.RunStatus.FAILED);forget(slot);throw error;}
+      projectQueue.enqueue(
+          context.projectId(),
+          context.runId(),
+          ProjectRunQueue.Access.valueOf(context.mode().name()),
+          () -> {
+            try {
+              if (admissions != null) admissions.startExecution(context);
+              lifecycle.accept(operation);
+            } finally {
+              forget(slot);
+            }
+          },
+          () -> {
+            active.put(context.runId(), ActiveRun.of(context, "operation"));
+            changed();
+          },
+          () -> {
+            if (admissions != null)
+              admissions.transition(
+                  context.runId(), dev.mikoto2000.rei.application.run.RunStatus.CANCELLED);
+            forget(slot);
+          },
+          error -> {
+            if (admissions != null)
+              admissions.transition(
+                  context.runId(), dev.mikoto2000.rei.application.run.RunStatus.FAILED);
+            try {
+              lifecycle.accept(
+                  () -> {
+                    throw error;
+                  });
+            } finally {
+              forget(slot);
+            }
+          },
+          context.requestSource() == AgentRunContext.RequestSource.MCP);
+    } catch (RuntimeException error) {
+      if (admissions != null)
+        admissions.transition(context.runId(), dev.mikoto2000.rei.application.run.RunStatus.FAILED);
+      forget(slot);
+      throw error;
+    }
   }
+
   private AgentRunContext cliContext(Path root, String conversation) {
-    return new AgentRunContext(UUID.randomUUID().toString(), conversation, root,
+    return new AgentRunContext(
+        UUID.randomUUID().toString(),
+        conversation,
+        root,
         dev.mikoto2000.rei.core.project.ProjectStorage.projectId(conversation));
   }
+
   private Slot slot(AgentRunContext context, String prompt) {
-    return new Slot(context, prompt, new UserInterventionQueue(entry -> received.accept(context, entry)));
+    return new Slot(
+        context, prompt, new UserInterventionQueue(entry -> received.accept(context, entry)));
   }
+
   private Disposition enqueue(Slot slot, Consumer<Runnable> lifecycle) {
     var context = slot.context();
-    if(admissions!=null)admissions.reserveKnownSession(context);
+    if (admissions != null) admissions.reserveKnownSession(context);
     var admitted = beforeExecution.getOrDefault(context.runId(), () -> {});
     agentSlots.put(context.runId(), slot);
-    String key = context.projectId() == null ? context.projectRoot().toString() : context.projectId();
+    String key =
+        context.projectId() == null ? context.projectRoot().toString() : context.projectId();
     try {
-      boolean first = projectQueue.enqueue(key, context.runId(), ProjectRunQueue.Access.valueOf(context.mode().name()), () -> {
-        try {
-          if(admissions!=null)admissions.startExecution(context);
-          admitted.run();
-          lifecycle.accept(() -> runner.execute(context, slot.prompt(), slot.queue()));
-        }
-        finally { agentSlots.remove(context.runId()); forget(slot); }
-      }, () -> { active.put(context.runId(), ActiveRun.of(context, slot.prompt())); changed(); },
-          () -> { if(admissions!=null)admissions.transition(context.runId(),dev.mikoto2000.rei.application.run.RunStatus.CANCELLED);agentSlots.remove(context.runId()); forget(slot); },
-          error -> {
-            if(admissions!=null)admissions.transition(context.runId(),dev.mikoto2000.rei.application.run.RunStatus.FAILED);
-            if(requestCaptures!=null)requestCaptures.startFailed(context.runId());
-            try { lifecycle.accept(() -> { throw error; }); }
-            finally { agentSlots.remove(context.runId()); forget(slot); }
-          },context.requestSource()==AgentRunContext.RequestSource.MCP);
+      boolean first =
+          projectQueue.enqueue(
+              key,
+              context.runId(),
+              ProjectRunQueue.Access.valueOf(context.mode().name()),
+              () -> {
+                try {
+                  if (admissions != null) admissions.startExecution(context);
+                  admitted.run();
+                  lifecycle.accept(() -> runner.execute(context, slot.prompt(), slot.queue()));
+                } finally {
+                  agentSlots.remove(context.runId());
+                  forget(slot);
+                }
+              },
+              () -> {
+                active.put(context.runId(), ActiveRun.of(context, slot.prompt()));
+                changed();
+              },
+              () -> {
+                if (admissions != null)
+                  admissions.transition(
+                      context.runId(), dev.mikoto2000.rei.application.run.RunStatus.CANCELLED);
+                agentSlots.remove(context.runId());
+                forget(slot);
+              },
+              error -> {
+                if (admissions != null)
+                  admissions.transition(
+                      context.runId(), dev.mikoto2000.rei.application.run.RunStatus.FAILED);
+                if (requestCaptures != null) requestCaptures.startFailed(context.runId());
+                try {
+                  lifecycle.accept(
+                      () -> {
+                        throw error;
+                      });
+                } finally {
+                  agentSlots.remove(context.runId());
+                  forget(slot);
+                }
+              },
+              context.requestSource() == AgentRunContext.RequestSource.MCP);
       return first ? Disposition.STARTED : Disposition.QUEUED;
-    } catch (RuntimeException error) { if(admissions!=null)admissions.transition(context.runId(),dev.mikoto2000.rei.application.run.RunStatus.FAILED);agentSlots.remove(context.runId()); forget(slot); throw error; }
+    } catch (RuntimeException error) {
+      if (admissions != null)
+        admissions.transition(context.runId(), dev.mikoto2000.rei.application.run.RunStatus.FAILED);
+      agentSlots.remove(context.runId());
+      forget(slot);
+      throw error;
+    }
   }
+
   private void forget(Slot slot) {
-    if(admissions!=null)admissions.release(slot.context().runId());
+    if (admissions != null) admissions.release(slot.context().runId());
     active.remove(slot.context().runId());
-    synchronized (mailboxes) { mailboxes.remove(slot.context().conversationId(), slot); }
-    for(var observer:cleanupObservers)try{observer.accept(slot.context());}catch(RuntimeException failure){org.slf4j.LoggerFactory.getLogger(ConversationInputRouter.class).warn("Run cleanup observer unavailable: {}",failure.getClass().getSimpleName());}
+    synchronized (mailboxes) {
+      mailboxes.remove(slot.context().conversationId(), slot);
+    }
+    for (var observer : cleanupObservers)
+      try {
+        observer.accept(slot.context());
+      } catch (RuntimeException failure) {
+        org.slf4j.LoggerFactory.getLogger(ConversationInputRouter.class)
+            .warn("Run cleanup observer unavailable: {}", failure.getClass().getSimpleName());
+      }
     changed();
   }
+
   private void changed() {
-    for (var listener : listeners) try { listener.run(); }
-    catch (RuntimeException error) {
-      org.slf4j.LoggerFactory.getLogger(ConversationInputRouter.class).warn("Active run display listener failed", error);
-    }
+    for (var listener : listeners)
+      try {
+        listener.run();
+      } catch (RuntimeException error) {
+        org.slf4j.LoggerFactory.getLogger(ConversationInputRouter.class)
+            .warn("Active run display listener failed", error);
+      }
   }
 }

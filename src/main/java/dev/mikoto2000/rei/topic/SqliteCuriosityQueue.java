@@ -3,9 +3,7 @@ package dev.mikoto2000.rei.topic;
 import java.sql.ResultSet;
 import java.time.Instant;
 import java.util.List;
-
 import javax.sql.DataSource;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 public class SqliteCuriosityQueue implements CuriosityQueue {
@@ -18,7 +16,9 @@ public class SqliteCuriosityQueue implements CuriosityQueue {
 
   @Override
   public synchronized void add(CuriosityItem item) {
-    jdbcClient.sql("""
+    jdbcClient
+        .sql(
+            """
         INSERT OR IGNORE INTO curiosity_items
           (id, question, normalized_question, reason, source, priority, created_at, expires_at, status)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
@@ -41,14 +41,18 @@ public class SqliteCuriosityQueue implements CuriosityQueue {
     int limit = Math.max(0, query.limit());
     if (limit == 0) return List.of();
     Instant now = query.now();
-    jdbcClient.sql("""
+    jdbcClient
+        .sql(
+            """
         UPDATE curiosity_items
         SET status = 'EXPIRED'
         WHERE status = 'PENDING' AND expires_at IS NOT NULL AND expires_at <= ?
         """)
         .param(toDbTime(now))
         .update();
-    return jdbcClient.sql("""
+    return jdbcClient
+        .sql(
+            """
         SELECT id, question, reason, source, priority, created_at, expires_at, status
         FROM curiosity_items
         WHERE status = 'PENDING'
@@ -73,7 +77,8 @@ public class SqliteCuriosityQueue implements CuriosityQueue {
 
   private void updateStatus(String id, CuriosityStatus status) {
     if (id == null || id.isBlank()) return;
-    jdbcClient.sql("UPDATE curiosity_items SET status = ? WHERE id = ?")
+    jdbcClient
+        .sql("UPDATE curiosity_items SET status = ? WHERE id = ?")
         .params(status.name(), id)
         .update();
   }
@@ -91,7 +96,9 @@ public class SqliteCuriosityQueue implements CuriosityQueue {
   }
 
   private void initializeSchema() {
-    jdbcClient.sql("""
+    jdbcClient
+        .sql(
+            """
         CREATE TABLE IF NOT EXISTS curiosity_items (
           id TEXT PRIMARY KEY,
           question TEXT NOT NULL,
@@ -103,23 +110,32 @@ public class SqliteCuriosityQueue implements CuriosityQueue {
           expires_at TEXT,
           status TEXT NOT NULL
         )
-        """).update();
+        """)
+        .update();
     addColumnIfMissing("curiosity_items", "normalized_question", "TEXT");
-    jdbcClient.sql("""
+    jdbcClient
+        .sql(
+            """
         CREATE UNIQUE INDEX IF NOT EXISTS idx_curiosity_items_normalized_question
         ON curiosity_items(normalized_question)
-        """).update();
-    jdbcClient.sql("""
+        """)
+        .update();
+    jdbcClient
+        .sql(
+            """
         CREATE INDEX IF NOT EXISTS idx_curiosity_items_status_priority
         ON curiosity_items(status, priority DESC, created_at ASC)
-        """).update();
+        """)
+        .update();
   }
 
   private void addColumnIfMissing(String table, String column, String type) {
-    boolean exists = jdbcClient.sql("PRAGMA table_info(" + table + ")")
-        .query((rs, rowNum) -> rs.getString("name"))
-        .list()
-        .contains(column);
+    boolean exists =
+        jdbcClient
+            .sql("PRAGMA table_info(" + table + ")")
+            .query((rs, rowNum) -> rs.getString("name"))
+            .list()
+            .contains(column);
     if (!exists) {
       jdbcClient.sql("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type).update();
     }

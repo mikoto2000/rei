@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -14,15 +13,16 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 @org.junit.jupiter.api.Tag("integration")
 class BlueskyReplyStateRepositoryTest {
 
-  @TempDir
-  java.nio.file.Path tempDir;
+  @TempDir java.nio.file.Path tempDir;
 
   private BlueskyReplyStateRepository repository;
 
   @BeforeEach
   void setUp() {
-    repository = new BlueskyReplyStateRepository(
-        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("bluesky-reply-state.db")));
+    repository =
+        new BlueskyReplyStateRepository(
+            new DriverManagerDataSource(
+                "jdbc:sqlite:" + tempDir.resolve("bluesky-reply-state.db")));
   }
 
   @Test
@@ -58,15 +58,28 @@ class BlueskyReplyStateRepositoryTest {
 
   @Test
   void claimIsExclusiveAcrossRepositoryInstances() throws Exception {
-    var other = new BlueskyReplyStateRepository(
-        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("bluesky-reply-state.db")));
+    var other =
+        new BlueskyReplyStateRepository(
+            new DriverManagerDataSource(
+                "jdbc:sqlite:" + tempDir.resolve("bluesky-reply-state.db")));
     var start = new java.util.concurrent.CountDownLatch(1);
     try (var executor = java.util.concurrent.Executors.newFixedThreadPool(2)) {
-      var first = executor.submit(() -> { start.await(); return repository.tryClaimReply("at://post/claim"); });
-      var second = executor.submit(() -> { start.await(); return other.tryClaimReply("at://post/claim"); });
+      var first =
+          executor.submit(
+              () -> {
+                start.await();
+                return repository.tryClaimReply("at://post/claim");
+              });
+      var second =
+          executor.submit(
+              () -> {
+                start.await();
+                return other.tryClaimReply("at://post/claim");
+              });
       start.countDown();
-      assertTrue(first.get(5, java.util.concurrent.TimeUnit.SECONDS)
-          ^ second.get(5, java.util.concurrent.TimeUnit.SECONDS));
+      assertTrue(
+          first.get(5, java.util.concurrent.TimeUnit.SECONDS)
+              ^ second.get(5, java.util.concurrent.TimeUnit.SECONDS));
     }
   }
 

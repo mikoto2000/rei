@@ -3,10 +3,7 @@ package dev.mikoto2000.rei.vectordocument;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "rei.vector-document")
-public record VectorDocumentProperties(
-    int chunkSize,
-    int chunkOverlap
-) {
+public record VectorDocumentProperties(int chunkSize, int chunkOverlap) {
 
   public VectorDocumentProperties {
     if (chunkSize <= 0) {

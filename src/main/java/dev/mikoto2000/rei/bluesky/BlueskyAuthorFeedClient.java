@@ -1,10 +1,8 @@
 package dev.mikoto2000.rei.bluesky;
 
 import java.util.List;
-
-import org.springframework.stereotype.Component;
-
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor

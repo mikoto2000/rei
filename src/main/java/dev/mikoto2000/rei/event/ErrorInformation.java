@@ -3,8 +3,7 @@ package dev.mikoto2000.rei.event;
 /**
  * エラー情報。
  *
- * <p>Throwable 自体を保持せず、イベントとして必要な情報だけを抽出する。
- * スタックトレース全文は通常の logging に任せる。</p>
+ * <p>Throwable 自体を保持せず、イベントとして必要な情報だけを抽出する。 スタックトレース全文は通常の logging に任せる。
  *
  * @param errorType エラーの種別（例外クラス名など）
  * @param message エラーメッセージ

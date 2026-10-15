@@ -8,5 +8,4 @@ public record TopicExecutionContext(
     Instant lastUserActivityAt,
     Instant lastAgentActivityAt,
     boolean agentBusy,
-    TopicTrigger trigger) {
-}
+    TopicTrigger trigger) {}

@@ -3,16 +3,14 @@ package dev.mikoto2000.rei.summarize.command;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintWriter;
-import java.net.URI;
-
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-
 import dev.mikoto2000.rei.summarize.SummaryResult;
 import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintWriter;
+import java.net.URI;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import picocli.CommandLine;
 
 class SummarizeCommandTest {

@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import java.io.PrintWriter;
-
 import org.jline.reader.LineReader;
 
 /** JLine-aware output that preserves an input line being edited. */
@@ -10,8 +9,13 @@ public final class JLineShellEventOutput implements ShellEventOutput {
   private final PrintWriter writer;
   private final StringBuilder pending = new StringBuilder();
   private dev.mikoto2000.rei.core.completion.ApprovalActionMenu approvalMenu;
-  public void setApprovalMenu(dev.mikoto2000.rei.core.completion.ApprovalActionMenu menu) { approvalMenu = menu; }
-  @Override public void approvalActions(String project, String session, String id) {
+
+  public void setApprovalMenu(dev.mikoto2000.rei.core.completion.ApprovalActionMenu menu) {
+    approvalMenu = menu;
+  }
+
+  @Override
+  public void approvalActions(String project, String session, String id) {
     if (approvalMenu != null) approvalMenu.offer(project, session, id);
   }
 
@@ -19,17 +23,23 @@ public final class JLineShellEventOutput implements ShellEventOutput {
     this.reader = reader;
     this.writer = reader.getTerminal().writer();
   }
-  @Override public synchronized void approvalRequired(String message) {
+
+  @Override
+  public synchronized void approvalRequired(String message) {
     if (dev.mikoto2000.rei.core.completion.ApprovalDisplayState.interactive(reader.getTerminal()))
       printBlock(dev.mikoto2000.rei.core.completion.ApprovalNotice.format(message));
     else {
       // Do not ask JLine to redraw a forced terminal type when actual streams are redirected.
       flushPendingToWriter();
-      writer.println(dev.mikoto2000.rei.core.completion.ApprovalNotice.text(message)); writer.flush();
+      writer.println(dev.mikoto2000.rei.core.completion.ApprovalNotice.text(message));
+      writer.flush();
     }
   }
 
-  /** Print one styled, newline-delimited block without interleaving stream chunks or damaging the prompt. */
+  /**
+   * Print one styled, newline-delimited block without interleaving stream chunks or damaging the
+   * prompt.
+   */
   public synchronized void printBlock(org.jline.utils.AttributedString block) {
     // Let JLine decide whether a prompt is active under its own lock, avoiding a
     // readLine-start race. Do not count ANSI bytes as columns in flushCompleteLines().
@@ -77,10 +87,16 @@ public final class JLineShellEventOutput implements ShellEventOutput {
       int end = newline < 0 ? pending.length() : newline;
       int columns = 0;
       int wrap = -1;
-      for (int offset = 0; offset < end;) {
+      for (int offset = 0; offset < end; ) {
         int codePoint = Character.codePointAt(pending, offset);
-        int cells = codePoint == '\t' ? 8 - columns % 8 : Math.max(0, org.jline.utils.WCWidth.wcwidth(codePoint));
-        if (columns + cells > width && offset > 0) { wrap = offset; break; }
+        int cells =
+            codePoint == '\t'
+                ? 8 - columns % 8
+                : Math.max(0, org.jline.utils.WCWidth.wcwidth(codePoint));
+        if (columns + cells > width && offset > 0) {
+          wrap = offset;
+          break;
+        }
         columns += cells;
         offset += Character.charCount(codePoint);
       }

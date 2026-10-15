@@ -4,32 +4,42 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
-import java.util.List;
-
 import org.junit.jupiter.api.Test;
 
-import dev.mikoto2000.rei.event.AgentEvent;
-import dev.mikoto2000.rei.event.AgentEventFactory;
-
 class TopicGeneratorProjectionTest {
-  private final AgentEventFactory events = new AgentEventFactory(
-      Clock.fixed(Instant.parse("2026-09-02T00:00:00Z"), ZoneOffset.UTC));
+  private final AgentEventFactory events =
+      new AgentEventFactory(Clock.fixed(Instant.parse("2026-09-02T00:00:00Z"), ZoneOffset.UTC));
 
   @Test
   void rebuildsTopicGeneratorStateFromLifecycleEvents() {
     TopicGeneratorProjection projection = new TopicGeneratorProjection();
     TopicScoreBreakdown score = new TopicScoreBreakdown(0.2, 0.2, 0.3, 0.2, 0, 0, 0.9);
 
-    apply(projection,
+    apply(
+        projection,
         events.topicGenerationStarted("run", "tg-1", "agent-run"),
-        events.topicCandidateGenerated("run", "tg-1", "topic-1", "FOLLOW_UP", "CONVERSATION",
-            "topic", "reason", 1d, 1d, 1d, 0d, 1d),
+        events.topicCandidateGenerated(
+            "run",
+            "tg-1",
+            "topic-1",
+            "FOLLOW_UP",
+            "CONVERSATION",
+            "topic",
+            "reason",
+            1d,
+            1d,
+            1d,
+            0d,
+            1d),
         events.topicCandidateScored("run", "tg-1", "topic-1", score),
         events.topicSelected("run", "tg-1", "topic-1", 0.9, 1),
-        events.topicSpoken("run", "tg-1", "topic-1", "m1", Instant.parse("2026-09-02T00:00:00Z"), "message"),
+        events.topicSpoken(
+            "run", "tg-1", "topic-1", "m1", Instant.parse("2026-09-02T00:00:00Z"), "message"),
         events.topicGenerationCompleted("run", "tg-1", 1, 1, 0, "topic-1", true, 12));
 
     TopicGeneratorState state = projection.currentState();
@@ -46,11 +56,24 @@ class TopicGeneratorProjectionTest {
   void storesRejectedAndSkippedStateSeparately() {
     TopicGeneratorProjection projection = new TopicGeneratorProjection();
 
-    apply(projection,
+    apply(
+        projection,
         events.topicGenerationStarted("run", "tg-1", "agent-run"),
-        events.topicCandidateGenerated("run", "tg-1", "topic-1", "FOLLOW_UP", "CONVERSATION",
-            "topic", "reason", 1d, 1d, 1d, 0d, 1d),
-        events.topicCandidateRejected("run", "tg-1", "topic-1", TopicRejectionReason.LOW_SCORE, 0.4),
+        events.topicCandidateGenerated(
+            "run",
+            "tg-1",
+            "topic-1",
+            "FOLLOW_UP",
+            "CONVERSATION",
+            "topic",
+            "reason",
+            1d,
+            1d,
+            1d,
+            0d,
+            1d),
+        events.topicCandidateRejected(
+            "run", "tg-1", "topic-1", TopicRejectionReason.LOW_SCORE, 0.4),
         events.topicSpeakSkipped("run", "tg-1", null, TopicSpeakSkipReason.NO_CANDIDATE, null),
         events.topicGenerationCompleted("run", "tg-1", 1, 1, 1, null, false, 12));
 
@@ -65,11 +88,24 @@ class TopicGeneratorProjectionTest {
   @Test
   void resetsCandidatesOnNewGenerationButKeepsLastSpokenAt() {
     TopicGeneratorProjection projection = new TopicGeneratorProjection();
-    apply(projection,
+    apply(
+        projection,
         events.topicGenerationStarted("run", "tg-1", "agent-run"),
-        events.topicCandidateGenerated("run", "tg-1", "topic-1", "FOLLOW_UP", "CONVERSATION",
-            "topic", "reason", 1d, 1d, 1d, 0d, 1d),
-        events.topicSpoken("run", "tg-1", "topic-1", "m1", Instant.parse("2026-09-02T00:00:00Z"), "message"),
+        events.topicCandidateGenerated(
+            "run",
+            "tg-1",
+            "topic-1",
+            "FOLLOW_UP",
+            "CONVERSATION",
+            "topic",
+            "reason",
+            1d,
+            1d,
+            1d,
+            0d,
+            1d),
+        events.topicSpoken(
+            "run", "tg-1", "topic-1", "m1", Instant.parse("2026-09-02T00:00:00Z"), "message"),
         events.topicGenerationStarted("run", "tg-2", "agent-run"));
 
     TopicGeneratorState state = projection.currentState();
@@ -96,7 +132,8 @@ class TopicGeneratorProjectionTest {
   void ignoresUnknownAndStaleEvents() {
     TopicGeneratorProjection projection = new TopicGeneratorProjection();
     AgentEvent started = withSequence(events.topicGenerationStarted("run", "tg-1", "agent-run"), 2);
-    AgentEvent stale = withSequence(events.topicGenerationStarted("run", "tg-stale", "agent-run"), 1);
+    AgentEvent stale =
+        withSequence(events.topicGenerationStarted("run", "tg-stale", "agent-run"), 1);
 
     projection.onEvent(events.messageStarted("m1", "assistant"));
     projection.onEvent(started);
@@ -113,7 +150,17 @@ class TopicGeneratorProjectionTest {
   }
 
   private AgentEvent withSequence(AgentEvent event, long sequence) {
-    return new AgentEvent(event.id(), sequence, event.timestamp(), event.type(), event.version(), event.sessionId(),
-        event.turnId(), event.runId(), event.correlationId(), event.parentEventId(), event.payload());
+    return new AgentEvent(
+        event.id(),
+        sequence,
+        event.timestamp(),
+        event.type(),
+        event.version(),
+        event.sessionId(),
+        event.turnId(),
+        event.runId(),
+        event.correlationId(),
+        event.parentEventId(),
+        event.payload());
   }
 }

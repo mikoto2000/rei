@@ -6,9 +6,7 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
-
 import javax.sql.DataSource;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
@@ -27,11 +25,18 @@ public class ReminderService {
   }
 
   public Reminder addBefore(String message, OffsetDateTime targetAt, int minutesBefore) {
-    return insert(message, ReminderType.BEFORE_TARGET, targetAt.minusMinutes(minutesBefore), targetAt, minutesBefore);
+    return insert(
+        message,
+        ReminderType.BEFORE_TARGET,
+        targetAt.minusMinutes(minutesBefore),
+        targetAt,
+        minutesBefore);
   }
 
   public List<Reminder> listActive() {
-    return jdbcClient.sql("""
+    return jdbcClient
+        .sql(
+            """
         SELECT id, message, type, remind_at, remind_at_epoch, target_at, minutes_before, notified, created_at, notified_at
         FROM reminders
         WHERE notified = 0
@@ -42,7 +47,9 @@ public class ReminderService {
   }
 
   public List<Reminder> findDue(OffsetDateTime now) {
-    return jdbcClient.sql("""
+    return jdbcClient
+        .sql(
+            """
         SELECT id, message, type, remind_at, remind_at_epoch, target_at, minutes_before, notified, created_at, notified_at
         FROM reminders
         WHERE notified = 0 AND remind_at_epoch <= ?
@@ -54,7 +61,9 @@ public class ReminderService {
   }
 
   public Reminder markNotified(long id, OffsetDateTime notifiedAt) {
-    jdbcClient.sql("""
+    jdbcClient
+        .sql(
+            """
         UPDATE reminders
         SET notified = 1, notified_at = ?
         WHERE id = ?
@@ -66,35 +75,44 @@ public class ReminderService {
   }
 
   public void delete(long id) {
-    jdbcClient.sql("DELETE FROM reminders WHERE id = ?")
-        .param(id)
-        .update();
+    jdbcClient.sql("DELETE FROM reminders WHERE id = ?").param(id).update();
   }
 
-  private Reminder insert(String message, ReminderType type, OffsetDateTime remindAt, OffsetDateTime targetAt, Integer minutesBefore) {
+  private Reminder insert(
+      String message,
+      ReminderType type,
+      OffsetDateTime remindAt,
+      OffsetDateTime targetAt,
+      Integer minutesBefore) {
     OffsetDateTime createdAt = OffsetDateTime.now(ZoneOffset.UTC);
-    Long id = jdbcClient.sql("""
+    Long id =
+        jdbcClient
+            .sql(
+                """
         INSERT INTO reminders (message, type, remind_at, remind_at_epoch, target_at, minutes_before, notified, created_at, notified_at)
         VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)
         RETURNING id
         """)
-        .params(
-            message,
-            type.name(),
-            remindAt.toString(),
-            toEpochMillis(remindAt),
-            targetAt == null ? null : targetAt.toString(),
-            minutesBefore,
-            createdAt.toString(),
-            null)
-        .query(Long.class)
-        .single();
+            .params(
+                message,
+                type.name(),
+                remindAt.toString(),
+                toEpochMillis(remindAt),
+                targetAt == null ? null : targetAt.toString(),
+                minutesBefore,
+                createdAt.toString(),
+                null)
+            .query(Long.class)
+            .single();
 
-    return new Reminder(id, message, type, remindAt, targetAt, minutesBefore, false, createdAt, null);
+    return new Reminder(
+        id, message, type, remindAt, targetAt, minutesBefore, false, createdAt, null);
   }
 
   public Reminder findById(long id) {
-    return jdbcClient.sql("""
+    return jdbcClient
+        .sql(
+            """
         SELECT id, message, type, remind_at, remind_at_epoch, target_at, minutes_before, notified, created_at, notified_at
         FROM reminders
         WHERE id = ?
@@ -122,8 +140,10 @@ public class ReminderService {
   }
 
   private void initializeSchema(DataSource dataSource) {
-    try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
-      statement.executeUpdate("""
+    try (var connection = dataSource.getConnection();
+        var statement = connection.createStatement()) {
+      statement.executeUpdate(
+          """
           CREATE TABLE IF NOT EXISTS reminders (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             message TEXT NOT NULL,
@@ -156,16 +176,20 @@ public class ReminderService {
 
   private void backfillEpoch(java.sql.Statement statement) throws SQLException {
     List<ReminderEpochUpdate> updates = new ArrayList<>();
-    try (var resultSet = statement.executeQuery("SELECT id, remind_at FROM reminders WHERE remind_at_epoch IS NULL")) {
+    try (var resultSet =
+        statement.executeQuery(
+            "SELECT id, remind_at FROM reminders WHERE remind_at_epoch IS NULL")) {
       while (resultSet.next()) {
-        updates.add(new ReminderEpochUpdate(
-            resultSet.getLong("id"),
-            toEpochMillis(OffsetDateTime.parse(resultSet.getString("remind_at")))));
+        updates.add(
+            new ReminderEpochUpdate(
+                resultSet.getLong("id"),
+                toEpochMillis(OffsetDateTime.parse(resultSet.getString("remind_at")))));
       }
     }
 
     for (ReminderEpochUpdate update : updates) {
-      jdbcClient.sql("UPDATE reminders SET remind_at_epoch = ? WHERE id = ?")
+      jdbcClient
+          .sql("UPDATE reminders SET remind_at_epoch = ? WHERE id = ?")
           .params(update.remindAtEpoch(), update.id())
           .update();
     }
@@ -175,6 +199,5 @@ public class ReminderService {
     return dateTime.toInstant().toEpochMilli();
   }
 
-  private record ReminderEpochUpdate(long id, long remindAtEpoch) {
-  }
+  private record ReminderEpochUpdate(long id, long remindAtEpoch) {}
 }

@@ -3,7 +3,7 @@ package dev.mikoto2000.rei.event;
 /**
  * Agent Event の種別。
  *
- * <p>文字列の直書きを各所に散らさず、型安全に扱えるようにするための enum。</p>
+ * <p>文字列の直書きを各所に散らさず、型安全に扱えるようにするための enum。
  */
 public enum AgentEventType {
   GITHUB_PR_UPDATED("github.pr.updated"),

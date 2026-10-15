@@ -9,12 +9,17 @@ public final class ProjectClient {
   final AtomicReference<Path> selection;
   String sessionId;
   long epoch;
-  public synchronized long selectionEpoch(){return epoch;}
+
+  public synchronized long selectionEpoch() {
+    return epoch;
+  }
 
   ProjectClient(ProjectService service, Path startup) {
     this.service = service;
     this.selection = new AtomicReference<>(startup);
   }
 
-  public ProjectClientScope open() { return ProjectClientScope.open(this); }
+  public ProjectClientScope open() {
+    return ProjectClientScope.open(this);
+  }
 }

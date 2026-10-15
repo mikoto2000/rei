@@ -9,6 +9,8 @@ public interface RetrievalCandidates {
   default List<Document> bm25Search(SearchRequest request) {
     throw new UnsupportedOperationException("BM25 retrieval is not supported by this backend");
   }
+
   List<Document> denseSearch(SearchRequest request);
+
   List<Document> lexicalSearch(SearchRequest request);
 }

@@ -1,11 +1,10 @@
 package dev.mikoto2000.rei.image;
 
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.stereotype.Component;
-
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.stereotype.Component;
 
 @Component
 public class LlmImagePromptEnhancer implements ImagePromptEnhancer {
@@ -13,17 +12,25 @@ public class LlmImagePromptEnhancer implements ImagePromptEnhancer {
   private final LlmModelProvider modelProvider;
   private final ModelHolderService modelHolderService;
 
-  public LlmImagePromptEnhancer(LlmModelProvider modelProvider, ModelHolderService modelHolderService) {
+  public LlmImagePromptEnhancer(
+      LlmModelProvider modelProvider, ModelHolderService modelHolderService) {
     this.modelProvider = modelProvider;
     this.modelHolderService = modelHolderService;
   }
 
   @Override
   public String enhance(String userRequest) {
-    Prompt prompt = new Prompt(
-        buildPrompt(userRequest),
-        modelProvider.chatOptions(LlmFeature.IMAGE_PROMPT, modelHolderService.get()));
-    String content = modelProvider.chatModel(LlmFeature.IMAGE_PROMPT).call(prompt).getResult().getOutput().getText();
+    Prompt prompt =
+        new Prompt(
+            buildPrompt(userRequest),
+            modelProvider.chatOptions(LlmFeature.IMAGE_PROMPT, modelHolderService.get()));
+    String content =
+        modelProvider
+            .chatModel(LlmFeature.IMAGE_PROMPT)
+            .call(prompt)
+            .getResult()
+            .getOutput()
+            .getText();
     if (content == null || content.isBlank()) {
       throw new IllegalStateException("画像生成プロンプト生成結果が空です");
     }
@@ -45,6 +52,7 @@ public class LlmImagePromptEnhancer implements ImagePromptEnhancer {
 
         User request:
         %s
-        """.formatted(userRequest);
+        """
+        .formatted(userRequest);
   }
 }

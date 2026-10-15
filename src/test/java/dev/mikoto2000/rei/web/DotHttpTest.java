@@ -17,8 +17,11 @@ class DotHttpTest {
   @TempDir Path root;
 
   @Configuration(proxyBeanMethods = false)
-  @Import({WebApiIntegrationTest.Config.class, DotController.class,
-      dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver.class})
+  @Import({
+    WebApiIntegrationTest.Config.class,
+    DotController.class,
+    dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver.class
+  })
   static class Config {
     @Bean
     DotDelegationService dots() {

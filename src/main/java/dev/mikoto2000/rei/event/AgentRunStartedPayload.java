@@ -8,5 +8,4 @@ package dev.mikoto2000.rei.event;
  * @param parentRunId 親 Run の ID（任意）
  */
 public record AgentRunStartedPayload(String runId, String reason, String parentRunId)
-    implements AgentEventPayload {
-}
+    implements AgentEventPayload {}

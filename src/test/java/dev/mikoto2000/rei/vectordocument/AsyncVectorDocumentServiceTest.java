@@ -1,7 +1,7 @@
 package dev.mikoto2000.rei.vectordocument;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -13,23 +13,33 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 class AsyncVectorDocumentServiceTest {
-  @Test void ingestionReportsCompletionAndFailureToItsOwnWriterWithoutGlobalOutput()throws Exception {
-    var vectors=Mockito.mock(VectorDocumentService.class);var service=new AsyncVectorDocumentService(vectors);var lines=new java.util.ArrayList<String>();
-    when(vectors.add(List.of("paper.md"))).thenReturn(List.of(new VectorDocumentEntry("doc","paper.md",2,"2026-10-11T00:00:00Z")));
-    service.addAndReport(List.of("paper.md"),lines::add);assertTrue(lines.getFirst().contains("追加完了: doc"));assertFalse(service.hasActiveEmbeddings());
-    doThrow(new IOException("failure")).when(vectors).add(List.of("missing.md"));service.addAndReport(List.of("missing.md"),lines::add);assertTrue(lines.getLast().contains("追加失敗: missing.md"));assertFalse(service.hasActiveEmbeddings());
+  @Test
+  void ingestionReportsCompletionAndFailureToItsOwnWriterWithoutGlobalOutput() throws Exception {
+    var vectors = Mockito.mock(VectorDocumentService.class);
+    var service = new AsyncVectorDocumentService(vectors);
+    var lines = new java.util.ArrayList<String>();
+    when(vectors.add(List.of("paper.md")))
+        .thenReturn(List.of(new VectorDocumentEntry("doc", "paper.md", 2, "2026-10-11T00:00:00Z")));
+    service.addAndReport(List.of("paper.md"), lines::add);
+    assertTrue(lines.getFirst().contains("追加完了: doc"));
+    assertFalse(service.hasActiveEmbeddings());
+    doThrow(new IOException("failure")).when(vectors).add(List.of("missing.md"));
+    service.addAndReport(List.of("missing.md"), lines::add);
+    assertTrue(lines.getLast().contains("追加失敗: missing.md"));
+    assertFalse(service.hasActiveEmbeddings());
   }
 
   @Test
   void addAsyncPrintsCompletionMessage() throws Exception {
     VectorDocumentService vectorDocumentService = Mockito.mock(VectorDocumentService.class);
-    when(vectorDocumentService.add(List.of("docs/spec.md"))).thenReturn(List.of(
-        new VectorDocumentEntry("doc-1", "/tmp/docs/spec.md", 3, "2026-03-28T00:00:00Z")));
+    when(vectorDocumentService.add(List.of("docs/spec.md")))
+        .thenReturn(
+            List.of(
+                new VectorDocumentEntry("doc-1", "/tmp/docs/spec.md", 3, "2026-03-28T00:00:00Z")));
     AsyncVectorDocumentService service = new AsyncVectorDocumentService(vectorDocumentService);
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -73,11 +83,15 @@ class AsyncVectorDocumentServiceTest {
     CountDownLatch release = new CountDownLatch(1);
     var executor = Executors.newSingleThreadExecutor();
 
-    Mockito.doAnswer(invocation -> {
-      started.countDown();
-      assertTrue(release.await(1, TimeUnit.SECONDS));
-      return List.of(new VectorDocumentEntry("doc-1", "/tmp/docs/spec.md", 1, "2026-03-28T00:00:00Z"));
-    }).when(vectorDocumentService).add(List.of("docs/spec.md"));
+    Mockito.doAnswer(
+            invocation -> {
+              started.countDown();
+              assertTrue(release.await(1, TimeUnit.SECONDS));
+              return List.of(
+                  new VectorDocumentEntry("doc-1", "/tmp/docs/spec.md", 1, "2026-03-28T00:00:00Z"));
+            })
+        .when(vectorDocumentService)
+        .add(List.of("docs/spec.md"));
 
     try {
       var future = executor.submit(() -> service.addAsync(List.of("docs/spec.md")));

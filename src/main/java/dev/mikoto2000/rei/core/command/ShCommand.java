@@ -1,15 +1,13 @@
 package dev.mikoto2000.rei.core.command;
 
+import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.core.service.SystemShellService;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Supplier;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
-import dev.mikoto2000.rei.core.project.ProjectService;
-import dev.mikoto2000.rei.core.service.SystemShellService;
 import picocli.CommandLine.Command;
 
 @Component
@@ -49,9 +47,6 @@ public class ShCommand implements Runnable {
   }
 
   Process startProcess(List<String> commandLine, Path directory) throws IOException {
-    return new ProcessBuilder(commandLine)
-        .directory(directory.toFile())
-        .inheritIO()
-        .start();
+    return new ProcessBuilder(commandLine).directory(directory.toFile()).inheritIO().start();
   }
 }

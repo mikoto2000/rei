@@ -7,19 +7,17 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.List;
-
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-
 import dev.mikoto2000.rei.memory.model.Memory;
 import dev.mikoto2000.rei.memory.model.MemoryScope;
 import dev.mikoto2000.rei.memory.model.MemoryStatus;
 import dev.mikoto2000.rei.memory.model.MemoryType;
-import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 import dev.mikoto2000.rei.memory.service.MemoryConflictResolver;
+import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 import dev.mikoto2000.rei.memory.service.MemoryService;
 import dev.mikoto2000.rei.memory.util.SensitiveInfoDetector;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import picocli.CommandLine;
 
 @org.junit.jupiter.api.Tag("integration")
@@ -32,15 +30,28 @@ class MemoryConsolidateCommandTest {
     SensitiveInfoDetector detector = Mockito.mock(SensitiveInfoDetector.class);
     MemoryConflictResolver resolver = Mockito.mock(MemoryConflictResolver.class);
 
-    Memory candidate = new Memory("1", "candidate", MemoryType.KNOWLEDGE, MemoryScope.SHORT_TERM,
-        MemoryStatus.CANDIDATE, 0.8d, null, null, null);
+    Memory candidate =
+        new Memory(
+            "1",
+            "candidate",
+            MemoryType.KNOWLEDGE,
+            MemoryScope.SHORT_TERM,
+            MemoryStatus.CANDIDATE,
+            0.8d,
+            null,
+            null,
+            null);
     when(consolidator.extractCandidates()).thenReturn(List.of(candidate));
     when(memoryService.listActiveWithExpiryCheck()).thenReturn(List.of());
     when(detector.containsSensitiveInfo(any())).thenReturn(false);
-    when(resolver.check(any(), any())).thenReturn(new MemoryConflictResolver.ConflictResult(
-        MemoryConflictResolver.ConflictType.NONE, null, 0.2d));
+    when(resolver.check(any(), any()))
+        .thenReturn(
+            new MemoryConflictResolver.ConflictResult(
+                MemoryConflictResolver.ConflictType.NONE, null, 0.2d));
 
-    var cmd = new CommandLine(new MemoryCommand.ConsolidateCommand(consolidator, memoryService, detector, resolver));
+    var cmd =
+        new CommandLine(
+            new MemoryCommand.ConsolidateCommand(consolidator, memoryService, detector, resolver));
     int exitCode = cmd.execute();
 
     assertEquals(0, exitCode);
@@ -54,15 +65,28 @@ class MemoryConsolidateCommandTest {
     SensitiveInfoDetector detector = Mockito.mock(SensitiveInfoDetector.class);
     MemoryConflictResolver resolver = Mockito.mock(MemoryConflictResolver.class);
 
-    Memory candidate = new Memory("1", "candidate", MemoryType.KNOWLEDGE, MemoryScope.SHORT_TERM,
-        MemoryStatus.CANDIDATE, 0.8d, null, null, null);
+    Memory candidate =
+        new Memory(
+            "1",
+            "candidate",
+            MemoryType.KNOWLEDGE,
+            MemoryScope.SHORT_TERM,
+            MemoryStatus.CANDIDATE,
+            0.8d,
+            null,
+            null,
+            null);
     when(consolidator.extractCandidates()).thenReturn(List.of(candidate));
     when(memoryService.listActiveWithExpiryCheck()).thenReturn(List.of());
     when(detector.containsSensitiveInfo(any())).thenReturn(false);
-    when(resolver.check(any(), any())).thenReturn(new MemoryConflictResolver.ConflictResult(
-        MemoryConflictResolver.ConflictType.NONE, null, 0.2d));
+    when(resolver.check(any(), any()))
+        .thenReturn(
+            new MemoryConflictResolver.ConflictResult(
+                MemoryConflictResolver.ConflictType.NONE, null, 0.2d));
 
-    var cmd = new CommandLine(new MemoryCommand.ConsolidateCommand(consolidator, memoryService, detector, resolver));
+    var cmd =
+        new CommandLine(
+            new MemoryCommand.ConsolidateCommand(consolidator, memoryService, detector, resolver));
     int exitCode = cmd.execute("--approve");
 
     assertEquals(0, exitCode);
@@ -76,18 +100,32 @@ class MemoryConsolidateCommandTest {
     SensitiveInfoDetector detector = Mockito.mock(SensitiveInfoDetector.class);
     MemoryConflictResolver resolver = Mockito.mock(MemoryConflictResolver.class);
 
-    Memory candidate = new Memory("1", "candidate", MemoryType.KNOWLEDGE, MemoryScope.SHORT_TERM,
-        MemoryStatus.CANDIDATE, 0.8d, null, null, null);
+    Memory candidate =
+        new Memory(
+            "1",
+            "candidate",
+            MemoryType.KNOWLEDGE,
+            MemoryScope.SHORT_TERM,
+            MemoryStatus.CANDIDATE,
+            0.8d,
+            null,
+            null,
+            null);
     when(consolidator.extractCandidates()).thenReturn(List.of(candidate));
     when(consolidator.conflictTimeoutSeconds()).thenReturn(1);
     when(memoryService.listActiveWithExpiryCheck()).thenReturn(List.of());
     when(detector.containsSensitiveInfo(any())).thenReturn(false);
-    when(resolver.check(any(), any())).thenAnswer(invocation -> {
-      Thread.sleep(1_200);
-      return new MemoryConflictResolver.ConflictResult(MemoryConflictResolver.ConflictType.NONE, null, 0.2d);
-    });
+    when(resolver.check(any(), any()))
+        .thenAnswer(
+            invocation -> {
+              Thread.sleep(1_200);
+              return new MemoryConflictResolver.ConflictResult(
+                  MemoryConflictResolver.ConflictType.NONE, null, 0.2d);
+            });
 
-    var cmd = new CommandLine(new MemoryCommand.ConsolidateCommand(consolidator, memoryService, detector, resolver));
+    var cmd =
+        new CommandLine(
+            new MemoryCommand.ConsolidateCommand(consolidator, memoryService, detector, resolver));
     int exitCode = cmd.execute("--approve");
 
     assertEquals(0, exitCode);

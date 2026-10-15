@@ -6,7 +6,6 @@ import static org.mockito.Mockito.*;
 import java.nio.file.AccessDeniedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -18,7 +17,11 @@ class FeedOpmlImportServiceTest {
   @Test
   void registersAllFeedsThroughExistingServiceWithoutFetching() throws Exception {
     FeedService feeds = spy(newService());
-    var result = importer(feeds).importFile(file("<outline title='日本語' xmlUrl='https://example.com/a'/><outline xmlUrl='https://example.com/b'/>"));
+    var result =
+        importer(feeds)
+            .importFile(
+                file(
+                    "<outline title='日本語' xmlUrl='https://example.com/a'/><outline xmlUrl='https://example.com/b'/>"));
     assertEquals(2, result.imported().size());
     assertTrue(result.skipped().isEmpty());
     assertTrue(result.failed().isEmpty());
@@ -36,8 +39,14 @@ class FeedOpmlImportServiceTest {
   void continuesAfterInvalidUrlsDuplicatesAndRegistrationErrors() throws Exception {
     FeedService feeds = spy(newService());
     feeds.add("https://example.com/existing", "Existing");
-    doThrow(new IllegalStateException("database unavailable")).when(feeds).add("https://example.com/error", "https://example.com/error");
-    var result = importer(feeds).importFile(file("""
+    doThrow(new IllegalStateException("database unavailable"))
+        .when(feeds)
+        .add("https://example.com/error", "https://example.com/error");
+    var result =
+        importer(feeds)
+            .importFile(
+                file(
+                    """
         <outline xmlUrl='https://example.com/a'/>
         <outline xmlUrl='not a url'/><outline xmlUrl=''/><outline xmlUrl='file:///secret'/>
         <outline xmlUrl='https://'/><outline xmlUrl='https://example.com/error'/>
@@ -72,11 +81,21 @@ class FeedOpmlImportServiceTest {
   @Test
   void rejectsMissingFileDirectoryAndOversizeFile() throws Exception {
     var importer = importer(mock(FeedService.class));
-    assertTrue(assertThrows(OpmlImportException.class, () -> importer.importFile(tempDir.resolve("missing"))).getMessage().contains("file not found"));
-    assertTrue(assertThrows(OpmlImportException.class, () -> importer.importFile(tempDir)).getMessage().contains("regular file"));
+    assertTrue(
+        assertThrows(
+                OpmlImportException.class, () -> importer.importFile(tempDir.resolve("missing")))
+            .getMessage()
+            .contains("file not found"));
+    assertTrue(
+        assertThrows(OpmlImportException.class, () -> importer.importFile(tempDir))
+            .getMessage()
+            .contains("regular file"));
     Path large = tempDir.resolve("large.opml");
     Files.write(large, new byte[FeedOpmlImportService.MAX_FILE_SIZE_BYTES + 1]);
-    assertTrue(assertThrows(OpmlImportException.class, () -> importer.importFile(large)).getMessage().contains("10 MiB"));
+    assertTrue(
+        assertThrows(OpmlImportException.class, () -> importer.importFile(large))
+            .getMessage()
+            .contains("10 MiB"));
   }
 
   @Test
@@ -84,9 +103,15 @@ class FeedOpmlImportServiceTest {
     Path path = tempDir.resolve("denied.opml");
     try (var files = mockStatic(Files.class)) {
       files.when(() -> Files.isRegularFile(path)).thenReturn(true);
-      files.when(() -> Files.newInputStream(path)).thenThrow(new AccessDeniedException(path.toString()));
-      assertTrue(assertThrows(OpmlImportException.class, () -> importer(mock(FeedService.class)).importFile(path))
-          .getMessage().contains("cannot read file"));
+      files
+          .when(() -> Files.newInputStream(path))
+          .thenThrow(new AccessDeniedException(path.toString()));
+      assertTrue(
+          assertThrows(
+                  OpmlImportException.class,
+                  () -> importer(mock(FeedService.class)).importFile(path))
+              .getMessage()
+              .contains("cannot read file"));
     }
   }
 
@@ -97,10 +122,15 @@ class FeedOpmlImportServiceTest {
     try (var files = mockStatic(Files.class)) {
       files.when(() -> Files.isRegularFile(path)).thenReturn(true);
       files.when(() -> Files.size(path)).thenReturn(1L);
-      files.when(() -> Files.newInputStream(path)).thenReturn(
-          new java.io.ByteArrayInputStream(new byte[FeedOpmlImportService.MAX_FILE_SIZE_BYTES + 1]));
-      assertTrue(assertThrows(OpmlImportException.class, () -> importer(feeds).importFile(path))
-          .getMessage().contains("10 MiB"));
+      files
+          .when(() -> Files.newInputStream(path))
+          .thenReturn(
+              new java.io.ByteArrayInputStream(
+                  new byte[FeedOpmlImportService.MAX_FILE_SIZE_BYTES + 1]));
+      assertTrue(
+          assertThrows(OpmlImportException.class, () -> importer(feeds).importFile(path))
+              .getMessage()
+              .contains("10 MiB"));
       verifyNoInteractions(feeds);
     }
   }
@@ -108,7 +138,11 @@ class FeedOpmlImportServiceTest {
   @Test
   void rejectsAndRedactsCredentialUrlsInImportResults() throws Exception {
     FeedService feeds = newService();
-    var result = importer(feeds).importFile(file("<outline title='secret' text='secret' htmlUrl='https://secret@example.com' xmlUrl='https://user:secret@example.com/feed'/><outline xmlUrl='https://example.com/feed?token=secret'/>"));
+    var result =
+        importer(feeds)
+            .importFile(
+                file(
+                    "<outline title='secret' text='secret' htmlUrl='https://secret@example.com' xmlUrl='https://user:secret@example.com/feed'/><outline xmlUrl='https://example.com/feed?token=secret'/>"));
     assertEquals(2, result.failed().size());
     assertTrue(feeds.list().isEmpty());
     assertFalse(result.toString().contains("secret"));
@@ -120,7 +154,8 @@ class FeedOpmlImportServiceTest {
   }
 
   private FeedService newService() {
-    return new FeedService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feeds.db")));
+    return new FeedService(
+        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feeds.db")));
   }
 
   private FeedOpmlImportService importer(FeedService feeds) {

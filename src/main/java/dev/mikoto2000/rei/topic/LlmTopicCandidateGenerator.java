@@ -1,15 +1,13 @@
 package dev.mikoto2000.rei.topic;
 
+import dev.mikoto2000.rei.core.service.ModelHolderService;
 import java.util.List;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
-
-import dev.mikoto2000.rei.core.service.ModelHolderService;
 
 public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
   private static final Logger log = LoggerFactory.getLogger(LlmTopicCandidateGenerator.class);
@@ -19,8 +17,11 @@ public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
   private final TopicCandidateParser parser;
   private final TopicGeneratorProperties properties;
 
-  public LlmTopicCandidateGenerator(ChatModel chatModel, ModelHolderService modelHolderService,
-      TopicCandidateParser parser, TopicGeneratorProperties properties) {
+  public LlmTopicCandidateGenerator(
+      ChatModel chatModel,
+      ModelHolderService modelHolderService,
+      TopicCandidateParser parser,
+      TopicGeneratorProperties properties) {
     this.chatModel = chatModel;
     this.modelHolderService = modelHolderService;
     this.parser = parser;
@@ -79,8 +80,13 @@ public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
 
         Recent topics to avoid:
         %s
-        """.formatted(properties.getMaxCandidates(), model, renderConversation(context), renderWorkingSet(context),
-        String.join("\n", context.recentTopics()));
+        """
+        .formatted(
+            properties.getMaxCandidates(),
+            model,
+            renderConversation(context),
+            renderWorkingSet(context),
+            String.join("\n", context.recentTopics()));
   }
 
   private String renderConversation(TopicGenerationContext context) {

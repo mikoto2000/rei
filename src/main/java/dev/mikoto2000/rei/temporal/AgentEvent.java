@@ -4,8 +4,4 @@ import java.time.Instant;
 import java.util.Map;
 
 public record AgentEvent(
-    Instant timestamp,
-    String type,
-    String subject,
-    Map<String, Object> payload) {
-}
+    Instant timestamp, String type, String subject, Map<String, Object> payload) {}

@@ -1,17 +1,19 @@
 package dev.mikoto2000.rei;
 
+import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import java.nio.file.Path;
 import java.util.Map;
 
-import dev.mikoto2000.rei.core.datasource.ReiPaths;
-
 final class ExternalConfigSupport {
 
-  private ExternalConfigSupport() {
-  }
+  private ExternalConfigSupport() {}
 
   static Map<String, Object> defaultProperties() {
-    return Map.of("spring.config.additional-location", additionalLocation(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current()), "rei.data-dir", dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().toString());
+    return Map.of(
+        "spring.config.additional-location",
+        additionalLocation(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current()),
+        "rei.data-dir",
+        dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().toString());
   }
 
   static Map<String, Object> defaultProperties(Path workDirectory) {

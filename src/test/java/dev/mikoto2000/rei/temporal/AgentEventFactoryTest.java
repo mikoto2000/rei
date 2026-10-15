@@ -6,7 +6,6 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.Map;
-
 import org.junit.jupiter.api.Test;
 
 class AgentEventFactoryTest {

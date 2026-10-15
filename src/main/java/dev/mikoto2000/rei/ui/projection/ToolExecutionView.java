@@ -11,5 +11,4 @@ public record ToolExecutionView(
     ErrorView error,
     Long durationMillis,
     Instant startedAt,
-    Instant completedAt) {
-}
+    Instant completedAt) {}

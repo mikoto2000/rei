@@ -1,5 +1,9 @@
 package dev.mikoto2000.rei.checkpoint;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
+
 import dev.mikoto2000.rei.application.run.RunRegistry;
 import dev.mikoto2000.rei.application.run.RunService;
 import dev.mikoto2000.rei.core.actionplan.ActionPlan;
@@ -28,10 +32,6 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.sqlite.SQLiteDataSource;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
-
 @Tag("integration")
 class CheckpointForceConcurrencyTest {
   @TempDir Path root;
@@ -48,12 +48,21 @@ class CheckpointForceConcurrencyTest {
     var settings = new CheckpointProperties();
     repository = new PersistentCheckpointRepository(source, settings);
     var beans = new StaticListableBeanFactory();
-    beans.addBean("router", new ConversationInputRouter(queued::add, (context, prompt, interventions) -> {}));
-    service = new PersistentCheckpointService(repository, new CheckpointReconciler(null), settings, bus,
-        beans.getBeanProvider(ConversationInputRouter.class), beans.getBeanProvider(RunRegistry.class),
-        beans.getBeanProvider(RunService.class), beans.getBeanProvider(ActionPlan.class),
-        beans.getBeanProvider(WorkingSet.class), beans.getBeanProvider(TaskState.class),
-        beans.getBeanProvider(CheckpointStore.class));
+    beans.addBean(
+        "router", new ConversationInputRouter(queued::add, (context, prompt, interventions) -> {}));
+    service =
+        new PersistentCheckpointService(
+            repository,
+            new CheckpointReconciler(null),
+            settings,
+            bus,
+            beans.getBeanProvider(ConversationInputRouter.class),
+            beans.getBeanProvider(RunRegistry.class),
+            beans.getBeanProvider(RunService.class),
+            beans.getBeanProvider(ActionPlan.class),
+            beans.getBeanProvider(WorkingSet.class),
+            beans.getBeanProvider(TaskState.class),
+            beans.getBeanProvider(CheckpointStore.class));
     bus.service = service;
     owner = new AgentRunContext("run", "session", root, "project");
     service.start(owner, "original request");
@@ -68,8 +77,10 @@ class CheckpointForceConcurrencyTest {
   void toolBoundaryPublishesAfterReleasingCheckpointLock() {
     bus.inspectOn(AgentEventType.CHECKPOINT_REVISION_SAVED);
 
-    bus.publishBoundary(new AgentEventFactory(Clock.systemUTC())
-        .toolStarted("read", "readFile", "read").withOwnership(owner));
+    bus.publishBoundary(
+        new AgentEventFactory(Clock.systemUTC())
+            .toolStarted("read", "readFile", "read")
+            .withOwnership(owner));
 
     assertEquals(1, bus.inspections.get());
     assertEquals("read", saved().operations().getFirst().toolCallId());
@@ -138,7 +149,8 @@ class CheckpointForceConcurrencyTest {
           Thread.currentThread().interrupt();
           fail("Checkpoint inspection was interrupted", interrupted);
         } catch (Exception failure) {
-          fail("Checkpoint publication held the checkpoint lock while notifying observers", failure);
+          fail(
+              "Checkpoint publication held the checkpoint lock while notifying observers", failure);
         }
       }
       super.publish(event);

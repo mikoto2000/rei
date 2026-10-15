@@ -5,7 +5,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -16,7 +15,6 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
-
 import reactor.core.publisher.Flux;
 
 class FallbackChatModelTest {
@@ -24,9 +22,16 @@ class FallbackChatModelTest {
   void fallbackRetainsConfiguredFallbackModelAndRequestOptionsForCallAndStream() {
     var primary = Mockito.mock(ChatModel.class);
     var fallback = Mockito.mock(ChatModel.class);
-    when(fallback.getOptions()).thenReturn(OpenAiChatOptions.builder().model("local-fallback").build());
-    var options = OpenAiChatOptions.builder().model("feature-model").temperature(0.3)
-        .maxTokens(1234).streamUsage(true).toolContext(java.util.Map.of("run", "owner")).build();
+    when(fallback.getOptions())
+        .thenReturn(OpenAiChatOptions.builder().model("local-fallback").build());
+    var options =
+        OpenAiChatOptions.builder()
+            .model("feature-model")
+            .temperature(0.3)
+            .maxTokens(1234)
+            .streamUsage(true)
+            .toolContext(java.util.Map.of("run", "owner"))
+            .build();
     var prompt = new Prompt("hello", options);
     when(primary.call(prompt)).thenThrow(new RuntimeException("unavailable"));
     when(primary.stream(prompt)).thenReturn(Flux.error(new RuntimeException("unavailable")));
@@ -51,18 +56,31 @@ class FallbackChatModelTest {
     assertThat(options.getModel()).isEqualTo("feature-model");
   }
 
-  @Test void ordinaryTransportErrorAfterRunCancellationDoesNotStartFallback() {
+  @Test
+  void ordinaryTransportErrorAfterRunCancellationDoesNotStartFallback() {
     var primary = Mockito.mock(ChatModel.class);
     var fallback = Mockito.mock(ChatModel.class);
-    var context = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext("run",
-        new OutputLimitRunBudget(1, 3), new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(java.nio.file.Path.of(".")),
-        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), event -> {});
-    var prompt = new Prompt("request", org.springframework.ai.model.tool.ToolCallingChatOptions.builder()
-        .toolContext(java.util.Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, context)).build());
-    when(primary.stream(prompt)).thenAnswer(invocation -> {
-      context.cancel();
-      return Flux.error(new RuntimeException("connection closed"));
-    });
+    var context =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+            "run",
+            new OutputLimitRunBudget(1, 3),
+            new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(java.nio.file.Path.of(".")),
+            new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+            event -> {});
+    var prompt =
+        new Prompt(
+            "request",
+            org.springframework.ai.model.tool.ToolCallingChatOptions.builder()
+                .toolContext(
+                    java.util.Map.of(
+                        dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, context))
+                .build());
+    when(primary.stream(prompt))
+        .thenAnswer(
+            invocation -> {
+              context.cancel();
+              return Flux.error(new RuntimeException("connection closed"));
+            });
     var model = new FallbackChatModel("chat", primary, fallback, null);
     org.assertj.core.api.Assertions.assertThatThrownBy(() -> model.stream(prompt).blockLast())
         .isInstanceOf(java.util.concurrent.CancellationException.class);
@@ -75,7 +93,8 @@ class FallbackChatModelTest {
     var fallback = Mockito.mock(ChatModel.class);
     var prompt = new Prompt("request");
     when(primary.call(prompt)).thenThrow(new java.util.concurrent.CancellationException());
-    when(primary.stream(prompt)).thenReturn(Flux.error(new java.util.concurrent.CancellationException()));
+    when(primary.stream(prompt))
+        .thenReturn(Flux.error(new java.util.concurrent.CancellationException()));
     var model = new FallbackChatModel("chat", primary, fallback, null);
     org.assertj.core.api.Assertions.assertThatThrownBy(() -> model.call(prompt))
         .isInstanceOf(java.util.concurrent.CancellationException.class);
@@ -88,7 +107,8 @@ class FallbackChatModelTest {
   void callFallsBackToDefaultModelWhenPrimaryFails() {
     ChatModel primary = Mockito.mock(ChatModel.class);
     ChatModel fallback = Mockito.mock(ChatModel.class);
-    Prompt prompt = new Prompt("hello", ChatOptions.builder().model("feature-model").temperature(0.2).build());
+    Prompt prompt =
+        new Prompt("hello", ChatOptions.builder().model("feature-model").temperature(0.2).build());
     ChatResponse fallbackResponse = response("fallback");
 
     when(primary.call(prompt)).thenThrow(new RuntimeException("connection failed"));
@@ -122,7 +142,8 @@ class FallbackChatModelTest {
   void callKeepsPromptModelWhenItIsNotPrimaryFeatureModel() {
     ChatModel primary = Mockito.mock(ChatModel.class);
     ChatModel fallback = Mockito.mock(ChatModel.class);
-    Prompt prompt = new Prompt("hello", ChatOptions.builder().model("current-default-model").build());
+    Prompt prompt =
+        new Prompt("hello", ChatOptions.builder().model("current-default-model").build());
 
     when(primary.call(prompt)).thenThrow(new RuntimeException("connection failed"));
     when(fallback.call(Mockito.any(Prompt.class))).thenReturn(response("fallback"));
@@ -157,10 +178,9 @@ class FallbackChatModelTest {
   void callRemovesPrimaryModelFromOpenAiOptionsWhenFallingBack() {
     ChatModel primary = Mockito.mock(ChatModel.class);
     ChatModel fallback = Mockito.mock(ChatModel.class);
-    Prompt prompt = new Prompt("hello", OpenAiChatOptions.builder()
-        .model("feature-model")
-        .temperature(0.5)
-        .build());
+    Prompt prompt =
+        new Prompt(
+            "hello", OpenAiChatOptions.builder().model("feature-model").temperature(0.5).build());
 
     when(primary.call(prompt)).thenThrow(new RuntimeException("connection failed"));
     when(fallback.call(Mockito.any(Prompt.class))).thenReturn(response("fallback"));

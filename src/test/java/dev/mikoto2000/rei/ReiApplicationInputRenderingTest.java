@@ -3,19 +3,17 @@ package dev.mikoto2000.rei;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.when;
 
-import java.time.LocalTime;
-
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-
-import dev.mikoto2000.rei.ui.shell.RootCommand;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.CommandUserInputDisplayPolicy;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.ui.shell.RootCommand;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
+import java.time.LocalTime;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import picocli.CommandLine;
 
 class ReiApplicationInputRenderingTest {
@@ -52,7 +50,8 @@ class ReiApplicationInputRenderingTest {
   }
 
   private ReiApplication newApp(String modelName) {
-    AsyncVectorDocumentService asyncVectorDocumentService = Mockito.mock(AsyncVectorDocumentService.class);
+    AsyncVectorDocumentService asyncVectorDocumentService =
+        Mockito.mock(AsyncVectorDocumentService.class);
     when(asyncVectorDocumentService.hasActiveEmbeddings()).thenReturn(false);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     when(modelHolderService.get()).thenReturn(modelName);
@@ -71,7 +70,8 @@ class ReiApplicationInputRenderingTest {
   }
 
   private ReiApplication newAppWithFixedTime(String modelName, LocalTime fixedTime) {
-    AsyncVectorDocumentService asyncVectorDocumentService = Mockito.mock(AsyncVectorDocumentService.class);
+    AsyncVectorDocumentService asyncVectorDocumentService =
+        Mockito.mock(AsyncVectorDocumentService.class);
     when(asyncVectorDocumentService.hasActiveEmbeddings()).thenReturn(false);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     when(modelHolderService.get()).thenReturn(modelName);

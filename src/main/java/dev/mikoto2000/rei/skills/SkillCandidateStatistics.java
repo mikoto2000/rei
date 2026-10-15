@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.skills;
 
 import java.util.concurrent.atomic.LongAdder;
-
 import org.springframework.stereotype.Component;
 
 @Component
@@ -23,6 +22,5 @@ public class SkillCandidateStatistics {
     return new Snapshot(evaluations.sum(), top1Hits.sum(), top3Hits.sum(), top5Hits.sum());
   }
 
-  public record Snapshot(long evaluations, long top1Hits, long top3Hits, long top5Hits) {
-  }
+  public record Snapshot(long evaluations, long top1Hits, long top3Hits, long top5Hits) {}
 }

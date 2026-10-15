@@ -8,7 +8,8 @@ public class CuriosityTopicCandidateGenerator implements TopicCandidateGenerator
   private final CuriosityQueue queue;
   private final TopicGeneratorProperties properties;
 
-  public CuriosityTopicCandidateGenerator(CuriosityQueue queue, TopicGeneratorProperties properties) {
+  public CuriosityTopicCandidateGenerator(
+      CuriosityQueue queue, TopicGeneratorProperties properties) {
     this.queue = queue;
     this.properties = properties;
   }
@@ -18,18 +19,20 @@ public class CuriosityTopicCandidateGenerator implements TopicCandidateGenerator
     if (!properties.isEnabled()) return List.of();
     Instant now = context.currentTime();
     return queue.findCandidates(new CuriosityQuery(now, properties.getMaxCandidates())).stream()
-        .map(item -> new TopicCandidate(
-            UUID.randomUUID().toString(),
-            item.question(),
-            item.reason(),
-            TopicType.FOLLOW_UP,
-            TopicSource.CURIOSITY_QUEUE,
-            item.priority(),
-            freshness(item, now),
-            0.75d,
-            0.25d,
-            0.80d,
-            now))
+        .map(
+            item ->
+                new TopicCandidate(
+                    UUID.randomUUID().toString(),
+                    item.question(),
+                    item.reason(),
+                    TopicType.FOLLOW_UP,
+                    TopicSource.CURIOSITY_QUEUE,
+                    item.priority(),
+                    freshness(item, now),
+                    0.75d,
+                    0.25d,
+                    0.80d,
+                    now))
         .toList();
   }
 

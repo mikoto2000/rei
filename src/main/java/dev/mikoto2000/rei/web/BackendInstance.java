@@ -9,20 +9,40 @@ public final class BackendInstance implements AutoCloseable {
   private final BackendEndpointStore store;
   private final String instanceId = UUID.randomUUID().toString();
   private BackendEndpoint ready;
-  public BackendInstance(BackendEndpointStore store) { this.store = store; }
+
+  public BackendInstance(BackendEndpointStore store) {
+    this.store = store;
+  }
+
   public synchronized void ready(int port) throws IOException {
     if (ready != null) throw new IllegalStateException("Backend already ready");
-    var value = new BackendEndpoint(1,instanceId,store.storageId(),ProcessHandle.current().pid(),
-        "http://127.0.0.1:"+port,BackendEndpoint.CURRENT_API_PROTOCOL,"READY");
+    var value =
+        new BackendEndpoint(
+            1,
+            instanceId,
+            store.storageId(),
+            ProcessHandle.current().pid(),
+            "http://127.0.0.1:" + port,
+            BackendEndpoint.CURRENT_API_PROTOCOL,
+            "READY");
     store.publish(value);
     ready = value;
   }
+
   public synchronized BackendEndpoint get() {
     if (ready == null) throw new IllegalStateException("Backend is not ready");
     return ready;
   }
-  public synchronized boolean matches(String expected) { return ready != null && instanceId.equals(expected); }
-  @Override public synchronized void close() throws IOException {
-    if (ready != null) { store.removeOwned(instanceId); ready = null; }
+
+  public synchronized boolean matches(String expected) {
+    return ready != null && instanceId.equals(expected);
+  }
+
+  @Override
+  public synchronized void close() throws IOException {
+    if (ready != null) {
+      store.removeOwned(instanceId);
+      ready = null;
+    }
   }
 }

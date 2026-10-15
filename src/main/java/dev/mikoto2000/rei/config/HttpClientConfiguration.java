@@ -12,22 +12,21 @@ import reactor.netty.http.client.HttpClient;
 @Configuration
 public class HttpClientConfiguration {
 
-    @Bean
-    RestClientCustomizer mdnsRestClientCustomizer() {
-        ReactorClientHttpRequestFactory requestFactory =
-            new ReactorClientHttpRequestFactory(mdnsHttpClient());
+  @Bean
+  RestClientCustomizer mdnsRestClientCustomizer() {
+    ReactorClientHttpRequestFactory requestFactory =
+        new ReactorClientHttpRequestFactory(mdnsHttpClient());
 
-        return builder -> builder.requestFactory(requestFactory);
-    }
+    return builder -> builder.requestFactory(requestFactory);
+  }
 
-    @Bean
-    WebClientCustomizer mdnsWebClientCustomizer() {
-        ReactorClientHttpConnector connector = new ReactorClientHttpConnector(mdnsHttpClient());
-        return builder -> builder.clientConnector(connector);
-    }
+  @Bean
+  WebClientCustomizer mdnsWebClientCustomizer() {
+    ReactorClientHttpConnector connector = new ReactorClientHttpConnector(mdnsHttpClient());
+    return builder -> builder.clientConnector(connector);
+  }
 
-    private HttpClient mdnsHttpClient() {
-        return HttpClient.create()
-            .resolver(DefaultAddressResolverGroup.INSTANCE);
-    }
+  private HttpClient mdnsHttpClient() {
+    return HttpClient.create().resolver(DefaultAddressResolverGroup.INSTANCE);
+  }
 }

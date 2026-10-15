@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 
 class AgentSkillExplicitSelectorTest {
@@ -27,7 +26,8 @@ class AgentSkillExplicitSelectorTest {
     AgentSkill second = skill("second", true);
     AgentSkillExplicitSelector selector = new AgentSkillExplicitSelector(repository(first, second));
 
-    AgentSkillExplicitSelector.ExplicitSelection selection = selector.select("@skill:first @skill:second run");
+    AgentSkillExplicitSelector.ExplicitSelection selection =
+        selector.select("@skill:first @skill:second run");
 
     assertThat(selection.skills()).containsExactly(first, second);
     assertThat(selection.sanitizedPrompt()).isEqualTo("run");
@@ -38,17 +38,22 @@ class AgentSkillExplicitSelectorTest {
     AgentSkill disabled = skill("disabled", false);
     AgentSkillExplicitSelector selector = new AgentSkillExplicitSelector(repository(disabled));
 
-    AgentSkillExplicitSelector.ExplicitSelection selection = selector.select("@skill:missing @skill:disabled run");
+    AgentSkillExplicitSelector.ExplicitSelection selection =
+        selector.select("@skill:missing @skill:disabled run");
 
     assertThat(selection.skills()).isEmpty();
     assertThat(selection.sanitizedPrompt()).isEqualTo("run");
-    assertThat(selection.warnings()).containsExactly(
-        "[warn] Skill が見つかりません: missing",
-        "[warn] Skill は無効です: disabled");
+    assertThat(selection.warnings())
+        .containsExactly("[warn] Skill が見つかりません: missing", "[warn] Skill は無効です: disabled");
   }
 
   private AgentSkill skill(String name, boolean enabled) {
-    return new AgentSkill(name, name + " description", enabled, Path.of(name), Path.of(name).resolve("SKILL.md"),
+    return new AgentSkill(
+        name,
+        name + " description",
+        enabled,
+        Path.of(name),
+        Path.of(name).resolve("SKILL.md"),
         name + " instructions");
   }
 

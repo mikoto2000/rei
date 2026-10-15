@@ -12,5 +12,4 @@ public record FeedItem(
     OffsetDateTime publishedAt,
     OffsetDateTime fetchedAt,
     OffsetDateTime createdAt,
-    OffsetDateTime updatedAt) {
-}
+    OffsetDateTime updatedAt) {}

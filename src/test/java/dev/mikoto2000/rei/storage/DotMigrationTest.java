@@ -19,8 +19,14 @@ class DotMigrationTest {
         var s = c.createStatement()) {
       s.execute("INSERT INTO mcp_settings VALUES('test_preserved','existing')");
       for (String table :
-          new String[] {"dot_requests", "dot_receipts", "dot_resume_intents", "dot_audit", "review_participants", "review_jobs"})
-        s.execute("DROP TABLE " + table);
+          new String[] {
+            "dot_requests",
+            "dot_receipts",
+            "dot_resume_intents",
+            "dot_audit",
+            "review_participants",
+            "review_jobs"
+          }) s.execute("DROP TABLE " + table);
       s.execute("DELETE FROM storage_migrations WHERE version>=8");
       s.execute("PRAGMA user_version=7");
     }

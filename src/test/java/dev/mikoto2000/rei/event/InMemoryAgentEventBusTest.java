@@ -9,17 +9,26 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
-
 import org.junit.jupiter.api.Test;
 
 class InMemoryAgentEventBusTest {
 
-  private final Clock clock = Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));
+  private final Clock clock =
+      Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));
 
   private AgentEvent event(String type) {
-    return new AgentEvent("id-" + type, 0L, Instant.now(clock), AgentEventType.from(type), 1,
-        "session-1", "turn-1", "run-1", (String) null, (String) null, null);
+    return new AgentEvent(
+        "id-" + type,
+        0L,
+        Instant.now(clock),
+        AgentEventType.from(type),
+        1,
+        "session-1",
+        "turn-1",
+        "run-1",
+        (String) null,
+        (String) null,
+        null);
   }
 
   @Test
@@ -98,9 +107,10 @@ class InMemoryAgentEventBusTest {
   void listenerExceptionDoesNotStopOtherListeners() {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
     List<AgentEvent> received = new ArrayList<>();
-    bus.subscribe(e -> {
-      throw new RuntimeException("boom");
-    });
+    bus.subscribe(
+        e -> {
+          throw new RuntimeException("boom");
+        });
     bus.subscribe(received::add);
 
     bus.publish(event("agent.run.started"));

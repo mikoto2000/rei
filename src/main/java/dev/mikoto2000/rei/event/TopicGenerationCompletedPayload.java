@@ -10,5 +10,5 @@ public record TopicGenerationCompletedPayload(
     String selectedCandidateId,
     boolean spoken,
     long durationMs,
-    Instant completedAt) implements AgentEventPayload {
-}
+    Instant completedAt)
+    implements AgentEventPayload {}

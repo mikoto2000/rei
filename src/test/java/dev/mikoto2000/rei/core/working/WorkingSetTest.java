@@ -4,23 +4,21 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Path;
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.ArrayList;
-
-import org.junit.jupiter.api.Test;
-
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.event.WorkingSetItemAddedPayload;
 import dev.mikoto2000.rei.event.WorkingSetItemRemovedPayload;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
+import org.junit.jupiter.api.Test;
 
 @org.junit.jupiter.api.Tag("integration")
 class WorkingSetTest {
@@ -30,7 +28,8 @@ class WorkingSetTest {
   @Test
   void defaultWorkingSetRetainsFiftyFilesAndEvictsOldestOnFiftyFirst() {
     assertEquals(50, new WorkingSet().maxFiles());
-    WorkingSet ws = new WorkingSet(WorkingSet.DEFAULT_MAX_FILES, new AdvancingClock(new AtomicLong()));
+    WorkingSet ws =
+        new WorkingSet(WorkingSet.DEFAULT_MAX_FILES, new AdvancingClock(new AtomicLong()));
     for (int i = 0; i < 50; i++) {
       ws.recordRead(Path.of("file-" + i));
     }
@@ -48,7 +47,8 @@ class WorkingSetTest {
 
   @Test
   void defaultCapacityKeepsReAccessedFileAndEvictsNextOldest() {
-    WorkingSet ws = new WorkingSet(WorkingSet.DEFAULT_MAX_FILES, new AdvancingClock(new AtomicLong()));
+    WorkingSet ws =
+        new WorkingSet(WorkingSet.DEFAULT_MAX_FILES, new AdvancingClock(new AtomicLong()));
     for (int i = 0; i < 50; i++) {
       ws.recordRead(Path.of("file-" + i));
     }
@@ -102,10 +102,11 @@ class WorkingSetTest {
     ws.remove(Path.of("new.txt"));
     ws.remove(Path.of("absent.txt"));
 
-    List<WorkingSetItemRemovedPayload> removals = received.stream()
-        .filter(event -> event.type() == AgentEventType.WORKING_SET_ITEM_REMOVED)
-        .map(event -> (WorkingSetItemRemovedPayload) event.payload())
-        .toList();
+    List<WorkingSetItemRemovedPayload> removals =
+        received.stream()
+            .filter(event -> event.type() == AgentEventType.WORKING_SET_ITEM_REMOVED)
+            .map(event -> (WorkingSetItemRemovedPayload) event.payload())
+            .toList();
     assertEquals(2, removals.size());
     assertEquals("capacity eviction", removals.get(0).reason());
     assertEquals("explicit removal", removals.get(1).reason());

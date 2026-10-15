@@ -8,9 +8,26 @@ import java.util.Set;
 
 /** Reject credential-bearing feed URLs before persistence, display or network access. */
 public final class FeedUrlSafety {
-  private static final Set<String> CREDENTIAL_KEYS = Set.of("token", "accesstoken", "authtoken", "bearertoken",
-      "key", "apikey", "accesskey", "auth", "authorization", "secret", "password", "passwd", "credential",
-      "credentials", "signature", "sig", "clientsecret", "refreshtoken");
+  private static final Set<String> CREDENTIAL_KEYS =
+      Set.of(
+          "token",
+          "accesstoken",
+          "authtoken",
+          "bearertoken",
+          "key",
+          "apikey",
+          "accesskey",
+          "auth",
+          "authorization",
+          "secret",
+          "password",
+          "passwd",
+          "credential",
+          "credentials",
+          "signature",
+          "sig",
+          "clientsecret",
+          "refreshtoken");
 
   private FeedUrlSafety() {}
 
@@ -19,12 +36,17 @@ public final class FeedUrlSafety {
       if (value == null || value.length() > 2048) throw invalid();
       URI uri = URI.create(value);
       if (!("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))
-          || uri.getHost() == null || uri.getRawUserInfo() != null || uri.getRawFragment() != null
-          || uri.getPort() == 0 || uri.getPort() > 65535) throw invalid();
+          || uri.getHost() == null
+          || uri.getRawUserInfo() != null
+          || uri.getRawFragment() != null
+          || uri.getPort() == 0
+          || uri.getPort() > 65535) throw invalid();
       if (uri.getRawQuery() != null) {
         for (String parameter : uri.getRawQuery().split("[&;]")) {
-          String key = URLDecoder.decode(parameter.split("=", 2)[0], StandardCharsets.UTF_8)
-              .toLowerCase(Locale.ROOT).replaceAll("[-_]", "");
+          String key =
+              URLDecoder.decode(parameter.split("=", 2)[0], StandardCharsets.UTF_8)
+                  .toLowerCase(Locale.ROOT)
+                  .replaceAll("[-_]", "");
           if (CREDENTIAL_KEYS.contains(key)) throw invalid();
         }
       }

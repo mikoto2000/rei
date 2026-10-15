@@ -22,7 +22,8 @@ public final class ToolLoopSupport {
     if (options instanceof org.springframework.ai.openai.OpenAiChatOptions openAi
         && openAi.getExtraBody() != null) {
       Object rawTools = openAi.getExtraBody().get("tools");
-      if (rawTools != null && !(rawTools instanceof java.util.Collection<?> tools && tools.isEmpty())) {
+      if (rawTools != null
+          && !(rawTools instanceof java.util.Collection<?> tools && tools.isEmpty())) {
         throw new IllegalArgumentException("Model must not carry raw default tools");
       }
     }
@@ -31,92 +32,191 @@ public final class ToolLoopSupport {
   // Rei already bounds explicit loops with durable run budgets/maxSteps and timeouts.
   // Library history-based limits reset at user interventions and can abort a tool batch
   // before Rei checkpoints it, so retain the existing application-owned limits.
-  private final ToolCallingManager manager = ToolCallingManager.builder()
-      .unlimitedCallsPerTool().unlimitedTotalToolCalls().build();
+  private final ToolCallingManager manager =
+      ToolCallingManager.builder().unlimitedCallsPerTool().unlimitedTotalToolCalls().build();
+
   public ToolExecutionResult execute(Prompt prompt, ChatResponse response) {
     return deliveryMetadata(prompt, manager.executeToolCalls(prompt, response));
   }
+
   private ToolExecutionResult deliveryMetadata(Prompt prompt, ToolExecutionResult result) {
-    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options) || options.getToolCallbacks() == null) return result;
-    var policies = new java.util.HashMap<String, dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind>();
-    for (var callback : options.getToolCallbacks()) policies.put(callback.getToolDefinition().name(),
-        dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.kind(callback));
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)
+        || options.getToolCallbacks() == null) return result;
+    var policies =
+        new java.util.HashMap<String, dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind>();
+    for (var callback : options.getToolCallbacks())
+      policies.put(
+          callback.getToolDefinition().name(),
+          dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.kind(callback));
     var history = new java.util.ArrayList<>(result.conversationHistory());
-    var registered = new java.util.HashMap<String,org.springframework.ai.tool.ToolCallback>();
-    options.getToolCallbacks().forEach(callback -> registered.put(callback.getToolDefinition().name(),callback));
-    if (!history.isEmpty() && history.getLast() instanceof org.springframework.ai.chat.messages.ToolResponseMessage message) {
-      var calls = new java.util.HashMap<String, dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind>();
-      for (var response : message.getResponses()) calls.put(response.id(), policies.getOrDefault(response.name(),
-          dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.GENERAL));
+    var registered = new java.util.HashMap<String, org.springframework.ai.tool.ToolCallback>();
+    options
+        .getToolCallbacks()
+        .forEach(callback -> registered.put(callback.getToolDefinition().name(), callback));
+    if (!history.isEmpty()
+        && history.getLast()
+            instanceof org.springframework.ai.chat.messages.ToolResponseMessage message) {
+      var calls =
+          new java.util.HashMap<
+              String, dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind>();
+      for (var response : message.getResponses())
+        calls.put(
+            response.id(),
+            policies.getOrDefault(
+                response.name(),
+                dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.GENERAL));
       var receipts = new java.util.HashMap<String, dev.mikoto2000.rei.review.ReviewTools.Receipt>();
-      for (var response : message.getResponses()) if (registered.get(response.name()) instanceof dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.Registered callback && callback.reviewPage())
-        try {receipts.put(response.id(), dev.mikoto2000.rei.review.ReviewTools.receipt(response.responseData()));}
-        catch(IllegalArgumentException malformed){/* A tool error/argument correction is never a delivery receipt. */}
-      var metadata = new java.util.HashMap<>(message.getMetadata()); metadata.put("rei.deliveryPolicies", java.util.Map.copyOf(calls));
+      for (var response : message.getResponses())
+        if (registered.get(response.name())
+                instanceof
+                dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.Registered callback
+            && callback.reviewPage())
+          try {
+            receipts.put(
+                response.id(),
+                dev.mikoto2000.rei.review.ReviewTools.receipt(response.responseData()));
+          } catch (IllegalArgumentException malformed) {
+            /* A tool error/argument correction is never a delivery receipt. */
+          }
+      var metadata = new java.util.HashMap<>(message.getMetadata());
+      metadata.put("rei.deliveryPolicies", java.util.Map.copyOf(calls));
       if (!receipts.isEmpty()) metadata.put("rei.reviewReceipts", java.util.Map.copyOf(receipts));
-      history.set(history.size() - 1, org.springframework.ai.chat.messages.ToolResponseMessage.builder()
-          .responses(message.getResponses()).metadata(metadata).build());
+      history.set(
+          history.size() - 1,
+          org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+              .responses(message.getResponses())
+              .metadata(metadata)
+              .build());
     }
-    return ToolExecutionResult.builder().conversationHistory(history).returnDirect(result.returnDirect()).build();
+    return ToolExecutionResult.builder()
+        .conversationHistory(history)
+        .returnDirect(result.returnDirect())
+        .build();
   }
-  public ToolExecutionResult executeResumable(Prompt prompt,ChatResponse response,dev.mikoto2000.rei.core.stagnation.RunExecutionContext context) {
-    if(!context.hasApprovalContinuation() && response.getResult().getOutput().getToolCalls().stream().noneMatch(call->
-        java.util.Set.of("delegateTask","delegateTasks").contains(call.name())
-        ||dev.mikoto2000.rei.core.taskstate.TaskStateArguments.supports(call.name())
-        ||dev.mikoto2000.rei.core.policy.ShellFileReadArguments.supports(call.name())
-        ||dev.mikoto2000.rei.core.policy.ProcessWaitArguments.supports(call.name())))return execute(prompt,response);
-    if(response.getResults().size()!=1)throw new IllegalArgumentException("Approval continuation requires a single selected generation");
-    var output=response.getResult().getOutput();
-    return executePending(prompt,new RunContinuation.PendingTools(java.util.Objects.toString(output.getText(),""),output.getToolCalls(),java.util.List.of()),context,false);
-  }
-  public ToolExecutionResult executePending(Prompt prompt,RunContinuation.PendingTools pending,
+
+  public ToolExecutionResult executeResumable(
+      Prompt prompt,
+      ChatResponse response,
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext context) {
-    return executePending(prompt,pending,context,true);
+    if (!context.hasApprovalContinuation()
+        && response.getResult().getOutput().getToolCalls().stream()
+            .noneMatch(
+                call ->
+                    java.util.Set.of("delegateTask", "delegateTasks").contains(call.name())
+                        || dev.mikoto2000.rei.core.taskstate.TaskStateArguments.supports(
+                            call.name())
+                        || dev.mikoto2000.rei.core.policy.ShellFileReadArguments.supports(
+                            call.name())
+                        || dev.mikoto2000.rei.core.policy.ProcessWaitArguments.supports(
+                            call.name()))) return execute(prompt, response);
+    if (response.getResults().size() != 1)
+      throw new IllegalArgumentException(
+          "Approval continuation requires a single selected generation");
+    var output = response.getResult().getOutput();
+    return executePending(
+        prompt,
+        new RunContinuation.PendingTools(
+            java.util.Objects.toString(output.getText(), ""),
+            output.getToolCalls(),
+            java.util.List.of()),
+        context,
+        false);
   }
-  private ToolExecutionResult executePending(Prompt prompt,RunContinuation.PendingTools pending,
-      dev.mikoto2000.rei.core.stagnation.RunExecutionContext context,boolean replay) {
-    var options=(ToolCallingChatOptions)prompt.getOptions();
-    var callbacks=new java.util.HashMap<String,org.springframework.ai.tool.ToolCallback>();
-    options.getToolCallbacks().forEach(callback->callbacks.put(callback.getToolDefinition().name(),callback));
-    var ids=new java.util.HashSet<String>();
-    for(var call:pending.calls())if(!callbacks.containsKey(call.name())||!ids.add(call.id()))throw new IllegalArgumentException("Unrequested or duplicate saved Tool");
-    var completed=new java.util.ArrayList<>(pending.completed());
-    boolean corrected=false;
-    if(completed.size()>pending.calls().size())throw new IllegalArgumentException("Invalid completed Tool prefix");
-    for(int i=0;i<completed.size();i++)if(!completed.get(i).id().equals(pending.calls().get(i).id())||!completed.get(i).name().equals(pending.calls().get(i).name()))throw new IllegalArgumentException("Saved Tool prefix mismatch");
-    for(int i=completed.size();i<pending.calls().size();i++) {
-      var call=pending.calls().get(i);context.checkActive();
-      if(replay)context.checkApprovalContinuationExecution();
-      try {context.validateToolArguments(call.name(),call.arguments());}
-      catch(dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException invalid) {
-        completed.add(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(call.id(),call.name(),context.argumentCorrection(call.id(),call.name(),invalid)));
-        corrected=true;continue;
-      }catch(dev.mikoto2000.rei.chatgpt.ChatGptException denied) {
+
+  public ToolExecutionResult executePending(
+      Prompt prompt,
+      RunContinuation.PendingTools pending,
+      dev.mikoto2000.rei.core.stagnation.RunExecutionContext context) {
+    return executePending(prompt, pending, context, true);
+  }
+
+  private ToolExecutionResult executePending(
+      Prompt prompt,
+      RunContinuation.PendingTools pending,
+      dev.mikoto2000.rei.core.stagnation.RunExecutionContext context,
+      boolean replay) {
+    var options = (ToolCallingChatOptions) prompt.getOptions();
+    var callbacks = new java.util.HashMap<String, org.springframework.ai.tool.ToolCallback>();
+    options
+        .getToolCallbacks()
+        .forEach(callback -> callbacks.put(callback.getToolDefinition().name(), callback));
+    var ids = new java.util.HashSet<String>();
+    for (var call : pending.calls())
+      if (!callbacks.containsKey(call.name()) || !ids.add(call.id()))
+        throw new IllegalArgumentException("Unrequested or duplicate saved Tool");
+    var completed = new java.util.ArrayList<>(pending.completed());
+    boolean corrected = false;
+    if (completed.size() > pending.calls().size())
+      throw new IllegalArgumentException("Invalid completed Tool prefix");
+    for (int i = 0; i < completed.size(); i++)
+      if (!completed.get(i).id().equals(pending.calls().get(i).id())
+          || !completed.get(i).name().equals(pending.calls().get(i).name()))
+        throw new IllegalArgumentException("Saved Tool prefix mismatch");
+    for (int i = completed.size(); i < pending.calls().size(); i++) {
+      var call = pending.calls().get(i);
+      context.checkActive();
+      if (replay) context.checkApprovalContinuationExecution();
+      try {
+        context.validateToolArguments(call.name(), call.arguments());
+      } catch (dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException invalid) {
+        completed.add(
+            new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
+                call.id(),
+                call.name(),
+                context.argumentCorrection(call.id(), call.name(), invalid)));
+        corrected = true;
+        continue;
+      } catch (dev.mikoto2000.rei.chatgpt.ChatGptException denied) {
         // Host policy refusals are terminal, not model-correctable arguments. Report them before
         // the callback boundary so the client can show why no approval or execution occurred.
-        context.reportToolPermissionFailure(call.id(),call.name(),denied);
+        context.reportToolPermissionFailure(call.id(), call.name(), denied);
         throw denied;
       }
       try {
-        var values=new java.util.HashMap<String,Object>();if(options.getToolContext()!=null)values.putAll(options.getToolContext());
-        values.put("toolCallId",call.id());
-        String result=callbacks.get(call.name()).call(call.arguments(),new org.springframework.ai.chat.model.ToolContext(values));
-        completed.add(new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(call.id(),call.name(),result));
-      }catch(RuntimeException error) {
-        for(Throwable cause=error;cause!=null;cause=cause.getCause()) {
-          if(cause instanceof dev.mikoto2000.rei.core.policy.ToolPermissionException permission&&permission.approvalId()!=null) {
-            if(context.suspendForApproval(permission.approvalId(),prompt.getInstructions(),new RunContinuation.PendingTools(pending.text(),pending.calls(),java.util.List.copyOf(completed))))
+        var values = new java.util.HashMap<String, Object>();
+        if (options.getToolContext() != null) values.putAll(options.getToolContext());
+        values.put("toolCallId", call.id());
+        String result =
+            callbacks
+                .get(call.name())
+                .call(call.arguments(), new org.springframework.ai.chat.model.ToolContext(values));
+        completed.add(
+            new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
+                call.id(), call.name(), result));
+      } catch (RuntimeException error) {
+        for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+          if (cause instanceof dev.mikoto2000.rei.core.policy.ToolPermissionException permission
+              && permission.approvalId() != null) {
+            if (context.suspendForApproval(
+                permission.approvalId(),
+                prompt.getInstructions(),
+                new RunContinuation.PendingTools(
+                    pending.text(), pending.calls(), java.util.List.copyOf(completed))))
               throw new RunWaitingException();
           }
-          if(cause.getCause()==cause)break;
+          if (cause.getCause() == cause) break;
         }
         throw error;
       }
     }
-    var history=new java.util.ArrayList<>(prompt.getInstructions());
-    history.add(org.springframework.ai.chat.messages.AssistantMessage.builder().content(pending.text()).toolCalls(pending.calls()).build());
-    history.add(org.springframework.ai.chat.messages.ToolResponseMessage.builder().responses(completed).build());
-    boolean direct=pending.calls().stream().allMatch(call->callbacks.get(call.name()).getToolMetadata().returnDirect());
-    return deliveryMetadata(prompt, ToolExecutionResult.builder().conversationHistory(history).returnDirect(direct&&!corrected).build());
+    var history = new java.util.ArrayList<>(prompt.getInstructions());
+    history.add(
+        org.springframework.ai.chat.messages.AssistantMessage.builder()
+            .content(pending.text())
+            .toolCalls(pending.calls())
+            .build());
+    history.add(
+        org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+            .responses(completed)
+            .build());
+    boolean direct =
+        pending.calls().stream()
+            .allMatch(call -> callbacks.get(call.name()).getToolMetadata().returnDirect());
+    return deliveryMetadata(
+        prompt,
+        ToolExecutionResult.builder()
+            .conversationHistory(history)
+            .returnDirect(direct && !corrected)
+            .build());
   }
 }

@@ -1,19 +1,17 @@
 package dev.mikoto2000.rei.feed;
 
+import dev.mikoto2000.rei.websearch.WebSearchPage;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.function.Function;
-
 import org.jsoup.Jsoup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
-
-import dev.mikoto2000.rei.websearch.WebSearchPage;
 
 @Service
 public class FeedSummaryService {
@@ -26,8 +24,11 @@ public class FeedSummaryService {
   private final FeedSummaryGenerator feedSummaryGenerator;
   private final FeedProperties feedProperties;
 
-  public FeedSummaryService(FeedService feedService, Function<FeedBriefingItem, WebSearchPage> feedArticlePageFetcher,
-      FeedSummaryGenerator feedSummaryGenerator, FeedProperties feedProperties) {
+  public FeedSummaryService(
+      FeedService feedService,
+      Function<FeedBriefingItem, WebSearchPage> feedArticlePageFetcher,
+      FeedSummaryGenerator feedSummaryGenerator,
+      FeedProperties feedProperties) {
     this.feedService = feedService;
     this.feedArticlePageFetcher = feedArticlePageFetcher;
     this.feedSummaryGenerator = feedSummaryGenerator;
@@ -42,7 +43,8 @@ public class FeedSummaryService {
   }
 
   public String summarizeBriefing(OffsetDateTime from, OffsetDateTime to) {
-    List<FeedBriefingItem> items = feedService.listBriefingItems(from, to, feedProperties.briefingMaxItems());
+    List<FeedBriefingItem> items =
+        feedService.listBriefingItems(from, to, feedProperties.briefingMaxItems());
     if (items.isEmpty()) {
       return "昨日 00:00 以降の新着記事はありませんでした";
     }
@@ -65,18 +67,25 @@ public class FeedSummaryService {
     }
     try {
       String summary = feedSummaryGenerator.generate(buildItemPrompt(item, resolved));
-      log.debug("feed item summarized: itemId={}, articleUrl={}, articleFetchStatus={}, summarySource={}, truncated={}",
-          item.id(), item.url(), resolved.fetchStatus(), resolved.source(), resolved.truncated());
+      log.debug(
+          "feed item summarized: itemId={}, articleUrl={}, articleFetchStatus={}, summarySource={}, truncated={}",
+          item.id(),
+          item.url(),
+          resolved.fetchStatus(),
+          resolved.source(),
+          resolved.truncated());
       return new FeedItemSummaryResult(summary, resolved.source(), resolved.fetchStatus());
     } catch (RuntimeException e) {
-      return new FeedItemSummaryResult("記事要約の生成に失敗しました。タイトルと URL を確認してください。",
-          resolved.source(), resolved.fetchStatus());
+      return new FeedItemSummaryResult(
+          "記事要約の生成に失敗しました。タイトルと URL を確認してください。", resolved.source(), resolved.fetchStatus());
     }
   }
 
-  private String buildBriefingPrompt(OffsetDateTime from, OffsetDateTime to, List<FeedBriefingItem> items) {
+  private String buildBriefingPrompt(
+      OffsetDateTime from, OffsetDateTime to, List<FeedBriefingItem> items) {
     StringBuilder builder = new StringBuilder();
-    builder.append("""
+    builder.append(
+        """
         あなたは RSS/Atom フィードから取得した記事ページ本文をもとに、新着記事の全体要約を行う。
         本文取得に失敗した記事はメタデータだけが含まれることがある。その場合は断定しすぎない。
         次の形式で日本語で簡潔に返す:
@@ -92,11 +101,13 @@ public class FeedSummaryService {
 
         対象期間: %s から %s
         記事一覧:
-        """.formatted(from, to));
+        """
+            .formatted(from, to));
     Map<String, ArticleFetch> fetchCache = new LinkedHashMap<>();
     for (FeedBriefingItem item : items) {
       ResolvedContent resolved = resolveContent(item, fetchCache);
-      builder.append("- ")
+      builder
+          .append("- ")
           .append(item.publishedAt())
           .append(" | ")
           .append(item.feedName())
@@ -112,7 +123,10 @@ public class FeedSummaryService {
           .append(resolved.content())
           .append('\n');
     }
-    log.debug("feed briefing content resolved: items={}, uniqueArticleUrls={}", items.size(), fetchCache.size());
+    log.debug(
+        "feed briefing content resolved: items={}, uniqueArticleUrls={}",
+        items.size(),
+        fetchCache.size());
     return builder.toString().trim();
   }
 
@@ -129,7 +143,9 @@ public class FeedSummaryService {
         URL: %s
         記事本文:
         %s
-        """.formatted(item.feedName(), item.publishedAt(), item.title(), item.url(), resolved.content());
+        """
+          .formatted(
+              item.feedName(), item.publishedAt(), item.title(), item.url(), resolved.content());
     }
     return """
         あなたは RSS/Atom フィードの記事要約アシスタントです。
@@ -142,14 +158,17 @@ public class FeedSummaryService {
         URL: %s
         Feed content:
         %s
-        """.formatted(item.feedName(), item.publishedAt(), item.title(), item.url(), resolved.content());
+        """
+        .formatted(
+            item.feedName(), item.publishedAt(), item.title(), item.url(), resolved.content());
   }
 
   private ResolvedContent resolveContent(FeedBriefingItem item) {
     return resolveContent(item, new LinkedHashMap<>());
   }
 
-  private ResolvedContent resolveContent(FeedBriefingItem item, Map<String, ArticleFetch> fetchCache) {
+  private ResolvedContent resolveContent(
+      FeedBriefingItem item, Map<String, ArticleFetch> fetchCache) {
     if (isBlank(item.url())) {
       return feedContent(item, "not_requested");
     }
@@ -166,20 +185,30 @@ public class FeedSummaryService {
       if (page != null && !isBlank(page.content())) {
         return new ArticleFetch(page.content().trim(), true, page.truncated());
       }
-      log.debug("feed article fetch produced empty content: itemId={}, articleUrl={}", item.id(), item.url());
+      log.debug(
+          "feed article fetch produced empty content: itemId={}, articleUrl={}",
+          item.id(),
+          item.url());
     } catch (Exception e) {
-      log.debug("feed article fetch failed: itemId={}, articleUrl={}, reason={}", item.id(), item.url(), e.toString());
+      log.debug(
+          "feed article fetch failed: itemId={}, articleUrl={}, reason={}",
+          item.id(),
+          item.url(),
+          e.toString());
     }
     return new ArticleFetch("", false, false);
   }
 
   private ResolvedContent feedContent(FeedBriefingItem item, String fetchStatus) {
     String content = firstNonBlank(item.content(), item.description(), item.title());
-    String normalized = content == null ? "" : Jsoup.parse(content).text().replaceAll("\\s+", " ").trim();
+    String normalized =
+        content == null ? "" : Jsoup.parse(content).text().replaceAll("\\s+", " ").trim();
     boolean truncated = normalized.length() > MAX_FEED_CONTENT_LENGTH;
     if (truncated) {
-      int end = normalized.offsetByCodePoints(0, Math.min(MAX_FEED_CONTENT_LENGTH,
-          normalized.codePointCount(0, normalized.length())));
+      int end =
+          normalized.offsetByCodePoints(
+              0,
+              Math.min(MAX_FEED_CONTENT_LENGTH, normalized.codePointCount(0, normalized.length())));
       normalized = normalized.substring(0, end);
     }
     return new ResolvedContent(normalized, "feed", fetchStatus, truncated);
@@ -196,9 +225,8 @@ public class FeedSummaryService {
     return value == null || value.isBlank();
   }
 
-  private record ResolvedContent(String content, String source, String fetchStatus, boolean truncated) {
-  }
+  private record ResolvedContent(
+      String content, String source, String fetchStatus, boolean truncated) {}
 
-  private record ArticleFetch(String content, boolean success, boolean truncated) {
-  }
+  private record ArticleFetch(String content, boolean success, boolean truncated) {}
 }

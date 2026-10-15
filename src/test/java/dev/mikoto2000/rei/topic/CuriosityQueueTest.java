@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Instant;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 
 class CuriosityQueueTest {
@@ -57,7 +56,8 @@ class CuriosityQueueTest {
     TopicGeneratorProperties properties = new TopicGeneratorProperties();
     properties.setEnabled(true);
     queue.add(item("a", "測定を確認する", 0.9, Instant.parse("2026-10-02T00:00:00Z")));
-    CuriosityTopicCandidateGenerator generator = new CuriosityTopicCandidateGenerator(queue, properties);
+    CuriosityTopicCandidateGenerator generator =
+        new CuriosityTopicCandidateGenerator(queue, properties);
 
     List<TopicCandidate> candidates = generator.generate(context());
 
@@ -66,8 +66,15 @@ class CuriosityQueueTest {
   }
 
   private CuriosityItem item(String id, String question, double priority, Instant expiresAt) {
-    return new CuriosityItem(id, question, "reason", TopicSource.CONVERSATION, priority,
-        Instant.parse("2026-09-02T00:00:00Z"), expiresAt, CuriosityStatus.PENDING);
+    return new CuriosityItem(
+        id,
+        question,
+        "reason",
+        TopicSource.CONVERSATION,
+        priority,
+        Instant.parse("2026-09-02T00:00:00Z"),
+        expiresAt,
+        CuriosityStatus.PENDING);
   }
 
   private TopicGenerationContext context() {

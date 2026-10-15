@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -17,8 +16,11 @@ public class DiscoveryTopicCandidateGenerator implements TopicCandidateGenerator
   private final DiscoverySeenRepository seenRepository;
   private final TopicGeneratorProperties properties;
 
-  public DiscoveryTopicCandidateGenerator(DiscoverySeedGenerator seedGenerator, List<DiscoverySource> sources,
-      DiscoverySeenRepository seenRepository, TopicGeneratorProperties properties) {
+  public DiscoveryTopicCandidateGenerator(
+      DiscoverySeedGenerator seedGenerator,
+      List<DiscoverySource> sources,
+      DiscoverySeenRepository seenRepository,
+      TopicGeneratorProperties properties) {
     this.seedGenerator = seedGenerator;
     this.sources = sources == null ? List.of() : List.copyOf(sources);
     this.seenRepository = seenRepository;
@@ -68,6 +70,7 @@ public class DiscoveryTopicCandidateGenerator implements TopicCandidateGenerator
     long days = Math.max(0L, Duration.between(publishedAt, now).toDays());
     if (days >= properties.getDiscovery().getFreshnessWindowDays()) return 0.1d;
     double remaining = properties.getDiscovery().getFreshnessWindowDays() - days;
-    return Math.max(0.1d, Math.min(1.0d, remaining / properties.getDiscovery().getFreshnessWindowDays()));
+    return Math.max(
+        0.1d, Math.min(1.0d, remaining / properties.getDiscovery().getFreshnessWindowDays()));
   }
 }

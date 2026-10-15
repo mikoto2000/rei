@@ -8,140 +8,255 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties("rei.activity")
 public class ActivityProperties {
   private boolean enabled = false;
+
   /** Explicit opt-in to observation-time Git and saved Work Context references. */
   private boolean workContextEnabled = false;
+
   private boolean extractionEnabled = true;
   private boolean keepScreenshots = false;
   private boolean keepOnExtractionFailure = false;
   private int captureIntervalSeconds = 60;
-  private Observation observation=new Observation();
-    private VisionQueue visionQueue=new VisionQueue();
-    private Temporal temporal=new Temporal();
-    @Data public static class Temporal {
-      private boolean enabled=true;
-      private boolean llmEnabled=false;
-      private int windowSeconds=300;
-      private int intervalSeconds=60;
-      private int maxRecords=120;
-      private int maxInputChars=12000;
-      private int maxOutputTokens=512;
-      private int maxTotalTokens=8192;
-      private int maxRetries=1;
-      private int timeoutSeconds=20;
-    }
-  @Data public static class VisionQueue {
-    private boolean enabled=true;
-    private int minimumStartIntervalSeconds=30;
-    private int maxRefreshIntervalSeconds=300;
+  private Observation observation = new Observation();
+  private VisionQueue visionQueue = new VisionQueue();
+  private Temporal temporal = new Temporal();
+
+  @Data
+  public static class Temporal {
+    private boolean enabled = true;
+    private boolean llmEnabled = false;
+    private int windowSeconds = 300;
+    private int intervalSeconds = 60;
+    private int maxRecords = 120;
+    private int maxInputChars = 12000;
+    private int maxOutputTokens = 512;
+    private int maxTotalTokens = 8192;
+    private int maxRetries = 1;
+    private int timeoutSeconds = 20;
   }
-  @Data public static class Observation {
-    private boolean inputAwareEnabled=true;
-    private int intervalSeconds=15;
-    private int maxObservationIntervalSeconds=300;
+
+  @Data
+  public static class VisionQueue {
+    private boolean enabled = true;
+    private int minimumStartIntervalSeconds = 30;
+    private int maxRefreshIntervalSeconds = 300;
   }
-  public int observationDurationSeconds(boolean lightweight) {return lightweight?Math.min(captureIntervalSeconds,observation.intervalSeconds):captureIntervalSeconds;}
+
+  @Data
+  public static class Observation {
+    private boolean inputAwareEnabled = true;
+    private int intervalSeconds = 15;
+    private int maxObservationIntervalSeconds = 300;
+  }
+
+  public int observationDurationSeconds(boolean lightweight) {
+    return lightweight
+        ? Math.min(captureIntervalSeconds, observation.intervalSeconds)
+        : captureIntervalSeconds;
+  }
+
   private double visionImageScale = .5;
   private int backgroundAnalysisIntervalSeconds = 300;
   private Detection detection = new Detection();
-  private DesktopContext desktopContext=new DesktopContext();
-  @Data public static class DesktopContext {
-    /** Empty selects all connected displays. IDs come from the existing Robot capture adapter. */
-    private List<String> monitors=List.of();
-    private List<Mask> masks=List.of();
-  }
-  public record Mask(String monitor,int x,int y,int width,int height) {}
+  private DesktopContext desktopContext = new DesktopContext();
 
-  private Classification classification=new Classification();
-  private Summary summary=new Summary();
-  private Coaching coaching=new Coaching();
-  @Data public static class Coaching {
-    private boolean automaticEnabled=false;
-    private boolean weeklyEnabled=true;
-    private boolean monthlyEnabled=true;
-    private int checkIntervalSeconds=3600;
+  @Data
+  public static class DesktopContext {
+    /** Empty selects all connected displays. IDs come from the existing Robot capture adapter. */
+    private List<String> monitors = List.of();
+
+    private List<Mask> masks = List.of();
   }
-  @Data public static class Summary {
-    private boolean llmEnabled=true;
-    private int timeoutSeconds=30;
-    private String projectAliasesFile="activity/project-aliases.yaml";
+
+  public record Mask(String monitor, int x, int y, int width, int height) {}
+
+  private Classification classification = new Classification();
+  private Summary summary = new Summary();
+  private Coaching coaching = new Coaching();
+
+  @Data
+  public static class Coaching {
+    private boolean automaticEnabled = false;
+    private boolean weeklyEnabled = true;
+    private boolean monthlyEnabled = true;
+    private int checkIntervalSeconds = 3600;
   }
-  @Data public static class Classification {
-    private String userRulesFile="activity/classification-rules.yaml";
-    private boolean hotReload=true;
-    private Registry unknownRegistry=new Registry();
-    private Registry entertainmentRegistry=new Registry();
-    private RuleSuggestion ruleSuggestion=new RuleSuggestion();
-    private Diagnostics diagnostics=new Diagnostics();
+
+  @Data
+  public static class Summary {
+    private boolean llmEnabled = true;
+    private int timeoutSeconds = 30;
+    private String projectAliasesFile = "activity/project-aliases.yaml";
   }
-  @Data public static class Registry { private boolean enabled=true;private int retentionDays=30;private int maxEntries=1000; }
-  @Data public static class RuleSuggestion {
-    public static final int DEFAULT_MAX_OUTPUT_TOKENS=8192;
-    private boolean enabled=true;private int minimumSamples=3;
-    private int maxOutputTokens=DEFAULT_MAX_OUTPUT_TOKENS;
+
+  @Data
+  public static class Classification {
+    private String userRulesFile = "activity/classification-rules.yaml";
+    private boolean hotReload = true;
+    private Registry unknownRegistry = new Registry();
+    private Registry entertainmentRegistry = new Registry();
+    private RuleSuggestion ruleSuggestion = new RuleSuggestion();
+    private Diagnostics diagnostics = new Diagnostics();
   }
-  @Data public static class Diagnostics { private boolean enabled=true; }
-  public enum DetectionMode { EVIDENCE_FIRST, VISION_FIRST }
-  @Data public static class Detection {
-    private DetectionMode mode=DetectionMode.EVIDENCE_FIRST;
-    private boolean evidenceEnabled=true;
-    private boolean visionEnabled=true;
-    private boolean fallbackEnabled=true;
-    private double skipVisionConfidence=.8;
-    private boolean foregroundCrop=true;
-    private boolean backgroundFullScreenEnabled=false;
-    private int maxOutputTokens=2048;
+
+  @Data
+  public static class Registry {
+    private boolean enabled = true;
+    private int retentionDays = 30;
+    private int maxEntries = 1000;
   }
+
+  @Data
+  public static class RuleSuggestion {
+    public static final int DEFAULT_MAX_OUTPUT_TOKENS = 8192;
+    private boolean enabled = true;
+    private int minimumSamples = 3;
+    private int maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS;
+  }
+
+  @Data
+  public static class Diagnostics {
+    private boolean enabled = true;
+  }
+
+  public enum DetectionMode {
+    EVIDENCE_FIRST,
+    VISION_FIRST
+  }
+
+  @Data
+  public static class Detection {
+    private DetectionMode mode = DetectionMode.EVIDENCE_FIRST;
+    private boolean evidenceEnabled = true;
+    private boolean visionEnabled = true;
+    private boolean fallbackEnabled = true;
+    private double skipVisionConfidence = .8;
+    private boolean foregroundCrop = true;
+    private boolean backgroundFullScreenEnabled = false;
+    private int maxOutputTokens = 2048;
+  }
+
   private int screenshotRetentionDays = 3;
   private double changeThreshold = .03;
   private int sessionGapSeconds = 90;
+
   /** Compatibility cap for explicitly configured Phase 3 settings. */
   private Integer summaryGapSeconds;
+
   private int summaryNormalMergeGapSeconds = 120;
   private int summaryMaximumMergeGapSeconds = 300;
   private double primaryConfidenceThreshold = .5;
   private int summaryBriefSwitchSeconds = 120;
   private String zone = java.time.ZoneId.systemDefault().getId();
   private List<String> excludedProcesses = List.of("KeePassXC.exe", "1Password.exe");
-  private List<String> excludedWindowTitlePatterns = List.of("*Password*", "*Private Browsing*", "*InPrivate*");
+  private List<String> excludedWindowTitlePatterns =
+      List.of("*Password*", "*Private Browsing*", "*InPrivate*");
 
-    public void validate() {
-      if(temporal==null || temporal.windowSeconds<60 || temporal.windowSeconds>600 || temporal.intervalSeconds<60 || temporal.intervalSeconds>300
-          || temporal.maxRecords<1 || temporal.maxRecords>120 || temporal.maxInputChars<1000 || temporal.maxInputChars>16000
-          || temporal.maxOutputTokens<1 || temporal.maxOutputTokens>2048 || temporal.maxTotalTokens<1 || temporal.maxTotalTokens>32768
-          || temporal.maxRetries<0 || temporal.maxRetries>1 || temporal.timeoutSeconds<1 || temporal.timeoutSeconds>60)
-        throw new IllegalArgumentException("Invalid temporal Activity limits");
-    if(visionQueue==null || visionQueue.minimumStartIntervalSeconds<0 || visionQueue.maxRefreshIntervalSeconds<1
-        || visionQueue.maxRefreshIntervalSeconds<visionQueue.minimumStartIntervalSeconds)
+  public void validate() {
+    if (temporal == null
+        || temporal.windowSeconds < 60
+        || temporal.windowSeconds > 600
+        || temporal.intervalSeconds < 60
+        || temporal.intervalSeconds > 300
+        || temporal.maxRecords < 1
+        || temporal.maxRecords > 120
+        || temporal.maxInputChars < 1000
+        || temporal.maxInputChars > 16000
+        || temporal.maxOutputTokens < 1
+        || temporal.maxOutputTokens > 2048
+        || temporal.maxTotalTokens < 1
+        || temporal.maxTotalTokens > 32768
+        || temporal.maxRetries < 0
+        || temporal.maxRetries > 1
+        || temporal.timeoutSeconds < 1
+        || temporal.timeoutSeconds > 60)
+      throw new IllegalArgumentException("Invalid temporal Activity limits");
+    if (visionQueue == null
+        || visionQueue.minimumStartIntervalSeconds < 0
+        || visionQueue.maxRefreshIntervalSeconds < 1
+        || visionQueue.maxRefreshIntervalSeconds < visionQueue.minimumStartIntervalSeconds)
       throw new IllegalArgumentException("Invalid activity vision queue intervals");
-    if(observation==null || observation.intervalSeconds<1 || observation.maxObservationIntervalSeconds<observation.intervalSeconds)
+    if (observation == null
+        || observation.intervalSeconds < 1
+        || observation.maxObservationIntervalSeconds < observation.intervalSeconds)
       throw new IllegalArgumentException("Invalid activity observation intervals");
-    if(coaching==null || coaching.checkIntervalSeconds<60 || coaching.checkIntervalSeconds>86400)
+    if (coaching == null
+        || coaching.checkIntervalSeconds < 60
+        || coaching.checkIntervalSeconds > 86400)
       throw new IllegalArgumentException("Invalid period coaching interval (60..86400 seconds)");
-    if(summary==null || summary.timeoutSeconds<1 || summary.timeoutSeconds>120 || summary.projectAliasesFile==null || summary.projectAliasesFile.isBlank())
+    if (summary == null
+        || summary.timeoutSeconds < 1
+        || summary.timeoutSeconds > 120
+        || summary.projectAliasesFile == null
+        || summary.projectAliasesFile.isBlank())
       throw new IllegalArgumentException("Invalid daily summary settings");
-    if(classification==null || classification.userRulesFile==null || classification.userRulesFile.isBlank() || classification.unknownRegistry==null || classification.entertainmentRegistry==null || classification.ruleSuggestion==null || classification.diagnostics==null || classification.ruleSuggestion.minimumSamples<1)
+    if (classification == null
+        || classification.userRulesFile == null
+        || classification.userRulesFile.isBlank()
+        || classification.unknownRegistry == null
+        || classification.entertainmentRegistry == null
+        || classification.ruleSuggestion == null
+        || classification.diagnostics == null
+        || classification.ruleSuggestion.minimumSamples < 1)
       throw new IllegalArgumentException("Invalid classification toolkit settings");
-    if(classification.ruleSuggestion.maxOutputTokens<1)
-      throw new IllegalArgumentException("rei.activity.classification.rule-suggestion.max-output-tokens must be positive");
-    for(var registry:List.of(classification.unknownRegistry,classification.entertainmentRegistry))if(registry.retentionDays<1 || registry.maxEntries<1 || registry.maxEntries>10000)throw new IllegalArgumentException("Invalid registry retention");
-    if(detection==null || detection.mode==null || !Double.isFinite(detection.skipVisionConfidence)
-        || detection.skipVisionConfidence<0 || detection.skipVisionConfidence>1 || detection.maxOutputTokens<1)
+    if (classification.ruleSuggestion.maxOutputTokens < 1)
+      throw new IllegalArgumentException(
+          "rei.activity.classification.rule-suggestion.max-output-tokens must be positive");
+    for (var registry :
+        List.of(classification.unknownRegistry, classification.entertainmentRegistry))
+      if (registry.retentionDays < 1 || registry.maxEntries < 1 || registry.maxEntries > 10000)
+        throw new IllegalArgumentException("Invalid registry retention");
+    if (detection == null
+        || detection.mode == null
+        || !Double.isFinite(detection.skipVisionConfidence)
+        || detection.skipVisionConfidence < 0
+        || detection.skipVisionConfidence > 1
+        || detection.maxOutputTokens < 1)
       throw new IllegalArgumentException("Invalid activity detection settings");
-    if (captureIntervalSeconds < 1 || backgroundAnalysisIntervalSeconds < 1 || screenshotRetentionDays < 0 || sessionGapSeconds < 0
-        || !Double.isFinite(visionImageScale) || visionImageScale<=0 || visionImageScale>1
-        || (summaryGapSeconds != null && summaryGapSeconds < 0) || summaryBriefSwitchSeconds < 0
-        || summaryNormalMergeGapSeconds < 0 || summaryMaximumMergeGapSeconds < summaryNormalMergeGapSeconds
-        || !Double.isFinite(primaryConfidenceThreshold) || primaryConfidenceThreshold < 0 || primaryConfidenceThreshold > 1
-        || !Double.isFinite(changeThreshold) || changeThreshold < 0 || changeThreshold > 1
-        || excludedProcesses == null || excludedWindowTitlePatterns == null)
+    if (captureIntervalSeconds < 1
+        || backgroundAnalysisIntervalSeconds < 1
+        || screenshotRetentionDays < 0
+        || sessionGapSeconds < 0
+        || !Double.isFinite(visionImageScale)
+        || visionImageScale <= 0
+        || visionImageScale > 1
+        || (summaryGapSeconds != null && summaryGapSeconds < 0)
+        || summaryBriefSwitchSeconds < 0
+        || summaryNormalMergeGapSeconds < 0
+        || summaryMaximumMergeGapSeconds < summaryNormalMergeGapSeconds
+        || !Double.isFinite(primaryConfidenceThreshold)
+        || primaryConfidenceThreshold < 0
+        || primaryConfidenceThreshold > 1
+        || !Double.isFinite(changeThreshold)
+        || changeThreshold < 0
+        || changeThreshold > 1
+        || excludedProcesses == null
+        || excludedWindowTitlePatterns == null)
       throw new IllegalArgumentException("Invalid rei.activity settings");
-    if(desktopContext==null || desktopContext.monitors==null || desktopContext.masks==null
-        || desktopContext.monitors.size()>16 || desktopContext.masks.size()>64
-        || desktopContext.monitors.stream().anyMatch(id->id==null || id.isBlank())
-        || desktopContext.masks.stream().anyMatch(m->m==null || m.monitor()==null || m.monitor().isBlank() || m.width()<=0 || m.height()<=0))
+    if (desktopContext == null
+        || desktopContext.monitors == null
+        || desktopContext.masks == null
+        || desktopContext.monitors.size() > 16
+        || desktopContext.masks.size() > 64
+        || desktopContext.monitors.stream().anyMatch(id -> id == null || id.isBlank())
+        || desktopContext.masks.stream()
+            .anyMatch(
+                m ->
+                    m == null
+                        || m.monitor() == null
+                        || m.monitor().isBlank()
+                        || m.width() <= 0
+                        || m.height() <= 0))
       throw new IllegalArgumentException("Invalid desktop privacy settings");
     java.time.ZoneId.of(zone);
   }
-  public int effectiveMaximumGapSeconds() {return summaryGapSeconds==null?summaryMaximumMergeGapSeconds:Math.min(summaryGapSeconds,summaryMaximumMergeGapSeconds);}
-  public int effectiveNormalGapSeconds() {return Math.min(summaryNormalMergeGapSeconds,effectiveMaximumGapSeconds());}
+
+  public int effectiveMaximumGapSeconds() {
+    return summaryGapSeconds == null
+        ? summaryMaximumMergeGapSeconds
+        : Math.min(summaryGapSeconds, summaryMaximumMergeGapSeconds);
+  }
+
+  public int effectiveNormalGapSeconds() {
+    return Math.min(summaryNormalMergeGapSeconds, effectiveMaximumGapSeconds());
+  }
 }

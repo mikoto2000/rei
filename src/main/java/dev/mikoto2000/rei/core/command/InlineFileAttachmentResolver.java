@@ -17,23 +17,20 @@ import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import javax.imageio.ImageIO;
-
 import org.springframework.ai.content.Media;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.util.MimeType;
 import org.springframework.util.MimeTypeUtils;
 
-/**
- * Resolves inline attachment markers in chat prompts.
- */
+/** Resolves inline attachment markers in chat prompts. */
 public class InlineFileAttachmentResolver {
 
   private static final Pattern FILE_TOKEN_PATTERN = Pattern.compile("(?<!\\\\)`@file:([^`]+)`");
   private static final Pattern CLIPBOARD_TOKEN_PATTERN = Pattern.compile("(?<!\\\\)`@clipboard`");
-  private static final Pattern ESCAPED_TOKEN_PATTERN = Pattern.compile("\\\\(`@file:[^`]+`|`@clipboard`)");
+  private static final Pattern ESCAPED_TOKEN_PATTERN =
+      Pattern.compile("\\\\(`@file:[^`]+`|`@clipboard`)");
   private static final MimeType IMAGE_PNG = MimeTypeUtils.parseMimeType("image/png");
 
   private final ClipboardMediaProvider clipboardMediaProvider;
@@ -116,7 +113,8 @@ public class InlineFileAttachmentResolver {
     @Override
     public Media getClipboardMedia() throws Exception {
       try {
-        Transferable transferable = Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
+        Transferable transferable =
+            Toolkit.getDefaultToolkit().getSystemClipboard().getContents(null);
         if (transferable == null) {
           throw new IllegalStateException("clipboard is empty");
         }
@@ -126,7 +124,9 @@ public class InlineFileAttachmentResolver {
           if (text == null) {
             throw new IllegalStateException("clipboard text is null");
           }
-          return new Media(MimeTypeUtils.TEXT_PLAIN, new ByteArrayResource(text.getBytes(StandardCharsets.UTF_8)));
+          return new Media(
+              MimeTypeUtils.TEXT_PLAIN,
+              new ByteArrayResource(text.getBytes(StandardCharsets.UTF_8)));
         }
 
         if (transferable.isDataFlavorSupported(DataFlavor.imageFlavor)) {
@@ -160,21 +160,25 @@ public class InlineFileAttachmentResolver {
         return null;
       }
 
-      String imageBase64 = runPowerShell(
-          "$img = Get-Clipboard -Format Image -ErrorAction SilentlyContinue; " +
-          "if ($null -ne $img) { " +
-          "  $ms = New-Object System.IO.MemoryStream; " +
-          "  $img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); " +
-          "  [Convert]::ToBase64String($ms.ToArray()) " +
-          "}");
+      String imageBase64 =
+          runPowerShell(
+              "$img = Get-Clipboard -Format Image -ErrorAction SilentlyContinue; "
+                  + "if ($null -ne $img) { "
+                  + "  $ms = New-Object System.IO.MemoryStream; "
+                  + "  $img.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png); "
+                  + "  [Convert]::ToBase64String($ms.ToArray()) "
+                  + "}");
       if (imageBase64 != null && !imageBase64.isBlank()) {
         byte[] bytes = Base64.getDecoder().decode(imageBase64.trim());
         return new Media(IMAGE_PNG, new ByteArrayResource(bytes));
       }
 
-      String text = runPowerShell("Get-Clipboard -Raw -TextFormatType UnicodeText -ErrorAction SilentlyContinue");
+      String text =
+          runPowerShell(
+              "Get-Clipboard -Raw -TextFormatType UnicodeText -ErrorAction SilentlyContinue");
       if (text != null && !text.isBlank()) {
-        return new Media(MimeTypeUtils.TEXT_PLAIN, new ByteArrayResource(text.getBytes(StandardCharsets.UTF_8)));
+        return new Media(
+            MimeTypeUtils.TEXT_PLAIN, new ByteArrayResource(text.getBytes(StandardCharsets.UTF_8)));
       }
       return null;
     }
@@ -200,12 +204,13 @@ public class InlineFileAttachmentResolver {
       if (image instanceof BufferedImage bufferedImage) {
         return bufferedImage;
       }
-      BufferedImage converted = new BufferedImage(image.getWidth(null), image.getHeight(null), BufferedImage.TYPE_INT_ARGB);
+      BufferedImage converted =
+          new BufferedImage(
+              image.getWidth(null), image.getHeight(null), BufferedImage.TYPE_INT_ARGB);
       converted.getGraphics().drawImage(image, 0, 0, null);
       return converted;
     }
   }
 
-  public record ResolvedPrompt(String prompt, List<Media> media, List<String> warnings) {
-  }
+  public record ResolvedPrompt(String prompt, List<Media> media, List<String> warnings) {}
 }

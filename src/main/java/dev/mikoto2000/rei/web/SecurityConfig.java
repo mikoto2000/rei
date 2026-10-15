@@ -10,25 +10,36 @@ import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
 @Configuration(proxyBeanMethods = false)
-@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
+@org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+    name = "rei.web.enabled",
+    havingValue = "true")
 @EnableWebSecurity
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class SecurityConfig {
-  @Bean SecurityFilterChain apiSecurity(HttpSecurity http, ApiKeyProperties key,
-      org.springframework.core.env.Environment environment) throws Exception {
-    boolean github=environment.getProperty("rei.github.webhook.enabled",Boolean.class,false);
+  @Bean
+  SecurityFilterChain apiSecurity(
+      HttpSecurity http, ApiKeyProperties key, org.springframework.core.env.Environment environment)
+      throws Exception {
+    boolean github = environment.getProperty("rei.github.webhook.enabled", Boolean.class, false);
     return http.csrf(csrf -> csrf.disable())
         .httpBasic(basic -> basic.disable())
         .formLogin(form -> form.disable())
-        .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
+        .sessionManagement(
+            session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
         .requestCache(cache -> cache.disable())
-        .authorizeHttpRequests(auth -> {
-          auth.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll();
-          if(github)auth.requestMatchers(HttpMethod.POST,"/api/v1/github/events").permitAll();
-          auth.anyRequest().authenticated();
-        })
-        .exceptionHandling(errors -> errors.authenticationEntryPoint((request, response, exception) -> response.setStatus(401)))
-        .addFilterBefore(new ApiKeyAuthenticationFilter(key,github), UsernamePasswordAuthenticationFilter.class)
+        .authorizeHttpRequests(
+            auth -> {
+              auth.requestMatchers(HttpMethod.GET, "/actuator/health").permitAll();
+              if (github)
+                auth.requestMatchers(HttpMethod.POST, "/api/v1/github/events").permitAll();
+              auth.anyRequest().authenticated();
+            })
+        .exceptionHandling(
+            errors ->
+                errors.authenticationEntryPoint(
+                    (request, response, exception) -> response.setStatus(401)))
+        .addFilterBefore(
+            new ApiKeyAuthenticationFilter(key, github), UsernamePasswordAuthenticationFilter.class)
         .build();
   }
 }

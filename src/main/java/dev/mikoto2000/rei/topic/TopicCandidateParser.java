@@ -6,10 +6,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -55,7 +53,9 @@ public class TopicCandidateParser {
     int objectEnd = normalized.lastIndexOf('}');
     int arrayStart = normalized.indexOf('[');
     int arrayEnd = normalized.lastIndexOf(']');
-    if (objectStart >= 0 && objectEnd > objectStart && (arrayStart < 0 || objectStart < arrayStart)) {
+    if (objectStart >= 0
+        && objectEnd > objectStart
+        && (arrayStart < 0 || objectStart < arrayStart)) {
       return normalized.substring(objectStart, objectEnd + 1);
     }
     if (arrayStart >= 0 && arrayEnd > arrayStart) {

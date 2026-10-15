@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.time.Duration;
 import java.time.Instant;
-
 import org.junit.jupiter.api.Test;
 
 class DefaultIdleTopicTriggerTest {
@@ -88,13 +87,46 @@ class DefaultIdleTopicTriggerTest {
       this.lastAgentActivityAt = applicationStartedAt;
     }
 
-    @Override public Instant applicationStartedAt() { return applicationStartedAt; }
-    @Override public Instant lastUserActivityAt() { return lastUserActivityAt; }
-    @Override public Instant lastAgentActivityAt() { return lastAgentActivityAt; }
-    @Override public boolean isAgentBusy() { return agentBusy; }
-    @Override public long activityVersion() { return 0; }
-    @Override public void recordUserActivity(Instant at) { lastUserActivityAt = at; }
-    @Override public void recordAgentStarted(Instant at) { lastAgentActivityAt = at; agentBusy = true; }
-    @Override public void recordAgentCompleted(Instant at) { lastAgentActivityAt = at; agentBusy = false; }
+    @Override
+    public Instant applicationStartedAt() {
+      return applicationStartedAt;
+    }
+
+    @Override
+    public Instant lastUserActivityAt() {
+      return lastUserActivityAt;
+    }
+
+    @Override
+    public Instant lastAgentActivityAt() {
+      return lastAgentActivityAt;
+    }
+
+    @Override
+    public boolean isAgentBusy() {
+      return agentBusy;
+    }
+
+    @Override
+    public long activityVersion() {
+      return 0;
+    }
+
+    @Override
+    public void recordUserActivity(Instant at) {
+      lastUserActivityAt = at;
+    }
+
+    @Override
+    public void recordAgentStarted(Instant at) {
+      lastAgentActivityAt = at;
+      agentBusy = true;
+    }
+
+    @Override
+    public void recordAgentCompleted(Instant at) {
+      lastAgentActivityAt = at;
+      agentBusy = false;
+    }
   }
 }

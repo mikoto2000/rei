@@ -8,8 +8,7 @@ import java.util.List;
 /**
  * 現在のタスク中に、どのファイルへどのような変更を行ったかを短く保持する。
  *
- * <p>Working Set（どのファイルを使用しているか）や Task State（何をしようとしているか）とは別に、
- * 「現在のタスクで何を変更したか」を保持する。</p>
+ * <p>Working Set（どのファイルを使用しているか）や Task State（何をしようとしているか）とは別に、 「現在のタスクで何を変更したか」を保持する。
  */
 public class RecentChanges {
 
@@ -17,8 +16,10 @@ public class RecentChanges {
 
   /** ファイルを作成した。 */
   public static final String OP_CREATE = "CREATE";
+
   /** ファイルを編集した。 */
   public static final String OP_EDIT = "EDIT";
+
   /** ファイルを削除した。 */
   public static final String OP_DELETE = "DELETE";
 
@@ -76,7 +77,11 @@ public class RecentChanges {
     StringBuilder sb = new StringBuilder();
     sb.append("## Recent Changes\n\n");
     for (RecentChange entry : entries) {
-      sb.append("- ").append(entry.path()).append(" [").append(entry.operation().toLowerCase()).append("]\n");
+      sb.append("- ")
+          .append(entry.path())
+          .append(" [")
+          .append(entry.operation().toLowerCase())
+          .append("]\n");
       sb.append("  ").append(entry.summary()).append("\n");
     }
     sb.append("\n");

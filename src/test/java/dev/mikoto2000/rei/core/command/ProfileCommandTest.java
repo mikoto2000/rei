@@ -2,6 +2,10 @@ package dev.mikoto2000.rei.core.command;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.ProfileEventLogStore;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
@@ -9,27 +13,20 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-
-import dev.mikoto2000.rei.event.AgentEventFactory;
-import dev.mikoto2000.rei.event.ProfileEventLogStore;
 
 @org.junit.jupiter.api.Tag("integration")
 class ProfileCommandTest {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void summaryPrintsCountsAndDurations() {
     ProfileEventLogStore store = store();
-    AgentEventFactory events = new AgentEventFactory(
-        Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo")));
+    AgentEventFactory events =
+        new AgentEventFactory(
+            Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo")));
     store.append(events.runStarted("run-1", "chat", null));
     store.append(events.runCompleted("run-1", 250L));
 
@@ -44,8 +41,9 @@ class ProfileCommandTest {
   @Test
   void chartPrintsBuckets() {
     ProfileEventLogStore store = store();
-    AgentEventFactory events = new AgentEventFactory(
-        Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo")));
+    AgentEventFactory events =
+        new AgentEventFactory(
+            Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo")));
     store.append(events.messageStarted("message-1", "assistant"));
 
     String output = capture(() -> new ProfileCommand(store).printChart(60L, 10));
@@ -58,8 +56,9 @@ class ProfileCommandTest {
   @Test
   void mermaidPrintsXyChart() {
     ProfileEventLogStore store = store();
-    AgentEventFactory events = new AgentEventFactory(
-        Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo")));
+    AgentEventFactory events =
+        new AgentEventFactory(
+            Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo")));
     store.append(events.messageStarted("message-1", "assistant"));
 
     String output = capture(() -> new ProfileCommand(store).printMermaid(10));
@@ -70,7 +69,8 @@ class ProfileCommandTest {
   }
 
   private ProfileEventLogStore store() {
-    return new ProfileEventLogStore(tempDir.resolve(".rei").resolve("profile.log"),
+    return new ProfileEventLogStore(
+        tempDir.resolve(".rei").resolve("profile.log"),
         new ObjectMapper().registerModule(new JavaTimeModule()));
   }
 

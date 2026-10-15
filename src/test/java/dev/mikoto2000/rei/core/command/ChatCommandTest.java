@@ -1,34 +1,15 @@
 package dev.mikoto2000.rei.core.command;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
-import java.time.Clock;
-import java.util.List;
-import java.util.function.Consumer;
-
-import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mockito;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
-import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
-import org.springframework.ai.chat.metadata.ChatResponseMetadata;
-import org.springframework.ai.chat.metadata.DefaultUsage;
-import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.model.Generation;
-import org.springframework.ai.chat.prompt.Prompt;
-
+import dev.mikoto2000.rei.core.chat.ChatExecutionService;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
-import dev.mikoto2000.rei.core.chat.ChatExecutionService;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.llm.FixedLlmChatClientProvider;
@@ -43,6 +24,23 @@ import dev.mikoto2000.rei.ui.shell.ChatCommand;
 import dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer;
 import dev.mikoto2000.rei.ui.shell.ShellEventOutput;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.time.Clock;
+import java.util.List;
+import java.util.function.Consumer;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.ChatClient.ChatClientRequestSpec;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.metadata.ChatGenerationMetadata;
+import org.springframework.ai.chat.metadata.ChatResponseMetadata;
+import org.springframework.ai.chat.metadata.DefaultUsage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.Prompt;
 import picocli.CommandLine;
 import reactor.core.publisher.Flux;
 
@@ -51,21 +49,32 @@ class ChatCommandTest {
   @Test
   void runPrintsAnswerWithoutAdvisorContext() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ChatClientRequestSpec requestSpec =
+        Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
-    when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("answer "), response("text")));
+    when(requestSpec.stream().chatResponse())
+        .thenReturn(Flux.just(response("answer "), response("text")));
 
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
     RecordingOutput output = new RecordingOutput();
     bus.subscribe(new ShellAgentEventRenderer(output));
-    assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
-        Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty(),
-        new AgentEventFactory(Clock.systemDefaultZone()), bus)).execute("hello") == 0);
+    assertTrue(
+        new CommandLine(
+                    new ChatCommand(
+                        chatClient,
+                        modelHolderService,
+                        cancellationService,
+                        Mockito.mock(ChatResponseNarrator.class),
+                        java.util.Optional.empty(),
+                        new AgentEventFactory(Clock.systemDefaultZone()),
+                        bus))
+                .execute("hello")
+            == 0);
 
     assertTrue(output.text().contains("=== answer ("));
     assertTrue(output.text().contains("answer text"));
@@ -75,23 +84,32 @@ class ChatCommandTest {
   @Test
   void runPrintsGenerationMetricsWhenCompletionUsageIsAvailable() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ChatClientRequestSpec requestSpec =
+        Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
-    when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(
-        response("answer "),
-        responseWithUsage("", 12)));
+    when(requestSpec.stream().chatResponse())
+        .thenReturn(Flux.just(response("answer "), responseWithUsage("", 12)));
 
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
     RecordingOutput output = new RecordingOutput();
     bus.subscribe(new ShellAgentEventRenderer(output));
-    assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
-        Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty(),
-        new AgentEventFactory(Clock.systemDefaultZone()), bus)).execute("hello") == 0);
+    assertTrue(
+        new CommandLine(
+                    new ChatCommand(
+                        chatClient,
+                        modelHolderService,
+                        cancellationService,
+                        Mockito.mock(ChatResponseNarrator.class),
+                        java.util.Optional.empty(),
+                        new AgentEventFactory(Clock.systemDefaultZone()),
+                        bus))
+                .execute("hello")
+            == 0);
 
     assertTrue(output.text().contains("answer "));
     assertTrue(output.text().contains("[agent] completed"));
@@ -102,7 +120,8 @@ class ChatCommandTest {
   @Test
   void runDoesNotPrintTokensPerSecondWhenCompletionUsageIsUnavailable() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ChatClientRequestSpec requestSpec =
+        Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
 
@@ -115,8 +134,16 @@ class ChatCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
-          Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty())).execute("hello") == 0);
+      assertTrue(
+          new CommandLine(
+                      new ChatCommand(
+                          chatClient,
+                          modelHolderService,
+                          cancellationService,
+                          Mockito.mock(ChatResponseNarrator.class),
+                          java.util.Optional.empty()))
+                  .execute("hello")
+              == 0);
     } finally {
       System.setOut(originalOut);
     }
@@ -126,8 +153,9 @@ class ChatCommandTest {
 
   @Test
   void calculatesGenerationMetricsFromDefinedTimeBoundaries() {
-    ChatExecutionService.GenerationMetrics metrics = ChatExecutionService.calculateGenerationMetrics(
-        1_000_000_000L, 1_200_000_000L, 2_200_000_000L, 2_500_000_000L, 11, 3);
+    ChatExecutionService.GenerationMetrics metrics =
+        ChatExecutionService.calculateGenerationMetrics(
+            1_000_000_000L, 1_200_000_000L, 2_200_000_000L, 2_500_000_000L, 11, 3);
 
     assertEquals(200.0d, metrics.timeToFirstTokenMillis(), 0.0001d);
     assertEquals(10.0d, metrics.outputTokensPerSecond(), 0.0001d);
@@ -136,8 +164,9 @@ class ChatCommandTest {
 
   @Test
   void outputSpeedIsUnavailableWhenProviderDeliversAnswerInOneChunk() {
-    ChatExecutionService.GenerationMetrics metrics = ChatExecutionService.calculateGenerationMetrics(
-        1_000_000_000L, 1_200_000_000L, 1_200_000_100L, 1_500_000_000L, 11, 1);
+    ChatExecutionService.GenerationMetrics metrics =
+        ChatExecutionService.calculateGenerationMetrics(
+            1_000_000_000L, 1_200_000_000L, 1_200_000_100L, 1_500_000_000L, 11, 1);
 
     assertTrue(metrics.outputTokensPerSecond() == null);
   }
@@ -145,21 +174,32 @@ class ChatCommandTest {
   @Test
   void runPrintsChatFailureToStandardError() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ChatClientRequestSpec requestSpec =
+        Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
-    when(requestSpec.stream().chatResponse()).thenReturn(Flux.error(new java.net.ConnectException("Connection refused")));
+    when(requestSpec.stream().chatResponse())
+        .thenReturn(Flux.error(new java.net.ConnectException("Connection refused")));
 
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
     RecordingOutput output = new RecordingOutput();
     bus.subscribe(new ShellAgentEventRenderer(output));
-    assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
-        Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty(),
-        new AgentEventFactory(Clock.systemDefaultZone()), bus)).execute("hello") == 0);
+    assertTrue(
+        new CommandLine(
+                    new ChatCommand(
+                        chatClient,
+                        modelHolderService,
+                        cancellationService,
+                        Mockito.mock(ChatResponseNarrator.class),
+                        java.util.Optional.empty(),
+                        new AgentEventFactory(Clock.systemDefaultZone()),
+                        bus))
+                .execute("hello")
+            == 0);
 
     assertTrue(output.text().contains("[agent] failed"));
   }
@@ -167,7 +207,8 @@ class ChatCommandTest {
   @Test
   void runTreatsLengthFinishReasonAsOutputLimitReached() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ChatClientRequestSpec requestSpec =
+        Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
     ChatResponseNarrator narrator = Mockito.mock(ChatResponseNarrator.class);
@@ -175,10 +216,19 @@ class ChatCommandTest {
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
-    when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(responseWithFinishReason("partial", "length")));
+    when(requestSpec.stream().chatResponse())
+        .thenReturn(Flux.just(responseWithFinishReason("partial", "length")));
 
-    assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
-        narrator, java.util.Optional.empty())).execute("hello") == 0);
+    assertTrue(
+        new CommandLine(
+                    new ChatCommand(
+                        chatClient,
+                        modelHolderService,
+                        cancellationService,
+                        narrator,
+                        java.util.Optional.empty()))
+                .execute("hello")
+            == 0);
 
     verify(narrator, never()).narrateIfCompleted(any());
   }
@@ -186,7 +236,8 @@ class ChatCommandTest {
   @Test
   void runDoesNotReplanWhenFinishReasonIsStop() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ChatClientRequestSpec requestSpec =
+        Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
     ChatResponseNarrator narrator = Mockito.mock(ChatResponseNarrator.class);
@@ -195,21 +246,26 @@ class ChatCommandTest {
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
-    when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(responseWithFinishReason("answer", "stop")));
+    when(requestSpec.stream().chatResponse())
+        .thenReturn(Flux.just(responseWithFinishReason("answer", "stop")));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      assertTrue(new CommandLine(new ChatCommand(
-          new FixedLlmChatClientProvider(chatClient),
-          modelHolderService,
-          new FixedLlmModelProvider(),
-          new LlmProperties(),
-          cancellationService,
-          narrator,
-          java.util.Optional.empty(),
-          java.util.Optional.of(replanner))).execute("hello") == 0);
+      assertTrue(
+          new CommandLine(
+                      new ChatCommand(
+                          new FixedLlmChatClientProvider(chatClient),
+                          modelHolderService,
+                          new FixedLlmModelProvider(),
+                          new LlmProperties(),
+                          cancellationService,
+                          narrator,
+                          java.util.Optional.empty(),
+                          java.util.Optional.of(replanner)))
+                  .execute("hello")
+              == 0);
     } finally {
       System.setOut(originalOut);
     }
@@ -221,7 +277,8 @@ class ChatCommandTest {
   @Test
   void runReplansAndExecutesSubgoalsWhenOutputLimitIsReached() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ChatClientRequestSpec requestSpec =
+        Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
     ChatResponseNarrator narrator = Mockito.mock(ChatResponseNarrator.class);
@@ -231,29 +288,37 @@ class ChatCommandTest {
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
-    when(requestSpec.stream().chatResponse()).thenReturn(
-        Flux.just(responseWithFinishReason("partial", "length")),
-        Flux.just(response("subgoal-1 result")),
-        Flux.just(response("subgoal-2 result")),
-        Flux.just(response("final result")));
-    when(replanner.replan(any(OutputLimitReplanRequest.class))).thenReturn(new OutputLimitReplanPlan(List.of(
-        new OutputLimitReplanSubgoal("one", "first subgoal"),
-        new OutputLimitReplanSubgoal("two", "second subgoal")),
-        "integrate results"));
+    when(requestSpec.stream().chatResponse())
+        .thenReturn(
+            Flux.just(responseWithFinishReason("partial", "length")),
+            Flux.just(response("subgoal-1 result")),
+            Flux.just(response("subgoal-2 result")),
+            Flux.just(response("final result")));
+    when(replanner.replan(any(OutputLimitReplanRequest.class)))
+        .thenReturn(
+            new OutputLimitReplanPlan(
+                List.of(
+                    new OutputLimitReplanSubgoal("one", "first subgoal"),
+                    new OutputLimitReplanSubgoal("two", "second subgoal")),
+                "integrate results"));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      assertTrue(new CommandLine(new ChatCommand(
-          new FixedLlmChatClientProvider(chatClient),
-          modelHolderService,
-          new FixedLlmModelProvider(),
-          properties,
-          cancellationService,
-          narrator,
-          java.util.Optional.empty(),
-          java.util.Optional.of(replanner))).execute("original goal") == 0);
+      assertTrue(
+          new CommandLine(
+                      new ChatCommand(
+                          new FixedLlmChatClientProvider(chatClient),
+                          modelHolderService,
+                          new FixedLlmModelProvider(),
+                          properties,
+                          cancellationService,
+                          narrator,
+                          java.util.Optional.empty(),
+                          java.util.Optional.of(replanner)))
+                  .execute("original goal")
+              == 0);
     } finally {
       System.setOut(originalOut);
     }
@@ -272,7 +337,8 @@ class ChatCommandTest {
   @Test
   void runStopsReplanningWhenReplanBudgetIsExhausted() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ChatClientRequestSpec requestSpec =
+        Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
     ChatResponseNarrator narrator = Mockito.mock(ChatResponseNarrator.class);
@@ -283,21 +349,28 @@ class ChatCommandTest {
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
-    when(requestSpec.stream().chatResponse()).thenReturn(
-        Flux.just(responseWithFinishReason("partial", "length")),
-        Flux.just(responseWithFinishReason("subgoal partial", "length")));
-    when(replanner.replan(any(OutputLimitReplanRequest.class))).thenReturn(
-        new OutputLimitReplanPlan(List.of(new OutputLimitReplanSubgoal("one", "large subgoal")), "integrate"));
+    when(requestSpec.stream().chatResponse())
+        .thenReturn(
+            Flux.just(responseWithFinishReason("partial", "length")),
+            Flux.just(responseWithFinishReason("subgoal partial", "length")));
+    when(replanner.replan(any(OutputLimitReplanRequest.class)))
+        .thenReturn(
+            new OutputLimitReplanPlan(
+                List.of(new OutputLimitReplanSubgoal("one", "large subgoal")), "integrate"));
 
-    assertTrue(new CommandLine(new ChatCommand(
-        new FixedLlmChatClientProvider(chatClient),
-        modelHolderService,
-        new FixedLlmModelProvider(),
-        properties,
-        cancellationService,
-        narrator,
-        java.util.Optional.empty(),
-        java.util.Optional.of(replanner))).execute("original goal") == 0);
+    assertTrue(
+        new CommandLine(
+                    new ChatCommand(
+                        new FixedLlmChatClientProvider(chatClient),
+                        modelHolderService,
+                        new FixedLlmModelProvider(),
+                        properties,
+                        cancellationService,
+                        narrator,
+                        java.util.Optional.empty(),
+                        java.util.Optional.of(replanner)))
+                .execute("original goal")
+            == 0);
 
     verify(replanner, Mockito.times(1)).replan(any());
     verify(chatClient, Mockito.times(2)).prompt(any(Prompt.class));
@@ -307,7 +380,8 @@ class ChatCommandTest {
   @Test
   void runCountsInitialPromptAgainstOutputLimitLlmCallBudget() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ChatClientRequestSpec requestSpec =
+        Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
     ChatResponseNarrator narrator = Mockito.mock(ChatResponseNarrator.class);
@@ -318,17 +392,22 @@ class ChatCommandTest {
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
-    when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(responseWithFinishReason("partial", "length")));
+    when(requestSpec.stream().chatResponse())
+        .thenReturn(Flux.just(responseWithFinishReason("partial", "length")));
 
-    assertTrue(new CommandLine(new ChatCommand(
-        new FixedLlmChatClientProvider(chatClient),
-        modelHolderService,
-        new FixedLlmModelProvider(),
-        properties,
-        cancellationService,
-        narrator,
-        java.util.Optional.empty(),
-        java.util.Optional.of(replanner))).execute("original goal") == 0);
+    assertTrue(
+        new CommandLine(
+                    new ChatCommand(
+                        new FixedLlmChatClientProvider(chatClient),
+                        modelHolderService,
+                        new FixedLlmModelProvider(),
+                        properties,
+                        cancellationService,
+                        narrator,
+                        java.util.Optional.empty(),
+                        java.util.Optional.of(replanner)))
+                .execute("original goal")
+            == 0);
 
     verify(replanner, never()).replan(any());
     verify(chatClient, Mockito.times(1)).prompt(any(Prompt.class));
@@ -338,7 +417,8 @@ class ChatCommandTest {
   @Test
   void runReplansSubgoalAgainWhenSubgoalHitsOutputLimit() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ChatClientRequestSpec requestSpec =
+        Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
     ChatResponseNarrator narrator = Mockito.mock(ChatResponseNarrator.class);
@@ -348,29 +428,38 @@ class ChatCommandTest {
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
-    when(requestSpec.stream().chatResponse()).thenReturn(
-        Flux.just(responseWithFinishReason("partial", "length")),
-        Flux.just(responseWithFinishReason("large subgoal partial", "length")),
-        Flux.just(response("nested subgoal result")),
-        Flux.just(response("nested final result")),
-        Flux.just(response("final result")));
-    when(replanner.replan(any(OutputLimitReplanRequest.class))).thenReturn(
-        new OutputLimitReplanPlan(List.of(new OutputLimitReplanSubgoal("one", "large subgoal")), "integrate large"),
-        new OutputLimitReplanPlan(List.of(new OutputLimitReplanSubgoal("one-a", "small subgoal")), "integrate small"));
+    when(requestSpec.stream().chatResponse())
+        .thenReturn(
+            Flux.just(responseWithFinishReason("partial", "length")),
+            Flux.just(responseWithFinishReason("large subgoal partial", "length")),
+            Flux.just(response("nested subgoal result")),
+            Flux.just(response("nested final result")),
+            Flux.just(response("final result")));
+    when(replanner.replan(any(OutputLimitReplanRequest.class)))
+        .thenReturn(
+            new OutputLimitReplanPlan(
+                List.of(new OutputLimitReplanSubgoal("one", "large subgoal")), "integrate large"),
+            new OutputLimitReplanPlan(
+                List.of(new OutputLimitReplanSubgoal("one-a", "small subgoal")),
+                "integrate small"));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      assertTrue(new CommandLine(new ChatCommand(
-          new FixedLlmChatClientProvider(chatClient),
-          modelHolderService,
-          new FixedLlmModelProvider(),
-          properties,
-          cancellationService,
-          narrator,
-          java.util.Optional.empty(),
-          java.util.Optional.of(replanner))).execute("original goal") == 0);
+      assertTrue(
+          new CommandLine(
+                      new ChatCommand(
+                          new FixedLlmChatClientProvider(chatClient),
+                          modelHolderService,
+                          new FixedLlmModelProvider(),
+                          properties,
+                          cancellationService,
+                          narrator,
+                          java.util.Optional.empty(),
+                          java.util.Optional.of(replanner)))
+                  .execute("original goal")
+              == 0);
     } finally {
       System.setOut(originalOut);
     }
@@ -387,7 +476,8 @@ class ChatCommandTest {
   @Test
   void runSendsPromptContainingAttachmentToken() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ChatClientRequestSpec requestSpec =
+        Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
 
@@ -400,8 +490,16 @@ class ChatCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService, Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty()))
-          .execute("`@file:path/to/file.txt`", "please") == 0);
+      assertTrue(
+          new CommandLine(
+                      new ChatCommand(
+                          chatClient,
+                          modelHolderService,
+                          cancellationService,
+                          Mockito.mock(ChatResponseNarrator.class),
+                          java.util.Optional.empty()))
+                  .execute("`@file:path/to/file.txt`", "please")
+              == 0);
     } finally {
       System.setOut(originalOut);
     }
@@ -414,10 +512,12 @@ class ChatCommandTest {
   @Test
   void runRendersMemorySuggestionThroughShellAgentEventRendererWhenAutoTriggerIsTrue() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ChatClientRequestSpec requestSpec =
+        Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
-    MemoryConsolidatorService memoryConsolidatorService = Mockito.mock(MemoryConsolidatorService.class);
+    MemoryConsolidatorService memoryConsolidatorService =
+        Mockito.mock(MemoryConsolidatorService.class);
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
@@ -432,10 +532,18 @@ class ChatCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(directOut));
     try {
-      assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
-          Mockito.mock(ChatResponseNarrator.class), java.util.Optional.of(memoryConsolidatorService),
-          new AgentEventFactory(Clock.systemDefaultZone()), bus))
-          .execute("hello") == 0);
+      assertTrue(
+          new CommandLine(
+                      new ChatCommand(
+                          chatClient,
+                          modelHolderService,
+                          cancellationService,
+                          Mockito.mock(ChatResponseNarrator.class),
+                          java.util.Optional.of(memoryConsolidatorService),
+                          new AgentEventFactory(Clock.systemDefaultZone()),
+                          bus))
+                  .execute("hello")
+              == 0);
     } finally {
       System.setOut(originalOut);
     }
@@ -447,10 +555,12 @@ class ChatCommandTest {
   @Test
   void runDoesNotPrintMemorySuggestionWhenAutoTriggerIsFalse() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ChatClientRequestSpec requestSpec =
+        Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
-    MemoryConsolidatorService memoryConsolidatorService = Mockito.mock(MemoryConsolidatorService.class);
+    MemoryConsolidatorService memoryConsolidatorService =
+        Mockito.mock(MemoryConsolidatorService.class);
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
@@ -462,9 +572,16 @@ class ChatCommandTest {
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
-          Mockito.mock(ChatResponseNarrator.class), java.util.Optional.of(memoryConsolidatorService)))
-          .execute("hello") == 0);
+      assertTrue(
+          new CommandLine(
+                      new ChatCommand(
+                          chatClient,
+                          modelHolderService,
+                          cancellationService,
+                          Mockito.mock(ChatResponseNarrator.class),
+                          java.util.Optional.of(memoryConsolidatorService)))
+                  .execute("hello")
+              == 0);
     } finally {
       System.setOut(originalOut);
     }
@@ -475,23 +592,32 @@ class ChatCommandTest {
   @Test
   void runPrintsThinkingMetadataBeforeAnswer() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
-    ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ChatClientRequestSpec requestSpec =
+        Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     CommandCancellationService cancellationService = new CommandCancellationService();
 
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
     when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
-    when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(
-        responseWithThinking("", "考えています"),
-        response("answer")));
+    when(requestSpec.stream().chatResponse())
+        .thenReturn(Flux.just(responseWithThinking("", "考えています"), response("answer")));
 
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
     RecordingOutput output = new RecordingOutput();
     bus.subscribe(new ShellAgentEventRenderer(output));
-    assertTrue(new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService,
-        Mockito.mock(ChatResponseNarrator.class), java.util.Optional.empty(),
-        new AgentEventFactory(Clock.systemDefaultZone()), bus)).execute("hello") == 0);
+    assertTrue(
+        new CommandLine(
+                    new ChatCommand(
+                        chatClient,
+                        modelHolderService,
+                        cancellationService,
+                        Mockito.mock(ChatResponseNarrator.class),
+                        java.util.Optional.empty(),
+                        new AgentEventFactory(Clock.systemDefaultZone()),
+                        bus))
+                .execute("hello")
+            == 0);
 
     assertTrue(output.text().contains("=== thinking ("));
     assertTrue(output.text().contains("考えています"));
@@ -501,10 +627,20 @@ class ChatCommandTest {
 
   private static final class RecordingOutput implements ShellEventOutput {
     private final StringBuilder value = new StringBuilder();
-    public void print(String text) { value.append(text); }
-    public void println(String text) { value.append(text).append('\n'); }
-    public void flush() { }
-    String text() { return value.toString(); }
+
+    public void print(String text) {
+      value.append(text);
+    }
+
+    public void println(String text) {
+      value.append(text).append('\n');
+    }
+
+    public void flush() {}
+
+    String text() {
+      return value.toString();
+    }
   }
 
   private static ChatResponse response(String text) {
@@ -512,23 +648,20 @@ class ChatCommandTest {
   }
 
   private static ChatResponse responseWithThinking(String text, String thinking) {
-    ChatGenerationMetadata metadata = ChatGenerationMetadata.builder()
-        .metadata("reasoning_content", thinking)
-        .build();
+    ChatGenerationMetadata metadata =
+        ChatGenerationMetadata.builder().metadata("reasoning_content", thinking).build();
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text), metadata)));
   }
 
   private static ChatResponse responseWithFinishReason(String text, String finishReason) {
-    ChatGenerationMetadata metadata = ChatGenerationMetadata.builder()
-        .finishReason(finishReason)
-        .build();
+    ChatGenerationMetadata metadata =
+        ChatGenerationMetadata.builder().finishReason(finishReason).build();
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text), metadata)));
   }
 
   private static ChatResponse responseWithUsage(String text, int completionTokens) {
-    ChatResponseMetadata metadata = ChatResponseMetadata.builder()
-        .usage(new DefaultUsage(0, completionTokens))
-        .build();
+    ChatResponseMetadata metadata =
+        ChatResponseMetadata.builder().usage(new DefaultUsage(0, completionTokens)).build();
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))), metadata);
   }
 }

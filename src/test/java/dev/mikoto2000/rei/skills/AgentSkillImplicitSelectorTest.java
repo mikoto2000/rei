@@ -7,7 +7,6 @@ import static org.mockito.Mockito.when;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.model.ChatModel;
@@ -19,14 +18,16 @@ class AgentSkillImplicitSelectorTest {
     AgentSkill skill = skill("skill-a");
     ChatModel model = Mockito.mock(ChatModel.class);
     when(model.call(anyString())).thenReturn("[\"skill-a\"]");
-    var selector = new AgentSkillImplicitSelector(model, new InMemoryAgentSkillRepository(List.of(skill)));
+    var selector =
+        new AgentSkillImplicitSelector(model, new InMemoryAgentSkillRepository(List.of(skill)));
 
     assertThat(selector.select("please use it", Set.of(), null)).containsExactly(skill);
 
     var prompt = org.mockito.ArgumentCaptor.forClass(String.class);
     Mockito.verify(model).call(prompt.capture());
     assertSelectionPrompt(prompt.getValue(), skill);
-    assertThat(prompt.getValue().indexOf("Skills:")).isLessThan(prompt.getValue().indexOf("User request:"));
+    assertThat(prompt.getValue().indexOf("Skills:"))
+        .isLessThan(prompt.getValue().indexOf("User request:"));
     assertThat(new AgentSkillPromptRenderer().render("please use it", List.of(skill)))
         .contains(skill.instructions());
   }
@@ -35,43 +36,61 @@ class AgentSkillImplicitSelectorTest {
   void sendsOnlySkillMetadataAndUserRequestWithTokenBudget() {
     AgentSkill skill = skill("skill-a");
     ChatModel model = Mockito.mock(ChatModel.class);
-    var response = new org.springframework.ai.chat.model.ChatResponse(List.of(
-        new org.springframework.ai.chat.model.Generation(
-            new org.springframework.ai.chat.messages.AssistantMessage("[\"skill-a\"]"))));
-    when(model.call(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class))).thenReturn(response);
+    var response =
+        new org.springframework.ai.chat.model.ChatResponse(
+            List.of(
+                new org.springframework.ai.chat.model.Generation(
+                    new org.springframework.ai.chat.messages.AssistantMessage("[\"skill-a\"]"))));
+    when(model.call(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(response);
     var budget = Mockito.mock(dev.mikoto2000.rei.llm.ModelCallBudget.class);
     when(budget.tokenLimitEnabled()).thenReturn(true);
-    var selector = new AgentSkillImplicitSelector(model, new InMemoryAgentSkillRepository(List.of(skill)));
+    var selector =
+        new AgentSkillImplicitSelector(model, new InMemoryAgentSkillRepository(List.of(skill)));
 
-    assertThat(selector.select("please use it", Set.of(), List.of(skill), budget)).containsExactly(skill);
+    assertThat(selector.select("please use it", Set.of(), List.of(skill), budget))
+        .containsExactly(skill);
 
-    var prompt = org.mockito.ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
+    var prompt =
+        org.mockito.ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
     Mockito.verify(model).call(prompt.capture());
     assertSelectionPrompt(prompt.getValue().getContents(), skill);
     Mockito.verify(budget).run();
     Mockito.verify(budget).recordTotalTokens(response.getMetadata().getUsage().getTotalTokens());
-    assertThat(prompt.getValue().getContents().indexOf("Skills:")).isLessThan(prompt.getValue().getContents().indexOf("User request:"));
+    assertThat(prompt.getValue().getContents().indexOf("Skills:"))
+        .isLessThan(prompt.getValue().getContents().indexOf("User request:"));
     assertThat(new AgentSkillPromptRenderer().render("please use it", List.of(skill)))
         .contains(skill.instructions());
   }
 
   private void assertSelectionPrompt(String prompt, AgentSkill skill) {
-    assertThat(prompt).endsWith("User request:\nplease use it\n")
-        .contains("Skills:\n- name: " + skill.name() + "\n  description: " + skill.description()
-            + "\n\nReturn format:\n")
+    assertThat(prompt)
+        .endsWith("User request:\nplease use it\n")
+        .contains(
+            "Skills:\n- name: "
+                + skill.name()
+                + "\n  description: "
+                + skill.description()
+                + "\n\nReturn format:\n")
         .doesNotContain("excerpt:", skill.instructions());
   }
 
   @Test
   void wrappedInterruptionTerminatesSelectionAndRestoresInterrupt() {
     var model = Mockito.mock(ChatModel.class);
-    when(model.call(anyString())).thenThrow(new RuntimeException(new InterruptedException("cancelled")));
-    var selector = new AgentSkillImplicitSelector(model, new InMemoryAgentSkillRepository(List.of(skill("a"))));
+    when(model.call(anyString()))
+        .thenThrow(new RuntimeException(new InterruptedException("cancelled")));
+    var selector =
+        new AgentSkillImplicitSelector(
+            model, new InMemoryAgentSkillRepository(List.of(skill("a"))));
     try {
-      org.assertj.core.api.Assertions.assertThatThrownBy(() -> selector.select("request", Set.of(), List.of(skill("a"))))
+      org.assertj.core.api.Assertions.assertThatThrownBy(
+              () -> selector.select("request", Set.of(), List.of(skill("a"))))
           .isInstanceOf(java.util.concurrent.CancellationException.class);
       assertThat(Thread.currentThread().isInterrupted()).isTrue();
-    } finally { Thread.interrupted(); }
+    } finally {
+      Thread.interrupted();
+    }
   }
 
   @Test
@@ -120,11 +139,17 @@ class AgentSkillImplicitSelectorTest {
   private AgentSkillImplicitSelector selector(String llmResponse, AgentSkill... skills) {
     ChatModel chatModel = Mockito.mock(ChatModel.class);
     when(chatModel.call(anyString())).thenReturn(llmResponse);
-    return new AgentSkillImplicitSelector(chatModel, new InMemoryAgentSkillRepository(List.of(skills)));
+    return new AgentSkillImplicitSelector(
+        chatModel, new InMemoryAgentSkillRepository(List.of(skills)));
   }
 
   private AgentSkill skill(String name) {
-    return new AgentSkill(name, name + " description", true, Path.of(name), Path.of(name).resolve("SKILL.md"),
+    return new AgentSkill(
+        name,
+        name + " description",
+        true,
+        Path.of(name),
+        Path.of(name).resolve("SKILL.md"),
         name + " instructions");
   }
 }

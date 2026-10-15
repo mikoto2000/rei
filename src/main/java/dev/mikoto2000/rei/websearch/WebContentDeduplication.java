@@ -6,12 +6,21 @@ import java.util.*;
 
 public final class WebContentDeduplication {
   private WebContentDeduplication() {}
+
   public static String fingerprint(String fullContent) {
-    try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(fullContent.getBytes(StandardCharsets.UTF_8))); }
-    catch (NoSuchAlgorithmException impossible) { throw new IllegalStateException(impossible); }
+    try {
+      return HexFormat.of()
+          .formatHex(
+              MessageDigest.getInstance("SHA-256")
+                  .digest(fullContent.getBytes(StandardCharsets.UTF_8)));
+    } catch (NoSuchAlgorithmException impossible) {
+      throw new IllegalStateException(impossible);
+    }
   }
+
   public static List<WebSearchPage> pages(List<WebSearchPage> pages) {
-    List<WebSearchPage> result = new ArrayList<>(); Map<String, Integer> seen = new HashMap<>();
+    List<WebSearchPage> result = new ArrayList<>();
+    Map<String, Integer> seen = new HashMap<>();
     for (var page : pages) {
       Integer index = page.fingerprint() == null ? null : seen.get(page.fingerprint());
       if (index == null) {
@@ -24,8 +33,10 @@ public final class WebContentDeduplication {
     }
     return List.copyOf(result);
   }
+
   public static List<WebSearchAndReadItem> items(List<WebSearchAndReadItem> items) {
-    List<WebSearchAndReadItem> result = new ArrayList<>(); Map<String, Integer> seen = new HashMap<>();
+    List<WebSearchAndReadItem> result = new ArrayList<>();
+    Map<String, Integer> seen = new HashMap<>();
     for (var item : items) {
       Integer index = item.fingerprint() == null ? null : seen.get(item.fingerprint());
       if (index == null) {
@@ -38,8 +49,18 @@ public final class WebContentDeduplication {
     }
     return List.copyOf(result);
   }
+
   private static List<WebSourceAlias> duplicateAliases(List<WebSourceAlias> aliases) {
-    return aliases.stream().map(alias -> "http_redirect".equals(alias.evidenceType())
-        ?new WebSourceAlias(alias.url(),alias.title(),alias.publishedAt(),"duplicate_body_http_redirect"):alias).toList();
+    return aliases.stream()
+        .map(
+            alias ->
+                "http_redirect".equals(alias.evidenceType())
+                    ? new WebSourceAlias(
+                        alias.url(),
+                        alias.title(),
+                        alias.publishedAt(),
+                        "duplicate_body_http_redirect")
+                    : alias)
+        .toList();
   }
 }

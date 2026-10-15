@@ -17,7 +17,12 @@ public final class SqliteTestDatabase implements AutoCloseable {
     dataSource = new SingleConnectionDataSource(connection, true);
   }
 
-  public DataSource dataSource() { return dataSource; }
+  public DataSource dataSource() {
+    return dataSource;
+  }
 
-  @Override public void close() throws SQLException { connection.close(); }
+  @Override
+  public void close() throws SQLException {
+    connection.close();
+  }
 }

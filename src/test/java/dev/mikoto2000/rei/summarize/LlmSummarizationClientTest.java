@@ -6,8 +6,10 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -18,10 +20,6 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
-import dev.mikoto2000.rei.core.service.ModelHolderService;
-import dev.mikoto2000.rei.llm.LlmFeature;
-import dev.mikoto2000.rei.llm.LlmModelProvider;
-
 class LlmSummarizationClientTest {
 
   @Test
@@ -31,7 +29,8 @@ class LlmSummarizationClientTest {
     ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
     when(modelHolderService.get()).thenReturn("gpt-test");
     when(modelProvider.chatModel(LlmFeature.WEB_PAGE_SUMMARY)).thenReturn(chatModel);
-    when(modelProvider.chatOptions(anyString(), anyString(), Mockito.eq(false))).thenReturn(OpenAiChatOptions.builder().build());
+    when(modelProvider.chatOptions(anyString(), anyString(), Mockito.eq(false)))
+        .thenReturn(OpenAiChatOptions.builder().build());
     when(chatModel.call(Mockito.any(Prompt.class)))
         .thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage("  要約結果  ")))));
     LlmSummarizationClient client = new LlmSummarizationClient(modelProvider, modelHolderService);

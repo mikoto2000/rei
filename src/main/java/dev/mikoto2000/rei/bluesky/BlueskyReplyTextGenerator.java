@@ -1,21 +1,5 @@
 package dev.mikoto2000.rei.bluesky;
 
-import java.time.Duration;
-import java.util.List;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
-import java.util.stream.Collectors;
-
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.model.Generation;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.stereotype.Component;
-
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.llm.ConversationIds;
 import dev.mikoto2000.rei.llm.FixedLlmChatClientProvider;
@@ -23,48 +7,74 @@ import dev.mikoto2000.rei.llm.FixedLlmModelProvider;
 import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
+import java.time.Duration;
+import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
+import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.openai.OpenAiChatOptions;
+import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 @Component
 public class BlueskyReplyTextGenerator {
 
-  private static final Pattern THINK_END = Pattern.compile("</think\\s*>", Pattern.CASE_INSENSITIVE);
-  private static final Pattern THINK_MARKER = Pattern.compile("<\\s*/?\\s*think\\b", Pattern.CASE_INSENSITIVE);
+  private static final Pattern THINK_END =
+      Pattern.compile("</think\\s*>", Pattern.CASE_INSENSITIVE);
+  private static final Pattern THINK_MARKER =
+      Pattern.compile("<\\s*/?\\s*think\\b", Pattern.CASE_INSENSITIVE);
 
   // Match the whole final answer, not function/JSON examples inside natural-language prose.
   // Deliberately accept JSON-like arguments too: malformed commands must not become replies.
-  private static final Pattern TOOL_INVOCATION_TEXT = Pattern.compile(
-      "[A-Za-z_$][A-Za-z0-9_.$-]*\\s*\\(\\s*\\{.*}\\s*\\)\\s*;?",
-      Pattern.DOTALL);
+  private static final Pattern TOOL_INVOCATION_TEXT =
+      Pattern.compile("[A-Za-z_$][A-Za-z0-9_.$-]*\\s*\\(\\s*\\{.*}\\s*\\)\\s*;?", Pattern.DOTALL);
 
   private final LlmChatClientProvider chatClientProvider;
   private final ModelHolderService modelHolderService;
   private final LlmModelProvider modelProvider;
   private final BlueskyProperties properties;
 
-  public BlueskyReplyTextGenerator(ObjectProvider<ChatClient> chatClientProvider,
-      ModelHolderService modelHolderService) {
-    this(new FixedLlmChatClientProvider(chatClientProvider.getObject()), modelHolderService,
-        new FixedLlmModelProvider(), new BlueskyProperties());
+  public BlueskyReplyTextGenerator(
+      ObjectProvider<ChatClient> chatClientProvider, ModelHolderService modelHolderService) {
+    this(
+        new FixedLlmChatClientProvider(chatClientProvider.getObject()),
+        modelHolderService,
+        new FixedLlmModelProvider(),
+        new BlueskyProperties());
   }
 
   @Autowired
-  public BlueskyReplyTextGenerator(LlmChatClientProvider chatClientProvider, ModelHolderService modelHolderService,
-      LlmModelProvider modelProvider, BlueskyProperties properties) {
+  public BlueskyReplyTextGenerator(
+      LlmChatClientProvider chatClientProvider,
+      ModelHolderService modelHolderService,
+      LlmModelProvider modelProvider,
+      BlueskyProperties properties) {
     this.chatClientProvider = chatClientProvider;
     this.modelHolderService = modelHolderService;
     this.modelProvider = modelProvider;
     this.properties = properties;
   }
 
-  public String generate(String handle, String postText, List<BlueskyReplyConversationRepository.ConversationMessage> history) {
+  public String generate(
+      String handle,
+      String postText,
+      List<BlueskyReplyConversationRepository.ConversationMessage> history) {
     String conversationId = ConversationIds.blueskyReply(handle);
     if (postText == null || postText.isBlank()) {
       throw new IllegalArgumentException("Bluesky reply target post text is blank");
     }
-    String historyBlock = history.stream()
-        .map(m -> "- " + m.role() + ": " + m.content())
-        .collect(Collectors.joining("\n"));
-    String promptText = """
+    String historyBlock =
+        history.stream()
+            .map(m -> "- " + m.role() + ": " + m.content())
+            .collect(Collectors.joining("\n"));
+    String promptText =
+        """
         You are replying on Bluesky.
         Keep the reply concise, natural Japanese, and under 120 characters.
         Avoid markdown, hashtags, and URLs unless necessary.
@@ -79,10 +89,10 @@ public class BlueskyReplyTextGenerator {
 
         Post to reply:
         %s
-        """.formatted(handle, historyBlock.isBlank() ? "(none)" : historyBlock, postText);
+        """
+            .formatted(handle, historyBlock.isBlank() ? "(none)" : historyBlock, postText);
 
-    Prompt prompt = new Prompt(promptText,
-        replyOptions());
+    Prompt prompt = new Prompt(promptText, replyOptions());
     String content = generateContent(prompt, conversationId);
     if (content == null || content.isBlank()) {
       throw new IllegalStateException("Bluesky reply text generation returned blank content");
@@ -95,13 +105,15 @@ public class BlueskyReplyTextGenerator {
   }
 
   public String generateForManualReply(String postText, String handle, String identifier) {
-    String conversationId = handle != null && !handle.isBlank()
-        ? ConversationIds.blueskyReply(handle)
-        : ConversationIds.blueskyManual(identifier);
+    String conversationId =
+        handle != null && !handle.isBlank()
+            ? ConversationIds.blueskyReply(handle)
+            : ConversationIds.blueskyManual(identifier);
     if (postText == null || postText.isBlank()) {
       throw new IllegalArgumentException("Bluesky manual reply target post text is blank");
     }
-    String promptText = """
+    String promptText =
+        """
         次のBluesky投稿に対する返信文を日本語で1つ作成してください。
         条件:
         - 120文字以内
@@ -113,12 +125,13 @@ public class BlueskyReplyTextGenerator {
 
         投稿本文:
         %s
-        """.formatted(postText);
-    Prompt prompt = new Prompt(promptText,
-        replyOptions());
+        """
+            .formatted(postText);
+    Prompt prompt = new Prompt(promptText, replyOptions());
     String content = generateContent(prompt, conversationId);
     if (content == null || content.isBlank()) {
-      throw new IllegalStateException("Bluesky manual reply text generation returned blank content");
+      throw new IllegalStateException(
+          "Bluesky manual reply text generation returned blank content");
     }
     return content.strip();
   }
@@ -128,7 +141,8 @@ public class BlueskyReplyTextGenerator {
     if (postText == null || postText.isBlank()) {
       throw new IllegalArgumentException("Bluesky manual reply target post text is blank");
     }
-    String promptText = """
+    String promptText =
+        """
         次のBluesky投稿に対する返信文を日本語で1つ作成してください。
         条件:
         - 120文字以内
@@ -140,25 +154,32 @@ public class BlueskyReplyTextGenerator {
 
         投稿本文:
         %s
-        """.formatted(postText);
-    Prompt prompt = new Prompt(promptText,
-        replyOptions());
+        """
+            .formatted(postText);
+    Prompt prompt = new Prompt(promptText, replyOptions());
     String content = generateContent(prompt, conversationId);
     if (content == null || content.isBlank()) {
-      throw new IllegalStateException("Bluesky manual reply text generation returned blank content");
+      throw new IllegalStateException(
+          "Bluesky manual reply text generation returned blank content");
     }
     return content.strip();
   }
 
   private OpenAiChatOptions replyOptions() {
-    var options = modelProvider.chatOptions(LlmFeature.BLUESKY_REPLY, modelHolderService.get()).mutate()
-        .toolChoice("none").toolCallbacks(List.of()).build();
+    var options =
+        modelProvider
+            .chatOptions(LlmFeature.BLUESKY_REPLY, modelHolderService.get())
+            .mutate()
+            .toolChoice("none")
+            .toolCallbacks(List.of())
+            .build();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
     return options;
   }
 
   private String generateContent(Prompt prompt, String conversationId) {
-    return chatClientProvider.chatClient(LlmFeature.BLUESKY_REPLY)
+    return chatClientProvider
+        .chatClient(LlmFeature.BLUESKY_REPLY)
         .prompt(prompt)
         .advisors(advisor -> advisor.param(ChatMemory.CONVERSATION_ID, conversationId))
         .stream()
@@ -174,7 +195,8 @@ public class BlueskyReplyTextGenerator {
 
   private String validateFinalAnswer(String content) {
     if (TOOL_INVOCATION_TEXT.matcher(content).matches()) {
-      throw new IllegalStateException("Bluesky reply text generation returned tool invocation text");
+      throw new IllegalStateException(
+          "Bluesky reply text generation returned tool invocation text");
     }
     return content;
   }
@@ -189,14 +211,16 @@ public class BlueskyReplyTextGenerator {
     }
     String answer = content.substring(answerStart);
     if (THINK_MARKER.matcher(answer).find()) {
-      throw new IllegalStateException("Bluesky reply text generation returned an incomplete thinking block");
+      throw new IllegalStateException(
+          "Bluesky reply text generation returned an incomplete thinking block");
     }
     return answer;
   }
 
   Duration generationTimeout() {
     BlueskyProperties.BlueskyReplyProperties replyProperties = properties.getReply();
-    int timeoutSeconds = replyProperties == null ? 1200 : replyProperties.getGenerationTimeoutSeconds();
+    int timeoutSeconds =
+        replyProperties == null ? 1200 : replyProperties.getGenerationTimeoutSeconds();
     return Duration.ofSeconds(Math.max(1, timeoutSeconds));
   }
 

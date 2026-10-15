@@ -1,119 +1,300 @@
 package dev.mikoto2000.rei.core.stagnation;
 
-import java.util.*;
+import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.*;
+
 import dev.mikoto2000.rei.event.*;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
-import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.*;
+import java.util.*;
 
 /** One user run, explicitly passed in ToolContext across reactive scheduler boundaries. */
 public class RunExecutionContext {
   private static final int ACQUISITION_ONLY_LIMIT = 32;
   private static final int UNKNOWN_GRACE_ITERATIONS = 16;
-  public record ProgressState(InformationLedger.State information, OutputLimitRunBudget.Snapshot budget,
-      int acquisitionOnlyIterations, int unknownIterations, int unknownReplanNotices) {
-    public ProgressState(InformationLedger.State information, OutputLimitRunBudget.Snapshot budget,
-        int acquisitionOnlyIterations, int unknownIterations) { this(information,budget,acquisitionOnlyIterations,unknownIterations,0); }
-  }
-  public synchronized ProgressState progressSnapshot() {
-    return new ProgressState(evaluator.informationSnapshot(), budget.snapshot(), acquisitionOnlyIterations, unknownIterations, unknownReplanNotices);
-  }
-  public synchronized void restoreProgress(ProgressState saved) {
-    if (saved == null) { evaluator.restoreInformation(null); return; }
-    if (saved.acquisitionOnlyIterations() < 0 || saved.unknownIterations() < 0 || saved.unknownReplanNotices()<0 || saved.unknownReplanNotices()>2) throw new IllegalArgumentException("Invalid saved progress");
-    evaluator.restoreInformation(saved.information()); budget.restore(saved.budget());
-    acquisitionOnlyIterations = saved.acquisitionOnlyIterations(); unknownIterations = saved.unknownIterations();
-    unknownReplanNotices=saved.unknownReplanNotices();
-  }
-  private dev.mikoto2000.rei.core.chat.RunContinuation continuation;
-  private List<org.springframework.ai.chat.messages.Message> resumeMessages=List.of();
-  public void setContinuation(dev.mikoto2000.rei.core.chat.RunContinuation continuation){this.continuation=continuation;}
-  private dev.mikoto2000.rei.core.chat.RunContinuation.PendingTools pendingApprovalTools;
-  public void resume(dev.mikoto2000.rei.core.chat.RunContinuation.Saved saved){if(saved!=null){budget.restore(saved.budget());evaluator.restoreInformation(null);resumeMessages=List.copyOf(saved.messages());pendingApprovalTools=saved.pendingTools();}}
-  public dev.mikoto2000.rei.core.chat.RunContinuation.PendingTools takePendingApprovalTools(){var pending=pendingApprovalTools;pendingApprovalTools=null;return pending;}
-  public boolean hasApprovalContinuation(){return continuation instanceof dev.mikoto2000.rei.core.policy.ApprovalContinuationService;}
-  public void checkApprovalContinuationExecution(){if(continuation instanceof dev.mikoto2000.rei.core.policy.ApprovalContinuationService approvals)approvals.checkExecution(runContext);}
-  public boolean suspendForApproval(String approvalId,List<org.springframework.ai.chat.messages.Message> history,
-      dev.mikoto2000.rei.core.chat.RunContinuation.PendingTools pending) {
-    if(continuation instanceof dev.mikoto2000.rei.core.policy.ApprovalContinuationService approvals){approvals.suspendApproval(this,approvalId,history,pending);return true;}
-    return false;
-  }
-  public List<org.springframework.ai.chat.messages.Message> takeResumeMessages(){var saved=resumeMessages;resumeMessages=List.of();return saved;}
-  public OutputLimitRunBudget.Snapshot budgetSnapshot(){return budget.snapshot();}
-  public boolean hasParentReservation(){return budget.sharedLlmReservation()!=null;}
-  private java.util.function.Predicate<List<org.springframework.ai.chat.messages.Message>> dotWait;
-  public void setDotWait(java.util.function.Predicate<List<org.springframework.ai.chat.messages.Message>> wait){this.dotWait=wait;}
-  public void suspendIfWaiting(List<org.springframework.ai.chat.messages.Message> history){checkActive();if(dotWait!=null&&dotWait.test(history))throw new dev.mikoto2000.rei.core.chat.RunWaitingException();if(continuation!=null&&continuation.suspend(this,history))throw new dev.mikoto2000.rei.core.chat.RunWaitingException();}
-  public static final String KEY = RunExecutionContext.class.getName();
-  private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
-  public void setToolPermissionGuard(dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {this.permissions=permissions;}
-  public void validateToolArguments(String name,String input) {
-    if(permissions!=null)permissions.validateArguments(name,input,runContext);
-    else {
-      dev.mikoto2000.rei.core.taskstate.TaskStateArguments.validate(name,input);
-      dev.mikoto2000.rei.core.policy.ShellFileReadArguments.validate(name,input);
-      dev.mikoto2000.rei.core.policy.ProcessWaitArguments.validate(name,input);
+
+  public record ProgressState(
+      InformationLedger.State information,
+      OutputLimitRunBudget.Snapshot budget,
+      int acquisitionOnlyIterations,
+      int unknownIterations,
+      int unknownReplanNotices) {
+    public ProgressState(
+        InformationLedger.State information,
+        OutputLimitRunBudget.Snapshot budget,
+        int acquisitionOnlyIterations,
+        int unknownIterations) {
+      this(information, budget, acquisitionOnlyIterations, unknownIterations, 0);
     }
   }
-  public void reportToolPermissionFailure(String callId,String name,dev.mikoto2000.rei.chatgpt.ChatGptException error) {
-    publisher.publishBoundary(factory.toolFailed(callId,name,dev.mikoto2000.rei.chatgpt.ChatGptRunFailure.diagnostic(error)).withOwnership(runContext));
+
+  public synchronized ProgressState progressSnapshot() {
+    return new ProgressState(
+        evaluator.informationSnapshot(),
+        budget.snapshot(),
+        acquisitionOnlyIterations,
+        unknownIterations,
+        unknownReplanNotices);
   }
-  public String argumentCorrection(String callId,String name,dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException error) {
-    if(!budget.tryCorrectArguments())throw new ExecutionStoppedException(TOOL_ARGUMENT_REPAIR_EXHAUSTED);
-    String guidance=dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage());
-    publisher.publish(factory.toolFailed(callId,name,new ErrorInformation("InvalidToolArguments",guidance,"invalid_tool_arguments")).withOwnership(runContext));
-    return tools.jackson.databind.json.JsonMapper.builder().build().writeValueAsString(java.util.Map.of("error","INVALID_TOOL_ARGUMENTS","executed",false,
-        "guidance",guidance,"instruction","Correct only the invalid call arguments and issue a new tool call. Do not repeat successful sibling calls. This is not permission; normal authorization and approval still apply.",
-        "correctionsRemaining",budget.remainingArgumentCorrections(),"maxCorrections",budget.maxArgumentCorrections()));
+
+  public synchronized void restoreProgress(ProgressState saved) {
+    if (saved == null) {
+      evaluator.restoreInformation(null);
+      return;
+    }
+    if (saved.acquisitionOnlyIterations() < 0
+        || saved.unknownIterations() < 0
+        || saved.unknownReplanNotices() < 0
+        || saved.unknownReplanNotices() > 2)
+      throw new IllegalArgumentException("Invalid saved progress");
+    evaluator.restoreInformation(saved.information());
+    budget.restore(saved.budget());
+    acquisitionOnlyIterations = saved.acquisitionOnlyIterations();
+    unknownIterations = saved.unknownIterations();
+    unknownReplanNotices = saved.unknownReplanNotices();
   }
-  public void checkToolPermission(String name,String input) {
-    if(permissions!=null){permissions.check(name,input,runContext);return;}
-    if(runContext!=null && (runContext.mode()==dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.CONVERSATION
-        || runContext.mode()==dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY
-        && !dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.intrinsicallyReadOnly(name)))
-      throw new dev.mikoto2000.rei.core.policy.ToolPermissionException(name,dev.mikoto2000.rei.core.policy.PermissionDecision.DENY);
+
+  private dev.mikoto2000.rei.core.chat.RunContinuation continuation;
+  private List<org.springframework.ai.chat.messages.Message> resumeMessages = List.of();
+
+  public void setContinuation(dev.mikoto2000.rei.core.chat.RunContinuation continuation) {
+    this.continuation = continuation;
   }
+
+  private dev.mikoto2000.rei.core.chat.RunContinuation.PendingTools pendingApprovalTools;
+
+  public void resume(dev.mikoto2000.rei.core.chat.RunContinuation.Saved saved) {
+    if (saved != null) {
+      budget.restore(saved.budget());
+      evaluator.restoreInformation(null);
+      resumeMessages = List.copyOf(saved.messages());
+      pendingApprovalTools = saved.pendingTools();
+    }
+  }
+
+  public dev.mikoto2000.rei.core.chat.RunContinuation.PendingTools takePendingApprovalTools() {
+    var pending = pendingApprovalTools;
+    pendingApprovalTools = null;
+    return pending;
+  }
+
+  public boolean hasApprovalContinuation() {
+    return continuation instanceof dev.mikoto2000.rei.core.policy.ApprovalContinuationService;
+  }
+
+  public void checkApprovalContinuationExecution() {
+    if (continuation
+        instanceof dev.mikoto2000.rei.core.policy.ApprovalContinuationService approvals)
+      approvals.checkExecution(runContext);
+  }
+
+  public boolean suspendForApproval(
+      String approvalId,
+      List<org.springframework.ai.chat.messages.Message> history,
+      dev.mikoto2000.rei.core.chat.RunContinuation.PendingTools pending) {
+    if (continuation
+        instanceof dev.mikoto2000.rei.core.policy.ApprovalContinuationService approvals) {
+      approvals.suspendApproval(this, approvalId, history, pending);
+      return true;
+    }
+    return false;
+  }
+
+  public List<org.springframework.ai.chat.messages.Message> takeResumeMessages() {
+    var saved = resumeMessages;
+    resumeMessages = List.of();
+    return saved;
+  }
+
+  public OutputLimitRunBudget.Snapshot budgetSnapshot() {
+    return budget.snapshot();
+  }
+
+  public boolean hasParentReservation() {
+    return budget.sharedLlmReservation() != null;
+  }
+
+  private java.util.function.Predicate<List<org.springframework.ai.chat.messages.Message>> dotWait;
+
+  public void setDotWait(
+      java.util.function.Predicate<List<org.springframework.ai.chat.messages.Message>> wait) {
+    this.dotWait = wait;
+  }
+
+  public void suspendIfWaiting(List<org.springframework.ai.chat.messages.Message> history) {
+    checkActive();
+    if (dotWait != null && dotWait.test(history))
+      throw new dev.mikoto2000.rei.core.chat.RunWaitingException();
+    if (continuation != null && continuation.suspend(this, history))
+      throw new dev.mikoto2000.rei.core.chat.RunWaitingException();
+  }
+
+  public static final String KEY = RunExecutionContext.class.getName();
+  private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
+
+  public void setToolPermissionGuard(
+      dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {
+    this.permissions = permissions;
+  }
+
+  public void validateToolArguments(String name, String input) {
+    if (permissions != null) permissions.validateArguments(name, input, runContext);
+    else {
+      dev.mikoto2000.rei.core.taskstate.TaskStateArguments.validate(name, input);
+      dev.mikoto2000.rei.core.policy.ShellFileReadArguments.validate(name, input);
+      dev.mikoto2000.rei.core.policy.ProcessWaitArguments.validate(name, input);
+    }
+  }
+
+  public void reportToolPermissionFailure(
+      String callId, String name, dev.mikoto2000.rei.chatgpt.ChatGptException error) {
+    publisher.publishBoundary(
+        factory
+            .toolFailed(
+                callId, name, dev.mikoto2000.rei.chatgpt.ChatGptRunFailure.diagnostic(error))
+            .withOwnership(runContext));
+  }
+
+  public String argumentCorrection(
+      String callId,
+      String name,
+      dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException error) {
+    if (!budget.tryCorrectArguments())
+      throw new ExecutionStoppedException(TOOL_ARGUMENT_REPAIR_EXHAUSTED);
+    String guidance = dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage());
+    publisher.publish(
+        factory
+            .toolFailed(
+                callId,
+                name,
+                new ErrorInformation("InvalidToolArguments", guidance, "invalid_tool_arguments"))
+            .withOwnership(runContext));
+    return tools.jackson.databind.json.JsonMapper.builder()
+        .build()
+        .writeValueAsString(
+            java.util.Map.of(
+                "error",
+                "INVALID_TOOL_ARGUMENTS",
+                "executed",
+                false,
+                "guidance",
+                guidance,
+                "instruction",
+                "Correct only the invalid call arguments and issue a new tool call. Do not repeat successful sibling calls. This is not permission; normal authorization and approval still apply.",
+                "correctionsRemaining",
+                budget.remainingArgumentCorrections(),
+                "maxCorrections",
+                budget.maxArgumentCorrections()));
+  }
+
+  public void checkToolPermission(String name, String input) {
+    if (permissions != null) {
+      permissions.check(name, input, runContext);
+      return;
+    }
+    if (runContext != null
+        && (runContext.mode() == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.CONVERSATION
+            || runContext.mode() == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.READ_ONLY
+                && !dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.intrinsicallyReadOnly(
+                    name)))
+      throw new dev.mikoto2000.rei.core.policy.ToolPermissionException(
+          name, dev.mikoto2000.rei.core.policy.PermissionDecision.DENY);
+  }
+
   private final String runId;
   private final OutputLimitRunBudget budget;
   private final StagnationDetector detector = new StagnationDetector();
   private final ProgressEvaluator evaluator;
   private final AgentEventFactory factory;
   private final AgentEventPublisher publisher;
-  private final List<org.springframework.ai.chat.messages.AssistantMessage.ToolCall> plannedTools=new ArrayList<>();
-  public void planTools(List<org.springframework.ai.chat.messages.AssistantMessage.ToolCall> calls) {
-    synchronized(this){plannedTools.clear();plannedTools.addAll(calls);}
-    for(var call:calls){checkActive();publisher.publishBoundary(new AgentEvent(UUID.randomUUID().toString(),0,java.time.Instant.now(),AgentEventType.TOOL_PLANNED,1,null,null,runId,null,null,
-        new ToolStartedPayload(call.id(),call.name(),"planned",null)).withOwnership(runContext));
+  private final List<org.springframework.ai.chat.messages.AssistantMessage.ToolCall> plannedTools =
+      new ArrayList<>();
+
+  public void planTools(
+      List<org.springframework.ai.chat.messages.AssistantMessage.ToolCall> calls) {
+    synchronized (this) {
+      plannedTools.clear();
+      plannedTools.addAll(calls);
+    }
+    for (var call : calls) {
+      checkActive();
+      publisher.publishBoundary(
+          new AgentEvent(
+                  UUID.randomUUID().toString(),
+                  0,
+                  java.time.Instant.now(),
+                  AgentEventType.TOOL_PLANNED,
+                  1,
+                  null,
+                  null,
+                  runId,
+                  null,
+                  null,
+                  new ToolStartedPayload(call.id(), call.name(), "planned", null))
+              .withOwnership(runContext));
     }
   }
-  public synchronized String claimToolId(String name,String input) {
-    for(int i=0;i<plannedTools.size();i++)if(plannedTools.get(i).name().equals(name)&&plannedTools.get(i).arguments().equals(input))return plannedTools.remove(i).id();
+
+  public synchronized String claimToolId(String name, String input) {
+    for (int i = 0; i < plannedTools.size(); i++)
+      if (plannedTools.get(i).name().equals(name) && plannedTools.get(i).arguments().equals(input))
+        return plannedTools.remove(i).id();
     return UUID.randomUUID().toString();
   }
-  private java.util.function.Consumer<List<org.springframework.ai.chat.messages.Message>> toolResultsCheckpoint=messages->{};
-  public void setToolResultsCheckpoint(java.util.function.Consumer<List<org.springframework.ai.chat.messages.Message>> observer){toolResultsCheckpoint=observer;}
-  public void preserveToolResults(List<org.springframework.ai.chat.messages.Message> messages){toolResultsCheckpoint.accept(messages);}
-  public String beginDurableTool(String call,String name,String input) {
-    publisher.publishBoundary(factory.toolStarted(call,name,"Structured tool execution").withOwnership(runContext));return call;
+
+  private java.util.function.Consumer<List<org.springframework.ai.chat.messages.Message>>
+      toolResultsCheckpoint = messages -> {};
+
+  public void setToolResultsCheckpoint(
+      java.util.function.Consumer<List<org.springframework.ai.chat.messages.Message>> observer) {
+    toolResultsCheckpoint = observer;
   }
-  public void completeDurableTool(String call,String name,String result) {
-    String summary=CredentialRedactor.redact(result==null?"":result);
-    if(summary.length()>1000)summary=summary.substring(0,1000);
-    publisher.publishBoundary(factory.toolCompleted(call,name,0,summary).withOwnership(runContext));
+
+  public void preserveToolResults(List<org.springframework.ai.chat.messages.Message> messages) {
+    toolResultsCheckpoint.accept(messages);
   }
-  public void failDurableTool(String call,String name,RuntimeException error) {
-    publisher.publishBoundary(factory.toolFailed(call,name,dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(error)).withOwnership(runContext));
+
+  public String beginDurableTool(String call, String name, String input) {
+    publisher.publishBoundary(
+        factory.toolStarted(call, name, "Structured tool execution").withOwnership(runContext));
+    return call;
   }
+
+  public void completeDurableTool(String call, String name, String result) {
+    String summary = CredentialRedactor.redact(result == null ? "" : result);
+    if (summary.length() > 1000) summary = summary.substring(0, 1000);
+    publisher.publishBoundary(
+        factory.toolCompleted(call, name, 0, summary).withOwnership(runContext));
+  }
+
+  public void failDurableTool(String call, String name, RuntimeException error) {
+    publisher.publishBoundary(
+        factory
+            .toolFailed(
+                call, name, dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(error))
+            .withOwnership(runContext));
+  }
+
   private final List<ProgressEvidence> pending = new ArrayList<>();
-  private final Map<String,dev.mikoto2000.rei.core.dependency.DependencyState> dependencies=new LinkedHashMap<>();
-  private int toolCalls,waitingObservations;
+  private final Map<String, dev.mikoto2000.rei.core.dependency.DependencyState> dependencies =
+      new LinkedHashMap<>();
+  private int toolCalls, waitingObservations;
   private boolean iterationFailed;
-  public synchronized void observeDependency(dev.mikoto2000.rei.core.dependency.DependencyObservation observation) {
+
+  public synchronized void observeDependency(
+      dev.mikoto2000.rei.core.dependency.DependencyObservation observation) {
     checkActive();
-    var previous=dependencies.put(observation.id(),observation.state());
-    if(dependencies.size()>64)dependencies.remove(dependencies.keySet().iterator().next());
-    if(observation.state()==dev.mikoto2000.rei.core.dependency.DependencyState.WAITING)waitingObservations++;
-    else if(previous!=observation.state())pending.add(new ProgressEvidence(ProgressEvent.NEW_INFORMATION,"Dependency state: "+observation.state(),observation.id(),observation.state().name()));
+    var previous = dependencies.put(observation.id(), observation.state());
+    if (dependencies.size() > 64) dependencies.remove(dependencies.keySet().iterator().next());
+    if (observation.state() == dev.mikoto2000.rei.core.dependency.DependencyState.WAITING)
+      waitingObservations++;
+    else if (previous != observation.state())
+      pending.add(
+          new ProgressEvidence(
+              ProgressEvent.NEW_INFORMATION,
+              "Dependency state: " + observation.state(),
+              observation.id(),
+              observation.state().name()));
   }
+
   private final Deque<String> recentActions = new ArrayDeque<>();
   private final Set<String> completedSubgoals = new HashSet<>();
   private String lastError = "none";
@@ -129,31 +310,68 @@ public class RunExecutionContext {
   private boolean completed;
   private boolean iterationOpen;
   private long contextSegment;
-  public synchronized long nextContextSegment() { return ++contextSegment * 1_000_000_000L; }
+
+  public synchronized long nextContextSegment() {
+    return ++contextSegment * 1_000_000_000L;
+  }
+
   private String userRequest = "";
-  private List<org.springframework.ai.chat.messages.Message> conversationSnapshot=List.of();
-  public void setConversationSnapshot(List<org.springframework.ai.chat.messages.Message> messages) {conversationSnapshot=List.copyOf(messages);}
-  public List<org.springframework.ai.chat.messages.Message> conversationSnapshot() {return conversationSnapshot;}
+  private List<org.springframework.ai.chat.messages.Message> conversationSnapshot = List.of();
+
+  public void setConversationSnapshot(List<org.springframework.ai.chat.messages.Message> messages) {
+    conversationSnapshot = List.copyOf(messages);
+  }
+
+  public List<org.springframework.ai.chat.messages.Message> conversationSnapshot() {
+    return conversationSnapshot;
+  }
+
   private boolean externalDelegationUsed;
   private dev.mikoto2000.rei.externalagent.ExternalAgentResult externalReviewResult;
-  public synchronized dev.mikoto2000.rei.externalagent.ExternalAgentResult externalReviewResult() { return externalReviewResult; }
-  public synchronized void setExternalReviewResult(dev.mikoto2000.rei.externalagent.ExternalAgentResult result) { externalReviewResult = result; }
-  public synchronized void setUserRequest(String request) { userRequest = request; }
-  public synchronized String userRequest() { return userRequest; }
-  public synchronized boolean externalDelegationUsed() { return externalDelegationUsed; }
+
+  public synchronized dev.mikoto2000.rei.externalagent.ExternalAgentResult externalReviewResult() {
+    return externalReviewResult;
+  }
+
+  public synchronized void setExternalReviewResult(
+      dev.mikoto2000.rei.externalagent.ExternalAgentResult result) {
+    externalReviewResult = result;
+  }
+
+  public synchronized void setUserRequest(String request) {
+    userRequest = request;
+  }
+
+  public synchronized String userRequest() {
+    return userRequest;
+  }
+
+  public synchronized boolean externalDelegationUsed() {
+    return externalDelegationUsed;
+  }
+
   public synchronized boolean claimExternalDelegation() {
     checkActive();
     if (externalDelegationUsed) return false;
     externalDelegationUsed = true;
     return true;
   }
+
   private dev.mikoto2000.rei.core.chat.AgentRunContext runContext;
-  public void setRunContext(dev.mikoto2000.rei.core.chat.AgentRunContext context) { this.runContext = context; }
-  public dev.mikoto2000.rei.core.chat.AgentRunContext runContext() { return runContext; }
+
+  public void setRunContext(dev.mikoto2000.rei.core.chat.AgentRunContext context) {
+    this.runContext = context;
+  }
+
+  public dev.mikoto2000.rei.core.chat.AgentRunContext runContext() {
+    return runContext;
+  }
+
   private dev.mikoto2000.rei.core.chat.UserInterventionQueue interventions;
   private java.util.function.Consumer<String> interventionApplied = text -> {};
 
-  public void setInterventions(dev.mikoto2000.rei.core.chat.UserInterventionQueue queue,
+  public void setInterventions(
+      dev.mikoto2000.rei.core.chat.UserInterventionQueue queue,
       java.util.function.Consumer<String> applied) {
     this.interventions = queue;
     this.interventionApplied = applied;
@@ -162,86 +380,174 @@ public class RunExecutionContext {
   public synchronized List<org.springframework.ai.chat.messages.Message> applyInterventions() {
     if (cancelled) return List.of();
     if (interventions == null) return List.of();
-    return interventions.drainEntries().stream().map(entry -> {
-      userRequest = entry.text();
-      interventionApplied.accept(entry.text());
-      publisher.publish(factory.intervention(runId, entry.id(), entry.text(), true).withOwnership(runContext));
-      return (org.springframework.ai.chat.messages.Message) new org.springframework.ai.chat.messages.UserMessage(entry.text());
-    }).toList();
+    return interventions.drainEntries().stream()
+        .map(
+            entry -> {
+              userRequest = entry.text();
+              interventionApplied.accept(entry.text());
+              publisher.publish(
+                  factory
+                      .intervention(runId, entry.id(), entry.text(), true)
+                      .withOwnership(runContext));
+              return (org.springframework.ai.chat.messages.Message)
+                  new org.springframework.ai.chat.messages.UserMessage(entry.text());
+            })
+        .toList();
   }
 
-  public RunExecutionContext(String runId, OutputLimitRunBudget budget, ProgressEvaluator evaluator,
-      AgentEventFactory factory, AgentEventPublisher publisher) {
-    this.runId = runId; this.budget = budget; this.evaluator = evaluator;
-    this.factory = factory; this.publisher = publisher;
+  public RunExecutionContext(
+      String runId,
+      OutputLimitRunBudget budget,
+      ProgressEvaluator evaluator,
+      AgentEventFactory factory,
+      AgentEventPublisher publisher) {
+    this.runId = runId;
+    this.budget = budget;
+    this.evaluator = evaluator;
+    this.factory = factory;
+    this.publisher = publisher;
   }
 
   /** Children share the local Run counter as well as its optional durable Goal reservation. */
   public OutputLimitRunBudget.LlmCallReservation sharedLlmReservation() {
     return new OutputLimitRunBudget.LlmCallReservation() {
       public boolean tryReserve() {
-        synchronized(RunExecutionContext.this) {checkActive();return budget.tryConsumeLlmCall();}
+        synchronized (RunExecutionContext.this) {
+          checkActive();
+          return budget.tryConsumeLlmCall();
+        }
       }
+
       public int remaining() {
-        synchronized(RunExecutionContext.this) {return budget.remainingLlmCalls();}
+        synchronized (RunExecutionContext.this) {
+          return budget.remainingLlmCalls();
+        }
       }
-      public boolean tokenLimitEnabled(){return budget.tokenLimitEnabled();}
-      public void recordTotalTokens(Integer tokens){RunExecutionContext.this.recordTotalTokens(tokens);}
+
+      public boolean tokenLimitEnabled() {
+        return budget.tokenLimitEnabled();
+      }
+
+      public void recordTotalTokens(Integer tokens) {
+        RunExecutionContext.this.recordTotalTokens(tokens);
+      }
     };
   }
+
   public dev.mikoto2000.rei.llm.ModelCallBudget modelCallBudget() {
     return new dev.mikoto2000.rei.llm.ModelCallBudget() {
-      public void run(){consumeNextLlmCall();}
-      public boolean tokenLimitEnabled(){return budget.tokenLimitEnabled();}
-      public void recordTotalTokens(Integer tokens){RunExecutionContext.this.recordTotalTokens(tokens);}
+      public void run() {
+        consumeNextLlmCall();
+      }
+
+      public boolean tokenLimitEnabled() {
+        return budget.tokenLimitEnabled();
+      }
+
+      public void recordTotalTokens(Integer tokens) {
+        RunExecutionContext.this.recordTotalTokens(tokens);
+      }
     };
   }
+
   public synchronized void recordTotalTokens(Integer tokens) {
-    checkActive();budget.recordTotalTokens(tokens);
-    if(budget.usageUnknown())throw new ExecutionStoppedException(TOKEN_USAGE_UNKNOWN);
-    if(budget.tokenExceeded())throw new ExecutionStoppedException(TOKEN_BUDGET_EXCEEDED);
+    checkActive();
+    budget.recordTotalTokens(tokens);
+    if (budget.usageUnknown()) throw new ExecutionStoppedException(TOKEN_USAGE_UNKNOWN);
+    if (budget.tokenExceeded()) throw new ExecutionStoppedException(TOKEN_BUDGET_EXCEEDED);
   }
+
   public synchronized void checkModelTokenBudget() {
     checkActive();
-    if(budget.tokenExhausted())throw new ExecutionStoppedException(budget.usageUnknown()?TOKEN_USAGE_UNKNOWN:TOKEN_BUDGET_EXCEEDED);
+    if (budget.tokenExhausted())
+      throw new ExecutionStoppedException(
+          budget.usageUnknown() ? TOKEN_USAGE_UNKNOWN : TOKEN_BUDGET_EXCEEDED);
   }
-  public StagnationDetector detector() { return detector; }
-  public ProgressEvaluator evaluator() { return evaluator; }
-  public long progressVersion() { return progressVersion; }
-  public synchronized long completionTokens() { return completionTokens; }
-  public synchronized void recordCompletionTokens(long tokens) { completionTokens += Math.max(0, tokens); }
-  /** Called only by the executor after a planned subgoal returns SUCCESS, not on arbitrary tool success. */
+
+  public StagnationDetector detector() {
+    return detector;
+  }
+
+  public ProgressEvaluator evaluator() {
+    return evaluator;
+  }
+
+  public long progressVersion() {
+    return progressVersion;
+  }
+
+  public synchronized long completionTokens() {
+    return completionTokens;
+  }
+
+  public synchronized void recordCompletionTokens(long tokens) {
+    completionTokens += Math.max(0, tokens);
+  }
+
+  /**
+   * Called only by the executor after a planned subgoal returns SUCCESS, not on arbitrary tool
+   * success.
+   */
   public synchronized void completeSubgoal(String goal) {
     if (closed || !completedSubgoals.add(goal)) return;
     boolean recovering = detector.replanCount() > 0 || detector.isReplanRequested();
-    var evidence = new ProgressEvidence(ProgressEvent.SUBGOAL_COMPLETED,
-        "Planned subgoal completed", ProgressEvaluator.actionKey("subgoal", goal));
+    var evidence =
+        new ProgressEvidence(
+            ProgressEvent.SUBGOAL_COMPLETED,
+            "Planned subgoal completed",
+            ProgressEvaluator.actionKey("subgoal", goal));
     detector.recordProgress(evidence.kind());
     acquisitionOnlyIterations = 0;
     progressVersion++;
     emit(AgentEventType.PROGRESS_DETECTED, evidence, "subgoal_completed");
     if (recovering) emit(AgentEventType.STAGNATION_RECOVERED, evidence, "progress_resumed");
   }
-  public synchronized void close() { closed = true; pending.clear(); }
-  public synchronized void expire() {close();if(interventions!=null)interventions.discardAndFinish();}
+
+  public synchronized void close() {
+    closed = true;
+    pending.clear();
+  }
+
+  public synchronized void expire() {
+    close();
+    if (interventions != null) interventions.discardAndFinish();
+  }
+
   public synchronized void cancel() {
     if (completed) return;
     cancelled = true;
     close();
     int discarded = interventions == null ? 0 : interventions.discardAndFinish();
-    if (discarded > 0) org.slf4j.LoggerFactory.getLogger(RunExecutionContext.class)
-        .info("Cancelled run {}: discarded {} pending guidance", runId, discarded);
+    if (discarded > 0)
+      org.slf4j.LoggerFactory.getLogger(RunExecutionContext.class)
+          .info("Cancelled run {}: discarded {} pending guidance", runId, discarded);
   }
-  public synchronized boolean isCancelled() { return cancelled; }
+
+  public synchronized boolean isCancelled() {
+    return cancelled;
+  }
+
   public synchronized void completeRun() {
     checkActive();
     completed = true;
   }
+
   public synchronized void checkActive() {
-    if (closed || Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
+    if (closed || Thread.currentThread().isInterrupted())
+      throw new java.util.concurrent.CancellationException();
   }
-  public synchronized void beginIteration() { checkActive(); pending.clear(); toolCalls=0;waitingObservations=0;iterationFailed=false;iterationOpen = true; }
-  public synchronized void recordTool(String name, String arguments, String result, ProgressEvaluator.Snapshot before) {
+
+  public synchronized void beginIteration() {
+    checkActive();
+    pending.clear();
+    toolCalls = 0;
+    waitingObservations = 0;
+    iterationFailed = false;
+    iterationOpen = true;
+  }
+
+  public synchronized void recordTool(
+      String name, String arguments, String result, ProgressEvaluator.Snapshot before) {
     toolCalls++;
     if (closed) return;
     String action = ProgressEvaluator.actionKey(name, arguments);
@@ -256,21 +562,32 @@ public class RunExecutionContext {
     if (recentActions.size() > 6) recentActions.removeFirst();
     pending.addAll(evaluator.afterTool(name, arguments, result, before));
   }
+
   public synchronized void recordFailure(String name, String arguments, RuntimeException error) {
-    iterationFailed=true;
+    iterationFailed = true;
     if (closed) return;
     evaluator.recordFailure(name, arguments);
     lastError = name + ":" + error.getClass().getSimpleName();
     detector.recordFailure(error.getClass().getSimpleName(), name);
   }
+
   public synchronized void endIteration() {
     if (closed || !iterationOpen) return;
     iterationOpen = false;
-    if(pending.isEmpty() && toolCalls>0 && toolCalls==waitingObservations && !iterationFailed) {
-      emit(AgentEventType.STAGNATION_UPDATED,null,"waiting_for_dependency");return;
+    if (pending.isEmpty()
+        && toolCalls > 0
+        && toolCalls == waitingObservations
+        && !iterationFailed) {
+      emit(AgentEventType.STAGNATION_UPDATED, null, "waiting_for_dependency");
+      return;
     }
     boolean recovering = detector.replanCount() > 0 || detector.isReplanRequested();
-    boolean work = pending.stream().anyMatch(e -> e.kind() == ProgressEvent.SUBGOAL_COMPLETED || e.kind() == ProgressEvent.STATE_CHANGED);
+    boolean work =
+        pending.stream()
+            .anyMatch(
+                e ->
+                    e.kind() == ProgressEvent.SUBGOAL_COMPLETED
+                        || e.kind() == ProgressEvent.STATE_CHANGED);
     boolean acquisitionProgress = pending.stream().anyMatch(ProgressEvidence::acquisitionProgress);
     boolean known = pending.stream().anyMatch(e -> e.kind() != ProgressEvent.INFORMATION_UNKNOWN);
     boolean unknown = pending.stream().anyMatch(e -> e.kind() == ProgressEvent.INFORMATION_UNKNOWN);
@@ -278,12 +595,24 @@ public class RunExecutionContext {
     // Reading another exact range is necessary acquisition, even if one file needs many pages.
     // Pause this heuristic only: reads do not complete work or replenish any shared Run budget.
     else if (known && !acquisitionProgress) acquisitionOnlyIterations++;
-    if (unknown && !known) unknownIterations++; else unknownIterations = 0;
-    boolean stalledWork = acquisitionOnlyIterations >= ACQUISITION_ONLY_LIMIT && !acquisitionProgress;
-    stagnationReason = stalledWork ? "WORK_STALLED"
-        : unknown ? "INFORMATION_UNKNOWN" : iterationFailed ? "TOOL_FAILURE"
-        : detector.hasRepeatedToolCall() ? lastToolName.startsWith("read") ? "REPEATED_READ" : "REPEATED_SEARCH_OR_ACTION"
-        : toolCalls > 0 && !known ? "DUPLICATE_OR_UNSUPPORTED_INFORMATION" : "no_progress";
+    if (unknown && !known) unknownIterations++;
+    else unknownIterations = 0;
+    boolean stalledWork =
+        acquisitionOnlyIterations >= ACQUISITION_ONLY_LIMIT && !acquisitionProgress;
+    stagnationReason =
+        stalledWork
+            ? "WORK_STALLED"
+            : unknown
+                ? "INFORMATION_UNKNOWN"
+                : iterationFailed
+                    ? "TOOL_FAILURE"
+                    : detector.hasRepeatedToolCall()
+                        ? lastToolName.startsWith("read")
+                            ? "REPEATED_READ"
+                            : "REPEATED_SEARCH_OR_ACTION"
+                        : toolCalls > 0 && !known
+                            ? "DUPLICATE_OR_UNSUPPORTED_INFORMATION"
+                            : "no_progress";
     // Unknown is neither progress nor a duplicate. Allow bounded diagnosis time before replanning.
     if (!(unknown && !known)) detector.recordIteration(known && !stalledWork);
     for (ProgressEvidence evidence : pending) {
@@ -295,33 +624,51 @@ public class RunExecutionContext {
       progressVersion++;
       emit(AgentEventType.PROGRESS_DETECTED, evidence, "meaningful_progress");
     }
-    if (known && !stalledWork && recovering) emit(AgentEventType.STAGNATION_RECOVERED, pending.getFirst(), "progress_resumed");
+    if (known && !stalledWork && recovering)
+      emit(AgentEventType.STAGNATION_RECOVERED, pending.getFirst(), "progress_resumed");
     if (!known || stalledWork) {
       emit(AgentEventType.STAGNATION_UPDATED, null, stagnationReason);
       if (detector.isStagnant()) emit(AgentEventType.STAGNATION_DETECTED, null, stagnationReason);
     }
     pending.clear();
   }
+
   public synchronized void consumeNextLlmCall() {
     checkModelTokenBudget();
     checkActive();
     if (!budget.tryConsumeLlmCall()) throw new ExecutionStoppedException(LLM_CALL_BUDGET_EXCEEDED);
   }
+
   public synchronized String requestReplan() {
     if (!detector.isReplanRequested()) {
       // Without a call ceiling, inconclusive tracking must not allow an endless loop.
-      if (!budget.llmCallBudgetEnabled() && unknownReplanNotices >= 2
+      if (!budget.llmCallBudgetEnabled()
+          && unknownReplanNotices >= 2
           && unknownIterations >= 3 * UNKNOWN_GRACE_ITERATIONS) {
         emit(AgentEventType.STAGNATION_STOPPED, null, "INFORMATION_UNKNOWN");
         throw new ExecutionStoppedException(STAGNATED);
       }
-      if (unknownReplanNotices<2 && unknownIterations >= (unknownReplanNotices+1)*UNKNOWN_GRACE_ITERATIONS) {
-        if (!budget.hasRemainingLlmCalls()) throw new ExecutionStoppedException(LLM_CALL_BUDGET_EXCEEDED);
+      if (unknownReplanNotices < 2
+          && unknownIterations >= (unknownReplanNotices + 1) * UNKNOWN_GRACE_ITERATIONS) {
+        if (!budget.hasRemainingLlmCalls())
+          throw new ExecutionStoppedException(LLM_CALL_BUDGET_EXCEEDED);
         unknownReplanNotices++;
-        publisher.publish(factory.executionProgress(AgentEventType.STAGNATION_REPLAN_REQUESTED, runId,
-            new ExecutionProgressPayload(null,detector.stagnationCount(),detector.threshold(),unknownReplanNotices,2,"INFORMATION_UNKNOWN")).withOwnership(runContext));
+        publisher.publish(
+            factory
+                .executionProgress(
+                    AgentEventType.STAGNATION_REPLAN_REQUESTED,
+                    runId,
+                    new ExecutionProgressPayload(
+                        null,
+                        detector.stagnationCount(),
+                        detector.threshold(),
+                        unknownReplanNotices,
+                        2,
+                        "INFORMATION_UNKNOWN"))
+                .withOwnership(runContext));
         return "Progress diagnosis: INFORMATION_UNKNOWN. Tracking capacity or historical evidence is insufficient to classify these reads. Replan toward independently verifiable work outcomes. Do not infer completion from unknown information."
-            + (budget.llmCallBudgetEnabled() ? " The remaining shared Run budget is finite."
+            + (budget.llmCallBudgetEnabled()
+                ? " The remaining shared Run budget is finite."
                 : " Call limiting is disabled; continued inconclusive tracking after diagnosis will stop the Run.");
       }
       return null;
@@ -330,19 +677,36 @@ public class RunExecutionContext {
       emit(AgentEventType.STAGNATION_STOPPED, null, "STAGNATED");
       throw new ExecutionStoppedException(STAGNATED);
     }
-    if (!budget.hasRemainingLlmCalls()) throw new ExecutionStoppedException(LLM_CALL_BUDGET_EXCEEDED);
-    if (!budget.tryConsumeStagnationReplan()) throw new ExecutionStoppedException(REPLAN_BUDGET_EXCEEDED);
-    String notice = new StagnationAdvisor(detector).replanNotice(
-        String.join(", ", recentActions), lastError);
-    notice += "\nProgress diagnosis: " + stagnationReason + ". Information acquisition does not complete planned work. Confirm work outcomes; do not infer completion from reads.";
+    if (!budget.hasRemainingLlmCalls())
+      throw new ExecutionStoppedException(LLM_CALL_BUDGET_EXCEEDED);
+    if (!budget.tryConsumeStagnationReplan())
+      throw new ExecutionStoppedException(REPLAN_BUDGET_EXCEEDED);
+    String notice =
+        new StagnationAdvisor(detector).replanNotice(String.join(", ", recentActions), lastError);
+    notice +=
+        "\nProgress diagnosis: "
+            + stagnationReason
+            + ". Information acquisition does not complete planned work. Confirm work outcomes; do not infer completion from reads.";
     detector.recordReplan();
     acquisitionOnlyIterations = 0;
     unknownIterations = 0;
     emit(AgentEventType.STAGNATION_REPLAN_REQUESTED, null, stagnationReason);
     return notice;
   }
+
   private void emit(AgentEventType type, ProgressEvidence evidence, String reason) {
-    publisher.publish(factory.executionProgress(type, runId, new ExecutionProgressPayload(evidence,
-        detector.stagnationCount(), detector.threshold(), detector.replanCount(), detector.maxReplans(), reason)).withOwnership(runContext));
+    publisher.publish(
+        factory
+            .executionProgress(
+                type,
+                runId,
+                new ExecutionProgressPayload(
+                    evidence,
+                    detector.stagnationCount(),
+                    detector.threshold(),
+                    detector.replanCount(),
+                    detector.maxReplans(),
+                    reason))
+            .withOwnership(runContext));
   }
 }

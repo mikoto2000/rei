@@ -11,5 +11,4 @@ public record Reminder(
     Integer minutesBefore,
     boolean notified,
     OffsetDateTime createdAt,
-    OffsetDateTime notifiedAt
-) {}
+    OffsetDateTime notifiedAt) {}

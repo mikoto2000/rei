@@ -1,11 +1,9 @@
 package dev.mikoto2000.rei.feed;
 
 import java.util.List;
-
+import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
-
-import lombok.RequiredArgsConstructor;
 
 @Component
 @RequiredArgsConstructor
@@ -44,13 +42,19 @@ public class FeedTools {
     return formatUpdateResults(List.of(feedUpdateService.update(id)));
   }
 
-  @Tool(name = "feedSummarizeBriefing", description = "昨日 00:00 から現在までの新着記事をまとめて要約します。各記事について記事本文の取得を試み、取得できない記事は Feed 提供情報へフォールバックします。別途 fetchUrlContent を呼ぶ必要はありません。")
+  @Tool(
+      name = "feedSummarizeBriefing",
+      description =
+          "昨日 00:00 から現在までの新着記事をまとめて要約します。各記事について記事本文の取得を試み、取得できない記事は Feed 提供情報へフォールバックします。別途 fetchUrlContent を呼ぶ必要はありません。")
   String feedSummarizeBriefing() {
     IO.println("新着記事ブリーフィングを要約するよ");
     return feedSummaryService.summarizeBriefing();
   }
 
-  @Tool(name = "feedSummarizeItem", description = "指定した Feed 記事を要約します。URL があれば記事本文の取得と要約を試み、取得できない場合は Feed 提供情報へフォールバックします。別途 fetchUrlContent を呼ぶ必要はありません。")
+  @Tool(
+      name = "feedSummarizeItem",
+      description =
+          "指定した Feed 記事を要約します。URL があれば記事本文の取得と要約を試み、取得できない場合は Feed 提供情報へフォールバックします。別途 fetchUrlContent を呼ぶ必要はありません。")
   FeedItemSummaryResult feedSummarizeItem(Long itemId) {
     IO.println("記事を要約するよ。itemId=" + itemId);
     return feedSummaryService.summarizeItemDetailed(itemId);
@@ -65,7 +69,11 @@ public class FeedTools {
       if (result.errorMessage() == null || result.errorMessage().isBlank()) {
         builder.append("- ").append(result.feedName()).append(" | +").append(result.addedItems());
       } else {
-        builder.append("- ").append(result.feedName()).append(" | error=").append(result.errorMessage());
+        builder
+            .append("- ")
+            .append(result.feedName())
+            .append(" | error=")
+            .append(result.errorMessage());
       }
       builder.append('\n');
     }

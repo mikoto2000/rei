@@ -6,6 +6,4 @@ package dev.mikoto2000.rei.event;
  * @param messageId メッセージの ID
  * @param role メッセージのロール
  */
-public record MessageStartedPayload(String messageId, String role)
-    implements AgentEventPayload {
-}
+public record MessageStartedPayload(String messageId, String role) implements AgentEventPayload {}

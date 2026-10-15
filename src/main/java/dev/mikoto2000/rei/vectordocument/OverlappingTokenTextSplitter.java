@@ -1,14 +1,12 @@
 package dev.mikoto2000.rei.vectordocument;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import org.springframework.ai.transformer.splitter.TextSplitter;
-
 import com.knuddels.jtokkit.Encodings;
 import com.knuddels.jtokkit.api.Encoding;
 import com.knuddels.jtokkit.api.EncodingType;
 import com.knuddels.jtokkit.api.IntArrayList;
+import java.util.ArrayList;
+import java.util.List;
+import org.springframework.ai.transformer.splitter.TextSplitter;
 
 class OverlappingTokenTextSplitter extends TextSplitter {
 

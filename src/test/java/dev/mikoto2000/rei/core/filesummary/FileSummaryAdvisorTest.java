@@ -9,11 +9,9 @@ import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.client.ChatClientRequest;
-import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -23,8 +21,7 @@ class FileSummaryAdvisorTest {
 
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void usableSummaryIsInjectedIntoUserMessage() throws Exception {
@@ -32,9 +29,14 @@ class FileSummaryAdvisorTest {
     Files.writeString(file, "class UserService {}");
     String version = sha256(file);
 
-    FileSummaryCache cache = new FileSummaryCache(20, Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE));
-    cache.save(new FileSummary(file.toString(), version, "User の作成・更新を担当",
-        Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
+    FileSummaryCache cache =
+        new FileSummaryCache(20, Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE));
+    cache.save(
+        new FileSummary(
+            file.toString(),
+            version,
+            "User の作成・更新を担当",
+            Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
 
     FileSummaryAdvisor advisor = new FileSummaryAdvisor(cache);
     UserMessage userMessage = UserMessage.builder().text("fix the bug").build();
@@ -53,9 +55,14 @@ class FileSummaryAdvisorTest {
     Path file = tempDir.resolve("UserService.java");
     Files.writeString(file, "class UserService {}");
 
-    FileSummaryCache cache = new FileSummaryCache(20, Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE));
-    cache.save(new FileSummary(file.toString(), "stale-version", "古い要約",
-        Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
+    FileSummaryCache cache =
+        new FileSummaryCache(20, Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE));
+    cache.save(
+        new FileSummary(
+            file.toString(),
+            "stale-version",
+            "古い要約",
+            Instant.parse("2026-08-17T00:00:00Z").atZone(ZONE).toOffsetDateTime()));
 
     FileSummaryAdvisor advisor = new FileSummaryAdvisor(cache);
     UserMessage userMessage = UserMessage.builder().text("hello").build();

@@ -5,7 +5,6 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.LongSupplier;
-
 import org.springframework.stereotype.Service;
 
 @Service
@@ -19,25 +18,43 @@ public class AgentSkillSelectionService {
   private final LongSupplier nanoTime;
 
   @org.springframework.beans.factory.annotation.Autowired
-  public AgentSkillSelectionService(AgentSkillsProperties properties, AgentSkillExplicitSelector explicitSelector,
-      AgentSkillImplicitSelection implicitSelector, AgentSkillRepository repository,
+  public AgentSkillSelectionService(
+      AgentSkillsProperties properties,
+      AgentSkillExplicitSelector explicitSelector,
+      AgentSkillImplicitSelection implicitSelector,
+      AgentSkillRepository repository,
       SkillCandidateSelector candidateSelector) {
-    this(properties, explicitSelector, implicitSelector, repository, candidateSelector, System::nanoTime);
+    this(
+        properties,
+        explicitSelector,
+        implicitSelector,
+        repository,
+        candidateSelector,
+        System::nanoTime);
   }
 
-  public AgentSkillSelectionService(AgentSkillsProperties properties, AgentSkillExplicitSelector explicitSelector,
+  public AgentSkillSelectionService(
+      AgentSkillsProperties properties,
+      AgentSkillExplicitSelector explicitSelector,
       AgentSkillImplicitSelection implicitSelector) {
     this(properties, explicitSelector, implicitSelector, null, null, System::nanoTime);
   }
 
-  AgentSkillSelectionService(AgentSkillsProperties properties, AgentSkillExplicitSelector explicitSelector,
-      AgentSkillImplicitSelection implicitSelector, LongSupplier nanoTime) {
+  AgentSkillSelectionService(
+      AgentSkillsProperties properties,
+      AgentSkillExplicitSelector explicitSelector,
+      AgentSkillImplicitSelection implicitSelector,
+      LongSupplier nanoTime) {
     this(properties, explicitSelector, implicitSelector, null, null, nanoTime);
   }
 
-  AgentSkillSelectionService(AgentSkillsProperties properties, AgentSkillExplicitSelector explicitSelector,
-      AgentSkillImplicitSelection implicitSelector, AgentSkillRepository repository,
-      SkillCandidateSelector candidateSelector, LongSupplier nanoTime) {
+  AgentSkillSelectionService(
+      AgentSkillsProperties properties,
+      AgentSkillExplicitSelector explicitSelector,
+      AgentSkillImplicitSelection implicitSelector,
+      AgentSkillRepository repository,
+      SkillCandidateSelector candidateSelector,
+      LongSupplier nanoTime) {
     this.properties = properties;
     this.explicitSelector = explicitSelector;
     this.implicitSelector = implicitSelector;
@@ -51,48 +68,73 @@ public class AgentSkillSelectionService {
   }
 
   public AgentSkillSelection select(String prompt, Runnable beforeModelCall) {
-    var budget=beforeModelCall instanceof dev.mikoto2000.rei.llm.ModelCallBudget accounting?accounting:
-        dev.mikoto2000.rei.llm.ModelCallBudgetScope.current();
-    try(var scope=dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(budget)) {
-      return selectBudgeted(prompt,beforeModelCall);
+    var budget =
+        beforeModelCall instanceof dev.mikoto2000.rei.llm.ModelCallBudget accounting
+            ? accounting
+            : dev.mikoto2000.rei.llm.ModelCallBudgetScope.current();
+    try (var scope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(budget)) {
+      return selectBudgeted(prompt, beforeModelCall);
     }
   }
-  private AgentSkillSelection selectBudgeted(String prompt,Runnable beforeModelCall) {
+
+  private AgentSkillSelection selectBudgeted(String prompt, Runnable beforeModelCall) {
     if (!properties.isEnabled()) {
-      return new AgentSkillSelection(List.of(), List.of(), List.of(), prompt == null ? "" : prompt, null,
-          List.of(), null);
+      return new AgentSkillSelection(
+          List.of(), List.of(), List.of(), prompt == null ? "" : prompt, null, List.of(), null);
     }
 
     AgentSkillExplicitSelector.ExplicitSelection explicit = explicitSelector.select(prompt);
-    List<AgentSkill> explicitSkills = distinctAndLimit(explicit.skills(), properties.getMaxSelected());
+    List<AgentSkill> explicitSkills =
+        distinctAndLimit(explicit.skills(), properties.getMaxSelected());
     int remaining = properties.getMaxSelected() - explicitSkills.size();
     List<AgentSkill> implicitSkills = List.of();
     List<SkillCandidate> candidates = List.of();
     Long candidateDurationMs = null;
     Long selectorDurationMs = null;
     if (remaining > 0) {
-      Set<String> explicitNames = explicitSkills.stream().map(AgentSkill::name).collect(java.util.stream.Collectors.toSet());
+      Set<String> explicitNames =
+          explicitSkills.stream()
+              .map(AgentSkill::name)
+              .collect(java.util.stream.Collectors.toSet());
       if (repository != null && candidateSelector != null) {
-        List<AgentSkill> eligibleSkills = repository.findEnabled().stream()
-            .filter(skill -> !explicitNames.contains(skill.name()))
-            .toList();
+        List<AgentSkill> eligibleSkills =
+            repository.findEnabled().stream()
+                .filter(skill -> !explicitNames.contains(skill.name()))
+                .toList();
         long candidateStartedAtNanos = nanoTime.getAsLong();
-        candidates = candidateSelector.selectCandidates(explicit.sanitizedPrompt(), eligibleSkills, 5);
-        candidateDurationMs = Math.max(0L, (nanoTime.getAsLong() - candidateStartedAtNanos) / 1_000_000L);
+        candidates =
+            candidateSelector.selectCandidates(explicit.sanitizedPrompt(), eligibleSkills, 5);
+        candidateDurationMs =
+            Math.max(0L, (nanoTime.getAsLong() - candidateStartedAtNanos) / 1_000_000L);
       }
       long selectorStartedAtNanos = nanoTime.getAsLong();
-      List<AgentSkill> providedCandidates = repository == null || candidateSelector == null ? null
-          : candidates.stream().map(SkillCandidate::skill).toList();
-      implicitSkills = distinctAndLimit(
-          beforeModelCall == null
-              ? implicitSelector.select(explicit.sanitizedPrompt(), explicitNames, providedCandidates)
-              : implicitSelector.select(explicit.sanitizedPrompt(), explicitNames, providedCandidates, beforeModelCall),
-          remaining);
-      selectorDurationMs = Math.max(0L, (nanoTime.getAsLong() - selectorStartedAtNanos) / 1_000_000L);
+      List<AgentSkill> providedCandidates =
+          repository == null || candidateSelector == null
+              ? null
+              : candidates.stream().map(SkillCandidate::skill).toList();
+      implicitSkills =
+          distinctAndLimit(
+              beforeModelCall == null
+                  ? implicitSelector.select(
+                      explicit.sanitizedPrompt(), explicitNames, providedCandidates)
+                  : implicitSelector.select(
+                      explicit.sanitizedPrompt(),
+                      explicitNames,
+                      providedCandidates,
+                      beforeModelCall),
+              remaining);
+      selectorDurationMs =
+          Math.max(0L, (nanoTime.getAsLong() - selectorStartedAtNanos) / 1_000_000L);
     }
 
-    return new AgentSkillSelection(explicitSkills, implicitSkills, explicit.warnings(), explicit.sanitizedPrompt(),
-        selectorDurationMs, candidates, candidateDurationMs);
+    return new AgentSkillSelection(
+        explicitSkills,
+        implicitSkills,
+        explicit.warnings(),
+        explicit.sanitizedPrompt(),
+        selectorDurationMs,
+        candidates,
+        candidateDurationMs);
   }
 
   private List<AgentSkill> distinctAndLimit(List<AgentSkill> skills, int limit) {

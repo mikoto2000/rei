@@ -5,7 +5,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
 import org.springframework.stereotype.Component;
 
 @Component
@@ -13,7 +12,8 @@ public class EscCancellationMonitor {
 
   private static final int ESC = 27;
 
-  public int await(Future<Integer> future, EscapeReader escapeReader, Runnable cancelAction) throws IOException {
+  public int await(Future<Integer> future, EscapeReader escapeReader, Runnable cancelAction)
+      throws IOException {
     boolean cancelled = false;
     while (true) {
       try {

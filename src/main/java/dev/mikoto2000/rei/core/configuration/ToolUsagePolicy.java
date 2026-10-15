@@ -2,15 +2,17 @@ package dev.mikoto2000.rei.core.configuration;
 
 /** Tool planning instructions shared without inheriting personality, history or authority. */
 public final class ToolUsagePolicy {
-  private ToolUsagePolicy() { }
+  private ToolUsagePolicy() {}
 
-  public static final String BATCHING = """
+  public static final String BATCHING =
+      """
       For multiple independent, already-known targets of the same Multi tool, pass all targets in one array
       in a single call. Do not emit multiple one-item calls to the same tool in the same response.
       Split only when a later target depends on an earlier result or documented limits require it
       (file count, bytes, lines, tokens, or staged writes). A one-item array remains valid for a single target.
       """;
-  public static final String FILE_READS = """
+  public static final String FILE_READS =
+      """
       Read file contents with readMultiFile, including a single file. Do not use runCommand with
       Get-Content, gc, cat, type or other shell file readers. Shell is for builds, tests, Git and
       development commands without a dedicated tool. A truncated result is a page, not a failed read:

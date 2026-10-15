@@ -7,12 +7,10 @@ import java.time.ZoneOffset;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.List;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
-
 import javax.sql.DataSource;
-
 import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
@@ -34,24 +32,39 @@ public class ConversationHistorySearchService {
   private dev.mikoto2000.rei.event.AgentEventPublisher publisher;
 
   @org.springframework.beans.factory.annotation.Autowired(required = false)
-  public void setHistoryEvents(dev.mikoto2000.rei.event.AgentEventFactory events,
+  public void setHistoryEvents(
+      dev.mikoto2000.rei.event.AgentEventFactory events,
       dev.mikoto2000.rei.event.AgentEventPublisher publisher) {
     this.events = events;
     this.publisher = publisher;
   }
 
-  public ConversationHistorySearchService(DataSource dataSource, ConversationLogStore conversationLogStore) {
+  public ConversationHistorySearchService(
+      DataSource dataSource, ConversationLogStore conversationLogStore) {
     this.jdbcClient = JdbcClient.create(dataSource);
     this.conversationLogStore = conversationLogStore;
-    this.projectRetrieval = new ProjectHistoryRetrieval(conversationLogStore,
-        new dev.mikoto2000.rei.core.project.ProjectRegistry(dev.mikoto2000.rei.core.datasource.ReiPaths.projectsFilePath()));
+    this.projectRetrieval =
+        new ProjectHistoryRetrieval(
+            conversationLogStore,
+            new dev.mikoto2000.rei.core.project.ProjectRegistry(
+                dev.mikoto2000.rei.core.datasource.ReiPaths.projectsFilePath()));
   }
 
-  public List<ConversationSearchResult> search(String query, String scope, String speaker, String since, String until,
-      Integer limit) {
+  public List<ConversationSearchResult> search(
+      String query, String scope, String speaker, String since, String until, Integer limit) {
     var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
-    if (project != null) return search(new HistorySearchRequest(query, project.id(), null,
-        HistorySearchScope.CURRENT_PROJECT_PREFERRED, scope, speaker, since, until, limit));
+    if (project != null)
+      return search(
+          new HistorySearchRequest(
+              query,
+              project.id(),
+              null,
+              HistorySearchScope.CURRENT_PROJECT_PREFERRED,
+              scope,
+              speaker,
+              since,
+              until,
+              limit));
     if (query == null || query.isBlank()) {
       throw new IllegalArgumentException("query must not be blank");
     }
@@ -76,13 +89,21 @@ public class ConversationHistorySearchService {
     results.sort((a, b) -> b.timestamp().compareTo(a.timestamp()));
     LinkedHashMap<String, ConversationSearchResult> unique = new LinkedHashMap<>();
     for (ConversationSearchResult result : results) {
-      String key = String.join("\u0000", result.conversationId(), result.speaker(), result.timestamp(), result.content());
+      String key =
+          String.join(
+              "\u0000",
+              result.conversationId(),
+              result.speaker(),
+              result.timestamp(),
+              result.content());
       unique.putIfAbsent(key, result);
     }
     return unique.values().stream().limit(safeLimit).toList();
   }
 
-  /** Explicit ownership is captured at the tool boundary; retrieval never switches ProjectService. */
+  /**
+   * Explicit ownership is captured at the tool boundary; retrieval never switches ProjectService.
+   */
   public List<ConversationSearchResult> search(HistorySearchRequest request) {
     return search(request, true);
   }
@@ -97,17 +118,31 @@ public class ConversationHistorySearchService {
     String speaker = normalizeSpeaker(request.speaker());
     TimeRange range = parseTimeRange(request.since(), request.until());
     int limit = normalizeLimit(request.limit(), DEFAULT_SEARCH_LIMIT, MAX_SEARCH_LIMIT);
-    var outcome = projectRetrieval.search(request, e ->
-        (category.equals("all") || category.equals(e.scope()))
-        && (speaker == null || speaker.equalsIgnoreCase(e.speaker()))
-        && (range.sinceEpochMillis() == null || e.timestamp().toInstant().toEpochMilli() >= range.sinceEpochMillis())
-        && (range.untilEpochMillis() == null || e.timestamp().toInstant().toEpochMilli() <= range.untilEpochMillis()), limit);
+    var outcome =
+        projectRetrieval.search(
+            request,
+            e ->
+                (category.equals("all") || category.equals(e.scope()))
+                    && (speaker == null || speaker.equalsIgnoreCase(e.speaker()))
+                    && (range.sinceEpochMillis() == null
+                        || e.timestamp().toInstant().toEpochMilli() >= range.sinceEpochMillis())
+                    && (range.untilEpochMillis() == null
+                        || e.timestamp().toInstant().toEpochMilli() <= range.untilEpochMillis()),
+            limit);
     if (emitEvents && events != null && publisher != null) {
-      int currentHits = (int) outcome.results().stream()
-          .filter(r -> r.sourceProjectId().equals(request.preferredProjectId())).count();
-      publisher.publish(events.historySearchCompleted(new dev.mikoto2000.rei.event.HistorySearchCompletedPayload(
-          request.preferredProjectId(), request.retrievalScope().name(), outcome.searchedProjectCount(), currentHits,
-          outcome.results().size() - currentHits)));
+      int currentHits =
+          (int)
+              outcome.results().stream()
+                  .filter(r -> r.sourceProjectId().equals(request.preferredProjectId()))
+                  .count();
+      publisher.publish(
+          events.historySearchCompleted(
+              new dev.mikoto2000.rei.event.HistorySearchCompletedPayload(
+                  request.preferredProjectId(),
+                  request.retrievalScope().name(),
+                  outcome.searchedProjectCount(),
+                  currentHits,
+                  outcome.results().size() - currentHits)));
     }
     return outcome.results();
   }
@@ -119,71 +154,137 @@ public class ConversationHistorySearchService {
     int safeLimit = normalizeLimit(limit, DEFAULT_DETAIL_LIMIT, MAX_DETAIL_LIMIT);
     var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
     if (project != null || conversationId.startsWith("project:")) {
-      String id = conversationId.startsWith("project:") ? conversationId : project.conversationId(conversationId);
+      String id =
+          conversationId.startsWith("project:")
+              ? conversationId
+              : project.conversationId(conversationId);
       String sourceId = dev.mikoto2000.rei.core.project.ProjectStorage.projectId(id);
-      var source = projectRetrieval.projects().stream().filter(p -> p.id().equals(sourceId)).findFirst()
-          .orElseThrow(() -> new IllegalArgumentException("Unknown source project"));
+      var source =
+          projectRetrieval.projects().stream()
+              .filter(p -> p.id().equals(sourceId))
+              .findFirst()
+              .orElseThrow(() -> new IllegalArgumentException("Unknown source project"));
       boolean foreign = project == null || !source.id().equals(project.id());
-      int budget = foreign ? Math.min(safeLimit, HistoryRetrievalPolicy.CROSS_PROJECT_MAX_RESULTS) : safeLimit;
-      var entries = conversationLogStore.readProject(sourceId).stream().filter(e -> e.conversationId().equals(id)).toList();
-      var messages = entries.stream().skip(Math.max(0, entries.size() - budget))
-          .map(e -> new ConversationHistoryMessage(e.speaker(), e.timestamp().toInstant().toString(), e.content())).toList();
+      int budget =
+          foreign
+              ? Math.min(safeLimit, HistoryRetrievalPolicy.CROSS_PROJECT_MAX_RESULTS)
+              : safeLimit;
+      var entries =
+          conversationLogStore.readProject(sourceId).stream()
+              .filter(e -> e.conversationId().equals(id))
+              .toList();
+      var messages =
+          entries.stream()
+              .skip(Math.max(0, entries.size() - budget))
+              .map(
+                  e ->
+                      new ConversationHistoryMessage(
+                          e.speaker(), e.timestamp().toInstant().toString(), e.content()))
+              .toList();
       if (messages.isEmpty()) messages = findChatDetail(id, budget);
-      if (foreign) messages = messages.stream().map(m -> new ConversationHistoryMessage(m.speaker(), m.timestamp(),
-          HistoryRetrievalPolicy.clip(m.content(), HistoryRetrievalPolicy.CONTENT_MAX_CHARS))).toList();
-      return new ConversationHistoryDetail(id, ConversationLogStore.scopeOf(id), messages, source.id(), source.name(),
-          foreign ? HistoryRetrievalPolicy.FOREIGN_BOUNDARY : HistoryRetrievalPolicy.LOCAL_BOUNDARY);
+      if (foreign)
+        messages =
+            messages.stream()
+                .map(
+                    m ->
+                        new ConversationHistoryMessage(
+                            m.speaker(),
+                            m.timestamp(),
+                            HistoryRetrievalPolicy.clip(
+                                m.content(), HistoryRetrievalPolicy.CONTENT_MAX_CHARS)))
+                .toList();
+      return new ConversationHistoryDetail(
+          id,
+          ConversationLogStore.scopeOf(id),
+          messages,
+          source.id(),
+          source.name(),
+          foreign
+              ? HistoryRetrievalPolicy.FOREIGN_BOUNDARY
+              : HistoryRetrievalPolicy.LOCAL_BOUNDARY);
     }
     List<ConversationHistoryMessage> persisted = findPersistentLogDetail(conversationId, safeLimit);
     if (!persisted.isEmpty()) {
-      return new ConversationHistoryDetail(conversationId, ConversationLogStore.scopeOf(conversationId), persisted);
+      return new ConversationHistoryDetail(
+          conversationId, ConversationLogStore.scopeOf(conversationId), persisted);
     }
     if (conversationId.startsWith("chat:")) {
-      return new ConversationHistoryDetail(conversationId, "chat", findChatDetailWithFallback(conversationId, "chat:".length(), safeLimit));
+      return new ConversationHistoryDetail(
+          conversationId,
+          "chat",
+          findChatDetailWithFallback(conversationId, "chat:".length(), safeLimit));
     }
     if (conversationId.startsWith("bluesky-reply:")) {
       String handle = conversationId.substring("bluesky-reply:".length());
-      return new ConversationHistoryDetail(conversationId, "bluesky-reply", findBlueskyReplyDetail(handle, safeLimit));
+      return new ConversationHistoryDetail(
+          conversationId, "bluesky-reply", findBlueskyReplyDetail(handle, safeLimit));
     }
     if (conversationId.startsWith("bluesky-manual:")) {
-      return new ConversationHistoryDetail(conversationId, "bluesky-manual", findChatDetailWithFallback(conversationId, "bluesky-manual:".length(), safeLimit));
+      return new ConversationHistoryDetail(
+          conversationId,
+          "bluesky-manual",
+          findChatDetailWithFallback(conversationId, "bluesky-manual:".length(), safeLimit));
     }
     if (conversationId.startsWith("tool:")) {
-      return new ConversationHistoryDetail(conversationId, "tool", findChatDetailWithFallback(conversationId, "tool:".length(), safeLimit));
+      return new ConversationHistoryDetail(
+          conversationId,
+          "tool",
+          findChatDetailWithFallback(conversationId, "tool:".length(), safeLimit));
     }
-    throw new IllegalArgumentException("conversationId must start with chat:, bluesky-reply:, bluesky-manual:, or tool:");
+    throw new IllegalArgumentException(
+        "conversationId must start with chat:, bluesky-reply:, bluesky-manual:, or tool:");
   }
 
-  private List<ConversationSearchResult> searchPersistentLogs(String query, String scope, String speaker,
-      TimeRange timeRange) {
+  private List<ConversationSearchResult> searchPersistentLogs(
+      String query, String scope, String speaker, TimeRange timeRange) {
     List<String> terms = List.of(query.strip().toLowerCase(Locale.ROOT).split("\\s+"));
     return conversationLogStore.readAll().stream()
         .filter(entry -> scope.equals("all") || entry.scope().equals(scope))
         .filter(entry -> speaker == null || entry.speaker().equalsIgnoreCase(speaker))
-        .filter(entry -> timeRange.sinceEpochMillis() == null
-            || entry.timestamp().toInstant().toEpochMilli() >= timeRange.sinceEpochMillis())
-        .filter(entry -> timeRange.untilEpochMillis() == null
-            || entry.timestamp().toInstant().toEpochMilli() <= timeRange.untilEpochMillis())
-        .filter(entry -> terms.stream().allMatch(term -> entry.content().toLowerCase(Locale.ROOT).contains(term)))
-        .map(entry -> new ConversationSearchResult(
-            entry.conversationId(), entry.scope(), entry.speaker(), entry.timestamp().toInstant().toString(),
-            preview(entry.content(), SUMMARY_MAX_LENGTH), preview(entry.content(), CONTENT_MAX_LENGTH)))
+        .filter(
+            entry ->
+                timeRange.sinceEpochMillis() == null
+                    || entry.timestamp().toInstant().toEpochMilli() >= timeRange.sinceEpochMillis())
+        .filter(
+            entry ->
+                timeRange.untilEpochMillis() == null
+                    || entry.timestamp().toInstant().toEpochMilli() <= timeRange.untilEpochMillis())
+        .filter(
+            entry ->
+                terms.stream()
+                    .allMatch(term -> entry.content().toLowerCase(Locale.ROOT).contains(term)))
+        .map(
+            entry ->
+                new ConversationSearchResult(
+                    entry.conversationId(),
+                    entry.scope(),
+                    entry.speaker(),
+                    entry.timestamp().toInstant().toString(),
+                    preview(entry.content(), SUMMARY_MAX_LENGTH),
+                    preview(entry.content(), CONTENT_MAX_LENGTH)))
         .toList();
   }
 
-  private List<ConversationHistoryMessage> findPersistentLogDetail(String conversationId, int limit) {
-    List<ConversationLogEntry> entries = conversationLogStore.readAll().stream()
-        .filter(entry -> entry.conversationId().equals(conversationId))
-        .toList();
+  private List<ConversationHistoryMessage> findPersistentLogDetail(
+      String conversationId, int limit) {
+    List<ConversationLogEntry> entries =
+        conversationLogStore.readAll().stream()
+            .filter(entry -> entry.conversationId().equals(conversationId))
+            .toList();
     return entries.stream()
         .skip(Math.max(0, entries.size() - limit))
-        .map(entry -> new ConversationHistoryMessage(
-            entry.speaker(), entry.timestamp().toInstant().toString(), entry.content()))
+        .map(
+            entry ->
+                new ConversationHistoryMessage(
+                    entry.speaker(), entry.timestamp().toInstant().toString(), entry.content()))
         .toList();
   }
 
-  private List<ConversationSearchResult> searchChat(String query, String speaker, TimeRange timeRange, int limit) {
-    StringBuilder sql = new StringBuilder("""
+  private List<ConversationSearchResult> searchChat(
+      String query, String speaker, TimeRange timeRange, int limit) {
+    StringBuilder sql =
+        new StringBuilder(
+            """
         SELECT conversation_id, content, type, timestamp
         FROM SPRING_AI_CHAT_MEMORY
         WHERE 1 = 1
@@ -207,28 +308,33 @@ public class ConversationHistorySearchService {
     sql.append(" ORDER BY timestamp DESC LIMIT ?");
     params.add(limit);
     try {
-      return jdbcClient.sql(sql.toString())
+      return jdbcClient
+          .sql(sql.toString())
           .params(params)
-          .query((rs, rowNum) -> {
-            String content = rs.getString("content");
-            String timestamp = Instant.ofEpochMilli(rs.getLong("timestamp")).toString();
-            String conversationId = rs.getString("conversation_id");
-            return new ConversationSearchResult(
-                conversationId.startsWith("chat:") ? conversationId : "chat:" + conversationId,
-                "chat",
-                normalizeChatSpeaker(rs.getString("type")),
-                timestamp,
-                preview(content, SUMMARY_MAX_LENGTH),
-                preview(content, CONTENT_MAX_LENGTH));
-          })
+          .query(
+              (rs, rowNum) -> {
+                String content = rs.getString("content");
+                String timestamp = Instant.ofEpochMilli(rs.getLong("timestamp")).toString();
+                String conversationId = rs.getString("conversation_id");
+                return new ConversationSearchResult(
+                    conversationId.startsWith("chat:") ? conversationId : "chat:" + conversationId,
+                    "chat",
+                    normalizeChatSpeaker(rs.getString("type")),
+                    timestamp,
+                    preview(content, SUMMARY_MAX_LENGTH),
+                    preview(content, CONTENT_MAX_LENGTH));
+              })
           .list();
     } catch (DataAccessException e) {
       return List.of();
     }
   }
 
-  private List<ConversationSearchResult> searchBlueskyManual(String query, String speaker, TimeRange timeRange, int limit) {
-    StringBuilder sql = new StringBuilder("""
+  private List<ConversationSearchResult> searchBlueskyManual(
+      String query, String speaker, TimeRange timeRange, int limit) {
+    StringBuilder sql =
+        new StringBuilder(
+            """
         SELECT conversation_id, content, type, timestamp
         FROM SPRING_AI_CHAT_MEMORY
         WHERE 1 = 1
@@ -251,28 +357,33 @@ public class ConversationHistorySearchService {
     sql.append(" ORDER BY timestamp DESC LIMIT ?");
     params.add(limit);
     try {
-      return jdbcClient.sql(sql.toString())
+      return jdbcClient
+          .sql(sql.toString())
           .params(params)
-          .query((rs, rowNum) -> {
-            String content = rs.getString("content");
-            String timestamp = Instant.ofEpochMilli(rs.getLong("timestamp")).toString();
-            String conversationId = rs.getString("conversation_id");
-            return new ConversationSearchResult(
-                conversationId,
-                "bluesky-manual",
-                normalizeChatSpeaker(rs.getString("type")),
-                timestamp,
-                preview(content, SUMMARY_MAX_LENGTH),
-                preview(content, CONTENT_MAX_LENGTH));
-          })
+          .query(
+              (rs, rowNum) -> {
+                String content = rs.getString("content");
+                String timestamp = Instant.ofEpochMilli(rs.getLong("timestamp")).toString();
+                String conversationId = rs.getString("conversation_id");
+                return new ConversationSearchResult(
+                    conversationId,
+                    "bluesky-manual",
+                    normalizeChatSpeaker(rs.getString("type")),
+                    timestamp,
+                    preview(content, SUMMARY_MAX_LENGTH),
+                    preview(content, CONTENT_MAX_LENGTH));
+              })
           .list();
     } catch (DataAccessException e) {
       return List.of();
     }
   }
 
-  private List<ConversationSearchResult> searchTool(String query, String speaker, TimeRange timeRange, int limit) {
-    StringBuilder sql = new StringBuilder("""
+  private List<ConversationSearchResult> searchTool(
+      String query, String speaker, TimeRange timeRange, int limit) {
+    StringBuilder sql =
+        new StringBuilder(
+            """
         SELECT conversation_id, content, type, timestamp
         FROM SPRING_AI_CHAT_MEMORY
         WHERE 1 = 1
@@ -295,28 +406,33 @@ public class ConversationHistorySearchService {
     sql.append(" ORDER BY timestamp DESC LIMIT ?");
     params.add(limit);
     try {
-      return jdbcClient.sql(sql.toString())
+      return jdbcClient
+          .sql(sql.toString())
           .params(params)
-          .query((rs, rowNum) -> {
-            String content = rs.getString("content");
-            String timestamp = Instant.ofEpochMilli(rs.getLong("timestamp")).toString();
-            String conversationId = rs.getString("conversation_id");
-            return new ConversationSearchResult(
-                conversationId,
-                "tool",
-                normalizeChatSpeaker(rs.getString("type")),
-                timestamp,
-                preview(content, SUMMARY_MAX_LENGTH),
-                preview(content, CONTENT_MAX_LENGTH));
-          })
+          .query(
+              (rs, rowNum) -> {
+                String content = rs.getString("content");
+                String timestamp = Instant.ofEpochMilli(rs.getLong("timestamp")).toString();
+                String conversationId = rs.getString("conversation_id");
+                return new ConversationSearchResult(
+                    conversationId,
+                    "tool",
+                    normalizeChatSpeaker(rs.getString("type")),
+                    timestamp,
+                    preview(content, SUMMARY_MAX_LENGTH),
+                    preview(content, CONTENT_MAX_LENGTH));
+              })
           .list();
     } catch (DataAccessException e) {
       return List.of();
     }
   }
 
-  private List<ConversationSearchResult> searchBlueskyReply(String query, String speaker, TimeRange timeRange, int limit) {
-    StringBuilder sql = new StringBuilder("""
+  private List<ConversationSearchResult> searchBlueskyReply(
+      String query, String speaker, TimeRange timeRange, int limit) {
+    StringBuilder sql =
+        new StringBuilder(
+            """
         SELECT handle, role, content, created_at
         FROM bluesky_reply_conversations
         WHERE 1 = 1
@@ -338,18 +454,20 @@ public class ConversationHistorySearchService {
     sql.append(" ORDER BY created_at DESC LIMIT ?");
     params.add(limit);
     try {
-      return jdbcClient.sql(sql.toString())
+      return jdbcClient
+          .sql(sql.toString())
           .params(params)
-          .query((rs, rowNum) -> {
-            String content = rs.getString("content");
-            return new ConversationSearchResult(
-                "bluesky-reply:" + rs.getString("handle"),
-                "bluesky-reply",
-                rs.getString("role"),
-                normalizeTimestamp(rs.getString("created_at")),
-                preview(content, SUMMARY_MAX_LENGTH),
-                preview(content, CONTENT_MAX_LENGTH));
-          })
+          .query(
+              (rs, rowNum) -> {
+                String content = rs.getString("content");
+                return new ConversationSearchResult(
+                    "bluesky-reply:" + rs.getString("handle"),
+                    "bluesky-reply",
+                    rs.getString("role"),
+                    normalizeTimestamp(rs.getString("created_at")),
+                    preview(content, SUMMARY_MAX_LENGTH),
+                    preview(content, CONTENT_MAX_LENGTH));
+              })
           .list();
     } catch (DataAccessException e) {
       return List.of();
@@ -358,19 +476,24 @@ public class ConversationHistorySearchService {
 
   private List<ConversationHistoryMessage> findChatDetail(String conversationId, int limit) {
     try {
-      List<ConversationHistoryMessage> messages = jdbcClient.sql("""
+      List<ConversationHistoryMessage> messages =
+          jdbcClient
+              .sql(
+                  """
           SELECT type, content, timestamp
           FROM SPRING_AI_CHAT_MEMORY
           WHERE conversation_id = ?
           ORDER BY timestamp DESC
           LIMIT ?
           """)
-          .params(conversationId, limit)
-          .query((rs, rowNum) -> new ConversationHistoryMessage(
-              normalizeChatSpeaker(rs.getString("type")),
-              Instant.ofEpochMilli(rs.getLong("timestamp")).toString(),
-              rs.getString("content")))
-          .list();
+              .params(conversationId, limit)
+              .query(
+                  (rs, rowNum) ->
+                      new ConversationHistoryMessage(
+                          normalizeChatSpeaker(rs.getString("type")),
+                          Instant.ofEpochMilli(rs.getLong("timestamp")).toString(),
+                          rs.getString("content")))
+              .list();
       Collections.reverse(messages);
       return messages;
     } catch (DataAccessException e) {
@@ -378,8 +501,8 @@ public class ConversationHistorySearchService {
     }
   }
 
-  private List<ConversationHistoryMessage> findChatDetailWithFallback(String conversationId, int prefixLength,
-      int limit) {
+  private List<ConversationHistoryMessage> findChatDetailWithFallback(
+      String conversationId, int prefixLength, int limit) {
     List<ConversationHistoryMessage> messages = findChatDetail(conversationId, limit);
     if (!messages.isEmpty()) {
       return messages;
@@ -389,19 +512,24 @@ public class ConversationHistorySearchService {
 
   private List<ConversationHistoryMessage> findBlueskyReplyDetail(String handle, int limit) {
     try {
-      List<ConversationHistoryMessage> messages = jdbcClient.sql("""
+      List<ConversationHistoryMessage> messages =
+          jdbcClient
+              .sql(
+                  """
           SELECT role, content, created_at
           FROM bluesky_reply_conversations
           WHERE handle = ?
           ORDER BY id DESC
           LIMIT ?
           """)
-          .params(handle, limit)
-          .query((rs, rowNum) -> new ConversationHistoryMessage(
-              rs.getString("role"),
-              normalizeTimestamp(rs.getString("created_at")),
-              rs.getString("content")))
-          .list();
+              .params(handle, limit)
+              .query(
+                  (rs, rowNum) ->
+                      new ConversationHistoryMessage(
+                          rs.getString("role"),
+                          normalizeTimestamp(rs.getString("created_at")),
+                          rs.getString("content")))
+              .list();
       Collections.reverse(messages);
       return messages;
     } catch (DataAccessException e) {
@@ -424,11 +552,15 @@ public class ConversationHistorySearchService {
       return "all";
     }
     String normalized = scope.toLowerCase(Locale.ROOT);
-    if (normalized.equals("all") || normalized.equals("chat") || normalized.equals("bluesky-reply")
-        || normalized.equals("bluesky-manual") || normalized.equals("tool")) {
+    if (normalized.equals("all")
+        || normalized.equals("chat")
+        || normalized.equals("bluesky-reply")
+        || normalized.equals("bluesky-manual")
+        || normalized.equals("tool")) {
       return normalized;
     }
-    throw new IllegalArgumentException("scope must be all, chat, bluesky-reply, bluesky-manual, or tool");
+    throw new IllegalArgumentException(
+        "scope must be all, chat, bluesky-reply, bluesky-manual, or tool");
   }
 
   private String normalizeSpeaker(String speaker) {
@@ -439,7 +571,10 @@ public class ConversationHistorySearchService {
   }
 
   private String chatSpeaker(String speaker) {
-    if (speaker.equals("assistant") || speaker.equals("user") || speaker.equals("system") || speaker.equals("tool")) {
+    if (speaker.equals("assistant")
+        || speaker.equals("user")
+        || speaker.equals("system")
+        || speaker.equals("tool")) {
       return speaker;
     }
     return speaker;
@@ -502,6 +637,6 @@ public class ConversationHistorySearchService {
     }
   }
 
-  private record TimeRange(Long sinceEpochMillis, Long untilEpochMillis, String sinceText, String untilText) {
-  }
+  private record TimeRange(
+      Long sinceEpochMillis, Long untilEpochMillis, String sinceText, String untilText) {}
 }

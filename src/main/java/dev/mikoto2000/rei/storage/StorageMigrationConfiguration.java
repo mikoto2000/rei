@@ -12,54 +12,136 @@ import org.springframework.context.annotation.*;
 import org.springframework.core.PriorityOrdered;
 import org.springframework.core.env.Environment;
 
-@Configuration(proxyBeanMethods=false)
+@Configuration(proxyBeanMethods = false)
 public class StorageMigrationConfiguration {
-  @Bean public static StartupGate storageStartupGate(){return new StartupGate();}
-  @Bean public StorageObjectRegistry storageObjectRegistry(Environment environment){return new StorageObjectRegistry(Path.of(environment.getProperty("rei.data-dir",dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().toString())));}
-  @Bean public RetentionPlanner retentionPlanner(StorageObjectRegistry registry){return new RetentionPlanner(registry);}
-  @Bean public RetentionExecutor retentionExecutor(StorageObjectRegistry registry,RetentionPlanner planner){return new RetentionExecutor(registry,planner);}
-  @Bean public ManagedActivityLog managedActivityLog(StorageObjectRegistry registry){return new ManagedActivityLog(registry);}
-  @Bean public StorageMaintenance storageMaintenance(StorageObjectRegistry registry){return new StorageMaintenance(registry);}
-  @Bean public AutomaticRetention automaticRetention(StorageObjectRegistry registry,RetentionPlanner planner,RetentionExecutor executor){return new AutomaticRetention(registry,planner,executor);}
-  /** Same-version contexts in one JVM share a ready lease; another process cannot migrate underneath them. */
-  public static final class StartupGate implements BeanFactoryPostProcessor,EnvironmentAware,PriorityOrdered {
-    private static final Map<Path,Shared> OPEN=new HashMap<>();
+  @Bean
+  public static StartupGate storageStartupGate() {
+    return new StartupGate();
+  }
+
+  @Bean
+  public StorageObjectRegistry storageObjectRegistry(Environment environment) {
+    return new StorageObjectRegistry(
+        Path.of(
+            environment.getProperty(
+                "rei.data-dir",
+                dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().toString())));
+  }
+
+  @Bean
+  public RetentionPlanner retentionPlanner(StorageObjectRegistry registry) {
+    return new RetentionPlanner(registry);
+  }
+
+  @Bean
+  public RetentionExecutor retentionExecutor(
+      StorageObjectRegistry registry, RetentionPlanner planner) {
+    return new RetentionExecutor(registry, planner);
+  }
+
+  @Bean
+  public ManagedActivityLog managedActivityLog(StorageObjectRegistry registry) {
+    return new ManagedActivityLog(registry);
+  }
+
+  @Bean
+  public StorageMaintenance storageMaintenance(StorageObjectRegistry registry) {
+    return new StorageMaintenance(registry);
+  }
+
+  @Bean
+  public AutomaticRetention automaticRetention(
+      StorageObjectRegistry registry, RetentionPlanner planner, RetentionExecutor executor) {
+    return new AutomaticRetention(registry, planner, executor);
+  }
+
+  /**
+   * Same-version contexts in one JVM share a ready lease; another process cannot migrate underneath
+   * them.
+   */
+  public static final class StartupGate
+      implements BeanFactoryPostProcessor, EnvironmentAware, PriorityOrdered {
+    private static final Map<Path, Shared> OPEN = new HashMap<>();
     private Environment environment;
+
     private static final class Shared {
       final StorageMigrationCoordinator coordinator;
       final AutoCloseable walLifetime;
-      int users=1;
-      Shared(StorageMigrationCoordinator coordinator,AutoCloseable walLifetime){this.coordinator=coordinator;this.walLifetime=walLifetime;}
+      int users = 1;
+
+      Shared(StorageMigrationCoordinator coordinator, AutoCloseable walLifetime) {
+        this.coordinator = coordinator;
+        this.walLifetime = walLifetime;
+      }
     }
-    @Override public void setEnvironment(Environment environment){this.environment=environment;}
-    @Override public int getOrder(){return HIGHEST_PRECEDENCE;}
-    @Override public void postProcessBeanFactory(ConfigurableListableBeanFactory factory)throws BeansException {
-      Path root=Path.of(environment.getProperty("rei.data-dir",dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().toString())).toAbsolutePath().normalize();
+
+    @Override
+    public void setEnvironment(Environment environment) {
+      this.environment = environment;
+    }
+
+    @Override
+    public int getOrder() {
+      return HIGHEST_PRECEDENCE;
+    }
+
+    @Override
+    public void postProcessBeanFactory(ConfigurableListableBeanFactory factory)
+        throws BeansException {
+      Path root =
+          Path.of(
+                  environment.getProperty(
+                      "rei.data-dir",
+                      dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().toString()))
+              .toAbsolutePath()
+              .normalize();
       try {
-        if(!(factory instanceof DefaultListableBeanFactory standard))throw new IOException("Unsupported bean factory; storage gate cannot guarantee shutdown lease release");
+        if (!(factory instanceof DefaultListableBeanFactory standard))
+          throw new IOException(
+              "Unsupported bean factory; storage gate cannot guarantee shutdown lease release");
         Shared shared;
-        synchronized(OPEN) {
-          shared=OPEN.get(root);
-          if(shared==null) {
-            var coordinator=new StorageMigrationCoordinator(root);
+        synchronized (OPEN) {
+          shared = OPEN.get(root);
+          if (shared == null) {
+            var coordinator = new StorageMigrationCoordinator(root);
             try {
               coordinator.prepare();
-              shared=new Shared(coordinator,new StorageDatabase(root).keepWalOpen());
-            }catch(Exception error){coordinator.close();throw error;}
-            OPEN.put(root,shared);
-          }else {shared.coordinator.verifyCurrentReadyVersion();shared.users++;}
+              shared = new Shared(coordinator, new StorageDatabase(root).keepWalOpen());
+            } catch (Exception error) {
+              coordinator.close();
+              throw error;
+            }
+            OPEN.put(root, shared);
+          } else {
+            shared.coordinator.verifyCurrentReadyVersion();
+            shared.users++;
+          }
         }
         try {
-          standard.registerSingleton("storageMigrationLease",shared.coordinator);
-          standard.registerDisposableBean("storageMigrationLease",()->release(root));
-        }catch(Exception error){release(root);throw error;}
-      }catch(Exception error){throw new BeanInitializationException("Storage migration gate stopped normal startup for "+root,error);}
+          standard.registerSingleton("storageMigrationLease", shared.coordinator);
+          standard.registerDisposableBean("storageMigrationLease", () -> release(root));
+        } catch (Exception error) {
+          release(root);
+          throw error;
+        }
+      } catch (Exception error) {
+        throw new BeanInitializationException(
+            "Storage migration gate stopped normal startup for " + root, error);
+      }
     }
-    private static void release(Path root)throws Exception {
-      synchronized(OPEN){var current=OPEN.get(root);if(current!=null&&--current.users==0){
-        OPEN.remove(root);
-        try { current.walLifetime.close(); } finally { current.coordinator.close(); }
-      }}
+
+    private static void release(Path root) throws Exception {
+      synchronized (OPEN) {
+        var current = OPEN.get(root);
+        if (current != null && --current.users == 0) {
+          OPEN.remove(root);
+          try {
+            current.walLifetime.close();
+          } finally {
+            current.coordinator.close();
+          }
+        }
+      }
     }
   }
 }

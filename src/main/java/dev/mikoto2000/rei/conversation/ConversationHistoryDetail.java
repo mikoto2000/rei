@@ -9,7 +9,8 @@ public record ConversationHistoryDetail(
     String sourceProjectId,
     String sourceProjectName,
     String contextBoundary) {
-  public ConversationHistoryDetail(String conversationId, String scope, List<ConversationHistoryMessage> messages) {
+  public ConversationHistoryDetail(
+      String conversationId, String scope, List<ConversationHistoryMessage> messages) {
     this(conversationId, scope, messages, null, null, null);
   }
 }

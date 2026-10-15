@@ -3,27 +3,25 @@ package dev.mikoto2000.rei.core.command;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.mikoto2000.rei.core.project.ProjectService;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
-import dev.mikoto2000.rei.core.project.ProjectService;
 import picocli.CommandLine;
 
 @org.junit.jupiter.api.Tag("integration")
 class ProjectCommandTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void projectCommandAddsListsChangesAndRemovesProject() throws Exception {
     Path project = Files.createDirectories(tempDir.resolve("project-a"));
-    ProjectService service = connect(new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects")));
+    ProjectService service =
+        connect(new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects")));
     CommandLine commandLine = newCommand(service);
 
     assertEquals(0, commandLine.execute("add", project.toString()));
@@ -36,7 +34,8 @@ class ProjectCommandTest extends dev.mikoto2000.rei.core.project.ProjectClientTe
   @Test
   void listMarksCurrentProject() throws Exception {
     Path project = Files.createDirectories(tempDir.resolve("project-a"));
-    ProjectService service = connect(new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects")));
+    ProjectService service =
+        connect(new ProjectService(tempDir, tempDir.resolve(".rei").resolve("projects")));
     service.add(project.toString());
     service.cd(project.toString());
 
@@ -53,23 +52,25 @@ class ProjectCommandTest extends dev.mikoto2000.rei.core.project.ProjectClientTe
   }
 
   private CommandLine newCommand(ProjectService service) {
-    return new CommandLine(new ProjectCommand(), new CommandLine.IFactory() {
-      @Override
-      public <K> K create(Class<K> cls) throws Exception {
-        if (cls == ProjectCommand.AddCommand.class) {
-          return cls.cast(new ProjectCommand.AddCommand(service));
-        }
-        if (cls == ProjectCommand.RemoveCommand.class) {
-          return cls.cast(new ProjectCommand.RemoveCommand(service));
-        }
-        if (cls == ProjectCommand.ListCommand.class) {
-          return cls.cast(new ProjectCommand.ListCommand(service));
-        }
-        if (cls == ProjectCommand.CdCommand.class) {
-          return cls.cast(new ProjectCommand.CdCommand(service));
-        }
-        return CommandLine.defaultFactory().create(cls);
-      }
-    });
+    return new CommandLine(
+        new ProjectCommand(),
+        new CommandLine.IFactory() {
+          @Override
+          public <K> K create(Class<K> cls) throws Exception {
+            if (cls == ProjectCommand.AddCommand.class) {
+              return cls.cast(new ProjectCommand.AddCommand(service));
+            }
+            if (cls == ProjectCommand.RemoveCommand.class) {
+              return cls.cast(new ProjectCommand.RemoveCommand(service));
+            }
+            if (cls == ProjectCommand.ListCommand.class) {
+              return cls.cast(new ProjectCommand.ListCommand(service));
+            }
+            if (cls == ProjectCommand.CdCommand.class) {
+              return cls.cast(new ProjectCommand.CdCommand(service));
+            }
+            return CommandLine.defaultFactory().create(cls);
+          }
+        });
   }
 }

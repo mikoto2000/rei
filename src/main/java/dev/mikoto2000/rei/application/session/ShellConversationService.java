@@ -1,136 +1,250 @@
 package dev.mikoto2000.rei.application.session;
 
-import java.util.function.BiConsumer;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
+import java.util.function.BiConsumer;
 
 /** Selection belongs to a Shell client, never to the process or an execution thread. */
 public final class ShellConversationService {
   private final dev.mikoto2000.rei.application.input.ConversationInputGateway gateway;
   private dev.mikoto2000.rei.llm.capture.CaptureStore captures;
-  @org.springframework.beans.factory.annotation.Autowired(required=false)
-  public void setCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore captures){this.captures=captures;}
-  private record Owned(dev.mikoto2000.rei.core.project.ProjectClient client,AgentRunContext context) {}
-  private final java.util.concurrent.ConcurrentMap<String,Owned> owned=new java.util.concurrent.ConcurrentHashMap<>();
-  private void rememberOwner(dev.mikoto2000.rei.core.project.ProjectClient client,AgentRunContext context) {
-    if(inputs!=null)owned.entrySet().removeIf(entry->!inputs.containsRun(entry.getValue().context().projectId(),entry.getKey()));
-    owned.put(context.runId(),new Owned(client,context));
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore captures) {
+    this.captures = captures;
   }
-  public boolean ownsRun(dev.mikoto2000.rei.core.project.ProjectClient client,AgentRunContext context) {
-    var owner=owned.get(context.runId());return owner!=null&&owner.client()==client&&owner.context().equals(context);
+
+  private record Owned(
+      dev.mikoto2000.rei.core.project.ProjectClient client, AgentRunContext context) {}
+
+  private final java.util.concurrent.ConcurrentMap<String, Owned> owned =
+      new java.util.concurrent.ConcurrentHashMap<>();
+
+  private void rememberOwner(
+      dev.mikoto2000.rei.core.project.ProjectClient client, AgentRunContext context) {
+    if (inputs != null)
+      owned
+          .entrySet()
+          .removeIf(
+              entry -> !inputs.containsRun(entry.getValue().context().projectId(), entry.getKey()));
+    owned.put(context.runId(), new Owned(client, context));
   }
-  private java.util.function.Predicate<AgentRunContext> activeCancellation=context->false;
+
+  public boolean ownsRun(
+      dev.mikoto2000.rei.core.project.ProjectClient client, AgentRunContext context) {
+    var owner = owned.get(context.runId());
+    return owner != null && owner.client() == client && owner.context().equals(context);
+  }
+
+  private java.util.function.Predicate<AgentRunContext> activeCancellation = context -> false;
+
   public void onActiveCancellation(java.util.function.Predicate<AgentRunContext> cancellation) {
-    activeCancellation=java.util.Objects.requireNonNull(cancellation);
+    activeCancellation = java.util.Objects.requireNonNull(cancellation);
   }
-  /** Voice stop is confined to this captured client and selected Session, never the whole project. */
-  public int cancelSelectedActive(dev.mikoto2000.rei.core.project.ProjectClient client,
+
+  /**
+   * Voice stop is confined to this captured client and selected Session, never the whole project.
+   */
+  public int cancelSelectedActive(
+      dev.mikoto2000.rei.core.project.ProjectClient client,
       dev.mikoto2000.rei.application.input.ConversationInput input) {
-    if(input.source()!=dev.mikoto2000.rei.application.input.InputSource.VOICE)throw new IllegalArgumentException("VOICE control required");
-    var target=input.target();
-    synchronized(client) {
-      if(!isSelected(client,target))throw new IllegalStateException("Voice target changed");
-      if(!gateway.isNovel(input)||inputs==null)return 0;
-      var active=inputs.activeRuns().stream().map(dev.mikoto2000.rei.core.chat.ActiveRun::runId)
-          .collect(java.util.stream.Collectors.toSet());
-      int cancelled=0;
-      for(var owner:owned.values()) {
-        var context=owner.context();
-        if(owner.client()==client && active.contains(context.runId())
-            && java.util.Objects.equals(context.projectId(),target.project().id())
-            && java.util.Objects.equals(context.conversationId(),target.sessionId())
+    if (input.source() != dev.mikoto2000.rei.application.input.InputSource.VOICE)
+      throw new IllegalArgumentException("VOICE control required");
+    var target = input.target();
+    synchronized (client) {
+      if (!isSelected(client, target)) throw new IllegalStateException("Voice target changed");
+      if (!gateway.isNovel(input) || inputs == null) return 0;
+      var active =
+          inputs.activeRuns().stream()
+              .map(dev.mikoto2000.rei.core.chat.ActiveRun::runId)
+              .collect(java.util.stream.Collectors.toSet());
+      int cancelled = 0;
+      for (var owner : owned.values()) {
+        var context = owner.context();
+        if (owner.client() == client
+            && active.contains(context.runId())
+            && java.util.Objects.equals(context.projectId(), target.project().id())
+            && java.util.Objects.equals(context.conversationId(), target.sessionId())
             && context.projectRoot().equals(target.project().root().toAbsolutePath().normalize())
-            && activeCancellation.test(context))cancelled++;
+            && activeCancellation.test(context)) cancelled++;
       }
       return cancelled;
     }
   }
-  private org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.dot.DotDelegationService> dotDelegations;
-  @org.springframework.beans.factory.annotation.Autowired public void setDotDelegations(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.dot.DotDelegationService> dots){this.dotDelegations=dots;}
+
+  private org.springframework.beans.factory.ObjectProvider<
+          dev.mikoto2000.rei.dot.DotDelegationService>
+      dotDelegations;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setDotDelegations(
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.dot.DotDelegationService>
+          dots) {
+    this.dotDelegations = dots;
+  }
+
   private final java.time.Clock clock;
   private final ProjectService projects;
   private final SessionLifecycle lifecycle;
   private final boolean concurrentEnabled;
   private final dev.mikoto2000.rei.core.chat.ConversationInputRouter inputs;
-  public ShellConversationService(ProjectService projects, SessionLifecycle lifecycle,
+
+  public ShellConversationService(
+      ProjectService projects,
+      SessionLifecycle lifecycle,
       BiConsumer<AgentRunContext, String> dispatch) {
-    this(projects,lifecycle,dispatch,false,null);
+    this(projects, lifecycle, dispatch, false, null);
   }
-  public ShellConversationService(ProjectService projects,SessionLifecycle lifecycle,BiConsumer<AgentRunContext,String> dispatch,
-      boolean concurrentEnabled,dev.mikoto2000.rei.core.chat.ConversationInputRouter inputs) {
-    this(projects,lifecycle,dispatch,concurrentEnabled,inputs,java.time.Clock.systemUTC());
+
+  public ShellConversationService(
+      ProjectService projects,
+      SessionLifecycle lifecycle,
+      BiConsumer<AgentRunContext, String> dispatch,
+      boolean concurrentEnabled,
+      dev.mikoto2000.rei.core.chat.ConversationInputRouter inputs) {
+    this(projects, lifecycle, dispatch, concurrentEnabled, inputs, java.time.Clock.systemUTC());
   }
-  public ShellConversationService(ProjectService projects,SessionLifecycle lifecycle,BiConsumer<AgentRunContext,String> dispatch,
-      boolean concurrentEnabled,dev.mikoto2000.rei.core.chat.ConversationInputRouter inputs,java.time.Clock clock) {
-    this.clock=java.util.Objects.requireNonNull(clock);
-    this.projects=projects;this.lifecycle=lifecycle;this.concurrentEnabled=concurrentEnabled;this.inputs=inputs;
-    this.gateway=new dev.mikoto2000.rei.application.input.ConversationInputGateway(lifecycle,dispatch,inputs,clock);
+
+  public ShellConversationService(
+      ProjectService projects,
+      SessionLifecycle lifecycle,
+      BiConsumer<AgentRunContext, String> dispatch,
+      boolean concurrentEnabled,
+      dev.mikoto2000.rei.core.chat.ConversationInputRouter inputs,
+      java.time.Clock clock) {
+    this.clock = java.util.Objects.requireNonNull(clock);
+    this.projects = projects;
+    this.lifecycle = lifecycle;
+    this.concurrentEnabled = concurrentEnabled;
+    this.inputs = inputs;
+    this.gateway =
+        new dev.mikoto2000.rei.application.input.ConversationInputGateway(
+            lifecycle, dispatch, inputs, clock);
   }
+
   public AgentRunContext submit(String message) {
-    return submit(message,AgentRunContext.Mode.EXCLUSIVE);
+    return submit(message, AgentRunContext.Mode.EXCLUSIVE);
   }
-  public AgentRunContext submit(String message,AgentRunContext.Mode mode) {
-    if(mode==null)mode=AgentRunContext.Mode.EXCLUSIVE;
-    if(mode!=AgentRunContext.Mode.EXCLUSIVE && !concurrentEnabled)throw new IllegalArgumentException("Concurrent conversations are disabled");
+
+  public AgentRunContext submit(String message, AgentRunContext.Mode mode) {
+    if (mode == null) mode = AgentRunContext.Mode.EXCLUSIVE;
+    if (mode != AgentRunContext.Mode.EXCLUSIVE && !concurrentEnabled)
+      throw new IllegalArgumentException("Concurrent conversations are disabled");
     synchronized (projects.currentClient()) {
       var project = projects.currentContext();
-      var input = new dev.mikoto2000.rei.application.input.ConversationInput(java.util.UUID.randomUUID(),
-          dev.mikoto2000.rei.application.input.InputSource.KEYBOARD,
-          new dev.mikoto2000.rei.application.input.ConversationTarget(project,currentSessionId()),message,clock.instant());
-            var captureStore=captures;var client=projects.currentClient();
-      var context = gateway.submit(input,mode,run->{
-        rememberOwner(client,run);
-        if(dotDelegations!=null)dotDelegations.ifAvailable(dot->dot.authoriseHumanInput(run,message));
-        if(captureStore!=null)captureStore.accept(client,run.conversationId(),input.inputId().toString(),run.runId());
-      },run->{if(captureStore!=null)captureStore.startFailed(run.runId());});
+      var input =
+          new dev.mikoto2000.rei.application.input.ConversationInput(
+              java.util.UUID.randomUUID(),
+              dev.mikoto2000.rei.application.input.InputSource.KEYBOARD,
+              new dev.mikoto2000.rei.application.input.ConversationTarget(
+                  project, currentSessionId()),
+              message,
+              clock.instant());
+      var captureStore = captures;
+      var client = projects.currentClient();
+      var context =
+          gateway.submit(
+              input,
+              mode,
+              run -> {
+                rememberOwner(client, run);
+                if (dotDelegations != null)
+                  dotDelegations.ifAvailable(dot -> dot.authoriseHumanInput(run, message));
+                if (captureStore != null)
+                  captureStore.accept(
+                      client, run.conversationId(), input.inputId().toString(), run.runId());
+              },
+              run -> {
+                if (captureStore != null) captureStore.startFailed(run.runId());
+              });
       projects.selectSession(context.conversationId());
       return context;
     }
   }
+
   /** Captured on the interactive thread, then safe to pass to an ASR worker. */
   public dev.mikoto2000.rei.application.input.ConversationTarget captureTarget() {
-    synchronized(projects.currentClient()) {
-      if(currentSessionId()==null)newConversation();
-      return new dev.mikoto2000.rei.application.input.ConversationTarget(projects.currentContext(),currentSessionId());
+    synchronized (projects.currentClient()) {
+      if (currentSessionId() == null) newConversation();
+      return new dev.mikoto2000.rei.application.input.ConversationTarget(
+          projects.currentContext(), currentSessionId());
     }
   }
-  public dev.mikoto2000.rei.core.project.ProjectClient captureClient(){return projects.currentClient();}
-  public boolean isSelected(dev.mikoto2000.rei.core.project.ProjectClient client,dev.mikoto2000.rei.application.input.ConversationTarget target) {
-    try {
-      var selection=projects.selectionOf(client);
-      return selection.project().id().equals(target.project().id())&&selection.project().root().equals(target.project().root())
-          &&java.util.Objects.equals(selection.conversationId(),target.sessionId());
-    }catch(RuntimeException unavailable){return false;}
+
+  public dev.mikoto2000.rei.core.project.ProjectClient captureClient() {
+    return projects.currentClient();
   }
+
+  public boolean isSelected(
+      dev.mikoto2000.rei.core.project.ProjectClient client,
+      dev.mikoto2000.rei.application.input.ConversationTarget target) {
+    try {
+      var selection = projects.selectionOf(client);
+      return selection.project().id().equals(target.project().id())
+          && selection.project().root().equals(target.project().root())
+          && java.util.Objects.equals(selection.conversationId(), target.sessionId());
+    } catch (RuntimeException unavailable) {
+      return false;
+    }
+  }
+
   /** Check selection and admit the voice envelope under the same client lock as Session changes. */
-  public AgentRunContext submitSelectedVoice(dev.mikoto2000.rei.core.project.ProjectClient client,dev.mikoto2000.rei.application.input.ConversationInput input) {
+  public AgentRunContext submitSelectedVoice(
+      dev.mikoto2000.rei.core.project.ProjectClient client,
+      dev.mikoto2000.rei.application.input.ConversationInput input) {
     return submitSelectedVoice(client, input, () -> {});
   }
-  public AgentRunContext submitSelectedVoice(dev.mikoto2000.rei.core.project.ProjectClient client,
-      dev.mikoto2000.rei.application.input.ConversationInput input, Runnable afterAccepted) {
-    if(client==null||input.source()!=dev.mikoto2000.rei.application.input.InputSource.VOICE)throw new IllegalArgumentException("Captured VOICE client required");
-    synchronized(client) {
-      if(!isSelected(client,input.target()))throw new IllegalStateException("Voice target changed; restart voice for the selected Session");
-      return gateway.submit(input, AgentRunContext.Mode.EXCLUSIVE,
-          run->rememberOwner(client,run),run->owned.remove(run.runId()),afterAccepted);
+
+  public AgentRunContext submitSelectedVoice(
+      dev.mikoto2000.rei.core.project.ProjectClient client,
+      dev.mikoto2000.rei.application.input.ConversationInput input,
+      Runnable afterAccepted) {
+    if (client == null || input.source() != dev.mikoto2000.rei.application.input.InputSource.VOICE)
+      throw new IllegalArgumentException("Captured VOICE client required");
+    synchronized (client) {
+      if (!isSelected(client, input.target()))
+        throw new IllegalStateException(
+            "Voice target changed; restart voice for the selected Session");
+      return gateway.submit(
+          input,
+          AgentRunContext.Mode.EXCLUSIVE,
+          run -> rememberOwner(client, run),
+          run -> owned.remove(run.runId()),
+          afterAccepted);
     }
   }
+
   public AgentRunContext submit(dev.mikoto2000.rei.application.input.ConversationInput input) {
-    return gateway.submit(input,AgentRunContext.Mode.EXCLUSIVE);
+    return gateway.submit(input, AgentRunContext.Mode.EXCLUSIVE);
   }
+
   public java.util.List<dev.mikoto2000.rei.application.input.ConversationInput> pending(
-      dev.mikoto2000.rei.application.input.ConversationTarget target) { return gateway.pending(target); }
-  public boolean cancelPending(dev.mikoto2000.rei.application.input.ConversationTarget target,java.util.UUID inputId) {
-    return gateway.cancelPending(target,inputId);
+      dev.mikoto2000.rei.application.input.ConversationTarget target) {
+    return gateway.pending(target);
   }
-  public void onPendingCancellation(java.util.function.Predicate<AgentRunContext> cancellation) { gateway.onCancel(cancellation); }
-  public boolean intervene(String runId,String message) {
-    if(!concurrentEnabled || inputs==null)throw new IllegalArgumentException("Concurrent conversations are disabled");
-    synchronized(projects.currentClient()) {
-      return inputs.offerIntervention(projects.currentContext().id(),currentSessionId(),runId,message);
+
+  public boolean cancelPending(
+      dev.mikoto2000.rei.application.input.ConversationTarget target, java.util.UUID inputId) {
+    return gateway.cancelPending(target, inputId);
+  }
+
+  public void onPendingCancellation(java.util.function.Predicate<AgentRunContext> cancellation) {
+    gateway.onCancel(cancellation);
+  }
+
+  public boolean intervene(String runId, String message) {
+    if (!concurrentEnabled || inputs == null)
+      throw new IllegalArgumentException("Concurrent conversations are disabled");
+    synchronized (projects.currentClient()) {
+      return inputs.offerIntervention(
+          projects.currentContext().id(), currentSessionId(), runId, message);
     }
   }
-  public void newConversation() { newConversation(null); }
+
+  public void newConversation() {
+    newConversation(null);
+  }
+
   public SessionMetadata newConversation(String title) {
     synchronized (projects.currentClient()) {
       var session = lifecycle.create(projects.currentContext(), title);
@@ -138,29 +252,42 @@ public final class ShellConversationService {
       return session;
     }
   }
+
   public void resume(String sessionId) {
     synchronized (projects.currentClient()) {
       lifecycle.validate(sessionId, projects.currentContext().id());
       projects.selectSession(sessionId);
     }
   }
+
   public SessionMetadata currentMetadata() {
-    synchronized(projects.currentClient()) {
-      var id=currentSessionId();return id==null?null:lifecycle.validate(id,projects.currentContext().id());
+    synchronized (projects.currentClient()) {
+      var id = currentSessionId();
+      return id == null ? null : lifecycle.validate(id, projects.currentContext().id());
     }
   }
-  public SessionMetadata responseStyle(dev.mikoto2000.rei.core.chat.ResponseStyle style,boolean voiceOnly) {
+
+  public SessionMetadata responseStyle(
+      dev.mikoto2000.rei.core.chat.ResponseStyle style, boolean voiceOnly) {
     java.util.Objects.requireNonNull(style);
-    synchronized(projects.currentClient()) {
-      if(currentSessionId()==null)newConversation();
-      return lifecycle.responseStyle(projects.currentContext(),currentSessionId(),style,voiceOnly);
+    synchronized (projects.currentClient()) {
+      if (currentSessionId() == null) newConversation();
+      return lifecycle.responseStyle(
+          projects.currentContext(), currentSessionId(), style, voiceOnly);
     }
   }
-  public String currentSessionId() { return projects.currentSessionId(); }
+
+  public String currentSessionId() {
+    return projects.currentSessionId();
+  }
+
   public SessionMetadata end() {
-    synchronized(projects.currentClient()) {
-      String id=currentSessionId();if(id==null)return null;
-      var session=lifecycle.end(id,projects.currentContext().id());projects.selectSession(null);return session;
+    synchronized (projects.currentClient()) {
+      String id = currentSessionId();
+      if (id == null) return null;
+      var session = lifecycle.end(id, projects.currentContext().id());
+      projects.selectSession(null);
+      return session;
     }
   }
 }

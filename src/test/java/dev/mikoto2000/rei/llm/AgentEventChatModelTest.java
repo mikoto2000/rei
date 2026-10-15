@@ -1,27 +1,25 @@
 package dev.mikoto2000.rei.llm;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-import java.time.Clock;
-import java.util.ArrayList;
-import java.util.List;
-
-import org.junit.jupiter.api.Test;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.model.ChatResponse;
-import org.springframework.ai.chat.prompt.Prompt;
-
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
-import dev.mikoto2000.rei.event.LlmRequestStartedPayload;
 import dev.mikoto2000.rei.event.LlmRequestFailedPayload;
-import static org.assertj.core.api.Assertions.assertThat;
+import dev.mikoto2000.rei.event.LlmRequestStartedPayload;
+import java.time.Clock;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
 class AgentEventChatModelTest {
@@ -36,8 +34,9 @@ class AgentEventChatModelTest {
     List<AgentEvent> events = new ArrayList<>();
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
     bus.subscribe(events::add);
-    var model = new AgentEventChatModel(LlmFeature.ACTIVITY, delegate,
-        new AgentEventFactory(Clock.systemUTC()), bus);
+    var model =
+        new AgentEventChatModel(
+            LlmFeature.ACTIVITY, delegate, new AgentEventFactory(Clock.systemUTC()), bus);
 
     assertEquals(response, model.call(prompt));
     assertEquals(failure, assertThrows(IllegalStateException.class, () -> model.call(prompt)));
@@ -50,16 +49,19 @@ class AgentEventChatModelTest {
     Prompt prompt = new Prompt("detect activity");
     ChatResponse response = mock(ChatResponse.class);
     var failure = new IllegalStateException("activity failed");
-    when(delegate.stream(prompt)).thenReturn(Flux.just(response, response))
+    when(delegate.stream(prompt))
+        .thenReturn(Flux.just(response, response))
         .thenReturn(Flux.error(failure));
     List<AgentEvent> events = new ArrayList<>();
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
     bus.subscribe(events::add);
-    var model = new AgentEventChatModel(LlmFeature.ACTIVITY, delegate,
-        new AgentEventFactory(Clock.systemUTC()), bus);
+    var model =
+        new AgentEventChatModel(
+            LlmFeature.ACTIVITY, delegate, new AgentEventFactory(Clock.systemUTC()), bus);
 
     assertEquals(List.of(response, response), model.stream(prompt).collectList().block());
-    assertEquals(failure, assertThrows(IllegalStateException.class, () -> model.stream(prompt).blockLast()));
+    assertEquals(
+        failure, assertThrows(IllegalStateException.class, () -> model.stream(prompt).blockLast()));
     assertEquals(List.of(), events);
   }
 
@@ -73,12 +75,15 @@ class AgentEventChatModelTest {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
     bus.subscribe(events::add);
 
-    ChatResponse actual = new AgentEventChatModel(LlmFeature.AGENT_SKILLS, delegate,
-        new AgentEventFactory(Clock.systemUTC()), bus).call(prompt);
+    ChatResponse actual =
+        new AgentEventChatModel(
+                LlmFeature.AGENT_SKILLS, delegate, new AgentEventFactory(Clock.systemUTC()), bus)
+            .call(prompt);
 
     assertEquals(response, actual);
     assertEquals(AgentEventType.LLM_REQUEST_STARTED, events.get(0).type());
-    assertEquals(LlmFeature.AGENT_SKILLS, ((LlmRequestStartedPayload) events.get(0).payload()).feature());
+    assertEquals(
+        LlmFeature.AGENT_SKILLS, ((LlmRequestStartedPayload) events.get(0).payload()).feature());
     assertEquals(AgentEventType.LLM_RESPONSE_COMPLETED, events.get(1).type());
   }
 
@@ -91,11 +96,13 @@ class AgentEventChatModelTest {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
     bus.subscribe(events::add);
 
-    new AgentEventChatModel(LlmFeature.SEARCH, delegate,
-        new AgentEventFactory(Clock.systemUTC()), bus).stream(prompt).onErrorComplete().blockLast();
+    new AgentEventChatModel(
+            LlmFeature.SEARCH, delegate, new AgentEventFactory(Clock.systemUTC()), bus)
+        .stream(prompt).onErrorComplete().blockLast();
 
     assertEquals(AgentEventType.LLM_REQUEST_STARTED, events.getFirst().type());
-    assertFalse(events.stream().anyMatch(event -> event.type() == AgentEventType.LLM_RESPONSE_COMPLETED));
+    assertFalse(
+        events.stream().anyMatch(event -> event.type() == AgentEventType.LLM_RESPONSE_COMPLETED));
   }
 
   @Test
@@ -107,8 +114,12 @@ class AgentEventChatModelTest {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
     bus.subscribe(events::add);
 
-    assertThrows(IllegalStateException.class, () -> new AgentEventChatModel(LlmFeature.CHAT, delegate,
-        new AgentEventFactory(Clock.systemUTC()), bus).call(prompt));
+    assertThrows(
+        IllegalStateException.class,
+        () ->
+            new AgentEventChatModel(
+                    LlmFeature.CHAT, delegate, new AgentEventFactory(Clock.systemUTC()), bus)
+                .call(prompt));
 
     assertEquals(AgentEventType.LLM_REQUEST_STARTED, events.get(0).type());
     assertEquals(AgentEventType.LLM_REQUEST_FAILED, events.get(1).type());
@@ -124,8 +135,9 @@ class AgentEventChatModelTest {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
     bus.subscribe(events::add);
 
-    new AgentEventChatModel(LlmFeature.CHAT, delegate,
-        new AgentEventFactory(Clock.systemUTC()), bus).stream(prompt).blockLast();
+    new AgentEventChatModel(
+            LlmFeature.CHAT, delegate, new AgentEventFactory(Clock.systemUTC()), bus)
+        .stream(prompt).blockLast();
 
     assertEquals(AgentEventType.LLM_REQUEST_STARTED, events.get(0).type());
     assertEquals(AgentEventType.LLM_RESPONSE_FIRST_TOKEN, events.get(1).type());
@@ -137,17 +149,25 @@ class AgentEventChatModelTest {
   void summaryPurposeLabelsCallAndStreamWithoutChangingTheDelegatePrompt() {
     for (boolean streaming : List.of(false, true)) {
       var delegate = mock(ChatModel.class);
-      var prompt = new Prompt("summary", org.springframework.ai.openai.OpenAiChatOptions.builder()
-          .model("configured-model").toolContext(java.util.Map.of("rei.modelCallPurpose", "context-summary")).build());
+      var prompt =
+          new Prompt(
+              "summary",
+              org.springframework.ai.openai.OpenAiChatOptions.builder()
+                  .model("configured-model")
+                  .toolContext(java.util.Map.of("rei.modelCallPurpose", "context-summary"))
+                  .build());
       var response = mock(ChatResponse.class);
       when(delegate.call(prompt)).thenReturn(response);
       when(delegate.stream(prompt)).thenReturn(Flux.just(response));
       var events = new ArrayList<AgentEvent>();
       var bus = new InMemoryAgentEventBus();
       bus.subscribe(events::add);
-      var model = new AgentEventChatModel(LlmFeature.CHAT, delegate, new AgentEventFactory(Clock.systemUTC()), bus);
+      var model =
+          new AgentEventChatModel(
+              LlmFeature.CHAT, delegate, new AgentEventFactory(Clock.systemUTC()), bus);
       assertEquals(response, streaming ? model.stream(prompt).blockLast() : model.call(prompt));
-      assertEquals("context-summary", ((LlmRequestStartedPayload) events.getFirst().payload()).feature());
+      assertEquals(
+          "context-summary", ((LlmRequestStartedPayload) events.getFirst().payload()).feature());
       assertEquals("configured-model", prompt.getOptions().getModel());
       if (streaming) org.mockito.Mockito.verify(delegate).stream(prompt);
       else org.mockito.Mockito.verify(delegate).call(prompt);
@@ -159,18 +179,25 @@ class AgentEventChatModelTest {
     for (Object marker : List.of("private-purpose-secret", 27)) {
       for (boolean streaming : List.of(false, true)) {
         var delegate = mock(ChatModel.class);
-        var prompt = new Prompt("chat", org.springframework.ai.openai.OpenAiChatOptions.builder()
-            .toolContext(java.util.Map.of("rei.modelCallPurpose", marker)).build());
+        var prompt =
+            new Prompt(
+                "chat",
+                org.springframework.ai.openai.OpenAiChatOptions.builder()
+                    .toolContext(java.util.Map.of("rei.modelCallPurpose", marker))
+                    .build());
         var response = mock(ChatResponse.class);
         when(delegate.call(prompt)).thenReturn(response);
         when(delegate.stream(prompt)).thenReturn(Flux.just(response));
         var events = new ArrayList<AgentEvent>();
         var bus = new InMemoryAgentEventBus();
         bus.subscribe(events::add);
-        var model = new AgentEventChatModel(LlmFeature.CHAT, delegate, new AgentEventFactory(Clock.systemUTC()), bus);
+        var model =
+            new AgentEventChatModel(
+                LlmFeature.CHAT, delegate, new AgentEventFactory(Clock.systemUTC()), bus);
         if (streaming) model.stream(prompt).blockLast();
         else model.call(prompt);
-        assertEquals(LlmFeature.CHAT, ((LlmRequestStartedPayload) events.getFirst().payload()).feature());
+        assertEquals(
+            LlmFeature.CHAT, ((LlmRequestStartedPayload) events.getFirst().payload()).feature());
         assertThat(events.toString()).doesNotContain("private-purpose-secret");
       }
     }
@@ -179,14 +206,22 @@ class AgentEventChatModelTest {
   @Test
   void nonChatFeaturesKeepTheirFeatureWhenSummaryMarkerIsPresent() {
     var delegate = mock(ChatModel.class);
-    var prompt = new Prompt("skill", org.springframework.ai.openai.OpenAiChatOptions.builder()
-        .toolContext(java.util.Map.of("rei.modelCallPurpose", "context-summary")).build());
+    var prompt =
+        new Prompt(
+            "skill",
+            org.springframework.ai.openai.OpenAiChatOptions.builder()
+                .toolContext(java.util.Map.of("rei.modelCallPurpose", "context-summary"))
+                .build());
     when(delegate.call(prompt)).thenReturn(mock(ChatResponse.class));
     var events = new ArrayList<AgentEvent>();
     var bus = new InMemoryAgentEventBus();
     bus.subscribe(events::add);
-    new AgentEventChatModel(LlmFeature.AGENT_SKILLS, delegate, new AgentEventFactory(Clock.systemUTC()), bus).call(prompt);
-    assertEquals(LlmFeature.AGENT_SKILLS, ((LlmRequestStartedPayload) events.getFirst().payload()).feature());
+    new AgentEventChatModel(
+            LlmFeature.AGENT_SKILLS, delegate, new AgentEventFactory(Clock.systemUTC()), bus)
+        .call(prompt);
+    assertEquals(
+        LlmFeature.AGENT_SKILLS,
+        ((LlmRequestStartedPayload) events.getFirst().payload()).feature());
   }
 
   @Test
@@ -195,18 +230,32 @@ class AgentEventChatModelTest {
     for (boolean streaming : List.of(false, true)) {
       var delegate = mock(ChatModel.class);
       var prompt = new Prompt("fail");
-      var failure = org.springframework.web.reactive.function.client.WebClientResponseException.create(401,
-          secret, org.springframework.http.HttpHeaders.EMPTY, secret.getBytes(java.nio.charset.StandardCharsets.UTF_8),
-          java.nio.charset.StandardCharsets.UTF_8);
+      var failure =
+          org.springframework.web.reactive.function.client.WebClientResponseException.create(
+              401,
+              secret,
+              org.springframework.http.HttpHeaders.EMPTY,
+              secret.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+              java.nio.charset.StandardCharsets.UTF_8);
       when(delegate.call(prompt)).thenThrow(failure);
       when(delegate.stream(prompt)).thenReturn(Flux.error(failure));
       var events = new ArrayList<AgentEvent>();
       var bus = new InMemoryAgentEventBus();
       bus.subscribe(events::add);
-      var model = new AgentEventChatModel(LlmFeature.CHAT, delegate, new AgentEventFactory(Clock.systemUTC()), bus);
-      assertThrows(org.springframework.web.reactive.function.client.WebClientResponseException.class,
-          () -> { if (streaming) model.stream(prompt).blockLast(); else model.call(prompt); });
-      var event = events.stream().filter(value -> value.type() == AgentEventType.LLM_REQUEST_FAILED).findFirst().orElseThrow();
+      var model =
+          new AgentEventChatModel(
+              LlmFeature.CHAT, delegate, new AgentEventFactory(Clock.systemUTC()), bus);
+      assertThrows(
+          org.springframework.web.reactive.function.client.WebClientResponseException.class,
+          () -> {
+            if (streaming) model.stream(prompt).blockLast();
+            else model.call(prompt);
+          });
+      var event =
+          events.stream()
+              .filter(value -> value.type() == AgentEventType.LLM_REQUEST_FAILED)
+              .findFirst()
+              .orElseThrow();
       var error = ((LlmRequestFailedPayload) event.payload()).error();
       assertEquals("authentication_failed", error.code());
       assertThat(error.message()).contains("HTTP 401");

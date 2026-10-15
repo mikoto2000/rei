@@ -1,8 +1,5 @@
 package dev.mikoto2000.rei.ui.shell;
 
-import java.time.Duration;
-import java.time.Instant;
-
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventListener;
 import dev.mikoto2000.rei.event.AgentRunCompletedPayload;
@@ -27,20 +24,23 @@ import dev.mikoto2000.rei.event.LlmResponseFirstTokenPayload;
 import dev.mikoto2000.rei.event.MessageCompletedPayload;
 import dev.mikoto2000.rei.event.MessageDeltaPayload;
 import dev.mikoto2000.rei.event.MessageStartedPayload;
-import dev.mikoto2000.rei.event.SkillSelectionCompletedPayload;
-import dev.mikoto2000.rei.event.SkillSelectionFailedPayload;
+import dev.mikoto2000.rei.event.SkillCandidatesEvaluatedPayload;
 import dev.mikoto2000.rei.event.SkillRoutingCompletedPayload;
 import dev.mikoto2000.rei.event.SkillRoutingFailedPayload;
 import dev.mikoto2000.rei.event.SkillRoutingStartedPayload;
-import dev.mikoto2000.rei.event.SkillCandidatesEvaluatedPayload;
+import dev.mikoto2000.rei.event.SkillSelectionCompletedPayload;
+import dev.mikoto2000.rei.event.SkillSelectionFailedPayload;
+import dev.mikoto2000.rei.event.ThinkingCompletedPayload;
+import dev.mikoto2000.rei.event.ThinkingDeltaPayload;
+import dev.mikoto2000.rei.event.ThinkingStartedPayload;
 import dev.mikoto2000.rei.event.ToolCompletedPayload;
 import dev.mikoto2000.rei.event.ToolFailedPayload;
 import dev.mikoto2000.rei.event.ToolStartedPayload;
+import dev.mikoto2000.rei.event.TopicAutoSpeakSuppressedPayload;
 import dev.mikoto2000.rei.event.TopicCandidateGeneratedPayload;
 import dev.mikoto2000.rei.event.TopicCandidateRejectedPayload;
 import dev.mikoto2000.rei.event.TopicCandidateScoredPayload;
 import dev.mikoto2000.rei.event.TopicCandidatesRefreshedPayload;
-import dev.mikoto2000.rei.event.TopicAutoSpeakSuppressedPayload;
 import dev.mikoto2000.rei.event.TopicGenerationCompletedPayload;
 import dev.mikoto2000.rei.event.TopicGenerationFailedPayload;
 import dev.mikoto2000.rei.event.TopicGenerationStartedPayload;
@@ -48,15 +48,14 @@ import dev.mikoto2000.rei.event.TopicIdleTriggerEvaluatedPayload;
 import dev.mikoto2000.rei.event.TopicSelectedPayload;
 import dev.mikoto2000.rei.event.TopicSpeakSkippedPayload;
 import dev.mikoto2000.rei.event.TopicSpokenPayload;
-import dev.mikoto2000.rei.event.ThinkingCompletedPayload;
-import dev.mikoto2000.rei.event.ThinkingDeltaPayload;
-import dev.mikoto2000.rei.event.ThinkingStartedPayload;
+import dev.mikoto2000.rei.event.WorkingSetContextInjectedPayload;
 import dev.mikoto2000.rei.event.WorkingSetItemAddedPayload;
 import dev.mikoto2000.rei.event.WorkingSetItemRemovedPayload;
-import dev.mikoto2000.rei.event.WorkingSetContextInjectedPayload;
 import dev.mikoto2000.rei.event.WorkingSetSearchCompletedPayload;
 import dev.mikoto2000.rei.event.WorkingSetSearchStartedPayload;
 import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
+import java.time.Duration;
+import java.time.Instant;
 import org.springframework.core.env.Environment;
 
 /** Append-only Shell presentation adapter for Agent events. */
@@ -71,34 +70,46 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   private final java.util.List<AgentEvent> pendingNotifications = new java.util.ArrayList<>();
   private boolean flushingNotifications;
   private final java.util.List<AgentEvent> pendingLlmCompletions = new java.util.ArrayList<>();
-  private record LlmRequestKey(String runId, String requestId) { }
+
+  private record LlmRequestKey(String runId, String requestId) {}
+
   private final java.util.Map<LlmRequestKey, String> llmRequestFeatures;
   private Instant lastThrottledTopicSummaryAt;
-  private final java.util.LinkedHashMap<String, String> subAgentNames = new java.util.LinkedHashMap<>();
+  private final java.util.LinkedHashMap<String, String> subAgentNames =
+      new java.util.LinkedHashMap<>();
 
   public ShellAgentEventRenderer(ShellEventOutput output) {
     this(output, TopicNotificationOptions.summary());
   }
 
-  public ShellAgentEventRenderer(ShellEventOutput output, TopicNotificationOptions topicNotificationOptions) {
+  public ShellAgentEventRenderer(
+      ShellEventOutput output, TopicNotificationOptions topicNotificationOptions) {
     this(output, topicNotificationOptions, new java.util.HashMap<>());
   }
 
-  private ShellAgentEventRenderer(ShellEventOutput output, TopicNotificationOptions topicNotificationOptions,
+  private ShellAgentEventRenderer(
+      ShellEventOutput output,
+      TopicNotificationOptions topicNotificationOptions,
       java.util.Map<LlmRequestKey, String> llmRequestFeatures) {
     this.output = output;
     this.llmRequestFeatures = llmRequestFeatures;
-    this.topicNotificationOptions = topicNotificationOptions == null
-        ? TopicNotificationOptions.summary()
-        : topicNotificationOptions;
+    this.topicNotificationOptions =
+        topicNotificationOptions == null
+            ? TopicNotificationOptions.summary()
+            : topicNotificationOptions;
   }
 
   @Override
   public synchronized void onEvent(AgentEvent event) {
     // Checkpoint bookkeeping must not interrupt answer/thinking streams, including child runs.
     switch (event.type()) {
-      case CHECKPOINT_SAVED, CHECKPOINT_RECONCILED, CHECKPOINT_RESUMED, CHECKPOINT_REVISION_SAVED -> { return; }
-      default -> { }
+      case CHECKPOINT_SAVED,
+          CHECKPOINT_RECONCILED,
+          CHECKPOINT_RESUMED,
+          CHECKPOINT_REVISION_SAVED -> {
+        return;
+      }
+      default -> {}
     }
     // Notifications may overtake downstream answer chunks. Preserve the text until
     // a stream boundary, including when a chunk ends in a newline or mid-link.
@@ -106,11 +117,17 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       pendingNotifications.add(event);
       return;
     }
-    if (event.payload() instanceof dev.mikoto2000.rei.event.ExternalAgentLifecyclePayload delegation) {
+    if (event.payload()
+        instanceof dev.mikoto2000.rei.event.ExternalAgentLifecyclePayload delegation) {
       closeAssistantLine();
       closeThinkingLine();
-      output.println("[delegation] " + delegation.agent() + " "
-          + event.type().value().substring("delegation.".length()) + ": " + delegation.summary());
+      output.println(
+          "[delegation] "
+              + delegation.agent()
+              + " "
+              + event.type().value().substring("delegation.".length())
+              + ": "
+              + delegation.summary());
       output.flush();
       return;
     }
@@ -118,27 +135,57 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       rememberSubAgent(child);
       closeAssistantLine();
       closeThinkingLine();
-      output.println("[subagent] " + child.agentId() + " " + child.status().toLowerCase(java.util.Locale.ROOT)
-          + " (" + formatSeconds(child.duration()) + " s)" + " [" + child.subAgentRunId() + "]");
-      if(child.failureReason()!=null)output.println("[subagent] 原因: "+dev.mikoto2000.rei.event.CredentialRedactor.redact(child.failureReason()));
+      output.println(
+          "[subagent] "
+              + child.agentId()
+              + " "
+              + child.status().toLowerCase(java.util.Locale.ROOT)
+              + " ("
+              + formatSeconds(child.duration())
+              + " s)"
+              + " ["
+              + child.subAgentRunId()
+              + "]");
+      if (child.failureReason() != null)
+        output.println(
+            "[subagent] 原因: "
+                + dev.mikoto2000.rei.event.CredentialRedactor.redact(child.failureReason()));
       output.flush();
       return;
     }
     if (isSubAgentEvent(event)) {
       // Child answer/thinking streams must not enter the parent's streamed message state.
       switch (event.type()) {
-        case MESSAGE_STARTED, MESSAGE_DELTA, MESSAGE_COMPLETED,
-            THINKING_STARTED, THINKING_DELTA, THINKING_COMPLETED -> { return; }
-        default -> { }
+        case MESSAGE_STARTED,
+            MESSAGE_DELTA,
+            MESSAGE_COMPLETED,
+            THINKING_STARTED,
+            THINKING_DELTA,
+            THINKING_COMPLETED -> {
+          return;
+        }
+        default -> {}
       }
       closeAssistantLine();
       closeThinkingLine();
       String prefix = subAgentPrefix(event);
-      new ShellAgentEventRenderer(new ShellEventOutput() {
-        public void print(String text) { output.print(prefix + text); }
-        public void println(String text) { output.println(prefix + text); }
-        public void flush() { output.flush(); }
-      }, topicNotificationOptions, llmRequestFeatures).renderEvent(event);
+      new ShellAgentEventRenderer(
+              new ShellEventOutput() {
+                public void print(String text) {
+                  output.print(prefix + text);
+                }
+
+                public void println(String text) {
+                  output.println(prefix + text);
+                }
+
+                public void flush() {
+                  output.flush();
+                }
+              },
+              topicNotificationOptions,
+              llmRequestFeatures)
+          .renderEvent(event);
       return;
     }
     renderEvent(event);
@@ -147,12 +194,23 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   private boolean deferDuringAnswer(AgentEvent event) {
     if (isSubAgentEvent(event)) return true;
     return switch (event.type()) {
-      case MESSAGE_STARTED, MESSAGE_DELTA, MESSAGE_COMPLETED,
-          THINKING_STARTED, THINKING_DELTA, THINKING_COMPLETED,
-          AGENT_RUN_STARTED, AGENT_RUN_COMPLETED, AGENT_RUN_FAILED, AGENT_RUN_CANCELLED,
-          TOOL_STARTED, TOOL_COMPLETED, TOOL_FAILED,
+      case MESSAGE_STARTED,
+          MESSAGE_DELTA,
+          MESSAGE_COMPLETED,
+          THINKING_STARTED,
+          THINKING_DELTA,
+          THINKING_COMPLETED,
+          AGENT_RUN_STARTED,
+          AGENT_RUN_COMPLETED,
+          AGENT_RUN_FAILED,
+          AGENT_RUN_CANCELLED,
+          TOOL_STARTED,
+          TOOL_COMPLETED,
+          TOOL_FAILED,
           LLM_RESPONSE_COMPLETED,
-          ATTENTION_REQUIRED, APPLICATION_SHUTDOWN_STARTED -> false;
+          ATTENTION_REQUIRED,
+          APPLICATION_SHUTDOWN_STARTED ->
+          false;
       default -> true;
     };
   }
@@ -168,69 +226,123 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   }
 
   private String subAgentPrefix(AgentEvent event) {
-    String runId = event.runId() == null ? event.sessionId().substring("subagent:".length()) : event.runId();
+    String runId =
+        event.runId() == null ? event.sessionId().substring("subagent:".length()) : event.runId();
     String name = subAgentNames.get(runId);
     return "[subagent:" + (name == null ? "" : name + "/") + runId + "] ";
   }
 
   private void renderEvent(AgentEvent event) {
-    if (isTopicEvent(event) && topicNotificationOptions.verbosity() != TopicNotificationVerbosity.VERBOSE) {
+    if (isTopicEvent(event)
+        && topicNotificationOptions.verbosity() != TopicNotificationVerbosity.VERBOSE) {
       renderTopicSummary(event);
       output.flush();
       return;
     }
     switch (event.type()) {
       case AUTO_SLEEP_STOPPED -> {
-        closeAssistantLine();closeThinkingLine();
-        output.println(((dev.mikoto2000.rei.event.MemoryLifecyclePayload)event.payload()).status());
+        closeAssistantLine();
+        closeThinkingLine();
+        output.println(
+            ((dev.mikoto2000.rei.event.MemoryLifecyclePayload) event.payload()).status());
       }
       case DEPENDENCY_FAILED, DEPENDENCY_CANCELLED -> {
-        closeAssistantLine(); closeThinkingLine();
+        closeAssistantLine();
+        closeThinkingLine();
         var payload = (dev.mikoto2000.rei.event.DependencyStatusPayload) event.payload();
-        output.println("[dependency] " + payload.dependencyId() + " " + payload.state()
-            + " 理由: " + dev.mikoto2000.rei.event.FailureMessages.text(payload.reason()));
+        output.println(
+            "[dependency] "
+                + payload.dependencyId()
+                + " "
+                + payload.state()
+                + " 理由: "
+                + dev.mikoto2000.rei.event.FailureMessages.text(payload.reason()));
       }
       case MEMORY_SLEEP_FAILED -> {
-        closeAssistantLine(); closeThinkingLine();
+        closeAssistantLine();
+        closeThinkingLine();
         var payload = (dev.mikoto2000.rei.event.MemoryLifecyclePayload) event.payload();
         output.println("[memory.sleep] " + payload.status() + " (" + payload.sleepRunId() + ")");
       }
       case CONTEXT_COMPRESSION_FAILED, CONTEXT_COMPRESSION_SKIPPED -> {
-        closeAssistantLine(); closeThinkingLine();
+        closeAssistantLine();
+        closeThinkingLine();
         var payload = (dev.mikoto2000.rei.event.ContextCompressionPayload) event.payload();
-        String state = event.type() == dev.mikoto2000.rei.event.AgentEventType.CONTEXT_COMPRESSION_FAILED
-            ? "failed" : "skipped";
-        String details = payload.details() == null || payload.details().isBlank() ? ""
-            : " (" + dev.mikoto2000.rei.event.FailureMessages.text(payload.details()) + ")";
-        output.println("[context.compression] " + state + ": "
-            + dev.mikoto2000.rei.event.FailureMessages.text(payload.reason()) + details);
+        String state =
+            event.type() == dev.mikoto2000.rei.event.AgentEventType.CONTEXT_COMPRESSION_FAILED
+                ? "failed"
+                : "skipped";
+        String details =
+            payload.details() == null || payload.details().isBlank()
+                ? ""
+                : " (" + dev.mikoto2000.rei.event.FailureMessages.text(payload.details()) + ")";
+        output.println(
+            "[context.compression] "
+                + state
+                + ": "
+                + dev.mikoto2000.rei.event.FailureMessages.text(payload.reason())
+                + details);
       }
       case TASK_FAILED -> {
-        closeAssistantLine(); closeThinkingLine();
+        closeAssistantLine();
+        closeThinkingLine();
         var payload = (dev.mikoto2000.rei.event.TaskFailedPayload) event.payload();
         output.println("[task] failed " + payload.taskId() + ": " + errorMessage(payload.error()));
       }
       case GOAL_UPDATED -> {
-        closeAssistantLine();closeThinkingLine();
-        var payload=(dev.mikoto2000.rei.event.GoalLifecyclePayload)event.payload();
-        output.println("[goal] "+payload.goalId()+" "+payload.status()+" runs="+payload.attempts()+"/"+payload.maxRuns()
-            +" llm="+payload.llmCallsUsed()+"/"+payload.maxLlmCalls());
+        closeAssistantLine();
+        closeThinkingLine();
+        var payload = (dev.mikoto2000.rei.event.GoalLifecyclePayload) event.payload();
+        output.println(
+            "[goal] "
+                + payload.goalId()
+                + " "
+                + payload.status()
+                + " runs="
+                + payload.attempts()
+                + "/"
+                + payload.maxRuns()
+                + " llm="
+                + payload.llmCallsUsed()
+                + "/"
+                + payload.maxLlmCalls());
         if (payload.reason() != null && !payload.reason().isBlank())
-          output.println("[goal] 理由: " + dev.mikoto2000.rei.event.FailureMessages.text(payload.reason()));
+          output.println(
+              "[goal] 理由: " + dev.mikoto2000.rei.event.FailureMessages.text(payload.reason()));
       }
       case ATTENTION_REQUIRED -> {
-        closeAssistantLine();closeThinkingLine();
-        var payload=(dev.mikoto2000.rei.event.AttentionRequiredPayload)event.payload();
+        closeAssistantLine();
+        closeThinkingLine();
+        var payload = (dev.mikoto2000.rei.event.AttentionRequiredPayload) event.payload();
         if ("APPROVAL_REQUIRED".equals(payload.kind())) {
           output.approvalRequired(payload.message());
-          var match=java.util.regex.Pattern.compile("(?m)^/approval approve ([0-9a-fA-F-]{36}) --continue$").matcher(payload.message());
-          if(match.find())output.approvalActions(event.projectId(),event.sessionId(),match.group(1));
-        } else output.println("[attention] "+payload.kind()+": "+payload.message()+" (/attention show "+payload.attentionId()+")");
+          var match =
+              java.util.regex.Pattern.compile(
+                      "(?m)^/approval approve ([0-9a-fA-F-]{36}) --continue$")
+                  .matcher(payload.message());
+          if (match.find())
+            output.approvalActions(event.projectId(), event.sessionId(), match.group(1));
+        } else
+          output.println(
+              "[attention] "
+                  + payload.kind()
+                  + ": "
+                  + payload.message()
+                  + " (/attention show "
+                  + payload.attentionId()
+                  + ")");
       }
       case WORK_CONTEXT_UPDATED, WORK_CONTEXT_UPDATE_FAILED -> {
-        closeAssistantLine(); closeThinkingLine();
-        var payload=(dev.mikoto2000.rei.event.WorkContextPayload)event.payload();
-        output.println("["+event.type().value()+"] "+payload.status()+" revision="+payload.revision());
+        closeAssistantLine();
+        closeThinkingLine();
+        var payload = (dev.mikoto2000.rei.event.WorkContextPayload) event.payload();
+        output.println(
+            "["
+                + event.type().value()
+                + "] "
+                + payload.status()
+                + " revision="
+                + payload.revision());
       }
       case APPLICATION_SHUTDOWN_STARTED -> {
         closeAssistantLine();
@@ -241,45 +353,96 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         closeAssistantLine();
         closeThinkingLine();
         var progress = (dev.mikoto2000.rei.event.ComputerUseProgressPayload) event.payload();
-        output.println("[computer_use] step=" + progress.step() + " " + progress.phase()
-            + (progress.action() == null ? "" : " " + progress.action())
-            + (progress.target() == null ? "" : " " + progress.target() + " (" + progress.x() + "," + progress.y() + ") confidence=" + progress.confidence())
-            + (progress.reason() == null ? "" : " " + progress.reason()));
+        output.println(
+            "[computer_use] step="
+                + progress.step()
+                + " "
+                + progress.phase()
+                + (progress.action() == null ? "" : " " + progress.action())
+                + (progress.target() == null
+                    ? ""
+                    : " "
+                        + progress.target()
+                        + " ("
+                        + progress.x()
+                        + ","
+                        + progress.y()
+                        + ") confidence="
+                        + progress.confidence())
+                + (progress.reason() == null ? "" : " " + progress.reason()));
       }
       case EXECUTION_STARTED, EXECUTION_COMPLETED, EXECUTION_FAILED, EXECUTION_CANCELLED -> {
-        renderBackgroundExecution((dev.mikoto2000.rei.event.BackgroundExecutionPayload)event.payload(),event.projectId());
+        renderBackgroundExecution(
+            (dev.mikoto2000.rei.event.BackgroundExecutionPayload) event.payload(),
+            event.projectId());
       }
       case HISTORY_SEARCH_COMPLETED -> {
         closeAssistantLine();
         closeThinkingLine();
         var payload = (dev.mikoto2000.rei.event.HistorySearchCompletedPayload) event.payload();
-        output.println("[history.search] scope=" + payload.scope() + " currentHits=" + payload.currentProjectHitCount()
-            + " crossProjectHits=" + payload.crossProjectHitCount() + " projectsSearched=" + payload.searchedProjectCount());
+        output.println(
+            "[history.search] scope="
+                + payload.scope()
+                + " currentHits="
+                + payload.currentProjectHitCount()
+                + " crossProjectHits="
+                + payload.crossProjectHitCount()
+                + " projectsSearched="
+                + payload.searchedProjectCount());
       }
       case USER_INTERVENTION_RECEIVED, USER_INTERVENTION_APPLIED -> {
         closeAssistantLine();
-        output.println(event.type() == dev.mikoto2000.rei.event.AgentEventType.USER_INTERVENTION_RECEIVED
-            ? "[user] guidance queued" : "[user] guidance applied");
+        output.println(
+            event.type() == dev.mikoto2000.rei.event.AgentEventType.USER_INTERVENTION_RECEIVED
+                ? "[user] guidance queued"
+                : "[user] guidance applied");
       }
-      case PROGRESS_DETECTED, STAGNATION_UPDATED, STAGNATION_DETECTED,
-          STAGNATION_REPLAN_REQUESTED, STAGNATION_RECOVERED, STAGNATION_STOPPED -> {
+      case PROGRESS_DETECTED,
+          STAGNATION_UPDATED,
+          STAGNATION_DETECTED,
+          STAGNATION_REPLAN_REQUESTED,
+          STAGNATION_RECOVERED,
+          STAGNATION_STOPPED -> {
         closeAssistantLine();
         closeThinkingLine();
         var payload = (dev.mikoto2000.rei.event.ExecutionProgressPayload) event.payload();
-        String text = switch (event.type()) {
-          case PROGRESS_DETECTED -> "[progress] " + payload.evidence().kind() + ": "
-              + payload.evidence().description() + " (" + payload.evidence().source() + ")";
-          case STAGNATION_UPDATED -> "waiting_for_dependency".equals(payload.reason())?"[waiting] awaiting dependency":
-              "INFORMATION_UNKNOWN".equals(payload.reason()) ? "[stagnation] progress unknown: reason=INFORMATION_UNKNOWN ledgerStatus=UNKNOWN" :
-              "[stagnation] no progress: " + payload.consecutiveNoProgressIterations() + "/" + payload.threshold();
-          case STAGNATION_DETECTED -> "[stagnation] threshold reached";
-          case STAGNATION_REPLAN_REQUESTED -> "[stagnation] replanning (" + payload.stagnationReplanCount()
-              + "/" + payload.maxStagnationReplans() + ")";
-          case STAGNATION_RECOVERED -> "[stagnation] recovered: meaningful progress detected";
-          default -> "[stagnation] repeated after replanning -> stopped (STAGNATED)";
-        };
+        String text =
+            switch (event.type()) {
+              case PROGRESS_DETECTED ->
+                  "[progress] "
+                      + payload.evidence().kind()
+                      + ": "
+                      + payload.evidence().description()
+                      + " ("
+                      + payload.evidence().source()
+                      + ")";
+              case STAGNATION_UPDATED ->
+                  "waiting_for_dependency".equals(payload.reason())
+                      ? "[waiting] awaiting dependency"
+                      : "INFORMATION_UNKNOWN".equals(payload.reason())
+                          ? "[stagnation] progress unknown: reason=INFORMATION_UNKNOWN ledgerStatus=UNKNOWN"
+                          : "[stagnation] no progress: "
+                              + payload.consecutiveNoProgressIterations()
+                              + "/"
+                              + payload.threshold();
+              case STAGNATION_DETECTED -> "[stagnation] threshold reached";
+              case STAGNATION_REPLAN_REQUESTED ->
+                  "[stagnation] replanning ("
+                      + payload.stagnationReplanCount()
+                      + "/"
+                      + payload.maxStagnationReplans()
+                      + ")";
+              case STAGNATION_RECOVERED -> "[stagnation] recovered: meaningful progress detected";
+              default -> "[stagnation] repeated after replanning -> stopped (STAGNATED)";
+            };
         output.println(text);
-        if (java.util.Set.of("REPEATED_READ", "REPEATED_SEARCH_OR_ACTION", "TOOL_FAILURE", "WORK_STALLED", "DUPLICATE_OR_UNSUPPORTED_INFORMATION").contains(java.util.Objects.toString(payload.reason(), "")))
+        if (java.util.Set.of(
+                "REPEATED_READ",
+                "REPEATED_SEARCH_OR_ACTION",
+                "TOOL_FAILURE",
+                "WORK_STALLED",
+                "DUPLICATE_OR_UNSUPPORTED_INFORMATION")
+            .contains(java.util.Objects.toString(payload.reason(), "")))
           output.println("[stagnation] reason=" + payload.reason() + " ledgerStatus=HEALTHY");
       }
       case AGENT_RUN_STARTED -> {
@@ -298,21 +461,37 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         assistantMessageId = null;
         thinkingId = null;
         AgentRunCompletedPayload payload = (AgentRunCompletedPayload) event.payload();
-        llmRequestFeatures.keySet().removeIf(key -> java.util.Objects.equals(key.runId(), event.runId()));
-        String tokens = payload.completionTokens() == null
-            ? "tokens unavailable"
-            : payload.completionTokens() + " tokens";
-        String ttft = payload.timeToFirstTokenMillis() == null
-            ? "TTFT unavailable"
-            : "TTFT " + formatDecimal(payload.timeToFirstTokenMillis()) + " ms";
-        String outputSpeed = payload.outputTokensPerSecond() == null
-            ? "output speed unavailable"
-            : "output " + formatDecimal(payload.outputTokensPerSecond()) + " tok/s";
-        String endToEndSpeed = payload.endToEndTokensPerSecond() == null
-            ? "end-to-end speed unavailable"
-            : "end-to-end " + formatDecimal(payload.endToEndTokensPerSecond()) + " tok/s";
-        output.println("[agent] completed (" + formatSeconds(payload.duration()) + " s, " + tokens + ", "
-            + ttft + ", " + outputSpeed + ", " + endToEndSpeed + ")");
+        llmRequestFeatures
+            .keySet()
+            .removeIf(key -> java.util.Objects.equals(key.runId(), event.runId()));
+        String tokens =
+            payload.completionTokens() == null
+                ? "tokens unavailable"
+                : payload.completionTokens() + " tokens";
+        String ttft =
+            payload.timeToFirstTokenMillis() == null
+                ? "TTFT unavailable"
+                : "TTFT " + formatDecimal(payload.timeToFirstTokenMillis()) + " ms";
+        String outputSpeed =
+            payload.outputTokensPerSecond() == null
+                ? "output speed unavailable"
+                : "output " + formatDecimal(payload.outputTokensPerSecond()) + " tok/s";
+        String endToEndSpeed =
+            payload.endToEndTokensPerSecond() == null
+                ? "end-to-end speed unavailable"
+                : "end-to-end " + formatDecimal(payload.endToEndTokensPerSecond()) + " tok/s";
+        output.println(
+            "[agent] completed ("
+                + formatSeconds(payload.duration())
+                + " s, "
+                + tokens
+                + ", "
+                + ttft
+                + ", "
+                + outputSpeed
+                + ", "
+                + endToEndSpeed
+                + ")");
       }
       case AGENT_RUN_FAILED, AGENT_RUN_CANCELLED -> {
         closeAssistantLine();
@@ -321,16 +500,21 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         assistantMessageId = null;
         thinkingId = null;
         AgentRunFailedPayload payload = (AgentRunFailedPayload) event.payload();
-        llmRequestFeatures.keySet().removeIf(key -> java.util.Objects.equals(key.runId(), event.runId()));
-        output.println(event.type() == dev.mikoto2000.rei.event.AgentEventType.AGENT_RUN_CANCELLED
-            || payload.error() != null && "cancelled".equals(payload.error().code())
-            ? "[agent] cancelled: " + errorMessage(payload.error()) : "[agent] failed: " + errorMessage(payload.error()));
+        llmRequestFeatures
+            .keySet()
+            .removeIf(key -> java.util.Objects.equals(key.runId(), event.runId()));
+        output.println(
+            event.type() == dev.mikoto2000.rei.event.AgentEventType.AGENT_RUN_CANCELLED
+                    || payload.error() != null && "cancelled".equals(payload.error().code())
+                ? "[agent] cancelled: " + errorMessage(payload.error())
+                : "[agent] failed: " + errorMessage(payload.error()));
       }
       case LLM_REQUEST_STARTED -> {
         closeAssistantLine();
         closeThinkingLine();
         LlmRequestStartedPayload payload = (LlmRequestStartedPayload) event.payload();
-        llmRequestFeatures.put(new LlmRequestKey(event.runId(), payload.requestId()), payload.feature());
+        llmRequestFeatures.put(
+            new LlmRequestKey(event.runId(), payload.requestId()), payload.feature());
         output.println("[llm] request sent (" + payload.feature() + ")");
       }
       case LLM_REQUEST_FAILED -> {
@@ -338,7 +522,11 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         closeThinkingLine();
         LlmRequestFailedPayload payload = (LlmRequestFailedPayload) event.payload();
         llmRequestFeatures.remove(new LlmRequestKey(event.runId(), payload.requestId()));
-        output.println("[llm] request failed (" + payload.durationMs() + " ms): " + errorMessage(payload.error()));
+        output.println(
+            "[llm] request failed ("
+                + payload.durationMs()
+                + " ms): "
+                + errorMessage(payload.error()));
       }
       case LLM_RESPONSE_FIRST_TOKEN -> {
         closeAssistantLine();
@@ -395,7 +583,8 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         java.util.List<String> selected = new java.util.ArrayList<>();
         payload.explicitSkillNames().forEach(name -> selected.add(name + " (explicit)"));
         payload.implicitSkillNames().forEach(name -> selected.add(name + " (implicit)"));
-        output.println("[skill] selected: " + (selected.isEmpty() ? "none" : String.join(", ", selected)));
+        output.println(
+            "[skill] selected: " + (selected.isEmpty() ? "none" : String.join(", ", selected)));
       }
       case SKILL_SELECTION_FAILED -> {
         closeAssistantLine();
@@ -405,75 +594,136 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       case SKILL_ROUTING_STARTED -> {
         closeAssistantLine();
         SkillRoutingStartedPayload payload = (SkillRoutingStartedPayload) event.payload();
-        String invocation = payload.routingInvocation() > 1 ? " (#" + payload.routingInvocation() + ")" : "";
-        output.println("[skill] selecting from " + payload.candidateCount() + " skills..." + invocation);
+        String invocation =
+            payload.routingInvocation() > 1 ? " (#" + payload.routingInvocation() + ")" : "";
+        output.println(
+            "[skill] selecting from " + payload.candidateCount() + " skills..." + invocation);
       }
       case SKILL_ROUTING_COMPLETED -> {
         closeAssistantLine();
         SkillRoutingCompletedPayload payload = (SkillRoutingCompletedPayload) event.payload();
         payload.warnings().forEach(output::println);
-        String selection = payload.selectedSkill() == null
-            ? "no skill selected" : payload.selectedSkill() + " selected";
-        output.println("[skill] " + selection + " from " + payload.candidateCount() + " skills ("
-            + formatDuration(payload.durationMs()) + selectorSuffix(payload.selectorDurationMs()) + ")");
+        String selection =
+            payload.selectedSkill() == null
+                ? "no skill selected"
+                : payload.selectedSkill() + " selected";
+        output.println(
+            "[skill] "
+                + selection
+                + " from "
+                + payload.candidateCount()
+                + " skills ("
+                + formatDuration(payload.durationMs())
+                + selectorSuffix(payload.selectorDurationMs())
+                + ")");
       }
       case SKILL_ROUTING_FAILED -> {
         closeAssistantLine();
         SkillRoutingFailedPayload payload = (SkillRoutingFailedPayload) event.payload();
-        output.println("[skill] selection failed after " + formatDuration(payload.durationMs()) + ": "
-            + oneLineSummary(errorMessage(payload.error())));
+        output.println(
+            "[skill] selection failed after "
+                + formatDuration(payload.durationMs())
+                + ": "
+                + oneLineSummary(errorMessage(payload.error())));
       }
       case SKILL_CANDIDATES_EVALUATED -> {
         closeAssistantLine();
         SkillCandidatesEvaluatedPayload payload = (SkillCandidatesEvaluatedPayload) event.payload();
         String actual = payload.selected() ? payload.actualSelectedSkill() : "none";
-        String top5 = !payload.selected() ? "n/a" : Boolean.TRUE.equals(payload.top5Hit()) ? "hit" : "miss";
-        output.println("[skill-candidate] " + payload.totalSkillCount() + " -> " + payload.candidateCount()
-            + " skills (" + payload.durationMs() + "ms), actual=" + actual + ", top5=" + top5);
+        String top5 =
+            !payload.selected() ? "n/a" : Boolean.TRUE.equals(payload.top5Hit()) ? "hit" : "miss";
+        output.println(
+            "[skill-candidate] "
+                + payload.totalSkillCount()
+                + " -> "
+                + payload.candidateCount()
+                + " skills ("
+                + payload.durationMs()
+                + "ms), actual="
+                + actual
+                + ", top5="
+                + top5);
       }
       case WORKING_SET_ITEM_ADDED -> {
         closeAssistantLine();
         WorkingSetItemAddedPayload payload = (WorkingSetItemAddedPayload) event.payload();
-        output.println("[working-set] + " + displayName(payload.identifier(), payload.path())
-            + reasonSuffix(payload.reason()));
+        output.println(
+            "[working-set] + "
+                + displayName(payload.identifier(), payload.path())
+                + reasonSuffix(payload.reason()));
       }
       case WORKING_SET_ITEM_REMOVED -> {
         closeAssistantLine();
         WorkingSetItemRemovedPayload payload = (WorkingSetItemRemovedPayload) event.payload();
-        output.println("[working-set] - " + displayName(null, payload.itemId()) + reasonSuffix(payload.reason()));
+        output.println(
+            "[working-set] - "
+                + displayName(null, payload.itemId())
+                + reasonSuffix(payload.reason()));
       }
       case WORKING_SET_SEARCH_STARTED -> {
         closeAssistantLine();
         WorkingSetSearchStartedPayload payload = (WorkingSetSearchStartedPayload) event.payload();
-        output.println("[working-set] → search \"" + boundedSummary(payload.query(), 120).replace('"', '\'') + "\"");
+        output.println(
+            "[working-set] → search \""
+                + boundedSummary(payload.query(), 120).replace('"', '\'')
+                + "\"");
       }
       case WORKING_SET_SEARCH_COMPLETED -> {
         closeAssistantLine();
-        WorkingSetSearchCompletedPayload payload = (WorkingSetSearchCompletedPayload) event.payload();
-        String alreadyPresent = payload.alreadyPresentCount() == 0
-            ? "" : ", " + payload.alreadyPresentCount() + " already present";
-        output.println("[working-set] ✓ " + payload.hitCount() + " hits → " + payload.candidateCount()
-            + " candidates → " + payload.selectedCount() + " selected" + alreadyPresent
-            + " (" + payload.durationMs() + " ms)");
+        WorkingSetSearchCompletedPayload payload =
+            (WorkingSetSearchCompletedPayload) event.payload();
+        String alreadyPresent =
+            payload.alreadyPresentCount() == 0
+                ? ""
+                : ", " + payload.alreadyPresentCount() + " already present";
+        output.println(
+            "[working-set] ✓ "
+                + payload.hitCount()
+                + " hits → "
+                + payload.candidateCount()
+                + " candidates → "
+                + payload.selectedCount()
+                + " selected"
+                + alreadyPresent
+                + " ("
+                + payload.durationMs()
+                + " ms)");
       }
       case WORKING_SET_CONTEXT_INJECTED -> {
         closeAssistantLine();
-        WorkingSetContextInjectedPayload payload = (WorkingSetContextInjectedPayload) event.payload();
-        output.println("[working-set] injected " + payload.itemCount() + " items into context ("
-            + payload.contextCharacters() + " chars)");
+        WorkingSetContextInjectedPayload payload =
+            (WorkingSetContextInjectedPayload) event.payload();
+        output.println(
+            "[working-set] injected "
+                + payload.itemCount()
+                + " items into context ("
+                + payload.contextCharacters()
+                + " chars)");
       }
       case CONTEXT_INJECTED -> {
         closeAssistantLine();
         ContextInjectedPayload payload = (ContextInjectedPayload) event.payload();
         String items = payload.itemCount() == null ? "" : ", " + payload.itemCount() + " items";
-        output.println("[context] injected " + lower(payload.source()) + items + " ("
-            + payload.contextCharacters() + " chars)");
+        output.println(
+            "[context] injected "
+                + lower(payload.source())
+                + items
+                + " ("
+                + payload.contextCharacters()
+                + " chars)");
       }
       case CONTEXT_BUDGET_EVALUATED -> {
         closeAssistantLine();
         ContextBudgetEvaluatedPayload payload = (ContextBudgetEvaluatedPayload) event.payload();
-        output.println("[context] budget evaluated: " + payload.totalTokens() + "/" + payload.inputBudget()
-            + " tokens, included " + payload.included().size() + ", dropped " + payload.dropped().size());
+        output.println(
+            "[context] budget evaluated: "
+                + payload.totalTokens()
+                + "/"
+                + payload.inputBudget()
+                + " tokens, included "
+                + payload.included().size()
+                + ", dropped "
+                + payload.dropped().size());
       }
       case CONTEXT_BUDGET_TRIMMED -> {
         closeAssistantLine();
@@ -483,8 +733,12 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       case FILE_SUMMARY_SAVED -> {
         closeAssistantLine();
         FileSummarySavedPayload payload = (FileSummarySavedPayload) event.payload();
-        output.println("[file-summary] saved " + displayName(null, payload.path()) + " ("
-            + payload.summaryCharacters() + " chars)");
+        output.println(
+            "[file-summary] saved "
+                + displayName(null, payload.path())
+                + " ("
+                + payload.summaryCharacters()
+                + " chars)");
       }
       case FILE_SUMMARY_INVALIDATED -> {
         closeAssistantLine();
@@ -504,7 +758,8 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       }
       case TOPIC_IDLE_TRIGGER_EVALUATED -> {
         closeAssistantLine();
-        TopicIdleTriggerEvaluatedPayload payload = (TopicIdleTriggerEvaluatedPayload) event.payload();
+        TopicIdleTriggerEvaluatedPayload payload =
+            (TopicIdleTriggerEvaluatedPayload) event.payload();
         output.println("[topic] idle trigger " + (payload.accepted() ? "accepted" : "skipped"));
         output.println("        idle: " + formatDuration(payload.idleDurationMs()));
         output.println("        required: " + formatDuration(payload.requiredIdleMs()));
@@ -535,14 +790,27 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         TopicCandidateScoredPayload payload = (TopicCandidateScoredPayload) event.payload();
         output.println("[topic] scored");
         output.println("        id: " + payload.candidateId());
-        output.println("        score: " + formatNullableScore(payload.score() == null ? null : payload.score().finalScore()));
+        output.println(
+            "        score: "
+                + formatNullableScore(
+                    payload.score() == null ? null : payload.score().finalScore()));
         if (payload.score() != null) {
-          output.println("        priority: +" + formatNullableScore(payload.score().priorityContribution()));
-          output.println("        freshness: +" + formatNullableScore(payload.score().freshnessContribution()));
-          output.println("        usefulness: +" + formatNullableScore(payload.score().usefulnessContribution()));
-          output.println("        confidence: +" + formatNullableScore(payload.score().confidenceContribution()));
-          output.println("        intrusiveness: -" + formatNullableScore(payload.score().intrusivenessPenalty()));
-          output.println("        repetition: -" + formatNullableScore(payload.score().repetitionPenalty()));
+          output.println(
+              "        priority: +" + formatNullableScore(payload.score().priorityContribution()));
+          output.println(
+              "        freshness: +"
+                  + formatNullableScore(payload.score().freshnessContribution()));
+          output.println(
+              "        usefulness: +"
+                  + formatNullableScore(payload.score().usefulnessContribution()));
+          output.println(
+              "        confidence: +"
+                  + formatNullableScore(payload.score().confidenceContribution()));
+          output.println(
+              "        intrusiveness: -"
+                  + formatNullableScore(payload.score().intrusivenessPenalty()));
+          output.println(
+              "        repetition: -" + formatNullableScore(payload.score().repetitionPenalty()));
         }
       }
       case TOPIC_CANDIDATE_REJECTED -> {
@@ -610,7 +878,8 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       case FILE_MODIFIED -> {
         closeAssistantLine();
         FileModifiedPayload payload = (FileModifiedPayload) event.payload();
-        output.println("[file] modified " + displayName(null, payload.path()) + lineDeltaSuffix(payload));
+        output.println(
+            "[file] modified " + displayName(null, payload.path()) + lineDeltaSuffix(payload));
       }
       case FILE_DELETED -> {
         closeAssistantLine();
@@ -624,62 +893,104 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       }
       case BACKGROUND_PROCESS_COMPLETED -> {
         closeAssistantLine();
-        BackgroundProcessCompletedPayload payload = (BackgroundProcessCompletedPayload) event.payload();
-        output.println("[process] completed " + payload.processId() + " exit=" + payload.exitCode()
-            + " (" + formatDecimal(payload.elapsedSeconds()) + " s)");
+        BackgroundProcessCompletedPayload payload =
+            (BackgroundProcessCompletedPayload) event.payload();
+        output.println(
+            "[process] completed "
+                + payload.processId()
+                + " exit="
+                + payload.exitCode()
+                + " ("
+                + formatDecimal(payload.elapsedSeconds())
+                + " s)");
       }
       case BACKGROUND_PROCESS_FAILED -> {
         closeAssistantLine();
         BackgroundProcessFailedPayload payload = (BackgroundProcessFailedPayload) event.payload();
-        output.println("[process] failed " + payload.processId() + ": " + errorMessage(payload.error()));
+        output.println(
+            "[process] failed " + payload.processId() + ": " + errorMessage(payload.error()));
       }
       case BACKGROUND_PROCESS_KILLED -> {
         closeAssistantLine();
         BackgroundProcessKilledPayload payload = (BackgroundProcessKilledPayload) event.payload();
-        output.println("[process] killed " + payload.processId() + " exit=" + payload.exitCode()
-            + " (" + formatDecimal(payload.elapsedSeconds()) + " s)");
+        output.println(
+            "[process] killed "
+                + payload.processId()
+                + " exit="
+                + payload.exitCode()
+                + " ("
+                + formatDecimal(payload.elapsedSeconds())
+                + " s)");
       }
-      default -> { }
+      default -> {}
     }
     output.flush();
   }
 
-  /** Compact restore mode; audit records remain unchanged and can also be fed to onEvent for full replay. */
+  /**
+   * Compact restore mode; audit records remain unchanged and can also be fed to onEvent for full
+   * replay.
+   */
   public synchronized void onRecentEvent(AgentEvent event) {
-    if (event.payload() instanceof dev.mikoto2000.rei.event.SubAgentLifecyclePayload child) rememberSubAgent(child);
-    String detail = switch (event.payload()) {
-      case dev.mikoto2000.rei.event.SubAgentLifecyclePayload child -> child.agentId() + " " + child.status();
-      case ToolCompletedPayload tool -> tool.toolName();
-      case ToolStartedPayload tool -> tool.toolName();
-      case ToolFailedPayload tool -> tool.toolName();
-      case WorkingSetItemAddedPayload item -> item.path();
-      case WorkingSetItemRemovedPayload item -> item.itemId();
-      case dev.mikoto2000.rei.event.UserInterventionPayload input -> input.text();
-      case null, default -> "";
-    };
+    if (event.payload() instanceof dev.mikoto2000.rei.event.SubAgentLifecyclePayload child)
+      rememberSubAgent(child);
+    String detail =
+        switch (event.payload()) {
+          case dev.mikoto2000.rei.event.SubAgentLifecyclePayload child ->
+              child.agentId() + " " + child.status();
+          case ToolCompletedPayload tool -> tool.toolName();
+          case ToolStartedPayload tool -> tool.toolName();
+          case ToolFailedPayload tool -> tool.toolName();
+          case WorkingSetItemAddedPayload item -> item.path();
+          case WorkingSetItemRemovedPayload item -> item.itemId();
+          case dev.mikoto2000.rei.event.UserInterventionPayload input -> input.text();
+          case null, default -> "";
+        };
     detail = detail == null ? "" : detail.replaceAll("\\s+", " ");
     if (detail.length() > 100) detail = detail.substring(0, 100) + "…";
-    String time = java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
-        .withZone(java.time.ZoneId.systemDefault()).format(event.timestamp());
-    output.println("  " + time + " " + (isSubAgentEvent(event) ? subAgentPrefix(event) : "")
-        + event.type().value() + (detail.isBlank() ? "" : " " + detail));
+    String time =
+        java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
+            .withZone(java.time.ZoneId.systemDefault())
+            .format(event.timestamp());
+    output.println(
+        "  "
+            + time
+            + " "
+            + (isSubAgentEvent(event) ? subAgentPrefix(event) : "")
+            + event.type().value()
+            + (detail.isBlank() ? "" : " " + detail));
   }
 
   public synchronized void finish() {
-    closeAssistantLine(); closeThinkingLine(); output.flush();
+    closeAssistantLine();
+    closeThinkingLine();
+    output.flush();
   }
-  public synchronized void renderBackgroundExecution(dev.mikoto2000.rei.event.BackgroundExecutionPayload payload,String projectName) {
+
+  public synchronized void renderBackgroundExecution(
+      dev.mikoto2000.rei.event.BackgroundExecutionPayload payload, String projectName) {
     finish();
-    String state=switch(payload.status()) {
-      case "RUNNING" -> "started";
-      case "COMPLETED" -> "completed";
-      case "CANCELLED" -> "cancelled";
-      default -> "failed";
-    };
-    output.println("["+payload.executionType().name().toLowerCase(java.util.Locale.ROOT)+"."+state+"] "+projectName+" ("+payload.executionId()+")");
-    if(payload.request()!=null&&!payload.request().isBlank()) output.println("Source / request: "+payload.request());
-    if("TIMED_OUT".equals(payload.status())) output.println("Status: TIMED_OUT");
-    if(payload.output()!=null&&!payload.output().isBlank()) output.println(payload.output());
+    String state =
+        switch (payload.status()) {
+          case "RUNNING" -> "started";
+          case "COMPLETED" -> "completed";
+          case "CANCELLED" -> "cancelled";
+          default -> "failed";
+        };
+    output.println(
+        "["
+            + payload.executionType().name().toLowerCase(java.util.Locale.ROOT)
+            + "."
+            + state
+            + "] "
+            + projectName
+            + " ("
+            + payload.executionId()
+            + ")");
+    if (payload.request() != null && !payload.request().isBlank())
+      output.println("Source / request: " + payload.request());
+    if ("TIMED_OUT".equals(payload.status())) output.println("Status: TIMED_OUT");
+    if (payload.output() != null && !payload.output().isBlank()) output.println(payload.output());
     output.flush();
   }
 
@@ -701,8 +1012,11 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         if (!allowThrottledTopicSummary(event)) return;
         closeAssistantLine();
         TopicSpokenPayload payload = (TopicSpokenPayload) event.payload();
-        output.println("[topic] spoken: " + valueOr(payload.candidateId(), "none")
-            + " -> " + payload.messageId());
+        output.println(
+            "[topic] spoken: "
+                + valueOr(payload.candidateId(), "none")
+                + " -> "
+                + payload.messageId());
       }
       case TOPIC_SPEAK_SKIPPED -> {
         TopicSpeakSkippedPayload payload = (TopicSpeakSkippedPayload) event.payload();
@@ -718,7 +1032,8 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         output.println("[topic] auto speak suppressed: " + oneLineSummary(payload.reason()));
       }
       case TOPIC_IDLE_TRIGGER_EVALUATED -> {
-        TopicIdleTriggerEvaluatedPayload payload = (TopicIdleTriggerEvaluatedPayload) event.payload();
+        TopicIdleTriggerEvaluatedPayload payload =
+            (TopicIdleTriggerEvaluatedPayload) event.payload();
         if (payload.accepted() || !topicNotificationOptions.showIdleSkipped()) return;
         if (!allowThrottledTopicSummary(event)) return;
         closeAssistantLine();
@@ -727,10 +1042,13 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       case TOPIC_GENERATION_FAILED -> {
         closeAssistantLine();
         TopicGenerationFailedPayload payload = (TopicGenerationFailedPayload) event.payload();
-        output.println("[topic] generation failed: " + payload.stage() + " "
-            + oneLineSummary(payload.errorSummary()));
+        output.println(
+            "[topic] generation failed: "
+                + payload.stage()
+                + " "
+                + oneLineSummary(payload.errorSummary()));
       }
-      default -> { }
+      default -> {}
     }
   }
 
@@ -747,7 +1065,8 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
   private String eventTime(AgentEvent event) {
     return java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
-        .withZone(java.time.ZoneId.systemDefault()).format(event.timestamp());
+        .withZone(java.time.ZoneId.systemDefault())
+        .format(event.timestamp());
   }
 
   private void messageStarted(MessageStartedPayload payload, AgentEvent event) {
@@ -822,9 +1141,14 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
   private void renderLlmCompletion(AgentEvent event) {
     LlmResponseCompletedPayload payload = (LlmResponseCompletedPayload) event.payload();
-    String feature = llmRequestFeatures.remove(new LlmRequestKey(event.runId(), payload.requestId()));
-    output.println("[llm] response received (" + (feature == null ? payload.requestId() : feature)
-        + ", " + payload.durationMs() + " ms)");
+    String feature =
+        llmRequestFeatures.remove(new LlmRequestKey(event.runId(), payload.requestId()));
+    output.println(
+        "[llm] response received ("
+            + (feature == null ? payload.requestId() : feature)
+            + ", "
+            + payload.durationMs()
+            + " ms)");
   }
 
   private void closeAssistantLine() {
@@ -845,7 +1169,8 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     if (error == null) return dev.mikoto2000.rei.event.FailureMessages.text(null);
     String reason = error.message();
     if (reason == null || reason.isBlank()) reason = error.errorType();
-    if (error.code() != null && !error.code().isBlank()) reason = "[" + error.code() + "] " + reason;
+    if (error.code() != null && !error.code().isBlank())
+      reason = "[" + error.code() + "] " + reason;
     return dev.mikoto2000.rei.event.FailureMessages.text(reason);
   }
 
@@ -854,7 +1179,8 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   }
 
   private String formatDuration(long durationMillis) {
-    return durationMillis < 1_000L ? durationMillis + "ms"
+    return durationMillis < 1_000L
+        ? durationMillis + "ms"
         : String.format(java.util.Locale.ROOT, "%.2fs", durationMillis / 1_000.0d);
   }
 
@@ -915,7 +1241,11 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
   private String lineDeltaSuffix(FileModifiedPayload payload) {
     if (payload.addedLines() == null && payload.removedLines() == null) return "";
-    return " (+" + valueOr(payload.addedLines(), 0) + "/-" + valueOr(payload.removedLines(), 0) + ")";
+    return " (+"
+        + valueOr(payload.addedLines(), 0)
+        + "/-"
+        + valueOr(payload.removedLines(), 0)
+        + ")";
   }
 
   public enum TopicNotificationVerbosity {
@@ -925,12 +1255,11 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   }
 
   public record TopicNotificationOptions(
-      TopicNotificationVerbosity verbosity,
-      Duration minimumInterval,
-      boolean showIdleSkipped) {
+      TopicNotificationVerbosity verbosity, Duration minimumInterval, boolean showIdleSkipped) {
 
     public static TopicNotificationOptions summary() {
-      return new TopicNotificationOptions(TopicNotificationVerbosity.SUMMARY, Duration.ofMinutes(30), false);
+      return new TopicNotificationOptions(
+          TopicNotificationVerbosity.SUMMARY, Duration.ofMinutes(30), false);
     }
 
     public static TopicNotificationOptions verbose() {
@@ -939,20 +1268,27 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
 
     public static TopicNotificationOptions from(Environment environment) {
       if (environment == null) return summary();
-      String verbosityValue = environment.getProperty(
-          "rei.topic-generator.shell-notification.verbosity", "summary");
+      String verbosityValue =
+          environment.getProperty("rei.topic-generator.shell-notification.verbosity", "summary");
       TopicNotificationVerbosity verbosity = parseVerbosity(verbosityValue);
-      Duration minimumInterval = environment.getProperty(
-          "rei.topic-generator.shell-notification.minimum-interval", Duration.class, Duration.ofMinutes(30));
-      boolean showIdleSkipped = environment.getProperty(
-          "rei.topic-generator.shell-notification.show-idle-skipped", Boolean.class, Boolean.FALSE);
+      Duration minimumInterval =
+          environment.getProperty(
+              "rei.topic-generator.shell-notification.minimum-interval",
+              Duration.class,
+              Duration.ofMinutes(30));
+      boolean showIdleSkipped =
+          environment.getProperty(
+              "rei.topic-generator.shell-notification.show-idle-skipped",
+              Boolean.class,
+              Boolean.FALSE);
       return new TopicNotificationOptions(verbosity, minimumInterval, showIdleSkipped);
     }
 
     private static TopicNotificationVerbosity parseVerbosity(String value) {
       if (value == null || value.isBlank()) return TopicNotificationVerbosity.SUMMARY;
       try {
-        return TopicNotificationVerbosity.valueOf(value.trim().replace('-', '_').toUpperCase(java.util.Locale.ROOT));
+        return TopicNotificationVerbosity.valueOf(
+            value.trim().replace('-', '_').toUpperCase(java.util.Locale.ROOT));
       } catch (IllegalArgumentException ignored) {
         return TopicNotificationVerbosity.SUMMARY;
       }

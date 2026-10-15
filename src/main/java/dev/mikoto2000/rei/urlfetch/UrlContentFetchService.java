@@ -12,7 +12,6 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-
 import org.jsoup.Jsoup;
 import org.jsoup.nodes.Element;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +22,8 @@ public class UrlContentFetchService {
 
   private static final int DEFAULT_TIMEOUT_SECONDS = 30;
   private static final int CHARSET_SCAN_BYTES = 4096;
-  private static final Pattern CONTENT_TYPE_CHARSET = Pattern.compile("(?i)(?:^|;)\\s*charset\\s*=\\s*\"?([^;\\s\"]+)");
+  private static final Pattern CONTENT_TYPE_CHARSET =
+      Pattern.compile("(?i)(?:^|;)\\s*charset\\s*=\\s*\"?([^;\\s\"]+)");
 
   private final UrlValidator urlValidator;
   private final HttpClient httpClient;
@@ -35,15 +35,25 @@ public class UrlContentFetchService {
     this(urlValidator, new UrlFetchProperties(), new dev.mikoto2000.rei.http.SafeHttpFetcher());
   }
 
-  public UrlContentFetchService(UrlValidator validator, UrlFetchProperties properties,
+  public UrlContentFetchService(
+      UrlValidator validator,
+      UrlFetchProperties properties,
       dev.mikoto2000.rei.http.SafeHttpFetcher fetcher) {
-    this(validator, properties, fetcher, dev.mikoto2000.rei.http.cache.HttpResponseCache.disabled());
+    this(
+        validator, properties, fetcher, dev.mikoto2000.rei.http.cache.HttpResponseCache.disabled());
   }
+
   @Autowired
-  public UrlContentFetchService(UrlValidator validator, UrlFetchProperties properties,
-      dev.mikoto2000.rei.http.SafeHttpFetcher fetcher, dev.mikoto2000.rei.http.cache.HttpResponseCache cache) {
-    this.urlValidator = validator; this.properties = properties;
-    this.safeFetcher = fetcher; this.httpClient = null; this.cache = cache;
+  public UrlContentFetchService(
+      UrlValidator validator,
+      UrlFetchProperties properties,
+      dev.mikoto2000.rei.http.SafeHttpFetcher fetcher,
+      dev.mikoto2000.rei.http.cache.HttpResponseCache cache) {
+    this.urlValidator = validator;
+    this.properties = properties;
+    this.safeFetcher = fetcher;
+    this.httpClient = null;
+    this.cache = cache;
   }
 
   UrlContentFetchService(UrlValidator urlValidator, HttpClient httpClient) {
@@ -66,11 +76,13 @@ public class UrlContentFetchService {
           result.success() ? "fetch_successes" : "fetch_failures", 1);
       return result;
     } finally {
-      dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.duration("fetch", System.nanoTime() - started);
+      dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.duration(
+          "fetch", System.nanoTime() - started);
     }
   }
 
-  private UrlContentFetchResult fetchObserved(String url, dev.mikoto2000.rei.http.HttpFetchPolicy policy) {
+  private UrlContentFetchResult fetchObserved(
+      String url, dev.mikoto2000.rei.http.HttpFetchPolicy policy) {
     UrlContentFetchResult validation = urlValidator.validate(url);
     if (!validation.success()) {
       return validation;
@@ -78,25 +90,45 @@ public class UrlContentFetchService {
 
     try {
       if (safeFetcher != null) {
-        var response = cache.fetch(new dev.mikoto2000.rei.http.cache.HttpResponseCache.Request(URI.create(url), java.util.Map.of("Accept",
-            "text/plain,text/html,application/xhtml+xml,application/json"), policy,
-            dev.mikoto2000.rei.http.cache.HttpResponseCache.Namespace.PAGE, dev.mikoto2000.rei.http.FetchScope.forceRefresh()),
-            dev.mikoto2000.rei.http.FetchScope.current(), dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.http(null), safeFetcher);
-        if (response.status() >= 300) return UrlContentFetchResult.failure("HTTP_ERROR", "HTTP request failed with status: " + response.status(), response.status());
+        var response =
+            cache.fetch(
+                new dev.mikoto2000.rei.http.cache.HttpResponseCache.Request(
+                    URI.create(url),
+                    java.util.Map.of(
+                        "Accept", "text/plain,text/html,application/xhtml+xml,application/json"),
+                    policy,
+                    dev.mikoto2000.rei.http.cache.HttpResponseCache.Namespace.PAGE,
+                    dev.mikoto2000.rei.http.FetchScope.forceRefresh()),
+                dev.mikoto2000.rei.http.FetchScope.current(),
+                dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.http(null),
+                safeFetcher);
+        if (response.status() >= 300)
+          return UrlContentFetchResult.failure(
+              "HTTP_ERROR",
+              "HTTP request failed with status: " + response.status(),
+              response.status());
         String rawType = response.header("content-type");
-        return UrlContentFetchResult.success(new String(response.body(), charset(rawType, response.body())), normalizeContentType(rawType), response.finalUri().toString(), response.retrievedAt(), response.validatedAt());
+        return UrlContentFetchResult.success(
+            new String(response.body(), charset(rawType, response.body())),
+            normalizeContentType(rawType),
+            response.finalUri().toString(),
+            response.retrievedAt(),
+            response.validatedAt());
       }
       policy.validate(URI.create(url));
-      HttpRequest request = HttpRequest.newBuilder(URI.create(url))
-          .timeout(Duration.ofSeconds(DEFAULT_TIMEOUT_SECONDS))
-          .header("Accept", "text/plain,text/html,application/xhtml+xml,application/json")
-          .GET()
-          .build();
+      HttpRequest request =
+          HttpRequest.newBuilder(URI.create(url))
+              .timeout(Duration.ofSeconds(DEFAULT_TIMEOUT_SECONDS))
+              .header("Accept", "text/plain,text/html,application/xhtml+xml,application/json")
+              .GET()
+              .build();
       dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.add("http_requests", 1);
-      HttpResponse<byte[]> response = httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+      HttpResponse<byte[]> response =
+          httpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
       dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.status(response.statusCode());
       if (response.body() != null)
-        dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.add("received_bytes", response.body().length);
+        dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.add(
+            "received_bytes", response.body().length);
       if (response.statusCode() >= 400) {
         return UrlContentFetchResult.failure(
             "HTTP_ERROR",
@@ -106,8 +138,10 @@ public class UrlContentFetchService {
       if (response.body() == null) {
         return UrlContentFetchResult.failure("EXTRACTION_ERROR", "Response body is empty");
       }
-      String rawContentType = response.headers() == null ? null : response.headers().firstValue("Content-Type")
-          .orElse(null);
+      String rawContentType =
+          response.headers() == null
+              ? null
+              : response.headers().firstValue("Content-Type").orElse(null);
       String contentType = normalizeContentType(rawContentType);
       Charset charset = charset(rawContentType, response.body());
       return UrlContentFetchResult.success(new String(response.body(), charset), contentType);
@@ -155,7 +189,8 @@ public class UrlContentFetchService {
     if (body == null || body.length == 0) {
       return Optional.empty();
     }
-    String head = new String(body, 0, Math.min(body.length, CHARSET_SCAN_BYTES), StandardCharsets.ISO_8859_1);
+    String head =
+        new String(body, 0, Math.min(body.length, CHARSET_SCAN_BYTES), StandardCharsets.ISO_8859_1);
     // Parse attributes rather than matching markup inside comments or scripts.
     for (Element meta : Jsoup.parse(head).select("meta")) {
       Optional<Charset> charset = charsetByName(meta.attr("charset"));

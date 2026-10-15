@@ -10,5 +10,4 @@ public record Task(
     int priority,
     TaskStatus status,
     OffsetDateTime createdAt,
-    OffsetDateTime completedAt
-) {}
+    OffsetDateTime completedAt) {}

@@ -12,11 +12,22 @@ public final class ProjectClientScope implements AutoCloseable {
     CURRENT.set(Objects.requireNonNull(client));
   }
 
-  public static ProjectClientScope open(ProjectClient client) { return new ProjectClientScope(client); }
-  static ProjectClient current() { return CURRENT.get(); }
+  public static ProjectClientScope open(ProjectClient client) {
+    return new ProjectClientScope(client);
+  }
+
+  static ProjectClient current() {
+    return CURRENT.get();
+  }
+
   /** Identity only, for binding interactive display aliases to one client. */
-  public static Object identity(){return CURRENT.get();}
-  @Override public void close() {
-    if (previous == null) CURRENT.remove(); else CURRENT.set(previous);
+  public static Object identity() {
+    return CURRENT.get();
+  }
+
+  @Override
+  public void close() {
+    if (previous == null) CURRENT.remove();
+    else CURRENT.set(previous);
   }
 }

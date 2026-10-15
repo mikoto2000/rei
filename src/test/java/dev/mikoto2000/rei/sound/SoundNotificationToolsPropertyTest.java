@@ -4,17 +4,15 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
+import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
 import java.util.stream.Stream;
-
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
-
 /**
- * Feature: sound-notification
- * Property 6: SoundNotificationTools が SoundNotificationService に委譲し結果を返す
+ * Feature: sound-notification Property 6: SoundNotificationTools が SoundNotificationService
+ * に委譲し結果を返す
  */
 class SoundNotificationToolsPropertyTest {
 
@@ -29,8 +27,7 @@ class SoundNotificationToolsPropertyTest {
         "a".repeat(200),
         "🎵emoji🎵",
         "  前後スペース  ",
-        "null文字列ではない"
-    );
+        "null文字列ではない");
   }
 
   @ParameterizedTest(name = "message={0}")

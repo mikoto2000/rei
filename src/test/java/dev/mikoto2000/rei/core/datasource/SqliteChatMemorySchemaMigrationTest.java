@@ -7,7 +7,6 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -24,10 +23,10 @@ import org.sqlite.SQLiteDataSource;
 @Tag("integration")
 class SqliteChatMemorySchemaMigrationTest {
 
-  private static final String SEQUENCE_INDEX = "SPRING_AI_CHAT_MEMORY_CONVERSATION_ID_SEQUENCE_ID_IDX";
+  private static final String SEQUENCE_INDEX =
+      "SPRING_AI_CHAT_MEMORY_CONVERSATION_ID_SEQUENCE_ID_IDX";
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   private SQLiteDataSource dataSource;
   private JdbcTemplate jdbc;
@@ -47,7 +46,9 @@ class SqliteChatMemorySchemaMigrationTest {
     initializeSpringAiSchema();
     var repository = repository();
     repository.saveAll("new", List.of(new UserMessage("hello")));
-    assertThat(repository.findByConversationId("new")).extracting(Message::getText).containsExactly("hello");
+    assertThat(repository.findByConversationId("new"))
+        .extracting(Message::getText)
+        .containsExactly("hello");
   }
 
   @Test
@@ -60,22 +61,29 @@ class SqliteChatMemorySchemaMigrationTest {
     insert("b", "other first", "USER", 1000L);
     insert("a", "same timestamp", "ASSISTANT", 1000L);
     insert("a", "legacy tool", "TOOL", 2000L);
-    var originalRows = jdbc.queryForList(
-        "SELECT rowid, conversation_id, content, type, timestamp FROM SPRING_AI_CHAT_MEMORY ORDER BY rowid");
+    var originalRows =
+        jdbc.queryForList(
+            "SELECT rowid, conversation_id, content, type, timestamp FROM SPRING_AI_CHAT_MEMORY ORDER BY rowid");
 
     SqliteChatMemorySchemaMigration.migrate(dataSource);
     initializeSpringAiSchema();
 
-    assertThat(jdbc.queryForList(
-        "SELECT rowid, conversation_id, content, type, timestamp FROM SPRING_AI_CHAT_MEMORY ORDER BY rowid"))
+    assertThat(
+            jdbc.queryForList(
+                "SELECT rowid, conversation_id, content, type, timestamp FROM SPRING_AI_CHAT_MEMORY ORDER BY rowid"))
         .isEqualTo(originalRows);
-    assertThat(contents("a")).containsExactly("first", "same timestamp", "same timestamp", "legacy tool", "later");
+    assertThat(contents("a"))
+        .containsExactly("first", "same timestamp", "same timestamp", "legacy tool", "later");
     assertThat(contents("b")).containsExactly("other first", "other later");
-    assertThat(jdbc.queryForList(
-        "SELECT sequence_id FROM SPRING_AI_CHAT_MEMORY WHERE conversation_id = 'a' ORDER BY sequence_id", Long.class))
+    assertThat(
+            jdbc.queryForList(
+                "SELECT sequence_id FROM SPRING_AI_CHAT_MEMORY WHERE conversation_id = 'a' ORDER BY sequence_id",
+                Long.class))
         .containsExactly(0L, 1L, 2L, 3L, 4L);
-    assertThat(jdbc.queryForList(
-        "SELECT sequence_id FROM SPRING_AI_CHAT_MEMORY WHERE conversation_id = 'b' ORDER BY sequence_id", Long.class))
+    assertThat(
+            jdbc.queryForList(
+                "SELECT sequence_id FROM SPRING_AI_CHAT_MEMORY WHERE conversation_id = 'b' ORDER BY sequence_id",
+                Long.class))
         .containsExactly(0L, 1L);
     assertSequenceIndex();
   }
@@ -96,11 +104,17 @@ class SqliteChatMemorySchemaMigrationTest {
     messages.add(new UserMessage("follow-up"));
     repository.saveAll("a", messages);
 
-    assertThat(repository.findByConversationId("a")).extracting(Message::getText)
+    assertThat(repository.findByConversationId("a"))
+        .extracting(Message::getText)
         .containsExactly("question", "answer", "follow-up");
-    assertThat(repository.findByConversationId("b")).extracting(Message::getText).containsExactly("unrelated");
-    assertThat(jdbc.queryForObject(
-        "SELECT timestamp FROM SPRING_AI_CHAT_MEMORY WHERE content = 'question'", Long.class)).isEqualTo(1000L);
+    assertThat(repository.findByConversationId("b"))
+        .extracting(Message::getText)
+        .containsExactly("unrelated");
+    assertThat(
+            jdbc.queryForObject(
+                "SELECT timestamp FROM SPRING_AI_CHAT_MEMORY WHERE content = 'question'",
+                Long.class))
+        .isEqualTo(1000L);
   }
 
   @Test
@@ -112,13 +126,17 @@ class SqliteChatMemorySchemaMigrationTest {
     var repository = repository();
     var messages = repository.findByConversationId("a");
     repository.saveAll("a", List.of(messages.get(1), messages.get(0)));
-    var originalRows = jdbc.queryForList("SELECT rowid, * FROM SPRING_AI_CHAT_MEMORY ORDER BY rowid");
+    var originalRows =
+        jdbc.queryForList("SELECT rowid, * FROM SPRING_AI_CHAT_MEMORY ORDER BY rowid");
 
     SqliteChatMemorySchemaMigration.migrate(dataSource);
     SqliteChatMemorySchemaMigration.migrate(dataSource);
 
-    assertThat(jdbc.queryForList("SELECT rowid, * FROM SPRING_AI_CHAT_MEMORY ORDER BY rowid")).isEqualTo(originalRows);
-    assertThat(repository.findByConversationId("a")).extracting(Message::getText).containsExactly("newer", "older");
+    assertThat(jdbc.queryForList("SELECT rowid, * FROM SPRING_AI_CHAT_MEMORY ORDER BY rowid"))
+        .isEqualTo(originalRows);
+    assertThat(repository.findByConversationId("a"))
+        .extracting(Message::getText)
+        .containsExactly("newer", "older");
     assertSequenceIndex();
   }
 
@@ -127,11 +145,13 @@ class SqliteChatMemorySchemaMigrationTest {
     initializeSpringAiSchema();
     repository().saveAll("modern", List.of(new UserMessage("existing")));
     jdbc.execute("DROP INDEX " + SEQUENCE_INDEX);
-    var originalRows = jdbc.queryForList("SELECT rowid, * FROM SPRING_AI_CHAT_MEMORY ORDER BY rowid");
+    var originalRows =
+        jdbc.queryForList("SELECT rowid, * FROM SPRING_AI_CHAT_MEMORY ORDER BY rowid");
 
     SqliteChatMemorySchemaMigration.migrate(dataSource);
 
-    assertThat(jdbc.queryForList("SELECT rowid, * FROM SPRING_AI_CHAT_MEMORY ORDER BY rowid")).isEqualTo(originalRows);
+    assertThat(jdbc.queryForList("SELECT rowid, * FROM SPRING_AI_CHAT_MEMORY ORDER BY rowid"))
+        .isEqualTo(originalRows);
     assertSequenceIndex();
   }
 
@@ -143,7 +163,9 @@ class SqliteChatMemorySchemaMigrationTest {
     initializeSpringAiSchema();
     repository().saveAll("new", List.of(new UserMessage("first")));
 
-    assertThat(repository().findByConversationId("new")).extracting(Message::getText).containsExactly("first");
+    assertThat(repository().findByConversationId("new"))
+        .extracting(Message::getText)
+        .containsExactly("first");
     assertSequenceIndex();
   }
 
@@ -152,17 +174,22 @@ class SqliteChatMemorySchemaMigrationTest {
     createLegacySchema();
     insert("a", "preserved", "USER", 1000L);
     jdbc.execute("CREATE TABLE " + SEQUENCE_INDEX + " (value TEXT)");
-    var originalRows = jdbc.queryForList("SELECT rowid, * FROM SPRING_AI_CHAT_MEMORY ORDER BY rowid");
+    var originalRows =
+        jdbc.queryForList("SELECT rowid, * FROM SPRING_AI_CHAT_MEMORY ORDER BY rowid");
 
-    assertThatThrownBy(() -> SqliteChatMemorySchemaMigration.migrate(dataSource)).isInstanceOf(DataAccessException.class);
+    assertThatThrownBy(() -> SqliteChatMemorySchemaMigration.migrate(dataSource))
+        .isInstanceOf(DataAccessException.class);
 
-    assertThat(jdbc.queryForList("SELECT rowid, * FROM SPRING_AI_CHAT_MEMORY ORDER BY rowid")).isEqualTo(originalRows);
+    assertThat(jdbc.queryForList("SELECT rowid, * FROM SPRING_AI_CHAT_MEMORY ORDER BY rowid"))
+        .isEqualTo(originalRows);
     assertThat(jdbc.queryForList("PRAGMA table_info(SPRING_AI_CHAT_MEMORY)"))
-        .extracting(row -> row.get("name")).doesNotContain("sequence_id");
+        .extracting(row -> row.get("name"))
+        .doesNotContain("sequence_id");
   }
 
   private void createLegacySchema() {
-    jdbc.execute("""
+    jdbc.execute(
+        """
         CREATE TABLE SPRING_AI_CHAT_MEMORY (
           conversation_id TEXT NOT NULL,
           content TEXT NOT NULL,
@@ -171,25 +198,34 @@ class SqliteChatMemorySchemaMigrationTest {
           CHECK (type IN ('USER', 'ASSISTANT', 'SYSTEM', 'TOOL'))
         )
         """);
-    jdbc.execute("""
+    jdbc.execute(
+        """
         CREATE INDEX SPRING_AI_CHAT_MEMORY_CONVERSATION_ID_TIMESTAMP_IDX
         ON SPRING_AI_CHAT_MEMORY(conversation_id, timestamp)
         """);
   }
 
   private void initializeSpringAiSchema() {
-    new ResourceDatabasePopulator(new ClassPathResource(
-        "org/springframework/ai/chat/memory/repository/jdbc/schema-sqlite.sql")).execute(dataSource);
+    new ResourceDatabasePopulator(
+            new ClassPathResource(
+                "org/springframework/ai/chat/memory/repository/jdbc/schema-sqlite.sql"))
+        .execute(dataSource);
   }
 
   private void insert(String conversationId, String content, String type, long timestamp) {
-    jdbc.update("INSERT INTO SPRING_AI_CHAT_MEMORY (conversation_id, content, type, timestamp) VALUES (?, ?, ?, ?)",
-        conversationId, content, type, timestamp);
+    jdbc.update(
+        "INSERT INTO SPRING_AI_CHAT_MEMORY (conversation_id, content, type, timestamp) VALUES (?, ?, ?, ?)",
+        conversationId,
+        content,
+        type,
+        timestamp);
   }
 
   private List<String> contents(String conversationId) {
-    return jdbc.queryForList("SELECT content FROM SPRING_AI_CHAT_MEMORY WHERE conversation_id = ? ORDER BY sequence_id",
-        String.class, conversationId);
+    return jdbc.queryForList(
+        "SELECT content FROM SPRING_AI_CHAT_MEMORY WHERE conversation_id = ? ORDER BY sequence_id",
+        String.class,
+        conversationId);
   }
 
   private JdbcChatMemoryRepository repository() {
@@ -198,6 +234,7 @@ class SqliteChatMemorySchemaMigrationTest {
 
   private void assertSequenceIndex() {
     assertThat(jdbc.queryForList("PRAGMA index_info(" + SEQUENCE_INDEX + ")"))
-        .extracting(row -> row.get("name")).containsExactly("conversation_id", "sequence_id");
+        .extracting(row -> row.get("name"))
+        .containsExactly("conversation_id", "sequence_id");
   }
 }

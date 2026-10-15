@@ -3,7 +3,6 @@ package dev.mikoto2000.rei.core.process;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 
 class BoundedLineBufferTest {

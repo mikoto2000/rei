@@ -1,4 +1,3 @@
 package dev.mikoto2000.rei.event;
 
-public record FileSummaryStaleSkippedPayload(String path) implements AgentEventPayload {
-}
+public record FileSummaryStaleSkippedPayload(String path) implements AgentEventPayload {}

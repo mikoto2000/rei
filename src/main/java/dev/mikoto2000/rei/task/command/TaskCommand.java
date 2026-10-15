@@ -1,14 +1,12 @@
 package dev.mikoto2000.rei.task.command;
 
-import java.time.LocalDate;
-import java.util.List;
-
-import org.springframework.stereotype.Component;
-
 import dev.mikoto2000.rei.task.Task;
 import dev.mikoto2000.rei.task.TaskQuery;
 import dev.mikoto2000.rei.task.TaskService;
+import java.time.LocalDate;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -27,14 +25,49 @@ import picocli.CommandLine.Parameters;
 public class TaskCommand {
   private abstract static class ReportCommand implements Runnable {
     private java.io.PrintWriter reportOutput;
-    java.io.PrintWriter out(){return reportOutput==null?new java.io.PrintWriter(System.out,true):reportOutput;}
+
+    java.io.PrintWriter out() {
+      return reportOutput == null ? new java.io.PrintWriter(System.out, true) : reportOutput;
+    }
   }
-  private static String report(ReportCommand command){var text=new java.io.StringWriter();command.reportOutput=new java.io.PrintWriter(text,true);command.run();return text.toString().replaceFirst("[\\r\\n]+$","");}
-  public static String reportAdd(TaskService service,String title,LocalDate due,int priority){var command=new AddCommand(service);command.titleParts=new String[]{title};command.dueDate=due;command.priority=priority;return report(command);}
-  public static String reportList(TaskService service,Integer priority,LocalDate dueBefore){var command=new ListCommand(service);command.priority=priority;command.dueBefore=dueBefore;return report(command);}
-  public static String reportDone(TaskService service,long id){var command=new DoneCommand(service);command.id=id;return report(command);}
-  public static String reportDelete(TaskService service,long id){var command=new DeleteCommand(service);command.id=id;return report(command);}
-  public static String reportAuthorization(TaskService service){return report(new AuthCommand(service));}
+
+  private static String report(ReportCommand command) {
+    var text = new java.io.StringWriter();
+    command.reportOutput = new java.io.PrintWriter(text, true);
+    command.run();
+    return text.toString().replaceFirst("[\\r\\n]+$", "");
+  }
+
+  public static String reportAdd(TaskService service, String title, LocalDate due, int priority) {
+    var command = new AddCommand(service);
+    command.titleParts = new String[] {title};
+    command.dueDate = due;
+    command.priority = priority;
+    return report(command);
+  }
+
+  public static String reportList(TaskService service, Integer priority, LocalDate dueBefore) {
+    var command = new ListCommand(service);
+    command.priority = priority;
+    command.dueBefore = dueBefore;
+    return report(command);
+  }
+
+  public static String reportDone(TaskService service, long id) {
+    var command = new DoneCommand(service);
+    command.id = id;
+    return report(command);
+  }
+
+  public static String reportDelete(TaskService service, long id) {
+    var command = new DeleteCommand(service);
+    command.id = id;
+    return report(command);
+  }
+
+  public static String reportAuthorization(TaskService service) {
+    return report(new AuthCommand(service));
+  }
 
   @Component
   @RequiredArgsConstructor

@@ -8,5 +8,4 @@ public record MessageView(
     MessageStatus status,
     String text,
     Instant startedAt,
-    Instant completedAt) {
-}
+    Instant completedAt) {}

@@ -1,15 +1,13 @@
 package dev.mikoto2000.rei.vectorstore;
 
+import dev.mikoto2000.rei.vectordocument.VectorDocumentEntry;
+import dev.mikoto2000.rei.vectordocument.VectorDocumentRepository;
 import java.util.List;
 import java.util.Optional;
-
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.ai.vectorstore.filter.Filter;
-
-import dev.mikoto2000.rei.vectordocument.VectorDocumentEntry;
-import dev.mikoto2000.rei.vectordocument.VectorDocumentRepository;
 
 /** Provides empty retrieval results without a database or embedding model. */
 public class DisabledVectorStore implements VectorStore, VectorDocumentRepository {
@@ -39,7 +37,8 @@ public class DisabledVectorStore implements VectorStore, VectorDocumentRepositor
   }
 
   @Override
-  public VectorDocumentEntry replaceBySource(String docId, String source, String ingestedAt, List<Document> documents) {
+  public VectorDocumentEntry replaceBySource(
+      String docId, String source, String ingestedAt, List<Document> documents) {
     throw disabled();
   }
 

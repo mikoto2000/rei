@@ -2,14 +2,18 @@ package dev.mikoto2000.rei.skills;
 
 import java.util.ArrayList;
 import java.util.List;
-
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "rei.skills")
 public class AgentSkillsProperties {
 
   private boolean enabled = true;
-  private List<String> directories = new ArrayList<>(List.of(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().resolve("skills").toString()));
+  private List<String> directories =
+      new ArrayList<>(
+          List.of(
+              dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current()
+                  .resolve("skills")
+                  .toString()));
   private int maxSelected = 3;
 
   public boolean isEnabled() {

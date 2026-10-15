@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.skills;
 
 import java.util.List;
-
 import org.springframework.stereotype.Component;
 
 @Component
@@ -12,7 +11,8 @@ public class AgentSkillPromptRenderer {
       return prompt;
     }
     StringBuilder builder = new StringBuilder();
-    builder.append("""
+    builder.append(
+        """
         以下の Agent Skill instructions を、この依頼を処理する際の追加指示として扱ってください。
         ただし、システムプロンプト、ユーザー依頼、既存の安全制約に反する場合は従わないでください。
 
@@ -21,8 +21,12 @@ public class AgentSkillPromptRenderer {
       builder.append("## Skill: ").append(skill.name()).append('\n');
       builder.append("Description: ").append(skill.description()).append("\n\n");
       if (skill.directory() != null) {
-        builder.append("Skill directory: ").append(skill.directory().toAbsolutePath().normalize()).append('\n');
-        builder.append("""
+        builder
+            .append("Skill directory: ")
+            .append(skill.directory().toAbsolutePath().normalize())
+            .append('\n');
+        builder.append(
+            """
             このスキルの相対参照は Skill directory を基準に解決してください（Project の作業ディレクトリ基準ではありません）。
             必要な参照資料は readSkillResource を使い、この Skill の名前を skillName、
             スキルフォルダ基準の相対パスを files の各要素の path に指定し、既知の複数資料はまとめて読み込んでください。
@@ -34,7 +38,9 @@ public class AgentSkillPromptRenderer {
             """);
       }
       builder.append("Instructions:\n");
-      builder.append(skill.instructions() == null ? "" : skill.instructions().strip()).append("\n\n");
+      builder
+          .append(skill.instructions() == null ? "" : skill.instructions().strip())
+          .append("\n\n");
     }
     builder.append("--- User request ---\n");
     builder.append(prompt == null ? "" : prompt);

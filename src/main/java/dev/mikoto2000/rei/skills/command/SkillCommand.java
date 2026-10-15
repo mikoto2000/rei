@@ -1,10 +1,9 @@
 package dev.mikoto2000.rei.skills.command;
 
-import org.springframework.stereotype.Component;
-import org.springframework.beans.factory.annotation.Autowired;
-
 import dev.mikoto2000.rei.skills.AgentSkill;
 import dev.mikoto2000.rei.skills.AgentSkillRepository;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Parameters;
@@ -12,26 +11,41 @@ import picocli.CommandLine.ParentCommand;
 import picocli.CommandLine.Spec;
 
 @Component
-@Command(name = "skill", description = "Agent Skills を操作します", subcommands = {
-    SkillCommand.ListCommand.class,
-    SkillCommand.ShowCommand.class,
-    SkillCommand.ReloadCommand.class
-})
+@Command(
+    name = "skill",
+    description = "Agent Skills を操作します",
+    subcommands = {
+      SkillCommand.ListCommand.class,
+      SkillCommand.ShowCommand.class,
+      SkillCommand.ReloadCommand.class
+    })
 public class SkillCommand implements Runnable {
 
   private final AgentSkillRepository repository;
   private java.io.PrintWriter reportOutput;
 
   private String report(java.util.function.Consumer<SkillCommand> action) {
-    var text=new java.io.StringWriter();var command=new SkillCommand(repository);
-    command.reportOutput=new java.io.PrintWriter(text);action.accept(command);command.reportOutput.flush();return text.toString();
+    var text = new java.io.StringWriter();
+    var command = new SkillCommand(repository);
+    command.reportOutput = new java.io.PrintWriter(text);
+    action.accept(command);
+    command.reportOutput.flush();
+    return text.toString();
   }
-  public String renderList(){return report(SkillCommand::list);}
-  public String renderShow(String name){return report(command->command.show(name));}
-  public String renderReload(){return report(SkillCommand::reload);}
 
-  @Spec
-  CommandSpec spec;
+  public String renderList() {
+    return report(SkillCommand::list);
+  }
+
+  public String renderShow(String name) {
+    return report(command -> command.show(name));
+  }
+
+  public String renderReload() {
+    return report(SkillCommand::reload);
+  }
+
+  @Spec CommandSpec spec;
 
   public SkillCommand() {
     this(new EmptyAgentSkillRepository());
@@ -48,30 +62,37 @@ public class SkillCommand implements Runnable {
   }
 
   void list() {
-    java.util.List<AgentSkill> skills = new dev.mikoto2000.rei.application.read.SkillQueryService(repository).list();
+    java.util.List<AgentSkill> skills =
+        new dev.mikoto2000.rei.application.read.SkillQueryService(repository).list();
     if (skills.isEmpty()) {
       out().println("Agent Skills は登録されていません");
       return;
     }
     for (AgentSkill skill : skills) {
-      out().printf("%s | %s | %s | %s%n",
-          skill.name(),
-          skill.enabled() ? "enabled" : "disabled",
-          skill.description(),
-          skill.directory());
+      out()
+          .printf(
+              "%s | %s | %s | %s%n",
+              skill.name(),
+              skill.enabled() ? "enabled" : "disabled",
+              skill.description(),
+              skill.directory());
     }
   }
 
   void show(String name) {
-    new dev.mikoto2000.rei.application.read.SkillQueryService(repository).find(name).ifPresentOrElse(skill -> {
-      out().println("name: " + skill.name());
-      out().println("enabled: " + skill.enabled());
-      out().println("description: " + skill.description());
-      out().println("directory: " + skill.directory());
-      out().println("skillFile: " + skill.skillFile());
-      out().println();
-      out().println(skill.instructions());
-    }, () -> out().println("[error] Skill が見つかりません: " + name));
+    new dev.mikoto2000.rei.application.read.SkillQueryService(repository)
+        .find(name)
+        .ifPresentOrElse(
+            skill -> {
+              out().println("name: " + skill.name());
+              out().println("enabled: " + skill.enabled());
+              out().println("description: " + skill.description());
+              out().println("directory: " + skill.directory());
+              out().println("skillFile: " + skill.skillFile());
+              out().println();
+              out().println(skill.instructions());
+            },
+            () -> out().println("[error] Skill が見つかりません: " + name));
   }
 
   void reload() {
@@ -80,13 +101,12 @@ public class SkillCommand implements Runnable {
   }
 
   private java.io.PrintWriter out() {
-    return reportOutput==null?spec.commandLine().getOut():reportOutput;
+    return reportOutput == null ? spec.commandLine().getOut() : reportOutput;
   }
 
   @Command(name = "list", description = "Agent Skills の一覧を表示します")
   public static class ListCommand implements Runnable {
-    @ParentCommand
-    SkillCommand parent;
+    @ParentCommand SkillCommand parent;
 
     @Override
     public void run() {
@@ -96,8 +116,7 @@ public class SkillCommand implements Runnable {
 
   @Command(name = "show", description = "Agent Skill の詳細を表示します")
   public static class ShowCommand implements Runnable {
-    @ParentCommand
-    SkillCommand parent;
+    @ParentCommand SkillCommand parent;
 
     @Parameters(index = "0", paramLabel = "NAME")
     String name;
@@ -110,8 +129,7 @@ public class SkillCommand implements Runnable {
 
   @Command(name = "reload", description = "Agent Skills を再読み込みします")
   public static class ReloadCommand implements Runnable {
-    @ParentCommand
-    SkillCommand parent;
+    @ParentCommand SkillCommand parent;
 
     @Override
     public void run() {
@@ -136,7 +154,6 @@ public class SkillCommand implements Runnable {
     }
 
     @Override
-    public void reload() {
-    }
+    public void reload() {}
   }
 }

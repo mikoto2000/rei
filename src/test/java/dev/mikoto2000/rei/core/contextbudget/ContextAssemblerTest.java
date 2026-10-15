@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
 import static org.assertj.core.api.Assertions.*;
+
 import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -14,65 +15,141 @@ class ContextAssemblerTest {
   @TempDir Path dir;
   final TokenEstimator estimator = TokenEstimator.conservative();
   final AtomicInteger calls = new AtomicInteger();
+
   ContextCompressionProperties config() {
     var p = new ContextCompressionProperties();
-    p.setThreshold(300); p.setHardLimit(600); p.setRecentTokens(80); p.setSummaryTokens(100);
+    p.setThreshold(300);
+    p.setHardLimit(600);
+    p.setRecentTokens(80);
+    p.setSummaryTokens(100);
     return p;
   }
+
   ContextAssembler assembler(ConversationCompressor compressor) {
-    return new ContextAssembler(config(), estimator, new ConversationSummaryRepository(dir),
-        new ToolResultCompressor(new RawToolResultStore(dir), estimator, 100, 70), compressor, null, null);
+    return new ContextAssembler(
+        config(),
+        estimator,
+        new ConversationSummaryRepository(dir),
+        new ToolResultCompressor(new RawToolResultStore(dir), estimator, 100, 70),
+        compressor,
+        null,
+        null);
   }
+
   Prompt prompt(String old) {
-    return new Prompt(List.of(new SystemMessage("system"),
-        ContextHistoryAdvisor.historical(new UserMessage(old), 1),
-        ContextHistoryAdvisor.historical(new AssistantMessage("recent"), 2),
-        new UserMessage("current request and Working Set")));
+    return new Prompt(
+        List.of(
+            new SystemMessage("system"),
+            ContextHistoryAdvisor.historical(new UserMessage(old), 1),
+            ContextHistoryAdvisor.historical(new AssistantMessage("recent"), 2),
+            new UserMessage("current request and Working Set")));
   }
-  @Test void conversationReplyStyleSurvivesHistoryCompressionWithoutReplacingCharacter() {
-    var request=org.springframework.ai.chat.client.ChatClientRequest.builder().prompt(prompt("x".repeat(3000))).build();
-    var styled=new dev.mikoto2000.rei.core.chat.ConversationStyleAdvisor(dev.mikoto2000.rei.core.chat.ResponseStyle.CONVERSATION)
-        .before(request,org.mockito.Mockito.mock(org.springframework.ai.chat.client.advisor.api.AdvisorChain.class)).prompt();
-    var projected=assembler((previous,messages,budget,current)->{calls.incrementAndGet();return "old summary";})
-        .assemble(styled,"conversation","style-run",()->{});
+
+  @Test
+  void conversationReplyStyleSurvivesHistoryCompressionWithoutReplacingCharacter() {
+    var request =
+        org.springframework.ai.chat.client.ChatClientRequest.builder()
+            .prompt(prompt("x".repeat(3000)))
+            .build();
+    var styled =
+        new dev.mikoto2000.rei.core.chat.ConversationStyleAdvisor(
+                dev.mikoto2000.rei.core.chat.ResponseStyle.CONVERSATION)
+            .before(
+                request,
+                org.mockito.Mockito.mock(
+                    org.springframework.ai.chat.client.advisor.api.AdvisorChain.class))
+            .prompt();
+    var projected =
+        assembler(
+                (previous, messages, budget, current) -> {
+                  calls.incrementAndGet();
+                  return "old summary";
+                })
+            .assemble(styled, "conversation", "style-run", () -> {});
     assertThat(calls.get()).isGreaterThan(0);
-    assertThat(projected.getInstructions().stream().filter(m->m instanceof SystemMessage).map(Message::getText)
-        .collect(java.util.stream.Collectors.joining("\n"))).contains("system","会話スタイル","承認事項は省略しない");
+    assertThat(
+            projected.getInstructions().stream()
+                .filter(m -> m instanceof SystemMessage)
+                .map(Message::getText)
+                .collect(java.util.stream.Collectors.joining("\n")))
+        .contains("system", "会話スタイル", "承認事項は省略しない");
     assertThat(projected.getUserMessage().getText()).isEqualTo("current request and Working Set");
   }
-  @Test void runObservationsFollowOriginalSystemPrefixAndSummaryStaysFrozen() {
-    var repository=new ConversationSummaryRepository(dir);
-    repository.save(ConversationSummaryRepository.runKey("conversation","run"),new ConversationSummary("saved decision",1,java.time.Instant.now()));
-    var a=assembler((previous,messages,budget,request)->{calls.incrementAndGet();return "unexpected";});
-    var original=new Prompt(List.of(new SystemMessage("system"),new UserMessage("request"),new AssistantMessage("covered"),new AssistantMessage("new fact")));
-    var projected=a.assemble(original,"conversation","run",()->{});
+
+  @Test
+  void runObservationsFollowOriginalSystemPrefixAndSummaryStaysFrozen() {
+    var repository = new ConversationSummaryRepository(dir);
+    repository.save(
+        ConversationSummaryRepository.runKey("conversation", "run"),
+        new ConversationSummary("saved decision", 1, java.time.Instant.now()));
+    var a =
+        assembler(
+            (previous, messages, budget, request) -> {
+              calls.incrementAndGet();
+              return "unexpected";
+            });
+    var original =
+        new Prompt(
+            List.of(
+                new SystemMessage("system"),
+                new UserMessage("request"),
+                new AssistantMessage("covered"),
+                new AssistantMessage("new fact")));
+    var projected = a.assemble(original, "conversation", "run", () -> {});
     assertThat(projected.getInstructions().getFirst().getText()).isEqualTo("system");
-    assertThat(projected.getContents()).contains("saved decision","new fact").doesNotContain("covered");
-    var again=a.assemble(original,"conversation","run",()->{});
-    assertThat(again.getInstructions()).isEqualTo(projected.getInstructions());assertThat(calls).hasValue(0);
+    assertThat(projected.getContents())
+        .contains("saved decision", "new fact")
+        .doesNotContain("covered");
+    var again = a.assemble(original, "conversation", "run", () -> {});
+    assertThat(again.getInstructions()).isEqualTo(projected.getInstructions());
+    assertThat(calls).hasValue(0);
   }
-  @Test void updatedWorkingSetAndNewSystemPolicyAreUsedWithoutStaleSnapshot() {
-    var current=new java.util.concurrent.atomic.AtomicReference<>("Working Set: latest revision");
-    var a=assembler((previous,messages,budget,request)->"summary");a.setWorkingSet(current::get);
-    var marker=SystemMessage.builder().text("Working Set: old").metadata(Map.of("rei.workingSet",true)).build();
-    var raw=new Prompt(List.of(new SystemMessage("policy-v1"),new UserMessage("request"),marker));
-    assertThat(a.assemble(raw,"conversation","run",()->{}).getContents()).contains("latest revision").doesNotContain("Working Set: old");
+
+  @Test
+  void updatedWorkingSetAndNewSystemPolicyAreUsedWithoutStaleSnapshot() {
+    var current = new java.util.concurrent.atomic.AtomicReference<>("Working Set: latest revision");
+    var a = assembler((previous, messages, budget, request) -> "summary");
+    a.setWorkingSet(current::get);
+    var marker =
+        SystemMessage.builder()
+            .text("Working Set: old")
+            .metadata(Map.of("rei.workingSet", true))
+            .build();
+    var raw =
+        new Prompt(List.of(new SystemMessage("policy-v1"), new UserMessage("request"), marker));
+    assertThat(a.assemble(raw, "conversation", "run", () -> {}).getContents())
+        .contains("latest revision")
+        .doesNotContain("Working Set: old");
     current.set("Working Set: deleted old path, moved new path");
-    var revised=new Prompt(List.of(new SystemMessage("policy-v2"),new UserMessage("request"),marker));
-    var next=a.assemble(revised,"conversation","run",()->{});
+    var revised =
+        new Prompt(List.of(new SystemMessage("policy-v2"), new UserMessage("request"), marker));
+    var next = a.assemble(revised, "conversation", "run", () -> {});
     assertThat(next.getInstructions().getFirst().getText()).isEqualTo("policy-v2");
-    assertThat(next.getInstructions().getLast().getMetadata().get("rei.workingSet")).isEqualTo(true);
-    assertThat(dev.mikoto2000.rei.timing.PrefixDiagnostics.sources(next)).extracting(dev.mikoto2000.rei.timing.PrefixDiagnostics.Source::id).contains("WORKING_SET");
-    assertThat(next.getContents()).contains("deleted old path, moved new path").doesNotContain("latest revision","policy-v1");
+    assertThat(next.getInstructions().getLast().getMetadata().get("rei.workingSet"))
+        .isEqualTo(true);
+    assertThat(dev.mikoto2000.rei.timing.PrefixDiagnostics.sources(next))
+        .extracting(dev.mikoto2000.rei.timing.PrefixDiagnostics.Source::id)
+        .contains("WORKING_SET");
+    assertThat(next.getContents())
+        .contains("deleted old path, moved new path")
+        .doesNotContain("latest revision", "policy-v1");
     assertThat(raw.getContents()).contains("Working Set: old");
   }
-  @Test void belowThresholdKeepsOriginalMessages() {
+
+  @Test
+  void belowThresholdKeepsOriginalMessages() {
     var p = prompt("short");
-    var result = assembler((previous, messages, budget, request) -> { calls.incrementAndGet(); return "summary"; })
-        .assemble(p, "conversation", "run", () -> {});
+    var result =
+        assembler(
+                (previous, messages, budget, request) -> {
+                  calls.incrementAndGet();
+                  return "summary";
+                })
+            .assemble(p, "conversation", "run", () -> {});
     assertThat(result.getInstructions()).containsExactlyElementsOf(p.getInstructions());
     assertThat(calls).hasValue(0);
   }
+
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void reservesTheConfiguredOutputCapForEitherOpenAiTokenParameter(boolean completionTokens) {
@@ -81,10 +158,20 @@ class ContextAssemblerTest {
     properties.setCompletionReserve(100);
     properties.setToolReserve(0);
     properties.setSafetyMargin(0);
-    var a = new ContextAssembler(properties, estimator, new ConversationSummaryRepository(dir),
-        new ToolResultCompressor(new RawToolResultStore(dir), estimator, 100, 70),
-        (previous, messages, budget, request) -> { calls.incrementAndGet(); return "summary"; }, null, null);
-    var builder = org.springframework.ai.openai.OpenAiChatOptions.builder().model("configured-model");
+    var a =
+        new ContextAssembler(
+            properties,
+            estimator,
+            new ConversationSummaryRepository(dir),
+            new ToolResultCompressor(new RawToolResultStore(dir), estimator, 100, 70),
+            (previous, messages, budget, request) -> {
+              calls.incrementAndGet();
+              return "summary";
+            },
+            null,
+            null);
+    var builder =
+        org.springframework.ai.openai.OpenAiChatOptions.builder().model("configured-model");
     if (completionTokens) builder.maxCompletionTokens(800);
     else builder.maxTokens(800);
     var options = builder.build();
@@ -102,46 +189,92 @@ class ContextAssemblerTest {
     assertThat(options.getMaxCompletionTokens()).isEqualTo(completionTokens ? 800 : null);
     assertThat(options.getMaxTokens()).isEqualTo(completionTokens ? null : 800);
   }
-  @Test void compressesOnlyOldHistoryAndPersistsCursorAcrossRestart() {
+
+  @Test
+  void compressesOnlyOldHistoryAndPersistsCursorAcrossRestart() {
     var p = prompt("old ".repeat(500));
-    var result = assembler((previous, messages, budget, request) -> { calls.incrementAndGet(); return "decided API X"; })
-        .assemble(p, "conversation", "run", () -> {});
-    assertThat(result.getContents()).contains("decided API X", "recent", "current request and Working Set")
+    var result =
+        assembler(
+                (previous, messages, budget, request) -> {
+                  calls.incrementAndGet();
+                  return "decided API X";
+                })
+            .assemble(p, "conversation", "run", () -> {});
+    assertThat(result.getContents())
+        .contains("decided API X", "recent", "current request and Working Set")
         .doesNotContain("old old old");
     assertThat(p.getContents()).contains("old old old");
-    assembler((previous, messages, budget, request) -> { calls.incrementAndGet(); return "unexpected"; })
+    assembler(
+            (previous, messages, budget, request) -> {
+              calls.incrementAndGet();
+              return "unexpected";
+            })
         .assemble(p, "conversation", "next", () -> {});
     assertThat(calls).hasValue(1);
-    assertThat(new ConversationSummaryRepository(dir).read("conversation").throughSequence()).isEqualTo(1);
+    assertThat(new ConversationSummaryRepository(dir).read("conversation").throughSequence())
+        .isEqualTo(1);
   }
-  @Test void failureAndInsufficientGainFallBackWithoutRetry() {
+
+  @Test
+  void failureAndInsufficientGainFallBackWithoutRetry() {
     for (boolean fail : List.of(true, false)) {
       calls.set(0);
-      var result = assembler((previous, messages, budget, request) -> {
-        calls.incrementAndGet(); if (fail) throw new IllegalStateException("offline");
-        return "bad ".repeat(600);
-      }).assemble(prompt("old ".repeat(900)), "conversation", "run", () -> {});
+      var result =
+          assembler(
+                  (previous, messages, budget, request) -> {
+                    calls.incrementAndGet();
+                    if (fail) throw new IllegalStateException("offline");
+                    return "bad ".repeat(600);
+                  })
+              .assemble(prompt("old ".repeat(900)), "conversation", "run", () -> {});
       assertThat(result.getContents()).contains("current request and Working Set");
       assertThat(calls).hasValue(1);
-      assertThat(result.getInstructions().stream().mapToInt(estimator::message).sum()).isLessThanOrEqualTo(600);
+      assertThat(result.getInstructions().stream().mapToInt(estimator::message).sum())
+          .isLessThanOrEqualTo(600);
     }
   }
-  @Test void cancellationDoesNotCommitSummaryOrFallBack() {
+
+  @Test
+  void cancellationDoesNotCommitSummaryOrFallBack() {
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
-    var a = assembler((previous, messages, budget, request) -> { cancelled.set(true); return "summary"; });
-    assertThatThrownBy(() -> a.assemble(prompt("old ".repeat(500)), "conversation", "run", () -> {
-      if (cancelled.get()) throw new java.util.concurrent.CancellationException();
-    })).isInstanceOf(java.util.concurrent.CancellationException.class);
-    assertThat(new ConversationSummaryRepository(dir).read("conversation").throughSequence()).isZero();
+    var a =
+        assembler(
+            (previous, messages, budget, request) -> {
+              cancelled.set(true);
+              return "summary";
+            });
+    assertThatThrownBy(
+            () ->
+                a.assemble(
+                    prompt("old ".repeat(500)),
+                    "conversation",
+                    "run",
+                    () -> {
+                      if (cancelled.get()) throw new java.util.concurrent.CancellationException();
+                    }))
+        .isInstanceOf(java.util.concurrent.CancellationException.class);
+    assertThat(new ConversationSummaryRepository(dir).read("conversation").throughSequence())
+        .isZero();
   }
-  @Test void rollingSummarySeesOnlyPreviousSummaryAndNewPrefix() {
-    var a = assembler((previous, messages, budget, request) -> {
-      if (calls.incrementAndGet() == 1) { assertThat(previous).isEmpty(); return "first decision"; }
-      assertThat(previous).isEqualTo("first decision");
-      assertThat(messages).extracting(Message::getText).noneMatch(t -> t.contains("old old"));
-      assertThat(messages).extracting(Message::getText).anyMatch(t -> t.contains("new new"));
-      return "first decision; second decision";
-    });
+
+  @Test
+  void rollingSummarySeesOnlyPreviousSummaryAndNewPrefix() {
+    var a =
+        assembler(
+            (previous, messages, budget, request) -> {
+              if (calls.incrementAndGet() == 1) {
+                assertThat(previous).isEmpty();
+                return "first decision";
+              }
+              assertThat(previous).isEqualTo("first decision");
+              assertThat(messages)
+                  .extracting(Message::getText)
+                  .noneMatch(t -> t.contains("old old"));
+              assertThat(messages)
+                  .extracting(Message::getText)
+                  .anyMatch(t -> t.contains("new new"));
+              return "first decision; second decision";
+            });
     a.assemble(prompt("old ".repeat(500)), "conversation", "run", () -> {});
     var expanded = new ArrayList<Message>(prompt("old ".repeat(500)).getInstructions());
     expanded.add(3, ContextHistoryAdvisor.historical(new UserMessage("new ".repeat(500)), 3));
@@ -150,31 +283,60 @@ class ContextAssemblerTest {
     assertThat(result.getContents()).contains("first decision; second decision", "latest");
     assertThat(calls).hasValue(2);
   }
-  @Test void concurrentRequestsGenerateOneSummary() throws Exception {
-    var a = assembler((previous, messages, budget, request) -> { calls.incrementAndGet(); return "shared summary"; });
+
+  @Test
+  void concurrentRequestsGenerateOneSummary() throws Exception {
+    var a =
+        assembler(
+            (previous, messages, budget, request) -> {
+              calls.incrementAndGet();
+              return "shared summary";
+            });
     try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
       var futures = new ArrayList<java.util.concurrent.Future<Prompt>>();
-      for (int i = 0; i < 8; i++) futures.add(executor.submit(() ->
-          a.assemble(prompt("old ".repeat(500)), "conversation", "run", () -> {})));
+      for (int i = 0; i < 8; i++)
+        futures.add(
+            executor.submit(
+                () -> a.assemble(prompt("old ".repeat(500)), "conversation", "run", () -> {})));
       for (var future : futures) assertThat(future.get().getContents()).contains("shared summary");
     }
     assertThat(calls).hasValue(1);
   }
-  @Test void hardLimitDoesNotDiscardCurrentRequestOrSystem() {
-    assertThatThrownBy(() -> assembler((p, m, b, r) -> "summary").assemble(new Prompt(List.of(
-        new SystemMessage("policy"), new UserMessage("current ".repeat(1000)))), "chat", "run", () -> {}))
+
+  @Test
+  void hardLimitDoesNotDiscardCurrentRequestOrSystem() {
+    assertThatThrownBy(
+            () ->
+                assembler((p, m, b, r) -> "summary")
+                    .assemble(
+                        new Prompt(
+                            List.of(
+                                new SystemMessage("policy"),
+                                new UserMessage("current ".repeat(1000)))),
+                        "chat",
+                        "run",
+                        () -> {}))
         .hasMessageContaining("CONTEXT_HARD_LIMIT");
   }
-  @Test void workingSetIsRefreshedAndNeverSentToSummarizer() {
-    var a = assembler((p, m, b, r) -> {
-      assertThat(m).extracting(Message::getText).noneMatch(t -> t.contains("Working Set"));
-      return "summary";
-    });
+
+  @Test
+  void workingSetIsRefreshedAndNeverSentToSummarizer() {
+    var a =
+        assembler(
+            (p, m, b, r) -> {
+              assertThat(m).extracting(Message::getText).noneMatch(t -> t.contains("Working Set"));
+              return "summary";
+            });
     a.setWorkingSet(() -> "Working Set: changed-file.java, next task");
     var messages = new ArrayList<Message>(prompt("old ".repeat(500)).getInstructions());
-    messages.add(SystemMessage.builder().text("Working Set: obsolete")
-        .metadata(Map.of("rei.workingSet", true)).build());
+    messages.add(
+        SystemMessage.builder()
+            .text("Working Set: obsolete")
+            .metadata(Map.of("rei.workingSet", true))
+            .build());
     var result = a.assemble(new Prompt(messages), "chat", "run", () -> {});
-    assertThat(result.getContents()).contains("changed-file.java", "next task").doesNotContain("obsolete");
+    assertThat(result.getContents())
+        .contains("changed-file.java", "next task")
+        .doesNotContain("obsolete");
   }
 }

@@ -1,13 +1,15 @@
 package dev.mikoto2000.rei.voice;
 
-import java.util.List;
-import org.springframework.ai.chat.client.ChatClient;
-import dev.mikoto2000.rei.llm.*;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.mikoto2000.rei.llm.*;
+import java.util.List;
 
-/** One tool-free, advisor-free call; supplied utterances/history/dictionaries are untrusted data. */
+/**
+ * One tool-free, advisor-free call; supplied utterances/history/dictionaries are untrusted data.
+ */
 public final class VoiceCorrectionLlm {
-  public static final String SYSTEM = """
+  public static final String SYSTEM =
+      """
       あなたは日本語音声認識結果の補正専用AIです。Whisper の誤変換、同音異義語、技術用語、
       文脈上不自然な単語、明白な脱字・助詞だけを補正してください。辞書にない誤認識も短い文脈から
       十分に判断できれば補正できます。意味、依頼内容、操作意図を維持してください。
@@ -31,23 +33,54 @@ public final class VoiceCorrectionLlm {
   private final LlmChatClientProvider clients;
   private final LlmModelProvider models;
   private final VoiceCorrectionProperties properties;
-  public VoiceCorrectionLlm(LlmChatClientProvider clients,LlmModelProvider models,VoiceCorrectionProperties properties) {
-    this.clients=clients;this.models=models;this.properties=properties;
+
+  public VoiceCorrectionLlm(
+      LlmChatClientProvider clients,
+      LlmModelProvider models,
+      VoiceCorrectionProperties properties) {
+    this.clients = clients;
+    this.models = models;
+    this.properties = properties;
   }
-  public String call(String original,VoiceCorrectionContext.Snapshot context) throws Exception {
-    var base=models.chatOptions(LlmFeature.VOICE_CORRECTION,null);
-    var builder=base.mutate().toolCallbacks(List.of()).toolChoice("none").maxRetries(0)
-        .timeout(java.time.Duration.ofMillis(properties.getTimeoutMs()));
-    if(base.getMaxCompletionTokens()!=null)builder.maxCompletionTokens(null).maxTokens(null).maxCompletionTokens(properties.getMaxOutputTokens());
+
+  public String call(String original, VoiceCorrectionContext.Snapshot context) throws Exception {
+    var base = models.chatOptions(LlmFeature.VOICE_CORRECTION, null);
+    var builder =
+        base.mutate()
+            .toolCallbacks(List.of())
+            .toolChoice("none")
+            .maxRetries(0)
+            .timeout(java.time.Duration.ofMillis(properties.getTimeoutMs()));
+    if (base.getMaxCompletionTokens() != null)
+      builder
+          .maxCompletionTokens(null)
+          .maxTokens(null)
+          .maxCompletionTokens(properties.getMaxOutputTokens());
     else builder.maxTokens(properties.getMaxOutputTokens());
-    var options=builder.build();dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
-    var budget=new OutputLimitRunBudget(0,1,null,properties.getMaxTotalTokens());
-    if(!budget.tryConsumeLlmCall())throw new IllegalStateException("correction_budget");
-    String data=new ObjectMapper().writeValueAsString(java.util.Map.of("asr",original,"references",context));
-    var response=clients.chatClient(LlmFeature.VOICE_CORRECTION).prompt().system(SYSTEM).user(data).options(options.mutate()).call().chatResponse();
-    if(response==null || response.getResult()==null || !response.getResult().getOutput().getToolCalls().isEmpty())throw new IllegalStateException("invalid_output");
-    var usage=response.getMetadata().getUsage();budget.recordTotalTokens(usage==null?null:usage.getTotalTokens());
-    if(budget.usageUnknown() || budget.tokenExceeded())throw new IllegalStateException("correction_budget");
+    var options = builder.build();
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
+    var budget = new OutputLimitRunBudget(0, 1, null, properties.getMaxTotalTokens());
+    if (!budget.tryConsumeLlmCall()) throw new IllegalStateException("correction_budget");
+    String data =
+        new ObjectMapper()
+            .writeValueAsString(java.util.Map.of("asr", original, "references", context));
+    var response =
+        clients
+            .chatClient(LlmFeature.VOICE_CORRECTION)
+            .prompt()
+            .system(SYSTEM)
+            .user(data)
+            .options(options.mutate())
+            .call()
+            .chatResponse();
+    if (response == null
+        || response.getResult() == null
+        || !response.getResult().getOutput().getToolCalls().isEmpty())
+      throw new IllegalStateException("invalid_output");
+    var usage = response.getMetadata().getUsage();
+    budget.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+    if (budget.usageUnknown() || budget.tokenExceeded())
+      throw new IllegalStateException("correction_budget");
     return response.getResult().getOutput().getText();
   }
 }

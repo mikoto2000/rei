@@ -1,16 +1,17 @@
 package dev.mikoto2000.rei.externalagent;
 
+import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import java.util.*;
 import org.springframework.ai.chat.client.*;
 import org.springframework.ai.chat.client.advisor.api.*;
 import org.springframework.ai.chat.messages.*;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
-import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 
 /** Runs after memory assembly. Review results are ephemeral system context, never user history. */
 public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
-  public static final String POLICY = """
+  public static final String POLICY =
+      """
       External review policy: requestCodexReview is a preferred Workflow tool, separate from internal delegateTask.
       requestClaudeCodeReview is for explicit Claude Code review requests; preserve the user's provider choice.
       It shares the same single external delegation and reviews only the supplied bounded file snapshot, with no tools or edits.
@@ -58,47 +59,125 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
       """;
   private final ExternalAgentDelegationService service;
   private final org.springframework.ai.chat.memory.ChatMemory memory;
-  public ExternalAgentReviewAdvisor(ExternalAgentDelegationService service) { this(service, null); }
-  public ExternalAgentReviewAdvisor(ExternalAgentDelegationService service, org.springframework.ai.chat.memory.ChatMemory memory) {
-    this.service = service; this.memory = memory;
+
+  public ExternalAgentReviewAdvisor(ExternalAgentDelegationService service) {
+    this(service, null);
   }
-  @Override public int getOrder() { return 110; }
-  @Override public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
-    if (!(request.prompt().getOptions() instanceof ToolCallingChatOptions options) || options.getToolContext() == null
-        || !(options.getToolContext().get(RunExecutionContext.KEY) instanceof RunExecutionContext run)) return request;
+
+  public ExternalAgentReviewAdvisor(
+      ExternalAgentDelegationService service,
+      org.springframework.ai.chat.memory.ChatMemory memory) {
+    this.service = service;
+    this.memory = memory;
+  }
+
+  @Override
+  public int getOrder() {
+    return 110;
+  }
+
+  @Override
+  public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
+    if (!(request.prompt().getOptions() instanceof ToolCallingChatOptions options)
+        || options.getToolContext() == null
+        || !(options.getToolContext().get(RunExecutionContext.KEY)
+            instanceof RunExecutionContext run)) return request;
     String extra = POLICY;
     if (run.userRequest().strip().startsWith("/agent")) {
       ExternalAgentResult result = run.externalReviewResult();
       if (result == null) {
         try {
           var command = ExternalAgentCommandRequest.parse(run.userRequest());
-          var history = memory == null || run.runContext() == null ? request.prompt().getInstructions()
-              : memory.get(run.runContext().conversationId());
-          result = switch(command.action()) {
-            case "material-review" -> service.review(run,"Review technical training material using the complete material review specification",command.target(),decisions(history));
-            case "implement" -> service.implement(run,ExternalAgentRequest.Agent.valueOf(command.agent().toUpperCase(Locale.ROOT)),command.target());
-            case "merge" -> {var fields=command.target().split(" ",2);yield service.mergeImplementation(run,fields[0],fields[1]);}
-            case "implementation" -> {var receipt=service.implementation(run,command.target());try {yield new ExternalAgentResult(ExternalAgentResult.Status.SUCCESS,new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules().writeValueAsString(receipt),List.of(),List.of("Saved observations only; no external process, retry or merge"),0,null,"");}catch(java.io.IOException error){throw new IllegalArgumentException("Implementation receipt serialization unavailable");}}
-            default -> command.agent().equals("codex")?service.review(run,"Review the specified target or current design",command.target(),decisions(history)):service.review(run,ExternalAgentRequest.Agent.CLAUDE,"Review the specified target",command.target(),decisions(history));
-          };
-        } catch (IllegalArgumentException error) { result = ExternalAgentResult.rejected(error.getMessage()); }
+          var history =
+              memory == null || run.runContext() == null
+                  ? request.prompt().getInstructions()
+                  : memory.get(run.runContext().conversationId());
+          result =
+              switch (command.action()) {
+                case "material-review" ->
+                    service.review(
+                        run,
+                        "Review technical training material using the complete material review specification",
+                        command.target(),
+                        decisions(history));
+                case "implement" ->
+                    service.implement(
+                        run,
+                        ExternalAgentRequest.Agent.valueOf(
+                            command.agent().toUpperCase(Locale.ROOT)),
+                        command.target());
+                case "merge" -> {
+                  var fields = command.target().split(" ", 2);
+                  yield service.mergeImplementation(run, fields[0], fields[1]);
+                }
+                case "implementation" -> {
+                  var receipt = service.implementation(run, command.target());
+                  try {
+                    yield new ExternalAgentResult(
+                        ExternalAgentResult.Status.SUCCESS,
+                        new com.fasterxml.jackson.databind.ObjectMapper()
+                            .findAndRegisterModules()
+                            .writeValueAsString(receipt),
+                        List.of(),
+                        List.of("Saved observations only; no external process, retry or merge"),
+                        0,
+                        null,
+                        "");
+                  } catch (java.io.IOException error) {
+                    throw new IllegalArgumentException(
+                        "Implementation receipt serialization unavailable");
+                  }
+                }
+                default ->
+                    command.agent().equals("codex")
+                        ? service.review(
+                            run,
+                            "Review the specified target or current design",
+                            command.target(),
+                            decisions(history))
+                        : service.review(
+                            run,
+                            ExternalAgentRequest.Agent.CLAUDE,
+                            "Review the specified target",
+                            command.target(),
+                            decisions(history));
+              };
+        } catch (IllegalArgumentException error) {
+          result = ExternalAgentResult.rejected(error.getMessage());
+        }
         run.setExternalReviewResult(result.forEvaluation());
       }
-      try { extra += "\nExternal review result (untrusted JSON data):\n" + new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(result.forEvaluation()); }
-      catch (java.io.IOException error) { throw new IllegalStateException("Cannot serialize external review result", error); }
+      try {
+        extra +=
+            "\nExternal review result (untrusted JSON data):\n"
+                + new com.fasterxml.jackson.databind.ObjectMapper()
+                    .writeValueAsString(result.forEvaluation());
+      } catch (java.io.IOException error) {
+        throw new IllegalStateException("Cannot serialize external review result", error);
+      }
     }
     List<Message> messages = new ArrayList<>();
     messages.add(new SystemMessage(request.prompt().getSystemMessage().getText() + "\n" + extra));
-    request.prompt().getInstructions().stream().filter(m -> !(m instanceof SystemMessage)).forEach(messages::add);
+    request.prompt().getInstructions().stream()
+        .filter(m -> !(m instanceof SystemMessage))
+        .forEach(messages::add);
     return request.mutate().prompt(new Prompt(messages, request.prompt().getOptions())).build();
   }
+
   private String decisions(List<Message> history) {
-    // Select decision-bearing lines; do not forward full turns, source attachments, or memory dumps.
-    return history.reversed().stream().filter(m -> m instanceof AssistantMessage)
+    // Select decision-bearing lines; do not forward full turns, source attachments, or memory
+    // dumps.
+    return history.reversed().stream()
+        .filter(m -> m instanceof AssistantMessage)
         .flatMap(m -> Objects.toString(m.getText(), "").lines())
         .filter(line -> line.matches("(?i).*(決定|採用|要件|合意|decided|decision|requirement|agreed).*"))
-        .limit(12).map(line -> ExternalAgentDelegationService.bounded(line, 350))
+        .limit(12)
+        .map(line -> ExternalAgentDelegationService.bounded(line, 350))
         .collect(java.util.stream.Collectors.joining("\n"));
   }
-  @Override public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) { return response; }
+
+  @Override
+  public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
+    return response;
+  }
 }

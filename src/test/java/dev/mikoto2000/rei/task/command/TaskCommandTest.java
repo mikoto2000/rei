@@ -7,21 +7,19 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.task.Task;
+import dev.mikoto2000.rei.task.TaskQuery;
+import dev.mikoto2000.rei.task.TaskService;
+import dev.mikoto2000.rei.task.TaskStatus;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
-
-import dev.mikoto2000.rei.task.Task;
-import dev.mikoto2000.rei.task.TaskQuery;
-import dev.mikoto2000.rei.task.TaskService;
-import dev.mikoto2000.rei.task.TaskStatus;
 import picocli.CommandLine;
 
 class TaskCommandTest {
@@ -30,7 +28,8 @@ class TaskCommandTest {
   void addCommandRejectsRemovedTagOption() {
     TaskService service = Mockito.mock(TaskService.class);
 
-    assertThrows(CommandLine.UnmatchedArgumentException.class,
+    assertThrows(
+        CommandLine.UnmatchedArgumentException.class,
         () -> newCommand(service).parseArgs("add", "--tag", "backend", "design review"));
     Mockito.verifyNoInteractions(service);
   }
@@ -39,7 +38,8 @@ class TaskCommandTest {
   void listCommandRejectsRemovedTagOption() {
     TaskService service = Mockito.mock(TaskService.class);
 
-    assertThrows(CommandLine.UnmatchedArgumentException.class,
+    assertThrows(
+        CommandLine.UnmatchedArgumentException.class,
         () -> newCommand(service).parseArgs("list", "--tag", "backend"));
     Mockito.verifyNoInteractions(service);
   }
@@ -48,7 +48,8 @@ class TaskCommandTest {
   void listReportOmitsRemovedTagColumn() {
     TaskService service = Mockito.mock(TaskService.class);
     when(service.listOpen(any(TaskQuery.class)))
-        .thenReturn(List.of(task(1L, "design review", LocalDate.of(2026, 3, 31), 2, TaskStatus.OPEN)));
+        .thenReturn(
+            List.of(task(1L, "design review", LocalDate.of(2026, 3, 31), 2, TaskStatus.OPEN)));
 
     assertEquals("1 | 2 | 2026-03-31 | design review", TaskCommand.reportList(service, null, null));
   }
@@ -69,7 +70,8 @@ class TaskCommandTest {
     Task created = task(1L, "設計レビュー", LocalDate.of(2026, 3, 31), 2, TaskStatus.OPEN);
     when(service.add(any(), any(), any(Integer.class))).thenReturn(created);
 
-    int exitCode = newCommand(service).execute("add", "--due", "2026-03-31", "--priority", "2", "設計レビュー");
+    int exitCode =
+        newCommand(service).execute("add", "--due", "2026-03-31", "--priority", "2", "設計レビュー");
 
     assertEquals(0, exitCode);
     verify(service).add("設計レビュー", LocalDate.of(2026, 3, 31), 2);
@@ -79,8 +81,10 @@ class TaskCommandTest {
   void addCommandPrintsErrorWhenTaskCreationFails() {
     TaskService service = Mockito.mock(TaskService.class);
     when(service.add(any(), any(), any(Integer.class)))
-        .thenThrow(new IllegalStateException("Google Tasks へのタスク追加に失敗しました",
-            new IllegalStateException("Google Task integration is disabled")));
+        .thenThrow(
+            new IllegalStateException(
+                "Google Tasks へのタスク追加に失敗しました",
+                new IllegalStateException("Google Task integration is disabled")));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
@@ -92,13 +96,16 @@ class TaskCommandTest {
       System.setOut(originalOut);
     }
 
-    assertTrue(out.toString().contains("[error] Google Tasks へのタスク追加に失敗しました: Google Task integration is disabled"));
+    assertTrue(
+        out.toString()
+            .contains("[error] Google Tasks へのタスク追加に失敗しました: Google Task integration is disabled"));
   }
 
   @Test
   void listCommandPrintsOpenTasks() {
     TaskService service = Mockito.mock(TaskService.class);
-    when(service.listOpen(any(TaskQuery.class))).thenReturn(List.of(task(1L, "定例MTG", null, 1, TaskStatus.OPEN)));
+    when(service.listOpen(any(TaskQuery.class)))
+        .thenReturn(List.of(task(1L, "定例MTG", null, 1, TaskStatus.OPEN)));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
@@ -118,7 +125,8 @@ class TaskCommandTest {
     TaskService service = Mockito.mock(TaskService.class);
     when(service.listOpen(any(TaskQuery.class))).thenReturn(List.of());
 
-    int exitCode = newCommand(service).execute("list", "--priority", "2", "--due-before", "2026-03-31");
+    int exitCode =
+        newCommand(service).execute("list", "--priority", "2", "--due-before", "2026-03-31");
 
     assertEquals(0, exitCode);
     ArgumentCaptor<TaskQuery> captor = ArgumentCaptor.forClass(TaskQuery.class);
@@ -145,26 +153,28 @@ class TaskCommandTest {
   }
 
   private CommandLine newCommand(TaskService service) {
-    return new CommandLine(new TaskCommand(), new CommandLine.IFactory() {
-      @Override
-      public <K> K create(Class<K> cls) throws Exception {
-        if (cls == TaskCommand.AuthCommand.class) {
-          return cls.cast(new TaskCommand.AuthCommand(service));
-        }
-        if (cls == TaskCommand.AddCommand.class) {
-          return cls.cast(new TaskCommand.AddCommand(service));
-        }
-        if (cls == TaskCommand.ListCommand.class) {
-          return cls.cast(new TaskCommand.ListCommand(service));
-        }
-        if (cls == TaskCommand.DoneCommand.class) {
-          return cls.cast(new TaskCommand.DoneCommand(service));
-        }
-        if (cls == TaskCommand.DeleteCommand.class) {
-          return cls.cast(new TaskCommand.DeleteCommand(service));
-        }
-        return CommandLine.defaultFactory().create(cls);
-      }
-    });
+    return new CommandLine(
+        new TaskCommand(),
+        new CommandLine.IFactory() {
+          @Override
+          public <K> K create(Class<K> cls) throws Exception {
+            if (cls == TaskCommand.AuthCommand.class) {
+              return cls.cast(new TaskCommand.AuthCommand(service));
+            }
+            if (cls == TaskCommand.AddCommand.class) {
+              return cls.cast(new TaskCommand.AddCommand(service));
+            }
+            if (cls == TaskCommand.ListCommand.class) {
+              return cls.cast(new TaskCommand.ListCommand(service));
+            }
+            if (cls == TaskCommand.DoneCommand.class) {
+              return cls.cast(new TaskCommand.DoneCommand(service));
+            }
+            if (cls == TaskCommand.DeleteCommand.class) {
+              return cls.cast(new TaskCommand.DeleteCommand(service));
+            }
+            return CommandLine.defaultFactory().create(cls);
+          }
+        });
   }
 }

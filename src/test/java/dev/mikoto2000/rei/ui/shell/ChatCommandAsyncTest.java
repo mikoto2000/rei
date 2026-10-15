@@ -1,58 +1,99 @@
 package dev.mikoto2000.rei.ui.shell;
 
-import java.nio.file.Path;
-import java.util.ArrayList;
-import org.junit.jupiter.api.Test;
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import static org.assertj.core.api.Assertions.*;
 import static org.mockito.Mockito.*;
 
+import dev.mikoto2000.rei.core.chat.*;
+import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import org.junit.jupiter.api.Test;
+
 class ChatCommandAsyncTest {
   @org.junit.jupiter.api.io.TempDir Path temp;
-  @Test void shellSeparatesIndependentConsultationFromExplicitRunGuidance() {
-    var tasks=new ArrayList<Runnable>();var contexts=new ArrayList<AgentRunContext>();var inputs=new java.util.LinkedHashMap<String,java.util.List<String>>();
-    var projects=new dev.mikoto2000.rei.core.project.ProjectService(temp,new dev.mikoto2000.rei.core.project.ProjectRegistry(temp.resolve("projects.json")));
-    var repository=new dev.mikoto2000.rei.conversation.FileSessionRepository(temp.resolve("sessions.json"));
-    var router=new ConversationInputRouter(tasks::add,(owner,prompt,queue)->{contexts.add(owner);inputs.put(owner.runId(),queue.drain());});
-    var shell=new dev.mikoto2000.rei.application.session.ShellConversationService(projects,
-        new dev.mikoto2000.rei.application.session.SessionLifecycle(repository,java.time.Clock.systemUTC()),router::submit,true,router);
-    var command=new ChatCommand(mock(ChatExecutionService.class),mock(ChatResponseNarrator.class));command.setShellConversations(shell);
-    var cli=new picocli.CommandLine(command);
-    try(var scope=projects.newClient().open()) {
-      var task=shell.submit("long task");
-      assertThat(cli.execute("--mode","CONVERSATION","question")).isZero();
-      assertThat(cli.execute("--run",task.runId(),"guidance")).isZero();
-      assertThat(tasks).hasSize(2);tasks.forEach(Runnable::run);
-      assertThat(contexts).extracting(AgentRunContext::mode).containsExactly(AgentRunContext.Mode.EXCLUSIVE,AgentRunContext.Mode.CONVERSATION);
-      assertThat(contexts).extracting(AgentRunContext::conversationId).containsOnly(task.conversationId());
+
+  @Test
+  void shellSeparatesIndependentConsultationFromExplicitRunGuidance() {
+    var tasks = new ArrayList<Runnable>();
+    var contexts = new ArrayList<AgentRunContext>();
+    var inputs = new java.util.LinkedHashMap<String, java.util.List<String>>();
+    var projects =
+        new dev.mikoto2000.rei.core.project.ProjectService(
+            temp,
+            new dev.mikoto2000.rei.core.project.ProjectRegistry(temp.resolve("projects.json")));
+    var repository =
+        new dev.mikoto2000.rei.conversation.FileSessionRepository(temp.resolve("sessions.json"));
+    var router =
+        new ConversationInputRouter(
+            tasks::add,
+            (owner, prompt, queue) -> {
+              contexts.add(owner);
+              inputs.put(owner.runId(), queue.drain());
+            });
+    var shell =
+        new dev.mikoto2000.rei.application.session.ShellConversationService(
+            projects,
+            new dev.mikoto2000.rei.application.session.SessionLifecycle(
+                repository, java.time.Clock.systemUTC()),
+            router::submit,
+            true,
+            router);
+    var command =
+        new ChatCommand(mock(ChatExecutionService.class), mock(ChatResponseNarrator.class));
+    command.setShellConversations(shell);
+    var cli = new picocli.CommandLine(command);
+    try (var scope = projects.newClient().open()) {
+      var task = shell.submit("long task");
+      assertThat(cli.execute("--mode", "CONVERSATION", "question")).isZero();
+      assertThat(cli.execute("--run", task.runId(), "guidance")).isZero();
+      assertThat(tasks).hasSize(2);
+      tasks.forEach(Runnable::run);
+      assertThat(contexts)
+          .extracting(AgentRunContext::mode)
+          .containsExactly(AgentRunContext.Mode.EXCLUSIVE, AgentRunContext.Mode.CONVERSATION);
+      assertThat(contexts)
+          .extracting(AgentRunContext::conversationId)
+          .containsOnly(task.conversationId());
       assertThat(inputs.get(task.runId())).containsExactly("guidance");
     }
   }
-  @Test void shellCommandReturnsBeforeAgentAndAcceptsGuidance() {
+
+  @Test
+  void shellCommandReturnsBeforeAgentAndAcceptsGuidance() {
     var tasks = new ArrayList<Runnable>();
     var service = mock(ChatExecutionService.class);
     var command = new ChatCommand(service, mock(ChatResponseNarrator.class));
-    var projects = new dev.mikoto2000.rei.core.project.ProjectService(temp,
-        new dev.mikoto2000.rei.core.project.ProjectRegistry(temp.resolve("projects.json")));
-    var repository = new dev.mikoto2000.rei.conversation.FileSessionRepository(temp.resolve("sessions.json"));
-    var router = new ConversationInputRouter(tasks::add, (context, prompt, queue) -> service.execute(context, prompt, queue));
-    command.setShellConversations(new dev.mikoto2000.rei.application.session.ShellConversationService(projects,
-        new dev.mikoto2000.rei.application.session.SessionLifecycle(repository, java.time.Clock.systemUTC()), router::submit));
+    var projects =
+        new dev.mikoto2000.rei.core.project.ProjectService(
+            temp,
+            new dev.mikoto2000.rei.core.project.ProjectRegistry(temp.resolve("projects.json")));
+    var repository =
+        new dev.mikoto2000.rei.conversation.FileSessionRepository(temp.resolve("sessions.json"));
+    var router =
+        new ConversationInputRouter(
+            tasks::add, (context, prompt, queue) -> service.execute(context, prompt, queue));
+    command.setShellConversations(
+        new dev.mikoto2000.rei.application.session.ShellConversationService(
+            projects,
+            new dev.mikoto2000.rei.application.session.SessionLifecycle(
+                repository, java.time.Clock.systemUTC()),
+            router::submit));
     var cli = new picocli.CommandLine(command);
     try (var scope = projects.newClient().open()) {
-    assertThat(cli.execute("start")).isZero();
-    assertThat(cli.execute("guidance")).isZero();
-    verifyNoInteractions(service);
-    assertThat(tasks).hasSize(1);
-    tasks.removeFirst().run();
-    assertThat(tasks).hasSize(1);
-    tasks.removeFirst().run();
-    var contexts = org.mockito.ArgumentCaptor.forClass(AgentRunContext.class);
-    verify(service, times(2)).execute(contexts.capture(), anyString(), any());
-    assertThat(contexts.getAllValues().get(0).conversationId()).isEqualTo(contexts.getAllValues().get(1).conversationId());
-    assertThat(contexts.getAllValues().get(0).runId()).isNotEqualTo(contexts.getAllValues().get(1).runId());
-    assertThat(repository.findPage(null, null, 100)).hasSize(1);
+      assertThat(cli.execute("start")).isZero();
+      assertThat(cli.execute("guidance")).isZero();
+      verifyNoInteractions(service);
+      assertThat(tasks).hasSize(1);
+      tasks.removeFirst().run();
+      assertThat(tasks).hasSize(1);
+      tasks.removeFirst().run();
+      var contexts = org.mockito.ArgumentCaptor.forClass(AgentRunContext.class);
+      verify(service, times(2)).execute(contexts.capture(), anyString(), any());
+      assertThat(contexts.getAllValues().get(0).conversationId())
+          .isEqualTo(contexts.getAllValues().get(1).conversationId());
+      assertThat(contexts.getAllValues().get(0).runId())
+          .isNotEqualTo(contexts.getAllValues().get(1).runId());
+      assertThat(repository.findPage(null, null, 100)).hasSize(1);
     }
   }
 }

@@ -5,7 +5,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.tool.annotation.Tool;
@@ -17,7 +16,8 @@ class WebSearchToolsTest {
   void webSearchDelegatesToService() throws Exception {
     WebSearchService service = Mockito.mock(WebSearchService.class);
     WebSearchTools tools = new WebSearchTools(service, Mockito.mock(WebSearchAndReadService.class));
-    List<WebSearchResult> expected = List.of(new WebSearchResult("Title", "https://example.com", "Snippet", null));
+    List<WebSearchResult> expected =
+        List.of(new WebSearchResult("Title", "https://example.com", "Snippet", null));
     when(service.search("spring ai", 3)).thenReturn(expected);
 
     List<WebSearchResult> actual = tools.webSearch("spring ai", 3);
@@ -41,30 +41,48 @@ class WebSearchToolsTest {
 
   @Test
   void toolDescriptionExplainsWhenToUseCompositeAndPrimitiveTools() throws Exception {
-    Tool composite = WebSearchTools.class.getDeclaredMethod("webSearchAndRead", WebSearchAndReadRequest.class, org.springframework.ai.chat.model.ToolContext.class)
-        .getAnnotation(Tool.class);
-    Tool primitive = WebSearchTools.class.getDeclaredMethod("webSearch", String.class, Integer.class, Boolean.class, org.springframework.ai.chat.model.ToolContext.class)
-        .getAnnotation(Tool.class);
+    Tool composite =
+        WebSearchTools.class
+            .getDeclaredMethod(
+                "webSearchAndRead",
+                WebSearchAndReadRequest.class,
+                org.springframework.ai.chat.model.ToolContext.class)
+            .getAnnotation(Tool.class);
+    Tool primitive =
+        WebSearchTools.class
+            .getDeclaredMethod(
+                "webSearch",
+                String.class,
+                Integer.class,
+                Boolean.class,
+                org.springframework.ai.chat.model.ToolContext.class)
+            .getAnnotation(Tool.class);
 
     org.junit.jupiter.api.Assertions.assertTrue(composite.description().contains("default tool"));
     org.junit.jupiter.api.Assertions.assertTrue(composite.description().contains("public web"));
     org.junit.jupiter.api.Assertions.assertTrue(composite.description().contains("webSearch"));
-    org.junit.jupiter.api.Assertions.assertTrue(composite.description().contains("fetchUrlContent"));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        composite.description().contains("fetchUrlContent"));
     org.junit.jupiter.api.Assertions.assertTrue(composite.description().contains("readTop = 0"));
-    org.junit.jupiter.api.Assertions.assertTrue(primitive.description().contains("result metadata"));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        primitive.description().contains("result metadata"));
     org.junit.jupiter.api.Assertions.assertTrue(primitive.description().contains("URLs"));
-    org.junit.jupiter.api.Assertions.assertTrue(primitive.description().contains("webSearchAndRead"));
+    org.junit.jupiter.api.Assertions.assertTrue(
+        primitive.description().contains("webSearchAndRead"));
   }
 
   @Test
   void methodToolProviderRegistersCompositeToolWithRequestSchema() {
-    WebSearchTools tools = new WebSearchTools(Mockito.mock(WebSearchService.class),
-        Mockito.mock(WebSearchAndReadService.class));
-    var callbacks = MethodToolCallbackProvider.builder().toolObjects(tools).build().getToolCallbacks();
-    var callback = java.util.Arrays.stream(callbacks)
-        .filter(candidate -> "webSearchAndRead".equals(candidate.getToolDefinition().name()))
-        .findFirst()
-        .orElseThrow();
+    WebSearchTools tools =
+        new WebSearchTools(
+            Mockito.mock(WebSearchService.class), Mockito.mock(WebSearchAndReadService.class));
+    var callbacks =
+        MethodToolCallbackProvider.builder().toolObjects(tools).build().getToolCallbacks();
+    var callback =
+        java.util.Arrays.stream(callbacks)
+            .filter(candidate -> "webSearchAndRead".equals(candidate.getToolDefinition().name()))
+            .findFirst()
+            .orElseThrow();
 
     String schema = callback.getToolDefinition().inputSchema();
     org.junit.jupiter.api.Assertions.assertTrue(schema.contains("query"));

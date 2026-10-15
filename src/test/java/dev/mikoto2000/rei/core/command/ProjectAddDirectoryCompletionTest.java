@@ -3,15 +3,13 @@ package dev.mikoto2000.rei.core.command;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 @org.junit.jupiter.api.Tag("integration")
 class ProjectAddDirectoryCompletionTest {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void completesAbsoluteDirectoryFragment() throws Exception {

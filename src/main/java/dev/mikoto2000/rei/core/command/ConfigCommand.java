@@ -1,9 +1,8 @@
 package dev.mikoto2000.rei.core.command;
 
-import org.springframework.stereotype.Component;
-
 import dev.mikoto2000.rei.config.ExternalConfigFileService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -11,10 +10,7 @@ import picocli.CommandLine.Option;
 @Command(
     name = "config",
     description = "外部設定ファイルを操作します",
-    subcommands = {
-      ConfigCommand.PathCommand.class,
-      ConfigCommand.InitCommand.class
-    })
+    subcommands = {ConfigCommand.PathCommand.class, ConfigCommand.InitCommand.class})
 public class ConfigCommand {
 
   @Component

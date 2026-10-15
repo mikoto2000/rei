@@ -14,14 +14,16 @@ class SensitiveInfoDetectorPropertyTest {
 
   // Feature: ai-memory-consolidation, Property 17: 機密情報検出と保護
   @Property(tries = 100)
-  void detectsEmailPattern(@ForAll @AlphaChars @NotBlank String local, @ForAll @AlphaChars @NotBlank String domain) {
+  void detectsEmailPattern(
+      @ForAll @AlphaChars @NotBlank String local, @ForAll @AlphaChars @NotBlank String domain) {
     String content = local + "@" + domain + ".com";
     assertTrue(detector.containsSensitiveInfo(content));
   }
 
   // Feature: ai-memory-consolidation, Property 17: 機密情報検出と保護
   @Property(tries = 100)
-  void detectsSecretKeyPattern(@ForAll @AlphaChars @NotBlank String key, @ForAll @NotBlank String value) {
+  void detectsSecretKeyPattern(
+      @ForAll @AlphaChars @NotBlank String key, @ForAll @NotBlank String value) {
     String content = key + " password=" + value;
     assertTrue(detector.containsSensitiveInfo(content));
   }

@@ -12,7 +12,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -21,8 +20,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 @ExtendWith(MockitoExtension.class)
 class BlueskyReplySchedulerTest {
 
-  @Mock
-  private BlueskyReplyService service;
+  @Mock private BlueskyReplyService service;
 
   @Test
   void delegatesToService() {
@@ -37,11 +35,14 @@ class BlueskyReplySchedulerTest {
   void skipsWhenPreviousExecutionIsStillRunning() throws Exception {
     CountDownLatch entered = new CountDownLatch(1);
     CountDownLatch release = new CountDownLatch(1);
-    doAnswer(invocation -> {
-      entered.countDown();
-      assertTrue(release.await(1, TimeUnit.SECONDS));
-      return null;
-    }).when(service).runOnce();
+    doAnswer(
+            invocation -> {
+              entered.countDown();
+              assertTrue(release.await(1, TimeUnit.SECONDS));
+              return null;
+            })
+        .when(service)
+        .runOnce();
     BlueskyReplyScheduler scheduler = new BlueskyReplyScheduler(service);
     ExecutorService executor = Executors.newSingleThreadExecutor();
 

@@ -4,20 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.mockito.Mockito.when;
 
-import java.lang.reflect.Field;
-import java.util.List;
-
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.api.Advisor;
-import org.springframework.ai.chat.memory.ChatMemory;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.prompt.ChatOptions;
-import org.springframework.beans.factory.ObjectProvider;
-
 import dev.mikoto2000.rei.bluesky.BlueskyPostTools;
 import dev.mikoto2000.rei.briefing.BriefingTools;
+import dev.mikoto2000.rei.conversation.ConversationHistoryTools;
 import dev.mikoto2000.rei.core.Tools;
 import dev.mikoto2000.rei.core.actionplan.ActionPlanAdvisor;
 import dev.mikoto2000.rei.core.checkpoint.CheckpointAdvisor;
@@ -28,10 +17,8 @@ import dev.mikoto2000.rei.core.stagnation.StagnationAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor;
 import dev.mikoto2000.rei.core.taskstate.TaskStateTools;
 import dev.mikoto2000.rei.core.working.WorkingSetAdvisor;
-import dev.mikoto2000.rei.conversation.ConversationHistoryTools;
 import dev.mikoto2000.rei.event.ToolEventCallbackProvider;
 import dev.mikoto2000.rei.feed.FeedTools;
-import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools;
 import dev.mikoto2000.rei.llm.LlmProperties;
 import dev.mikoto2000.rei.reminder.ReminderTools;
@@ -39,29 +26,39 @@ import dev.mikoto2000.rei.search.SearchTools;
 import dev.mikoto2000.rei.skills.AgentSkillAdvisor;
 import dev.mikoto2000.rei.sound.SoundNotificationTools;
 import dev.mikoto2000.rei.task.TaskTools;
-import dev.mikoto2000.rei.text.TextTools;
 import dev.mikoto2000.rei.temporal.ClockTools;
 import dev.mikoto2000.rei.temporal.RuntimeContextAdvisor;
 import dev.mikoto2000.rei.temporal.SchedulerTools;
+import dev.mikoto2000.rei.text.TextTools;
 import dev.mikoto2000.rei.urlfetch.UrlContentFetchTools;
-import dev.mikoto2000.rei.websearch.WebSearchProperties;
 import dev.mikoto2000.rei.websearch.WebSearchTools;
+import java.lang.reflect.Field;
+import java.util.List;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
+import org.springframework.ai.chat.client.ChatClient;
+import org.springframework.ai.chat.client.advisor.api.Advisor;
+import org.springframework.ai.chat.memory.ChatMemory;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.prompt.ChatOptions;
+import org.springframework.beans.factory.ObjectProvider;
 
 class AiConfigurationTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
-      "false,false,false,false,delegateTask|delegateTasks",
-      "false,true,true,true,delegateTask|delegateTasks",
-      "true,false,false,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent",
-      "true,false,false,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent",
-      "true,true,false,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|delegateTaskGraph|getSubAgentGraph|resumeSubAgentGraph",
-      "true,false,true,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|compareSubAgentAnswers",
-      "true,false,true,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|compareSubAgentAnswers|judgeSubAgentAnswers",
-      "true,true,true,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|delegateTaskGraph|getSubAgentGraph|resumeSubAgentGraph|compareSubAgentAnswers|judgeSubAgentAnswers"
+    "false,false,false,false,delegateTask|delegateTasks",
+    "false,true,true,true,delegateTask|delegateTasks",
+    "true,false,false,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent",
+    "true,false,false,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent",
+    "true,true,false,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|delegateTaskGraph|getSubAgentGraph|resumeSubAgentGraph",
+    "true,false,true,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|compareSubAgentAnswers",
+    "true,false,true,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|compareSubAgentAnswers|judgeSubAgentAnswers",
+    "true,true,true,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|delegateTaskGraph|getSubAgentGraph|resumeSubAgentGraph|compareSubAgentAnswers|judgeSubAgentAnswers"
   })
   void chatClientOffersOnlyEnabledSubAgentToolsWithoutResolvingRunnerDuringConstruction(
-      boolean durable, boolean dag, boolean consensus, boolean judge, String expectedNames) throws Exception {
+      boolean durable, boolean dag, boolean consensus, boolean judge, String expectedNames)
+      throws Exception {
     var configuration = subAgentConfiguration();
     var settings = new dev.mikoto2000.rei.subagent.SubAgentProperties();
     settings.setDurableEnabled(durable);
@@ -70,8 +67,10 @@ class AiConfigurationTest {
     settings.setConsensusJudgeEnabled(judge);
     configuration.setSubAgentProperties(settings);
     var tools = Mockito.mock(dev.mikoto2000.rei.subagent.SubAgentTools.class);
-    when(tools.callback(Mockito.anyString())).thenAnswer(invocation -> namedCallback(invocation.getArgument(0)));
-    ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> toolsProvider = mockProviderReturning(tools);
+    when(tools.callback(Mockito.anyString()))
+        .thenAnswer(invocation -> namedCallback(invocation.getArgument(0)));
+    ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> toolsProvider =
+        mockProviderReturning(tools);
     when(toolsProvider.getObject()).thenReturn(tools);
     configuration.setSubAgentTools(toolsProvider);
 
@@ -79,48 +78,34 @@ class AiConfigurationTest {
     Mockito.verify(toolsProvider, Mockito.never()).getObject();
     Field callbacksField = request.getClass().getDeclaredField("toolCallbacks");
     callbacksField.setAccessible(true);
-    var subAgentNames = java.util.Set.of("delegateTask", "delegateTasks", "listDurableSubAgents",
-        "getDurableSubAgent", "resumeSubAgent", "reconcileSubAgent", "delegateTaskGraph",
-        "getSubAgentGraph", "resumeSubAgentGraph", "compareSubAgentAnswers", "judgeSubAgentAnswers");
-    var callbacks = ((List<?>) callbacksField.get(request)).stream()
-        .map(org.springframework.ai.tool.ToolCallback.class::cast)
-        .filter(callback -> subAgentNames.contains(callback.getToolDefinition().name())).toList();
+    var subAgentNames =
+        java.util.Set.of(
+            "delegateTask",
+            "delegateTasks",
+            "listDurableSubAgents",
+            "getDurableSubAgent",
+            "resumeSubAgent",
+            "reconcileSubAgent",
+            "delegateTaskGraph",
+            "getSubAgentGraph",
+            "resumeSubAgentGraph",
+            "compareSubAgentAnswers",
+            "judgeSubAgentAnswers");
+    var callbacks =
+        ((List<?>) callbacksField.get(request))
+            .stream()
+                .map(org.springframework.ai.tool.ToolCallback.class::cast)
+                .filter(callback -> subAgentNames.contains(callback.getToolDefinition().name()))
+                .toList();
     org.assertj.core.api.Assertions.assertThat(callbacks)
         .allMatch(dev.mikoto2000.rei.subagent.LazyDelegationCallback.class::isInstance);
-    org.assertj.core.api.Assertions.assertThat(callbacks.stream().map(callback -> callback.getToolDefinition().name()))
+    org.assertj.core.api.Assertions.assertThat(
+            callbacks.stream().map(callback -> callback.getToolDefinition().name()))
         .containsExactly(expectedNames.split("\\|"));
   }
 
   private AiConfiguration subAgentConfiguration() {
     return new AiConfiguration(
-        new CoreProperties("system prompt", 100), systemPromptService(), Mockito.mock(ChatModel.class),
-        Mockito.mock(ChatMemory.class), new Tools(), Mockito.mock(GoogleCalendarTools.class),
-        Mockito.mock(TaskTools.class), Mockito.mock(BriefingTools.class), Mockito.mock(FeedTools.class),
-        Mockito.mock(ReminderTools.class), Mockito.mock(SearchTools.class), Mockito.mock(WebSearchTools.class),
-        Mockito.mock(SoundNotificationTools.class), Mockito.mock(BlueskyPostTools.class),
-        Mockito.mock(dev.mikoto2000.rei.summarize.SummaryTools.class), Mockito.mock(UrlContentFetchTools.class),
-        Mockito.mock(TextTools.class), Mockito.mock(ClockTools.class), Mockito.mock(SchedulerTools.class),
-        Mockito.mock(ConversationHistoryTools.class), Mockito.mock(RuntimeContextAdvisor.class),
-        Mockito.mock(WorkingSetAdvisor.class), Mockito.mock(TaskStateAdvisor.class),
-        Mockito.mock(RecentChangesAdvisor.class), Mockito.mock(FileSummaryAdvisor.class),
-        Mockito.mock(RelatedFileGraphAdvisor.class), Mockito.mock(CheckpointAdvisor.class),
-        Mockito.mock(ActionPlanAdvisor.class), Mockito.mock(StagnationAdvisor.class),
-        Mockito.mock(TaskStateTools.class), new LlmProperties(), mockProviderReturning(null), mockProviderReturning(null));
-  }
-
-  private org.springframework.ai.tool.ToolCallback namedCallback(String name) {
-    var callback = Mockito.mock(org.springframework.ai.tool.ToolCallback.class);
-    when(callback.getToolDefinition()).thenReturn(org.springframework.ai.tool.definition.ToolDefinition.builder()
-        .name(name).description(name).inputSchema("{}").build());
-    return callback;
-  }
-
-  @Test
-  void chatClientIncludesMcpToolCallbackProviderWhenAvailable() throws Exception {
-    ToolEventCallbackProvider mcpToolCallbackProvider = Mockito.mock(ToolEventCallbackProvider.class);
-    ObjectProvider<ToolEventCallbackProvider> provider = mockProviderReturning(mcpToolCallbackProvider);
-
-    AiConfiguration configuration = new AiConfiguration(
         new CoreProperties("system prompt", 100),
         systemPromptService(),
         Mockito.mock(ChatModel.class),
@@ -153,79 +138,154 @@ class AiConfigurationTest {
         Mockito.mock(TaskStateTools.class),
         new LlmProperties(),
         mockProviderReturning(null),
-        provider);
+        mockProviderReturning(null));
+  }
+
+  private org.springframework.ai.tool.ToolCallback namedCallback(String name) {
+    var callback = Mockito.mock(org.springframework.ai.tool.ToolCallback.class);
+    when(callback.getToolDefinition())
+        .thenReturn(
+            org.springframework.ai.tool.definition.ToolDefinition.builder()
+                .name(name)
+                .description(name)
+                .inputSchema("{}")
+                .build());
+    return callback;
+  }
+
+  @Test
+  void chatClientIncludesMcpToolCallbackProviderWhenAvailable() throws Exception {
+    ToolEventCallbackProvider mcpToolCallbackProvider =
+        Mockito.mock(ToolEventCallbackProvider.class);
+    ObjectProvider<ToolEventCallbackProvider> provider =
+        mockProviderReturning(mcpToolCallbackProvider);
+
+    AiConfiguration configuration =
+        new AiConfiguration(
+            new CoreProperties("system prompt", 100),
+            systemPromptService(),
+            Mockito.mock(ChatModel.class),
+            Mockito.mock(ChatMemory.class),
+            new Tools(),
+            Mockito.mock(GoogleCalendarTools.class),
+            Mockito.mock(TaskTools.class),
+            Mockito.mock(BriefingTools.class),
+            Mockito.mock(FeedTools.class),
+            Mockito.mock(ReminderTools.class),
+            Mockito.mock(SearchTools.class),
+            Mockito.mock(WebSearchTools.class),
+            Mockito.mock(SoundNotificationTools.class),
+            Mockito.mock(BlueskyPostTools.class),
+            Mockito.mock(dev.mikoto2000.rei.summarize.SummaryTools.class),
+            Mockito.mock(UrlContentFetchTools.class),
+            Mockito.mock(TextTools.class),
+            Mockito.mock(ClockTools.class),
+            Mockito.mock(SchedulerTools.class),
+            Mockito.mock(ConversationHistoryTools.class),
+            Mockito.mock(RuntimeContextAdvisor.class),
+            Mockito.mock(WorkingSetAdvisor.class),
+            Mockito.mock(TaskStateAdvisor.class),
+            Mockito.mock(RecentChangesAdvisor.class),
+            Mockito.mock(FileSummaryAdvisor.class),
+            Mockito.mock(RelatedFileGraphAdvisor.class),
+            Mockito.mock(CheckpointAdvisor.class),
+            Mockito.mock(ActionPlanAdvisor.class),
+            Mockito.mock(StagnationAdvisor.class),
+            Mockito.mock(TaskStateTools.class),
+            new LlmProperties(),
+            mockProviderReturning(null),
+            provider);
 
     var external = Mockito.mock(dev.mikoto2000.rei.externalagent.ExternalAgentTools.class);
     var first = Mockito.mock(org.springframework.ai.tool.ToolCallback.class);
     var second = Mockito.mock(org.springframework.ai.tool.ToolCallback.class);
-    when(first.getToolDefinition()).thenReturn(org.springframework.ai.tool.definition.ToolDefinition.builder()
-        .name("firstExternal").description("first").inputSchema("{}").build());
-    when(second.getToolDefinition()).thenReturn(org.springframework.ai.tool.definition.ToolDefinition.builder()
-        .name("secondExternal").description("second").inputSchema("{}").build());
-    when(external.callbacks()).thenReturn(new org.springframework.ai.tool.ToolCallback[]{first, second});
+    when(first.getToolDefinition())
+        .thenReturn(
+            org.springframework.ai.tool.definition.ToolDefinition.builder()
+                .name("firstExternal")
+                .description("first")
+                .inputSchema("{}")
+                .build());
+    when(second.getToolDefinition())
+        .thenReturn(
+            org.springframework.ai.tool.definition.ToolDefinition.builder()
+                .name("secondExternal")
+                .description("second")
+                .inputSchema("{}")
+                .build());
+    when(external.callbacks())
+        .thenReturn(new org.springframework.ai.tool.ToolCallback[] {first, second});
     configuration.setExternalAgentTools(external, null);
     ChatClient chatClient = configuration.chatClient();
     Object defaultRequest = getDefaultChatClientRequest(chatClient);
     Field directCallbacks = defaultRequest.getClass().getDeclaredField("toolCallbacks");
     directCallbacks.setAccessible(true);
     var registered = (List<?>) directCallbacks.get(defaultRequest);
-    assertEquals(List.of(first, second), registered.subList(registered.size() - 2, registered.size()));
+    assertEquals(
+        List.of(first, second), registered.subList(registered.size() - 2, registered.size()));
 
     List<?> toolCallbackProviders = getDefaultToolCallbackProviders(chatClient);
     assertEquals(1, toolCallbackProviders.size());
     assertSame(mcpToolCallbackProvider, toolCallbackProviders.getFirst());
 
-    var computerTools = new dev.mikoto2000.rei.computeruse.ComputerUseTools(
-        Mockito.mock(dev.mikoto2000.rei.computeruse.ComputerUseService.class),
-        new dev.mikoto2000.rei.core.service.CommandCancellationService(),
-        new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()), event -> {});
+    var computerTools =
+        new dev.mikoto2000.rei.computeruse.ComputerUseTools(
+            Mockito.mock(dev.mikoto2000.rei.computeruse.ComputerUseService.class),
+            new dev.mikoto2000.rei.core.service.CommandCancellationService(),
+            new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC()),
+            event -> {});
     configuration.setComputerUseTools(mockProviderReturning(computerTools));
     Object request = getDefaultChatClientRequest(configuration.chatClient());
     Field callbacksField = request.getClass().getDeclaredField("toolCallbacks");
     callbacksField.setAccessible(true);
     var callbacks = (List<?>) callbacksField.get(request);
-    assertEquals(1, callbacks.stream().map(org.springframework.ai.tool.ToolCallback.class::cast)
-        .filter(callback -> callback.getToolDefinition().name().equals("computerUse")).count());
+    assertEquals(
+        1,
+        callbacks.stream()
+            .map(org.springframework.ai.tool.ToolCallback.class::cast)
+            .filter(callback -> callback.getToolDefinition().name().equals("computerUse"))
+            .count());
   }
 
   @Test
   void chatClientOmitsMcpToolCallbackProviderWhenUnavailable() throws Exception {
     ObjectProvider<ToolEventCallbackProvider> provider = mockProviderReturning(null);
 
-    AiConfiguration configuration = new AiConfiguration(
-        new CoreProperties("system prompt", 100),
-        systemPromptService(),
-        Mockito.mock(ChatModel.class),
-        Mockito.mock(ChatMemory.class),
-        new Tools(),
-        Mockito.mock(GoogleCalendarTools.class),
-        Mockito.mock(TaskTools.class),
-        Mockito.mock(BriefingTools.class),
-        Mockito.mock(FeedTools.class),
-        Mockito.mock(ReminderTools.class),
-        Mockito.mock(SearchTools.class),
-        Mockito.mock(WebSearchTools.class),
-        Mockito.mock(SoundNotificationTools.class),
-        Mockito.mock(BlueskyPostTools.class),
-        Mockito.mock(dev.mikoto2000.rei.summarize.SummaryTools.class),
-        Mockito.mock(UrlContentFetchTools.class),
-        Mockito.mock(TextTools.class),
-        Mockito.mock(ClockTools.class),
-        Mockito.mock(SchedulerTools.class),
-        Mockito.mock(ConversationHistoryTools.class),
-        Mockito.mock(RuntimeContextAdvisor.class),
-        Mockito.mock(WorkingSetAdvisor.class),
-        Mockito.mock(TaskStateAdvisor.class),
-        Mockito.mock(RecentChangesAdvisor.class),
-        Mockito.mock(FileSummaryAdvisor.class),
-        Mockito.mock(RelatedFileGraphAdvisor.class),
-        Mockito.mock(CheckpointAdvisor.class),
-        Mockito.mock(ActionPlanAdvisor.class),
-        Mockito.mock(StagnationAdvisor.class),
-        Mockito.mock(TaskStateTools.class),
-        new LlmProperties(),
-        mockProviderReturning(null),
-        provider);
+    AiConfiguration configuration =
+        new AiConfiguration(
+            new CoreProperties("system prompt", 100),
+            systemPromptService(),
+            Mockito.mock(ChatModel.class),
+            Mockito.mock(ChatMemory.class),
+            new Tools(),
+            Mockito.mock(GoogleCalendarTools.class),
+            Mockito.mock(TaskTools.class),
+            Mockito.mock(BriefingTools.class),
+            Mockito.mock(FeedTools.class),
+            Mockito.mock(ReminderTools.class),
+            Mockito.mock(SearchTools.class),
+            Mockito.mock(WebSearchTools.class),
+            Mockito.mock(SoundNotificationTools.class),
+            Mockito.mock(BlueskyPostTools.class),
+            Mockito.mock(dev.mikoto2000.rei.summarize.SummaryTools.class),
+            Mockito.mock(UrlContentFetchTools.class),
+            Mockito.mock(TextTools.class),
+            Mockito.mock(ClockTools.class),
+            Mockito.mock(SchedulerTools.class),
+            Mockito.mock(ConversationHistoryTools.class),
+            Mockito.mock(RuntimeContextAdvisor.class),
+            Mockito.mock(WorkingSetAdvisor.class),
+            Mockito.mock(TaskStateAdvisor.class),
+            Mockito.mock(RecentChangesAdvisor.class),
+            Mockito.mock(FileSummaryAdvisor.class),
+            Mockito.mock(RelatedFileGraphAdvisor.class),
+            Mockito.mock(CheckpointAdvisor.class),
+            Mockito.mock(ActionPlanAdvisor.class),
+            Mockito.mock(StagnationAdvisor.class),
+            Mockito.mock(TaskStateTools.class),
+            new LlmProperties(),
+            mockProviderReturning(null),
+            provider);
 
     ChatClient chatClient = configuration.chatClient();
 
@@ -237,106 +297,124 @@ class AiConfigurationTest {
   void chatClientIncludesAgentSkillAdvisorWhenAvailable() throws Exception {
     AgentSkillAdvisor agentSkillAdvisor = Mockito.mock(AgentSkillAdvisor.class);
 
-    AiConfiguration configuration = new AiConfiguration(
-        new CoreProperties("system prompt", 100),
-        systemPromptService(),
-        Mockito.mock(ChatModel.class),
-        Mockito.mock(ChatMemory.class),
-        new Tools(),
-        Mockito.mock(GoogleCalendarTools.class),
-        Mockito.mock(TaskTools.class),
-        Mockito.mock(BriefingTools.class),
-        Mockito.mock(FeedTools.class),
-        Mockito.mock(ReminderTools.class),
-        Mockito.mock(SearchTools.class),
-        Mockito.mock(WebSearchTools.class),
-        Mockito.mock(SoundNotificationTools.class),
-        Mockito.mock(BlueskyPostTools.class),
-        Mockito.mock(dev.mikoto2000.rei.summarize.SummaryTools.class),
-        Mockito.mock(UrlContentFetchTools.class),
-        Mockito.mock(TextTools.class),
-        Mockito.mock(ClockTools.class),
-        Mockito.mock(SchedulerTools.class),
-        Mockito.mock(ConversationHistoryTools.class),
-        Mockito.mock(RuntimeContextAdvisor.class),
-        Mockito.mock(WorkingSetAdvisor.class),
-        Mockito.mock(TaskStateAdvisor.class),
-        Mockito.mock(RecentChangesAdvisor.class),
-        Mockito.mock(FileSummaryAdvisor.class),
-        Mockito.mock(RelatedFileGraphAdvisor.class),
-        Mockito.mock(CheckpointAdvisor.class),
-        Mockito.mock(ActionPlanAdvisor.class),
-        Mockito.mock(StagnationAdvisor.class),
-        Mockito.mock(TaskStateTools.class),
-        new LlmProperties(),
-        mockProviderReturning(agentSkillAdvisor),
-        mockProviderReturning(null));
+    AiConfiguration configuration =
+        new AiConfiguration(
+            new CoreProperties("system prompt", 100),
+            systemPromptService(),
+            Mockito.mock(ChatModel.class),
+            Mockito.mock(ChatMemory.class),
+            new Tools(),
+            Mockito.mock(GoogleCalendarTools.class),
+            Mockito.mock(TaskTools.class),
+            Mockito.mock(BriefingTools.class),
+            Mockito.mock(FeedTools.class),
+            Mockito.mock(ReminderTools.class),
+            Mockito.mock(SearchTools.class),
+            Mockito.mock(WebSearchTools.class),
+            Mockito.mock(SoundNotificationTools.class),
+            Mockito.mock(BlueskyPostTools.class),
+            Mockito.mock(dev.mikoto2000.rei.summarize.SummaryTools.class),
+            Mockito.mock(UrlContentFetchTools.class),
+            Mockito.mock(TextTools.class),
+            Mockito.mock(ClockTools.class),
+            Mockito.mock(SchedulerTools.class),
+            Mockito.mock(ConversationHistoryTools.class),
+            Mockito.mock(RuntimeContextAdvisor.class),
+            Mockito.mock(WorkingSetAdvisor.class),
+            Mockito.mock(TaskStateAdvisor.class),
+            Mockito.mock(RecentChangesAdvisor.class),
+            Mockito.mock(FileSummaryAdvisor.class),
+            Mockito.mock(RelatedFileGraphAdvisor.class),
+            Mockito.mock(CheckpointAdvisor.class),
+            Mockito.mock(ActionPlanAdvisor.class),
+            Mockito.mock(StagnationAdvisor.class),
+            Mockito.mock(TaskStateTools.class),
+            new LlmProperties(),
+            mockProviderReturning(agentSkillAdvisor),
+            mockProviderReturning(null));
 
     ChatClient chatClient = configuration.chatClient();
 
     List<?> advisors = getDefaultAdvisors(chatClient);
-    assertSame(agentSkillAdvisor, ((dev.mikoto2000.rei.core.chat.RunScopedAdvisor) advisors.getLast()).delegate());
+    assertSame(
+        agentSkillAdvisor,
+        ((dev.mikoto2000.rei.core.chat.RunScopedAdvisor) advisors.getLast()).delegate());
   }
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
-  void chatClientUsesConfiguredMaxOutputTokensAsDefaultOption(boolean completionTokens) throws Exception {
+  void chatClientUsesConfiguredMaxOutputTokensAsDefaultOption(boolean completionTokens)
+      throws Exception {
     LlmProperties llmProperties = new LlmProperties();
     llmProperties.setMaxOutputTokens(4096);
     ChatModel model = Mockito.mock(ChatModel.class);
-    when(model.getOptions()).thenReturn(completionTokens
-        ? org.springframework.ai.openai.OpenAiChatOptions.builder().model("configured").maxCompletionTokens(8192).build()
-        : org.springframework.ai.openai.OpenAiChatOptions.builder().model("configured").maxTokens(8192).build());
+    when(model.getOptions())
+        .thenReturn(
+            completionTokens
+                ? org.springframework.ai.openai.OpenAiChatOptions.builder()
+                    .model("configured")
+                    .maxCompletionTokens(8192)
+                    .build()
+                : org.springframework.ai.openai.OpenAiChatOptions.builder()
+                    .model("configured")
+                    .maxTokens(8192)
+                    .build());
 
-    AiConfiguration configuration = new AiConfiguration(
-        new CoreProperties("system prompt", 100),
-        systemPromptService(),
-        model,
-        Mockito.mock(ChatMemory.class),
-        new Tools(),
-        Mockito.mock(GoogleCalendarTools.class),
-        Mockito.mock(TaskTools.class),
-        Mockito.mock(BriefingTools.class),
-        Mockito.mock(FeedTools.class),
-        Mockito.mock(ReminderTools.class),
-        Mockito.mock(SearchTools.class),
-        Mockito.mock(WebSearchTools.class),
-        Mockito.mock(SoundNotificationTools.class),
-        Mockito.mock(BlueskyPostTools.class),
-        Mockito.mock(dev.mikoto2000.rei.summarize.SummaryTools.class),
-        Mockito.mock(UrlContentFetchTools.class),
-        Mockito.mock(TextTools.class),
-        Mockito.mock(ClockTools.class),
-        Mockito.mock(SchedulerTools.class),
-        Mockito.mock(ConversationHistoryTools.class),
-        Mockito.mock(RuntimeContextAdvisor.class),
-        Mockito.mock(WorkingSetAdvisor.class),
-        Mockito.mock(TaskStateAdvisor.class),
-        Mockito.mock(RecentChangesAdvisor.class),
-        Mockito.mock(FileSummaryAdvisor.class),
-        Mockito.mock(RelatedFileGraphAdvisor.class),
-        Mockito.mock(CheckpointAdvisor.class),
-        Mockito.mock(ActionPlanAdvisor.class),
-        Mockito.mock(StagnationAdvisor.class),
-        Mockito.mock(TaskStateTools.class),
-        llmProperties,
-        mockProviderReturning(null),
-        mockProviderReturning(null));
+    AiConfiguration configuration =
+        new AiConfiguration(
+            new CoreProperties("system prompt", 100),
+            systemPromptService(),
+            model,
+            Mockito.mock(ChatMemory.class),
+            new Tools(),
+            Mockito.mock(GoogleCalendarTools.class),
+            Mockito.mock(TaskTools.class),
+            Mockito.mock(BriefingTools.class),
+            Mockito.mock(FeedTools.class),
+            Mockito.mock(ReminderTools.class),
+            Mockito.mock(SearchTools.class),
+            Mockito.mock(WebSearchTools.class),
+            Mockito.mock(SoundNotificationTools.class),
+            Mockito.mock(BlueskyPostTools.class),
+            Mockito.mock(dev.mikoto2000.rei.summarize.SummaryTools.class),
+            Mockito.mock(UrlContentFetchTools.class),
+            Mockito.mock(TextTools.class),
+            Mockito.mock(ClockTools.class),
+            Mockito.mock(SchedulerTools.class),
+            Mockito.mock(ConversationHistoryTools.class),
+            Mockito.mock(RuntimeContextAdvisor.class),
+            Mockito.mock(WorkingSetAdvisor.class),
+            Mockito.mock(TaskStateAdvisor.class),
+            Mockito.mock(RecentChangesAdvisor.class),
+            Mockito.mock(FileSummaryAdvisor.class),
+            Mockito.mock(RelatedFileGraphAdvisor.class),
+            Mockito.mock(CheckpointAdvisor.class),
+            Mockito.mock(ActionPlanAdvisor.class),
+            Mockito.mock(StagnationAdvisor.class),
+            Mockito.mock(TaskStateTools.class),
+            llmProperties,
+            mockProviderReturning(null),
+            mockProviderReturning(null));
 
     ChatOptions options = getDefaultChatOptions(configuration.chatClient());
 
     assertEquals(completionTokens ? null : 4096, options.getMaxTokens());
-    assertEquals(completionTokens ? 4096 : null,
+    assertEquals(
+        completionTokens ? 4096 : null,
         ((org.springframework.ai.openai.OpenAiChatOptions) options).getMaxCompletionTokens());
-    assertEquals(1, getDefaultAdvisors(configuration.chatClient()).stream()
-        .filter(dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor.class::isInstance).count());
+    assertEquals(
+        1,
+        getDefaultAdvisors(configuration.chatClient()).stream()
+            .filter(dev.mikoto2000.rei.llm.RunAwareToolCallingAdvisor.class::isInstance)
+            .count());
   }
 
   @SuppressWarnings("unchecked")
   private List<?> getDefaultToolCallbackProviders(ChatClient chatClient) throws Exception {
     Object defaultRequest = getDefaultChatClientRequest(chatClient);
 
-    Field toolCallbackProvidersField = defaultRequest.getClass().getDeclaredField("toolCallbackProviders");
+    Field toolCallbackProvidersField =
+        defaultRequest.getClass().getDeclaredField("toolCallbackProviders");
     toolCallbackProvidersField.setAccessible(true);
     return (List<?>) toolCallbackProvidersField.get(defaultRequest);
   }

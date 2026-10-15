@@ -101,7 +101,8 @@ class BlueskyPostServiceTest {
     when(client.authenticate(props.getHandle(), props.getAppPassword()))
         .thenReturn(new BlueskyApiClient.AuthResult(true, "jwt", "did:plc:abc"));
     when(client.createPost("jwt", "did:plc:abc", "hello"))
-        .thenReturn(new BlueskyApiClient.PostResult(true, "at://did:plc:abc/app.bsky.feed.post/3kxyz"));
+        .thenReturn(
+            new BlueskyApiClient.PostResult(true, "at://did:plc:abc/app.bsky.feed.post/3kxyz"));
     BlueskyPostService service = createService(props, client);
 
     BlueskyPostResult result = service.post("hello");
@@ -133,21 +134,35 @@ class BlueskyPostServiceTest {
     when(client.authenticate(props.getHandle(), props.getAppPassword()))
         .thenReturn(new BlueskyApiClient.AuthResult(true, "jwt", "did:plc:abc"));
     when(client.resolveReplyTarget("jwt", "at://did:plc:target/app.bsky.feed.post/xyz"))
-        .thenReturn(new BlueskyApiClient.ReplyTarget(
+        .thenReturn(
+            new BlueskyApiClient.ReplyTarget(
+                "at://did:plc:target/app.bsky.feed.post/xyz",
+                "cid-parent",
+                "at://did:plc:target/app.bsky.feed.post/xyz",
+                "cid-parent",
+                "target text"));
+    when(client.createReply(
+            "jwt",
+            "did:plc:abc",
+            "hello",
             "at://did:plc:target/app.bsky.feed.post/xyz",
             "cid-parent",
             "at://did:plc:target/app.bsky.feed.post/xyz",
-            "cid-parent",
-            "target text"));
-    when(client.createReply("jwt", "did:plc:abc", "hello",
-        "at://did:plc:target/app.bsky.feed.post/xyz", "cid-parent",
-        "at://did:plc:target/app.bsky.feed.post/xyz", "cid-parent"))
-        .thenReturn(new BlueskyApiClient.PostResult(true, "at://did:plc:abc/app.bsky.feed.post/reply1"));
-    BlueskyReplyConversationRepository conversationRepository = mock(BlueskyReplyConversationRepository.class);
+            "cid-parent"))
+        .thenReturn(
+            new BlueskyApiClient.PostResult(true, "at://did:plc:abc/app.bsky.feed.post/reply1"));
+    BlueskyReplyConversationRepository conversationRepository =
+        mock(BlueskyReplyConversationRepository.class);
     BlueskyReplyStateRepository stateRepository = mock(BlueskyReplyStateRepository.class);
-    when(stateRepository.tryClaimReply("at://did:plc:target/app.bsky.feed.post/xyz")).thenReturn(true);
-    BlueskyPostService service = createService(props, client, conversationRepository, mock(BlueskyReplyTextGenerator.class),
-        stateRepository);
+    when(stateRepository.tryClaimReply("at://did:plc:target/app.bsky.feed.post/xyz"))
+        .thenReturn(true);
+    BlueskyPostService service =
+        createService(
+            props,
+            client,
+            conversationRepository,
+            mock(BlueskyReplyTextGenerator.class),
+            stateRepository);
 
     BlueskyPostResult result = service.reply("at://did:plc:target/app.bsky.feed.post/xyz", "hello");
 
@@ -156,10 +171,11 @@ class BlueskyPostServiceTest {
     assertEquals("https://bsky.app/profile/did:plc:abc/post/reply1", result.postUrl());
     verify(conversationRepository).appendUserMessage("did:plc:target", "target text");
     verify(conversationRepository).appendAssistantMessage("did:plc:target", "hello");
-    verify(stateRepository).markReplied(
-        "at://did:plc:target/app.bsky.feed.post/xyz",
-        "did:plc:target",
-        "at://did:plc:abc/app.bsky.feed.post/reply1");
+    verify(stateRepository)
+        .markReplied(
+            "at://did:plc:target/app.bsky.feed.post/xyz",
+            "did:plc:target",
+            "at://did:plc:abc/app.bsky.feed.post/reply1");
   }
 
   @Test
@@ -185,33 +201,48 @@ class BlueskyPostServiceTest {
     when(client.authenticate(props.getHandle(), props.getAppPassword()))
         .thenReturn(new BlueskyApiClient.AuthResult(true, "jwt", "did:plc:abc"));
     when(client.resolveReplyTarget("jwt", "at://did:plc:target/app.bsky.feed.post/xyz"))
-        .thenReturn(new BlueskyApiClient.ReplyTarget(
+        .thenReturn(
+            new BlueskyApiClient.ReplyTarget(
+                "at://did:plc:target/app.bsky.feed.post/xyz",
+                "cid-parent",
+                "at://did:plc:target/app.bsky.feed.post/xyz",
+                "cid-parent",
+                "元投稿本文"));
+    when(generator.generateForManualReply(
+            "元投稿本文", "did:plc:target", "at://did:plc:target/app.bsky.feed.post/xyz"))
+        .thenReturn("生成返信");
+    when(client.createReply(
+            "jwt",
+            "did:plc:abc",
+            "生成返信",
             "at://did:plc:target/app.bsky.feed.post/xyz",
             "cid-parent",
             "at://did:plc:target/app.bsky.feed.post/xyz",
-            "cid-parent",
-            "元投稿本文"));
-    when(generator.generateForManualReply("元投稿本文", "did:plc:target", "at://did:plc:target/app.bsky.feed.post/xyz")).thenReturn("生成返信");
-    when(client.createReply("jwt", "did:plc:abc", "生成返信",
-        "at://did:plc:target/app.bsky.feed.post/xyz", "cid-parent",
-        "at://did:plc:target/app.bsky.feed.post/xyz", "cid-parent"))
-        .thenReturn(new BlueskyApiClient.PostResult(true, "at://did:plc:abc/app.bsky.feed.post/reply2"));
-    BlueskyReplyConversationRepository conversationRepository = mock(BlueskyReplyConversationRepository.class);
+            "cid-parent"))
+        .thenReturn(
+            new BlueskyApiClient.PostResult(true, "at://did:plc:abc/app.bsky.feed.post/reply2"));
+    BlueskyReplyConversationRepository conversationRepository =
+        mock(BlueskyReplyConversationRepository.class);
     BlueskyReplyStateRepository stateRepository = mock(BlueskyReplyStateRepository.class);
-    when(stateRepository.tryClaimReply("at://did:plc:target/app.bsky.feed.post/xyz")).thenReturn(true);
-    BlueskyPostService service = createService(props, client, conversationRepository, generator, stateRepository);
+    when(stateRepository.tryClaimReply("at://did:plc:target/app.bsky.feed.post/xyz"))
+        .thenReturn(true);
+    BlueskyPostService service =
+        createService(props, client, conversationRepository, generator, stateRepository);
 
     BlueskyPostResult result = service.reply("at://did:plc:target/app.bsky.feed.post/xyz");
 
     assertTrue(result.success());
     assertEquals("Bluesky reply created", result.message());
-    verify(generator).generateForManualReply("元投稿本文", "did:plc:target", "at://did:plc:target/app.bsky.feed.post/xyz");
+    verify(generator)
+        .generateForManualReply(
+            "元投稿本文", "did:plc:target", "at://did:plc:target/app.bsky.feed.post/xyz");
     verify(conversationRepository).appendUserMessage("did:plc:target", "元投稿本文");
     verify(conversationRepository).appendAssistantMessage("did:plc:target", "生成返信");
-    verify(stateRepository).markReplied(
-        "at://did:plc:target/app.bsky.feed.post/xyz",
-        "did:plc:target",
-        "at://did:plc:abc/app.bsky.feed.post/reply2");
+    verify(stateRepository)
+        .markReplied(
+            "at://did:plc:target/app.bsky.feed.post/xyz",
+            "did:plc:target",
+            "at://did:plc:abc/app.bsky.feed.post/reply2");
   }
 
   private BlueskyProperties configuredProperties() {
@@ -237,7 +268,8 @@ class BlueskyPostServiceTest {
       BlueskyApiClient client,
       BlueskyReplyConversationRepository conversationRepository,
       BlueskyReplyTextGenerator generator) {
-    return createService(props, client, conversationRepository, generator, mock(BlueskyReplyStateRepository.class));
+    return createService(
+        props, client, conversationRepository, generator, mock(BlueskyReplyStateRepository.class));
   }
 
   private BlueskyPostService createService(
@@ -246,6 +278,7 @@ class BlueskyPostServiceTest {
       BlueskyReplyConversationRepository conversationRepository,
       BlueskyReplyTextGenerator generator,
       BlueskyReplyStateRepository stateRepository) {
-    return new BlueskyPostService(props, client, generator, conversationRepository, stateRepository);
+    return new BlueskyPostService(
+        props, client, generator, conversationRepository, stateRepository);
   }
 }

@@ -1,22 +1,50 @@
 package dev.mikoto2000.rei.web;
+
 import static org.junit.jupiter.api.Assertions.*;
+
 import dev.mikoto2000.rei.subagent.*;
 import java.nio.file.*;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+
 class SubAgentControllerTest {
   @TempDir Path directory;
-  @Test void managementUsesConfiguredDirectoryAndDoesNotExposePromptsOrOverwriteDefinitions()throws Exception {
-    var policy=new SubAgentToolPolicy(Set.of());var loader=new SubAgentDefinitionLoader(policy,model->true);var registry=new SubAgentRegistry(directory,loader);
-    var controller=new SubAgentController(registry,loader,policy);
-    assertEquals("SubAgents: none"+System.lineSeparator(),controller.list().text());
-    assertTrue(controller.initialize(new SubAgentController.Identity("reviewer")).text().contains("Created:"));
-    var content=Files.readString(directory.resolve("reviewer.yaml"));
-    assertTrue(controller.initialize(new SubAgentController.Identity("reviewer")).text().contains("[error]"));assertEquals(content,Files.readString(directory.resolve("reviewer.yaml")));
-    assertTrue(controller.validate(new SubAgentController.FileRequest(directory.resolve("reviewer.yaml").toString())).text().contains("valid: reviewer"));
+
+  @Test
+  void managementUsesConfiguredDirectoryAndDoesNotExposePromptsOrOverwriteDefinitions()
+      throws Exception {
+    var policy = new SubAgentToolPolicy(Set.of());
+    var loader = new SubAgentDefinitionLoader(policy, model -> true);
+    var registry = new SubAgentRegistry(directory, loader);
+    var controller = new SubAgentController(registry, loader, policy);
+    assertEquals("SubAgents: none" + System.lineSeparator(), controller.list().text());
+    assertTrue(
+        controller
+            .initialize(new SubAgentController.Identity("reviewer"))
+            .text()
+            .contains("Created:"));
+    var content = Files.readString(directory.resolve("reviewer.yaml"));
+    assertTrue(
+        controller
+            .initialize(new SubAgentController.Identity("reviewer"))
+            .text()
+            .contains("[error]"));
+    assertEquals(content, Files.readString(directory.resolve("reviewer.yaml")));
+    assertTrue(
+        controller
+            .validate(
+                new SubAgentController.FileRequest(directory.resolve("reviewer.yaml").toString()))
+            .text()
+            .contains("valid: reviewer"));
     assertTrue(controller.reload().text().contains("SubAgents reloaded: 1"));
-    assertTrue(controller.show("reviewer").text().contains("effective tools:"));assertFalse(controller.show("reviewer").text().contains("systemPrompt"));
-    assertTrue(controller.initialize(new SubAgentController.Identity("../outside")).text().contains("[error]"));assertFalse(Files.exists(directory.getParent().resolve("outside.yaml")));
+    assertTrue(controller.show("reviewer").text().contains("effective tools:"));
+    assertFalse(controller.show("reviewer").text().contains("systemPrompt"));
+    assertTrue(
+        controller
+            .initialize(new SubAgentController.Identity("../outside"))
+            .text()
+            .contains("[error]"));
+    assertFalse(Files.exists(directory.getParent().resolve("outside.yaml")));
   }
 }

@@ -1,12 +1,12 @@
 package dev.mikoto2000.rei.core.project;
 
+import dev.mikoto2000.rei.application.session.SessionRepository;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import java.nio.file.*;
 import java.util.*;
 import org.springframework.stereotype.Service;
-import dev.mikoto2000.rei.core.datasource.ReiPaths;
-import dev.mikoto2000.rei.core.chat.AgentRunScope;
-import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import dev.mikoto2000.rei.application.session.SessionRepository;
 
 @Service
 public class ProjectService {
@@ -16,87 +16,173 @@ public class ProjectService {
   private final SessionRepository sessions;
   private volatile ProjectClient notificationClient;
   private volatile AgentRunContext notificationConversation;
-  public record NotificationSelection(ProjectContext project,String conversationId) {}
 
-  /** Explicit Shell lifetime binding; scheduled workers must never rely on inheriting ThreadLocal state. */
-  public interface NotificationBinding extends AutoCloseable { @Override void close(); }
+  public record NotificationSelection(ProjectContext project, String conversationId) {}
+
+  /**
+   * Explicit Shell lifetime binding; scheduled workers must never rely on inheriting ThreadLocal
+   * state.
+   */
+  public interface NotificationBinding extends AutoCloseable {
+    @Override
+    void close();
+  }
+
   public NotificationBinding notificationsFollow(ProjectClient client) {
-    var previous=notificationClient;notificationClient=client;
-    return ()->{if(notificationClient==client)notificationClient=previous;};
-  }
-  public void rememberConversation(AgentRunContext context) {notificationConversation=context;}
-  public Object notificationLock() {
-    var scopedClient=ProjectClientScope.current();
-    var selected=scopedClient!=null && scopedClient.service==this?scopedClient:notificationClient;
-    return selected!=null?selected:sessions!=null?sessions:this;
-  }
-  public NotificationSelection notificationSelection() {
-    var scopedClient=ProjectClientScope.current();
-    var selected=scopedClient!=null && scopedClient.service==this?scopedClient:notificationClient;
-    if(selected!=null)synchronized(selected) {
-      return new NotificationSelection(registry.resolve(selected.selection.get()),selected.sessionId);
-    }
-    var recent=notificationConversation;
-    if(recent!=null)return new NotificationSelection(new ProjectContext(recent.projectId(),recent.projectRoot().getFileName().toString(),recent.projectRoot()),recent.conversationId());
-    return new NotificationSelection(registry.resolve(startupDirectory),null);
-  }
-  public void selectNotificationDefault(String projectId,String conversationId) {
-    var scopedClient=ProjectClientScope.current();
-    var selected=scopedClient!=null && scopedClient.service==this?scopedClient:notificationClient;
-    if(selected!=null)synchronized(selected) {
-      if(selected.sessionId==null && registry.resolve(selected.selection.get()).id().equals(projectId)){selected.sessionId=conversationId;selected.epoch++;}
-    }
+    var previous = notificationClient;
+    notificationClient = client;
+    return () -> {
+      if (notificationClient == client) notificationClient = previous;
+    };
   }
 
-  public ProjectService() { this(ReiPaths.startupDirectory(), new ProjectRegistry(ReiPaths.projectsFilePath())); }
+  public void rememberConversation(AgentRunContext context) {
+    notificationConversation = context;
+  }
+
+  public Object notificationLock() {
+    var scopedClient = ProjectClientScope.current();
+    var selected =
+        scopedClient != null && scopedClient.service == this ? scopedClient : notificationClient;
+    return selected != null ? selected : sessions != null ? sessions : this;
+  }
+
+  public NotificationSelection notificationSelection() {
+    var scopedClient = ProjectClientScope.current();
+    var selected =
+        scopedClient != null && scopedClient.service == this ? scopedClient : notificationClient;
+    if (selected != null)
+      synchronized (selected) {
+        return new NotificationSelection(
+            registry.resolve(selected.selection.get()), selected.sessionId);
+      }
+    var recent = notificationConversation;
+    if (recent != null)
+      return new NotificationSelection(
+          new ProjectContext(
+              recent.projectId(),
+              recent.projectRoot().getFileName().toString(),
+              recent.projectRoot()),
+          recent.conversationId());
+    return new NotificationSelection(registry.resolve(startupDirectory), null);
+  }
+
+  public void selectNotificationDefault(String projectId, String conversationId) {
+    var scopedClient = ProjectClientScope.current();
+    var selected =
+        scopedClient != null && scopedClient.service == this ? scopedClient : notificationClient;
+    if (selected != null)
+      synchronized (selected) {
+        if (selected.sessionId == null
+            && registry.resolve(selected.selection.get()).id().equals(projectId)) {
+          selected.sessionId = conversationId;
+          selected.epoch++;
+        }
+      }
+  }
+
+  public ProjectService() {
+    this(ReiPaths.startupDirectory(), new ProjectRegistry(ReiPaths.projectsFilePath()));
+  }
+
   @org.springframework.beans.factory.annotation.Autowired
   public ProjectService(SessionRepository sessions) {
     this(ReiPaths.startupDirectory(), new ProjectRegistry(ReiPaths.projectsFilePath()), sessions);
   }
+
   /** Compatibility constructor for callers that only use path management. */
-  public ProjectService(Path startup, Path file) { this(startup, new ProjectRegistry(file), false); }
-  public ProjectService(Path startup, ProjectRegistry registry) { this(startup, registry, true); }
+  public ProjectService(Path startup, Path file) {
+    this(startup, new ProjectRegistry(file), false);
+  }
+
+  public ProjectService(Path startup, ProjectRegistry registry) {
+    this(startup, registry, true);
+  }
+
   public ProjectService(Path startup, ProjectRegistry registry, SessionRepository sessions) {
     this(startup, registry, true, sessions);
   }
+
   private ProjectService(Path startup, ProjectRegistry registry, boolean scoped) {
     this(startup, registry, scoped, null);
   }
-  private ProjectService(Path startup, ProjectRegistry registry, boolean scoped, SessionRepository sessions) {
+
+  private ProjectService(
+      Path startup, ProjectRegistry registry, boolean scoped, SessionRepository sessions) {
     this.startupDirectory = startup.toAbsolutePath().normalize();
     this.registry = registry;
     this.scoped = scoped;
     this.sessions = sessions;
   }
-  public Path startupDirectory() { return startupDirectory; }
-  public ProjectClient newClient() { return new ProjectClient(this, startupDirectory); }
-  public ProjectClient currentClient() { return client(); }
+
+  public Path startupDirectory() {
+    return startupDirectory;
+  }
+
+  public ProjectClient newClient() {
+    return new ProjectClient(this, startupDirectory);
+  }
+
+  public ProjectClient currentClient() {
+    return client();
+  }
+
   /** Snapshot a specifically captured client's selection without worker ThreadLocal inheritance. */
   public NotificationSelection selectionOf(ProjectClient selected) {
-    if(selected==null||selected.service!=this)throw new IllegalArgumentException("Foreign project client");
-    synchronized(selected){return new NotificationSelection(registry.resolve(selected.selection.get()),selected.sessionId);}
+    if (selected == null || selected.service != this)
+      throw new IllegalArgumentException("Foreign project client");
+    synchronized (selected) {
+      return new NotificationSelection(
+          registry.resolve(selected.selection.get()), selected.sessionId);
+    }
   }
-  public String currentSessionId() { synchronized (client()) { return client().sessionId; } }
-  public void selectSession(String sessionId) { synchronized (client()) { if(!Objects.equals(client().sessionId,sessionId))client().epoch++;client().sessionId = sessionId; } }
+
+  public String currentSessionId() {
+    synchronized (client()) {
+      return client().sessionId;
+    }
+  }
+
+  public void selectSession(String sessionId) {
+    synchronized (client()) {
+      if (!Objects.equals(client().sessionId, sessionId)) client().epoch++;
+      client().sessionId = sessionId;
+    }
+  }
+
   public static String selectedShellSession() {
     var client = ProjectClientScope.current();
     if (client == null) return null;
-    synchronized (client) { return client.sessionId; }
+    synchronized (client) {
+      return client.sessionId;
+    }
   }
+
   private ProjectClient client() {
     var client = ProjectClientScope.current();
     if (client == null || client.service != this)
       throw new IllegalStateException("A project client scope is required");
     return client;
   }
+
   /** Client selection for interactive controls; execution ownership is contextForOperation(). */
   public Path currentProject() {
     var client = ProjectClientScope.current();
     return client == null ? startupDirectory : client().selection.get();
   }
-  public ProjectContext currentContext() { return registry.resolve(currentProject()); }
-  public List<ProjectContext> registeredProjects() { return registry.list(); }
-  public List<ProjectContext> completionProjects() { return registry.completionSnapshot(); }
+
+  public ProjectContext currentContext() {
+    return registry.resolve(currentProject());
+  }
+
+  public List<ProjectContext> registeredProjects() {
+    return registry.list();
+  }
+
+  public List<ProjectContext> completionProjects() {
+    return registry.completionSnapshot();
+  }
+
   public static List<String> completionProjectPathStrings() {
     var client = ProjectClientScope.current();
     if (client == null) return List.of(ReiPaths.startupDirectory().toString());
@@ -105,77 +191,113 @@ public class ProjectService {
     client.service.completionProjects().forEach(project -> paths.add(project.root().toString()));
     return List.copyOf(paths);
   }
+
   public List<Path> list() {
     var paths = new LinkedHashSet<Path>();
     paths.add(startupDirectory);
     registry.list().forEach(p -> paths.add(p.root()));
     return List.copyOf(paths);
   }
-  public Path add(String directory) { return registry.resolve(resolveDirectory(directory)).root(); }
+
+  public Path add(String directory) {
+    return registry.resolve(resolveDirectory(directory)).root();
+  }
+
   public Path cd(String directory) {
     var client = client();
     var context = registry.resolve(resolveDirectory(directory));
     synchronized (client) {
       if (!client.selection.get().equals(context.root())) {
         client.epoch++;
-        var latest = sessions == null ? List.<dev.mikoto2000.rei.application.session.SessionMetadata>of()
-            : sessions.findPage(context.id(), null, 1);
+        var latest =
+            sessions == null
+                ? List.<dev.mikoto2000.rei.application.session.SessionMetadata>of()
+                : sessions.findPage(context.id(), null, 1);
         client.sessionId = latest.isEmpty() ? null : latest.getFirst().sessionId();
       }
       client.selection.set(context.root());
     }
     return context.root();
   }
+
   public Path remove(String directory) {
     var client = client();
     Path path = resolveDirectory(directory);
     registry.remove(path);
     synchronized (client) {
-      if (client.selection.get().equals(path)) { client.epoch++;client.selection.set(startupDirectory); client.sessionId = null; }
+      if (client.selection.get().equals(path)) {
+        client.epoch++;
+        client.selection.set(startupDirectory);
+        client.sessionId = null;
+      }
     }
     return path;
   }
+
   /** Running work keeps its captured ownership even when the client changes its selection. */
   public static ProjectContext contextForOperation() {
-    var execution=dev.mikoto2000.rei.core.execution.ExecutionScope.current();
-    if(execution!=null) return new ProjectContext(execution.projectId(),execution.projectRoot().getFileName().toString(),execution.projectRoot());
+    var execution = dev.mikoto2000.rei.core.execution.ExecutionScope.current();
+    if (execution != null)
+      return new ProjectContext(
+          execution.projectId(),
+          execution.projectRoot().getFileName().toString(),
+          execution.projectRoot());
     var run = AgentRunScope.current();
-    if (run != null && run.projectId() != null) return new ProjectContext(run.projectId(),
-        run.projectRoot().getFileName().toString(), run.projectRoot());
+    if (run != null && run.projectId() != null)
+      return new ProjectContext(
+          run.projectId(), run.projectRoot().getFileName().toString(), run.projectRoot());
     if (run != null) return null;
     var client = ProjectClientScope.current();
     ProjectService service = client == null ? null : client.service;
-    return service != null && service.scoped && Files.isDirectory(service.currentProject()) ? service.currentContext() : null;
+    return service != null && service.scoped && Files.isDirectory(service.currentProject())
+        ? service.currentContext()
+        : null;
   }
+
   public static List<String> registeredProjectPathStrings() {
     var client = ProjectClientScope.current();
     var service = client == null ? null : client.service;
-    return service == null ? List.of(ReiPaths.startupDirectory().toString()) : service.list().stream().map(Path::toString).toList();
+    return service == null
+        ? List.of(ReiPaths.startupDirectory().toString())
+        : service.list().stream().map(Path::toString).toList();
   }
+
   public static Path currentProjectOrStartupDirectory() {
     var client = ProjectClientScope.current();
     var service = client == null ? null : client.service;
     return service == null ? ReiPaths.startupDirectory() : service.currentProject();
   }
+
   static List<String> loadProjectPathStrings(Path startup, Path file) {
-    var paths = new LinkedHashSet<String>(); paths.add(startup.toAbsolutePath().normalize().toString());
+    var paths = new LinkedHashSet<String>();
+    paths.add(startup.toAbsolutePath().normalize().toString());
     if (Files.isRegularFile(file)) {
       try {
-        if (Files.readString(file).stripLeading().startsWith("{")) new ProjectRegistry(file).list().forEach(p -> paths.add(p.root().toString()));
-        else Files.readAllLines(file).stream().filter(s -> !s.isBlank()).forEach(s -> paths.add(Path.of(s.strip()).toAbsolutePath().normalize().toString()));
-      } catch (java.io.IOException e) { throw new IllegalStateException("Cannot read project list", e); }
+        if (Files.readString(file).stripLeading().startsWith("{"))
+          new ProjectRegistry(file).list().forEach(p -> paths.add(p.root().toString()));
+        else
+          Files.readAllLines(file).stream()
+              .filter(s -> !s.isBlank())
+              .forEach(s -> paths.add(Path.of(s.strip()).toAbsolutePath().normalize().toString()));
+      } catch (java.io.IOException e) {
+        throw new IllegalStateException("Cannot read project list", e);
+      }
     }
     return List.copyOf(paths);
   }
+
   private Path resolveDirectory(String directory) {
     return resolveDirectory(currentProject(), directory);
   }
+
   /** Read-only validation, shared with registry selection, before application startup. */
   public static Path resolveExistingDirectory(Path base, String directory) {
     return ProjectRegistry.canonical(resolveDirectory(base, directory));
   }
+
   private static Path resolveDirectory(Path base, String directory) {
-    if (directory == null || directory.isBlank()) throw new IllegalArgumentException("directory must not be blank");
+    if (directory == null || directory.isBlank())
+      throw new IllegalArgumentException("directory must not be blank");
     Path path = Path.of(directory);
     return (path.isAbsolute() ? path : base.resolve(path)).toAbsolutePath().normalize();
   }

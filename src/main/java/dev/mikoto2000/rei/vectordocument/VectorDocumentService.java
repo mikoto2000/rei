@@ -11,7 +11,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
-
 import org.springframework.ai.document.Document;
 import org.springframework.ai.reader.tika.TikaDocumentReader;
 import org.springframework.ai.transformer.splitter.TextSplitter;
@@ -23,7 +22,8 @@ import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
 
 @Service
-@org.springframework.boot.context.properties.EnableConfigurationProperties(dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties.class)
+@org.springframework.boot.context.properties.EnableConfigurationProperties(
+    dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties.class)
 public class VectorDocumentService {
 
   private final VectorStore vectorStore;
@@ -31,9 +31,13 @@ public class VectorDocumentService {
   private final Clock clock;
   private final VectorDocumentProperties properties;
   private CandidateReranker rerankService;
-  private dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties retrieval=new dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties(false,40,60);
+  private dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties retrieval =
+      new dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties(false, 40, 60);
+
   @Autowired
-  void setRetrieval(dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties retrieval){this.retrieval=retrieval;}
+  void setRetrieval(dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties retrieval) {
+    this.retrieval = retrieval;
+  }
 
   @Autowired
   void setRerankService(CandidateReranker rerankService) {
@@ -79,7 +83,9 @@ public class VectorDocumentService {
         documentsToAdd.add(new Document(docId + "#" + i, chunk.getText(), metadata));
       }
 
-      added.add(vectorDocumentRepository.replaceBySource(docId, normalizedSource, ingestedAt, documentsToAdd));
+      added.add(
+          vectorDocumentRepository.replaceBySource(
+              docId, normalizedSource, ingestedAt, documentsToAdd));
     }
 
     return added;
@@ -89,43 +95,51 @@ public class VectorDocumentService {
     return vectorDocumentRepository.list();
   }
 
-  public List<VectorDocumentSearchResult> search(String query, Integer topK, Double similarityThreshold, String source) {
+  public List<VectorDocumentSearchResult> search(
+      String query, Integer topK, Double similarityThreshold, String source) {
     int requestedTopK = topK == null ? 5 : topK;
-    if(retrieval.enabled() && (requestedTopK<1 || requestedTopK>64))throw new IllegalArgumentException("RRF document topK must be 1..64");
-    SearchRequest.Builder builder = SearchRequest.builder()
-        .query(query)
-        .topK(expandedTopK(requestedTopK));
+    if (retrieval.enabled() && (requestedTopK < 1 || requestedTopK > 64))
+      throw new IllegalArgumentException("RRF document topK must be 1..64");
+    SearchRequest.Builder builder =
+        SearchRequest.builder().query(query).topK(expandedTopK(requestedTopK));
     if (similarityThreshold == null) {
       builder.similarityThresholdAll();
     } else {
       builder.similarityThreshold(similarityThreshold);
     }
     if (source != null && !source.isBlank()) {
-      builder.filterExpression(new FilterExpressionBuilder().eq("source", normalizeSource(source)).build());
+      builder.filterExpression(
+          new FilterExpressionBuilder().eq("source", normalizeSource(source)).build());
     }
 
-    var request=builder.build();
+    var request = builder.build();
     List<Document> chunks;
-    if(retrieval.enabled()) {
-      if(!(vectorStore instanceof dev.mikoto2000.rei.vectorstore.RetrievalCandidates backend))throw new IllegalStateException("Vector store does not support independent retrieval candidates");
-      chunks=new dev.mikoto2000.rei.vectorstore.HybridRetriever(backend,retrieval).search(request);
-    }else chunks=vectorStore.similaritySearch(request);
-    List<AggregatedSearchResult> candidates = chunks.stream()
-        .collect(java.util.stream.Collectors.groupingBy(
-            document -> asString(document.getMetadata().get("docId")),
-            LinkedHashMap::new,
-            java.util.stream.Collectors.toList()))
-        .values().stream()
-        .map(documents -> aggregateResult(query, documents))
-        .sorted(Comparator.comparing(AggregatedSearchResult::score).reversed().thenComparing(AggregatedSearchResult::docId))
-        .toList();
+    if (retrieval.enabled()) {
+      if (!(vectorStore instanceof dev.mikoto2000.rei.vectorstore.RetrievalCandidates backend))
+        throw new IllegalStateException(
+            "Vector store does not support independent retrieval candidates");
+      chunks =
+          new dev.mikoto2000.rei.vectorstore.HybridRetriever(backend, retrieval).search(request);
+    } else chunks = vectorStore.similaritySearch(request);
+    List<AggregatedSearchResult> candidates =
+        chunks.stream()
+            .collect(
+                java.util.stream.Collectors.groupingBy(
+                    document -> asString(document.getMetadata().get("docId")),
+                    LinkedHashMap::new,
+                    java.util.stream.Collectors.toList()))
+            .values()
+            .stream()
+            .map(documents -> aggregateResult(query, documents))
+            .sorted(
+                Comparator.comparing(AggregatedSearchResult::score)
+                    .reversed()
+                    .thenComparing(AggregatedSearchResult::docId))
+            .toList();
     if (rerankService != null) {
       candidates = rerankService.rerank(query, candidates, AggregatedSearchResult::mergedText);
     }
-    return candidates.stream()
-        .limit(requestedTopK)
-        .map(this::toSearchResult)
-        .toList();
+    return candidates.stream().limit(requestedTopK).map(this::toSearchResult).toList();
   }
 
   public boolean deleteByDocId(String docId) {
@@ -146,10 +160,12 @@ public class VectorDocumentService {
       return textSplitter.apply(markdownSections(path, title, fileType));
     }
 
-    TikaDocumentReader documentReader = new TikaDocumentReader(new FileSystemResource(documentPath));
-    return textSplitter.apply(documentReader.get().stream()
-        .map(document -> enrichMetadata(document, title, fileType, null))
-        .toList());
+    TikaDocumentReader documentReader =
+        new TikaDocumentReader(new FileSystemResource(documentPath));
+    return textSplitter.apply(
+        documentReader.get().stream()
+            .map(document -> enrichMetadata(document, title, fileType, null))
+            .toList());
   }
 
   private VectorDocumentSearchResult toSearchResult(AggregatedSearchResult result) {
@@ -166,14 +182,15 @@ public class VectorDocumentService {
   }
 
   private AggregatedSearchResult aggregateResult(String query, List<Document> documents) {
-    List<Document> sortedByChunkIndex = documents.stream()
-        .sorted(Comparator.comparingInt(this::chunkIndex))
-        .toList();
-    Document best = sortedByChunkIndex.stream()
-        .max(Comparator.comparing(this::documentScore).thenComparing(Document::getId))
-        .orElseThrow();
+    List<Document> sortedByChunkIndex =
+        documents.stream().sorted(Comparator.comparingInt(this::chunkIndex)).toList();
+    Document best =
+        sortedByChunkIndex.stream()
+            .max(Comparator.comparing(this::documentScore).thenComparing(Document::getId))
+            .orElseThrow();
 
-    double score = retrieval.enabled()?documentScore(best):compositeScore(query, sortedByChunkIndex);
+    double score =
+        retrieval.enabled() ? documentScore(best) : compositeScore(query, sortedByChunkIndex);
     return new AggregatedSearchResult(
         query,
         asString(best.getMetadata().get("docId")),
@@ -211,14 +228,15 @@ public class VectorDocumentService {
       return normalizedText;
     }
     return sentences.stream()
-        .max(Comparator
-            .comparingDouble((String sentence) -> sentenceLexicalScore(query, sentence))
-            .thenComparingInt((String sentence) -> sentence.length()))
+        .max(
+            Comparator.comparingDouble((String sentence) -> sentenceLexicalScore(query, sentence))
+                .thenComparingInt((String sentence) -> sentence.length()))
         .orElse(normalizedText);
   }
 
   private int snippetStart(String query, String normalizedText, int maxLength) {
-    String normalizedQuery = query == null ? "" : query.replaceAll("\\s+", " ").trim().toLowerCase();
+    String normalizedQuery =
+        query == null ? "" : query.replaceAll("\\s+", " ").trim().toLowerCase();
     if (!normalizedQuery.isEmpty()) {
       int queryIndex = normalizedText.toLowerCase().indexOf(normalizedQuery);
       if (queryIndex >= 0) {
@@ -247,7 +265,8 @@ public class VectorDocumentService {
   }
 
   private double sentenceLexicalScore(String query, String sentence) {
-    String normalizedQuery = query == null ? "" : query.replaceAll("\\s+", " ").trim().toLowerCase();
+    String normalizedQuery =
+        query == null ? "" : query.replaceAll("\\s+", " ").trim().toLowerCase();
     if (normalizedQuery.isBlank()) {
       return 0.0d;
     }
@@ -277,27 +296,31 @@ public class VectorDocumentService {
   }
 
   private double compositeScore(String query, List<Document> documents) {
-    List<Double> topScores = documents.stream()
-        .map(this::documentScore)
-        .sorted(Comparator.reverseOrder())
-        .limit(2)
-        .toList();
+    List<Double> topScores =
+        documents.stream()
+            .map(this::documentScore)
+            .sorted(Comparator.reverseOrder())
+            .limit(2)
+            .toList();
     double best = topScores.isEmpty() ? 0.0d : topScores.getFirst();
     double second = topScores.size() > 1 ? topScores.get(1) : 0.0d;
-    double lexicalCoverage = lexicalCoverage(query, mergeAdjacentChunks(documents, chunkIndex(documents.getFirst())));
+    double lexicalCoverage =
+        lexicalCoverage(query, mergeAdjacentChunks(documents, chunkIndex(documents.getFirst())));
     return best + second + (lexicalCoverage * 0.1d);
   }
 
   private double lexicalCoverage(String query, String text) {
-    String normalizedQuery = query == null ? "" : query.replaceAll("\\s+", " ").trim().toLowerCase();
+    String normalizedQuery =
+        query == null ? "" : query.replaceAll("\\s+", " ").trim().toLowerCase();
     if (normalizedQuery.isBlank() || text == null || text.isBlank()) {
       return 0.0d;
     }
     String lowerText = text.toLowerCase();
-    List<String> tokens = java.util.Arrays.stream(normalizedQuery.split(" "))
-        .filter(token -> !token.isBlank())
-        .distinct()
-        .toList();
+    List<String> tokens =
+        java.util.Arrays.stream(normalizedQuery.split(" "))
+            .filter(token -> !token.isBlank())
+            .distinct()
+            .toList();
     if (tokens.isEmpty()) {
       return 0.0d;
     }
@@ -356,10 +379,13 @@ public class VectorDocumentService {
       for (String line : Files.readAllLines(path)) {
         if (line.stripLeading().startsWith("#")) {
           if (body.length() > 0) {
-            sections.add(new Document(body.toString().trim(), Map.of(
-                "title", title,
-                "fileType", fileType,
-                "sectionHeading", currentHeading)));
+            sections.add(
+                new Document(
+                    body.toString().trim(),
+                    Map.of(
+                        "title", title,
+                        "fileType", fileType,
+                        "sectionHeading", currentHeading)));
             body = new StringBuilder();
           }
           currentHeading = line.replaceFirst("^#+\\s*", "").trim();
@@ -368,13 +394,19 @@ public class VectorDocumentService {
         body.append(line).append(System.lineSeparator());
       }
       if (body.length() > 0) {
-        sections.add(new Document(body.toString().trim(), Map.of(
-            "title", title,
-            "fileType", fileType,
-            "sectionHeading", currentHeading)));
+        sections.add(
+            new Document(
+                body.toString().trim(),
+                Map.of(
+                    "title", title,
+                    "fileType", fileType,
+                    "sectionHeading", currentHeading)));
       }
       if (sections.isEmpty()) {
-        sections.add(new Document("", Map.of("title", title, "fileType", fileType, "sectionHeading", currentHeading)));
+        sections.add(
+            new Document(
+                "",
+                Map.of("title", title, "fileType", fileType, "sectionHeading", currentHeading)));
       }
       return sections;
     } catch (IOException e) {
@@ -382,7 +414,8 @@ public class VectorDocumentService {
     }
   }
 
-  private Document enrichMetadata(Document document, String title, String fileType, String sectionHeading) {
+  private Document enrichMetadata(
+      Document document, String title, String fileType, String sectionHeading) {
     Map<String, Object> metadata = new LinkedHashMap<>(document.getMetadata());
     metadata.put("title", title);
     metadata.put("fileType", fileType);
@@ -412,11 +445,5 @@ public class VectorDocumentService {
   }
 
   private record AggregatedSearchResult(
-      String query,
-      String docId,
-      String source,
-      int chunkIndex,
-      double score,
-      String mergedText) {
-  }
+      String query, String docId, String source, int chunkIndex, double score, String mergedText) {}
 }

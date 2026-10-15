@@ -1,19 +1,16 @@
 package dev.mikoto2000.rei.core.configuration;
 
+import dev.mikoto2000.rei.core.datasource.ReiPaths;
+import dev.mikoto2000.rei.core.datasource.SqliteChatMemorySchemaMigration;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecDataSource;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
 import java.nio.file.Path;
-
 import javax.sql.DataSource;
-
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Primary;
 import org.sqlite.SQLiteDataSource;
-
-import dev.mikoto2000.rei.core.datasource.ReiPaths;
-import dev.mikoto2000.rei.core.datasource.SqliteChatMemorySchemaMigration;
-import dev.mikoto2000.rei.core.sqlitevec.SqliteVecDataSource;
-import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
 
 @Configuration
 public class DataSourceConfiguration {
@@ -26,17 +23,25 @@ public class DataSourceConfiguration {
 
   @Bean
   @Qualifier("vectorStoreDataSource")
-  @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(name = "rei.embedding.enabled", havingValue = "true", matchIfMissing = true)
-  public DataSource vectorStoreDataSource(SqliteVecExtensionLoader sqliteVecExtensionLoader) throws Exception {
-    return new SqliteVecDataSource(sqliteVecCapableDataSource(ReiPaths.vectorStoreDbPath()), sqliteVecExtensionLoader);
+  @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
+      name = "rei.embedding.enabled",
+      havingValue = "true",
+      matchIfMissing = true)
+  public DataSource vectorStoreDataSource(SqliteVecExtensionLoader sqliteVecExtensionLoader)
+      throws Exception {
+    return new SqliteVecDataSource(
+        sqliteVecCapableDataSource(ReiPaths.vectorStoreDbPath()), sqliteVecExtensionLoader);
   }
 
   DataSource dataSource(Path workDirectory) throws Exception {
     return sqliteDataSource(ReiPaths.memoryDbPath(workDirectory));
   }
 
-  DataSource vectorStoreDataSource(Path workDirectory, SqliteVecExtensionLoader sqliteVecExtensionLoader) throws Exception {
-    return new SqliteVecDataSource(sqliteVecCapableDataSource(ReiPaths.vectorStoreDbPath(workDirectory)), sqliteVecExtensionLoader);
+  DataSource vectorStoreDataSource(
+      Path workDirectory, SqliteVecExtensionLoader sqliteVecExtensionLoader) throws Exception {
+    return new SqliteVecDataSource(
+        sqliteVecCapableDataSource(ReiPaths.vectorStoreDbPath(workDirectory)),
+        sqliteVecExtensionLoader);
   }
 
   private DataSource sqliteDataSource(Path dbPath) throws Exception {

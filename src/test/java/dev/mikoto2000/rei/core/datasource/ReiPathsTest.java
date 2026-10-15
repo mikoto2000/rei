@@ -3,7 +3,6 @@ package dev.mikoto2000.rei.core.datasource;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.nio.file.Path;
-
 import org.junit.jupiter.api.Test;
 
 class ReiPathsTest {
@@ -11,9 +10,7 @@ class ReiPathsTest {
   @Test
   void memoryDbPathUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
-    Path expected = Path.of(
-        "/work/rei",
-        "memory.db");
+    Path expected = Path.of("/work/rei", "memory.db");
 
     assertEquals(expected, ReiPaths.memoryDbPath(workDirectory));
   }
@@ -21,9 +18,7 @@ class ReiPathsTest {
   @Test
   void vectorStoreDbPathUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
-    Path expected = Path.of(
-        "/work/rei",
-        "vectorstore.db");
+    Path expected = Path.of("/work/rei", "vectorstore.db");
 
     assertEquals(expected, ReiPaths.vectorStoreDbPath(workDirectory));
   }
@@ -31,9 +26,7 @@ class ReiPathsTest {
   @Test
   void memoryConsolidationDbPathUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
-    Path expected = Path.of(
-        "/work/rei",
-        "memory-consolidation.db");
+    Path expected = Path.of("/work/rei", "memory-consolidation.db");
 
     assertEquals(expected, ReiPaths.memoryConsolidationDbPath(workDirectory));
   }
@@ -41,9 +34,7 @@ class ReiPathsTest {
   @Test
   void curiosityDbPathUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
-    Path expected = Path.of(
-        "/work/rei",
-        "curiosity.db");
+    Path expected = Path.of("/work/rei", "curiosity.db");
 
     assertEquals(expected, ReiPaths.curiosityDbPath(workDirectory));
   }
@@ -51,9 +42,7 @@ class ReiPathsTest {
   @Test
   void historyFilePathUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
-    Path expected = Path.of(
-        "/work/rei",
-        "history");
+    Path expected = Path.of("/work/rei", "history");
 
     assertEquals(expected, ReiPaths.historyFilePath(workDirectory));
   }
@@ -62,7 +51,8 @@ class ReiPathsTest {
   void conversationLogsDirectoryUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
 
-    assertEquals(Path.of("/work/rei", "conversation-logs"),
+    assertEquals(
+        Path.of("/work/rei", "conversation-logs"),
         ReiPaths.conversationLogsDirectory(workDirectory));
   }
 
@@ -70,16 +60,13 @@ class ReiPathsTest {
   void profileLogPathUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
 
-    assertEquals(Path.of("/work/rei", "profile.log"),
-        ReiPaths.profileLogPath(workDirectory));
+    assertEquals(Path.of("/work/rei", "profile.log"), ReiPaths.profileLogPath(workDirectory));
   }
 
   @Test
   void configFilePathUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
-    Path expected = Path.of(
-        "/work/rei",
-        "application.yaml");
+    Path expected = Path.of("/work/rei", "application.yaml");
 
     assertEquals(expected, ReiPaths.configFilePath(workDirectory));
   }
@@ -87,9 +74,7 @@ class ReiPathsTest {
   @Test
   void additionalSystemPromptFilePathUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
-    Path expected = Path.of(
-        "/work/rei",
-        "additional-system-prompt.md");
+    Path expected = Path.of("/work/rei", "additional-system-prompt.md");
 
     assertEquals(expected, ReiPaths.additionalSystemPromptFilePath(workDirectory));
   }
@@ -97,9 +82,7 @@ class ReiPathsTest {
   @Test
   void projectsFilePathUsesWorkingDirectory() {
     Path workDirectory = Path.of("/work/rei");
-    Path expected = Path.of(
-        "/work/rei",
-        "projects.json");
+    Path expected = Path.of("/work/rei", "projects.json");
 
     assertEquals(expected, ReiPaths.projectsFilePath(workDirectory));
   }

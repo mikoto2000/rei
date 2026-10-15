@@ -1,12 +1,11 @@
 package dev.mikoto2000.rei.sound;
 
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.stereotype.Component;
-
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.stereotype.Component;
 
 @Component
 @RequiredArgsConstructor
@@ -15,14 +14,15 @@ public class SoundNotificationTools {
   private final SoundNotificationService soundNotificationService;
 
   /**
-   * AI エージェントから音声通知を実行するツール。
-   * ユーザーへの重要な通知を音声で伝えたいときに使用する。
+   * AI エージェントから音声通知を実行するツール。 ユーザーへの重要な通知を音声で伝えたいときに使用する。
    *
    * @param message 通知メッセージ
    * @return 通知の成否を示す文字列
    */
-  @Tool(name = "soundNotify",
-      description = """
+  @Tool(
+      name = "soundNotify",
+      description =
+          """
           音声通知を実行します。
           ユーザーへの重要なお知らせ・リマインダー・アラートを音声で伝えたいときに使用します。
           外部の音声合成プログラムにメッセージを渡して実行します。
@@ -30,8 +30,7 @@ public class SoundNotificationTools {
           """)
   public String notify(String message) {
     var context = AgentRunScope.current();
-    if (context != null
-        && context.requestSource() != AgentRunContext.RequestSource.SHELL) {
+    if (context != null && context.requestSource() != AgentRunContext.RequestSource.SHELL) {
       return "音声通知は Shell 経由のリクエストでのみ利用できます。";
     }
     try {

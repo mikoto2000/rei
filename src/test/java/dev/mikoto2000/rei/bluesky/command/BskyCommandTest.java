@@ -6,14 +6,12 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
-
-import org.junit.jupiter.api.Test;
-
 import dev.mikoto2000.rei.bluesky.BlueskyPostResult;
 import dev.mikoto2000.rei.bluesky.BlueskyPostService;
 import dev.mikoto2000.rei.bluesky.BlueskyReplyConversationRepository;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
 class BskyCommandTest {
@@ -22,14 +20,20 @@ class BskyCommandTest {
   void replyCommandDelegatesToService() {
     BlueskyPostService service = mock(BlueskyPostService.class);
     when(service.reply("at://did:plc:x/app.bsky.feed.post/abc", "hello world"))
-        .thenReturn(new BlueskyPostResult(true, "Bluesky reply created", "at://did:plc:me/app.bsky.feed.post/r1",
-            "https://bsky.app/profile/did:plc:me/post/r1"));
+        .thenReturn(
+            new BlueskyPostResult(
+                true,
+                "Bluesky reply created",
+                "at://did:plc:me/app.bsky.feed.post/r1",
+                "https://bsky.app/profile/did:plc:me/post/r1"));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      int exitCode = newCommand(service).execute("reply", "at://did:plc:x/app.bsky.feed.post/abc", "hello", "world");
+      int exitCode =
+          newCommand(service)
+              .execute("reply", "at://did:plc:x/app.bsky.feed.post/abc", "hello", "world");
       assertEquals(0, exitCode);
     } finally {
       System.setOut(originalOut);
@@ -45,8 +49,12 @@ class BskyCommandTest {
   void replyCommandUsesAutoGenerationWhenTextOmitted() {
     BlueskyPostService service = mock(BlueskyPostService.class);
     when(service.reply("at://did:plc:x/app.bsky.feed.post/abc"))
-        .thenReturn(new BlueskyPostResult(true, "Bluesky reply created", "at://did:plc:me/app.bsky.feed.post/r2",
-            "https://bsky.app/profile/did:plc:me/post/r2"));
+        .thenReturn(
+            new BlueskyPostResult(
+                true,
+                "Bluesky reply created",
+                "at://did:plc:me/app.bsky.feed.post/r2",
+                "https://bsky.app/profile/did:plc:me/post/r2"));
 
     int exitCode = newCommand(service).execute("reply", "at://did:plc:x/app.bsky.feed.post/abc");
 
@@ -58,7 +66,8 @@ class BskyCommandTest {
   void historyUsersCommandPrintsHandles() {
     BlueskyPostService service = mock(BlueskyPostService.class);
     BlueskyReplyConversationRepository repository = mock(BlueskyReplyConversationRepository.class);
-    when(repository.listHandles()).thenReturn(java.util.List.of("alice.bsky.social", "bob.bsky.social"));
+    when(repository.listHandles())
+        .thenReturn(java.util.List.of("alice.bsky.social", "bob.bsky.social"));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
@@ -77,17 +86,22 @@ class BskyCommandTest {
   void historyCommandPrintsConversation() {
     BlueskyPostService service = mock(BlueskyPostService.class);
     BlueskyReplyConversationRepository repository = mock(BlueskyReplyConversationRepository.class);
-    when(repository.findRecent("alice.bsky.social", 2)).thenReturn(java.util.List.of(
-        new BlueskyReplyConversationRepository.ConversationMessage("user", "hello",
-            java.time.OffsetDateTime.parse("2026-06-01T03:00:00+09:00")),
-        new BlueskyReplyConversationRepository.ConversationMessage("assistant", "hi",
-            java.time.OffsetDateTime.parse("2026-06-01T03:01:00+09:00"))));
+    when(repository.findRecent("alice.bsky.social", 2))
+        .thenReturn(
+            java.util.List.of(
+                new BlueskyReplyConversationRepository.ConversationMessage(
+                    "user", "hello", java.time.OffsetDateTime.parse("2026-06-01T03:00:00+09:00")),
+                new BlueskyReplyConversationRepository.ConversationMessage(
+                    "assistant",
+                    "hi",
+                    java.time.OffsetDateTime.parse("2026-06-01T03:01:00+09:00"))));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
     PrintStream originalOut = System.out;
     System.setOut(new PrintStream(out));
     try {
-      int exitCode = newCommand(service, repository).execute("history", "alice.bsky.social", "--limit", "2");
+      int exitCode =
+          newCommand(service, repository).execute("history", "alice.bsky.social", "--limit", "2");
       assertEquals(0, exitCode);
     } finally {
       System.setOut(originalOut);
@@ -100,21 +114,24 @@ class BskyCommandTest {
     return newCommand(service, mock(BlueskyReplyConversationRepository.class));
   }
 
-  private CommandLine newCommand(BlueskyPostService service, BlueskyReplyConversationRepository repository) {
-    return new CommandLine(new BskyCommand(), new CommandLine.IFactory() {
-      @Override
-      public <K> K create(Class<K> cls) throws Exception {
-        if (cls == BskyCommand.ReplyCommand.class) {
-          return cls.cast(new BskyCommand.ReplyCommand(service));
-        }
-        if (cls == BskyCommand.HistoryUsersCommand.class) {
-          return cls.cast(new BskyCommand.HistoryUsersCommand(repository));
-        }
-        if (cls == BskyCommand.HistoryCommand.class) {
-          return cls.cast(new BskyCommand.HistoryCommand(repository));
-        }
-        return CommandLine.defaultFactory().create(cls);
-      }
-    });
+  private CommandLine newCommand(
+      BlueskyPostService service, BlueskyReplyConversationRepository repository) {
+    return new CommandLine(
+        new BskyCommand(),
+        new CommandLine.IFactory() {
+          @Override
+          public <K> K create(Class<K> cls) throws Exception {
+            if (cls == BskyCommand.ReplyCommand.class) {
+              return cls.cast(new BskyCommand.ReplyCommand(service));
+            }
+            if (cls == BskyCommand.HistoryUsersCommand.class) {
+              return cls.cast(new BskyCommand.HistoryUsersCommand(repository));
+            }
+            if (cls == BskyCommand.HistoryCommand.class) {
+              return cls.cast(new BskyCommand.HistoryCommand(repository));
+            }
+            return CommandLine.defaultFactory().create(cls);
+          }
+        });
   }
 }

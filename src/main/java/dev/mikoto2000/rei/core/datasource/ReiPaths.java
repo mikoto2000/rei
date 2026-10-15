@@ -5,16 +5,13 @@ import java.nio.file.Path;
 
 /**
  * Rei が利用する作業用ファイルの保存先パスを解決するユーティリティです。
- * <p>
- * Rei 自身のデータは OS 標準のグローバルデータディレクトリへ保存します。
- * Path を受け取るオーバーロードは明示的に指定されたデータディレクトリを使用します。
- * </p>
+ *
+ * <p>Rei 自身のデータは OS 標準のグローバルデータディレクトリへ保存します。 Path を受け取るオーバーロードは明示的に指定されたデータディレクトリを使用します。
  */
 public final class ReiPaths {
   private static final Path STARTUP_DIRECTORY = Path.of("").toAbsolutePath().normalize();
 
-  private ReiPaths() {
-  }
+  private ReiPaths() {}
 
   public static Path startupDirectory() {
     return STARTUP_DIRECTORY;

@@ -1,5 +1,8 @@
 package dev.mikoto2000.rei.interest;
 
+import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -8,15 +11,10 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
-
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
-import dev.mikoto2000.rei.core.service.ModelHolderService;
-import dev.mikoto2000.rei.llm.LlmFeature;
-import dev.mikoto2000.rei.llm.LlmModelProvider;
 import tools.jackson.core.type.TypeReference;
 import tools.jackson.databind.json.JsonMapper;
 
@@ -28,13 +26,15 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
   private final ModelHolderService modelHolderService;
   private final JsonMapper objectMapper;
 
-  public LlmInterestTopicExtractor(ChatModel chatModel, ModelHolderService modelHolderService,
-      JsonMapper objectMapper) {
+  public LlmInterestTopicExtractor(
+      ChatModel chatModel, ModelHolderService modelHolderService, JsonMapper objectMapper) {
     this(new FixedLlmModelProvider(chatModel), modelHolderService, objectMapper);
   }
 
   @Autowired
-  public LlmInterestTopicExtractor(LlmModelProvider modelProvider, ModelHolderService modelHolderService,
+  public LlmInterestTopicExtractor(
+      LlmModelProvider modelProvider,
+      ModelHolderService modelHolderService,
       JsonMapper objectMapper) {
     this.modelProvider = modelProvider;
     this.modelHolderService = modelHolderService;
@@ -47,14 +47,16 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
   }
 
   @Override
-  public List<InterestTopicCandidate> extract(List<ConversationSnippet> snippets, int maxTopics, List<String> pastQueries) {
+  public List<InterestTopicCandidate> extract(
+      List<ConversationSnippet> snippets, int maxTopics, List<String> pastQueries) {
     if (snippets.isEmpty()) {
       return List.of();
     }
 
-    Prompt prompt = new Prompt(
-        buildPrompt(snippets, maxTopics, pastQueries),
-        modelProvider.chatOptions(LlmFeature.INTEREST_DISCOVERY, modelHolderService.get()));
+    Prompt prompt =
+        new Prompt(
+            buildPrompt(snippets, maxTopics, pastQueries),
+            modelProvider.chatOptions(LlmFeature.INTEREST_DISCOVERY, modelHolderService.get()));
 
     String response = callWithTimeout(prompt);
     return parse(response);
@@ -62,13 +64,21 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
 
   private String callWithTimeout(Prompt prompt) {
     ExecutorService executor = Executors.newSingleThreadExecutor();
-    Future<String> future = executor.submit(() -> modelProvider.chatModel(LlmFeature.INTEREST_DISCOVERY)
-        .call(prompt).getResult().getOutput().getText());
+    Future<String> future =
+        executor.submit(
+            () ->
+                modelProvider
+                    .chatModel(LlmFeature.INTEREST_DISCOVERY)
+                    .call(prompt)
+                    .getResult()
+                    .getOutput()
+                    .getText());
     try {
       return future.get(EXTRACT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     } catch (TimeoutException e) {
       future.cancel(true);
-      throw new IllegalStateException("Interest topic extraction timed out after " + EXTRACT_TIMEOUT_SECONDS + " seconds", e);
+      throw new IllegalStateException(
+          "Interest topic extraction timed out after " + EXTRACT_TIMEOUT_SECONDS + " seconds", e);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       throw new IllegalStateException("Interest topic extraction was interrupted", e);
@@ -83,10 +93,12 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
     }
   }
 
-  private String buildPrompt(List<ConversationSnippet> snippets, int maxTopics, List<String> pastQueries) {
-    String conversation = snippets.stream()
-        .map(snippet -> "- [%s] %s".formatted(snippet.createdAt(), snippet.text()))
-        .collect(Collectors.joining("\n", "", ""));
+  private String buildPrompt(
+      List<ConversationSnippet> snippets, int maxTopics, List<String> pastQueries) {
+    String conversation =
+        snippets.stream()
+            .map(snippet -> "- [%s] %s".formatted(snippet.createdAt(), snippet.text()))
+            .collect(Collectors.joining("\n", "", ""));
 
     return """
         Extract candidate interest topics from user conversation history for later web search.
@@ -99,27 +111,27 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
         %s
         Conversation history:
         %s
-        """.formatted(maxTopics, buildPastQueriesSection(pastQueries), conversation);
+        """
+        .formatted(maxTopics, buildPastQueriesSection(pastQueries), conversation);
   }
 
   private String buildPastQueriesSection(List<String> pastQueries) {
     if (pastQueries.isEmpty()) {
       return "";
     }
-    String queryList = pastQueries.stream()
-        .map(q -> "- " + q)
-        .collect(Collectors.joining("\n"));
+    String queryList = pastQueries.stream().map(q -> "- " + q).collect(Collectors.joining("\n"));
     return """
 
         Previously used search queries. Avoid duplicates:
         %s
-        """.formatted(queryList);
+        """
+        .formatted(queryList);
   }
 
   private List<InterestTopicCandidate> parse(String response) {
     try {
-      return objectMapper.readValue(normalizeJsonArray(response), new TypeReference<List<InterestTopicCandidate>>() {
-      });
+      return objectMapper.readValue(
+          normalizeJsonArray(response), new TypeReference<List<InterestTopicCandidate>>() {});
     } catch (Exception e) {
       throw new IllegalStateException("Failed to parse interest topic candidates", e);
     }

@@ -27,6 +27,5 @@ class InMemoryAgentSkillRepository implements AgentSkillRepository {
   }
 
   @Override
-  public void reload() {
-  }
+  public void reload() {}
 }

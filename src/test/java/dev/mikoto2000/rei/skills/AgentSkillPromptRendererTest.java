@@ -4,7 +4,6 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 
 class AgentSkillPromptRendererTest {
@@ -12,15 +11,22 @@ class AgentSkillPromptRendererTest {
   @Test
   void injectsSelectedSkillInstructionsIntoPrompt() {
     AgentSkillPromptRenderer renderer = new AgentSkillPromptRenderer();
-    AgentSkill skill = new AgentSkill("sample", "Sample description", true, Path.of("sample"),
-        Path.of("sample/SKILL.md"), "Sample instructions");
+    AgentSkill skill =
+        new AgentSkill(
+            "sample",
+            "Sample description",
+            true,
+            Path.of("sample"),
+            Path.of("sample/SKILL.md"),
+            "Sample instructions");
 
     String rendered = renderer.render("hello", List.of(skill));
 
     assertThat(rendered).contains("## Skill: sample");
     assertThat(rendered).contains("Description: Sample description");
     assertThat(rendered).contains("Sample instructions");
-    assertThat(rendered).contains("Skill directory: " + Path.of("sample").toAbsolutePath().normalize());
+    assertThat(rendered)
+        .contains("Skill directory: " + Path.of("sample").toAbsolutePath().normalize());
     assertThat(rendered).contains("readSkillResource");
     assertThat(rendered).contains("--- User request ---");
     assertThat(rendered).endsWith("hello");
@@ -35,13 +41,27 @@ class AgentSkillPromptRendererTest {
 
   @Test
   void keepsSeparateDirectoriesAndReferenceInstructionsForMultipleSkills() {
-    var first = new AgentSkill("first", "", true, Path.of("one"), Path.of("one/SKILL.md"),
-        "Read [guide](references/guide.md)");
-    var second = new AgentSkill("second", "", true, Path.of("two"), Path.of("two/SKILL.md"),
-        "Read [guide](references/guide.md)");
+    var first =
+        new AgentSkill(
+            "first",
+            "",
+            true,
+            Path.of("one"),
+            Path.of("one/SKILL.md"),
+            "Read [guide](references/guide.md)");
+    var second =
+        new AgentSkill(
+            "second",
+            "",
+            true,
+            Path.of("two"),
+            Path.of("two/SKILL.md"),
+            "Read [guide](references/guide.md)");
     String rendered = new AgentSkillPromptRenderer().render("review", List.of(first, second));
-    assertThat(rendered).contains("Skill directory: " + first.directory().toAbsolutePath().normalize(),
-        "Skill directory: " + second.directory().toAbsolutePath().normalize());
+    assertThat(rendered)
+        .contains(
+            "Skill directory: " + first.directory().toAbsolutePath().normalize(),
+            "Skill directory: " + second.directory().toAbsolutePath().normalize());
     assertThat(rendered).endsWith("review");
   }
 }

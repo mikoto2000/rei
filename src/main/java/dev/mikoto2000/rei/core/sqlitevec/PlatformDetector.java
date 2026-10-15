@@ -48,6 +48,7 @@ public class PlatformDetector {
   }
 
   private IllegalStateException unsupported(String osName, String osArch) {
-    return new IllegalStateException("sqlite-vec 未対応の platform です: os=" + osName + ", arch=" + osArch);
+    return new IllegalStateException(
+        "sqlite-vec 未対応の platform です: os=" + osName + ", arch=" + osArch);
   }
 }

@@ -3,7 +3,6 @@ package dev.mikoto2000.rei.temporal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -20,12 +19,15 @@ public class InMemoryAgentScheduler implements AgentScheduler {
   @Override
   public ScheduledAgentTask scheduleAfter(Duration duration, String action, String conversationId) {
     Instant createdAt = Instant.now(clock);
-    return save(new ScheduledAgentTask(newId(), createdAt, createdAt.plus(duration), action, conversationId));
+    return save(
+        new ScheduledAgentTask(
+            newId(), createdAt, createdAt.plus(duration), action, conversationId));
   }
 
   @Override
   public ScheduledAgentTask scheduleAt(Instant executeAt, String action, String conversationId) {
-    return save(new ScheduledAgentTask(newId(), Instant.now(clock), executeAt, action, conversationId));
+    return save(
+        new ScheduledAgentTask(newId(), Instant.now(clock), executeAt, action, conversationId));
   }
 
   @Override
@@ -36,7 +38,8 @@ public class InMemoryAgentScheduler implements AgentScheduler {
   @Override
   public void cancel(String id) {
     if (id == null || id.isBlank()) throw new IllegalArgumentException("timerId is required");
-    if (!tasks.removeIf(task -> task.id().equals(id))) throw new IllegalArgumentException("Schedule not found");
+    if (!tasks.removeIf(task -> task.id().equals(id)))
+      throw new IllegalArgumentException("Schedule not found");
   }
 
   private ScheduledAgentTask save(ScheduledAgentTask task) {

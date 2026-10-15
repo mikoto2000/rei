@@ -1,4 +1,5 @@
 package dev.mikoto2000.rei.core.dependency;
+
 import java.net.URI;
 import java.net.http.*;
 import java.time.Duration;
@@ -7,19 +8,40 @@ import org.springframework.stereotype.Component;
 
 /** No redirects, credentials or response-body exposure; one bounded request per probe. */
 @Component
-public class JavaHttpDependencyProbe implements DependencyHttpProbe,AutoCloseable {
+public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseable {
   private boolean predicatesEnabled;
+
   @org.springframework.beans.factory.annotation.Autowired
-  public void setPredicatesEnabled(@org.springframework.beans.factory.annotation.Value("${rei.predicates.enabled:false}") boolean enabled){predicatesEnabled=enabled;}
-  private final HttpClient client=HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(2)).followRedirects(HttpClient.Redirect.NEVER).build();
-  public enum ConnectivityReason { RESPONSE, TIMEOUT, CONNECTION_FAILED, UNAVAILABLE }
+  public void setPredicatesEnabled(
+      @org.springframework.beans.factory.annotation.Value("${rei.predicates.enabled:false}")
+          boolean enabled) {
+    predicatesEnabled = enabled;
+  }
+
+  private final HttpClient client =
+      HttpClient.newBuilder()
+          .connectTimeout(Duration.ofSeconds(2))
+          .followRedirects(HttpClient.Redirect.NEVER)
+          .build();
+
+  public enum ConnectivityReason {
+    RESPONSE,
+    TIMEOUT,
+    CONNECTION_FAILED,
+    UNAVAILABLE
+  }
+
   public record Connectivity(ConnectivityReason reason, Integer httpStatus) {}
+
   /** Same managed client/security boundary; no body, credentials or diagnostic exception text. */
   public Connectivity connectivity(String url, Duration timeout, Runnable checkActive) {
     new DependencySpec(DependencySpec.Kind.HTTP_STATUS, url, "200");
-    if (timeout == null || timeout.compareTo(Duration.ofMillis(100)) < 0 || timeout.compareTo(Duration.ofSeconds(30)) > 0)
+    if (timeout == null
+        || timeout.compareTo(Duration.ofMillis(100)) < 0
+        || timeout.compareTo(Duration.ofSeconds(30)) > 0)
       throw new IllegalArgumentException("Connectivity timeout must be 100ms to 30s");
-    if (URI.create(url).getQuery() != null) throw new IllegalArgumentException("Diagnostic URL must not contain a query");
+    if (URI.create(url).getQuery() != null)
+      throw new IllegalArgumentException("Diagnostic URL must not contain a query");
     checkActive.run();
     var request = HttpRequest.newBuilder(URI.create(url)).timeout(timeout).GET().build();
     var pending = client.sendAsync(request, HttpResponse.BodyHandlers.discarding());
@@ -30,106 +52,245 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe,AutoCloseabl
         long remaining = deadline - System.nanoTime();
         if (remaining <= 0) return new Connectivity(ConnectivityReason.TIMEOUT, null);
         try {
-          var response = pending.get(Math.min(remaining, TimeUnit.MILLISECONDS.toNanos(50)), TimeUnit.NANOSECONDS);
+          var response =
+              pending.get(
+                  Math.min(remaining, TimeUnit.MILLISECONDS.toNanos(50)), TimeUnit.NANOSECONDS);
           checkActive.run();
           return new Connectivity(ConnectivityReason.RESPONSE, response.statusCode());
-        } catch (TimeoutException slice) { /* Recheck cancellation and the monotonic deadline. */ }
+        } catch (TimeoutException slice) {
+          /* Recheck cancellation and the monotonic deadline. */
+        }
       }
     } catch (InterruptedException interrupted) {
-      Thread.currentThread().interrupt(); throw new CancellationException("Connectivity observation cancelled");
+      Thread.currentThread().interrupt();
+      throw new CancellationException("Connectivity observation cancelled");
     } catch (ExecutionException failure) {
       ConnectivityReason reason = ConnectivityReason.UNAVAILABLE;
       Throwable cause = failure;
-      for (int depth=0; cause != null && depth<8; depth++, cause=cause.getCause()) {
-        if (cause instanceof HttpTimeoutException) {reason=ConnectivityReason.TIMEOUT; break;}
-        if (cause instanceof java.net.ConnectException) reason=ConnectivityReason.CONNECTION_FAILED;
+      for (int depth = 0; cause != null && depth < 8; depth++, cause = cause.getCause()) {
+        if (cause instanceof HttpTimeoutException) {
+          reason = ConnectivityReason.TIMEOUT;
+          break;
+        }
+        if (cause instanceof java.net.ConnectException)
+          reason = ConnectivityReason.CONNECTION_FAILED;
       }
       return new Connectivity(reason, null);
-    } finally { pending.cancel(true); }
+    } finally {
+      pending.cancel(true);
+    }
   }
-  @Override public DependencyObservation probe(String id,String url,int expectedStatus) {
-    new DependencySpec(DependencySpec.Kind.HTTP_STATUS,url,Integer.toString(expectedStatus));
-    if(Thread.currentThread().isInterrupted())throw new CancellationException("HTTP observation cancelled");
-    var request=HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(2)).GET().build();
-    var pending=client.sendAsync(request,HttpResponse.BodyHandlers.discarding());
+
+  @Override
+  public DependencyObservation probe(String id, String url, int expectedStatus) {
+    new DependencySpec(DependencySpec.Kind.HTTP_STATUS, url, Integer.toString(expectedStatus));
+    if (Thread.currentThread().isInterrupted())
+      throw new CancellationException("HTTP observation cancelled");
+    var request =
+        HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(2)).GET().build();
+    var pending = client.sendAsync(request, HttpResponse.BodyHandlers.discarding());
     try {
-      var response=pending.get(2,TimeUnit.SECONDS);boolean matches=response.statusCode()==expectedStatus;
-      return new DependencyObservation(id,matches?DependencyState.COMPLETED:DependencyState.WAITING,matches?"http_status_verified":"http_status_mismatch");
-    }catch(InterruptedException error){Thread.currentThread().interrupt();throw new CancellationException("HTTP observation cancelled");}
-    catch(ExecutionException|TimeoutException error){return new DependencyObservation(id,DependencyState.WAITING,"http_unavailable");}
-    finally {pending.cancel(true);}
+      var response = pending.get(2, TimeUnit.SECONDS);
+      boolean matches = response.statusCode() == expectedStatus;
+      return new DependencyObservation(
+          id,
+          matches ? DependencyState.COMPLETED : DependencyState.WAITING,
+          matches ? "http_status_verified" : "http_status_mismatch");
+    } catch (InterruptedException error) {
+      Thread.currentThread().interrupt();
+      throw new CancellationException("HTTP observation cancelled");
+    } catch (ExecutionException | TimeoutException error) {
+      return new DependencyObservation(id, DependencyState.WAITING, "http_unavailable");
+    } finally {
+      pending.cancel(true);
+    }
   }
-  @Override @jakarta.annotation.PreDestroy public void close(){client.shutdownNow();}
-  @Override public DependencyObservation probeBody(String id,String url,int expectedStatus,String sha256) {
-    var spec=new DependencySpec(DependencySpec.Kind.HTTP_BODY_SHA256,url,expectedStatus+":"+sha256);
-    if(Thread.currentThread().isInterrupted())throw new CancellationException("HTTP observation cancelled");
-    var request=HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(2)).GET().build();
-    var pending=client.sendAsync(request,response->new DigestSubscriber());
+
+  @Override
+  @jakarta.annotation.PreDestroy
+  public void close() {
+    client.shutdownNow();
+  }
+
+  @Override
+  public DependencyObservation probeBody(String id, String url, int expectedStatus, String sha256) {
+    var spec =
+        new DependencySpec(
+            DependencySpec.Kind.HTTP_BODY_SHA256, url, expectedStatus + ":" + sha256);
+    if (Thread.currentThread().isInterrupted())
+      throw new CancellationException("HTTP observation cancelled");
+    var request =
+        HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(2)).GET().build();
+    var pending = client.sendAsync(request, response -> new DigestSubscriber());
     try {
-      var response=pending.get(2,TimeUnit.SECONDS);
-      if(response.statusCode()!=expectedStatus)return new DependencyObservation(id,DependencyState.WAITING,"http_status_mismatch");
-      boolean matches=response.body().equals(spec.expected().substring(4));
-      return new DependencyObservation(id,matches?DependencyState.COMPLETED:DependencyState.WAITING,matches?"http_body_digest_verified":"http_body_digest_mismatch");
-    }catch(InterruptedException error){Thread.currentThread().interrupt();throw new CancellationException("HTTP observation cancelled");}
-    catch(ExecutionException error){
-      for(Throwable cause=error;cause!=null;cause=cause.getCause())if(cause instanceof BodyLimitExceeded)
-        return new DependencyObservation(id,DependencyState.BLOCKED,"http_body_too_large");
-      return new DependencyObservation(id,DependencyState.WAITING,"http_unavailable");
-    }catch(TimeoutException error){return new DependencyObservation(id,DependencyState.WAITING,"http_unavailable");}
-    finally {pending.cancel(true);}
+      var response = pending.get(2, TimeUnit.SECONDS);
+      if (response.statusCode() != expectedStatus)
+        return new DependencyObservation(id, DependencyState.WAITING, "http_status_mismatch");
+      boolean matches = response.body().equals(spec.expected().substring(4));
+      return new DependencyObservation(
+          id,
+          matches ? DependencyState.COMPLETED : DependencyState.WAITING,
+          matches ? "http_body_digest_verified" : "http_body_digest_mismatch");
+    } catch (InterruptedException error) {
+      Thread.currentThread().interrupt();
+      throw new CancellationException("HTTP observation cancelled");
+    } catch (ExecutionException error) {
+      for (Throwable cause = error; cause != null; cause = cause.getCause())
+        if (cause instanceof BodyLimitExceeded)
+          return new DependencyObservation(id, DependencyState.BLOCKED, "http_body_too_large");
+      return new DependencyObservation(id, DependencyState.WAITING, "http_unavailable");
+    } catch (TimeoutException error) {
+      return new DependencyObservation(id, DependencyState.WAITING, "http_unavailable");
+    } finally {
+      pending.cancel(true);
+    }
   }
+
   private static final class BodyLimitExceeded extends java.io.IOException {}
-  @Override public DependencyObservation probeJson(String id,String url,String expected) {
-    new DependencySpec(DependencySpec.Kind.HTTP_JSON_VALUE,url,expected);var condition=HttpJsonCondition.parse(expected);
-    if(condition.predicate()!=null && !predicatesEnabled)return new DependencyObservation(id,DependencyState.BLOCKED,"predicate_disabled");
-    if(Thread.currentThread().isInterrupted())throw new CancellationException("HTTP observation cancelled");
-    var request=HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(2)).GET().build();
-    var pending=client.sendAsync(request,response->new JsonSubscriber());
+
+  @Override
+  public DependencyObservation probeJson(String id, String url, String expected) {
+    new DependencySpec(DependencySpec.Kind.HTTP_JSON_VALUE, url, expected);
+    var condition = HttpJsonCondition.parse(expected);
+    if (condition.predicate() != null && !predicatesEnabled)
+      return new DependencyObservation(id, DependencyState.BLOCKED, "predicate_disabled");
+    if (Thread.currentThread().isInterrupted())
+      throw new CancellationException("HTTP observation cancelled");
+    var request =
+        HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(2)).GET().build();
+    var pending = client.sendAsync(request, response -> new JsonSubscriber());
     try {
-      var response=pending.get(2,TimeUnit.SECONDS);
-      if(response.statusCode()!=condition.status())return new DependencyObservation(id,DependencyState.WAITING,"http_status_mismatch");
-      if(condition.predicate()!=null){var observed=condition.predicate().evaluate(response.body());return new DependencyObservation(id,switch(observed){case SATISFIED->DependencyState.COMPLETED;case UNSATISFIED->DependencyState.WAITING;case UNKNOWN->DependencyState.BLOCKED;},switch(observed){case SATISFIED->"predicate_verified";case UNSATISFIED->"predicate_mismatch";case UNKNOWN->"predicate_unknown";});}
-      boolean matches=condition.matches(response.body());
-      return new DependencyObservation(id,matches?DependencyState.COMPLETED:DependencyState.WAITING,matches?"http_json_value_verified":"http_json_value_mismatch");
-    }catch(InterruptedException error){Thread.currentThread().interrupt();throw new CancellationException("HTTP observation cancelled");}
-    catch(ExecutionException error){
-      for(Throwable cause=error;cause!=null;cause=cause.getCause())if(cause instanceof BodyLimitExceeded)return new DependencyObservation(id,DependencyState.BLOCKED,"http_body_too_large");
-      return new DependencyObservation(id,DependencyState.WAITING,"http_unavailable");
-    }catch(TimeoutException error){return new DependencyObservation(id,DependencyState.WAITING,"http_unavailable");}
-    catch(java.io.IOException error){return new DependencyObservation(id,DependencyState.WAITING,"http_json_invalid");}
-    finally {pending.cancel(true);}
+      var response = pending.get(2, TimeUnit.SECONDS);
+      if (response.statusCode() != condition.status())
+        return new DependencyObservation(id, DependencyState.WAITING, "http_status_mismatch");
+      if (condition.predicate() != null) {
+        var observed = condition.predicate().evaluate(response.body());
+        return new DependencyObservation(
+            id,
+            switch (observed) {
+              case SATISFIED -> DependencyState.COMPLETED;
+              case UNSATISFIED -> DependencyState.WAITING;
+              case UNKNOWN -> DependencyState.BLOCKED;
+            },
+            switch (observed) {
+              case SATISFIED -> "predicate_verified";
+              case UNSATISFIED -> "predicate_mismatch";
+              case UNKNOWN -> "predicate_unknown";
+            });
+      }
+      boolean matches = condition.matches(response.body());
+      return new DependencyObservation(
+          id,
+          matches ? DependencyState.COMPLETED : DependencyState.WAITING,
+          matches ? "http_json_value_verified" : "http_json_value_mismatch");
+    } catch (InterruptedException error) {
+      Thread.currentThread().interrupt();
+      throw new CancellationException("HTTP observation cancelled");
+    } catch (ExecutionException error) {
+      for (Throwable cause = error; cause != null; cause = cause.getCause())
+        if (cause instanceof BodyLimitExceeded)
+          return new DependencyObservation(id, DependencyState.BLOCKED, "http_body_too_large");
+      return new DependencyObservation(id, DependencyState.WAITING, "http_unavailable");
+    } catch (TimeoutException error) {
+      return new DependencyObservation(id, DependencyState.WAITING, "http_unavailable");
+    } catch (java.io.IOException error) {
+      return new DependencyObservation(id, DependencyState.WAITING, "http_json_invalid");
+    } finally {
+      pending.cancel(true);
+    }
   }
+
   private static final class JsonSubscriber implements HttpResponse.BodySubscriber<byte[]> {
-    private final HttpResponse.BodySubscriber<byte[]> delegate=HttpResponse.BodySubscribers.ofByteArray();
-    private java.util.concurrent.Flow.Subscription subscription;private long count;private boolean stopped;
-    public CompletionStage<byte[]> getBody(){return delegate.getBody();}
-    public void onSubscribe(java.util.concurrent.Flow.Subscription incoming){subscription=incoming;delegate.onSubscribe(incoming);}
-    public void onNext(java.util.List<java.nio.ByteBuffer> buffers){
-      if(stopped)return;
-      for(var buffer:buffers)count+=buffer.remaining();
-      if(count>65536){stopped=true;delegate.onError(new BodyLimitExceeded());subscription.cancel();return;}
+    private final HttpResponse.BodySubscriber<byte[]> delegate =
+        HttpResponse.BodySubscribers.ofByteArray();
+    private java.util.concurrent.Flow.Subscription subscription;
+    private long count;
+    private boolean stopped;
+
+    public CompletionStage<byte[]> getBody() {
+      return delegate.getBody();
+    }
+
+    public void onSubscribe(java.util.concurrent.Flow.Subscription incoming) {
+      subscription = incoming;
+      delegate.onSubscribe(incoming);
+    }
+
+    public void onNext(java.util.List<java.nio.ByteBuffer> buffers) {
+      if (stopped) return;
+      for (var buffer : buffers) count += buffer.remaining();
+      if (count > 65536) {
+        stopped = true;
+        delegate.onError(new BodyLimitExceeded());
+        subscription.cancel();
+        return;
+      }
       delegate.onNext(buffers);
     }
-    public void onError(Throwable error){if(!stopped){stopped=true;delegate.onError(error);}}
-    public void onComplete(){if(!stopped){stopped=true;delegate.onComplete();}}
+
+    public void onError(Throwable error) {
+      if (!stopped) {
+        stopped = true;
+        delegate.onError(error);
+      }
+    }
+
+    public void onComplete() {
+      if (!stopped) {
+        stopped = true;
+        delegate.onComplete();
+      }
+    }
   }
+
   /** Hash streaming byte buffers; never retain or decode the response body. */
   private static final class DigestSubscriber implements HttpResponse.BodySubscriber<String> {
-    private final CompletableFuture<String> result=new CompletableFuture<>();
+    private final CompletableFuture<String> result = new CompletableFuture<>();
     private final java.security.MessageDigest digest;
-    private java.util.concurrent.Flow.Subscription subscription;private long count;
-    DigestSubscriber(){try{digest=java.security.MessageDigest.getInstance("SHA-256");}catch(java.security.NoSuchAlgorithmException error){throw new IllegalStateException(error);}}
-    public CompletionStage<String> getBody(){return result;}
-    public void onSubscribe(java.util.concurrent.Flow.Subscription incoming){if(subscription!=null){incoming.cancel();return;}subscription=incoming;incoming.request(1);}
-    public void onNext(java.util.List<java.nio.ByteBuffer> buffers){
-      if(result.isDone())return;
-      for(var buffer:buffers) {
-        count+=buffer.remaining();if(count>65536){result.completeExceptionally(new BodyLimitExceeded());subscription.cancel();return;}
+    private java.util.concurrent.Flow.Subscription subscription;
+    private long count;
+
+    DigestSubscriber() {
+      try {
+        digest = java.security.MessageDigest.getInstance("SHA-256");
+      } catch (java.security.NoSuchAlgorithmException error) {
+        throw new IllegalStateException(error);
+      }
+    }
+
+    public CompletionStage<String> getBody() {
+      return result;
+    }
+
+    public void onSubscribe(java.util.concurrent.Flow.Subscription incoming) {
+      if (subscription != null) {
+        incoming.cancel();
+        return;
+      }
+      subscription = incoming;
+      incoming.request(1);
+    }
+
+    public void onNext(java.util.List<java.nio.ByteBuffer> buffers) {
+      if (result.isDone()) return;
+      for (var buffer : buffers) {
+        count += buffer.remaining();
+        if (count > 65536) {
+          result.completeExceptionally(new BodyLimitExceeded());
+          subscription.cancel();
+          return;
+        }
         digest.update(buffer.asReadOnlyBuffer());
       }
       subscription.request(1);
     }
-    public void onError(Throwable error){result.completeExceptionally(error);}
-    public void onComplete(){result.complete(java.util.HexFormat.of().formatHex(digest.digest()));}
+
+    public void onError(Throwable error) {
+      result.completeExceptionally(error);
+    }
+
+    public void onComplete() {
+      result.complete(java.util.HexFormat.of().formatHex(digest.digest()));
+    }
   }
 }

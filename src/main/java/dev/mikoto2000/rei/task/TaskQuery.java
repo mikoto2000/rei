@@ -2,7 +2,4 @@ package dev.mikoto2000.rei.task;
 
 import java.time.LocalDate;
 
-public record TaskQuery(
-    Integer priority,
-    LocalDate dueBefore
-) {}
+public record TaskQuery(Integer priority, LocalDate dueBefore) {}

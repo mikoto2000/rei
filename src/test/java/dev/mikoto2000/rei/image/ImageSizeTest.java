@@ -19,9 +19,13 @@ class ImageSizeTest {
   @Test
   void rejectsInvalidFormat() {
     assertThatThrownBy(() -> ImageSize.parse("1024")).isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> ImageSize.parse("1024*1024")).isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> ImageSize.parse("0x1024")).isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> ImageSize.parse("1024x0")).isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> ImageSize.parse("-1x1024")).isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> ImageSize.parse("1024*1024"))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> ImageSize.parse("0x1024"))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> ImageSize.parse("1024x0"))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> ImageSize.parse("-1x1024"))
+        .isInstanceOf(IllegalArgumentException.class);
   }
 }

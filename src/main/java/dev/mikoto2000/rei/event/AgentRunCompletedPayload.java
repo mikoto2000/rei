@@ -10,8 +10,13 @@ package dev.mikoto2000.rei.event;
  * @param outputTokensPerSecond 最後の回答ストリームの回答生成速度（取得できない場合は {@code null}）
  * @param endToEndTokensPerSecond 最後の回答ストリームの end-to-end 速度（取得できない場合は {@code null}）
  */
-public record AgentRunCompletedPayload(String runId, long duration, Long completionTokens,
-    Double timeToFirstTokenMillis, Double outputTokensPerSecond, Double endToEndTokensPerSecond)
+public record AgentRunCompletedPayload(
+    String runId,
+    long duration,
+    Long completionTokens,
+    Double timeToFirstTokenMillis,
+    Double outputTokensPerSecond,
+    Double endToEndTokensPerSecond)
     implements AgentEventPayload {
 
   public AgentRunCompletedPayload(String runId, long duration) {
@@ -23,7 +28,8 @@ public record AgentRunCompletedPayload(String runId, long duration, Long complet
   }
 
   /** 従来の生成速度だけを受け取る呼び出しとの互換用。 */
-  public AgentRunCompletedPayload(String runId, long duration, Long completionTokens, Double tokensPerSecond) {
+  public AgentRunCompletedPayload(
+      String runId, long duration, Long completionTokens, Double tokensPerSecond) {
     this(runId, duration, completionTokens, null, tokensPerSecond, null);
   }
 }

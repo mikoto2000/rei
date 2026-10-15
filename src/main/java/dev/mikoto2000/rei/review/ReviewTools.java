@@ -1,217 +1,424 @@
 package dev.mikoto2000.rei.review;
 
+import dev.mikoto2000.rei.core.Tools;
+import dev.mikoto2000.rei.core.chat.*;
+import dev.mikoto2000.rei.core.contextbudget.*;
+import dev.mikoto2000.rei.review.ReviewCoverageLedger.*;
+import dev.mikoto2000.rei.storage.StorageDatabase;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
 import java.util.*;
 import org.springframework.ai.tool.annotation.Tool;
-import dev.mikoto2000.rei.core.Tools;
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.core.contextbudget.*;
-import dev.mikoto2000.rei.storage.StorageDatabase;
-import dev.mikoto2000.rei.review.ReviewCoverageLedger.*;
 
 /** Explicit review protocol. Reading never means delivery, and delivery never means reviewed. */
 public final class ReviewTools {
-  public record Page(String reviewJobId, Range range, int offset, int nextOffset, boolean truncated, String content) { }
-  public record Receipt(String job, Range range, String serializedHash) { }
+  public record Page(
+      String reviewJobId,
+      Range range,
+      int offset,
+      int nextOffset,
+      boolean truncated,
+      String content) {}
+
+  public record Receipt(String job, Range range, String serializedHash) {}
+
   private final ReviewCoverageLedger ledger;
   private final RawToolResultStore raw;
   private final java.util.function.Supplier<Tools> files;
   private final TokenEstimator estimator;
-  public ReviewTools(ReviewCoverageLedger ledger, RawToolResultStore raw, Tools files, TokenEstimator estimator) {
+
+  public ReviewTools(
+      ReviewCoverageLedger ledger, RawToolResultStore raw, Tools files, TokenEstimator estimator) {
     this(ledger, raw, () -> files, estimator);
   }
-  public ReviewTools(ReviewCoverageLedger ledger, RawToolResultStore raw, java.util.function.Supplier<Tools> files, TokenEstimator estimator) {
-    this.ledger = ledger; this.raw = raw; this.files = files; this.estimator = estimator;
+
+  public ReviewTools(
+      ReviewCoverageLedger ledger,
+      RawToolResultStore raw,
+      java.util.function.Supplier<Tools> files,
+      TokenEstimator estimator) {
+    this.ledger = ledger;
+    this.raw = raw;
+    this.files = files;
+    this.estimator = estimator;
   }
+
   public static Scope scope(AgentRunContext owner) {
-    if (owner == null || owner.projectId() == null) throw new IllegalStateException("A Project run is required");
+    if (owner == null || owner.projectId() == null)
+      throw new IllegalStateException("A Project run is required");
     return new Scope(owner.projectId(), owner.conversationId(), owner.runId());
   }
-  @Tool(description = "Begin a coverage-verified review of explicit Project text/PDF files. Criteria and criteriaVersion are required. Read pages with readReviewFile, then submit one structured result for each delivered range. Reading alone never completes a review.")
-  public Job beginReview(List<String> paths, String criteria, String criteriaVersion) throws java.io.IOException {
-    var owner = AgentRunScope.current(); var scope = scope(owner);
-    if (paths == null || paths.isEmpty() || paths.size() > 64) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
-    var targets = new ArrayList<Target>(); int bytes = 0;
+
+  @Tool(
+      description =
+          "Begin a coverage-verified review of explicit Project text/PDF files. Criteria and criteriaVersion are required. Read pages with readReviewFile, then submit one structured result for each delivered range. Reading alone never completes a review.")
+  public Job beginReview(List<String> paths, String criteria, String criteriaVersion)
+      throws java.io.IOException {
+    var owner = AgentRunScope.current();
+    var scope = scope(owner);
+    if (paths == null || paths.isEmpty() || paths.size() > 64)
+      throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+    var targets = new ArrayList<Target>();
+    int bytes = 0;
     for (var path : paths) {
-      var snapshot = files.get().reviewSnapshot(path); bytes += snapshot.text().getBytes(StandardCharsets.UTF_8).length;
-      if (bytes > 8 * 1024 * 1024) throw new IllegalArgumentException("Review snapshot budget exceeded");
+      var snapshot = files.get().reviewSnapshot(path);
+      bytes += snapshot.text().getBytes(StandardCharsets.UTF_8).length;
+      if (bytes > 8 * 1024 * 1024)
+        throw new IllegalArgumentException("Review snapshot budget exceeded");
       var end = position(snapshot.text(), snapshot.text().length());
-      targets.add(new Target(snapshot.path(), snapshot.version(), end[0],
-          List.of(new Span(0, snapshot.text().length(), 1, end[0], 0, end[1]))));
+      targets.add(
+          new Target(
+              snapshot.path(),
+              snapshot.version(),
+              end[0],
+              List.of(new Span(0, snapshot.text().length(), 1, end[0], 0, end[1]))));
     }
     return ledger.create(scope, criteria, criteriaVersion, targets);
   }
-  @Tool(description="Rebuild a STALE_VERSION review job from the current versions of its original files. Preserves historical findings, marks old-version ranges stale and starts the changed files again; never reuses old-version reviews.")
-  public Job restartReview(String reviewJobId)throws java.io.IOException {
-    var scope=scope(AgentRunScope.current());var old=ledger.get(reviewJobId,scope);var targets=new ArrayList<Target>();
-    for(var target:old.targets()) {
-      var snapshot=files.get().reviewSnapshot(target.path());var end=position(snapshot.text(),snapshot.text().length());
-      targets.add(new Target(snapshot.path(),snapshot.version(),end[0],List.of(new Span(0,snapshot.text().length(),1,end[0],0,end[1]))));
+
+  @Tool(
+      description =
+          "Rebuild a STALE_VERSION review job from the current versions of its original files. Preserves historical findings, marks old-version ranges stale and starts the changed files again; never reuses old-version reviews.")
+  public Job restartReview(String reviewJobId) throws java.io.IOException {
+    var scope = scope(AgentRunScope.current());
+    var old = ledger.get(reviewJobId, scope);
+    var targets = new ArrayList<Target>();
+    for (var target : old.targets()) {
+      var snapshot = files.get().reviewSnapshot(target.path());
+      var end = position(snapshot.text(), snapshot.text().length());
+      targets.add(
+          new Target(
+              snapshot.path(),
+              snapshot.version(),
+              end[0],
+              List.of(new Span(0, snapshot.text().length(), 1, end[0], 0, end[1]))));
     }
-    return ledger.rebuild(reviewJobId,scope,targets);
+    return ledger.rebuild(reviewJobId, scope, targets);
   }
+
   @ResultDelivery(ResultDelivery.Kind.FILE_CONTENT)
-  @Tool(description = "Read an exact decoded review page. Pass reviewJobId, path, expectedVersion, UTF-16 offset, and tokenBudget 256..2048. Start at offset 0 and follow nextOffset while truncated. A version change invalidates the job. Preserve each returned range unchanged in submitReviewResult.")
-  public Page readReviewFile(String reviewJobId, String path, String expectedVersion, int offset, int tokenBudget) throws java.io.IOException {
-    var owner = AgentRunScope.current(); var scope = scope(owner); var job = ledger.get(reviewJobId, scope);
-    var target = job.targets().stream().filter(t -> t.path().equals(path)).findFirst().orElseThrow(() -> new IllegalArgumentException("REVIEW_RESULT_INVALID"));
+  @Tool(
+      description =
+          "Read an exact decoded review page. Pass reviewJobId, path, expectedVersion, UTF-16 offset, and tokenBudget 256..2048. Start at offset 0 and follow nextOffset while truncated. A version change invalidates the job. Preserve each returned range unchanged in submitReviewResult.")
+  public Page readReviewFile(
+      String reviewJobId, String path, String expectedVersion, int offset, int tokenBudget)
+      throws java.io.IOException {
+    var owner = AgentRunScope.current();
+    var scope = scope(owner);
+    var job = ledger.get(reviewJobId, scope);
+    var target =
+        job.targets().stream()
+            .filter(t -> t.path().equals(path))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("REVIEW_RESULT_INVALID"));
     if (!target.version().equals(expectedVersion)) throw new IllegalStateException("STALE_VERSION");
-    if (tokenBudget < 256 || tokenBudget > 2048) throw new IllegalArgumentException("CONTEXT_BUDGET_INSUFFICIENT");
+    if (tokenBudget < 256 || tokenBudget > 2048)
+      throw new IllegalArgumentException("CONTEXT_BUDGET_INSUFFICIENT");
     var snapshot = files.get().reviewSnapshot(path);
-    if (!target.version().equals(snapshot.version())) { ledger.invalidate(reviewJobId, scope, path, snapshot.version()); throw new IllegalStateException("STALE_VERSION"); }
+    if (!target.version().equals(snapshot.version())) {
+      ledger.invalidate(reviewJobId, scope, path, snapshot.version());
+      throw new IllegalStateException("STALE_VERSION");
+    }
     String source = snapshot.text();
-    if (offset < 0 || offset > source.length() || offset > 0 && offset < source.length()
-        && Character.isHighSurrogate(source.charAt(offset - 1)) && Character.isLowSurrogate(source.charAt(offset))) throw new IllegalArgumentException("INVALID_CURSOR");
+    if (offset < 0
+        || offset > source.length()
+        || offset > 0
+            && offset < source.length()
+            && Character.isHighSurrogate(source.charAt(offset - 1))
+            && Character.isLowSurrogate(source.charAt(offset)))
+      throw new IllegalArgumentException("INVALID_CURSOR");
     int maxEnd = Math.min(source.length(), offset + tokenBudget * 4);
-    if (maxEnd > offset && maxEnd < source.length() && Character.isLowSurrogate(source.charAt(maxEnd))) maxEnd--;
+    if (maxEnd > offset
+        && maxEnd < source.length()
+        && Character.isLowSurrogate(source.charAt(maxEnd))) maxEnd--;
     int low = 0, high = source.codePointCount(offset, maxEnd);
     while (low < high) {
       int middle = low + (high - low + 1) / 2;
-      var candidate = page(reviewJobId, target, source, offset, source.offsetByCodePoints(offset, middle));
-      if (estimate(candidate) <= tokenBudget) low = middle; else high = middle - 1;
+      var candidate =
+          page(reviewJobId, target, source, offset, source.offsetByCodePoints(offset, middle));
+      if (estimate(candidate) <= tokenBudget) low = middle;
+      else high = middle - 1;
     }
     var page = page(reviewJobId, target, source, offset, source.offsetByCodePoints(offset, low));
-    if (estimate(page) > tokenBudget || low == 0 && offset < source.length()) throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT");
+    if (estimate(page) > tokenBudget || low == 0 && offset < source.length())
+      throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT");
     ledger.fetched(reviewJobId, scope, page.range());
     return page;
   }
-  @Tool(description = "Submit a structured review for exactly one delivered range returned by readReviewFile. Provide assessment even if there are no findings. Findings must cite exact source evidence inside the range. Undelivered, changed-version, malformed or invented ranges are rejected.")
-  public Job submitReviewResult(String reviewJobId, Range range, String assessment, List<Finding> findings) throws java.io.IOException {
-    var owner = AgentRunScope.current(); var scope = scope(owner);
+
+  @Tool(
+      description =
+          "Submit a structured review for exactly one delivered range returned by readReviewFile. Provide assessment even if there are no findings. Findings must cite exact source evidence inside the range. Undelivered, changed-version, malformed or invented ranges are rejected.")
+  public Job submitReviewResult(
+      String reviewJobId, Range range, String assessment, List<Finding> findings)
+      throws java.io.IOException {
+    var owner = AgentRunScope.current();
+    var scope = scope(owner);
     var job = reviewStatus(reviewJobId);
     if ("STALE_VERSION".equals(job.status())) throw new IllegalStateException("STALE_VERSION");
     var source = files.get().reviewSnapshot(range.path());
-    if (!range.version().equals(source.version()) || range.span().end() > source.text().length()
-        || !hash(source.text().substring(range.span().start(), range.span().end())).equals(range.contentHash())) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+    if (!range.version().equals(source.version())
+        || range.span().end() > source.text().length()
+        || !hash(source.text().substring(range.span().start(), range.span().end()))
+            .equals(range.contentHash()))
+      throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
     if (findings == null) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
     for (var finding : findings) {
-      if(!boundary(source.text(),finding.location().start())||!boundary(source.text(),finding.location().end()))throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
-      if(finding.location().start()<range.span().start()||finding.location().end()>range.span().end()
-          ||finding.location().end()>source.text().length())throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
-      int[] from=position(source.text(),finding.location().start()),to=position(source.text(),finding.location().end());
-      if(finding.location().startLine()!=from[0]||finding.location().endLine()!=to[0]
-          ||finding.location().startOffset()!=from[1]||finding.location().endOffset()!=to[1])throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
-      if (finding.location().start() < range.span().start() || finding.location().end() > range.span().end()
-          || !source.text().substring(finding.location().start(), finding.location().end()).equals(finding.evidence())) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+      if (!boundary(source.text(), finding.location().start())
+          || !boundary(source.text(), finding.location().end()))
+        throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+      if (finding.location().start() < range.span().start()
+          || finding.location().end() > range.span().end()
+          || finding.location().end() > source.text().length())
+        throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+      int[] from = position(source.text(), finding.location().start()),
+          to = position(source.text(), finding.location().end());
+      if (finding.location().startLine() != from[0]
+          || finding.location().endLine() != to[0]
+          || finding.location().startOffset() != from[1]
+          || finding.location().endOffset() != to[1])
+        throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+      if (finding.location().start() < range.span().start()
+          || finding.location().end() > range.span().end()
+          || !source
+              .text()
+              .substring(finding.location().start(), finding.location().end())
+              .equals(finding.evidence()))
+        throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
     }
     return ledger.reviewed(reviewJobId, scope, range, assessment, findings);
   }
-  @Tool(description = "Inspect persisted review coverage and findings. Revalidates each current source version. COMPLETE only means verified range coverage; semantic review quality requires human judgment. Unreviewed/stale/failed ranges remain visible.")
+
+  @Tool(
+      description =
+          "Inspect persisted review coverage and findings. Revalidates each current source version. COMPLETE only means verified range coverage; semantic review quality requires human judgment. Unreviewed/stale/failed ranges remain visible.")
   public Job reviewStatus(String reviewJobId) throws java.io.IOException {
-    var scope = scope(AgentRunScope.current()); var job = ledger.get(reviewJobId, scope);
+    var scope = scope(AgentRunScope.current());
+    var job = ledger.get(reviewJobId, scope);
     for (var target : job.targets()) {
       Tools.ReviewSnapshot snapshot;
-      try { snapshot=files.get().reviewSnapshot(target.path()); }
-      catch(java.io.IOException missing){job=ledger.invalidate(reviewJobId,scope,target.path(),"unavailable");continue;}
-      if (!target.version().equals(snapshot.version())) job = ledger.invalidate(reviewJobId, scope, target.path(), snapshot.version());
+      try {
+        snapshot = files.get().reviewSnapshot(target.path());
+      } catch (java.io.IOException missing) {
+        job = ledger.invalidate(reviewJobId, scope, target.path(), "unavailable");
+        continue;
+      }
+      if (!target.version().equals(snapshot.version()))
+        job = ledger.invalidate(reviewJobId, scope, target.path(), snapshot.version());
     }
     return job;
   }
+
   /** Called only after a model request containing these exact pages has successfully completed. */
   public void confirmed(AgentRunContext owner, List<Page> pages) {
     var grouped = new LinkedHashMap<String, List<Range>>();
     for (var page : pages) {
-      if (!hash(page.content()).equals(page.range().contentHash())) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+      if (!hash(page.content()).equals(page.range().contentHash()))
+        throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
       grouped.computeIfAbsent(page.reviewJobId(), ignored -> new ArrayList<>()).add(page.range());
     }
     grouped.forEach((job, ranges) -> ledger.delivered(job, scope(owner), ranges));
   }
+
   private static Page decodePage(String result) throws java.io.IOException {
-    var tree=StorageDatabase.JSON.readTree(result);
-    if(tree.has("output")) {
-      if(!tree.path("output").isTextual() || tree.path("truncated").asBoolean(true)
+    var tree = StorageDatabase.JSON.readTree(result);
+    if (tree.has("output")) {
+      if (!tree.path("output").isTextual()
+          || tree.path("truncated").asBoolean(true)
           || !hash(tree.path("output").asText()).equals(tree.path("outputSha256").asText()))
         throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
-      result=tree.path("output").asText();
+      result = tree.path("output").asText();
     }
-    var page=StorageDatabase.JSON.readValue(result,Page.class);
-    if(page.reviewJobId()==null || page.range()==null || page.content()==null
-        || !hash(page.content()).equals(page.range().contentHash()))throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+    var page = StorageDatabase.JSON.readValue(result, Page.class);
+    if (page.reviewJobId() == null
+        || page.range() == null
+        || page.content() == null
+        || !hash(page.content()).equals(page.range().contentHash()))
+      throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
     return page;
   }
+
   public static Receipt receipt(String result) {
-    try {var page=decodePage(result);return new Receipt(page.reviewJobId(),page.range(),hash(result));}
-    catch(java.io.IOException invalid){throw new IllegalArgumentException("REVIEW_RESULT_INVALID",invalid);}
-  }
-  public record Pending(String path,String version,int start,int end,int startLine,int startOffset,String state) { }
-  @Tool(description="Return missing review spans with exact source version and next character offset. Stale, undelivered and unreviewed spans remain pending. Use reviewStatus for preserved findings and restartReview for changed sources.")
-  public List<Pending> reviewPending(String reviewJobId)throws java.io.IOException {
-    var job=reviewStatus(reviewJobId);var pending=new ArrayList<Pending>();
-    for(var target:job.targets())for(var required:target.required()) {
-      var complete=job.ranges().stream().filter(e->e.reviewed()&&e.delivered()&&!e.stale()
-          &&e.range().path().equals(target.path())&&e.range().version().equals(target.version()))
-          .map(e->e.range().span()).sorted(Comparator.comparingInt(Span::start)).toList();
-      int cursor=required.start();
-      for(var span:complete) {
-        if(span.end()<=cursor||span.start()>=required.end())continue;
-        if(span.start()>cursor)pending.add(pending(target,cursor,Math.min(span.start(),required.end()),job.status()));
-        cursor=Math.max(cursor,Math.min(span.end(),required.end()));
-      }
-      if(cursor<required.end() || required.start()==required.end()&&complete.isEmpty())
-        pending.add(pending(target,cursor,required.end(),job.status()));
+    try {
+      var page = decodePage(result);
+      return new Receipt(page.reviewJobId(), page.range(), hash(result));
+    } catch (java.io.IOException invalid) {
+      throw new IllegalArgumentException("REVIEW_RESULT_INVALID", invalid);
     }
+  }
+
+  public record Pending(
+      String path,
+      String version,
+      int start,
+      int end,
+      int startLine,
+      int startOffset,
+      String state) {}
+
+  @Tool(
+      description =
+          "Return missing review spans with exact source version and next character offset. Stale, undelivered and unreviewed spans remain pending. Use reviewStatus for preserved findings and restartReview for changed sources.")
+  public List<Pending> reviewPending(String reviewJobId) throws java.io.IOException {
+    var job = reviewStatus(reviewJobId);
+    var pending = new ArrayList<Pending>();
+    for (var target : job.targets())
+      for (var required : target.required()) {
+        var complete =
+            job.ranges().stream()
+                .filter(
+                    e ->
+                        e.reviewed()
+                            && e.delivered()
+                            && !e.stale()
+                            && e.range().path().equals(target.path())
+                            && e.range().version().equals(target.version()))
+                .map(e -> e.range().span())
+                .sorted(Comparator.comparingInt(Span::start))
+                .toList();
+        int cursor = required.start();
+        for (var span : complete) {
+          if (span.end() <= cursor || span.start() >= required.end()) continue;
+          if (span.start() > cursor)
+            pending.add(
+                pending(target, cursor, Math.min(span.start(), required.end()), job.status()));
+          cursor = Math.max(cursor, Math.min(span.end(), required.end()));
+        }
+        if (cursor < required.end() || required.start() == required.end() && complete.isEmpty())
+          pending.add(pending(target, cursor, required.end(), job.status()));
+      }
     return List.copyOf(pending);
   }
-  private Pending pending(Target target,int start,int end,String state)throws java.io.IOException {
-    int[] position={1,0};
-    try {var text=files.get().reviewSnapshot(target.path()).text();if(start<=text.length())position=position(text,start);}
-    catch(java.io.IOException unavailable){/* Old-version coordinates remain visible on unavailable source. */}
-    return new Pending(target.path(),target.version(),start,end,position[0],position[1],state);
-  }
-  public void confirmedPrompt(org.springframework.ai.chat.prompt.Prompt prompt, AgentRunContext owner) {
-    var pages = new ArrayList<Page>();
-    for (var message : prompt.getInstructions()) if (message instanceof org.springframework.ai.chat.messages.ToolResponseMessage tool
-        && tool.getMetadata().get("rei.reviewReceipts") instanceof Map<?, ?> receipts) {
-      for (var response : tool.getResponses()) if (receipts.get(response.id()) instanceof Receipt receipt
-          && hash(response.responseData()).equals(receipt.serializedHash())) {
-        try { pages.add(decodePage(response.responseData())); }
-        catch (java.io.IOException invalid) { throw new IllegalArgumentException("REVIEW_RESULT_INVALID", invalid); }
-      }
+
+  private Pending pending(Target target, int start, int end, String state)
+      throws java.io.IOException {
+    int[] position = {1, 0};
+    try {
+      var text = files.get().reviewSnapshot(target.path()).text();
+      if (start <= text.length()) position = position(text, start);
+    } catch (java.io.IOException unavailable) {
+      /* Old-version coordinates remain visible on unavailable source. */
     }
+    return new Pending(
+        target.path(), target.version(), start, end, position[0], position[1], state);
+  }
+
+  public void confirmedPrompt(
+      org.springframework.ai.chat.prompt.Prompt prompt, AgentRunContext owner) {
+    var pages = new ArrayList<Page>();
+    for (var message : prompt.getInstructions())
+      if (message instanceof org.springframework.ai.chat.messages.ToolResponseMessage tool
+          && tool.getMetadata().get("rei.reviewReceipts") instanceof Map<?, ?> receipts) {
+        for (var response : tool.getResponses())
+          if (receipts.get(response.id()) instanceof Receipt receipt
+              && hash(response.responseData()).equals(receipt.serializedHash())) {
+            try {
+              pages.add(decodePage(response.responseData()));
+            } catch (java.io.IOException invalid) {
+              throw new IllegalArgumentException("REVIEW_RESULT_INVALID", invalid);
+            }
+          }
+      }
     if (!pages.isEmpty()) confirmed(owner, pages);
   }
+
   private Page page(String job, Target target, String source, int start, int end) {
     int[] from = position(source, start), to = position(source, end);
     String body = source.substring(start, end);
-    return new Page(job, new Range(target.path(), target.version(), new Span(start, end, from[0], to[0], from[1], to[1]), hash(body)), start, end, end < source.length(), body);
+    return new Page(
+        job,
+        new Range(
+            target.path(),
+            target.version(),
+            new Span(start, end, from[0], to[0], from[1], to[1]),
+            hash(body)),
+        start,
+        end,
+        end < source.length(),
+        body);
   }
-  private int estimate(Page page) { try {
-    String wire=StorageDatabase.JSON.writeValueAsString(page);
-    var owner=AgentRunScope.current();
-    if(owner!=null&&owner.conversationId().startsWith("subagent:"))wire=StorageDatabase.JSON.writeValueAsString(Map.of(
-        "evidenceId","00000000-0000-0000-0000-000000000000","tool","readReviewFile","inputSha256","0".repeat(64),
-        "outputSha256","0".repeat(64),"output",wire,"truncated",false));
-    return estimator.text(wire); } catch (java.io.IOException error) { throw new IllegalStateException(error); } }
-  private static boolean boundary(String source,int offset){
-    return offset>=0&&offset<=source.length()&&(offset==0||offset==source.length()
-        ||!Character.isHighSurrogate(source.charAt(offset-1))||!Character.isLowSurrogate(source.charAt(offset)));
+
+  private int estimate(Page page) {
+    try {
+      String wire = StorageDatabase.JSON.writeValueAsString(page);
+      var owner = AgentRunScope.current();
+      if (owner != null && owner.conversationId().startsWith("subagent:"))
+        wire =
+            StorageDatabase.JSON.writeValueAsString(
+                Map.of(
+                    "evidenceId",
+                    "00000000-0000-0000-0000-000000000000",
+                    "tool",
+                    "readReviewFile",
+                    "inputSha256",
+                    "0".repeat(64),
+                    "outputSha256",
+                    "0".repeat(64),
+                    "output",
+                    wire,
+                    "truncated",
+                    false));
+      return estimator.text(wire);
+    } catch (java.io.IOException error) {
+      throw new IllegalStateException(error);
+    }
   }
+
+  private static boolean boundary(String source, int offset) {
+    return offset >= 0
+        && offset <= source.length()
+        && (offset == 0
+            || offset == source.length()
+            || !Character.isHighSurrogate(source.charAt(offset - 1))
+            || !Character.isLowSurrogate(source.charAt(offset)));
+  }
+
   private static int[] position(String source, int offset) {
     int line = 1, beginning = 0;
-    for (int i = 0; i < offset; i++) if (source.charAt(i) == '\n') { line++; beginning = i + 1; }
-    return new int[]{line, offset - beginning};
+    for (int i = 0; i < offset; i++)
+      if (source.charAt(i) == '\n') {
+        line++;
+        beginning = i + 1;
+      }
+    return new int[] {line, offset - beginning};
   }
+
   public void requireComplete(AgentRunContext owner) {
-    for(var id:ledger.jobs(scope(owner)))try {
-      if(!reviewStatus(id).status().equals("COMPLETE"))throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
-          dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.REVIEW_PARTIAL);
-    }catch(java.io.IOException error){throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
-        dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.REVIEW_PARTIAL);}
+    for (var id : ledger.jobs(scope(owner)))
+      try {
+        if (!reviewStatus(id).status().equals("COMPLETE"))
+          throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
+              dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.REVIEW_PARTIAL);
+      } catch (java.io.IOException error) {
+        throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
+            dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.REVIEW_PARTIAL);
+      }
   }
-  public void finishRun(AgentRunContext owner,boolean cancelled,boolean failed,AgentRunContext parent) {
-    if(owner==null||owner.projectId()==null)return;
-    var scope=scope(owner);
-    for(var id:ledger.jobs(scope)) {
-      var job=ledger.get(id,scope);
-      if(!job.status().equals("COMPLETE")&&(cancelled||failed))ledger.stop(id,scope,cancelled);
-      if(parent!=null&&parent.projectId()!=null&&parent.projectId().equals(owner.projectId())&&job.owner().equals(scope))
-        ledger.grant(id,scope,scope(parent));
+
+  public void finishRun(
+      AgentRunContext owner, boolean cancelled, boolean failed, AgentRunContext parent) {
+    if (owner == null || owner.projectId() == null) return;
+    var scope = scope(owner);
+    for (var id : ledger.jobs(scope)) {
+      var job = ledger.get(id, scope);
+      if (!job.status().equals("COMPLETE") && (cancelled || failed))
+        ledger.stop(id, scope, cancelled);
+      if (parent != null
+          && parent.projectId() != null
+          && parent.projectId().equals(owner.projectId())
+          && job.owner().equals(scope)) ledger.grant(id, scope, scope(parent));
     }
     raw.clearRun(owner.runId());
   }
+
   public static String hash(String content) {
-    try { return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content.getBytes(StandardCharsets.UTF_8))); }
-    catch (NoSuchAlgorithmException error) { throw new IllegalStateException(error); }
+    try {
+      return HexFormat.of()
+          .formatHex(
+              MessageDigest.getInstance("SHA-256")
+                  .digest(content.getBytes(StandardCharsets.UTF_8)));
+    } catch (NoSuchAlgorithmException error) {
+      throw new IllegalStateException(error);
+    }
   }
 }

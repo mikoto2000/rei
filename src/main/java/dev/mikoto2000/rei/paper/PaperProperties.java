@@ -37,10 +37,26 @@ public class PaperProperties {
       glossaryVersion = "1";
 
   public void validate() {
-    new dev.mikoto2000.rei.http.HttpFetchPolicy(maxResponseBytes, maxDecodedResponseBytes,
-        connectTimeout, readTimeout, timeout, maxRedirects, null, null, false);
-    new dev.mikoto2000.rei.http.HttpFetchPolicy(maxPdfBytes, maxDecodedPdfBytes,
-        connectTimeout, readTimeout, timeout, maxRedirects, null, null, false);
+    new dev.mikoto2000.rei.http.HttpFetchPolicy(
+        maxResponseBytes,
+        maxDecodedResponseBytes,
+        connectTimeout,
+        readTimeout,
+        timeout,
+        maxRedirects,
+        null,
+        null,
+        false);
+    new dev.mikoto2000.rei.http.HttpFetchPolicy(
+        maxPdfBytes,
+        maxDecodedPdfBytes,
+        connectTimeout,
+        readTimeout,
+        timeout,
+        maxRedirects,
+        null,
+        null,
+        false);
     if (maxPdfBytes < 1
         || maxResponseBytes < 1
         || maxPages < 1

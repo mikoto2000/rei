@@ -5,9 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.time.Instant;
-
 import javax.sql.DataSource;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
@@ -15,8 +13,7 @@ import org.sqlite.SQLiteDataSource;
 @org.junit.jupiter.api.Tag("integration")
 class SqliteCuriosityQueueTest {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void persistsCuriosityItemsAcrossQueueInstances() {
@@ -27,12 +24,15 @@ class SqliteCuriosityQueueTest {
     SqliteCuriosityQueue second = new SqliteCuriosityQueue(dataSource(dbPath));
 
     assertEquals(1, second.findCandidates(new CuriosityQuery(now(), 10)).size());
-    assertEquals("Working Set 測定", second.findCandidates(new CuriosityQuery(now(), 10)).getFirst().question());
+    assertEquals(
+        "Working Set 測定",
+        second.findCandidates(new CuriosityQuery(now(), 10)).getFirst().question());
   }
 
   @Test
   void duplicateQuestionIsSuppressedByNormalizedUniqueKey() {
-    SqliteCuriosityQueue queue = new SqliteCuriosityQueue(dataSource(tempDir.resolve("curiosity.db")));
+    SqliteCuriosityQueue queue =
+        new SqliteCuriosityQueue(dataSource(tempDir.resolve("curiosity.db")));
     queue.add(item("id-1", "Working Set 測定", 0.8, null));
     queue.add(item("id-2", " working  set 測定 ", 0.9, null));
 
@@ -41,7 +41,8 @@ class SqliteCuriosityQueueTest {
 
   @Test
   void statusUpdatesRemoveItemsFromPendingCandidates() {
-    SqliteCuriosityQueue queue = new SqliteCuriosityQueue(dataSource(tempDir.resolve("curiosity.db")));
+    SqliteCuriosityQueue queue =
+        new SqliteCuriosityQueue(dataSource(tempDir.resolve("curiosity.db")));
     queue.add(item("used", "used question", 0.8, null));
     queue.add(item("dismissed", "dismissed question", 0.7, null));
 
@@ -53,7 +54,8 @@ class SqliteCuriosityQueueTest {
 
   @Test
   void expiredItemsAreMarkedAndNotReturned() {
-    SqliteCuriosityQueue queue = new SqliteCuriosityQueue(dataSource(tempDir.resolve("curiosity.db")));
+    SqliteCuriosityQueue queue =
+        new SqliteCuriosityQueue(dataSource(tempDir.resolve("curiosity.db")));
     queue.add(item("expired", "expired question", 0.9, Instant.parse("2026-09-01T00:00:00Z")));
 
     assertTrue(queue.findCandidates(new CuriosityQuery(now(), 10)).isEmpty());
@@ -61,7 +63,8 @@ class SqliteCuriosityQueueTest {
 
   @Test
   void candidatesAreOrderedByPriorityAndLimited() {
-    SqliteCuriosityQueue queue = new SqliteCuriosityQueue(dataSource(tempDir.resolve("curiosity.db")));
+    SqliteCuriosityQueue queue =
+        new SqliteCuriosityQueue(dataSource(tempDir.resolve("curiosity.db")));
     queue.add(item("low", "low question", 0.1, null));
     queue.add(item("high", "high question", 0.9, null));
 
@@ -83,8 +86,15 @@ class SqliteCuriosityQueueTest {
   }
 
   private CuriosityItem item(String id, String question, double priority, Instant expiresAt) {
-    return new CuriosityItem(id, question, "reason", TopicSource.CONVERSATION, priority,
-        Instant.parse("2026-09-02T00:00:00Z"), expiresAt, CuriosityStatus.PENDING);
+    return new CuriosityItem(
+        id,
+        question,
+        "reason",
+        TopicSource.CONVERSATION,
+        priority,
+        Instant.parse("2026-09-02T00:00:00Z"),
+        expiresAt,
+        CuriosityStatus.PENDING);
   }
 
   private Instant now() {

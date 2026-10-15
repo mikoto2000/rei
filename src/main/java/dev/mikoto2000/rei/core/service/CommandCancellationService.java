@@ -2,9 +2,7 @@ package dev.mikoto2000.rei.core.service;
 
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-
 import org.springframework.stereotype.Component;
-
 import reactor.core.Disposable;
 
 @Component
@@ -14,15 +12,22 @@ public class CommandCancellationService {
     final AtomicReference<Disposable> disposableRef = new AtomicReference<>();
     final AtomicReference<Thread> executionThreadRef = new AtomicReference<>();
     final AtomicBoolean cancellationRequested = new AtomicBoolean(false);
-    final java.util.concurrent.CopyOnWriteArrayList<Runnable> children = new java.util.concurrent.CopyOnWriteArrayList<>();
+    final java.util.concurrent.CopyOnWriteArrayList<Runnable> children =
+        new java.util.concurrent.CopyOnWriteArrayList<>();
     final String projectId;
-    State(String projectId) { this.projectId = projectId; }
+
+    State(String projectId) {
+      this.projectId = projectId;
+    }
   }
-  private final java.util.concurrent.ConcurrentMap<String, State> runs = new java.util.concurrent.ConcurrentHashMap<>();
+
+  private final java.util.concurrent.ConcurrentMap<String, State> runs =
+      new java.util.concurrent.ConcurrentHashMap<>();
   private final java.util.Set<String> pendingCancellations = new java.util.HashSet<>();
   private final State legacy = new State(null);
+
   private State state() {
-    if(dev.mikoto2000.rei.core.execution.ExecutionScope.current()!=null) return null;
+    if (dev.mikoto2000.rei.core.execution.ExecutionScope.current() != null) return null;
     var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     return run == null ? legacy : runs.get(run.runId());
   }
@@ -48,16 +53,26 @@ public class CommandCancellationService {
     }
     return cancel(state);
   }
-  public synchronized void forgetPendingCancellation(String runId) { pendingCancellations.remove(runId); }
+
+  public synchronized void forgetPendingCancellation(String runId) {
+    pendingCancellations.remove(runId);
+  }
+
   /** Stop only an existing child; a terminal Goal must not leave an orphan future cancellation. */
-  public boolean cancelRegisteredRun(String runId) {var existing=runs.get(runId);return existing!=null&&cancel(existing);}
+  public boolean cancelRegisteredRun(String runId) {
+    var existing = runs.get(runId);
+    return existing != null && cancel(existing);
+  }
 
   public void register(Disposable disposable) {
     if (disposable == null) {
       return;
     }
     var state = state();
-    if (state == null) { disposable.dispose(); return; }
+    if (state == null) {
+      disposable.dispose();
+      return;
+    }
     state.disposableRef.set(disposable);
     if (state.cancellationRequested.get()) {
       disposable.dispose();
@@ -71,14 +86,19 @@ public class CommandCancellationService {
     for (var state : runs.values()) if (state.projectId == null) changed |= cancel(state);
     return changed;
   }
-  /** Adds a child without replacing the parent's streaming subscription. Safe against registration/cancel races. */
+
+  /**
+   * Adds a child without replacing the parent's streaming subscription. Safe against
+   * registration/cancel races.
+   */
   public Disposable onCancel(String runId, Runnable child) {
     State state = runId == null ? legacy : runs.get(runId);
-    if (state == null) return () -> { };
+    if (state == null) return () -> {};
     state.children.add(child);
     if (state.cancellationRequested.get()) child.run();
     return () -> state.children.remove(child);
   }
+
   private boolean cancel(State state) {
     if (state == null) return false;
     boolean changed = state.cancellationRequested.compareAndSet(false, true);
@@ -93,14 +113,17 @@ public class CommandCancellationService {
     }
     return changed;
   }
+
   public boolean cancelCurrentProject() {
     var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
     if (project == null) return cancel();
     return cancelProject(project.id());
   }
+
   /** Explicit human Project control; never infer another client's mutable selection. */
   public boolean cancelProject(String projectId) {
-    if(projectId==null||projectId.isBlank()||projectId.length()>128)throw new IllegalArgumentException("Project ID required");
+    if (projectId == null || projectId.isBlank() || projectId.length() > 128)
+      throw new IllegalArgumentException("Project ID required");
     boolean changed = false;
     for (var state : runs.values()) if (projectId.equals(state.projectId)) changed |= cancel(state);
     return changed;

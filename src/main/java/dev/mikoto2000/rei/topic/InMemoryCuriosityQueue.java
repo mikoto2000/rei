@@ -29,8 +29,10 @@ public class InMemoryCuriosityQueue implements CuriosityQueue {
     return items.values().stream()
         .filter(item -> item.status() == CuriosityStatus.PENDING)
         .filter(item -> item.expiresAt() == null || item.expiresAt().isAfter(now))
-        .sorted(Comparator.comparingDouble(CuriosityItem::priority).reversed()
-            .thenComparing(CuriosityItem::createdAt))
+        .sorted(
+            Comparator.comparingDouble(CuriosityItem::priority)
+                .reversed()
+                .thenComparing(CuriosityItem::createdAt))
         .limit(limit)
         .toList();
   }

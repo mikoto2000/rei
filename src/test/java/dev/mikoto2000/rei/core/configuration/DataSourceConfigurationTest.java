@@ -5,22 +5,18 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 
-import java.nio.file.Path;
-import java.sql.Connection;
-
-import javax.sql.DataSource;
-
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import dev.mikoto2000.rei.core.sqlitevec.SqliteVecDataSource;
 import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
+import java.nio.file.Path;
+import java.sql.Connection;
+import javax.sql.DataSource;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 @org.junit.jupiter.api.Tag("integration")
 class DataSourceConfigurationTest {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void dataSourceUsesMemoryDatabase() throws Exception {
@@ -29,7 +25,8 @@ class DataSourceConfigurationTest {
     DataSource dataSource = configuration.dataSource(tempDir);
 
     try (Connection connection = dataSource.getConnection()) {
-      assertEquals("jdbc:sqlite:" + tempDir.resolve("memory.db"), connection.getMetaData().getURL());
+      assertEquals(
+          "jdbc:sqlite:" + tempDir.resolve("memory.db"), connection.getMetaData().getURL());
     }
   }
 
@@ -43,7 +40,8 @@ class DataSourceConfigurationTest {
 
     assertInstanceOf(SqliteVecDataSource.class, dataSource);
     try (Connection connection = dataSource.getConnection()) {
-      assertEquals("jdbc:sqlite:" + tempDir.resolve("vectorstore.db") + "?enable_load_extension=true",
+      assertEquals(
+          "jdbc:sqlite:" + tempDir.resolve("vectorstore.db") + "?enable_load_extension=true",
           connection.getMetaData().getURL());
     }
   }

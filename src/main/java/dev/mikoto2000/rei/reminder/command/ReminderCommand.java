@@ -1,13 +1,11 @@
 package dev.mikoto2000.rei.reminder.command;
 
-import java.time.OffsetDateTime;
-import java.util.List;
-
-import org.springframework.stereotype.Component;
-
 import dev.mikoto2000.rei.reminder.Reminder;
 import dev.mikoto2000.rei.reminder.ReminderService;
+import java.time.OffsetDateTime;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -22,11 +20,40 @@ import picocli.CommandLine.Parameters;
       ReminderCommand.DeleteCommand.class
     })
 public class ReminderCommand {
-  private abstract static class ReportCommand implements Runnable {protected java.io.PrintWriter out=new java.io.PrintWriter(System.out,true);}
-  private static String report(ReportCommand command){var text=new java.io.StringWriter();command.out=new java.io.PrintWriter(text,true);command.run();return text.toString().replaceAll("[\\r\\n]+$","");}
-  public static String reportList(ReminderService service){return report(new ListCommand(service));}
-  public static String reportAdd(ReminderService service,String message,OffsetDateTime at,OffsetDateTime target,Integer minutes){var command=new AddCommand(service);command.messageParts=new String[]{message};command.at=at;command.target=target;command.minutesBefore=minutes;return report(command);}
-  public static String reportDelete(ReminderService service,long id){var command=new DeleteCommand(service);command.id=id;return report(command);}
+  private abstract static class ReportCommand implements Runnable {
+    protected java.io.PrintWriter out = new java.io.PrintWriter(System.out, true);
+  }
+
+  private static String report(ReportCommand command) {
+    var text = new java.io.StringWriter();
+    command.out = new java.io.PrintWriter(text, true);
+    command.run();
+    return text.toString().replaceAll("[\\r\\n]+$", "");
+  }
+
+  public static String reportList(ReminderService service) {
+    return report(new ListCommand(service));
+  }
+
+  public static String reportAdd(
+      ReminderService service,
+      String message,
+      OffsetDateTime at,
+      OffsetDateTime target,
+      Integer minutes) {
+    var command = new AddCommand(service);
+    command.messageParts = new String[] {message};
+    command.at = at;
+    command.target = target;
+    command.minutesBefore = minutes;
+    return report(command);
+  }
+
+  public static String reportDelete(ReminderService service, long id) {
+    var command = new DeleteCommand(service);
+    command.id = id;
+    return report(command);
+  }
 
   @Component
   @RequiredArgsConstructor
@@ -79,7 +106,14 @@ public class ReminderCommand {
       }
 
       for (Reminder reminder : reminders) {
-        out.println(reminder.id() + " | " + reminder.type() + " | " + reminder.remindAt() + " | " + reminder.message());
+        out.println(
+            reminder.id()
+                + " | "
+                + reminder.type()
+                + " | "
+                + reminder.remindAt()
+                + " | "
+                + reminder.message());
       }
     }
   }

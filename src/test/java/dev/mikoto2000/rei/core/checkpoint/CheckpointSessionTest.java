@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertSame;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
@@ -30,7 +29,8 @@ class CheckpointSessionTest {
   @Test
   void advisorSharesSameCheckpointStoreInstance() {
     try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
-      context.register(CheckpointConfiguration.class, CheckpointAdvisor.class, TestConfiguration.class);
+      context.register(
+          CheckpointConfiguration.class, CheckpointAdvisor.class, TestConfiguration.class);
       context.refresh();
       CheckpointAdvisor advisor = context.getBean(CheckpointAdvisor.class);
       CheckpointStore store = context.getBean(CheckpointStore.class);

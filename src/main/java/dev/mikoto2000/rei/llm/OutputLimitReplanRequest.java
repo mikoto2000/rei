@@ -7,5 +7,4 @@ public record OutputLimitReplanRequest(
     String partialOutput,
     int replanCount,
     int maxReplansPerGoal,
-    int remainingLlmCalls) {
-}
+    int remainingLlmCalls) {}

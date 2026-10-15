@@ -9,5 +9,5 @@ public record FeedOpmlImportResult(List<Feed> imported, List<Entry> skipped, Lis
     failed = List.copyOf(failed);
   }
 
-  public record Entry(OpmlSubscription subscription, String reason) { }
+  public record Entry(OpmlSubscription subscription, String reason) {}
 }

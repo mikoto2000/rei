@@ -17,7 +17,8 @@ public record TopicCandidate(
 
   public TopicCandidate {
     if (id == null || id.isBlank()) throw new IllegalArgumentException("id must not be blank");
-    if (topic == null || topic.isBlank()) throw new IllegalArgumentException("topic must not be blank");
+    if (topic == null || topic.isBlank())
+      throw new IllegalArgumentException("topic must not be blank");
     if (reason == null) reason = "";
     if (type == null) throw new IllegalArgumentException("type must not be null");
     if (source == null) throw new IllegalArgumentException("source must not be null");

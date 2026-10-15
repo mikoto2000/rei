@@ -4,20 +4,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.mikoto2000.rei.testsupport.SqliteTestDatabase;
-import javax.sql.DataSource;
-import java.time.OffsetDateTime;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-import java.time.temporal.ChronoUnit;
-
-
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
 import dev.mikoto2000.rei.memory.model.Memory;
 import dev.mikoto2000.rei.memory.model.MemoryScope;
 import dev.mikoto2000.rei.memory.model.MemoryStatus;
 import dev.mikoto2000.rei.memory.model.MemoryType;
+import dev.mikoto2000.rei.testsupport.SqliteTestDatabase;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
+import javax.sql.DataSource;
 import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 import net.jqwik.api.constraints.AlphaChars;
@@ -26,16 +24,32 @@ import net.jqwik.api.constraints.NotBlank;
 
 @net.jqwik.api.Tag("integration")
 class MemoryServicePropertyTest {
-  private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-04T00:00:00Z"), ZoneOffset.UTC);
+  private static final Clock CLOCK =
+      Clock.fixed(Instant.parse("2026-10-04T00:00:00Z"), ZoneOffset.UTC);
 
   // Feature: ai-memory-consolidation, Property 2: 承認記憶の保存ラウンドトリップ
   @Property(tries = 100)
-  void saveFindRoundTrip(@ForAll @NotBlank String content, @ForAll MemoryType type,
-      @ForAll MemoryScope scope, @ForAll @DoubleRange(min = 0.0, max = 1.0) double confidence) throws Exception {
+  void saveFindRoundTrip(
+      @ForAll @NotBlank String content,
+      @ForAll MemoryType type,
+      @ForAll MemoryScope scope,
+      @ForAll @DoubleRange(min = 0.0, max = 1.0) double confidence)
+      throws Exception {
     try (var database = new SqliteTestDatabase()) {
       MemoryService service = newService(database.dataSource());
 
-      Memory saved = service.save(new Memory(null, content, type, scope, MemoryStatus.CANDIDATE, confidence, null, null, null));
+      Memory saved =
+          service.save(
+              new Memory(
+                  null,
+                  content,
+                  type,
+                  scope,
+                  MemoryStatus.CANDIDATE,
+                  confidence,
+                  null,
+                  null,
+                  null));
       Memory found = service.findById(saved.id()).orElseThrow();
 
       assertEquals(content, found.content());
@@ -52,8 +66,17 @@ class MemoryServicePropertyTest {
     try (var database = new SqliteTestDatabase()) {
       MemoryService service = newService(database.dataSource());
       for (int i = 0; i < 15; i++) {
-        service.save(new Memory(null, token + " value-" + i, MemoryType.KNOWLEDGE, MemoryScope.SHORT_TERM,
-            MemoryStatus.CANDIDATE, 0.8d, null, null, null));
+        service.save(
+            new Memory(
+                null,
+                token + " value-" + i,
+                MemoryType.KNOWLEDGE,
+                MemoryScope.SHORT_TERM,
+                MemoryStatus.CANDIDATE,
+                0.8d,
+                null,
+                null,
+                null));
       }
 
       // AlphaChars can generate FTS operators such as OR; search for a literal token.
@@ -65,16 +88,29 @@ class MemoryServicePropertyTest {
 
   // Feature: ai-memory-consolidation, Property 10: 論理削除の不変条件
   @Property(tries = 50)
-  void deletedMemoryIsNotReturnedByListOrSearch(@ForAll @AlphaChars @NotBlank String token) throws Exception {
+  void deletedMemoryIsNotReturnedByListOrSearch(@ForAll @AlphaChars @NotBlank String token)
+      throws Exception {
     try (var database = new SqliteTestDatabase()) {
       MemoryService service = newService(database.dataSource());
-      Memory saved = service.save(new Memory(null, token + " to-delete", MemoryType.KNOWLEDGE, MemoryScope.SHORT_TERM,
-          MemoryStatus.CANDIDATE, 0.8d, null, null, null));
+      Memory saved =
+          service.save(
+              new Memory(
+                  null,
+                  token + " to-delete",
+                  MemoryType.KNOWLEDGE,
+                  MemoryScope.SHORT_TERM,
+                  MemoryStatus.CANDIDATE,
+                  0.8d,
+                  null,
+                  null,
+                  null));
       service.updateStatus(saved.id(), MemoryStatus.DELETED);
 
       assertEquals(MemoryStatus.DELETED, service.findById(saved.id()).orElseThrow().status());
       assertTrue(service.listActive().stream().noneMatch(m -> m.id().equals(saved.id())));
-      assertTrue(service.search("\"" + token + "\"", 10).stream().noneMatch(m -> m.id().equals(saved.id())));
+      assertTrue(
+          service.search("\"" + token + "\"", 10).stream()
+              .noneMatch(m -> m.id().equals(saved.id())));
     }
   }
 
@@ -84,8 +120,18 @@ class MemoryServicePropertyTest {
     try (var database = new SqliteTestDatabase()) {
       MemoryService service = newService(database.dataSource());
       OffsetDateTime before = OffsetDateTime.now(CLOCK).truncatedTo(ChronoUnit.SECONDS);
-      Memory saved = service.save(new Memory(null, "expiry-check", MemoryType.KNOWLEDGE, scope,
-          MemoryStatus.CANDIDATE, 0.8d, null, null, null));
+      Memory saved =
+          service.save(
+              new Memory(
+                  null,
+                  "expiry-check",
+                  MemoryType.KNOWLEDGE,
+                  scope,
+                  MemoryStatus.CANDIDATE,
+                  0.8d,
+                  null,
+                  null,
+                  null));
       OffsetDateTime expiresAt = saved.expiresAt();
       OffsetDateTime after = OffsetDateTime.now(CLOCK).truncatedTo(ChronoUnit.SECONDS);
 
@@ -108,8 +154,18 @@ class MemoryServicePropertyTest {
   void expiredMemoryBecomesDeprecated(@ForAll boolean ignored) throws Exception {
     try (var database = new SqliteTestDatabase()) {
       MemoryService service = newService(database.dataSource());
-      Memory expired = service.save(new Memory(null, "expired", MemoryType.KNOWLEDGE, MemoryScope.SHORT_TERM,
-          MemoryStatus.CANDIDATE, 0.8d, OffsetDateTime.now(CLOCK).minusDays(1), null, null));
+      Memory expired =
+          service.save(
+              new Memory(
+                  null,
+                  "expired",
+                  MemoryType.KNOWLEDGE,
+                  MemoryScope.SHORT_TERM,
+                  MemoryStatus.CANDIDATE,
+                  0.8d,
+                  OffsetDateTime.now(CLOCK).minusDays(1),
+                  null,
+                  null));
 
       var active = service.listActiveWithExpiryCheck();
       assertTrue(active.stream().noneMatch(m -> m.id().equals(expired.id())));
@@ -118,8 +174,9 @@ class MemoryServicePropertyTest {
   }
 
   private MemoryService newService(DataSource dataSource) {
-    var props = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60,
-        new MemoryProperties.ExpiryDefaults(30, 365));
+    var props =
+        new MemoryProperties(
+            true, 20, 80, 10, 3, 2000, 60, new MemoryProperties.ExpiryDefaults(30, 365));
     return new MemoryService(dataSource, props, CLOCK);
   }
 }

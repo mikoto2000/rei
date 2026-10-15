@@ -1,20 +1,24 @@
 package dev.mikoto2000.rei.memory.util;
 
+import com.google.re2j.Pattern;
 import java.util.ArrayList;
 import java.util.List;
-import com.google.re2j.Pattern;
-
 import org.springframework.stereotype.Component;
 
 @Component
 public class SensitiveInfoDetector {
 
-  private static final Pattern EMAIL = Pattern.compile("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}");
+  private static final Pattern EMAIL =
+      Pattern.compile("[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\\.[A-Za-z]{2,}");
   private static final Pattern PHONE_JP = Pattern.compile("(?:0\\d{1,4}-?\\d{1,4}-?\\d{3,4})");
-  private static final Pattern PHONE_INTL = Pattern.compile("\\+\\d{1,3}[\\s-]?\\d{2,4}[\\s-]?\\d{2,4}[\\s-]?\\d{2,4}");
-  private static final Pattern SECRET_KEY = Pattern.compile("(?i)(password|passwd|secret|access[_-]?token|refresh[_-]?token|token|api[_-]?key|credential|authorization|accessJwt|refreshJwt)[\"']?\\s*[:=]\\s*[\"']?\\S+");
+  private static final Pattern PHONE_INTL =
+      Pattern.compile("\\+\\d{1,3}[\\s-]?\\d{2,4}[\\s-]?\\d{2,4}[\\s-]?\\d{2,4}");
+  private static final Pattern SECRET_KEY =
+      Pattern.compile(
+          "(?i)(password|passwd|secret|access[_-]?token|refresh[_-]?token|token|api[_-]?key|credential|authorization|accessJwt|refreshJwt)[\"']?\\s*[:=]\\s*[\"']?\\S+");
   private static final Pattern BARE_KEY = Pattern.compile("\\bsk-[A-Za-z0-9_-]{16,}\\b");
-  private static final Pattern PEM = Pattern.compile("-----BEGIN (?:CERTIFICATE|[A-Z ]*PRIVATE KEY)-----");
+  private static final Pattern PEM =
+      Pattern.compile("-----BEGIN (?:CERTIFICATE|[A-Z ]*PRIVATE KEY)-----");
 
   public boolean containsSensitiveInfo(String content) {
     return !detectPatterns(content).isEmpty();

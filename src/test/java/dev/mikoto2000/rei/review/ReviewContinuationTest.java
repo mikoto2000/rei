@@ -1,28 +1,49 @@
 package dev.mikoto2000.rei.review;
+
 import static org.assertj.core.api.Assertions.*;
-import java.nio.file.*;import java.util.*;
-import org.junit.jupiter.api.*;import org.junit.jupiter.api.io.TempDir;
-import dev.mikoto2000.rei.core.*;import dev.mikoto2000.rei.core.chat.*;import dev.mikoto2000.rei.core.contextbudget.*;import dev.mikoto2000.rei.storage.*;
+
+import dev.mikoto2000.rei.core.*;
+import dev.mikoto2000.rei.core.chat.*;
+import dev.mikoto2000.rei.core.contextbudget.*;
+import dev.mikoto2000.rei.storage.*;
+import java.nio.file.*;
+import java.util.*;
+import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.io.TempDir;
+
 class ReviewContinuationTest {
- @TempDir Path dir;
- @Test void pendingRangesAndDeletedSourceRemainVisible() throws Exception {
-  Files.writeString(dir.resolve("source.md"),"first\nlast");
-  try(var migration=new StorageMigrationCoordinator(dir.resolve("data"))){migration.prepare();}
-  var ledger=new ReviewCoverageLedger(new StorageDatabase(dir.resolve("data")));
-  var tools=new ReviewTools(ledger,new RawToolResultStore(dir.resolve("data")),new Tools(),TokenEstimator.conservative());
-  var owner=new AgentRunContext("run","chat",dir,"project");
-  try(var scope=AgentRunScope.open(owner)){
-   var job=tools.beginReview(List.of("source.md"),"review","v1");
-   assertThat(tools.reviewPending(job.id()).getFirst().start()).isZero();
-   var page=tools.readReviewFile(job.id(),"source.md",job.targets().getFirst().version(),0,512);
-   String inner=StorageDatabase.JSON.writeValueAsString(page);
-   String envelope=StorageDatabase.JSON.writeValueAsString(Map.of("output",inner,"outputSha256",ReviewTools.hash(inner),"truncated",false));
-   assertThat(ReviewTools.receipt(envelope).range()).isEqualTo(page.range());
-   tools.confirmed(owner,List.of(page));tools.submitReviewResult(job.id(),page.range(),"checked",List.of());
-   assertThat(tools.reviewPending(job.id())).isEmpty();
-   Files.delete(dir.resolve("source.md"));
-   assertThat(tools.reviewStatus(job.id()).status()).isEqualTo("STALE_VERSION");
-   assertThat(tools.reviewPending(job.id())).isNotEmpty();
+  @TempDir Path dir;
+
+  @Test
+  void pendingRangesAndDeletedSourceRemainVisible() throws Exception {
+    Files.writeString(dir.resolve("source.md"), "first\nlast");
+    try (var migration = new StorageMigrationCoordinator(dir.resolve("data"))) {
+      migration.prepare();
+    }
+    var ledger = new ReviewCoverageLedger(new StorageDatabase(dir.resolve("data")));
+    var tools =
+        new ReviewTools(
+            ledger,
+            new RawToolResultStore(dir.resolve("data")),
+            new Tools(),
+            TokenEstimator.conservative());
+    var owner = new AgentRunContext("run", "chat", dir, "project");
+    try (var scope = AgentRunScope.open(owner)) {
+      var job = tools.beginReview(List.of("source.md"), "review", "v1");
+      assertThat(tools.reviewPending(job.id()).getFirst().start()).isZero();
+      var page =
+          tools.readReviewFile(job.id(), "source.md", job.targets().getFirst().version(), 0, 512);
+      String inner = StorageDatabase.JSON.writeValueAsString(page);
+      String envelope =
+          StorageDatabase.JSON.writeValueAsString(
+              Map.of("output", inner, "outputSha256", ReviewTools.hash(inner), "truncated", false));
+      assertThat(ReviewTools.receipt(envelope).range()).isEqualTo(page.range());
+      tools.confirmed(owner, List.of(page));
+      tools.submitReviewResult(job.id(), page.range(), "checked", List.of());
+      assertThat(tools.reviewPending(job.id())).isEmpty();
+      Files.delete(dir.resolve("source.md"));
+      assertThat(tools.reviewStatus(job.id()).status()).isEqualTo("STALE_VERSION");
+      assertThat(tools.reviewPending(job.id())).isNotEmpty();
+    }
   }
- }
 }

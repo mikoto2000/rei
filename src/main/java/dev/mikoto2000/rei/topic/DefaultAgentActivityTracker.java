@@ -5,7 +5,6 @@ import java.time.Instant;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
-
 import org.springframework.stereotype.Component;
 
 @Component
@@ -15,9 +14,15 @@ public class DefaultAgentActivityTracker implements AgentActivityTracker {
   private final AtomicReference<Instant> lastAgentActivityAt;
   private final AtomicBoolean agentBusy = new AtomicBoolean(false);
   private final AtomicLong activityVersion = new AtomicLong();
-  private org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.core.chat.ConversationInputRouter> activeRuns;
+  private org.springframework.beans.factory.ObjectProvider<
+          dev.mikoto2000.rei.core.chat.ConversationInputRouter>
+      activeRuns;
+
   @org.springframework.beans.factory.annotation.Autowired
-  public void setActiveRuns(org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.core.chat.ConversationInputRouter> activeRuns) {
+  public void setActiveRuns(
+      org.springframework.beans.factory.ObjectProvider<
+              dev.mikoto2000.rei.core.chat.ConversationInputRouter>
+          activeRuns) {
     this.activeRuns = activeRuns;
   }
 

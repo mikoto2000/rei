@@ -7,17 +7,10 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.util.List;
-
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-
-import dev.mikoto2000.rei.memory.model.Memory;
-import dev.mikoto2000.rei.memory.model.MemoryScope;
-import dev.mikoto2000.rei.memory.model.MemoryStatus;
-import dev.mikoto2000.rei.memory.model.MemoryType;
 import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 import dev.mikoto2000.rei.memory.service.MemoryService;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import picocli.CommandLine;
 
 class MemorySummarizeCommandTest {
@@ -26,7 +19,8 @@ class MemorySummarizeCommandTest {
   void summarizeDoesNotSaveWithoutApproveOption() {
     MemoryConsolidatorService consolidator = Mockito.mock(MemoryConsolidatorService.class);
     MemoryService memoryService = Mockito.mock(MemoryService.class);
-    when(consolidator.summarizeCandidates()).thenReturn(new MemoryConsolidatorService.Summary(true,"summary"));
+    when(consolidator.summarizeCandidates())
+        .thenReturn(new MemoryConsolidatorService.Summary(true, "summary"));
 
     var cmd = new CommandLine(new MemoryCommand.SummarizeCommand(consolidator, memoryService));
     int exitCode = cmd.execute();
@@ -39,7 +33,8 @@ class MemorySummarizeCommandTest {
   void summarizeSavesWhenApproved() {
     MemoryConsolidatorService consolidator = Mockito.mock(MemoryConsolidatorService.class);
     MemoryService memoryService = Mockito.mock(MemoryService.class);
-    when(consolidator.summarizeCandidates()).thenReturn(new MemoryConsolidatorService.Summary(true,"summary"));
+    when(consolidator.summarizeCandidates())
+        .thenReturn(new MemoryConsolidatorService.Summary(true, "summary"));
 
     var cmd = new CommandLine(new MemoryCommand.SummarizeCommand(consolidator, memoryService));
     int exitCode = cmd.execute("--approve");

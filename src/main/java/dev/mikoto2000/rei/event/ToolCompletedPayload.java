@@ -3,7 +3,7 @@ package dev.mikoto2000.rei.event;
 /**
  * Tool 呼び出しの完了。
  *
- * <p>Tool の結果全文を Event に格納しない。要約情報（件数・バイト数など）を優先する。</p>
+ * <p>Tool の結果全文を Event に格納しない。要約情報（件数・バイト数など）を優先する。
  *
  * @param toolCallId Tool 呼び出しの ID
  * @param toolName Tool 名
@@ -23,5 +23,4 @@ public record ToolCompletedPayload(
     Long bytes,
     Integer matches,
     Integer items)
-    implements AgentEventPayload {
-}
+    implements AgentEventPayload {}

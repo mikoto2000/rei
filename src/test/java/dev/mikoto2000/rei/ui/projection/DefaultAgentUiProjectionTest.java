@@ -3,28 +3,31 @@ package dev.mikoto2000.rei.ui.projection;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneOffset;
-
-import org.junit.jupiter.api.Test;
-
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.ErrorInformation;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import org.junit.jupiter.api.Test;
 
 class DefaultAgentUiProjectionTest {
 
-  @Test void projectsCancellationAsATerminalStateDistinctFromFailure() {
+  @Test
+  void projectsCancellationAsATerminalStateDistinctFromFailure() {
     var projection = new DefaultAgentUiProjection();
     projection.apply(sequence(events.runStarted("run", "request", null), 1));
-    projection.apply(sequence(events.runFailed("run", new ErrorInformation("Cancelled", "chat run cancelled", "cancelled")), 2));
+    projection.apply(
+        sequence(
+            events.runFailed(
+                "run", new ErrorInformation("Cancelled", "chat run cancelled", "cancelled")),
+            2));
     assertEquals("CANCELLED", projection.currentState().run().status().name());
   }
 
-  private final AgentEventFactory events = new AgentEventFactory(
-      Clock.fixed(Instant.parse("2026-08-23T00:00:00Z"), ZoneOffset.UTC));
+  private final AgentEventFactory events =
+      new AgentEventFactory(Clock.fixed(Instant.parse("2026-08-23T00:00:00Z"), ZoneOffset.UTC));
 
   @Test
   void initialStateIsIdleAndEmpty() {
@@ -48,7 +51,8 @@ class DefaultAgentUiProjectionTest {
     assertEquals(42L, projection.currentState().run().durationMillis());
 
     projection.apply(sequence(events.runStarted("run-2", "user-request", null), 3));
-    projection.apply(sequence(events.runFailed("run-2", new ErrorInformation("IOException", "boom", "E1")), 4));
+    projection.apply(
+        sequence(events.runFailed("run-2", new ErrorInformation("IOException", "boom", "E1")), 4));
     assertEquals(AgentRunStatus.FAILED, projection.currentState().run().status());
     assertEquals("IOException", projection.currentState().run().error().type());
   }
@@ -73,7 +77,11 @@ class DefaultAgentUiProjectionTest {
     projection.apply(sequence(events.toolStarted("call-1", "grep", "q=x"), 1));
     projection.apply(sequence(events.toolCompleted("call-1", "grep", 10, "2 matches"), 2));
     projection.apply(sequence(events.toolStarted("call-2", "read", "a.txt"), 3));
-    projection.apply(sequence(events.toolFailed("call-2", "read", new ErrorInformation("IOException", "no file", null)), 4));
+    projection.apply(
+        sequence(
+            events.toolFailed(
+                "call-2", "read", new ErrorInformation("IOException", "no file", null)),
+            4));
     projection.apply(sequence(events.toolStarted("call-3", "edit", "a.txt"), 5));
 
     AgentUiState state = projection.currentState();
@@ -101,7 +109,9 @@ class DefaultAgentUiProjectionTest {
     projection.apply(sequence(events.messageDelta("missing-message", "partial"), 1));
     projection.apply(sequence(events.messageCompleted("completed-only", "assistant", "done"), 2));
     projection.apply(sequence(events.toolCompleted("missing-tool", "read", 5, "ok"), 3));
-    projection.apply(sequence(events.toolFailed("failed-tool", "write", new ErrorInformation("IO", "bad", null)), 4));
+    projection.apply(
+        sequence(
+            events.toolFailed("failed-tool", "write", new ErrorInformation("IO", "bad", null)), 4));
 
     AgentUiState state = projection.currentState();
     assertEquals(2, state.messages().size());
@@ -162,7 +172,17 @@ class DefaultAgentUiProjectionTest {
   }
 
   private AgentEvent sequence(AgentEvent event, long sequence) {
-    return new AgentEvent(event.id(), sequence, event.timestamp(), event.type(), event.version(), event.sessionId(),
-        event.turnId(), event.runId(), event.correlationId(), event.parentEventId(), event.payload());
+    return new AgentEvent(
+        event.id(),
+        sequence,
+        event.timestamp(),
+        event.type(),
+        event.version(),
+        event.sessionId(),
+        event.turnId(),
+        event.runId(),
+        event.correlationId(),
+        event.parentEventId(),
+        event.payload());
   }
 }

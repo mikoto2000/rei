@@ -7,8 +7,18 @@ import java.util.List;
 @FunctionalInterface
 public interface ActivityEvidenceSource {
   Contribution collect(Instant at) throws Exception;
-  record Contribution(String projectName,String projectId,List<ActivityEvidence.RecentEvent> events,ActivityEvidence.WorkReference workContext) {
-    public Contribution {events=List.copyOf(events);}
-    public Contribution(String name,String id,List<ActivityEvidence.RecentEvent> events){this(name,id,events,null);}
+
+  record Contribution(
+      String projectName,
+      String projectId,
+      List<ActivityEvidence.RecentEvent> events,
+      ActivityEvidence.WorkReference workContext) {
+    public Contribution {
+      events = List.copyOf(events);
+    }
+
+    public Contribution(String name, String id, List<ActivityEvidence.RecentEvent> events) {
+      this(name, id, events, null);
+    }
   }
 }

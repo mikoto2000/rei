@@ -1,14 +1,33 @@
 package dev.mikoto2000.rei.activity;
+
 import java.time.Instant;
 import java.util.List;
+
 public interface ActivityStore {
   void append(ActivityRecord record);
-  /** Replace an existing observation and rebuild its session projection without adding observed time. */
+
+  /**
+   * Replace an existing observation and rebuild its session projection without adding observed
+   * time.
+   */
   void replace(ActivityRecord record);
+
   List<ActivitySession> findBetween(Instant start, Instant end);
+
   List<ActivityRecord> findRecordsBetween(Instant start, Instant end);
+
   /** Bounded read capability; older adapters must not silently fall back to an unbounded read. */
-  default List<ActivityRecord> findRecordsBetweenBounded(Instant start,Instant end,int maxRecords){throw new UnsupportedOperationException("Bounded Activity evidence queries are unavailable");}
-  /** Exact observation instants, end exclusive; unlike interval queries this never scans the preceding day. */
-  default List<ActivityRecord> findObservationsBetweenBounded(Instant start,Instant end,int maxRecords){throw new UnsupportedOperationException("Bounded recent observations are unavailable");}
+  default List<ActivityRecord> findRecordsBetweenBounded(
+      Instant start, Instant end, int maxRecords) {
+    throw new UnsupportedOperationException("Bounded Activity evidence queries are unavailable");
+  }
+
+  /**
+   * Exact observation instants, end exclusive; unlike interval queries this never scans the
+   * preceding day.
+   */
+  default List<ActivityRecord> findObservationsBetweenBounded(
+      Instant start, Instant end, int maxRecords) {
+    throw new UnsupportedOperationException("Bounded recent observations are unavailable");
+  }
 }

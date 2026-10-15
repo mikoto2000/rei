@@ -1,14 +1,12 @@
 package dev.mikoto2000.rei.topic;
 
+import dev.mikoto2000.rei.websearch.WebSearchAndReadRequest;
+import dev.mikoto2000.rei.websearch.WebSearchAndReadService;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Component;
-
-import dev.mikoto2000.rei.websearch.WebSearchAndReadRequest;
-import dev.mikoto2000.rei.websearch.WebSearchAndReadService;
 
 @Component
 @ConditionalOnBean(WebSearchAndReadService.class)
@@ -26,15 +24,17 @@ public class WebDiscoverySource implements DiscoverySource {
       var response = service.searchAndRead(new WebSearchAndReadRequest(seed, 3, 1));
       response.results().stream()
           .filter(result -> result.title() != null && !result.title().isBlank())
-          .map(result -> new DiscoveryItem(
-              result.url(),
-              result.title(),
-              result.snippet(),
-              result.url(),
-              TopicSource.WEB,
-              parseInstant(result.publishedAt()),
-              relevance(seed, result.title() + " " + result.snippet()),
-              seed))
+          .map(
+              result ->
+                  new DiscoveryItem(
+                      result.url(),
+                      result.title(),
+                      result.snippet(),
+                      result.url(),
+                      TopicSource.WEB,
+                      parseInstant(result.publishedAt()),
+                      relevance(seed, result.title() + " " + result.snippet()),
+                      seed))
           .forEach(items::add);
     }
     return items;
@@ -42,7 +42,9 @@ public class WebDiscoverySource implements DiscoverySource {
 
   private double relevance(String seed, String text) {
     if (text == null || seed == null) return 0.0d;
-    return text.toLowerCase(java.util.Locale.ROOT).contains(seed.toLowerCase(java.util.Locale.ROOT)) ? 0.80d : 0.40d;
+    return text.toLowerCase(java.util.Locale.ROOT).contains(seed.toLowerCase(java.util.Locale.ROOT))
+        ? 0.80d
+        : 0.40d;
   }
 
   private Instant parseInstant(String value) {

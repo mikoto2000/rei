@@ -7,7 +7,7 @@ import java.util.Optional;
 /**
  * 検索結果を TTL 付きで保持するキャッシュ。
  *
- * <p>同一・同等検索を短時間に繰り返すことを減らす。副作用のない検索系ツールの結果のみを対象とする。</p>
+ * <p>同一・同等検索を短時間に繰り返すことを減らす。副作用のない検索系ツールの結果のみを対象とする。
  */
 public class SearchResultCache {
 
@@ -21,7 +21,8 @@ public class SearchResultCache {
   }
 
   public SearchResultCache(Duration ttl, int maxEntries, Clock clock) {
-    this.entries = new BoundedTtlCache<>(ttl, Math.max(1, maxEntries), Long.MAX_VALUE, clock, ignored -> 1);
+    this.entries =
+        new BoundedTtlCache<>(ttl, Math.max(1, maxEntries), Long.MAX_VALUE, clock, ignored -> 1);
   }
 
   /** キャッシュが空かどうか。 */
@@ -48,5 +49,4 @@ public class SearchResultCache {
   public void clear() {
     entries.clear();
   }
-
 }

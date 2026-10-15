@@ -15,22 +15,41 @@ public final class PlanClient implements PlanInference {
   static final int HTTP_ERROR_LIMIT_BYTES = 65536;
 
   public record Model(String id, String name) {}
-  public record Input(String role,String content) {
+
+  public record Input(String role, String content) {
     public Input {
-      if(role==null||!Set.of("user","assistant").contains(role)||content==null)
+      if (role == null || !Set.of("user", "assistant").contains(role) || content == null)
         throw new IllegalArgumentException("Explicit user/assistant text required");
     }
-    @Override public String toString(){return "Input["+role+", protected text]";}
+
+    @Override
+    public String toString() {
+      return "Input[" + role + ", protected text]";
+    }
   }
 
-  private static byte[] encodeRequest(String model,String instructions,List<Input> input) {
+  private static byte[] encodeRequest(String model, String instructions, List<Input> input) {
     try {
-      return new ObjectMapper().writeValueAsBytes(Map.of("model",model,"instructions",instructions,
-          "input",input,"store",false,"stream",true));
-    } catch(com.fasterxml.jackson.core.JsonProcessingException invalid){throw ChatGptException.of(PROTOCOL);}
+      return new ObjectMapper()
+          .writeValueAsBytes(
+              Map.of(
+                  "model",
+                  model,
+                  "instructions",
+                  instructions,
+                  "input",
+                  input,
+                  "store",
+                  false,
+                  "stream",
+                  true));
+    } catch (com.fasterxml.jackson.core.JsonProcessingException invalid) {
+      throw ChatGptException.of(PROTOCOL);
+    }
   }
-  public static int encodedRequestBytes(String model,String instructions,List<Input> input) {
-    return encodeRequest(model,instructions,input).length;
+
+  public static int encodedRequestBytes(String model, String instructions, List<Input> input) {
+    return encodeRequest(model, instructions, input).length;
   }
 
   private record Catalog(String clientId, String subject, Instant expires, List<Model> models) {}
@@ -126,16 +145,23 @@ public final class PlanClient implements PlanInference {
 
   /** Own SIWC credentials only; a logout/stop invalidates an in-flight external process. */
   public record Lease(TokenSet tokens, BooleanSupplier valid) {
-    @Override public String toString(){return "Lease[protected]";}
+    @Override
+    public String toString() {
+      return "Lease[protected]";
+    }
   }
-  public Lease lease(String account,String model) {
-    var generation=generations.computeIfAbsent(account,a->new java.util.concurrent.atomic.AtomicInteger());
-    int initial=generation.get();
-    if(models(account,false).stream().noneMatch(m->m.id().equals(model)))throw ChatGptException.of(MODEL_UNAVAILABLE);
-    var tokens=oauth.access(account);
-    BooleanSupplier valid=()->generation.get()==initial&&clock.instant().getEpochSecond()<tokens.expiresAt();
-    if(!valid.getAsBoolean())throw ChatGptException.of(AUTH_REQUIRED);
-    return new Lease(tokens,valid);
+
+  public Lease lease(String account, String model) {
+    var generation =
+        generations.computeIfAbsent(account, a -> new java.util.concurrent.atomic.AtomicInteger());
+    int initial = generation.get();
+    if (models(account, false).stream().noneMatch(m -> m.id().equals(model)))
+      throw ChatGptException.of(MODEL_UNAVAILABLE);
+    var tokens = oauth.access(account);
+    BooleanSupplier valid =
+        () -> generation.get() == initial && clock.instant().getEpochSecond() < tokens.expiresAt();
+    if (!valid.getAsBoolean()) throw ChatGptException.of(AUTH_REQUIRED);
+    return new Lease(tokens, valid);
   }
 
   public PlanSseAssembler.Result infer(
@@ -161,15 +187,30 @@ public final class PlanClient implements PlanInference {
       int receiveLimit,
       BooleanSupplier cancelled,
       Runnable onDispatch) {
-    return inferHistory(account,model,instructions,List.of(new Input("user",task)),timeout,
-        sendLimit,receiveLimit,cancelled,onDispatch);
+    return inferHistory(
+        account,
+        model,
+        instructions,
+        List.of(new Input("user", task)),
+        timeout,
+        sendLimit,
+        receiveLimit,
+        cancelled,
+        onDispatch);
   }
 
-  public PlanSseAssembler.Result inferHistory(String account,String model,String instructions,
-      List<Input> input,Duration timeout,int sendLimit,int receiveLimit,BooleanSupplier cancelled,
+  public PlanSseAssembler.Result inferHistory(
+      String account,
+      String model,
+      String instructions,
+      List<Input> input,
+      Duration timeout,
+      int sendLimit,
+      int receiveLimit,
+      BooleanSupplier cancelled,
       Runnable onDispatch) {
-    input=List.copyOf(input);
-    if(input.isEmpty()||input.size()>16)throw ChatGptException.of(SEND_LIMIT);
+    input = List.copyOf(input);
+    if (input.isEmpty() || input.size() > 16) throw ChatGptException.of(SEND_LIMIT);
     long deadline = System.nanoTime() + timeout.toNanos();
     var generation =
         generations.computeIfAbsent(account, a -> new java.util.concurrent.atomic.AtomicInteger());
@@ -178,7 +219,7 @@ public final class PlanClient implements PlanInference {
     if (stop.getAsBoolean()) throw ChatGptException.of(CANCELLED);
     if (models(account, false).stream().noneMatch(m -> m.id().equals(model)))
       throw ChatGptException.of(MODEL_UNAVAILABLE);
-    byte[] body=encodeRequest(model,instructions,input);
+    byte[] body = encodeRequest(model, instructions, input);
     if (body.length > sendLimit) throw ChatGptException.of(SEND_LIMIT);
     var token = oauth.access(account);
     if (stop.getAsBoolean()) throw ChatGptException.of(CANCELLED);

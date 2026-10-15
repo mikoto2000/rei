@@ -12,7 +12,6 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -62,13 +61,14 @@ class SoundNotificationServiceTest {
     props.setCommand(List.of("echo", "{{MESSAGE}}"));
 
     List<List<String>> capturedCommands = new ArrayList<>();
-    SoundNotificationService service = new SoundNotificationService(props) {
-      @Override
-      protected ProcessBuilder createProcessBuilder(List<String> command) {
-        capturedCommands.add(new ArrayList<>(command));
-        return new ProcessBuilder("cmd", "/c", "exit", "0");
-      }
-    };
+    SoundNotificationService service =
+        new SoundNotificationService(props) {
+          @Override
+          protected ProcessBuilder createProcessBuilder(List<String> command) {
+            capturedCommands.add(new ArrayList<>(command));
+            return new ProcessBuilder("cmd", "/c", "exit", "0");
+          }
+        };
 
     service.notify("hello world");
 
@@ -83,17 +83,18 @@ class SoundNotificationServiceTest {
     props.setEnabled(true);
     props.setCommand(List.of("sleep", "{{MESSAGE}}"));
 
-    SoundNotificationService service = new SoundNotificationService(props) {
-      @Override
-      protected ProcessBuilder createProcessBuilder(List<String> command) {
-        return new ProcessBuilder("cmd", "/c", "ping", "-n", "100", "127.0.0.1");
-      }
+    SoundNotificationService service =
+        new SoundNotificationService(props) {
+          @Override
+          protected ProcessBuilder createProcessBuilder(List<String> command) {
+            return new ProcessBuilder("cmd", "/c", "ping", "-n", "100", "127.0.0.1");
+          }
 
-      @Override
-      protected long getTimeoutSeconds() {
-        return 1L;
-      }
-    };
+          @Override
+          protected long getTimeoutSeconds() {
+            return 1L;
+          }
+        };
 
     service.notify("timeout message");
 
@@ -106,12 +107,13 @@ class SoundNotificationServiceTest {
     props.setEnabled(true);
     props.setCommand(List.of("echo", "{{MESSAGE}}"));
 
-    SoundNotificationService service = new SoundNotificationService(props) {
-      @Override
-      protected ProcessBuilder createProcessBuilder(List<String> command) {
-        return new ProcessBuilder("cmd", "/c", "exit", "1");
-      }
-    };
+    SoundNotificationService service =
+        new SoundNotificationService(props) {
+          @Override
+          protected ProcessBuilder createProcessBuilder(List<String> command) {
+            return new ProcessBuilder("cmd", "/c", "exit", "1");
+          }
+        };
 
     service.notify("failure message");
 
@@ -127,36 +129,39 @@ class SoundNotificationServiceTest {
     AtomicInteger inFlight = new AtomicInteger(0);
     AtomicInteger maxInFlight = new AtomicInteger(0);
 
-    SoundNotificationService service = new SoundNotificationService(props) {
-      @Override
-      protected ProcessBuilder createProcessBuilder(List<String> command) {
-        int current = inFlight.incrementAndGet();
-        maxInFlight.updateAndGet(prev -> Math.max(prev, current));
-        try {
-          Thread.sleep(100);
-        } catch (InterruptedException e) {
-          Thread.currentThread().interrupt();
-        } finally {
-          inFlight.decrementAndGet();
-        }
-        return new ProcessBuilder("cmd", "/c", "exit", "0");
-      }
-    };
+    SoundNotificationService service =
+        new SoundNotificationService(props) {
+          @Override
+          protected ProcessBuilder createProcessBuilder(List<String> command) {
+            int current = inFlight.incrementAndGet();
+            maxInFlight.updateAndGet(prev -> Math.max(prev, current));
+            try {
+              Thread.sleep(100);
+            } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+            } finally {
+              inFlight.decrementAndGet();
+            }
+            return new ProcessBuilder("cmd", "/c", "exit", "0");
+          }
+        };
 
     ExecutorService pool = Executors.newFixedThreadPool(2);
     CountDownLatch start = new CountDownLatch(1);
     CountDownLatch done = new CountDownLatch(2);
 
-    pool.submit(() -> {
-      await(start);
-      service.notify("first");
-      done.countDown();
-    });
-    pool.submit(() -> {
-      await(start);
-      service.notify("second");
-      done.countDown();
-    });
+    pool.submit(
+        () -> {
+          await(start);
+          service.notify("first");
+          done.countDown();
+        });
+    pool.submit(
+        () -> {
+          await(start);
+          service.notify("second");
+          done.countDown();
+        });
 
     start.countDown();
     assertTrue(done.await(5, TimeUnit.SECONDS));
@@ -175,6 +180,8 @@ class SoundNotificationServiceTest {
   }
 
   private void assertOutputContains(String expected) {
-    assertTrue(outContent.toString().contains(expected), "console output should contain message: " + expected);
+    assertTrue(
+        outContent.toString().contains(expected),
+        "console output should contain message: " + expected);
   }
 }

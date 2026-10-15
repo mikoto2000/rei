@@ -10,13 +10,15 @@ import org.springframework.stereotype.Component;
 
 /** Announces shutdown before lifecycle stop and bean destruction disconnect consumers. */
 @Component
-public final class ApplicationShutdownNotifier implements ApplicationListener<ContextClosedEvent>, Ordered {
+public final class ApplicationShutdownNotifier
+    implements ApplicationListener<ContextClosedEvent>, Ordered {
   private final AgentEventBus bus;
   private final AgentEventFactory events;
   private final ApplicationContext context;
   private boolean announced;
 
-  public ApplicationShutdownNotifier(AgentEventBus bus, AgentEventFactory events, ApplicationContext context) {
+  public ApplicationShutdownNotifier(
+      AgentEventBus bus, AgentEventFactory events, ApplicationContext context) {
     this.bus = bus;
     this.events = events;
     this.context = context;
@@ -28,9 +30,13 @@ public final class ApplicationShutdownNotifier implements ApplicationListener<Co
     bus.publish(events.applicationShutdownStarted(reason));
   }
 
-  @Override public void onApplicationEvent(ContextClosedEvent event) {
+  @Override
+  public void onApplicationEvent(ContextClosedEvent event) {
     if (event.getApplicationContext() == context) begin("context_closed");
   }
 
-  @Override public int getOrder() { return Ordered.HIGHEST_PRECEDENCE; }
+  @Override
+  public int getOrder() {
+    return Ordered.HIGHEST_PRECEDENCE;
+  }
 }

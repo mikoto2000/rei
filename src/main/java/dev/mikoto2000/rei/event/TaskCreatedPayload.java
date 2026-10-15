@@ -9,5 +9,4 @@ package dev.mikoto2000.rei.event;
  * @param status タスクの状態
  */
 public record TaskCreatedPayload(String taskId, String parentTaskId, String title, String status)
-    implements AgentEventPayload {
-}
+    implements AgentEventPayload {}

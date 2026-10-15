@@ -5,9 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.nio.file.Path;
 import java.util.List;
-
 import javax.sql.DataSource;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -16,14 +14,14 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 @org.junit.jupiter.api.Tag("integration")
 class BlueskyReplyConversationRepositoryTest {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   private BlueskyReplyConversationRepository repository;
 
   @BeforeEach
   void setUp() {
-    DataSource dataSource = new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("reply-conversation-test.db"));
+    DataSource dataSource =
+        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("reply-conversation-test.db"));
     repository = new BlueskyReplyConversationRepository(dataSource);
   }
 
@@ -33,8 +31,10 @@ class BlueskyReplyConversationRepositoryTest {
     repository.appendAssistantMessage("alice.bsky.social", "hi");
     repository.appendUserMessage("bob.bsky.social", "yo");
 
-    List<BlueskyReplyConversationRepository.ConversationMessage> alice = repository.findRecent("alice.bsky.social", 10);
-    List<BlueskyReplyConversationRepository.ConversationMessage> bob = repository.findRecent("bob.bsky.social", 10);
+    List<BlueskyReplyConversationRepository.ConversationMessage> alice =
+        repository.findRecent("alice.bsky.social", 10);
+    List<BlueskyReplyConversationRepository.ConversationMessage> bob =
+        repository.findRecent("bob.bsky.social", 10);
 
     assertEquals(2, alice.size());
     assertEquals("user", alice.get(0).role());

@@ -8,12 +8,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
-
 import org.junit.jupiter.api.Test;
 
 class AgentEventFactoryTest {
 
-  private final Clock clock = Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));
+  private final Clock clock =
+      Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));
   private final AgentEventFactory factory = new AgentEventFactory(clock);
 
   @Test
@@ -90,7 +90,9 @@ class AgentEventFactoryTest {
 
   @Test
   void createsToolFailedEvent() {
-    AgentEvent event = factory.toolFailed("call-1", "readMultiFile", new ErrorInformation("IOException", "boom", null));
+    AgentEvent event =
+        factory.toolFailed(
+            "call-1", "readMultiFile", new ErrorInformation("IOException", "boom", null));
 
     assertEquals(AgentEventType.TOOL_FAILED, event.type());
     ToolFailedPayload payload = (ToolFailedPayload) event.payload();
@@ -102,9 +104,20 @@ class AgentEventFactoryTest {
   @Test
   void createsSkillRoutingLifecycleEventsWithTypedMetrics() {
     AgentEvent started = factory.skillRoutingStarted("run-1", "routing-1", 27, 1);
-    AgentEvent completed = factory.skillRoutingCompleted("run-1", "routing-1", 1_834, 27, "rspress", 1,
-        1_560L, 21L, null, java.util.List.of("explicit"), java.util.List.of("implicit"),
-        java.util.List.of("warning"));
+    AgentEvent completed =
+        factory.skillRoutingCompleted(
+            "run-1",
+            "routing-1",
+            1_834,
+            27,
+            "rspress",
+            1,
+            1_560L,
+            21L,
+            null,
+            java.util.List.of("explicit"),
+            java.util.List.of("implicit"),
+            java.util.List.of("warning"));
 
     assertEquals(AgentEventType.SKILL_ROUTING_STARTED, started.type());
     assertEquals(AgentEventType.SKILL_ROUTING_COMPLETED, completed.type());
@@ -131,8 +144,8 @@ class AgentEventFactoryTest {
 
   @Test
   void sessionTurnRunIdsArePropagated() {
-    AgentEvent event = factory.runStarted("run-1", "user-request", null)
-        .withContext("session-1", "turn-1");
+    AgentEvent event =
+        factory.runStarted("run-1", "user-request", null).withContext("session-1", "turn-1");
 
     assertEquals("session-1", event.sessionId());
     assertEquals("turn-1", event.turnId());

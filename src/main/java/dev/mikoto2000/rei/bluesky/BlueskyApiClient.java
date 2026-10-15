@@ -21,7 +21,13 @@ public interface BlueskyApiClient {
     return getAuthorFeed(actorDid, limit);
   }
 
-  default PostResult createReply(String accessJwt, String did, String text, String parentUri, String parentCid, String rootUri,
+  default PostResult createReply(
+      String accessJwt,
+      String did,
+      String text,
+      String parentUri,
+      String parentCid,
+      String rootUri,
       String rootCid) {
     throw new UnsupportedOperationException("createReply is not implemented");
   }
@@ -30,11 +36,9 @@ public interface BlueskyApiClient {
     throw new UnsupportedOperationException("resolveReplyTarget is not implemented");
   }
 
-  record AuthResult(boolean success, String accessJwt, String did) {
-  }
+  record AuthResult(boolean success, String accessJwt, String did) {}
 
-  record PostResult(boolean success, String postUri) {
-  }
+  record PostResult(boolean success, String postUri) {}
 
   record FeedPost(
       String uri,
@@ -44,9 +48,8 @@ public interface BlueskyApiClient {
       boolean repost,
       boolean reply,
       String rootUri,
-      String rootCid) {
-  }
+      String rootCid) {}
 
-  record ReplyTarget(String parentUri, String parentCid, String rootUri, String rootCid, String targetText) {
-  }
+  record ReplyTarget(
+      String parentUri, String parentCid, String rootUri, String rootCid, String targetText) {}
 }

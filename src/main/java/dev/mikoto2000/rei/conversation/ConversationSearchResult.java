@@ -11,8 +11,13 @@ public record ConversationSearchResult(
     String sourceProjectName,
     String contextBoundary,
     double relevanceScore) {
-  public ConversationSearchResult(String conversationId, String scope, String speaker, String timestamp,
-      String summary, String content) {
+  public ConversationSearchResult(
+      String conversationId,
+      String scope,
+      String speaker,
+      String timestamp,
+      String summary,
+      String content) {
     this(conversationId, scope, speaker, timestamp, summary, content, null, null, null, 0);
   }
 }

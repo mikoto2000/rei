@@ -9,7 +9,6 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.List;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -29,8 +28,9 @@ class BlueskyReplyDeduplicationTest {
 
   @BeforeEach
   void setUp() {
-    repository = new BlueskyReplyStateRepository(
-        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("state.db")));
+    repository =
+        new BlueskyReplyStateRepository(
+            new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("state.db")));
     conversation = mock(BlueskyReplyConversationRepository.class);
     generator = mock(BlueskyReplyTextGenerator.class);
     api = mock(BlueskyApiClient.class);
@@ -43,7 +43,8 @@ class BlueskyReplyDeduplicationTest {
     when(api.resolveReplyTarget(anyString(), anyString()))
         .thenReturn(new BlueskyApiClient.ReplyTarget(TARGET, "cid", TARGET, "cid", "hello"));
     when(api.createReply(any(), any(), any(), any(), any(), any(), any()))
-        .thenReturn(new BlueskyApiClient.PostResult(true, "at://did:plc:rei/app.bsky.feed.post/reply"));
+        .thenReturn(
+            new BlueskyApiClient.PostResult(true, "at://did:plc:rei/app.bsky.feed.post/reply"));
     manual = new BlueskyPostService(properties, api, generator, conversation, repository);
   }
 
@@ -66,14 +67,27 @@ class BlueskyReplyDeduplicationTest {
     var feedClient = mock(BlueskyAuthorFeedClient.class);
     when(feedClient.resolveDid(user.getHandle())).thenReturn("did:plc:alice");
     when(api.getAuthorFeed("did:plc:alice", reply.getFetchLimit(), "jwt"))
-        .thenReturn(List.of(new BlueskyApiClient.FeedPost(TARGET, "cid", "hello",
-            OffsetDateTime.now(), false, false, null, null)));
-    when(generator.generate(any(), any(), any())).thenAnswer(invocation -> {
-      assertThat(manual.reply(URL, "manual").success()).isTrue();
-      return "automatic";
-    });
-    var scheduled = new BlueskyReplyService(properties, mock(BlueskyReplyPropertiesValidator.class),
-        feedClient, repository, conversation, generator, api, () -> 0.0, Clock.systemUTC());
+        .thenReturn(
+            List.of(
+                new BlueskyApiClient.FeedPost(
+                    TARGET, "cid", "hello", OffsetDateTime.now(), false, false, null, null)));
+    when(generator.generate(any(), any(), any()))
+        .thenAnswer(
+            invocation -> {
+              assertThat(manual.reply(URL, "manual").success()).isTrue();
+              return "automatic";
+            });
+    var scheduled =
+        new BlueskyReplyService(
+            properties,
+            mock(BlueskyReplyPropertiesValidator.class),
+            feedClient,
+            repository,
+            conversation,
+            generator,
+            api,
+            () -> 0.0,
+            Clock.systemUTC());
 
     scheduled.runOnce();
 
@@ -86,8 +100,9 @@ class BlueskyReplyDeduplicationTest {
         .thenThrow(new IllegalStateException("response lost after send"));
     assertThat(manual.reply(URL, "first").success()).isFalse();
 
-    var reopened = new BlueskyReplyStateRepository(
-        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("state.db")));
+    var reopened =
+        new BlueskyReplyStateRepository(
+            new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("state.db")));
     var restarted = new BlueskyPostService(properties, api, generator, conversation, reopened);
     assertThat(restarted.reply(TARGET, "second").success()).isFalse();
     verify(api, times(1)).createReply(any(), any(), any(), any(), any(), any(), any());
@@ -106,7 +121,8 @@ class BlueskyReplyDeduplicationTest {
   @Test
   void historyFailureAfterSendDoesNotCauseAnotherSend() {
     doThrow(new IllegalStateException("history unavailable"))
-        .when(conversation).appendUserMessage(anyString(), anyString());
+        .when(conversation)
+        .appendUserMessage(anyString(), anyString());
     assertThat(manual.reply(URL, "first").success()).isFalse();
     assertThat(repository.isAlreadyReplied(TARGET)).isTrue();
     assertThat(manual.reply(URL, "second").success()).isFalse();

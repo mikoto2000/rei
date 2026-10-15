@@ -1,15 +1,15 @@
 package dev.mikoto2000.rei.core.execution;
 
+import dev.mikoto2000.rei.conversation.HistoryFormatter;
+import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
+import dev.mikoto2000.rei.core.project.*;
+import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.image.*;
+import dev.mikoto2000.rei.summarize.*;
 import java.net.URI;
 import java.time.*;
 import java.util.function.*;
 import org.springframework.stereotype.Service;
-import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
-import dev.mikoto2000.rei.core.project.*;
-import dev.mikoto2000.rei.summarize.*;
-import dev.mikoto2000.rei.image.*;
-import dev.mikoto2000.rei.event.*;
-import dev.mikoto2000.rei.conversation.HistoryFormatter;
 
 /** Command orchestration over the existing runtime registry/executor and project state store. */
 @Service
@@ -23,89 +23,175 @@ public class BackgroundCommands {
   private final AgentEventPublisher publisher;
   private final Clock clock;
   private dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator narrator;
-  @org.springframework.beans.factory.annotation.Autowired(required=false)
-  public void setNarrator(dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator narrator) { this.narrator=narrator; }
-  public BackgroundCommands(ConversationInputRouter runs,ProjectService projects,ProjectRunStateStore states,
-      WebPageSummarizerService summaries,ImageGenerationService images,AgentEventFactory events,AgentEventPublisher publisher,Clock clock) {
-    this.runs=runs; this.projects=projects; this.states=states; this.summaries=summaries; this.images=images;
-    this.events=events; this.publisher=publisher; this.clock=clock;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setNarrator(dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator narrator) {
+    this.narrator = narrator;
   }
+
+  public BackgroundCommands(
+      ConversationInputRouter runs,
+      ProjectService projects,
+      ProjectRunStateStore states,
+      WebPageSummarizerService summaries,
+      ImageGenerationService images,
+      AgentEventFactory events,
+      AgentEventPublisher publisher,
+      Clock clock) {
+    this.runs = runs;
+    this.projects = projects;
+    this.states = states;
+    this.summaries = summaries;
+    this.images = images;
+    this.events = events;
+    this.publisher = publisher;
+    this.clock = clock;
+  }
+
   public ActiveExecution summarize(URI source) {
-    return start(ExecutionType.SUMMARIZE,source.toString(),()->summaries.summarize(source).summary());
+    return start(
+        ExecutionType.SUMMARIZE, source.toString(), () -> summaries.summarize(source).summary());
   }
+
   public ActiveExecution image(ImageGenerationRequest request) {
-    return start(ExecutionType.IMAGE,request.prompt(),()->{
-      var result=images.generate(request);
-      if(!result.success()) {
-        if("cancelled".equals(result.message())) throw new java.util.concurrent.CancellationException();
-        throw new IllegalStateException(result.message());
-      }
-      return "画像生成プロンプト: "+result.prompt()+"\n画像を保存しました: "+result.savedPath();
-    });
+    return start(
+        ExecutionType.IMAGE,
+        request.prompt(),
+        () -> {
+          var result = images.generate(request);
+          if (!result.success()) {
+            if ("cancelled".equals(result.message()))
+              throw new java.util.concurrent.CancellationException();
+            throw new IllegalStateException(result.message());
+          }
+          return "画像生成プロンプト: " + result.prompt() + "\n画像を保存しました: " + result.savedPath();
+        });
   }
-  private ActiveExecution start(ExecutionType type,String source,Supplier<String> operation) {
-    var project=projects.currentContext();
-    var registered=new java.util.concurrent.atomic.AtomicReference<ActiveExecution>();
+
+  private ActiveExecution start(ExecutionType type, String source, Supplier<String> operation) {
+    var project = projects.currentContext();
+    var registered = new java.util.concurrent.atomic.AtomicReference<ActiveExecution>();
     try {
-      return runs.submitBackground(project,type,source,e->{registered.set(e); publish(e,"RUNNING","");},e->{
-        try {
-          String result=operation.get();
-          if(Thread.currentThread().isInterrupted()) throw new java.util.concurrent.CancellationException();
-          states.saveCompleted(CompletedExecution.of(e,source,result,clock.instant()));
-          publish(e,"COMPLETED",result);
-        } catch(Exception error) {
-          publish(e,status(error),new HistoryFormatter().label(dev.mikoto2000.rei.event.FailureMessages.describe(error)));
-          org.slf4j.LoggerFactory.getLogger(getClass()).debug("Background execution failed: {}",e.id(),error);
-        }
-      });
-    } catch(RuntimeException error) {
-      if(registered.get()!=null) publish(registered.get(),"FAILED","Execution could not be started: " + dev.mikoto2000.rei.event.FailureMessages.describe(error));
+      return runs.submitBackground(
+          project,
+          type,
+          source,
+          e -> {
+            registered.set(e);
+            publish(e, "RUNNING", "");
+          },
+          e -> {
+            try {
+              String result = operation.get();
+              if (Thread.currentThread().isInterrupted())
+                throw new java.util.concurrent.CancellationException();
+              states.saveCompleted(CompletedExecution.of(e, source, result, clock.instant()));
+              publish(e, "COMPLETED", result);
+            } catch (Exception error) {
+              publish(
+                  e,
+                  status(error),
+                  new HistoryFormatter()
+                      .label(dev.mikoto2000.rei.event.FailureMessages.describe(error)));
+              org.slf4j.LoggerFactory.getLogger(getClass())
+                  .debug("Background execution failed: {}", e.id(), error);
+            }
+          });
+    } catch (RuntimeException error) {
+      if (registered.get() != null)
+        publish(
+            registered.get(),
+            "FAILED",
+            "Execution could not be started: "
+                + dev.mikoto2000.rei.event.FailureMessages.describe(error));
       throw error;
     }
   }
+
   private String status(Throwable error) {
-    for(Throwable cause=error;cause!=null;cause=cause.getCause()) {
-      if(cause instanceof java.util.concurrent.CancellationException || cause instanceof InterruptedException) return "CANCELLED";
-      if(cause instanceof java.util.concurrent.TimeoutException || cause instanceof java.net.http.HttpTimeoutException
+    for (Throwable cause = error; cause != null; cause = cause.getCause()) {
+      if (cause instanceof java.util.concurrent.CancellationException
+          || cause instanceof InterruptedException) return "CANCELLED";
+      if (cause instanceof java.util.concurrent.TimeoutException
+          || cause instanceof java.net.http.HttpTimeoutException
           || cause instanceof java.net.SocketTimeoutException) return "TIMED_OUT";
     }
-    return Thread.currentThread().isInterrupted()?"CANCELLED":error.getMessage()!=null&&error.getMessage().toLowerCase(java.util.Locale.ROOT).contains("timeout")?"TIMED_OUT":"FAILED";
+    return Thread.currentThread().isInterrupted()
+        ? "CANCELLED"
+        : error.getMessage() != null
+                && error.getMessage().toLowerCase(java.util.Locale.ROOT).contains("timeout")
+            ? "TIMED_OUT"
+            : "FAILED";
   }
-  private void publish(ActiveExecution execution,String status,String output) {
-    try { publisher.publish(events.backgroundExecution(execution,status,output)); }
-    catch(RuntimeException error) { org.slf4j.LoggerFactory.getLogger(getClass()).debug("Execution notification failed: {}",execution.id(),error); }
+
+  private void publish(ActiveExecution execution, String status, String output) {
+    try {
+      publisher.publish(events.backgroundExecution(execution, status, output));
+    } catch (RuntimeException error) {
+      org.slf4j.LoggerFactory.getLogger(getClass())
+          .debug("Execution notification failed: {}", execution.id(), error);
+    }
   }
+
   public void showLastSummary(Consumer<String> out) {
-    showLastSummary(projects.currentContext(),out,true,java.util.List.of());
+    showLastSummary(projects.currentContext(), out, true, java.util.List.of());
   }
-  public void showLastSummary(ProjectContext project,Consumer<String> out,boolean narrate,java.util.List<ActiveExecution> additional) {
-    var format=new HistoryFormatter();
-    var active=java.util.stream.Stream.concat(runs.activeExecutions().stream(),additional.stream()).filter(e->e.type()==ExecutionType.SUMMARIZE&&project.id().equals(e.projectId())).toList();
-    if(!active.isEmpty()) {
+
+  public void showLastSummary(
+      ProjectContext project,
+      Consumer<String> out,
+      boolean narrate,
+      java.util.List<ActiveExecution> additional) {
+    var format = new HistoryFormatter();
+    var active =
+        java.util.stream.Stream.concat(runs.activeExecutions().stream(), additional.stream())
+            .filter(e -> e.type() == ExecutionType.SUMMARIZE && project.id().equals(e.projectId()))
+            .toList();
+    if (!active.isEmpty()) {
       out.accept("Summarize is currently running:");
-      for(var execution:active) {
-        long elapsed=Math.max(0,Duration.between(execution.startedAt(),clock.instant()).toSeconds());
-        out.accept("  "+execution.id()+"  Source: "+format.label(execution.summary())+"  Elapsed: "+String.format("%02d:%02d",elapsed/60,elapsed%60));
+      for (var execution : active) {
+        long elapsed =
+            Math.max(0, Duration.between(execution.startedAt(), clock.instant()).toSeconds());
+        out.accept(
+            "  "
+                + execution.id()
+                + "  Source: "
+                + format.label(execution.summary())
+                + "  Elapsed: "
+                + String.format("%02d:%02d", elapsed / 60, elapsed % 60));
       }
     }
-    var latest=states.latestCompleted(project.id(),ExecutionType.SUMMARIZE);
-    if(latest.isEmpty()) out.accept("No completed summary for project: "+format.label(project.name()));
+    var latest = states.latestCompleted(project.id(), ExecutionType.SUMMARIZE);
+    if (latest.isEmpty())
+      out.accept("No completed summary for project: " + format.label(project.name()));
     else {
-      var result=latest.get();
+      var result = latest.get();
       out.accept("Last completed summary:");
-      out.accept("  Source: "+format.label(result.source()));
-      out.accept("  Completed: "+format.timestamp(result.completedAt().toString()));
-      String text=CredentialRedactor.redact(result.result()).replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", "");
+      out.accept("  Source: " + format.label(result.source()));
+      out.accept("  Completed: " + format.timestamp(result.completedAt().toString()));
+      String text =
+          CredentialRedactor.redact(result.result()).replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", "");
       out.accept(text);
-      if(narrate && narrator!=null && !text.isBlank()) {
-        var execution=new ActiveExecution(result.id(),result.projectId(),result.conversationId(),
-            project.root(),result.type(),result.source(),result.startedAt());
+      if (narrate && narrator != null && !text.isBlank()) {
+        var execution =
+            new ActiveExecution(
+                result.id(),
+                result.projectId(),
+                result.conversationId(),
+                project.root(),
+                result.type(),
+                result.source(),
+                result.startedAt());
         try {
-          runs.executeAuxiliary(()->{
-            try(var scope=ExecutionScope.open(execution)) { narrator.narrateCompletedRun(text); }
-          });
-        } catch(java.util.concurrent.RejectedExecutionException error) {
-          org.slf4j.LoggerFactory.getLogger(getClass()).debug("Summary narration could not be scheduled",error);
+          runs.executeAuxiliary(
+              () -> {
+                try (var scope = ExecutionScope.open(execution)) {
+                  narrator.narrateCompletedRun(text);
+                }
+              });
+        } catch (java.util.concurrent.RejectedExecutionException error) {
+          org.slf4j.LoggerFactory.getLogger(getClass())
+              .debug("Summary narration could not be scheduled", error);
         }
       }
     }

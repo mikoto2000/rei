@@ -1,5 +1,9 @@
 package dev.mikoto2000.rei.memory.service;
 
+import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
+import dev.mikoto2000.rei.memory.model.Memory;
+import dev.mikoto2000.rei.memory.model.MemoryScope;
+import dev.mikoto2000.rei.memory.model.MemoryStatus;
 import java.sql.ResultSet;
 import java.time.Clock;
 import java.time.OffsetDateTime;
@@ -7,18 +11,11 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 import java.util.function.Supplier;
-
 import javax.sql.DataSource;
-
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
-
-import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
-import dev.mikoto2000.rei.memory.model.Memory;
-import dev.mikoto2000.rei.memory.model.MemoryScope;
-import dev.mikoto2000.rei.memory.model.MemoryStatus;
 
 @Service
 public class MemoryService {
@@ -27,14 +24,17 @@ public class MemoryService {
   private final MemoryProperties memoryProperties;
   private final Clock clock;
 
-  public MemoryService(@Qualifier("memoryConsolidationDataSource") DataSource dataSource,
+  public MemoryService(
+      @Qualifier("memoryConsolidationDataSource") DataSource dataSource,
       MemoryProperties memoryProperties) {
     this(dataSource, memoryProperties, Clock.systemUTC());
   }
 
   @Autowired
-  public MemoryService(@Qualifier("memoryConsolidationDataSource") DataSource dataSource,
-      MemoryProperties memoryProperties, Clock clock) {
+  public MemoryService(
+      @Qualifier("memoryConsolidationDataSource") DataSource dataSource,
+      MemoryProperties memoryProperties,
+      Clock clock) {
     this.jdbcClient = JdbcClient.create(dataSource);
     this.memoryProperties = memoryProperties;
     this.clock = clock;
@@ -42,8 +42,11 @@ public class MemoryService {
   }
 
   public void initializeSchema() {
-    executeDb(() -> {
-      jdbcClient.sql("""
+    executeDb(
+        () -> {
+          jdbcClient
+              .sql(
+                  """
           CREATE TABLE IF NOT EXISTS memories (
             id TEXT PRIMARY KEY,
             content TEXT NOT NULL,
@@ -57,80 +60,134 @@ public class MemoryService {
             observed_at TEXT,
             valid_until TEXT
           )
-          """).update();
-      addColumnIfMissing("memories", "observed_at", "TEXT");
-      addColumnIfMissing("memories", "valid_until", "TEXT");
-      jdbcClient.sql("CREATE TABLE IF NOT EXISTS memory_tags (memory_id TEXT NOT NULL, tag TEXT NOT NULL)").update();
-      jdbcClient.sql("CREATE TABLE IF NOT EXISTS memory_sources (memory_id TEXT NOT NULL, source TEXT NOT NULL)").update();
-      jdbcClient.sql("CREATE TABLE IF NOT EXISTS memory_relations (from_memory_id TEXT NOT NULL, to_memory_id TEXT NOT NULL, relation_type TEXT NOT NULL)")
-          .update();
-      jdbcClient.sql("CREATE TABLE IF NOT EXISTS memory_summaries (memory_id TEXT NOT NULL, summary TEXT NOT NULL)").update();
-      jdbcClient.sql("CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(memory_id UNINDEXED, content)").update();
-    }, "メモリDBの初期化に失敗しました");
+          """)
+              .update();
+          addColumnIfMissing("memories", "observed_at", "TEXT");
+          addColumnIfMissing("memories", "valid_until", "TEXT");
+          jdbcClient
+              .sql(
+                  "CREATE TABLE IF NOT EXISTS memory_tags (memory_id TEXT NOT NULL, tag TEXT NOT NULL)")
+              .update();
+          jdbcClient
+              .sql(
+                  "CREATE TABLE IF NOT EXISTS memory_sources (memory_id TEXT NOT NULL, source TEXT NOT NULL)")
+              .update();
+          jdbcClient
+              .sql(
+                  "CREATE TABLE IF NOT EXISTS memory_relations (from_memory_id TEXT NOT NULL, to_memory_id TEXT NOT NULL, relation_type TEXT NOT NULL)")
+              .update();
+          jdbcClient
+              .sql(
+                  "CREATE TABLE IF NOT EXISTS memory_summaries (memory_id TEXT NOT NULL, summary TEXT NOT NULL)")
+              .update();
+          jdbcClient
+              .sql(
+                  "CREATE VIRTUAL TABLE IF NOT EXISTS memory_fts USING fts5(memory_id UNINDEXED, content)")
+              .update();
+        },
+        "メモリDBの初期化に失敗しました");
   }
 
   public Memory save(Memory memory) {
-    return executeDb(() -> {
-      OffsetDateTime now = OffsetDateTime.now(clock);
-      String id = memory.id() == null || memory.id().isBlank() ? UUID.randomUUID().toString() : memory.id();
-      OffsetDateTime expiresAt = memory.expiresAt() != null ? memory.expiresAt() : defaultExpiry(memory.scope(), now);
-      OffsetDateTime observedAt = memory.observedAt() != null ? memory.observedAt()
-          : memory.createdAt() != null ? memory.createdAt() : now;
-      OffsetDateTime validUntil = memory.validUntil() != null ? memory.validUntil() : expiresAt;
-      Memory saved = new Memory(
-          id,
-          memory.content(),
-          memory.type(),
-          memory.scope(),
-          MemoryStatus.ACTIVE,
-          memory.confidence(),
-          expiresAt,
-          memory.createdAt() != null ? memory.createdAt() : now,
-          now,
-          observedAt,
-          validUntil);
-      jdbcClient.sql("""
+    return executeDb(
+        () -> {
+          OffsetDateTime now = OffsetDateTime.now(clock);
+          String id =
+              memory.id() == null || memory.id().isBlank()
+                  ? UUID.randomUUID().toString()
+                  : memory.id();
+          OffsetDateTime expiresAt =
+              memory.expiresAt() != null ? memory.expiresAt() : defaultExpiry(memory.scope(), now);
+          OffsetDateTime observedAt =
+              memory.observedAt() != null
+                  ? memory.observedAt()
+                  : memory.createdAt() != null ? memory.createdAt() : now;
+          OffsetDateTime validUntil = memory.validUntil() != null ? memory.validUntil() : expiresAt;
+          Memory saved =
+              new Memory(
+                  id,
+                  memory.content(),
+                  memory.type(),
+                  memory.scope(),
+                  MemoryStatus.ACTIVE,
+                  memory.confidence(),
+                  expiresAt,
+                  memory.createdAt() != null ? memory.createdAt() : now,
+                  now,
+                  observedAt,
+                  validUntil);
+          jdbcClient
+              .sql(
+                  """
           INSERT INTO memories(id, content, type, scope, status, confidence, expires_at, created_at, updated_at, observed_at, valid_until)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """)
-          .params(saved.id(), saved.content(), saved.type().name(), saved.scope().name(), saved.status().name(),
-              saved.confidence(),
-              toDbTime(saved.expiresAt()), toDbTime(saved.createdAt()), toDbTime(saved.updatedAt()),
-              toDbTime(saved.observedAt()), toDbTime(saved.validUntil()))
-          .update();
-      jdbcClient.sql("INSERT INTO memory_fts(memory_id, content) VALUES (?, ?)")
-          .params(saved.id(), saved.content()).update();
-      return saved;
-    }, "メモリ保存に失敗しました");
+              .params(
+                  saved.id(),
+                  saved.content(),
+                  saved.type().name(),
+                  saved.scope().name(),
+                  saved.status().name(),
+                  saved.confidence(),
+                  toDbTime(saved.expiresAt()),
+                  toDbTime(saved.createdAt()),
+                  toDbTime(saved.updatedAt()),
+                  toDbTime(saved.observedAt()),
+                  toDbTime(saved.validUntil()))
+              .update();
+          jdbcClient
+              .sql("INSERT INTO memory_fts(memory_id, content) VALUES (?, ?)")
+              .params(saved.id(), saved.content())
+              .update();
+          return saved;
+        },
+        "メモリ保存に失敗しました");
   }
 
   public Optional<Memory> findById(String id) {
-    return executeDb(() -> jdbcClient.sql("SELECT * FROM memories WHERE id = ?")
-        .param(id)
-        .query(this::mapMemory)
-        .optional(), "メモリ取得に失敗しました");
+    return executeDb(
+        () ->
+            jdbcClient
+                .sql("SELECT * FROM memories WHERE id = ?")
+                .param(id)
+                .query(this::mapMemory)
+                .optional(),
+        "メモリ取得に失敗しました");
   }
 
   public List<Memory> listActive() {
-    return executeDb(() -> jdbcClient.sql("SELECT * FROM memories WHERE status = 'ACTIVE' ORDER BY created_at DESC")
-        .query(this::mapMemory)
-        .list(), "アクティブメモリ一覧の取得に失敗しました");
+    return executeDb(
+        () ->
+            jdbcClient
+                .sql("SELECT * FROM memories WHERE status = 'ACTIVE' ORDER BY created_at DESC")
+                .query(this::mapMemory)
+                .list(),
+        "アクティブメモリ一覧の取得に失敗しました");
   }
 
   public List<Memory> listActiveWithExpiryCheck() {
-    executeDb(() -> jdbcClient.sql("""
+    executeDb(
+        () ->
+            jdbcClient
+                .sql(
+                    """
         UPDATE memories
         SET status = 'DEPRECATED', updated_at = ?
         WHERE status = 'ACTIVE' AND expires_at IS NOT NULL AND expires_at < ?
         """)
-        .params(toDbTime(OffsetDateTime.now(clock)), toDbTime(OffsetDateTime.now(clock)))
-        .update(), "有効期限チェックに失敗しました");
+                .params(toDbTime(OffsetDateTime.now(clock)), toDbTime(OffsetDateTime.now(clock)))
+                .update(),
+        "有効期限チェックに失敗しました");
     return listActive();
   }
 
   public List<Memory> search(String query, int limit) {
     int safeLimit = Math.max(1, Math.min(limit, memoryProperties.searchMaxResults()));
-    return executeDb(() -> jdbcClient.sql("""
+    return executeDb(
+        () ->
+            jdbcClient
+                .sql(
+                    """
         SELECT m.*
         FROM memory_fts f
         JOIN memories m ON m.id = f.memory_id
@@ -138,18 +195,23 @@ public class MemoryService {
         ORDER BY rank
         LIMIT ?
         """)
-        .params(query, safeLimit)
-        .query(this::mapMemory)
-        .list(), "メモリ検索に失敗しました");
+                .params(query, safeLimit)
+                .query(this::mapMemory)
+                .list(),
+        "メモリ検索に失敗しました");
   }
 
   public boolean updateStatus(String id, MemoryStatus status) {
-    return executeDb(() -> {
-      int updated = jdbcClient.sql("UPDATE memories SET status = ?, updated_at = ? WHERE id = ?")
-          .params(status.name(), toDbTime(OffsetDateTime.now(clock)), id)
-          .update();
-      return updated > 0;
-    }, "メモリステータス更新に失敗しました");
+    return executeDb(
+        () -> {
+          int updated =
+              jdbcClient
+                  .sql("UPDATE memories SET status = ?, updated_at = ? WHERE id = ?")
+                  .params(status.name(), toDbTime(OffsetDateTime.now(clock)), id)
+                  .update();
+          return updated > 0;
+        },
+        "メモリステータス更新に失敗しました");
   }
 
   public void saveTags(String memoryId, List<String> tags) {
@@ -160,49 +222,79 @@ public class MemoryService {
       if (tag == null || tag.isBlank()) {
         continue;
       }
-      executeDb(() -> jdbcClient.sql("INSERT INTO memory_tags(memory_id, tag) VALUES (?, ?)")
-          .params(memoryId, tag)
-          .update(), "メモリタグ保存に失敗しました");
+      executeDb(
+          () ->
+              jdbcClient
+                  .sql("INSERT INTO memory_tags(memory_id, tag) VALUES (?, ?)")
+                  .params(memoryId, tag)
+                  .update(),
+          "メモリタグ保存に失敗しました");
     }
   }
 
   public List<String> findTags(String memoryId) {
-    return executeDb(() -> jdbcClient.sql("SELECT tag FROM memory_tags WHERE memory_id = ? ORDER BY tag")
-        .param(memoryId)
-        .query(String.class)
-        .list(), "メモリタグ取得に失敗しました");
+    return executeDb(
+        () ->
+            jdbcClient
+                .sql("SELECT tag FROM memory_tags WHERE memory_id = ? ORDER BY tag")
+                .param(memoryId)
+                .query(String.class)
+                .list(),
+        "メモリタグ取得に失敗しました");
   }
 
   public void saveSource(String memoryId, String source) {
     if (source == null || source.isBlank()) {
       return;
     }
-    executeDb(() -> jdbcClient.sql("INSERT INTO memory_sources(memory_id, source) VALUES (?, ?)")
-        .params(memoryId, source)
-        .update(), "メモリソース保存に失敗しました");
+    executeDb(
+        () ->
+            jdbcClient
+                .sql("INSERT INTO memory_sources(memory_id, source) VALUES (?, ?)")
+                .params(memoryId, source)
+                .update(),
+        "メモリソース保存に失敗しました");
   }
 
   public List<String> findSources(String memoryId) {
-    return executeDb(() -> jdbcClient.sql("SELECT source FROM memory_sources WHERE memory_id = ? ORDER BY source")
-        .param(memoryId)
-        .query(String.class)
-        .list(), "メモリソース取得に失敗しました");
+    return executeDb(
+        () ->
+            jdbcClient
+                .sql("SELECT source FROM memory_sources WHERE memory_id = ? ORDER BY source")
+                .param(memoryId)
+                .query(String.class)
+                .list(),
+        "メモリソース取得に失敗しました");
   }
 
   public void saveRelation(String fromMemoryId, String toMemoryId, String relationType) {
-    if (fromMemoryId == null || toMemoryId == null || relationType == null
-        || fromMemoryId.isBlank() || toMemoryId.isBlank() || relationType.isBlank()) {
+    if (fromMemoryId == null
+        || toMemoryId == null
+        || relationType == null
+        || fromMemoryId.isBlank()
+        || toMemoryId.isBlank()
+        || relationType.isBlank()) {
       return;
     }
-    executeDb(() -> jdbcClient.sql("INSERT INTO memory_relations(from_memory_id, to_memory_id, relation_type) VALUES (?, ?, ?)")
-        .params(fromMemoryId, toMemoryId, relationType)
-        .update(), "メモリ関連保存に失敗しました");
+    executeDb(
+        () ->
+            jdbcClient
+                .sql(
+                    "INSERT INTO memory_relations(from_memory_id, to_memory_id, relation_type) VALUES (?, ?, ?)")
+                .params(fromMemoryId, toMemoryId, relationType)
+                .update(),
+        "メモリ関連保存に失敗しました");
   }
 
   public int relationCount() {
-    Integer count = executeDb(() -> jdbcClient.sql("SELECT COUNT(*) FROM memory_relations")
-        .query(Integer.class)
-        .single(), "メモリ関連件数の取得に失敗しました");
+    Integer count =
+        executeDb(
+            () ->
+                jdbcClient
+                    .sql("SELECT COUNT(*) FROM memory_relations")
+                    .query(Integer.class)
+                    .single(),
+            "メモリ関連件数の取得に失敗しました");
     return count == null ? 0 : count;
   }
 
@@ -210,16 +302,25 @@ public class MemoryService {
     if (summary == null || summary.isBlank()) {
       return;
     }
-    executeDb(() -> jdbcClient.sql("INSERT INTO memory_summaries(memory_id, summary) VALUES (?, ?)")
-        .params(memoryId, summary)
-        .update(), "メモリ要約保存に失敗しました");
+    executeDb(
+        () ->
+            jdbcClient
+                .sql("INSERT INTO memory_summaries(memory_id, summary) VALUES (?, ?)")
+                .params(memoryId, summary)
+                .update(),
+        "メモリ要約保存に失敗しました");
   }
 
   public Optional<String> findSummary(String memoryId) {
-    return executeDb(() -> jdbcClient.sql("SELECT summary FROM memory_summaries WHERE memory_id = ? ORDER BY rowid DESC LIMIT 1")
-        .param(memoryId)
-        .query(String.class)
-        .optional(), "メモリ要約取得に失敗しました");
+    return executeDb(
+        () ->
+            jdbcClient
+                .sql(
+                    "SELECT summary FROM memory_summaries WHERE memory_id = ? ORDER BY rowid DESC LIMIT 1")
+                .param(memoryId)
+                .query(String.class)
+                .optional(),
+        "メモリ要約取得に失敗しました");
   }
 
   private Memory mapMemory(ResultSet rs, int rowNum) throws java.sql.SQLException {
@@ -238,10 +339,12 @@ public class MemoryService {
   }
 
   private void addColumnIfMissing(String table, String column, String type) {
-    boolean exists = jdbcClient.sql("PRAGMA table_info(" + table + ")")
-        .query((rs, rowNum) -> rs.getString("name"))
-        .list()
-        .contains(column);
+    boolean exists =
+        jdbcClient
+            .sql("PRAGMA table_info(" + table + ")")
+            .query((rs, rowNum) -> rs.getString("name"))
+            .list()
+            .contains(column);
     if (!exists) {
       jdbcClient.sql("ALTER TABLE " + table + " ADD COLUMN " + column + " " + type).update();
     }

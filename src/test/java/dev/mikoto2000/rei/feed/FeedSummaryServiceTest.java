@@ -3,51 +3,56 @@ package dev.mikoto2000.rei.feed;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.mikoto2000.rei.websearch.WebSearchPage;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.mockito.Mockito;
-
-import dev.mikoto2000.rei.websearch.WebSearchPage;
+import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 @org.junit.jupiter.api.Tag("integration")
 class FeedSummaryServiceTest {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
   private int databaseSequence;
 
   @Test
   void summarizeRecentItemsBuildsPromptFromBriefingItems() {
     FeedService feedService = newService();
     Feed feed = feedService.add("https://example.com/feed.xml", "Example Feed");
-    feedService.saveFetchedItems(feed.id(), List.of(
-        new FetchedFeedItem("Today", "https://example.com/today", OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC))),
+    feedService.saveFetchedItems(
+        feed.id(),
+        List.of(
+            new FetchedFeedItem(
+                "Today",
+                "https://example.com/today",
+                OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC))),
         OffsetDateTime.of(2026, 4, 22, 8, 0, 0, 0, ZoneOffset.UTC));
     AtomicReference<String> promptRef = new AtomicReference<>();
-    FeedSummaryService service = new FeedSummaryService(
-        feedService,
-        item -> new WebSearchPage(
-            item.title(),
-            item.url(),
-            "",
-            item.publishedAt().toString(),
-            "Fetched article body"),
-        prompt -> {
-          promptRef.set(prompt);
-          return "briefing summary";
-        },
-        new FeedProperties(20));
+    FeedSummaryService service =
+        new FeedSummaryService(
+            feedService,
+            item ->
+                new WebSearchPage(
+                    item.title(),
+                    item.url(),
+                    "",
+                    item.publishedAt().toString(),
+                    "Fetched article body"),
+            prompt -> {
+              promptRef.set(prompt);
+              return "briefing summary";
+            },
+            new FeedProperties(20));
 
-    String summary = service.summarizeBriefing(
-        OffsetDateTime.of(2026, 4, 21, 0, 0, 0, 0, ZoneOffset.UTC),
-        OffsetDateTime.of(2026, 4, 22, 9, 0, 0, 0, ZoneOffset.UTC));
+    String summary =
+        service.summarizeBriefing(
+            OffsetDateTime.of(2026, 4, 21, 0, 0, 0, 0, ZoneOffset.UTC),
+            OffsetDateTime.of(2026, 4, 22, 9, 0, 0, 0, ZoneOffset.UTC));
 
     assertEquals("briefing summary", summary);
     assertTrue(promptRef.get().contains("Today"));
@@ -62,34 +67,58 @@ class FeedSummaryServiceTest {
   void summarizeBriefingReturnsGeneratedSummaryAsIs() {
     FeedService feedService = newService();
     Feed feed = feedService.add("https://example.com/feed.xml", "Example Feed");
-    feedService.saveFetchedItems(feed.id(), List.of(
-        new FetchedFeedItem("Today", "https://example.com/today", OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC)),
-        new FetchedFeedItem("Yesterday", "https://example.com/yesterday", OffsetDateTime.of(2026, 4, 21, 3, 0, 0, 0, ZoneOffset.UTC))),
+    feedService.saveFetchedItems(
+        feed.id(),
+        List.of(
+            new FetchedFeedItem(
+                "Today",
+                "https://example.com/today",
+                OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC)),
+            new FetchedFeedItem(
+                "Yesterday",
+                "https://example.com/yesterday",
+                OffsetDateTime.of(2026, 4, 21, 3, 0, 0, 0, ZoneOffset.UTC))),
         OffsetDateTime.of(2026, 4, 22, 8, 0, 0, 0, ZoneOffset.UTC));
-    FeedSummaryService service = new FeedSummaryService(
-        feedService,
-        item -> new WebSearchPage(item.title(), item.url(), "", item.publishedAt().toString(), "Fetched article body"),
-        prompt -> "briefing summary",
-        new FeedProperties(20));
+    FeedSummaryService service =
+        new FeedSummaryService(
+            feedService,
+            item ->
+                new WebSearchPage(
+                    item.title(),
+                    item.url(),
+                    "",
+                    item.publishedAt().toString(),
+                    "Fetched article body"),
+            prompt -> "briefing summary",
+            new FeedProperties(20));
 
-    String summary = service.summarizeBriefing(
-        OffsetDateTime.of(2026, 4, 21, 0, 0, 0, 0, ZoneOffset.UTC),
-        OffsetDateTime.of(2026, 4, 22, 9, 0, 0, 0, ZoneOffset.UTC));
+    String summary =
+        service.summarizeBriefing(
+            OffsetDateTime.of(2026, 4, 21, 0, 0, 0, 0, ZoneOffset.UTC),
+            OffsetDateTime.of(2026, 4, 22, 9, 0, 0, 0, ZoneOffset.UTC));
 
     assertEquals("briefing summary", summary);
   }
 
   @Test
   void summarizeBriefingReturnsNoItemsMessageWhenEmpty() {
-    FeedSummaryService service = new FeedSummaryService(
-        newService(),
-        item -> new WebSearchPage(item.title(), item.url(), "", item.publishedAt() == null ? null : item.publishedAt().toString(), ""),
-        prompt -> "unused",
-        new FeedProperties(20));
+    FeedSummaryService service =
+        new FeedSummaryService(
+            newService(),
+            item ->
+                new WebSearchPage(
+                    item.title(),
+                    item.url(),
+                    "",
+                    item.publishedAt() == null ? null : item.publishedAt().toString(),
+                    ""),
+            prompt -> "unused",
+            new FeedProperties(20));
 
-    String summary = service.summarizeBriefing(
-        OffsetDateTime.of(2026, 4, 21, 0, 0, 0, 0, ZoneOffset.UTC),
-        OffsetDateTime.of(2026, 4, 22, 9, 0, 0, 0, ZoneOffset.UTC));
+    String summary =
+        service.summarizeBriefing(
+            OffsetDateTime.of(2026, 4, 21, 0, 0, 0, 0, ZoneOffset.UTC),
+            OffsetDateTime.of(2026, 4, 22, 9, 0, 0, 0, ZoneOffset.UTC));
 
     assertEquals("昨日 00:00 以降の新着記事はありませんでした", summary);
   }
@@ -98,24 +127,31 @@ class FeedSummaryServiceTest {
   void summarizeItemBuildsPromptFromSelectedItem() {
     FeedService feedService = newService();
     Feed feed = feedService.add("https://example.com/feed.xml", "Example Feed");
-    feedService.saveFetchedItems(feed.id(), List.of(
-        new FetchedFeedItem("Today", "https://example.com/today", OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC))),
+    feedService.saveFetchedItems(
+        feed.id(),
+        List.of(
+            new FetchedFeedItem(
+                "Today",
+                "https://example.com/today",
+                OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC))),
         OffsetDateTime.of(2026, 4, 22, 8, 0, 0, 0, ZoneOffset.UTC));
     long itemId = feedService.listItemsForFeed(feed.id()).getFirst().id();
     AtomicReference<String> promptRef = new AtomicReference<>();
-    FeedSummaryService service = new FeedSummaryService(
-        feedService,
-        item -> new WebSearchPage(
-            item.title(),
-            item.url(),
-            "",
-            item.publishedAt().toString(),
-            "Fetched item body"),
-        prompt -> {
-          promptRef.set(prompt);
-          return "item summary";
-        },
-        new FeedProperties(20));
+    FeedSummaryService service =
+        new FeedSummaryService(
+            feedService,
+            item ->
+                new WebSearchPage(
+                    item.title(),
+                    item.url(),
+                    "",
+                    item.publishedAt().toString(),
+                    "Fetched item body"),
+            prompt -> {
+              promptRef.set(prompt);
+              return "item summary";
+            },
+            new FeedProperties(20));
 
     String summary = service.summarizeItem(itemId);
 
@@ -129,21 +165,27 @@ class FeedSummaryServiceTest {
   void summarizeItemFallsBackToMetadataWhenPageFetchFails() {
     FeedService feedService = newService();
     Feed feed = feedService.add("https://example.com/feed.xml", "Example Feed");
-    feedService.saveFetchedItems(feed.id(), List.of(
-        new FetchedFeedItem("Today", "https://example.com/today", OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC))),
+    feedService.saveFetchedItems(
+        feed.id(),
+        List.of(
+            new FetchedFeedItem(
+                "Today",
+                "https://example.com/today",
+                OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC))),
         OffsetDateTime.of(2026, 4, 22, 8, 0, 0, 0, ZoneOffset.UTC));
     long itemId = feedService.listItemsForFeed(feed.id()).getFirst().id();
     AtomicReference<String> promptRef = new AtomicReference<>();
-    FeedSummaryService service = new FeedSummaryService(
-        feedService,
-        item -> {
-          throw new IllegalStateException("fetch failed");
-        },
-        prompt -> {
-          promptRef.set(prompt);
-          return "item summary";
-        },
-        new FeedProperties(20));
+    FeedSummaryService service =
+        new FeedSummaryService(
+            feedService,
+            item -> {
+              throw new IllegalStateException("fetch failed");
+            },
+            prompt -> {
+              promptRef.set(prompt);
+              return "item summary";
+            },
+            new FeedProperties(20));
 
     String summary = service.summarizeItem(itemId);
 
@@ -154,11 +196,15 @@ class FeedSummaryServiceTest {
 
   @Test
   void summarizeItemDetailedReportsArticleSourceWhenFetchSucceeds() {
-    FeedService feedService = serviceWithItem("https://example.com/article", "FEED_DESCRIPTION", "FEED_CONTENT");
+    FeedService feedService =
+        serviceWithItem("https://example.com/article", "FEED_DESCRIPTION", "FEED_CONTENT");
     long itemId = feedService.listItemsForFeed(1L).getFirst().id();
     AtomicReference<String> promptRef = new AtomicReference<>();
-    FeedSummaryService service = summaryService(feedService,
-        item -> new WebSearchPage(item.title(), item.url(), "", null, "ARTICLE_BODY_MARKER"), promptRef);
+    FeedSummaryService service =
+        summaryService(
+            feedService,
+            item -> new WebSearchPage(item.title(), item.url(), "", null, "ARTICLE_BODY_MARKER"),
+            promptRef);
 
     FeedItemSummaryResult result = service.summarizeItemDetailed(itemId);
 
@@ -172,13 +218,18 @@ class FeedSummaryServiceTest {
   @Test
   void summarizeItemDetailedFallsBackToFeedWhenFetchFailsOrIsEmpty() {
     for (boolean throwsFailure : List.of(true, false)) {
-      FeedService feedService = serviceWithItem("https://example.com/article", "FEED_DESCRIPTION_MARKER", null);
+      FeedService feedService =
+          serviceWithItem("https://example.com/article", "FEED_DESCRIPTION_MARKER", null);
       long itemId = feedService.listItemsForFeed(1L).getFirst().id();
       AtomicReference<String> promptRef = new AtomicReference<>();
-      FeedSummaryService service = summaryService(feedService, item -> {
-        if (throwsFailure) throw new IllegalStateException("fetch failed");
-        return new WebSearchPage(item.title(), item.url(), "", null, "  ");
-      }, promptRef);
+      FeedSummaryService service =
+          summaryService(
+              feedService,
+              item -> {
+                if (throwsFailure) throw new IllegalStateException("fetch failed");
+                return new WebSearchPage(item.title(), item.url(), "", null, "  ");
+              },
+              promptRef);
 
       FeedItemSummaryResult result = service.summarizeItemDetailed(itemId);
 
@@ -194,11 +245,16 @@ class FeedSummaryServiceTest {
     FeedService feedService = serviceWithItem(null, null, "EMBEDDED_CONTENT_MARKER");
     long itemId = feedService.listItemsForFeed(1L).getFirst().id();
     AtomicReference<String> promptRef = new AtomicReference<>();
-    java.util.concurrent.atomic.AtomicInteger fetches = new java.util.concurrent.atomic.AtomicInteger();
-    FeedSummaryService service = summaryService(feedService, item -> {
-      fetches.incrementAndGet();
-      throw new AssertionError("must not fetch");
-    }, promptRef);
+    java.util.concurrent.atomic.AtomicInteger fetches =
+        new java.util.concurrent.atomic.AtomicInteger();
+    FeedSummaryService service =
+        summaryService(
+            feedService,
+            item -> {
+              fetches.incrementAndGet();
+              throw new AssertionError("must not fetch");
+            },
+            promptRef);
 
     FeedItemSummaryResult result = service.summarizeItemDetailed(itemId);
 
@@ -213,24 +269,48 @@ class FeedSummaryServiceTest {
     FeedService feedService = Mockito.mock(FeedService.class);
     OffsetDateTime from = OffsetDateTime.parse("2026-04-21T00:00:00Z");
     OffsetDateTime to = OffsetDateTime.parse("2026-04-22T09:00:00Z");
-    List<FeedBriefingItem> items = List.of(
-        new FeedBriefingItem(1, "A", "https://example.com/shared", null, null,
-            OffsetDateTime.parse("2026-04-22T08:00:00Z"), "Feed A"),
-        new FeedBriefingItem(2, "B", "https://example.com/failure", "FEED_B_FALLBACK", null,
-            OffsetDateTime.parse("2026-04-22T07:00:00Z"), "Feed B"),
-        new FeedBriefingItem(3, "C", "https://example.com/shared", null, null,
-            OffsetDateTime.parse("2026-04-22T06:00:00Z"), "Feed C"));
+    List<FeedBriefingItem> items =
+        List.of(
+            new FeedBriefingItem(
+                1,
+                "A",
+                "https://example.com/shared",
+                null,
+                null,
+                OffsetDateTime.parse("2026-04-22T08:00:00Z"),
+                "Feed A"),
+            new FeedBriefingItem(
+                2,
+                "B",
+                "https://example.com/failure",
+                "FEED_B_FALLBACK",
+                null,
+                OffsetDateTime.parse("2026-04-22T07:00:00Z"),
+                "Feed B"),
+            new FeedBriefingItem(
+                3,
+                "C",
+                "https://example.com/shared",
+                null,
+                null,
+                OffsetDateTime.parse("2026-04-22T06:00:00Z"),
+                "Feed C"));
     Mockito.when(feedService.listBriefingItems(from, to, 20)).thenReturn(items);
     java.util.Map<String, Integer> fetchCounts = new java.util.HashMap<>();
     AtomicReference<String> promptRef = new AtomicReference<>();
-    FeedSummaryService service = new FeedSummaryService(feedService, item -> {
-      fetchCounts.merge(item.url(), 1, Integer::sum);
-      if (item.url().endsWith("failure")) throw new IllegalStateException("timeout");
-      return new WebSearchPage(item.title(), item.url(), "", null, "SHARED_ARTICLE_BODY");
-    }, prompt -> {
-      promptRef.set(prompt);
-      return "briefing summary";
-    }, new FeedProperties(20));
+    FeedSummaryService service =
+        new FeedSummaryService(
+            feedService,
+            item -> {
+              fetchCounts.merge(item.url(), 1, Integer::sum);
+              if (item.url().endsWith("failure")) throw new IllegalStateException("timeout");
+              return new WebSearchPage(item.title(), item.url(), "", null, "SHARED_ARTICLE_BODY");
+            },
+            prompt -> {
+              promptRef.set(prompt);
+              return "briefing summary";
+            },
+            new FeedProperties(20));
 
     String result = service.summarizeBriefing(from, to);
 
@@ -248,16 +328,28 @@ class FeedSummaryServiceTest {
   void summarizeItemDoesNotInvokeLlmWhenArticleAndFeedInformationAreEmpty() {
     FeedService feedService = newService();
     Feed feed = feedService.add("https://example.com/feed.xml", "Example Feed");
-    feedService.saveFetchedItems(feed.id(), List.of(new FetchedFeedItem(" ", "https://example.com/empty",
-        OffsetDateTime.parse("2026-04-22T07:00:00Z"), " ", " ")),
+    feedService.saveFetchedItems(
+        feed.id(),
+        List.of(
+            new FetchedFeedItem(
+                " ",
+                "https://example.com/empty",
+                OffsetDateTime.parse("2026-04-22T07:00:00Z"),
+                " ",
+                " ")),
         OffsetDateTime.parse("2026-04-22T08:00:00Z"));
     long itemId = feedService.listItemsForFeed(1L).getFirst().id();
-    java.util.concurrent.atomic.AtomicInteger generations = new java.util.concurrent.atomic.AtomicInteger();
-    FeedSummaryService service = new FeedSummaryService(feedService,
-        item -> new WebSearchPage("", item.url(), "", null, " "), prompt -> {
-          generations.incrementAndGet();
-          return "must not run";
-        }, new FeedProperties(20));
+    java.util.concurrent.atomic.AtomicInteger generations =
+        new java.util.concurrent.atomic.AtomicInteger();
+    FeedSummaryService service =
+        new FeedSummaryService(
+            feedService,
+            item -> new WebSearchPage("", item.url(), "", null, " "),
+            prompt -> {
+              generations.incrementAndGet();
+              return "must not run";
+            },
+            new FeedProperties(20));
 
     FeedItemSummaryResult result = service.summarizeItemDetailed(itemId);
 
@@ -270,22 +362,36 @@ class FeedSummaryServiceTest {
   private FeedService serviceWithItem(String url, String description, String content) {
     FeedService service = newService();
     Feed feed = service.add("https://example.com/feed.xml", "Example Feed");
-    service.saveFetchedItems(feed.id(), List.of(new FetchedFeedItem("Today", url,
-        OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC), description, content)),
+    service.saveFetchedItems(
+        feed.id(),
+        List.of(
+            new FetchedFeedItem(
+                "Today",
+                url,
+                OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC),
+                description,
+                content)),
         OffsetDateTime.of(2026, 4, 22, 8, 0, 0, 0, ZoneOffset.UTC));
     return service;
   }
 
-  private FeedSummaryService summaryService(FeedService feedService,
-      java.util.function.Function<FeedBriefingItem, WebSearchPage> fetcher, AtomicReference<String> promptRef) {
-    return new FeedSummaryService(feedService, fetcher, prompt -> {
-      promptRef.set(prompt);
-      return "generated summary";
-    }, new FeedProperties(20));
+  private FeedSummaryService summaryService(
+      FeedService feedService,
+      java.util.function.Function<FeedBriefingItem, WebSearchPage> fetcher,
+      AtomicReference<String> promptRef) {
+    return new FeedSummaryService(
+        feedService,
+        fetcher,
+        prompt -> {
+          promptRef.set(prompt);
+          return "generated summary";
+        },
+        new FeedProperties(20));
   }
 
   private FeedService newService() {
-    return new FeedService(new DriverManagerDataSource(
-        "jdbc:sqlite:" + tempDir.resolve("feed-summary-" + databaseSequence++ + ".db")));
+    return new FeedService(
+        new DriverManagerDataSource(
+            "jdbc:sqlite:" + tempDir.resolve("feed-summary-" + databaseSequence++ + ".db")));
   }
 }

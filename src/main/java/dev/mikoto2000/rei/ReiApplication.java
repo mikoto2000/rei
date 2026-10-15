@@ -1,53 +1,47 @@
-
-
 package dev.mikoto2000.rei;
 
-
-import java.io.IOException;
-import java.io.PrintStream;
-import java.io.PrintWriter;
-import java.time.LocalTime;
-import java.time.format.DateTimeFormatter;
-import java.util.List;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-
-import org.jline.reader.Completer;
-import org.jline.reader.EndOfFileException;
-import org.jline.reader.LineReader;
-import org.jline.reader.Reference;
-import org.jline.reader.UserInterruptException;
-import org.jline.keymap.KeyMap;
-import org.jline.terminal.Attributes;
-import org.jline.terminal.Terminal;
-import org.jline.terminal.TerminalBuilder;
-import org.jline.utils.NonBlockingReader;
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.context.ConfigurableApplicationContext;
-import org.springframework.core.env.Environment;
-import org.springframework.scheduling.annotation.EnableScheduling;
-
-import dev.mikoto2000.rei.ui.shell.RootCommand;
 import dev.mikoto2000.rei.core.command.ReiLineReaderFactory;
 import dev.mikoto2000.rei.core.command.UserInputParser;
 import dev.mikoto2000.rei.core.command.UserInputService;
 import dev.mikoto2000.rei.core.project.ProjectService;
-import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
+import dev.mikoto2000.rei.core.service.CommandCompletionNotificationPolicy;
 import dev.mikoto2000.rei.core.service.CommandUserInputDisplayPolicy;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.event.AgentEventBus;
 import dev.mikoto2000.rei.topic.AgentActivityTracker;
 import dev.mikoto2000.rei.ui.shell.JLineShellEventOutput;
-import dev.mikoto2000.rei.ui.shell.UserInputFrame;
+import dev.mikoto2000.rei.ui.shell.RootCommand;
 import dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer;
 import dev.mikoto2000.rei.ui.shell.ShellEventSession;
+import dev.mikoto2000.rei.ui.shell.UserInputFrame;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
 import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
+import java.io.IOException;
+import java.io.PrintStream;
+import java.io.PrintWriter;
+import java.time.LocalTime;
+import java.time.format.DateTimeFormatter;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import org.jline.keymap.KeyMap;
+import org.jline.reader.Completer;
+import org.jline.reader.EndOfFileException;
+import org.jline.reader.LineReader;
+import org.jline.reader.Reference;
+import org.jline.reader.UserInterruptException;
+import org.jline.terminal.Attributes;
+import org.jline.terminal.Terminal;
+import org.jline.terminal.TerminalBuilder;
+import org.jline.utils.NonBlockingReader;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.SpringApplication;
+import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration;
+import org.springframework.context.ConfigurableApplicationContext;
+import org.springframework.core.env.Environment;
+import org.springframework.scheduling.annotation.EnableScheduling;
 import picocli.CommandLine;
 
 @EnableScheduling
@@ -55,17 +49,23 @@ import picocli.CommandLine;
 public class ReiApplication {
   @Autowired(required = false)
   private dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvalRequests;
+
   @Autowired(required = false)
   private dev.mikoto2000.rei.core.policy.ApprovalContinuationService approvalContinuations;
+
   @Autowired(required = false)
   private dev.mikoto2000.rei.application.run.RunRegistry approvalRuns;
+
   @org.springframework.beans.factory.annotation.Autowired(required = false)
-  private dev.mikoto2000.rei.core.completion.CompletionEngine completionEngine = ReiLineReaderFactory.completionEngine();
+  private dev.mikoto2000.rei.core.completion.CompletionEngine completionEngine =
+      ReiLineReaderFactory.completionEngine();
 
   @Autowired(required = false)
   private dev.mikoto2000.rei.voice.VoiceInputCoordinator voiceInput;
+
   @Autowired(required = false)
   private dev.mikoto2000.rei.voice.VoiceEventPublisher voiceEvents;
+
   @Autowired(required = false)
   private dev.mikoto2000.rei.voice.VoiceDeliveryService voiceDelivery;
 
@@ -82,32 +82,42 @@ public class ReiApplication {
   private final AgentEventBus agentEventBus;
   private final AgentActivityTracker agentActivityTracker;
   private final Environment environment;
+
   @Autowired(required = false)
   private dev.mikoto2000.rei.ui.shell.ProjectShellActivity projectShellActivity;
+
   @Autowired(required = false)
   private dev.mikoto2000.rei.core.chat.ConversationInputRouter activeRuns;
+
   @Autowired(required = false)
   private dev.mikoto2000.rei.ui.shell.ActiveRunDisplay activeRunDisplay;
-  @Autowired
-  private ProjectService projects;
-  @Autowired
-  private ApplicationShutdownNotifier shutdownNotifier;
+
+  @Autowired private ProjectService projects;
+  @Autowired private ApplicationShutdownNotifier shutdownNotifier;
 
   private static final String COMMAND_COMPLETION_MESSAGE = "コマンド実行が完了しました";
   private static final String MULTILINE_CONTINUATION = "\\";
   private static final String MULTILINE_PROMPT = "...> ";
   private static final String PASTE_END_TOKEN = ".";
   private static final String PASTE_PROMPT = "paste> ";
-  private static final DateTimeFormatter PROMPT_TIME_FORMATTER = DateTimeFormatter.ofPattern("HH:mm");
+  private static final DateTimeFormatter PROMPT_TIME_FORMATTER =
+      DateTimeFormatter.ofPattern("HH:mm");
 
   @Autowired
-  public ReiApplication(RootCommand rootCommand, CommandLine.IFactory factory, ModelHolderService currentModelHolder,
-      EscCancellationMonitor escCancellationMonitor, CommandCancellationService commandCancellationService,
+  public ReiApplication(
+      RootCommand rootCommand,
+      CommandLine.IFactory factory,
+      ModelHolderService currentModelHolder,
+      EscCancellationMonitor escCancellationMonitor,
+      CommandCancellationService commandCancellationService,
       CommandCompletionNotificationPolicy commandCompletionNotificationPolicy,
       CommandUserInputDisplayPolicy commandUserInputDisplayPolicy,
-      AsyncVectorDocumentService asyncVectorDocumentService, SoundNotificationService soundNotificationService,
-      ChatResponseNarrator chatResponseNarrator, AgentEventBus agentEventBus,
-      AgentActivityTracker agentActivityTracker, Environment environment) {
+      AsyncVectorDocumentService asyncVectorDocumentService,
+      SoundNotificationService soundNotificationService,
+      ChatResponseNarrator chatResponseNarrator,
+      AgentEventBus agentEventBus,
+      AgentActivityTracker agentActivityTracker,
+      Environment environment) {
     this.rootCommand = rootCommand;
     this.factory = factory;
     this.currentModelHolder = currentModelHolder;
@@ -123,16 +133,33 @@ public class ReiApplication {
     this.environment = environment;
   }
 
-  ReiApplication(RootCommand rootCommand, CommandLine.IFactory factory, ModelHolderService currentModelHolder,
-      EscCancellationMonitor escCancellationMonitor, CommandCancellationService commandCancellationService,
+  ReiApplication(
+      RootCommand rootCommand,
+      CommandLine.IFactory factory,
+      ModelHolderService currentModelHolder,
+      EscCancellationMonitor escCancellationMonitor,
+      CommandCancellationService commandCancellationService,
       CommandCompletionNotificationPolicy commandCompletionNotificationPolicy,
       CommandUserInputDisplayPolicy commandUserInputDisplayPolicy,
-      AsyncVectorDocumentService asyncVectorDocumentService, SoundNotificationService soundNotificationService,
-      ChatResponseNarrator chatResponseNarrator, AgentEventBus agentEventBus) {
-    this(rootCommand, factory, currentModelHolder, escCancellationMonitor, commandCancellationService,
-        commandCompletionNotificationPolicy, commandUserInputDisplayPolicy, asyncVectorDocumentService,
-        soundNotificationService, chatResponseNarrator, agentEventBus,
-        new dev.mikoto2000.rei.topic.DefaultAgentActivityTracker(java.time.Clock.systemDefaultZone()), null);
+      AsyncVectorDocumentService asyncVectorDocumentService,
+      SoundNotificationService soundNotificationService,
+      ChatResponseNarrator chatResponseNarrator,
+      AgentEventBus agentEventBus) {
+    this(
+        rootCommand,
+        factory,
+        currentModelHolder,
+        escCancellationMonitor,
+        commandCancellationService,
+        commandCompletionNotificationPolicy,
+        commandUserInputDisplayPolicy,
+        asyncVectorDocumentService,
+        soundNotificationService,
+        chatResponseNarrator,
+        agentEventBus,
+        new dev.mikoto2000.rei.topic.DefaultAgentActivityTracker(
+            java.time.Clock.systemDefaultZone()),
+        null);
   }
 
   public static void main(String[] args) throws IOException {
@@ -145,39 +172,58 @@ public class ReiApplication {
       return;
     }
     try {
-      var options = StartupOptions.parse(args, dev.mikoto2000.rei.core.datasource.ReiPaths.startupDirectory());
+      var options =
+          StartupOptions.parse(
+              args, dev.mikoto2000.rei.core.datasource.ReiPaths.startupDirectory());
       if (options.printHelpIfRequested()) return;
     } catch (CommandLine.ParameterException error) {
       System.err.println("Error: " + error.getMessage());
       System.exit(error.getCommandLine().getCommandSpec().exitCodeOnInvalidInput());
       return;
     }
-    System.setProperty("rei.data-dir", dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().toString());
+    System.setProperty(
+        "rei.data-dir", dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().toString());
     if (mode == dev.mikoto2000.rei.launcher.BackendMode.SERVER
         && (System.getenv("REI_API_KEY") == null || System.getenv("REI_API_KEY").isBlank())) {
-      System.err.println("Server mode requires REI_API_KEY. Configure the existing API key and restart; no credentials have been generated.");
+      System.err.println(
+          "Server mode requires REI_API_KEY. Configure the existing API key and restart; no credentials have been generated.");
       System.exit(2);
       return;
     }
     SpringApplication application = new SpringApplication(ReiApplication.class);
-    boolean backend=StartupOptions.parse(args,dev.mikoto2000.rei.core.datasource.ReiPaths.startupDirectory()).backend();
-    application.addInitializers(c->c.getEnvironment().getPropertySources().addFirst(
-        new org.springframework.core.env.MapPropertySource("reiBackendMode",java.util.Map.of("rei.backend-mode",backend))));
+    boolean backend =
+        StartupOptions.parse(args, dev.mikoto2000.rei.core.datasource.ReiPaths.startupDirectory())
+            .backend();
+    application.addInitializers(
+        c ->
+            c.getEnvironment()
+                .getPropertySources()
+                .addFirst(
+                    new org.springframework.core.env.MapPropertySource(
+                        "reiBackendMode", java.util.Map.of("rei.backend-mode", backend))));
     application.setDefaultProperties(ExternalConfigSupport.defaultProperties());
     dev.mikoto2000.rei.web.WebApplication.configure(application, System.getenv("REI_API_KEY"));
     ConfigurableApplicationContext context = application.run(args);
-    boolean consoleExit=context.getEnvironment().getProperty(ForegroundConsole.PROPERTY,Boolean.class,false);
+    boolean consoleExit =
+        context.getEnvironment().getProperty(ForegroundConsole.PROPERTY, Boolean.class, false);
     if (mode == dev.mikoto2000.rei.launcher.BackendMode.SERVER && !consoleExit) return;
     int exitCode;
     try {
       var app = context.getBean(ReiApplication.class);
-      if(backend && consoleExit) {
+      if (backend && consoleExit) {
         ForegroundConsole.run(context);
-      }else if(backend) {
-        var stopped=new java.util.concurrent.CountDownLatch(1);
-        context.addApplicationListener((org.springframework.context.ApplicationListener<org.springframework.context.event.ContextClosedEvent>)e->stopped.countDown());
-        try{stopped.await();}catch(InterruptedException interrupted){Thread.currentThread().interrupt();}
-      }else launch(app, args);
+      } else if (backend) {
+        var stopped = new java.util.concurrent.CountDownLatch(1);
+        context.addApplicationListener(
+            (org.springframework.context.ApplicationListener<
+                    org.springframework.context.event.ContextClosedEvent>)
+                e -> stopped.countDown());
+        try {
+          stopped.await();
+        } catch (InterruptedException interrupted) {
+          Thread.currentThread().interrupt();
+        }
+      } else launch(app, args);
     } finally {
       exitCode = SpringApplication.exit(context);
     }
@@ -192,41 +238,69 @@ public class ReiApplication {
     var options = StartupOptions.parse(args, projects.startupDirectory());
     if (options.printHelpIfRequested()) return;
     var client = projects.newClient();
-    try (var scope = client.open(); var notifications = projects.notificationsFollow(client)) {
+    try (var scope = client.open();
+        var notifications = projects.notificationsFollow(client)) {
       if (options.project() != null) projects.cd(options.project().toString());
       runShell(args, client);
     }
   }
 
-  void runShell(String[] args, dev.mikoto2000.rei.core.project.ProjectClient client) throws IOException {
+  void runShell(String[] args, dev.mikoto2000.rei.core.project.ProjectClient client)
+      throws IOException {
     var cmd = new picocli.CommandLine(rootCommand, factory);
     rootCommand.configureCommands(cmd);
     var terminal = terminalBuilder(System.out).build();
     configureCommandOutput(cmd, terminal);
-    dev.mikoto2000.rei.ui.shell.ShellProjectCommands.configure(cmd, projects, client, projectShellActivity);
+    dev.mikoto2000.rei.ui.shell.ShellProjectCommands.configure(
+        cmd, projects, client, projectShellActivity);
 
-    ReiLineReaderFactory.Session inputSession = ReiLineReaderFactory.create(terminal, cmd, completionEngine);
+    ReiLineReaderFactory.Session inputSession =
+        ReiLineReaderFactory.create(terminal, cmd, completionEngine);
     LineReader reader = inputSession.reader();
-    var llm=cmd.getSubcommands().get("llm");
-    if(llm!=null && llm.getCommand() instanceof dev.mikoto2000.rei.llm.capture.LlmCaptureCommand capture)
-      capture.setConfirmation(prompt->{try{var answer=reader.readLine(prompt);return "y".equalsIgnoreCase(answer)||"yes".equalsIgnoreCase(answer);}catch(org.jline.reader.EndOfFileException|org.jline.reader.UserInterruptException declined){return false;}});
+    var llm = cmd.getSubcommands().get("llm");
+    if (llm != null
+        && llm.getCommand() instanceof dev.mikoto2000.rei.llm.capture.LlmCaptureCommand capture)
+      capture.setConfirmation(
+          prompt -> {
+            try {
+              var answer = reader.readLine(prompt);
+              return "y".equalsIgnoreCase(answer) || "yes".equalsIgnoreCase(answer);
+            } catch (org.jline.reader.EndOfFileException
+                | org.jline.reader.UserInterruptException declined) {
+              return false;
+            }
+          });
     configureMultilineKeyBinding(reader);
     var eventOutput = new JLineShellEventOutput(reader);
-    var approvalMenu = new dev.mikoto2000.rei.core.completion.ApprovalActionMenu(reader, () -> {
-      try (var scope = client.open()) {
-        return new dev.mikoto2000.rei.core.completion.ApprovalActionMenu.Owner(projects.currentContext().id(), projects.currentSessionId());
-      }
-    });
+    var approvalMenu =
+        new dev.mikoto2000.rei.core.completion.ApprovalActionMenu(
+            reader,
+            () -> {
+              try (var scope = client.open()) {
+                return new dev.mikoto2000.rei.core.completion.ApprovalActionMenu.Owner(
+                    projects.currentContext().id(), projects.currentSessionId());
+              }
+            });
     eventOutput.setApprovalMenu(approvalMenu);
-    if (approvalRequests != null) approvalMenu.follow(owner -> {
-      if (owner.project() == null || owner.session() == null) return java.util.List.of();
-      return approvalRequests.list(owner.project()).stream()
-          .filter(request -> owner.session().equals(request.sessionId()))
-          .filter(request -> approvalRunActive(request.runId()))
-          .filter(request -> dev.mikoto2000.rei.core.completion.ApprovalDisplayState.pending(request.status(), request.expiresAt(),
-              approvalContinuations == null ? "UNAVAILABLE" : approvalContinuations.state(request.id()).orElse("UNAVAILABLE"), java.time.Instant.now()))
-          .map(dev.mikoto2000.rei.core.policy.ToolApprovalRepository.Request::id).toList();
-    });
+    if (approvalRequests != null)
+      approvalMenu.follow(
+          owner -> {
+            if (owner.project() == null || owner.session() == null) return java.util.List.of();
+            return approvalRequests.list(owner.project()).stream()
+                .filter(request -> owner.session().equals(request.sessionId()))
+                .filter(request -> approvalRunActive(request.runId()))
+                .filter(
+                    request ->
+                        dev.mikoto2000.rei.core.completion.ApprovalDisplayState.pending(
+                            request.status(),
+                            request.expiresAt(),
+                            approvalContinuations == null
+                                ? "UNAVAILABLE"
+                                : approvalContinuations.state(request.id()).orElse("UNAVAILABLE"),
+                            java.time.Instant.now()))
+                .map(dev.mikoto2000.rei.core.policy.ToolApprovalRepository.Request::id)
+                .toList();
+          });
     var notificationOptions = ShellAgentEventRenderer.TopicNotificationOptions.from(environment);
     dev.mikoto2000.rei.event.AgentEventListener shellListener;
     if (projectShellActivity != null) {
@@ -236,10 +310,16 @@ public class ReiApplication {
       shellListener = new ShellAgentEventRenderer(eventOutput, notificationOptions);
     }
     ShellEventSession shellEvents = new ShellEventSession(agentEventBus, shellListener);
-    var voiceSubscription = voiceEvents == null ? null
-        : voiceEvents.subscribe(new dev.mikoto2000.rei.voice.VoiceShellEventRenderer(eventOutput));
-    var voiceSubmittedSubscription = voiceDelivery == null ? null
-        : voiceDelivery.onSubmitted(input -> eventOutput.printBlock(UserInputFrame.format(input.text(), now())));
+    var voiceSubscription =
+        voiceEvents == null
+            ? null
+            : voiceEvents.subscribe(
+                new dev.mikoto2000.rei.voice.VoiceShellEventRenderer(eventOutput));
+    var voiceSubmittedSubscription =
+        voiceDelivery == null
+            ? null
+            : voiceDelivery.onSubmitted(
+                input -> eventOutput.printBlock(UserInputFrame.format(input.text(), now())));
 
     System.out.println("AI Shell");
     System.out.println("通常入力は chat として扱います。/exit で終了します。");
@@ -249,16 +329,29 @@ public class ReiApplication {
     ExecutorService commandExecutor = Executors.newSingleThreadExecutor();
     UserInputService inputService = new UserInputService(new UserInputParser());
     try (var consoleSession = new dev.mikoto2000.rei.ui.shell.AgentConsoleSession();
-        var runPrompt = new dev.mikoto2000.rei.ui.shell.ActiveRunPrompt(reader, activeRuns, () -> {
-          try (var scope = client.open()) { return buildPrompt(); }
-        })) {
-      startVoiceAutomatically(cmd, terminal, line -> eventOutput.printBlock(new org.jline.utils.AttributedString(line)));
-      shellLoop: while (true) {
+        var runPrompt =
+            new dev.mikoto2000.rei.ui.shell.ActiveRunPrompt(
+                reader,
+                activeRuns,
+                () -> {
+                  try (var scope = client.open()) {
+                    return buildPrompt();
+                  }
+                })) {
+      startVoiceAutomatically(
+          cmd,
+          terminal,
+          line -> eventOutput.printBlock(new org.jline.utils.AttributedString(line)));
+      shellLoop:
+      while (true) {
         try {
           String line;
           approvalMenu.enabled(true);
-          try { line = runPrompt.readLine(); }
-          finally { approvalMenu.enabled(false); }
+          try {
+            line = runPrompt.readLine();
+          } finally {
+            approvalMenu.enabled(false);
+          }
           if (line == null) {
             break;
           }
@@ -267,7 +360,7 @@ public class ReiApplication {
 
           UserInputService.Input input = inputService.interpret(line);
           switch (input.kind()) {
-            case EMPTY -> { }
+            case EMPTY -> {}
             case EXIT -> {
               if (confirmExitIfNeeded(prompt -> reader.readLine(prompt))) {
                 break shellLoop;
@@ -292,7 +385,8 @@ public class ReiApplication {
               String[] commandArgs = input.arguments();
               printUserInputIfNeeded(input.text(), terminal, commandArgs);
               if (isInteractiveShellCommand(commandArgs)) {
-                executeInteractiveShellCommand(cmd, reader, terminal, inputSession.completer(), commandArgs);
+                executeInteractiveShellCommand(
+                    cmd, reader, terminal, inputSession.completer(), commandArgs);
               } else {
                 executeInterruptibly(cmd, terminal, commandExecutor, commandArgs);
               }
@@ -304,7 +398,8 @@ public class ReiApplication {
           }
 
         } catch (UserInterruptException e) {
-          if(environment!=null&&environment.getProperty(ForegroundConsole.PROPERTY,Boolean.class,false))break;
+          if (environment != null
+              && environment.getProperty(ForegroundConsole.PROPERTY, Boolean.class, false)) break;
           // Ctrl-C でその行だけキャンセル
         } catch (EndOfFileException e) {
           // Ctrl-D (EOF) は即時終了する
@@ -316,7 +411,8 @@ public class ReiApplication {
       approvalMenu.close();
       commandExecutor.shutdownNow();
       var voiceCommand = cmd.getSubcommands().get("voice");
-      if (voiceCommand != null && voiceCommand.getCommand() instanceof dev.mikoto2000.rei.voice.VoiceCommand voice)
+      if (voiceCommand != null
+          && voiceCommand.getCommand() instanceof dev.mikoto2000.rei.voice.VoiceCommand voice)
         voice.closeAutoStart();
       if (voiceInput != null) voiceInput.close();
       if (voiceSubmittedSubscription != null) voiceSubmittedSubscription.close();
@@ -325,25 +421,37 @@ public class ReiApplication {
     }
   }
 
-  static void startVoiceAutomatically(CommandLine cmd, Terminal terminal, java.util.function.Consumer<String> output) {
+  static void startVoiceAutomatically(
+      CommandLine cmd, Terminal terminal, java.util.function.Consumer<String> output) {
     var command = cmd.getSubcommands().get("voice");
-    if (command != null && command.getCommand() instanceof dev.mikoto2000.rei.voice.VoiceCommand voice)
+    if (command != null
+        && command.getCommand() instanceof dev.mikoto2000.rei.voice.VoiceCommand voice)
       voice.autoStart(isInteractiveTerminal(terminal), output);
   }
+
   private boolean approvalRunActive(String runId) {
     if (approvalRuns == null) return true;
-    try { return !approvalRuns.get(runId).status().isTerminal(); }
-    catch (dev.mikoto2000.rei.application.run.RunNotFoundException missing) { return false; }
+    try {
+      return !approvalRuns.get(runId).status().isTerminal();
+    } catch (dev.mikoto2000.rei.application.run.RunNotFoundException missing) {
+      return false;
+    }
   }
 
   static boolean isInteractiveTerminal(Terminal terminal) {
-    if (terminal == null || terminal.getType() == null || Terminal.TYPE_DUMB.equals(terminal.getType())
+    if (terminal == null
+        || terminal.getType() == null
+        || Terminal.TYPE_DUMB.equals(terminal.getType())
         || Terminal.TYPE_DUMB_COLOR.equals(terminal.getType())) return false;
     // Terminal type can be forced even with piped stdin. Require actual input-TTY evidence.
     try {
-      return terminal instanceof org.jline.terminal.spi.TerminalExt ext && ext.getSystemStream() != null
-          && ext.getProvider() != null && ext.getProvider().isSystemStream(org.jline.terminal.spi.SystemStream.Input);
-    } catch (RuntimeException | LinkageError unavailable) { return false; }
+      return terminal instanceof org.jline.terminal.spi.TerminalExt ext
+          && ext.getSystemStream() != null
+          && ext.getProvider() != null
+          && ext.getProvider().isSystemStream(org.jline.terminal.spi.SystemStream.Input);
+    } catch (RuntimeException | LinkageError unavailable) {
+      return false;
+    }
   }
 
   static TerminalBuilder terminalBuilder(PrintStream output) {
@@ -370,59 +478,97 @@ public class ReiApplication {
     cmd.setOut(writer);
     cmd.setErr(writer);
     var chatgpt = cmd.getSubcommands().get("chatgpt");
-    if (chatgpt != null && chatgpt.getCommand() instanceof dev.mikoto2000.rei.chatgpt.ChatGptCommand command) {
+    if (chatgpt != null
+        && chatgpt.getCommand() instanceof dev.mikoto2000.rei.chatgpt.ChatGptCommand command) {
       command.setShellOutput(writer);
     }
     var subagent = cmd.getSubcommands().get("subagent");
-    if (subagent != null && subagent.getCommand() instanceof dev.mikoto2000.rei.subagent.SubAgentCommand command) {
+    if (subagent != null
+        && subagent.getCommand() instanceof dev.mikoto2000.rei.subagent.SubAgentCommand command) {
       command.setShellOutput(writer);
     }
     var llm = cmd.getSubcommands().get("llm");
-    if(llm!=null && llm.getCommand() instanceof dev.mikoto2000.rei.llm.capture.LlmCaptureCommand command)command.setShellOutput(writer);
+    if (llm != null
+        && llm.getCommand() instanceof dev.mikoto2000.rei.llm.capture.LlmCaptureCommand command)
+      command.setShellOutput(writer);
     var runs = cmd.getSubcommands().get("runs");
-    if (runs != null && runs.getCommand() instanceof dev.mikoto2000.rei.ui.shell.RunsCommand command) {
+    if (runs != null
+        && runs.getCommand() instanceof dev.mikoto2000.rei.ui.shell.RunsCommand command) {
       command.setShellOutput(writer);
     }
     var history = cmd.getSubcommands().get("history");
     var sleep = cmd.getSubcommands().get("sleep");
     var work = cmd.getSubcommands().get("work");
-    var checkpoint=cmd.getSubcommands().get("checkpoint");
-    if(checkpoint!=null && checkpoint.getCommand() instanceof dev.mikoto2000.rei.checkpoint.CheckpointCommand command) command.setShellOutput(writer);
-    var resume=cmd.getSubcommands().get("resume");
-    if(resume!=null && resume.getCommand() instanceof dev.mikoto2000.rei.checkpoint.ResumeCommand command) command.setShellOutput(writer);
-    var approval=cmd.getSubcommands().get("approval");
-    var timer=cmd.getSubcommands().get("timer");
-    var dependency=cmd.getSubcommands().get("dependency");
-    if(dependency!=null && dependency.getCommand() instanceof dev.mikoto2000.rei.core.dependency.DependencyCommand command) command.setShellOutput(writer);
-    var attention=cmd.getSubcommands().get("attention");
-    var goal=cmd.getSubcommands().get("goal");
-    var reflection=cmd.getSubcommands().get("reflection");
-    if(reflection!=null && reflection.getCommand() instanceof dev.mikoto2000.rei.reflection.ReflectionCommand command) command.setShellOutput(writer);
-    if(goal!=null && goal.getCommand() instanceof dev.mikoto2000.rei.goal.GoalCommand command) command.setShellOutput(writer);
-    if(attention!=null && attention.getCommand() instanceof dev.mikoto2000.rei.attention.AttentionCommand command) command.setShellOutput(writer);
-    if(timer!=null && timer.getCommand() instanceof dev.mikoto2000.rei.temporal.TimerCommand command) command.setShellOutput(writer);
-    if(approval!=null && approval.getCommand() instanceof dev.mikoto2000.rei.core.policy.ApprovalCommand command) command.setShellOutput(writer);
-    if (work != null && work.getCommand() instanceof dev.mikoto2000.rei.workcontext.WorkCommand command)
+    var checkpoint = cmd.getSubcommands().get("checkpoint");
+    if (checkpoint != null
+        && checkpoint.getCommand()
+            instanceof dev.mikoto2000.rei.checkpoint.CheckpointCommand command)
       command.setShellOutput(writer);
-    if (sleep != null && sleep.getCommand() instanceof dev.mikoto2000.rei.memory.command.SleepCommand command)
+    var resume = cmd.getSubcommands().get("resume");
+    if (resume != null
+        && resume.getCommand() instanceof dev.mikoto2000.rei.checkpoint.ResumeCommand command)
       command.setShellOutput(writer);
-    if (history != null && history.getCommand() instanceof dev.mikoto2000.rei.ui.shell.HistoryCommand command) {
+    var approval = cmd.getSubcommands().get("approval");
+    var timer = cmd.getSubcommands().get("timer");
+    var dependency = cmd.getSubcommands().get("dependency");
+    if (dependency != null
+        && dependency.getCommand()
+            instanceof dev.mikoto2000.rei.core.dependency.DependencyCommand command)
+      command.setShellOutput(writer);
+    var attention = cmd.getSubcommands().get("attention");
+    var goal = cmd.getSubcommands().get("goal");
+    var reflection = cmd.getSubcommands().get("reflection");
+    if (reflection != null
+        && reflection.getCommand()
+            instanceof dev.mikoto2000.rei.reflection.ReflectionCommand command)
+      command.setShellOutput(writer);
+    if (goal != null && goal.getCommand() instanceof dev.mikoto2000.rei.goal.GoalCommand command)
+      command.setShellOutput(writer);
+    if (attention != null
+        && attention.getCommand() instanceof dev.mikoto2000.rei.attention.AttentionCommand command)
+      command.setShellOutput(writer);
+    if (timer != null
+        && timer.getCommand() instanceof dev.mikoto2000.rei.temporal.TimerCommand command)
+      command.setShellOutput(writer);
+    if (approval != null
+        && approval.getCommand() instanceof dev.mikoto2000.rei.core.policy.ApprovalCommand command)
+      command.setShellOutput(writer);
+    if (work != null
+        && work.getCommand() instanceof dev.mikoto2000.rei.workcontext.WorkCommand command)
+      command.setShellOutput(writer);
+    if (sleep != null
+        && sleep.getCommand() instanceof dev.mikoto2000.rei.memory.command.SleepCommand command)
+      command.setShellOutput(writer);
+    if (history != null
+        && history.getCommand() instanceof dev.mikoto2000.rei.ui.shell.HistoryCommand command) {
       command.setShellOutput(writer);
     }
-    var dot=cmd.getSubcommands().get("dot");
-    if(dot!=null&&dot.getCommand() instanceof dev.mikoto2000.rei.dot.DotCommand command)command.setShellOutput(writer);
-    var summarize=cmd.getSubcommands().get("summarize");
-    if(summarize!=null && summarize.getCommand() instanceof dev.mikoto2000.rei.summarize.command.SummarizeCommand command) {
+    var dot = cmd.getSubcommands().get("dot");
+    if (dot != null && dot.getCommand() instanceof dev.mikoto2000.rei.dot.DotCommand command)
+      command.setShellOutput(writer);
+    var summarize = cmd.getSubcommands().get("summarize");
+    if (summarize != null
+        && summarize.getCommand()
+            instanceof dev.mikoto2000.rei.summarize.command.SummarizeCommand command) {
       command.setShellOutput(writer);
     }
   }
 
-  protected void executeInterruptibly(CommandLine cmd, Terminal terminal, ExecutorService commandExecutor, String... args)
+  protected void executeInterruptibly(
+      CommandLine cmd, Terminal terminal, ExecutorService commandExecutor, String... args)
       throws IOException {
-    if (args.length > 0 && ("llm".equals(args[0]) || "cancel".equals(args[0]) || "agent".equals(args[0]) || "history".equals(args[0]) || "summarize".equals(args[0]) || "image".equals(args[0]) || ("chat".equals(args[0])
-        && cmd.getSubcommands().get("chat") != null
-        && cmd.getSubcommands().get("chat").getCommand() instanceof dev.mikoto2000.rei.ui.shell.ChatCommand chat
-        && chat.acceptsAsynchronously()))) {
+    if (args.length > 0
+        && ("llm".equals(args[0])
+            || "cancel".equals(args[0])
+            || "agent".equals(args[0])
+            || "history".equals(args[0])
+            || "summarize".equals(args[0])
+            || "image".equals(args[0])
+            || ("chat".equals(args[0])
+                && cmd.getSubcommands().get("chat") != null
+                && cmd.getSubcommands().get("chat").getCommand()
+                    instanceof dev.mikoto2000.rei.ui.shell.ChatCommand chat
+                && chat.acceptsAsynchronously()))) {
       cmd.execute(args);
       return;
     }
@@ -430,20 +576,33 @@ public class ReiApplication {
     try {
       var future = commandExecutor.submit(() -> executeWithOutputPolicy(cmd, args));
       try {
-        boolean consoleExit=environment!=null&&environment.getProperty(ForegroundConsole.PROPERTY,Boolean.class,false);
-        escCancellationMonitor.await(future, timeoutMillis -> consoleExit
-            ?ForegroundConsole.readCommandInput(terminal.reader(),timeoutMillis):terminal.reader().read(timeoutMillis), () -> {
-          boolean accepted = commandCancellationService.cancel();
-          cmd.getErr().println(accepted ? "[cancel] Esc により停止を要求しました。"
-              : "[cancel] 停止対象の実行がないか、既に停止を要求済みです。");
-          cmd.getErr().flush();
-        });
-      }catch(UserInterruptException|EndOfFileException exit) {
-        commandCancellationService.cancel();future.cancel(true);throw exit;
+        boolean consoleExit =
+            environment != null
+                && environment.getProperty(ForegroundConsole.PROPERTY, Boolean.class, false);
+        escCancellationMonitor.await(
+            future,
+            timeoutMillis ->
+                consoleExit
+                    ? ForegroundConsole.readCommandInput(terminal.reader(), timeoutMillis)
+                    : terminal.reader().read(timeoutMillis),
+            () -> {
+              boolean accepted = commandCancellationService.cancel();
+              cmd.getErr()
+                  .println(
+                      accepted
+                          ? "[cancel] Esc により停止を要求しました。"
+                          : "[cancel] 停止対象の実行がないか、既に停止を要求済みです。");
+              cmd.getErr().flush();
+            });
+      } catch (UserInterruptException | EndOfFileException exit) {
+        commandCancellationService.cancel();
+        future.cancel(true);
+        throw exit;
       }
     } finally {
       terminal.setAttributes(originalAttributes);
-      if (!chatResponseNarrator.wasNarrated() && commandCompletionNotificationPolicy.shouldNotify(args)) {
+      if (!chatResponseNarrator.wasNarrated()
+          && commandCompletionNotificationPolicy.shouldNotify(args)) {
         soundNotificationService.notify(COMMAND_COMPLETION_MESSAGE);
       }
       chatResponseNarrator.reset();
@@ -467,16 +626,17 @@ public class ReiApplication {
   }
 
   boolean isInteractiveShellCommand(String... args) {
-    return args != null && args.length > 0
-        && "sh".equals(args[0]);
+    return args != null && args.length > 0 && "sh".equals(args[0]);
   }
 
-  void executeInteractiveShellCommand(CommandLine cmd, LineReader reader, Terminal terminal, String... args) {
-    executeInteractiveShellCommand(cmd, reader, terminal, ReiLineReaderFactory.completer(cmd, completionEngine), args);
+  void executeInteractiveShellCommand(
+      CommandLine cmd, LineReader reader, Terminal terminal, String... args) {
+    executeInteractiveShellCommand(
+        cmd, reader, terminal, ReiLineReaderFactory.completer(cmd, completionEngine), args);
   }
 
-  void executeInteractiveShellCommand(CommandLine cmd, LineReader reader, Terminal terminal,
-      Completer completer, String... args) {
+  void executeInteractiveShellCommand(
+      CommandLine cmd, LineReader reader, Terminal terminal, Completer completer, String... args) {
     boolean paused = false;
     try {
       if (terminal.canPauseResume()) {
@@ -515,7 +675,10 @@ public class ReiApplication {
 
   String buildPrompt() {
     return (activeRunDisplay == null ? "" : activeRunDisplay.promptStatus() + "\n")
-        + now().format(PROMPT_TIME_FORMATTER) + " " + currentModelHolder.get() + "> ";
+        + now().format(PROMPT_TIME_FORMATTER)
+        + " "
+        + currentModelHolder.get()
+        + "> ";
   }
 
   LocalTime now() {
@@ -559,10 +722,14 @@ public class ReiApplication {
   }
 
   void configureMultilineKeyBinding(LineReader reader) {
-    reader.getWidgets().put("insert-newline", () -> {
-      reader.getBuffer().write('\n');
-      return true;
-    });
+    reader
+        .getWidgets()
+        .put(
+            "insert-newline",
+            () -> {
+              reader.getBuffer().write('\n');
+              return true;
+            });
     Reference insertNewline = new Reference("insert-newline");
     if (reader.getKeyMaps().containsKey(LineReader.MAIN)) {
       reader.getKeyMaps().get(LineReader.MAIN).bind(insertNewline, KeyMap.ctrl('J'));
@@ -618,5 +785,4 @@ public class ReiApplication {
   interface ConfirmationReader {
     String read(String prompt) throws UserInterruptException, EndOfFileException;
   }
-
 }

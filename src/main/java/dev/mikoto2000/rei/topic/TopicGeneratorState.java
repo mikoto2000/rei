@@ -16,6 +16,7 @@ public record TopicGeneratorState(
     long lastSequence) {
 
   public static TopicGeneratorState idle() {
-    return new TopicGeneratorState(TopicGenerationStatus.IDLE, null, List.of(), null, null, null, null, null, false, 0L);
+    return new TopicGeneratorState(
+        TopicGenerationStatus.IDLE, null, List.of(), null, null, null, null, null, false, 0L);
   }
 }

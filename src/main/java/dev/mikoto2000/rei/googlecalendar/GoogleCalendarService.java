@@ -1,5 +1,13 @@
 package dev.mikoto2000.rei.googlecalendar;
 
+import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
+import com.google.api.client.http.javanet.NetHttpTransport;
+import com.google.api.client.json.JsonFactory;
+import com.google.api.client.json.gson.GsonFactory;
+import com.google.api.services.calendar.Calendar;
+import com.google.api.services.calendar.model.Event;
+import com.google.api.services.calendar.model.EventDateTime;
+import dev.mikoto2000.rei.google.GoogleOAuthService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -10,31 +18,22 @@ import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.List;
 import java.util.Objects;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
-import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
-import com.google.api.client.http.javanet.NetHttpTransport;
-import com.google.api.client.json.JsonFactory;
-import com.google.api.client.json.gson.GsonFactory;
-import com.google.api.services.calendar.Calendar;
-import com.google.api.services.calendar.model.Event;
-import com.google.api.services.calendar.model.EventDateTime;
-
-import dev.mikoto2000.rei.google.GoogleOAuthService;
 
 @Service
 public class GoogleCalendarService {
 
   private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
-  private static final DateTimeFormatter DATE_TIME_FORMATTER = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
+  private static final DateTimeFormatter DATE_TIME_FORMATTER =
+      DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
   private final GoogleCalendarProperties properties;
   private final GoogleOAuthService googleOAuthService;
 
   @Autowired
-  public GoogleCalendarService(GoogleCalendarProperties properties, GoogleOAuthService googleOAuthService) {
+  public GoogleCalendarService(
+      GoogleCalendarProperties properties, GoogleOAuthService googleOAuthService) {
     this.properties = properties;
     this.googleOAuthService = googleOAuthService;
   }
@@ -66,41 +65,36 @@ public class GoogleCalendarService {
   public List<GoogleCalendarEventSummary> listEvents(Instant from, Instant to) throws Exception {
     Calendar client = getCalendarClient();
 
-    return client.events()
-      .list(defaultCalendarId())
-      .setTimeMin(new com.google.api.client.util.DateTime(from.toEpochMilli()))
-      .setTimeMax(new com.google.api.client.util.DateTime(to.toEpochMilli()))
-      .setOrderBy("startTime")
-      .setSingleEvents(true)
-      .execute()
-      .getItems()
-      .stream()
-      .map(this::toSummary)
-      .toList();
+    return client
+        .events()
+        .list(defaultCalendarId())
+        .setTimeMin(new com.google.api.client.util.DateTime(from.toEpochMilli()))
+        .setTimeMax(new com.google.api.client.util.DateTime(to.toEpochMilli()))
+        .setOrderBy("startTime")
+        .setSingleEvents(true)
+        .execute()
+        .getItems()
+        .stream()
+        .map(this::toSummary)
+        .toList();
   }
 
   public GoogleCalendarEventSummary createEvent(
-      String summary,
-      ZonedDateTime start,
-      ZonedDateTime end,
-      String location,
-      String description
-  ) throws Exception {
+      String summary, ZonedDateTime start, ZonedDateTime end, String location, String description)
+      throws Exception {
     if (!end.isAfter(start)) {
       throw new IllegalArgumentException("end must be after start");
     }
 
-    Event event = new Event()
-      .setSummary(summary)
-      .setLocation(blankToNull(location))
-      .setDescription(blankToNull(description))
-      .setStart(toEventDateTime(start))
-      .setEnd(toEventDateTime(end));
+    Event event =
+        new Event()
+            .setSummary(summary)
+            .setLocation(blankToNull(location))
+            .setDescription(blankToNull(description))
+            .setStart(toEventDateTime(start))
+            .setEnd(toEventDateTime(end));
 
-    Event created = getCalendarClient()
-      .events()
-      .insert(defaultCalendarId(), event)
-      .execute();
+    Event created = getCalendarClient().events().insert(defaultCalendarId(), event).execute();
 
     return toSummary(created);
   }
@@ -145,9 +139,10 @@ public class GoogleCalendarService {
     }
 
     NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
-    return new Calendar.Builder(httpTransport, JSON_FACTORY, googleOAuthService.authorize(httpTransport, false))
-      .setApplicationName(properties.applicationName())
-      .build();
+    return new Calendar.Builder(
+            httpTransport, JSON_FACTORY, googleOAuthService.authorize(httpTransport, false))
+        .setApplicationName(properties.applicationName())
+        .build();
   }
 
   private GoogleCalendarEventSummary toSummary(Event event) {
@@ -157,8 +152,7 @@ public class GoogleCalendarService {
         formatEventTime(event.getStart()),
         formatEventTime(event.getEnd()),
         Objects.toString(event.getLocation(), ""),
-        Objects.toString(event.getStatus(), "")
-    );
+        Objects.toString(event.getStatus(), ""));
   }
 
   private String formatEventTime(EventDateTime eventDateTime) {
@@ -167,9 +161,10 @@ public class GoogleCalendarService {
     }
 
     if (eventDateTime.getDateTime() != null) {
-      ZoneId eventZone = eventDateTime.getTimeZone() == null || eventDateTime.getTimeZone().isBlank()
-          ? zoneId()
-          : ZoneId.of(eventDateTime.getTimeZone());
+      ZoneId eventZone =
+          eventDateTime.getTimeZone() == null || eventDateTime.getTimeZone().isBlank()
+              ? zoneId()
+              : ZoneId.of(eventDateTime.getTimeZone());
       return DATE_TIME_FORMATTER.format(
           Instant.ofEpochMilli(eventDateTime.getDateTime().getValue()).atZone(eventZone));
     }
@@ -188,7 +183,8 @@ public class GoogleCalendarService {
   }
 
   private String defaultCalendarId() {
-    return properties.calendar().defaultCalendarId() == null || properties.calendar().defaultCalendarId().isBlank()
+    return properties.calendar().defaultCalendarId() == null
+            || properties.calendar().defaultCalendarId().isBlank()
         ? "primary"
         : properties.calendar().defaultCalendarId();
   }

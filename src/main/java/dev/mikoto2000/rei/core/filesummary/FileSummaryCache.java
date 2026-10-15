@@ -1,22 +1,20 @@
 package dev.mikoto2000.rei.core.filesummary;
 
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
 import java.time.Clock;
 import java.time.OffsetDateTime;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import dev.mikoto2000.rei.event.AgentEventFactory;
-import dev.mikoto2000.rei.event.AgentEventPublisher;
-
 /**
  * ファイルの要約を version と紐付けて保持するキャッシュ。
  *
- * <p>summary はファイル内容の version（sha256 等）と紐付けて保存する。
- * 現在のファイル version と一致しない summary は stale として扱い、LLM には提示しない。</p>
+ * <p>summary はファイル内容の version（sha256 等）と紐付けて保存する。 現在のファイル version と一致しない summary は stale として扱い、LLM
+ * には提示しない。
  */
 public class FileSummaryCache {
 
@@ -36,7 +34,8 @@ public class FileSummaryCache {
     this(maxEntries, clock, null, null);
   }
 
-  public FileSummaryCache(int maxEntries, Clock clock, AgentEventFactory events, AgentEventPublisher eventPublisher) {
+  public FileSummaryCache(
+      int maxEntries, Clock clock, AgentEventFactory events, AgentEventPublisher eventPublisher) {
     this.maxEntries = Math.max(1, maxEntries);
     this.clock = clock;
     this.events = events;
@@ -61,8 +60,11 @@ public class FileSummaryCache {
   /** ファイル要約を保存する。 */
   public void save(FileSummary summary) {
     entries.put(summary.path(), summary);
-    publish(events == null ? null : events.fileSummarySaved(summary.path(),
-        summary.summary() == null ? 0 : summary.summary().length()));
+    publish(
+        events == null
+            ? null
+            : events.fileSummarySaved(
+                summary.path(), summary.summary() == null ? 0 : summary.summary().length()));
     evictIfNeeded();
   }
 
@@ -86,7 +88,7 @@ public class FileSummaryCache {
   /**
    * LLM コンテキストに渡す表現を組み立てる。
    *
-   * <p>versionProvider は各ファイルの現在 version を返す。version が一致しない summary は stale として除外する。</p>
+   * <p>versionProvider は各ファイルの現在 version を返す。version が一致しない summary は stale として除外する。
    */
   public String renderForPrompt(java.util.function.Function<String, String> versionProvider) {
     StringBuilder sb = new StringBuilder();
@@ -104,10 +106,11 @@ public class FileSummaryCache {
 
   private void evictIfNeeded() {
     while (entries.size() > maxEntries) {
-      String oldest = entries.values().stream()
-          .min(Comparator.comparing(FileSummary::createdAt))
-          .map(FileSummary::path)
-          .orElse(null);
+      String oldest =
+          entries.values().stream()
+              .min(Comparator.comparing(FileSummary::createdAt))
+              .map(FileSummary::path)
+              .orElse(null);
       if (oldest == null) {
         return;
       }

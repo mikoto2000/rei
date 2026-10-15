@@ -1,61 +1,102 @@
 package dev.mikoto2000.rei.event;
 
-import java.nio.file.*;
-import java.nio.charset.StandardCharsets;
-import java.io.*;
-import java.util.*;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.jsontype.NamedType;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
-import org.springframework.stereotype.Component;
+import java.io.*;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.util.*;
 
-/** Typed JSONL audit log. Project sequences are durable; the bus retains its process sequence API. */
+/**
+ * Typed JSONL audit log. Project sequences are durable; the bus retains its process sequence API.
+ */
 public class ProjectAgentEventStore implements AgentEventListener {
-  /** Legacy file backend is bounded. The SQLite backend provides indexed lookup across retained events. */
-  public Optional<AgentEvent> findEvent(String project,String id){return recent(project,1000).stream().filter(e->e.id().equals(id)).findFirst();}
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(ProjectAgentEventStore.class);
+  /**
+   * Legacy file backend is bounded. The SQLite backend provides indexed lookup across retained
+   * events.
+   */
+  public Optional<AgentEvent> findEvent(String project, String id) {
+    return recent(project, 1000).stream().filter(e -> e.id().equals(id)).findFirst();
+  }
+
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(ProjectAgentEventStore.class);
   private final Path base;
   private final ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
   private final Map<String, Long> sequences = new HashMap<>();
+
   @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, property = "_payloadType")
   private interface PayloadType {}
 
-  public ProjectAgentEventStore() { this(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current()); }
+  public ProjectAgentEventStore() {
+    this(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current());
+  }
+
   public ProjectAgentEventStore(Path base) {
     this.base = base;
     mapper.addMixIn(AgentEventPayload.class, PayloadType.class);
     for (Class<?> type : AgentEventPayload.class.getPermittedSubclasses())
       mapper.registerSubtypes(new NamedType(type, type.getSimpleName()));
   }
-  @Override public void onEvent(AgentEvent event) { if (event.projectId() != null) append(event); }
+
+  @Override
+  public void onEvent(AgentEvent event) {
+    if (event.projectId() != null) append(event);
+  }
 
   public synchronized AgentEvent append(AgentEvent event) {
-    if (event.projectId() == null) throw new IllegalArgumentException("ProjectId is required for persisted agent events");
+    if (event.projectId() == null)
+      throw new IllegalArgumentException("ProjectId is required for persisted agent events");
     long next = lastSequence(event.projectId()) + 1;
-    var stored = new AgentEvent(event.id(), next, event.timestamp(), event.type(), event.version(), event.sessionId(),
-        event.turnId(), event.runId(), event.correlationId(), event.parentEventId(), event.payload(), event.projectId());
+    var stored =
+        new AgentEvent(
+            event.id(),
+            next,
+            event.timestamp(),
+            event.type(),
+            event.version(),
+            event.sessionId(),
+            event.turnId(),
+            event.runId(),
+            event.correlationId(),
+            event.parentEventId(),
+            event.payload(),
+            event.projectId());
     Path file = file(event.projectId());
     try {
       Files.createDirectories(file.getParent());
       String line = mapper.writeValueAsString(stored);
       // Separate an interrupted final line before appending a new complete record.
       String separator = "";
-      if (Files.exists(file) && Files.size(file) > 0) try (var input = new RandomAccessFile(file.toFile(), "r")) {
-        input.seek(input.length() - 1); if (input.read() != '\n') separator = "\n";
-      }
-      Files.writeString(file, separator + line + "\n", StandardCharsets.UTF_8, StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+      if (Files.exists(file) && Files.size(file) > 0)
+        try (var input = new RandomAccessFile(file.toFile(), "r")) {
+          input.seek(input.length() - 1);
+          if (input.read() != '\n') separator = "\n";
+        }
+      Files.writeString(
+          file,
+          separator + line + "\n",
+          StandardCharsets.UTF_8,
+          StandardOpenOption.CREATE,
+          StandardOpenOption.APPEND);
       sequences.put(event.projectId(), next);
       return stored;
-    } catch (IOException error) { throw new IllegalStateException("Cannot persist agent event: " + file, error); }
+    } catch (IOException error) {
+      throw new IllegalStateException("Cannot persist agent event: " + file, error);
+    }
   }
+
   public synchronized long lastSequence(String projectId) {
-    return sequences.computeIfAbsent(projectId, id -> recent(id, 1).stream().mapToLong(AgentEvent::sequence).max().orElse(0));
+    return sequences.computeIfAbsent(
+        projectId, id -> recent(id, 1).stream().mapToLong(AgentEvent::sequence).max().orElse(0));
   }
 
   /** Reads from the end of the file; project switching never scans or replays the complete log. */
   public synchronized List<AgentEvent> recent(String projectId, int limit) {
-    if (limit < 1 || limit > 1000) throw new IllegalArgumentException("Event limit must be between 1 and 1000");
+    if (limit < 1 || limit > 1000)
+      throw new IllegalArgumentException("Event limit must be between 1 and 1000");
     Path file = file(projectId);
     if (!Files.exists(file)) return List.of();
     List<AgentEvent> result = new ArrayList<>();
@@ -64,66 +105,96 @@ public class ProjectAgentEventStore implements AgentEventListener {
       long position = input.length();
       byte[] block = new byte[8192];
       while (position > 0 && result.size() < limit) {
-        int length = (int) Math.min(block.length, position); position -= length;
-        input.seek(position); input.readFully(block, 0, length);
+        int length = (int) Math.min(block.length, position);
+        position -= length;
+        input.seek(position);
+        input.readFully(block, 0, length);
         for (int i = length - 1; i >= 0 && result.size() < limit; i--) {
-          if (block[i] == '\n') { addReversedLine(reversed, result, file); reversed.reset(); }
-          else reversed.write(block[i]);
+          if (block[i] == '\n') {
+            addReversedLine(reversed, result, file);
+            reversed.reset();
+          } else reversed.write(block[i]);
         }
       }
       if (result.size() < limit) addReversedLine(reversed, result, file);
-    } catch (IOException error) { log.warn("Cannot restore recent agent events: {}", file, error); }
+    } catch (IOException error) {
+      log.warn("Cannot restore recent agent events: {}", file, error);
+    }
     Collections.reverse(result);
     return List.copyOf(result);
   }
 
-  public record Page(List<AgentEvent> events,long nextOffset,boolean discardingLine) {}
+  public record Page(List<AgentEvent> events, long nextOffset, boolean discardingLine) {}
+
   /** Append-only replay: at most 256 KiB / 128 lines per call, with a 64 KiB line cap. */
-  public synchronized Page readPage(String projectId,long offset,boolean discardingLine) {
-    if(offset<0)throw new IllegalArgumentException("Negative event cursor");
-    Path file=file(projectId);
-    if(!Files.exists(file))return new Page(List.of(),0,false);
-    try(var input=new RandomAccessFile(file.toFile(),"r")) {
-      if(offset>input.length()){offset=0;discardingLine=false;}
+  public synchronized Page readPage(String projectId, long offset, boolean discardingLine) {
+    if (offset < 0) throw new IllegalArgumentException("Negative event cursor");
+    Path file = file(projectId);
+    if (!Files.exists(file)) return new Page(List.of(), 0, false);
+    try (var input = new RandomAccessFile(file.toFile(), "r")) {
+      if (offset > input.length()) {
+        offset = 0;
+        discardingLine = false;
+      }
       input.seek(offset);
-      byte[] bytes=new byte[(int)Math.min(256*1024,input.length()-offset)];input.readFully(bytes);
-      var events=new ArrayList<AgentEvent>();int lineStart=0,lines=0;
-      for(int i=0;i<bytes.length;i++) {
-        if(i-lineStart>=64*1024)discardingLine=true;
-        if(bytes[i]=='\n') {
-          if(!discardingLine) {
-            var event=decode(new String(bytes,lineStart,i-lineStart,StandardCharsets.UTF_8),file);
-            if(event!=null)events.add(event);
+      byte[] bytes = new byte[(int) Math.min(256 * 1024, input.length() - offset)];
+      input.readFully(bytes);
+      var events = new ArrayList<AgentEvent>();
+      int lineStart = 0, lines = 0;
+      for (int i = 0; i < bytes.length; i++) {
+        if (i - lineStart >= 64 * 1024) discardingLine = true;
+        if (bytes[i] == '\n') {
+          if (!discardingLine) {
+            var event =
+                decode(new String(bytes, lineStart, i - lineStart, StandardCharsets.UTF_8), file);
+            if (event != null) events.add(event);
           }
-          discardingLine=false;lineStart=i+1;
-          if(++lines>=128)return new Page(List.copyOf(events),offset+lineStart,false);
+          discardingLine = false;
+          lineStart = i + 1;
+          if (++lines >= 128) return new Page(List.copyOf(events), offset + lineStart, false);
         }
       }
       // Preserve an incomplete normal line; oversized lines are skipped across page boundaries.
-      return new Page(List.copyOf(events),offset+(discardingLine?bytes.length:lineStart),discardingLine);
-    } catch(IOException error){throw new IllegalStateException("Cannot page persisted agent events",error);}
+      return new Page(
+          List.copyOf(events),
+          offset + (discardingLine ? bytes.length : lineStart),
+          discardingLine);
+    } catch (IOException error) {
+      throw new IllegalStateException("Cannot page persisted agent events", error);
+    }
   }
 
   /** Forward pagination is separate from normal Shell restoration. */
-  public Map<String,String> referenceStatus(String project,Set<String> ids) {
-    var result=new HashMap<String,String>();ids.forEach(id->result.put(id,"not-found"));
-    if(ids.isEmpty())return result;
-    Path path=file(project);if(!Files.exists(path))return result;
+  public Map<String, String> referenceStatus(String project, Set<String> ids) {
+    var result = new HashMap<String, String>();
+    ids.forEach(id -> result.put(id, "not-found"));
+    if (ids.isEmpty()) return result;
+    Path path = file(project);
+    if (!Files.exists(path)) return result;
     try {
-      if(Files.size(path)>8*1024*1024) {
-        ids.forEach(id->result.put(id,"requires-history-lookup"));
-        for(var event:recent(project,1000))if(ids.contains(event.id()))result.put(event.id(),"available");
-      } else try(var reader=Files.newBufferedReader(path)) {
-        String line;while((line=reader.readLine())!=null) {
-          if(Thread.currentThread().isInterrupted())throw new java.util.concurrent.CancellationException();
-          var event=decode(line,path);if(event!=null&&ids.contains(event.id()))result.put(event.id(),"available");
+      if (Files.size(path) > 8 * 1024 * 1024) {
+        ids.forEach(id -> result.put(id, "requires-history-lookup"));
+        for (var event : recent(project, 1000))
+          if (ids.contains(event.id())) result.put(event.id(), "available");
+      } else
+        try (var reader = Files.newBufferedReader(path)) {
+          String line;
+          while ((line = reader.readLine()) != null) {
+            if (Thread.currentThread().isInterrupted())
+              throw new java.util.concurrent.CancellationException();
+            var event = decode(line, path);
+            if (event != null && ids.contains(event.id())) result.put(event.id(), "available");
+          }
         }
-      }
-    }catch(IOException error){ids.forEach(id->result.put(id,"unavailable"));}
+    } catch (IOException error) {
+      ids.forEach(id -> result.put(id, "unavailable"));
+    }
     return Map.copyOf(result);
   }
+
   public List<AgentEvent> readAfter(String projectId, long afterSequence, int limit) {
-    if (limit < 1 || limit > 1000) throw new IllegalArgumentException("Event limit must be between 1 and 1000");
+    if (limit < 1 || limit > 1000)
+      throw new IllegalArgumentException("Event limit must be between 1 and 1000");
     Path file = file(projectId);
     if (!Files.exists(file)) return List.of();
     List<AgentEvent> result = new ArrayList<>();
@@ -133,20 +204,36 @@ public class ProjectAgentEventStore implements AgentEventListener {
         var event = decode(line, file);
         if (event != null && event.sequence() > afterSequence) result.add(event);
       }
-    } catch (IOException error) { log.warn("Cannot replay agent events: {}", file, error); }
+    } catch (IOException error) {
+      log.warn("Cannot replay agent events: {}", file, error);
+    }
     return List.copyOf(result);
   }
+
   private void addReversedLine(ByteArrayOutputStream reversed, List<AgentEvent> result, Path file) {
     byte[] bytes = reversed.toByteArray();
-    for (int i = 0, j = bytes.length - 1; i < j; i++, j--) { byte value = bytes[i]; bytes[i] = bytes[j]; bytes[j] = value; }
+    for (int i = 0, j = bytes.length - 1; i < j; i++, j--) {
+      byte value = bytes[i];
+      bytes[i] = bytes[j];
+      bytes[j] = value;
+    }
     var event = decode(new String(bytes, StandardCharsets.UTF_8), file);
     if (event != null) result.add(event);
   }
+
   private AgentEvent decode(String line, Path file) {
     if (line.isBlank()) return null;
-    try { return mapper.readValue(line, AgentEvent.class); }
-    catch (IOException error) { log.warn("Skipping malformed or unsupported agent event in {} ({})", file, error.getClass().getSimpleName()); return null; }
+    try {
+      return mapper.readValue(line, AgentEvent.class);
+    } catch (IOException error) {
+      log.warn(
+          "Skipping malformed or unsupported agent event in {} ({})",
+          file,
+          error.getClass().getSimpleName());
+      return null;
+    }
   }
+
   private Path file(String id) {
     UUID.fromString(id);
     return base.resolve("projects").resolve(id).resolve("events/events.jsonl");

@@ -3,18 +3,16 @@ package dev.mikoto2000.rei.skills.command;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.verify;
 
+import dev.mikoto2000.rei.skills.AgentSkill;
+import dev.mikoto2000.rei.skills.AgentSkillRepository;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
-
-import dev.mikoto2000.rei.skills.AgentSkill;
-import dev.mikoto2000.rei.skills.AgentSkillRepository;
 import picocli.CommandLine;
 
 class SkillCommandTest {
@@ -65,7 +63,10 @@ class SkillCommandTest {
 
   @Test
   void repositoryConstructorIsAutowired() throws Exception {
-    assertThat(SkillCommand.class.getConstructor(AgentSkillRepository.class).isAnnotationPresent(Autowired.class))
+    assertThat(
+            SkillCommand.class
+                .getConstructor(AgentSkillRepository.class)
+                .isAnnotationPresent(Autowired.class))
         .isTrue();
   }
 
@@ -96,13 +97,17 @@ class SkillCommandTest {
       }
 
       @Override
-      public void reload() {
-      }
+      public void reload() {}
     };
   }
 
   private AgentSkill skill(String name, boolean enabled) {
-    return new AgentSkill(name, name + " description", enabled, Path.of(name), Path.of(name).resolve("SKILL.md"),
+    return new AgentSkill(
+        name,
+        name + " description",
+        enabled,
+        Path.of(name),
+        Path.of(name).resolve("SKILL.md"),
         name + " instructions");
   }
 }

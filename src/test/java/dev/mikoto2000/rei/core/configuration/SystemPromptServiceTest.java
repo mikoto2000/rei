@@ -2,20 +2,17 @@ package dev.mikoto2000.rei.core.configuration;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import dev.mikoto2000.rei.config.ExternalConfigFileService;
 import java.nio.file.Files;
 import java.nio.file.Path;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.core.io.DefaultResourceLoader;
 
-import dev.mikoto2000.rei.config.ExternalConfigFileService;
-
 @org.junit.jupiter.api.Tag("integration")
 class SystemPromptServiceTest {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void returnsBasePromptWhenAdditionalFileDoesNotExist() {
@@ -28,14 +25,20 @@ class SystemPromptServiceTest {
   void appendsExternalAdditionalSystemPrompt() throws Exception {
     ExternalConfigFileService externalConfigFileService = new ExternalConfigFileService(tempDir);
     Files.createDirectories(externalConfigFileService.additionalSystemPromptFilePath().getParent());
-    Files.writeString(externalConfigFileService.additionalSystemPromptFilePath(), "extra line 1\nextra line 2\n");
-    SystemPromptService service = new SystemPromptService(
-        new CoreProperties("base prompt", 100),
-        new DefaultResourceLoader(),
-        externalConfigFileService);
+    Files.writeString(
+        externalConfigFileService.additionalSystemPromptFilePath(), "extra line 1\nextra line 2\n");
+    SystemPromptService service =
+        new SystemPromptService(
+            new CoreProperties("base prompt", 100),
+            new DefaultResourceLoader(),
+            externalConfigFileService);
 
-    assertEquals("base prompt" + System.lineSeparator() + System.lineSeparator()
-        + "extra line 1\nextra line 2", service.systemPrompt());
+    assertEquals(
+        "base prompt"
+            + System.lineSeparator()
+            + System.lineSeparator()
+            + "extra line 1\nextra line 2",
+        service.systemPrompt());
   }
 
   @Test
@@ -52,11 +55,11 @@ class SystemPromptServiceTest {
   void usesMarkdownFileContentAsAdditionalPrompt() throws Exception {
     ExternalConfigFileService externalConfigFileService = new ExternalConfigFileService(tempDir);
     Files.createDirectories(externalConfigFileService.additionalSystemPromptFilePath().getParent());
-    Files.writeString(externalConfigFileService.additionalSystemPromptFilePath(), "## 追加指示\nplain prompt\n");
-    SystemPromptService service = new SystemPromptService(
-        new CoreProperties("", 100),
-        new DefaultResourceLoader(),
-        externalConfigFileService);
+    Files.writeString(
+        externalConfigFileService.additionalSystemPromptFilePath(), "## 追加指示\nplain prompt\n");
+    SystemPromptService service =
+        new SystemPromptService(
+            new CoreProperties("", 100), new DefaultResourceLoader(), externalConfigFileService);
 
     assertEquals("## 追加指示\nplain prompt", service.systemPrompt());
   }

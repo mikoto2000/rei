@@ -19,7 +19,8 @@ class UserInputParserTest {
 
   @Test
   void appliesShellQuotingRulesToSlashCommands() {
-    assertArrayEquals(new String[] {"project", "add", "C:\\work dir"},
+    assertArrayEquals(
+        new String[] {"project", "add", "C:\\work dir"},
         parser.parse("/project add \"C:\\work dir\"").arguments());
   }
 

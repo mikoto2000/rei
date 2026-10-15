@@ -1,15 +1,13 @@
 package dev.mikoto2000.rei.googlecalendar.command;
 
+import dev.mikoto2000.rei.googlecalendar.GoogleCalendarEventSummary;
+import dev.mikoto2000.rei.googlecalendar.GoogleCalendarService;
 import java.time.LocalDate;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
-
-import org.springframework.stereotype.Component;
-
-import dev.mikoto2000.rei.googlecalendar.GoogleCalendarEventSummary;
-import dev.mikoto2000.rei.googlecalendar.GoogleCalendarService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
@@ -27,13 +25,51 @@ import picocli.CommandLine.Parameters;
 public class ScheduleCommand {
   private abstract static class ReportCommand implements Runnable {
     private java.io.PrintWriter reportOutput;
-    java.io.PrintWriter out(){return reportOutput==null?new java.io.PrintWriter(System.out,true):reportOutput;}
+
+    java.io.PrintWriter out() {
+      return reportOutput == null ? new java.io.PrintWriter(System.out, true) : reportOutput;
+    }
   }
-  private static String report(ReportCommand command){var text=new java.io.StringWriter();command.reportOutput=new java.io.PrintWriter(text,true);command.run();return text.toString().replaceFirst("[\\r\\n]+$","");}
-  public static String reportList(GoogleCalendarService service,LocalDate date,String from,String to){var command=new ListCommand(service);command.date=date;command.from=from;command.to=to;return report(command);}
-  public static String reportAdd(GoogleCalendarService service,String title,String start,String end,String location,String description){var command=new AddCommand(service);command.titleParts=new String[]{title};command.start=start;command.end=end;command.location=location;command.description=description;return report(command);}
-  public static String reportAuthorization(GoogleCalendarService service){return report(new AuthCommand(service));}
-  public static String reportRefresh(GoogleCalendarService service){return report(new RefreshTokenCommand(service));}
+
+  private static String report(ReportCommand command) {
+    var text = new java.io.StringWriter();
+    command.reportOutput = new java.io.PrintWriter(text, true);
+    command.run();
+    return text.toString().replaceFirst("[\\r\\n]+$", "");
+  }
+
+  public static String reportList(
+      GoogleCalendarService service, LocalDate date, String from, String to) {
+    var command = new ListCommand(service);
+    command.date = date;
+    command.from = from;
+    command.to = to;
+    return report(command);
+  }
+
+  public static String reportAdd(
+      GoogleCalendarService service,
+      String title,
+      String start,
+      String end,
+      String location,
+      String description) {
+    var command = new AddCommand(service);
+    command.titleParts = new String[] {title};
+    command.start = start;
+    command.end = end;
+    command.location = location;
+    command.description = description;
+    return report(command);
+  }
+
+  public static String reportAuthorization(GoogleCalendarService service) {
+    return report(new AuthCommand(service));
+  }
+
+  public static String reportRefresh(GoogleCalendarService service) {
+    return report(new RefreshTokenCommand(service));
+  }
 
   @Component
   @RequiredArgsConstructor
@@ -81,10 +117,14 @@ public class ScheduleCommand {
     @Option(names = "--date", description = "対象日。形式: yyyy-MM-dd")
     LocalDate date;
 
-    @Option(names = "--from", description = "開始日時。形式: 2026-03-23T09:00:00+09:00 または 2026-03-23T09:00:00")
+    @Option(
+        names = "--from",
+        description = "開始日時。形式: 2026-03-23T09:00:00+09:00 または 2026-03-23T09:00:00")
     String from;
 
-    @Option(names = "--to", description = "終了日時。形式: 2026-03-23T18:00:00+09:00 または 2026-03-23T18:00:00")
+    @Option(
+        names = "--to",
+        description = "終了日時。形式: 2026-03-23T18:00:00+09:00 または 2026-03-23T18:00:00")
     String to;
 
     @Override
@@ -94,13 +134,15 @@ public class ScheduleCommand {
         if (date != null) {
           events = googleCalendarService.listEventsForDate(date);
         } else {
-          ZonedDateTime resolvedFrom = from != null
-              ? googleCalendarService.parseDateTime(from)
-              : LocalDate.now(googleCalendarService.zoneId()).atStartOfDay(googleCalendarService.zoneId());
-          ZonedDateTime resolvedTo = to != null
-              ? googleCalendarService.parseDateTime(to)
-              : resolvedFrom.plusDays(1);
-          events = googleCalendarService.listEvents(resolvedFrom.toInstant(), resolvedTo.toInstant());
+          ZonedDateTime resolvedFrom =
+              from != null
+                  ? googleCalendarService.parseDateTime(from)
+                  : LocalDate.now(googleCalendarService.zoneId())
+                      .atStartOfDay(googleCalendarService.zoneId());
+          ZonedDateTime resolvedTo =
+              to != null ? googleCalendarService.parseDateTime(to) : resolvedFrom.plusDays(1);
+          events =
+              googleCalendarService.listEvents(resolvedFrom.toInstant(), resolvedTo.toInstant());
         }
 
         if (events.isEmpty()) {
@@ -115,14 +157,11 @@ public class ScheduleCommand {
     }
 
     private void printEvent(GoogleCalendarEventSummary event) {
-      out().println(String.format(
-          "%s | %s | %s | %s | %s",
-          event.id(),
-          event.start(),
-          event.end(),
-          event.summary(),
-          event.location()
-      ));
+      out()
+          .println(
+              String.format(
+                  "%s | %s | %s | %s | %s",
+                  event.id(), event.start(), event.end(), event.summary(), event.location()));
     }
   }
 
@@ -133,10 +172,16 @@ public class ScheduleCommand {
 
     private final GoogleCalendarService googleCalendarService;
 
-    @Option(names = "--start", required = true, description = "開始日時。形式: 2026-03-23T09:00:00+09:00 または 2026-03-23T09:00:00")
+    @Option(
+        names = "--start",
+        required = true,
+        description = "開始日時。形式: 2026-03-23T09:00:00+09:00 または 2026-03-23T09:00:00")
     String start;
 
-    @Option(names = "--end", required = true, description = "終了日時。形式: 2026-03-23T10:00:00+09:00 または 2026-03-23T10:00:00")
+    @Option(
+        names = "--end",
+        required = true,
+        description = "終了日時。形式: 2026-03-23T10:00:00+09:00 または 2026-03-23T10:00:00")
     String end;
 
     @Option(names = "--location", description = "場所")
@@ -153,19 +198,16 @@ public class ScheduleCommand {
       try {
         ZonedDateTime resolvedStart = googleCalendarService.parseDateTime(start);
         ZonedDateTime resolvedEnd = googleCalendarService.parseDateTime(end);
-        GoogleCalendarEventSummary created = googleCalendarService.createEvent(
-            String.join(" ", titleParts),
-            resolvedStart,
-            resolvedEnd,
-            location,
-            description
-        );
-        out().println(String.format(
-            "作成しました: %s | %s | %s",
-            created.id(),
-            created.summary(),
-            DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(resolvedStart)
-        ));
+        GoogleCalendarEventSummary created =
+            googleCalendarService.createEvent(
+                String.join(" ", titleParts), resolvedStart, resolvedEnd, location, description);
+        out()
+            .println(
+                String.format(
+                    "作成しました: %s | %s | %s",
+                    created.id(),
+                    created.summary(),
+                    DateTimeFormatter.ISO_OFFSET_DATE_TIME.format(resolvedStart)));
       } catch (Exception e) {
         out().println("[error] " + userFacingMessage(e, "Google Calendar への予定追加に失敗しました"));
       }

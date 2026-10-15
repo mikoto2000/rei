@@ -7,10 +7,8 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-
-import org.springframework.stereotype.Service;
-
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
@@ -28,8 +26,10 @@ public class FeedOpmlImportService {
     List<FeedOpmlImportResult.Entry> failed = new ArrayList<>();
     for (OpmlSubscription subscription : subscriptions) {
       if (!isFeedUrl(subscription.xmlUrl())) {
-        failed.add(new FeedOpmlImportResult.Entry(
-            new OpmlSubscription("", "", "[invalid feed URL]", "", List.of()), "invalid feed URL"));
+        failed.add(
+            new FeedOpmlImportResult.Entry(
+                new OpmlSubscription("", "", "[invalid feed URL]", "", List.of()),
+                "invalid feed URL"));
         continue;
       }
       try {

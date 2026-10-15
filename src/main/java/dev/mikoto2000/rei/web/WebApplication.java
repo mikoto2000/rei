@@ -12,15 +12,31 @@ public final class WebApplication {
     String key = environmentKey == null || environmentKey.isBlank() ? "" : environmentKey;
     var type = key.isEmpty() ? WebApplicationType.NONE : WebApplicationType.SERVLET;
     application.setWebApplicationType(type);
-    Map<String, Object> properties = Map.of("rei.api-key", key, "rei.web.enabled", !key.isEmpty(),
-        "spring.main.web-application-type", type.name());
-    // Spring binds spring.main.* after environment preparation. Pin the decision before that binding as well.
-    application.addListeners((org.springframework.context.ApplicationListener<org.springframework.boot.context.event.ApplicationEnvironmentPreparedEvent>)
-        event -> event.getEnvironment().getPropertySources().addFirst(new MapPropertySource("reiApiKeyEnvironment", properties)));
-    application.addInitializers(context -> {
-      context.getEnvironment().getPropertySources().addFirst(
-          new MapPropertySource("reiApiKeyEnvironment", properties));
-      context.getBeanFactory().registerSingleton("apiKeyProperties", new ApiKeyProperties(key));
-    });
+    Map<String, Object> properties =
+        Map.of(
+            "rei.api-key",
+            key,
+            "rei.web.enabled",
+            !key.isEmpty(),
+            "spring.main.web-application-type",
+            type.name());
+    // Spring binds spring.main.* after environment preparation. Pin the decision before that
+    // binding as well.
+    application.addListeners(
+        (org.springframework.context.ApplicationListener<
+                org.springframework.boot.context.event.ApplicationEnvironmentPreparedEvent>)
+            event ->
+                event
+                    .getEnvironment()
+                    .getPropertySources()
+                    .addFirst(new MapPropertySource("reiApiKeyEnvironment", properties)));
+    application.addInitializers(
+        context -> {
+          context
+              .getEnvironment()
+              .getPropertySources()
+              .addFirst(new MapPropertySource("reiApiKeyEnvironment", properties));
+          context.getBeanFactory().registerSingleton("apiKeyProperties", new ApiKeyProperties(key));
+        });
   }
 }

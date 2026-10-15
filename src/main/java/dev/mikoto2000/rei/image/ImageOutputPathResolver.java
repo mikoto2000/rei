@@ -7,7 +7,8 @@ import java.time.format.DateTimeFormatter;
 
 public class ImageOutputPathResolver {
 
-  private static final DateTimeFormatter FILE_TIMESTAMP = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
+  private static final DateTimeFormatter FILE_TIMESTAMP =
+      DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
   private final Path workDirectory;
   private final ImageProperties properties;
@@ -22,15 +23,15 @@ public class ImageOutputPathResolver {
   public Path resolve(Path outputPath) {
     Path path = outputPath == null ? defaultOutputPath() : outputPath;
     if (!path.isAbsolute()) {
-      var execution=dev.mikoto2000.rei.core.execution.ExecutionScope.current();
-      path = (execution==null?workDirectory:execution.projectRoot()).resolve(path);
+      var execution = dev.mikoto2000.rei.core.execution.ExecutionScope.current();
+      path = (execution == null ? workDirectory : execution.projectRoot()).resolve(path);
     }
     return path.toAbsolutePath().normalize();
   }
 
   private Path defaultOutputPath() {
-    var execution=dev.mikoto2000.rei.core.execution.ExecutionScope.current();
-    String suffix=execution==null?"":"-"+execution.id();
+    var execution = dev.mikoto2000.rei.core.execution.ExecutionScope.current();
+    String suffix = execution == null ? "" : "-" + execution.id();
     String fileName = "image-" + LocalDateTime.now(clock).format(FILE_TIMESTAMP) + suffix + ".png";
     return properties.getOutputDirectory().resolve(fileName);
   }

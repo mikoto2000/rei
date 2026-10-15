@@ -5,22 +5,21 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelUnloadService;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.Optional;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
-
-import dev.mikoto2000.rei.core.service.ModelHolderService;
-import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelUnloadService;
 
 class ModelCommandTest {
 
   @Test
   void switchingModelSendsUnloadForCurrentModel() {
     ModelHolderService holder = Mockito.mock(ModelHolderService.class);
-    OpenAiCompatibleModelUnloadService unloadService = Mockito.mock(OpenAiCompatibleModelUnloadService.class);
+    OpenAiCompatibleModelUnloadService unloadService =
+        Mockito.mock(OpenAiCompatibleModelUnloadService.class);
     when(holder.get()).thenReturn("gpt-4o", "gpt-5");
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();
@@ -42,7 +41,8 @@ class ModelCommandTest {
   @Test
   void sameModelDoesNotSendUnload() {
     ModelHolderService holder = Mockito.mock(ModelHolderService.class);
-    OpenAiCompatibleModelUnloadService unloadService = Mockito.mock(OpenAiCompatibleModelUnloadService.class);
+    OpenAiCompatibleModelUnloadService unloadService =
+        Mockito.mock(OpenAiCompatibleModelUnloadService.class);
     when(holder.get()).thenReturn("gpt-4o", "gpt-4o");
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();

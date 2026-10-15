@@ -1,10 +1,7 @@
 package dev.mikoto2000.rei.core.actionplan;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-
-import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
@@ -87,7 +84,8 @@ class ActionPlanTest {
     plan.addStep("step B");
     plan.startStep("step-1");
     plan.startStep("step-2");
-    long inProgress = plan.steps().stream().filter(s -> ActionPlan.STATUS_IN_PROGRESS.equals(s.status())).count();
+    long inProgress =
+        plan.steps().stream().filter(s -> ActionPlan.STATUS_IN_PROGRESS.equals(s.status())).count();
     assertEquals(1, inProgress);
   }
 

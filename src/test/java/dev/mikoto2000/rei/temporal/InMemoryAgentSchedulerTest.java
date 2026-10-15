@@ -6,7 +6,6 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
-
 import org.junit.jupiter.api.Test;
 
 class InMemoryAgentSchedulerTest {
@@ -16,7 +15,8 @@ class InMemoryAgentSchedulerTest {
     Clock fixed = Clock.fixed(Instant.parse("2026-08-16T16:35:00Z"), ZoneId.of("Asia/Tokyo"));
     AgentScheduler scheduler = new InMemoryAgentScheduler(fixed);
 
-    ScheduledAgentTask actual = scheduler.scheduleAfter(Duration.ofMinutes(10), "check_server_status", "chat-1");
+    ScheduledAgentTask actual =
+        scheduler.scheduleAfter(Duration.ofMinutes(10), "check_server_status", "chat-1");
 
     assertEquals(Instant.parse("2026-08-16T16:35:00Z"), actual.createdAt());
     assertEquals(Instant.parse("2026-08-16T16:45:00Z"), actual.executeAt());

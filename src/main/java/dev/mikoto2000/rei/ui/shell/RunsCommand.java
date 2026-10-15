@@ -10,11 +10,21 @@ public class RunsCommand implements Runnable {
   private final ActiveRunDisplay display;
   private java.io.PrintWriter shellOutput;
   @Spec private CommandSpec spec;
-  public RunsCommand() { this.display = null; }
+
+  public RunsCommand() {
+    this.display = null;
+  }
+
   @org.springframework.beans.factory.annotation.Autowired
-  public RunsCommand(ActiveRunDisplay display) { this.display = display; }
+  public RunsCommand(ActiveRunDisplay display) {
+    this.display = display;
+  }
+
   /** Keep the terminal's writer independently of picocli's rebindable command spec. */
-  public void setShellOutput(java.io.PrintWriter output) { this.shellOutput = output; }
+  public void setShellOutput(java.io.PrintWriter output) {
+    this.shellOutput = output;
+  }
+
   public void run() {
     var out = shellOutput == null ? spec.commandLine().getOut() : shellOutput;
     if (display == null) {

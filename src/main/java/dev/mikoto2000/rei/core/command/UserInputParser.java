@@ -6,7 +6,11 @@ import java.util.List;
 /** UI-independent classification and tokenization of shell-style user input. */
 public final class UserInputParser {
 
-  public enum Kind { EMPTY, CHAT, SLASH_COMMAND }
+  public enum Kind {
+    EMPTY,
+    CHAT,
+    SLASH_COMMAND
+  }
 
   public record ParsedInput(Kind kind, String text, String[] arguments) {
     public ParsedInput {
@@ -32,11 +36,14 @@ public final class UserInputParser {
 
   public String[] split(String line) {
     // Preserve execution semantics: explicitly empty quoted arguments were historically omitted.
-    return tokenize(line).stream().map(Token::value).filter(value -> !value.isEmpty()).toArray(String[]::new);
+    return tokenize(line).stream()
+        .map(Token::value)
+        .filter(value -> !value.isEmpty())
+        .toArray(String[]::new);
   }
 
   /** Shared lexical rules, with raw spans for cursor-aware input adapters. */
-  public record Token(String value, int start, int end) { }
+  public record Token(String value, int start, int end) {}
 
   public List<Token> tokenize(String line) {
     List<Token> words = new ArrayList<>();
@@ -64,8 +71,9 @@ public final class UserInputParser {
 
   /** Encode one argument using the same literal-backslash grammar as split(). */
   public static String quote(String value, boolean complete, char preferredQuote) {
-    boolean needsQuotes = preferredQuote != 0 || value.chars()
-        .anyMatch(c -> Character.isWhitespace(c) || c == '\'' || c == '"');
+    boolean needsQuotes =
+        preferredQuote != 0
+            || value.chars().anyMatch(c -> Character.isWhitespace(c) || c == '\'' || c == '"');
     if (!needsQuotes) return value;
     char quote = preferredQuote == 0 ? '"' : preferredQuote;
     char other = quote == '"' ? '\'' : '"';

@@ -6,12 +6,16 @@ import org.junit.jupiter.api.Test;
 
 class LlmPropertiesTest {
 
-  @Test void callBudgetDefaultsToEnabledAndBindsFalse() {
+  @Test
+  void callBudgetDefaultsToEnabledAndBindsFalse() {
     assertThat(new LlmProperties().getOutputLimit().isLlmCallBudgetEnabled()).isTrue();
-    var source = new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(
-        java.util.Map.of("rei.llm.output-limit.llm-call-budget-enabled", "false"));
-    var properties = new org.springframework.boot.context.properties.bind.Binder(source)
-        .bind("rei.llm", LlmProperties.class).get();
+    var source =
+        new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(
+            java.util.Map.of("rei.llm.output-limit.llm-call-budget-enabled", "false"));
+    var properties =
+        new org.springframework.boot.context.properties.bind.Binder(source)
+            .bind("rei.llm", LlmProperties.class)
+            .get();
     assertThat(properties.getOutputLimit().isLlmCallBudgetEnabled()).isFalse();
   }
 

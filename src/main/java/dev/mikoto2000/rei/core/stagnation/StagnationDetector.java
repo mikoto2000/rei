@@ -6,7 +6,7 @@ import org.slf4j.LoggerFactory;
 /**
  * 作業が進展していないことを検出する。
  *
- * <p>単純な同一ツール判定ではなく、progress の有無・同一 tool call・同一 failure を組み合わせる。</p>
+ * <p>単純な同一ツール判定ではなく、progress の有無・同一 tool call・同一 failure を組み合わせる。
  */
 public class StagnationDetector {
 
@@ -25,8 +25,13 @@ public class StagnationDetector {
   private boolean repeatedToolCall;
   private boolean repeatedFailure;
 
-  public int threshold() { return threshold; }
-  public int maxReplans() { return maxReplans; }
+  public int threshold() {
+    return threshold;
+  }
+
+  public int maxReplans() {
+    return maxReplans;
+  }
 
   public StagnationDetector() {
     this(DEFAULT_THRESHOLD, DEFAULT_MAX_REPLANS);
@@ -95,7 +100,9 @@ public class StagnationDetector {
 
   /** 進展イベントを記録する。 */
   public void recordProgress(ProgressEvent event) {
-    if (event == ProgressEvent.FAILURE || event == ProgressEvent.TOOL_CALL || event == ProgressEvent.INFORMATION_UNKNOWN) return;
+    if (event == ProgressEvent.FAILURE
+        || event == ProgressEvent.TOOL_CALL
+        || event == ProgressEvent.INFORMATION_UNKNOWN) return;
     stagnationCount = 0;
     replanCount = 0;
     replanRequested = false;

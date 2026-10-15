@@ -10,7 +10,6 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.List;
 import java.util.Optional;
-
 import org.junit.jupiter.api.Test;
 
 class SearchResultCacheTest {
@@ -77,7 +76,8 @@ class SearchResultCacheTest {
 
   @Test
   void missAfterTtlExpires() {
-    var clock = new dev.mikoto2000.rei.testsupport.AdjustableClock(Instant.parse("2026-08-17T00:00:00Z"));
+    var clock =
+        new dev.mikoto2000.rei.testsupport.AdjustableClock(Instant.parse("2026-08-17T00:00:00Z"));
     SearchResultCache cache = new SearchResultCache(Duration.ofSeconds(60), 100, clock);
     SearchCacheKey key = new SearchCacheKey("grepMultiQuery", "pattern=UserService");
     cache.put(key, List.of("docs/UserService.java"));
@@ -108,8 +108,9 @@ class SearchResultCacheTest {
 
   @Test
   void maxEntriesEvictsOldest() {
-    SearchResultCache cache = new SearchResultCache(Duration.ofSeconds(60), 2,
-        Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE));
+    SearchResultCache cache =
+        new SearchResultCache(
+            Duration.ofSeconds(60), 2, Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE));
     cache.put(new SearchCacheKey("grepMultiQuery", "pattern=A"), List.of("a"));
     cache.put(new SearchCacheKey("grepMultiQuery", "pattern=B"), List.of("b"));
     cache.put(new SearchCacheKey("grepMultiQuery", "pattern=C"), List.of("c"));

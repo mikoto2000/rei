@@ -1,18 +1,16 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
-import java.util.ArrayList;
-import java.util.List;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
+import java.util.ArrayList;
+import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * 限られた context budget の中で、現在のタスクに重要な情報を優先して LLM に渡す。
  *
- * <p>決定的な優先順位・件数制限・文字数/トークン概算で処理する。追加 LLM 呼び出しは行わない。</p>
+ * <p>決定的な優先順位・件数制限・文字数/トークン概算で処理する。追加 LLM 呼び出しは行わない。
  */
 public class ContextBudgetManager {
 
@@ -31,8 +29,12 @@ public class ContextBudgetManager {
     this(modelContextLimit, outputReserve, safetyMargin, null, null);
   }
 
-  public ContextBudgetManager(int modelContextLimit, int outputReserve, int safetyMargin,
-      AgentEventFactory events, AgentEventPublisher eventPublisher) {
+  public ContextBudgetManager(
+      int modelContextLimit,
+      int outputReserve,
+      int safetyMargin,
+      AgentEventFactory events,
+      AgentEventPublisher eventPublisher) {
     this.modelContextLimit = modelContextLimit;
     this.outputReserve = outputReserve;
     this.safetyMargin = safetyMargin;
@@ -45,7 +47,8 @@ public class ContextBudgetManager {
     return modelContextLimit - outputReserve - safetyMargin;
   }
 
-  public static long estimateMessages(java.util.List<org.springframework.ai.chat.messages.Message> messages,
+  public static long estimateMessages(
+      java.util.List<org.springframework.ai.chat.messages.Message> messages,
       TokenEstimator estimator) {
     return messages.stream().mapToLong(estimator::message).sum();
   }
@@ -85,7 +88,8 @@ public class ContextBudgetManager {
     return new AllocationResult(List.copyOf(included), List.copyOf(dropped), total);
   }
 
-  private void publishAllocation(int budget, int total, List<String> included, List<String> dropped) {
+  private void publishAllocation(
+      int budget, int total, List<String> included, List<String> dropped) {
     if (events == null || eventPublisher == null) {
       return;
     }

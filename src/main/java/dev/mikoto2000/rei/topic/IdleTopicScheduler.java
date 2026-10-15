@@ -1,13 +1,11 @@
 package dev.mikoto2000.rei.topic;
 
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
 import java.time.Clock;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
-
-import dev.mikoto2000.rei.event.AgentEventFactory;
-import dev.mikoto2000.rei.event.AgentEventPublisher;
 
 public class IdleTopicScheduler {
   private static final Logger log = LoggerFactory.getLogger(IdleTopicScheduler.class);
@@ -19,8 +17,12 @@ public class IdleTopicScheduler {
   private final AgentEventPublisher eventPublisher;
   private String lastDecisionKey;
 
-  public IdleTopicScheduler(IdleTopicTrigger idleTopicTrigger, TopicOrchestrator topicOrchestrator, Clock clock,
-      AgentEventFactory eventFactory, AgentEventPublisher eventPublisher) {
+  public IdleTopicScheduler(
+      IdleTopicTrigger idleTopicTrigger,
+      TopicOrchestrator topicOrchestrator,
+      Clock clock,
+      AgentEventFactory eventFactory,
+      AgentEventPublisher eventPublisher) {
     this.idleTopicTrigger = idleTopicTrigger;
     this.topicOrchestrator = topicOrchestrator;
     this.clock = clock;
@@ -45,7 +47,11 @@ public class IdleTopicScheduler {
     String key = decision.accepted() ? "accepted" : "rejected:" + decision.rejectReason();
     if (!decision.accepted() && key.equals(lastDecisionKey)) return;
     lastDecisionKey = key;
-    eventPublisher.publish(eventFactory.topicIdleTriggerEvaluated(decision.rejectReason(), decision.accepted(),
-        decision.idleDuration(), decision.requiredIdle()));
+    eventPublisher.publish(
+        eventFactory.topicIdleTriggerEvaluated(
+            decision.rejectReason(),
+            decision.accepted(),
+            decision.idleDuration(),
+            decision.requiredIdle()));
   }
 }

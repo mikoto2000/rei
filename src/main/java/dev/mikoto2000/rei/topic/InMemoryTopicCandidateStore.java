@@ -17,7 +17,8 @@ public class InMemoryTopicCandidateStore implements TopicCandidateStore {
   @Override
   public synchronized List<TopicCandidate> currentCandidates(Instant now, Duration maxAge) {
     if (generatedAt == null || candidates.isEmpty()) return List.of();
-    if (maxAge != null && Duration.between(generatedAt, now).compareTo(maxAge) > 0) return List.of();
+    if (maxAge != null && Duration.between(generatedAt, now).compareTo(maxAge) > 0)
+      return List.of();
     return candidates;
   }
 }

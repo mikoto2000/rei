@@ -2,18 +2,16 @@ package dev.mikoto2000.rei.memory.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import dev.mikoto2000.rei.memory.model.Memory;
+import dev.mikoto2000.rei.memory.model.MemoryScope;
+import dev.mikoto2000.rei.memory.model.MemoryStatus;
+import dev.mikoto2000.rei.memory.model.MemoryType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-
 import org.junit.jupiter.api.Test;
-
-import dev.mikoto2000.rei.memory.model.Memory;
-import dev.mikoto2000.rei.memory.model.MemoryScope;
-import dev.mikoto2000.rei.memory.model.MemoryStatus;
-import dev.mikoto2000.rei.memory.model.MemoryType;
 
 class MemoryFreshnessServiceTest {
 
@@ -51,9 +49,10 @@ class MemoryFreshnessServiceTest {
 
   @Test
   void validUntilBeforeNowIsStale() {
-    Memory memory = memory(
-        OffsetDateTime.parse("2026-08-16T16:39:40Z"),
-        OffsetDateTime.parse("2026-08-16T16:39:59Z"));
+    Memory memory =
+        memory(
+            OffsetDateTime.parse("2026-08-16T16:39:40Z"),
+            OffsetDateTime.parse("2026-08-16T16:39:59Z"));
 
     MemoryFreshness actual = service.evaluate(memory, null);
 
@@ -61,7 +60,17 @@ class MemoryFreshnessServiceTest {
   }
 
   private Memory memory(OffsetDateTime observedAt, OffsetDateTime validUntil) {
-    return new Memory("id", "content", MemoryType.KNOWLEDGE, MemoryScope.SHORT_TERM, MemoryStatus.ACTIVE,
-        0.9d, null, observedAt, observedAt, observedAt, validUntil);
+    return new Memory(
+        "id",
+        "content",
+        MemoryType.KNOWLEDGE,
+        MemoryScope.SHORT_TERM,
+        MemoryStatus.ACTIVE,
+        0.9d,
+        null,
+        observedAt,
+        observedAt,
+        observedAt,
+        validUntil);
   }
 }

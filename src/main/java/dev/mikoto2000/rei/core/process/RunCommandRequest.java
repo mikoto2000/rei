@@ -4,7 +4,8 @@ package dev.mikoto2000.rei.core.process;
 public record RunCommandRequest(String command, String executionMode, Integer timeoutSeconds) {
 
   public RunCommandRequest {
-    if (command == null || command.isBlank()) throw new IllegalArgumentException("command は空にできません");
+    if (command == null || command.isBlank())
+      throw new IllegalArgumentException("command は空にできません");
     CommandExecutionMode.parse(executionMode);
   }
 

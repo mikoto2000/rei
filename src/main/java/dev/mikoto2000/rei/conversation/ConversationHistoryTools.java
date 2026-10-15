@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.conversation;
 
 import java.util.List;
-
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
@@ -15,7 +14,10 @@ public class ConversationHistoryTools {
     this.service = service;
   }
 
-  @Tool(name = "searchConversationHistory", description = """
+  @Tool(
+      name = "searchConversationHistory",
+      description =
+          """
       過去の判断・会話を参照するときに使用します。query は検索キーワード（空白区切り）です。
       retrievalScope は CURRENT_PROJECT_ONLY, CURRENT_PROJECT_PREFERRED, ALL_PROJECTS。
       既定は CURRENT_PROJECT_PREFERRED: 実行元の履歴を優先し、不十分な場合のみ他 Project を検索します。
@@ -38,24 +40,37 @@ public class ConversationHistoryTools {
       @ToolParam(required = false) HistorySearchScope retrievalScope,
       @ToolParam(required = false) String referencedProject) {
     var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
-    return service.search(new HistorySearchRequest(query, project == null ? null : project.id(), referencedProject,
-        retrievalScope, scope, speaker, since, until, limit));
+    return service.search(
+        new HistorySearchRequest(
+            query,
+            project == null ? null : project.id(),
+            referencedProject,
+            retrievalScope,
+            scope,
+            speaker,
+            since,
+            until,
+            limit));
   }
 
   /** Compatibility for non-tool callers; the annotated method exposes explicit retrieval scope. */
-  public List<ConversationSearchResult> searchConversationHistory(String query, String scope, String speaker,
-      String since, String until, Integer limit) {
+  public List<ConversationSearchResult> searchConversationHistory(
+      String query, String scope, String speaker, String since, String until, Integer limit) {
     return service.search(query, scope, speaker, since, until, limit);
   }
 
-  @Tool(name = "getConversationHistory", description = """
+  @Tool(
+      name = "getConversationHistory",
+      description =
+          """
       searchConversationHistory が返した conversationId を指定して、永続ログを含む会話履歴の詳細を取得します。
       返された project:<ProjectId>:chat:<id> 等の conversationId を変更せず使用してください。
       他 Project の詳細も取得できますが、sourceProjectId / sourceProjectName / contextBoundary を保持してください。
       他 Project のパス・branch・build command は現在 Project のものではありません。
       limit は実行元最大100件。他 Project は最大3件、本文各500文字です。
       """)
-  public ConversationHistoryDetail getConversationHistory(String conversationId, @ToolParam(required = false) Integer limit) {
+  public ConversationHistoryDetail getConversationHistory(
+      String conversationId, @ToolParam(required = false) Integer limit) {
     return service.detail(conversationId, limit);
   }
 }

@@ -9,5 +9,5 @@ public record WorkingSetSearchCompletedPayload(
     int selectedCount,
     int alreadyPresentCount,
     int workingSetSizeBefore,
-    int workingSetSizeAfter) implements AgentEventPayload {
-}
+    int workingSetSizeAfter)
+    implements AgentEventPayload {}

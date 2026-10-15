@@ -8,12 +8,12 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 
 class AgentEventLifecycleTest {
 
-  private final Clock clock = Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));
+  private final Clock clock =
+      Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));
   private final AgentEventFactory factory = new AgentEventFactory(clock);
   private final InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
   private final List<AgentEvent> received = new ArrayList<>();
@@ -90,7 +90,9 @@ class AgentEventLifecycleTest {
     subscribe();
 
     bus.publish(factory.toolStarted("call-2", "readMultiFile", "files=[a.txt]"));
-    bus.publish(factory.toolFailed("call-2", "readMultiFile", new ErrorInformation("IOException", "boom", null)));
+    bus.publish(
+        factory.toolFailed(
+            "call-2", "readMultiFile", new ErrorInformation("IOException", "boom", null)));
 
     assertEquals(2, received.size());
     assertEquals("call-2", received.get(0).correlationId());
@@ -103,7 +105,8 @@ class AgentEventLifecycleTest {
     subscribe();
 
     bus.publish(factory.toolStarted("call-1", "readMultiFile", "files=[a.txt]"));
-    bus.publish(factory.toolCompleted("call-1", "readMultiFile", 500L, "2 files", 2, 1234L, null, null));
+    bus.publish(
+        factory.toolCompleted("call-1", "readMultiFile", 500L, "2 files", 2, 1234L, null, null));
 
     ToolCompletedPayload completed = (ToolCompletedPayload) received.get(1).payload();
     assertEquals("2 files", completed.resultSummary());

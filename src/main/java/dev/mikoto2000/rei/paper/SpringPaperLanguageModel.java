@@ -19,16 +19,19 @@ public class SpringPaperLanguageModel implements PaperLanguageModel {
   public String model() {
     var model = provider.subAgentChatModel();
     String name =
-        provider.model(
-            "chat",
-            model.getOptions() == null ? null : model.getOptions().getModel());
+        provider.model("chat", model.getOptions() == null ? null : model.getOptions().getModel());
     return name == null ? "configured-default" : name;
   }
 
   public String generate(String system, String input, PaperOperation op) {
     op.check();
-    var options = provider.chatOptions("chat", model()).mutate()
-        .toolCallbacks(List.of()).toolChoice("none").build();
+    var options =
+        provider
+            .chatOptions("chat", model())
+            .mutate()
+            .toolCallbacks(List.of())
+            .toolChoice("none")
+            .build();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
     var chatModel = provider.subAgentChatModel();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(chatModel);

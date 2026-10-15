@@ -7,5 +7,5 @@ public record TopicSpokenPayload(
     String candidateId,
     String messageId,
     Instant spokenAt,
-    String messageSummary) implements AgentEventPayload {
-}
+    String messageSummary)
+    implements AgentEventPayload {}

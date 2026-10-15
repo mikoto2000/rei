@@ -3,9 +3,9 @@ package dev.mikoto2000.rei.core.process;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.Future;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 class ManagedBackgroundProcess {
   final String processId;
@@ -25,10 +25,16 @@ class ManagedBackgroundProcess {
   volatile Future<?> stdoutReader;
   volatile Future<?> stderrReader;
 
-  ManagedBackgroundProcess(String processId, Process process, List<String> commandLine, Path workingDirectory,
-      int logLineCapacity, Instant startedAt, long startedAtNanos) {
+  ManagedBackgroundProcess(
+      String processId,
+      Process process,
+      List<String> commandLine,
+      Path workingDirectory,
+      int logLineCapacity,
+      Instant startedAt,
+      long startedAtNanos) {
     this.processId = processId;
-    this.owner=dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+    this.owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     this.process = process;
     this.commandLine = List.copyOf(commandLine);
     this.workingDirectory = workingDirectory;

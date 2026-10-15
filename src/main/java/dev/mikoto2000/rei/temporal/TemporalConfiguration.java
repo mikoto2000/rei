@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.temporal;
 
 import java.time.Clock;
-
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 

@@ -12,5 +12,4 @@ public record Feed(
     boolean enabled,
     OffsetDateTime createdAt,
     OffsetDateTime updatedAt,
-    OffsetDateTime lastFetchedAt) {
-}
+    OffsetDateTime lastFetchedAt) {}

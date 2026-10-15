@@ -1,15 +1,13 @@
 package dev.mikoto2000.rei.topic;
 
+import dev.mikoto2000.rei.core.service.ModelHolderService;
 import java.time.Clock;
 import java.util.List;
-
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import dev.mikoto2000.rei.core.service.ModelHolderService;
 import tools.jackson.databind.json.JsonMapper;
 
 @Configuration(proxyBeanMethods = false)
@@ -22,14 +20,17 @@ public class TopicGeneratorConfiguration {
   }
 
   @Bean
-  LlmTopicCandidateGenerator llmTopicCandidateGenerator(ChatModel chatModel, ModelHolderService modelHolderService,
-      TopicCandidateParser parser, TopicGeneratorProperties properties) {
+  LlmTopicCandidateGenerator llmTopicCandidateGenerator(
+      ChatModel chatModel,
+      ModelHolderService modelHolderService,
+      TopicCandidateParser parser,
+      TopicGeneratorProperties properties) {
     return new LlmTopicCandidateGenerator(chatModel, modelHolderService, parser, properties);
   }
 
   @Bean
-  CuriosityTopicCandidateGenerator curiosityTopicCandidateGenerator(CuriosityQueue queue,
-      TopicGeneratorProperties properties) {
+  CuriosityTopicCandidateGenerator curiosityTopicCandidateGenerator(
+      CuriosityQueue queue, TopicGeneratorProperties properties) {
     return new CuriosityTopicCandidateGenerator(queue, properties);
   }
 
@@ -39,10 +40,13 @@ public class TopicGeneratorConfiguration {
   }
 
   @Bean
-  DiscoveryTopicCandidateGenerator discoveryTopicCandidateGenerator(DiscoverySeedGenerator seedGenerator,
-      ObjectProvider<DiscoverySource> sources, DiscoverySeenRepository seenRepository,
+  DiscoveryTopicCandidateGenerator discoveryTopicCandidateGenerator(
+      DiscoverySeedGenerator seedGenerator,
+      ObjectProvider<DiscoverySource> sources,
+      DiscoverySeenRepository seenRepository,
       TopicGeneratorProperties properties) {
-    return new DiscoveryTopicCandidateGenerator(seedGenerator, sources.stream().toList(), seenRepository, properties);
+    return new DiscoveryTopicCandidateGenerator(
+        seedGenerator, sources.stream().toList(), seenRepository, properties);
   }
 
   @Bean
@@ -61,15 +65,27 @@ public class TopicGeneratorConfiguration {
   }
 
   @Bean
-  TopicGeneratorService topicGeneratorService(ObjectProvider<TopicCandidateGenerator> generators,
-      TopicRanker ranker, SpeakDecisionPolicy speakDecisionPolicy, TopicMessageGenerator messageGenerator,
-      CuriosityQueue curiosityQueue, TopicGeneratorProperties properties,
+  TopicGeneratorService topicGeneratorService(
+      ObjectProvider<TopicCandidateGenerator> generators,
+      TopicRanker ranker,
+      SpeakDecisionPolicy speakDecisionPolicy,
+      TopicMessageGenerator messageGenerator,
+      CuriosityQueue curiosityQueue,
+      TopicGeneratorProperties properties,
       dev.mikoto2000.rei.event.AgentEventFactory eventFactory,
       dev.mikoto2000.rei.event.AgentEventPublisher eventPublisher,
       Clock clock) {
     List<TopicCandidateGenerator> generatorList = generators.stream().toList();
-    return new TopicGeneratorService(generatorList, ranker, speakDecisionPolicy, messageGenerator, curiosityQueue,
-        properties, eventFactory, eventPublisher, clock);
+    return new TopicGeneratorService(
+        generatorList,
+        ranker,
+        speakDecisionPolicy,
+        messageGenerator,
+        curiosityQueue,
+        properties,
+        eventFactory,
+        eventPublisher,
+        clock);
   }
 
   @Bean
@@ -78,35 +94,62 @@ public class TopicGeneratorConfiguration {
   }
 
   @Bean
-  IdleTopicTrigger idleTopicTrigger(TopicGeneratorProperties properties, AgentActivityTracker activityTracker) {
+  IdleTopicTrigger idleTopicTrigger(
+      TopicGeneratorProperties properties, AgentActivityTracker activityTracker) {
     return new DefaultIdleTopicTrigger(properties, activityTracker);
   }
 
   @Bean(destroyMethod = "shutdownNow")
   java.util.concurrent.ExecutorService topicCandidateRefreshExecutor() {
     // One active refresh and only the latest waiting request. Never run generation on the caller.
-    return new java.util.concurrent.ThreadPoolExecutor(1, 1, 0, java.util.concurrent.TimeUnit.MILLISECONDS,
+    return new java.util.concurrent.ThreadPoolExecutor(
+        1,
+        1,
+        0,
+        java.util.concurrent.TimeUnit.MILLISECONDS,
         new java.util.concurrent.ArrayBlockingQueue<>(1),
-        task -> { var thread = new Thread(task, "rei-topic-refresh"); thread.setDaemon(true); return thread; },
+        task -> {
+          var thread = new Thread(task, "rei-topic-refresh");
+          thread.setDaemon(true);
+          return thread;
+        },
         new java.util.concurrent.ThreadPoolExecutor.DiscardOldestPolicy());
   }
 
   @Bean
-  TopicOrchestrator topicOrchestrator(TopicGeneratorService topicGeneratorService,
-      TopicCandidateStore candidateStore, TopicGenerationContextProvider contextProvider,
-      AgentActivityTracker activityTracker, AgentMessagePublisher messagePublisher,
-      TopicGeneratorProperties properties, dev.mikoto2000.rei.event.AgentEventFactory eventFactory,
-      dev.mikoto2000.rei.event.AgentEventPublisher eventPublisher, Clock clock,
+  TopicOrchestrator topicOrchestrator(
+      TopicGeneratorService topicGeneratorService,
+      TopicCandidateStore candidateStore,
+      TopicGenerationContextProvider contextProvider,
+      AgentActivityTracker activityTracker,
+      AgentMessagePublisher messagePublisher,
+      TopicGeneratorProperties properties,
+      dev.mikoto2000.rei.event.AgentEventFactory eventFactory,
+      dev.mikoto2000.rei.event.AgentEventPublisher eventPublisher,
+      Clock clock,
       @org.springframework.beans.factory.annotation.Qualifier("topicCandidateRefreshExecutor")
-      java.util.concurrent.ExecutorService refreshExecutor) {
-    return new DefaultTopicOrchestrator(topicGeneratorService, candidateStore, contextProvider, activityTracker,
-        messagePublisher, properties, eventFactory, eventPublisher, clock, refreshExecutor);
+          java.util.concurrent.ExecutorService refreshExecutor) {
+    return new DefaultTopicOrchestrator(
+        topicGeneratorService,
+        candidateStore,
+        contextProvider,
+        activityTracker,
+        messagePublisher,
+        properties,
+        eventFactory,
+        eventPublisher,
+        clock,
+        refreshExecutor);
   }
 
   @Bean
-  IdleTopicScheduler idleTopicScheduler(IdleTopicTrigger idleTopicTrigger, TopicOrchestrator topicOrchestrator,
-      Clock clock, dev.mikoto2000.rei.event.AgentEventFactory eventFactory,
+  IdleTopicScheduler idleTopicScheduler(
+      IdleTopicTrigger idleTopicTrigger,
+      TopicOrchestrator topicOrchestrator,
+      Clock clock,
+      dev.mikoto2000.rei.event.AgentEventFactory eventFactory,
       dev.mikoto2000.rei.event.AgentEventPublisher eventPublisher) {
-    return new IdleTopicScheduler(idleTopicTrigger, topicOrchestrator, clock, eventFactory, eventPublisher);
+    return new IdleTopicScheduler(
+        idleTopicTrigger, topicOrchestrator, clock, eventFactory, eventPublisher);
   }
 }

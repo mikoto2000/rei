@@ -6,10 +6,10 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.core.service.ModelHolderService;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.ai.chat.messages.AssistantMessage;
@@ -17,8 +17,6 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
-
-import dev.mikoto2000.rei.core.service.ModelHolderService;
 import tools.jackson.databind.json.JsonMapper;
 
 class LlmInterestTopicExtractorTest {
@@ -27,11 +25,17 @@ class LlmInterestTopicExtractorTest {
   void extractBuildsPromptAndParsesJsonResponse() {
     ChatModel chatModel = org.mockito.Mockito.mock(ChatModel.class);
     ModelHolderService modelHolderService = org.mockito.Mockito.mock(ModelHolderService.class);
-    LlmInterestTopicExtractor extractor = new LlmInterestTopicExtractor(chatModel, modelHolderService, new JsonMapper());
+    LlmInterestTopicExtractor extractor =
+        new LlmInterestTopicExtractor(chatModel, modelHolderService, new JsonMapper());
 
     when(modelHolderService.get()).thenReturn("qwen3.5:122b");
-    when(chatModel.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of(
-        new Generation(new AssistantMessage("""
+    when(chatModel.call(any(Prompt.class)))
+        .thenReturn(
+            new ChatResponse(
+                List.of(
+                    new Generation(
+                        new AssistantMessage(
+                            """
             [
               {
                 "topic": "Neovim setup",
@@ -42,10 +46,18 @@ class LlmInterestTopicExtractorTest {
             ]
             """)))));
 
-    List<InterestTopicCandidate> topics = extractor.extract(List.of(
-        new ConversationSnippet("c1", "vim in devcontainer", OffsetDateTime.of(2026, 4, 17, 0, 0, 0, 0, ZoneOffset.UTC)),
-        new ConversationSnippet("c2", "neovim plugins", OffsetDateTime.of(2026, 4, 18, 0, 0, 0, 0, ZoneOffset.UTC))),
-        3);
+    List<InterestTopicCandidate> topics =
+        extractor.extract(
+            List.of(
+                new ConversationSnippet(
+                    "c1",
+                    "vim in devcontainer",
+                    OffsetDateTime.of(2026, 4, 17, 0, 0, 0, 0, ZoneOffset.UTC)),
+                new ConversationSnippet(
+                    "c2",
+                    "neovim plugins",
+                    OffsetDateTime.of(2026, 4, 18, 0, 0, 0, 0, ZoneOffset.UTC))),
+            3);
 
     assertEquals(1, topics.size());
     assertEquals("Neovim setup", topics.getFirst().topic());
@@ -61,11 +73,12 @@ class LlmInterestTopicExtractorTest {
   void extractWithPastQueriesIncludesPastQueriesInPrompt() {
     ChatModel chatModel = org.mockito.Mockito.mock(ChatModel.class);
     ModelHolderService modelHolderService = org.mockito.Mockito.mock(ModelHolderService.class);
-    LlmInterestTopicExtractor extractor = new LlmInterestTopicExtractor(chatModel, modelHolderService, new JsonMapper());
+    LlmInterestTopicExtractor extractor =
+        new LlmInterestTopicExtractor(chatModel, modelHolderService, new JsonMapper());
 
     when(modelHolderService.get()).thenReturn("qwen3.5:122b");
-    when(chatModel.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of(
-        new Generation(new AssistantMessage("[]")))));
+    when(chatModel.call(any(Prompt.class)))
+        .thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage("[]")))));
 
     List<String> pastQueries = List.of("Neovim devcontainer best practices", "vim plugin 2025");
 
@@ -87,11 +100,12 @@ class LlmInterestTopicExtractorTest {
   void extractWithEmptyPastQueriesDoesNotAddPastQueriesSection() {
     ChatModel chatModel = org.mockito.Mockito.mock(ChatModel.class);
     ModelHolderService modelHolderService = org.mockito.Mockito.mock(ModelHolderService.class);
-    LlmInterestTopicExtractor extractor = new LlmInterestTopicExtractor(chatModel, modelHolderService, new JsonMapper());
+    LlmInterestTopicExtractor extractor =
+        new LlmInterestTopicExtractor(chatModel, modelHolderService, new JsonMapper());
 
     when(modelHolderService.get()).thenReturn("qwen3.5:122b");
-    when(chatModel.call(any(Prompt.class))).thenReturn(new ChatResponse(List.of(
-        new Generation(new AssistantMessage("[]")))));
+    when(chatModel.call(any(Prompt.class)))
+        .thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage("[]")))));
 
     extractor.extract(
         List.of(new ConversationSnippet("c1", "neovim", OffsetDateTime.now(ZoneOffset.UTC))),
@@ -107,7 +121,9 @@ class LlmInterestTopicExtractorTest {
 
   @Test
   void normalizeJsonArray_stripsCodeFence() {
-    String normalized = LlmInterestTopicExtractor.normalizeJsonArray("""
+    String normalized =
+        LlmInterestTopicExtractor.normalizeJsonArray(
+            """
         ```json
         [
           {"topic":"t","reason":"r","searchQuery":"q","score":0.7}
@@ -120,7 +136,9 @@ class LlmInterestTopicExtractorTest {
 
   @Test
   void normalizeJsonArray_extractsArrayFromDecoratedText() {
-    String normalized = LlmInterestTopicExtractor.normalizeJsonArray("""
+    String normalized =
+        LlmInterestTopicExtractor.normalizeJsonArray(
+            """
         Here are candidates:
         [
           {"topic":"t","reason":"r","searchQuery":"q","score":0.7}

@@ -1,13 +1,13 @@
 package dev.mikoto2000.rei.image;
 
 import java.nio.file.Path;
-
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties(prefix = "rei.image")
 public class ImageProperties {
 
-  private Path outputDirectory = dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().resolve("images");
+  private Path outputDirectory =
+      dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().resolve("images");
   private String size = "1024x1024";
   private String responseFormat = "auto";
   private int timeoutSeconds = 300;

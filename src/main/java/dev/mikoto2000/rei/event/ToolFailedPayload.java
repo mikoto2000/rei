@@ -8,5 +8,4 @@ package dev.mikoto2000.rei.event;
  * @param error エラー情報
  */
 public record ToolFailedPayload(String toolCallId, String toolName, ErrorInformation error)
-    implements AgentEventPayload {
-}
+    implements AgentEventPayload {}

@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.sql.Connection;
 import java.sql.Statement;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -13,23 +12,27 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 @org.junit.jupiter.api.Tag("integration")
 class ConversationHistoryServiceTest {
 
-  @TempDir
-  java.nio.file.Path tempDir;
+  @TempDir java.nio.file.Path tempDir;
 
   @Test
   void findRecentUserMessagesReturnsRecentUserMessagesOnly() throws Exception {
-    DriverManagerDataSource dataSource = new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("memory.db"));
+    DriverManagerDataSource dataSource =
+        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("memory.db"));
     initializeSchema(dataSource);
     long now = java.time.Instant.now().toEpochMilli();
 
-    try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
-      statement.executeUpdate(String.format("""
+    try (Connection connection = dataSource.getConnection();
+        Statement statement = connection.createStatement()) {
+      statement.executeUpdate(
+          String.format(
+              """
           INSERT INTO SPRING_AI_CHAT_MEMORY (conversation_id, content, type, timestamp)
           VALUES
           ('c1', 'vim の devcontainer を改善したい', 'USER', %d),
           ('c1', '了解しました', 'ASSISTANT', %d),
           ('c2', 'neovim plugin の最近動向が気になる', 'USER', %d)
-          """, now - 2_000, now - 1_000, now));
+          """,
+              now - 2_000, now - 1_000, now));
     }
 
     ConversationHistoryService service = new ConversationHistoryService(dataSource);
@@ -43,8 +46,10 @@ class ConversationHistoryServiceTest {
   }
 
   private void initializeSchema(DriverManagerDataSource dataSource) throws Exception {
-    try (Connection connection = dataSource.getConnection(); Statement statement = connection.createStatement()) {
-      statement.executeUpdate("""
+    try (Connection connection = dataSource.getConnection();
+        Statement statement = connection.createStatement()) {
+      statement.executeUpdate(
+          """
           CREATE TABLE IF NOT EXISTS SPRING_AI_CHAT_MEMORY (
             conversation_id TEXT NOT NULL,
             content TEXT NOT NULL,

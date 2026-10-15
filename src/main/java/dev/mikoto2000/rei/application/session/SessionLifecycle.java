@@ -1,67 +1,127 @@
 package dev.mikoto2000.rei.application.session;
 
-import java.time.Clock;
-import java.util.UUID;
-import java.util.function.Consumer;
 import dev.mikoto2000.rei.application.run.*;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.llm.ConversationIds;
+import java.time.Clock;
+import java.util.UUID;
+import java.util.function.Consumer;
 
 /** Shared admission boundary: persist identity before enqueue; reject unknown continuations. */
 public final class SessionLifecycle {
   private final SessionRepository repository;
   private final Clock clock;
   private dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions;
-  public void setAdmissions(dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions){this.admissions=admissions;}
-  private java.util.function.Consumer<AgentRunContext> selected=context->{};
-  private java.util.function.Consumer<SessionMetadata> ended=session->{};
-  public void onEnded(java.util.function.Consumer<SessionMetadata> ended){this.ended=ended;}
-  public void onSelected(java.util.function.Consumer<AgentRunContext> selected){this.selected=selected;}
-  public SessionLifecycle(SessionRepository repository, Clock clock) {
-    this.repository = repository; this.clock = clock;
+
+  public void setAdmissions(dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions) {
+    this.admissions = admissions;
   }
+
+  private java.util.function.Consumer<AgentRunContext> selected = context -> {};
+  private java.util.function.Consumer<SessionMetadata> ended = session -> {};
+
+  public void onEnded(java.util.function.Consumer<SessionMetadata> ended) {
+    this.ended = ended;
+  }
+
+  public void onSelected(java.util.function.Consumer<AgentRunContext> selected) {
+    this.selected = selected;
+  }
+
+  public SessionLifecycle(SessionRepository repository, Clock clock) {
+    this.repository = repository;
+    this.clock = clock;
+  }
+
   public SessionMetadata validate(String id, String projectId) {
-    var session = repository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Session"));
+    var session =
+        repository.findById(id).orElseThrow(() -> new ResourceNotFoundException("Session"));
     if (!session.projectId().equals(projectId)) throw new SessionConflictException();
     return session;
   }
+
   /** Ends the client's activity, while keeping the Session resumable and its history intact. */
-  public SessionMetadata end(String id,String projectId) {
-    if(projectId==null||projectId.isBlank())throw new IllegalArgumentException("Project ID is required");
-    synchronized(repository) {
-      var session=validate(id,projectId);ended.accept(session);return session;
+  public SessionMetadata end(String id, String projectId) {
+    if (projectId == null || projectId.isBlank())
+      throw new IllegalArgumentException("Project ID is required");
+    synchronized (repository) {
+      var session = validate(id, projectId);
+      ended.accept(session);
+      return session;
     }
   }
+
   /** Persist an empty conversation without starting or inheriting a run. */
   public SessionMetadata create(ProjectContext project, String title) {
     synchronized (repository) {
-      var metadata = newMetadata(project, title == null || title.isBlank() ? "New session" : title, clock.instant());
+      var metadata =
+          newMetadata(
+              project, title == null || title.isBlank() ? "New session" : title, clock.instant());
       repository.accept(metadata, () -> {});
       return metadata;
     }
   }
-  public AgentRunContext submit(ProjectContext project, String sessionId, String message,
-      AgentRunContext.RequestSource source, Consumer<AgentRunContext> enqueue) {
+
+  public AgentRunContext submit(
+      ProjectContext project,
+      String sessionId,
+      String message,
+      AgentRunContext.RequestSource source,
+      Consumer<AgentRunContext> enqueue) {
     return submit(project, sessionId, message, source, AgentRunContext.Mode.EXCLUSIVE, enqueue);
   }
-  public AgentRunContext submit(ProjectContext project, String sessionId, String message,
-      AgentRunContext.RequestSource source, AgentRunContext.Mode mode, Consumer<AgentRunContext> enqueue) {
-    return submit(project,sessionId,message,source,mode,false,enqueue);
+
+  public AgentRunContext submit(
+      ProjectContext project,
+      String sessionId,
+      String message,
+      AgentRunContext.RequestSource source,
+      AgentRunContext.Mode mode,
+      Consumer<AgentRunContext> enqueue) {
+    return submit(project, sessionId, message, source, mode, false, enqueue);
   }
-  public AgentRunContext submit(ProjectContext project,String sessionId,String message,
-      AgentRunContext.RequestSource source,AgentRunContext.Mode mode,boolean voiceInput,Consumer<AgentRunContext> enqueue) {
-    return submit(project,sessionId,message,source,mode,voiceInput,null,null,enqueue);
+
+  public AgentRunContext submit(
+      ProjectContext project,
+      String sessionId,
+      String message,
+      AgentRunContext.RequestSource source,
+      AgentRunContext.Mode mode,
+      boolean voiceInput,
+      Consumer<AgentRunContext> enqueue) {
+    return submit(project, sessionId, message, source, mode, voiceInput, null, null, enqueue);
   }
-  public AgentRunContext submit(ProjectContext project,String sessionId,String message,
-      AgentRunContext.RequestSource source,AgentRunContext.Mode mode,boolean voiceInput,String key,String fingerprint,Consumer<AgentRunContext> enqueue) {
-    return submit(project,sessionId,message,source,mode,voiceInput,key,fingerprint,null,enqueue);
+
+  public AgentRunContext submit(
+      ProjectContext project,
+      String sessionId,
+      String message,
+      AgentRunContext.RequestSource source,
+      AgentRunContext.Mode mode,
+      boolean voiceInput,
+      String key,
+      String fingerprint,
+      Consumer<AgentRunContext> enqueue) {
+    return submit(
+        project, sessionId, message, source, mode, voiceInput, key, fingerprint, null, enqueue);
   }
-  public AgentRunContext submit(ProjectContext project,String sessionId,String message,
-      AgentRunContext.RequestSource source,AgentRunContext.Mode mode,boolean voiceInput,String key,String fingerprint,
-      dev.mikoto2000.rei.mcp.McpAdmission mcp,Consumer<AgentRunContext> enqueue) {
-    if (message == null || message.isBlank()) throw new IllegalArgumentException("message is required");
-    // All entry points sharing this repository serialize validation, metadata update and FIFO admission.
+
+  public AgentRunContext submit(
+      ProjectContext project,
+      String sessionId,
+      String message,
+      AgentRunContext.RequestSource source,
+      AgentRunContext.Mode mode,
+      boolean voiceInput,
+      String key,
+      String fingerprint,
+      dev.mikoto2000.rei.mcp.McpAdmission mcp,
+      Consumer<AgentRunContext> enqueue) {
+    if (message == null || message.isBlank())
+      throw new IllegalArgumentException("message is required");
+    // All entry points sharing this repository serialize validation, metadata update and FIFO
+    // admission.
     synchronized (repository) {
       var now = clock.instant();
       SessionMetadata metadata;
@@ -69,31 +129,61 @@ public final class SessionLifecycle {
         metadata = newMetadata(project, message, now);
         sessionId = metadata.sessionId();
       } else metadata = validate(sessionId, project.id()).touched(now);
-      var context = new AgentRunContext(UUID.randomUUID().toString(), sessionId, project.root(), project.id(), source, mode, voiceInput,
-          metadata.responseStyle()==dev.mikoto2000.rei.core.chat.ResponseStyle.AUTO
-              ? (voiceInput ? dev.mikoto2000.rei.core.chat.ResponseStyle.CONVERSATION : dev.mikoto2000.rei.core.chat.ResponseStyle.NORMAL)
-              : metadata.voiceOnly() && !voiceInput ? dev.mikoto2000.rei.core.chat.ResponseStyle.NORMAL : metadata.responseStyle());
-      if(admissions==null) {
-        if(key!=null||mcp!=null)throw new IllegalStateException("Durable admission is unavailable");
+      var context =
+          new AgentRunContext(
+              UUID.randomUUID().toString(),
+              sessionId,
+              project.root(),
+              project.id(),
+              source,
+              mode,
+              voiceInput,
+              metadata.responseStyle() == dev.mikoto2000.rei.core.chat.ResponseStyle.AUTO
+                  ? (voiceInput
+                      ? dev.mikoto2000.rei.core.chat.ResponseStyle.CONVERSATION
+                      : dev.mikoto2000.rei.core.chat.ResponseStyle.NORMAL)
+                  : metadata.voiceOnly() && !voiceInput
+                      ? dev.mikoto2000.rei.core.chat.ResponseStyle.NORMAL
+                      : metadata.responseStyle());
+      if (admissions == null) {
+        if (key != null || mcp != null)
+          throw new IllegalStateException("Durable admission is unavailable");
         repository.accept(metadata, () -> enqueue.accept(context));
       } else {
-        var receipt=admissions.accept(metadata,context,key,fingerprint,mcp);
-        if(receipt.replay())return receipt.context();
+        var receipt = admissions.accept(metadata, context, key, fingerprint, mcp);
+        if (receipt.replay()) return receipt.context();
         repository.refreshCompletionSnapshot();
-        try {enqueue.accept(context);}
-        catch(RuntimeException|Error error){if(mcp!=null)admissions.mcpAdmissionFailed(context.runId(),error instanceof RuntimeException runtime?runtime:new IllegalStateException());admissions.transition(context.runId(),RunStatus.FAILED);admissions.release(context.runId());throw error;}
+        try {
+          enqueue.accept(context);
+        } catch (RuntimeException | Error error) {
+          if (mcp != null)
+            admissions.mcpAdmissionFailed(
+                context.runId(),
+                error instanceof RuntimeException runtime ? runtime : new IllegalStateException());
+          admissions.transition(context.runId(), RunStatus.FAILED);
+          admissions.release(context.runId());
+          throw error;
+        }
       }
-      if(source!=AgentRunContext.RequestSource.MCP)selected.accept(context);
+      if (source != AgentRunContext.RequestSource.MCP) selected.accept(context);
       return context;
     }
   }
-  public SessionMetadata responseStyle(ProjectContext project,String sessionId,dev.mikoto2000.rei.core.chat.ResponseStyle style,boolean voiceOnly) {
+
+  public SessionMetadata responseStyle(
+      ProjectContext project,
+      String sessionId,
+      dev.mikoto2000.rei.core.chat.ResponseStyle style,
+      boolean voiceOnly) {
     java.util.Objects.requireNonNull(style);
-    synchronized(repository) {
-      var metadata=validate(sessionId,project.id()).withResponseStyle(style,voiceOnly,clock.instant());
-      repository.accept(metadata,()->{});return metadata;
+    synchronized (repository) {
+      var metadata =
+          validate(sessionId, project.id()).withResponseStyle(style, voiceOnly, clock.instant());
+      repository.accept(metadata, () -> {});
+      return metadata;
     }
   }
+
   private SessionMetadata newMetadata(ProjectContext project, String title, java.time.Instant now) {
     var id = project.conversationId(ConversationIds.chat(UUID.randomUUID().toString()));
     return new SessionMetadata(id, project.id(), SessionTitle.from(title), now, now);

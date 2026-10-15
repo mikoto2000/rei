@@ -1,13 +1,26 @@
 package dev.mikoto2000.rei.core.chat;
 
-public record ChatExecutionResult(Status status, String text, boolean memoryConsolidationSuggested,
-    String errorMessage,String stopCode) {
-  public ChatExecutionResult {stopCode=stopCode==null?"":stopCode;}
-  public ChatExecutionResult(Status status,String text,boolean suggested,String errorMessage){this(status,text,suggested,errorMessage,"");}
-  public static ChatExecutionResult failed(String errorMessage,String stopCode){return new ChatExecutionResult(Status.FAILED,"",false,errorMessage,stopCode);}
+public record ChatExecutionResult(
+    Status status,
+    String text,
+    boolean memoryConsolidationSuggested,
+    String errorMessage,
+    String stopCode) {
+  public ChatExecutionResult {
+    stopCode = stopCode == null ? "" : stopCode;
+  }
+
+  public ChatExecutionResult(Status status, String text, boolean suggested, String errorMessage) {
+    this(status, text, suggested, errorMessage, "");
+  }
+
+  public static ChatExecutionResult failed(String errorMessage, String stopCode) {
+    return new ChatExecutionResult(Status.FAILED, "", false, errorMessage, stopCode);
+  }
 
   public static ChatExecutionResult success(String text, boolean memoryConsolidationSuggested) {
-    return new ChatExecutionResult(Status.SUCCESS, text == null ? "" : text, memoryConsolidationSuggested, null);
+    return new ChatExecutionResult(
+        Status.SUCCESS, text == null ? "" : text, memoryConsolidationSuggested, null);
   }
 
   public static ChatExecutionResult failed(String errorMessage) {
@@ -21,8 +34,14 @@ public record ChatExecutionResult(Status status, String text, boolean memoryCons
   public static ChatExecutionResult cancelled() {
     return new ChatExecutionResult(Status.CANCELLED, "", false, "chat run cancelled");
   }
-  public static ChatExecutionResult waiting(){return waiting("external_dependency_waiting");}
-  public static ChatExecutionResult waiting(String reason){return new ChatExecutionResult(Status.WAITING,"",false,null,reason);}
+
+  public static ChatExecutionResult waiting() {
+    return waiting("external_dependency_waiting");
+  }
+
+  public static ChatExecutionResult waiting(String reason) {
+    return new ChatExecutionResult(Status.WAITING, "", false, null, reason);
+  }
 
   public enum Status {
     SUCCESS,

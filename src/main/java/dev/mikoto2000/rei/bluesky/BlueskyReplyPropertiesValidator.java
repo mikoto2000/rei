@@ -23,10 +23,12 @@ public class BlueskyReplyPropertiesValidator {
         throw new IllegalStateException("rei.bluesky.reply.users[].handle must not be blank");
       }
       if (user.getProbability() < 0.0d || user.getProbability() > 1.0d) {
-        throw new IllegalStateException("rei.bluesky.reply.users[].probability must be between 0.0 and 1.0");
+        throw new IllegalStateException(
+            "rei.bluesky.reply.users[].probability must be between 0.0 and 1.0");
       }
       if (user.getMaxRepliesPerDay() < 0) {
-        throw new IllegalStateException("rei.bluesky.reply.users[].max-replies-per-day must be >= 0");
+        throw new IllegalStateException(
+            "rei.bluesky.reply.users[].max-replies-per-day must be >= 0");
       }
     }
   }

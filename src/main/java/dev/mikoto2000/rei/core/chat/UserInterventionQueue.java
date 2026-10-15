@@ -6,16 +6,25 @@ import java.util.List;
 /** A run-owned mailbox. Closing and accepting input share one linearization point. */
 public final class UserInterventionQueue {
   public record Entry(String id, String text) {}
+
   private final ArrayDeque<Entry> pending = new ArrayDeque<>();
   private final java.util.function.Consumer<Entry> received;
   private boolean finished;
-  public UserInterventionQueue() { this(entry -> {}); }
-  public UserInterventionQueue(java.util.function.Consumer<Entry> received) { this.received = received; }
+
+  public UserInterventionQueue() {
+    this(entry -> {});
+  }
+
+  public UserInterventionQueue(java.util.function.Consumer<Entry> received) {
+    this.received = received;
+  }
 
   public synchronized boolean offer(String text) {
-    if(text==null || text.isBlank() || text.length()>16384)throw new IllegalArgumentException("Invalid guidance");
-    if (finished || pending.size()>=32) return false;
-    var entry = new Entry(java.util.UUID.randomUUID().toString(), java.util.Objects.requireNonNull(text));
+    if (text == null || text.isBlank() || text.length() > 16384)
+      throw new IllegalArgumentException("Invalid guidance");
+    if (finished || pending.size() >= 32) return false;
+    var entry =
+        new Entry(java.util.UUID.randomUUID().toString(), java.util.Objects.requireNonNull(text));
     pending.addLast(entry);
     received.accept(entry);
     return true;

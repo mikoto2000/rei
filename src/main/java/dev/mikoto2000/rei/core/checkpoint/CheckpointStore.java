@@ -1,16 +1,15 @@
 package dev.mikoto2000.rei.core.checkpoint;
 
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
 import java.time.Clock;
 import java.time.OffsetDateTime;
 import java.util.Optional;
 
-import dev.mikoto2000.rei.event.AgentEventFactory;
-import dev.mikoto2000.rei.event.AgentEventPublisher;
-
 /**
  * 再開に必要な要点を固定したスナップショットを保持する。
  *
- * <p>Task State / Working Set 等の完全コピーではなく、再開に必要な最小情報を保持する。</p>
+ * <p>Task State / Working Set 等の完全コピーではなく、再開に必要な最小情報を保持する。
  */
 public class CheckpointStore {
 
@@ -27,7 +26,8 @@ public class CheckpointStore {
     this(clock, null, null);
   }
 
-  public CheckpointStore(Clock clock, AgentEventFactory events, AgentEventPublisher eventPublisher) {
+  public CheckpointStore(
+      Clock clock, AgentEventFactory events, AgentEventPublisher eventPublisher) {
     this.clock = clock;
     this.events = events;
     this.eventPublisher = eventPublisher;
@@ -47,8 +47,10 @@ public class CheckpointStore {
   public void save(TurnCheckpoint checkpoint) {
     this.latest = checkpoint;
     if (events != null && eventPublisher != null) {
-      int workingFileCount = checkpoint.workingFiles() == null ? 0 : checkpoint.workingFiles().size();
-      eventPublisher.publish(events.checkpointSaved(checkpoint.taskId(), checkpoint.reason(), workingFileCount));
+      int workingFileCount =
+          checkpoint.workingFiles() == null ? 0 : checkpoint.workingFiles().size();
+      eventPublisher.publish(
+          events.checkpointSaved(checkpoint.taskId(), checkpoint.reason(), workingFileCount));
     }
   }
 

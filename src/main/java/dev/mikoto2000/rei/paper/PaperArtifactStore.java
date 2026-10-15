@@ -60,17 +60,24 @@ public class PaperArtifactStore {
   }
 
   public Optional<byte[]> read(String id, String kind, String ext) {
-    return readBounded(id,kind,ext,Math.max(properties.getMaxPdfBytes(),properties.getMaxExtractedChars()*8L));
+    return readBounded(
+        id,
+        kind,
+        ext,
+        Math.max(properties.getMaxPdfBytes(), properties.getMaxExtractedChars() * 8L));
   }
-  public Optional<byte[]> readBounded(String id,String kind,String ext,long maximum) {
+
+  public Optional<byte[]> readBounded(String id, String kind, String ext, long maximum) {
     Path target = path(id, kind, ext);
     try {
       if (!Files.exists(target)) return Optional.empty();
-      if (maximum<1||maximum>Integer.MAX_VALUE-1||!Files.isRegularFile(target,LinkOption.NOFOLLOW_LINKS)||Files.size(target)>maximum)
-        throw new IOException("size");
-      try(var input=Files.newInputStream(target,LinkOption.NOFOLLOW_LINKS)) {
-        byte[] bytes=input.readNBytes((int)maximum+1);
-        if(bytes.length>maximum)throw new IOException("size");
+      if (maximum < 1
+          || maximum > Integer.MAX_VALUE - 1
+          || !Files.isRegularFile(target, LinkOption.NOFOLLOW_LINKS)
+          || Files.size(target) > maximum) throw new IOException("size");
+      try (var input = Files.newInputStream(target, LinkOption.NOFOLLOW_LINKS)) {
+        byte[] bytes = input.readNBytes((int) maximum + 1);
+        if (bytes.length > maximum) throw new IOException("size");
         return Optional.of(bytes);
       }
     } catch (IOException e) {

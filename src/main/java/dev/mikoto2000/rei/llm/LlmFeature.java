@@ -20,6 +20,5 @@ public final class LlmFeature {
   public static final String IMAGE_GENERATION = "image-generation";
   public static final String WEB_PAGE_SUMMARY = "web-page-summary";
 
-  private LlmFeature() {
-  }
+  private LlmFeature() {}
 }

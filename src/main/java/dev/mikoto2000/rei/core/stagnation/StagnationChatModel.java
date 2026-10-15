@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core.stagnation;
 
+import dev.mikoto2000.rei.llm.OutputLimitDetector;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.ai.chat.messages.*;
@@ -9,146 +10,265 @@ import org.springframework.ai.model.tool.*;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.metadata.ToolMetadata;
-import dev.mikoto2000.rei.llm.OutputLimitDetector;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-/** Explicit streaming LLM -> tool-result loop. Existing client advisors still own prompt/memory handling. */
+/**
+ * Explicit streaming LLM -> tool-result loop. Existing client advisors still own prompt/memory
+ * handling.
+ */
 public class StagnationChatModel implements ChatModel {
   private final ChatModel delegate;
   private final dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler;
-  private final dev.mikoto2000.rei.core.chat.ToolLoopSupport tools = new dev.mikoto2000.rei.core.chat.ToolLoopSupport();
+  private final dev.mikoto2000.rei.core.chat.ToolLoopSupport tools =
+      new dev.mikoto2000.rei.core.chat.ToolLoopSupport();
 
-  public StagnationChatModel(ChatModel delegate) { this(delegate, null); }
-  public StagnationChatModel(ChatModel delegate, dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler) {
-    this.delegate = delegate; this.assembler = assembler;
+  public StagnationChatModel(ChatModel delegate) {
+    this(delegate, null);
   }
-  @Override public ChatOptions getOptions() { return delegate.getOptions(); }
-  @Override public ChatResponse call(Prompt prompt) {
+
+  public StagnationChatModel(
+      ChatModel delegate, dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler) {
+    this.delegate = delegate;
+    this.assembler = assembler;
+  }
+
+  @Override
+  public ChatOptions getOptions() {
+    return delegate.getOptions();
+  }
+
+  @Override
+  public ChatResponse call(Prompt prompt) {
     if (context(prompt) == null) return delegate.call(prompt);
     AtomicReference<ChatResponse> result = new AtomicReference<>();
     new MessageAggregator().aggregate(stream(prompt), result::set).blockLast();
     return result.get();
   }
-  @Override public Flux<ChatResponse> stream(Prompt prompt) {
+
+  @Override
+  public Flux<ChatResponse> stream(Prompt prompt) {
     RunExecutionContext context = context(prompt);
     if (context == null) return delegate.stream(prompt);
-    return Flux.defer(() -> {
-      var prepared=prepare(prompt,context);var pending=context.takePendingApprovalTools();
-      if(pending==null)return iteration(prepared,context,true,context.progressVersion());
-      return Mono.fromCallable(()->{
-        context.checkActive();context.beginIteration();
-        try {
-          context.planTools(pending.calls().subList(pending.completed().size(),pending.calls().size()));
-          var result=tools.executePending(prepared,pending,context);
-          context.preserveToolResults(result.conversationHistory());context.suspendIfWaiting(result.conversationHistory());return result;
-        }finally{context.endIteration();}
-      }).subscribeOn(Schedulers.boundedElastic()).flatMapMany(result->{
-        if(result.returnDirect())return Flux.just(new ChatResponse(ToolExecutionResult.buildGenerations(result)));
-        return iteration(new Prompt(result.conversationHistory(),prepared.getOptions()),context,false,context.progressVersion());
-      });
-    }).doOnError(error->{if(assembler!=null)assembler.finishReviewRun(context.runContext(),
-        error instanceof java.util.concurrent.CancellationException,false,null);})
-        .doOnCancel(()->{if(assembler!=null)assembler.finishReviewRun(context.runContext(),true,false,null);});
+    return Flux.defer(
+            () -> {
+              var prepared = prepare(prompt, context);
+              var pending = context.takePendingApprovalTools();
+              if (pending == null)
+                return iteration(prepared, context, true, context.progressVersion());
+              return Mono.fromCallable(
+                      () -> {
+                        context.checkActive();
+                        context.beginIteration();
+                        try {
+                          context.planTools(
+                              pending
+                                  .calls()
+                                  .subList(pending.completed().size(), pending.calls().size()));
+                          var result = tools.executePending(prepared, pending, context);
+                          context.preserveToolResults(result.conversationHistory());
+                          context.suspendIfWaiting(result.conversationHistory());
+                          return result;
+                        } finally {
+                          context.endIteration();
+                        }
+                      })
+                  .subscribeOn(Schedulers.boundedElastic())
+                  .flatMapMany(
+                      result -> {
+                        if (result.returnDirect())
+                          return Flux.just(
+                              new ChatResponse(ToolExecutionResult.buildGenerations(result)));
+                        return iteration(
+                            new Prompt(result.conversationHistory(), prepared.getOptions()),
+                            context,
+                            false,
+                            context.progressVersion());
+                      });
+            })
+        .doOnError(
+            error -> {
+              if (assembler != null)
+                assembler.finishReviewRun(
+                    context.runContext(),
+                    error instanceof java.util.concurrent.CancellationException,
+                    false,
+                    null);
+            })
+        .doOnCancel(
+            () -> {
+              if (assembler != null)
+                assembler.finishReviewRun(context.runContext(), true, false, null);
+            });
   }
 
-  private Flux<ChatResponse> iteration(Prompt prompt, RunExecutionContext context, boolean prepaid, long progressAtLimit) {
-    return Flux.defer(() -> {
-      context.checkActive();
-      context.checkModelTokenBudget();
-      if (!prepaid) context.consumeNextLlmCall();
-      context.beginIteration();
-      AtomicReference<ChatResponse> aggregate = new AtomicReference<>();
-      AtomicReference<Prompt> sent = new AtomicReference<>();
-      var invoked=new java.util.concurrent.atomic.AtomicBoolean();
-      var reported=new java.util.concurrent.atomic.AtomicBoolean();
-      Flux<ChatResponse> requests = assembler == null || context.runContext() == null ? Flux.defer(() -> {
-        context.checkModelTokenBudget();invoked.set(true);return delegate.stream(prompt);
-      })
-          : Mono.fromCallable(() -> {
-            try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext())) {
-              try {
-                return assembler.assemble(prompt, context.runContext().conversationId(), context.runContext().runId(), context::checkActive);
-              } catch (java.util.concurrent.CancellationException cancelled) {
-                // Disposal may interrupt the summary worker after the downstream subscriber has gone away.
-                if (context.isCancelled()) return null;
-                throw cancelled;
-              }
-            }
-          }).subscribeOn(Schedulers.boundedElastic()).flatMapMany(projected -> {
-            context.checkActive();
-            context.checkModelTokenBudget();invoked.set(true);
-            sent.set(projected); return delegate.stream(projected);
-          });
-      Flux<ChatResponse> response = new MessageAggregator().aggregate(requests, aggregate::set);
-      return response.concatWith(Flux.defer(() -> {
-        ChatResponse result = aggregate.get();
-        if (result == null || result.getResult() == null) {
-          reported.set(true);context.recordTotalTokens(null);
-          context.endIteration();
-          return Flux.empty();
-        }
-        context.checkActive();
-        if (assembler != null && sent.get() != null) assembler.confirmedDelivery(sent.get(), context.runContext());
-        var usage = result.getMetadata().getUsage();
-        reported.set(true);
-        context.recordTotalTokens(usage==null?null:usage.getTotalTokens());
-        if (usage != null && usage.getCompletionTokens() != null) {
-          context.recordCompletionTokens(usage.getCompletionTokens());
-        }
-        if (result.hasToolCalls() && !OutputLimitDetector.isOutputLimitReached(result)) {
-          return Mono.fromCallable(() -> {
-            context.checkActive();
-            try {
-              context.planTools(result.getResult().getOutput().getToolCalls());
-              var toolResult = tools.executeResumable(prompt, result,context);
-              if (assembler != null && context.runContext() != null)
-                assembler.preserveToolResults(toolResult.conversationHistory(), context.runContext().conversationId(),
-                    context.runContext().runId());
-              context.preserveToolResults(toolResult.conversationHistory());
-              context.suspendIfWaiting(toolResult.conversationHistory());
-              return toolResult;
-            }
-            finally { context.endIteration(); }
-          }).subscribeOn(Schedulers.boundedElastic()).flatMapMany(toolResult -> {
-            if (toolResult.returnDirect()) return Flux.just(new ChatResponse(ToolExecutionResult.buildGenerations(toolResult)));
-            List<Message> messages = new ArrayList<>(toolResult.conversationHistory());
-            messages.addAll(context.applyInterventions());
-            String notice = context.requestReplan();
-            if (notice != null) messages.add(new UserMessage(notice));
-            return iteration(new Prompt(messages, prompt.getOptions()), context, false, progressAtLimit);
-          });
-        }
-        context.endIteration();
-        if (!OutputLimitDetector.isOutputLimitReached(result)) {
-          var guidance = context.applyInterventions();
-          if (guidance.isEmpty()) { if(assembler!=null)assembler.requireReviewed(context.runContext()); return Flux.empty(); }
-          List<Message> messages = new ArrayList<>(prompt.getInstructions());
-          messages.add(result.getResult().getOutput());
-          messages.addAll(guidance);
-          return iteration(new Prompt(messages, prompt.getOptions()), context, false, progressAtLimit);
-        }
-        String notice = context.requestReplan();
-        if (notice != null || context.progressVersion() > progressAtLimit) {
-          List<Message> messages = new ArrayList<>(prompt.getInstructions());
-          // A length-truncated tool call has no complete arguments and must never be replayed/executed.
-          messages.add(new AssistantMessage(Objects.toString(result.getResult().getOutput().getText(), "")));
-          messages.add(new UserMessage(notice != null ? notice
-              : "Continue the current goal from the verified progress. Do not repeat completed actions. Keep the next output concise."));
-          return iteration(new Prompt(messages, prompt.getOptions()), context, false, context.progressVersion());
-        }
-        return Flux.empty(); // Outer output-limit splitter handles a goal that made no progress.
-      })).doOnError(error -> {
-        context.endIteration();
-        if(invoked.get()&&!reported.getAndSet(true))context.recordTotalTokens(null);
-      }).doOnCancel(()->{
-        context.endIteration();
-        if(invoked.get()&&!reported.getAndSet(true)) {
-          try{context.recordTotalTokens(null);}catch(RuntimeException stopped){/* Already cancelled or blocked by unknown usage. */}
-        }
-      });
-    });
+  private Flux<ChatResponse> iteration(
+      Prompt prompt, RunExecutionContext context, boolean prepaid, long progressAtLimit) {
+    return Flux.defer(
+        () -> {
+          context.checkActive();
+          context.checkModelTokenBudget();
+          if (!prepaid) context.consumeNextLlmCall();
+          context.beginIteration();
+          AtomicReference<ChatResponse> aggregate = new AtomicReference<>();
+          AtomicReference<Prompt> sent = new AtomicReference<>();
+          var invoked = new java.util.concurrent.atomic.AtomicBoolean();
+          var reported = new java.util.concurrent.atomic.AtomicBoolean();
+          Flux<ChatResponse> requests =
+              assembler == null || context.runContext() == null
+                  ? Flux.defer(
+                      () -> {
+                        context.checkModelTokenBudget();
+                        invoked.set(true);
+                        return delegate.stream(prompt);
+                      })
+                  : Mono.fromCallable(
+                          () -> {
+                            try (var scope =
+                                dev.mikoto2000.rei.core.chat.AgentRunScope.open(
+                                    context.runContext())) {
+                              try {
+                                return assembler.assemble(
+                                    prompt,
+                                    context.runContext().conversationId(),
+                                    context.runContext().runId(),
+                                    context::checkActive);
+                              } catch (java.util.concurrent.CancellationException cancelled) {
+                                // Disposal may interrupt the summary worker after the downstream
+                                // subscriber has gone away.
+                                if (context.isCancelled()) return null;
+                                throw cancelled;
+                              }
+                            }
+                          })
+                      .subscribeOn(Schedulers.boundedElastic())
+                      .flatMapMany(
+                          projected -> {
+                            context.checkActive();
+                            context.checkModelTokenBudget();
+                            invoked.set(true);
+                            sent.set(projected);
+                            return delegate.stream(projected);
+                          });
+          Flux<ChatResponse> response = new MessageAggregator().aggregate(requests, aggregate::set);
+          return response
+              .concatWith(
+                  Flux.defer(
+                      () -> {
+                        ChatResponse result = aggregate.get();
+                        if (result == null || result.getResult() == null) {
+                          reported.set(true);
+                          context.recordTotalTokens(null);
+                          context.endIteration();
+                          return Flux.empty();
+                        }
+                        context.checkActive();
+                        if (assembler != null && sent.get() != null)
+                          assembler.confirmedDelivery(sent.get(), context.runContext());
+                        var usage = result.getMetadata().getUsage();
+                        reported.set(true);
+                        context.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+                        if (usage != null && usage.getCompletionTokens() != null) {
+                          context.recordCompletionTokens(usage.getCompletionTokens());
+                        }
+                        if (result.hasToolCalls()
+                            && !OutputLimitDetector.isOutputLimitReached(result)) {
+                          return Mono.fromCallable(
+                                  () -> {
+                                    context.checkActive();
+                                    try {
+                                      context.planTools(
+                                          result.getResult().getOutput().getToolCalls());
+                                      var toolResult =
+                                          tools.executeResumable(prompt, result, context);
+                                      if (assembler != null && context.runContext() != null)
+                                        assembler.preserveToolResults(
+                                            toolResult.conversationHistory(),
+                                            context.runContext().conversationId(),
+                                            context.runContext().runId());
+                                      context.preserveToolResults(toolResult.conversationHistory());
+                                      context.suspendIfWaiting(toolResult.conversationHistory());
+                                      return toolResult;
+                                    } finally {
+                                      context.endIteration();
+                                    }
+                                  })
+                              .subscribeOn(Schedulers.boundedElastic())
+                              .flatMapMany(
+                                  toolResult -> {
+                                    if (toolResult.returnDirect())
+                                      return Flux.just(
+                                          new ChatResponse(
+                                              ToolExecutionResult.buildGenerations(toolResult)));
+                                    List<Message> messages =
+                                        new ArrayList<>(toolResult.conversationHistory());
+                                    messages.addAll(context.applyInterventions());
+                                    String notice = context.requestReplan();
+                                    if (notice != null) messages.add(new UserMessage(notice));
+                                    return iteration(
+                                        new Prompt(messages, prompt.getOptions()),
+                                        context,
+                                        false,
+                                        progressAtLimit);
+                                  });
+                        }
+                        context.endIteration();
+                        if (!OutputLimitDetector.isOutputLimitReached(result)) {
+                          var guidance = context.applyInterventions();
+                          if (guidance.isEmpty()) {
+                            if (assembler != null) assembler.requireReviewed(context.runContext());
+                            return Flux.empty();
+                          }
+                          List<Message> messages = new ArrayList<>(prompt.getInstructions());
+                          messages.add(result.getResult().getOutput());
+                          messages.addAll(guidance);
+                          return iteration(
+                              new Prompt(messages, prompt.getOptions()),
+                              context,
+                              false,
+                              progressAtLimit);
+                        }
+                        String notice = context.requestReplan();
+                        if (notice != null || context.progressVersion() > progressAtLimit) {
+                          List<Message> messages = new ArrayList<>(prompt.getInstructions());
+                          // A length-truncated tool call has no complete arguments and must never
+                          // be replayed/executed.
+                          messages.add(
+                              new AssistantMessage(
+                                  Objects.toString(result.getResult().getOutput().getText(), "")));
+                          messages.add(
+                              new UserMessage(
+                                  notice != null
+                                      ? notice
+                                      : "Continue the current goal from the verified progress. Do not repeat completed actions. Keep the next output concise."));
+                          return iteration(
+                              new Prompt(messages, prompt.getOptions()),
+                              context,
+                              false,
+                              context.progressVersion());
+                        }
+                        return Flux
+                            .empty(); // Outer output-limit splitter handles a goal that made no
+                        // progress.
+                      }))
+              .doOnError(
+                  error -> {
+                    context.endIteration();
+                    if (invoked.get() && !reported.getAndSet(true)) context.recordTotalTokens(null);
+                  })
+              .doOnCancel(
+                  () -> {
+                    context.endIteration();
+                    if (invoked.get() && !reported.getAndSet(true)) {
+                      try {
+                        context.recordTotalTokens(null);
+                      } catch (RuntimeException stopped) {
+                        /* Already cancelled or blocked by unknown usage. */
+                      }
+                    }
+                  });
+        });
   }
 
   private Prompt prepare(Prompt prompt, RunExecutionContext context) {
@@ -159,59 +279,98 @@ public class StagnationChatModel implements ChatModel {
     toolContext.put("rei.contextSequenceOffset", context.nextContextSegment());
     List<ToolCallback> callbacks = new ArrayList<>();
     if (options.getToolCallbacks() != null)
-      for (ToolCallback callback : options.getToolCallbacks()) callbacks.add(observe(callback, context));
-    var resumed=context.takeResumeMessages();
-    var instructions=new ArrayList<Message>();
-    if(resumed.isEmpty())instructions.addAll(prompt.getInstructions());
-    else {prompt.getInstructions().stream().filter(m->m instanceof SystemMessage).forEach(instructions::add);instructions.addAll(resumed);}
-    return new Prompt(instructions, options.mutate()
-        .toolContext(toolContext).toolCallbacks(dev.mikoto2000.rei.llm.StableToolDefinitions.callbacks(callbacks)).build());
+      for (ToolCallback callback : options.getToolCallbacks())
+        callbacks.add(observe(callback, context));
+    var resumed = context.takeResumeMessages();
+    var instructions = new ArrayList<Message>();
+    if (resumed.isEmpty()) instructions.addAll(prompt.getInstructions());
+    else {
+      prompt.getInstructions().stream()
+          .filter(m -> m instanceof SystemMessage)
+          .forEach(instructions::add);
+      instructions.addAll(resumed);
+    }
+    return new Prompt(
+        instructions,
+        options
+            .mutate()
+            .toolContext(toolContext)
+            .toolCallbacks(dev.mikoto2000.rei.llm.StableToolDefinitions.callbacks(callbacks))
+            .build());
   }
 
   private ToolCallback observe(ToolCallback delegateTool, RunExecutionContext context) {
-    return dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.preservePolicy(delegateTool, new ToolCallback() {
-      public ToolDefinition getToolDefinition() { return delegateTool.getToolDefinition(); }
-      public ToolMetadata getToolMetadata() { return delegateTool.getToolMetadata(); }
-      public String call(String input) { return call(input, null); }
-      public String call(String input, ToolContext toolContext) {
-        try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext())) {
-        context.checkActive();
-        String name = getToolDefinition().name();
-        // These two domain callbacks authorize the complete persisted specification, not raw tool JSON.
-        // Preparation never starts a process; execution checks Policy/approval on the server before claim.
-        if(!(delegateTool instanceof dev.mikoto2000.rei.externalagent.ExternalAgentToolCallback domain && domain.authorizesSpecification())
-            && !(delegateTool instanceof dev.mikoto2000.rei.slack.SlackAgentToolCallback slack && slack.authorizesSpecification())
-            && !(delegateTool instanceof dev.mikoto2000.rei.dot.DotToolCallback dot && dot.authorizesSpecification()))context.checkToolPermission(name,input);
-        if (context.externalDelegationUsed() && !(delegateTool instanceof dev.mikoto2000.rei.externalagent.ExternalAgentToolCallback domain && domain.availableAfterDelegation()))
-          return "External review is complete or already attempted. Evaluate the supplied result independently and answer; no further tool execution or automatic fixes are allowed in this review run.";
-        var before = context.evaluator().beforeTool(name, input);
-        boolean decorated=delegateTool instanceof dev.mikoto2000.rei.event.ToolEventCallbackDecorator;
-        String actualId=context.claimToolId(name,input);
-        var capturedToolContext=new HashMap<String,Object>();if(toolContext!=null)capturedToolContext.putAll(toolContext.getContext());
-        capturedToolContext.put(RunExecutionContext.KEY,context);
-        capturedToolContext.put("toolCallId",actualId);
-        var invocationContext=new ToolContext(capturedToolContext);
-        String durableCall=decorated?null:context.beginDurableTool(actualId,name,input);
-        String result;
-        try {
-          context.checkActive();
-          result = delegateTool.call(input,invocationContext);
-        } catch (RuntimeException error) {
-          if(!decorated)context.failDurableTool(durableCall,name,error);
-          context.recordFailure(name, input, error);
-          throw error;
-        }
-        if(!decorated)context.completeDurableTool(durableCall,name,result);
-        context.recordTool(name,input,result,before);
-        return result;
-        }
-      }
-    });
+    return dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.preservePolicy(
+        delegateTool,
+        new ToolCallback() {
+          public ToolDefinition getToolDefinition() {
+            return delegateTool.getToolDefinition();
+          }
+
+          public ToolMetadata getToolMetadata() {
+            return delegateTool.getToolMetadata();
+          }
+
+          public String call(String input) {
+            return call(input, null);
+          }
+
+          public String call(String input, ToolContext toolContext) {
+            try (var scope =
+                dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext())) {
+              context.checkActive();
+              String name = getToolDefinition().name();
+              // These two domain callbacks authorize the complete persisted specification, not raw
+              // tool JSON.
+              // Preparation never starts a process; execution checks Policy/approval on the server
+              // before claim.
+              if (!(delegateTool
+                          instanceof
+                          dev.mikoto2000.rei.externalagent.ExternalAgentToolCallback domain
+                      && domain.authorizesSpecification())
+                  && !(delegateTool instanceof dev.mikoto2000.rei.slack.SlackAgentToolCallback slack
+                      && slack.authorizesSpecification())
+                  && !(delegateTool instanceof dev.mikoto2000.rei.dot.DotToolCallback dot
+                      && dot.authorizesSpecification())) context.checkToolPermission(name, input);
+              if (context.externalDelegationUsed()
+                  && !(delegateTool
+                          instanceof
+                          dev.mikoto2000.rei.externalagent.ExternalAgentToolCallback domain
+                      && domain.availableAfterDelegation()))
+                return "External review is complete or already attempted. Evaluate the supplied result independently and answer; no further tool execution or automatic fixes are allowed in this review run.";
+              var before = context.evaluator().beforeTool(name, input);
+              boolean decorated =
+                  delegateTool instanceof dev.mikoto2000.rei.event.ToolEventCallbackDecorator;
+              String actualId = context.claimToolId(name, input);
+              var capturedToolContext = new HashMap<String, Object>();
+              if (toolContext != null) capturedToolContext.putAll(toolContext.getContext());
+              capturedToolContext.put(RunExecutionContext.KEY, context);
+              capturedToolContext.put("toolCallId", actualId);
+              var invocationContext = new ToolContext(capturedToolContext);
+              String durableCall =
+                  decorated ? null : context.beginDurableTool(actualId, name, input);
+              String result;
+              try {
+                context.checkActive();
+                result = delegateTool.call(input, invocationContext);
+              } catch (RuntimeException error) {
+                if (!decorated) context.failDurableTool(durableCall, name, error);
+                context.recordFailure(name, input, error);
+                throw error;
+              }
+              if (!decorated) context.completeDurableTool(durableCall, name, result);
+              context.recordTool(name, input, result, before);
+              return result;
+            }
+          }
+        });
   }
 
   private RunExecutionContext context(Prompt prompt) {
-    if (prompt.getOptions() instanceof ToolCallingChatOptions options && options.getToolContext() != null
-        && options.getToolContext().get(RunExecutionContext.KEY) instanceof RunExecutionContext context) return context;
+    if (prompt.getOptions() instanceof ToolCallingChatOptions options
+        && options.getToolContext() != null
+        && options.getToolContext().get(RunExecutionContext.KEY)
+            instanceof RunExecutionContext context) return context;
     return null;
   }
 }

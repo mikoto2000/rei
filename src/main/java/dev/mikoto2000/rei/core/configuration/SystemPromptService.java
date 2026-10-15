@@ -1,15 +1,13 @@
 package dev.mikoto2000.rei.core.configuration;
 
+import dev.mikoto2000.rei.config.ExternalConfigFileService;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
-
-import dev.mikoto2000.rei.config.ExternalConfigFileService;
 
 @Service
 public class SystemPromptService {
@@ -19,7 +17,9 @@ public class SystemPromptService {
   private final ExternalConfigFileService externalConfigFileService;
 
   @Autowired
-  public SystemPromptService(CoreProperties coreProperties, ResourceLoader resourceLoader,
+  public SystemPromptService(
+      CoreProperties coreProperties,
+      ResourceLoader resourceLoader,
       ExternalConfigFileService externalConfigFileService) {
     this.coreProperties = coreProperties;
     this.resourceLoader = resourceLoader;
@@ -35,7 +35,10 @@ public class SystemPromptService {
     if (base.isBlank()) {
       return additional.strip();
     }
-    return base.stripTrailing() + System.lineSeparator() + System.lineSeparator() + additional.strip();
+    return base.stripTrailing()
+        + System.lineSeparator()
+        + System.lineSeparator()
+        + additional.strip();
   }
 
   private String readBaseSystemPrompt() {

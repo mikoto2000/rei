@@ -2,9 +2,8 @@ package dev.mikoto2000.rei.core.command;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import org.junit.jupiter.api.Test;
-
 import dev.mikoto2000.rei.ui.shell.RootCommand;
+import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
 class RootCommandImageTest {

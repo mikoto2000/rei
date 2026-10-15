@@ -2,10 +2,8 @@ package dev.mikoto2000.rei.websearch;
 
 import java.io.IOException;
 import java.util.List;
-
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
-
 
 @Component
 public class WebSearchTools {
@@ -13,34 +11,61 @@ public class WebSearchTools {
   private final WebSearchService webSearchService;
   private final WebSearchAndReadService webSearchAndReadService;
   private final WebResultBudget resultBudget;
-  public WebSearchTools(WebSearchService search,WebSearchAndReadService read) { this(search,read,WebResultBudget.defaults()); }
-  @org.springframework.beans.factory.annotation.Autowired
-  public WebSearchTools(WebSearchService search,WebSearchAndReadService read,WebResultBudget budget) {
-    this.webSearchService=search; this.webSearchAndReadService=read; this.resultBudget=budget;
+
+  public WebSearchTools(WebSearchService search, WebSearchAndReadService read) {
+    this(search, read, WebResultBudget.defaults());
   }
 
-  @Tool(name = "webSearch", description = """
+  @org.springframework.beans.factory.annotation.Autowired
+  public WebSearchTools(
+      WebSearchService search, WebSearchAndReadService read, WebResultBudget budget) {
+    this.webSearchService = search;
+    this.webSearchAndReadService = read;
+    this.resultBudget = budget;
+  }
+
+  @Tool(
+      name = "webSearch",
+      description =
+          """
       Search the public web and return result metadata such as titles, URLs, and snippets.
       Use this primitive when result metadata or candidate URLs are sufficient.
       For normal public-web research that needs page content, prefer webSearchAndRead.
       """)
-  List<WebSearchResult> webSearch(String query, Integer limit,
-      @org.springframework.ai.tool.annotation.ToolParam(required = false, description = "Revalidate cached web sources") Boolean forceRefresh,
-      org.springframework.ai.chat.model.ToolContext context) throws IOException, InterruptedException {
+  List<WebSearchResult> webSearch(
+      String query,
+      Integer limit,
+      @org.springframework.ai.tool.annotation.ToolParam(
+              required = false,
+              description = "Revalidate cached web sources")
+          Boolean forceRefresh,
+      org.springframework.ai.chat.model.ToolContext context)
+      throws IOException, InterruptedException {
     try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context);
-        var refresh = dev.mikoto2000.rei.http.FetchScope.withForceRefresh(Boolean.TRUE.equals(forceRefresh))) {
-      resultBudget.requireAvailable(context); return resultBudget.fitMetadata(webSearch(query, limit),context);
+        var refresh =
+            dev.mikoto2000.rei.http.FetchScope.withForceRefresh(
+                Boolean.TRUE.equals(forceRefresh))) {
+      resultBudget.requireAvailable(context);
+      return resultBudget.fitMetadata(webSearch(query, limit), context);
     }
   }
-  List<WebSearchResult> webSearch(String query, Integer limit, org.springframework.ai.chat.model.ToolContext context) throws IOException, InterruptedException {
+
+  List<WebSearchResult> webSearch(
+      String query, Integer limit, org.springframework.ai.chat.model.ToolContext context)
+      throws IOException, InterruptedException {
     return webSearch(query, limit, null, context);
   }
-  List<WebSearchResult> webSearch(String query, Integer limit) throws IOException, InterruptedException {
+
+  List<WebSearchResult> webSearch(String query, Integer limit)
+      throws IOException, InterruptedException {
     IO.println(String.format("Web を検索するよ。limit=%s", limit));
     return webSearchService.search(query, limit);
   }
 
-  @Tool(name = "webSearchAndRead", description = """
+  @Tool(
+      name = "webSearchAndRead",
+      description =
+          """
       Search the public web and fetch readable content from the top search results in a single call.
       Use this as the default tool when researching information on the public web.
       Prefer this over calling webSearch followed by fetchUrlContent manually.
@@ -50,12 +75,15 @@ public class WebSearchTools {
       Set readTop = 0 to return search metadata without fetching page contents.
       Individual page fetch failures are returned per result and do not fail the whole search.
       """)
-  public WebSearchAndReadResponse webSearchAndRead(WebSearchAndReadRequest request, org.springframework.ai.chat.model.ToolContext context)
+  public WebSearchAndReadResponse webSearchAndRead(
+      WebSearchAndReadRequest request, org.springframework.ai.chat.model.ToolContext context)
       throws IOException, InterruptedException {
     try (var scope = dev.mikoto2000.rei.http.FetchScope.enter(context)) {
-      resultBudget.requireAvailable(context); return resultBudget.fit(webSearchAndRead(request),context);
+      resultBudget.requireAvailable(context);
+      return resultBudget.fit(webSearchAndRead(request), context);
     }
   }
+
   public WebSearchAndReadResponse webSearchAndRead(WebSearchAndReadRequest request)
       throws IOException, InterruptedException {
     return webSearchAndReadService.searchAndRead(request);

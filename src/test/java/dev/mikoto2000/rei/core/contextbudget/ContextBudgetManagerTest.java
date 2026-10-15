@@ -3,16 +3,14 @@ package dev.mikoto2000.rei.core.contextbudget;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.util.List;
-import java.util.ArrayList;
-
-import org.junit.jupiter.api.Test;
-
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.ContextBudgetEvaluatedPayload;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.jupiter.api.Test;
 
 class ContextBudgetManagerTest {
 
@@ -97,7 +95,10 @@ class ContextBudgetManagerTest {
   @Test
   void actionPlanOldDoneStepsAreTrimmed() {
     ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
-    ContextSection plan = new ContextSection("ACTION_PLAN", "1. [DONE] old step\n2. [IN_PROGRESS] current step\n3. [TODO] next step");
+    ContextSection plan =
+        new ContextSection(
+            "ACTION_PLAN",
+            "1. [DONE] old step\n2. [IN_PROGRESS] current step\n3. [TODO] next step");
 
     AllocationResult result = manager.allocate(List.of(plan));
     assertTrue(result.included().contains("ACTION_PLAN"));
@@ -151,7 +152,8 @@ class ContextBudgetManagerTest {
   @Test
   void conversationHistoryTrimmedFromOldest() {
     ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
-    ContextSection history = new ContextSection("CONVERSATION_HISTORY", "old history " + "x".repeat(5000));
+    ContextSection history =
+        new ContextSection("CONVERSATION_HISTORY", "old history " + "x".repeat(5000));
 
     AllocationResult result = manager.allocate(List.of(history));
     assertTrue(result.dropped().contains("CONVERSATION_HISTORY"));
@@ -170,8 +172,9 @@ class ContextBudgetManagerTest {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
     List<AgentEvent> events = new ArrayList<>();
     bus.subscribe(events::add);
-    ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100,
-        new AgentEventFactory(java.time.Clock.systemUTC()), bus);
+    ContextBudgetManager manager =
+        new ContextBudgetManager(
+            1000, 100, 100, new AgentEventFactory(java.time.Clock.systemUTC()), bus);
     ContextSection system = new ContextSection("SYSTEM", "system");
     ContextSection history = new ContextSection("CONVERSATION_HISTORY", "x".repeat(5000));
 

@@ -4,6 +4,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.mikoto2000.rei.core.configuration.SqliteVecProperties;
+import dev.mikoto2000.rei.core.sqlitevec.PlatformDetector;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecAssetResolver;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecDataSource;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecInstaller;
+import dev.mikoto2000.rei.vectorstore.SqliteVectorStore;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -12,7 +19,6 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Map;
-
 import org.apache.pdfbox.pdmodel.PDDocument;
 import org.apache.pdfbox.pdmodel.PDPage;
 import org.apache.pdfbox.pdmodel.PDPageContentStream;
@@ -20,35 +26,31 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.sqlite.SQLiteDataSource;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.Embedding;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
-
-import dev.mikoto2000.rei.core.configuration.SqliteVecProperties;
-import dev.mikoto2000.rei.core.sqlitevec.PlatformDetector;
-import dev.mikoto2000.rei.core.sqlitevec.SqliteVecAssetResolver;
-import dev.mikoto2000.rei.core.sqlitevec.SqliteVecDataSource;
-import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
-import dev.mikoto2000.rei.core.sqlitevec.SqliteVecInstaller;
-import dev.mikoto2000.rei.vectorstore.SqliteVectorStore;
+import org.sqlite.SQLiteDataSource;
 
 @org.junit.jupiter.api.Tag("integration")
 class VectorDocumentServiceTest {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void addListSearchAndDeleteDocuments() throws IOException {
-    Path springDoc = Files.writeString(tempDir.resolve("spring-ai.txt"), "Spring AI guide for building AI assistants.");
-    Path weatherDoc = Files.writeString(tempDir.resolve("weather.txt"), "Weather forecast memo for Ibaraki tomorrow.");
+    Path springDoc =
+        Files.writeString(
+            tempDir.resolve("spring-ai.txt"), "Spring AI guide for building AI assistants.");
+    Path weatherDoc =
+        Files.writeString(
+            tempDir.resolve("weather.txt"), "Weather forecast memo for Ibaraki tomorrow.");
 
     VectorDocumentService service = newService();
 
-    List<VectorDocumentEntry> added = service.add(List.of(springDoc.toString(), weatherDoc.toString()));
+    List<VectorDocumentEntry> added =
+        service.add(List.of(springDoc.toString(), weatherDoc.toString()));
 
     assertEquals(2, added.size());
     assertEquals(2, service.list().size());
@@ -61,11 +63,12 @@ class VectorDocumentServiceTest {
     assertEquals("Spring AI guide for building AI assistants.", results.getFirst().snippet());
     assertTrue(results.getFirst().source().endsWith("spring-ai.txt"));
 
-    String springDocId = added.stream()
-        .filter(entry -> entry.source().endsWith("spring-ai.txt"))
-        .findFirst()
-        .orElseThrow()
-        .docId();
+    String springDocId =
+        added.stream()
+            .filter(entry -> entry.source().endsWith("spring-ai.txt"))
+            .findFirst()
+            .orElseThrow()
+            .docId();
 
     assertTrue(service.deleteByDocId(springDocId));
     assertEquals(1, service.list().size());
@@ -92,13 +95,17 @@ class VectorDocumentServiceTest {
 
   @Test
   void searchCanFilterBySource() throws IOException {
-    Path springDoc = Files.writeString(tempDir.resolve("spring-ai.txt"), "Spring AI guide for building AI assistants.");
-    Path weatherDoc = Files.writeString(tempDir.resolve("weather.txt"), "Spring weather outlook for Ibaraki.");
+    Path springDoc =
+        Files.writeString(
+            tempDir.resolve("spring-ai.txt"), "Spring AI guide for building AI assistants.");
+    Path weatherDoc =
+        Files.writeString(tempDir.resolve("weather.txt"), "Spring weather outlook for Ibaraki.");
 
     VectorDocumentService service = newService();
     service.add(List.of(springDoc.toString(), weatherDoc.toString()));
 
-    List<VectorDocumentSearchResult> results = service.search("spring", 5, null, springDoc.toAbsolutePath().normalize().toString());
+    List<VectorDocumentSearchResult> results =
+        service.search("spring", 5, null, springDoc.toAbsolutePath().normalize().toString());
 
     assertEquals(1, results.size());
     assertTrue(results.getFirst().source().endsWith("spring-ai.txt"));
@@ -107,10 +114,46 @@ class VectorDocumentServiceTest {
   @Test
   void searchReturnsDistinctDocumentsEvenWhenTopChunksAreFromSameDocument() {
     TestFixture fixture = newFixture();
-    fixture.vectorStore().add(List.of(
-        new Document("doc-1#0", "Spring AI guide", Map.of("docId", "doc-1", "source", "/tmp/doc-1.md", "chunkIndex", 0, "ingestedAt", "2026-03-28T00:00:00Z")),
-        new Document("doc-1#1", "Spring AI appendix", Map.of("docId", "doc-1", "source", "/tmp/doc-1.md", "chunkIndex", 1, "ingestedAt", "2026-03-28T00:00:00Z")),
-        new Document("doc-2#0", "Spring tools memo", Map.of("docId", "doc-2", "source", "/tmp/doc-2.md", "chunkIndex", 0, "ingestedAt", "2026-03-28T00:00:00Z"))));
+    fixture
+        .vectorStore()
+        .add(
+            List.of(
+                new Document(
+                    "doc-1#0",
+                    "Spring AI guide",
+                    Map.of(
+                        "docId",
+                        "doc-1",
+                        "source",
+                        "/tmp/doc-1.md",
+                        "chunkIndex",
+                        0,
+                        "ingestedAt",
+                        "2026-03-28T00:00:00Z")),
+                new Document(
+                    "doc-1#1",
+                    "Spring AI appendix",
+                    Map.of(
+                        "docId",
+                        "doc-1",
+                        "source",
+                        "/tmp/doc-1.md",
+                        "chunkIndex",
+                        1,
+                        "ingestedAt",
+                        "2026-03-28T00:00:00Z")),
+                new Document(
+                    "doc-2#0",
+                    "Spring tools memo",
+                    Map.of(
+                        "docId",
+                        "doc-2",
+                        "source",
+                        "/tmp/doc-2.md",
+                        "chunkIndex",
+                        0,
+                        "ingestedAt",
+                        "2026-03-28T00:00:00Z"))));
 
     List<VectorDocumentSearchResult> results = fixture.service().search("spring", 2, null, null);
 
@@ -122,11 +165,58 @@ class VectorDocumentServiceTest {
   @Test
   void searchRanksDocumentHigherWhenEvidenceIsDistributedAcrossChunks() {
     TestFixture fixture = newFixture();
-    fixture.vectorStore().add(List.of(
-        new Document("doc-1#0", "Spring AI guide", Map.of("docId", "doc-1", "source", "/tmp/doc-1.md", "chunkIndex", 0, "ingestedAt", "2026-03-28T00:00:00Z")),
-        new Document("doc-1#1", "General appendix", Map.of("docId", "doc-1", "source", "/tmp/doc-1.md", "chunkIndex", 1, "ingestedAt", "2026-03-28T00:00:00Z")),
-        new Document("doc-2#0", "Spring memo", Map.of("docId", "doc-2", "source", "/tmp/doc-2.md", "chunkIndex", 0, "ingestedAt", "2026-03-28T00:00:00Z")),
-        new Document("doc-2#1", "AI memo", Map.of("docId", "doc-2", "source", "/tmp/doc-2.md", "chunkIndex", 1, "ingestedAt", "2026-03-28T00:00:00Z"))));
+    fixture
+        .vectorStore()
+        .add(
+            List.of(
+                new Document(
+                    "doc-1#0",
+                    "Spring AI guide",
+                    Map.of(
+                        "docId",
+                        "doc-1",
+                        "source",
+                        "/tmp/doc-1.md",
+                        "chunkIndex",
+                        0,
+                        "ingestedAt",
+                        "2026-03-28T00:00:00Z")),
+                new Document(
+                    "doc-1#1",
+                    "General appendix",
+                    Map.of(
+                        "docId",
+                        "doc-1",
+                        "source",
+                        "/tmp/doc-1.md",
+                        "chunkIndex",
+                        1,
+                        "ingestedAt",
+                        "2026-03-28T00:00:00Z")),
+                new Document(
+                    "doc-2#0",
+                    "Spring memo",
+                    Map.of(
+                        "docId",
+                        "doc-2",
+                        "source",
+                        "/tmp/doc-2.md",
+                        "chunkIndex",
+                        0,
+                        "ingestedAt",
+                        "2026-03-28T00:00:00Z")),
+                new Document(
+                    "doc-2#1",
+                    "AI memo",
+                    Map.of(
+                        "docId",
+                        "doc-2",
+                        "source",
+                        "/tmp/doc-2.md",
+                        "chunkIndex",
+                        1,
+                        "ingestedAt",
+                        "2026-03-28T00:00:00Z"))));
 
     List<VectorDocumentSearchResult> results = fixture.service().search("spring ai", 2, null, null);
 
@@ -138,12 +228,23 @@ class VectorDocumentServiceTest {
   @Test
   void searchBuildsSnippetAroundQueryInsteadOfDocumentPrefix() {
     TestFixture fixture = newFixture();
-    fixture.vectorStore().add(List.of(
-        new Document(
-            "doc-1#0",
-            "Preface text that is unrelated and keeps going before the important section begins. "
-                + "Spring AI tools help build assistants with retrieval and search.",
-            Map.of("docId", "doc-1", "source", "/tmp/doc-1.md", "chunkIndex", 0, "ingestedAt", "2026-03-28T00:00:00Z"))));
+    fixture
+        .vectorStore()
+        .add(
+            List.of(
+                new Document(
+                    "doc-1#0",
+                    "Preface text that is unrelated and keeps going before the important section begins. "
+                        + "Spring AI tools help build assistants with retrieval and search.",
+                    Map.of(
+                        "docId",
+                        "doc-1",
+                        "source",
+                        "/tmp/doc-1.md",
+                        "chunkIndex",
+                        0,
+                        "ingestedAt",
+                        "2026-03-28T00:00:00Z"))));
 
     List<VectorDocumentSearchResult> results = fixture.service().search("spring ai", 1, null, null);
 
@@ -155,13 +256,25 @@ class VectorDocumentServiceTest {
   @Test
   void searchBuildsSnippetFromBestMatchingSentence() {
     TestFixture fixture = newFixture();
-    fixture.vectorStore().add(List.of(
-        new Document(
-            "doc-1#0",
-            "Intro sentence. Spring AI tools help build assistants. Closing sentence.",
-            Map.of("docId", "doc-1", "source", "/tmp/doc-1.md", "chunkIndex", 0, "ingestedAt", "2026-03-28T00:00:00Z"))));
+    fixture
+        .vectorStore()
+        .add(
+            List.of(
+                new Document(
+                    "doc-1#0",
+                    "Intro sentence. Spring AI tools help build assistants. Closing sentence.",
+                    Map.of(
+                        "docId",
+                        "doc-1",
+                        "source",
+                        "/tmp/doc-1.md",
+                        "chunkIndex",
+                        0,
+                        "ingestedAt",
+                        "2026-03-28T00:00:00Z"))));
 
-    List<VectorDocumentSearchResult> results = fixture.service().search("spring ai tools", 1, null, null);
+    List<VectorDocumentSearchResult> results =
+        fixture.service().search("spring ai tools", 1, null, null);
 
     assertEquals(1, results.size());
     assertEquals("Spring AI tools help build assistants.", results.getFirst().snippet());
@@ -170,26 +283,51 @@ class VectorDocumentServiceTest {
   @Test
   void searchMergesAdjacentChunksBeforeBuildingSnippet() {
     TestFixture fixture = newFixture();
-    fixture.vectorStore().add(List.of(
-        new Document(
-            "doc-1#0",
-            "Spring AI tools help",
-            Map.of("docId", "doc-1", "source", "/tmp/doc-1.md", "chunkIndex", 0, "ingestedAt", "2026-03-28T00:00:00Z")),
-        new Document(
-            "doc-1#1",
-            "build assistants effectively for teams.",
-            Map.of("docId", "doc-1", "source", "/tmp/doc-1.md", "chunkIndex", 1, "ingestedAt", "2026-03-28T00:00:00Z"))));
+    fixture
+        .vectorStore()
+        .add(
+            List.of(
+                new Document(
+                    "doc-1#0",
+                    "Spring AI tools help",
+                    Map.of(
+                        "docId",
+                        "doc-1",
+                        "source",
+                        "/tmp/doc-1.md",
+                        "chunkIndex",
+                        0,
+                        "ingestedAt",
+                        "2026-03-28T00:00:00Z")),
+                new Document(
+                    "doc-1#1",
+                    "build assistants effectively for teams.",
+                    Map.of(
+                        "docId",
+                        "doc-1",
+                        "source",
+                        "/tmp/doc-1.md",
+                        "chunkIndex",
+                        1,
+                        "ingestedAt",
+                        "2026-03-28T00:00:00Z"))));
 
-    List<VectorDocumentSearchResult> results = fixture.service().search("build assistants", 1, null, null);
+    List<VectorDocumentSearchResult> results =
+        fixture.service().search("build assistants", 1, null, null);
 
     assertEquals(1, results.size());
-    assertTrue(results.getFirst().snippet().contains("Spring AI tools help build assistants effectively"));
+    assertTrue(
+        results.getFirst().snippet().contains("Spring AI tools help build assistants effectively"));
   }
 
   @Test
   void deleteBySourceRemovesMatchingDocument() throws IOException {
-    Path springDoc = Files.writeString(tempDir.resolve("spring-ai.txt"), "Spring AI guide for building AI assistants.");
-    Path weatherDoc = Files.writeString(tempDir.resolve("weather.txt"), "Weather forecast memo for Ibaraki tomorrow.");
+    Path springDoc =
+        Files.writeString(
+            tempDir.resolve("spring-ai.txt"), "Spring AI guide for building AI assistants.");
+    Path weatherDoc =
+        Files.writeString(
+            tempDir.resolve("weather.txt"), "Weather forecast memo for Ibaraki tomorrow.");
 
     VectorDocumentService service = newService();
     service.add(List.of(springDoc.toString(), weatherDoc.toString()));
@@ -218,12 +356,10 @@ class VectorDocumentServiceTest {
     Path document = tempDir.resolve("long.txt");
     Files.writeString(document, "spring tools ai weather ".repeat(80));
 
-    VectorDocumentEntry withoutOverlap = newServiceWithChunkSettings(20, 0)
-        .add(List.of(document.toString()))
-        .getFirst();
-    VectorDocumentEntry withOverlap = newServiceWithChunkSettings(20, 10)
-        .add(List.of(document.toString()))
-        .getFirst();
+    VectorDocumentEntry withoutOverlap =
+        newServiceWithChunkSettings(20, 0).add(List.of(document.toString())).getFirst();
+    VectorDocumentEntry withOverlap =
+        newServiceWithChunkSettings(20, 10).add(List.of(document.toString())).getFirst();
 
     assertTrue(withOverlap.chunkCount() > withoutOverlap.chunkCount());
   }
@@ -231,7 +367,9 @@ class VectorDocumentServiceTest {
   @Test
   void addStoresMetadataForTitleFileTypeAndMarkdownHeading() throws IOException {
     Path markdown = tempDir.resolve("architecture-notes.md");
-    Files.writeString(markdown, """
+    Files.writeString(
+        markdown,
+        """
         # Architecture
 
         Spring AI tools help build assistants.
@@ -240,11 +378,16 @@ class VectorDocumentServiceTest {
     TestFixture fixture = newFixture();
     fixture.service().add(List.of(markdown.toString()));
 
-    Document stored = fixture.vectorStore().similaritySearch(org.springframework.ai.vectorstore.SearchRequest.builder()
-        .query("spring ai")
-        .topK(1)
-        .similarityThresholdAll()
-        .build()).getFirst();
+    Document stored =
+        fixture
+            .vectorStore()
+            .similaritySearch(
+                org.springframework.ai.vectorstore.SearchRequest.builder()
+                    .query("spring ai")
+                    .topK(1)
+                    .similarityThresholdAll()
+                    .build())
+            .getFirst();
 
     assertEquals("architecture-notes", stored.getMetadata().get("title"));
     assertEquals("md", stored.getMetadata().get("fileType"));
@@ -264,7 +407,8 @@ class VectorDocumentServiceTest {
     writePdf(pdf, repeated);
 
     VectorDocumentService service = newServiceWithChunkSettings(40, 10);
-    List<VectorDocumentEntry> entries = service.add(List.of(text.toString(), markdown.toString(), pdf.toString()));
+    List<VectorDocumentEntry> entries =
+        service.add(List.of(text.toString(), markdown.toString(), pdf.toString()));
 
     int textChunks = findEntry(entries, "notes.txt").chunkCount();
     int markdownChunks = findEntry(entries, "notes.md").chunkCount();
@@ -300,30 +444,33 @@ class VectorDocumentServiceTest {
     dataSource.setLoadExtension(true);
     SqliteVecProperties properties = new SqliteVecProperties();
     properties.setExtensionPath(vecExtensionPath().toString());
-    SqliteVecInstaller installer = new SqliteVecInstaller(
-        properties,
-        new PlatformDetector(),
-        new SqliteVecAssetResolver(),
-        new tools.jackson.databind.json.JsonMapper());
+    SqliteVecInstaller installer =
+        new SqliteVecInstaller(
+            properties,
+            new PlatformDetector(),
+            new SqliteVecAssetResolver(),
+            new tools.jackson.databind.json.JsonMapper());
     SqliteVecExtensionLoader loader = new SqliteVecExtensionLoader(properties, installer);
-    SqliteVectorStore vectorStore = new SqliteVectorStore(
-        new SqliteVecDataSource(dataSource, loader),
-        new FakeEmbeddingModel(),
-        new tools.jackson.databind.json.JsonMapper());
-    VectorDocumentService service = new VectorDocumentService(
-        vectorStore,
-        vectorStore,
-        Clock.fixed(Instant.parse("2026-03-28T00:00:00Z"), ZoneOffset.UTC),
-        new VectorDocumentProperties(chunkSize, chunkOverlap));
+    SqliteVectorStore vectorStore =
+        new SqliteVectorStore(
+            new SqliteVecDataSource(dataSource, loader),
+            new FakeEmbeddingModel(),
+            new tools.jackson.databind.json.JsonMapper());
+    VectorDocumentService service =
+        new VectorDocumentService(
+            vectorStore,
+            vectorStore,
+            Clock.fixed(Instant.parse("2026-03-28T00:00:00Z"), ZoneOffset.UTC),
+            new VectorDocumentProperties(chunkSize, chunkOverlap));
     return new TestFixture(service, vectorStore);
   }
 
-  private record TestFixture(VectorDocumentService service, SqliteVectorStore vectorStore) {
-  }
+  private record TestFixture(VectorDocumentService service, SqliteVectorStore vectorStore) {}
 
   private Path vecExtensionPath() {
     return dev.mikoto2000.rei.testsupport.SqliteVecTestExtension.resolve();
   }
+
   private VectorDocumentEntry findEntry(List<VectorDocumentEntry> entries, String suffix) {
     return entries.stream()
         .filter(entry -> entry.source().endsWith(suffix))
@@ -352,9 +499,10 @@ class VectorDocumentServiceTest {
 
     @Override
     public EmbeddingResponse call(EmbeddingRequest request) {
-      List<Embedding> embeddings = java.util.stream.IntStream.range(0, request.getInstructions().size())
-          .mapToObj(i -> new Embedding(embedText(request.getInstructions().get(i)), i))
-          .toList();
+      List<Embedding> embeddings =
+          java.util.stream.IntStream.range(0, request.getInstructions().size())
+              .mapToObj(i -> new Embedding(embedText(request.getInstructions().get(i)), i))
+              .toList();
       return new EmbeddingResponse(embeddings);
     }
 
@@ -371,10 +519,7 @@ class VectorDocumentServiceTest {
     private float[] embedText(String text) {
       String value = text == null ? "" : text.toLowerCase();
       return new float[] {
-          score(value, "spring"),
-          score(value, "ai"),
-          score(value, "weather"),
-          score(value, "tools")
+        score(value, "spring"), score(value, "ai"), score(value, "weather"), score(value, "tools")
       };
     }
 

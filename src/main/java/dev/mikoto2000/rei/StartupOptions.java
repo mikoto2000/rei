@@ -1,21 +1,31 @@
 package dev.mikoto2000.rei;
 
-import java.nio.file.Path;
 import dev.mikoto2000.rei.core.project.ProjectService;
+import java.nio.file.Path;
 import picocli.CommandLine;
 
 /** Parsed before Spring starts; unrelated arguments remain available to Spring. */
-@CommandLine.Command(name = "rei", description = "AI シェル", mixinStandardHelpOptions = true,
+@CommandLine.Command(
+    name = "rei",
+    description = "AI シェル",
+    mixinStandardHelpOptions = true,
     versionProvider = ReiVersionProvider.class)
 public final class StartupOptions {
-  @CommandLine.Option(names = "--mode", paramLabel = "<server|legacy-shell>",
+  @CommandLine.Option(
+      names = "--mode",
+      paramLabel = "<server|legacy-shell>",
       description = "起動方式を指定します（軽量 CLI への移行中は既定値 legacy-shell）")
   private String mode;
-  @CommandLine.Option(names = {"-p", "--project"}, paramLabel = "<directory>",
+
+  @CommandLine.Option(
+      names = {"-p", "--project"},
+      paramLabel = "<directory>",
       description = "起動時のカレントプロジェクトのディレクトリを指定します")
   private String directory;
-  @CommandLine.Option(names="--backend",description="Shell を開かず Backend を常駐起動します")
+
+  @CommandLine.Option(names = "--backend", description = "Shell を開かず Backend を常駐起動します")
   private boolean backend;
+
   private Path project;
   private boolean helpRequested;
   private boolean versionRequested;
@@ -28,18 +38,28 @@ public final class StartupOptions {
     options.versionRequested = parsed.isVersionHelpRequested();
     if (options.directory != null && !options.helpRequested && !options.versionRequested) {
       try {
-        options.project = ProjectService.resolveExistingDirectory(startupDirectory, options.directory);
+        options.project =
+            ProjectService.resolveExistingDirectory(startupDirectory, options.directory);
       } catch (IllegalArgumentException error) {
-        throw new CommandLine.ParameterException(command, "Invalid --project '" + options.directory + "': "
-            + error.getMessage(), error);
+        throw new CommandLine.ParameterException(
+            command, "Invalid --project '" + options.directory + "': " + error.getMessage(), error);
       }
     }
     return options;
   }
 
-  public Path project() { return project; }
-  public boolean backend() {return backend || "server".equals(mode);}
-  public boolean helpRequested() { return helpRequested; }
+  public Path project() {
+    return project;
+  }
+
+  public boolean backend() {
+    return backend || "server".equals(mode);
+  }
+
+  public boolean helpRequested() {
+    return helpRequested;
+  }
+
   public boolean printHelpIfRequested() {
     var command = new CommandLine(this);
     if (helpRequested) command.usage(System.out);

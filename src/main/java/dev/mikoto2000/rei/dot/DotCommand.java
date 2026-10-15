@@ -12,7 +12,10 @@ public final class DotCommand implements java.util.concurrent.Callable<Integer> 
   private final DotDelegationService service;
   private final ProjectService projects;
 
-  @Parameters(arity = "0..*", paramLabel = "ACTION [ID|INSTRUCTION] [OPTIONS]",completionCandidates=ActionCandidates.class)
+  @Parameters(
+      arity = "0..*",
+      paramLabel = "ACTION [ID|INSTRUCTION] [OPTIONS]",
+      completionCandidates = ActionCandidates.class)
   String[] arguments;
 
   @Option(names = "--project-id")
@@ -132,13 +135,21 @@ public final class DotCommand implements java.util.concurrent.Callable<Integer> 
       out.println(dev.mikoto2000.rei.storage.StorageDatabase.JSON.writeValueAsString(result));
       return 0;
     } catch (Exception e) {
-      out.println("[error] " + (e instanceof DotException dot ? dot.code : "INVALID_ARGUMENT") + ": " + dev.mikoto2000.rei.event.FailureMessages.describe(e));
+      out.println(
+          "[error] "
+              + (e instanceof DotException dot ? dot.code : "INVALID_ARGUMENT")
+              + ": "
+              + dev.mikoto2000.rei.event.FailureMessages.describe(e));
       return 2;
     } finally {
       out.flush();
     }
   }
-  public static final class ActionCandidates extends dev.mikoto2000.rei.core.completion.FirstArgumentCandidates {
-    public ActionCandidates() { super("request", "requests", "status", "result", "cancel", "verify", "resume"); }
+
+  public static final class ActionCandidates
+      extends dev.mikoto2000.rei.core.completion.FirstArgumentCandidates {
+    public ActionCandidates() {
+      super("request", "requests", "status", "result", "cancel", "verify", "resume");
+    }
   }
 }

@@ -11,7 +11,10 @@ class WebPageContentExtractorTest {
   void extractsArticleTextWithoutChromeContent() {
     WebPageContentExtractor extractor = new JsoupWebPageContentExtractor();
 
-    String content = extractor.extract("https://example.com/article", """
+    String content =
+        extractor.extract(
+            "https://example.com/article",
+            """
         <html>
           <head>
             <script>console.log('ignore')</script>

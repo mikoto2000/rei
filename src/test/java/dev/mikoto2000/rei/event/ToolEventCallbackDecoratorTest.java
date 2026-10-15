@@ -14,18 +14,18 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.ToolCallbackProvider;
-import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
 class ToolEventCallbackDecoratorTest {
 
-  private final Clock clock = Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));
+  private final Clock clock =
+      Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));
   private final AgentEventFactory factory = new AgentEventFactory(clock);
   private final InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
   private final List<AgentEvent> received = new ArrayList<>();
@@ -83,19 +83,22 @@ class ToolEventCallbackDecoratorTest {
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {"readBinaryFile", "readPdfFile", "copyFile"})
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"readBinaryFile", "readPdfFile", "copyFile"})
   void missingFileReturnsFailureAndPreservesFailedEvent(String toolName) {
     bus.subscribe(received::add);
     var callback = delegate(toolName, "unused");
-    when(callback.call("input")).thenThrow(new IllegalStateException(
-        new java.nio.file.NoSuchFileException("PRIVATE_PATH")));
+    when(callback.call("input"))
+        .thenThrow(
+            new IllegalStateException(new java.nio.file.NoSuchFileException("PRIVATE_PATH")));
     String result = new ToolEventCallbackDecorator(callback, factory, bus).call("input");
 
     assertTrue(dev.mikoto2000.rei.core.stagnation.ProgressEvaluator.failedResult(result));
     assertTrue(result.contains("source_missing"));
     assertTrue(result.contains("findFile"));
     assertTrue(!result.contains("PRIVATE_PATH"));
-    assertEquals(List.of(AgentEventType.TOOL_STARTED, AgentEventType.TOOL_FAILED),
+    assertEquals(
+        List.of(AgentEventType.TOOL_STARTED, AgentEventType.TOOL_FAILED),
         received.stream().map(AgentEvent::type).toList());
     assertEquals(received.get(0).correlationId(), received.get(1).correlationId());
   }
@@ -104,10 +107,12 @@ class ToolEventCallbackDecoratorTest {
   void missingFileWithContextReturnsFailure() {
     bus.subscribe(received::add);
     var callback = delegate("readBinaryFile", "unused");
-    when(callback.call(eq("input"), any(ToolContext.class))).thenThrow(
-        new java.io.UncheckedIOException(new java.io.FileNotFoundException("PRIVATE_PATH")));
-    String result = new ToolEventCallbackDecorator(callback, factory, bus).call("input",
-        new ToolContext(java.util.Map.of("toolCallId", "missing-file-call")));
+    when(callback.call(eq("input"), any(ToolContext.class)))
+        .thenThrow(
+            new java.io.UncheckedIOException(new java.io.FileNotFoundException("PRIVATE_PATH")));
+    String result =
+        new ToolEventCallbackDecorator(callback, factory, bus)
+            .call("input", new ToolContext(java.util.Map.of("toolCallId", "missing-file-call")));
 
     assertTrue(dev.mikoto2000.rei.core.stagnation.ProgressEvaluator.failedResult(result));
     assertTrue(result.contains("file_unavailable"));
@@ -120,35 +125,48 @@ class ToolEventCallbackDecoratorTest {
     var callback = delegate("updateTaskState", "unused");
     var failure = new IllegalStateException(new java.nio.file.NoSuchFileException("storage"));
     when(callback.call("input")).thenThrow(failure);
-    assertSame(failure, assertThrows(IllegalStateException.class,
-        () -> new ToolEventCallbackDecorator(callback, factory, bus).call("input")));
+    assertSame(
+        failure,
+        assertThrows(
+            IllegalStateException.class,
+            () -> new ToolEventCallbackDecorator(callback, factory, bus).call("input")));
   }
 
   @Test
   void unrelatedFailuresStillPropagate() {
     var callback = delegate("readBinaryFile", "unused");
-    for (var failure : List.of(
-        new java.io.UncheckedIOException(new java.nio.file.AccessDeniedException("denied")),
-        new IllegalStateException(new java.io.IOException("disk failure")),
-        new SecurityException("denied"),
-        new IllegalStateException(new java.util.concurrent.CancellationException()))) {
+    for (var failure :
+        List.of(
+            new java.io.UncheckedIOException(new java.nio.file.AccessDeniedException("denied")),
+            new IllegalStateException(new java.io.IOException("disk failure")),
+            new SecurityException("denied"),
+            new IllegalStateException(new java.util.concurrent.CancellationException()))) {
       org.mockito.Mockito.doThrow(failure).when(callback).call("input");
-      assertSame(failure, assertThrows(RuntimeException.class,
-          () -> new ToolEventCallbackDecorator(callback, factory, bus).call("input")));
+      assertSame(
+          failure,
+          assertThrows(
+              RuntimeException.class,
+              () -> new ToolEventCallbackDecorator(callback, factory, bus).call("input")));
     }
   }
 
   @Test
   void cancellationDuringMissingFileReadStillPropagates() {
     var callback = delegate("readBinaryFile", "unused");
-    var failure = new java.io.UncheckedIOException(new java.nio.file.NoSuchFileException("missing"));
-    when(callback.call("input")).thenAnswer(invocation -> {
-      Thread.currentThread().interrupt();
-      throw failure;
-    });
+    var failure =
+        new java.io.UncheckedIOException(new java.nio.file.NoSuchFileException("missing"));
+    when(callback.call("input"))
+        .thenAnswer(
+            invocation -> {
+              Thread.currentThread().interrupt();
+              throw failure;
+            });
     try {
-      assertSame(failure, assertThrows(RuntimeException.class,
-          () -> new ToolEventCallbackDecorator(callback, factory, bus).call("input")));
+      assertSame(
+          failure,
+          assertThrows(
+              RuntimeException.class,
+              () -> new ToolEventCallbackDecorator(callback, factory, bus).call("input")));
     } finally {
       Thread.interrupted();
     }
@@ -182,8 +200,7 @@ class ToolEventCallbackDecoratorTest {
     ToolCallback b = delegate("toolB", "b");
     ToolCallbackProvider provider = mock(ToolCallbackProvider.class);
     when(provider.getToolCallbacks()).thenReturn(new ToolCallback[] {a, b});
-    ToolCallbackProvider decoratedProvider =
-        new ToolEventCallbackProvider(provider, factory, bus);
+    ToolCallbackProvider decoratedProvider = new ToolEventCallbackProvider(provider, factory, bus);
 
     ToolCallback[] callbacks = decoratedProvider.getToolCallbacks();
 
@@ -228,10 +245,10 @@ class ToolEventCallbackDecoratorTest {
   @Test
   void methodToolProviderCallbacksAreObserved() {
     bus.subscribe(received::add);
-    MethodToolCallbackProvider provider = MethodToolCallbackProvider.builder()
-        .toolObjects(new SampleMethodTools())
-        .build();
-    ToolCallback decorated = new ToolEventCallbackProvider(provider, factory, bus).getToolCallbacks()[0];
+    MethodToolCallbackProvider provider =
+        MethodToolCallbackProvider.builder().toolObjects(new SampleMethodTools()).build();
+    ToolCallback decorated =
+        new ToolEventCallbackProvider(provider, factory, bus).getToolCallbacks()[0];
 
     assertEquals("\"hello Rei\"", decorated.call("{\"name\":\"Rei\"}"));
     assertEquals(AgentEventType.TOOL_STARTED, received.get(0).type());

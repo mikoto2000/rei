@@ -1,19 +1,20 @@
 package dev.mikoto2000.rei.image;
 
+import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Base64;
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
-
-import dev.mikoto2000.rei.core.service.CommandCancellationService;
 
 @Service
 public class ImageGenerationService {
   private dev.mikoto2000.rei.artifact.ArtifactStore artifacts;
-  @Autowired(required=false)
-  public void setArtifactStore(dev.mikoto2000.rei.artifact.ArtifactStore artifacts){this.artifacts=artifacts;}
+
+  @Autowired(required = false)
+  public void setArtifactStore(dev.mikoto2000.rei.artifact.ArtifactStore artifacts) {
+    this.artifacts = artifacts;
+  }
 
   private final ImageGenerationClient client;
   private final ImageOutputPathResolver outputPathResolver;
@@ -22,23 +23,44 @@ public class ImageGenerationService {
   private final ImageProperties properties;
 
   @Autowired
-  public ImageGenerationService(ImageGenerationClient client, ImageProperties properties,
-      CommandCancellationService cancellationService, ImagePromptEnhancer promptEnhancer) {
-    this(client, new ImageOutputPathResolver(Path.of("").toAbsolutePath().normalize(), properties,
-        java.time.Clock.systemDefaultZone()), cancellationService, promptEnhancer, properties);
+  public ImageGenerationService(
+      ImageGenerationClient client,
+      ImageProperties properties,
+      CommandCancellationService cancellationService,
+      ImagePromptEnhancer promptEnhancer) {
+    this(
+        client,
+        new ImageOutputPathResolver(
+            Path.of("").toAbsolutePath().normalize(),
+            properties,
+            java.time.Clock.systemDefaultZone()),
+        cancellationService,
+        promptEnhancer,
+        properties);
   }
 
   ImageGenerationService(ImageGenerationClient client, ImageOutputPathResolver outputPathResolver) {
     this(client, outputPathResolver, null, new NoOpImagePromptEnhancer(), new ImageProperties());
   }
 
-  ImageGenerationService(ImageGenerationClient client, ImageOutputPathResolver outputPathResolver,
+  ImageGenerationService(
+      ImageGenerationClient client,
+      ImageOutputPathResolver outputPathResolver,
       CommandCancellationService cancellationService) {
-    this(client, outputPathResolver, cancellationService, new NoOpImagePromptEnhancer(), new ImageProperties());
+    this(
+        client,
+        outputPathResolver,
+        cancellationService,
+        new NoOpImagePromptEnhancer(),
+        new ImageProperties());
   }
 
-  ImageGenerationService(ImageGenerationClient client, ImageOutputPathResolver outputPathResolver,
-      CommandCancellationService cancellationService, ImagePromptEnhancer promptEnhancer, ImageProperties properties) {
+  ImageGenerationService(
+      ImageGenerationClient client,
+      ImageOutputPathResolver outputPathResolver,
+      CommandCancellationService cancellationService,
+      ImagePromptEnhancer promptEnhancer,
+      ImageProperties properties) {
     this.client = client;
     this.outputPathResolver = outputPathResolver;
     this.cancellationService = cancellationService;
@@ -71,14 +93,33 @@ public class ImageGenerationService {
         Files.createDirectories(outputPath.getParent());
       }
       Files.write(outputPath, bytes);
-      var owner=dev.mikoto2000.rei.core.chat.AgentRunScope.current();
-      String artifact=artifacts!=null&&owner!=null&&owner.projectId()!=null?
-          artifacts.publish(owner,"image:"+java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(outputPath.getFileName().toString().getBytes(java.nio.charset.StandardCharsets.UTF_8))),"image/png",outputPath.getFileName().toString(),bytes).artifactId():null;
-      return ImageGenerationResult.success(outputPath,effectiveRequest.prompt(),artifact);
+      var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+      String artifact =
+          artifacts != null && owner != null && owner.projectId() != null
+              ? artifacts
+                  .publish(
+                      owner,
+                      "image:"
+                          + java.util.HexFormat.of()
+                              .formatHex(
+                                  java.security.MessageDigest.getInstance("SHA-256")
+                                      .digest(
+                                          outputPath
+                                              .getFileName()
+                                              .toString()
+                                              .getBytes(java.nio.charset.StandardCharsets.UTF_8))),
+                      "image/png",
+                      outputPath.getFileName().toString(),
+                      bytes)
+                  .artifactId()
+              : null;
+      return ImageGenerationResult.success(outputPath, effectiveRequest.prompt(), artifact);
     } catch (IllegalArgumentException e) {
       return ImageGenerationResult.failure("画像データのデコードに失敗しました");
     } catch (Exception e) {
-      if(dev.mikoto2000.rei.core.chat.RunCancellation.isCancellation(e)||Thread.currentThread().isInterrupted())return ImageGenerationResult.failure("cancelled");
+      if (dev.mikoto2000.rei.core.chat.RunCancellation.isCancellation(e)
+          || Thread.currentThread().isInterrupted())
+        return ImageGenerationResult.failure("cancelled");
       return ImageGenerationResult.failure(sanitizeMessage(e));
     }
   }
@@ -99,7 +140,8 @@ public class ImageGenerationService {
     if (enhancedPrompt == null || enhancedPrompt.isBlank()) {
       throw new IllegalStateException("画像生成プロンプト生成結果が空です");
     }
-    return new ImageGenerationRequest(enhancedPrompt.strip(), request.outputPath(), request.model(), request.size(), false);
+    return new ImageGenerationRequest(
+        enhancedPrompt.strip(), request.outputPath(), request.model(), request.size(), false);
   }
 
   private boolean isCancellationRequested() {

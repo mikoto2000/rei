@@ -29,20 +29,24 @@ class TextToolsTest {
 
   @Test
   void methodToolProviderRegistersCountCharactersTool() throws Exception {
-    Tool annotation = TextTools.class.getDeclaredMethod("countCharacters", String.class)
-        .getAnnotation(Tool.class);
+    Tool annotation =
+        TextTools.class
+            .getDeclaredMethod("countCharacters", String.class)
+            .getAnnotation(Tool.class);
 
     assertEquals("countCharacters", annotation.name());
     assertTrue(annotation.description().contains("文字数"));
     assertTrue(annotation.description().contains("Unicode code point"));
 
-    var callback = java.util.Arrays.stream(MethodToolCallbackProvider.builder()
-        .toolObjects(new TextTools())
-        .build()
-        .getToolCallbacks())
-        .filter(candidate -> "countCharacters".equals(candidate.getToolDefinition().name()))
-        .findFirst()
-        .orElseThrow();
+    var callback =
+        java.util.Arrays.stream(
+                MethodToolCallbackProvider.builder()
+                    .toolObjects(new TextTools())
+                    .build()
+                    .getToolCallbacks())
+            .filter(candidate -> "countCharacters".equals(candidate.getToolDefinition().name()))
+            .findFirst()
+            .orElseThrow();
 
     assertTrue(callback.getToolDefinition().inputSchema().contains("text"));
   }

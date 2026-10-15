@@ -1,8 +1,7 @@
 package dev.mikoto2000.rei.llm;
 
-import java.io.IOException;
-
 import dev.mikoto2000.rei.computeruse.ShowUiRequestInterceptor;
+import java.io.IOException;
 import okhttp3.Interceptor;
 import okhttp3.RequestBody;
 import okhttp3.Response;
@@ -14,7 +13,10 @@ public final class ShowUiSdkRequestInterceptor implements Interceptor {
   public Response intercept(Chain chain) throws IOException {
     var request = chain.request();
     var body = request.body();
-    if (body == null || body.isOneShot() || body.isDuplex() || !request.url().encodedPath().endsWith("/chat/completions")) {
+    if (body == null
+        || body.isOneShot()
+        || body.isDuplex()
+        || !request.url().encodedPath().endsWith("/chat/completions")) {
       return chain.proceed(request);
     }
     var buffer = new Buffer();
@@ -22,7 +24,10 @@ public final class ShowUiSdkRequestInterceptor implements Interceptor {
     byte[] original = buffer.readByteArray();
     byte[] rewritten = ShowUiRequestInterceptor.rewriteBody(original);
     if (java.util.Arrays.equals(original, rewritten)) return chain.proceed(request);
-    return chain.proceed(request.newBuilder()
-        .method(request.method(), RequestBody.create(rewritten, body.contentType())).build());
+    return chain.proceed(
+        request
+            .newBuilder()
+            .method(request.method(), RequestBody.create(rewritten, body.contentType()))
+            .build());
   }
 }

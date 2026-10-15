@@ -1,24 +1,22 @@
 package dev.mikoto2000.rei.event;
 
-import java.time.Clock;
-import java.time.Duration;
-import java.time.Instant;
-import java.util.List;
-import java.util.UUID;
-
-import org.springframework.stereotype.Component;
-
 import dev.mikoto2000.rei.topic.IdleTriggerRejectReason;
 import dev.mikoto2000.rei.topic.TopicGenerationStage;
 import dev.mikoto2000.rei.topic.TopicRejectionReason;
 import dev.mikoto2000.rei.topic.TopicScoreBreakdown;
 import dev.mikoto2000.rei.topic.TopicSpeakSkipReason;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
+import org.springframework.stereotype.Component;
 
 /**
  * Agent Event を作成する Factory。
  *
- * <p>呼び出し側が大量の boilerplate を書かず、イベント内容に集中できる API を提供する。
- * 各メソッドは Envelope の共通属性（id / timestamp / version など）を自動的に埋める。</p>
+ * <p>呼び出し側が大量の boilerplate を書かず、イベント内容に集中できる API を提供する。 各メソッドは Envelope の共通属性（id / timestamp /
+ * version など）を自動的に埋める。
  */
 @Component
 public class AgentEventFactory {
@@ -33,75 +31,182 @@ public class AgentEventFactory {
 
   // ---- Agent Run ----
 
-  public AgentEvent memory(AgentEventType type, String project, String session, MemoryLifecyclePayload payload) {
-    if(type!=AgentEventType.AUTO_SLEEP_STOPPED && type!=AgentEventType.MEMORY_SLEEP_STARTED && type!=AgentEventType.MEMORY_SLEEP_COMPLETED
-        && type!=AgentEventType.MEMORY_SLEEP_FAILED && type!=AgentEventType.MEMORY_RETRIEVAL_COMPLETED)
+  public AgentEvent memory(
+      AgentEventType type, String project, String session, MemoryLifecyclePayload payload) {
+    if (type != AgentEventType.AUTO_SLEEP_STOPPED
+        && type != AgentEventType.MEMORY_SLEEP_STARTED
+        && type != AgentEventType.MEMORY_SLEEP_COMPLETED
+        && type != AgentEventType.MEMORY_SLEEP_FAILED
+        && type != AgentEventType.MEMORY_RETRIEVAL_COMPLETED)
       throw new IllegalArgumentException("Not a memory event");
-    return new AgentEvent(UUID.randomUUID().toString(),0L,Instant.now(clock),type,VERSION,session,null,
-        null,payload.sleepRunId(),null,payload,project);
+    return new AgentEvent(
+        UUID.randomUUID().toString(),
+        0L,
+        Instant.now(clock),
+        type,
+        VERSION,
+        session,
+        null,
+        null,
+        payload.sleepRunId(),
+        null,
+        payload,
+        project);
   }
 
   public AgentEvent applicationShutdownStarted(String reason) {
     // Do not inherit the run/execution scope of the thread initiating shutdown.
-    return new AgentEvent(UUID.randomUUID().toString(), 0L, Instant.now(clock),
-        AgentEventType.APPLICATION_SHUTDOWN_STARTED, VERSION, null, null, null, null, null,
+    return new AgentEvent(
+        UUID.randomUUID().toString(),
+        0L,
+        Instant.now(clock),
+        AgentEventType.APPLICATION_SHUTDOWN_STARTED,
+        VERSION,
+        null,
+        null,
+        null,
+        null,
+        null,
         new ApplicationShutdownStartedPayload(reason));
   }
 
   public AgentEvent contextCompression(AgentEventType type, ContextCompressionPayload payload) {
-    if (type != AgentEventType.CONTEXT_COMPRESSION_STARTED && type != AgentEventType.CONTEXT_COMPRESSION_COMPLETED
+    if (type != AgentEventType.CONTEXT_COMPRESSION_STARTED
+        && type != AgentEventType.CONTEXT_COMPRESSION_COMPLETED
         && type != AgentEventType.CONTEXT_COMPRESSION_FAILED
-        && type != AgentEventType.CONTEXT_COMPRESSION_SKIPPED) throw new IllegalArgumentException("Not a compression event");
+        && type != AgentEventType.CONTEXT_COMPRESSION_SKIPPED)
+      throw new IllegalArgumentException("Not a compression event");
     return newEvent(type, null, null, payload);
   }
 
-  public AgentEvent delegation(AgentEventType type, String runId, ExternalAgentLifecyclePayload payload) {
-    if (type != AgentEventType.DELEGATION_STARTED && type != AgentEventType.DELEGATION_COMPLETED
-        && type != AgentEventType.DELEGATION_FAILED && type != AgentEventType.DELEGATION_CANCELLED)
+  public AgentEvent delegation(
+      AgentEventType type, String runId, ExternalAgentLifecyclePayload payload) {
+    if (type != AgentEventType.DELEGATION_STARTED
+        && type != AgentEventType.DELEGATION_COMPLETED
+        && type != AgentEventType.DELEGATION_FAILED
+        && type != AgentEventType.DELEGATION_CANCELLED)
       throw new IllegalArgumentException("Not an external delegation event");
     return newEvent(type, runId, payload.delegationId(), payload);
   }
 
   public AgentEvent computerUseProgress(dev.mikoto2000.rei.computeruse.ComputerProgress progress) {
-    return newEvent(AgentEventType.COMPUTER_USE_PROGRESS, null, null,
-        new ComputerUseProgressPayload(progress.step(), progress.phase(), progress.action(), progress.target(),
-            progress.x(), progress.y(), progress.confidence(), progress.reason()));
+    return newEvent(
+        AgentEventType.COMPUTER_USE_PROGRESS,
+        null,
+        null,
+        new ComputerUseProgressPayload(
+            progress.step(),
+            progress.phase(),
+            progress.action(),
+            progress.target(),
+            progress.x(),
+            progress.y(),
+            progress.confidence(),
+            progress.reason()));
   }
 
-  public AgentEvent subAgentLifecycle(AgentEventType type, String parentRunId, String subAgentRunId,
-      String agentId, String task, String status, long duration, String failureReason) {
-    if (type != AgentEventType.SUBAGENT_STARTED && type != AgentEventType.SUBAGENT_COMPLETED
-        && type != AgentEventType.SUBAGENT_FAILED) throw new IllegalArgumentException("Not a SubAgent lifecycle event");
-    return newEvent(type, subAgentRunId, parentRunId,
-        new SubAgentLifecyclePayload(parentRunId, subAgentRunId, bounded(agentId, 64), bounded(task, 120),
-            status, duration, bounded(failureReason, 120)));
+  public AgentEvent subAgentLifecycle(
+      AgentEventType type,
+      String parentRunId,
+      String subAgentRunId,
+      String agentId,
+      String task,
+      String status,
+      long duration,
+      String failureReason) {
+    if (type != AgentEventType.SUBAGENT_STARTED
+        && type != AgentEventType.SUBAGENT_COMPLETED
+        && type != AgentEventType.SUBAGENT_FAILED)
+      throw new IllegalArgumentException("Not a SubAgent lifecycle event");
+    return newEvent(
+        type,
+        subAgentRunId,
+        parentRunId,
+        new SubAgentLifecyclePayload(
+            parentRunId,
+            subAgentRunId,
+            bounded(agentId, 64),
+            bounded(task, 120),
+            status,
+            duration,
+            bounded(failureReason, 120)));
   }
 
-  public AgentEvent subAgentLifecycle(AgentEventType type,String parentRunId,String subAgentRunId,String agentId,
-      String task,String status,long duration,String failureReason,String backendId,String modelId,Integer totalTokens) {
-    var base=subAgentLifecycle(type,parentRunId,subAgentRunId,agentId,task,status,duration,failureReason);
-    var original=(SubAgentLifecyclePayload)base.payload();
-    var payload=new SubAgentLifecyclePayload(original.parentRunId(),original.subAgentRunId(),original.agentId(),
-        original.taskSummary(),original.status(),original.duration(),subAgentFailureReason(failureReason),backendId,modelId,totalTokens);
-    return new AgentEvent(base.id(),base.sequence(),base.timestamp(),base.type(),base.version(),base.sessionId(),base.turnId(),base.runId(),base.correlationId(),base.parentEventId(),payload,base.projectId());
+  public AgentEvent subAgentLifecycle(
+      AgentEventType type,
+      String parentRunId,
+      String subAgentRunId,
+      String agentId,
+      String task,
+      String status,
+      long duration,
+      String failureReason,
+      String backendId,
+      String modelId,
+      Integer totalTokens) {
+    var base =
+        subAgentLifecycle(
+            type, parentRunId, subAgentRunId, agentId, task, status, duration, failureReason);
+    var original = (SubAgentLifecyclePayload) base.payload();
+    var payload =
+        new SubAgentLifecyclePayload(
+            original.parentRunId(),
+            original.subAgentRunId(),
+            original.agentId(),
+            original.taskSummary(),
+            original.status(),
+            original.duration(),
+            subAgentFailureReason(failureReason),
+            backendId,
+            modelId,
+            totalTokens);
+    return new AgentEvent(
+        base.id(),
+        base.sequence(),
+        base.timestamp(),
+        base.type(),
+        base.version(),
+        base.sessionId(),
+        base.turnId(),
+        base.runId(),
+        base.correlationId(),
+        base.parentEventId(),
+        payload,
+        base.projectId());
   }
 
   /** Keep a bounded, redacted diagnostic identical in external child receipts and notifications. */
-  public String subAgentFailureReason(String reason) {return bounded(reason,1000);}
+  public String subAgentFailureReason(String reason) {
+    return bounded(reason, 1000);
+  }
 
   public AgentEvent historySearchCompleted(HistorySearchCompletedPayload payload) {
     var event = newEvent(AgentEventType.HISTORY_SEARCH_COMPLETED, null, null, payload);
-    return new AgentEvent(event.id(), event.sequence(), event.timestamp(), event.type(), event.version(),
-        event.sessionId(), event.turnId(), event.runId(), event.correlationId(), event.parentEventId(), event.payload(),
+    return new AgentEvent(
+        event.id(),
+        event.sequence(),
+        event.timestamp(),
+        event.type(),
+        event.version(),
+        event.sessionId(),
+        event.turnId(),
+        event.runId(),
+        event.correlationId(),
+        event.parentEventId(),
+        event.payload(),
         event.projectId() == null ? payload.preferredProjectId() : event.projectId());
   }
 
-  public AgentEvent executionProgress(AgentEventType type, String runId, ExecutionProgressPayload payload) {
+  public AgentEvent executionProgress(
+      AgentEventType type, String runId, ExecutionProgressPayload payload) {
     return newEvent(type, runId, null, payload);
   }
 
   public AgentEvent runStarted(String runId, String reason, String parentRunId) {
-    return newEvent(AgentEventType.AGENT_RUN_STARTED, runId, null,
+    return newEvent(
+        AgentEventType.AGENT_RUN_STARTED,
+        runId,
+        null,
         new AgentRunStartedPayload(runId, reason, parentRunId));
   }
 
@@ -113,276 +218,480 @@ public class AgentEventFactory {
     return runCompleted(runId, duration, completionTokens, null);
   }
 
-  public AgentEvent runCompleted(String runId, long duration, Long completionTokens, Double tokensPerSecond) {
+  public AgentEvent runCompleted(
+      String runId, long duration, Long completionTokens, Double tokensPerSecond) {
     return runCompleted(runId, duration, completionTokens, null, tokensPerSecond, null);
   }
 
-  public AgentEvent runCompleted(String runId, long duration, Long completionTokens, Double timeToFirstTokenMillis,
-      Double outputTokensPerSecond, Double endToEndTokensPerSecond) {
-    return newEvent(AgentEventType.AGENT_RUN_COMPLETED, runId, null,
-        new AgentRunCompletedPayload(runId, duration, completionTokens, timeToFirstTokenMillis,
-            outputTokensPerSecond, endToEndTokensPerSecond));
+  public AgentEvent runCompleted(
+      String runId,
+      long duration,
+      Long completionTokens,
+      Double timeToFirstTokenMillis,
+      Double outputTokensPerSecond,
+      Double endToEndTokensPerSecond) {
+    return newEvent(
+        AgentEventType.AGENT_RUN_COMPLETED,
+        runId,
+        null,
+        new AgentRunCompletedPayload(
+            runId,
+            duration,
+            completionTokens,
+            timeToFirstTokenMillis,
+            outputTokensPerSecond,
+            endToEndTokensPerSecond));
   }
 
   public AgentEvent runFailed(String runId, ErrorInformation error) {
-    return newEvent(AgentEventType.AGENT_RUN_FAILED, runId, null,
-        new AgentRunFailedPayload(runId, error));
+    return newEvent(
+        AgentEventType.AGENT_RUN_FAILED, runId, null, new AgentRunFailedPayload(runId, error));
   }
 
   public AgentEvent runCancelled(String runId, ErrorInformation error) {
-    return newEvent(AgentEventType.AGENT_RUN_CANCELLED, runId, null,
-        new AgentRunFailedPayload(runId, error));
+    return newEvent(
+        AgentEventType.AGENT_RUN_CANCELLED, runId, null, new AgentRunFailedPayload(runId, error));
   }
 
   // ---- LLM ----
 
   public AgentEvent llmRequestStarted(String runId, String requestId, String feature) {
-    return newEvent(AgentEventType.LLM_REQUEST_STARTED, runId, requestId,
+    return newEvent(
+        AgentEventType.LLM_REQUEST_STARTED,
+        runId,
+        requestId,
         new LlmRequestStartedPayload(requestId, feature));
   }
 
-  public AgentEvent llmRequestFailed(String runId, String requestId, long durationMs, Throwable error) {
-    return newEvent(AgentEventType.LLM_REQUEST_FAILED, runId, requestId,
-        new LlmRequestFailedPayload(requestId, durationMs,
+  public AgentEvent llmRequestFailed(
+      String runId, String requestId, long durationMs, Throwable error) {
+    return newEvent(
+        AgentEventType.LLM_REQUEST_FAILED,
+        runId,
+        requestId,
+        new LlmRequestFailedPayload(
+            requestId,
+            durationMs,
             dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(error)));
   }
 
   public AgentEvent llmResponseFirstToken(String runId, String requestId, long durationMs) {
-    return newEvent(AgentEventType.LLM_RESPONSE_FIRST_TOKEN, runId, requestId,
+    return newEvent(
+        AgentEventType.LLM_RESPONSE_FIRST_TOKEN,
+        runId,
+        requestId,
         new LlmResponseFirstTokenPayload(requestId, durationMs));
   }
 
   public AgentEvent llmResponseCompleted(String runId, String requestId, long durationMs) {
-    return newEvent(AgentEventType.LLM_RESPONSE_COMPLETED, runId, requestId,
+    return newEvent(
+        AgentEventType.LLM_RESPONSE_COMPLETED,
+        runId,
+        requestId,
         new LlmResponseCompletedPayload(requestId, durationMs));
   }
 
   // ---- Message ----
 
   public AgentEvent messageStarted(String messageId, String role) {
-    return newEvent(AgentEventType.MESSAGE_STARTED, null, null,
-        new MessageStartedPayload(messageId, role));
+    return newEvent(
+        AgentEventType.MESSAGE_STARTED, null, null, new MessageStartedPayload(messageId, role));
   }
 
   public AgentEvent messageDelta(String messageId, String delta) {
-    return newEvent(AgentEventType.MESSAGE_DELTA, null, null,
-        new MessageDeltaPayload(messageId, delta));
+    return newEvent(
+        AgentEventType.MESSAGE_DELTA, null, null, new MessageDeltaPayload(messageId, delta));
   }
 
   public AgentEvent messageCompleted(String messageId, String role, String text) {
-    return newEvent(AgentEventType.MESSAGE_COMPLETED, null, null,
+    return newEvent(
+        AgentEventType.MESSAGE_COMPLETED,
+        null,
+        null,
         new MessageCompletedPayload(messageId, role, text));
   }
 
   public AgentEvent memoryConsolidationSuggested() {
-    return newEvent(AgentEventType.MEMORY_CONSOLIDATION_SUGGESTED, null, null,
+    return newEvent(
+        AgentEventType.MEMORY_CONSOLIDATION_SUGGESTED,
+        null,
+        null,
         new MemoryConsolidationSuggestedPayload());
   }
 
   // ---- Thinking ----
 
   public AgentEvent thinkingStarted(String thinkingId) {
-    return newEvent(AgentEventType.THINKING_STARTED, null, null,
-        new ThinkingStartedPayload(thinkingId));
+    return newEvent(
+        AgentEventType.THINKING_STARTED, null, null, new ThinkingStartedPayload(thinkingId));
   }
 
   public AgentEvent thinkingDelta(String thinkingId, String delta) {
-    return newEvent(AgentEventType.THINKING_DELTA, null, null,
-        new ThinkingDeltaPayload(thinkingId, delta));
+    return newEvent(
+        AgentEventType.THINKING_DELTA, null, null, new ThinkingDeltaPayload(thinkingId, delta));
   }
 
   public AgentEvent thinkingCompleted(String thinkingId, String text) {
-    return newEvent(AgentEventType.THINKING_COMPLETED, null, null,
+    return newEvent(
+        AgentEventType.THINKING_COMPLETED,
+        null,
+        null,
         new ThinkingCompletedPayload(thinkingId, text));
   }
 
   // ---- Tool ----
 
   public AgentEvent toolStarted(String toolCallId, String toolName, String argumentsSummary) {
-    return newEvent(AgentEventType.TOOL_STARTED, null, toolCallId,
+    return newEvent(
+        AgentEventType.TOOL_STARTED,
+        null,
+        toolCallId,
         new ToolStartedPayload(toolCallId, toolName, argumentsSummary, null));
   }
 
-  public AgentEvent toolStarted(String toolCallId, String toolName, String argumentsSummary, String summary) {
-    return newEvent(AgentEventType.TOOL_STARTED, null, toolCallId,
+  public AgentEvent toolStarted(
+      String toolCallId, String toolName, String argumentsSummary, String summary) {
+    return newEvent(
+        AgentEventType.TOOL_STARTED,
+        null,
+        toolCallId,
         new ToolStartedPayload(toolCallId, toolName, argumentsSummary, summary));
   }
 
-  public AgentEvent toolCompleted(String toolCallId, String toolName, long duration, String resultSummary) {
-    return newEvent(AgentEventType.TOOL_COMPLETED, null, toolCallId,
-        new ToolCompletedPayload(toolCallId, toolName, duration, resultSummary, null, null, null, null));
+  public AgentEvent toolCompleted(
+      String toolCallId, String toolName, long duration, String resultSummary) {
+    return newEvent(
+        AgentEventType.TOOL_COMPLETED,
+        null,
+        toolCallId,
+        new ToolCompletedPayload(
+            toolCallId, toolName, duration, resultSummary, null, null, null, null));
   }
 
-  public AgentEvent toolCompleted(String toolCallId, String toolName, long duration, String resultSummary,
-      Integer files, Long bytes, Integer matches, Integer items) {
-    return newEvent(AgentEventType.TOOL_COMPLETED, null, toolCallId,
-        new ToolCompletedPayload(toolCallId, toolName, duration, resultSummary, files, bytes, matches, items));
+  public AgentEvent toolCompleted(
+      String toolCallId,
+      String toolName,
+      long duration,
+      String resultSummary,
+      Integer files,
+      Long bytes,
+      Integer matches,
+      Integer items) {
+    return newEvent(
+        AgentEventType.TOOL_COMPLETED,
+        null,
+        toolCallId,
+        new ToolCompletedPayload(
+            toolCallId, toolName, duration, resultSummary, files, bytes, matches, items));
   }
 
   public AgentEvent toolFailed(String toolCallId, String toolName, ErrorInformation error) {
-    return newEvent(AgentEventType.TOOL_FAILED, null, toolCallId,
+    return newEvent(
+        AgentEventType.TOOL_FAILED,
+        null,
+        toolCallId,
         new ToolFailedPayload(toolCallId, toolName, error));
   }
 
   // ---- Skill selection ----
 
   public AgentEvent skillSelectionStarted(String selectionId) {
-    return newEvent(AgentEventType.SKILL_SELECTION_STARTED, null, selectionId,
+    return newEvent(
+        AgentEventType.SKILL_SELECTION_STARTED,
+        null,
+        selectionId,
         new SkillSelectionStartedPayload(selectionId));
   }
 
-  public AgentEvent skillSelectionCompleted(String selectionId, java.util.List<String> explicitSkillNames,
-      java.util.List<String> implicitSkillNames, java.util.List<String> warnings) {
-    return newEvent(AgentEventType.SKILL_SELECTION_COMPLETED, null, selectionId,
-        new SkillSelectionCompletedPayload(selectionId, explicitSkillNames, implicitSkillNames, warnings));
+  public AgentEvent skillSelectionCompleted(
+      String selectionId,
+      java.util.List<String> explicitSkillNames,
+      java.util.List<String> implicitSkillNames,
+      java.util.List<String> warnings) {
+    return newEvent(
+        AgentEventType.SKILL_SELECTION_COMPLETED,
+        null,
+        selectionId,
+        new SkillSelectionCompletedPayload(
+            selectionId, explicitSkillNames, implicitSkillNames, warnings));
   }
 
   public AgentEvent skillSelectionFailed(String selectionId, ErrorInformation error) {
-    return newEvent(AgentEventType.SKILL_SELECTION_FAILED, null, selectionId,
+    return newEvent(
+        AgentEventType.SKILL_SELECTION_FAILED,
+        null,
+        selectionId,
         new SkillSelectionFailedPayload(selectionId, error));
   }
 
-  public AgentEvent skillRoutingStarted(String runId, String routingId, int candidateCount,
-      int routingInvocation) {
-    return newEvent(AgentEventType.SKILL_ROUTING_STARTED, runId, routingId,
+  public AgentEvent skillRoutingStarted(
+      String runId, String routingId, int candidateCount, int routingInvocation) {
+    return newEvent(
+        AgentEventType.SKILL_ROUTING_STARTED,
+        runId,
+        routingId,
         new SkillRoutingStartedPayload(candidateCount, routingInvocation));
   }
 
-  public AgentEvent skillRoutingCompleted(String runId, String routingId, long durationMs, int candidateCount,
-      String selectedSkill, int routingInvocation, Long selectorDurationMs, Long metadataLoadDurationMs,
-      Long skillLoadDurationMs, java.util.List<String> explicitSkillNames,
-      java.util.List<String> implicitSkillNames, java.util.List<String> warnings) {
-    return newEvent(AgentEventType.SKILL_ROUTING_COMPLETED, runId, routingId,
-        new SkillRoutingCompletedPayload(durationMs, candidateCount, selectedSkill, routingInvocation,
-            selectorDurationMs, metadataLoadDurationMs, skillLoadDurationMs, explicitSkillNames,
-            implicitSkillNames, warnings));
+  public AgentEvent skillRoutingCompleted(
+      String runId,
+      String routingId,
+      long durationMs,
+      int candidateCount,
+      String selectedSkill,
+      int routingInvocation,
+      Long selectorDurationMs,
+      Long metadataLoadDurationMs,
+      Long skillLoadDurationMs,
+      java.util.List<String> explicitSkillNames,
+      java.util.List<String> implicitSkillNames,
+      java.util.List<String> warnings) {
+    return newEvent(
+        AgentEventType.SKILL_ROUTING_COMPLETED,
+        runId,
+        routingId,
+        new SkillRoutingCompletedPayload(
+            durationMs,
+            candidateCount,
+            selectedSkill,
+            routingInvocation,
+            selectorDurationMs,
+            metadataLoadDurationMs,
+            skillLoadDurationMs,
+            explicitSkillNames,
+            implicitSkillNames,
+            warnings));
   }
 
-  public AgentEvent skillRoutingFailed(String runId, String routingId, long durationMs, int candidateCount,
-      int routingInvocation, ErrorInformation error) {
-    return newEvent(AgentEventType.SKILL_ROUTING_FAILED, runId, routingId,
+  public AgentEvent skillRoutingFailed(
+      String runId,
+      String routingId,
+      long durationMs,
+      int candidateCount,
+      int routingInvocation,
+      ErrorInformation error) {
+    return newEvent(
+        AgentEventType.SKILL_ROUTING_FAILED,
+        runId,
+        routingId,
         new SkillRoutingFailedPayload(durationMs, candidateCount, routingInvocation, error));
   }
 
-  public AgentEvent skillCandidatesEvaluated(String runId, String routingId, int totalSkillCount,
-      long durationMs, String actualSelectedSkill, boolean selected, Boolean top1Hit, Boolean top3Hit,
-      Boolean top5Hit, java.util.List<SkillCandidatesEvaluatedPayload.CandidateScore> topCandidates) {
-    return newEvent(AgentEventType.SKILL_CANDIDATES_EVALUATED, runId, routingId,
-        new SkillCandidatesEvaluatedPayload(totalSkillCount, topCandidates.size(), durationMs, actualSelectedSkill,
-            selected, top1Hit, top3Hit, top5Hit, topCandidates));
+  public AgentEvent skillCandidatesEvaluated(
+      String runId,
+      String routingId,
+      int totalSkillCount,
+      long durationMs,
+      String actualSelectedSkill,
+      boolean selected,
+      Boolean top1Hit,
+      Boolean top3Hit,
+      Boolean top5Hit,
+      java.util.List<SkillCandidatesEvaluatedPayload.CandidateScore> topCandidates) {
+    return newEvent(
+        AgentEventType.SKILL_CANDIDATES_EVALUATED,
+        runId,
+        routingId,
+        new SkillCandidatesEvaluatedPayload(
+            totalSkillCount,
+            topCandidates.size(),
+            durationMs,
+            actualSelectedSkill,
+            selected,
+            top1Hit,
+            top3Hit,
+            top5Hit,
+            topCandidates));
   }
 
   // ---- Task ----
 
   public AgentEvent taskCreated(String taskId, String parentTaskId, String title, String status) {
-    return newEvent(AgentEventType.TASK_CREATED, null, null,
+    return newEvent(
+        AgentEventType.TASK_CREATED,
+        null,
+        null,
         new TaskCreatedPayload(taskId, parentTaskId, title, status));
   }
 
   public AgentEvent taskStarted(String taskId) {
-    return newEvent(AgentEventType.TASK_STARTED, null, null,
-        new TaskStartedPayload(taskId));
+    return newEvent(AgentEventType.TASK_STARTED, null, null, new TaskStartedPayload(taskId));
   }
 
   public AgentEvent taskCompleted(String taskId, Long duration) {
-    return newEvent(AgentEventType.TASK_COMPLETED, null, null,
-        new TaskCompletedPayload(taskId, duration));
+    return newEvent(
+        AgentEventType.TASK_COMPLETED, null, null, new TaskCompletedPayload(taskId, duration));
   }
 
   public AgentEvent taskFailed(String taskId, ErrorInformation error) {
-    return newEvent(AgentEventType.TASK_FAILED, null, null,
-        new TaskFailedPayload(taskId, error));
+    return newEvent(AgentEventType.TASK_FAILED, null, null, new TaskFailedPayload(taskId, error));
   }
 
   // ---- Working Set ----
 
-  public AgentEvent workingSetItemAdded(String itemId, String kind, String identifier, String path, String reason) {
+  public AgentEvent workingSetItemAdded(
+      String itemId, String kind, String identifier, String path, String reason) {
     return workingSetItemAdded(itemId, kind, identifier, path, reason, null);
   }
 
-  public AgentEvent workingSetItemAdded(String itemId, String kind, String identifier, String path, String reason,
+  public AgentEvent workingSetItemAdded(
+      String itemId,
+      String kind,
+      String identifier,
+      String path,
+      String reason,
       String correlationId) {
-    return newEvent(AgentEventType.WORKING_SET_ITEM_ADDED, null, correlationId,
+    return newEvent(
+        AgentEventType.WORKING_SET_ITEM_ADDED,
+        null,
+        correlationId,
         new WorkingSetItemAddedPayload(itemId, kind, identifier, path, reason));
   }
 
   public AgentEvent workingSetItemRemoved(String itemId, String reason) {
-    return newEvent(AgentEventType.WORKING_SET_ITEM_REMOVED, null, null,
+    return newEvent(
+        AgentEventType.WORKING_SET_ITEM_REMOVED,
+        null,
+        null,
         new WorkingSetItemRemovedPayload(itemId, reason));
   }
 
-  public AgentEvent workingSetSearchStarted(String searchId, String query, String strategy,
-      int workingSetSizeBefore) {
-    return newEvent(AgentEventType.WORKING_SET_SEARCH_STARTED, null, searchId,
+  public AgentEvent workingSetSearchStarted(
+      String searchId, String query, String strategy, int workingSetSizeBefore) {
+    return newEvent(
+        AgentEventType.WORKING_SET_SEARCH_STARTED,
+        null,
+        searchId,
         new WorkingSetSearchStartedPayload(searchId, query, strategy, workingSetSizeBefore));
   }
 
-  public AgentEvent workingSetSearchCompleted(String searchId, long durationMs, int hitCount,
-      int candidateCount, int selectedCount, int alreadyPresentCount, int workingSetSizeBefore,
+  public AgentEvent workingSetSearchCompleted(
+      String searchId,
+      long durationMs,
+      int hitCount,
+      int candidateCount,
+      int selectedCount,
+      int alreadyPresentCount,
+      int workingSetSizeBefore,
       int workingSetSizeAfter) {
-    return newEvent(AgentEventType.WORKING_SET_SEARCH_COMPLETED, null, searchId,
-        new WorkingSetSearchCompletedPayload(searchId, durationMs, hitCount, candidateCount, selectedCount,
-            alreadyPresentCount, workingSetSizeBefore, workingSetSizeAfter));
+    return newEvent(
+        AgentEventType.WORKING_SET_SEARCH_COMPLETED,
+        null,
+        searchId,
+        new WorkingSetSearchCompletedPayload(
+            searchId,
+            durationMs,
+            hitCount,
+            candidateCount,
+            selectedCount,
+            alreadyPresentCount,
+            workingSetSizeBefore,
+            workingSetSizeAfter));
   }
 
   public AgentEvent workingSetContextInjected(int itemCount, int contextCharacters) {
-    return newEvent(AgentEventType.WORKING_SET_CONTEXT_INJECTED, null, null,
+    return newEvent(
+        AgentEventType.WORKING_SET_CONTEXT_INJECTED,
+        null,
+        null,
         new WorkingSetContextInjectedPayload(itemCount, contextCharacters));
   }
 
   public AgentEvent contextInjected(String source, Integer itemCount, int contextCharacters) {
-    return newEvent(AgentEventType.CONTEXT_INJECTED, null, null,
+    return newEvent(
+        AgentEventType.CONTEXT_INJECTED,
+        null,
+        null,
         new ContextInjectedPayload(source, itemCount, contextCharacters));
   }
 
-  public AgentEvent contextBudgetEvaluated(int inputBudget, int totalTokens, java.util.List<String> included,
+  public AgentEvent contextBudgetEvaluated(
+      int inputBudget,
+      int totalTokens,
+      java.util.List<String> included,
       java.util.List<String> dropped) {
-    return newEvent(AgentEventType.CONTEXT_BUDGET_EVALUATED, null, null,
+    return newEvent(
+        AgentEventType.CONTEXT_BUDGET_EVALUATED,
+        null,
+        null,
         new ContextBudgetEvaluatedPayload(inputBudget, totalTokens, included, dropped));
   }
 
-  public AgentEvent contextBudgetTrimmed(int inputBudget, int totalTokens, java.util.List<String> dropped) {
-    return newEvent(AgentEventType.CONTEXT_BUDGET_TRIMMED, null, null,
+  public AgentEvent contextBudgetTrimmed(
+      int inputBudget, int totalTokens, java.util.List<String> dropped) {
+    return newEvent(
+        AgentEventType.CONTEXT_BUDGET_TRIMMED,
+        null,
+        null,
         new ContextBudgetTrimmedPayload(inputBudget, totalTokens, dropped));
   }
 
   public AgentEvent fileSummarySaved(String path, int summaryCharacters) {
-    return newEvent(AgentEventType.FILE_SUMMARY_SAVED, null, null,
+    return newEvent(
+        AgentEventType.FILE_SUMMARY_SAVED,
+        null,
+        null,
         new FileSummarySavedPayload(path, summaryCharacters));
   }
 
   public AgentEvent fileSummaryInvalidated(String path) {
-    return newEvent(AgentEventType.FILE_SUMMARY_INVALIDATED, null, null,
+    return newEvent(
+        AgentEventType.FILE_SUMMARY_INVALIDATED,
+        null,
+        null,
         new FileSummaryInvalidatedPayload(path));
   }
 
   public AgentEvent fileSummaryStaleSkipped(String path) {
-    return newEvent(AgentEventType.FILE_SUMMARY_STALE_SKIPPED, null, null,
+    return newEvent(
+        AgentEventType.FILE_SUMMARY_STALE_SKIPPED,
+        null,
+        null,
         new FileSummaryStaleSkippedPayload(path));
   }
 
   public AgentEvent checkpointSaved(String taskId, String reason, int workingFileCount) {
-    return newEvent(AgentEventType.CHECKPOINT_SAVED, null, null,
+    return newEvent(
+        AgentEventType.CHECKPOINT_SAVED,
+        null,
+        null,
         new CheckpointSavedPayload(taskId, reason, workingFileCount));
   }
 
-  public AgentEvent backgroundProcessStarted(String processId, long pid, String command, String workingDirectory) {
-    return newEvent(AgentEventType.BACKGROUND_PROCESS_STARTED, null, processId,
-        new BackgroundProcessStartedPayload(processId, pid, bounded(command, 200), workingDirectory));
+  public AgentEvent backgroundProcessStarted(
+      String processId, long pid, String command, String workingDirectory) {
+    return newEvent(
+        AgentEventType.BACKGROUND_PROCESS_STARTED,
+        null,
+        processId,
+        new BackgroundProcessStartedPayload(
+            processId, pid, bounded(command, 200), workingDirectory));
   }
 
-  public AgentEvent backgroundProcessCompleted(String processId, long pid, Integer exitCode, double elapsedSeconds) {
-    return newEvent(AgentEventType.BACKGROUND_PROCESS_COMPLETED, null, processId,
+  public AgentEvent backgroundProcessCompleted(
+      String processId, long pid, Integer exitCode, double elapsedSeconds) {
+    return newEvent(
+        AgentEventType.BACKGROUND_PROCESS_COMPLETED,
+        null,
+        processId,
         new BackgroundProcessCompletedPayload(processId, pid, exitCode, elapsedSeconds));
   }
 
   public AgentEvent backgroundProcessFailed(String processId, String command, Throwable error) {
-    return newEvent(AgentEventType.BACKGROUND_PROCESS_FAILED, null, processId,
-        new BackgroundProcessFailedPayload(processId, bounded(command, 200), ErrorInformation.from(error)));
+    return newEvent(
+        AgentEventType.BACKGROUND_PROCESS_FAILED,
+        null,
+        processId,
+        new BackgroundProcessFailedPayload(
+            processId, bounded(command, 200), ErrorInformation.from(error)));
   }
 
-  public AgentEvent backgroundProcessKilled(String processId, long pid, Integer exitCode, double elapsedSeconds) {
-    return newEvent(AgentEventType.BACKGROUND_PROCESS_KILLED, null, processId,
+  public AgentEvent backgroundProcessKilled(
+      String processId, long pid, Integer exitCode, double elapsedSeconds) {
+    return newEvent(
+        AgentEventType.BACKGROUND_PROCESS_KILLED,
+        null,
+        processId,
         new BackgroundProcessKilledPayload(processId, pid, exitCode, elapsedSeconds));
   }
 
@@ -390,15 +699,25 @@ public class AgentEventFactory {
 
   public AgentEvent topicGenerationStarted(String runId, String topicGenerationId, String trigger) {
     Instant now = Instant.now(clock);
-    return newEvent(AgentEventType.TOPIC_GENERATION_STARTED, runId, topicGenerationId,
+    return newEvent(
+        AgentEventType.TOPIC_GENERATION_STARTED,
+        runId,
+        topicGenerationId,
         new TopicGenerationStartedPayload(topicGenerationId, bounded(trigger, 80), now));
   }
 
-  public AgentEvent topicIdleTriggerEvaluated(IdleTriggerRejectReason reason, boolean accepted,
-      Duration idleDuration, Duration requiredIdle) {
+  public AgentEvent topicIdleTriggerEvaluated(
+      IdleTriggerRejectReason reason,
+      boolean accepted,
+      Duration idleDuration,
+      Duration requiredIdle) {
     Instant now = Instant.now(clock);
-    return newEvent(AgentEventType.TOPIC_IDLE_TRIGGER_EVALUATED, null, null,
-        new TopicIdleTriggerEvaluatedPayload(accepted, millis(idleDuration), millis(requiredIdle), reason, now));
+    return newEvent(
+        AgentEventType.TOPIC_IDLE_TRIGGER_EVALUATED,
+        null,
+        null,
+        new TopicIdleTriggerEvaluatedPayload(
+            accepted, millis(idleDuration), millis(requiredIdle), reason, now));
   }
 
   public AgentEvent topicCandidatesRefreshed(int candidateCount) {
@@ -407,134 +726,236 @@ public class AgentEventFactory {
 
   public AgentEvent topicCandidatesRefreshed(int candidateCount, List<String> topics) {
     Instant now = Instant.now(clock);
-    return newEvent(AgentEventType.TOPIC_CANDIDATES_REFRESHED, null, null,
+    return newEvent(
+        AgentEventType.TOPIC_CANDIDATES_REFRESHED,
+        null,
+        null,
         new TopicCandidatesRefreshedPayload(candidateCount, topics, now));
   }
 
-  public AgentEvent topicCandidateGenerated(String runId, String topicGenerationId, String topicCandidateId,
-      String topicType, String source, String topic, String reason, Double priority, Double freshness,
-      Double usefulness, Double intrusiveness, Double confidence) {
-    return newEvent(AgentEventType.TOPIC_CANDIDATE_GENERATED, runId, topicGenerationId,
-        new TopicCandidateGeneratedPayload(topicGenerationId, topicCandidateId, topicType, source, bounded(topic, 160),
-            bounded(reason, 240), priority, freshness, usefulness, intrusiveness, confidence));
+  public AgentEvent topicCandidateGenerated(
+      String runId,
+      String topicGenerationId,
+      String topicCandidateId,
+      String topicType,
+      String source,
+      String topic,
+      String reason,
+      Double priority,
+      Double freshness,
+      Double usefulness,
+      Double intrusiveness,
+      Double confidence) {
+    return newEvent(
+        AgentEventType.TOPIC_CANDIDATE_GENERATED,
+        runId,
+        topicGenerationId,
+        new TopicCandidateGeneratedPayload(
+            topicGenerationId,
+            topicCandidateId,
+            topicType,
+            source,
+            bounded(topic, 160),
+            bounded(reason, 240),
+            priority,
+            freshness,
+            usefulness,
+            intrusiveness,
+            confidence));
   }
 
-  public AgentEvent topicCandidateScored(String runId, String topicGenerationId, String topicCandidateId,
-      TopicScoreBreakdown score) {
-    return newEvent(AgentEventType.TOPIC_CANDIDATE_SCORED, runId, topicGenerationId,
+  public AgentEvent topicCandidateScored(
+      String runId, String topicGenerationId, String topicCandidateId, TopicScoreBreakdown score) {
+    return newEvent(
+        AgentEventType.TOPIC_CANDIDATE_SCORED,
+        runId,
+        topicGenerationId,
         new TopicCandidateScoredPayload(topicGenerationId, topicCandidateId, score));
   }
 
-  public AgentEvent topicCandidateRejected(String runId, String topicGenerationId, String topicCandidateId,
-      TopicRejectionReason reason, Double score) {
-    return newEvent(AgentEventType.TOPIC_CANDIDATE_REJECTED, runId, topicGenerationId,
+  public AgentEvent topicCandidateRejected(
+      String runId,
+      String topicGenerationId,
+      String topicCandidateId,
+      TopicRejectionReason reason,
+      Double score) {
+    return newEvent(
+        AgentEventType.TOPIC_CANDIDATE_REJECTED,
+        runId,
+        topicGenerationId,
         new TopicCandidateRejectedPayload(topicGenerationId, topicCandidateId, reason, score));
   }
 
-  public AgentEvent topicSelected(String runId, String topicGenerationId, String topicCandidateId,
-      Double score, Integer rank) {
-    return newEvent(AgentEventType.TOPIC_SELECTED, runId, topicGenerationId,
+  public AgentEvent topicSelected(
+      String runId, String topicGenerationId, String topicCandidateId, Double score, Integer rank) {
+    return newEvent(
+        AgentEventType.TOPIC_SELECTED,
+        runId,
+        topicGenerationId,
         new TopicSelectedPayload(topicGenerationId, topicCandidateId, score, rank));
   }
 
-  public AgentEvent topicSpoken(String runId, String topicGenerationId, String topicCandidateId, String messageId,
-      Instant spokenAt, String message) {
-    return newEvent(AgentEventType.TOPIC_SPOKEN, runId, topicGenerationId,
-        new TopicSpokenPayload(topicGenerationId, topicCandidateId, messageId, spokenAt, bounded(message, 240)));
+  public AgentEvent topicSpoken(
+      String runId,
+      String topicGenerationId,
+      String topicCandidateId,
+      String messageId,
+      Instant spokenAt,
+      String message) {
+    return newEvent(
+        AgentEventType.TOPIC_SPOKEN,
+        runId,
+        topicGenerationId,
+        new TopicSpokenPayload(
+            topicGenerationId, topicCandidateId, messageId, spokenAt, bounded(message, 240)));
   }
 
-  public AgentEvent topicSpeakSkipped(String runId, String topicGenerationId, String topicCandidateId,
-      TopicSpeakSkipReason reason, Instant nextSpeakAllowedAt) {
-    return newEvent(AgentEventType.TOPIC_SPEAK_SKIPPED, runId, topicGenerationId,
-        new TopicSpeakSkippedPayload(topicGenerationId, topicCandidateId, reason, nextSpeakAllowedAt));
+  public AgentEvent topicSpeakSkipped(
+      String runId,
+      String topicGenerationId,
+      String topicCandidateId,
+      TopicSpeakSkipReason reason,
+      Instant nextSpeakAllowedAt) {
+    return newEvent(
+        AgentEventType.TOPIC_SPEAK_SKIPPED,
+        runId,
+        topicGenerationId,
+        new TopicSpeakSkippedPayload(
+            topicGenerationId, topicCandidateId, reason, nextSpeakAllowedAt));
   }
 
-  public AgentEvent topicGenerationCompleted(String runId, String topicGenerationId, int candidateCount,
-      int scoredCount, int rejectedCount, String selectedCandidateId, boolean spoken, long durationMs) {
+  public AgentEvent topicGenerationCompleted(
+      String runId,
+      String topicGenerationId,
+      int candidateCount,
+      int scoredCount,
+      int rejectedCount,
+      String selectedCandidateId,
+      boolean spoken,
+      long durationMs) {
     Instant now = Instant.now(clock);
-    return newEvent(AgentEventType.TOPIC_GENERATION_COMPLETED, runId, topicGenerationId,
-        new TopicGenerationCompletedPayload(topicGenerationId, candidateCount, scoredCount, rejectedCount,
-            selectedCandidateId, spoken, durationMs, now));
+    return newEvent(
+        AgentEventType.TOPIC_GENERATION_COMPLETED,
+        runId,
+        topicGenerationId,
+        new TopicGenerationCompletedPayload(
+            topicGenerationId,
+            candidateCount,
+            scoredCount,
+            rejectedCount,
+            selectedCandidateId,
+            spoken,
+            durationMs,
+            now));
   }
 
-  public AgentEvent topicGenerationFailed(String runId, String topicGenerationId, TopicGenerationStage stage,
-      Throwable error) {
+  public AgentEvent topicGenerationFailed(
+      String runId, String topicGenerationId, TopicGenerationStage stage, Throwable error) {
     Instant now = Instant.now(clock);
-    String message = error == null ? "unknown error" : error.getClass().getSimpleName() + ": " + error.getMessage();
-    return newEvent(AgentEventType.TOPIC_GENERATION_FAILED, runId, topicGenerationId,
+    String message =
+        error == null
+            ? "unknown error"
+            : error.getClass().getSimpleName() + ": " + error.getMessage();
+    return newEvent(
+        AgentEventType.TOPIC_GENERATION_FAILED,
+        runId,
+        topicGenerationId,
         new TopicGenerationFailedPayload(topicGenerationId, stage, bounded(message, 240), now));
   }
 
   public AgentEvent topicAutoSpeakSuppressed(String reason) {
     Instant now = Instant.now(clock);
-    return newEvent(AgentEventType.TOPIC_AUTO_SPEAK_SUPPRESSED, null, null,
+    return newEvent(
+        AgentEventType.TOPIC_AUTO_SPEAK_SUPPRESSED,
+        null,
+        null,
         new TopicAutoSpeakSuppressedPayload(bounded(reason, 160), now));
   }
 
   // ---- Context ----
 
   public AgentEvent contextSnapshotUpdated(Long usedTokens, Long maxTokens, Double utilization) {
-    return newEvent(AgentEventType.CONTEXT_SNAPSHOT_UPDATED, null, null,
+    return newEvent(
+        AgentEventType.CONTEXT_SNAPSHOT_UPDATED,
+        null,
+        null,
         new ContextSnapshotUpdatedPayload(usedTokens, maxTokens, utilization));
   }
 
   // ---- File ----
 
   public AgentEvent fileCreated(String path) {
-    return newEvent(AgentEventType.FILE_CREATED, null, null,
-        new FileCreatedPayload(path));
+    return newEvent(AgentEventType.FILE_CREATED, null, null, new FileCreatedPayload(path));
   }
 
   public AgentEvent fileModified(String path, Integer addedLines, Integer removedLines) {
-    return newEvent(AgentEventType.FILE_MODIFIED, null, null,
+    return newEvent(
+        AgentEventType.FILE_MODIFIED,
+        null,
+        null,
         new FileModifiedPayload(path, addedLines, removedLines));
   }
 
   public AgentEvent fileDeleted(String path) {
-    return newEvent(AgentEventType.FILE_DELETED, null, null,
-        new FileDeletedPayload(path));
+    return newEvent(AgentEventType.FILE_DELETED, null, null, new FileDeletedPayload(path));
   }
 
   // ---- 共通 ----
-  public AgentEvent backgroundExecution(dev.mikoto2000.rei.core.execution.ActiveExecution execution,String status,String output) {
-    var type=switch(status) {
-      case "RUNNING" -> AgentEventType.EXECUTION_STARTED;
-      case "COMPLETED" -> AgentEventType.EXECUTION_COMPLETED;
-      case "CANCELLED" -> AgentEventType.EXECUTION_CANCELLED;
-      default -> AgentEventType.EXECUTION_FAILED;
-    };
-    String safe=CredentialRedactor.redact(output).replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", "");
-    if(safe.length()>20000) safe=safe.substring(0,20000)+"... (truncated)";
-    return newEvent(type,execution.id(),execution.id(),new BackgroundExecutionPayload(execution.id(),execution.type(),status,
-        bounded(execution.summary(),200),safe)).withExecutionOwnership(execution);
-  }
-  public AgentEvent intervention(String runId, String inputId, String text, boolean applied) {
-    return newEvent(applied ? AgentEventType.USER_INTERVENTION_APPLIED : AgentEventType.USER_INTERVENTION_RECEIVED,
-        runId, inputId, new UserInterventionPayload(inputId, text));
+  public AgentEvent backgroundExecution(
+      dev.mikoto2000.rei.core.execution.ActiveExecution execution, String status, String output) {
+    var type =
+        switch (status) {
+          case "RUNNING" -> AgentEventType.EXECUTION_STARTED;
+          case "COMPLETED" -> AgentEventType.EXECUTION_COMPLETED;
+          case "CANCELLED" -> AgentEventType.EXECUTION_CANCELLED;
+          default -> AgentEventType.EXECUTION_FAILED;
+        };
+    String safe = CredentialRedactor.redact(output).replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", "");
+    if (safe.length() > 20000) safe = safe.substring(0, 20000) + "... (truncated)";
+    return newEvent(
+            type,
+            execution.id(),
+            execution.id(),
+            new BackgroundExecutionPayload(
+                execution.id(), execution.type(), status, bounded(execution.summary(), 200), safe))
+        .withExecutionOwnership(execution);
   }
 
-  private AgentEvent newEvent(AgentEventType type, String runId, String correlationId, AgentEventPayload payload) {
-    return new AgentEvent(
-        UUID.randomUUID().toString(),
-        0L,
-        Instant.now(clock),
-        type,
-        VERSION,
-        null,
-        null,
+  public AgentEvent intervention(String runId, String inputId, String text, boolean applied) {
+    return newEvent(
+        applied
+            ? AgentEventType.USER_INTERVENTION_APPLIED
+            : AgentEventType.USER_INTERVENTION_RECEIVED,
         runId,
-        correlationId,
-        null,
-        payload).withOwnership(dev.mikoto2000.rei.core.chat.AgentRunScope.current())
+        inputId,
+        new UserInterventionPayload(inputId, text));
+  }
+
+  private AgentEvent newEvent(
+      AgentEventType type, String runId, String correlationId, AgentEventPayload payload) {
+    return new AgentEvent(
+            UUID.randomUUID().toString(),
+            0L,
+            Instant.now(clock),
+            type,
+            VERSION,
+            null,
+            null,
+            runId,
+            correlationId,
+            null,
+            payload)
+        .withOwnership(dev.mikoto2000.rei.core.chat.AgentRunScope.current())
         .withExecutionOwnership(dev.mikoto2000.rei.core.execution.ExecutionScope.current());
   }
 
   private String bounded(String value, int maxLength) {
     if (value == null) return null;
-    String safe = CredentialRedactor.redact(value)
-        .replaceAll("[\\p{Cntrl}]+", " ")
-        .replaceAll("\\s+", " ")
-        .trim();
+    String safe =
+        CredentialRedactor.redact(value)
+            .replaceAll("[\\p{Cntrl}]+", " ")
+            .replaceAll("\\s+", " ")
+            .trim();
     return safe.length() <= maxLength ? safe : safe.substring(0, maxLength - 1) + "…";
   }
 

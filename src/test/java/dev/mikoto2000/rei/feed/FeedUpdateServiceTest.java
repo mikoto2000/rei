@@ -6,7 +6,6 @@ import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
@@ -14,14 +13,18 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 @org.junit.jupiter.api.Tag("integration")
 class FeedUpdateServiceTest {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void updateStoresFeedMetadataAndItems() {
     FeedService feedService = newService();
     Feed feed = feedService.add("https://example.com/feed.xml", "Example Feed");
-    FeedFetcher feedFetcher = new FeedFetcher(uri -> new FeedHttpResponse(200, """
+    FeedFetcher feedFetcher =
+        new FeedFetcher(
+            uri ->
+                new FeedHttpResponse(
+                    200,
+                    """
         <?xml version="1.0" encoding="UTF-8"?>
         <rss version="2.0">
           <channel>
@@ -53,7 +56,12 @@ class FeedUpdateServiceTest {
   void updateDeduplicatesItemsByUrl() {
     FeedService feedService = newService();
     Feed feed = feedService.add("https://example.com/feed.xml", "Example Feed");
-    FeedFetcher feedFetcher = new FeedFetcher(uri -> new FeedHttpResponse(200, """
+    FeedFetcher feedFetcher =
+        new FeedFetcher(
+            uri ->
+                new FeedHttpResponse(
+                    200,
+                    """
         <?xml version="1.0" encoding="UTF-8"?>
         <rss version="2.0">
           <channel>
@@ -83,11 +91,15 @@ class FeedUpdateServiceTest {
     feedService.update(disabledFeed.id(), "Disabled Feed", false);
     Feed failingFeed = feedService.add("https://example.com/fail.xml", "Fail Feed");
 
-    FeedFetcher feedFetcher = new FeedFetcher(uri -> {
-      if (uri.toString().contains("fail")) {
-        throw new FeedFetchException("fetch failed", 503);
-      }
-      return new FeedHttpResponse(200, """
+    FeedFetcher feedFetcher =
+        new FeedFetcher(
+            uri -> {
+              if (uri.toString().contains("fail")) {
+                throw new FeedFetchException("fetch failed", 503);
+              }
+              return new FeedHttpResponse(
+                  200,
+                  """
           <?xml version="1.0" encoding="UTF-8"?>
           <rss version="2.0">
             <channel>
@@ -99,7 +111,7 @@ class FeedUpdateServiceTest {
             </channel>
           </rss>
           """);
-    });
+            });
     FeedUpdateService updateService = new FeedUpdateService(feedService, feedFetcher);
 
     List<FeedUpdateResult> results = updateService.updateAll();
@@ -117,18 +129,31 @@ class FeedUpdateServiceTest {
     FeedService feedService = newService();
     Feed feed = feedService.add("https://example.com/feed.xml", "Example Feed");
     OffsetDateTime fetchedAt = OffsetDateTime.of(2026, 4, 22, 8, 0, 0, 0, ZoneOffset.UTC);
-    feedService.saveFetchedItems(feed.id(), List.of(
-        new FetchedFeedItem("Today", "https://example.com/today", OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC)),
-        new FetchedFeedItem("Yesterday", "https://example.com/yesterday", OffsetDateTime.of(2026, 4, 21, 3, 0, 0, 0, ZoneOffset.UTC)),
-        new FetchedFeedItem("Old", "https://example.com/old", OffsetDateTime.of(2026, 4, 20, 23, 59, 59, 0, ZoneOffset.UTC))),
+    feedService.saveFetchedItems(
+        feed.id(),
+        List.of(
+            new FetchedFeedItem(
+                "Today",
+                "https://example.com/today",
+                OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC)),
+            new FetchedFeedItem(
+                "Yesterday",
+                "https://example.com/yesterday",
+                OffsetDateTime.of(2026, 4, 21, 3, 0, 0, 0, ZoneOffset.UTC)),
+            new FetchedFeedItem(
+                "Old",
+                "https://example.com/old",
+                OffsetDateTime.of(2026, 4, 20, 23, 59, 59, 0, ZoneOffset.UTC))),
         fetchedAt);
 
-    List<FeedBriefingItem> items = feedService.listBriefingItems(
-        OffsetDateTime.of(2026, 4, 21, 0, 0, 0, 0, ZoneOffset.UTC),
-        OffsetDateTime.of(2026, 4, 22, 9, 0, 0, 0, ZoneOffset.UTC),
-        10);
+    List<FeedBriefingItem> items =
+        feedService.listBriefingItems(
+            OffsetDateTime.of(2026, 4, 21, 0, 0, 0, 0, ZoneOffset.UTC),
+            OffsetDateTime.of(2026, 4, 22, 9, 0, 0, 0, ZoneOffset.UTC),
+            10);
 
-    assertEquals(List.of("Today", "Yesterday"), items.stream().map(FeedBriefingItem::title).toList());
+    assertEquals(
+        List.of("Today", "Yesterday"), items.stream().map(FeedBriefingItem::title).toList());
   }
 
   @Test
@@ -138,26 +163,51 @@ class FeedUpdateServiceTest {
     Feed feedB = feedService.add("https://example.com/b.xml", "Feed B");
     OffsetDateTime fetchedAt = OffsetDateTime.of(2026, 4, 22, 8, 0, 0, 0, ZoneOffset.UTC);
 
-    feedService.saveFetchedItems(feedA.id(), List.of(
-        new FetchedFeedItem("A-3", "https://example.com/a/3", OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC)),
-        new FetchedFeedItem("A-2", "https://example.com/a/2", OffsetDateTime.of(2026, 4, 22, 6, 0, 0, 0, ZoneOffset.UTC)),
-        new FetchedFeedItem("A-1", "https://example.com/a/1", OffsetDateTime.of(2026, 4, 22, 5, 0, 0, 0, ZoneOffset.UTC))),
+    feedService.saveFetchedItems(
+        feedA.id(),
+        List.of(
+            new FetchedFeedItem(
+                "A-3",
+                "https://example.com/a/3",
+                OffsetDateTime.of(2026, 4, 22, 7, 0, 0, 0, ZoneOffset.UTC)),
+            new FetchedFeedItem(
+                "A-2",
+                "https://example.com/a/2",
+                OffsetDateTime.of(2026, 4, 22, 6, 0, 0, 0, ZoneOffset.UTC)),
+            new FetchedFeedItem(
+                "A-1",
+                "https://example.com/a/1",
+                OffsetDateTime.of(2026, 4, 22, 5, 0, 0, 0, ZoneOffset.UTC))),
         fetchedAt);
-    feedService.saveFetchedItems(feedB.id(), List.of(
-        new FetchedFeedItem("B-3", "https://example.com/b/3", OffsetDateTime.of(2026, 4, 22, 4, 0, 0, 0, ZoneOffset.UTC)),
-        new FetchedFeedItem("B-2", "https://example.com/b/2", OffsetDateTime.of(2026, 4, 22, 3, 0, 0, 0, ZoneOffset.UTC)),
-        new FetchedFeedItem("B-1", "https://example.com/b/1", OffsetDateTime.of(2026, 4, 22, 2, 0, 0, 0, ZoneOffset.UTC))),
+    feedService.saveFetchedItems(
+        feedB.id(),
+        List.of(
+            new FetchedFeedItem(
+                "B-3",
+                "https://example.com/b/3",
+                OffsetDateTime.of(2026, 4, 22, 4, 0, 0, 0, ZoneOffset.UTC)),
+            new FetchedFeedItem(
+                "B-2",
+                "https://example.com/b/2",
+                OffsetDateTime.of(2026, 4, 22, 3, 0, 0, 0, ZoneOffset.UTC)),
+            new FetchedFeedItem(
+                "B-1",
+                "https://example.com/b/1",
+                OffsetDateTime.of(2026, 4, 22, 2, 0, 0, 0, ZoneOffset.UTC))),
         fetchedAt);
 
-    List<FeedBriefingItem> items = feedService.listBriefingItems(
-        OffsetDateTime.of(2026, 4, 21, 0, 0, 0, 0, ZoneOffset.UTC),
-        OffsetDateTime.of(2026, 4, 22, 9, 0, 0, 0, ZoneOffset.UTC),
-        2);
+    List<FeedBriefingItem> items =
+        feedService.listBriefingItems(
+            OffsetDateTime.of(2026, 4, 21, 0, 0, 0, 0, ZoneOffset.UTC),
+            OffsetDateTime.of(2026, 4, 22, 9, 0, 0, 0, ZoneOffset.UTC),
+            2);
 
-    assertEquals(List.of("A-3", "A-2", "B-3", "B-2"), items.stream().map(FeedBriefingItem::title).toList());
+    assertEquals(
+        List.of("A-3", "A-2", "B-3", "B-2"), items.stream().map(FeedBriefingItem::title).toList());
   }
 
   private FeedService newService() {
-    return new FeedService(new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feed-update.db")));
+    return new FeedService(
+        new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feed-update.db")));
   }
 }

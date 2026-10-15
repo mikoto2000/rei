@@ -5,15 +5,17 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-
 import org.junit.jupiter.api.Test;
 
 @org.junit.jupiter.api.Tag("integration")
 class ChatExecutionServiceDependencyTest {
 
   @Test
-  void chatExecutionServiceDoesNotDependOnShellUiOrSoundPresentationComponents() throws IOException {
-    String source = Files.readString(Path.of("src/main/java/dev/mikoto2000/rei/core/chat/ChatExecutionService.java"));
+  void chatExecutionServiceDoesNotDependOnShellUiOrSoundPresentationComponents()
+      throws IOException {
+    String source =
+        Files.readString(
+            Path.of("src/main/java/dev/mikoto2000/rei/core/chat/ChatExecutionService.java"));
 
     assertFalse(source.contains("dev.mikoto2000.rei.ui."));
     assertFalse(source.contains("ChatResponseNarrator"));

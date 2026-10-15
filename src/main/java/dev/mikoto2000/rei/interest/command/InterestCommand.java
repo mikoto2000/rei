@@ -1,13 +1,11 @@
 package dev.mikoto2000.rei.interest.command;
 
-import java.util.List;
-
-import org.springframework.stereotype.Component;
-
-import dev.mikoto2000.rei.interest.InterestUpdate;
 import dev.mikoto2000.rei.interest.InterestDiscoveryJob;
+import dev.mikoto2000.rei.interest.InterestUpdate;
 import dev.mikoto2000.rei.interest.InterestUpdateService;
+import java.util.List;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
@@ -15,15 +13,28 @@ import picocli.CommandLine.Option;
 @Command(
     name = "interest",
     description = "興味更新を確認します",
-    subcommands = {
-      InterestCommand.ListCommand.class,
-      InterestCommand.DiscoverCommand.class
-    })
+    subcommands = {InterestCommand.ListCommand.class, InterestCommand.DiscoverCommand.class})
 public class InterestCommand {
-  public static String reportList(InterestUpdateService service,int hours){var command=new ListCommand(service);command.hours=hours;return report(command);}
-  public static String reportDiscovery(InterestDiscoveryJob job){return report(new DiscoverCommand(job));}
-  private static String report(ReportCommand command){var text=new java.io.StringWriter();command.out=new java.io.PrintWriter(text,true);command.run();return text.toString().replaceAll("[\\r\\n]+$","");}
-  private abstract static class ReportCommand implements Runnable { protected java.io.PrintWriter out=new java.io.PrintWriter(System.out,true); }
+  public static String reportList(InterestUpdateService service, int hours) {
+    var command = new ListCommand(service);
+    command.hours = hours;
+    return report(command);
+  }
+
+  public static String reportDiscovery(InterestDiscoveryJob job) {
+    return report(new DiscoverCommand(job));
+  }
+
+  private static String report(ReportCommand command) {
+    var text = new java.io.StringWriter();
+    command.out = new java.io.PrintWriter(text, true);
+    command.run();
+    return text.toString().replaceAll("[\\r\\n]+$", "");
+  }
+
+  private abstract static class ReportCommand implements Runnable {
+    protected java.io.PrintWriter out = new java.io.PrintWriter(System.out, true);
+  }
 
   @Component
   @RequiredArgsConstructor
@@ -45,8 +56,16 @@ public class InterestCommand {
 
       for (InterestUpdate update : updates) {
         String urls = update.sourceUrls().isEmpty() ? "" : String.join(", ", update.sourceUrls());
-        out.println(update.id() + " | " + update.createdAt() + " | " + update.topic() + " | "
-            + update.summary() + " | " + urls);
+        out.println(
+            update.id()
+                + " | "
+                + update.createdAt()
+                + " | "
+                + update.topic()
+                + " | "
+                + update.summary()
+                + " | "
+                + urls);
       }
     }
   }

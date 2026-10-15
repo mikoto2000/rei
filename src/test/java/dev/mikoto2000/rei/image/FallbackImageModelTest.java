@@ -6,7 +6,6 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -23,9 +22,17 @@ class FallbackImageModelTest {
   void portableRequestOptionsUseTheConfiguredFallbackModel() {
     var primary = Mockito.mock(ImageModel.class);
     var fallback = Mockito.mock(org.springframework.ai.openai.OpenAiImageModel.class);
-    when(fallback.getOptions()).thenReturn(OpenAiImageOptions.builder().model("local-image-fallback").build());
-    var prompt = new ImagePrompt("cat", org.springframework.ai.image.ImageOptionsBuilder.builder()
-        .model("feature-model").width(512).height(512).responseFormat("b64_json").build());
+    when(fallback.getOptions())
+        .thenReturn(OpenAiImageOptions.builder().model("local-image-fallback").build());
+    var prompt =
+        new ImagePrompt(
+            "cat",
+            org.springframework.ai.image.ImageOptionsBuilder.builder()
+                .model("feature-model")
+                .width(512)
+                .height(512)
+                .responseFormat("b64_json")
+                .build());
     when(primary.call(prompt)).thenThrow(new RuntimeException("unavailable"));
     when(fallback.call(Mockito.any(ImagePrompt.class))).thenReturn(response("image"));
 
@@ -42,9 +49,18 @@ class FallbackImageModelTest {
   void fallbackUsesConfiguredModelAndPreservesImageOptions() {
     var primary = Mockito.mock(ImageModel.class);
     var fallback = Mockito.mock(org.springframework.ai.openai.OpenAiImageModel.class);
-    when(fallback.getOptions()).thenReturn(OpenAiImageOptions.builder().model("local-image-fallback").build());
-    var prompt = new ImagePrompt("cat", OpenAiImageOptions.builder().model("feature-model")
-        .width(512).height(512).quality("high").responseFormat("b64_json").build());
+    when(fallback.getOptions())
+        .thenReturn(OpenAiImageOptions.builder().model("local-image-fallback").build());
+    var prompt =
+        new ImagePrompt(
+            "cat",
+            OpenAiImageOptions.builder()
+                .model("feature-model")
+                .width(512)
+                .height(512)
+                .quality("high")
+                .responseFormat("b64_json")
+                .build());
     when(primary.call(prompt)).thenThrow(new RuntimeException("unavailable"));
     when(fallback.call(Mockito.any(ImagePrompt.class))).thenReturn(response("image"));
 
@@ -68,7 +84,8 @@ class FallbackImageModelTest {
     ImageResponse response = response("primary");
     when(primary.call(prompt)).thenReturn(response);
 
-    FallbackImageModel model = new FallbackImageModel("image-generation", primary, fallback, "feature-model");
+    FallbackImageModel model =
+        new FallbackImageModel("image-generation", primary, fallback, "feature-model");
 
     assertThat(model.call(prompt)).isSameAs(response);
     verifyNoInteractions(fallback);
@@ -83,7 +100,8 @@ class FallbackImageModelTest {
     when(primary.call(prompt)).thenThrow(new RuntimeException("connection failed"));
     when(fallback.call(Mockito.any(ImagePrompt.class))).thenReturn(response);
 
-    FallbackImageModel model = new FallbackImageModel("image-generation", primary, fallback, "feature-model");
+    FallbackImageModel model =
+        new FallbackImageModel("image-generation", primary, fallback, "feature-model");
 
     assertThat(model.call(prompt)).isSameAs(response);
     ArgumentCaptor<ImagePrompt> captor = ArgumentCaptor.forClass(ImagePrompt.class);
@@ -93,12 +111,14 @@ class FallbackImageModelTest {
   }
 
   private ImagePrompt prompt(String model) {
-    return new ImagePrompt("cat", OpenAiImageOptions.builder()
-        .model(model)
-        .width(512)
-        .height(512)
-        .responseFormat("b64_json")
-        .build());
+    return new ImagePrompt(
+        "cat",
+        OpenAiImageOptions.builder()
+            .model(model)
+            .width(512)
+            .height(512)
+            .responseFormat("b64_json")
+            .build());
   }
 
   private ImageResponse response(String base64) {

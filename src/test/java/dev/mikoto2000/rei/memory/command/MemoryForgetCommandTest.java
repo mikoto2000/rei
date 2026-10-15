@@ -4,18 +4,16 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
-import java.util.Optional;
-
-import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-
 import dev.mikoto2000.rei.memory.model.Memory;
 import dev.mikoto2000.rei.memory.model.MemoryScope;
 import dev.mikoto2000.rei.memory.model.MemoryStatus;
 import dev.mikoto2000.rei.memory.model.MemoryType;
 import dev.mikoto2000.rei.memory.service.MemoryService;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+import java.util.Optional;
+import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 import picocli.CommandLine;
 
 class MemoryForgetCommandTest {
@@ -56,8 +54,17 @@ class MemoryForgetCommandTest {
   @Test
   void forgetShowsAlreadyDeletedMessage() {
     MemoryService service = Mockito.mock(MemoryService.class);
-    Memory deleted = new Memory("deleted", "x", MemoryType.KNOWLEDGE, MemoryScope.SHORT_TERM, MemoryStatus.DELETED, 0.8d,
-        null, null, null);
+    Memory deleted =
+        new Memory(
+            "deleted",
+            "x",
+            MemoryType.KNOWLEDGE,
+            MemoryScope.SHORT_TERM,
+            MemoryStatus.DELETED,
+            0.8d,
+            null,
+            null,
+            null);
     when(service.findById("deleted")).thenReturn(Optional.of(deleted));
 
     ByteArrayOutputStream out = new ByteArrayOutputStream();

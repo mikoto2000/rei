@@ -1,11 +1,24 @@
 package dev.mikoto2000.rei.memory.service;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.mikoto2000.rei.core.chat.RunCancellation;
+import dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException;
+import dev.mikoto2000.rei.llm.ConversationIds;
+import dev.mikoto2000.rei.llm.LlmChatClientProvider;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.ModelCallBudget;
+import dev.mikoto2000.rei.memory.configuration.MemoryConsolidationProperties;
+import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
+import dev.mikoto2000.rei.memory.model.Memory;
+import dev.mikoto2000.rei.memory.model.MemoryScope;
+import dev.mikoto2000.rei.memory.model.MemoryStatus;
+import dev.mikoto2000.rei.memory.model.MemoryType;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
-
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -13,49 +26,45 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
-
-import dev.mikoto2000.rei.llm.ConversationIds;
-import dev.mikoto2000.rei.llm.LlmChatClientProvider;
-import dev.mikoto2000.rei.llm.LlmFeature;
-import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
-import dev.mikoto2000.rei.memory.configuration.MemoryConsolidationProperties;
-import dev.mikoto2000.rei.llm.ModelCallBudget;
-import dev.mikoto2000.rei.core.chat.RunCancellation;
-import dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException;
-import dev.mikoto2000.rei.memory.model.Memory;
-import dev.mikoto2000.rei.memory.model.MemoryScope;
-import dev.mikoto2000.rei.memory.model.MemoryStatus;
-import dev.mikoto2000.rei.memory.model.MemoryType;
-
 @Service
-@org.springframework.boot.context.properties.EnableConfigurationProperties(MemoryConsolidationProperties.class)
+@org.springframework.boot.context.properties.EnableConfigurationProperties(
+    MemoryConsolidationProperties.class)
 public class MemoryConsolidatorService {
 
   private final LlmChatClientProvider chatClientProvider;
   private final JdbcClient jdbcClient;
   private final MemoryProperties memoryProperties;
   private final ObjectMapper objectMapper = new ObjectMapper();
-  private MemoryConsolidationProperties consolidation=new MemoryConsolidationProperties(0,0);
+  private MemoryConsolidationProperties consolidation = new MemoryConsolidationProperties(0, 0);
+
   @Autowired
-  public void setConsolidationProperties(MemoryConsolidationProperties properties){this.consolidation=properties;}
-  public record Summary(boolean hasCandidates,String summary) {}
-  public Summary summarizeCandidates() {
-    var budget=new ConsolidationModelBudget(consolidation);
-    var candidates=extractCandidates(budget);
-    return candidates.isEmpty()?new Summary(false,""):new Summary(true,summarize(candidates.stream().map(Memory::content).toList(),budget));
+  public void setConsolidationProperties(MemoryConsolidationProperties properties) {
+    this.consolidation = properties;
   }
 
-  public MemoryConsolidatorService(ChatClient chatClient,
+  public record Summary(boolean hasCandidates, String summary) {}
+
+  public Summary summarizeCandidates() {
+    var budget = new ConsolidationModelBudget(consolidation);
+    var candidates = extractCandidates(budget);
+    return candidates.isEmpty()
+        ? new Summary(false, "")
+        : new Summary(true, summarize(candidates.stream().map(Memory::content).toList(), budget));
+  }
+
+  public MemoryConsolidatorService(
+      ChatClient chatClient,
       @Qualifier("dataSource") javax.sql.DataSource dataSource,
       MemoryProperties memoryProperties) {
-    this(new dev.mikoto2000.rei.llm.FixedLlmChatClientProvider(chatClient), dataSource,
+    this(
+        new dev.mikoto2000.rei.llm.FixedLlmChatClientProvider(chatClient),
+        dataSource,
         memoryProperties);
   }
 
   @Autowired
-  public MemoryConsolidatorService(LlmChatClientProvider chatClientProvider,
+  public MemoryConsolidatorService(
+      LlmChatClientProvider chatClientProvider,
       @Qualifier("dataSource") javax.sql.DataSource dataSource,
       MemoryProperties memoryProperties) {
     this.chatClientProvider = chatClientProvider;
@@ -66,25 +75,34 @@ public class MemoryConsolidatorService {
   public List<Memory> extractCandidates() {
     return extractCandidates(new ConsolidationModelBudget(consolidation));
   }
+
   private List<Memory> extractCandidates(ModelCallBudget budget) {
     RunCancellation.propagate(null);
-    List<String> messages = jdbcClient.sql("""
+    List<String> messages =
+        jdbcClient
+            .sql(
+                """
         SELECT content FROM SPRING_AI_CHAT_MEMORY
         WHERE type IN ('USER', 'ASSISTANT')
         ORDER BY timestamp DESC
         LIMIT 200
         """)
-        .query((rs, rowNum) -> rs.getString("content"))
-        .list();
+            .query((rs, rowNum) -> rs.getString("content"))
+            .list();
     if (messages.isEmpty()) {
       return List.of();
     }
 
     String llmText;
     try {
-      llmText = call("次の会話から保存候補をJSON配列で返してください:\n" + String.join("\n", messages),"memory-extract",budget);
+      llmText =
+          call(
+              "次の会話から保存候補をJSON配列で返してください:\n" + String.join("\n", messages),
+              "memory-extract",
+              budget);
     } catch (Exception e) {
-      RunCancellation.propagate(e);if(e instanceof ExecutionStoppedException stopped)throw stopped;
+      RunCancellation.propagate(e);
+      if (e instanceof ExecutionStoppedException stopped) throw stopped;
       throw new IllegalStateException("LLM での候補抽出に失敗しました", e);
     }
 
@@ -100,16 +118,17 @@ public class MemoryConsolidatorService {
       if (content == null || content.isBlank()) {
         continue;
       }
-      candidates.add(new Memory(
-          null,
-          content.length() > 400 ? content.substring(0, 400) : content,
-          MemoryType.KNOWLEDGE,
-          MemoryScope.SHORT_TERM,
-          MemoryStatus.CANDIDATE,
-          0.7d,
-          null,
-          OffsetDateTime.now(),
-          OffsetDateTime.now()));
+      candidates.add(
+          new Memory(
+              null,
+              content.length() > 400 ? content.substring(0, 400) : content,
+              MemoryType.KNOWLEDGE,
+              MemoryScope.SHORT_TERM,
+              MemoryStatus.CANDIDATE,
+              0.7d,
+              null,
+              OffsetDateTime.now(),
+              OffsetDateTime.now()));
     }
     return candidates;
   }
@@ -123,8 +142,7 @@ public class MemoryConsolidatorService {
       return List.of();
     }
     try {
-      List<Map<String, Object>> rows = objectMapper.readValue(trimmed, new TypeReference<>() {
-      });
+      List<Map<String, Object>> rows = objectMapper.readValue(trimmed, new TypeReference<>() {});
       List<Memory> memories = new ArrayList<>();
       for (Map<String, Object> row : rows) {
         String content = stringValue(row.get("content"));
@@ -134,8 +152,17 @@ public class MemoryConsolidatorService {
         MemoryType type = parseType(stringValue(row.get("type")));
         MemoryScope scope = parseScope(stringValue(row.get("scope")));
         double confidence = parseConfidence(row.get("confidence"));
-        memories.add(new Memory(null, content, type, scope, MemoryStatus.CANDIDATE, confidence, null, OffsetDateTime.now(),
-            OffsetDateTime.now()));
+        memories.add(
+            new Memory(
+                null,
+                content,
+                type,
+                scope,
+                MemoryStatus.CANDIDATE,
+                confidence,
+                null,
+                OffsetDateTime.now(),
+                OffsetDateTime.now()));
       }
       return memories;
     } catch (Exception ignored) {
@@ -144,9 +171,10 @@ public class MemoryConsolidatorService {
   }
 
   public String summarize(List<String> conversation) {
-    return summarize(conversation,new ConsolidationModelBudget(consolidation));
+    return summarize(conversation, new ConsolidationModelBudget(consolidation));
   }
-  private String summarize(List<String> conversation,ModelCallBudget budget) {
+
+  private String summarize(List<String> conversation, ModelCallBudget budget) {
     RunCancellation.propagate(null);
     if (conversation == null || conversation.isEmpty()) {
       return "";
@@ -154,9 +182,10 @@ public class MemoryConsolidatorService {
     String prompt = String.join("\n", conversation);
     String summary;
     try {
-      summary = call("会話を要約してください:\n" + prompt,"memory-summarize",budget);
+      summary = call("会話を要約してください:\n" + prompt, "memory-summarize", budget);
     } catch (Exception e) {
-      RunCancellation.propagate(e);if(e instanceof ExecutionStoppedException stopped)throw stopped;
+      RunCancellation.propagate(e);
+      if (e instanceof ExecutionStoppedException stopped) throw stopped;
       throw new IllegalStateException("LLM での要約に失敗しました", e);
     }
     if (summary == null) {
@@ -166,23 +195,43 @@ public class MemoryConsolidatorService {
     return summary.length() <= max ? summary : summary.substring(0, max);
   }
 
-  private String call(String prompt,String conversation,ModelCallBudget budget) {
-    budget.run();boolean invoked=false,reported=false;
+  private String call(String prompt, String conversation, ModelCallBudget budget) {
+    budget.run();
+    boolean invoked = false, reported = false;
     try {
-      var request=chatClientProvider.chatClient(LlmFeature.MEMORY).prompt(prompt)
-          .advisors(advisor->advisor.param(ChatMemory.CONVERSATION_ID,ConversationIds.tool(conversation)));
-      if(!budget.tokenLimitEnabled()) {
-        invoked=true;var text=request.call().content();RunCancellation.propagate(null);return text;
+      var request =
+          chatClientProvider
+              .chatClient(LlmFeature.MEMORY)
+              .prompt(prompt)
+              .advisors(
+                  advisor ->
+                      advisor.param(
+                          ChatMemory.CONVERSATION_ID, ConversationIds.tool(conversation)));
+      if (!budget.tokenLimitEnabled()) {
+        invoked = true;
+        var text = request.call().content();
+        RunCancellation.propagate(null);
+        return text;
       }
-      invoked=true;var response=request.call().chatResponse();RunCancellation.propagate(null);
-      var usage=response==null||response.getMetadata()==null?null:response.getMetadata().getUsage();
-      Integer tokens=usage==null?null:usage.getTotalTokens();reported=true;
+      invoked = true;
+      var response = request.call().chatResponse();
+      RunCancellation.propagate(null);
+      var usage =
+          response == null || response.getMetadata() == null
+              ? null
+              : response.getMetadata().getUsage();
+      Integer tokens = usage == null ? null : usage.getTotalTokens();
+      reported = true;
       budget.recordTotalTokens(tokens);
-      return response==null||response.getResult()==null||response.getResult().getOutput()==null?null:response.getResult().getOutput().getText();
-    }catch(RuntimeException error) {
+      return response == null
+              || response.getResult() == null
+              || response.getResult().getOutput() == null
+          ? null
+          : response.getResult().getOutput().getText();
+    } catch (RuntimeException error) {
       RunCancellation.propagate(error);
-      if(error instanceof ExecutionStoppedException)throw error;
-      if(invoked&&!reported&&budget.tokenLimitEnabled())budget.recordTotalTokens(null);
+      if (error instanceof ExecutionStoppedException) throw error;
+      if (invoked && !reported && budget.tokenLimitEnabled()) budget.recordTotalTokens(null);
       throw error;
     }
   }
@@ -202,9 +251,8 @@ public class MemoryConsolidatorService {
   }
 
   public boolean shouldSuggestConsolidationNow() {
-    Integer messageCount = jdbcClient.sql("SELECT COUNT(*) FROM SPRING_AI_CHAT_MEMORY")
-        .query(Integer.class)
-        .single();
+    Integer messageCount =
+        jdbcClient.sql("SELECT COUNT(*) FROM SPRING_AI_CHAT_MEMORY").query(Integer.class).single();
     return shouldSuggestConsolidation(messageCount == null ? 0 : messageCount, 0, 0);
   }
 

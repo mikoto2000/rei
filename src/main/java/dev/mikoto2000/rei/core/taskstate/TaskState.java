@@ -6,17 +6,19 @@ import java.util.List;
 /**
  * 現在の作業目的・進捗・次に行うべきことを保持する。
  *
- * <p>Working Set（どのファイルを使用しているか）とは別の責務として、
- * 「何を目的としているか」「どこまで終わったか」「次に何をするか」を保持する。</p>
+ * <p>Working Set（どのファイルを使用しているか）とは別の責務として、 「何を目的としているか」「どこまで終わったか」「次に何をするか」を保持する。
  */
 public class TaskState {
 
   /** 現在継続中のタスクがない状態。 */
   public static final String STATUS_IDLE = "IDLE";
+
   /** 作業中。 */
   public static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
+
   /** 現在のタスクが完了した。 */
   public static final String STATUS_COMPLETED = "COMPLETED";
+
   /** 外部要因・不足情報・エラー等で進められない。 */
   public static final String STATUS_BLOCKED = "BLOCKED";
 
@@ -119,9 +121,7 @@ public class TaskState {
     }
   }
 
-  /**
-   * LLM コンテキストに渡す簡潔な表現を組み立てる。
-   */
+  /** LLM コンテキストに渡す簡潔な表現を組み立てる。 */
   public String renderForPrompt() {
     if (isEmpty()) {
       return "";

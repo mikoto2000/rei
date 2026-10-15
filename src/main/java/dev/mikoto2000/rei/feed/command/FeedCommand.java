@@ -1,14 +1,5 @@
 package dev.mikoto2000.rei.feed.command;
 
-import java.nio.file.InvalidPathException;
-import java.nio.file.Path;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
-import java.util.List;
-import java.util.concurrent.Callable;
-
-import org.springframework.stereotype.Component;
-
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.feed.Feed;
 import dev.mikoto2000.rei.feed.FeedBriefingItem;
@@ -20,7 +11,14 @@ import dev.mikoto2000.rei.feed.FeedUpdateResult;
 import dev.mikoto2000.rei.feed.FeedUpdateService;
 import dev.mikoto2000.rei.feed.OpmlImportException;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.concurrent.Callable;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
@@ -42,17 +40,78 @@ import picocli.CommandLine.Spec;
       FeedCommand.ItemCommand.class
     })
 public class FeedCommand {
-  private abstract static class ReportCommand implements Runnable {protected java.io.PrintWriter out=new java.io.PrintWriter(System.out,true);}
-  private static String report(ReportCommand command){var text=new java.io.StringWriter();command.out=new java.io.PrintWriter(text,true);command.run();return text.toString().replaceAll("[\\r\\n]+$","");}
-  public static String reportList(FeedService service){return report(new ListCommand(service));}
-  public static String reportAdd(FeedService service,String url,String name){var command=new AddCommand(service);command.url=url;command.displayName=name;return report(command);}
-  public static String reportEdit(FeedService service,long id,String name,Boolean enabled){var command=new EditCommand(service);command.id=id;command.displayName=name;command.enabled=Boolean.TRUE.equals(enabled);command.disabled=Boolean.FALSE.equals(enabled);return report(command);}
-  public static String reportDelete(FeedService service,long id){var command=new DeleteCommand(service);command.id=id;return report(command);}
-  public static String reportUpdate(FeedUpdateService service,Long id){var command=new UpdateCommand(service);command.id=id;return report(command);}
-  public static String reportSummary(FeedSummaryService service){var command=new SummaryCommand(service,null);return report(command);}
-  public static String reportItems(FeedService service,OffsetDateTime from,OffsetDateTime to,int limit){var command=new ItemCommand.ListCommand(service);command.from=from;command.to=to;command.limit=limit;return report(command);}
-  public static String reportItemSummary(FeedSummaryService service,long id){var command=new ItemCommand.SummarizeCommand(service);command.itemId=id;return report(command);}
-  public static String reportImport(FeedOpmlImportService service,String path){var command=new ImportOpmlCommand(service);command.path=path;var text=new java.io.StringWriter();var writer=new java.io.PrintWriter(text,true);new picocli.CommandLine(command).setOut(writer).setErr(writer);command.call();return text.toString().replaceAll("[\\r\\n]+$","");}
+  private abstract static class ReportCommand implements Runnable {
+    protected java.io.PrintWriter out = new java.io.PrintWriter(System.out, true);
+  }
+
+  private static String report(ReportCommand command) {
+    var text = new java.io.StringWriter();
+    command.out = new java.io.PrintWriter(text, true);
+    command.run();
+    return text.toString().replaceAll("[\\r\\n]+$", "");
+  }
+
+  public static String reportList(FeedService service) {
+    return report(new ListCommand(service));
+  }
+
+  public static String reportAdd(FeedService service, String url, String name) {
+    var command = new AddCommand(service);
+    command.url = url;
+    command.displayName = name;
+    return report(command);
+  }
+
+  public static String reportEdit(FeedService service, long id, String name, Boolean enabled) {
+    var command = new EditCommand(service);
+    command.id = id;
+    command.displayName = name;
+    command.enabled = Boolean.TRUE.equals(enabled);
+    command.disabled = Boolean.FALSE.equals(enabled);
+    return report(command);
+  }
+
+  public static String reportDelete(FeedService service, long id) {
+    var command = new DeleteCommand(service);
+    command.id = id;
+    return report(command);
+  }
+
+  public static String reportUpdate(FeedUpdateService service, Long id) {
+    var command = new UpdateCommand(service);
+    command.id = id;
+    return report(command);
+  }
+
+  public static String reportSummary(FeedSummaryService service) {
+    var command = new SummaryCommand(service, null);
+    return report(command);
+  }
+
+  public static String reportItems(
+      FeedService service, OffsetDateTime from, OffsetDateTime to, int limit) {
+    var command = new ItemCommand.ListCommand(service);
+    command.from = from;
+    command.to = to;
+    command.limit = limit;
+    return report(command);
+  }
+
+  public static String reportItemSummary(FeedSummaryService service, long id) {
+    var command = new ItemCommand.SummarizeCommand(service);
+    command.itemId = id;
+    return report(command);
+  }
+
+  public static String reportImport(FeedOpmlImportService service, String path) {
+    var command = new ImportOpmlCommand(service);
+    command.path = path;
+    var text = new java.io.StringWriter();
+    var writer = new java.io.PrintWriter(text, true);
+    new picocli.CommandLine(command).setOut(writer).setErr(writer);
+    command.call();
+    return text.toString().replaceAll("[\\r\\n]+$", "");
+  }
 
   @Component
   @Command(name = "import-opml", description = "OPML ファイルからフィードを一括登録します")
@@ -70,16 +129,21 @@ public class FeedCommand {
       this.importService = importService;
     }
 
-    @Spec
-    CommandSpec spec;
+    @Spec CommandSpec spec;
 
-    @Parameters(index = "0", paramLabel = "PATH", description = "OPML ファイルのパス", completionCandidates = dev.mikoto2000.rei.core.completion.PathCompletionCandidates.File.class)
+    @Parameters(
+        index = "0",
+        paramLabel = "PATH",
+        description = "OPML ファイルのパス",
+        completionCandidates =
+            dev.mikoto2000.rei.core.completion.PathCompletionCandidates.File.class)
     String path;
 
     @Override
     public Integer call() {
       try {
-        if (importService == null) throw new OpmlImportException("feed import service is unavailable");
+        if (importService == null)
+          throw new OpmlImportException("feed import service is unavailable");
         FeedOpmlImportResult result = importService.importFile(resolvePath());
         var out = spec.commandLine().getOut();
         out.println("OPML import completed.");
@@ -105,7 +169,10 @@ public class FeedCommand {
         return Path.of(System.getProperty("user.home")).resolve(path.substring(2));
       }
       Path input = Path.of(path);
-      return (input.isAbsolute() ? input : ProjectService.currentProjectOrStartupDirectory().resolve(input)).normalize();
+      return (input.isAbsolute()
+              ? input
+              : ProjectService.currentProjectOrStartupDirectory().resolve(input))
+          .normalize();
     }
 
     private void printDetails(String label, List<FeedOpmlImportResult.Entry> entries) {
@@ -113,9 +180,18 @@ public class FeedCommand {
       var out = spec.commandLine().getOut();
       out.println();
       out.println(label + ":");
-      entries.stream().limit(MAX_DETAILS).forEach(entry -> out.println(
-          "- " + singleLine(entry.subscription().xmlUrl()) + " (" + entry.reason() + ")"));
-      if (entries.size() > MAX_DETAILS) out.println("... and " + (entries.size() - MAX_DETAILS) + " more");
+      entries.stream()
+          .limit(MAX_DETAILS)
+          .forEach(
+              entry ->
+                  out.println(
+                      "- "
+                          + singleLine(entry.subscription().xmlUrl())
+                          + " ("
+                          + entry.reason()
+                          + ")"));
+      if (entries.size() > MAX_DETAILS)
+        out.println("... and " + (entries.size() - MAX_DETAILS) + " more");
     }
 
     private String singleLine(String value) {
@@ -139,7 +215,10 @@ public class FeedCommand {
     @Override
     public void run() {
       Feed created = feedService.add(url, displayName);
-      String resolvedName = created.displayName() == null || created.displayName().isBlank() ? "-" : created.displayName();
+      String resolvedName =
+          created.displayName() == null || created.displayName().isBlank()
+              ? "-"
+              : created.displayName();
       out.println("追加: " + created.id() + " | " + resolvedName + " | " + created.url());
     }
   }
@@ -160,9 +239,17 @@ public class FeedCommand {
       }
 
       for (Feed feed : feeds) {
-        String displayName = feed.displayName() == null || feed.displayName().isBlank() ? "-" : feed.displayName();
+        String displayName =
+            feed.displayName() == null || feed.displayName().isBlank() ? "-" : feed.displayName();
         String lastFetchedAt = feed.lastFetchedAt() == null ? "-" : feed.lastFetchedAt().toString();
-        out.println(displayName + " | " + feed.url() + " | " + lastFetchedAt + " | " + (feed.enabled() ? "enabled" : "disabled"));
+        out.println(
+            displayName
+                + " | "
+                + feed.url()
+                + " | "
+                + lastFetchedAt
+                + " | "
+                + (feed.enabled() ? "enabled" : "disabled"));
       }
     }
   }
@@ -197,8 +284,17 @@ public class FeedCommand {
         resolvedEnabled = false;
       }
       Feed updated = feedService.update(id, displayName, resolvedEnabled);
-      String resolvedName = updated.displayName() == null || updated.displayName().isBlank() ? "-" : updated.displayName();
-      out.println("更新: " + updated.id() + " | " + resolvedName + " | " + (updated.enabled() ? "enabled" : "disabled"));
+      String resolvedName =
+          updated.displayName() == null || updated.displayName().isBlank()
+              ? "-"
+              : updated.displayName();
+      out.println(
+          "更新: "
+              + updated.id()
+              + " | "
+              + resolvedName
+              + " | "
+              + (updated.enabled() ? "enabled" : "disabled"));
     }
   }
 
@@ -259,10 +355,10 @@ public class FeedCommand {
 
     @Override
     public void run() {
-      if(chatResponseNarrator!=null)chatResponseNarrator.reset();
+      if (chatResponseNarrator != null) chatResponseNarrator.reset();
       String summary = feedSummaryService.summarizeBriefing();
       out.println(summary);
-      if(chatResponseNarrator!=null)chatResponseNarrator.narrateIfCompleted(summary);
+      if (chatResponseNarrator != null) chatResponseNarrator.narrateIfCompleted(summary);
     }
   }
 
@@ -294,17 +390,32 @@ public class FeedCommand {
 
       @Override
       public void run() {
-        OffsetDateTime resolvedFrom = from == null
-            ? OffsetDateTime.now(ZoneOffset.UTC).toLocalDate().minusDays(1).atStartOfDay().atOffset(ZoneOffset.UTC)
-            : from;
+        OffsetDateTime resolvedFrom =
+            from == null
+                ? OffsetDateTime.now(ZoneOffset.UTC)
+                    .toLocalDate()
+                    .minusDays(1)
+                    .atStartOfDay()
+                    .atOffset(ZoneOffset.UTC)
+                : from;
         OffsetDateTime resolvedTo = to == null ? OffsetDateTime.now(ZoneOffset.UTC) : to;
-        List<FeedBriefingItem> items = feedService.listBriefingItems(resolvedFrom, resolvedTo, limit);
+        List<FeedBriefingItem> items =
+            feedService.listBriefingItems(resolvedFrom, resolvedTo, limit);
         if (items.isEmpty()) {
           out.println("対象期間の記事はありません");
           return;
         }
         for (FeedBriefingItem item : items) {
-          out.println(item.id() + " | " + item.publishedAt() + " | " + item.feedName() + " | " + item.title() + " | " + item.url());
+          out.println(
+              item.id()
+                  + " | "
+                  + item.publishedAt()
+                  + " | "
+                  + item.feedName()
+                  + " | "
+                  + item.title()
+                  + " | "
+                  + item.url());
         }
       }
     }

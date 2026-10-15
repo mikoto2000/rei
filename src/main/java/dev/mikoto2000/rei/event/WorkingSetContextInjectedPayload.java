@@ -7,5 +7,4 @@ package dev.mikoto2000.rei.event;
  * @param contextCharacters 注入したコンテキスト文字数
  */
 public record WorkingSetContextInjectedPayload(int itemCount, int contextCharacters)
-    implements AgentEventPayload {
-}
+    implements AgentEventPayload {}

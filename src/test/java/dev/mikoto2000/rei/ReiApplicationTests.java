@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei;
 
+import dev.mikoto2000.rei.ui.shell.ChatCommand;
+import dev.mikoto2000.rei.vectordocument.VectorDocumentRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.embedding.EmbeddingModel;
@@ -10,40 +12,32 @@ import org.springframework.context.ApplicationContext;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
-import dev.mikoto2000.rei.ui.shell.ChatCommand;
-import dev.mikoto2000.rei.vectordocument.VectorDocumentRepository;
-
 @SpringBootTest(properties = "spring.ai.openai.api-key=test-key")
 @org.junit.jupiter.api.Tag("integration")
 class ReiApplicationTests {
 
-	@MockitoBean
-	ChatModel chatModel;
+  @MockitoBean ChatModel chatModel;
 
-	@MockitoBean
-	EmbeddingModel embeddingModel;
+  @MockitoBean EmbeddingModel embeddingModel;
 
-	@MockitoBean
-	VectorStore vectorStore;
+  @MockitoBean VectorStore vectorStore;
 
-	@MockitoBean
-	VectorDocumentRepository vectorDocumentRepository;
+  @MockitoBean VectorDocumentRepository vectorDocumentRepository;
 
-	@Autowired
-	ApplicationContext applicationContext;
+  @Autowired ApplicationContext applicationContext;
 
-	@Test
-	void contextLoads() {
-	}
+  @Test
+  void contextLoads() {}
 
-	@Test
-	void passwordAuthenticationUserIsNotCreated() {
-		org.assertj.core.api.Assertions.assertThat(applicationContext.getBeansOfType(UserDetailsService.class)).isEmpty();
-	}
+  @Test
+  void passwordAuthenticationUserIsNotCreated() {
+    org.assertj.core.api.Assertions.assertThat(
+            applicationContext.getBeansOfType(UserDetailsService.class))
+        .isEmpty();
+  }
 
-	@Test
-	void chatCommandIsSpringBeanForPicocliFactory() {
-		applicationContext.getBean(ChatCommand.class);
-	}
-
+  @Test
+  void chatCommandIsSpringBeanForPicocliFactory() {
+    applicationContext.getBean(ChatCommand.class);
+  }
 }

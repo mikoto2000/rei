@@ -1,33 +1,51 @@
 package dev.mikoto2000.rei.voice;
-import java.util.function.Consumer;
+
 import dev.mikoto2000.rei.ui.shell.ShellEventOutput;
+import java.util.function.Consumer;
+
 public final class VoiceShellEventRenderer implements Consumer<VoiceEventPublisher.Event> {
   private final ShellEventOutput output;
-  public VoiceShellEventRenderer(ShellEventOutput output) { this.output=output; }
+
+  public VoiceShellEventRenderer(ShellEventOutput output) {
+    this.output = output;
+  }
+
   public void accept(VoiceEventPublisher.Event event) {
-    String text=switch(event.type()) {
-      case ASR_TIMING, CORRECTION_TIMING -> null;
-      case CORRECTION_RESULT -> "correction: "+event.detail();
-      case STATE_CHANGED -> event.detail().equals("LISTENING") ? "LISTENING: 受付中です" : event.detail();
-      case SEGMENT_QUEUE_FULL -> "認識待ちキューが満杯のため発話を破棄しました";
-      case SHORT_DROPPED -> "短すぎる発話を破棄しました";
-      case MAX_DROPPED -> "最大発話時間の上限に達した未完了発話を破棄しました";
-      case INTERRUPT_RESULT -> event.detail().equals("cancelled") ? "このShellの実行中Runへ取消を要求しました。再開には明示的な依頼が必要です" : "このShell・Sessionの実行中Runはありません";
-      case TTS_FAILED -> "ローカル読み上げに失敗しました。画面の応答と音声設定を確認してください";
-      case TTS_DROPPED -> "読み上げの長さ・キュー上限に達しました。画面の応答を確認してください";
-      case RESULT_REJECTED -> "空・無効・コマンド形式、または呼びかけ条件外の認識結果を破棄しました";
-      case INPUT_REJECTED -> "会話入力を受け付けられませんでした。/voice pending と送信先Sessionを確認してください";
-      case BACKEND_FAILED -> "音声モデル/JNIの初期化に失敗しました。モデル一式と --enable-native-access=ALL-UNNAMED を確認してください";
-      case CAPTURE_FAILED -> "選択マイクの録音/VADが停止しました。別マイクへは切り替えません";
-      case RECOGNITION_FAILED -> "音声認識に失敗して停止しました";
-      case RELEASE_FAILED -> "音声資源の解放に失敗しました";
-      case MODEL_PROGRESS, MODEL_STATE -> "models: "+event.detail();
-      case REVIEW_REQUIRED -> "認識の確認待ち: "+event.detail()+"。/voice pending、/voice confirm ID [--text 訂正文] または /voice pending cancel ID";
-      case TARGET_CHANGED -> "選択Project/Sessionが変わったため停止しました。新しい送信先で /voice on を実行してください";
-      case CAPTURE_RESUMED -> "録音の長い中断/時刻変更を検出し、古い発話を破棄して停止しました。マイクを再選択してください";
-      case DEVICE_CHANGED -> "選択デバイスの状態が変わり停止しました。再接続後に一覧を確認して明示的に再選択してください";
-      case DIAGNOSTIC_RESULT -> "診断結果（Agent送信なし）: "+event.detail();
-    };
-    if(text!=null){output.println("[voice] "+text);output.flush();}
+    String text =
+        switch (event.type()) {
+          case ASR_TIMING, CORRECTION_TIMING -> null;
+          case CORRECTION_RESULT -> "correction: " + event.detail();
+          case STATE_CHANGED ->
+              event.detail().equals("LISTENING") ? "LISTENING: 受付中です" : event.detail();
+          case SEGMENT_QUEUE_FULL -> "認識待ちキューが満杯のため発話を破棄しました";
+          case SHORT_DROPPED -> "短すぎる発話を破棄しました";
+          case MAX_DROPPED -> "最大発話時間の上限に達した未完了発話を破棄しました";
+          case INTERRUPT_RESULT ->
+              event.detail().equals("cancelled")
+                  ? "このShellの実行中Runへ取消を要求しました。再開には明示的な依頼が必要です"
+                  : "このShell・Sessionの実行中Runはありません";
+          case TTS_FAILED -> "ローカル読み上げに失敗しました。画面の応答と音声設定を確認してください";
+          case TTS_DROPPED -> "読み上げの長さ・キュー上限に達しました。画面の応答を確認してください";
+          case RESULT_REJECTED -> "空・無効・コマンド形式、または呼びかけ条件外の認識結果を破棄しました";
+          case INPUT_REJECTED -> "会話入力を受け付けられませんでした。/voice pending と送信先Sessionを確認してください";
+          case BACKEND_FAILED ->
+              "音声モデル/JNIの初期化に失敗しました。モデル一式と --enable-native-access=ALL-UNNAMED を確認してください";
+          case CAPTURE_FAILED -> "選択マイクの録音/VADが停止しました。別マイクへは切り替えません";
+          case RECOGNITION_FAILED -> "音声認識に失敗して停止しました";
+          case RELEASE_FAILED -> "音声資源の解放に失敗しました";
+          case MODEL_PROGRESS, MODEL_STATE -> "models: " + event.detail();
+          case REVIEW_REQUIRED ->
+              "認識の確認待ち: "
+                  + event.detail()
+                  + "。/voice pending、/voice confirm ID [--text 訂正文] または /voice pending cancel ID";
+          case TARGET_CHANGED -> "選択Project/Sessionが変わったため停止しました。新しい送信先で /voice on を実行してください";
+          case CAPTURE_RESUMED -> "録音の長い中断/時刻変更を検出し、古い発話を破棄して停止しました。マイクを再選択してください";
+          case DEVICE_CHANGED -> "選択デバイスの状態が変わり停止しました。再接続後に一覧を確認して明示的に再選択してください";
+          case DIAGNOSTIC_RESULT -> "診断結果（Agent送信なし）: " + event.detail();
+        };
+    if (text != null) {
+      output.println("[voice] " + text);
+      output.flush();
+    }
   }
 }

@@ -11,5 +11,5 @@ public record TopicCandidateGeneratedPayload(
     Double freshness,
     Double usefulness,
     Double intrusiveness,
-    Double confidence) implements AgentEventPayload {
-}
+    Double confidence)
+    implements AgentEventPayload {}

@@ -4,14 +4,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.nio.file.Path;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 
 class SkillCandidateEvaluatorTest {
 
   @Test
   void doesNotTreatNoSelectionAsMiss() {
-    SkillCandidateEvaluation evaluation = SkillCandidateEvaluator.evaluate(List.of(candidate("a")), null);
+    SkillCandidateEvaluation evaluation =
+        SkillCandidateEvaluator.evaluate(List.of(candidate("a")), null);
 
     assertThat(evaluation.selected()).isFalse();
     assertThat(evaluation.top1Hit()).isNull();
@@ -21,7 +21,8 @@ class SkillCandidateEvaluatorTest {
 
   @Test
   void reportsTop1Hit() {
-    SkillCandidateEvaluation evaluation = SkillCandidateEvaluator.evaluate(candidates("a", "b"), "a");
+    SkillCandidateEvaluation evaluation =
+        SkillCandidateEvaluator.evaluate(candidates("a", "b"), "a");
 
     assertThat(evaluation.top1Hit()).isTrue();
     assertThat(evaluation.top3Hit()).isTrue();
@@ -30,7 +31,8 @@ class SkillCandidateEvaluatorTest {
 
   @Test
   void reportsTop3HitOutsideTop1() {
-    SkillCandidateEvaluation evaluation = SkillCandidateEvaluator.evaluate(candidates("a", "b", "c"), "c");
+    SkillCandidateEvaluation evaluation =
+        SkillCandidateEvaluator.evaluate(candidates("a", "b", "c"), "c");
 
     assertThat(evaluation.top1Hit()).isFalse();
     assertThat(evaluation.top3Hit()).isTrue();
@@ -39,7 +41,8 @@ class SkillCandidateEvaluatorTest {
 
   @Test
   void reportsTop5Miss() {
-    SkillCandidateEvaluation evaluation = SkillCandidateEvaluator.evaluate(candidates("a", "b", "c", "d", "e"), "z");
+    SkillCandidateEvaluation evaluation =
+        SkillCandidateEvaluator.evaluate(candidates("a", "b", "c", "d", "e"), "z");
 
     assertThat(evaluation.top1Hit()).isFalse();
     assertThat(evaluation.top3Hit()).isFalse();

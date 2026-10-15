@@ -1,24 +1,28 @@
 package dev.mikoto2000.rei.core.project;
 
+import static org.assertj.core.api.Assertions.*;
+
+import dev.mikoto2000.rei.core.working.*;
+import dev.mikoto2000.rei.event.*;
 import java.nio.file.*;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
-import dev.mikoto2000.rei.core.working.*;
-import dev.mikoto2000.rei.event.*;
-import static org.assertj.core.api.Assertions.*;
 
 @org.junit.jupiter.api.Tag("integration")
 class ProjectSpringScopeTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @TempDir Path temp;
-  @Test void injectedWorkingSetProxySwitchesTargets() throws Exception {
+
+  @Test
+  void injectedWorkingSetProxySwitchesTargets() throws Exception {
     String prior = System.getProperty("rei.data-dir");
     System.setProperty("rei.data-dir", temp.resolve("data").toString());
     try (var beans = new AnnotationConfigApplicationContext()) {
       var a = Files.createDirectory(temp.resolve("a"));
       var b = Files.createDirectory(temp.resolve("b"));
-      var projects = connect(new ProjectService(a, new ProjectRegistry(temp.resolve("data/projects.json"))));
+      var projects =
+          connect(new ProjectService(a, new ProjectRegistry(temp.resolve("data/projects.json"))));
       beans.registerBean(Clock.class, Clock::systemUTC);
       beans.registerBean(AgentEventFactory.class, () -> new AgentEventFactory(Clock.systemUTC()));
       beans.registerBean(AgentEventBus.class, InMemoryAgentEventBus::new);
@@ -31,7 +35,8 @@ class ProjectSpringScopeTest extends dev.mikoto2000.rei.core.project.ProjectClie
       projects.cd(a.toString());
       assertThat(workingSet.getFiles()).hasSize(1);
     } finally {
-      if (prior == null) System.clearProperty("rei.data-dir"); else System.setProperty("rei.data-dir", prior);
+      if (prior == null) System.clearProperty("rei.data-dir");
+      else System.setProperty("rei.data-dir", prior);
     }
   }
 }

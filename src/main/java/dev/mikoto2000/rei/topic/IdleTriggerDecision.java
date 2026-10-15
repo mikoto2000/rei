@@ -12,8 +12,8 @@ public record IdleTriggerDecision(
     return new IdleTriggerDecision(true, idleDuration, null, requiredIdle);
   }
 
-  public static IdleTriggerDecision rejected(Duration idleDuration, IdleTriggerRejectReason reason,
-      Duration requiredIdle) {
+  public static IdleTriggerDecision rejected(
+      Duration idleDuration, IdleTriggerRejectReason reason, Duration requiredIdle) {
     return new IdleTriggerDecision(false, idleDuration, reason, requiredIdle);
   }
 }

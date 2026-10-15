@@ -6,7 +6,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class TextTools {
 
-  @Tool(name = "countCharacters", description = """
+  @Tool(
+      name = "countCharacters",
+      description =
+          """
       文字列の文字数を取得します。
       Java の UTF-16 code unit 数ではなく Unicode code point 数を返します。
       絵文字などのサロゲートペアは 1 文字として数えます。

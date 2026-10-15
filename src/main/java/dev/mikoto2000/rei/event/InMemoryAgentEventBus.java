@@ -3,7 +3,6 @@ package dev.mikoto2000.rei.event;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
@@ -11,8 +10,8 @@ import org.springframework.stereotype.Component;
 /**
  * プロセス内 In-memory Event Bus。
  *
- * <p>publish されたイベントに単調増加の sequence を付与し、各 Listener に通知する。
- * Listener の例外は Agent Core 全体の実行を止めないよう捕捉し、logging で観測可能にする。</p>
+ * <p>publish されたイベントに単調増加の sequence を付与し、各 Listener に通知する。 Listener の例外は Agent Core
+ * 全体の実行を止めないよう捕捉し、logging で観測可能にする。
  */
 @Component
 public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher {
@@ -21,32 +20,64 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
 
   private final List<AgentEventListener> listeners = new CopyOnWriteArrayList<>();
   private final List<AgentEventListener> boundaryListeners = new CopyOnWriteArrayList<>();
-  @Override public Subscription subscribeBoundary(AgentEventListener listener) {
-    boundaryListeners.add(listener); return () -> boundaryListeners.remove(listener);
+
+  @Override
+  public Subscription subscribeBoundary(AgentEventListener listener) {
+    boundaryListeners.add(listener);
+    return () -> boundaryListeners.remove(listener);
   }
-  @Override public void publishBoundary(AgentEvent event) {
+
+  @Override
+  public void publishBoundary(AgentEvent event) {
     for (var listener : boundaryListeners) listener.onEvent(event);
     publish(event);
   }
+
   private final AtomicLong sequence = new AtomicLong(0L);
   private final java.util.ArrayDeque<AgentEvent> pending = new java.util.ArrayDeque<>();
   private boolean dispatching;
   private final ReplayBuffer replay;
 
-  public InMemoryAgentEventBus() { this(new ReplayBuffer(10_000, java.time.Clock.systemUTC())); }
-  private InMemoryAgentEventBus(ReplayBuffer replay) { this.replay = replay; }
-  public static InMemoryAgentEventBus withReplayBuffer(ReplayBuffer replay) { return new InMemoryAgentEventBus(replay); }
-
-  @Override public synchronized ReplaySubscription subscribe(String runId, long fromSequence, AgentEventListener listener) {
-    var snapshot = replay.snapshot(runId, fromSequence);
-    var subscription = subscribe(event -> {
-      if (runId.equals(event.runId()) && event.sequence() > snapshot.latestSequence()) listener.onEvent(event);
-    });
-    return new ReplaySubscription(snapshot.events(), subscription, snapshot.latestSequence(), snapshot.terminalSequence());
+  public InMemoryAgentEventBus() {
+    this(new ReplayBuffer(10_000, java.time.Clock.systemUTC()));
   }
-  @Override public synchronized void purgeRun(String runId) { replay.purgeRun(runId); }
-  @Override public synchronized void purgeExpired() { replay.purgeExpired(); }
-  @Override public synchronized void purgeExpired(java.util.Set<String> protectedRuns) { replay.purgeExpired(protectedRuns); }
+
+  private InMemoryAgentEventBus(ReplayBuffer replay) {
+    this.replay = replay;
+  }
+
+  public static InMemoryAgentEventBus withReplayBuffer(ReplayBuffer replay) {
+    return new InMemoryAgentEventBus(replay);
+  }
+
+  @Override
+  public synchronized ReplaySubscription subscribe(
+      String runId, long fromSequence, AgentEventListener listener) {
+    var snapshot = replay.snapshot(runId, fromSequence);
+    var subscription =
+        subscribe(
+            event -> {
+              if (runId.equals(event.runId()) && event.sequence() > snapshot.latestSequence())
+                listener.onEvent(event);
+            });
+    return new ReplaySubscription(
+        snapshot.events(), subscription, snapshot.latestSequence(), snapshot.terminalSequence());
+  }
+
+  @Override
+  public synchronized void purgeRun(String runId) {
+    replay.purgeRun(runId);
+  }
+
+  @Override
+  public synchronized void purgeExpired() {
+    replay.purgeExpired();
+  }
+
+  @Override
+  public synchronized void purgeExpired(java.util.Set<String> protectedRuns) {
+    replay.purgeExpired(protectedRuns);
+  }
 
   @Override
   public Subscription subscribe(AgentEventListener listener) {
@@ -84,7 +115,11 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
           try {
             listener.onEvent(sequenced);
           } catch (RuntimeException e) {
-            log.warn("Agent event listener failed: type={}, listener={}", sequenced.type(), listener.getClass().getName(), e);
+            log.warn(
+                "Agent event listener failed: type={}, listener={}",
+                sequenced.type(),
+                listener.getClass().getName(),
+                e);
           }
         }
       }
@@ -111,6 +146,7 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
         event.runId(),
         event.correlationId(),
         event.parentEventId(),
-        event.payload(), event.projectId());
+        event.payload(),
+        event.projectId());
   }
 }

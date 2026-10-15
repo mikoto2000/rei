@@ -1,16 +1,13 @@
 package dev.mikoto2000.rei.bluesky;
 
-import java.time.OffsetDateTime;
-import java.util.List;
-
-import javax.sql.DataSource;
-
-import org.springframework.jdbc.core.simple.JdbcClient;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Repository;
-
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.llm.ConversationIds;
+import java.time.OffsetDateTime;
+import java.util.List;
+import javax.sql.DataSource;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.jdbc.core.simple.JdbcClient;
+import org.springframework.stereotype.Repository;
 
 @Repository
 public class BlueskyReplyConversationRepository {
@@ -23,7 +20,8 @@ public class BlueskyReplyConversationRepository {
   }
 
   @Autowired
-  public BlueskyReplyConversationRepository(DataSource dataSource, ConversationLogStore conversationLogStore) {
+  public BlueskyReplyConversationRepository(
+      DataSource dataSource, ConversationLogStore conversationLogStore) {
     this.jdbcClient = JdbcClient.create(dataSource);
     this.conversationLogStore = conversationLogStore;
     initializeSchema();
@@ -39,7 +37,9 @@ public class BlueskyReplyConversationRepository {
 
   public List<ConversationMessage> findRecent(String handle, int limit) {
     int safeLimit = Math.max(1, limit);
-    return jdbcClient.sql("""
+    return jdbcClient
+        .sql(
+            """
         SELECT role, content, created_at
         FROM bluesky_reply_conversations
         WHERE handle = ?
@@ -47,16 +47,20 @@ public class BlueskyReplyConversationRepository {
         LIMIT ?
         """)
         .params(handle, safeLimit)
-        .query((rs, rowNum) -> new ConversationMessage(
-            rs.getString("role"),
-            rs.getString("content"),
-            OffsetDateTime.parse(rs.getString("created_at"))))
+        .query(
+            (rs, rowNum) ->
+                new ConversationMessage(
+                    rs.getString("role"),
+                    rs.getString("content"),
+                    OffsetDateTime.parse(rs.getString("created_at"))))
         .list()
         .reversed();
   }
 
   public List<String> listHandles() {
-    return jdbcClient.sql("""
+    return jdbcClient
+        .sql(
+            """
         SELECT DISTINCT handle
         FROM bluesky_reply_conversations
         ORDER BY handle
@@ -66,7 +70,9 @@ public class BlueskyReplyConversationRepository {
   }
 
   private void append(String handle, String role, String content) {
-    jdbcClient.sql("""
+    jdbcClient
+        .sql(
+            """
         INSERT INTO bluesky_reply_conversations(handle, role, content, created_at)
         VALUES (?, ?, ?, ?)
         """)
@@ -78,7 +84,9 @@ public class BlueskyReplyConversationRepository {
   }
 
   private void initializeSchema() {
-    jdbcClient.sql("""
+    jdbcClient
+        .sql(
+            """
         CREATE TABLE IF NOT EXISTS bluesky_reply_conversations (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           handle TEXT NOT NULL,
@@ -86,9 +94,9 @@ public class BlueskyReplyConversationRepository {
           content TEXT NOT NULL,
           created_at TEXT NOT NULL
         )
-        """).update();
+        """)
+        .update();
   }
 
-  public record ConversationMessage(String role, String content, OffsetDateTime createdAt) {
-  }
+  public record ConversationMessage(String role, String content, OffsetDateTime createdAt) {}
 }

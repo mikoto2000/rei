@@ -1,15 +1,17 @@
 package dev.mikoto2000.rei.web;
 
+import static org.assertj.core.api.Assertions.*;
+
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.event.*;
 import java.time.Clock;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
-import static org.assertj.core.api.Assertions.*;
 
 class RunCancellationTest {
-  @Test void cancelBeforeBeginSurvivesAndStopsResourcesForOnlyThatRun() {
+  @Test
+  void cancelBeforeBeginSurvivesAndStopsResourcesForOnlyThatRun() {
     var service = new CommandCancellationService();
     var thread = new Thread();
     var child = new AtomicInteger();
@@ -32,9 +34,12 @@ class RunCancellationTest {
     }
   }
 
-  @Test void cancellationFactoryKeepsRunOwnershipAndTurnIdentity() {
-    var event = new AgentEventFactory(Clock.systemUTC()).runCancelled("one", null)
-        .withOwnership(RunRegistryTest.context("one"));
+  @Test
+  void cancellationFactoryKeepsRunOwnershipAndTurnIdentity() {
+    var event =
+        new AgentEventFactory(Clock.systemUTC())
+            .runCancelled("one", null)
+            .withOwnership(RunRegistryTest.context("one"));
     assertThat(event.type()).isEqualTo(AgentEventType.AGENT_RUN_CANCELLED);
     assertThat(event.runId()).isEqualTo("one");
     assertThat(event.turnId()).isEqualTo("one");

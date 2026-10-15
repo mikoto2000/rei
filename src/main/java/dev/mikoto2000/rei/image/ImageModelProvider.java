@@ -1,21 +1,19 @@
 package dev.mikoto2000.rei.image;
 
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmProperties;
+import io.micrometer.observation.ObservationRegistry;
 import java.time.Duration;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-
 import org.springframework.ai.image.ImageModel;
 import org.springframework.ai.openai.OpenAiImageModel;
 import org.springframework.ai.openai.OpenAiImageOptions;
-import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.ObjectProvider;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-
-import dev.mikoto2000.rei.llm.LlmFeature;
-import dev.mikoto2000.rei.llm.LlmProperties;
-import dev.mikoto2000.rei.event.AgentEventFactory;
-import dev.mikoto2000.rei.event.AgentEventPublisher;
-import io.micrometer.observation.ObservationRegistry;
 
 @Component
 public class ImageModelProvider {
@@ -28,8 +26,12 @@ public class ImageModelProvider {
   private final Map<String, ImageModel> cache = new ConcurrentHashMap<>();
 
   @Autowired
-  public ImageModelProvider(ObjectProvider<ImageModel> defaultImageModelProvider, LlmProperties properties,
-      ImageProperties imageProperties, AgentEventFactory eventFactory, AgentEventPublisher eventPublisher) {
+  public ImageModelProvider(
+      ObjectProvider<ImageModel> defaultImageModelProvider,
+      LlmProperties properties,
+      ImageProperties imageProperties,
+      AgentEventFactory eventFactory,
+      AgentEventPublisher eventPublisher) {
     this.defaultImageModelProvider = defaultImageModelProvider;
     this.properties = properties;
     this.imageProperties = imageProperties;
@@ -38,7 +40,12 @@ public class ImageModelProvider {
   }
 
   ImageModelProvider(ImageModel defaultImageModel, LlmProperties properties) {
-    this(new FixedObjectProvider<>(defaultImageModel), properties, new ImageProperties(), null, null);
+    this(
+        new FixedObjectProvider<>(defaultImageModel),
+        properties,
+        new ImageProperties(),
+        null,
+        null);
   }
 
   public ImageModel imageModel() {
@@ -48,13 +55,18 @@ public class ImageModelProvider {
   private ImageModel createImageModel() {
     ImageModel defaultImageModel = defaultImageModel();
     LlmProperties.Server server = properties.feature(LlmFeature.IMAGE_GENERATION);
-    ImageModel model = server == null || !server.hasCustomServer()
-        ? defaultImageModel
-        : new FallbackImageModel(LlmFeature.IMAGE_GENERATION, createOpenAiCompatibleImageModel(server),
-            defaultImageModel, server.getModel());
+    ImageModel model =
+        server == null || !server.hasCustomServer()
+            ? defaultImageModel
+            : new FallbackImageModel(
+                LlmFeature.IMAGE_GENERATION,
+                createOpenAiCompatibleImageModel(server),
+                defaultImageModel,
+                server.getModel());
     return eventFactory == null || eventPublisher == null
         ? model
-        : new AgentEventImageModel(LlmFeature.IMAGE_GENERATION, model, eventFactory, eventPublisher);
+        : new AgentEventImageModel(
+            LlmFeature.IMAGE_GENERATION, model, eventFactory, eventPublisher);
   }
 
   public String model(String overrideModel) {
@@ -70,7 +82,8 @@ public class ImageModelProvider {
 
   static String configuredModel(ImageModel model) {
     return model instanceof OpenAiImageModel openAi && openAi.getOptions() != null
-        ? openAi.getOptions().getModel() : null;
+        ? openAi.getOptions().getModel()
+        : null;
   }
 
   private ImageModel defaultImageModel() {
@@ -82,16 +95,22 @@ public class ImageModelProvider {
   }
 
   private ImageModel createOpenAiCompatibleImageModel(LlmProperties.Server server) {
-    OpenAiImageOptions.Builder options = OpenAiImageOptions.builder()
-        .baseUrl(dev.mikoto2000.rei.llm.OpenAiCompatibleEndpoint.baseUrl(server.getBaseUrl()))
-        .apiKey(server.getApiKey() == null || server.getApiKey().isBlank() ? "dummy-key" : server.getApiKey())
-        .timeout(Duration.ofSeconds(Math.max(1, imageProperties.getTimeoutSeconds())));
+    OpenAiImageOptions.Builder options =
+        OpenAiImageOptions.builder()
+            .baseUrl(dev.mikoto2000.rei.llm.OpenAiCompatibleEndpoint.baseUrl(server.getBaseUrl()))
+            .apiKey(
+                server.getApiKey() == null || server.getApiKey().isBlank()
+                    ? "dummy-key"
+                    : server.getApiKey())
+            .timeout(Duration.ofSeconds(Math.max(1, imageProperties.getTimeoutSeconds())));
     String model = model(null);
     if (model != null && !model.isBlank()) {
       options.model(model);
     }
-    return OpenAiImageModel.builder().options(options.build())
-        .observationRegistry(ObservationRegistry.NOOP).build();
+    return OpenAiImageModel.builder()
+        .options(options.build())
+        .observationRegistry(ObservationRegistry.NOOP)
+        .build();
   }
 
   private record FixedObjectProvider<T>(T value) implements ObjectProvider<T> {

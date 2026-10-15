@@ -1,5 +1,15 @@
 package dev.mikoto2000.rei.memory.command;
 
+import dev.mikoto2000.rei.memory.model.Memory;
+import dev.mikoto2000.rei.memory.model.MemoryScope;
+import dev.mikoto2000.rei.memory.model.MemoryStatus;
+import dev.mikoto2000.rei.memory.model.MemoryType;
+import dev.mikoto2000.rei.memory.service.ConsolidationReport;
+import dev.mikoto2000.rei.memory.service.MemoryConflictResolver;
+import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
+import dev.mikoto2000.rei.memory.service.MemoryExporter;
+import dev.mikoto2000.rei.memory.service.MemoryService;
+import dev.mikoto2000.rei.memory.util.SensitiveInfoDetector;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.List;
@@ -7,34 +17,25 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
-
-import org.springframework.stereotype.Component;
-
-import dev.mikoto2000.rei.memory.model.Memory;
-import dev.mikoto2000.rei.memory.model.MemoryScope;
-import dev.mikoto2000.rei.memory.model.MemoryStatus;
-import dev.mikoto2000.rei.memory.model.MemoryType;
-import dev.mikoto2000.rei.memory.service.ConsolidationReport;
-import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
-import dev.mikoto2000.rei.memory.service.MemoryConflictResolver;
-import dev.mikoto2000.rei.memory.service.MemoryExporter;
-import dev.mikoto2000.rei.memory.service.MemoryService;
-import dev.mikoto2000.rei.memory.util.SensitiveInfoDetector;
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
 @Component
-@Command(name = "memory", description = "記憶管理コマンド", subcommands = {
-    MemoryCommand.ListCommand.class,
-    MemoryCommand.ShowCommand.class,
-    MemoryCommand.SearchCommand.class,
-    MemoryCommand.ForgetCommand.class,
-    MemoryCommand.ExportCommand.class,
-    MemoryCommand.SummarizeCommand.class,
-    MemoryCommand.ConsolidateCommand.class
-})
+@Command(
+    name = "memory",
+    description = "記憶管理コマンド",
+    subcommands = {
+      MemoryCommand.ListCommand.class,
+      MemoryCommand.ShowCommand.class,
+      MemoryCommand.SearchCommand.class,
+      MemoryCommand.ForgetCommand.class,
+      MemoryCommand.ExportCommand.class,
+      MemoryCommand.SummarizeCommand.class,
+      MemoryCommand.ConsolidateCommand.class
+    })
 public class MemoryCommand {
 
   @Component
@@ -43,14 +44,24 @@ public class MemoryCommand {
   public static class ListCommand implements Runnable {
     private final MemoryService memoryService;
     private MemoryCommandSupport support;
+
     @org.springframework.beans.factory.annotation.Autowired
-    public void setSupport(MemoryCommandSupport support) { this.support=support; }
-    @Option(names="--limit",defaultValue="20") int pageLimit=20;
-    @Option(names="--offset",defaultValue="0") int offset;
+    public void setSupport(MemoryCommandSupport support) {
+      this.support = support;
+    }
+
+    @Option(names = "--limit", defaultValue = "20")
+    int pageLimit = 20;
+
+    @Option(names = "--offset", defaultValue = "0")
+    int offset;
 
     @Override
     public void run() {
-      if(support!=null) { System.out.println(support.list(pageLimit,offset)); return; }
+      if (support != null) {
+        System.out.println(support.list(pageLimit, offset));
+        return;
+      }
       List<Memory> memories = memoryService.listActiveWithExpiryCheck();
       if (memories.isEmpty()) {
         System.out.println("保存済みの記憶はありません");
@@ -79,11 +90,15 @@ public class MemoryCommand {
   public static class SearchCommand implements Runnable {
     private final MemoryService memoryService;
     private MemoryCommandSupport support;
+
     @org.springframework.beans.factory.annotation.Autowired
-    public void setSupport(MemoryCommandSupport support) { this.support=support; }
+    public void setSupport(MemoryCommandSupport support) {
+      this.support = support;
+    }
 
     String query;
-    @Parameters(index = "0..*", arity="1..*", description = "検索クエリ")
+
+    @Parameters(index = "0..*", arity = "1..*", description = "検索クエリ")
     String[] queryWords;
 
     @Option(names = "--limit", defaultValue = "10")
@@ -91,8 +106,11 @@ public class MemoryCommand {
 
     @Override
     public void run() {
-      if(queryWords!=null) query=String.join(" ",queryWords);
-      if(support!=null) { System.out.println(support.search(query,limit)); return; }
+      if (queryWords != null) query = String.join(" ", queryWords);
+      if (support != null) {
+        System.out.println(support.search(query, limit));
+        return;
+      }
       if (query == null || query.isBlank()) {
         System.out.println("検索クエリを入力してください");
         return;
@@ -116,15 +134,21 @@ public class MemoryCommand {
   public static class ForgetCommand implements Runnable {
     private final MemoryService memoryService;
     private MemoryCommandSupport support;
+
     @org.springframework.beans.factory.annotation.Autowired
-    public void setSupport(MemoryCommandSupport support) { this.support=support; }
+    public void setSupport(MemoryCommandSupport support) {
+      this.support = support;
+    }
 
     @Parameters(index = "0", description = "記憶ID")
     String id;
 
     @Override
     public void run() {
-      if(support!=null) { System.out.println(support.forget(id)); return; }
+      if (support != null) {
+        System.out.println(support.forget(id));
+        return;
+      }
       if (id == null || id.isBlank()) {
         System.out.println("有効な記憶 ID を入力してください");
         return;
@@ -145,11 +169,16 @@ public class MemoryCommand {
 
   @Component
   @RequiredArgsConstructor
-  @Command(name="show",description="記憶の詳細と出典を表示します")
+  @Command(name = "show", description = "記憶の詳細と出典を表示します")
   public static class ShowCommand implements Runnable {
     private final MemoryCommandSupport support;
-    @Parameters(index="0") String id;
-    public void run() { System.out.println(support.show(id)); }
+
+    @Parameters(index = "0")
+    String id;
+
+    public void run() {
+      System.out.println(support.show(id));
+    }
   }
 
   @Component
@@ -160,17 +189,30 @@ public class MemoryCommand {
 
     @Option(names = "--dir")
     String exportDir;
+
     private java.io.PrintWriter reportOutput;
-    private java.io.PrintWriter out() { return reportOutput==null?new java.io.PrintWriter(System.out,true):reportOutput; }
+
+    private java.io.PrintWriter out() {
+      return reportOutput == null ? new java.io.PrintWriter(System.out, true) : reportOutput;
+    }
+
     public String render(String directory) {
-      var command=new ExportCommand(memoryExporter);command.exportDir=directory;
-      var text=new java.io.StringWriter();command.reportOutput=new java.io.PrintWriter(text,true);command.run();return text.toString().stripTrailing();
+      var command = new ExportCommand(memoryExporter);
+      command.exportDir = directory;
+      var text = new java.io.StringWriter();
+      command.reportOutput = new java.io.PrintWriter(text, true);
+      command.run();
+      return text.toString().stripTrailing();
     }
 
     @Override
     public void run() {
-      MemoryExporter.ExportResult result = memoryExporter.export(exportDir == null
-          ? dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current().resolve("memory-export") : Path.of(exportDir));
+      MemoryExporter.ExportResult result =
+          memoryExporter.export(
+              exportDir == null
+                  ? dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current()
+                      .resolve("memory-export")
+                  : Path.of(exportDir));
       if (result.count() == 0) {
         out().println("エクスポート対象の記憶がありません");
         return;
@@ -187,13 +229,25 @@ public class MemoryCommand {
     private final MemoryConsolidatorService consolidatorService;
     private final MemoryService memoryService;
 
-    @Option(names = {"--approve", "--save"}, defaultValue = "false", description = "要約の保存を承認します")
+    @Option(
+        names = {"--approve", "--save"},
+        defaultValue = "false",
+        description = "要約の保存を承認します")
     boolean approve;
+
     private java.io.PrintWriter reportOutput;
-    private java.io.PrintWriter out() { return reportOutput==null?new java.io.PrintWriter(System.out,true):reportOutput; }
+
+    private java.io.PrintWriter out() {
+      return reportOutput == null ? new java.io.PrintWriter(System.out, true) : reportOutput;
+    }
+
     public String render(boolean approval) {
-      var command=new SummarizeCommand(consolidatorService,memoryService);command.approve=approval;
-      var text=new java.io.StringWriter();command.reportOutput=new java.io.PrintWriter(text,true);command.run();return text.toString().stripTrailing();
+      var command = new SummarizeCommand(consolidatorService, memoryService);
+      command.approve = approval;
+      var text = new java.io.StringWriter();
+      command.reportOutput = new java.io.PrintWriter(text, true);
+      command.run();
+      return text.toString().stripTrailing();
     }
 
     @Override
@@ -210,8 +264,17 @@ public class MemoryCommand {
           out().println("要約は未保存です。保存するには --approve を指定してください");
           return;
         }
-        Memory memory = new Memory(null, summary, MemoryType.EPISODE_SUMMARY, MemoryScope.SHORT_TERM,
-            MemoryStatus.CANDIDATE, 0.8d, null, OffsetDateTime.now(), OffsetDateTime.now());
+        Memory memory =
+            new Memory(
+                null,
+                summary,
+                MemoryType.EPISODE_SUMMARY,
+                MemoryScope.SHORT_TERM,
+                MemoryStatus.CANDIDATE,
+                0.8d,
+                null,
+                OffsetDateTime.now(),
+                OffsetDateTime.now());
         memoryService.save(memory);
         out().println("要約を記憶として保存しました");
       } catch (dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException e) {
@@ -231,13 +294,27 @@ public class MemoryCommand {
     private final SensitiveInfoDetector sensitiveInfoDetector;
     private final MemoryConflictResolver conflictResolver;
 
-    @Option(names = {"--approve", "--save"}, defaultValue = "false", description = "抽出候補の保存を承認します")
+    @Option(
+        names = {"--approve", "--save"},
+        defaultValue = "false",
+        description = "抽出候補の保存を承認します")
     boolean approve;
+
     private java.io.PrintWriter reportOutput;
-    private java.io.PrintWriter out() { return reportOutput==null?new java.io.PrintWriter(System.out,true):reportOutput; }
+
+    private java.io.PrintWriter out() {
+      return reportOutput == null ? new java.io.PrintWriter(System.out, true) : reportOutput;
+    }
+
     public String render(boolean approval) {
-      var command=new ConsolidateCommand(consolidatorService,memoryService,sensitiveInfoDetector,conflictResolver);command.approve=approval;
-      var text=new java.io.StringWriter();command.reportOutput=new java.io.PrintWriter(text,true);command.run();return text.toString().stripTrailing();
+      var command =
+          new ConsolidateCommand(
+              consolidatorService, memoryService, sensitiveInfoDetector, conflictResolver);
+      command.approve = approval;
+      var text = new java.io.StringWriter();
+      command.reportOutput = new java.io.PrintWriter(text, true);
+      command.run();
+      return text.toString().stripTrailing();
     }
 
     @Override
@@ -278,8 +355,14 @@ public class MemoryCommand {
           saved++;
         }
         ConsolidationReport report = ConsolidationReport.of(candidates.size(), saved, skipped);
-        out().println(
-            "統合結果 保存=" + report.savedCount() + " / スキップ=" + report.skippedCount() + " / 候補=" + report.totalCandidates());
+        out()
+            .println(
+                "統合結果 保存="
+                    + report.savedCount()
+                    + " / スキップ="
+                    + report.skippedCount()
+                    + " / 候補="
+                    + report.totalCandidates());
       } catch (dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException e) {
         out().println("[stopped] " + e.reason().name());
       } catch (IllegalStateException e) {
@@ -287,11 +370,11 @@ public class MemoryCommand {
       }
     }
 
-    private MemoryConflictResolver.ConflictResult waitConflictCheck(Memory candidate, List<Memory> active) {
+    private MemoryConflictResolver.ConflictResult waitConflictCheck(
+        Memory candidate, List<Memory> active) {
       int timeoutSec = Math.max(1, consolidatorService.conflictTimeoutSeconds());
       try {
-        return CompletableFuture
-            .supplyAsync(() -> conflictResolver.check(candidate, active))
+        return CompletableFuture.supplyAsync(() -> conflictResolver.check(candidate, active))
             .orTimeout(timeoutSec, TimeUnit.SECONDS)
             .join();
       } catch (CompletionException e) {

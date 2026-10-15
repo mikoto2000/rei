@@ -7,5 +7,4 @@ package dev.mikoto2000.rei.event;
  * @param reason 除去理由
  */
 public record WorkingSetItemRemovedPayload(String itemId, String reason)
-    implements AgentEventPayload {
-}
+    implements AgentEventPayload {}

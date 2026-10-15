@@ -47,8 +47,7 @@ class ConversationIdsTest {
         .isInstanceOf(IllegalArgumentException.class);
     assertThatThrownBy(() -> ConversationIds.blueskyManual(null))
         .isInstanceOf(IllegalArgumentException.class);
-    assertThatThrownBy(() -> ConversationIds.tool(""))
-        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> ConversationIds.tool("")).isInstanceOf(IllegalArgumentException.class);
   }
 
   @Test

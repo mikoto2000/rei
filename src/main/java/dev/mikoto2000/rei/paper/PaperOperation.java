@@ -5,11 +5,21 @@ import java.util.concurrent.*;
 import org.springframework.ai.chat.model.ToolContext;
 
 public record PaperOperation(String sessionId, RunExecutionContext execution, long deadlineNanos) {
-  public PaperOperation(String sessionId, RunExecutionContext execution) { this(sessionId, execution, Long.MAX_VALUE); }
-  public PaperOperation withDeadline(java.time.Duration timeout) {
-    return new PaperOperation(sessionId, execution,
-        Math.min(deadlineNanos, new dev.mikoto2000.rei.http.FetchOperation(() -> {}, Long.MAX_VALUE).withTimeout(timeout).deadlineNanos()));
+  public PaperOperation(String sessionId, RunExecutionContext execution) {
+    this(sessionId, execution, Long.MAX_VALUE);
   }
+
+  public PaperOperation withDeadline(java.time.Duration timeout) {
+    return new PaperOperation(
+        sessionId,
+        execution,
+        Math.min(
+            deadlineNanos,
+            new dev.mikoto2000.rei.http.FetchOperation(() -> {}, Long.MAX_VALUE)
+                .withTimeout(timeout)
+                .deadlineNanos()));
+  }
+
   public static PaperOperation local(String session) {
     return new PaperOperation(session, null);
   }

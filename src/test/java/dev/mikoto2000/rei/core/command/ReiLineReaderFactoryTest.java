@@ -1,18 +1,16 @@
 package dev.mikoto2000.rei.core.command;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
+import dev.mikoto2000.rei.ui.shell.RootCommand;
 import java.util.ArrayList;
 import java.util.List;
-
 import org.jline.reader.Candidate;
 import org.jline.reader.LineReader;
 import org.jline.reader.impl.DefaultParser;
 import org.junit.jupiter.api.Test;
-
-import dev.mikoto2000.rei.ui.shell.RootCommand;
 import picocli.CommandLine;
 
 class ReiLineReaderFactoryTest {

@@ -4,44 +4,64 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.core.configuration.CoreProperties;
+import dev.mikoto2000.rei.core.configuration.SystemPromptService;
+import dev.mikoto2000.rei.summarize.SummaryTools;
 import java.util.Arrays;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.beans.factory.ObjectProvider;
 
-import dev.mikoto2000.rei.core.configuration.CoreProperties;
-import dev.mikoto2000.rei.core.configuration.SystemPromptService;
-import dev.mikoto2000.rei.summarize.SummaryTools;
-
 class LlmChatClientProviderTest {
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
-      "false,false,false,false,delegateTask|delegateTasks",
-      "false,true,true,true,delegateTask|delegateTasks",
-      "true,false,false,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent",
-      "true,false,false,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent",
-      "true,true,false,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|delegateTaskGraph|getSubAgentGraph|resumeSubAgentGraph",
-      "true,false,true,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|compareSubAgentAnswers",
-      "true,false,true,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|compareSubAgentAnswers|judgeSubAgentAnswers",
-      "true,true,true,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|delegateTaskGraph|getSubAgentGraph|resumeSubAgentGraph|compareSubAgentAnswers|judgeSubAgentAnswers"
+    "false,false,false,false,delegateTask|delegateTasks",
+    "false,true,true,true,delegateTask|delegateTasks",
+    "true,false,false,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent",
+    "true,false,false,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent",
+    "true,true,false,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|delegateTaskGraph|getSubAgentGraph|resumeSubAgentGraph",
+    "true,false,true,false,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|compareSubAgentAnswers",
+    "true,false,true,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|compareSubAgentAnswers|judgeSubAgentAnswers",
+    "true,true,true,true,delegateTask|delegateTasks|listDurableSubAgents|getDurableSubAgent|resumeSubAgent|reconcileSubAgent|delegateTaskGraph|getSubAgentGraph|resumeSubAgentGraph|compareSubAgentAnswers|judgeSubAgentAnswers"
   })
-  void chatClientOffersOnlyEnabledSubAgentTools(boolean durable, boolean dag, boolean consensus,
-      boolean judge, String expectedNames) throws Exception {
+  void chatClientOffersOnlyEnabledSubAgentTools(
+      boolean durable, boolean dag, boolean consensus, boolean judge, String expectedNames)
+      throws Exception {
     var models = mock(LlmModelProvider.class);
     when(models.chatModel(LlmFeature.CHAT)).thenReturn(mock(ChatModel.class));
     when(models.chatOptions(LlmFeature.CHAT, null))
         .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
     var system = mock(SystemPromptService.class);
     when(system.systemPrompt()).thenReturn("system");
-    var provider = new LlmChatClientProvider(models, new CoreProperties("system", 100), system,
-        mock(ChatMemory.class), optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), null, null);
+    var provider =
+        new LlmChatClientProvider(
+            models,
+            new CoreProperties("system", 100),
+            system,
+            mock(ChatMemory.class),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            null,
+            null);
     var settings = new dev.mikoto2000.rei.subagent.SubAgentProperties();
     settings.setDurableEnabled(durable);
     settings.setDagEnabled(dag);
@@ -49,13 +69,20 @@ class LlmChatClientProviderTest {
     settings.setConsensusJudgeEnabled(judge);
     provider.setSubAgentProperties(settings);
     var tools = mock(dev.mikoto2000.rei.subagent.SubAgentTools.class);
-    when(tools.callback(org.mockito.ArgumentMatchers.anyString())).thenAnswer(invocation -> {
-      String name = invocation.getArgument(0);
-      var callback = mock(org.springframework.ai.tool.ToolCallback.class);
-      when(callback.getToolDefinition()).thenReturn(org.springframework.ai.tool.definition.ToolDefinition.builder()
-          .name(name).description(name).inputSchema("{}").build());
-      return callback;
-    });
+    when(tools.callback(org.mockito.ArgumentMatchers.anyString()))
+        .thenAnswer(
+            invocation -> {
+              String name = invocation.getArgument(0);
+              var callback = mock(org.springframework.ai.tool.ToolCallback.class);
+              when(callback.getToolDefinition())
+                  .thenReturn(
+                      org.springframework.ai.tool.definition.ToolDefinition.builder()
+                          .name(name)
+                          .description(name)
+                          .inputSchema("{}")
+                          .build());
+              return callback;
+            });
     ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> toolsProvider = optional(tools);
     when(toolsProvider.getObject()).thenReturn(tools);
     provider.setSubAgentTools(toolsProvider);
@@ -66,29 +93,55 @@ class LlmChatClientProviderTest {
     var request = requestField.get(client);
     var callbacksField = request.getClass().getDeclaredField("toolCallbacks");
     callbacksField.setAccessible(true);
-    var callbacks = ((List<?>) callbacksField.get(request)).stream()
-        .map(org.springframework.ai.tool.ToolCallback.class::cast).toList();
-    assertThat(callbacks).allMatch(dev.mikoto2000.rei.event.ToolEventCallbackDecorator.class::isInstance);
+    var callbacks =
+        ((List<?>) callbacksField.get(request))
+            .stream().map(org.springframework.ai.tool.ToolCallback.class::cast).toList();
+    assertThat(callbacks)
+        .allMatch(dev.mikoto2000.rei.event.ToolEventCallbackDecorator.class::isInstance);
     assertThat(callbacks.stream().map(callback -> callback.getToolDefinition().name()))
         .containsExactly(expectedNames.split("\\|"));
   }
 
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings={"EXCLUSIVE", "READ_ONLY"})
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"EXCLUSIVE", "READ_ONLY"})
   void toolUsingClientsReceiveCommonPolicyOnce(String mode) throws Exception {
     var models = mock(LlmModelProvider.class);
     var model = mock(ChatModel.class);
     when(models.chatModel(LlmFeature.CHAT)).thenReturn(model);
     when(models.subAgentChatModel()).thenReturn(model);
-    when(models.chatOptions(LlmFeature.CHAT, null)).thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
+    when(models.chatOptions(LlmFeature.CHAT, null))
+        .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
     var system = mock(SystemPromptService.class);
     when(system.systemPrompt()).thenReturn("parent personality");
-    var provider = new LlmChatClientProvider(models, new CoreProperties("system", 100), system,
-        mock(ChatMemory.class), optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), null, null);
-    var client = provider.parallelChatClient(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.valueOf(mode));
+    var provider =
+        new LlmChatClientProvider(
+            models,
+            new CoreProperties("system", 100),
+            system,
+            mock(ChatMemory.class),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            null,
+            null);
+    var client =
+        provider.parallelChatClient(
+            dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.valueOf(mode));
     var field = client.getClass().getDeclaredField("defaultChatClientRequest");
     field.setAccessible(true);
     var request = field.get(client);
@@ -96,89 +149,180 @@ class LlmChatClientProviderTest {
     systemField.setAccessible(true);
     String prompt = (String) systemField.get(request);
     assertThat(prompt).contains("Common tool usage policy", "same response", "documented limits");
-    assertThat(prompt.indexOf("Common tool usage policy")).isEqualTo(prompt.lastIndexOf("Common tool usage policy"));
+    assertThat(prompt.indexOf("Common tool usage policy"))
+        .isEqualTo(prompt.lastIndexOf("Common tool usage policy"));
     if (mode.equals("READ_ONLY")) {
       assertThat(prompt).doesNotContain("parent personality");
-      when(model.getOptions()).thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
-      when(model.call(org.mockito.ArgumentMatchers.any(org.springframework.ai.chat.prompt.Prompt.class)))
-          .thenReturn(new org.springframework.ai.chat.model.ChatResponse(List.of(new org.springframework.ai.chat.model.Generation(
-              new org.springframework.ai.chat.messages.AssistantMessage("answer")))));
-      client.prompt(new org.springframework.ai.chat.prompt.Prompt(List.of(
-          new org.springframework.ai.chat.messages.SystemMessage("Request guidance"),
-          new org.springframework.ai.chat.messages.UserMessage("question")))).call().content();
-      var captured = org.mockito.ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
+      when(model.getOptions())
+          .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
+      when(model.call(
+              org.mockito.ArgumentMatchers.any(org.springframework.ai.chat.prompt.Prompt.class)))
+          .thenReturn(
+              new org.springframework.ai.chat.model.ChatResponse(
+                  List.of(
+                      new org.springframework.ai.chat.model.Generation(
+                          new org.springframework.ai.chat.messages.AssistantMessage("answer")))));
+      client
+          .prompt(
+              new org.springframework.ai.chat.prompt.Prompt(
+                  List.of(
+                      new org.springframework.ai.chat.messages.SystemMessage("Request guidance"),
+                      new org.springframework.ai.chat.messages.UserMessage("question"))))
+          .call()
+          .content();
+      var captured =
+          org.mockito.ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
       org.mockito.Mockito.verify(model).call(captured.capture());
-      String sent = captured.getValue().getInstructions().stream().map(org.springframework.ai.chat.messages.Message::getText)
-          .collect(java.util.stream.Collectors.joining("\n"));
-      assertThat(sent).contains("Request guidance", "Common tool usage policy").doesNotContain("parent personality");
-      assertThat(sent.indexOf("Common tool usage policy")).isEqualTo(sent.lastIndexOf("Common tool usage policy"));
+      String sent =
+          captured.getValue().getInstructions().stream()
+              .map(org.springframework.ai.chat.messages.Message::getText)
+              .collect(java.util.stream.Collectors.joining("\n"));
+      assertThat(sent)
+          .contains("Request guidance", "Common tool usage policy")
+          .doesNotContain("parent personality");
+      assertThat(sent.indexOf("Common tool usage policy"))
+          .isEqualTo(sent.lastIndexOf("Common tool usage policy"));
     }
   }
 
   @Test
   void conversationClientHasNoSharedMemoryAdvisorsOrTools() {
     var model = mock(ChatModel.class);
-    when(model.getOptions()).thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
-    when(model.call(org.mockito.ArgumentMatchers.any(org.springframework.ai.chat.prompt.Prompt.class))).thenReturn(new org.springframework.ai.chat.model.ChatResponse(
-        List.of(new org.springframework.ai.chat.model.Generation(new org.springframework.ai.chat.messages.AssistantMessage("answer")))));
+    when(model.getOptions())
+        .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
+    when(model.call(
+            org.mockito.ArgumentMatchers.any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(
+            new org.springframework.ai.chat.model.ChatResponse(
+                List.of(
+                    new org.springframework.ai.chat.model.Generation(
+                        new org.springframework.ai.chat.messages.AssistantMessage("answer")))));
     var models = mock(LlmModelProvider.class);
     when(models.subAgentChatModel()).thenReturn(model);
-    when(models.chatOptions(LlmFeature.CHAT, null)).thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
+    when(models.chatOptions(LlmFeature.CHAT, null))
+        .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
     var memory = mock(ChatMemory.class);
-    var provider = new LlmChatClientProvider(models, new CoreProperties("system", 100), mock(SystemPromptService.class), memory,
-        optional(null), optional(null), optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null), optional(null), optional(null), null, null);
-    assertThat(provider.parallelChatClient(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.CONVERSATION)
-        .prompt("question").call().content()).isEqualTo("answer");
-    var captured = org.mockito.ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
+    var provider =
+        new LlmChatClientProvider(
+            models,
+            new CoreProperties("system", 100),
+            mock(SystemPromptService.class),
+            memory,
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            null,
+            null);
+    assertThat(
+            provider
+                .parallelChatClient(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.CONVERSATION)
+                .prompt("question")
+                .call()
+                .content())
+        .isEqualTo("answer");
+    var captured =
+        org.mockito.ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
     org.mockito.Mockito.verify(model).call(captured.capture());
     assertThat(captured.getValue().getInstructions()).hasSize(1);
-    assertThat(((org.springframework.ai.model.tool.ToolCallingChatOptions)captured.getValue().getOptions()).getToolCallbacks()).isEmpty();
+    assertThat(
+            ((org.springframework.ai.model.tool.ToolCallingChatOptions)
+                    captured.getValue().getOptions())
+                .getToolCallbacks())
+        .isEmpty();
     org.mockito.Mockito.verifyNoInteractions(memory);
   }
+
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings={"memory","voice-correction"})
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"memory", "voice-correction"})
   void memoryProcessesOnlySuppliedEvidenceWithoutToolsOrAdvisors(String feature) {
     var prompts = new java.util.ArrayList<org.springframework.ai.chat.prompt.Prompt>();
-    ChatModel model = new ChatModel() {
-      @Override public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
-        return org.springframework.ai.openai.OpenAiChatOptions.builder().build();
-      }
-      @Override public org.springframework.ai.chat.model.ChatResponse call(org.springframework.ai.chat.prompt.Prompt prompt) {
-        prompts.add(prompt);
-        return new org.springframework.ai.chat.model.ChatResponse(List.of(new org.springframework.ai.chat.model.Generation(
-            new org.springframework.ai.chat.messages.AssistantMessage("[]"))));
-      }
-    };
+    ChatModel model =
+        new ChatModel() {
+          @Override
+          public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
+            return org.springframework.ai.openai.OpenAiChatOptions.builder().build();
+          }
+
+          @Override
+          public org.springframework.ai.chat.model.ChatResponse call(
+              org.springframework.ai.chat.prompt.Prompt prompt) {
+            prompts.add(prompt);
+            return new org.springframework.ai.chat.model.ChatResponse(
+                List.of(
+                    new org.springframework.ai.chat.model.Generation(
+                        new org.springframework.ai.chat.messages.AssistantMessage("[]"))));
+          }
+        };
     var models = mock(LlmModelProvider.class);
     when(models.memoryChatModel()).thenReturn(model);
     when(models.voiceCorrectionChatModel()).thenReturn(model);
-    var originalOptions = org.springframework.ai.openai.OpenAiChatOptions.builder()
-        .model("memory-model").temperature(0.2).maxCompletionTokens(321)
-        .toolChoice("auto").build();
+    var originalOptions =
+        org.springframework.ai.openai.OpenAiChatOptions.builder()
+            .model("memory-model")
+            .temperature(0.2)
+            .maxCompletionTokens(321)
+            .toolChoice("auto")
+            .build();
     when(models.chatOptions(feature, null)).thenReturn(originalOptions);
     var memory = mock(ChatMemory.class);
     var system = mock(SystemPromptService.class);
-    var provider = new LlmChatClientProvider(models, new CoreProperties("system", 100), system, memory,
-        optional(mock(dev.mikoto2000.rei.core.Tools.class)), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null),
-        optional(mock(dev.mikoto2000.rei.temporal.RuntimeContextAdvisor.class)), optional(null),
-        optional(mock(dev.mikoto2000.rei.core.working.WorkingSetAdvisor.class)),
-        optional(mock(dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor.class)),
-        optional(null), optional(mock(dev.mikoto2000.rei.event.ToolEventCallbackProvider.class)), null, null);
+    var provider =
+        new LlmChatClientProvider(
+            models,
+            new CoreProperties("system", 100),
+            system,
+            memory,
+            optional(mock(dev.mikoto2000.rei.core.Tools.class)),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(mock(dev.mikoto2000.rei.temporal.RuntimeContextAdvisor.class)),
+            optional(null),
+            optional(mock(dev.mikoto2000.rei.core.working.WorkingSetAdvisor.class)),
+            optional(mock(dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor.class)),
+            optional(null),
+            optional(mock(dev.mikoto2000.rei.event.ToolEventCallbackProvider.class)),
+            null,
+            null);
 
-    assertThat(provider.chatClient(feature).prompt("supplied evidence").call().content()).isEqualTo("[]");
+    assertThat(provider.chatClient(feature).prompt("supplied evidence").call().content())
+        .isEqualTo("[]");
     assertThat(prompts).hasSize(1);
     assertThat(prompts.getFirst().getInstructions()).hasSize(1);
-    assertThat(prompts.getFirst().getInstructions().getFirst().getText()).isEqualTo("supplied evidence");
-    var options = (org.springframework.ai.model.tool.ToolCallingChatOptions) prompts.getFirst().getOptions();
-    assertThat(((org.springframework.ai.openai.OpenAiChatOptions) options).getToolChoice()).isEqualTo("none");
+    assertThat(prompts.getFirst().getInstructions().getFirst().getText())
+        .isEqualTo("supplied evidence");
+    var options =
+        (org.springframework.ai.model.tool.ToolCallingChatOptions) prompts.getFirst().getOptions();
+    assertThat(((org.springframework.ai.openai.OpenAiChatOptions) options).getToolChoice())
+        .isEqualTo("none");
     assertThat(options.getToolCallbacks()).isEmpty();
     assertThat(options.getModel()).isEqualTo("memory-model");
     assertThat(options.getTemperature()).isEqualTo(0.2);
-    assertThat(((org.springframework.ai.openai.OpenAiChatOptions) options).getMaxCompletionTokens()).isEqualTo(321);
+    assertThat(((org.springframework.ai.openai.OpenAiChatOptions) options).getMaxCompletionTokens())
+        .isEqualTo(321);
     assertThat(originalOptions.getToolChoice()).isEqualTo("auto");
     org.mockito.Mockito.verifyNoInteractions(memory, system);
   }
@@ -188,39 +332,86 @@ class LlmChatClientProviderTest {
   void requestsWithoutAnApplicationRunRetainToolCalling(String feature) {
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     var toolCalls = new java.util.concurrent.atomic.AtomicInteger();
-    ChatModel model = new ChatModel() {
-      @Override public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
-        return org.springframework.ai.openai.OpenAiChatOptions.builder().model("local").build();
-      }
-      @Override public org.springframework.ai.chat.model.ChatResponse call(org.springframework.ai.chat.prompt.Prompt prompt) {
-      if (calls.incrementAndGet() > 1) return new org.springframework.ai.chat.model.ChatResponse(List.of(
-          new org.springframework.ai.chat.model.Generation(new org.springframework.ai.chat.messages.AssistantMessage("done"))));
-      return new org.springframework.ai.chat.model.ChatResponse(List.of(new org.springframework.ai.chat.model.Generation(
-          org.springframework.ai.chat.messages.AssistantMessage.builder().content("").toolCalls(List.of(
-              new org.springframework.ai.chat.messages.AssistantMessage.ToolCall("call-1", "function", "test", "{}"))).build())));
-      }
-    };
+    ChatModel model =
+        new ChatModel() {
+          @Override
+          public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
+            return org.springframework.ai.openai.OpenAiChatOptions.builder().model("local").build();
+          }
+
+          @Override
+          public org.springframework.ai.chat.model.ChatResponse call(
+              org.springframework.ai.chat.prompt.Prompt prompt) {
+            if (calls.incrementAndGet() > 1)
+              return new org.springframework.ai.chat.model.ChatResponse(
+                  List.of(
+                      new org.springframework.ai.chat.model.Generation(
+                          new org.springframework.ai.chat.messages.AssistantMessage("done"))));
+            return new org.springframework.ai.chat.model.ChatResponse(
+                List.of(
+                    new org.springframework.ai.chat.model.Generation(
+                        org.springframework.ai.chat.messages.AssistantMessage.builder()
+                            .content("")
+                            .toolCalls(
+                                List.of(
+                                    new org.springframework.ai.chat.messages.AssistantMessage
+                                        .ToolCall("call-1", "function", "test", "{}")))
+                            .build())));
+          }
+        };
     var models = mock(LlmModelProvider.class);
     when(models.chatModel(feature)).thenReturn(model);
-    when(models.chatOptions(feature, null)).thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder()
-        .model("local").build());
-    var system = mock(SystemPromptService.class); when(system.systemPrompt()).thenReturn("system");
-    var provider = new LlmChatClientProvider(models, new CoreProperties("system", 100), system,
-        org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build(),
-        optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), null, null);
-    var callback = new org.springframework.ai.tool.ToolCallback() {
-      @Override public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
-        return org.springframework.ai.tool.definition.ToolDefinition.builder().name("test").description("test")
-            .inputSchema("{\"type\":\"object\",\"properties\":{}}").build();
-      }
-      @Override public String call(String input) { toolCalls.incrementAndGet(); return "ok"; }
-    };
+    when(models.chatOptions(feature, null))
+        .thenReturn(
+            org.springframework.ai.openai.OpenAiChatOptions.builder().model("local").build());
+    var system = mock(SystemPromptService.class);
+    when(system.systemPrompt()).thenReturn("system");
+    var provider =
+        new LlmChatClientProvider(
+            models,
+            new CoreProperties("system", 100),
+            system,
+            org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build(),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            null,
+            null);
+    var callback =
+        new org.springframework.ai.tool.ToolCallback() {
+          @Override
+          public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
+            return org.springframework.ai.tool.definition.ToolDefinition.builder()
+                .name("test")
+                .description("test")
+                .inputSchema("{\"type\":\"object\",\"properties\":{}}")
+                .build();
+          }
 
-    var response = provider.chatClient(feature).prompt().user("test").tools(callback).call().chatResponse();
+          @Override
+          public String call(String input) {
+            toolCalls.incrementAndGet();
+            return "ok";
+          }
+        };
+
+    var response =
+        provider.chatClient(feature).prompt().user("test").tools(callback).call().chatResponse();
 
     assertThat(response.hasToolCalls()).isFalse();
     assertThat(calls).hasValue(2);
@@ -229,38 +420,75 @@ class LlmChatClientProviderTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
-  void persistedSessionHistoryIsAvailableRegardlessOfCompression(boolean compression,
-      @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) {
+  void persistedSessionHistoryIsAvailableRegardlessOfCompression(
+      boolean compression, @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) {
     var turns = new dev.mikoto2000.rei.conversation.ConversationTurnStore(directory);
-    var context = new dev.mikoto2000.rei.core.chat.AgentRunContext("saved-run", "chat:saved", directory);
+    var context =
+        new dev.mikoto2000.rei.core.chat.AgentRunContext("saved-run", "chat:saved", directory);
     turns.startOrdered(context, "persisted-session-question", java.time.Instant.now());
-    turns.finish(context, dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.COMPLETED, "persisted-session-answer");
+    turns.finish(
+        context,
+        dev.mikoto2000.rei.conversation.ConversationTurnStore.Status.COMPLETED,
+        "persisted-session-answer");
     var prompts = new java.util.ArrayList<org.springframework.ai.chat.prompt.Prompt>();
-    ChatModel model = prompt -> {
-      prompts.add(prompt);
-      return new org.springframework.ai.chat.model.ChatResponse(List.of(new org.springframework.ai.chat.model.Generation(
-          new org.springframework.ai.chat.messages.AssistantMessage("response"))));
-    };
+    ChatModel model =
+        prompt -> {
+          prompts.add(prompt);
+          return new org.springframework.ai.chat.model.ChatResponse(
+              List.of(
+                  new org.springframework.ai.chat.model.Generation(
+                      new org.springframework.ai.chat.messages.AssistantMessage("response"))));
+        };
     var models = mock(LlmModelProvider.class);
     when(models.chatModel(LlmFeature.CHAT)).thenReturn(model);
-    when(models.chatOptions(LlmFeature.CHAT, null)).thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
-    var system = mock(SystemPromptService.class); when(system.systemPrompt()).thenReturn("system");
+    when(models.chatOptions(LlmFeature.CHAT, null))
+        .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
+    var system = mock(SystemPromptService.class);
+    when(system.systemPrompt()).thenReturn("system");
     var memory = org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build();
-    var provider = new LlmChatClientProvider(models, new CoreProperties("system", 100), system, memory,
-        optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), null, null);
+    var provider =
+        new LlmChatClientProvider(
+            models,
+            new CoreProperties("system", 100),
+            system,
+            memory,
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            null,
+            null);
     var properties = new dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties();
     properties.setEnabled(compression);
-    var history = new dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor(
-        new dev.mikoto2000.rei.conversation.ConversationTurnStore(directory), memory,
-        new dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository(directory));
+    var history =
+        new dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor(
+            new dev.mikoto2000.rei.conversation.ConversationTurnStore(directory),
+            memory,
+            new dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository(directory));
     provider.setContextCompression(null, history, null, properties);
-    provider.chatClient(LlmFeature.CHAT).prompt().user("continue")
-        .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, "chat:saved")).call().content();
-    assertThat(prompts.getLast().toString()).contains("persisted-session-question", "persisted-session-answer");
+    provider
+        .chatClient(LlmFeature.CHAT)
+        .prompt()
+        .user("continue")
+        .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, "chat:saved"))
+        .call()
+        .content();
+    assertThat(prompts.getLast().toString())
+        .contains("persisted-session-question", "persisted-session-answer");
   }
 
   @Test
@@ -271,19 +499,39 @@ class LlmChatClientProviderTest {
         .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
     var systemPrompt = mock(SystemPromptService.class);
     when(systemPrompt.systemPrompt()).thenReturn("system prompt");
-    var provider = new LlmChatClientProvider(models, new CoreProperties("system prompt", 100),
-        systemPrompt, mock(ChatMemory.class),
-        optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), null, null);
+    var provider =
+        new LlmChatClientProvider(
+            models,
+            new CoreProperties("system prompt", 100),
+            systemPrompt,
+            mock(ChatMemory.class),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            null,
+            null);
     provider.setSummaryTools(optional(mock(SummaryTools.class)));
 
     var external = mock(dev.mikoto2000.rei.externalagent.ExternalAgentTools.class);
     var first = mock(org.springframework.ai.tool.ToolCallback.class);
     var second = mock(org.springframework.ai.tool.ToolCallback.class);
-    when(external.callbacks()).thenReturn(new org.springframework.ai.tool.ToolCallback[]{first, second});
+    when(external.callbacks())
+        .thenReturn(new org.springframework.ai.tool.ToolCallback[] {first, second});
     provider.setExternalAgentTools(external, null);
 
     var client = provider.chatClient(LlmFeature.CHAT);
@@ -295,9 +543,11 @@ class LlmChatClientProviderTest {
     assertThat(directCallbacks.get(request)).isEqualTo(List.of(first, second));
     var callbacksField = request.getClass().getDeclaredField("toolCallbackProviders");
     callbacksField.setAccessible(true);
-    var callbacks = ((List<?>) callbacksField.get(request)).stream()
-        .map(ToolCallbackProvider.class::cast)
-        .flatMap(callbacksProvider -> Arrays.stream(callbacksProvider.getToolCallbacks()));
+    var callbacks =
+        ((List<?>) callbacksField.get(request))
+            .stream()
+                .map(ToolCallbackProvider.class::cast)
+                .flatMap(callbacksProvider -> Arrays.stream(callbacksProvider.getToolCallbacks()));
     assertThat(callbacks.map(callback -> callback.getToolDefinition().name()))
         .containsExactly("getLastSummary");
   }
@@ -310,13 +560,32 @@ class LlmChatClientProviderTest {
         .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
     var systemPrompt = mock(SystemPromptService.class);
     when(systemPrompt.systemPrompt()).thenReturn("system prompt");
-    var provider = new LlmChatClientProvider(models, new CoreProperties("system prompt", 100),
-        systemPrompt, mock(ChatMemory.class),
-        optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(mock(dev.mikoto2000.rei.bluesky.BlueskyPostTools.class)), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(mock(dev.mikoto2000.rei.event.ToolEventCallbackProvider.class)), null, null);
+    var provider =
+        new LlmChatClientProvider(
+            models,
+            new CoreProperties("system prompt", 100),
+            systemPrompt,
+            mock(ChatMemory.class),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(mock(dev.mikoto2000.rei.bluesky.BlueskyPostTools.class)),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(mock(dev.mikoto2000.rei.event.ToolEventCallbackProvider.class)),
+            null,
+            null);
     provider.setSummaryTools(optional(mock(SummaryTools.class)));
 
     var client = provider.chatClient(LlmFeature.BLUESKY_REPLY);
@@ -325,11 +594,12 @@ class LlmChatClientProviderTest {
     var request = requestField.get(client);
     var callbacksField = request.getClass().getDeclaredField("toolCallbackProviders");
     callbacksField.setAccessible(true);
-    var callbacks = ((List<?>) callbacksField.get(request)).stream()
-        .map(ToolCallbackProvider.class::cast)
-        .flatMap(callbacksProvider -> Arrays.stream(callbacksProvider.getToolCallbacks()));
-    assertThat(callbacks.map(callback -> callback.getToolDefinition().name()))
-        .isEmpty();
+    var callbacks =
+        ((List<?>) callbacksField.get(request))
+            .stream()
+                .map(ToolCallbackProvider.class::cast)
+                .flatMap(callbacksProvider -> Arrays.stream(callbacksProvider.getToolCallbacks()));
+    assertThat(callbacks.map(callback -> callback.getToolDefinition().name())).isEmpty();
   }
 
   private static <T> ObjectProvider<T> optional(T value) {

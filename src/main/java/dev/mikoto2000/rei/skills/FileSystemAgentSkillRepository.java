@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
-
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
@@ -59,10 +58,14 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
         continue;
       }
       try (var stream = Files.list(skillsDirectory)) {
-        stream.filter(Files::isDirectory)
+        stream
+            .filter(Files::isDirectory)
             .map(path -> path.resolve(SKILL_FILE_NAME))
             .filter(Files::isRegularFile)
-            .forEach(skillFile -> loadSkill(skillFile).ifPresent(skill -> skills.putIfAbsent(skill.name(), skill)));
+            .forEach(
+                skillFile ->
+                    loadSkill(skillFile)
+                        .ifPresent(skill -> skills.putIfAbsent(skill.name(), skill)));
       } catch (IOException e) {
         log.warn("Failed to scan Agent Skills directory: {}", skillsDirectory, e);
       }
@@ -80,8 +83,15 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
       }
       String description = parsed.metadata().getOrDefault("description", "");
       boolean enabled = Boolean.parseBoolean(parsed.metadata().getOrDefault("enabled", "true"));
-      return Optional.of(new AgentSkill(name, description, parsed.keywords(), enabled, skillFile.getParent(), skillFile,
-          parsed.instructions()));
+      return Optional.of(
+          new AgentSkill(
+              name,
+              description,
+              parsed.keywords(),
+              enabled,
+              skillFile.getParent(),
+              skillFile,
+              parsed.instructions()));
     } catch (Exception e) {
       log.warn("Failed to load Agent Skill: {}", skillFile, e);
       return Optional.empty();
@@ -172,14 +182,16 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
   }
 
   private String unquote(String value) {
-    if ((value.startsWith("\"") && value.endsWith("\"")) || (value.startsWith("'") && value.endsWith("'"))) {
+    if ((value.startsWith("\"") && value.endsWith("\""))
+        || (value.startsWith("'") && value.endsWith("'"))) {
       return value.substring(1, value.length() - 1);
     }
     return value;
   }
 
   private Path resolveDirectory(String directory) {
-    String resolved = directory == null ? "" : directory.replace("${user.dir}", System.getProperty("user.dir"));
+    String resolved =
+        directory == null ? "" : directory.replace("${user.dir}", System.getProperty("user.dir"));
     return Path.of(resolved).toAbsolutePath().normalize();
   }
 
@@ -191,9 +203,8 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
     return names.contains(".kiro");
   }
 
-  private record ParsedMetadata(Map<String, String> values, List<String> keywords) {
-  }
+  private record ParsedMetadata(Map<String, String> values, List<String> keywords) {}
 
-  private record ParsedSkill(Map<String, String> metadata, List<String> keywords, String instructions) {
-  }
+  private record ParsedSkill(
+      Map<String, String> metadata, List<String> keywords, String instructions) {}
 }

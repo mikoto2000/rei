@@ -38,7 +38,7 @@ public class CrossrefSearchProvider implements AcademicSearchProvider {
       op.check();
       var p = normalize(n);
       if (p.title() != null && OpenAlexSearchProvider.matches(p, q)) result.add(p);
-      if(result.size()>=q.limit())break;
+      if (result.size() >= q.limit()) break;
     }
     return result;
   }

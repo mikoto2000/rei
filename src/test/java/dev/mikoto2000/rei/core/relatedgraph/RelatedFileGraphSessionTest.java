@@ -7,15 +7,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
-/**
- * Related File Graph がセッション（アプリケーション全体のシングルトン Bean）として保持されることを検証する。
- */
+/** Related File Graph がセッション（アプリケーション全体のシングルトン Bean）として保持されることを検証する。 */
 @org.junit.jupiter.api.Tag("integration")
 class RelatedFileGraphSessionTest {
 
@@ -24,7 +21,8 @@ class RelatedFileGraphSessionTest {
   @Test
   void providesRelatedFileGraphBean() {
     RelatedFileGraphConfiguration config = new RelatedFileGraphConfiguration();
-    RelatedFileGraph graph = config.relatedFileGraph(Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE));
+    RelatedFileGraph graph =
+        config.relatedFileGraph(Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE));
     assertNotNull(graph);
     assertTrue(graph.isEmpty());
   }

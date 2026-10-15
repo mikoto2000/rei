@@ -7,18 +7,22 @@ import java.util.Optional;
 /**
  * タスクを完了するための具体的なステップ列を保持する。
  *
- * <p>Task State（現在のタスク全体の状態）とは別に、具体的なステップの順序と状態を管理する。</p>
+ * <p>Task State（現在のタスク全体の状態）とは別に、具体的なステップの順序と状態を管理する。
  */
 public class ActionPlan {
 
   /** 未着手。 */
   public static final String STATUS_TODO = "TODO";
+
   /** 進行中。 */
   public static final String STATUS_IN_PROGRESS = "IN_PROGRESS";
+
   /** 完了。 */
   public static final String STATUS_DONE = "DONE";
+
   /** 進行不能。 */
   public static final String STATUS_BLOCKED = "BLOCKED";
+
   /** 不要になった。 */
   public static final String STATUS_SKIPPED = "SKIPPED";
 
@@ -29,11 +33,25 @@ public class ActionPlan {
   public List<PlanStep> steps() {
     return List.copyOf(steps);
   }
+
   public void restore(List<PlanStep> saved) {
-    if(saved.size()>100||saved.stream().map(PlanStep::id).distinct().count()!=saved.size()
-        ||saved.stream().anyMatch(s->!List.of(STATUS_TODO,STATUS_IN_PROGRESS,STATUS_DONE,STATUS_BLOCKED,STATUS_SKIPPED).contains(s.status()))
-        ||saved.stream().filter(s->STATUS_IN_PROGRESS.equals(s.status())).count()>1)throw new IllegalArgumentException("Invalid action plan");
-    steps.clear();steps.addAll(saved);nextOrder=saved.stream().mapToInt(PlanStep::order).max().orElse(0)+1;
+    if (saved.size() > 100
+        || saved.stream().map(PlanStep::id).distinct().count() != saved.size()
+        || saved.stream()
+            .anyMatch(
+                s ->
+                    !List.of(
+                            STATUS_TODO,
+                            STATUS_IN_PROGRESS,
+                            STATUS_DONE,
+                            STATUS_BLOCKED,
+                            STATUS_SKIPPED)
+                        .contains(s.status()))
+        || saved.stream().filter(s -> STATUS_IN_PROGRESS.equals(s.status())).count() > 1)
+      throw new IllegalArgumentException("Invalid action plan");
+    steps.clear();
+    steps.addAll(saved);
+    nextOrder = saved.stream().mapToInt(PlanStep::order).max().orElse(0) + 1;
   }
 
   /** plan が空かどうか。 */
@@ -90,14 +108,23 @@ public class ActionPlan {
     for (int i = 0; i < steps.size(); i++) {
       PlanStep step = steps.get(i);
       if (step.id().equals(stepId)) {
-        steps.set(i, new PlanStep(step.id(), step.description(), step.status(), step.order(), step.failureCount() + 1));
+        steps.set(
+            i,
+            new PlanStep(
+                step.id(),
+                step.description(),
+                step.status(),
+                step.order(),
+                step.failureCount() + 1));
       }
     }
   }
 
   /** 全必須ステップが DONE または SKIPPED になっているか。 */
   public boolean isComplete() {
-    return !steps.isEmpty() && steps.stream().allMatch(s -> STATUS_DONE.equals(s.status()) || STATUS_SKIPPED.equals(s.status()));
+    return !steps.isEmpty()
+        && steps.stream()
+            .allMatch(s -> STATUS_DONE.equals(s.status()) || STATUS_SKIPPED.equals(s.status()));
   }
 
   /** LLM コンテキストに渡す簡潔な表現を組み立てる。 */
@@ -109,7 +136,12 @@ public class ActionPlan {
     sb.append("## Action Plan\n\n");
     for (int i = 0; i < steps.size(); i++) {
       PlanStep step = steps.get(i);
-      sb.append(i + 1).append(". [").append(step.status()).append("] ").append(step.description()).append("\n");
+      sb.append(i + 1)
+          .append(". [")
+          .append(step.status())
+          .append("] ")
+          .append(step.description())
+          .append("\n");
     }
     return sb.toString();
   }

@@ -1,38 +1,59 @@
 package dev.mikoto2000.rei.conversation;
 
-import java.nio.file.Path;
 import dev.mikoto2000.rei.application.session.SessionRepository;
-import org.springframework.context.annotation.*;
+import java.nio.file.Path;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.annotation.*;
 
 /** Shared by the interactive Shell and the Web application. */
 @Configuration(proxyBeanMethods = false)
 @Import(dev.mikoto2000.rei.storage.StorageMigrationConfiguration.class)
 public class SessionHistoryConfiguration {
-  @Bean @DependsOn("storageMigrationLease")
-  ConversationAdmissionStore conversationAdmissionStore(@Value("${rei.data-dir}") String directory,java.time.Clock clock,
-      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.event.AgentEventBus> events) {
-    var admissions=new ConversationAdmissionStore(Path.of(directory),clock);
+  @Bean
+  @DependsOn("storageMigrationLease")
+  ConversationAdmissionStore conversationAdmissionStore(
+      @Value("${rei.data-dir}") String directory,
+      java.time.Clock clock,
+      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.event.AgentEventBus>
+          events) {
+    var admissions = new ConversationAdmissionStore(Path.of(directory), clock);
     events.ifAvailable(admissions::observe);
     return admissions;
   }
-  @Bean dev.mikoto2000.rei.application.session.SessionLifecycle sessionLifecycle(SessionRepository repository, java.time.Clock clock,
-      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.core.project.ProjectService> projects,
-      org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.memory.service.AutoSleepService> autoSleep,
+
+  @Bean
+  dev.mikoto2000.rei.application.session.SessionLifecycle sessionLifecycle(
+      SessionRepository repository,
+      java.time.Clock clock,
+      org.springframework.beans.factory.ObjectProvider<
+              dev.mikoto2000.rei.core.project.ProjectService>
+          projects,
+      org.springframework.beans.factory.ObjectProvider<
+              dev.mikoto2000.rei.memory.service.AutoSleepService>
+          autoSleep,
       ConversationAdmissionStore admissions) {
-    var lifecycle=new dev.mikoto2000.rei.application.session.SessionLifecycle(repository,clock);
+    var lifecycle = new dev.mikoto2000.rei.application.session.SessionLifecycle(repository, clock);
     lifecycle.setAdmissions(admissions);
-    lifecycle.onSelected(context->projects.ifAvailable(project->project.rememberConversation(context)));
-    lifecycle.onEnded(session->autoSleep.ifAvailable(service->service.afterSessionEnd(session)));return lifecycle;
+    lifecycle.onSelected(
+        context -> projects.ifAvailable(project -> project.rememberConversation(context)));
+    lifecycle.onEnded(
+        session -> autoSleep.ifAvailable(service -> service.afterSessionEnd(session)));
+    return lifecycle;
   }
-  @Bean dev.mikoto2000.rei.application.session.SessionQueryService sessionQueryService(SessionRepository repository,
-      ConversationTurnStore turns) {
+
+  @Bean
+  dev.mikoto2000.rei.application.session.SessionQueryService sessionQueryService(
+      SessionRepository repository, ConversationTurnStore turns) {
     return new dev.mikoto2000.rei.application.session.SessionQueryService(repository, turns);
   }
-  @Bean ConversationTurnStore conversationTurnStore(@Value("${rei.data-dir}") String directory) {
+
+  @Bean
+  ConversationTurnStore conversationTurnStore(@Value("${rei.data-dir}") String directory) {
     return new SqliteConversationTurnStore(Path.of(directory));
   }
-  @Bean SessionRepository sessionRepository(@Value("${rei.data-dir}") String directory) {
+
+  @Bean
+  SessionRepository sessionRepository(@Value("${rei.data-dir}") String directory) {
     return new SqliteSessionRepository(Path.of(directory));
   }
 }

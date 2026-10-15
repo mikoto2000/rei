@@ -5,7 +5,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-
 import org.junit.jupiter.api.Test;
 
 @org.junit.jupiter.api.Tag("integration")
@@ -13,7 +12,8 @@ class ChatCommandDependencyTest {
 
   @Test
   void chatCommandDoesNotWriteUserFacingOutputDirectlyToStandardOutput() throws IOException {
-    String source = Files.readString(Path.of("src/main/java/dev/mikoto2000/rei/ui/shell/ChatCommand.java"));
+    String source =
+        Files.readString(Path.of("src/main/java/dev/mikoto2000/rei/ui/shell/ChatCommand.java"));
 
     assertFalse(source.contains("System.out"));
     assertFalse(source.contains("System.err"));

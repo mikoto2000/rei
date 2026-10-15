@@ -4,14 +4,6 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Duration;
-
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import com.google.api.client.auth.oauth2.AuthorizationCodeFlow;
 import com.google.api.client.auth.oauth2.Credential;
 import com.google.api.client.auth.oauth2.TokenResponse;
@@ -20,8 +12,13 @@ import com.google.api.client.json.gson.GsonFactory;
 import com.google.api.client.testing.http.MockHttpTransport;
 import com.google.api.client.testing.http.MockLowLevelHttpResponse;
 import com.google.api.client.util.store.FileDataStoreFactory;
-
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Duration;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 @org.junit.jupiter.api.Tag("integration")
 class GoogleOAuthServiceTest {
@@ -30,9 +27,14 @@ class GoogleOAuthServiceTest {
   private GoogleOAuthService service(boolean calendar, boolean task) throws Exception {
     Path credentials = directory.resolve("credentials.json");
     Files.writeString(credentials, "{}");
-    return spy(new GoogleOAuthService(new GoogleCalendarProperties("Rei", credentials.toString(),
-        directory.toString(), new GoogleCalendarProperties.CalendarProperties(calendar, "primary", ""),
-        new GoogleCalendarProperties.TaskProperties(task))));
+    return spy(
+        new GoogleOAuthService(
+            new GoogleCalendarProperties(
+                "Rei",
+                credentials.toString(),
+                directory.toString(),
+                new GoogleCalendarProperties.CalendarProperties(calendar, "primary", ""),
+                new GoogleCalendarProperties.TaskProperties(task))));
   }
 
   private Credential stored(GoogleOAuthService service, Long remaining) throws Exception {
@@ -46,7 +48,8 @@ class GoogleOAuthServiceTest {
     return credential;
   }
 
-  @Test void refreshesAtBoundaryAndUsesSharedCredentialAfterwards() throws Exception {
+  @Test
+  void refreshesAtBoundaryAndUsesSharedCredentialAfterwards() throws Exception {
     GoogleOAuthService service = service(false, true);
     Credential credential = stored(service, 300L);
     assertTrue(service.refreshIfExpiring(Duration.ofMinutes(5)));
@@ -56,14 +59,16 @@ class GoogleOAuthServiceTest {
     verify(credential, times(1)).refreshToken();
   }
 
-  @Test void doesNotRefreshEarly() throws Exception {
+  @Test
+  void doesNotRefreshEarly() throws Exception {
     GoogleOAuthService service = service(true, false);
     Credential credential = stored(service, 301L);
     assertFalse(service.refreshIfExpiring(Duration.ofMinutes(5)));
     verify(credential, never()).refreshToken();
   }
 
-  @Test void refreshesExpiredAndUnknownExpiry() throws Exception {
+  @Test
+  void refreshesExpiredAndUnknownExpiry() throws Exception {
     for (Long remaining : new Long[] {-1L, null}) {
       GoogleOAuthService service = service(true, true);
       Credential credential = stored(service, remaining);
@@ -72,13 +77,15 @@ class GoogleOAuthServiceTest {
     }
   }
 
-  @Test void disabledIntegrationsDoNotLoadCredentials() throws Exception {
+  @Test
+  void disabledIntegrationsDoNotLoadCredentials() throws Exception {
     GoogleOAuthService service = service(false, false);
     assertFalse(service.refreshIfExpiring(Duration.ofMinutes(5)));
     verify(service, never()).createFlow(any());
   }
 
-  @Test void missingCredentialsDoNotStartAuthorization() throws Exception {
+  @Test
+  void missingCredentialsDoNotStartAuthorization() throws Exception {
     GoogleOAuthService service = service(true, true);
     Files.delete(directory.resolve("credentials.json"));
     assertFalse(service.refreshIfExpiring(Duration.ofMinutes(5)));
@@ -86,7 +93,8 @@ class GoogleOAuthServiceTest {
     verify(service, never()).authorize(any(), anyBoolean());
   }
 
-  @Test void missingStoredTokenAndMissingRefreshTokenAreSkipped() throws Exception {
+  @Test
+  void missingStoredTokenAndMissingRefreshTokenAreSkipped() throws Exception {
     GoogleOAuthService service = service(true, true);
     Credential credential = stored(service, 0L);
     when(credential.getRefreshToken()).thenReturn(null);
@@ -98,25 +106,45 @@ class GoogleOAuthServiceTest {
     verify(service, never()).authorize(any(), anyBoolean());
   }
 
-  @Test void failureCanBeRetried() throws Exception {
+  @Test
+  void failureCanBeRetried() throws Exception {
     GoogleOAuthService service = service(true, true);
     Credential credential = stored(service, 0L);
-    when(credential.refreshToken()).thenThrow(new IOException("offline")).thenReturn(false).thenReturn(true);
+    when(credential.refreshToken())
+        .thenThrow(new IOException("offline"))
+        .thenReturn(false)
+        .thenReturn(true);
     assertThrows(IOException.class, () -> service.refreshIfExpiring(Duration.ofMinutes(5)));
-    assertThrows(IllegalStateException.class, () -> service.refreshIfExpiring(Duration.ofMinutes(5)));
+    assertThrows(
+        IllegalStateException.class, () -> service.refreshIfExpiring(Duration.ofMinutes(5)));
     assertTrue(service.refreshIfExpiring(Duration.ofMinutes(5)));
   }
 
-  @Test void refreshedTokenAndExpiryArePersistedForRestart() throws Exception {
+  @Test
+  void refreshedTokenAndExpiryArePersistedForRestart() throws Exception {
     GoogleOAuthService service = service(true, true);
-    var response = new MockLowLevelHttpResponse().setContentType("application/json")
-        .setContent("{\"access_token\":\"new-test-token\",\"expires_in\":3600,\"token_type\":\"Bearer\"}");
+    var response =
+        new MockLowLevelHttpResponse()
+            .setContentType("application/json")
+            .setContent(
+                "{\"access_token\":\"new-test-token\",\"expires_in\":3600,\"token_type\":\"Bearer\"}");
     var transport = new MockHttpTransport.Builder().setLowLevelHttpResponse(response).build();
-    var flow = new GoogleAuthorizationCodeFlow.Builder(transport, GsonFactory.getDefaultInstance(),
-        "test-client", "test-secret", java.util.List.of("test-scope"))
-        .setDataStoreFactory(new FileDataStoreFactory(directory.toFile())).setAccessType("offline").build();
-    flow.createAndStoreCredential(new TokenResponse().setAccessToken("old-test-token")
-        .setRefreshToken("test-refresh-token").setExpiresInSeconds(0L), "user");
+    var flow =
+        new GoogleAuthorizationCodeFlow.Builder(
+                transport,
+                GsonFactory.getDefaultInstance(),
+                "test-client",
+                "test-secret",
+                java.util.List.of("test-scope"))
+            .setDataStoreFactory(new FileDataStoreFactory(directory.toFile()))
+            .setAccessType("offline")
+            .build();
+    flow.createAndStoreCredential(
+        new TokenResponse()
+            .setAccessToken("old-test-token")
+            .setRefreshToken("test-refresh-token")
+            .setExpiresInSeconds(0L),
+        "user");
     doReturn(flow).when(service).createFlow(any());
 
     assertTrue(service.refreshIfExpiring(Duration.ofMinutes(5)));

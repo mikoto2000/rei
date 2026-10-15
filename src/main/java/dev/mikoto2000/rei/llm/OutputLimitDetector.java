@@ -1,14 +1,12 @@
 package dev.mikoto2000.rei.llm;
 
 import java.util.Locale;
-
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 
 public final class OutputLimitDetector {
 
-  private OutputLimitDetector() {
-  }
+  private OutputLimitDetector() {}
 
   public static boolean isOutputLimitReached(ChatResponse response) {
     if (response == null) {

@@ -4,11 +4,14 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import dev.mikoto2000.rei.core.service.CommandCancellationService;
+import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.ui.shell.ChatCommand;
+import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.List;
 import java.util.function.Consumer;
-
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
@@ -17,69 +20,80 @@ import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
-
-import dev.mikoto2000.rei.core.service.CommandCancellationService;
-import dev.mikoto2000.rei.core.service.ModelHolderService;
-import dev.mikoto2000.rei.ui.shell.ChatCommand;
-import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
 import picocli.CommandLine;
 import reactor.core.publisher.Flux;
 
 class ChatCommandNarrationTest {
 
-    @Test
-    void runCallsResetOnNarratorAtStart() {
-        ChatClient chatClient = Mockito.mock(ChatClient.class);
-        ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
-        ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
-        CommandCancellationService cancellationService = new CommandCancellationService();
-        ChatResponseNarrator chatResponseNarrator = Mockito.mock(ChatResponseNarrator.class);
+  @Test
+  void runCallsResetOnNarratorAtStart() {
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec =
+        Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    CommandCancellationService cancellationService = new CommandCancellationService();
+    ChatResponseNarrator chatResponseNarrator = Mockito.mock(ChatResponseNarrator.class);
 
-        when(modelHolderService.get()).thenReturn("gpt-test");
-        when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-        when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
-        when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("answer "), response("text")));
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.stream().chatResponse())
+        .thenReturn(Flux.just(response("answer "), response("text")));
 
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        PrintStream originalOut = System.out;
-        System.setOut(new PrintStream(out));
-        try {
-            new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService, chatResponseNarrator, java.util.Optional.empty()))
-                    .execute("hello");
-        } finally {
-            System.setOut(originalOut);
-        }
-
-        verify(chatResponseNarrator).reset();
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      new CommandLine(
+              new ChatCommand(
+                  chatClient,
+                  modelHolderService,
+                  cancellationService,
+                  chatResponseNarrator,
+                  java.util.Optional.empty()))
+          .execute("hello");
+    } finally {
+      System.setOut(originalOut);
     }
 
-    @Test
-    void runCallsNarrateIfCompletedWithFullResponseTextOnSuccess() {
-        ChatClient chatClient = Mockito.mock(ChatClient.class);
-        ChatClientRequestSpec requestSpec = Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
-        ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
-        CommandCancellationService cancellationService = new CommandCancellationService();
-        ChatResponseNarrator chatResponseNarrator = Mockito.mock(ChatResponseNarrator.class);
+    verify(chatResponseNarrator).reset();
+  }
 
-        when(modelHolderService.get()).thenReturn("gpt-test");
-        when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
-        when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
-        when(requestSpec.stream().chatResponse()).thenReturn(Flux.just(response("answer "), response("text")));
+  @Test
+  void runCallsNarrateIfCompletedWithFullResponseTextOnSuccess() {
+    ChatClient chatClient = Mockito.mock(ChatClient.class);
+    ChatClientRequestSpec requestSpec =
+        Mockito.mock(ChatClientRequestSpec.class, Mockito.RETURNS_DEEP_STUBS);
+    ModelHolderService modelHolderService = Mockito.mock(ModelHolderService.class);
+    CommandCancellationService cancellationService = new CommandCancellationService();
+    ChatResponseNarrator chatResponseNarrator = Mockito.mock(ChatResponseNarrator.class);
 
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        PrintStream originalOut = System.out;
-        System.setOut(new PrintStream(out));
-        try {
-            new CommandLine(new ChatCommand(chatClient, modelHolderService, cancellationService, chatResponseNarrator, java.util.Optional.empty()))
-                    .execute("hello");
-        } finally {
-            System.setOut(originalOut);
-        }
+    when(modelHolderService.get()).thenReturn("gpt-test");
+    when(chatClient.prompt(any(Prompt.class))).thenReturn(requestSpec);
+    when(requestSpec.advisors(any(Consumer.class))).thenReturn(requestSpec);
+    when(requestSpec.stream().chatResponse())
+        .thenReturn(Flux.just(response("answer "), response("text")));
 
-        verify(chatResponseNarrator).narrateIfCompleted("answer text");
+    ByteArrayOutputStream out = new ByteArrayOutputStream();
+    PrintStream originalOut = System.out;
+    System.setOut(new PrintStream(out));
+    try {
+      new CommandLine(
+              new ChatCommand(
+                  chatClient,
+                  modelHolderService,
+                  cancellationService,
+                  chatResponseNarrator,
+                  java.util.Optional.empty()))
+          .execute("hello");
+    } finally {
+      System.setOut(originalOut);
     }
 
-    private static ChatResponse response(String text) {
-        return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
-    }
+    verify(chatResponseNarrator).narrateIfCompleted("answer text");
+  }
+
+  private static ChatResponse response(String text) {
+    return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
+  }
 }

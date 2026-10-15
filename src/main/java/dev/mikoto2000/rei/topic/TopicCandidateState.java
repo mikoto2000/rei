@@ -8,5 +8,4 @@ public record TopicCandidateState(
     String topic,
     String reason,
     TopicScoreBreakdown score,
-    TopicRejectionReason rejectionReason) {
-}
+    TopicRejectionReason rejectionReason) {}

@@ -1,10 +1,8 @@
 package dev.mikoto2000.rei.interest;
 
 import java.util.List;
-
-import org.springframework.stereotype.Service;
-
 import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
 
 @Service
 @RequiredArgsConstructor
@@ -26,15 +24,18 @@ public class ConversationInterestService {
   }
 
   public List<InterestTopicCandidate> discoverFallbackCandidates(List<String> pastQueries) {
-    int broadenedMaxTopics = Math.max(properties.getMaxTopics() * FALLBACK_MAX_TOPICS_MULTIPLIER, properties.getMaxTopics());
+    int broadenedMaxTopics =
+        Math.max(
+            properties.getMaxTopics() * FALLBACK_MAX_TOPICS_MULTIPLIER, properties.getMaxTopics());
     double broadenedMinScore = Math.max(0.0d, properties.getMinScore() - FALLBACK_MIN_SCORE_DELTA);
     return discoverCandidates(pastQueries, broadenedMaxTopics, broadenedMinScore);
   }
 
-  private List<InterestTopicCandidate> discoverCandidates(List<String> pastQueries, int maxTopics, double minScore) {
-    List<ConversationSnippet> snippets = conversationHistoryService.findRecentUserMessages(
-        properties.getLookbackDays(),
-        properties.getMessageLimit());
+  private List<InterestTopicCandidate> discoverCandidates(
+      List<String> pastQueries, int maxTopics, double minScore) {
+    List<ConversationSnippet> snippets =
+        conversationHistoryService.findRecentUserMessages(
+            properties.getLookbackDays(), properties.getMessageLimit());
     return interestTopicExtractor.extract(snippets, maxTopics, pastQueries).stream()
         .filter(candidate -> candidate.score() >= minScore)
         .limit(maxTopics)

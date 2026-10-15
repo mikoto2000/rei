@@ -4,22 +4,70 @@ import java.nio.file.Path;
 import java.util.Objects;
 
 /** Identity and location are captured before dispatch, never resolved at completion. */
-public record AgentRunContext(String runId, String conversationId, Path projectRoot, String projectId,
-    RequestSource requestSource, Mode mode, boolean voiceInput, ResponseStyle responseStyle) {
-  public AgentRunContext(String runId,String conversationId,Path projectRoot,String projectId,RequestSource source,Mode mode,boolean voiceInput) {
-    this(runId,conversationId,projectRoot,projectId,source,mode,voiceInput,ResponseStyle.NORMAL);
+public record AgentRunContext(
+    String runId,
+    String conversationId,
+    Path projectRoot,
+    String projectId,
+    RequestSource requestSource,
+    Mode mode,
+    boolean voiceInput,
+    ResponseStyle responseStyle) {
+  public AgentRunContext(
+      String runId,
+      String conversationId,
+      Path projectRoot,
+      String projectId,
+      RequestSource source,
+      Mode mode,
+      boolean voiceInput) {
+    this(
+        runId,
+        conversationId,
+        projectRoot,
+        projectId,
+        source,
+        mode,
+        voiceInput,
+        ResponseStyle.NORMAL);
   }
-  /** Speech provenance adds recognition safety; RequestSource remains the caller's execution authority. */
-  public AgentRunContext(String runId,String conversationId,Path projectRoot,String projectId,RequestSource requestSource,Mode mode) {
-    this(runId,conversationId,projectRoot,projectId,requestSource,mode,false);
-  }
-  public AgentRunContext asVoiceInput() {
-    return new AgentRunContext(runId,conversationId,projectRoot,projectId,requestSource,mode,true,responseStyle);
-  }
-  public enum RequestSource { SHELL, WEB, MCP }
-  public enum Mode { EXCLUSIVE, READ_ONLY, CONVERSATION }
 
-  public AgentRunContext(String runId, String conversationId, Path projectRoot, String projectId,
+  /**
+   * Speech provenance adds recognition safety; RequestSource remains the caller's execution
+   * authority.
+   */
+  public AgentRunContext(
+      String runId,
+      String conversationId,
+      Path projectRoot,
+      String projectId,
+      RequestSource requestSource,
+      Mode mode) {
+    this(runId, conversationId, projectRoot, projectId, requestSource, mode, false);
+  }
+
+  public AgentRunContext asVoiceInput() {
+    return new AgentRunContext(
+        runId, conversationId, projectRoot, projectId, requestSource, mode, true, responseStyle);
+  }
+
+  public enum RequestSource {
+    SHELL,
+    WEB,
+    MCP
+  }
+
+  public enum Mode {
+    EXCLUSIVE,
+    READ_ONLY,
+    CONVERSATION
+  }
+
+  public AgentRunContext(
+      String runId,
+      String conversationId,
+      Path projectRoot,
+      String projectId,
       RequestSource requestSource) {
     this(runId, conversationId, projectRoot, projectId, requestSource, Mode.EXCLUSIVE);
   }
@@ -27,12 +75,18 @@ public record AgentRunContext(String runId, String conversationId, Path projectR
   public AgentRunContext(String runId, String conversationId, Path projectRoot, String projectId) {
     this(runId, conversationId, projectRoot, projectId, RequestSource.SHELL);
   }
+
   public AgentRunContext(String runId, String conversationId, Path projectRoot) {
     this(runId, conversationId, projectRoot, null);
   }
-  public AgentRunContext(String runId, dev.mikoto2000.rei.core.project.ProjectContext project, String logicalConversation) {
+
+  public AgentRunContext(
+      String runId,
+      dev.mikoto2000.rei.core.project.ProjectContext project,
+      String logicalConversation) {
     this(runId, project.conversationId(logicalConversation), project.root(), project.id());
   }
+
   public AgentRunContext {
     Objects.requireNonNull(runId);
     Objects.requireNonNull(conversationId);

@@ -12,12 +12,13 @@ public record SkillCandidatesEvaluatedPayload(
     Boolean top1Hit,
     Boolean top3Hit,
     Boolean top5Hit,
-    List<CandidateScore> topCandidates) implements AgentEventPayload {
+    List<CandidateScore> topCandidates)
+    implements AgentEventPayload {
 
   public SkillCandidatesEvaluatedPayload {
-    topCandidates = topCandidates == null ? List.of() : List.copyOf(topCandidates.stream().limit(5).toList());
+    topCandidates =
+        topCandidates == null ? List.of() : List.copyOf(topCandidates.stream().limit(5).toList());
   }
 
-  public record CandidateScore(String skill, int score) {
-  }
+  public record CandidateScore(String skill, int score) {}
 }

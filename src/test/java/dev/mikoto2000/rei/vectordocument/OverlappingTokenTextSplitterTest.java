@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
 
@@ -14,14 +13,17 @@ class OverlappingTokenTextSplitterTest {
   void splitCreatesOverlappingChunks() {
     OverlappingTokenTextSplitter splitter = new OverlappingTokenTextSplitter(6, 2);
 
-    List<Document> chunks = splitter.split(new Document("zero one two three four five six seven eight nine"));
+    List<Document> chunks =
+        splitter.split(new Document("zero one two three four five six seven eight nine"));
 
     assertTrue(chunks.size() >= 2);
 
     List<String> firstTokens = tokens(chunks.get(0).getText());
     List<String> secondTokens = tokens(chunks.get(1).getText());
 
-    assertEquals(firstTokens.subList(firstTokens.size() - 2, firstTokens.size()), secondTokens.subList(0, 2));
+    assertEquals(
+        firstTokens.subList(firstTokens.size() - 2, firstTokens.size()),
+        secondTokens.subList(0, 2));
   }
 
   @Test

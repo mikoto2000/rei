@@ -15,18 +15,31 @@ final class PngScreenshotEncoder {
     return bytes.toByteArray();
   }
 
-  /** Only the outbound Vision copy is resized; capture geometry and optional evidence stay intact. */
-  static byte[] encode(BufferedImage image,double scale) throws IOException {
-    if(!Double.isFinite(scale) || scale<=0 || scale>1) throw new IllegalArgumentException("Invalid Vision image scale");
-    if(scale==1) return encode(image);
-    int width=Math.max(1,(int)Math.round(image.getWidth()*scale));
-    int height=Math.max(1,(int)Math.round(image.getHeight()*scale));
-    var resized=new BufferedImage(width,height,image.getColorModel().hasAlpha()?BufferedImage.TYPE_INT_ARGB:BufferedImage.TYPE_INT_RGB);
-    var graphics=resized.createGraphics();
+  /**
+   * Only the outbound Vision copy is resized; capture geometry and optional evidence stay intact.
+   */
+  static byte[] encode(BufferedImage image, double scale) throws IOException {
+    if (!Double.isFinite(scale) || scale <= 0 || scale > 1)
+      throw new IllegalArgumentException("Invalid Vision image scale");
+    if (scale == 1) return encode(image);
+    int width = Math.max(1, (int) Math.round(image.getWidth() * scale));
+    int height = Math.max(1, (int) Math.round(image.getHeight() * scale));
+    var resized =
+        new BufferedImage(
+            width,
+            height,
+            image.getColorModel().hasAlpha()
+                ? BufferedImage.TYPE_INT_ARGB
+                : BufferedImage.TYPE_INT_RGB);
+    var graphics = resized.createGraphics();
     try {
-      graphics.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION,java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC);
-      graphics.drawImage(image,0,0,width,height,null);
-    } finally {graphics.dispose();}
+      graphics.setRenderingHint(
+          java.awt.RenderingHints.KEY_INTERPOLATION,
+          java.awt.RenderingHints.VALUE_INTERPOLATION_BICUBIC);
+      graphics.drawImage(image, 0, 0, width, height, null);
+    } finally {
+      graphics.dispose();
+    }
     return encode(resized);
   }
 

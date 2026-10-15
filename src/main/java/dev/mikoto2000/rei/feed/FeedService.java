@@ -3,9 +3,7 @@ package dev.mikoto2000.rei.feed;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
-
 import javax.sql.DataSource;
-
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
@@ -26,20 +24,25 @@ public class FeedService {
     }
 
     OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
-    Long id = jdbcClient.sql("""
+    Long id =
+        jdbcClient
+            .sql(
+                """
         INSERT INTO feeds (url, title, site_url, description, display_name, enabled, created_at, updated_at, last_fetched_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
         RETURNING id
         """)
-        .params(url, null, null, null, displayName, 1, now.toString(), now.toString(), null)
-        .query(Long.class)
-        .single();
+            .params(url, null, null, null, displayName, 1, now.toString(), now.toString(), null)
+            .query(Long.class)
+            .single();
 
     return findById(id);
   }
 
   public List<Feed> list() {
-    return jdbcClient.sql("""
+    return jdbcClient
+        .sql(
+            """
         SELECT id, url, title, site_url, description, display_name, enabled, created_at, updated_at, last_fetched_at
         FROM feeds
         ORDER BY id ASC
@@ -49,7 +52,9 @@ public class FeedService {
   }
 
   public List<Feed> listActive() {
-    return jdbcClient.sql("""
+    return jdbcClient
+        .sql(
+            """
         SELECT id, url, title, site_url, description, display_name, enabled, created_at, updated_at, last_fetched_at
         FROM feeds
         WHERE enabled = 1
@@ -61,11 +66,14 @@ public class FeedService {
 
   public Feed update(long id, String displayName, Boolean enabled) {
     Feed current = findById(id);
-    String resolvedDisplayName = displayName == null || displayName.isBlank() ? current.displayName() : displayName;
+    String resolvedDisplayName =
+        displayName == null || displayName.isBlank() ? current.displayName() : displayName;
     boolean resolvedEnabled = enabled == null ? current.enabled() : enabled;
     OffsetDateTime now = OffsetDateTime.now(ZoneOffset.UTC);
 
-    jdbcClient.sql("""
+    jdbcClient
+        .sql(
+            """
         UPDATE feeds
         SET display_name = ?, enabled = ?, updated_at = ?
         WHERE id = ?
@@ -77,7 +85,9 @@ public class FeedService {
   }
 
   public Feed findById(long id) {
-    return jdbcClient.sql("""
+    return jdbcClient
+        .sql(
+            """
         SELECT id, url, title, site_url, description, display_name, enabled, created_at, updated_at, last_fetched_at
         FROM feeds
         WHERE id = ?
@@ -87,9 +97,12 @@ public class FeedService {
         .single();
   }
 
-  public Feed updateFetchedMetadata(long id, String title, String siteUrl, String description, OffsetDateTime fetchedAt) {
+  public Feed updateFetchedMetadata(
+      long id, String title, String siteUrl, String description, OffsetDateTime fetchedAt) {
     Feed current = findById(id);
-    jdbcClient.sql("""
+    jdbcClient
+        .sql(
+            """
         UPDATE feeds
         SET title = ?, site_url = ?, description = ?, updated_at = ?, last_fetched_at = ?
         WHERE id = ?
@@ -113,30 +126,35 @@ public class FeedService {
         continue;
       }
       OffsetDateTime now = fetchedAt == null ? OffsetDateTime.now(ZoneOffset.UTC) : fetchedAt;
-      int updated = jdbcClient.sql("""
+      int updated =
+          jdbcClient
+              .sql(
+                  """
           INSERT OR IGNORE INTO feed_items
             (feed_id, title, url, description, content, published_at, fetched_at, created_at, updated_at, dedupe_key)
           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """)
-          .params(
-              feedId,
-              item.title(),
-              item.url(),
-              item.description(),
-              item.content(),
-              item.publishedAt() == null ? null : item.publishedAt().toString(),
-              now.toString(),
-              now.toString(),
-              now.toString(),
-              dedupeKey)
-          .update();
+              .params(
+                  feedId,
+                  item.title(),
+                  item.url(),
+                  item.description(),
+                  item.content(),
+                  item.publishedAt() == null ? null : item.publishedAt().toString(),
+                  now.toString(),
+                  now.toString(),
+                  now.toString(),
+                  dedupeKey)
+              .update();
       added += updated;
     }
     return added;
   }
 
   public List<FeedItem> listItemsForFeed(long feedId) {
-    return jdbcClient.sql("""
+    return jdbcClient
+        .sql(
+            """
         SELECT id, feed_id, title, url, description, content, published_at, fetched_at, created_at, updated_at
         FROM feed_items
         WHERE feed_id = ?
@@ -147,8 +165,11 @@ public class FeedService {
         .list();
   }
 
-  public void recordFetchFailure(long feedId, OffsetDateTime failedAt, String errorMessage, Integer httpStatus) {
-    jdbcClient.sql("""
+  public void recordFetchFailure(
+      long feedId, OffsetDateTime failedAt, String errorMessage, Integer httpStatus) {
+    jdbcClient
+        .sql(
+            """
         INSERT INTO feed_fetch_failures (feed_id, failed_at, error_message, http_status)
         VALUES (?, ?, ?, ?)
         """)
@@ -157,7 +178,9 @@ public class FeedService {
   }
 
   public List<FeedFetchFailure> listFailures(long feedId) {
-    return jdbcClient.sql("""
+    return jdbcClient
+        .sql(
+            """
         SELECT id, feed_id, failed_at, error_message, http_status
         FROM feed_fetch_failures
         WHERE feed_id = ?
@@ -168,8 +191,11 @@ public class FeedService {
         .list();
   }
 
-  public List<FeedBriefingItem> listBriefingItems(OffsetDateTime from, OffsetDateTime to, int maxItemsPerFeed) {
-    return jdbcClient.sql("""
+  public List<FeedBriefingItem> listBriefingItems(
+      OffsetDateTime from, OffsetDateTime to, int maxItemsPerFeed) {
+    return jdbcClient
+        .sql(
+            """
         SELECT id, title, url, description, content, published_at, feed_name
         FROM (
           SELECT i.id, i.title, i.url, i.description, i.content, i.published_at,
@@ -191,7 +217,9 @@ public class FeedService {
   }
 
   public FeedBriefingItem findBriefingItem(long itemId) {
-    return jdbcClient.sql("""
+    return jdbcClient
+        .sql(
+            """
         SELECT i.id, i.title, i.url, i.description, i.content, i.published_at,
                COALESCE(NULLIF(f.display_name, ''), NULLIF(f.title, ''), f.url) AS feed_name
         FROM feed_items i
@@ -204,22 +232,18 @@ public class FeedService {
   }
 
   public void delete(long id) {
-    jdbcClient.sql("DELETE FROM feed_fetch_failures WHERE feed_id = ?")
-        .param(id)
-        .update();
-    jdbcClient.sql("DELETE FROM feed_items WHERE feed_id = ?")
-        .param(id)
-        .update();
-    jdbcClient.sql("DELETE FROM feeds WHERE id = ?")
-        .param(id)
-        .update();
+    jdbcClient.sql("DELETE FROM feed_fetch_failures WHERE feed_id = ?").param(id).update();
+    jdbcClient.sql("DELETE FROM feed_items WHERE feed_id = ?").param(id).update();
+    jdbcClient.sql("DELETE FROM feeds WHERE id = ?").param(id).update();
   }
 
   private boolean existsByUrl(String url) {
-    Long count = jdbcClient.sql("SELECT COUNT(*) FROM feeds WHERE url = ?")
-        .param(url)
-        .query(Long.class)
-        .single();
+    Long count =
+        jdbcClient
+            .sql("SELECT COUNT(*) FROM feeds WHERE url = ?")
+            .param(url)
+            .query(Long.class)
+            .single();
     return count != null && count > 0;
   }
 
@@ -266,7 +290,8 @@ public class FeedService {
     }
   }
 
-  private FeedFetchFailure mapFeedFetchFailure(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
+  private FeedFetchFailure mapFeedFetchFailure(java.sql.ResultSet rs, int rowNum)
+      throws java.sql.SQLException {
     int httpStatus = rs.getInt("http_status");
     return new FeedFetchFailure(
         rs.getLong("id"),
@@ -276,7 +301,8 @@ public class FeedService {
         rs.wasNull() ? null : httpStatus);
   }
 
-  private FeedBriefingItem mapFeedBriefingItem(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
+  private FeedBriefingItem mapFeedBriefingItem(java.sql.ResultSet rs, int rowNum)
+      throws java.sql.SQLException {
     return new FeedBriefingItem(
         rs.getLong("id"),
         rs.getString("title"),
@@ -298,8 +324,10 @@ public class FeedService {
   }
 
   private void initializeSchema(DataSource dataSource) {
-    try (var connection = dataSource.getConnection(); var statement = connection.createStatement()) {
-      statement.executeUpdate("""
+    try (var connection = dataSource.getConnection();
+        var statement = connection.createStatement()) {
+      statement.executeUpdate(
+          """
           CREATE TABLE IF NOT EXISTS feeds (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             url TEXT NOT NULL UNIQUE,
@@ -313,7 +341,8 @@ public class FeedService {
             last_fetched_at TEXT
           )
           """);
-      statement.executeUpdate("""
+      statement.executeUpdate(
+          """
           CREATE TABLE IF NOT EXISTS feed_items (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             feed_id INTEGER NOT NULL,
@@ -331,11 +360,13 @@ public class FeedService {
           """);
       addColumnIfMissing(connection, "feed_items", "description", "TEXT");
       addColumnIfMissing(connection, "feed_items", "content", "TEXT");
-      statement.executeUpdate("""
+      statement.executeUpdate(
+          """
           CREATE UNIQUE INDEX IF NOT EXISTS idx_feed_items_dedupe_key
           ON feed_items(dedupe_key)
           """);
-      statement.executeUpdate("""
+      statement.executeUpdate(
+          """
           CREATE TABLE IF NOT EXISTS feed_fetch_failures (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             feed_id INTEGER NOT NULL,
@@ -350,7 +381,8 @@ public class FeedService {
     }
   }
 
-  private void addColumnIfMissing(java.sql.Connection connection, String table, String column, String type)
+  private void addColumnIfMissing(
+      java.sql.Connection connection, String table, String column, String type)
       throws java.sql.SQLException {
     try (var resultSet = connection.getMetaData().getColumns(null, null, table, column)) {
       if (resultSet.next()) {

@@ -5,20 +5,20 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 @org.junit.jupiter.api.Tag("integration")
 class FileSystemAgentSkillRepositoryTest {
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @Test
   void loadsSkillMdFromConfiguredDirectory() throws Exception {
     Path skillsDir = tempDir.resolve(".rei").resolve("skills");
-    writeSkill(skillsDir.resolve("sample"), """
+    writeSkill(
+        skillsDir.resolve("sample"),
+        """
         ---
         name: sample
         description: Sample skill
@@ -45,7 +45,9 @@ class FileSystemAgentSkillRepositoryTest {
   @Test
   void excludesDisabledSkillsFromEnabledList() throws Exception {
     Path skillsDir = tempDir.resolve(".rei").resolve("skills");
-    writeSkill(skillsDir.resolve("enabled"), """
+    writeSkill(
+        skillsDir.resolve("enabled"),
+        """
         ---
         name: enabled
         description: Enabled skill
@@ -53,7 +55,9 @@ class FileSystemAgentSkillRepositoryTest {
         ---
         enabled instructions
         """);
-    writeSkill(skillsDir.resolve("disabled"), """
+    writeSkill(
+        skillsDir.resolve("disabled"),
+        """
         ---
         name: disabled
         description: Disabled skill
@@ -61,16 +65,21 @@ class FileSystemAgentSkillRepositoryTest {
         ---
         disabled instructions
         """);
-    FileSystemAgentSkillRepository repository = new FileSystemAgentSkillRepository(properties(skillsDir));
+    FileSystemAgentSkillRepository repository =
+        new FileSystemAgentSkillRepository(properties(skillsDir));
 
-    assertThat(repository.findAll()).extracting(AgentSkill::name).containsExactlyInAnyOrder("enabled", "disabled");
+    assertThat(repository.findAll())
+        .extracting(AgentSkill::name)
+        .containsExactlyInAnyOrder("enabled", "disabled");
     assertThat(repository.findEnabled()).extracting(AgentSkill::name).containsExactly("enabled");
   }
 
   @Test
   void loadsSkillMdWithFoldedDescription() throws Exception {
     Path skillsDir = tempDir.resolve(".rei").resolve("skills");
-    writeSkill(skillsDir.resolve("powershell"), """
+    writeSkill(
+        skillsDir.resolve("powershell"),
+        """
         ---
         name: powershell
         description: >
@@ -81,20 +90,24 @@ class FileSystemAgentSkillRepositoryTest {
 
         Use PowerShell according to PowerShell semantics.
         """);
-    FileSystemAgentSkillRepository repository = new FileSystemAgentSkillRepository(properties(skillsDir));
+    FileSystemAgentSkillRepository repository =
+        new FileSystemAgentSkillRepository(properties(skillsDir));
 
     List<AgentSkill> skills = repository.findAll();
 
     assertThat(skills).hasSize(1);
     assertThat(skills.get(0).name()).isEqualTo("powershell");
     assertThat(skills.get(0).description())
-        .isEqualTo("Use this skill when working in PowerShell on Windows or cross-platform PowerShell. It provides guidance for correct PowerShell syntax.");
+        .isEqualTo(
+            "Use this skill when working in PowerShell on Windows or cross-platform PowerShell. It provides guidance for correct PowerShell syntax.");
   }
 
   @Test
   void loadsOptionalKeywordsFromFrontMatter() throws Exception {
     Path skillsDir = tempDir.resolve(".rei").resolve("skills");
-    writeSkill(skillsDir.resolve("powershell"), """
+    writeSkill(
+        skillsDir.resolve("powershell"),
+        """
         ---
         name: powershell
         description: PowerShell operations
@@ -106,7 +119,8 @@ class FileSystemAgentSkillRepositoryTest {
         instructions
         """);
 
-    AgentSkill skill = new FileSystemAgentSkillRepository(properties(skillsDir)).findAll().getFirst();
+    AgentSkill skill =
+        new FileSystemAgentSkillRepository(properties(skillsDir)).findAll().getFirst();
 
     assertThat(skill.keywords()).containsExactly("invoke-webrequest", "pwsh", "PowerShell");
   }
@@ -114,7 +128,9 @@ class FileSystemAgentSkillRepositoryTest {
   @Test
   void defaultsKeywordsToEmptyList() throws Exception {
     Path skillsDir = tempDir.resolve(".rei").resolve("skills");
-    writeSkill(skillsDir.resolve("sample"), """
+    writeSkill(
+        skillsDir.resolve("sample"),
+        """
         ---
         name: sample
         description: Sample
@@ -122,7 +138,8 @@ class FileSystemAgentSkillRepositoryTest {
         instructions
         """);
 
-    AgentSkill skill = new FileSystemAgentSkillRepository(properties(skillsDir)).findAll().getFirst();
+    AgentSkill skill =
+        new FileSystemAgentSkillRepository(properties(skillsDir)).findAll().getFirst();
 
     assertThat(skill.keywords()).isEmpty();
   }
@@ -130,20 +147,25 @@ class FileSystemAgentSkillRepositoryTest {
   @Test
   void skipsBrokenSkillButKeepsOtherSkills() throws Exception {
     Path skillsDir = tempDir.resolve(".rei").resolve("skills");
-    writeSkill(skillsDir.resolve("valid"), """
+    writeSkill(
+        skillsDir.resolve("valid"),
+        """
         ---
         name: valid
         description: Valid skill
         ---
         valid instructions
         """);
-    writeSkill(skillsDir.resolve("broken"), """
+    writeSkill(
+        skillsDir.resolve("broken"),
+        """
         ---
         name: broken
         description: Broken skill
         broken
         """);
-    FileSystemAgentSkillRepository repository = new FileSystemAgentSkillRepository(properties(skillsDir));
+    FileSystemAgentSkillRepository repository =
+        new FileSystemAgentSkillRepository(properties(skillsDir));
 
     assertThat(repository.findAll()).extracting(AgentSkill::name).containsExactly("valid");
   }
@@ -151,14 +173,17 @@ class FileSystemAgentSkillRepositoryTest {
   @Test
   void ignoresKiroDirectoryEvenWhenConfigured() throws Exception {
     Path kiroDir = tempDir.resolve(".kiro");
-    writeSkill(kiroDir.resolve("sample"), """
+    writeSkill(
+        kiroDir.resolve("sample"),
+        """
         ---
         name: sample
         description: Should be ignored
         ---
         instructions
         """);
-    FileSystemAgentSkillRepository repository = new FileSystemAgentSkillRepository(properties(kiroDir));
+    FileSystemAgentSkillRepository repository =
+        new FileSystemAgentSkillRepository(properties(kiroDir));
 
     assertThat(repository.findAll()).isEmpty();
   }
@@ -166,17 +191,22 @@ class FileSystemAgentSkillRepositoryTest {
   @Test
   void reloadReflectsFileChanges() throws Exception {
     Path skillsDir = tempDir.resolve(".rei").resolve("skills");
-    writeSkill(skillsDir.resolve("before"), """
+    writeSkill(
+        skillsDir.resolve("before"),
+        """
         ---
         name: before
         description: Before skill
         ---
         before instructions
         """);
-    FileSystemAgentSkillRepository repository = new FileSystemAgentSkillRepository(properties(skillsDir));
+    FileSystemAgentSkillRepository repository =
+        new FileSystemAgentSkillRepository(properties(skillsDir));
     assertThat(repository.findAll()).extracting(AgentSkill::name).containsExactly("before");
 
-    writeSkill(skillsDir.resolve("after"), """
+    writeSkill(
+        skillsDir.resolve("after"),
+        """
         ---
         name: after
         description: After skill
@@ -185,7 +215,9 @@ class FileSystemAgentSkillRepositoryTest {
         """);
     repository.reload();
 
-    assertThat(repository.findAll()).extracting(AgentSkill::name).containsExactlyInAnyOrder("before", "after");
+    assertThat(repository.findAll())
+        .extracting(AgentSkill::name)
+        .containsExactlyInAnyOrder("before", "after");
   }
 
   private AgentSkillsProperties properties(Path skillsDir) {

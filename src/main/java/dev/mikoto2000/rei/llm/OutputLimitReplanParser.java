@@ -1,10 +1,9 @@
 package dev.mikoto2000.rei.llm;
 
-import java.util.ArrayList;
-import java.util.List;
-
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.ArrayList;
+import java.util.List;
 
 public class OutputLimitReplanParser {
 
@@ -20,7 +19,8 @@ public class OutputLimitReplanParser {
 
   public OutputLimitReplanPlan parse(String plannerOutput, int maxSubgoals) {
     try {
-      PlannerPlan plan = objectMapper.readValue(normalizeJsonObject(plannerOutput), PlannerPlan.class);
+      PlannerPlan plan =
+          objectMapper.readValue(normalizeJsonObject(plannerOutput), PlannerPlan.class);
       return validate(plan, maxSubgoals);
     } catch (IllegalArgumentException e) {
       throw e;
@@ -44,7 +44,8 @@ public class OutputLimitReplanParser {
         throw new IllegalArgumentException("Planner subgoal goal must not be blank");
       }
       String id = trimToNull(subgoal.id);
-      subgoals.add(new OutputLimitReplanSubgoal(id == null ? "subgoal-" + (subgoals.size() + 1) : id, goal));
+      subgoals.add(
+          new OutputLimitReplanSubgoal(id == null ? "subgoal-" + (subgoals.size() + 1) : id, goal));
     }
     if (subgoals.isEmpty()) {
       throw new IllegalArgumentException("Planner subgoals must not be empty");

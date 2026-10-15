@@ -4,16 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.Path;
-import java.time.Clock;
-import java.time.Instant;
-import java.time.ZoneId;
-import java.util.List;
-
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.TempDir;
-
 import dev.mikoto2000.rei.core.service.SystemShellService;
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventFactory;
@@ -21,13 +11,21 @@ import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.temporal.ManualMonotonicTimeSource;
 import dev.mikoto2000.rei.temporal.MonotonicTimeSource;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.List;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 @org.junit.jupiter.api.Tag("e2e")
 class BackgroundProcessManagerTest {
-  private final BackgroundProcessManager manager = new BackgroundProcessManager(new SystemShellService());
+  private final BackgroundProcessManager manager =
+      new BackgroundProcessManager(new SystemShellService());
 
-  @TempDir
-  Path tempDir;
+  @TempDir Path tempDir;
 
   @AfterEach
   void tearDown() {
@@ -55,7 +53,8 @@ class BackgroundProcessManagerTest {
   void statusReportsExitedProcessAndExitCode() throws Exception {
     BackgroundProcessSnapshot spawned = manager.spawnCommandLine(javaCommand("exit", "7"), tempDir);
 
-    BackgroundProcessSnapshot actual = awaitStatus(spawned.processId(), BackgroundProcessStatus.EXITED);
+    BackgroundProcessSnapshot actual =
+        awaitStatus(spawned.processId(), BackgroundProcessStatus.EXITED);
 
     assertEquals(7, actual.exitCode());
     assertTrue(actual.stdout().contains("fixture stdout"));
@@ -68,7 +67,8 @@ class BackgroundProcessManagerTest {
     awaitStdout(spawned.processId(), "ready");
 
     BackgroundProcessSnapshot killed = manager.kill(spawned.processId());
-    BackgroundProcessSnapshot actual = awaitStatus(spawned.processId(), BackgroundProcessStatus.KILLED);
+    BackgroundProcessSnapshot actual =
+        awaitStatus(spawned.processId(), BackgroundProcessStatus.KILLED);
 
     assertEquals(BackgroundProcessStatus.KILLED, killed.status());
     assertEquals(BackgroundProcessStatus.KILLED, actual.status());
@@ -91,7 +91,8 @@ class BackgroundProcessManagerTest {
     awaitStdout(second.processId(), "ready");
 
     manager.kill(first.processId());
-    BackgroundProcessSnapshot killed = awaitStatus(first.processId(), BackgroundProcessStatus.KILLED);
+    BackgroundProcessSnapshot killed =
+        awaitStatus(first.processId(), BackgroundProcessStatus.KILLED);
     BackgroundProcessSnapshot stillRunning = manager.status(second.processId(), 100);
 
     assertEquals(BackgroundProcessStatus.KILLED, killed.status());
@@ -101,10 +102,11 @@ class BackgroundProcessManagerTest {
   @Test
   void elapsedSecondsUsesMonotonicClockInsteadOfWallClock() throws Exception {
     ManualMonotonicTimeSource monotonic = new ManualMonotonicTimeSource(1_000_000_000L);
-    BackgroundProcessManager manager = new BackgroundProcessManager(
-        new SystemShellService(),
-        Clock.fixed(Instant.parse("2026-08-16T16:30:00Z"), ZoneId.of("Asia/Tokyo")),
-        monotonic);
+    BackgroundProcessManager manager =
+        new BackgroundProcessManager(
+            new SystemShellService(),
+            Clock.fixed(Instant.parse("2026-08-16T16:30:00Z"), ZoneId.of("Asia/Tokyo")),
+            monotonic);
     try {
       BackgroundProcessSnapshot spawned = manager.spawnCommandLine(javaCommand("run"), tempDir);
       awaitStdout(spawned.processId(), "ready", manager);
@@ -123,10 +125,12 @@ class BackgroundProcessManagerTest {
   void timeoutBoundaryAlwaysLeavesEitherCompletedOutputOrValidManagedId() throws Exception {
     BackgroundProcessSnapshot spawned = manager.spawnCommandLine(javaCommand("exit", "0"), tempDir);
 
-    BackgroundProcessSnapshot observed = manager.await(spawned.processId(), java.time.Duration.ZERO);
+    BackgroundProcessSnapshot observed =
+        manager.await(spawned.processId(), java.time.Duration.ZERO);
 
-    assertTrue(observed.status() == BackgroundProcessStatus.RUNNING
-        || observed.status() == BackgroundProcessStatus.EXITED);
+    assertTrue(
+        observed.status() == BackgroundProcessStatus.RUNNING
+            || observed.status() == BackgroundProcessStatus.EXITED);
     assertTrue(manager.status(spawned.processId(), 100).found());
   }
 
@@ -135,30 +139,39 @@ class BackgroundProcessManagerTest {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
     List<AgentEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
     bus.subscribe(events::add);
-    BackgroundProcessManager manager = new BackgroundProcessManager(new SystemShellService(),
-        Clock.fixed(Instant.parse("2026-08-16T16:30:00Z"), ZoneId.of("Asia/Tokyo")),
-        MonotonicTimeSource.system(), new AgentEventFactory(Clock.systemUTC()), bus);
+    BackgroundProcessManager manager =
+        new BackgroundProcessManager(
+            new SystemShellService(),
+            Clock.fixed(Instant.parse("2026-08-16T16:30:00Z"), ZoneId.of("Asia/Tokyo")),
+            MonotonicTimeSource.system(),
+            new AgentEventFactory(Clock.systemUTC()),
+            bus);
     try {
-      BackgroundProcessSnapshot spawned = manager.spawnCommandLine(javaCommand("exit", "0"), tempDir);
+      BackgroundProcessSnapshot spawned =
+          manager.spawnCommandLine(javaCommand("exit", "0"), tempDir);
       awaitStatus(spawned.processId(), BackgroundProcessStatus.EXITED, manager);
 
       long deadline = System.nanoTime() + java.time.Duration.ofSeconds(5).toNanos();
-      while (events.stream().noneMatch(event -> event.type() == AgentEventType.BACKGROUND_PROCESS_COMPLETED)
+      while (events.stream()
+              .noneMatch(event -> event.type() == AgentEventType.BACKGROUND_PROCESS_COMPLETED)
           && System.nanoTime() < deadline) Thread.sleep(10);
 
       assertEquals(AgentEventType.BACKGROUND_PROCESS_STARTED, events.get(0).type());
-      assertTrue(events.stream().anyMatch(event -> event.type() == AgentEventType.BACKGROUND_PROCESS_COMPLETED));
+      assertTrue(
+          events.stream()
+              .anyMatch(event -> event.type() == AgentEventType.BACKGROUND_PROCESS_COMPLETED));
     } finally {
       manager.shutdown();
     }
   }
 
-  private BackgroundProcessSnapshot awaitStdout(String processId, String expectedLine) throws Exception {
+  private BackgroundProcessSnapshot awaitStdout(String processId, String expectedLine)
+      throws Exception {
     return awaitStdout(processId, expectedLine, manager);
   }
 
-  private BackgroundProcessSnapshot awaitStdout(String processId, String expectedLine, BackgroundProcessManager manager)
-      throws Exception {
+  private BackgroundProcessSnapshot awaitStdout(
+      String processId, String expectedLine, BackgroundProcessManager manager) throws Exception {
     long deadline = System.currentTimeMillis() + 5000;
     BackgroundProcessSnapshot snapshot;
     do {
@@ -171,13 +184,14 @@ class BackgroundProcessManagerTest {
     return snapshot;
   }
 
-  private BackgroundProcessSnapshot awaitStatus(String processId, BackgroundProcessStatus expectedStatus)
-      throws Exception {
+  private BackgroundProcessSnapshot awaitStatus(
+      String processId, BackgroundProcessStatus expectedStatus) throws Exception {
     return awaitStatus(processId, expectedStatus, manager);
   }
 
-  private BackgroundProcessSnapshot awaitStatus(String processId, BackgroundProcessStatus expectedStatus,
-      BackgroundProcessManager manager) throws Exception {
+  private BackgroundProcessSnapshot awaitStatus(
+      String processId, BackgroundProcessStatus expectedStatus, BackgroundProcessManager manager)
+      throws Exception {
     long deadline = System.currentTimeMillis() + 5000;
     BackgroundProcessSnapshot snapshot;
     do {
@@ -191,21 +205,31 @@ class BackgroundProcessManagerTest {
   }
 
   private List<String> javaCommand(String... args) {
-    return dev.mikoto2000.rei.testsupport.JavaFixtureCommand.command(tempDir, LongRunningProcessFixture.class, args);
+    return dev.mikoto2000.rei.testsupport.JavaFixtureCommand.command(
+        tempDir, LongRunningProcessFixture.class, args);
   }
 
   private boolean isWindows() {
     return System.getProperty("os.name").toLowerCase().contains("win");
   }
-  @Test void ownedObservationRejectsAnotherProjectSessionOrRoot() throws Exception {
+
+  @Test
+  void ownedObservationRejectsAnotherProjectSessionOrRoot() throws Exception {
     BackgroundProcessSnapshot spawned;
-    try(var scope=dev.mikoto2000.rei.core.chat.AgentRunScope.open(new dev.mikoto2000.rei.core.chat.AgentRunContext("r","session",tempDir,"project"))) {
-      spawned=manager.spawnCommandLine(javaCommand("exit","0"),tempDir);
+    try (var scope =
+        dev.mikoto2000.rei.core.chat.AgentRunScope.open(
+            new dev.mikoto2000.rei.core.chat.AgentRunContext("r", "session", tempDir, "project"))) {
+      spawned = manager.spawnCommandLine(javaCommand("exit", "0"), tempDir);
     }
-    awaitStatus(spawned.processId(),BackgroundProcessStatus.EXITED);
-    assertTrue(manager.statusOwned(spawned.processId(),"project","session",tempDir).found());
-    org.junit.jupiter.api.Assertions.assertFalse(manager.statusOwned(spawned.processId(),"other","session",tempDir).found());
-    org.junit.jupiter.api.Assertions.assertFalse(manager.statusOwned(spawned.processId(),"project","other",tempDir).found());
-    org.junit.jupiter.api.Assertions.assertFalse(manager.statusOwned(spawned.processId(),"project","session",tempDir.resolve("other")).found());
+    awaitStatus(spawned.processId(), BackgroundProcessStatus.EXITED);
+    assertTrue(manager.statusOwned(spawned.processId(), "project", "session", tempDir).found());
+    org.junit.jupiter.api.Assertions.assertFalse(
+        manager.statusOwned(spawned.processId(), "other", "session", tempDir).found());
+    org.junit.jupiter.api.Assertions.assertFalse(
+        manager.statusOwned(spawned.processId(), "project", "other", tempDir).found());
+    org.junit.jupiter.api.Assertions.assertFalse(
+        manager
+            .statusOwned(spawned.processId(), "project", "session", tempDir.resolve("other"))
+            .found());
   }
 }

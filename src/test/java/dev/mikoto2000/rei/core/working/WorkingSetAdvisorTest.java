@@ -3,25 +3,22 @@ package dev.mikoto2000.rei.core.working;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
+import dev.mikoto2000.rei.event.WorkingSetContextInjectedPayload;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
-
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClientRequest;
-import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
-
-import dev.mikoto2000.rei.event.AgentEvent;
-import dev.mikoto2000.rei.event.AgentEventFactory;
-import dev.mikoto2000.rei.event.AgentEventType;
-import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
-import dev.mikoto2000.rei.event.WorkingSetContextInjectedPayload;
 
 class WorkingSetAdvisorTest {
 
@@ -50,7 +47,8 @@ class WorkingSetAdvisorTest {
     assertTrue(text.contains("fix the bug"));
     assertEquals(1, received.size());
     assertEquals(AgentEventType.WORKING_SET_CONTEXT_INJECTED, received.getFirst().type());
-    WorkingSetContextInjectedPayload payload = (WorkingSetContextInjectedPayload) received.getFirst().payload();
+    WorkingSetContextInjectedPayload payload =
+        (WorkingSetContextInjectedPayload) received.getFirst().payload();
     assertEquals(2, payload.itemCount());
     assertTrue(payload.contextCharacters() > 0);
   }
