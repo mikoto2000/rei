@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.core.command;
 
 import dev.mikoto2000.rei.core.completion.*;
-import dev.mikoto2000.rei.core.datasource.ReiPaths;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.ui.shell.JLineCompletionAdapter;
 import java.io.IOException;
@@ -23,16 +22,10 @@ public final class ReiLineReaderFactory {
 
   public static Session create(Terminal terminal, CommandLine command, CompletionEngine engine)
       throws IOException {
-    try {
-      ReiPaths.ensureParentDirectoryExists(ReiPaths.historyFilePath());
-    } catch (Exception exception) {
-      throw new IOException("履歴ファイル用ディレクトリの作成に失敗しました: " + ReiPaths.historyFilePath(), exception);
-    }
     Completer completer = completer(command, engine);
     var reader = new ApprovalMenuLineReader(terminal);
     reader.setCompleter(completer);
     reader.setParser(parser());
-    reader.setVariable(LineReader.HISTORY_FILE, ReiPaths.historyFilePath());
     reader.setVariable(LineReader.HISTORY_SIZE, 1000);
     reader.setVariable(LineReader.HISTORY_FILE_SIZE, 1000);
     reader.setOpt(LineReader.Option.BRACKETED_PASTE);
