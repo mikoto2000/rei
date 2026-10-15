@@ -40,19 +40,24 @@ public final class ToolLoopSupport {
   }
 
   private ToolExecutionResult deliveryMetadata(Prompt prompt, ToolExecutionResult result) {
-    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)
-        || options.getToolCallbacks() == null) return result;
+    return deliveryMetadata(prompt, result, java.util.Set.of());
+  }
+
+  private ToolExecutionResult deliveryMetadata(
+      Prompt prompt, ToolExecutionResult result, java.util.Set<String> argumentCorrections) {
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return result;
+    var toolCallbacks = options.getToolCallbacks();
+    if (toolCallbacks == null) return result;
     var policies =
         new java.util.HashMap<String, dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind>();
-    for (var callback : options.getToolCallbacks())
+    for (var callback : toolCallbacks)
       policies.put(
           callback.getToolDefinition().name(),
           dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.kind(callback));
     var history = new java.util.ArrayList<>(result.conversationHistory());
     var registered = new java.util.HashMap<String, org.springframework.ai.tool.ToolCallback>();
-    options
-        .getToolCallbacks()
-        .forEach(callback -> registered.put(callback.getToolDefinition().name(), callback));
+    toolCallbacks.forEach(
+        callback -> registered.put(callback.getToolDefinition().name(), callback));
     if (!history.isEmpty()
         && history.getLast()
             instanceof org.springframework.ai.chat.messages.ToolResponseMessage message) {
@@ -62,9 +67,11 @@ public final class ToolLoopSupport {
       for (var response : message.getResponses())
         calls.put(
             response.id(),
-            policies.getOrDefault(
-                response.name(),
-                dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.GENERAL));
+            argumentCorrections.contains(response.id())
+                ? dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.GENERAL
+                : policies.getOrDefault(
+                    response.name(),
+                    dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.GENERAL));
       var receipts = new java.util.HashMap<String, dev.mikoto2000.rei.review.ReviewTools.Receipt>();
       for (var response : message.getResponses())
         if (registered.get(response.name())
@@ -107,7 +114,8 @@ public final class ToolLoopSupport {
                             call.name())
                         || dev.mikoto2000.rei.core.policy.ShellFileReadArguments.supports(
                             call.name())
-                        || dev.mikoto2000.rei.core.policy.ProcessWaitArguments.supports(
+                        || dev.mikoto2000.rei.core.policy.ProcessWaitArguments.supports(call.name())
+                        || dev.mikoto2000.rei.core.policy.RawToolResultArguments.supports(
                             call.name()))) return execute(prompt, response);
     if (response.getResults().size() != 1)
       throw new IllegalArgumentException(
@@ -145,7 +153,13 @@ public final class ToolLoopSupport {
       if (!callbacks.containsKey(call.name()) || !ids.add(call.id()))
         throw new IllegalArgumentException("Unrequested or duplicate saved Tool");
     var completed = new java.util.ArrayList<>(pending.completed());
-    boolean corrected = false;
+    var argumentCorrections = new java.util.HashSet<>(pending.argumentCorrections());
+    var completedIds =
+        completed.stream()
+            .map(org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse::id)
+            .collect(java.util.stream.Collectors.toSet());
+    if (!completedIds.containsAll(argumentCorrections))
+      throw new IllegalArgumentException("Argument correction must belong to a completed Tool");
     if (completed.size() > pending.calls().size())
       throw new IllegalArgumentException("Invalid completed Tool prefix");
     for (int i = 0; i < completed.size(); i++)
@@ -164,7 +178,7 @@ public final class ToolLoopSupport {
                 call.id(),
                 call.name(),
                 context.argumentCorrection(call.id(), call.name(), invalid)));
-        corrected = true;
+        argumentCorrections.add(call.id());
         continue;
       } catch (dev.mikoto2000.rei.chatgpt.ChatGptException denied) {
         // Host policy refusals are terminal, not model-correctable arguments. Report them before
@@ -191,8 +205,10 @@ public final class ToolLoopSupport {
                 permission.approvalId(),
                 prompt.getInstructions(),
                 new RunContinuation.PendingTools(
-                    pending.text(), pending.calls(), java.util.List.copyOf(completed))))
-              throw new RunWaitingException();
+                    pending.text(),
+                    pending.calls(),
+                    java.util.List.copyOf(completed),
+                    argumentCorrections))) throw new RunWaitingException();
           }
           if (cause.getCause() == cause) break;
         }
@@ -216,7 +232,8 @@ public final class ToolLoopSupport {
         prompt,
         ToolExecutionResult.builder()
             .conversationHistory(history)
-            .returnDirect(direct && !corrected)
-            .build());
+            .returnDirect(direct && argumentCorrections.isEmpty())
+            .build(),
+        argumentCorrections);
   }
 }

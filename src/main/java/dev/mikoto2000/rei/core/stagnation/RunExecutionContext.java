@@ -141,6 +141,7 @@ public class RunExecutionContext {
       dev.mikoto2000.rei.core.taskstate.TaskStateArguments.validate(name, input);
       dev.mikoto2000.rei.core.policy.ShellFileReadArguments.validate(name, input);
       dev.mikoto2000.rei.core.policy.ProcessWaitArguments.validate(name, input);
+      dev.mikoto2000.rei.core.policy.RawToolResultArguments.validate(name, input);
     }
   }
 

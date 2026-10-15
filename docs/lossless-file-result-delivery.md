@@ -21,6 +21,8 @@ FILE_CONTENTの対象は readMultiFile、searchAndRead、readSkillResource、rea
 
 大きい委譲結果は `rawResultRef` / `content` / `nextOffset` / `truncated` を持つページになる。`content` は元の結果JSONの連続した断片であり、単独の完全な結果JSONとは限らない。`truncated=true` なら `readRawToolResult(rawResultRef, offset=nextOffset, limit=16000)` を呼び、`hasMore=false` まで次の `nextOffset` を辿る。各本文を順番に連結すれば、単一・バッチとも元JSONと一致する。小さい結果は既存の結果JSONのまま返す。会話要約を無効にしても、この配送と最終入力上限の調整は有効。
 
+`readRawToolResult` の入力名は `offset` です。前回の応答が `nextOffset: 3433` なら、次は `{"rawResultRef":"同じ参照","offset":3433,"limit":16000}` と指定します。`nextOffset` を入力に使ったり、数値を `"3433"` のように文字列で渡したりしません。必須引数・型・数値範囲の不正は、保存結果を読む前にまとめて検出し、既存の回数制限付き引数修正ループで LLM に返します。この修正応答は原文ページと区別して保存・圧縮し、承認待ちから続行する場合もその区別を保持します。
+
 一般ログの GENERAL / DIAGNOSTIC_LOG / SEARCH_RESULT では重要行・先頭・末尾の表示が引き続き残る。例えば runCommand の大きいログはexitCode/error/status/stderr/diagnosisを優先し、完全ログはraw参照で取得する。本文と委譲結果にはこの抜粋方式を適用しない。登録されたレビューPage以外の文字列から配送receiptを作らない。
 
 ## ページ分割と予算

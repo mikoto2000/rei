@@ -305,7 +305,7 @@ public class SubAgentTools {
                     .collect(java.util.stream.Collectors.joining("\n"));
             String continuation =
                 DeliveryToolRegistration.kind(delegate) == ResultDelivery.Kind.LOSSLESS_RESULT
-                    ? "\nLarge results are delivered as exact contiguous pages with rawResultRef, content, nextOffset and truncated. While truncated, call readRawToolResult with that rawResultRef and nextOffset; continue until hasMore=false. A page's content is a fragment of the original result JSON, not a complete child result. Assemble all fragments before interpreting findings or declaring completion."
+                    ? "\nLarge results are delivered as exact contiguous pages with rawResultRef, content, nextOffset and truncated. While truncated, call readRawToolResult with that rawResultRef, offset set to the numeric nextOffset value, and limit:16000. nextOffset is an output field, not an input argument; do not quote the offset. Continue until hasMore=false. A page's content is a fragment of the original result JSON, not a complete child result. Assemble all fragments before interpreting findings or declaring completion."
                     : "";
             return ToolDefinition.builder()
                 .name(original.name())

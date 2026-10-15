@@ -94,6 +94,7 @@ public class ToolPermissionPolicy {
   public void validateArguments(String tool, String input) {
     ShellFileReadArguments.validate(tool, input);
     ProcessWaitArguments.validate(tool, input);
+    RawToolResultArguments.validate(tool, input);
     dev.mikoto2000.rei.core.taskstate.TaskStateArguments.validate(tool, input);
     validateDelegation(tool, input);
   }

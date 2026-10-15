@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.core.contextbudget;
 
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 
 public class RawToolResultTools {
   private final RawToolResultStore store;
@@ -26,8 +27,18 @@ public class RawToolResultTools {
   @Tool(
       resultConverter = RawResultPageTextConverter.class,
       description =
-          "Read an exact contiguous page of a saved result. Offset is a UTF-16 character offset; limit 1..16000 is an upper bound. Follow nextOffset while hasMore. A page may shrink to its token budget.")
-  public String readRawToolResult(String rawResultRef, int offset, int limit) {
+          "Read an exact contiguous page of a saved result. All three arguments are required: rawResultRef, offset, limit. offset is a nonnegative UTF-16 character offset. Start with offset:0. To continue while hasMore=true, pass the previous response's numeric nextOffset as the input offset, for example {\"rawResultRef\":\"<same reference>\",\"offset\":3433,\"limit\":16000}. nextOffset is an output field, not an input argument. Do not quote numeric values. limit 1..16000 is an upper bound; a page may shrink to its token budget.")
+  public String readRawToolResult(
+      @ToolParam(
+              description =
+                  "Required saved result reference; keep the same reference across pages.")
+          String rawResultRef,
+      @ToolParam(
+              description =
+                  "Required integer UTF-16 character offset, at least 0. Initially 0; for continuation use the previous response's numeric nextOffset as offset. Do not send a nextOffset input field.")
+          int offset,
+      @ToolParam(description = "Required integer character limit from 1 to 16000 inclusive.")
+          int limit) {
     var owner = AgentRunScope.current();
     if (owner == null) throw new IllegalStateException("A run is required");
     if (offset < 0 || limit < 1 || limit > 16000)
