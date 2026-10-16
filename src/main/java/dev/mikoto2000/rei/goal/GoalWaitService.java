@@ -1,13 +1,25 @@
 package dev.mikoto2000.rei.goal;
 
-import dev.mikoto2000.rei.checkpoint.*;
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.core.dependency.*;
-import dev.mikoto2000.rei.event.*;
-import dev.mikoto2000.rei.temporal.*;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpoint;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpointService;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
+import dev.mikoto2000.rei.core.chat.RunCancellation;
+import dev.mikoto2000.rei.core.dependency.DependencyObservationService;
+import dev.mikoto2000.rei.core.dependency.DependencyState;
+import dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.DependencyStatusPayload;
+import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
 import java.nio.file.Path;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
 

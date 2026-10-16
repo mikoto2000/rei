@@ -1,7 +1,7 @@
 package dev.mikoto2000.rei.web;
 
-import dev.mikoto2000.rei.event.*;
-import java.util.*;
+import dev.mikoto2000.rei.event.AgentEvent;
+import java.util.Map;
 
 /**
  * Version 1 explicitly projects payload fields; future internal fields are not automatically

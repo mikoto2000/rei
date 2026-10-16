@@ -1,9 +1,15 @@
 package dev.mikoto2000.rei.websearch;
 
-import dev.mikoto2000.rei.core.contextbudget.*;
+import dev.mikoto2000.rei.core.contextbudget.ContextBudgetManager;
+import dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties;
+import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
-import dev.mikoto2000.rei.http.*;
-import java.util.*;
+import dev.mikoto2000.rei.http.FetchScope;
+import dev.mikoto2000.rei.http.HttpFetchException;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Objects;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.execution.DefaultToolCallResultConverter;
 import org.springframework.stereotype.Component;

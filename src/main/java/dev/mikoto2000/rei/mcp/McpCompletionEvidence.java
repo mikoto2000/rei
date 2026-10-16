@@ -1,10 +1,14 @@
 package dev.mikoto2000.rei.mcp;
 
-import dev.mikoto2000.rei.artifact.*;
+import dev.mikoto2000.rei.artifact.ArtifactStore;
 import dev.mikoto2000.rei.event.CredentialRedactor;
-import dev.mikoto2000.rei.goal.*;
-import dev.mikoto2000.rei.reflection.*;
-import java.util.*;
+import dev.mikoto2000.rei.goal.GoalRepository;
+import dev.mikoto2000.rei.reflection.GoalReflectionRepository;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /** Project only saved Goal verification facts; never reverify files or trust assistant claims. */
 public final class McpCompletionEvidence {

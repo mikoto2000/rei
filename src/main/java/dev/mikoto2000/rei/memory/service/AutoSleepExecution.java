@@ -1,7 +1,7 @@
 package dev.mikoto2000.rei.memory.service;
 
 import dev.mikoto2000.rei.llm.ModelCallBudget;
-import java.time.*;
+import java.time.Duration;
 
 /** Per-execution limits, passed through the existing model accounting path. */
 public final class AutoSleepExecution implements ModelCallBudget {

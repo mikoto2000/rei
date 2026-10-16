@@ -1,13 +1,17 @@
 package dev.mikoto2000.rei.goal;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.mikoto2000.rei.core.chat.*;
-import java.nio.file.*;
-import java.time.*;
-import java.util.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.util.ArrayList;
 import java.util.function.Consumer;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 

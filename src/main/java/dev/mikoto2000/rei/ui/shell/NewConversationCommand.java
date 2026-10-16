@@ -2,7 +2,9 @@ package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.application.session.ShellConversationService;
 import org.springframework.stereotype.Component;
-import picocli.CommandLine.*;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Parameters;
+import picocli.CommandLine.Spec;
 
 @Component
 @Command(name = "new", description = "新しい Session を作成して選択します", mixinStandardHelpOptions = true)

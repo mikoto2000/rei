@@ -1,22 +1,42 @@
 package dev.mikoto2000.rei.dot;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.calls;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-import dev.mikoto2000.rei.application.run.*;
-import dev.mikoto2000.rei.application.session.*;
-import dev.mikoto2000.rei.checkpoint.*;
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.core.dependency.*;
-import dev.mikoto2000.rei.core.policy.*;
-import dev.mikoto2000.rei.core.project.*;
-import dev.mikoto2000.rei.core.stagnation.*;
-import dev.mikoto2000.rei.event.*;
-import dev.mikoto2000.rei.llm.*;
-import java.nio.file.*;
-import java.time.*;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import dev.mikoto2000.rei.application.run.RunRegistry;
+import dev.mikoto2000.rei.application.run.RunStatus;
+import dev.mikoto2000.rei.application.session.SessionMetadata;
+import dev.mikoto2000.rei.application.session.SessionRepository;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpoint;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.RunWaitingException;
+import dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository;
+import dev.mikoto2000.rei.core.policy.ActionCapability;
+import dev.mikoto2000.rei.core.policy.ToolPermissionGuard;
+import dev.mikoto2000.rei.core.policy.ToolPermissionPolicy;
+import dev.mikoto2000.rei.core.policy.ToolPermissionProperties;
+import dev.mikoto2000.rei.core.project.ProjectContext;
+import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.core.stagnation.ProgressEvaluator;
+import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class DotParentDelegationTest {

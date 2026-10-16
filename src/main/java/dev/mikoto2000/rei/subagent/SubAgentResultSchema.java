@@ -1,10 +1,16 @@
 package dev.mikoto2000.rei.subagent;
 
-import com.networknt.schema.*;
+import com.networknt.schema.Schema;
+import com.networknt.schema.SchemaLocation;
+import com.networknt.schema.SchemaRegistry;
+import com.networknt.schema.SchemaRegistryConfig;
+import com.networknt.schema.SpecificationVersion;
 import com.networknt.schema.path.PathType;
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import tools.jackson.databind.JsonNode;
 
 /** Definition-owned compiled schema. Reload replaces it; executions never read schema files. */

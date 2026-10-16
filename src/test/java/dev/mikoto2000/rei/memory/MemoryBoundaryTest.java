@@ -1,16 +1,30 @@
 package dev.mikoto2000.rei.memory;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
-import dev.mikoto2000.rei.memory.model.*;
-import dev.mikoto2000.rei.memory.service.*;
+import dev.mikoto2000.rei.memory.model.MemoryScope;
+import dev.mikoto2000.rei.memory.service.MemoryCandidateExtractor;
+import dev.mikoto2000.rei.memory.service.MemoryRepository;
+import dev.mikoto2000.rei.memory.service.MemoryResolutionModel;
+import dev.mikoto2000.rei.memory.service.MemoryResolver;
+import dev.mikoto2000.rei.memory.service.MemoryRetriever;
+import dev.mikoto2000.rei.memory.service.MemoryService;
+import dev.mikoto2000.rei.memory.service.SleepService;
 import java.nio.file.Path;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 

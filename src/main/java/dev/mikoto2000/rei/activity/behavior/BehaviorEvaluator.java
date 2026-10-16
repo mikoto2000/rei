@@ -1,8 +1,18 @@
 package dev.mikoto2000.rei.activity.behavior;
 
-import dev.mikoto2000.rei.activity.*;
-import java.time.*;
-import java.util.*;
+import dev.mikoto2000.rei.activity.ActivityDisplayLabels;
+import dev.mikoto2000.rei.activity.ActivityRecord;
+import dev.mikoto2000.rei.activity.ActivityRolePolicy;
+import dev.mikoto2000.rei.activity.ActivitySession;
+import dev.mikoto2000.rei.activity.EntertainmentDisposition;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Pure evaluation of fine-session evidence. Summary projections and external context are not

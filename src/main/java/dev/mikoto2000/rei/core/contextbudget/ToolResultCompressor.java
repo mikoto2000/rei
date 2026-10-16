@@ -1,7 +1,13 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
-import java.util.*;
-import org.springframework.ai.chat.messages.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 
 /**
  * Exact source/delegated pages; diagnostic excerpts for general logs. Raw bodies are saved first.

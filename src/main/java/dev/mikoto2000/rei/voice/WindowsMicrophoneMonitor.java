@@ -1,6 +1,9 @@
 package dev.mikoto2000.rei.voice;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.function.Supplier;
 
 /** Pins a Java Sound selection to one active Windows endpoint; never follows the default. */

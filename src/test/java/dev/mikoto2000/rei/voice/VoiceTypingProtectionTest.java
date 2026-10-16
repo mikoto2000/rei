@@ -1,17 +1,21 @@
 package dev.mikoto2000.rei.voice;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.mikoto2000.rei.ui.shell.JLineShellEventOutput;
 import dev.mikoto2000.rei.ui.shell.UserInputFrame;
-import java.io.*;
+import java.io.ByteArrayOutputStream;
+import java.io.PipedInputStream;
+import java.io.PipedOutputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
-import org.jline.reader.*;
+import org.jline.reader.LineReaderBuilder;
 import org.jline.terminal.Size;
 import org.jline.terminal.impl.DumbTerminal;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 
 @Timeout(15)
 class VoiceTypingProtectionTest {

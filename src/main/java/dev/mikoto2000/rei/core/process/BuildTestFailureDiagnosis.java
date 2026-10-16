@@ -1,7 +1,12 @@
 package dev.mikoto2000.rei.core.process;
 
 import dev.mikoto2000.rei.event.CredentialRedactor;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /** Deterministic observations of command output; suggestions never execute a command. */

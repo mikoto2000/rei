@@ -1,10 +1,16 @@
 package dev.mikoto2000.rei.core.command;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.RETURNS_DEEP_STUBS;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import dev.mikoto2000.rei.core.service.*;
-import dev.mikoto2000.rei.search.*;
+import dev.mikoto2000.rei.core.service.CommandCancellationService;
+import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.search.SearchKnowledgeResult;
+import dev.mikoto2000.rei.search.SearchKnowledgeService;
 import dev.mikoto2000.rei.websearch.WebSearchContext;
 import java.util.List;
 import org.junit.jupiter.api.Test;

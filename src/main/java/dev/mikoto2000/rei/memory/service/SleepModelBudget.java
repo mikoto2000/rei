@@ -1,9 +1,12 @@
 package dev.mikoto2000.rei.memory.service;
 
-import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.*;
+import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.LLM_CALL_BUDGET_EXCEEDED;
+import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.TOKEN_BUDGET_EXCEEDED;
+import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.TOKEN_USAGE_UNKNOWN;
 
 import dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException;
-import dev.mikoto2000.rei.llm.*;
+import dev.mikoto2000.rei.llm.ModelCallBudget;
+import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
 
 /** One Sleep invocation: extraction and semantic resolutions share this absolute budget. */

@@ -2,10 +2,12 @@ package dev.mikoto2000.rei.slack;
 
 import dev.mikoto2000.rei.core.policy.ToolPermissionGuard;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Objects;
 import org.springframework.ai.chat.model.ToolContext;
-import org.springframework.ai.tool.*;
-import org.springframework.ai.tool.annotation.*;
+import org.springframework.ai.tool.ToolCallback;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
 /** One bounded explicit question, never implicit Session/history attachment. */

@@ -3,7 +3,14 @@ package dev.mikoto2000.rei.dot;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 
 public final class DotPayload {
   private DotPayload() {}

@@ -1,9 +1,11 @@
 package dev.mikoto2000.rei.activity;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-import java.util.*;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ActivityTuningMetricsTest {

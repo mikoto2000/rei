@@ -1,9 +1,16 @@
 package dev.mikoto2000.rei.web;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
-import dev.mikoto2000.rei.core.service.*;
+import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelUnloadService;
+import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelsService;
 import org.junit.jupiter.api.Test;
 
 class ModelControllerTest {

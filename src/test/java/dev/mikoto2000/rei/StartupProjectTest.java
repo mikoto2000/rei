@@ -1,11 +1,22 @@
 package dev.mikoto2000.rei;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.CALLS_REAL_METHODS;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
 
 import dev.mikoto2000.rei.core.command.ProjectCommand;
-import dev.mikoto2000.rei.core.project.*;
-import java.nio.file.*;
+import dev.mikoto2000.rei.core.project.ProjectBeanScope;
+import dev.mikoto2000.rei.core.project.ProjectContext;
+import dev.mikoto2000.rei.core.project.ProjectRegistry;
+import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.core.project.ProjectStorage;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.test.util.ReflectionTestUtils;

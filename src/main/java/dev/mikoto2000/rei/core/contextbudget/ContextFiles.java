@@ -2,7 +2,10 @@ package dev.mikoto2000.rei.core.contextbudget;
 
 import dev.mikoto2000.rei.core.project.ProjectStorage;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
 final class ContextFiles {

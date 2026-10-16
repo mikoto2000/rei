@@ -1,16 +1,37 @@
 package dev.mikoto2000.rei.storage;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import dev.mikoto2000.rei.application.session.*;
-import dev.mikoto2000.rei.conversation.*;
+import dev.mikoto2000.rei.application.session.CursorKey;
+import dev.mikoto2000.rei.application.session.SessionMetadata;
+import dev.mikoto2000.rei.application.session.SessionRepository;
+import dev.mikoto2000.rei.application.session.SessionTurn;
+import dev.mikoto2000.rei.conversation.ConversationLogEntry;
+import dev.mikoto2000.rei.conversation.ConversationLogStore;
+import dev.mikoto2000.rei.conversation.ConversationTurnStore;
+import dev.mikoto2000.rei.conversation.FileSessionRepository;
+import dev.mikoto2000.rei.conversation.SessionHistoryConfiguration;
+import dev.mikoto2000.rei.conversation.SqliteConversationTurnStore;
+import dev.mikoto2000.rei.conversation.SqliteSessionRepository;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import java.nio.file.*;
-import java.time.*;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.AnnotationConfigApplicationContext;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.springframework.core.env.MapPropertySource;
 
 @Tag("integration")

@@ -1,18 +1,24 @@
 package dev.mikoto2000.rei.web;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.mikoto2000.rei.artifact.*;
+import dev.mikoto2000.rei.artifact.ArtifactConfiguration;
+import dev.mikoto2000.rei.artifact.ArtifactStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import java.net.URI;
-import java.net.http.*;
-import java.nio.file.*;
-import java.time.*;
-import org.junit.jupiter.api.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.file.Path;
+import java.time.Duration;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.SpringApplication;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 import org.sqlite.SQLiteDataSource;
 
 @Tag("integration")

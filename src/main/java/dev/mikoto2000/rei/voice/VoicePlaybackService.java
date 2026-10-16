@@ -3,9 +3,14 @@ package dev.mikoto2000.rei.voice;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import java.time.Duration;
 import java.util.Objects;
-import java.util.concurrent.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.*;
+import java.util.function.BooleanSupplier;
+import java.util.function.Predicate;
+import java.util.function.Supplier;
 
 /** Bounded optional narration of the captured Shell owner's completed VOICE replies. */
 public final class VoicePlaybackService implements AutoCloseable {

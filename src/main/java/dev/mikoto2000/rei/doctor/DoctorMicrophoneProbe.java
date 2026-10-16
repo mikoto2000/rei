@@ -1,8 +1,17 @@
 package dev.mikoto2000.rei.doctor;
 
-import dev.mikoto2000.rei.voice.*;
+import dev.mikoto2000.rei.voice.AudioDevice;
+import dev.mikoto2000.rei.voice.AudioDeviceService;
+import dev.mikoto2000.rei.voice.JavaSoundMicrophoneCapture;
 import java.time.Duration;
-import java.util.concurrent.*;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.stereotype.Component;
 

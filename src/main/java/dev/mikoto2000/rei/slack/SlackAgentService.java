@@ -1,14 +1,29 @@
 package dev.mikoto2000.rei.slack;
 
-import dev.mikoto2000.rei.application.run.*;
-import dev.mikoto2000.rei.core.chat.*;
+import dev.mikoto2000.rei.application.run.RunNotFoundException;
+import dev.mikoto2000.rei.application.run.RunRegistry;
+import dev.mikoto2000.rei.application.run.RunService;
+import dev.mikoto2000.rei.application.run.RunStatus;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
+import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
+import dev.mikoto2000.rei.core.chat.RunContinuation;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import java.time.Clock;
-import java.util.*;
-import java.util.function.*;
-import org.springframework.ai.chat.messages.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 
 /**
  * Socket pump drives persisted dependencies. Waiting occupies neither a worker nor a model call.

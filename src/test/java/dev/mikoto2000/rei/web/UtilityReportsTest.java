@@ -1,11 +1,14 @@
 package dev.mikoto2000.rei.web;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-import dev.mikoto2000.rei.briefing.*;
+import dev.mikoto2000.rei.briefing.BriefingService;
+import dev.mikoto2000.rei.briefing.DailyBriefing;
 import dev.mikoto2000.rei.briefing.command.BriefingCommand;
-import dev.mikoto2000.rei.reminder.*;
+import dev.mikoto2000.rei.reminder.ReminderService;
 import dev.mikoto2000.rei.reminder.command.ReminderCommand;
 import java.util.List;
 import org.junit.jupiter.api.Test;

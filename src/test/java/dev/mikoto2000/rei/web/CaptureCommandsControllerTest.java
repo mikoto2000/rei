@@ -1,11 +1,15 @@
 package dev.mikoto2000.rei.web;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.mikoto2000.rei.application.session.*;
+import dev.mikoto2000.rei.application.session.SessionLifecycle;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
-import dev.mikoto2000.rei.llm.capture.*;
-import java.nio.file.*;
+import dev.mikoto2000.rei.llm.capture.CaptureStore;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

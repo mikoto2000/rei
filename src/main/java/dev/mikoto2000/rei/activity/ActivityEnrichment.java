@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.activity;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
 /**
  * Merge independent fields without losing a known service or mixing conflicting service contexts.

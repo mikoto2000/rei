@@ -1,6 +1,6 @@
 package dev.mikoto2000.rei.subagent;
 
-import java.util.*;
+import java.util.List;
 import tools.jackson.databind.JsonNode;
 
 /** Common envelope first, then the definition's optional result schema. */

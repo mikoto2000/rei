@@ -1,11 +1,17 @@
 package dev.mikoto2000.rei.computeruse;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.awt.*;
+import java.awt.BasicStroke;
+import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.nio.file.*;
-import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import javax.imageio.ImageIO;
 
 /** Opt-in local artifacts. Filenames never derive from model text or OS display identifiers. */

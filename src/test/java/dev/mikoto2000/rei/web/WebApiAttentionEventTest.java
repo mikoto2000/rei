@@ -1,9 +1,16 @@
 package dev.mikoto2000.rei.web;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
-import dev.mikoto2000.rei.event.*;
-import java.time.*;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.AttentionRequiredPayload;
+import dev.mikoto2000.rei.event.ExecutionProgressPayload;
+import dev.mikoto2000.rei.event.GoalLifecyclePayload;
+import java.time.Clock;
+import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
 class WebApiAttentionEventTest {

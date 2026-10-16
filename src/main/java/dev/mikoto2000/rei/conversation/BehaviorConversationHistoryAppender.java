@@ -1,10 +1,14 @@
 package dev.mikoto2000.rei.conversation;
 
-import dev.mikoto2000.rei.application.session.*;
-import dev.mikoto2000.rei.core.project.*;
+import dev.mikoto2000.rei.application.session.SessionMetadata;
+import dev.mikoto2000.rei.application.session.SessionRepository;
+import dev.mikoto2000.rei.application.session.SessionTitle;
+import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.core.project.ProjectStorage;
 import dev.mikoto2000.rei.llm.ConversationIds;
 import dev.mikoto2000.rei.topic.AgentMessage;
-import java.util.*;
+import java.util.LinkedHashMap;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 /**

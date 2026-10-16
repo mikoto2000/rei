@@ -1,17 +1,24 @@
 package dev.mikoto2000.rei.web;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import dev.mikoto2000.rei.application.read.ReadQueryService;
 import dev.mikoto2000.rei.briefing.BriefingService;
 import dev.mikoto2000.rei.event.ProfileEventLogStore;
 import dev.mikoto2000.rei.feed.FeedService;
 import dev.mikoto2000.rei.search.SearchKnowledgeService;
-import dev.mikoto2000.rei.skills.*;
-import java.util.*;
+import dev.mikoto2000.rei.skills.AgentSkill;
+import dev.mikoto2000.rei.skills.AgentSkillRepository;
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 

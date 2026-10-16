@@ -1,8 +1,8 @@
 package dev.mikoto2000.rei.llm.capture;
 
 import java.io.IOException;
-import okhttp3.*;
-import okio.*;
+import okhttp3.Interceptor;
+import okhttp3.Response;
 
 /** Runs after known rewrites. Captures repeatable, known-size bodies with a hard bounded sink. */
 public final class CaptureInterceptor implements Interceptor {

@@ -1,15 +1,22 @@
 package dev.mikoto2000.rei.core;
 
 import com.fasterxml.jackson.core.StreamReadFeature;
-import com.fasterxml.jackson.databind.*;
-import dev.mikoto2000.rei.core.chat.*;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.BoundedToolLoop;
+import dev.mikoto2000.rei.core.chat.RunCancellation;
+import dev.mikoto2000.rei.core.chat.ToolLoopSupport;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
-import org.springframework.ai.chat.messages.*;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;

@@ -1,11 +1,15 @@
 package dev.mikoto2000.rei;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 import dev.mikoto2000.rei.voice.VoiceCommand;
 import org.jline.terminal.Terminal;
-import org.jline.terminal.spi.*;
+import org.jline.terminal.spi.SystemStream;
+import org.jline.terminal.spi.TerminalExt;
+import org.jline.terminal.spi.TerminalProvider;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 

@@ -3,11 +3,15 @@ package dev.mikoto2000.rei.core;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.core.process.BuildTestFailureDiagnosis;
 import dev.mikoto2000.rei.core.service.SystemShellService;
-import dev.mikoto2000.rei.externalagent.*;
+import dev.mikoto2000.rei.externalagent.ExternalAgentProcessRunner;
+import dev.mikoto2000.rei.externalagent.ExternalAgentResult;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.*;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * Explicit bounded test -> static patch review -> final test cycle. Never claims semantic

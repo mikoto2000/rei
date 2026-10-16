@@ -1,7 +1,7 @@
 package dev.mikoto2000.rei.web;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
 import dev.mikoto2000.rei.application.read.ReadQueryService;
 import dev.mikoto2000.rei.application.state.StatefulOperationService;
@@ -11,12 +11,14 @@ import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
 import dev.mikoto2000.rei.memory.service.MemoryService;
 import dev.mikoto2000.rei.reminder.ReminderService;
 import dev.mikoto2000.rei.skills.AgentSkillRepository;
-import java.net.http.*;
+import java.net.http.HttpClient;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.SpringApplication;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 
 @org.junit.jupiter.api.Tag("integration")
 class StatefulHttpTest {

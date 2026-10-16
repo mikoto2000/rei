@@ -1,12 +1,18 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.core.command.UserInputService;
-import dev.mikoto2000.rei.core.completion.*;
+import dev.mikoto2000.rei.core.completion.CompletionCandidate;
+import dev.mikoto2000.rei.core.completion.CompletionContext;
+import dev.mikoto2000.rei.core.completion.CompletionMetadata;
+import dev.mikoto2000.rei.core.completion.FilePathCompletionProvider;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 import org.jline.reader.ParsedLine;
 import picocli.CommandLine;
-import picocli.CommandLine.Model.*;
+import picocli.CommandLine.Model.ArgSpec;
 
 /** Reads the live command model without parsing/executing commands or rebinding @Spec. */
 public final class CommandCompletionContextResolver {

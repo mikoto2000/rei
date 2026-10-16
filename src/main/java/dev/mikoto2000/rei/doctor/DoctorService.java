@@ -1,16 +1,31 @@
 package dev.mikoto2000.rei.doctor;
 
-import static dev.mikoto2000.rei.doctor.DoctorResult.Status.*;
+import static dev.mikoto2000.rei.doctor.DoctorResult.Status.ERROR;
+import static dev.mikoto2000.rei.doctor.DoctorResult.Status.NOT_APPLICABLE;
+import static dev.mikoto2000.rei.doctor.DoctorResult.Status.NOT_CONFIGURED;
+import static dev.mikoto2000.rei.doctor.DoctorResult.Status.OK;
+import static dev.mikoto2000.rei.doctor.DoctorResult.Status.SKIPPED;
+import static dev.mikoto2000.rei.doctor.DoctorResult.Status.UNVERIFIED;
+import static dev.mikoto2000.rei.doctor.DoctorResult.Status.WARNING;
 
-import dev.mikoto2000.rei.externalagent.*;
+import dev.mikoto2000.rei.externalagent.ClaudeCodeProperties;
+import dev.mikoto2000.rei.externalagent.CodexProperties;
 import dev.mikoto2000.rei.llm.LlmProperties;
-import dev.mikoto2000.rei.voice.*;
+import dev.mikoto2000.rei.voice.VoiceModelManifest;
+import dev.mikoto2000.rei.voice.VoiceProperties;
 import java.net.URI;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
 import java.time.Clock;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.core.env.*;
+import org.springframework.core.env.ConfigurableEnvironment;
+import org.springframework.core.env.Environment;
+import org.springframework.core.env.PropertySource;
 import org.springframework.stereotype.Service;
 
 /**

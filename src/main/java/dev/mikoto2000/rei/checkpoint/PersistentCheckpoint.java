@@ -2,7 +2,8 @@ package dev.mikoto2000.rei.checkpoint;
 
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
 
 /** Execution evidence only. No reasoning trace or raw tool output is stored here. */
 public record PersistentCheckpoint(

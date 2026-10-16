@@ -1,6 +1,6 @@
 package dev.mikoto2000.rei.paper;
 
-import java.util.*;
+import java.util.List;
 
 public record PaperSearchQuery(
     String query,

@@ -5,7 +5,9 @@ import dev.mikoto2000.rei.core.completion.PathFragment;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import org.jline.reader.*;
+import org.jline.reader.CompletingParsedLine;
+import org.jline.reader.ParsedLine;
+import org.jline.reader.Parser;
 
 /** JLine's standard completion contract backed by the exact execution tokenizer. */
 public final class ShellCompletionParser implements Parser {

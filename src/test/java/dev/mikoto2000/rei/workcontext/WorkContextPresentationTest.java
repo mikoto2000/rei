@@ -1,11 +1,17 @@
 package dev.mikoto2000.rei.workcontext;
 
-import static dev.mikoto2000.rei.workcontext.WorkContext.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static dev.mikoto2000.rei.workcontext.WorkContext.GitState;
+import static dev.mikoto2000.rei.workcontext.WorkContext.Item;
+import static dev.mikoto2000.rei.workcontext.WorkContext.Kind;
+import static dev.mikoto2000.rei.workcontext.WorkContext.Status;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class WorkContextPresentationTest {

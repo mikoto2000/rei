@@ -1,9 +1,12 @@
 package dev.mikoto2000.rei.reflection;
 
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.GoalLifecyclePayload;
 import dev.mikoto2000.rei.goal.GoalRepository;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.UUID;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;

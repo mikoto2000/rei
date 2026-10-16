@@ -1,6 +1,9 @@
 package dev.mikoto2000.rei.computeruse;
 
-import java.awt.*;
+import java.awt.AWTException;
+import java.awt.GraphicsEnvironment;
+import java.awt.Rectangle;
+import java.awt.Robot;
 import java.awt.image.BufferedImage;
 
 /** Lazy: enabling the tool does not capture or move the desktop during application startup. */

@@ -1,7 +1,10 @@
 package dev.mikoto2000.rei.topic;
 
-import dev.mikoto2000.rei.conversation.*;
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.conversation.BehaviorConversationHistoryAppender;
+import dev.mikoto2000.rei.conversation.ConversationLogStore;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.llm.ConversationIds;
 import org.springframework.stereotype.Component;
 

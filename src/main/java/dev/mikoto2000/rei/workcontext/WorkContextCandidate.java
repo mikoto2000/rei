@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.workcontext;
 
-import dev.mikoto2000.rei.workcontext.WorkContext.*;
+import dev.mikoto2000.rei.workcontext.WorkContext.Kind;
+import dev.mikoto2000.rei.workcontext.WorkContext.Origin;
+import dev.mikoto2000.rei.workcontext.WorkContext.Status;
 import java.util.List;
 
 public record WorkContextCandidate(

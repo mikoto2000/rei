@@ -3,8 +3,17 @@ package dev.mikoto2000.rei.skills;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.vectordocument.CandidateReranker;
 import dev.mikoto2000.rei.vectorstore.ReciprocalRankFusion;
-import java.util.*;
-import java.util.function.*;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.function.LongSupplier;
+import java.util.function.Supplier;
 
 /**
  * Live-catalog metadata search with an optional persisted vector cache; never caches queries or

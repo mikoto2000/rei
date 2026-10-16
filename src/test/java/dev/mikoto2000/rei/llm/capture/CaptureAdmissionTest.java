@@ -1,14 +1,18 @@
 package dev.mikoto2000.rei.llm.capture;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import dev.mikoto2000.rei.application.session.*;
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.core.project.*;
-import java.nio.file.*;
-import java.util.*;
-import java.util.concurrent.*;
-import org.junit.jupiter.api.*;
+import dev.mikoto2000.rei.application.session.SessionLifecycle;
+import dev.mikoto2000.rei.application.session.ShellConversationService;
+import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
+import dev.mikoto2000.rei.core.project.ProjectRegistry;
+import dev.mikoto2000.rei.core.project.ProjectService;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.concurrent.RejectedExecutionException;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 @Tag("integration")

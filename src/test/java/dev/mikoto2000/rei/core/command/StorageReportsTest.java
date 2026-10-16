@@ -1,12 +1,24 @@
 package dev.mikoto2000.rei.core.command;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.storage.*;
-import java.time.*;
-import java.util.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.storage.AutomaticRetention;
+import dev.mikoto2000.rei.storage.RetentionExecutor;
+import dev.mikoto2000.rei.storage.RetentionPlanner;
+import dev.mikoto2000.rei.storage.StorageMaintenance;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class StorageReportsTest {

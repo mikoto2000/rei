@@ -1,7 +1,9 @@
 package dev.mikoto2000.rei.application.read;
 
-import dev.mikoto2000.rei.skills.*;
-import java.util.*;
+import dev.mikoto2000.rei.skills.AgentSkill;
+import dev.mikoto2000.rei.skills.AgentSkillRepository;
+import java.util.List;
+import java.util.Optional;
 
 /** Shared shell/Web read boundary; deliberately has no reload or filesystem operation. */
 public record SkillQueryService(AgentSkillRepository repository) {

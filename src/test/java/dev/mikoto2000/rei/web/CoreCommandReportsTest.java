@@ -1,12 +1,16 @@
 package dev.mikoto2000.rei.web;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-import dev.mikoto2000.rei.checkpoint.*;
-import dev.mikoto2000.rei.workcontext.*;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpoint;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpointService;
+import dev.mikoto2000.rei.workcontext.WorkContextGit;
+import dev.mikoto2000.rei.workcontext.WorkContextProperties;
+import dev.mikoto2000.rei.workcontext.WorkContextService;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class CoreCommandReportsTest {

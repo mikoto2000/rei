@@ -3,9 +3,11 @@ package dev.mikoto2000.rei.core.dependency;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import java.time.Duration;
-import java.util.*;
+import java.util.List;
+import java.util.Locale;
 import org.springframework.ai.chat.model.ToolContext;
-import org.springframework.ai.tool.annotation.*;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
 @Component

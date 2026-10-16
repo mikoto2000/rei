@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
-import java.util.*;
+import java.util.EnumSet;
+import java.util.Set;
 
 /** Display saved diagnostics only. No image, prompt, response, or window-title rendering. */
 public final class ActivityEvidenceDisplayFormatter {

@@ -1,17 +1,29 @@
 package dev.mikoto2000.rei.application.task;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
-import dev.mikoto2000.rei.application.run.*;
-import dev.mikoto2000.rei.core.chat.*;
+import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
+import dev.mikoto2000.rei.application.run.RunRegistry;
+import dev.mikoto2000.rei.application.run.RunService;
+import dev.mikoto2000.rei.application.run.RunStatus;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 @Tag("integration")

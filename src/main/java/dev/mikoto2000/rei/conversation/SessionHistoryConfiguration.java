@@ -3,7 +3,10 @@ package dev.mikoto2000.rei.conversation;
 import dev.mikoto2000.rei.application.session.SessionRepository;
 import java.nio.file.Path;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
+import org.springframework.context.annotation.Import;
 
 /** Shared by the interactive Shell and the Web application. */
 @Configuration(proxyBeanMethods = false)

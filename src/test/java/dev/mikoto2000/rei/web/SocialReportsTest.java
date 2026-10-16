@@ -1,11 +1,15 @@
 package dev.mikoto2000.rei.web;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import dev.mikoto2000.rei.bluesky.*;
+import dev.mikoto2000.rei.bluesky.BlueskyPostResult;
+import dev.mikoto2000.rei.bluesky.BlueskyPostService;
+import dev.mikoto2000.rei.bluesky.BlueskyReplyConversationRepository;
 import dev.mikoto2000.rei.bluesky.command.BskyCommand;
-import dev.mikoto2000.rei.interest.*;
+import dev.mikoto2000.rei.interest.InterestUpdateService;
 import dev.mikoto2000.rei.interest.command.InterestCommand;
 import java.util.List;
 import org.junit.jupiter.api.Test;

@@ -1,10 +1,18 @@
 package dev.mikoto2000.rei.storage;
 
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.FileVisitOption;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.sql.*;
-import java.util.*;
+import java.sql.Connection;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.EnumSet;
+import java.util.List;
+import java.util.UUID;
 
 /** Metadata only: unknown legacy ownership is never inferred from filenames or mtimes. */
 final class ReferenceMigration {

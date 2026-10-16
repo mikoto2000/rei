@@ -1,14 +1,25 @@
 package dev.mikoto2000.rei.core.taskstate;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import dev.mikoto2000.rei.core.policy.*;
+import dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException;
+import dev.mikoto2000.rei.core.policy.ToolApprovalRepository;
+import dev.mikoto2000.rei.core.policy.ToolPermissionGuard;
+import dev.mikoto2000.rei.core.policy.ToolPermissionPolicy;
+import dev.mikoto2000.rei.core.policy.ToolPermissionProperties;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class TaskStateArgumentsTest {

@@ -1,13 +1,21 @@
 package dev.mikoto2000.rei.timing;
 
-import static dev.mikoto2000.rei.timing.TimingRecorder.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static dev.mikoto2000.rei.timing.TimingRecorder.Category;
+import static dev.mikoto2000.rei.timing.TimingRecorder.Status;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.event.*;
-import java.io.*;
-import java.time.*;
-import java.util.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.time.Clock;
+import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;

@@ -1,12 +1,22 @@
 package dev.mikoto2000.rei.websearch;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
-import dev.mikoto2000.rei.search.*;
-import dev.mikoto2000.rei.urlfetch.*;
-import java.util.*;
+import dev.mikoto2000.rei.search.SearchKnowledgeResult;
+import dev.mikoto2000.rei.search.SearchKnowledgeService;
+import dev.mikoto2000.rei.search.SearchTools;
+import dev.mikoto2000.rei.urlfetch.UrlContentFetchResult;
+import dev.mikoto2000.rei.urlfetch.UrlContentFetchService;
+import dev.mikoto2000.rei.urlfetch.UrlContentFetchTools;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 

@@ -1,9 +1,21 @@
 package dev.mikoto2000.rei.storage;
 
-import com.sun.jna.*;
-import com.sun.jna.ptr.*;
-import java.util.*;
-import java.util.concurrent.*;
+import com.sun.jna.Library;
+import com.sun.jna.Native;
+import com.sun.jna.Pointer;
+import com.sun.jna.Structure;
+import com.sun.jna.Union;
+import com.sun.jna.WString;
+import com.sun.jna.ptr.IntByReference;
+import com.sun.jna.ptr.PointerByReference;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /** OS physical-disk idle-time counter, independent of application COMMIT counts. */
 final class WindowsDiskSampler implements AutoCloseable {

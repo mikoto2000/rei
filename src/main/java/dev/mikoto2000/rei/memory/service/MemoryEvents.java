@@ -1,6 +1,9 @@
 package dev.mikoto2000.rei.memory.service;
 
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.MemoryLifecyclePayload;
 import org.springframework.stereotype.Component;
 
 @Component

@@ -1,8 +1,9 @@
 package dev.mikoto2000.rei.activity;
 
-import java.time.*;
+import java.time.Duration;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.List;
 
 /** Bounded deterministic wording. Vision prose is evidence, never copied into the user summary. */
 public record ActivitySummaryFormatter(ZoneId zone) {

@@ -2,8 +2,11 @@ package dev.mikoto2000.rei.subagent;
 
 import dev.mikoto2000.rei.core.chat.BoundedToolLoop;
 import dev.mikoto2000.rei.core.policy.ToolPermissionException;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.Collections;
+import java.util.IdentityHashMap;
+import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.TimeoutException;
 
 /**
  * Value-free failure categories; provider bodies, tool arguments and exception messages stay

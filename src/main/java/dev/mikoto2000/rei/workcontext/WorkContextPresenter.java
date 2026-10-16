@@ -2,7 +2,9 @@ package dev.mikoto2000.rei.workcontext;
 
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import java.time.Instant;
-import java.util.*;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 
 /** Seen state belongs to each UI client, not a global project or the persisted data. */

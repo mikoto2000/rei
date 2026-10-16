@@ -1,12 +1,15 @@
 package dev.mikoto2000.rei.summarize;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.execution.CompletedExecution;
 import dev.mikoto2000.rei.core.execution.ExecutionType;
-import dev.mikoto2000.rei.core.project.*;
+import dev.mikoto2000.rei.core.project.ProjectClientScope;
+import dev.mikoto2000.rei.core.project.ProjectRegistry;
+import dev.mikoto2000.rei.core.project.ProjectRunStateStore;
+import dev.mikoto2000.rei.core.project.ProjectService;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.UUID;

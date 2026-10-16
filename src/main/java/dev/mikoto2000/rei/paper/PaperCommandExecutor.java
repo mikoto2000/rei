@@ -1,6 +1,6 @@
 package dev.mikoto2000.rei.paper;
 
-import java.util.*;
+import java.util.Map;
 import org.springframework.stereotype.Component;
 
 @Component

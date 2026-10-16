@@ -1,8 +1,8 @@
 package dev.mikoto2000.rei.conversation;
 
-import dev.mikoto2000.rei.core.project.*;
+import dev.mikoto2000.rei.core.project.ProjectContext;
+import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.llm.ConversationIds;
-import java.util.*;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
 

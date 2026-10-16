@@ -1,9 +1,16 @@
 package dev.mikoto2000.rei.voice;
 
-import dev.mikoto2000.rei.application.input.*;
-import java.time.*;
-import java.util.*;
-import java.util.function.*;
+import dev.mikoto2000.rei.application.input.ConversationInput;
+import dev.mikoto2000.rei.application.input.InputSource;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
+import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * Recognition confirmation is separate from tool approval. Pending speech stays only in bounded

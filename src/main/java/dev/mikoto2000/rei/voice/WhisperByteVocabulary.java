@@ -2,9 +2,13 @@ package dev.mikoto2000.rei.voice;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.charset.*;
-import java.nio.file.*;
-import java.util.*;
+import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.Base64;
+import java.util.HashSet;
 
 /**
  * Preserves byte-level BPE fragments across sherpa 1.13.8's per-token UTF-8 cleanup. Token IDs and

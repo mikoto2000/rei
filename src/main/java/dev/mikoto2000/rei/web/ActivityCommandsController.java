@@ -1,12 +1,21 @@
 package dev.mikoto2000.rei.web;
 
-import dev.mikoto2000.rei.activity.*;
+import dev.mikoto2000.rei.activity.ActivityCommand;
+import dev.mikoto2000.rei.activity.PeriodCoaching;
 import dev.mikoto2000.rei.application.run.IntegrationRunSubmitService;
-import dev.mikoto2000.rei.core.project.*;
+import dev.mikoto2000.rei.core.project.ProjectClientScope;
+import dev.mikoto2000.rei.core.project.ProjectRegistry;
+import dev.mikoto2000.rei.core.project.ProjectService;
 import java.net.URI;
-import org.springframework.boot.autoconfigure.condition.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 /** Explicit journal controls; no action/method selector is supplied to the Backend. */
 @RestController

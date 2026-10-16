@@ -1,13 +1,21 @@
 package dev.mikoto2000.rei.memory;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
-import dev.mikoto2000.rei.memory.model.*;
-import dev.mikoto2000.rei.memory.service.*;
+import dev.mikoto2000.rei.memory.model.MemoryCandidate;
+import dev.mikoto2000.rei.memory.model.MemoryScope;
+import dev.mikoto2000.rei.memory.model.MemoryType;
+import dev.mikoto2000.rei.memory.service.MemoryRepository;
+import dev.mikoto2000.rei.memory.service.MemoryRetriever;
+import dev.mikoto2000.rei.memory.service.MemoryService;
 import java.nio.file.Path;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 

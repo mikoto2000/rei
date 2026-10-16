@@ -1,7 +1,10 @@
 package dev.mikoto2000.rei.http;
 
-import java.net.*;
-import java.util.*;
+import java.net.InetAddress;
+import java.net.URI;
+import java.net.UnknownHostException;
+import java.util.Locale;
+import java.util.Set;
 
 /**
  * Conservative public HTTP destinations; DNS and actual peers are also checked by the transport.

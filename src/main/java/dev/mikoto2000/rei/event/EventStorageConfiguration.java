@@ -1,7 +1,11 @@
 package dev.mikoto2000.rei.event;
 
-import dev.mikoto2000.rei.storage.*;
-import org.springframework.context.annotation.*;
+import dev.mikoto2000.rei.storage.SqliteEventCursorStore;
+import dev.mikoto2000.rei.storage.StorageMigrationConfiguration;
+import dev.mikoto2000.rei.storage.StorageObjectRegistry;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 
 @Configuration(proxyBeanMethods = false)
 @Import(StorageMigrationConfiguration.class)

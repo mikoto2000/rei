@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.memory.service;
 
-import dev.mikoto2000.rei.memory.model.*;
+import dev.mikoto2000.rei.memory.model.LongTermMemory;
+import dev.mikoto2000.rei.memory.model.MemoryCandidate;
 import java.util.List;
 
 @FunctionalInterface

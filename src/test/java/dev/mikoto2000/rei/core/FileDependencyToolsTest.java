@@ -1,15 +1,21 @@
 package dev.mikoto2000.rei.core;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.core.dependency.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.core.dependency.DependencyAwaiter;
+import dev.mikoto2000.rei.core.dependency.DependencyState;
 import dev.mikoto2000.rei.goal.FileGoalVerifier;
-import java.nio.file.*;
-import java.time.*;
-import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 class FileDependencyToolsTest {

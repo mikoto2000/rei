@@ -1,11 +1,19 @@
 package dev.mikoto2000.rei.chatgpt;
 
-import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.*;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.CANCELLED;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.PERMISSION_DENIED;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.PROTOCOL;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.ROUTE_UNAVAILABLE;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TIMEOUT;
 
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 

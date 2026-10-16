@@ -1,12 +1,18 @@
 package dev.mikoto2000.rei.web;
 
-import dev.mikoto2000.rei.activity.*;
+import dev.mikoto2000.rei.activity.PeriodCoaching;
+import dev.mikoto2000.rei.activity.PeriodCoachingService;
+import dev.mikoto2000.rei.activity.PeriodCoachingStore;
 import java.util.ConcurrentModificationException;
 import java.util.function.Supplier;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.boot.autoconfigure.condition.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.HttpStatus;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 /**

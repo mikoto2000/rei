@@ -2,13 +2,20 @@ package dev.mikoto2000.rei.core.execution;
 
 import dev.mikoto2000.rei.conversation.HistoryFormatter;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
-import dev.mikoto2000.rei.core.project.*;
-import dev.mikoto2000.rei.event.*;
-import dev.mikoto2000.rei.image.*;
-import dev.mikoto2000.rei.summarize.*;
+import dev.mikoto2000.rei.core.project.ProjectContext;
+import dev.mikoto2000.rei.core.project.ProjectRunStateStore;
+import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
+import dev.mikoto2000.rei.event.CredentialRedactor;
+import dev.mikoto2000.rei.image.ImageGenerationRequest;
+import dev.mikoto2000.rei.image.ImageGenerationService;
+import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
 import java.net.URI;
-import java.time.*;
-import java.util.function.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /** Command orchestration over the existing runtime registry/executor and project state store. */

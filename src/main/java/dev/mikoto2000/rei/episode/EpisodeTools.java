@@ -1,10 +1,13 @@
 package dev.mikoto2000.rei.episode;
 
-import dev.mikoto2000.rei.conversation.*;
+import dev.mikoto2000.rei.conversation.HistorySearchRequest;
+import dev.mikoto2000.rei.conversation.HistorySearchScope;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
-import dev.mikoto2000.rei.core.project.*;
-import java.util.*;
-import org.springframework.ai.tool.annotation.*;
+import dev.mikoto2000.rei.core.project.ProjectService;
+import java.util.List;
+import java.util.Map;
+import org.springframework.ai.tool.annotation.Tool;
+import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
 @Component

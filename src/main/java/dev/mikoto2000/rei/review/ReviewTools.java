@@ -1,13 +1,27 @@
 package dev.mikoto2000.rei.review;
 
 import dev.mikoto2000.rei.core.Tools;
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.core.contextbudget.*;
-import dev.mikoto2000.rei.review.ReviewCoverageLedger.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.core.contextbudget.RawToolResultStore;
+import dev.mikoto2000.rei.core.contextbudget.ResultDelivery;
+import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
+import dev.mikoto2000.rei.review.ReviewCoverageLedger.Finding;
+import dev.mikoto2000.rei.review.ReviewCoverageLedger.Job;
+import dev.mikoto2000.rei.review.ReviewCoverageLedger.Range;
+import dev.mikoto2000.rei.review.ReviewCoverageLedger.Scope;
+import dev.mikoto2000.rei.review.ReviewCoverageLedger.Span;
+import dev.mikoto2000.rei.review.ReviewCoverageLedger.Target;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import java.nio.charset.StandardCharsets;
-import java.security.*;
-import java.util.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import org.springframework.ai.tool.annotation.Tool;
 
 /** Explicit review protocol. Reading never means delivery, and delivery never means reviewed. */

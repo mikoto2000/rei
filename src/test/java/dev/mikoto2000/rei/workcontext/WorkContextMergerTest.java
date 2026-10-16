@@ -1,10 +1,16 @@
 package dev.mikoto2000.rei.workcontext;
 
-import static dev.mikoto2000.rei.workcontext.WorkContext.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static dev.mikoto2000.rei.workcontext.WorkContext.Evidence;
+import static dev.mikoto2000.rei.workcontext.WorkContext.Kind;
+import static dev.mikoto2000.rei.workcontext.WorkContext.Origin;
+import static dev.mikoto2000.rei.workcontext.WorkContext.Status;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class WorkContextMergerTest {

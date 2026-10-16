@@ -4,7 +4,9 @@ import dev.mikoto2000.rei.core.chat.RunCancellation;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
 
 /**
  * Apply only explicitly supplied saved proposals after a complete failed check; rerun the whole

@@ -1,17 +1,26 @@
 package dev.mikoto2000.rei.review;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.mikoto2000.rei.core.*;
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.core.contextbudget.*;
-import dev.mikoto2000.rei.storage.*;
-import java.nio.file.*;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import dev.mikoto2000.rei.core.Tools;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.core.chat.ToolLoopSupport;
+import dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration;
+import dev.mikoto2000.rei.core.contextbudget.RawToolResultStore;
+import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
+import dev.mikoto2000.rei.storage.StorageDatabase;
+import dev.mikoto2000.rei.storage.StorageMigrationCoordinator;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.ai.chat.messages.*;
-import org.springframework.ai.chat.model.*;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 

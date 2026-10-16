@@ -1,7 +1,8 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
 import java.util.List;
-import org.springframework.ai.chat.messages.*;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 
 /** Selects a contiguous old prefix; tool calls and their responses form indivisible groups. */
 public final class CompressionPolicy {

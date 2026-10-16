@@ -1,19 +1,29 @@
 package dev.mikoto2000.rei.core.policy;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import dev.mikoto2000.rei.core.stagnation.*;
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.core.stagnation.ProgressEvaluator;
+import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
+import dev.mikoto2000.rei.core.stagnation.StagnationChatModel;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.messages.AssistantMessage;
-import org.springframework.ai.chat.model.*;
+import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.ai.chat.model.ChatResponse;
+import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;

@@ -1,8 +1,9 @@
 package dev.mikoto2000.rei.storage;
 
-import java.nio.file.*;
-import java.sql.*;
-import java.time.*;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.sql.Connection;
+import java.time.Duration;
 
 /** Observation is read-only. Space reclamation requires an explicit operation. */
 public final class StorageMaintenance {

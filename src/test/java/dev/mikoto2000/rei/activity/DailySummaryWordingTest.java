@@ -1,10 +1,15 @@
 package dev.mikoto2000.rei.activity;
 
-import static dev.mikoto2000.rei.activity.DailySummaryTest.*;
-import static dev.mikoto2000.rei.activity.EntertainmentDisposition.*;
-import static org.assertj.core.api.Assertions.*;
+import static dev.mikoto2000.rei.activity.DailySummaryTest.aggregate;
+import static dev.mikoto2000.rei.activity.DailySummaryTest.segment;
+import static dev.mikoto2000.rei.activity.EntertainmentDisposition.ENTERTAINMENT;
+import static dev.mikoto2000.rei.activity.EntertainmentDisposition.NON_ENTERTAINMENT;
+import static dev.mikoto2000.rei.activity.EntertainmentDisposition.UNCERTAIN;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;

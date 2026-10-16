@@ -1,7 +1,10 @@
 package dev.mikoto2000.rei.core;
 
-import dev.mikoto2000.rei.core.dependency.*;
-import dev.mikoto2000.rei.core.process.*;
+import dev.mikoto2000.rei.core.dependency.DependencyAwaiter;
+import dev.mikoto2000.rei.core.dependency.DependencyObservation;
+import dev.mikoto2000.rei.core.dependency.DependencyState;
+import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
+import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import java.time.Duration;
 import java.util.concurrent.atomic.AtomicReference;

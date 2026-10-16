@@ -1,18 +1,26 @@
 package dev.mikoto2000.rei.application.task;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.mikoto2000.rei.application.run.*;
-import dev.mikoto2000.rei.checkpoint.*;
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.core.dependency.*;
+import dev.mikoto2000.rei.application.run.RunRegistry;
+import dev.mikoto2000.rei.application.run.RunStatus;
+import dev.mikoto2000.rei.checkpoint.CheckpointProperties;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpoint;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.core.dependency.DependencySpec;
+import dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
-import java.nio.file.*;
-import java.time.*;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 

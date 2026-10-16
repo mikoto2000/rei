@@ -1,10 +1,14 @@
 package dev.mikoto2000.rei.conversation;
 
-import dev.mikoto2000.rei.application.session.*;
+import dev.mikoto2000.rei.application.session.CursorKey;
+import dev.mikoto2000.rei.application.session.SessionMetadata;
+import dev.mikoto2000.rei.application.session.SessionRepository;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import java.nio.file.Path;
-import java.sql.*;
-import java.util.*;
+import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 /** Session mutations touch one row; keyset queries use indexed time and Java string order. */
 public final class SqliteSessionRepository implements SessionRepository {

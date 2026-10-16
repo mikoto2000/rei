@@ -1,12 +1,17 @@
 package dev.mikoto2000.rei.voice;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import dev.mikoto2000.rei.application.input.*;
+import dev.mikoto2000.rei.application.input.ConversationTarget;
 import dev.mikoto2000.rei.core.project.ProjectContext;
-import java.nio.file.*;
-import java.time.*;
-import java.util.concurrent.atomic.*;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 class VoiceAdvancedTest {

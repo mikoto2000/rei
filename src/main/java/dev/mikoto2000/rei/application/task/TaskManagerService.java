@@ -1,15 +1,32 @@
 package dev.mikoto2000.rei.application.task;
 
-import dev.mikoto2000.rei.application.run.*;
-import dev.mikoto2000.rei.application.session.*;
+import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
+import dev.mikoto2000.rei.application.run.RunNotFoundException;
+import dev.mikoto2000.rei.application.run.RunRegistry;
+import dev.mikoto2000.rei.application.run.RunSnapshot;
+import dev.mikoto2000.rei.application.run.RunStatus;
+import dev.mikoto2000.rei.application.session.CursorCodec;
+import dev.mikoto2000.rei.application.session.CursorKey;
+import dev.mikoto2000.rei.application.session.HistoryPage;
+import dev.mikoto2000.rei.application.session.Pagination;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository;
 import dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository;
-import dev.mikoto2000.rei.core.project.*;
+import dev.mikoto2000.rei.core.project.ProjectContext;
+import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 /** Reads existing state without dispatch, reconciliation, or creating another Task lifecycle. */
 public final class TaskManagerService {

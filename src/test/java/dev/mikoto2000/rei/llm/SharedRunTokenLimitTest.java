@@ -1,8 +1,11 @@
 package dev.mikoto2000.rei.llm;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import dev.mikoto2000.rei.core.stagnation.*;
+import dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException;
+import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import org.junit.jupiter.api.Test;
 
 class SharedRunTokenLimitTest {

@@ -1,11 +1,14 @@
 package dev.mikoto2000.rei.computeruse;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
 
-import dev.mikoto2000.rei.core.service.*;
-import dev.mikoto2000.rei.event.*;
-import dev.mikoto2000.rei.llm.*;
+import dev.mikoto2000.rei.core.service.CommandCancellationService;
+import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
+import dev.mikoto2000.rei.llm.LlmProperties;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;

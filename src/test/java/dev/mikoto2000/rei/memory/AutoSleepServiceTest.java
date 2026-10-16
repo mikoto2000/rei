@@ -1,15 +1,39 @@
 package dev.mikoto2000.rei.memory;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyBoolean;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import dev.mikoto2000.rei.memory.configuration.*;
-import dev.mikoto2000.rei.memory.service.*;
+import dev.mikoto2000.rei.memory.configuration.AutoSleepProperties;
+import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
+import dev.mikoto2000.rei.memory.service.AutoSleepService;
+import dev.mikoto2000.rei.memory.service.MemoryCandidateExtractor;
+import dev.mikoto2000.rei.memory.service.MemoryRepository;
+import dev.mikoto2000.rei.memory.service.MemoryResolver;
+import dev.mikoto2000.rei.memory.service.SleepService;
 import dev.mikoto2000.rei.topic.DefaultAgentActivityTracker;
-import java.time.*;
-import java.util.concurrent.*;
-import org.junit.jupiter.api.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 
 class AutoSleepServiceTest {
   final Instant now = Instant.parse("2026-10-04T00:00:00Z");

@@ -3,11 +3,24 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
 import dev.mikoto2000.rei.application.session.SessionQueryService;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import dev.mikoto2000.rei.core.project.*;
-import dev.mikoto2000.rei.reflection.*;
+import dev.mikoto2000.rei.core.project.ProjectContext;
+import dev.mikoto2000.rei.core.project.ProjectRegistry;
+import dev.mikoto2000.rei.reflection.GoalReflectionRepository;
+import dev.mikoto2000.rei.reflection.GoalReflectionService;
+import dev.mikoto2000.rei.reflection.ReflectionLessonService;
+import dev.mikoto2000.rei.reflection.RunReflectionRepository;
+import dev.mikoto2000.rei.reflection.RunReflectionService;
+import dev.mikoto2000.rei.reflection.VerifiedReflectionMemoryService;
 import java.util.List;
-import org.springframework.boot.autoconfigure.condition.*;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 /** Scoped human reflection review. No tool invocation or automatic memory promotion. */
 @RestController

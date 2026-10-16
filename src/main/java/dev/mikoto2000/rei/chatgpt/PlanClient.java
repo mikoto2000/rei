@@ -1,11 +1,28 @@
 package dev.mikoto2000.rei.chatgpt;
 
-import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.*;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.AUTH_REQUIRED;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.CANCELLED;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.MODEL_UNAVAILABLE;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.PROTOCOL;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.RECEIVE_LIMIT;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.SEND_LIMIT;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TIMEOUT;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TRANSPORT;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.values;
 
-import com.fasterxml.jackson.databind.*;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.net.URI;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 

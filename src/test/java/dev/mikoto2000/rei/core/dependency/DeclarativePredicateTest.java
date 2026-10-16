@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.core.dependency;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTimeoutPreemptively;
 
 import dev.mikoto2000.rei.core.predicate.DeclarativePredicate;
 import java.nio.charset.StandardCharsets;

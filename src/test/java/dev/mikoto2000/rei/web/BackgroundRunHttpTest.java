@@ -1,16 +1,24 @@
 package dev.mikoto2000.rei.web;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-import dev.mikoto2000.rei.image.*;
-import dev.mikoto2000.rei.summarize.*;
-import java.net.http.*;
+import dev.mikoto2000.rei.image.ImageGenerationRequest;
+import dev.mikoto2000.rei.image.ImageGenerationResult;
+import dev.mikoto2000.rei.image.ImageGenerationService;
+import dev.mikoto2000.rei.image.ImageProperties;
+import dev.mikoto2000.rei.summarize.SummaryResult;
+import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
+import java.net.http.HttpClient;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.SpringApplication;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 
 @org.junit.jupiter.api.Tag("integration")
 class BackgroundRunHttpTest {

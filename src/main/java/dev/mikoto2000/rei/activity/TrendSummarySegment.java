@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
-import java.time.*;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.List;
 
 /** A bounded period's observed trend, not a continuous activity or an analytics input. */

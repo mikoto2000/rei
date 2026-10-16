@@ -3,7 +3,9 @@ package dev.mikoto2000.rei.core.chat;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.model.tool.*;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
+import org.springframework.ai.model.tool.ToolCallingManager;
+import org.springframework.ai.model.tool.ToolExecutionResult;
 
 /** Shared Spring AI tool dispatch boundary for explicit application-owned loops. */
 public final class ToolLoopSupport {

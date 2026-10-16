@@ -4,8 +4,14 @@ import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.workcontext.WorkContext;
 import java.nio.file.Path;
 import java.time.Instant;
-import java.util.*;
-import java.util.function.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Read-only opt-in capture. Never copies work text, commands, results or absolute repository paths.

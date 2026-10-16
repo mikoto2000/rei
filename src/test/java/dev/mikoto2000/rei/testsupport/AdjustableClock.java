@@ -1,6 +1,10 @@
 package dev.mikoto2000.rei.testsupport;
 
-import java.time.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZoneOffset;
 import java.util.concurrent.atomic.AtomicReference;
 
 public final class AdjustableClock extends Clock {

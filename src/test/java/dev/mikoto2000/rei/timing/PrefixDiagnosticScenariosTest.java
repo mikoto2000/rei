@@ -1,8 +1,12 @@
 package dev.mikoto2000.rei.timing;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
 
 /** Reproducible synthetic diagnostic overhead, never a provider cache benchmark. */

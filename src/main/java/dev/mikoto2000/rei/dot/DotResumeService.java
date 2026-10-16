@@ -1,13 +1,27 @@
 package dev.mikoto2000.rei.dot;
 
-import dev.mikoto2000.rei.application.run.*;
+import dev.mikoto2000.rei.application.run.RunRegistry;
+import dev.mikoto2000.rei.application.run.RunSnapshot;
+import dev.mikoto2000.rei.application.run.RunStatus;
 import dev.mikoto2000.rei.application.session.SessionRepository;
-import dev.mikoto2000.rei.checkpoint.*;
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.temporal.*;
-import java.nio.file.*;
-import java.time.*;
-import java.util.*;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpoint;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpointService;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
+import dev.mikoto2000.rei.temporal.AgentSchedulerProperties;
+import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 
 /** Human review and a durable intent feed the existing scheduler/checkpoint router. */

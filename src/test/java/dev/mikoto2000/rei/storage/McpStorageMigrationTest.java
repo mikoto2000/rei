@@ -1,8 +1,11 @@
 package dev.mikoto2000.rei.storage;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.sql.*;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import org.junit.jupiter.api.Test;
 
 class McpStorageMigrationTest {

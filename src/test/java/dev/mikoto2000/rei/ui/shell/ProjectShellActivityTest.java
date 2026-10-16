@@ -1,13 +1,26 @@
 package dev.mikoto2000.rei.ui.shell;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.core.project.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
+import dev.mikoto2000.rei.core.project.ProjectRegistry;
+import dev.mikoto2000.rei.core.project.ProjectRunStateStore;
+import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.working.WorkingSet;
-import dev.mikoto2000.rei.event.*;
-import java.nio.file.*;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.AttentionRequiredPayload;
+import dev.mikoto2000.rei.event.ProjectAgentEventStore;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

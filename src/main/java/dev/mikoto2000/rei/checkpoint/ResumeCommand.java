@@ -4,8 +4,11 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import java.util.concurrent.Callable;
 import org.springframework.stereotype.Component;
-import picocli.CommandLine.*;
+import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
+import picocli.CommandLine.Parameters;
+import picocli.CommandLine.ParentCommand;
+import picocli.CommandLine.Spec;
 
 @Component
 @Command(

@@ -1,9 +1,11 @@
 package dev.mikoto2000.rei.ui.shell;
 
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.core.project.*;
-import java.time.*;
-import java.util.*;
+import dev.mikoto2000.rei.core.chat.ActiveRun;
+import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
+import dev.mikoto2000.rei.core.project.ProjectService;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.List;
 import org.springframework.stereotype.Component;
 
 @Component

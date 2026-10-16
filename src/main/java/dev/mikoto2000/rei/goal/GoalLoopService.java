@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.goal;
 
-import dev.mikoto2000.rei.core.chat.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
 import dev.mikoto2000.rei.core.policy.ToolPermissionProperties;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Service;

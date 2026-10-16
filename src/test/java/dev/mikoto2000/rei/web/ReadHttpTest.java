@@ -1,24 +1,33 @@
 package dev.mikoto2000.rei.web;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import dev.mikoto2000.rei.application.read.ReadQueryService;
-import dev.mikoto2000.rei.briefing.*;
+import dev.mikoto2000.rei.briefing.BriefingService;
+import dev.mikoto2000.rei.briefing.DailyBriefing;
 import dev.mikoto2000.rei.event.ProfileEventLogStore;
 import dev.mikoto2000.rei.feed.FeedService;
-import dev.mikoto2000.rei.search.*;
-import dev.mikoto2000.rei.skills.*;
+import dev.mikoto2000.rei.search.SearchKnowledgeResult;
+import dev.mikoto2000.rei.search.SearchKnowledgeService;
+import dev.mikoto2000.rei.skills.AgentSkillRepository;
 import dev.mikoto2000.rei.websearch.WebSearchContext;
-import java.net.*;
-import java.net.http.*;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.file.Path;
-import java.time.*;
-import java.util.*;
+import java.time.Duration;
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.SpringApplication;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 
 @org.junit.jupiter.api.Tag("integration")
 class ReadHttpTest {

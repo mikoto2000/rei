@@ -2,8 +2,11 @@ package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.planning.DailyPlanningService;
 import java.util.List;
-import org.springframework.boot.autoconfigure.condition.*;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @ConditionalOnProperty(

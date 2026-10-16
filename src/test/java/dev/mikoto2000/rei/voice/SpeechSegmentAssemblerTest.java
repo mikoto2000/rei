@@ -1,9 +1,12 @@
 package dev.mikoto2000.rei.voice;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
 class SpeechSegmentAssemblerTest {

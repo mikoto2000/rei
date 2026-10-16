@@ -1,7 +1,9 @@
 package dev.mikoto2000.rei.voice;
 
 import java.time.Clock;
-import java.util.*;
+import java.util.Arrays;
+import java.util.Objects;
+import java.util.UUID;
 
 /**
  * Bounded assembly from raw VAD probabilities, distinct normal completion and maximum-time drop.

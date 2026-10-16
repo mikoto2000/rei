@@ -1,12 +1,15 @@
 package dev.mikoto2000.rei.core.chat;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import dev.mikoto2000.rei.topic.DefaultAgentActivityTracker;
 import java.nio.file.Path;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class ActiveRunActivityTest {

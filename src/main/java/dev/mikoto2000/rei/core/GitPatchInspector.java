@@ -1,14 +1,27 @@
 package dev.mikoto2000.rei.core;
 
-import dev.mikoto2000.rei.core.SelfPatchReviewService.*;
+import dev.mikoto2000.rei.core.SelfPatchReviewService.Finding;
+import dev.mikoto2000.rei.core.SelfPatchReviewService.Review;
+import dev.mikoto2000.rei.core.SelfPatchReviewService.Snapshot;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
-import dev.mikoto2000.rei.externalagent.*;
-import java.io.*;
-import java.nio.*;
+import dev.mikoto2000.rei.externalagent.ExternalAgentProcessRunner;
+import dev.mikoto2000.rei.externalagent.ExternalAgentResult;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
-import java.security.*;
-import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HexFormat;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.regex.Pattern;
 
 /**

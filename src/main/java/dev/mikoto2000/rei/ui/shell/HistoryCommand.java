@@ -1,15 +1,24 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
-import dev.mikoto2000.rei.application.session.*;
-import dev.mikoto2000.rei.conversation.*;
+import dev.mikoto2000.rei.application.session.Pagination;
+import dev.mikoto2000.rei.application.session.SessionMetadata;
+import dev.mikoto2000.rei.application.session.SessionQueryService;
+import dev.mikoto2000.rei.conversation.HistoryFormatter;
+import dev.mikoto2000.rei.conversation.HistorySearchScope;
+import dev.mikoto2000.rei.conversation.HistoryShellService;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import java.io.PrintWriter;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Component;
-import picocli.CommandLine.*;
+import picocli.CommandLine.ArgGroup;
+import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
+import picocli.CommandLine.ParentCommand;
+import picocli.CommandLine.Spec;
 
 @Component
 @Command(

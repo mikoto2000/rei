@@ -1,8 +1,12 @@
 package dev.mikoto2000.rei.activity;
 
-import java.util.*;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 import java.util.function.Function;
-import java.util.regex.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Ordered, anchored service rules. Called only after the OS process has been identified as a

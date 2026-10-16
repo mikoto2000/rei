@@ -1,18 +1,29 @@
 package dev.mikoto2000.rei.application.run;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import dev.mikoto2000.rei.application.session.SessionLifecycle;
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.core.project.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
+import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.memory.command.MemoryCommandSupport;
-import dev.mikoto2000.rei.memory.service.*;
+import dev.mikoto2000.rei.memory.service.SleepRun;
+import dev.mikoto2000.rei.memory.service.SleepService;
 import java.nio.file.Path;
 import java.time.Clock;
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

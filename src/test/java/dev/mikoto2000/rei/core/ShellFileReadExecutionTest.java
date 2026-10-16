@@ -1,6 +1,6 @@
 package dev.mikoto2000.rei.core;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException;
 import dev.mikoto2000.rei.core.process.RunCommandRequest;

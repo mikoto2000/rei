@@ -1,9 +1,11 @@
 package dev.mikoto2000.rei.activity.behavior;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.util.*;
+import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.function.Supplier;
-import org.springframework.ai.chat.messages.*;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;

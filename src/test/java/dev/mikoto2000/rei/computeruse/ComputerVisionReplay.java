@@ -1,10 +1,12 @@
 package dev.mikoto2000.rei.computeruse;
 
 import java.awt.Rectangle;
-import java.nio.file.*;
-import java.util.*;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import javax.imageio.ImageIO;
-import org.springframework.ai.openai.*;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
 
 /** Manual frozen-image inference only: never constructs Robot or dispatches input. */
 public final class ComputerVisionReplay {

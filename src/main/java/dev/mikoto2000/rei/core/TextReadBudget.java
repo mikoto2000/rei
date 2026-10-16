@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 
 /** Bounds source payload bytes, including UTF-8 multibyte code points and enormous lines. */
 final class TextReadBudget {

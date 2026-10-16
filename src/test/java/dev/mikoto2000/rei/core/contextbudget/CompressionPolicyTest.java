@@ -1,10 +1,13 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import java.util.*;
+import java.util.List;
 import org.junit.jupiter.api.Test;
-import org.springframework.ai.chat.messages.*;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 
 class CompressionPolicyTest {
   final TokenEstimator estimator = TokenEstimator.conservative();

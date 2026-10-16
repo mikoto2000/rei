@@ -1,6 +1,11 @@
 package dev.mikoto2000.rei.subagent;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 
 /** Compares actual worker results, never caller-supplied verdicts or votes. */
 public final class PlanReviewComparison {

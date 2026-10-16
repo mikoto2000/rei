@@ -1,14 +1,20 @@
 package dev.mikoto2000.rei.mcp;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.mikoto2000.rei.application.run.*;
-import dev.mikoto2000.rei.conversation.*;
-import dev.mikoto2000.rei.storage.*;
-import java.nio.file.*;
-import java.time.*;
+import dev.mikoto2000.rei.application.run.RunStatus;
+import dev.mikoto2000.rei.conversation.ConversationAdmissionStore;
+import dev.mikoto2000.rei.conversation.SqliteConversationTurnStore;
+import dev.mikoto2000.rei.storage.StorageMigrationCoordinator;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Duration;
 import java.util.concurrent.TimeUnit;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 @Tag("integration")

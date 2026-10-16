@@ -1,10 +1,11 @@
 package dev.mikoto2000.rei.activity;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.nio.file.*;
-import java.time.*;
-import org.junit.jupiter.api.*;
+import java.nio.file.Path;
+import java.time.Clock;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 @org.junit.jupiter.api.Tag("integration")

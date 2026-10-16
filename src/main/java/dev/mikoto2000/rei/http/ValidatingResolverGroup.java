@@ -1,9 +1,15 @@
 package dev.mikoto2000.rei.http;
 
-import io.netty.resolver.*;
-import io.netty.util.concurrent.*;
-import java.net.*;
-import java.util.*;
+import io.netty.resolver.AbstractAddressResolver;
+import io.netty.resolver.AddressResolver;
+import io.netty.resolver.AddressResolverGroup;
+import io.netty.util.concurrent.EventExecutor;
+import io.netty.util.concurrent.Future;
+import io.netty.util.concurrent.Promise;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.util.List;
+import java.util.Set;
 import java.util.function.Predicate;
 
 /** Validates all answers and passes resolved socket addresses to the connector. */

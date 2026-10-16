@@ -1,9 +1,13 @@
 package dev.mikoto2000.rei.activity.behavior;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import dev.mikoto2000.rei.activity.*;
-import java.util.*;
+import dev.mikoto2000.rei.activity.ActivityFieldConfidence;
+import dev.mikoto2000.rei.activity.ActivityRecord;
+import dev.mikoto2000.rei.activity.ClassificationDiagnostics;
+import dev.mikoto2000.rei.activity.EntertainmentDisposition;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class BehaviorDispositionTest {

@@ -1,13 +1,26 @@
 package dev.mikoto2000.rei.storage;
 
 import dev.mikoto2000.rei.event.ProfileEventLogEntry;
-import java.io.*;
-import java.nio.*;
-import java.nio.charset.*;
-import java.nio.file.*;
-import java.sql.*;
-import java.time.*;
-import java.util.*;
+import java.io.BufferedInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.nio.ByteBuffer;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
+import java.sql.Connection;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 
 /** New diagnostic segments only. Existing activity.jsonl is never adopted or mutated. */
 public final class ManagedActivityLog {

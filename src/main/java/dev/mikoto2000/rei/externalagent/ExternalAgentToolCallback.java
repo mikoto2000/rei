@@ -2,7 +2,7 @@ package dev.mikoto2000.rei.externalagent;
 
 import java.util.Set;
 import org.springframework.ai.chat.model.ToolContext;
-import org.springframework.ai.tool.*;
+import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.metadata.ToolMetadata;
 

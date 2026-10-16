@@ -1,12 +1,27 @@
 package dev.mikoto2000.rei.externalagent;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.mikoto2000.rei.core.*;
+import dev.mikoto2000.rei.core.GitPatchInspector;
+import dev.mikoto2000.rei.core.SelfPatchReviewService;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.FileAlreadyExistsException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
+import java.util.UUID;
 import java.util.function.BooleanSupplier;
 
 /** Parent-owned worktree, independent Git inspection and fixed administrator test recipe. */

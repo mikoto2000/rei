@@ -1,7 +1,8 @@
 package dev.mikoto2000.rei.slack;
 
 import dev.mikoto2000.rei.event.CredentialRedactor;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class SlackReplies {
   private SlackReplies() {}

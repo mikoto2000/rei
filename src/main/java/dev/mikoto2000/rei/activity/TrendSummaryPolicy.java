@@ -1,7 +1,17 @@
 package dev.mikoto2000.rei.activity;
 
-import java.time.*;
-import java.util.*;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.TreeSet;
 
 /** Read-only trend grouping. Session gap rules remain intact in the source projections. */
 public record TrendSummaryPolicy(

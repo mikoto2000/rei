@@ -1,15 +1,22 @@
 package dev.mikoto2000.rei.application.task;
 
-import dev.mikoto2000.rei.application.run.*;
-import dev.mikoto2000.rei.checkpoint.*;
+import dev.mikoto2000.rei.application.run.ChatSubmitService;
+import dev.mikoto2000.rei.application.run.RunRegistry;
+import dev.mikoto2000.rei.application.run.RunService;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository;
+import dev.mikoto2000.rei.checkpoint.PersistentCheckpointService;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
-import dev.mikoto2000.rei.goal.*;
+import dev.mikoto2000.rei.goal.GoalLoopService;
+import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
 import dev.mikoto2000.rei.web.TaskController;
-import org.springframework.boot.autoconfigure.condition.*;
-import org.springframework.context.annotation.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(

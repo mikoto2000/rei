@@ -4,9 +4,13 @@ import dev.mikoto2000.rei.application.run.ChatSubmitService;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import java.net.URI;
 import java.util.Set;
-import org.springframework.boot.autoconfigure.condition.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RestController;
 
 /** Explicit human recovery operations retain the shared permission and admission boundary. */
 @RestController

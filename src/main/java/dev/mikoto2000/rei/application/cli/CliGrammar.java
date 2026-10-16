@@ -1,7 +1,10 @@
 package dev.mikoto2000.rei.application.cli;
 
 import picocli.CommandLine;
-import picocli.CommandLine.Model.*;
+import picocli.CommandLine.Model.ArgGroupSpec;
+import picocli.CommandLine.Model.CommandSpec;
+import picocli.CommandLine.Model.OptionSpec;
+import picocli.CommandLine.Model.PositionalParamSpec;
 
 /** Data-only help model. It has no command object, executor, service, or filesystem access. */
 public final class CliGrammar {

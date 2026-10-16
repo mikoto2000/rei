@@ -1,6 +1,6 @@
 package dev.mikoto2000.rei.slack;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import org.junit.jupiter.api.Test;

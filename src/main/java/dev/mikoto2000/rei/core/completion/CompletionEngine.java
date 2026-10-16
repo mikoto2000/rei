@@ -1,6 +1,9 @@
 package dev.mikoto2000.rei.core.completion;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 
 /** Highest supporting priority wins, even when empty. Ties merge; first value wins duplicates. */

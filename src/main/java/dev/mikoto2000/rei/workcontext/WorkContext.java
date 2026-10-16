@@ -1,7 +1,8 @@
 package dev.mikoto2000.rei.workcontext;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.List;
+import java.util.Set;
 
 /** Project work state, separate from chat history, task execution and personal memory. */
 public record WorkContext(

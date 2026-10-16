@@ -1,8 +1,9 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.offset;
 
-import java.util.*;
 import org.junit.jupiter.api.Test;
 
 class LosslessResultPagerTest {

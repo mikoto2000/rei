@@ -1,7 +1,8 @@
 package dev.mikoto2000.rei.voice;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.Objects;
+import java.util.UUID;
 
 public record SpeechSegment(UUID id, float[] samples, Instant createdAt) {
   public SpeechSegment {

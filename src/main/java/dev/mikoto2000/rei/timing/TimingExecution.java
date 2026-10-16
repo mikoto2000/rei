@@ -1,9 +1,12 @@
 package dev.mikoto2000.rei.timing;
 
-import static dev.mikoto2000.rei.timing.TimingRecorder.*;
+import static dev.mikoto2000.rei.timing.TimingRecorder.Category;
+import static dev.mikoto2000.rei.timing.TimingRecorder.Metric;
+import static dev.mikoto2000.rei.timing.TimingRecorder.Status;
 
-import dev.mikoto2000.rei.core.chat.*;
-import java.util.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
+import java.util.UUID;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 

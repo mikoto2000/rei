@@ -1,8 +1,17 @@
 package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.activity.ActivityRecord.Activity;
-import java.time.*;
-import java.util.*;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /** Two stages: compatible primary contexts, then bounded A/B/A excursions for presentation. */
 public record SemanticSessionPolicy(

@@ -1,11 +1,17 @@
 package dev.mikoto2000.rei.voice;
 
-import java.io.*;
-import java.net.*;
-import java.net.http.*;
-import java.nio.file.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.io.InterruptedIOException;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
-import java.util.concurrent.*;
+import java.util.concurrent.ExecutionException;
 import java.util.function.LongConsumer;
 
 /** JVM-default certificate validation, bounded HTTPS redirects and exact-size/hash streaming. */

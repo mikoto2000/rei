@@ -1,7 +1,8 @@
 package dev.mikoto2000.rei.evaluation;
 
 import dev.mikoto2000.rei.core.chat.RunCancellation;
-import java.util.*;
+import java.util.List;
+import java.util.Objects;
 
 /**
  * Offline scoring only: observations come from an executor, conditions from independent oracles.

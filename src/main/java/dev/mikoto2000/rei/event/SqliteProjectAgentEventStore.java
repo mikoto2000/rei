@@ -1,11 +1,19 @@
 package dev.mikoto2000.rei.event;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.mikoto2000.rei.storage.*;
+import dev.mikoto2000.rei.storage.StorageDatabase;
+import dev.mikoto2000.rei.storage.StorageObjectRegistry;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.sql.*;
-import java.util.*;
+import java.sql.Connection;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 
 /** Indexed individual events; project counters survive later logical deletion. */
 public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {

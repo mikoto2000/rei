@@ -1,11 +1,18 @@
 package dev.mikoto2000.rei.workcontext;
 
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.core.project.*;
-import dev.mikoto2000.rei.workcontext.WorkContext.*;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.core.project.ProjectContext;
+import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.workcontext.WorkContext.Evidence;
+import dev.mikoto2000.rei.workcontext.WorkContext.Item;
+import dev.mikoto2000.rei.workcontext.WorkContext.Origin;
+import dev.mikoto2000.rei.workcontext.WorkContext.Status;
 import java.time.Instant;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 

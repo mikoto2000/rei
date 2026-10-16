@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.slack;
 
-import java.util.*;
+import java.util.Map;
+import java.util.Set;
 import lombok.Getter;
 import lombok.Setter;
 import org.springframework.boot.context.properties.ConfigurationProperties;

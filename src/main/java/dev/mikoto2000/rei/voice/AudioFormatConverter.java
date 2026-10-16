@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.voice;
 
-import javax.sound.sampled.*;
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
 
 public final class AudioFormatConverter {
   public static final AudioFormat PCM16 = new AudioFormat(16000, 16, 1, true, false);

@@ -1,11 +1,21 @@
 package dev.mikoto2000.rei.activity;
 
-import static dev.mikoto2000.rei.activity.DailySummaryTest.*;
-import static dev.mikoto2000.rei.activity.EntertainmentDisposition.*;
-import static org.assertj.core.api.Assertions.*;
+import static dev.mikoto2000.rei.activity.DailySummaryTest.NAMES;
+import static dev.mikoto2000.rei.activity.DailySummaryTest.RANGE;
+import static dev.mikoto2000.rei.activity.DailySummaryTest.aggregate;
+import static dev.mikoto2000.rei.activity.DailySummaryTest.largeDay;
+import static dev.mikoto2000.rei.activity.DailySummaryTest.segment;
+import static dev.mikoto2000.rei.activity.EntertainmentDisposition.NON_ENTERTAINMENT;
+import static dev.mikoto2000.rei.activity.EntertainmentDisposition.UNCERTAIN;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.assertj.core.api.Assertions.in;
 
-import java.nio.file.*;
-import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 @org.junit.jupiter.api.Tag("integration")

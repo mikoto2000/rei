@@ -1,9 +1,13 @@
 package dev.mikoto2000.rei.activity;
 
-import dev.mikoto2000.rei.activity.behavior.*;
-import java.time.*;
+import dev.mikoto2000.rei.activity.behavior.BehaviorSeverity;
+import dev.mikoto2000.rei.activity.behavior.BehaviorStateStore;
+import dev.mikoto2000.rei.activity.behavior.BehaviorTimelineEvent;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
 
 /** Bulk reads followed by a stable timestamp merge. Does not evaluate, notify or re-extract. */
 public record ActivityTimelinePresentationService(

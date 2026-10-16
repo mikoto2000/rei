@@ -1,8 +1,9 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import org.springframework.stereotype.Component;
-import picocli.CommandLine.*;
+import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
+import picocli.CommandLine.Spec;
 
 @Component
 @Command(name = "runs", description = "全プロジェクトの実行中AgentRunを表示します")

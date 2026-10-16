@@ -1,8 +1,13 @@
 package dev.mikoto2000.rei.workcontext;
 
-import dev.mikoto2000.rei.subagent.*;
-import dev.mikoto2000.rei.workcontext.WorkContext.*;
-import java.util.*;
+import dev.mikoto2000.rei.subagent.SubAgentResultParser;
+import dev.mikoto2000.rei.subagent.SubAgentResultSchema;
+import dev.mikoto2000.rei.subagent.SubAgentValidationException;
+import dev.mikoto2000.rei.workcontext.WorkContext.Kind;
+import dev.mikoto2000.rei.workcontext.WorkContext.Origin;
+import dev.mikoto2000.rei.workcontext.WorkContext.Status;
+import java.util.ArrayList;
+import java.util.List;
 
 public final class WorkContextOutput {
   private static final SubAgentResultSchema SCHEMA =

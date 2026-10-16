@@ -1,7 +1,8 @@
 package dev.mikoto2000.rei.core.dependency;
 
 import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
-import dev.mikoto2000.rei.goal.*;
+import dev.mikoto2000.rei.goal.FileGoalVerifier;
+import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.workcontext.WorkContextGit;
 import java.nio.file.Path;
 import java.time.Clock;

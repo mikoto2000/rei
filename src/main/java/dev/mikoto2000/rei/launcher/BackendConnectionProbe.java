@@ -2,7 +2,9 @@ package dev.mikoto2000.rei.launcher;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
-import java.net.http.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
 
 /** Authenticated identity check. A successful health check is never sufficient. */

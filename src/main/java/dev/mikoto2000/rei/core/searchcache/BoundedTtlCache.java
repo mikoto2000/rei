@@ -1,7 +1,11 @@
 package dev.mikoto2000.rei.core.searchcache;
 
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.LinkedHashMap;
+import java.util.Objects;
+import java.util.Optional;
 import java.util.function.ToLongFunction;
 
 /** Thread-safe FIFO with finite retention and both entry and resident-weight bounds. */

@@ -2,8 +2,13 @@ package dev.mikoto2000.rei.evaluation;
 
 import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.vectordocument.CandidateReranker;
-import dev.mikoto2000.rei.vectorstore.*;
-import java.util.*;
+import dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties;
+import dev.mikoto2000.rei.vectorstore.HybridRetriever;
+import dev.mikoto2000.rei.vectorstore.RetrievalCandidates;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Objects;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 

@@ -1,8 +1,10 @@
 package dev.mikoto2000.rei.activity;
 
-import java.time.*;
-import java.util.*;
-import java.util.function.*;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 /** Runs on its own single worker. A supplement failure cannot stop observation or Vision. */
 public final class TemporalActivityInferenceService {

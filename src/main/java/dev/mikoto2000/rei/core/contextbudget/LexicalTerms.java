@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 
 /** Shared lexical normalization; preserves the indexed retrieval contract. */
 public final class LexicalTerms {

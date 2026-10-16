@@ -1,9 +1,14 @@
 package dev.mikoto2000.rei.voice;
 
-import java.io.*;
-import java.util.*;
+import java.io.IOException;
+import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.sound.sampled.*;
+import javax.sound.sampled.AudioFormat;
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.DataLine;
+import javax.sound.sampled.Mixer;
+import javax.sound.sampled.TargetDataLine;
 
 public final class JavaSoundMicrophoneCapture implements MicrophoneCaptureService {
   public FrameSource open(AudioDevice device) throws Exception {

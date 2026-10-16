@@ -2,7 +2,11 @@ package dev.mikoto2000.rei.http;
 
 import dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException;
 import java.time.Duration;
-import java.util.concurrent.*;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 /** A single deadline includes DNS, redirects, transfer and decoding. */
 public record FetchOperation(Runnable cancellationCheck, long deadlineNanos) {

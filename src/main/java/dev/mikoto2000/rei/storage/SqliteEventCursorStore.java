@@ -1,7 +1,8 @@
 package dev.mikoto2000.rei.storage;
 
 import java.nio.file.Path;
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.UUID;
 
 /** Cursor units are project sequences after startup conversion, never byte offsets. */

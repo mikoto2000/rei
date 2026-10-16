@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.memory.service;
 
-import java.util.*;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
 
 /**
  * Bound plain-text terms; Japanese text also contributes trigrams without needing a morphological

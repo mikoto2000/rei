@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.paper;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
 
 public record PaperTranslation(
     String paperId,

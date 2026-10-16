@@ -1,6 +1,10 @@
 package dev.mikoto2000.rei.core.completion;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
 
 /** Usable directly as picocli completionCandidates without coupling this API to picocli. */
 public interface CompletionMetadata extends Iterable<String> {

@@ -1,7 +1,10 @@
 package dev.mikoto2000.rei.github;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 @org.springframework.boot.context.properties.ConfigurationProperties("rei.github.webhook")
 @lombok.Getter

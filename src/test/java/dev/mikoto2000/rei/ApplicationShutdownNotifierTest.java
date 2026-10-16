@@ -2,7 +2,11 @@ package dev.mikoto2000.rei;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.ApplicationShutdownStartedPayload;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import java.time.Clock;
 import java.util.ArrayList;
 import org.junit.jupiter.api.Test;

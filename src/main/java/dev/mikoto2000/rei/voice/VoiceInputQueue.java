@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.voice;
 
-import java.util.concurrent.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.TimeUnit;
 
 /** Bounded complete-segment queue; offer never waits for ASR or an Agent. */
 public final class VoiceInputQueue {

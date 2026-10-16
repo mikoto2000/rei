@@ -1,8 +1,20 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
-import static dev.mikoto2000.rei.core.contextbudget.ContextCompressionException.Reason.*;
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static dev.mikoto2000.rei.core.contextbudget.ContextCompressionException.Reason.EMPTY_SUMMARY;
+import static dev.mikoto2000.rei.core.contextbudget.ContextCompressionException.Reason.INPUT_BUDGET;
+import static dev.mikoto2000.rei.core.contextbudget.ContextCompressionException.Reason.INVALID_RESPONSE;
+import static dev.mikoto2000.rei.core.contextbudget.ContextCompressionException.Reason.OUTPUT_LIMIT;
+import static dev.mikoto2000.rei.core.contextbudget.ContextCompressionException.Reason.RATE_LIMIT;
+import static dev.mikoto2000.rei.core.contextbudget.ContextCompressionException.Reason.TIMEOUT;
+import static dev.mikoto2000.rei.core.contextbudget.ContextCompressionException.Reason.TRANSPORT;
+import static dev.mikoto2000.rei.core.contextbudget.ContextCompressionException.Reason.UNKNOWN;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;

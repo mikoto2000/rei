@@ -3,13 +3,18 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.application.run.ChatSubmitService;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.command.UserInputParser;
-import dev.mikoto2000.rei.externalagent.*;
+import dev.mikoto2000.rei.externalagent.BeginnerReviewRequest;
+import dev.mikoto2000.rei.externalagent.ExternalAgentCommandRequest;
 import dev.mikoto2000.rei.paper.PaperCommandRequest;
 import java.net.URI;
 import java.util.List;
-import org.springframework.boot.autoconfigure.condition.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RestController;
 
 /** Named domain requests, validated by the same grammar as the existing Shell. */
 @RestController

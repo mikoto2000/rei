@@ -1,11 +1,21 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
-import dev.mikoto2000.rei.workcontext.*;
+import dev.mikoto2000.rei.workcontext.WorkContext;
+import dev.mikoto2000.rei.workcontext.WorkContextFormatter;
+import dev.mikoto2000.rei.workcontext.WorkContextGit;
+import dev.mikoto2000.rei.workcontext.WorkContextProperties;
+import dev.mikoto2000.rei.workcontext.WorkContextService;
 import java.time.Instant;
-import java.util.*;
-import org.springframework.boot.autoconfigure.condition.*;
-import org.springframework.web.bind.annotation.*;
+import java.util.List;
+import java.util.Map;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 /** Same authenticated /api/v1 boundary as projects and sessions; no mutable UI project state. */
 @RestController

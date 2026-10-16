@@ -1,10 +1,17 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.core.command.EmbedCommand;
-import dev.mikoto2000.rei.vectordocument.*;
+import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
+import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
 import java.util.List;
-import org.springframework.boot.autoconfigure.condition.*;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 /** Named vector collection operations; explicit files only, never Backend glob expansion. */
 @RestController

@@ -1,9 +1,12 @@
 package dev.mikoto2000.rei.core.project;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.mikoto2000.rei.conversation.*;
-import java.nio.file.*;
+import dev.mikoto2000.rei.conversation.ConversationHistoryMessage;
+import dev.mikoto2000.rei.conversation.ConversationHistorySearchService;
+import dev.mikoto2000.rei.conversation.ConversationLogStore;
+import dev.mikoto2000.rei.conversation.ConversationSearchResult;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.core.JdbcTemplate;

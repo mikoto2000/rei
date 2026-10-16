@@ -1,8 +1,9 @@
 package dev.mikoto2000.rei.slack;
 
-import com.slack.api.methods.*;
+import com.slack.api.methods.MethodsClient;
+import com.slack.api.methods.SlackApiException;
 import com.slack.api.methods.request.chat.ChatPostMessageRequest;
-import java.util.*;
+import java.util.Set;
 
 final class SdkSlackTransport implements SlackTransport {
   private final MethodsClient methods;

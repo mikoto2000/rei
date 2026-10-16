@@ -1,9 +1,17 @@
 package dev.mikoto2000.rei.activity.behavior;
 
-import dev.mikoto2000.rei.activity.*;
-import dev.mikoto2000.rei.topic.*;
-import java.time.*;
-import java.util.*;
+import dev.mikoto2000.rei.activity.ActivityCapture;
+import dev.mikoto2000.rei.activity.ActivityProperties;
+import dev.mikoto2000.rei.activity.ActivityStore;
+import dev.mikoto2000.rei.topic.AgentActivityTracker;
+import dev.mikoto2000.rei.topic.AgentMessage;
+import dev.mikoto2000.rei.topic.AgentMessagePublisher;
+import dev.mikoto2000.rei.topic.MessageOrigin;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**

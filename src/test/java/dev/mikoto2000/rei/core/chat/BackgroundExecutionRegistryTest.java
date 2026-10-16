@@ -1,12 +1,23 @@
 package dev.mikoto2000.rei.core.chat;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import dev.mikoto2000.rei.core.execution.*;
+import dev.mikoto2000.rei.core.execution.ActiveExecution;
+import dev.mikoto2000.rei.core.execution.ExecutionScope;
+import dev.mikoto2000.rei.core.execution.ExecutionType;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import java.nio.file.Path;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+import java.util.UUID;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletionException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 
 class BackgroundExecutionRegistryTest {

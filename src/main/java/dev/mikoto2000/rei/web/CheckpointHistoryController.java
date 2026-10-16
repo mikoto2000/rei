@@ -4,7 +4,11 @@ import dev.mikoto2000.rei.checkpoint.CheckpointHistoryReport;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpointService;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 /** Global checkpoint capacity uses the same authenticated backend API as storage maintenance. */
 @RestController

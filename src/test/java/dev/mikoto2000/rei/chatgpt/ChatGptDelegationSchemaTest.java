@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.chatgpt;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.networknt.schema.SchemaRegistry;
 import com.networknt.schema.SpecificationVersion;

@@ -2,7 +2,8 @@ package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import java.util.function.Supplier;
-import org.jline.reader.*;
+import org.jline.reader.LineReader;
+import org.jline.reader.Widget;
 import org.jline.reader.impl.LineReaderImpl;
 
 /**

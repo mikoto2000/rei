@@ -2,12 +2,19 @@ package dev.mikoto2000.rei.storage;
 
 import com.fasterxml.jackson.core.JsonToken;
 import dev.mikoto2000.rei.application.session.SessionMetadata;
-import dev.mikoto2000.rei.conversation.*;
-import java.io.*;
-import java.nio.file.*;
-import java.security.*;
-import java.sql.*;
-import java.util.*;
+import dev.mikoto2000.rei.conversation.ConversationTurnStore;
+import dev.mikoto2000.rei.conversation.SqliteConversationTurnStore;
+import dev.mikoto2000.rei.conversation.SqliteSessionRepository;
+import java.io.IOException;
+import java.io.InterruptedIOException;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.sql.Connection;
+import java.util.Arrays;
+import java.util.HexFormat;
+import java.util.UUID;
 
 /** Stream old arrays into individual rows, then verify their count and canonical row digest. */
 final class SessionTurnMigration {

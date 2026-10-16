@@ -1,11 +1,30 @@
 package dev.mikoto2000.rei.websearch;
 
-import dev.mikoto2000.rei.http.*;
+import dev.mikoto2000.rei.http.FetchOperation;
+import dev.mikoto2000.rei.http.FetchScope;
+import dev.mikoto2000.rei.http.HostAdmission;
+import dev.mikoto2000.rei.http.HttpFetchException;
+import dev.mikoto2000.rei.http.TransferBudget;
+import dev.mikoto2000.rei.http.TransferScope;
 import java.net.URI;
 import java.time.Duration;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.Callable;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.stereotype.Component;
 
 /** One shared bounded HTTP worker pool; caller deadlines and rank survive executor boundaries. */

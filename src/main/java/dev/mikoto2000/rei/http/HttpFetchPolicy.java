@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.http;
 
-import java.net.*;
+import java.net.InetAddress;
+import java.net.URI;
 import java.time.Duration;
 
 public record HttpFetchPolicy(

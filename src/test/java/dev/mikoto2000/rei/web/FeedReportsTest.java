@@ -1,9 +1,12 @@
 package dev.mikoto2000.rei.web;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import dev.mikoto2000.rei.feed.*;
+import dev.mikoto2000.rei.feed.FeedService;
+import dev.mikoto2000.rei.feed.FeedSummaryService;
 import dev.mikoto2000.rei.feed.command.FeedCommand;
 import java.time.OffsetDateTime;
 import java.util.List;

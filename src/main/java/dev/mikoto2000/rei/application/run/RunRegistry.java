@@ -1,8 +1,17 @@
 package dev.mikoto2000.rei.application.run;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 
 /** Monitor-protected transitions publish an immutable snapshot of status and metadata together. */
 public final class RunRegistry implements AutoCloseable {

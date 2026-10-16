@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.activity;
 
-import dev.mikoto2000.rei.computeruse.*;
+import dev.mikoto2000.rei.computeruse.CapturedScreen;
+import dev.mikoto2000.rei.computeruse.DisplayCapture;
+import dev.mikoto2000.rei.computeruse.ScreenGeometry;
 import java.awt.Rectangle;
 import java.util.ArrayList;
 

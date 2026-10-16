@@ -1,10 +1,16 @@
 package dev.mikoto2000.rei.voice;
 
 import java.nio.charset.StandardCharsets;
-import java.security.*;
-import java.util.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.Arrays;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Objects;
 import java.util.function.Supplier;
-import javax.sound.sampled.*;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Mixer;
+import javax.sound.sampled.TargetDataLine;
 
 public final class AudioDeviceService {
   private final Supplier<List<AudioDevice>> catalog;

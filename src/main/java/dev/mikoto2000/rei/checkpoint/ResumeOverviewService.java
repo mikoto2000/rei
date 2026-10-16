@@ -1,9 +1,14 @@
 package dev.mikoto2000.rei.checkpoint;
 
-import dev.mikoto2000.rei.core.project.*;
+import dev.mikoto2000.rei.core.project.ProjectService;
 import java.nio.charset.StandardCharsets;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Objects;
 
 /**
  * Read-only checkpoint projection. Deliberately has no Resume, reconciliation, Git or LLM

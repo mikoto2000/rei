@@ -1,6 +1,6 @@
 package dev.mikoto2000.rei.paper;
 
-import java.util.*;
+import java.util.Map;
 import java.util.function.Supplier;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;

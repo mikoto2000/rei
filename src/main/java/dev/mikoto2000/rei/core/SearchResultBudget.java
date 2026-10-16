@@ -1,7 +1,7 @@
 package dev.mikoto2000.rei.core;
 
 import java.io.IOException;
-import java.util.*;
+import java.util.List;
 
 /** Fair per-file allocations; every omitted source prefix has a version-bound continuation. */
 final class SearchResultBudget {

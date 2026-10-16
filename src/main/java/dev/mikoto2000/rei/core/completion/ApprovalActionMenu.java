@@ -1,8 +1,12 @@
 package dev.mikoto2000.rei.core.completion;
 
-import java.util.*;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.function.Supplier;
-import org.jline.reader.*;
+import org.jline.reader.LineReader;
+import org.jline.reader.Reference;
 
 /** Arrow-key approval actions share the ordinary input reader; never read on an event thread. */
 public final class ApprovalActionMenu implements AutoCloseable {

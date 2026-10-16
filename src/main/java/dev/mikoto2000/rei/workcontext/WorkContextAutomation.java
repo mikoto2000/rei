@@ -1,10 +1,16 @@
 package dev.mikoto2000.rei.workcontext;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.WorkContextPayload;
 import java.time.Instant;
 import java.util.UUID;
-import java.util.concurrent.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.ThreadPoolExecutor;
+import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Component;
 
 /** Queued only after durable terminal metadata; errors cannot change the original run outcome. */

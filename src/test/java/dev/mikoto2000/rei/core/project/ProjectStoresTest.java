@@ -1,10 +1,13 @@
 package dev.mikoto2000.rei.core.project;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.mikoto2000.rei.conversation.*;
-import dev.mikoto2000.rei.core.chat.*;
-import java.nio.file.*;
+import dev.mikoto2000.rei.conversation.ConversationLogEntry;
+import dev.mikoto2000.rei.conversation.ConversationLogStore;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

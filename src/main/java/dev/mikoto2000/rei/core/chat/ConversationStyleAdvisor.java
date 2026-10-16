@@ -1,9 +1,13 @@
 package dev.mikoto2000.rei.core.chat;
 
-import java.util.*;
-import org.springframework.ai.chat.client.*;
-import org.springframework.ai.chat.client.advisor.api.*;
-import org.springframework.ai.chat.messages.*;
+import java.util.ArrayList;
+import java.util.Objects;
+import org.springframework.ai.chat.client.ChatClientRequest;
+import org.springframework.ai.chat.client.ChatClientResponse;
+import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
+import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
 /** Fixed reply-style instructions; preserves character, tools, budgets and full response. */

@@ -1,13 +1,19 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
-import dev.mikoto2000.rei.application.session.*;
-import dev.mikoto2000.rei.conversation.*;
-import dev.mikoto2000.rei.core.project.*;
+import dev.mikoto2000.rei.application.session.SessionQueryService;
+import dev.mikoto2000.rei.conversation.HistorySearchScope;
+import dev.mikoto2000.rei.conversation.HistoryShellService;
+import dev.mikoto2000.rei.core.project.ProjectRegistry;
+import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.ui.shell.HistoryCommand;
 import java.util.function.Supplier;
-import org.springframework.boot.autoconfigure.condition.*;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")

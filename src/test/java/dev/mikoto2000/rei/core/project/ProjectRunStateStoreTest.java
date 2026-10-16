@@ -1,10 +1,11 @@
 package dev.mikoto2000.rei.core.project;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import dev.mikoto2000.rei.event.*;
-import java.nio.file.*;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.ErrorInformation;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;

@@ -1,9 +1,12 @@
 package dev.mikoto2000.rei.websearch;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
-import java.util.*;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
 
 /** Frozen HTML, no live providers, no model calls, cold extraction with identical source URLs. */

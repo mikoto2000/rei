@@ -1,10 +1,13 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
-import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.*;
+import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.LLM_CALL_BUDGET_EXCEEDED;
+import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.TOKEN_BUDGET_EXCEEDED;
+import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.TOKEN_USAGE_UNKNOWN;
 
 import dev.mikoto2000.rei.core.chat.RunCancellation;
 import dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException;
-import dev.mikoto2000.rei.llm.*;
+import dev.mikoto2000.rei.llm.ModelCallBudget;
+import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 
 /** Shared by the history and active-log summaries of one ownerless context projection. */
 final class StandaloneSummaryBudget implements ModelCallBudget {

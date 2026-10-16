@@ -1,12 +1,21 @@
 package dev.mikoto2000.rei.chatgpt;
 
-import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.*;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.AUTH_INVALID;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.CANCELLED;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TIMEOUT;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.values;
 
 import com.sun.net.httpserver.HttpServer;
-import java.net.*;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.URI;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
 /** The system browser is opened only by an explicit human login command. */

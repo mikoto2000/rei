@@ -2,12 +2,19 @@ package dev.mikoto2000.rei.memory.service;
 
 import dev.mikoto2000.rei.conversation.ConversationTurnStore.Turn;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
-import dev.mikoto2000.rei.llm.*;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
+import dev.mikoto2000.rei.llm.ModelCallBudget;
+import dev.mikoto2000.rei.llm.OutputLimitDetector;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
-import dev.mikoto2000.rei.memory.model.*;
+import dev.mikoto2000.rei.memory.model.LongTermMemory;
+import dev.mikoto2000.rei.memory.model.MemoryCandidate;
 import java.time.Duration;
-import java.util.*;
-import org.springframework.ai.chat.messages.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 

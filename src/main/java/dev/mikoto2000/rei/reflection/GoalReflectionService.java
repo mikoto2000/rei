@@ -1,10 +1,16 @@
 package dev.mikoto2000.rei.reflection;
 
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventBus;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.GoalLifecyclePayload;
 import dev.mikoto2000.rei.goal.GoalRepository;
-import jakarta.annotation.*;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import java.time.Clock;
-import java.util.*;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 import org.springframework.stereotype.Service;
 
 /** Reflects on saved verification facts, not model statements or inferred failure causes. */

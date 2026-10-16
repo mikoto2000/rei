@@ -1,13 +1,18 @@
 package dev.mikoto2000.rei.event;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectContext;
-import dev.mikoto2000.rei.ui.shell.*;
-import java.nio.file.*;
+import dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer;
+import dev.mikoto2000.rei.ui.shell.ShellEventOutput;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Clock;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

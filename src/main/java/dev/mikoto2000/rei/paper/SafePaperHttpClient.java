@@ -1,7 +1,8 @@
 package dev.mikoto2000.rei.paper;
 
-import java.net.*;
-import java.util.*;
+import java.net.InetAddress;
+import java.net.URI;
+import java.util.Map;
 import org.springframework.stereotype.Component;
 
 @Component

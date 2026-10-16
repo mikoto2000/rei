@@ -1,8 +1,13 @@
 package dev.mikoto2000.rei.websearch;
 
 import java.nio.charset.StandardCharsets;
-import java.security.*;
-import java.util.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
 
 public final class WebContentDeduplication {
   private WebContentDeduplication() {}

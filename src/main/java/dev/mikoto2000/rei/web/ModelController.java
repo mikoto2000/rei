@@ -1,9 +1,16 @@
 package dev.mikoto2000.rei.web;
 
-import dev.mikoto2000.rei.core.service.*;
+import dev.mikoto2000.rei.core.service.ModelHolderService;
+import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelUnloadService;
+import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelsService;
 import java.util.List;
-import org.springframework.boot.autoconfigure.condition.*;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 /** Named model controls using the same holder and unload behavior as the existing Shell. */
 @RestController

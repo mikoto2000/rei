@@ -1,9 +1,17 @@
 package dev.mikoto2000.rei.websearch;
 
-import dev.mikoto2000.rei.http.*;
+import dev.mikoto2000.rei.http.FetchOperation;
+import dev.mikoto2000.rei.http.FetchScope;
+import dev.mikoto2000.rei.http.HttpFetchException;
 import java.io.IOException;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /** One bounded, iterative research path for normal and indexed-knowledge web supplementation. */
 final class WebResearchPipeline {

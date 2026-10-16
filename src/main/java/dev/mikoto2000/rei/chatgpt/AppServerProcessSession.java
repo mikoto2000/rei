@@ -1,11 +1,19 @@
 package dev.mikoto2000.rei.chatgpt;
 
-import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.*;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.CANCELLED;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TRANSPORT;
 
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.BufferedWriter;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.OutputStreamWriter;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
-import java.util.concurrent.*;
+import java.util.concurrent.ArrayBlockingQueue;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 /** Bounded stdio and owned-process cleanup shared by both launchers. */
 final class AppServerProcessSession implements PlanAppServerRpc.Session {

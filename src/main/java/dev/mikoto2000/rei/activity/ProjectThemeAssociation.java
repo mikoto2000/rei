@@ -2,8 +2,15 @@ package dev.mikoto2000.rei.activity;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import dev.mikoto2000.rei.activity.ActivityEvidenceDisplayFormatter.Source;
-import java.time.*;
-import java.util.*;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.EnumSet;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * Derived summary relation. Support identifies saved observations, never a session-wide cross

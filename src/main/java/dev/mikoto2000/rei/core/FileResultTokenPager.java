@@ -4,7 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * Keeps the existing result schema; every omitted source suffix has a version-bound native cursor.

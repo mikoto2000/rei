@@ -2,9 +2,15 @@ package dev.mikoto2000.rei.memory.service;
 
 import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
-import dev.mikoto2000.rei.memory.model.*;
-import java.time.*;
-import java.util.*;
+import dev.mikoto2000.rei.memory.model.LongTermMemory;
+import dev.mikoto2000.rei.memory.model.MemoryScope;
+import java.time.Duration;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Locale;
 import org.springframework.stereotype.Service;
 
 @Service

@@ -1,6 +1,6 @@
 package dev.mikoto2000.rei.activity;
 
-import java.util.*;
+import java.util.Set;
 
 /**
  * Process guards precede title rules; a document mentioning a service cannot become that service.

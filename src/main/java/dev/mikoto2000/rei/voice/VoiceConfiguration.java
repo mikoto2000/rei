@@ -4,7 +4,8 @@ import dev.mikoto2000.rei.application.session.ShellConversationService;
 import java.nio.file.Path;
 import java.time.Clock;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({VoiceProperties.class, VoiceCorrectionProperties.class})

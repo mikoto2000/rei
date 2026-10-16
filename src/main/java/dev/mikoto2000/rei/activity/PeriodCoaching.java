@@ -1,6 +1,9 @@
 package dev.mikoto2000.rei.activity;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 /** User-defined category-share comparison, not a productivity or entertainment classifier. */
 public final class PeriodCoaching {

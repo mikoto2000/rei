@@ -1,10 +1,21 @@
 package dev.mikoto2000.rei.attention;
 
-import dev.mikoto2000.rei.core.policy.*;
-import dev.mikoto2000.rei.event.*;
-import jakarta.annotation.*;
-import java.util.*;
-import java.util.concurrent.*;
+import dev.mikoto2000.rei.core.policy.PermissionDecision;
+import dev.mikoto2000.rei.core.policy.ToolPermissionPolicy;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventBus;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.AttentionRequiredPayload;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.scheduling.annotation.Scheduled;

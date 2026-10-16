@@ -1,11 +1,13 @@
 package dev.mikoto2000.rei.voice;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.offset;
 
-import java.nio.file.*;
-import java.time.*;
-import java.util.*;
-import javax.sound.sampled.*;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.util.ArrayList;
+import java.util.Arrays;
+import javax.sound.sampled.AudioSystem;
 import org.junit.jupiter.api.Test;
 
 /** Explicit local native test: no microphone or download. */

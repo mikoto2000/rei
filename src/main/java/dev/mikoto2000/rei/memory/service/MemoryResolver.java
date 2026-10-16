@@ -1,8 +1,14 @@
 package dev.mikoto2000.rei.memory.service;
 
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
-import dev.mikoto2000.rei.memory.model.*;
-import java.util.*;
+import dev.mikoto2000.rei.memory.model.LongTermMemory;
+import dev.mikoto2000.rei.memory.model.MemoryCandidate;
+import dev.mikoto2000.rei.memory.model.MemoryScope;
+import dev.mikoto2000.rei.memory.model.MemoryStatus;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 import org.springframework.stereotype.Service;
 
 @Service

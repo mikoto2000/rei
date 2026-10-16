@@ -1,9 +1,13 @@
 package dev.mikoto2000.rei.checkpoint;
 
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
-import dev.mikoto2000.rei.core.chat.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.project.ProjectService;
-import java.util.*;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 

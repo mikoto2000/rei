@@ -1,8 +1,15 @@
 package dev.mikoto2000.rei.llm.capture;
 
-import java.io.*;
-import java.lang.reflect.*;
-import okio.*;
+import java.io.IOException;
+import java.io.OutputStream;
+import java.lang.reflect.InvocationHandler;
+import java.lang.reflect.InvocationTargetException;
+import java.lang.reflect.Method;
+import java.lang.reflect.Proxy;
+import okio.Buffer;
+import okio.BufferedSink;
+import okio.ByteString;
+import okio.Timeout;
 
 /** Buffering itself is bounded, including a producer's single oversized write. */
 final class BoundedBodySink implements InvocationHandler {

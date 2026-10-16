@@ -1,7 +1,8 @@
 package dev.mikoto2000.rei.paper;
 
-import java.net.*;
-import java.util.*;
+import java.net.URI;
+import java.util.ArrayList;
+import java.util.List;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 

@@ -1,9 +1,16 @@
 package dev.mikoto2000.rei.timing;
 
-import static dev.mikoto2000.rei.timing.TimingRecorder.*;
+import static dev.mikoto2000.rei.timing.TimingRecorder.Category;
+import static dev.mikoto2000.rei.timing.TimingRecorder.Status;
 
-import dev.mikoto2000.rei.event.*;
-import java.util.*;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventBus;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.SubAgentLifecyclePayload;
+import dev.mikoto2000.rei.event.ToolCompletedPayload;
+import dev.mikoto2000.rei.event.ToolFailedPayload;
+import dev.mikoto2000.rei.event.ToolStartedPayload;
+import java.util.Set;
 import org.springframework.stereotype.Component;
 
 /** Consumes only IDs and fixed tool classifications; no event payload is retained. */

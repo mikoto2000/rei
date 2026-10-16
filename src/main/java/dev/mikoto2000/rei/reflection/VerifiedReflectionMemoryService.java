@@ -1,11 +1,20 @@
 package dev.mikoto2000.rei.reflection;
 
-import dev.mikoto2000.rei.goal.*;
+import dev.mikoto2000.rei.goal.FileGoalVerifier;
+import dev.mikoto2000.rei.goal.GoalLoopService;
+import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
-import dev.mikoto2000.rei.memory.model.*;
+import dev.mikoto2000.rei.memory.model.LongTermMemory;
+import dev.mikoto2000.rei.memory.model.MemoryCandidate;
+import dev.mikoto2000.rei.memory.model.MemoryScope;
+import dev.mikoto2000.rei.memory.model.MemoryType;
 import dev.mikoto2000.rei.memory.service.MemoryRepository;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import org.springframework.stereotype.Service;
 
 /**

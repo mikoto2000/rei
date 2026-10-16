@@ -6,7 +6,10 @@ import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
-import picocli.CommandLine.*;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
+import picocli.CommandLine.Spec;
 
 @Component
 @Command(name = "dependency", description = "保存された依存関係の監視を確認・キャンセル・回答します")

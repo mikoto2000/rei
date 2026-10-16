@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.storage;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.SQLException;
 
 /** MCP ownership and immutable result index; execution remains in conversation_admissions. */
 final class McpStorageMigration {

@@ -1,7 +1,10 @@
 package dev.mikoto2000.rei.http;
 
 import java.util.Locale;
-import java.util.concurrent.*;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.Semaphore;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Reference-counted host permits, removed when the last owner or waiter leaves. */

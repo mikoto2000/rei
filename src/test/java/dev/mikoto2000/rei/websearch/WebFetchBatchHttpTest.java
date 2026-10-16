@@ -1,15 +1,28 @@
 package dev.mikoto2000.rei.websearch;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.sun.net.httpserver.HttpServer;
-import dev.mikoto2000.rei.http.*;
-import java.io.*;
-import java.net.*;
+import dev.mikoto2000.rei.http.FetchOperation;
+import dev.mikoto2000.rei.http.FetchScope;
+import dev.mikoto2000.rei.http.HttpFetchObserver;
+import dev.mikoto2000.rei.http.HttpFetchPolicy;
+import dev.mikoto2000.rei.http.SafeHttpFetcher;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.InetAddress;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.URI;
 import java.time.Duration;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
 class WebFetchBatchHttpTest {

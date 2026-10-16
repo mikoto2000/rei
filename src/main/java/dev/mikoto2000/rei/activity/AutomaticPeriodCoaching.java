@@ -1,10 +1,16 @@
 package dev.mikoto2000.rei.activity;
 
-import dev.mikoto2000.rei.topic.*;
+import dev.mikoto2000.rei.topic.AgentActivityTracker;
+import dev.mikoto2000.rei.topic.AgentMessage;
+import dev.mikoto2000.rei.topic.AgentMessagePublisher;
+import dev.mikoto2000.rei.topic.MessageOrigin;
 import java.time.Clock;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.function.*;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 /** Opt-in, at most two closed-period assessments and one publication per tick. No model calls. */
 public final class AutomaticPeriodCoaching {

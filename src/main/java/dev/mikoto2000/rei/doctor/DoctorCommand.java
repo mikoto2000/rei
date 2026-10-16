@@ -1,7 +1,9 @@
 package dev.mikoto2000.rei.doctor;
 
 import org.springframework.stereotype.Component;
-import picocli.CommandLine.*;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Spec;
+import picocli.CommandLine.Unmatched;
 
 @Component
 @Command(

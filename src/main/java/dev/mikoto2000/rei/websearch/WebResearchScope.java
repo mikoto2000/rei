@@ -1,8 +1,11 @@
 package dev.mikoto2000.rei.websearch;
 
-import dev.mikoto2000.rei.http.*;
+import dev.mikoto2000.rei.http.FetchScope;
+import dev.mikoto2000.rei.http.TransferBudget;
+import dev.mikoto2000.rei.http.TransferScope;
 import java.time.Duration;
-import java.util.*;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
 /**
  * Finite quotas shared by the initial search and deterministic supplements; no recursive planning.

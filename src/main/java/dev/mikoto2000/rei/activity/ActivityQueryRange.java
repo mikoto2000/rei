@@ -1,6 +1,9 @@
 package dev.mikoto2000.rei.activity;
 
-import java.time.*;
+import java.time.Clock;
+import java.time.DateTimeException;
+import java.time.Instant;
+import java.time.LocalDate;
 
 /** Half-open daily range. At today's midnight the range is empty. */
 public record ActivityQueryRange(Instant fromInclusive, Instant toExclusive) {

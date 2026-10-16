@@ -1,6 +1,11 @@
 package dev.mikoto2000.rei.activity;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /** Explicit summary display groups; never infers project identity or topic association. */
 public final class SummaryThemeGroups {

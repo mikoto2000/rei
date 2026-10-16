@@ -1,10 +1,17 @@
 package dev.mikoto2000.rei.voice;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InterruptedIOException;
 import java.net.URI;
-import java.nio.file.*;
-import java.security.*;
-import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HexFormat;
+import java.util.List;
 
 /** Curated complete runtime/model set. No arbitrary ONNX file or URL is accepted by the CLI. */
 public record VoiceModelManifest(String id, List<Asset> assets) {

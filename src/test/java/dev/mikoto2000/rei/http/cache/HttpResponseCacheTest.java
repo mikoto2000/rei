@@ -1,15 +1,30 @@
 package dev.mikoto2000.rei.http.cache;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyMap;
+import static org.mockito.Mockito.calls;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-import dev.mikoto2000.rei.http.*;
+import dev.mikoto2000.rei.http.FetchOperation;
+import dev.mikoto2000.rei.http.HttpFetchException;
+import dev.mikoto2000.rei.http.HttpFetchObserver;
+import dev.mikoto2000.rei.http.HttpFetchPolicy;
+import dev.mikoto2000.rei.http.SafeHttpFetcher;
 import dev.mikoto2000.rei.memory.util.SensitiveInfoDetector;
 import dev.mikoto2000.rei.testsupport.AdjustableClock;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
-import java.time.*;
-import java.util.*;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 

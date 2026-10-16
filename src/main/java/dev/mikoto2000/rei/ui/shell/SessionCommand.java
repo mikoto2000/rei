@@ -1,7 +1,8 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
-import dev.mikoto2000.rei.application.session.*;
+import dev.mikoto2000.rei.application.session.SessionQueryService;
+import dev.mikoto2000.rei.application.session.ShellConversationService;
 import dev.mikoto2000.rei.conversation.HistoryFormatter;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import org.springframework.stereotype.Component;

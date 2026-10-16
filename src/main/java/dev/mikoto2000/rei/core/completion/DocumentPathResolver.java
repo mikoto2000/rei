@@ -1,7 +1,8 @@
 package dev.mikoto2000.rei.core.completion;
 
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 
 /** Shared explicit document glob expansion; callers select their own local filesystem base. */

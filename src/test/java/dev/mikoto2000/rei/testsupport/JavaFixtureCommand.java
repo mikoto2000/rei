@@ -1,8 +1,12 @@
 package dev.mikoto2000.rei.testsupport;
 
 import java.io.UncheckedIOException;
-import java.nio.file.*;
-import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.List;
 
 /** Exact dependency classpath and Unicode fixture arguments, without shell interpolation. */
 public final class JavaFixtureCommand {

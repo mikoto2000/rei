@@ -1,10 +1,18 @@
 package dev.mikoto2000.rei.vectordocument;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.withSettings;
 
-import dev.mikoto2000.rei.vectorstore.*;
-import java.util.*;
+import dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties;
+import dev.mikoto2000.rei.vectorstore.RetrievalCandidates;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;

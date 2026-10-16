@@ -1,13 +1,18 @@
 package dev.mikoto2000.rei.application.run;
 
 import dev.mikoto2000.rei.application.session.SessionLifecycle;
-import dev.mikoto2000.rei.core.chat.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.event.AgentEventBus;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.memory.command.MemoryCommandSupport;
 import dev.mikoto2000.rei.memory.service.SleepService;
-import org.springframework.boot.autoconfigure.condition.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.stereotype.Service;
 
 /** Named memory maintenance over durable Session admission; it writes no conversation turns. */

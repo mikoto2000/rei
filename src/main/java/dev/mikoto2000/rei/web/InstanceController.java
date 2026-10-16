@@ -1,9 +1,11 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.launcher.BackendEndpoint;
-import org.springframework.boot.autoconfigure.condition.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 /** Protected by the existing stateless Bearer filter; health cannot identify an instance. */
 @RestController

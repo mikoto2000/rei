@@ -1,17 +1,27 @@
 package dev.mikoto2000.rei.slack;
 
-import com.slack.api.*;
-import com.slack.api.socket_mode.*;
+import com.slack.api.Slack;
+import com.slack.api.SlackConfig;
+import com.slack.api.socket_mode.SocketModeClient;
 import com.slack.api.util.http.SlackHttpClient;
-import dev.mikoto2000.rei.application.run.*;
-import dev.mikoto2000.rei.application.session.*;
+import dev.mikoto2000.rei.application.run.RunRegistry;
+import dev.mikoto2000.rei.application.run.RunService;
+import dev.mikoto2000.rei.application.session.SessionLifecycle;
+import dev.mikoto2000.rei.application.session.SessionRepository;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.event.AgentEventBus;
-import java.nio.channels.*;
-import java.nio.file.*;
+import java.nio.channels.FileChannel;
+import java.nio.channels.FileLock;
+import java.nio.channels.OverlappingFileLockException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Clock;
-import java.util.*;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /** One backend owns one socket. All initialization and network work is off the startup thread. */
 final class SlackSdkConnection implements SlackSocketLifecycle.Connection {

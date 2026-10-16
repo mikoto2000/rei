@@ -1,13 +1,20 @@
 package dev.mikoto2000.rei.chatgpt;
 
-import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.*;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.CANCELLED;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TIMEOUT;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TRANSPORT;
 
-import java.io.*;
-import java.net.*;
-import java.net.http.*;
-import java.time.*;
-import java.util.*;
-import java.util.concurrent.*;
+import java.io.IOException;
+import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.net.http.HttpTimeoutException;
+import java.time.Duration;
+import java.util.Map;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.BooleanSupplier;
 
 /** A bounded, redirect-free transport, isolated from Spring AI request capture. */

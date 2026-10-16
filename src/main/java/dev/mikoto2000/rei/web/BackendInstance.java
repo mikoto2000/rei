@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.web;
 
-import dev.mikoto2000.rei.launcher.*;
+import dev.mikoto2000.rei.launcher.BackendEndpoint;
+import dev.mikoto2000.rei.launcher.BackendEndpointStore;
 import java.io.IOException;
 import java.util.UUID;
 

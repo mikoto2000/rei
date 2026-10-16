@@ -3,7 +3,11 @@ package dev.mikoto2000.rei.llm;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
 import java.util.List;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.embedding.*;
+import org.springframework.ai.embedding.BatchingStrategy;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.embedding.EmbeddingOptions;
+import org.springframework.ai.embedding.EmbeddingRequest;
+import org.springframework.ai.embedding.EmbeddingResponse;
 
 /** Provider usage is charged before vectors can be indexed, cached or used for retrieval. */
 public final class BudgetedEmbeddingModel implements EmbeddingModel {

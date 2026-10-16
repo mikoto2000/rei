@@ -1,10 +1,14 @@
 package dev.mikoto2000.rei.timing;
 
-import static dev.mikoto2000.rei.timing.TimingRecorder.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static dev.mikoto2000.rei.timing.TimingRecorder.Category;
+import static dev.mikoto2000.rei.timing.TimingRecorder.Metric;
+import static dev.mikoto2000.rei.timing.TimingRecorder.Status;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 @org.junit.jupiter.api.Tag("integration")

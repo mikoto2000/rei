@@ -1,9 +1,12 @@
 package dev.mikoto2000.rei.core;
 
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
-import dev.mikoto2000.rei.core.dependency.*;
+import dev.mikoto2000.rei.core.dependency.DependencyAwaiter;
+import dev.mikoto2000.rei.core.dependency.DependencyObservation;
+import dev.mikoto2000.rei.core.dependency.DependencyState;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
-import dev.mikoto2000.rei.goal.*;
+import dev.mikoto2000.rei.goal.FileGoalVerifier;
+import dev.mikoto2000.rei.goal.GoalRepository;
 import java.time.Duration;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;

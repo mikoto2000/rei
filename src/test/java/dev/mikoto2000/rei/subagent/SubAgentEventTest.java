@@ -1,11 +1,19 @@
 package dev.mikoto2000.rei.subagent;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.event.*;
-import dev.mikoto2000.rei.ui.projection.*;
-import dev.mikoto2000.rei.ui.shell.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.ErrorInformation;
+import dev.mikoto2000.rei.event.ProjectAgentEventStore;
+import dev.mikoto2000.rei.event.ToolEventCallbackDecorator;
+import dev.mikoto2000.rei.ui.projection.DefaultAgentUiProjection;
+import dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer;
+import dev.mikoto2000.rei.ui.shell.ShellEventOutput;
 import java.nio.file.Path;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;

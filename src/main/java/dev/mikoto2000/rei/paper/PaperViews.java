@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.paper;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Map;
 
 final class PaperViews {
   static String clip(String text, int limit) {

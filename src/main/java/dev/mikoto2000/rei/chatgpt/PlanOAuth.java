@@ -1,14 +1,34 @@
 package dev.mikoto2000.rei.chatgpt;
 
-import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.*;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.AUTH_INVALID;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.AUTH_REQUIRED;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.CONSENT_REQUIRED;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.PROTOCOL;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.RECEIVE_LIMIT;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TRANSPORT;
 
-import com.fasterxml.jackson.databind.*;
-import java.net.*;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.net.URI;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
-import java.security.*;
-import java.time.*;
-import java.util.*;
-import org.springframework.security.oauth2.jwt.*;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
+import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
+import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
 /** Public-client authorization. No credentials are read from other applications. */
 public final class PlanOAuth {

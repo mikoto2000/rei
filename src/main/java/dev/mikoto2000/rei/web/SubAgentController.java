@@ -1,9 +1,18 @@
 package dev.mikoto2000.rei.web;
 
-import dev.mikoto2000.rei.subagent.*;
+import dev.mikoto2000.rei.subagent.SubAgentCommand;
+import dev.mikoto2000.rei.subagent.SubAgentDefinitionLoader;
+import dev.mikoto2000.rei.subagent.SubAgentRegistry;
+import dev.mikoto2000.rei.subagent.SubAgentToolPolicy;
 import java.nio.file.Path;
-import org.springframework.boot.autoconfigure.condition.*;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
 /** Fixed definition management only; this API does not launch or delegate to an agent. */
 @RestController

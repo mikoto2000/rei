@@ -1,8 +1,11 @@
 package dev.mikoto2000.rei.core.chat;
 
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
-import java.util.concurrent.*;
-import org.springframework.context.annotation.*;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.RejectedExecutionException;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class AgentRunConfiguration {

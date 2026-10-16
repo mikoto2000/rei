@@ -1,7 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.sql.*;
+import java.sql.Connection;
 import java.time.Instant;
 import javax.sql.DataSource;
 

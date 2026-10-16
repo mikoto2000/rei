@@ -1,6 +1,9 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
-import org.springframework.ai.chat.messages.*;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 
 /**
  * Replaceable estimate, not an exact tokenizer. Non-ASCII text is deliberately more conservative.

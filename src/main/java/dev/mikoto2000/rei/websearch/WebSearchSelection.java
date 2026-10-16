@@ -1,11 +1,25 @@
 package dev.mikoto2000.rei.websearch;
 
-import dev.mikoto2000.rei.http.*;
+import dev.mikoto2000.rei.http.FetchOperation;
+import dev.mikoto2000.rei.http.FetchScope;
+import dev.mikoto2000.rei.http.HttpFetchException;
+import dev.mikoto2000.rei.http.PublicNetworkPolicy;
 import java.io.IOException;
-import java.net.*;
+import java.net.URI;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.time.*;
-import java.util.*;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /** Shared bounded planning. Candidate sufficiency is not a verified answer. */

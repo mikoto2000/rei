@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.memory.model;
 
-import java.util.*;
+import java.util.List;
+import java.util.Set;
 
 public record MemoryCandidate(
     MemoryType type,

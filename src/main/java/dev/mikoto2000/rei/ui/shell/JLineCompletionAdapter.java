@@ -4,7 +4,10 @@ import dev.mikoto2000.rei.core.completion.CompletionEngine;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.function.Supplier;
-import org.jline.reader.*;
+import org.jline.reader.Candidate;
+import org.jline.reader.Completer;
+import org.jline.reader.LineReader;
+import org.jline.reader.ParsedLine;
 import picocli.CommandLine;
 
 public final class JLineCompletionAdapter implements Completer {

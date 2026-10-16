@@ -1,9 +1,16 @@
 package dev.mikoto2000.rei.doctor;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.mikoto2000.rei.core.policy.*;
-import java.util.*;
+import dev.mikoto2000.rei.core.policy.ActionCapability;
+import dev.mikoto2000.rei.core.policy.PermissionDecision;
+import dev.mikoto2000.rei.core.policy.ToolPermissionPolicy;
+import dev.mikoto2000.rei.core.policy.ToolPermissionProperties;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class DoctorActivePolicyTest {

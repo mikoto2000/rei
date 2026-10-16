@@ -4,7 +4,10 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
-import picocli.CommandLine.*;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
+import picocli.CommandLine.Spec;
 
 @Component
 @Command(name = "goal", description = "ファイルの達成目標を保存し、独立した検証と上限付きの対話計画を行います")

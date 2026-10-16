@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core.command;
 
-import dev.mikoto2000.rei.core.completion.*;
+import dev.mikoto2000.rei.core.completion.CompletionContext;
+import dev.mikoto2000.rei.core.completion.FilePathCompletionProvider;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;

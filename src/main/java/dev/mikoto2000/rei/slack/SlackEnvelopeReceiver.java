@@ -1,7 +1,10 @@
 package dev.mikoto2000.rei.slack;
 
-import com.fasterxml.jackson.core.*;
-import com.fasterxml.jackson.databind.*;
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.StreamReadConstraints;
+import com.fasterxml.jackson.core.StreamReadFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
 /** Returns an envelope ID only after durable admission; raw payloads are never logged. */
 public final class SlackEnvelopeReceiver {

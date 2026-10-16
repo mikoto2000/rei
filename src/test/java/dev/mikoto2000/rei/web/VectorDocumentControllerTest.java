@@ -1,9 +1,14 @@
 package dev.mikoto2000.rei.web;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
-import dev.mikoto2000.rei.vectordocument.*;
+import dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService;
+import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 

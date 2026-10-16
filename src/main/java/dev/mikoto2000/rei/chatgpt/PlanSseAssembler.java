@@ -1,11 +1,24 @@
 package dev.mikoto2000.rei.chatgpt;
 
-import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.*;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.AUTH_INVALID;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.MODEL_UNAVAILABLE;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.PERMISSION_DENIED;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.PROTOCOL;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.RECEIVE_LIMIT;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.ROUTE_UNAVAILABLE;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TRANSPORT;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.USAGE_LIMIT;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.USAGE_UNAVAILABLE;
 
-import com.fasterxml.jackson.databind.*;
-import java.io.*;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.SortedMap;
+import java.util.TreeMap;
 
 /** Text stays in memory until a validated response.completed event allows publication. */
 public final class PlanSseAssembler {

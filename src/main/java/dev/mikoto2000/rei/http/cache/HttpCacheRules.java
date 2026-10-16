@@ -1,12 +1,24 @@
 package dev.mikoto2000.rei.http.cache;
 
-import dev.mikoto2000.rei.http.*;
+import dev.mikoto2000.rei.http.HttpFetchException;
+import dev.mikoto2000.rei.http.PublicNetworkPolicy;
+import dev.mikoto2000.rei.http.SafeHttpFetcher;
 import dev.mikoto2000.rei.memory.util.SensitiveInfoDetector;
-import java.net.*;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
-import java.time.*;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
+import java.util.TreeMap;
 
 /** Conservative application cache: complete public direct responses only. */
 final class HttpCacheRules {

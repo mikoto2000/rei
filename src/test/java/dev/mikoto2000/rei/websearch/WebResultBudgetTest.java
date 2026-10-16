@@ -1,10 +1,17 @@
 package dev.mikoto2000.rei.websearch;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.mikoto2000.rei.core.contextbudget.*;
-import dev.mikoto2000.rei.http.*;
-import java.util.*;
+import dev.mikoto2000.rei.core.contextbudget.ContextBudgetManager;
+import dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties;
+import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
+import dev.mikoto2000.rei.http.HttpFetchException;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class WebResultBudgetTest {

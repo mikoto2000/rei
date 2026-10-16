@@ -1,11 +1,16 @@
 package dev.mikoto2000.rei.web;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import dev.mikoto2000.rei.skills.*;
+import dev.mikoto2000.rei.skills.AgentSkill;
+import dev.mikoto2000.rei.skills.AgentSkillRepository;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
 class SkillReportControllerTest {

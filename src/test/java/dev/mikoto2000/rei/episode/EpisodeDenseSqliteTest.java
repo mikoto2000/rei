@@ -1,18 +1,39 @@
 package dev.mikoto2000.rei.episode;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
 
 import dev.mikoto2000.rei.core.configuration.SqliteVecProperties;
-import dev.mikoto2000.rei.core.sqlitevec.*;
-import dev.mikoto2000.rei.llm.*;
+import dev.mikoto2000.rei.core.sqlitevec.PlatformDetector;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecAssetResolver;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecDataSource;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecInstaller;
+import dev.mikoto2000.rei.llm.BudgetedEmbeddingModel;
+import dev.mikoto2000.rei.llm.ModelCallBudget;
+import dev.mikoto2000.rei.llm.ModelCallBudgetScope;
 import dev.mikoto2000.rei.vectorstore.LazySqliteVectorStore;
 import java.nio.file.Path;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import java.util.List;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.document.Document;
-import org.springframework.ai.embedding.*;
+import org.springframework.ai.embedding.Embedding;
+import org.springframework.ai.embedding.EmbeddingModel;
+import org.springframework.ai.embedding.EmbeddingRequest;
+import org.springframework.ai.embedding.EmbeddingResponse;
+import org.springframework.ai.embedding.EmbeddingResponseMetadata;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import tools.jackson.databind.json.JsonMapper;
 

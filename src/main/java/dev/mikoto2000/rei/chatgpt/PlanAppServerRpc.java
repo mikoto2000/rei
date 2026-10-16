@@ -1,11 +1,24 @@
 package dev.mikoto2000.rei.chatgpt;
 
-import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.*;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.AUTH_REQUIRED;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.CANCELLED;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.PERMISSION_DENIED;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.PROTOCOL;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.RECEIVE_LIMIT;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.SEND_LIMIT;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TIMEOUT;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TRANSPORT;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.USAGE_LIMIT;
 
-import com.fasterxml.jackson.databind.*;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
-import java.util.*;
-import java.util.function.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.function.BooleanSupplier;
+import java.util.function.Function;
 
 /** Pinned Linux 0.154.0 / Windows 0.162.1 stdio schemas. No raw RPC is persisted. */
 public final class PlanAppServerRpc {

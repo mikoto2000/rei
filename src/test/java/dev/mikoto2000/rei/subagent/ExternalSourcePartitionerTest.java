@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.subagent;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.mikoto2000.rei.chatgpt.ChatGptException;
 import java.util.List;

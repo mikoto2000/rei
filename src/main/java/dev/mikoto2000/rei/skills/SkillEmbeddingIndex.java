@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.skills;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
 
 /** Optional metadata-vector cache. Never stores queries, instructions or Skill objects. */
 public interface SkillEmbeddingIndex {

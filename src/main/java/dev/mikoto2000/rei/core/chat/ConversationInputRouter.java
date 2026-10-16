@@ -1,11 +1,20 @@
 package dev.mikoto2000.rei.core.chat;
 
-import dev.mikoto2000.rei.core.execution.*;
+import dev.mikoto2000.rei.core.execution.ActiveExecution;
+import dev.mikoto2000.rei.core.execution.ExecutionScope;
+import dev.mikoto2000.rei.core.execution.ExecutionType;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.UUID;
 import java.util.concurrent.Executor;
-import java.util.function.*;
+import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 
 /** Owns input mailboxes and active views; ProjectRunQueue owns all AGENT scheduling. */
 public final class ConversationInputRouter {

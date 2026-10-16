@@ -1,8 +1,11 @@
 package dev.mikoto2000.rei.activity;
 
-import static dev.mikoto2000.rei.activity.DailySummaryAggregate.*;
+import static dev.mikoto2000.rei.activity.DailySummaryAggregate.Bucket;
+import static dev.mikoto2000.rei.activity.DailySummaryAggregate.categoryLabel;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 /** Presentation policy over existing ranks and durations; never reclassifies observations. */
 public final class DailySummaryBucketFormatter {

@@ -1,6 +1,10 @@
 package dev.mikoto2000.rei.core.command;
 
-import dev.mikoto2000.rei.core.completion.*;
+import dev.mikoto2000.rei.core.completion.ApprovalMenuLineReader;
+import dev.mikoto2000.rei.core.completion.ChoiceCompletionProvider;
+import dev.mikoto2000.rei.core.completion.CompletionEngine;
+import dev.mikoto2000.rei.core.completion.FilePathCompletionProvider;
+import dev.mikoto2000.rei.core.completion.PathFallbackCompletionProvider;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.ui.shell.JLineCompletionAdapter;
 import java.io.IOException;

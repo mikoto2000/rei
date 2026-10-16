@@ -1,8 +1,10 @@
 package dev.mikoto2000.rei.subagent;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.*;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 /**
  * Narrow transient read failures only. Returned error strings and model/provider failures are not

@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
-import java.util.*;
+import java.util.List;
+import java.util.Map;
 
 public record ActivityClassification(
     ActivityRecord.Inference inference,

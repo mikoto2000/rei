@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.core.policy;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties("rei.tool-permission")

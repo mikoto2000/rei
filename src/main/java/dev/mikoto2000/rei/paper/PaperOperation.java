@@ -1,7 +1,11 @@
 package dev.mikoto2000.rei.paper;
 
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
-import java.util.concurrent.*;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.springframework.ai.chat.model.ToolContext;
 
 public record PaperOperation(String sessionId, RunExecutionContext execution, long deadlineNanos) {

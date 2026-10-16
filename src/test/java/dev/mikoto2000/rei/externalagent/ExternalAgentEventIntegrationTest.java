@@ -1,12 +1,17 @@
 package dev.mikoto2000.rei.externalagent;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.event.*;
-import dev.mikoto2000.rei.ui.projection.*;
-import dev.mikoto2000.rei.ui.shell.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.ExternalAgentLifecyclePayload;
+import dev.mikoto2000.rei.event.ProjectAgentEventStore;
+import dev.mikoto2000.rei.ui.projection.DefaultAgentUiProjection;
+import dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer;
+import dev.mikoto2000.rei.ui.shell.ShellEventOutput;
 import java.nio.file.Path;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;

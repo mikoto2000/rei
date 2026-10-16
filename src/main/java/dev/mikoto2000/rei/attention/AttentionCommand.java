@@ -2,7 +2,10 @@ package dev.mikoto2000.rei.attention;
 
 import dev.mikoto2000.rei.core.project.ProjectService;
 import org.springframework.stereotype.Component;
-import picocli.CommandLine.*;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
+import picocli.CommandLine.Spec;
 
 @Component
 @Command(name = "attention", description = "保存された注意事項を確認・確認済みにします")

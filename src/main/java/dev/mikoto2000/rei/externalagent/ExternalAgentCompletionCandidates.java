@@ -1,7 +1,13 @@
 package dev.mikoto2000.rei.externalagent;
 
-import dev.mikoto2000.rei.core.completion.*;
-import java.util.*;
+import dev.mikoto2000.rei.core.completion.CompletionCandidate;
+import dev.mikoto2000.rei.core.completion.CompletionContext;
+import dev.mikoto2000.rei.core.completion.CompletionMetadata;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Locale;
+import java.util.Set;
 
 /** Metadata for the existing variadic /agent grammar, limited to its supported domain actions. */
 public final class ExternalAgentCompletionCandidates implements CompletionMetadata {

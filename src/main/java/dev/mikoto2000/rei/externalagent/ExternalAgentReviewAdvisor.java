@@ -1,10 +1,17 @@
 package dev.mikoto2000.rei.externalagent;
 
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
-import java.util.*;
-import org.springframework.ai.chat.client.*;
-import org.springframework.ai.chat.client.advisor.api.*;
-import org.springframework.ai.chat.messages.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import org.springframework.ai.chat.client.ChatClientRequest;
+import org.springframework.ai.chat.client.ChatClientResponse;
+import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
+import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 

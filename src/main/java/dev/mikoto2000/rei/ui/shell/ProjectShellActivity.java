@@ -1,8 +1,15 @@
 package dev.mikoto2000.rei.ui.shell;
 
-import dev.mikoto2000.rei.core.project.*;
+import dev.mikoto2000.rei.core.project.ProjectClient;
+import dev.mikoto2000.rei.core.project.ProjectContext;
+import dev.mikoto2000.rei.core.project.ProjectRunStateStore;
+import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.working.WorkingSet;
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventListener;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.BackgroundExecutionPayload;
+import dev.mikoto2000.rei.event.ProjectAgentEventStore;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;

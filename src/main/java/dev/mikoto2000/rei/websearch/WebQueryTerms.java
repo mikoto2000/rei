@@ -1,7 +1,11 @@
 package dev.mikoto2000.rei.websearch;
 
 import dev.mikoto2000.rei.core.contextbudget.LexicalTerms;
-import java.util.*;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 final class WebQueryTerms {

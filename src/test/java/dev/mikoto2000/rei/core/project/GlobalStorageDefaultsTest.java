@@ -1,8 +1,9 @@
 package dev.mikoto2000.rei.core.project;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
 @org.junit.jupiter.api.Tag("integration")

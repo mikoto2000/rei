@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.episode;
 
-import java.util.*;
+import java.util.List;
+import java.util.Set;
 
 /** An immutable event revision. Evidence belongs to each claim, never to the event status. */
 public record Episode(

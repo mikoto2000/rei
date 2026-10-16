@@ -1,9 +1,11 @@
 package dev.mikoto2000.rei.github;
 
 import java.nio.charset.StandardCharsets;
-import java.security.*;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.Instant;
-import java.util.*;
+import java.util.HexFormat;
+import java.util.Locale;
 
 /** Only fixed facts from authenticated payloads. No title, body, command or URL is retained. */
 public record GitHubFact(

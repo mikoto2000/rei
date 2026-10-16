@@ -1,24 +1,48 @@
 package dev.mikoto2000.rei.llm;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.STREAM;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.sun.net.httpserver.HttpServer;
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.core.contextbudget.*;
-import dev.mikoto2000.rei.core.stagnation.*;
-import dev.mikoto2000.rei.event.*;
-import dev.mikoto2000.rei.llm.capture.*;
-import java.net.*;
-import java.nio.file.*;
-import java.time.*;
-import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
-import org.junit.jupiter.api.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.contextbudget.ContextAssembler;
+import dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties;
+import dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor;
+import dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository;
+import dev.mikoto2000.rei.core.contextbudget.RawToolResultStore;
+import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
+import dev.mikoto2000.rei.core.contextbudget.ToolResultCompressor;
+import dev.mikoto2000.rei.core.stagnation.ProgressEvaluator;
+import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
+import dev.mikoto2000.rei.core.stagnation.StagnationChatModel;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.llm.capture.CaptureStore;
+import java.net.InetSocketAddress;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import org.springframework.ai.chat.messages.*;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.*;
+import org.springframework.ai.openai.OpenAiChatModel;
+import org.springframework.ai.openai.OpenAiChatOptions;
 
 @org.junit.jupiter.api.extension.ExtendWith(
     org.springframework.boot.test.system.OutputCaptureExtension.class)

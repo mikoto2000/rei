@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.vectorstore;
 
-import java.util.*;
+import java.util.Collections;
+import java.util.Map;
+import java.util.TreeMap;
 
 /**
  * Optional learned sparse provider boundary. Numeric vocabulary IDs never imply BM25 term weights.

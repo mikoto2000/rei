@@ -2,9 +2,14 @@ package dev.mikoto2000.rei.dot;
 
 import dev.mikoto2000.rei.core.project.ProjectService;
 import java.io.PrintWriter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import org.springframework.stereotype.Component;
-import picocli.CommandLine.*;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
+import picocli.CommandLine.Spec;
 
 @Component
 @Command(name = "dot", description = "てんてんへの永続依頼を作成・確認・取消", mixinStandardHelpOptions = true)

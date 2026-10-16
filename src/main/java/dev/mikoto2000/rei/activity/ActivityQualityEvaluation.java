@@ -1,8 +1,15 @@
 package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.core.chat.RunCancellation;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
 
 /**
  * Anonymous evaluation of existing projections. Never promotes an inference into an observed fact.

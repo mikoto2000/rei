@@ -1,6 +1,6 @@
 package dev.mikoto2000.rei.activity.behavior;
 
-import java.time.*;
+import java.time.Instant;
 
 public record BehaviorNotificationPolicy(BehaviorProperties config) {
   public enum Suppression {

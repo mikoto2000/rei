@@ -1,14 +1,22 @@
 package dev.mikoto2000.rei.doctor;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.mikoto2000.rei.externalagent.*;
+import dev.mikoto2000.rei.externalagent.ClaudeCodeProperties;
+import dev.mikoto2000.rei.externalagent.CodexProperties;
 import dev.mikoto2000.rei.llm.LlmProperties;
-import dev.mikoto2000.rei.voice.*;
+import dev.mikoto2000.rei.voice.VoiceModelManifest;
+import dev.mikoto2000.rei.voice.VoiceProperties;
 import java.net.URI;
-import java.nio.file.*;
-import java.time.*;
-import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.core.env.MapPropertySource;

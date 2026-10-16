@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.core.completion;
 
-import java.util.*;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Set;
 
 /** Fixed action choices for commands that parse their first positional argument themselves. */
 public abstract class FirstArgumentCandidates implements CompletionMetadata {

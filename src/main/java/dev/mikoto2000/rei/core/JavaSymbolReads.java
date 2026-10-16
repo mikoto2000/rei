@@ -4,7 +4,10 @@ import dev.mikoto2000.rei.core.chat.RunCancellation;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
 
 /** Source selection over the existing Javac AST, using request-local snapshot hashes. */
 final class JavaSymbolReads {

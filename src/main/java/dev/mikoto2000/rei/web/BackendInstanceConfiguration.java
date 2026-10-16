@@ -2,10 +2,13 @@ package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.launcher.BackendEndpointStore;
 import java.nio.file.Path;
-import org.springframework.boot.autoconfigure.condition.*;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.ApplicationListener;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.DependsOn;
 
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")

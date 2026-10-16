@@ -1,9 +1,15 @@
 package dev.mikoto2000.rei.slack;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.nio.file.*;
-import java.sql.*;
-import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
 
 /** Small channel-specific SQLite ledger. No network or runner calls occur in transactions. */
 public final class SlackStore {

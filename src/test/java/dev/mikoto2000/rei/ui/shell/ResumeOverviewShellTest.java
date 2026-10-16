@@ -1,16 +1,30 @@
 package dev.mikoto2000.rei.ui.shell;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
-import dev.mikoto2000.rei.checkpoint.*;
-import dev.mikoto2000.rei.core.project.*;
+import dev.mikoto2000.rei.checkpoint.ResumeOverview;
+import dev.mikoto2000.rei.checkpoint.ResumeOverviewService;
+import dev.mikoto2000.rei.core.project.ProjectClientTestSupport;
+import dev.mikoto2000.rei.core.project.ProjectRegistry;
+import dev.mikoto2000.rei.core.project.ProjectRunStateStore;
+import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.working.WorkingSet;
 import dev.mikoto2000.rei.event.ProjectAgentEventStore;
-import java.nio.file.*;
-import java.time.*;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Instant;
+import java.time.ZoneOffset;
+import java.util.List;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.memory.ChatMemory;
 

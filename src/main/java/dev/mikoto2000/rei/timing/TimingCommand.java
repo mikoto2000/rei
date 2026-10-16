@@ -1,12 +1,18 @@
 package dev.mikoto2000.rei.timing;
 
-import static dev.mikoto2000.rei.timing.TimingRecorder.*;
+import static dev.mikoto2000.rei.timing.TimingRecorder.Category;
+import static dev.mikoto2000.rei.timing.TimingRecorder.Metric;
+import static dev.mikoto2000.rei.timing.TimingRecorder.Run;
+import static dev.mikoto2000.rei.timing.TimingRecorder.Span;
+import static dev.mikoto2000.rei.timing.TimingRecorder.Statistics;
 
 import java.io.PrintWriter;
-import java.util.*;
+import java.util.Locale;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Component;
-import picocli.CommandLine.*;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Spec;
+import picocli.CommandLine.Unmatched;
 
 @Component
 @Command(name = "timing", description = "現在のSessionのRun時間内訳を表示", mixinStandardHelpOptions = true)

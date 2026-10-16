@@ -1,15 +1,22 @@
 package dev.mikoto2000.rei.ui.shell;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.mikoto2000.rei.application.session.*;
-import dev.mikoto2000.rei.conversation.*;
+import dev.mikoto2000.rei.application.session.SessionLifecycle;
+import dev.mikoto2000.rei.application.session.SessionMetadata;
+import dev.mikoto2000.rei.application.session.SessionQueryService;
+import dev.mikoto2000.rei.application.session.ShellConversationService;
+import dev.mikoto2000.rei.conversation.ConversationTurnStore;
+import dev.mikoto2000.rei.conversation.FileSessionRepository;
 import dev.mikoto2000.rei.core.command.UserInputParser;
-import dev.mikoto2000.rei.core.project.*;
-import java.io.*;
-import java.nio.file.*;
-import java.time.*;
-import java.util.*;
+import dev.mikoto2000.rei.core.project.ProjectRegistry;
+import dev.mikoto2000.rei.core.project.ProjectService;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;

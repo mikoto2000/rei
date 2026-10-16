@@ -1,11 +1,20 @@
 package dev.mikoto2000.rei.chatgpt;
 
-import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.*;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.CANCELLED;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.PROTOCOL;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.RECEIVE_LIMIT;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TIMEOUT;
+import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TRANSPORT;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.Duration;
-import java.util.concurrent.*;
-import java.util.function.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.FutureTask;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
+import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
 
 /** Covers body reads too: HttpRequest.timeout alone does not bound an InputStream body. */
 final class PlanIO {

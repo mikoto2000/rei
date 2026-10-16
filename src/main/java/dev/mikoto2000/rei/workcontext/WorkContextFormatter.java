@@ -2,8 +2,15 @@ package dev.mikoto2000.rei.workcontext;
 
 import dev.mikoto2000.rei.conversation.HistoryFormatter;
 import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
-import dev.mikoto2000.rei.workcontext.WorkContext.*;
-import java.util.*;
+import dev.mikoto2000.rei.workcontext.WorkContext.GitState;
+import dev.mikoto2000.rei.workcontext.WorkContext.Item;
+import dev.mikoto2000.rei.workcontext.WorkContext.Kind;
+import dev.mikoto2000.rei.workcontext.WorkContext.Status;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 public final class WorkContextFormatter {
   private final HistoryFormatter safe = new HistoryFormatter();

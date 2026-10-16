@@ -1,6 +1,9 @@
 package dev.mikoto2000.rei.core.policy;
 
-import java.util.*;
+import java.util.EnumSet;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
 

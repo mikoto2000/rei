@@ -1,8 +1,12 @@
 package dev.mikoto2000.rei.memory.service;
 
-import dev.mikoto2000.rei.memory.model.*;
-import dev.mikoto2000.rei.subagent.*;
-import java.util.*;
+import dev.mikoto2000.rei.memory.model.MemoryCandidate;
+import dev.mikoto2000.rei.memory.model.MemoryScope;
+import dev.mikoto2000.rei.memory.model.MemoryType;
+import dev.mikoto2000.rei.subagent.SubAgentResultParser;
+import dev.mikoto2000.rei.subagent.SubAgentResultSchema;
+import java.util.ArrayList;
+import java.util.List;
 import tools.jackson.databind.JsonNode;
 
 /** Reuses SubAgent strict parsing, bounded schema loading and offline Draft 2020-12 validation. */

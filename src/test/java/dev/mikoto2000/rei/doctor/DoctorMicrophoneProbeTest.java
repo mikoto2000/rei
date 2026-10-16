@@ -1,11 +1,16 @@
 package dev.mikoto2000.rei.doctor;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.mikoto2000.rei.voice.*;
+import dev.mikoto2000.rei.voice.AudioDevice;
+import dev.mikoto2000.rei.voice.AudioDeviceService;
 import java.time.Duration;
-import java.util.*;
-import java.util.concurrent.*;
+import java.util.List;
+import java.util.concurrent.CancellationException;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
 class DoctorMicrophoneProbeTest {

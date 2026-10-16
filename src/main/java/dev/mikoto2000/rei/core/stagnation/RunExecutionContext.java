@@ -1,10 +1,30 @@
 package dev.mikoto2000.rei.core.stagnation;
 
-import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.*;
+import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.LLM_CALL_BUDGET_EXCEEDED;
+import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.REPLAN_BUDGET_EXCEEDED;
+import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.STAGNATED;
+import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.TOKEN_BUDGET_EXCEEDED;
+import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.TOKEN_USAGE_UNKNOWN;
+import static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.TOOL_ARGUMENT_REPAIR_EXHAUSTED;
 
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventPublisher;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.CredentialRedactor;
+import dev.mikoto2000.rei.event.ErrorInformation;
+import dev.mikoto2000.rei.event.ExecutionProgressPayload;
+import dev.mikoto2000.rei.event.ToolStartedPayload;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
-import java.util.*;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Deque;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
 /** One user run, explicitly passed in ToolContext across reactive scheduler boundaries. */
 public class RunExecutionContext {

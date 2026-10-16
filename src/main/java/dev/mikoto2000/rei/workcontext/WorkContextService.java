@@ -1,12 +1,34 @@
 package dev.mikoto2000.rei.workcontext;
 
-import dev.mikoto2000.rei.application.session.*;
+import dev.mikoto2000.rei.application.session.SessionRepository;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
-import dev.mikoto2000.rei.core.project.*;
-import dev.mikoto2000.rei.event.*;
-import dev.mikoto2000.rei.workcontext.WorkContext.*;
-import java.time.*;
-import java.util.*;
+import dev.mikoto2000.rei.core.project.ProjectContext;
+import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.AgentRunFailedPayload;
+import dev.mikoto2000.rei.event.FileCreatedPayload;
+import dev.mikoto2000.rei.event.FileDeletedPayload;
+import dev.mikoto2000.rei.event.FileModifiedPayload;
+import dev.mikoto2000.rei.event.ProjectAgentEventStore;
+import dev.mikoto2000.rei.event.ToolCompletedPayload;
+import dev.mikoto2000.rei.event.ToolFailedPayload;
+import dev.mikoto2000.rei.event.UserInterventionPayload;
+import dev.mikoto2000.rei.workcontext.WorkContext.Evidence;
+import dev.mikoto2000.rei.workcontext.WorkContext.GitState;
+import dev.mikoto2000.rei.workcontext.WorkContext.Kind;
+import dev.mikoto2000.rei.workcontext.WorkContext.Origin;
+import dev.mikoto2000.rei.workcontext.WorkContext.Status;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.ConcurrentModificationException;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 /** Shared Shell/Chat Tool/HTTP application service. Extraction completes before any write. */

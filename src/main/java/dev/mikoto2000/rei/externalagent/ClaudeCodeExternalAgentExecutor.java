@@ -2,15 +2,26 @@ package dev.mikoto2000.rei.externalagent;
 
 import static dev.mikoto2000.rei.externalagent.ExternalAgentResult.Status;
 
-import com.fasterxml.jackson.core.*;
-import com.fasterxml.jackson.databind.*;
+import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.StreamReadConstraints;
+import com.fasterxml.jackson.core.StreamReadFeature;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
-import java.io.*;
-import java.nio.*;
-import java.nio.charset.*;
-import java.nio.file.*;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 import java.util.function.BooleanSupplier;
 
 /** Tool-free Claude Code review of an explicit bounded snapshot, never unrestricted CLI access. */

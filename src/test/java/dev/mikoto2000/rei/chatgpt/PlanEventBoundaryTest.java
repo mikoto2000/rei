@@ -1,8 +1,10 @@
 package dev.mikoto2000.rei.chatgpt;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.web.WebApiEventDto;
 import java.time.Clock;
 import java.util.Set;

@@ -1,7 +1,19 @@
 package dev.mikoto2000.rei.reflection;
 
-import dev.mikoto2000.rei.event.*;
-import jakarta.annotation.*;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventBus;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.AgentRunCompletedPayload;
+import dev.mikoto2000.rei.event.AgentRunFailedPayload;
+import dev.mikoto2000.rei.event.ErrorInformation;
+import dev.mikoto2000.rei.event.ProjectAgentEventStore;
+import dev.mikoto2000.rei.event.TaskCompletedPayload;
+import dev.mikoto2000.rei.event.TaskCreatedPayload;
+import dev.mikoto2000.rei.event.TaskFailedPayload;
+import dev.mikoto2000.rei.event.ToolCompletedPayload;
+import dev.mikoto2000.rei.event.ToolFailedPayload;
+import jakarta.annotation.PostConstruct;
+import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Service;
 
 /** Event facts only: no additional model call and no inferred root causes. */

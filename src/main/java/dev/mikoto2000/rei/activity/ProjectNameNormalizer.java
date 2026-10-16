@@ -1,6 +1,10 @@
 package dev.mikoto2000.rei.activity;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /** Summary-only normalization. Never merges by edit distance or updates classification evidence. */
 public final class ProjectNameNormalizer {

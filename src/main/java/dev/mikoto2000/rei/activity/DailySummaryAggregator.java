@@ -1,10 +1,28 @@
 package dev.mikoto2000.rei.activity;
 
-import static dev.mikoto2000.rei.activity.DailySummaryAggregate.*;
+import static dev.mikoto2000.rei.activity.DailySummaryAggregate.BUCKET_ORDER;
+import static dev.mikoto2000.rei.activity.DailySummaryAggregate.Block;
+import static dev.mikoto2000.rei.activity.DailySummaryAggregate.Bucket;
+import static dev.mikoto2000.rei.activity.DailySummaryAggregate.Weighted;
+import static dev.mikoto2000.rei.activity.DailySummaryAggregate.categoryLabel;
 
-import java.time.*;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.EnumMap;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * Read-only arithmetic over saved segment evidence. No model, capture, rule reload or persistence.

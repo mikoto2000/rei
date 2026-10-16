@@ -1,13 +1,24 @@
 package dev.mikoto2000.rei.websearch;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.anyMap;
+import static org.mockito.Mockito.calls;
+import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.mock;
 
-import dev.mikoto2000.rei.http.*;
-import dev.mikoto2000.rei.http.cache.*;
+import dev.mikoto2000.rei.http.FetchScope;
+import dev.mikoto2000.rei.http.HttpFetchObserver;
+import dev.mikoto2000.rei.http.SafeHttpFetcher;
+import dev.mikoto2000.rei.http.cache.HttpCacheProperties;
+import dev.mikoto2000.rei.http.cache.HttpResponseCache;
 import dev.mikoto2000.rei.memory.util.SensitiveInfoDetector;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;

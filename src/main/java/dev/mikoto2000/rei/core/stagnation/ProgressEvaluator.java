@@ -6,7 +6,16 @@ import dev.mikoto2000.rei.core.actionplan.ActionPlan;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.MessageDigest;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
 
 /** Run-local evidence ledger. Unknown tools are conservative: success alone proves nothing. */
 public class ProgressEvaluator {

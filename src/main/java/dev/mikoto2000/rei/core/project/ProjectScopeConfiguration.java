@@ -1,7 +1,8 @@
 package dev.mikoto2000.rei.core.project;
 
 import org.springframework.beans.factory.config.BeanFactoryPostProcessor;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class ProjectScopeConfiguration {

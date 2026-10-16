@@ -1,7 +1,9 @@
 package dev.mikoto2000.rei.goal;
 
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Set;
 
 /** Read-only completion view including optional checks and current content revisions. */
 public record GoalCompletionProgress(

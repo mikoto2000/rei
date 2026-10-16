@@ -1,7 +1,9 @@
 package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.activity.DesktopActivityObserver.Lightweight;
-import java.time.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Objects;
 
 /** Successful persistence owns the baseline. All state transitions share one monitor. */

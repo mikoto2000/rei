@@ -2,11 +2,19 @@ package dev.mikoto2000.rei.externalagent;
 
 import static dev.mikoto2000.rei.externalagent.ExternalAgentResult.Status;
 
-import com.fasterxml.jackson.databind.*;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
 import java.util.function.BooleanSupplier;
 
 /** All CLI/version-specific behavior lives here. Unsupported security capabilities fail closed. */

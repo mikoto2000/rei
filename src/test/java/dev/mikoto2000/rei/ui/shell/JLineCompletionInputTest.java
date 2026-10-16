@@ -2,12 +2,17 @@ package dev.mikoto2000.rei.ui.shell;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.mikoto2000.rei.core.command.*;
-import java.io.*;
-import java.nio.file.*;
-import org.jline.reader.*;
-import org.jline.terminal.*;
-import org.junit.jupiter.api.*;
+import dev.mikoto2000.rei.core.command.ProjectCommand;
+import dev.mikoto2000.rei.core.command.ReiLineReaderFactory;
+import dev.mikoto2000.rei.core.command.UserInputParser;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import org.jline.reader.LineReaderBuilder;
+import org.jline.terminal.Size;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;

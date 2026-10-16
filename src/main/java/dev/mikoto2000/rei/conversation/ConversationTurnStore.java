@@ -1,11 +1,23 @@
 package dev.mikoto2000.rei.conversation;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.mikoto2000.rei.application.session.*;
+import dev.mikoto2000.rei.application.session.ConversationHistory;
+import dev.mikoto2000.rei.application.session.CursorKey;
+import dev.mikoto2000.rei.application.session.SessionTurn;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.datasource.ReiDataDirectory;
-import java.nio.file.*;
-import java.util.*;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.UUID;
 
 /** Conversation lifecycle metadata, independent of the bounded chat memory window. */
 public class ConversationTurnStore implements ConversationHistory {

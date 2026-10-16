@@ -1,9 +1,20 @@
 package dev.mikoto2000.rei.computeruse;
 
-import static dev.mikoto2000.rei.computeruse.ComputerUseResult.Status.*;
+import static dev.mikoto2000.rei.computeruse.ComputerUseResult.Status.ACTION_ERROR;
+import static dev.mikoto2000.rei.computeruse.ComputerUseResult.Status.BUSY;
+import static dev.mikoto2000.rei.computeruse.ComputerUseResult.Status.CANCELLED;
+import static dev.mikoto2000.rei.computeruse.ComputerUseResult.Status.CAPTURE_ERROR;
+import static dev.mikoto2000.rei.computeruse.ComputerUseResult.Status.DONE;
+import static dev.mikoto2000.rei.computeruse.ComputerUseResult.Status.FAILED;
+import static dev.mikoto2000.rei.computeruse.ComputerUseResult.Status.MAX_STEPS;
+import static dev.mikoto2000.rei.computeruse.ComputerUseResult.Status.MODEL_ERROR;
+import static dev.mikoto2000.rei.computeruse.ComputerUseResult.Status.SAFETY_BLOCKED;
+import static dev.mikoto2000.rei.computeruse.ComputerUseResult.Status.STABILIZATION_ERROR;
 
-import java.util.*;
-import java.util.function.*;
+import java.util.ArrayList;
+import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
+import java.util.function.Supplier;
 
 public final class ComputerUseService {
   private static final java.util.concurrent.atomic.AtomicBoolean DESKTOP_BUSY =

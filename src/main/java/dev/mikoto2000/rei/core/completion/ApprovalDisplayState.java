@@ -2,7 +2,8 @@ package dev.mikoto2000.rei.core.completion;
 
 import java.time.Instant;
 import org.jline.terminal.Terminal;
-import org.jline.terminal.spi.*;
+import org.jline.terminal.spi.SystemStream;
+import org.jline.terminal.spi.TerminalExt;
 
 /** Presentation eligibility only; does not decide or change approval state. */
 public final class ApprovalDisplayState {

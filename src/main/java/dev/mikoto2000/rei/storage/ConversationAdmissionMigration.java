@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.storage;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.SQLException;
 
 /** Canonical conversation admission, execution leases and durable request receipts. */
 final class ConversationAdmissionMigration {

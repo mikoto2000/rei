@@ -1,11 +1,17 @@
 package dev.mikoto2000.rei.activity;
 
-import static dev.mikoto2000.rei.activity.DailySummaryTest.*;
+import static dev.mikoto2000.rei.activity.DailySummaryTest.RANGE;
+import static dev.mikoto2000.rei.activity.DailySummaryTest.aggregate;
+import static dev.mikoto2000.rei.activity.DailySummaryTest.largeDay;
+import static dev.mikoto2000.rei.activity.DailySummaryTest.segment;
 import static dev.mikoto2000.rei.activity.ThemeAttributionTest.sample;
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import java.nio.file.*;
-import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 

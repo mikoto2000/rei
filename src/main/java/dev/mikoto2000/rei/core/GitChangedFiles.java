@@ -1,11 +1,17 @@
 package dev.mikoto2000.rei.core;
 
 import dev.mikoto2000.rei.core.chat.RunCancellation;
-import dev.mikoto2000.rei.externalagent.*;
+import dev.mikoto2000.rei.externalagent.ExternalAgentProcessRunner;
+import dev.mikoto2000.rei.externalagent.ExternalAgentResult;
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.InvalidPathException;
+import java.nio.file.Path;
 import java.time.Duration;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+import java.util.TreeSet;
 
 /** Bounded, read-only path inventory. Never reads diff bodies or invokes diff helpers. */
 final class GitChangedFiles {

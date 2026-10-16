@@ -1,8 +1,14 @@
 package dev.mikoto2000.rei.activity;
 
-import dev.mikoto2000.rei.computeruse.*;
+import dev.mikoto2000.rei.computeruse.AwtRobotDriver;
+import dev.mikoto2000.rei.computeruse.CapturedScreen;
+import dev.mikoto2000.rei.computeruse.DisplayCapture;
+import dev.mikoto2000.rei.computeruse.RobotScreenCapture;
+import dev.mikoto2000.rei.computeruse.ScreenCapture;
+import dev.mikoto2000.rei.computeruse.ScreenGeometry;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Base64;
 import java.util.concurrent.TimeUnit;
 

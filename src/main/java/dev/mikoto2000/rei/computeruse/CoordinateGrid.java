@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.computeruse;
 
-import java.awt.*;
+import java.awt.Color;
+import java.awt.Font;
 import java.awt.image.BufferedImage;
 import java.util.Locale;
 

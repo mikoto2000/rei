@@ -1,13 +1,19 @@
 package dev.mikoto2000.rei.core;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.core.policy.*;
-import dev.mikoto2000.rei.goal.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.core.policy.ActionCapability;
+import dev.mikoto2000.rei.core.policy.ToolPermissionPolicy;
+import dev.mikoto2000.rei.core.policy.ToolPermissionProperties;
+import dev.mikoto2000.rei.goal.GoalCompletionGate;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class GoalCompletionToolTest {

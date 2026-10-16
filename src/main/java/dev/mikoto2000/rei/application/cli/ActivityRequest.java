@@ -1,8 +1,11 @@
 package dev.mikoto2000.rei.application.cli;
 
-import java.util.*;
+import java.util.List;
+import java.util.Set;
 import picocli.CommandLine;
-import picocli.CommandLine.*;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
 
 /**
  * Pure grammar matching ActivityCommand; no service, filesystem, screen or execution dependencies.

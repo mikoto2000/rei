@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.application.run;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import java.nio.file.Path;

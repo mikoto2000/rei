@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.paper;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Objects;
 
 final class PaperCacheKey {
   static String of(PaperRepository repository, Paper paper, Object... version) {

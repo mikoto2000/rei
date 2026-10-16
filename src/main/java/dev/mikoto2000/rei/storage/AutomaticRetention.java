@@ -1,9 +1,13 @@
 package dev.mikoto2000.rei.storage;
 
 import java.security.MessageDigest;
-import java.sql.*;
-import java.time.*;
-import java.util.*;
+import java.sql.Connection;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.HexFormat;
+import java.util.List;
+import java.util.UUID;
 
 /** Scoped, prospective consent. Automatic execution quarantines; it never purges. */
 public final class AutomaticRetention {

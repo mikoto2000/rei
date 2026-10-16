@@ -1,7 +1,10 @@
 package dev.mikoto2000.rei.websearch;
 
-import dev.mikoto2000.rei.http.*;
-import java.io.*;
+import dev.mikoto2000.rei.http.FetchScope;
+import dev.mikoto2000.rei.http.HttpFetchException;
+import java.io.IOException;
+import java.io.Reader;
+import java.io.StringReader;
 
 /** Conservative markup density guard before feeding parser chunks, with operation cancellation. */
 final class WebHtmlReader extends Reader {

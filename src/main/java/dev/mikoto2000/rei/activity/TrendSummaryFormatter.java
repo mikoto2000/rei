@@ -1,8 +1,12 @@
 package dev.mikoto2000.rei.activity;
 
-import java.time.*;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
 
 /** Evidence-based wording; the introduction qualifies all inferred activities. */
 public record TrendSummaryFormatter(ZoneId zone) {

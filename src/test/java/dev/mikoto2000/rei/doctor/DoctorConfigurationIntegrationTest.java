@@ -1,18 +1,24 @@
 package dev.mikoto2000.rei.doctor;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
-import dev.mikoto2000.rei.externalagent.*;
+import dev.mikoto2000.rei.externalagent.ClaudeCodeProperties;
+import dev.mikoto2000.rei.externalagent.CodexProperties;
 import dev.mikoto2000.rei.llm.LlmProperties;
 import dev.mikoto2000.rei.voice.VoiceProperties;
-import java.io.*;
-import java.nio.file.*;
-import org.junit.jupiter.api.*;
+import java.io.PrintWriter;
+import java.io.StringWriter;
+import java.nio.file.Path;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 
 @Tag("integration")

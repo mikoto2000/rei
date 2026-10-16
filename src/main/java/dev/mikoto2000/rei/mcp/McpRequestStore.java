@@ -1,11 +1,22 @@
 package dev.mikoto2000.rei.mcp;
 
-import dev.mikoto2000.rei.application.run.*;
-import dev.mikoto2000.rei.conversation.*;
+import dev.mikoto2000.rei.application.run.RunSnapshot;
+import dev.mikoto2000.rei.application.run.RunStatus;
+import dev.mikoto2000.rei.conversation.ConversationAdmissionStore;
+import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.storage.StorageDatabase;
-import java.time.*;
-import java.util.*;
+import java.time.Clock;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HexFormat;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.UUID;
 
 /** Owned durable index only; canonical Run state comes from the existing admission store. */
 public final class McpRequestStore {

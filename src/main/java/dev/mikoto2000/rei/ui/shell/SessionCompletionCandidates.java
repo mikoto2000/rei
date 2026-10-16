@@ -1,9 +1,13 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.application.session.SessionRepository;
-import dev.mikoto2000.rei.core.completion.*;
+import dev.mikoto2000.rei.core.completion.CompletionCandidate;
+import dev.mikoto2000.rei.core.completion.CompletionContext;
+import dev.mikoto2000.rei.core.completion.CompletionMetadata;
 import dev.mikoto2000.rei.core.project.ProjectService;
-import java.util.*;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Set;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 

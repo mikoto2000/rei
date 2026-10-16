@@ -1,14 +1,21 @@
 package dev.mikoto2000.rei.episode;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.mikoto2000.rei.conversation.*;
+import dev.mikoto2000.rei.conversation.ConversationTurnStore;
+import dev.mikoto2000.rei.conversation.SqliteConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.SqliteProjectAgentEventStore;
+import dev.mikoto2000.rei.event.ToolCompletedPayload;
 import dev.mikoto2000.rei.storage.StorageMigrationCoordinator;
 import java.nio.file.Path;
 import java.time.Instant;
-import org.junit.jupiter.api.*;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 @Tag("integration")

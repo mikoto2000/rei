@@ -1,18 +1,40 @@
 package dev.mikoto2000.rei.core.chat;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.argThat;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
+import static org.mockito.Mockito.when;
 
-import dev.mikoto2000.rei.core.execution.*;
-import dev.mikoto2000.rei.core.project.*;
-import dev.mikoto2000.rei.event.*;
-import dev.mikoto2000.rei.image.*;
-import dev.mikoto2000.rei.summarize.*;
+import dev.mikoto2000.rei.core.execution.BackgroundCommands;
+import dev.mikoto2000.rei.core.execution.ExecutionScope;
+import dev.mikoto2000.rei.core.execution.ExecutionType;
+import dev.mikoto2000.rei.core.project.ProjectContext;
+import dev.mikoto2000.rei.core.project.ProjectRegistry;
+import dev.mikoto2000.rei.core.project.ProjectRunStateStore;
+import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.image.ImageGenerationRequest;
+import dev.mikoto2000.rei.image.ImageGenerationResult;
+import dev.mikoto2000.rei.image.ImageGenerationService;
+import dev.mikoto2000.rei.image.ImageProperties;
+import dev.mikoto2000.rei.image.ImageSize;
+import dev.mikoto2000.rei.summarize.SummaryResult;
+import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
 import java.net.URI;
-import java.nio.file.*;
-import java.time.*;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.Clock;
+import java.util.ArrayList;
+import java.util.List;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 @org.junit.jupiter.api.Tag("integration")

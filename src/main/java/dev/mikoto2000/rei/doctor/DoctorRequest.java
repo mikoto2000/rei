@@ -1,8 +1,11 @@
 package dev.mikoto2000.rei.doctor;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Objects;
 import picocli.CommandLine;
-import picocli.CommandLine.*;
+import picocli.CommandLine.Option;
 
 /** Bounded explicit diagnostic grammar: no URL, executable or prompt supplied by users. */
 public record DoctorRequest(List<Check> checks, boolean details) {

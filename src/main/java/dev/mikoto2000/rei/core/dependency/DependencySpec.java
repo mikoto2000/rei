@@ -2,7 +2,8 @@ package dev.mikoto2000.rei.core.dependency;
 
 import java.net.URI;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.Locale;
+import java.util.Set;
 
 public record DependencySpec(Kind kind, String target, String expected) {
   public enum Kind {

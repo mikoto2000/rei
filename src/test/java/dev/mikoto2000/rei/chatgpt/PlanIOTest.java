@@ -1,11 +1,12 @@
 package dev.mikoto2000.rei.chatgpt;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
 import java.time.Duration;
-import java.util.concurrent.*;
-import java.util.concurrent.atomic.*;
+import java.util.concurrent.CountDownLatch;
 import org.junit.jupiter.api.Test;
 
 class PlanIOTest {

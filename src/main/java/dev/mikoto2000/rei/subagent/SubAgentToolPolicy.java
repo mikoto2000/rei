@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.subagent;
 
-import java.util.*;
+import java.util.List;
+import java.util.Set;
 
 /** YAML requests capabilities; only this audited allowlist grants them. No MCP or delegation. */
 public final class SubAgentToolPolicy {

@@ -3,7 +3,8 @@ package dev.mikoto2000.rei.llm;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.beans.factory.config.BeanPostProcessor;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 
 @Configuration(proxyBeanMethods = false)
 public class EmbeddingBudgetConfiguration {

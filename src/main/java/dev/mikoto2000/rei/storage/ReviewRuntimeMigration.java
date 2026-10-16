@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.storage;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.SQLException;
 
 /** A bounded scope index keeps child/Resume lookup independent of growing range JSON. */
 final class ReviewRuntimeMigration {

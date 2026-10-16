@@ -1,6 +1,9 @@
 package dev.mikoto2000.rei.externalagent;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 
 /** Criterion evidence is bound to one receipt/specification/patch; model success is never proof. */
 public record AcceptanceEvaluation(

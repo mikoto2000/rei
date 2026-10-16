@@ -1,10 +1,24 @@
 package dev.mikoto2000.rei.episode;
 
-import dev.mikoto2000.rei.conversation.*;
+import dev.mikoto2000.rei.conversation.ConversationHistorySearchService;
+import dev.mikoto2000.rei.conversation.ConversationSearchResult;
+import dev.mikoto2000.rei.conversation.ConversationTurnStore;
+import dev.mikoto2000.rei.conversation.HistoryRetrievalPolicy;
+import dev.mikoto2000.rei.conversation.HistorySearchRequest;
+import dev.mikoto2000.rei.conversation.HistorySearchScope;
 import dev.mikoto2000.rei.memory.service.MemoryRepository;
 import dev.mikoto2000.rei.vectorstore.ReciprocalRankFusion;
 import dev.mikoto2000.rei.workcontext.WorkContextService;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 @Service

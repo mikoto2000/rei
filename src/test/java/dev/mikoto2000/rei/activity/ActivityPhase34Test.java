@@ -1,11 +1,23 @@
 package dev.mikoto2000.rei.activity;
 
-import static dev.mikoto2000.rei.activity.ActivitySemanticTest.*;
-import static dev.mikoto2000.rei.activity.ActivityTrendTest.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static dev.mikoto2000.rei.activity.ActivitySemanticTest.START;
+import static dev.mikoto2000.rei.activity.ActivitySemanticTest.activity;
+import static dev.mikoto2000.rei.activity.ActivitySemanticTest.dev;
+import static dev.mikoto2000.rei.activity.ActivitySemanticTest.record;
+import static dev.mikoto2000.rei.activity.ActivitySemanticTest.segments;
+import static dev.mikoto2000.rei.activity.ActivityTrendTest.fine;
+import static dev.mikoto2000.rei.activity.ActivityTrendTest.trends;
+import static dev.mikoto2000.rei.activity.ActivityTrendTest.unknown;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.*;
-import java.util.*;
+import java.time.Duration;
+import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 @org.junit.jupiter.api.Tag("integration")

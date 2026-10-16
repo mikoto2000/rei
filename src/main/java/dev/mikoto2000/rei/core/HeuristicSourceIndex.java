@@ -2,8 +2,20 @@ package dev.mikoto2000.rei.core;
 
 import com.google.re2j.Pattern;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
-import java.nio.file.*;
-import java.util.*;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * Bounded lexical candidates. This deliberately does not implement a language/compiler resolver.

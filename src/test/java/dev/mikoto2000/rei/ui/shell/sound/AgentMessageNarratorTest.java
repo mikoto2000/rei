@@ -1,9 +1,17 @@
 package dev.mikoto2000.rei.ui.shell.sound;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.anyString;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
-import dev.mikoto2000.rei.topic.*;
+import dev.mikoto2000.rei.topic.AgentMessage;
+import dev.mikoto2000.rei.topic.MessageOrigin;
 import java.time.Instant;
 import java.util.ArrayList;
 import org.junit.jupiter.api.Test;

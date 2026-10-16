@@ -1,10 +1,14 @@
 package dev.mikoto2000.rei.core.project;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.mikoto2000.rei.core.working.*;
-import dev.mikoto2000.rei.event.*;
-import java.nio.file.*;
+import dev.mikoto2000.rei.core.working.WorkingSet;
+import dev.mikoto2000.rei.core.working.WorkingSetConfiguration;
+import dev.mikoto2000.rei.event.AgentEventBus;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;

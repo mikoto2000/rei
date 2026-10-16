@@ -1,7 +1,7 @@
 package dev.mikoto2000.rei.dot;
 
 import java.time.Duration;
-import java.util.*;
+import java.util.Set;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
 @ConfigurationProperties("rei.dot-delegation")

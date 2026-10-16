@@ -1,7 +1,10 @@
 package dev.mikoto2000.rei.externalagent;
 
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.NoSuchFileException;
+import java.nio.file.Path;
 
 public record ExternalAgentRequest(
     Agent agent,

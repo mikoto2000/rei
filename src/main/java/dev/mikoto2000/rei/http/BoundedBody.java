@@ -1,6 +1,9 @@
 package dev.mikoto2000.rei.http;
 
-import java.io.*;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.Locale;
 import java.util.zip.InflaterInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;

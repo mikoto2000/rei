@@ -1,10 +1,12 @@
 package dev.mikoto2000.rei.core.chat;
 
-import static org.assertj.core.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
-import dev.mikoto2000.rei.core.service.*;
+import dev.mikoto2000.rei.core.service.CommandCancellationService;
+import dev.mikoto2000.rei.core.service.ModelHolderService;
 import java.nio.file.Path;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;

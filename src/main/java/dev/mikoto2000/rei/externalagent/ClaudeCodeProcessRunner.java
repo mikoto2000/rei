@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.externalagent;
 
-import java.util.*;
+import java.util.Locale;
+import java.util.Map;
 
 /**
  * Keep CLI subscription login/OAuth; do not let inherited API/cloud credentials change the billing

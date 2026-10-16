@@ -1,11 +1,13 @@
 package dev.mikoto2000.rei.episode;
 
 import dev.mikoto2000.rei.core.datasource.ReiPaths;
-import dev.mikoto2000.rei.core.sqlitevec.*;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecDataSource;
+import dev.mikoto2000.rei.core.sqlitevec.SqliteVecExtensionLoader;
 import dev.mikoto2000.rei.vectorstore.LazySqliteVectorStore;
 import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnExpression;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
 import tools.jackson.databind.json.JsonMapper;
 
 @Configuration

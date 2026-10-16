@@ -1,9 +1,13 @@
 package dev.mikoto2000.rei.activity.behavior;
 
-import static dev.mikoto2000.rei.activity.behavior.BehaviorEvaluatorTest.*;
-import static org.junit.jupiter.api.Assertions.*;
+import static dev.mikoto2000.rei.activity.behavior.BehaviorEvaluatorTest.assess;
+import static dev.mikoto2000.rei.activity.behavior.BehaviorEvaluatorTest.record;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import java.time.*;
 import org.junit.jupiter.api.Test;
 
 class BehaviorNotificationPolicyTest {

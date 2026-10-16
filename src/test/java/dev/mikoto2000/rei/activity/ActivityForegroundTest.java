@@ -1,8 +1,11 @@
 package dev.mikoto2000.rei.activity;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
-import dev.mikoto2000.rei.computeruse.*;
+import dev.mikoto2000.rei.computeruse.CapturedScreen;
+import dev.mikoto2000.rei.computeruse.DisplayCapture;
+import dev.mikoto2000.rei.computeruse.ScreenGeometry;
 import java.awt.Rectangle;
 import java.awt.image.BufferedImage;
 import java.util.List;

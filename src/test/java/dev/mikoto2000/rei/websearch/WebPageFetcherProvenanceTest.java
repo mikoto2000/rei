@@ -1,10 +1,15 @@
 package dev.mikoto2000.rei.websearch;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
-import dev.mikoto2000.rei.urlfetch.*;
-import java.util.*;
+import dev.mikoto2000.rei.urlfetch.UrlContentFetchResult;
+import dev.mikoto2000.rei.urlfetch.UrlContentFetchService;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class WebPageFetcherProvenanceTest {

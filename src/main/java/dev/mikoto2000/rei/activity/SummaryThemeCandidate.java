@@ -1,6 +1,6 @@
 package dev.mikoto2000.rei.activity;
 
-import java.util.*;
+import java.util.List;
 
 /**
  * Final display granularity. memberProjects contains at most two observed representatives, never

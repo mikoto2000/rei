@@ -2,12 +2,22 @@ package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.run.ChatSubmitService;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import dev.mikoto2000.rei.doctor.*;
+import dev.mikoto2000.rei.doctor.DoctorActiveService;
+import dev.mikoto2000.rei.doctor.DoctorRequest;
+import dev.mikoto2000.rei.doctor.DoctorService;
 import java.net.URI;
-import java.util.*;
-import org.springframework.boot.autoconfigure.condition.*;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestHeader;
+import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")

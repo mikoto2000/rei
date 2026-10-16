@@ -1,6 +1,10 @@
 package dev.mikoto2000.rei.websearch;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Objects;
 
 /**
  * Retrieval evidence eligibility only; never upgrades external content into trusted instructions or

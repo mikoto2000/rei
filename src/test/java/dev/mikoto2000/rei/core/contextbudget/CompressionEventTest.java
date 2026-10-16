@@ -1,11 +1,14 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
 
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.ContextCompressionPayload;
+import dev.mikoto2000.rei.event.ErrorInformation;
 import dev.mikoto2000.rei.web.WebApiEventMapper;
 import java.time.Clock;
-import java.util.*;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class CompressionEventTest {

@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.voice;
 
-import static org.mockito.Mockito.*;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 import dev.mikoto2000.rei.ui.shell.ShellEventOutput;
 import org.junit.jupiter.api.Test;

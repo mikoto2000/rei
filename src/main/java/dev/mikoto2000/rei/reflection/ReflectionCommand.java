@@ -2,7 +2,10 @@ package dev.mikoto2000.rei.reflection;
 
 import dev.mikoto2000.rei.core.project.ProjectService;
 import org.springframework.stereotype.Component;
-import picocli.CommandLine.*;
+import picocli.CommandLine.Command;
+import picocli.CommandLine.Option;
+import picocli.CommandLine.Parameters;
+import picocli.CommandLine.Spec;
 
 @Component
 @Command(name = "reflection", description = "保存された目標・タスク・実行の証拠とレビュー提案を確認します")

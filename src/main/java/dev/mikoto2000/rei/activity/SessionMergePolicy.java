@@ -1,7 +1,12 @@
 package dev.mikoto2000.rei.activity;
 
-import java.time.*;
-import java.util.*;
+import java.time.Duration;
+import java.time.ZoneId;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Objects;
 
 /** Deterministic session projection. Midnight is a boundary in the configured journal timezone. */
 public record SessionMergePolicy(Duration maximumGap, ZoneId zone) {

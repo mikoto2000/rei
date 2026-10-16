@@ -1,7 +1,9 @@
 package dev.mikoto2000.rei.activity;
 
-import java.time.*;
-import java.util.*;
+import java.time.Instant;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.Objects;
 
 /** Bounded low-priority scheduling policy; no timers or screenshot retention. */
 final class DesktopAnalysisPolicy {

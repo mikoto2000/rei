@@ -1,10 +1,26 @@
 package dev.mikoto2000.rei.conversation;
 
-import static dev.mikoto2000.rei.conversation.HistoryRetrievalPolicy.*;
+import static dev.mikoto2000.rei.conversation.HistoryRetrievalPolicy.CONTENT_MAX_CHARS;
+import static dev.mikoto2000.rei.conversation.HistoryRetrievalPolicy.CROSS_PROJECT_MAX_RESULTS;
+import static dev.mikoto2000.rei.conversation.HistoryRetrievalPolicy.CURRENT_MAX_RESULTS;
+import static dev.mikoto2000.rei.conversation.HistoryRetrievalPolicy.FOREIGN_BOUNDARY;
+import static dev.mikoto2000.rei.conversation.HistoryRetrievalPolicy.LOCAL_BOUNDARY;
+import static dev.mikoto2000.rei.conversation.HistoryRetrievalPolicy.MIN_RELEVANCE;
+import static dev.mikoto2000.rei.conversation.HistoryRetrievalPolicy.STRONG_RELEVANCE;
+import static dev.mikoto2000.rei.conversation.HistoryRetrievalPolicy.SUFFICIENT_STRONG_RESULTS;
+import static dev.mikoto2000.rei.conversation.HistoryRetrievalPolicy.clip;
 
-import dev.mikoto2000.rei.core.project.*;
+import dev.mikoto2000.rei.core.project.ProjectContext;
+import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import java.text.Normalizer;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.PriorityQueue;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 

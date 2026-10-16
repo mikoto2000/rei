@@ -5,7 +5,10 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.subagent.SubAgentResultParser;
 import dev.mikoto2000.rei.subagent.SubAgentResultSchema;
 import java.nio.file.Path;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
 
 /** Strict shared schema validation followed by deterministic human-readable rendering. */
 final class MaterialReviewReport {

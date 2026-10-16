@@ -1,7 +1,8 @@
 package dev.mikoto2000.rei.core.completion;
 
 import dev.mikoto2000.rei.event.CredentialRedactor;
-import org.jline.utils.*;
+import org.jline.utils.AttributedString;
+import org.jline.utils.AttributedStyle;
 
 /** Bounded, redacted approval presentation shared by both terminal entry points. */
 public final class ApprovalNotice {

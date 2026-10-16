@@ -1,12 +1,19 @@
 package dev.mikoto2000.rei.workcontext;
 
-import dev.mikoto2000.rei.core.chat.*;
+import dev.mikoto2000.rei.core.chat.RunCancellation;
+import dev.mikoto2000.rei.core.chat.ToolLoopSupport;
 import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
-import dev.mikoto2000.rei.llm.*;
+import dev.mikoto2000.rei.llm.LlmFeature;
+import dev.mikoto2000.rei.llm.LlmModelProvider;
+import dev.mikoto2000.rei.llm.OutputLimitDetector;
 import dev.mikoto2000.rei.workcontext.WorkContext.Evidence;
 import java.time.Duration;
-import java.util.*;
-import org.springframework.ai.chat.messages.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 

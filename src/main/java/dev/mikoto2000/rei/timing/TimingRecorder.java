@@ -1,7 +1,9 @@
 package dev.mikoto2000.rei.timing;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 
 /** Metadata-only local timing; optional metrics never use text length as token counts. */
 public interface TimingRecorder {

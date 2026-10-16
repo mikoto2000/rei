@@ -1,10 +1,17 @@
 package dev.mikoto2000.rei.activity;
 
-import static dev.mikoto2000.rei.activity.DailySummaryAggregate.*;
+import static dev.mikoto2000.rei.activity.DailySummaryAggregate.ProjectThemeStat;
+import static dev.mikoto2000.rei.activity.DailySummaryAggregate.Weighted;
 import static dev.mikoto2000.rei.activity.SummaryThemeCandidate.DisplaySource;
 import static dev.mikoto2000.rei.activity.SummaryThemeCandidate.Level;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Set;
 
 /** Shared day/bucket display selection over already canonical, quality-checked associations. */
 public final class DailySummaryThemeConsolidator {

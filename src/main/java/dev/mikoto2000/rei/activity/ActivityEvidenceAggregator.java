@@ -1,7 +1,9 @@
 package dev.mikoto2000.rei.activity;
 
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 
 public final class ActivityEvidenceAggregator {
   private static final org.slf4j.Logger log =

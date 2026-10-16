@@ -1,8 +1,13 @@
 package dev.mikoto2000.rei.web;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.mikoto2000.rei.launcher.*;
+import dev.mikoto2000.rei.launcher.BackendConnectionProbe;
+import dev.mikoto2000.rei.launcher.BackendEndpointStore;
+import dev.mikoto2000.rei.launcher.BackendOwnership;
 import java.net.http.HttpClient;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Tag;
@@ -10,7 +15,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.ImportAutoConfiguration;
-import org.springframework.context.annotation.*;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Import;
 
 @Tag("integration")
 class BackendInstanceIntegrationTest {

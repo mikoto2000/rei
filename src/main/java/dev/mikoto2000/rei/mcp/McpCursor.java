@@ -1,7 +1,7 @@
 package dev.mikoto2000.rei.mcp;
 
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.Base64;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 

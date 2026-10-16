@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.storage;
 
-import java.sql.*;
+import java.sql.Connection;
+import java.sql.SQLException;
 
 final class ReviewCoverageMigration {
   static void apply(Connection db) throws SQLException {

@@ -1,10 +1,23 @@
 package dev.mikoto2000.rei.computeruse;
 
-import static dev.mikoto2000.rei.computeruse.ComputerAction.*;
+import static dev.mikoto2000.rei.computeruse.ComputerAction.Click;
+import static dev.mikoto2000.rei.computeruse.ComputerAction.Done;
+import static dev.mikoto2000.rei.computeruse.ComputerAction.DoubleClick;
+import static dev.mikoto2000.rei.computeruse.ComputerAction.Failed;
+import static dev.mikoto2000.rei.computeruse.ComputerAction.PressKey;
+import static dev.mikoto2000.rei.computeruse.ComputerAction.Risk;
+import static dev.mikoto2000.rei.computeruse.ComputerAction.Scroll;
+import static dev.mikoto2000.rei.computeruse.ComputerAction.Target;
+import static dev.mikoto2000.rei.computeruse.ComputerAction.TypeText;
+import static dev.mikoto2000.rei.computeruse.ComputerAction.Uncertain;
+import static dev.mikoto2000.rei.computeruse.ComputerAction.Wait;
 
 import com.fasterxml.jackson.core.JsonParser;
-import com.fasterxml.jackson.databind.*;
-import java.util.*;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
  * Strict decoding, followed by action-specific validation. No markdown, coercion, or action lists.

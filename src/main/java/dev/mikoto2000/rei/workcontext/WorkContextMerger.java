@@ -1,9 +1,23 @@
 package dev.mikoto2000.rei.workcontext;
 
-import dev.mikoto2000.rei.workcontext.WorkContext.*;
+import dev.mikoto2000.rei.workcontext.WorkContext.Evidence;
+import dev.mikoto2000.rei.workcontext.WorkContext.GitState;
+import dev.mikoto2000.rei.workcontext.WorkContext.Item;
+import dev.mikoto2000.rei.workcontext.WorkContext.Kind;
+import dev.mikoto2000.rei.workcontext.WorkContext.Origin;
+import dev.mikoto2000.rei.workcontext.WorkContext.Status;
 import java.text.Normalizer;
 import java.time.Instant;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.UUID;
 
 /** Pure merge: omission never deletes; only explicit grounded actions modify existing items. */
 public class WorkContextMerger {

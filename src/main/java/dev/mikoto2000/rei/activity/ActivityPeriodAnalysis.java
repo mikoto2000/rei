@@ -1,8 +1,23 @@
 package dev.mikoto2000.rei.activity;
 
-import java.time.*;
+import java.time.Clock;
+import java.time.DateTimeException;
+import java.time.DayOfWeek;
+import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
 import java.time.temporal.TemporalAdjusters;
-import java.util.*;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
+import java.util.TreeMap;
+import java.util.TreeSet;
 
 /** Deterministic read-only arithmetic over saved observation estimates, with no model calls. */
 public final class ActivityPeriodAnalysis {

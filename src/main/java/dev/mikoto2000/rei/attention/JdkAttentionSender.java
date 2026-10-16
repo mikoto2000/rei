@@ -2,9 +2,11 @@ package dev.mikoto2000.rei.attention;
 
 import jakarta.annotation.PreDestroy;
 import java.net.URI;
-import java.net.http.*;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.util.concurrent.*;
+import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Component;
 
 /**

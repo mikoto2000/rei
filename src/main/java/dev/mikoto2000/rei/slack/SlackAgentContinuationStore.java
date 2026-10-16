@@ -1,11 +1,18 @@
 package dev.mikoto2000.rei.slack;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import dev.mikoto2000.rei.core.chat.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.RunContinuation;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
 import javax.sql.DataSource;
-import org.springframework.ai.chat.messages.*;
+import org.springframework.ai.chat.messages.AssistantMessage;
+import org.springframework.ai.chat.messages.Message;
+import org.springframework.ai.chat.messages.SystemMessage;
+import org.springframework.ai.chat.messages.ToolResponseMessage;
+import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
 /** Persist only the non-system conversation and exact ToolCall/ToolResponse pairs. */

@@ -1,17 +1,23 @@
 package dev.mikoto2000.rei.github;
 
-import static org.assertj.core.api.Assertions.*;
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import dev.mikoto2000.rei.application.session.SessionLifecycle;
 import dev.mikoto2000.rei.attention.AttentionRepository;
-import dev.mikoto2000.rei.core.chat.*;
-import dev.mikoto2000.rei.core.dependency.*;
-import dev.mikoto2000.rei.core.project.*;
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.dependency.DependencySourceProbe;
+import dev.mikoto2000.rei.core.dependency.DependencySpec;
+import dev.mikoto2000.rei.core.dependency.DependencyState;
+import dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository;
+import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
-import java.nio.file.*;
-import java.time.*;
-import java.util.*;
-import org.junit.jupiter.api.*;
+import java.nio.file.Path;
+import java.time.Duration;
+import java.util.List;
+import java.util.UUID;
+import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 

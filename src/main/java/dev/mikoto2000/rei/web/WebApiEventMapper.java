@@ -1,7 +1,14 @@
 package dev.mikoto2000.rei.web;
 
-import dev.mikoto2000.rei.event.*;
-import java.util.*;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.CredentialRedactor;
+import dev.mikoto2000.rei.event.ExecutionProgressPayload;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /** Explicit external event boundary, independent of Shell presentation. */
 public final class WebApiEventMapper {

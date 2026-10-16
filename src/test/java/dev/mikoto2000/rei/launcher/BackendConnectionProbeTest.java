@@ -1,8 +1,8 @@
 package dev.mikoto2000.rei.launcher;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import java.net.*;
+import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
 import java.nio.file.Path;
 import java.util.UUID;

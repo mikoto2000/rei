@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.dot;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.Locale;
+import java.util.Set;
 
 final class DotAuthorization {
   static Set<String> categories(String input) {
