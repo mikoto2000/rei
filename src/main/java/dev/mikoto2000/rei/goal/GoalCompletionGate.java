@@ -201,7 +201,7 @@ public final class GoalCompletionGate {
             goal.currentRunId(),
             goal.completion(),
             goal.completionProof()),
-        files);
+        files::verify);
   }
 
   /** Shared evidence subject: Stage verification never fabricates or persists a temporary Goal. */
@@ -213,7 +213,12 @@ public final class GoalCompletionGate {
       Definition completion,
       Proof completionProof) {}
 
-  public FileGoalVerifier.Verification verify(Subject goal, FileGoalVerifier files) {
+  @FunctionalInterface
+  public interface FileChecks {
+    FileGoalVerifier.Verification verify(Path root, GoalRepository.FileCriterion criterion);
+  }
+
+  public FileGoalVerifier.Verification verify(Subject goal, FileChecks files) {
     var definition = goal.completion();
     if (definition == null) return failed("completion_definition_missing");
     try {

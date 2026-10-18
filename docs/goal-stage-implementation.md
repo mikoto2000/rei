@@ -138,3 +138,21 @@ Stage付きGoalの完了後も証拠変更でSTALE・Goal BLOCKEDへ戻し、残
 キャンセルはGoalとStage Attemptを同じtransactionで閉じる。
 修復観測には条件充足数/総条件数を保存し、同じ観測の反復と条件改善を区別できる。
 `rei.goal.stage.allow-split` と `rei.goal.stage.max-repairs` で4方式を切り替える。
+
+## 品質確認時の補足
+
+Checkstyleの設定と静的解析baselineは変更しない。SpotBugsの追加判定に含まれた既存箇所の
+nullable getter反復参照（summary/temporal/vision/timing/work-context）とPath名/親の参照は、
+値を一度取得してnullを判定する最小修正とした。対応する既存回帰も実行対象とする。
+Stage側は共有のread-only FileChecks契約、レスポンス/計画リクエストの不変list、
+optional注入参照のlocal captureにより追加指摘を解消する。基準の緩和やテスト除外は行わない。
+
+## 最終のローカル結果
+
+- 関連回帰332件成功（全Goal、修復/token/Wait、画像、観測、storage、HTTPなど）。
+- 外部実装のunknown/concurrent要求23件成功。null receiptを利用可能な終端結果の不在として保持する。
+- CLI補完21件＋承認継続1件成功。新しい2コマンドを補完の厳密な期待値へ追加し、ID位置に漏れない検証も保持する。
+- Checkstyle 0件。SpotBugs既存1,907件・新規0件。静的解析ゲートとゲート自身の8回帰ケース成功。
+- ローカル全回帰はApprovalChatIntegrationTestのlatch待機で停滞し、thread dumpを保存して停止した。
+  同テストは新規単独JVMで成功。全体の最終判定はPR #125の最新commitに対する全回帰CIも確認する。
+- 途中CIは5,979件中、追加CLI候補の旧期待値1件だけ失敗。期待値を上記の通り拡張して再実行する。

@@ -70,7 +70,7 @@ class ContextCompletionTest {
         List.of(
             "list show approve deny",
             "list show ack delivery deliver retry-delivery",
-            "list create show progress run verify cancel history reconcile completion wait wait-activate wait-resume wait-cancel",
+            "list create show progress stages stage-evidence run verify cancel history reconcile completion wait wait-activate wait-resume wait-cancel",
             "list show history check cancel answer",
             "show rollback clean reconcile-single",
             "show apply",

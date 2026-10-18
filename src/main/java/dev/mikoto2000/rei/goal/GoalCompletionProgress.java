@@ -53,6 +53,7 @@ public record GoalCompletionProgress(
   }
 
   public GoalCompletionProgress {
+    conditions = conditions == null ? List.of() : List.copyOf(conditions);
     if (diagnosis == null)
       diagnosis = GoalRepairDiagnosis.of(verification == null ? "" : verification.reason());
   }

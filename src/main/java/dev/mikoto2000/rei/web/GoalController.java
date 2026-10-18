@@ -127,7 +127,11 @@ public class GoalController {
 
   public record StagePlanRequest(
       long expectedPlanVersion, List<dev.mikoto2000.rei.goal.GoalStageDefinition> stages)
-      implements StrictApiRequest {}
+      implements StrictApiRequest {
+    public StagePlanRequest {
+      stages = stages == null ? null : List.copyOf(stages);
+    }
+  }
 
   @PutMapping("/{id}/stages")
   public List<dev.mikoto2000.rei.goal.GoalStageRepository.Stage> defineStages(

@@ -147,17 +147,17 @@ public final class VisionActivityExtractor implements ActivityExtractor {
       }
       if (response == null || response.getResults().isEmpty())
         throw invalidResponse("empty_response");
-      if (response.getResult().getOutput() != null
-          && response.getResult().getOutput().getText() != null)
-        outputChars = response.getResult().getOutput().getText().length();
+      var generation = response.getResult();
+      var message = generation == null ? null : generation.getOutput();
+      var output = message == null ? null : message.getText();
+      if (output != null) outputChars = output.length();
       if (dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response)) {
         status = "output_limit";
         throw invalidResponse("output_limit");
       }
       if (response.getResults().size() != 1) throw invalidResponse("multiple_results");
       if (response.hasToolCalls()) throw invalidResponse("unexpected_tool_calls");
-      if (response.getResult().getOutput() == null) throw invalidResponse("empty_output");
-      var output = response.getResult().getOutput().getText();
+      if (message == null) throw invalidResponse("empty_output");
       outputChars = output == null ? 0 : output.length();
       var result =
           focused

@@ -57,7 +57,8 @@ public class GoalStageService {
       planHistory = List.copyOf(planHistory);
     }
 
-    @com.fasterxml.jackson.annotation.JsonProperty
+    @com.fasterxml.jackson.annotation.JsonProperty(
+        access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
     public String currentStageId() {
       return stages.stream()
           .filter(s -> Set.of("RUNNING", "VERIFYING", "REPAIRING").contains(s.state()))
@@ -313,6 +314,7 @@ public class GoalStageService {
 
   public Progress progress(GoalRepository.Goal goal) {
     var current = refresh(goal);
+    goal = goals.get(goal.projectId(), goal.id());
     return new Progress(
         stages.planVersion(goal),
         current,

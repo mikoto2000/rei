@@ -264,9 +264,11 @@ public class GoalLoopService {
   public GoalCompletionProgress progress(String project, String id) {
     var goal = goals.get(project, id);
     gateway.validate(goal);
+    var stageProgress = stages == null ? null : stages.progress(goal);
+    goal = goals.get(project, id);
     var progress =
         GoalCompletionProgress.inspect(goal, goals.completionPhase(project, id), verifier);
-    return stages == null ? progress : progress.withStages(stages.progress(goal));
+    return stageProgress == null ? progress : progress.withStages(stageProgress);
   }
 
   public Inspection verify(String project, String id) {
@@ -275,6 +277,7 @@ public class GoalLoopService {
     var verification = verifier.verify(goal);
     if (stages != null && !stages.allVerified(goal))
       verification = new FileGoalVerifier.Verification(false, "stage_verification_required");
+    goal = goals.get(project, id);
     if (verification.satisfied()
         && !java.util.Set.of("COMPLETED", "RUNNING", "CANCELLED").contains(goal.status())) {
       goal = goals.verifiedWithoutRun(goal, verification.reason());
@@ -338,7 +341,9 @@ public class GoalLoopService {
       GoalRepository.Claim claim, Consumer<AgentRunContext> preparation) {
     if (!goals.active(claim)) return;
     var goal = goals.get(claim.goal().projectId(), claim.goal().id());
-    GoalStageService.Selection selection = stages == null ? null : stages.select(goal);
+    var stageManagement = stages;
+    GoalStageService.Selection selection =
+        stageManagement == null ? null : stageManagement.select(goal);
     if (selection != null && !selection.blocker().isBlank()) {
       stop(claim, "BLOCKED", selection.blocker());
       return;
@@ -375,8 +380,8 @@ public class GoalLoopService {
         goals.atomic(
             () -> {
               String admitted = goals.beginAttempt(claim);
-              if (selection != null && selection.stage() != null)
-                stages.begin(claim, admitted, selection.stage());
+              if (stageManagement != null && selection != null && selection.stage() != null)
+                stageManagement.begin(claim, admitted, selection.stage());
               return admitted;
             });
     events.publish(
@@ -453,13 +458,14 @@ public class GoalLoopService {
     }
     if (!goals.completionPhase(claim, "VERIFYING")) return;
     events.publish(goals.get(claim.goal().projectId(), claim.goal().id()), "VERIFYING");
-    if (stages != null) {
-      var stageVerification = stages.verifyRun(current, run);
+    var stageManagement = stages;
+    if (stageManagement != null) {
+      var stageVerification = stageManagement.verifyRun(current, run);
       if (stageVerification != null) {
         boolean recorded =
             goals.atomic(
                 () -> {
-                  if (!stages.finish(claim, run, stageVerification)) return false;
+                  if (!stageManagement.finish(claim, run, stageVerification)) return false;
                   goals.recordAttempt(
                       claim,
                       run,

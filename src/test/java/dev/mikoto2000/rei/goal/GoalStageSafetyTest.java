@@ -129,7 +129,7 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
     } catch (Exception e) {
       throw new IllegalStateException(e);
     }
-    loop.progress("project", goal.id());
+    assertEquals("BLOCKED", loop.progress("project", goal.id()).state());
     assertEquals("BLOCKED", goals.get("project", goal.id()).status());
     assertEquals("STALE", stages.list(goal).getFirst().state());
     assertEquals("COMPLETED", loop.run("project", goal.id()).status());

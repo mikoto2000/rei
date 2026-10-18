@@ -39,11 +39,14 @@ public final class GoalStageVerifier {
     }
   }
 
-  private final FileGoalVerifier files;
+  private final GoalCompletionGate.FileChecks files;
+  private final java.util.function.BiFunction<Path, String, FileGoalVerifier.Fingerprint>
+      fingerprints;
   private GoalCompletionGate gate;
 
   public GoalStageVerifier(FileGoalVerifier files) {
-    this.files = files;
+    this.files = files::verify;
+    this.fingerprints = files::fingerprint;
   }
 
   @org.springframework.beans.factory.annotation.Autowired(required = false)
@@ -76,7 +79,7 @@ public final class GoalStageVerifier {
     for (var criterion : stage.definition().criteria()) {
       var observed = files.verify(root, criterion);
       if (observed.satisfied()) satisfied++;
-      var fingerprint = files.fingerprint(root, criterion.relativeFile());
+      var fingerprint = fingerprints.apply(root, criterion.relativeFile());
       versions.put(
           criterion.relativeFile(),
           fingerprint.available() ? fingerprint.sha256() : fingerprint.reason());
@@ -91,7 +94,7 @@ public final class GoalStageVerifier {
           .filter(GoalCompletionGate.Requirement::required)
           .forEach(r -> evidenceFiles.add(r.criterion()));
       for (var item : evidenceFiles) {
-        var fingerprint = files.fingerprint(root, item.relativeFile());
+        var fingerprint = fingerprints.apply(root, item.relativeFile());
         versions.put(
             item.relativeFile(),
             fingerprint.available() ? fingerprint.sha256() : fingerprint.reason());
