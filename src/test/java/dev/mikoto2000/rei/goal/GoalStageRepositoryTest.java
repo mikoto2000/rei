@@ -91,4 +91,71 @@ class GoalStageRepositoryTest {
         GoalStageVerifier.Result.UNSATISFIED,
         verifier.verify(goal, reopened.list(goal).getFirst(), reopened.list(goal)).result());
   }
+
+  @Test
+  void largeBoundedVerificationContractsRemainReadableAfterEvidenceCommit() throws Exception {
+    var goals = goals();
+    var goal = goal(goals);
+    var stages = new GoalStageRepository(Clock.systemUTC(), goals);
+    var files = new FileGoalVerifier();
+    var document = new java.util.LinkedHashMap<String, String>();
+    var criteria = new java.util.ArrayList<GoalRepository.FileCriterion>();
+    var requirements = new java.util.ArrayList<GoalCompletionGate.Requirement>();
+    String value = "value".repeat(200);
+    for (int i = 0; i < 16; i++) {
+      document.put("v" + i, value);
+      var criterion =
+          new GoalRepository.FileCriterion(
+              "large.json", "", "/v" + i, GoalStageRepository.encode(value));
+      criteria.add(criterion);
+      requirements.add(
+          new GoalCompletionGate.Requirement(
+              "r" + i, "Verify the persisted artifact. ".repeat(30), true, criterion));
+    }
+    Files.writeString(dir.resolve("large.json"), GoalStageRepository.encode(document));
+    Files.writeString(dir.resolve("proof.txt"), "proof");
+    var definition =
+        new GoalStageDefinition(
+            "large",
+            null,
+            "Verify all fixed conditions",
+            List.of(criteria.getFirst()),
+            List.of(),
+            List.of(),
+            new GoalCompletionGate.Definition(
+                List.of(
+                    new GoalRepository.FileCriterion(
+                        "proof.txt", files.fingerprint(dir, "proof.txt").sha256())),
+                null,
+                List.of(),
+                criteria,
+                null,
+                requirements));
+    assertTrue(GoalStageRepository.encode(definition).length() > 32768);
+    stages.define(goal, 0, List.of(definition));
+    var claim = goals.claim("project", goal.id());
+    var run = goals.beginAttempt(claim);
+    var attempt = stages.begin(claim, run, stages.list(goal).getFirst());
+    var verifier = new GoalStageVerifier(files);
+    verifier.configureGate(
+        new GoalCompletionGate(
+            goals,
+            (owner, reference) -> {
+              throw new AssertionError("No review expected");
+            },
+            (owner, reference) -> {
+              throw new AssertionError("No artifact expected");
+            },
+            (root, deadline) -> {
+              throw new AssertionError("No patch capture expected");
+            },
+            Clock.systemUTC(),
+            false));
+    var observed = verifier.verify(goal, stages.list(goal).getFirst(), stages.list(goal));
+    assertEquals(GoalStageVerifier.Result.VERIFIED, observed.result());
+    assertTrue(stages.finish(claim, attempt, observed));
+    var reopened = new GoalStageRepository(Clock.systemUTC(), goals);
+    assertEquals("VERIFIED", reopened.list(goal).getFirst().state());
+    assertEquals(1, reopened.evidence(goal).size());
+  }
 }

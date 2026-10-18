@@ -40,7 +40,7 @@
 GoalStageDefinition は安定ID・親・依存ID・Goal要件ID・条件を保持する。
 Stage の planVersion と状態 version、Attempt の独立UUID / Run参照 / 試行番号を分ける。
 Run ID に UNIQUE 制約を置かず、将来の複数Stage/Runに備える。
-証拠は attempt・planVersion・条件JSONの版・現在file SHA・依存状態version・結果・UTC時刻・証拠IDを保存する。
+証拠は attempt・planVersion・条件定義のSHA-256版・現在file SHA・依存状態version・結果・UTC時刻・証拠IDを保存する。
 過去証拠と計画履歴は上書きしない。Stageの現在証拠参照だけ更新する。
 
 追加テーブル: agent_goal_stage_plans / agent_goal_stages / agent_goal_stage_attempts /
@@ -167,3 +167,13 @@ optional注入参照のlocal captureにより追加指摘を解消する。基�
 
 追加3ケースを含む安全性16件、全Goal/HTTP/CLIなど176件が成功した。
 これらを含む最新commitの必須CIも再確認してからマージする。
+
+
+## 多条件契約の永続化とサイズ上限
+
+多数の固定JSON条件/必須要件を持つ32KiB超のStage定義を実検証し、証拠をコミットして再読込するテストを追加した。
+条件版は定義JSONそのものの複製ではなくSHA-256とし、証拠内の巨大文字列によるdecoder上限超過を防ぐ。
+定義本体はStage/計画履歴に保持し、証拠は固定長の版とArtifact/Dependencyの版に結び付ける。
+この境界を含む全Goal/HTTP/CLI回帰177件が成功した。
+既存Goal Wait snapshotの128KiB上限は保持する。非常に大きな計画/履歴のWait登録は明示エラーとなり、
+手動reconcile/runの経路を使う。履歴を参照だけで保存する最適化は今後の改善点。

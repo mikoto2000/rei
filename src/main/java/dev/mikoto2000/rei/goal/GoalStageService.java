@@ -127,7 +127,7 @@ public class GoalStageService {
                   || evidence.planVersion() != stage.planVersion()
                   || !evidence
                       .conditionVersion()
-                      .equals(GoalStageRepository.encode(stage.definition()))
+                      .equals(GoalStageRepository.conditionVersion(stage.definition()))
                   || !evidence.artifactVersions().equals(observed.artifactVersions())
                   || !evidence.dependencyVersions().equals(observed.dependencyVersions())) {
                 stages.state(

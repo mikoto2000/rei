@@ -104,6 +104,17 @@ public class GoalStageRepository {
     }
   }
 
+  static String conditionVersion(GoalStageDefinition definition) {
+    try {
+      return java.util.HexFormat.of()
+          .formatHex(
+              java.security.MessageDigest.getInstance("SHA-256")
+                  .digest(encode(definition).getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    } catch (java.security.NoSuchAlgorithmException unavailable) {
+      throw new IllegalStateException("SHA-256 unavailable", unavailable);
+    }
+  }
+
   static <T> T decode(String value, Class<T> type) {
     if (value == null) return null;
     if (value.length() > 262144) throw new IllegalArgumentException("Stage data exceeds 256KiB");
@@ -364,7 +375,7 @@ public class GoalStageRepository {
                   attempt.stageId(),
                   attempt.id(),
                   attempt.planVersion(),
-                  encode(stage.definition()),
+                  conditionVersion(stage.definition()),
                   observed.artifactVersions(),
                   observed.dependencyVersions(),
                   observed.result(),
