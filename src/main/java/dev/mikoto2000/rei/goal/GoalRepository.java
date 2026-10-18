@@ -202,6 +202,14 @@ public class GoalRepository {
   private final Clock clock;
   private final dev.mikoto2000.rei.llm.LlmProperties properties;
 
+  <T> T atomic(java.util.function.Supplier<T> action) {
+    return transaction.execute(status -> action.get());
+  }
+
+  JdbcClient jdbc() {
+    return db;
+  }
+
   public GoalRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, Clock clock) {
     this(source, clock, new dev.mikoto2000.rei.llm.LlmProperties());
