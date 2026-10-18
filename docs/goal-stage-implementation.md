@@ -34,3 +34,24 @@
 [既存評価](goal-completion-evaluation.md) を参照。Stage 固有の10シナリオを追加し、
 同一Goal条件・予算で既存 / Stage / 修復 / 分割の4設定を比較する。
 モデルはこの測定に使わない。token は取得不可と記録し、0をモデル実測値として扱わない。
+
+## Phase 1 — 永続契約
+
+GoalStageDefinition は安定ID・親・依存ID・Goal要件ID・条件を保持する。
+Stage の planVersion と状態 version、Attempt の独立UUID / Run参照 / 試行番号を分ける。
+Run ID に UNIQUE 制約を置かず、将来の複数Stage/Runに備える。
+証拠は attempt・planVersion・条件JSONの版・現在file SHA・依存状態version・結果・UTC時刻・証拠IDを保存する。
+過去証拠と計画履歴は上書きしない。Stageの現在証拠参照だけ更新する。
+
+追加テーブル: agent_goal_stage_plans / agent_goal_stages / agent_goal_stage_attempts /
+agent_goal_stage_evidence / agent_goal_stage_plan_history。CREATE IF NOT EXISTS による追加のみで、
+旧GoalやRunの行を削除・再作成しない。GoalRepositoryのJDBC/transactionを共有する。
+保存するStage条件は現時点では不変。条件緩和はAPI・LLMとも拒否する。
+Goal Completion Gate の Subject 契約を抽出し、同じ所有者照合と現在証拠検証をGoal/Stageで共有する。
+
+Red: GoalStageDefinition未実装によるtestCompile失敗を確認。
+Green: GoalStageRepositoryTest / GoalCompletionGateTest / JsonFileGoalTest /
+GoalCompletionEvaluationTest / GoalCompletionBaselineTest 計29件成功。
+最初のbaseline実行は未実装テストの追加と競合したため無効。上記Green実行でStageなしの旧経路を再測定した。
+legacy fixture の独立条件成立率は7/10、応答中の誤完了申告率は3/10。
+これはhostが誤ってCOMPLETEDにした率とは別で、実LLMの改善率でもない。

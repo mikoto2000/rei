@@ -13,7 +13,24 @@ public record GoalCompletionProgress(
     FileGoalVerifier.Verification verification,
     List<Check> conditions,
     boolean deliveryPending,
-    GoalRepairDiagnosis diagnosis) {
+    GoalRepairDiagnosis diagnosis,
+    GoalStageService.Progress stageProgress) {
+  public GoalCompletionProgress(
+      String goalId,
+      String runId,
+      String state,
+      FileGoalVerifier.Verification verification,
+      List<Check> conditions,
+      boolean deliveryPending,
+      GoalRepairDiagnosis diagnosis) {
+    this(goalId, runId, state, verification, conditions, deliveryPending, diagnosis, null);
+  }
+
+  public GoalCompletionProgress withStages(GoalStageService.Progress stages) {
+    return new GoalCompletionProgress(
+        goalId, runId, state, verification, conditions, deliveryPending, diagnosis, stages);
+  }
+
   public GoalCompletionProgress(
       String goalId,
       String runId,

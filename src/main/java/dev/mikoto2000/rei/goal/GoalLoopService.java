@@ -37,6 +37,19 @@ public class GoalLoopService {
   private final GoalEvents events;
   private GoalCompletionGate completionGate;
   private GoalWaitRepository waits;
+  private GoalStageService stages;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void configureStages(GoalStageService stages) {
+    this.stages = stages;
+  }
+
+  public GoalStageService.Progress stageProgress(String project, String id) {
+    var goal = goals.get(project, id);
+    gateway.validate(goal);
+    if (stages == null) throw new IllegalStateException("Stage management unavailable");
+    return stages.progress(goal);
+  }
 
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void configureWaitRepository(GoalWaitRepository waits) {
@@ -197,8 +210,10 @@ public class GoalLoopService {
     verifier.requireEnabledPredicates(goal);
     if (waits != null && waits.active(project, id))
       throw new IllegalStateException("Use the condition-checked Goal wait resume control");
+    if (stages != null && !goal.status().equals("RUNNING")) stages.resumeExplicit(goal);
     if (!goal.status().equals("RUNNING")
         && !goal.status().equals("CANCELLED")
+        && (stages == null || stages.allVerified(goal))
         && verifier.verify(goal).satisfied()) return verify(project, id).goal();
     var claim = goals.claim(project, id);
     next(claim);
@@ -226,13 +241,17 @@ public class GoalLoopService {
   public GoalCompletionProgress progress(String project, String id) {
     var goal = goals.get(project, id);
     gateway.validate(goal);
-    return GoalCompletionProgress.inspect(goal, goals.completionPhase(project, id), verifier);
+    var progress =
+        GoalCompletionProgress.inspect(goal, goals.completionPhase(project, id), verifier);
+    return stages == null ? progress : progress.withStages(stages.progress(goal));
   }
 
   public Inspection verify(String project, String id) {
     var goal = goals.get(project, id);
     gateway.validate(goal);
     var verification = verifier.verify(goal);
+    if (stages != null && !stages.allVerified(goal))
+      verification = new FileGoalVerifier.Verification(false, "stage_verification_required");
     if (verification.satisfied()
         && !java.util.Set.of("COMPLETED", "RUNNING", "CANCELLED").contains(goal.status())) {
       goal = goals.verifiedWithoutRun(goal, verification.reason());
@@ -248,7 +267,13 @@ public class GoalLoopService {
     if (gateway.isInFlight(goal))
       throw new IllegalStateException(
           "Goal Run is queued or executing; stop it through the normal Run controls");
-    var result = goals.reconcile(project, id, expectedRunId);
+    var result =
+        goals.atomic(
+            () -> {
+              var reconciled = goals.reconcile(project, id, expectedRunId);
+              if (stages != null) stages.reconcile(reconciled, expectedRunId);
+              return reconciled;
+            });
     events.publish(result);
     return result;
   }
@@ -278,6 +303,18 @@ public class GoalLoopService {
       GoalRepository.Claim claim, Consumer<AgentRunContext> preparation) {
     if (!goals.active(claim)) return;
     var goal = goals.get(claim.goal().projectId(), claim.goal().id());
+    GoalStageService.Selection selection = stages == null ? null : stages.select(goal);
+    if (selection != null && !selection.blocker().isBlank()) {
+      stop(claim, "BLOCKED", selection.blocker());
+      return;
+    }
+    if (selection != null && stages.enabled(goal) && selection.allVerified()) {
+      var finalVerification = verifier.verify(goal);
+      if (finalVerification.satisfied()) {
+        stop(claim, "COMPLETED", finalVerification.reason());
+        return;
+      }
+    }
     if (goal.maxTotalTokens() > 0 && goal.pendingLlmCalls() > 0) {
       stop(claim, "BLOCKED", "token_usage_unknown");
       return;
@@ -299,7 +336,14 @@ public class GoalLoopService {
             .map(a -> a.status().equals("UNVERIFIED"))
             .orElse(false);
     if (!goals.completionPhase(claim, repairing ? "REPAIRING" : "RUNNING")) return;
-    String run = goals.beginAttempt(claim);
+    String run =
+        goals.atomic(
+            () -> {
+              String admitted = goals.beginAttempt(claim);
+              if (selection != null && selection.stage() != null)
+                stages.begin(claim, admitted, selection.stage());
+              return admitted;
+            });
     events.publish(
         goals.get(goal.projectId(), goal.id()), goals.completionPhase(goal.projectId(), goal.id()));
     try {
@@ -314,7 +358,7 @@ public class GoalLoopService {
       gateway.dispatch(claim, run, outcome -> completed(claim, run, outcome));
     } catch (RuntimeException error) {
       if (goals.active(claim, run)) {
-        goals.recordAttempt(claim, run, "FAILED", "admission_failed");
+        recordAttempt(claim, run, "FAILED", "admission_failed");
         stop(claim, "FAILED", "admission_failed");
       }
     }
@@ -325,7 +369,7 @@ public class GoalLoopService {
     var result = outcome.result();
     if (result.status() == ChatExecutionResult.Status.CANCELLED
         || Thread.currentThread().isInterrupted()) {
-      goals.recordAttempt(claim, run, "CANCELLED", "run_cancelled");
+      recordAttempt(claim, run, "CANCELLED", "run_cancelled");
       stop(claim, "PAUSED", "run_cancelled");
       return;
     }
@@ -338,7 +382,7 @@ public class GoalLoopService {
           current.pendingLlmCalls() > 0 || current.tokenUsageUnknown()
               ? "token_usage_unknown"
               : "token_budget_exhausted";
-      goals.recordAttempt(claim, run, "BLOCKED", reason);
+      recordAttempt(claim, run, "BLOCKED", reason);
       stop(claim, "BLOCKED", reason);
       return;
     }
@@ -350,7 +394,7 @@ public class GoalLoopService {
       if (goals.tokenExhausted(claim)) {
         var goal = goals.get(claim.goal().projectId(), claim.goal().id());
         String reason = goal.tokenUsageUnknown() ? "token_usage_unknown" : "token_budget_exhausted";
-        goals.recordAttempt(claim, run, "BLOCKED", reason);
+        recordAttempt(claim, run, "BLOCKED", reason);
         stop(claim, "BLOCKED", reason);
         return;
       }
@@ -361,21 +405,47 @@ public class GoalLoopService {
             default -> goals.remainingLlm(claim) == 0 ? "BLOCKED" : "FAILED";
           };
       String reason = outcome.stopReason().isBlank() ? "execution_stopped" : outcome.stopReason();
-      goals.recordAttempt(claim, run, state, reason);
+      recordAttempt(claim, run, state, reason);
       stop(claim, state, reason);
       return;
     }
     try {
       gateway.validate(claim.goal());
     } catch (RuntimeException error) {
-      goals.recordAttempt(claim, run, "BLOCKED", "owner_unavailable");
+      recordAttempt(claim, run, "BLOCKED", "owner_unavailable");
       stop(claim, "BLOCKED", "owner_unavailable");
       return;
     }
     if (!goals.completionPhase(claim, "VERIFYING")) return;
     events.publish(goals.get(claim.goal().projectId(), claim.goal().id()), "VERIFYING");
+    if (stages != null) {
+      var stageVerification = stages.verifyRun(current, run);
+      if (stageVerification != null) {
+        boolean recorded =
+            goals.atomic(
+                () -> {
+                  if (!stages.finish(claim, run, stageVerification)) return false;
+                  goals.recordAttempt(
+                      claim,
+                      run,
+                      stageVerification.result() == GoalStageVerifier.Result.VERIFIED
+                          ? "VERIFIED"
+                          : "UNVERIFIED",
+                      stageVerification.reason());
+                  return true;
+                });
+        if (!recorded) return;
+        if (stageVerification.result() != GoalStageVerifier.Result.VERIFIED
+            && stageVerification.result() != GoalStageVerifier.Result.UNSATISFIED) {
+          stop(claim, "BLOCKED", stageVerification.reason());
+          return;
+        }
+        next(claim);
+        return;
+      }
+    }
     var verification = verifier.verify(goals.get(claim.goal().projectId(), claim.goal().id()));
-    goals.recordAttempt(
+    recordAttempt(
         claim, run, verification.satisfied() ? "VERIFIED" : "UNVERIFIED", verification.reason());
     if (verification.satisfied()) {
       stop(claim, "COMPLETED", verification.reason());
@@ -394,5 +464,14 @@ public class GoalLoopService {
 
   private void stop(GoalRepository.Claim claim, String state, String reason) {
     if (goals.active(claim)) events.publish(goals.stop(claim, state, reason));
+  }
+
+  private void recordAttempt(GoalRepository.Claim claim, String run, String state, String reason) {
+    goals.atomic(
+        () -> {
+          if (stages != null) stages.interrupted(claim, run, reason);
+          goals.recordAttempt(claim, run, state, reason);
+          return null;
+        });
   }
 }

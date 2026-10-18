@@ -47,7 +47,11 @@ public final class GoalStageVerifier {
       List<GoalStageRepository.Stage> stages) {
     var versions = new LinkedHashMap<String, String>();
     var dependencies = new LinkedHashMap<String, Long>();
-    for (String id : stage.definition().dependsOnStageIds()) {
+    var prerequisiteIds = new java.util.LinkedHashSet<>(stage.definition().dependsOnStageIds());
+    stages.stream()
+        .filter(s -> stage.definition().id().equals(s.definition().parentStageId()))
+        .forEach(s -> prerequisiteIds.add(s.definition().id()));
+    for (String id : prerequisiteIds) {
       var dependency = stages.stream().filter(s -> s.definition().id().equals(id)).findFirst();
       if (dependency.isEmpty() || !dependency.get().state().equals("VERIFIED"))
         return new Observation(
@@ -65,6 +69,27 @@ public final class GoalStageVerifier {
       if (!observed.satisfied() && failure == null) failure = observed;
     }
     if (failure == null && stage.definition().completion() != null) {
+      var completion = stage.definition().completion();
+      var evidenceFiles =
+          new java.util.ArrayList<GoalRepository.FileCriterion>(completion.completionEvidence());
+      evidenceFiles.addAll(completion.requiredPredicates());
+      completion.requirements().stream()
+          .filter(GoalCompletionGate.Requirement::required)
+          .forEach(r -> evidenceFiles.add(r.criterion()));
+      for (var item : evidenceFiles) {
+        var fingerprint = files.fingerprint(root, item.relativeFile());
+        versions.put(
+            item.relativeFile(),
+            fingerprint.available() ? fingerprint.sha256() : fingerprint.reason());
+      }
+      if (stage.proof() != null) {
+        if (stage.proof().review() != null)
+          versions.put("review:" + stage.proof().review().id(), stage.proof().review().sha256());
+        stage
+            .proof()
+            .artifacts()
+            .forEach(ref -> versions.put("artifact:" + ref.id(), ref.sha256()));
+      }
       failure =
           gate == null
               ? new FileGoalVerifier.Verification(false, "completion_gate_unavailable")
