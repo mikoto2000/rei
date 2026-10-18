@@ -153,7 +153,7 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
                       outcome = new GoalLoopService.Outcome(ChatExecutionResult.cancelled());
                     } else {
                       validate(goal);
-                      var stageVerification = stages == null ? null : stages.verifyRun(goal, run);
+                      var stageVerification = stages == null ? null : stages.observeRun(goal, run);
                       if (stageVerification == null
                           ? verifier.verify(goal).satisfied()
                           : stageVerification.result() == GoalStageVerifier.Result.VERIFIED)

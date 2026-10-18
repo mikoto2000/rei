@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.goal;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
 import org.junit.jupiter.api.Test;

@@ -7,6 +7,36 @@ import org.springframework.stereotype.Service;
 /** Host decisions inside the existing Goal loop; this class never dispatches a Run. */
 @Service
 public class GoalStageService {
+  public record EventStage(
+      String id, String state, String reason, long version, String evidenceReference) {}
+
+  public record EventProgress(long planVersion, String currentStageId, List<EventStage> stages) {
+    public EventProgress {
+      stages = List.copyOf(stages);
+    }
+  }
+
+  public EventProgress eventProgress(GoalRepository.Goal goal) {
+    var current = stages.list(goal);
+    return new EventProgress(
+        stages.planVersion(goal),
+        current.stream()
+            .filter(s -> Set.of("RUNNING", "VERIFYING", "REPAIRING").contains(s.state()))
+            .map(s -> s.definition().id())
+            .findFirst()
+            .orElse(null),
+        current.stream()
+            .map(
+                s ->
+                    new EventStage(
+                        s.definition().id(),
+                        s.state(),
+                        s.reason(),
+                        s.version(),
+                        s.evidence() == null ? null : s.evidence().reference()))
+            .toList());
+  }
+
   public record Selection(GoalStageRepository.Stage stage, boolean allVerified, String blocker) {}
 
   public record Progress(
@@ -19,7 +49,23 @@ public class GoalStageService {
       int remainingLlmCalls,
       Long remainingTokens,
       String stopReason,
-      String resumeAction) {}
+      String resumeAction) {
+    public Progress {
+      stages = List.copyOf(stages);
+      attempts = List.copyOf(attempts);
+      evidence = List.copyOf(evidence);
+      planHistory = List.copyOf(planHistory);
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty
+    public String currentStageId() {
+      return stages.stream()
+          .filter(s -> Set.of("RUNNING", "VERIFYING", "REPAIRING").contains(s.state()))
+          .map(s -> s.definition().id())
+          .findFirst()
+          .orElse(null);
+    }
+  }
 
   private final GoalStageRepository stages;
   private final GoalStageVerifier verifier;
@@ -155,6 +201,19 @@ public class GoalStageService {
   public GoalStageVerifier.Observation verifyRun(GoalRepository.Goal goal, String run) {
     var attempt = stages.forRun(goal, run);
     if (attempt == null) return null;
+    var stage =
+        stages.list(goal).stream()
+            .filter(s -> s.definition().id().equals(attempt.stageId()))
+            .findFirst()
+            .orElseThrow();
+    if (stage.state().equals("RUNNING"))
+      stages.state(goal, stage, "VERIFYING", "independent_verification");
+    return observeRun(goal, run);
+  }
+
+  public GoalStageVerifier.Observation observeRun(GoalRepository.Goal goal, String run) {
+    var attempt = stages.forRun(goal, run);
+    if (attempt == null) return null;
     var current = refresh(goal);
     var stage =
         current.stream()
@@ -222,7 +281,7 @@ public class GoalStageService {
             ? "unlimited by configuration"
             : goal.maxTotalTokens() - goal.totalTokens())
         + "\nWork only on this Stage through the existing Chat planner. Preserve previous outputs and all Goal requirements. "
-        + "DONE is a claim; only the host may mark VERIFIED. Never repeat an unknown side effect.";
+        + "DONE is a claim; only the host may mark VERIFIED. Never repeat an unknown side effect. For stage review/test/artifact proof use attachGoalStageEvidence. If prior independent failure cannot be repaired, proposeGoalStageSplit with child contracts and current plan version. The host validates the proposal and independently rechecks the parent.";
   }
 
   public Progress progress(GoalRepository.Goal goal) {
@@ -240,5 +299,67 @@ public class GoalStageService {
         goal.status().equals("RUNNING")
             ? "Inspect current Run; reconcile its exact ID after a process exit"
             : "Inspect effects and permissions; explicitly run or use condition-checked wait resume");
+  }
+
+  public List<GoalStageRepository.Stage> define(
+      GoalRepository.Goal goal, long version, List<GoalStageDefinition> plan) {
+    return stages.define(goal, version, plan);
+  }
+
+  public void attach(
+      GoalRepository.Goal goal, String stage, long version, GoalCompletionGate.Proof proof) {
+    stages.attachProof(goal, stage, version, proof);
+  }
+
+  private GoalRepository.Goal owningRun(
+      dev.mikoto2000.rei.core.chat.AgentRunContext owner, String id) {
+    var goal = goals.get(owner.projectId(), id);
+    if (owner.mode() != dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE
+        || !owner.conversationId().equals(goal.sessionId())
+        || !owner.projectRoot().toString().equals(goal.projectRoot())
+        || !goal.status().equals("RUNNING")
+        || !owner.runId().equals(goal.currentRunId()))
+      throw new IllegalStateException("Captured owning Goal Run required");
+    return goal;
+  }
+
+  public void proposeSplit(
+      dev.mikoto2000.rei.core.chat.AgentRunContext owner,
+      String id,
+      long version,
+      List<GoalStageDefinition> children) {
+    goals.atomic(
+        () -> {
+          var goal = owningRun(owner, id);
+          var attempt = stages.forRun(goal, owner.runId());
+          if (attempt == null
+              || attempt.planVersion() != version
+              || stages.attempts(goal).stream()
+                  .noneMatch(
+                      a ->
+                          a.stageId().equals(attempt.stageId())
+                              && a.status().equals("UNSATISFIED")))
+            throw new IllegalStateException("Current failed Stage and plan version required");
+          stages.propose(goal, attempt, children);
+          return null;
+        });
+  }
+
+  public void attachRunning(
+      dev.mikoto2000.rei.core.chat.AgentRunContext owner,
+      String id,
+      GoalCompletionGate.Proof proof) {
+    goals.atomic(
+        () -> {
+          var goal = owningRun(owner, id);
+          var attempt = stages.forRun(goal, owner.runId());
+          if (attempt == null) throw new IllegalStateException("Current Stage required");
+          stages.attachRunningProof(goal, attempt, proof);
+          return null;
+        });
+  }
+
+  public boolean applyProposal(GoalRepository.Claim claim, String run) {
+    return stages.applyProposal(claim, run);
   }
 }

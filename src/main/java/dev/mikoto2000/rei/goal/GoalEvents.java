@@ -12,6 +12,12 @@ import org.springframework.stereotype.Component;
 public class GoalEvents {
   private final AgentEventPublisher publisher;
   private final Clock clock;
+  private GoalStageService stages;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void configureStages(GoalStageService stages) {
+    this.stages = stages;
+  }
 
   public GoalEvents(AgentEventPublisher publisher, Clock clock) {
     this.publisher = publisher;
@@ -43,7 +49,8 @@ public class GoalEvents {
                 goal.llmCallsUsed(),
                 goal.maxLlmCalls(),
                 goal.reason(),
-                completionPhase),
+                completionPhase,
+                stages == null ? null : stages.eventProgress(goal)),
             goal.projectId()));
   }
 }

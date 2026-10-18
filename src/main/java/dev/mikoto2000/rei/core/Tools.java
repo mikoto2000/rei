@@ -93,6 +93,32 @@ public class Tools {
   }
 
   private dev.mikoto2000.rei.goal.GoalCompletionGate goalCompletionGate;
+  private dev.mikoto2000.rei.goal.GoalStageService goalStages;
+
+  @Autowired(required = false)
+  void configureGoalStages(dev.mikoto2000.rei.goal.GoalStageService stages) {
+    goalStages = stages;
+  }
+
+  @Tool(
+      description =
+          "現在のGoal Stageへ保存Review/Artifact IDとSHAのproofを添付します。捕捉Run/root/sessionを照合し、現在patch/report/Artifact/条件はホストが独立検証します。条件や状態を変更する権限はありません。")
+  void attachGoalStageEvidence(
+      String goalId, dev.mikoto2000.rei.goal.GoalCompletionGate.Proof proof) {
+    if (goalStages == null) throw new IllegalStateException("Stages unavailable");
+    goalStages.attachRunning(diagnosedOwner(), goalId, proof);
+  }
+
+  @Tool(
+      description =
+          "独立検証で失敗した現在のGoal Stageの子工程案を保存します。expectedPlanVersionとchildren（id,parentStageId,objective,criteria,dependsOnStageIds,requirementIds,completion）を指定。親とGoal条件は不変。ホストが循環/深さ/数/予算/所有者を検証し、試行が未達の場合だけ採用します。Stageを完了にする権限はありません。")
+  void proposeGoalStageSplit(
+      String goalId,
+      long expectedPlanVersion,
+      java.util.List<dev.mikoto2000.rei.goal.GoalStageDefinition> children) {
+    if (goalStages == null) throw new IllegalStateException("Stages unavailable");
+    goalStages.proposeSplit(diagnosedOwner(), goalId, expectedPlanVersion, children);
+  }
 
   @Autowired(required = false)
   void setGoalCompletionGate(dev.mikoto2000.rei.goal.GoalCompletionGate gate) {

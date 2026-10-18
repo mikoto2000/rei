@@ -9,8 +9,21 @@ public record GoalLifecyclePayload(
     int llmCallsUsed,
     int maxLlmCalls,
     String reason,
-    String completionPhase)
+    String completionPhase,
+    dev.mikoto2000.rei.goal.GoalStageService.EventProgress stageProgress)
     implements AgentEventPayload {
+  public GoalLifecyclePayload(
+      String goalId,
+      String status,
+      int attempts,
+      int maxRuns,
+      int used,
+      int calls,
+      String reason,
+      String completionPhase) {
+    this(goalId, status, attempts, maxRuns, used, calls, reason, completionPhase, null);
+  }
+
   public GoalLifecyclePayload(
       String goalId, String status, int attempts, int maxRuns, int used, int calls, String reason) {
     this(goalId, status, attempts, maxRuns, used, calls, reason, null);

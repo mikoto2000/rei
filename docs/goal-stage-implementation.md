@@ -72,3 +72,60 @@ StageのVERIFIEDはGoal全体の検証を置き換えない。後工程が前工
 修復は既存GoalRepairDiagnosisのrepairable理由だけに限定する。max-repairs既定2、設定範囲0..5。
 各試行の観測（理由・成果SHA・依存版）が2回同じ場合はstage_repair_stalledで停止する。
 別の成果へ変化していても上限でstage_repair_limitに停止。Goal予算を補充しない。
+
+## Phase 4 — 計画変更
+
+独立検証で失敗した工程の修復Runから proposeGoalStageSplit を呼べる。
+これは既存Runにおける通常LLM呼出しの結果で、Goalの共有call/token予約内で生成する。
+追加のLLM検証は行わず、決定的validatorを使うため検証のLLM費用は0。
+案の保存だけでは計画を変更しない。そのRunのhost検証がUNSATISFIEDだった場合だけ、
+同じGoal claimとplanVersionで再検証して子を追加する。UNKNOWN/REJECTEDでは採用しない。
+初期の修復を経ない自動分割、親条件の書換え・削除、必須Goal要件の削除を拒否する。
+最大32工程、1案8子、親深さ3、計画version最大5。既存兄弟・失敗履歴・証拠を保持する。
+計画変更時は以前のVERIFIEDをSTALEにし、再確認してから依存工程を解放する。
+子が全て完了しても親自身の条件が未達なら停止する。
+
+Stage計画の登録後はGoal全体のcompletion定義も凍結する。条件緩和の自動承認機構は追加せず、
+緩和自体を拒否する保守的な初期仕様。必要なら人間が別の明示Goalを定義する。
+Phase 4の工程/HTTP/Tools/Policy回帰62件成功。
+
+## API / CLI
+
+既存Goalを作成し、最初のrunより前に工程を登録する（GoalとStageの目的・条件は別）。
+
+```text
+GET  /api/v1/projects/{project}/goals/{goal}/stages
+PUT  /api/v1/projects/{project}/goals/{goal}/stages
+     {"expectedPlanVersion":0,"stages":[...]}
+POST /api/v1/projects/{project}/goals/{goal}/stages/{stage}/evidence
+     {"expectedVersion":2,"proof":{"review":{"id":"...","sha256":"..."},"artifacts":[]}}
+```
+
+Stage形式の例（固定2工程）:
+
+```json
+[
+  {"id":"draft","objective":"本文を作成","criteria":[{"relativeFile":"draft.json","jsonPointer":"/ready","expectedJson":"true"}],"dependsOnStageIds":[],"requirementIds":[]},
+  {"id":"check","objective":"成果を検査","criteria":[{"relativeFile":"checks.json","jsonPointer":"/passed","expectedJson":"true"}],"dependsOnStageIds":["draft"],"requirementIds":[]}
+]
+```
+
+Goalに必須のnamed requirementがある場合は、StageのrequirementIdsにその全IDを割り当てる。
+条件はSHAまたは既存JSON scalar/predicateで、任意コードは実行しない。
+completionを指定する場合は既存Goal Completion Gateと同じ定義・保存Review/Test/Artifactのproof形式。
+JSON predicateのfeature flagは既存設定に従う。
+
+```text
+/goal stages <goal-id> --plan-version 0 --stages-json '<上記配列>'
+/goal run <goal-id>
+/goal progress <goal-id>
+/goal stages <goal-id>
+/goal stage-evidence <goal-id> --stage-id draft --stage-version 2 --proof-json '<proof>'
+/goal reconcile <goal-id> --run-id <保存Run ID> --acknowledge-uncertain-side-effects
+/goal run <goal-id>
+```
+
+計画変更と証拠添付は停止中かつ所有Sessionを選択して行う。HTTPは既存の認証・Project制約を使う。
+completion-progressの既存フィールドを維持しstageProgressを追加。工程状態・証拠・無効化理由・
+試行/修復履歴・計画履歴・残Run/call/token・停止理由・再開操作を取得できる。
+Goal.updatedイベントには小さい工程状態一覧と証拠参照を追加し、詳細履歴はprogress APIで取得する。

@@ -225,6 +225,9 @@ public class GoalRepository {
     transaction = new TransactionTemplate(new DataSourceTransactionManager(source));
     this.clock = clock;
     db.sql(
+            "CREATE TABLE IF NOT EXISTS agent_goal_stage_plans(goal TEXT PRIMARY KEY,version INTEGER NOT NULL,definition TEXT NOT NULL,changed_at TEXT NOT NULL)")
+        .update();
+    db.sql(
             "CREATE TABLE IF NOT EXISTS agent_goals(id TEXT PRIMARY KEY,project TEXT NOT NULL,root TEXT NOT NULL,session TEXT NOT NULL,objective TEXT NOT NULL,file TEXT NOT NULL,digest TEXT NOT NULL,max_runs INTEGER NOT NULL,max_calls INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,used INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL,run TEXT,token TEXT,reason TEXT NOT NULL DEFAULT '')")
         .update();
     var columns =
@@ -346,7 +349,7 @@ public class GoalRepository {
     var goal = get(owner.projectId(), id);
     completionOwner(owner, goal);
     if (db.sql(
-                "UPDATE agent_goals SET completion_json=?,completion_proof_json=NULL WHERE id=? AND project=? AND root=? AND session=? AND status NOT IN ('RUNNING','COMPLETED','CANCELLED')")
+                "UPDATE agent_goals SET completion_json=?,completion_proof_json=NULL WHERE id=? AND project=? AND root=? AND session=? AND status NOT IN ('RUNNING','COMPLETED','CANCELLED') AND NOT EXISTS(SELECT 1 FROM agent_goal_stage_plans WHERE goal=agent_goals.id)")
             .params(
                 json, id, owner.projectId(), owner.projectRoot().toString(), owner.conversationId())
             .update()

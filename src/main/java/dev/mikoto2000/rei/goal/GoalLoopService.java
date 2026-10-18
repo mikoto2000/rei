@@ -51,6 +51,26 @@ public class GoalLoopService {
     return stages.progress(goal);
   }
 
+  public java.util.List<GoalStageRepository.Stage> defineStages(
+      String project, String id, long version, java.util.List<GoalStageDefinition> plan) {
+    var goal = goals.get(project, id);
+    gateway.validate(goal);
+    if (stages == null) throw new IllegalStateException("Stages unavailable");
+    var result = stages.define(goal, version, plan);
+    events.publish(goals.get(project, id));
+    return result;
+  }
+
+  public GoalStageService.Progress attachStageEvidence(
+      String project, String id, String stage, long version, GoalCompletionGate.Proof proof) {
+    var goal = goals.get(project, id);
+    gateway.validate(goal);
+    if (stages == null) throw new IllegalStateException("Stages unavailable");
+    stages.attach(goal, stage, version, proof);
+    events.publish(goal);
+    return stages.progress(goal);
+  }
+
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void configureWaitRepository(GoalWaitRepository waits) {
     this.waits = waits;
@@ -228,6 +248,7 @@ public class GoalLoopService {
       throw new IllegalStateException("Enable tool permissions before Goal resume");
     gateway.validate(expected);
     verifier.requireEnabledPredicates(expected);
+    if (stages != null) stages.resumeExplicit(expected);
     var claim = goals.claim(expected, wait);
     next(claim, preparation);
     var result = goals.get(expected.projectId(), expected.id());
@@ -435,6 +456,14 @@ public class GoalLoopService {
                   return true;
                 });
         if (!recorded) return;
+        if (stageVerification.result() == GoalStageVerifier.Result.UNSATISFIED) {
+          try {
+            stages.applyProposal(claim, run);
+          } catch (IllegalArgumentException | IllegalStateException invalid) {
+            stop(claim, "BLOCKED", "stage_plan_rejected");
+            return;
+          }
+        }
         if (stageVerification.result() != GoalStageVerifier.Result.VERIFIED
             && stageVerification.result() != GoalStageVerifier.Result.UNSATISFIED) {
           stop(claim, "BLOCKED", stageVerification.reason());

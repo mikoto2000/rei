@@ -74,6 +74,18 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
   @Option(names = "--proof-json", description = "停止した目標に対する保存済みレビューと成果物の正確な ID／SHA 参照")
   String proofJson;
 
+  @Option(names = "--stages-json")
+  String stagesJson;
+
+  @Option(names = "--plan-version")
+  Long planVersion;
+
+  @Option(names = "--stage-id")
+  String stageId;
+
+  @Option(names = "--stage-version")
+  Long stageVersion;
+
   @Option(names = "--run-id", description = "結果が不明な実行の ID（実行を試みていない場合は none）")
   String expectedRunId;
 
@@ -115,6 +127,30 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
             case "list" -> goals.list(project.id());
             case "show" -> goals.get(project.id(), requiredValue());
             case "progress" -> loop.progress(project.id(), requiredValue());
+            case "stages" -> {
+              if (stagesJson == null) yield loop.stageProgress(project.id(), requiredValue());
+              if (planVersion == null || planVersion < 0)
+                throw new IllegalArgumentException("Observed --plan-version required");
+              var goal = goals.get(project.id(), requiredValue());
+              if (!goal.sessionId().equals(projects.currentSessionId()))
+                throw new IllegalArgumentException("Select owning Goal Session");
+              yield loop.defineStages(
+                  project.id(), goal.id(), planVersion, GoalStageRepository.parsePlan(stagesJson));
+            }
+            case "stage-evidence" -> {
+              if (stageId == null || stageVersion == null || stageVersion < 1 || proofJson == null)
+                throw new IllegalArgumentException(
+                    "--stage-id, --stage-version, --proof-json required");
+              var goal = goals.get(project.id(), requiredValue());
+              if (!goal.sessionId().equals(projects.currentSessionId()))
+                throw new IllegalArgumentException("Select owning Goal Session");
+              yield loop.attachStageEvidence(
+                  project.id(),
+                  goal.id(),
+                  stageId,
+                  stageVersion,
+                  GoalRepository.parseCompletionProof(proofJson));
+            }
             case "history" ->
                 goals.history(project.id(), requiredValue())
                     + "\nAttempts: "
@@ -218,6 +254,8 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
           "create",
           "show",
           "progress",
+          "stages",
+          "stage-evidence",
           "run",
           "verify",
           "cancel",

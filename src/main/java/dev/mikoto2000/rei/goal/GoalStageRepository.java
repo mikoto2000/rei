@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.goal;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Clock;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -70,6 +71,9 @@ public class GoalStageRepository {
     db = goals.jdbc();
     this.clock = clock;
     this.goals = goals;
+    db.sql(
+            "CREATE TABLE IF NOT EXISTS agent_goal_stage_proposals(goal TEXT NOT NULL,stage TEXT NOT NULL,plan_version INTEGER NOT NULL,run TEXT NOT NULL,children TEXT NOT NULL,PRIMARY KEY(goal,stage,plan_version))")
+        .update();
     db.sql(
             "CREATE TABLE IF NOT EXISTS agent_goal_stage_plans(goal TEXT PRIMARY KEY,version INTEGER NOT NULL,definition TEXT NOT NULL,changed_at TEXT NOT NULL)")
         .update();
@@ -149,11 +153,19 @@ public class GoalStageRepository {
 
   public List<Stage> define(
       GoalRepository.Goal expected, long expectedVersion, List<GoalStageDefinition> plan) {
+    return define(expected, expectedVersion, plan, null);
+  }
+
+  private List<Stage> define(
+      GoalRepository.Goal expected,
+      long expectedVersion,
+      List<GoalStageDefinition> plan,
+      GoalRepository.Claim claim) {
     return goals.atomic(
         () -> {
           lock(expected);
           var goal = goals.get(expected.projectId(), expected.id());
-          if (goal.status().equals("RUNNING")
+          if (goal.status().equals("RUNNING") && (claim == null || !goals.active(claim))
               || goal.status().equals("COMPLETED")
               || goal.status().equals("CANCELLED")
               || planVersion(goal) != expectedVersion)
@@ -256,6 +268,20 @@ public class GoalStageRepository {
         () -> {
           lock(claim.goal());
           if (!goals.active(claim, run)) throw new IllegalStateException("Goal Run inactive");
+          var inventory = list(claim.goal());
+          var prerequisites = new java.util.HashSet<>(expected.definition().dependsOnStageIds());
+          inventory.stream()
+              .filter(s -> expected.definition().id().equals(s.definition().parentStageId()))
+              .forEach(s -> prerequisites.add(s.definition().id()));
+          if (prerequisites.stream()
+              .anyMatch(
+                  dependency ->
+                      inventory.stream()
+                          .noneMatch(
+                              s ->
+                                  s.definition().id().equals(dependency)
+                                      && s.state().equals("VERIFIED"))))
+            throw new IllegalStateException("Stage prerequisites are not verified");
           String id = UUID.randomUUID().toString();
           if (db.sql(
                       "UPDATE agent_goal_stages SET state='RUNNING',version=version+1 WHERE goal=? AND id=? AND version=? AND plan_version=? AND state IN ('TODO','STALE','REPAIRING')")
@@ -309,8 +335,8 @@ public class GoalStageRepository {
                   .filter(s -> s.definition().id().equals(attempt.stageId()))
                   .findFirst()
                   .orElseThrow();
-          if (stage.planVersion() != attempt.planVersion() || !stage.state().equals("RUNNING"))
-            return false;
+          if (stage.planVersion() != attempt.planVersion()
+              || !java.util.Set.of("RUNNING", "VERIFYING").contains(stage.state())) return false;
           String state =
               observed.result() == GoalStageVerifier.Result.VERIFIED
                   ? "VERIFIED"
@@ -348,7 +374,7 @@ public class GoalStageRepository {
               .params(reference, goal.id(), attempt.stageId(), encode(evidence))
               .update();
           if (db.sql(
-                      "UPDATE agent_goal_stages SET state=?,reason=?,evidence=?,version=version+1 WHERE goal=? AND id=? AND version=? AND plan_version=? AND state='RUNNING'")
+                      "UPDATE agent_goal_stages SET state=?,reason=?,evidence=?,version=version+1 WHERE goal=? AND id=? AND version=? AND plan_version=? AND state IN ('RUNNING','VERIFYING')")
                   .params(
                       state,
                       observed.reason(),
@@ -404,8 +430,68 @@ public class GoalStageRepository {
         .params(clock.instant().toString(), goal.id(), run)
         .update();
     db.sql(
-            "UPDATE agent_goal_stages SET state='STALE',reason='uncertain_run_reconciled',version=version+1 WHERE goal=? AND id IN (SELECT stage FROM agent_goal_stage_attempts WHERE goal=? AND run=?) AND state='RUNNING'")
+            "UPDATE agent_goal_stages SET state='STALE',reason='uncertain_run_reconciled',version=version+1 WHERE goal=? AND id IN (SELECT stage FROM agent_goal_stage_attempts WHERE goal=? AND run=?) AND state IN ('RUNNING','VERIFYING')")
         .params(goal.id(), goal.id(), run)
         .update();
+  }
+
+  public void propose(
+      GoalRepository.Goal goal, Attempt attempt, List<GoalStageDefinition> children) {
+    if (children == null
+        || children.isEmpty()
+        || children.size() > 8
+        || children.stream().anyMatch(c -> !attempt.stageId().equals(c.parentStageId())))
+      throw new IllegalArgumentException("Expected 1..8 children of the current stage");
+    var previous = list(goal).stream().map(Stage::definition).toList();
+    var plan = new ArrayList<>(previous);
+    plan.addAll(children);
+    GoalStagePlanValidator.preserve(previous, plan);
+    GoalStagePlanValidator.validate(goal, plan);
+    db.sql(
+            "INSERT INTO agent_goal_stage_proposals(goal,stage,plan_version,run,children) VALUES(?,?,?,?,?) ON CONFLICT(goal,stage,plan_version) DO UPDATE SET run=excluded.run,children=excluded.children")
+        .params(
+            goal.id(), attempt.stageId(), attempt.planVersion(), attempt.runId(), encode(children))
+        .update();
+  }
+
+  boolean applyProposal(GoalRepository.Claim claim, String run) {
+    return goals.atomic(
+        () -> {
+          lock(claim.goal());
+          var goal = goals.get(claim.goal().projectId(), claim.goal().id());
+          var attempt =
+              attempts(goal).stream()
+                  .filter(a -> a.runId().equals(run) && a.status().equals("UNSATISFIED"))
+                  .findFirst()
+                  .orElse(null);
+          if (attempt == null || !goals.active(claim)) return false;
+          var json =
+              db.sql(
+                      "SELECT children FROM agent_goal_stage_proposals WHERE goal=? AND stage=? AND plan_version=? AND run=?")
+                  .params(goal.id(), attempt.stageId(), attempt.planVersion(), run)
+                  .query(String.class)
+                  .optional();
+          if (json.isEmpty()) return false;
+          var plan = new ArrayList<>(list(goal).stream().map(Stage::definition).toList());
+          plan.addAll(List.of(decode(json.get(), GoalStageDefinition[].class)));
+          define(goal, attempt.planVersion(), plan, claim);
+          return true;
+        });
+  }
+
+  void attachRunningProof(
+      GoalRepository.Goal goal, Attempt attempt, GoalCompletionGate.Proof proof) {
+    GoalCompletionGate.validateProof(proof);
+    if (db.sql(
+                "UPDATE agent_goal_stages SET proof=?,version=version+1 WHERE goal=? AND id=? AND plan_version=? AND state='RUNNING' AND EXISTS(SELECT 1 FROM agent_goals WHERE id=? AND status='RUNNING' AND run=?)")
+            .params(
+                encode(proof),
+                goal.id(),
+                attempt.stageId(),
+                attempt.planVersion(),
+                goal.id(),
+                attempt.runId())
+            .update()
+        != 1) throw new IllegalStateException("Stage Run changed");
   }
 }

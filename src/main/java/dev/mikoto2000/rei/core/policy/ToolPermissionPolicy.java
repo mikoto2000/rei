@@ -337,6 +337,8 @@ public class ToolPermissionPolicy {
             "getGoalCompletionDefinition")
         .contains(tool)) return Set.of(ActionCapability.READ);
     if ("attachGoalCompletionEvidence".equals(tool)) return Set.of(ActionCapability.LOCAL_WRITE);
+    if (Set.of("attachGoalStageEvidence", "proposeGoalStageSplit").contains(tool))
+      return Set.of(ActionCapability.LOCAL_WRITE);
     if ("proposeDiagnosedRepair".equals(tool)) return Set.of(ActionCapability.LOCAL_WRITE);
     if (Set.of(
             "listDurableSubAgents",

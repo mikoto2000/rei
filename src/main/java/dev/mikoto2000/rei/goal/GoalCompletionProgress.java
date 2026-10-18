@@ -27,8 +27,12 @@ public record GoalCompletionProgress(
   }
 
   public GoalCompletionProgress withStages(GoalStageService.Progress stages) {
+    var observed =
+        stages.stages().stream().anyMatch(s -> !s.state().equals("VERIFIED"))
+            ? new FileGoalVerifier.Verification(false, "stage_verification_required")
+            : verification;
     return new GoalCompletionProgress(
-        goalId, runId, state, verification, conditions, deliveryPending, diagnosis, stages);
+        goalId, runId, state, observed, conditions, deliveryPending, diagnosis, stages);
   }
 
   public GoalCompletionProgress(
