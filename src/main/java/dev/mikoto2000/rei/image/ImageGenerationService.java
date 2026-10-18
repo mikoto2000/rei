@@ -93,6 +93,9 @@ public class ImageGenerationService {
         Files.createDirectories(outputPath.getParent());
       }
       Files.write(outputPath, bytes);
+      String outputFilename =
+          java.util.Objects.requireNonNull(outputPath.getFileName(), "Image filename required")
+              .toString();
       var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
       String artifact =
           artifacts != null && owner != null && owner.projectId() != null
@@ -104,12 +107,10 @@ public class ImageGenerationService {
                               .formatHex(
                                   java.security.MessageDigest.getInstance("SHA-256")
                                       .digest(
-                                          outputPath
-                                              .getFileName()
-                                              .toString()
-                                              .getBytes(java.nio.charset.StandardCharsets.UTF_8))),
+                                          outputFilename.getBytes(
+                                              java.nio.charset.StandardCharsets.UTF_8))),
                       "image/png",
-                      outputPath.getFileName().toString(),
+                      outputFilename,
                       bytes)
                   .artifactId()
               : null;

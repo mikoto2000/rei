@@ -204,11 +204,10 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
             timing.markRun(
                 owner.runId(),
                 dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_FRAMEWORK_CHUNK);
-          if (response != null
-              && response.getResult() != null
-              && response.getResult().getOutput() != null
-              && response.getResult().getOutput().getText() != null
-              && !response.getResult().getOutput().getText().isEmpty()) {
+          var generation = response == null ? null : response.getResult();
+          var output = generation == null ? null : generation.getOutput();
+          var content = output == null ? null : output.getText();
+          if (content != null && !content.isEmpty()) {
             measured.mark(dev.mikoto2000.rei.timing.TimingRecorder.Metric.FIRST_GENERATION_TEXT);
             if (owner != null)
               timing.markRun(

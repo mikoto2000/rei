@@ -385,11 +385,14 @@ public class ImplementationRequestService {
     } catch (IllegalArgumentException unavailable) {
       return null;
     }
-    if (receipt == null || !Set.of("READY_FOR_APPROVAL", "FAILED").contains(receipt.status()))
-      return null;
-    if (!Objects.equals(saved.baseCommit(), receipt.baseline())) return null;
+    var terminal =
+        java.util.Optional.ofNullable(receipt)
+            .filter(item -> Set.of("READY_FOR_APPROVAL", "FAILED").contains(item.status()))
+            .orElse(null);
+    if (terminal == null) return null;
+    if (!Objects.equals(saved.baseCommit(), terminal.baseline())) return null;
     return complete(
-        saved, read(saved.canonicalSpecification(), ImplementationSpecification.class), receipt);
+        saved, read(saved.canonicalSpecification(), ImplementationSpecification.class), terminal);
   }
 
   private Outcome complete(

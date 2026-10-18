@@ -162,10 +162,10 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
               if (response.hasToolCalls()
                   || dev.mikoto2000.rei.llm.OutputLimitDetector.isOutputLimitReached(response))
                 throw new IllegalArgumentException("Invalid summary completion");
-              if (response.getResult() != null
-                  && response.getResult().getOutput() != null
-                  && response.getResult().getOutput().getText() != null)
-                result.append(response.getResult().getOutput().getText());
+              var generation = response.getResult();
+              var output = generation == null ? null : generation.getOutput();
+              var content = output == null ? null : output.getText();
+              if (content != null) result.append(content);
               if (result.length() > 8000) throw new IllegalArgumentException("Summary too large");
             })
         .blockLast(timeout);

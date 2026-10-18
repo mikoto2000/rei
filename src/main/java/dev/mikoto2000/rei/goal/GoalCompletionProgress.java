@@ -13,7 +13,28 @@ public record GoalCompletionProgress(
     FileGoalVerifier.Verification verification,
     List<Check> conditions,
     boolean deliveryPending,
-    GoalRepairDiagnosis diagnosis) {
+    GoalRepairDiagnosis diagnosis,
+    GoalStageService.Progress stageProgress) {
+  public GoalCompletionProgress(
+      String goalId,
+      String runId,
+      String state,
+      FileGoalVerifier.Verification verification,
+      List<Check> conditions,
+      boolean deliveryPending,
+      GoalRepairDiagnosis diagnosis) {
+    this(goalId, runId, state, verification, conditions, deliveryPending, diagnosis, null);
+  }
+
+  public GoalCompletionProgress withStages(GoalStageService.Progress stages) {
+    var observed =
+        stages.stages().stream().anyMatch(s -> !s.state().equals("VERIFIED"))
+            ? new FileGoalVerifier.Verification(false, "stage_verification_required")
+            : verification;
+    return new GoalCompletionProgress(
+        goalId, runId, state, observed, conditions, deliveryPending, diagnosis, stages);
+  }
+
   public GoalCompletionProgress(
       String goalId,
       String runId,
@@ -32,6 +53,7 @@ public record GoalCompletionProgress(
   }
 
   public GoalCompletionProgress {
+    conditions = conditions == null ? List.of() : List.copyOf(conditions);
     if (diagnosis == null)
       diagnosis = GoalRepairDiagnosis.of(verification == null ? "" : verification.reason());
   }

@@ -422,8 +422,10 @@ public final class StorageBackup {
 
   static void writeAtomic(Path target, byte[] bytes) throws IOException {
     requireSafePath(target);
-    Files.createDirectories(target.getParent());
-    Path temporary = Files.createTempFile(target.getParent(), "migration-", ".tmp");
+    var parent = target.getParent();
+    if (parent == null) throw new IOException("Backup target needs parent directory");
+    Files.createDirectories(parent);
+    Path temporary = Files.createTempFile(parent, "migration-", ".tmp");
     try {
       Files.write(temporary, bytes);
       force(temporary);

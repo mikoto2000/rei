@@ -119,6 +119,48 @@ public class GoalController {
     return control(() -> loop.progress(projectId, id));
   }
 
+  @GetMapping("/{id}/stages")
+  public dev.mikoto2000.rei.goal.GoalStageService.Progress stages(
+      @PathVariable String projectId, @PathVariable String id) {
+    return control(() -> loop.stageProgress(projectId, id));
+  }
+
+  public record StagePlanRequest(
+      long expectedPlanVersion, List<dev.mikoto2000.rei.goal.GoalStageDefinition> stages)
+      implements StrictApiRequest {
+    public StagePlanRequest {
+      stages = stages == null ? null : List.copyOf(stages);
+    }
+  }
+
+  @PutMapping("/{id}/stages")
+  public List<dev.mikoto2000.rei.goal.GoalStageRepository.Stage> defineStages(
+      @PathVariable String projectId,
+      @PathVariable String id,
+      @RequestBody StagePlanRequest request) {
+    if (request == null || request.expectedPlanVersion() < 0 || request.stages() == null)
+      throw new IllegalArgumentException("Stage plan and observed version required");
+    return control(
+        () -> loop.defineStages(projectId, id, request.expectedPlanVersion(), request.stages()));
+  }
+
+  public record StageEvidenceRequest(long expectedVersion, GoalCompletionGate.Proof proof)
+      implements StrictApiRequest {}
+
+  @PostMapping("/{id}/stages/{stageId}/evidence")
+  public dev.mikoto2000.rei.goal.GoalStageService.Progress stageEvidence(
+      @PathVariable String projectId,
+      @PathVariable String id,
+      @PathVariable String stageId,
+      @RequestBody StageEvidenceRequest request) {
+    if (request == null || request.expectedVersion() < 1 || request.proof() == null)
+      throw new IllegalArgumentException("Stage proof and observed version required");
+    return control(
+        () ->
+            loop.attachStageEvidence(
+                projectId, id, stageId, request.expectedVersion(), request.proof()));
+  }
+
   public record History(
       List<GoalRepository.History> history, List<GoalRepository.Attempt> attempts) {}
 

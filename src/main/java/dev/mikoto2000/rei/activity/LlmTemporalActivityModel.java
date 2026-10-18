@@ -119,10 +119,10 @@ public final class LlmTemporalActivityModel implements TemporalActivityInference
                     usage.accumulateAndGet(tokens, (a, b) -> a == null ? b : Math.max(a, b));
                   if (response.hasToolCalls() || OutputLimitDetector.isOutputLimitReached(response))
                     throw new IllegalArgumentException("Unsupported temporal completion");
-                  if (response.getResult() != null
-                      && response.getResult().getOutput() != null
-                      && response.getResult().getOutput().getText() != null)
-                    text.append(response.getResult().getOutput().getText());
+                  var generation = response.getResult();
+                  var output = generation == null ? null : generation.getOutput();
+                  var content = output == null ? null : output.getText();
+                  if (content != null) text.append(content);
                   if (text.length() > 2000)
                     throw new IllegalArgumentException("Temporal output exceeds limit");
                 })

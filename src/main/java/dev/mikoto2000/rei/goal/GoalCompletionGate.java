@@ -193,6 +193,32 @@ public final class GoalCompletionGate {
 
   public FileGoalVerifier.Verification verify(GoalRepository.Goal goal, FileGoalVerifier files) {
     if (!required(goal)) return new FileGoalVerifier.Verification(true, "criteria_verified");
+    return verify(
+        new Subject(
+            goal.projectId(),
+            goal.projectRoot(),
+            goal.sessionId(),
+            goal.currentRunId(),
+            goal.completion(),
+            goal.completionProof()),
+        files::verify);
+  }
+
+  /** Shared evidence subject: Stage verification never fabricates or persists a temporary Goal. */
+  public record Subject(
+      String projectId,
+      String projectRoot,
+      String sessionId,
+      String currentRunId,
+      Definition completion,
+      Proof completionProof) {}
+
+  @FunctionalInterface
+  public interface FileChecks {
+    FileGoalVerifier.Verification verify(Path root, GoalRepository.FileCriterion criterion);
+  }
+
+  public FileGoalVerifier.Verification verify(Subject goal, FileChecks files) {
     var definition = goal.completion();
     if (definition == null) return failed("completion_definition_missing");
     try {
@@ -336,6 +362,19 @@ public final class GoalCompletionGate {
   }
 
   private boolean ownedArtifact(GoalRepository.Goal goal, Artifact item, Reference ref) {
+    return ownedArtifact(
+        new Subject(
+            goal.projectId(),
+            goal.projectRoot(),
+            goal.sessionId(),
+            goal.currentRunId(),
+            goal.completion(),
+            goal.completionProof()),
+        item,
+        ref);
+  }
+
+  private boolean ownedArtifact(Subject goal, Artifact item, Reference ref) {
     return item != null
         && "AVAILABLE".equals(item.status())
         && item.projectId().equals(goal.projectId())
@@ -469,7 +508,7 @@ public final class GoalCompletionGate {
     }
   }
 
-  private static void criterion(GoalRepository.FileCriterion item) {
+  static void criterion(GoalRepository.FileCriterion item) {
     if (item == null) throw new IllegalArgumentException("File criterion required");
     GoalRepository.validateFile(item.relativeFile());
     if (item.predicateJson() != null) {

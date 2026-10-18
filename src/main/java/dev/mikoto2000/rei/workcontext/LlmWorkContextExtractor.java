@@ -109,8 +109,10 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
                 if (OutputLimitDetector.isOutputLimitReached(r))
                   throw new WorkContextExtractionException(
                       WorkContextExtractionException.Reason.OUTPUT_TRUNCATED);
-                if (r.getResult() != null && r.getResult().getOutput().getText() != null)
-                  result.append(r.getResult().getOutput().getText());
+                var generation = r.getResult();
+                var message = generation == null ? null : generation.getOutput();
+                var content = message == null ? null : message.getText();
+                if (content != null) result.append(content);
                 if (result.length()
                     > dev.mikoto2000.rei.subagent.SubAgentResultParser.MAX_OUTPUT_CHARS)
                   throw new WorkContextExtractionException(

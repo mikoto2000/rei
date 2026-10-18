@@ -202,6 +202,14 @@ public class GoalRepository {
   private final Clock clock;
   private final dev.mikoto2000.rei.llm.LlmProperties properties;
 
+  <T> T atomic(java.util.function.Supplier<T> action) {
+    return transaction.execute(status -> action.get());
+  }
+
+  JdbcClient jdbc() {
+    return db;
+  }
+
   public GoalRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, Clock clock) {
     this(source, clock, new dev.mikoto2000.rei.llm.LlmProperties());
@@ -216,6 +224,10 @@ public class GoalRepository {
     db = JdbcClient.create(source);
     transaction = new TransactionTemplate(new DataSourceTransactionManager(source));
     this.clock = clock;
+    db.sql(GoalStageRepository.STAGES_SCHEMA).update();
+    db.sql(
+            "CREATE TABLE IF NOT EXISTS agent_goal_stage_plans(goal TEXT PRIMARY KEY,version INTEGER NOT NULL,definition TEXT NOT NULL,changed_at TEXT NOT NULL)")
+        .update();
     db.sql(
             "CREATE TABLE IF NOT EXISTS agent_goals(id TEXT PRIMARY KEY,project TEXT NOT NULL,root TEXT NOT NULL,session TEXT NOT NULL,objective TEXT NOT NULL,file TEXT NOT NULL,digest TEXT NOT NULL,max_runs INTEGER NOT NULL,max_calls INTEGER NOT NULL,attempts INTEGER NOT NULL DEFAULT 0,used INTEGER NOT NULL DEFAULT 0,status TEXT NOT NULL,run TEXT,token TEXT,reason TEXT NOT NULL DEFAULT '')")
         .update();
@@ -338,7 +350,7 @@ public class GoalRepository {
     var goal = get(owner.projectId(), id);
     completionOwner(owner, goal);
     if (db.sql(
-                "UPDATE agent_goals SET completion_json=?,completion_proof_json=NULL WHERE id=? AND project=? AND root=? AND session=? AND status NOT IN ('RUNNING','COMPLETED','CANCELLED')")
+                "UPDATE agent_goals SET completion_json=?,completion_proof_json=NULL WHERE id=? AND project=? AND root=? AND session=? AND status NOT IN ('RUNNING','COMPLETED','CANCELLED') AND NOT EXISTS(SELECT 1 FROM agent_goal_stage_plans WHERE goal=agent_goals.id)")
             .params(
                 json, id, owner.projectId(), owner.projectRoot().toString(), owner.conversationId())
             .update()
@@ -788,12 +800,35 @@ public class GoalRepository {
       throw new IllegalArgumentException("Invalid Goal state");
     transaction.executeWithoutResult(
         status -> {
+          String effectiveState = state;
+          String effectiveReason = reason;
+          if (state.equals("COMPLETED")) {
+            if (db.sql(
+                        "UPDATE agent_goals SET attempts=attempts WHERE id=? AND project=? AND token=? AND status='RUNNING'")
+                    .params(claim.goal().id(), claim.goal().projectId(), claim.token())
+                    .update()
+                != 1) throw new IllegalStateException("Goal claim inactive");
+            if (db.sql(
+                        "SELECT COUNT(*) FROM agent_goals WHERE id=? AND EXISTS(SELECT 1 FROM agent_goal_stages s WHERE s.goal=agent_goals.id AND (s.state<>'VERIFIED' OR s.evidence IS NULL OR NOT EXISTS(SELECT 1 FROM agent_goal_stage_plans p WHERE p.goal=s.goal AND p.version=s.plan_version)))")
+                    .param(claim.goal().id())
+                    .query(Integer.class)
+                    .single()
+                > 0) {
+              effectiveState = "BLOCKED";
+              effectiveReason = "stage_verification_required";
+            }
+          }
           if (db.sql(
                       "UPDATE agent_goals SET status=?,reason=?,token=NULL,tokens_unknown=CASE WHEN max_tokens>0 AND tokens_pending>0 THEN 1 ELSE tokens_unknown END WHERE id=? AND project=? AND token=? AND status='RUNNING'")
-                  .params(state, reason, claim.goal().id(), claim.goal().projectId(), claim.token())
+                  .params(
+                      effectiveState,
+                      effectiveReason,
+                      claim.goal().id(),
+                      claim.goal().projectId(),
+                      claim.token())
                   .update()
               != 1) throw new IllegalStateException("Goal claim inactive");
-          history(claim.goal().id(), state, reason);
+          history(claim.goal().id(), effectiveState, effectiveReason);
         });
     return get(claim.goal().projectId(), claim.goal().id());
   }
@@ -806,6 +841,14 @@ public class GoalRepository {
         goal.criteria().stream().anyMatch(FileCriterion::jsonCriterion)
             ? "criteria_verified"
             : "file_digest_verified");
+  }
+
+  void staleStageCompletion(Goal expected) {
+    if (db.sql(
+                "UPDATE agent_goals SET status='BLOCKED',reason='stage_evidence_stale' WHERE project=? AND id=? AND status='COMPLETED' AND EXISTS(SELECT 1 FROM agent_goal_stages WHERE goal=agent_goals.id AND state<>'VERIFIED')")
+            .params(expected.projectId(), expected.id())
+            .update()
+        == 1) history(expected.id(), "BLOCKED", "stage_evidence_stale");
   }
 
   public Goal verifiedWithoutRun(String project, String id, String verifiedReason) {
@@ -823,7 +866,7 @@ public class GoalRepository {
           get(project, id);
           String reason = verifiedReason;
           if (db.sql(
-                      "UPDATE agent_goals SET status='COMPLETED',reason=? WHERE project=? AND id=? AND status NOT IN ('RUNNING','CANCELLED','COMPLETED') AND completion_json IS ? AND completion_proof_json IS ?")
+                      "UPDATE agent_goals SET status='COMPLETED',reason=? WHERE project=? AND id=? AND status NOT IN ('RUNNING','CANCELLED','COMPLETED') AND completion_json IS ? AND completion_proof_json IS ? AND NOT EXISTS(SELECT 1 FROM agent_goal_stages s WHERE s.goal=agent_goals.id AND (s.state<>'VERIFIED' OR s.evidence IS NULL OR NOT EXISTS(SELECT 1 FROM agent_goal_stage_plans p WHERE p.goal=s.goal AND p.version=s.plan_version)))")
                   .params(reason, project, id, definition, proof)
                   .update()
               != 1)

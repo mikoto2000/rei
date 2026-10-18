@@ -46,6 +46,12 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
   private final AgentEventFactory events;
   private final AgentEventPublisher publisher;
   private int repairReserveCalls = 2;
+  private GoalStageService stages;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void configureStages(GoalStageService stages) {
+    this.stages = stages;
+  }
 
   @org.springframework.beans.factory.annotation.Value("${rei.goal.repair-reserve-calls:2}")
   public void configureRepairReserve(int calls) {
@@ -147,7 +153,10 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
                       outcome = new GoalLoopService.Outcome(ChatExecutionResult.cancelled());
                     } else {
                       validate(goal);
-                      if (verifier.verify(goal).satisfied())
+                      var stageVerification = stages == null ? null : stages.observeRun(goal, run);
+                      if (stageVerification == null
+                          ? verifier.verify(goal).satisfied()
+                          : stageVerification.result() == GoalStageVerifier.Result.VERIFIED)
                         outcome =
                             new GoalLoopService.Outcome(
                                 ChatExecutionResult.success("Criterion already satisfied", false));
@@ -173,6 +182,7 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
                                 + (uncertain
                                     ? " An earlier Run has unknown side effects. Inspect current artifacts and saved history before deciding whether any action needs to be repeated."
                                     : "");
+                        if (stages != null) prompt += stages.prompt(goal, run);
                         var previous =
                             goals.attempts(goal.projectId(), goal.id()).stream()
                                 .filter(a -> !a.runId().equals(run))
