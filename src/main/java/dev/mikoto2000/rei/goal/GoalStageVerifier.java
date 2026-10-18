@@ -22,7 +22,17 @@ public final class GoalStageVerifier {
       Result result,
       String reason,
       Map<String, String> artifactVersions,
-      Map<String, Long> dependencyVersions) {
+      Map<String, Long> dependencyVersions,
+      int satisfiedConditions,
+      int totalConditions) {
+    public Observation(
+        Result result,
+        String reason,
+        Map<String, String> artifacts,
+        Map<String, Long> dependencies) {
+      this(result, reason, artifacts, dependencies, 0, 0);
+    }
+
     public Observation {
       artifactVersions = Map.copyOf(artifactVersions);
       dependencyVersions = Map.copyOf(dependencyVersions);
@@ -60,8 +70,12 @@ public final class GoalStageVerifier {
     }
     var root = Path.of(goal.projectRoot());
     FileGoalVerifier.Verification failure = null;
+    int satisfied = 0;
+    int total =
+        stage.definition().criteria().size() + (stage.definition().completion() == null ? 0 : 1);
     for (var criterion : stage.definition().criteria()) {
       var observed = files.verify(root, criterion);
+      if (observed.satisfied()) satisfied++;
       var fingerprint = files.fingerprint(root, criterion.relativeFile());
       versions.put(
           criterion.relativeFile(),
@@ -102,10 +116,14 @@ public final class GoalStageVerifier {
                       stage.definition().completion(),
                       stage.proof()),
                   files);
-      if (failure.satisfied()) failure = null;
+      if (failure.satisfied()) {
+        failure = null;
+        satisfied++;
+      }
     }
     if (failure == null)
-      return new Observation(Result.VERIFIED, "criteria_verified", versions, dependencies);
+      return new Observation(
+          Result.VERIFIED, "criteria_verified", versions, dependencies, satisfied, total);
     var diagnosis = GoalRepairDiagnosis.of(failure.reason());
     return new Observation(
         diagnosis.repairable()
@@ -115,6 +133,8 @@ public final class GoalStageVerifier {
                 : Result.UNKNOWN,
         failure.reason(),
         versions,
-        dependencies);
+        dependencies,
+        satisfied,
+        total);
   }
 }

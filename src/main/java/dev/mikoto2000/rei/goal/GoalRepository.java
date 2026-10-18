@@ -819,6 +819,14 @@ public class GoalRepository {
             : "file_digest_verified");
   }
 
+  void staleStageCompletion(Goal expected) {
+    if (db.sql(
+                "UPDATE agent_goals SET status='BLOCKED',reason='stage_evidence_stale' WHERE project=? AND id=? AND status='COMPLETED' AND EXISTS(SELECT 1 FROM agent_goal_stages WHERE goal=agent_goals.id AND state<>'VERIFIED')")
+            .params(expected.projectId(), expected.id())
+            .update()
+        == 1) history(expected.id(), "BLOCKED", "stage_evidence_stale");
+  }
+
   public Goal verifiedWithoutRun(String project, String id, String verifiedReason) {
     return verifiedWithoutRun(get(project, id), verifiedReason);
   }

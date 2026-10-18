@@ -54,6 +54,7 @@ public final class GoalStagePlanValidator {
         if (!ancestors.add(current.id()) || ancestors.size() > 3)
           throw new IllegalArgumentException("Stage parent cycle or depth limit");
         current = byId.get(current.parentStageId());
+        if (current == null) throw new IllegalArgumentException("Unknown parent stage reference");
       }
     }
     var visited = new HashSet<String>();

@@ -56,6 +56,8 @@ public class GoalLoopService {
     var goal = goals.get(project, id);
     gateway.validate(goal);
     if (stages == null) throw new IllegalStateException("Stages unavailable");
+    if (waits != null && waits.active(project, id))
+      throw new IllegalStateException("Cancel the active Goal wait before changing stages");
     var result = stages.define(goal, version, plan);
     events.publish(goals.get(project, id));
     return result;
@@ -301,7 +303,13 @@ public class GoalLoopService {
 
   public GoalRepository.Goal cancel(String project, String id) {
     var before = goals.get(project, id);
-    var goal = goals.cancel(project, id);
+    var goal =
+        goals.atomic(
+            () -> {
+              var cancelled = goals.cancel(project, id);
+              if (stages != null) stages.cancelled(cancelled);
+              return cancelled;
+            });
     if (before.status().equals("RUNNING")) gateway.cancel(goal);
     events.publish(goal);
     return goal;
@@ -310,7 +318,13 @@ public class GoalLoopService {
   public GoalRepository.Goal cancel(
       String project, String id, String expectedRun, long expectedAttempts) {
     var before = goals.get(project, id);
-    var goal = goals.cancel(project, id, expectedRun, expectedAttempts);
+    var goal =
+        goals.atomic(
+            () -> {
+              var cancelled = goals.cancel(project, id, expectedRun, expectedAttempts);
+              if (stages != null) stages.cancelled(cancelled);
+              return cancelled;
+            });
     if (before.status().equals("RUNNING")) gateway.cancel(goal);
     events.publish(goal);
     return goal;

@@ -221,3 +221,5 @@ SSE bridge の破棄時には送信完了を最大 2 秒待機します。切断
 Session単位の会話スタイル、音声限定設定、実行能力・承認を維持する仕様は [Phase 7](docs/voice-input-phase7.md) を参照してください。
 
 音声入力・会話モードのPR一覧、利用手順、実測結果と未対応範囲は [実装記録](docs/voice-input-implementation-report.md) を参照してください。
+
+Goal / Stage の責務、永続化、再開と操作は [Goal Stage実装](docs/goal-stage-implementation.md)、比較評価は [Goal Stage評価](docs/goal-stage-evaluation.md) を参照してください。

@@ -414,6 +414,15 @@ public class GoalStageRepository {
           var goal = goals.get(expected.projectId(), expected.id());
           if (java.util.Set.of("RUNNING", "COMPLETED", "CANCELLED").contains(goal.status()))
             throw new IllegalStateException("Stop the Goal before attaching stage evidence");
+          var stage =
+              list(goal).stream()
+                  .filter(s -> s.definition().id().equals(stageId))
+                  .findFirst()
+                  .orElseThrow(() -> new IllegalArgumentException("Stage not found"));
+          if (stage.state().equals("BLOCKED")
+              && !GoalRepairDiagnosis.of(stage.reason()).repairable())
+            throw new IllegalStateException(
+                "Evidence cannot authorize replay of an unknown or rejected operation");
           if (db.sql(
                       "UPDATE agent_goal_stages SET proof=?,state='STALE',version=version+1 WHERE goal=? AND id=? AND version=? AND state NOT IN ('RUNNING','DECOMPOSED')")
                   .params(encode(proof), goal.id(), stageId, version)
@@ -432,6 +441,17 @@ public class GoalStageRepository {
     db.sql(
             "UPDATE agent_goal_stages SET state='STALE',reason='uncertain_run_reconciled',version=version+1 WHERE goal=? AND id IN (SELECT stage FROM agent_goal_stage_attempts WHERE goal=? AND run=?) AND state IN ('RUNNING','VERIFYING')")
         .params(goal.id(), goal.id(), run)
+        .update();
+  }
+
+  void cancelled(GoalRepository.Goal goal) {
+    db.sql(
+            "UPDATE agent_goal_stage_attempts SET status='CANCELLED',reason='human_cancelled',finished_at=?,calls_used=?-calls_start,tokens_used=?-tokens_start WHERE goal=? AND status='RUNNING'")
+        .params(clock.instant().toString(), goal.llmCallsUsed(), goal.totalTokens(), goal.id())
+        .update();
+    db.sql(
+            "UPDATE agent_goal_stages SET state='BLOCKED',reason='human_cancelled',version=version+1 WHERE goal=? AND state<>'VERIFIED'")
+        .param(goal.id())
         .update();
   }
 

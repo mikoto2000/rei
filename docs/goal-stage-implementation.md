@@ -129,3 +129,12 @@ JSON predicateのfeature flagは既存設定に従う。
 completion-progressの既存フィールドを維持しstageProgressを追加。工程状態・証拠・無効化理由・
 試行/修復履歴・計画履歴・残Run/call/token・停止理由・再開操作を取得できる。
 Goal.updatedイベントには小さい工程状態一覧と証拠参照を追加し、詳細履歴はprogress APIで取得する。
+
+## Phase 5 / 最終検証
+
+評価と実モデル接続状況は [Goal Stage 評価](goal-stage-evaluation.md) を参照。
+追加安全性テストで、不明結果の証拠添付による再実行承認を拒否し、不正な親参照を検証エラーにする。
+Stage付きGoalの完了後も証拠変更でSTALE・Goal BLOCKEDへ戻し、残予算内で明示再開できる。
+キャンセルはGoalとStage Attemptを同じtransactionで閉じる。
+修復観測には条件充足数/総条件数を保存し、同じ観測の反復と条件改善を区別できる。
+`rei.goal.stage.allow-split` と `rei.goal.stage.max-repairs` で4方式を切り替える。
