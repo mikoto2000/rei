@@ -114,10 +114,9 @@ public class ProjectShellActivity implements AgentEventListener {
           activeRuns == null ? event.projectId() : activeRuns.projectName(event.projectId()));
       return;
     }
-    if (visibleSession != null
-        && visibleProject.equals(event.projectId())
+    if (visibleProject.equals(event.projectId())
         && event.sessionId() != null
-        && !visibleSession.equals(event.sessionId())) return;
+        && !visibleConversation().equals(event.sessionId())) return;
     if (activeRuns != null
         && event.projectId() != null
         && !event.projectId().equals(visibleProject)
@@ -156,7 +155,7 @@ public class ProjectShellActivity implements AgentEventListener {
               + states.read(project.id()).map(ProjectRunStateStore.State::status).orElse("none"));
     output.println("Recent activity:");
     for (var event : store.recent(project.id(), Math.max(1, Math.min(recentLimit, 1000))))
-      if (visibleSession == null || visibleSession.equals(event.sessionId()))
+      if (event.sessionId() == null || visibleConversation().equals(event.sessionId()))
         renderer.onRecentEvent(event);
     output.flush();
   }
@@ -167,6 +166,11 @@ public class ProjectShellActivity implements AgentEventListener {
    */
   public synchronized void refreshSession() {
     refreshSession(true);
+  }
+
+  private String visibleConversation() {
+    // No selected Session means the legacy Shell conversation, not every client Session.
+    return visibleSession == null ? "project:" + visibleProject + ":chat:main" : visibleSession;
   }
 
   private void refreshSession(boolean showContext) {

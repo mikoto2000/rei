@@ -61,8 +61,8 @@ class WebApiEventDtoTest {
             f.workingSetSearchCompleted("search", 20, 2, 2, 1, 0, 2, 3),
             f.workingSetContextInjected(2, 300),
             f.thinkingStarted("think"),
-            f.thinkingDelta("think", "private"),
-            f.thinkingCompleted("think", "private"));
+            f.thinkingDelta("think", "considering"),
+            f.thinkingCompleted("think", "considering"));
     long sequence = 0;
     for (var sample : samples) {
       var e = sample.withOwnership(RunRegistryTest.context("run"));
@@ -157,10 +157,26 @@ class WebApiEventDtoTest {
         .containsEntry("actualSelectedSkill", "coding")
         .doesNotContainKey("topCandidates");
     assertThat(
-            WebApiEventDto.from(factory.thinkingDelta("thinking", "private reasoning"), false, "")
+            WebApiEventDto.from(factory.thinkingDelta("thinking", "considering"), false, "")
                 .payload())
         .containsEntry("thinkingId", "thinking")
-        .doesNotContainKey("delta");
+        .containsEntry("delta", "considering");
+  }
+
+  @Test
+  void thinkingTextReachesClientsWithCredentialRedaction() {
+    var factory = new AgentEventFactory(Clock.systemUTC());
+    assertThat(WebApiEventDto.from(factory.thinkingStarted("t"), false, "api-secret").payload())
+        .containsOnlyKeys("thinkingId");
+    String text = "検討中 api-secret Bearer bearer-value password=hidden";
+    var delta = WebApiEventDto.from(factory.thinkingDelta("t", text), false, "api-secret");
+    var completed = WebApiEventDto.from(factory.thinkingCompleted("t", text), false, "api-secret");
+    assertThat(delta.payload()).containsOnlyKeys("thinkingId", "delta");
+    assertThat(completed.payload()).containsOnlyKeys("thinkingId", "text");
+    assertThat(delta.payload().get("delta")).isEqualTo(completed.payload().get("text"));
+    assertThat(delta.payload().get("delta").toString())
+        .contains("検討中", "[REDACTED]")
+        .doesNotContain("api-secret", "bearer-value", "hidden");
   }
 
   @Test

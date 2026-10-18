@@ -29,6 +29,54 @@ import org.springframework.ai.chat.memory.ChatMemory;
 @org.junit.jupiter.api.Tag("integration")
 class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
   @Test
+  void unselectedShellDoesNotDisplayAnotherClientsConversationOrReplayIt() throws Exception {
+    var projects =
+        connect(new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json"))));
+    var project = projects.currentContext();
+    var store = new ProjectAgentEventStore(temp);
+    var events = new AgentEventFactory(Clock.systemUTC());
+    var foreign = new AgentRunContext("cli-run", "cli-session", project.root(), project.id());
+    var shell = new AgentRunContext("shell-run", project, "chat:main");
+    var foreignTool = events.toolStarted("cli-tool", "CLI-ONLY", "{}").withOwnership(foreign);
+    store.append(foreignTool);
+    var output = mock(ShellEventOutput.class);
+    var activity =
+        new ProjectShellActivity(
+            projects,
+            store,
+            new ProjectRunStateStore(temp),
+            new WorkingSet(),
+            mock(ChatMemory.class));
+    activity.attach(output);
+    clearInvocations(output);
+    activity.onEvent(events.thinkingStarted("cli-thinking").withOwnership(foreign));
+    activity.onEvent(events.thinkingDelta("cli-thinking", "CLI-THINKING").withOwnership(foreign));
+    activity.onEvent(events.messageStarted("cli-message", "assistant").withOwnership(foreign));
+    activity.onEvent(events.messageDelta("cli-message", "CLI-ANSWER").withOwnership(foreign));
+    activity.onEvent(foreignTool);
+    org.mockito.Mockito.verifyNoInteractions(output);
+
+    activity.onEvent(events.messageStarted("shell-message", "assistant").withOwnership(shell));
+    activity.onEvent(events.messageDelta("shell-message", "SHELL-ANSWER").withOwnership(shell));
+    verify(output).print("SHELL-ANSWER");
+    clearInvocations(output);
+    activity.restore(project);
+    verify(output, never()).println(org.mockito.ArgumentMatchers.contains("CLI-ONLY"));
+
+    // Explicitly selecting the shared Session still allows following it from the Shell.
+    projects.selectSession("cli-session");
+    activity.onEvent(events.messageStarted("shared-message", "assistant").withOwnership(foreign));
+    activity.onEvent(events.messageDelta("shared-message", "SHARED-ANSWER").withOwnership(foreign));
+    verify(output).print("SHARED-ANSWER");
+
+    projects.selectSession(null);
+    activity.refreshSession();
+    clearInvocations(output);
+    activity.onEvent(foreignTool);
+    org.mockito.Mockito.verifyNoInteractions(output);
+  }
+
+  @Test
   void approvalFramesReachStyledOutputOnlyForTheSelectedSession() throws Exception {
     var projects =
         connect(new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json"))));

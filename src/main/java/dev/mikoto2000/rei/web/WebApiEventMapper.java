@@ -44,7 +44,9 @@ public final class WebApiEventMapper {
           case MESSAGE_STARTED -> "messageId role";
           case MESSAGE_DELTA -> "messageId delta";
           case MESSAGE_COMPLETED -> "messageId role text";
-          case THINKING_STARTED, THINKING_DELTA, THINKING_COMPLETED -> "thinkingId";
+          case THINKING_STARTED -> "thinkingId";
+          case THINKING_DELTA -> "thinkingId delta";
+          case THINKING_COMPLETED -> "thinkingId text";
           case TOOL_STARTED -> "toolCallId toolName";
           case TOOL_COMPLETED -> "toolCallId toolName duration files bytes matches items";
           case TOOL_FAILED -> "toolCallId toolName error";
