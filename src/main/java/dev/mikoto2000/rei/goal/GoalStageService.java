@@ -24,6 +24,14 @@ public class GoalStageService {
   private final GoalStageRepository stages;
   private final GoalStageVerifier verifier;
   private final GoalRepository goals;
+  private int maxRepairs = 2;
+
+  @org.springframework.beans.factory.annotation.Value("${rei.goal.stage.max-repairs:2}")
+  public void configureRepair(int maxRepairs) {
+    if (maxRepairs < 0 || maxRepairs > 5)
+      throw new IllegalArgumentException("Stage repair bound 0..5 required");
+    this.maxRepairs = maxRepairs;
+  }
 
   public GoalStageService(
       GoalStageRepository stages, GoalStageVerifier verifier, GoalRepository goals) {
@@ -91,6 +99,13 @@ public class GoalStageService {
               .filter(s -> selectedId.equals(s.definition().parentStageId()))
               .allMatch(s -> s.state().equals("VERIFIED"));
       if (dependencies && children) {
+        if (stage.state().equals("REPAIRING")) {
+          String blocker = repairBlocker(goal, stage);
+          if (!blocker.isEmpty()) {
+            stages.state(goal, stage, "BLOCKED", stage.reason());
+            return new Selection(null, false, blocker);
+          }
+        }
         if (stage.state().equals("DECOMPOSED")) {
           stages.state(goal, stage, "TODO", "parent_requires_verification");
           stage =
@@ -107,6 +122,29 @@ public class GoalStageService {
 
   private static String stageId(GoalStageRepository.Stage stage) {
     return stage.definition().id();
+  }
+
+  private String repairBlocker(GoalRepository.Goal goal, GoalStageRepository.Stage stage) {
+    if (!GoalRepairDiagnosis.of(stage.reason()).repairable()) return "stage_repair_not_allowed";
+    var failures =
+        stages.attempts(goal).stream()
+            .filter(
+                a ->
+                    a.stageId().equals(stageId(stage))
+                        && a.planVersion() == stage.planVersion()
+                        && a.status().equals("UNSATISFIED"))
+            .toList();
+    if (failures.size() > maxRepairs) return "stage_repair_limit";
+    if (failures.size() >= 2) {
+      var previous =
+          GoalStageRepository.decode(
+              failures.get(failures.size() - 2).observation(), GoalStageVerifier.Observation.class);
+      var latest =
+          GoalStageRepository.decode(
+              failures.getLast().observation(), GoalStageVerifier.Observation.class);
+      if (previous.equals(latest)) return "stage_repair_stalled";
+    }
+    return "";
   }
 
   public GoalStageRepository.Attempt begin(

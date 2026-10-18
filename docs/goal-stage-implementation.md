@@ -55,3 +55,20 @@ GoalCompletionEvaluationTest / GoalCompletionBaselineTest 計29件成功。
 最初のbaseline実行は未実装テストの追加と競合したため無効。上記Green実行でStageなしの旧経路を再測定した。
 legacy fixture の独立条件成立率は7/10、応答中の誤完了申告率は3/10。
 これはhostが誤ってCOMPLETEDにした率とは別で、実LLMの改善率でもない。
+
+## Phase 2 / 3 — 既存Loop内の実行・再開・修復
+
+Phase 2の工程/旧Goal/再開/Wait回帰34件、Phase 3の工程修復/旧修復/token回帰28件が成功。
+GoalLoopService.nextの既存予算確認・beginAttemptとStage Attempt admissionを同じtransactionへ入れる。
+成功callback後のStage証拠・状態とGoal attempt記録も同じtransaction。重複通知は既存claim/RunとAttemptで拒否。
+プロセスがcommit後・次dispatch前に終了した場合も、明示reconcile後はVERIFIED工程を再実行しない。
+SQLiteは外部操作と原子化しない。結果不明はBLOCKED、permission_requiredは既存Goal承認待ち、
+再起動時のRUNNINGは既存の人間向けreconcileが必要。承認解除や外部操作の再実行を起動時に行わない。
+
+Stage状態: TODO/STALE/REPAIRING → RUNNING → host検証 → VERIFIED または REPAIRING / BLOCKED。
+Goal completion phase VERIFYING中に独立検証する。DECOMPOSEDは全子がVERIFIED後に親自身を再検証する。
+StageのVERIFIEDはGoal全体の検証を置き換えない。後工程が前工程を壊すとSTALEを依存へ伝播して停止する。
+
+修復は既存GoalRepairDiagnosisのrepairable理由だけに限定する。max-repairs既定2、設定範囲0..5。
+各試行の観測（理由・成果SHA・依存版）が2回同じ場合はstage_repair_stalledで停止する。
+別の成果へ変化していても上限でstage_repair_limitに停止。Goal予算を補充しない。
