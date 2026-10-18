@@ -283,7 +283,12 @@ public class GoalStageService {
 
   public String prompt(GoalRepository.Goal goal, String run) {
     var attempt = stages.forRun(goal, run);
-    if (attempt == null) return "";
+    if (attempt == null)
+      return enabled(goal)
+          ? "\nFinal Goal repair: preserve all independently verified Stage contracts and artifacts: "
+              + stages.list(goal)
+              + "\nThe host revalidates every Stage after this Run."
+          : "";
     var current = stages.list(goal);
     var active =
         current.stream()

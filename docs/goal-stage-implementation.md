@@ -156,3 +156,14 @@ optional注入参照のlocal captureにより追加指摘を解消する。基�
 - ローカル全回帰はApprovalChatIntegrationTestのlatch待機で停滞し、thread dumpを保存して停止した。
   同テストは新規単独JVMで成功。全体の最終判定はPR #125の最新commitに対する全回帰CIも確認する。
 - 途中CIは5,979件中、追加CLI候補の旧期待値1件だけ失敗。期待値を上記の通り拡張して再実行する。
+
+## 完了判定境界の追加検証
+
+5979件の全回帰がローカル/CIとも成功した後、追加監査で次をRedで確認し修正した。
+
+- Stageを持たない最終Goal修復Runも、全Stageの現在証拠を再検証する。前工程を壊したらGoalをBLOCKEDにする。
+- 明示verifyでは実際に検証したGoalの定義/proof snapshotをCASへ渡し、検証中の定義変更を成功にしない。
+- reconcile時も中断Stage Attemptの予約済みcall/報告済みtoken差分を履歴へ保存し、Goal予算を変更しない。
+
+追加3ケースを含む安全性16件、全Goal/HTTP/CLIなど176件が成功した。
+これらを含む最新commitの必須CIも再確認してからマージする。

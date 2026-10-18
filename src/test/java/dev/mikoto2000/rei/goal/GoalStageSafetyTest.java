@@ -218,4 +218,81 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
         .run("project", goal.id());
     assertEquals(1, stages.planVersion(goal));
   }
+
+  @Test
+  void finalGoalRepairCannotBypassReverificationOfPreviouslyVerifiedStages() {
+    setup();
+    var goal =
+        goals.create(
+            new AgentRunContext("human", "session", dir, "project"),
+            "Final artifact",
+            List.of(criterion("final")),
+            5,
+            10);
+    stages.define(goal, 0, List.of(stage("a")));
+    var result =
+        loop((claim, run, complete) -> {
+              if (stages.forRun(goal, run) != null) write("a", true);
+              else {
+                write("final", true);
+                write("a", false);
+              }
+              complete.accept(done());
+            })
+            .run("project", goal.id());
+    assertEquals("BLOCKED", result.status());
+    assertEquals("STALE", stages.list(goal).getFirst().state());
+    assertTrue(files.verify(result).satisfied());
+  }
+
+  @Test
+  void goalCompletionKeepsTheVerifiedDefinitionSnapshotAcrossConcurrentChanges() {
+    setup();
+    write("a", true);
+    var owner = new AgentRunContext("human", "session", dir, "project");
+    var goal = goals.create(owner, "Snapshot", List.of(criterion("a")), 5, 10);
+    var stronger =
+        new GoalCompletionGate.Definition(
+            List.of(new GoalRepository.FileCriterion("proof.txt", "b".repeat(64))),
+            null,
+            List.of(),
+            List.of(),
+            null);
+    files =
+        new FileGoalVerifier() {
+          @Override
+          public Verification verify(GoalRepository.Goal snapshot) {
+            goals.defineCompletion(owner, snapshot.id(), stronger);
+            return new Verification(true, "criteria_verified");
+          }
+        };
+    var loop = loop((claim, run, complete) -> {});
+    assertThrows(IllegalStateException.class, () -> loop.verify("project", goal.id()));
+    assertEquals("READY", goals.get("project", goal.id()).status());
+  }
+
+  @Test
+  void reconciliationPreservesReservedUsageOfInterruptedStageAttempt() {
+    var goal = setup();
+    var claim = goals.claim("project", goal.id());
+    var run = goals.beginAttempt(claim);
+    stages.begin(claim, run, stages.list(goal).getFirst());
+    assertTrue(goals.reserveLlm(claim, run));
+    assertTrue(goals.reserveLlm(claim, run));
+    var loop =
+        loop(
+            new GoalLoopService.Gateway() {
+              public void dispatch(
+                  GoalRepository.Claim ignored,
+                  String next,
+                  java.util.function.Consumer<GoalLoopService.Outcome> complete) {}
+
+              public boolean isInFlight(GoalRepository.Goal ignored) {
+                return false;
+              }
+            });
+    loop.reconcile("project", goal.id(), run);
+    assertEquals(2, stages.attempts(goal).getFirst().callsUsed());
+    assertEquals(2, goals.get("project", goal.id()).llmCallsUsed());
+  }
 }

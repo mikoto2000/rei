@@ -435,8 +435,8 @@ public class GoalStageRepository {
   /** Only after the human reconciles the exact Goal Run; never an automatic startup replay. */
   void reconcile(GoalRepository.Goal goal, String run) {
     db.sql(
-            "UPDATE agent_goal_stage_attempts SET status='UNKNOWN',reason='uncertain_run_reconciled',finished_at=? WHERE goal=? AND run=? AND status='RUNNING'")
-        .params(clock.instant().toString(), goal.id(), run)
+            "UPDATE agent_goal_stage_attempts SET status='UNKNOWN',reason='uncertain_run_reconciled',finished_at=?,calls_used=?-calls_start,tokens_used=?-tokens_start WHERE goal=? AND run=? AND status='RUNNING'")
+        .params(clock.instant().toString(), goal.llmCallsUsed(), goal.totalTokens(), goal.id(), run)
         .update();
     db.sql(
             "UPDATE agent_goal_stages SET state='STALE',reason='uncertain_run_reconciled',version=version+1 WHERE goal=? AND id IN (SELECT stage FROM agent_goal_stage_attempts WHERE goal=? AND run=?) AND state IN ('RUNNING','VERIFYING')")

@@ -277,12 +277,11 @@ public class GoalLoopService {
     var verification = verifier.verify(goal);
     if (stages != null && !stages.allVerified(goal))
       verification = new FileGoalVerifier.Verification(false, "stage_verification_required");
-    goal = goals.get(project, id);
     if (verification.satisfied()
         && !java.util.Set.of("COMPLETED", "RUNNING", "CANCELLED").contains(goal.status())) {
       goal = goals.verifiedWithoutRun(goal, verification.reason());
       events.publish(goal);
-    }
+    } else goal = goals.get(project, id);
     return new Inspection(goal, verification);
   }
 
@@ -493,7 +492,14 @@ public class GoalLoopService {
         return;
       }
     }
-    var verification = verifier.verify(goals.get(claim.goal().projectId(), claim.goal().id()));
+    var verifiedGoal = goals.get(claim.goal().projectId(), claim.goal().id());
+    var verification = verifier.verify(verifiedGoal);
+    // Final Goal repair Runs have no Stage Attempt, but must preserve every Stage contract too.
+    if (stageManagement != null && !stageManagement.allVerified(verifiedGoal)) {
+      recordAttempt(claim, run, "UNVERIFIED", "stage_evidence_stale");
+      stop(claim, "BLOCKED", "stage_evidence_stale");
+      return;
+    }
     recordAttempt(
         claim, run, verification.satisfied() ? "VERIFIED" : "UNVERIFIED", verification.reason());
     if (verification.satisfied()) {
