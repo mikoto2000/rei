@@ -158,4 +158,86 @@ class GoalStageRepositoryTest {
     assertEquals("VERIFIED", reopened.list(goal).getFirst().state());
     assertEquals(1, reopened.evidence(goal).size());
   }
+
+  @Test
+  void verifiedGoalCommitRejectsAnUnverifiedStagePlan() throws Exception {
+    var goals = goals();
+    var goal = goal(goals);
+    Files.writeString(dir.resolve("final.json"), "{\"ok\":true}");
+    var stages = new GoalStageRepository(Clock.systemUTC(), goals);
+    stages.define(goal, 0, List.of(stage("a")));
+    assertTrue(new FileGoalVerifier().verify(goal).satisfied());
+    assertThrows(
+        IllegalStateException.class, () -> goals.verifiedWithoutRun(goal, "criteria_verified"));
+    assertEquals("READY", goals.get("project", goal.id()).status());
+  }
+
+  @Test
+  void completionStopReleasesClaimAsBlockedWhenStagesAreNotVerified() throws Exception {
+    var goals = goals();
+    var goal = goal(goals);
+    Files.writeString(dir.resolve("final.json"), "{\"ok\":true}");
+    var stages = new GoalStageRepository(Clock.systemUTC(), goals);
+    stages.define(goal, 0, List.of(stage("a")));
+    var claim = goals.claim("project", goal.id());
+    var stopped = goals.stop(claim, "COMPLETED", "criteria_verified");
+    assertEquals("BLOCKED", stopped.status());
+    assertEquals("stage_verification_required", stopped.reason());
+    assertFalse(goals.active(claim));
+  }
+
+  @Test
+  void fileRevalidationDoesNotBlockAnotherGoalsBudgetReservation() throws Exception {
+    var data = source();
+    var properties = new java.util.Properties();
+    properties.setProperty("busy_timeout", "200");
+    data.setConnectionProperties(properties);
+    var goals = new GoalRepository(data, Clock.systemUTC());
+    var goal = goal(goals);
+    var stages = new GoalStageRepository(Clock.systemUTC(), goals);
+    stages.define(goal, 0, List.of(stage("a"), stage("b", "a")));
+    var first = goals.claim("project", goal.id());
+    var run = goals.beginAttempt(first);
+    var attempt = stages.begin(first, run, stages.list(goal).getFirst());
+    Files.writeString(dir.resolve("a.json"), "{\"ok\":true}");
+    var files = new FileGoalVerifier();
+    var observed =
+        new GoalStageVerifier(files).verify(goal, stages.list(goal).getFirst(), stages.list(goal));
+    assertTrue(stages.finish(first, attempt, observed));
+    goals.recordAttempt(first, run, "VERIFIED", "criteria_verified");
+    goals.stop(first, "PAUSED", "pause");
+    var other = goal(goals);
+    var otherClaim = goals.claim("project", other.id());
+    var otherRun = goals.beginAttempt(otherClaim);
+    var entered = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var slowFiles =
+        new FileGoalVerifier() {
+          @Override
+          public Verification verify(Path root, GoalRepository.FileCriterion criterion) {
+            entered.countDown();
+            try {
+              if (!release.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                throw new IllegalStateException("Observation release timed out");
+            } catch (InterruptedException e) {
+              Thread.currentThread().interrupt();
+              throw new IllegalStateException(e);
+            }
+            return super.verify(root, criterion);
+          }
+        };
+    var service = new GoalStageService(stages, new GoalStageVerifier(slowFiles), goals);
+    try (var workers = java.util.concurrent.Executors.newFixedThreadPool(2)) {
+      var refresh = workers.submit(() -> service.refresh(goal));
+      try {
+        assertTrue(entered.await(3, java.util.concurrent.TimeUnit.SECONDS));
+        var reservation = workers.submit(() -> goals.reserveLlm(otherClaim, otherRun));
+        assertTrue(reservation.get(3, java.util.concurrent.TimeUnit.SECONDS));
+      } finally {
+        release.countDown();
+      }
+      refresh.get(5, java.util.concurrent.TimeUnit.SECONDS);
+    }
+    assertEquals(1, goals.get("project", other.id()).llmCallsUsed());
+  }
 }

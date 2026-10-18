@@ -224,6 +224,7 @@ public class GoalRepository {
     db = JdbcClient.create(source);
     transaction = new TransactionTemplate(new DataSourceTransactionManager(source));
     this.clock = clock;
+    db.sql(GoalStageRepository.STAGES_SCHEMA).update();
     db.sql(
             "CREATE TABLE IF NOT EXISTS agent_goal_stage_plans(goal TEXT PRIMARY KEY,version INTEGER NOT NULL,definition TEXT NOT NULL,changed_at TEXT NOT NULL)")
         .update();
@@ -799,12 +800,35 @@ public class GoalRepository {
       throw new IllegalArgumentException("Invalid Goal state");
     transaction.executeWithoutResult(
         status -> {
+          String effectiveState = state;
+          String effectiveReason = reason;
+          if (state.equals("COMPLETED")) {
+            if (db.sql(
+                        "UPDATE agent_goals SET attempts=attempts WHERE id=? AND project=? AND token=? AND status='RUNNING'")
+                    .params(claim.goal().id(), claim.goal().projectId(), claim.token())
+                    .update()
+                != 1) throw new IllegalStateException("Goal claim inactive");
+            if (db.sql(
+                        "SELECT COUNT(*) FROM agent_goals WHERE id=? AND EXISTS(SELECT 1 FROM agent_goal_stages s WHERE s.goal=agent_goals.id AND (s.state<>'VERIFIED' OR s.evidence IS NULL OR NOT EXISTS(SELECT 1 FROM agent_goal_stage_plans p WHERE p.goal=s.goal AND p.version=s.plan_version)))")
+                    .param(claim.goal().id())
+                    .query(Integer.class)
+                    .single()
+                > 0) {
+              effectiveState = "BLOCKED";
+              effectiveReason = "stage_verification_required";
+            }
+          }
           if (db.sql(
                       "UPDATE agent_goals SET status=?,reason=?,token=NULL,tokens_unknown=CASE WHEN max_tokens>0 AND tokens_pending>0 THEN 1 ELSE tokens_unknown END WHERE id=? AND project=? AND token=? AND status='RUNNING'")
-                  .params(state, reason, claim.goal().id(), claim.goal().projectId(), claim.token())
+                  .params(
+                      effectiveState,
+                      effectiveReason,
+                      claim.goal().id(),
+                      claim.goal().projectId(),
+                      claim.token())
                   .update()
               != 1) throw new IllegalStateException("Goal claim inactive");
-          history(claim.goal().id(), state, reason);
+          history(claim.goal().id(), effectiveState, effectiveReason);
         });
     return get(claim.goal().projectId(), claim.goal().id());
   }
@@ -842,7 +866,7 @@ public class GoalRepository {
           get(project, id);
           String reason = verifiedReason;
           if (db.sql(
-                      "UPDATE agent_goals SET status='COMPLETED',reason=? WHERE project=? AND id=? AND status NOT IN ('RUNNING','CANCELLED','COMPLETED') AND completion_json IS ? AND completion_proof_json IS ?")
+                      "UPDATE agent_goals SET status='COMPLETED',reason=? WHERE project=? AND id=? AND status NOT IN ('RUNNING','CANCELLED','COMPLETED') AND completion_json IS ? AND completion_proof_json IS ? AND NOT EXISTS(SELECT 1 FROM agent_goal_stages s WHERE s.goal=agent_goals.id AND (s.state<>'VERIFIED' OR s.evidence IS NULL OR NOT EXISTS(SELECT 1 FROM agent_goal_stage_plans p WHERE p.goal=s.goal AND p.version=s.plan_version)))")
                   .params(reason, project, id, definition, proof)
                   .update()
               != 1)

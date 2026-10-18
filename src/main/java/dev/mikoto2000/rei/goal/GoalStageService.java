@@ -98,55 +98,52 @@ public class GoalStageService {
   }
 
   public List<GoalStageRepository.Stage> refresh(GoalRepository.Goal goal) {
-    return goals.atomic(
-        () -> {
-          var current = stages.list(goal);
-          for (int pass = 0; pass <= current.size(); pass++) {
-            boolean changed = false;
-            var observedStages = current;
-            for (var stage : current) {
-              if (stage.state().equals("BLOCKED")
-                  && stage.reason().equals("stage_dependency_unverified")
-                  && stage.definition().dependsOnStageIds().stream()
-                      .allMatch(
-                          id ->
-                              observedStages.stream()
-                                  .anyMatch(
-                                      s ->
-                                          s.definition().id().equals(id)
-                                              && s.state().equals("VERIFIED")))) {
-                stages.state(goal, stage, "STALE", "stage_dependency_restored");
-                changed = true;
-                continue;
-              }
-              if (!stage.state().equals("VERIFIED")) continue;
-              var observed = verifier.verify(goal, stage, current);
-              var evidence = stage.evidence();
-              if (observed.result() != GoalStageVerifier.Result.VERIFIED
-                  || evidence == null
-                  || evidence.planVersion() != stage.planVersion()
-                  || !evidence
-                      .conditionVersion()
-                      .equals(GoalStageRepository.conditionVersion(stage.definition()))
-                  || !evidence.artifactVersions().equals(observed.artifactVersions())
-                  || !evidence.dependencyVersions().equals(observed.dependencyVersions())) {
-                stages.state(
-                    goal,
-                    stage,
-                    "STALE",
-                    observed.result() == GoalStageVerifier.Result.VERIFIED
-                        ? "stage_evidence_changed"
-                        : observed.reason());
-                changed = true;
-              }
-            }
-            current = stages.list(goal);
-            if (!changed) break;
-          }
-          if (!current.isEmpty() && current.stream().anyMatch(s -> !s.state().equals("VERIFIED")))
-            goals.staleStageCompletion(goal);
-          return current;
-        });
+    var current = stages.list(goal);
+    for (int pass = 0; pass <= current.size(); pass++) {
+      boolean changed = false;
+      var observedStages = current;
+      for (var stage : current) {
+        if (stage.state().equals("BLOCKED")
+            && stage.reason().equals("stage_dependency_unverified")
+            && stage.definition().dependsOnStageIds().stream()
+                .allMatch(
+                    id ->
+                        observedStages.stream()
+                            .anyMatch(
+                                s ->
+                                    s.definition().id().equals(id)
+                                        && s.state().equals("VERIFIED")))) {
+          stages.compareState(goal, stage, "STALE", "stage_dependency_restored");
+          changed = true;
+          continue;
+        }
+        if (!stage.state().equals("VERIFIED")) continue;
+        var observed = verifier.verify(goal, stage, current);
+        var evidence = stage.evidence();
+        if (observed.result() != GoalStageVerifier.Result.VERIFIED
+            || evidence == null
+            || evidence.planVersion() != stage.planVersion()
+            || !evidence
+                .conditionVersion()
+                .equals(GoalStageRepository.conditionVersion(stage.definition()))
+            || !evidence.artifactVersions().equals(observed.artifactVersions())
+            || !evidence.dependencyVersions().equals(observed.dependencyVersions())) {
+          stages.compareState(
+              goal,
+              stage,
+              "STALE",
+              observed.result() == GoalStageVerifier.Result.VERIFIED
+                  ? "stage_evidence_changed"
+                  : observed.reason());
+          changed = true;
+        }
+      }
+      current = stages.list(goal);
+      if (!changed) break;
+    }
+    if (!current.isEmpty() && current.stream().anyMatch(s -> !s.state().equals("VERIFIED")))
+      goals.staleStageCompletion(goal);
+    return current;
   }
 
   public Selection select(GoalRepository.Goal goal) {

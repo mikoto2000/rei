@@ -153,9 +153,9 @@ optional注入参照のlocal captureにより追加指摘を解消する。基�
 - 外部実装のunknown/concurrent要求23件成功。null receiptを利用可能な終端結果の不在として保持する。
 - CLI補完21件＋承認継続1件成功。新しい2コマンドを補完の厳密な期待値へ追加し、ID位置に漏れない検証も保持する。
 - Checkstyle 0件。SpotBugs既存1,907件・新規0件。静的解析ゲートとゲート自身の8回帰ケース成功。
-- ローカル全回帰はApprovalChatIntegrationTestのlatch待機で停滞し、thread dumpを保存して停止した。
-  同テストは新規単独JVMで成功。全体の最終判定はPR #125の最新commitに対する全回帰CIも確認する。
-- 途中CIは5,979件中、追加CLI候補の旧期待値1件だけ失敗。期待値を上記の通り拡張して再実行する。
+- ローカル全回帰は5,979件成功（既存skip 5件）。途中のlatch待機はthread dumpを保存して停止し、単独再現と全体再実行で確認した。
+- 途中CIの追加CLI候補の旧期待値1件は上記の通り拡張し、全回帰CI成功を確認した。
+- その後の追加境界テストを含む最終の全Goal/HTTP/CLI回帰は180件成功。最終commitの全回帰CI結果はPR #125に保存する。
 
 ## 完了判定境界の追加検証
 
@@ -177,3 +177,23 @@ optional注入参照のlocal captureにより追加指摘を解消する。基�
 この境界を含む全Goal/HTTP/CLI回帰177件が成功した。
 既存Goal Wait snapshotの128KiB上限は保持する。非常に大きな計画/履歴のWait登録は明示エラーとなり、
 手動reconcile/runの経路を使う。履歴を参照だけで保存する最適化は今後の改善点。
+
+
+## SQLiteの完了確定境界と観測の分離
+
+追加3件をRedで確認した。未検証Stageが残る明示verifyのDB確定は拒否し、
+実行中claimの完了停止はBLOCKED / stage_verification_requiredとしてclaimを解放する。
+いずれも現在の計画版・証拠・全StageのVERIFIED状態をDB書込時に再確認する。
+Stageを持たないGoalには追加の制限を課さない。Goal定義/proofのsnapshot CASも維持する。
+
+ファイルやレビューの観測を長いSQLite transaction内で行わず、観測後のStage更新を
+版付きの単一SQL CASで行う。競合時は最新行を読み直し、有界で再評価する。
+別GoalのLLM予算予約がファイル検証の待機中にも完了することを実SQLiteの並行テストで確認する。
+Attempt・証拠・実行結果の確定は従来通り同一transactionに残す。
+
+ローカル全回帰の後続実行では、実行中に同じtargetへ別Mavenコンパイルを行ったため、
+匿名クラスのNoClassDefFoundErrorが16件発生した。製品の成功結果として扱わず、
+最終commitは独立したクリーン環境の全回帰CIで判定する。以降は同じbuild directoryの
+Maven処理を直列に実行する。
+
+追加3件を含む全Goal/HTTP/CLI回帰180件が成功した。

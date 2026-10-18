@@ -12,6 +12,9 @@ import org.springframework.stereotype.Repository;
 /** Additive SQLite storage. All writes join the existing Goal transaction and claim fence. */
 @Repository
 public class GoalStageRepository {
+  static final String STAGES_SCHEMA =
+      "CREATE TABLE IF NOT EXISTS agent_goal_stages(goal TEXT NOT NULL,id TEXT NOT NULL,ordinal INTEGER NOT NULL,definition TEXT NOT NULL,plan_version INTEGER NOT NULL,version INTEGER NOT NULL,state TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',evidence TEXT,proof TEXT,PRIMARY KEY(goal,id))";
+
   public record Evidence(
       String goalId,
       String stageId,
@@ -77,9 +80,7 @@ public class GoalStageRepository {
     db.sql(
             "CREATE TABLE IF NOT EXISTS agent_goal_stage_plans(goal TEXT PRIMARY KEY,version INTEGER NOT NULL,definition TEXT NOT NULL,changed_at TEXT NOT NULL)")
         .update();
-    db.sql(
-            "CREATE TABLE IF NOT EXISTS agent_goal_stages(goal TEXT NOT NULL,id TEXT NOT NULL,ordinal INTEGER NOT NULL,definition TEXT NOT NULL,plan_version INTEGER NOT NULL,version INTEGER NOT NULL,state TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',evidence TEXT,proof TEXT,PRIMARY KEY(goal,id))")
-        .update();
+    db.sql(STAGES_SCHEMA).update();
     db.sql(
             "CREATE TABLE IF NOT EXISTS agent_goal_stage_attempts(id TEXT PRIMARY KEY,goal TEXT NOT NULL,stage TEXT NOT NULL,run TEXT NOT NULL,number INTEGER NOT NULL,plan_version INTEGER NOT NULL,status TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',started_at TEXT NOT NULL,finished_at TEXT NOT NULL DEFAULT '',calls_start INTEGER NOT NULL,tokens_start INTEGER NOT NULL,calls_used INTEGER NOT NULL DEFAULT 0,tokens_used INTEGER NOT NULL DEFAULT 0,observation TEXT NOT NULL DEFAULT '',UNIQUE(goal,stage,number))")
         .update();
@@ -401,9 +402,14 @@ public class GoalStageRepository {
   }
 
   public void state(GoalRepository.Goal goal, Stage expected, String state, String reason) {
+    if (!compareState(goal, expected, state, reason))
+      throw new IllegalStateException("Stage CAS failed");
+  }
+
+  boolean compareState(GoalRepository.Goal goal, Stage expected, String state, String reason) {
     if (!java.util.Set.of("STALE", "TODO", "BLOCKED", "VERIFYING").contains(state))
       throw new IllegalArgumentException("Host transition required");
-    if (db.sql(
+    return db.sql(
                 "UPDATE agent_goal_stages SET state=?,reason=?,version=version+1 WHERE goal=? AND id=? AND version=? AND plan_version=?")
             .params(
                 state,
@@ -413,7 +419,7 @@ public class GoalStageRepository {
                 expected.version(),
                 expected.planVersion())
             .update()
-        != 1) throw new IllegalStateException("Stage CAS failed");
+        == 1;
   }
 
   public void attachProof(
