@@ -23,7 +23,6 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.OpenOption;
-import java.nio.file.PathMatcher;
 import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.nio.file.StandardOpenOption;
@@ -1285,6 +1284,10 @@ public class Tools {
       Use this primitive when match locations are sufficient. When locating and inspecting code, prefer searchAndRead.
       @param queries 検索条件のリスト。
       Each query may specify charset; otherwise BOM, strict UTF-8, then CP932 are tried.
+      includeGlob/excludeGlob are relative to baseDir. Without a slash, match file names at any depth.
+      Use / as separator (backslash is also accepted); **/ includes zero directories.
+      Examples: *.java or **/*.java includes direct children and descendants; foo/*.java selects foo's direct children.
+      Use **/*.{java,xml} for multiple extensions. Matching is case-sensitive on every platform.
       @return query ごとの結果。queryIndex で入力順と対応し、読めないファイルは fileErrors に含む。
 
       Example: {"queries":[{"pattern":"class A","baseDir":"src","fixedString":true},{"pattern":"class B","baseDir":"src","fixedString":true}]}
@@ -1505,8 +1508,13 @@ public class Tools {
             : Math.min(MAX_GREP_MATCHES_PER_QUERY, query.maxMatches());
     Pattern compiled =
         compileGrepPattern(query.pattern(), effectiveIgnoreCase, effectiveFixedString);
-    PathMatcher includeMatcher = globMatcher(query.includeGlob(), workingDirectory);
-    PathMatcher excludeMatcher = globMatcher(query.excludeGlob(), workingDirectory);
+    SearchGlob includeMatcher = SearchGlob.compile(query.includeGlob());
+    SearchGlob excludeMatcher = SearchGlob.compile(query.excludeGlob());
+    java.nio.file.Path globBase =
+        workingDirectory.resolve(query.baseDir().replace('\\', '/')).toAbsolutePath().normalize();
+    // A concrete file is also an accepted search base; match its name in that case.
+    if (Files.isRegularFile(globBase)) globBase = globBase.getParent();
+    final java.nio.file.Path globBaseDirectory = globBase;
 
     List<String> candidates =
         snapshots.inventory(
@@ -1517,14 +1525,21 @@ public class Tools {
             () ->
                 listFile(query.baseDir(), workingDirectory).stream()
                     .filter(
-                        path -> matchesGlob(path, includeMatcher, excludeMatcher, workingDirectory))
+                        path ->
+                            matchesGlob(
+                                path,
+                                includeMatcher,
+                                excludeMatcher,
+                                workingDirectory,
+                                globBaseDirectory))
                     .toList());
     List<GrepMatch> matches = new ArrayList<>();
     List<GrepFileError> fileErrors = new ArrayList<>();
     boolean searchTruncated = false;
     for (String relativePath : candidates) {
       dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);
-      if (!matchesGlob(relativePath, includeMatcher, excludeMatcher, workingDirectory)) {
+      if (!matchesGlob(
+          relativePath, includeMatcher, excludeMatcher, workingDirectory, globBaseDirectory)) {
         continue;
       }
       java.nio.file.Path filePath = workingDirectory.resolve(relativePath);
@@ -1712,6 +1727,9 @@ public class Tools {
       Use this as the default tool for locating and inspecting code or text when exact file locations are not known.
       Use grepMultiQuery when only match locations are needed, or readMultiFile when file paths are already known.
       @param queries 検索条件のリスト。
+      includeGlob/excludeGlob are relative to baseDir; patterns without a slash match file names at any depth.
+      **/ includes zero directories. Use / as separator (backslash accepted), e.g. **/*.{java,xml}.
+      Glob matching is case-sensitive on every platform.
       @param contextLines ヒット行の前後何行を取得するか。デフォルト 25。
       @param maxFiles 読み込む最大ファイル数。デフォルト 8。
       @return ファイルごとの検索結果と読み込んだコンテキスト。
@@ -2714,23 +2732,19 @@ public class Tools {
   /** 1 ファイルの書き込み結果。 */
   public record WriteFileResult(String path, boolean success, String error) {}
 
-  private PathMatcher globMatcher(String glob, java.nio.file.Path workingDirectory) {
-    if (glob == null || glob.isBlank()) {
-      return null;
-    }
-    return workingDirectory.getFileSystem().getPathMatcher("glob:" + glob);
-  }
-
   private boolean matchesGlob(
       String relativePath,
-      PathMatcher includeMatcher,
-      PathMatcher excludeMatcher,
-      java.nio.file.Path workingDirectory) {
-    java.nio.file.Path normalizedPath = Paths.get(relativePath.replace('\\', '/'));
-    if (includeMatcher != null && !includeMatcher.matches(normalizedPath)) {
+      SearchGlob includeMatcher,
+      SearchGlob excludeMatcher,
+      java.nio.file.Path workingDirectory,
+      java.nio.file.Path baseDirectory) {
+    java.nio.file.Path candidate =
+        workingDirectory.resolve(relativePath.replace('\\', '/')).toAbsolutePath().normalize();
+    String path = baseDirectory.relativize(candidate).toString().replace('\\', '/');
+    if (includeMatcher != null && !includeMatcher.matches(path)) {
       return false;
     }
-    return excludeMatcher == null || !excludeMatcher.matches(normalizedPath);
+    return excludeMatcher == null || !excludeMatcher.matches(path);
   }
 
   private Pattern compileGrepPattern(String pattern, boolean ignoreCase, boolean fixedString) {

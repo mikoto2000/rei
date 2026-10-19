@@ -383,6 +383,67 @@ class FileOperationsOptimizationTest {
   }
 
   @Test
+  void grepAndSearchGlobsAreRelativeToBaseDirAndIncludeDirectChildren() throws Exception {
+    Files.createDirectories(root.resolve("src/foo/deep"));
+    var paths = List.of("src/A.java", "src/foo/B.java", "src/foo/deep/C.java", "src/pom.xml");
+    for (String path : paths) Files.writeString(root.resolve(path), "hit");
+    var tools =
+        new Tools() {
+          @Override
+          List<String> listFile(String base, Path directory) {
+            return paths;
+          }
+        };
+    var queries =
+        List.of(
+            globQuery("src", "*.java", null),
+            globQuery("src", "**/*.java", null),
+            globQuery("src", "foo/*.java", null),
+            globQuery("src", "**/*.{java,xml}", "foo/**"),
+            globQuery(root.resolve("src").toString(), "**\\*.java", "**/B.java"));
+    var expected =
+        List.of(
+            List.of("src/A.java", "src/foo/B.java", "src/foo/deep/C.java"),
+            List.of("src/A.java", "src/foo/B.java", "src/foo/deep/C.java"),
+            List.of("src/foo/B.java"),
+            List.of("src/A.java", "src/pom.xml"),
+            List.of("src/A.java", "src/foo/deep/C.java"));
+    var results = tools.grepMultiQuery(queries, root);
+    for (int i = 0; i < queries.size(); i++) {
+      assertNull(results.get(i).error());
+      assertEquals(
+          expected.get(i), results.get(i).matches().stream().map(Tools.GrepMatch::path).toList());
+      var search =
+          tools.searchAndRead(new Tools.SearchAndReadRequest(List.of(queries.get(i)), 0, 8), root);
+      assertTrue(search.stream().allMatch(r -> r.error() == null));
+      assertEquals(expected.get(i), search.stream().map(Tools.SearchAndReadResult::path).toList());
+    }
+  }
+
+  @Test
+  void invalidGlobFailsOnlyItsQuery() throws Exception {
+    Files.writeString(root.resolve("a.java"), "hit");
+    var tools =
+        new Tools() {
+          @Override
+          List<String> listFile(String base, Path directory) {
+            return List.of("a.java");
+          }
+        };
+    var results =
+        tools.grepMultiQuery(
+            List.of(globQuery(".", "[", null), globQuery(".", "*.java", null)), root);
+    assertNotNull(results.getFirst().error());
+    assertNull(results.get(1).error());
+    assertEquals(1, results.get(1).matches().size());
+  }
+
+  private static Tools.GrepQuery globQuery(String base, String include, String exclude) {
+    return new Tools.GrepQuery(
+        "hit", base, false, true, false, false, 0, 0, null, true, include, exclude);
+  }
+
+  @Test
   void directoryLinksCannotAliasTheReadingBoundary() throws Exception {
     var directory = Files.createDirectory(root.resolve("real"));
     Files.writeString(directory.resolve("a.txt"), "secret");
