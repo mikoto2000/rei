@@ -1,0 +1,24 @@
+{
+  "sourceCommit": "bb4f49247370ed3e6cd9cc3ee06209aa060e5075",
+  "productionSourceDigest": "f62bb18b627dc42fbe5dd660c2f0d77494a2803076390bf44a74a9733df49ab5",
+  "productionFiles": 1560,
+  "productionPackages": 106,
+  "productionBytecodeClasses": 2851,
+  "coreFiles": 261,
+  "compiledJavaSources": 2725,
+  "testResourceJavaFixtures": 1,
+  "inventoryCounts": {
+    "production": 1575,
+    "test": 1150,
+    "generated": 0
+  },
+  "toolCount": 53,
+  "baselines": {
+    "A-application-ui": 0,
+    "B-execution-ui": 1,
+    "C-business-cycles": 2837,
+    "C-wiring-cycles": 799,
+    "D-configuration": 372,
+    "E-core-concentration": 1034
+  }
+}

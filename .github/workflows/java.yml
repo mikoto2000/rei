@@ -26,5 +26,14 @@ jobs:
           New-Item -ItemType Directory -Force -Path $testTemp | Out-Null
           "TMP=$testTemp" >> $env:GITHUB_ENV
           "TEMP=$testTemp" >> $env:GITHUB_ENV
+      - name: Architecture budgets and guard effectiveness
+        run: ./mvnw.cmd -B "-Dtest=PackageArchitectureTest,ArchitectureGuardTest,ArchitectureSourceReportTest" "-Darchitecture.report=true" test
+      - name: Preserve architecture evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: architecture-${{ github.run_id }}-${{ github.run_attempt }}
+          retention-days: 14
+          path: target/architecture/**
       - name: Full regression with process deadline
         run: .\.github\ci\full-test.ps1
