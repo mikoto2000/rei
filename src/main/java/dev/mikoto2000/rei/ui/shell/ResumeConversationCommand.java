@@ -8,6 +8,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
 
+/** 現在の project の Session を明示的に選択しますを行うための利用者コマンド。 */
 @Component
 @Command(
     name = "switch",
@@ -15,25 +16,31 @@ import picocli.CommandLine.Spec;
     description = "現在の project の Session を明示的に選択します",
     mixinStandardHelpOptions = true)
 public final class ResumeConversationCommand implements java.util.concurrent.Callable<Integer> {
+  /** 会話一覧。 */
   private final ShellConversationService conversations;
 
+  /** 会話の識別子。 */
   @Parameters(
       index = "0",
       paramLabel = "SESSION_ID",
       completionCandidates = SessionCompletionCandidates.CurrentProject.class)
   String sessionId;
 
+  /** 仕様。 */
   @Spec private picocli.CommandLine.Model.CommandSpec spec;
 
+  /** ターミナルでの対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ResumeConversationCommand() {
     this(null);
   }
 
+  /** 指定された値や利用先を使って、ResumeConversationCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public ResumeConversationCommand(ShellConversationService conversations) {
     this.conversations = conversations;
   }
 
+  /** 現在の project の Session を明示的に選択しますを行う。 */
   @Override
   public Integer call() {
     try {

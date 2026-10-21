@@ -14,12 +14,19 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 
+/** 作業文脈の引き継ぎに必要な作業文脈対話の補助を扱う。 */
 @Component
 public class WorkContextAdvisor implements BaseAdvisor {
+  /** サービス。 */
   private final WorkContextService service;
+
+  /** この機能の動作設定。 */
   private final WorkContextProperties properties;
+
+  /** Gitの情報。 */
   private final WorkContextGit git;
 
+  /** 指定された値や利用先を使って、WorkContextAdvisorを初期化する。 */
   public WorkContextAdvisor(
       WorkContextService service, WorkContextProperties properties, WorkContextGit git) {
     this.service = service;
@@ -27,6 +34,7 @@ public class WorkContextAdvisor implements BaseAdvisor {
     this.git = git;
   }
 
+  /** 作業文脈の引き継ぎの本処理へ渡す文脈を準備する。 */
   @Override
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     var owner = request.context().get(AgentRunContext.class.getName());
@@ -55,11 +63,13 @@ public class WorkContextAdvisor implements BaseAdvisor {
     }
   }
 
+  /** 作業文脈の引き継ぎの実行結果を受け取り、後続の処理へ反映する。 */
   @Override
   public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
     return response;
   }
 
+  /** 他の補助処理と組み合わせる際の適用順序を返す。 */
   @Override
   public int getOrder() {
     return -109;

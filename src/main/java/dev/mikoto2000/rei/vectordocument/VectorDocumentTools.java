@@ -6,18 +6,22 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+/** ベクトル文書をモデルから呼び出せるツールとして提供する。 */
 @Component
 @RequiredArgsConstructor
 public class VectorDocumentTools {
 
+  /** ベクトル文書サービス。 */
   private final VectorDocumentService vectorDocumentService;
 
+  /** 検索対象文書の管理で用いるベクトル文書追加を返す。 */
   @Tool(name = "vectorDocumentAdd", description = "ファイル群をベクトルストアに追加または再登録します。引数はファイルパスの一覧です。")
   List<VectorDocumentEntry> vectorDocumentAdd(List<String> sources) throws IOException {
     IO.println(String.format("ベクトル文書 %s を追加または再登録するよ", sources));
     return vectorDocumentService.add(sources);
   }
 
+  /** 検索対象文書の管理で用いるベクトル文書検索を返す。 */
   @Tool(
       name = "vectorDocumentSearch",
       description = "ベクトルストアに登録済みの文書を類似検索します。query は必須です。topK, threshold, source は必要な場合だけ指定できます。")
@@ -30,12 +34,14 @@ public class VectorDocumentTools {
     return vectorDocumentService.search(query, topK, threshold, source);
   }
 
+  /** 検索対象文書の管理で用いるベクトル文書一覧を返す。 */
   @Tool(name = "vectorDocumentList", description = "ベクトルストアに登録済みの文書一覧を返します。")
   List<VectorDocumentEntry> vectorDocumentList() throws IOException {
     IO.println("ベクトル文書一覧を取得するよ");
     return vectorDocumentService.list();
   }
 
+  /** 検索対象文書の管理において、ベクトル文書削除別文書の識別子に該当するか判定する。 */
   @Tool(
       name = "vectorDocumentDeleteByDocId",
       description = "docId を指定してベクトルストアから文書を削除します。削除できた場合は true を返します。")
@@ -44,6 +50,7 @@ public class VectorDocumentTools {
     return vectorDocumentService.deleteByDocId(docId);
   }
 
+  /** 検索対象文書の管理で用いるベクトル文書削除別取得元を返す。 */
   @Tool(
       name = "vectorDocumentDeleteBySource",
       description = "source に一致する文書群をベクトルストアから削除します。返り値は削除した文書数です。")

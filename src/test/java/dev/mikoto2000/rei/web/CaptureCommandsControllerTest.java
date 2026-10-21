@@ -14,9 +14,12 @@ import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 取得記録コマンド一覧受付窓口の結果と状態の契約を検証するテスト。 */
 class CaptureCommandsControllerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** Web APIによる操作の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void reservationsAreClientAndSessionSpecificAndRawRequiresExplicitApproval() throws Exception {
     var registry = new ProjectRegistry(directory.resolve("projects.json"));

@@ -9,9 +9,12 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 加工前の結果Reuseの結果と状態の契約を検証するテスト。 */
 class RawResultReuseTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** モデルへ渡す文脈の管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void identicalBodiesAreStoredOnceButCallIdentityIsPreserved() {
     var store = new RawToolResultStore(dir);
@@ -23,6 +26,7 @@ class RawResultReuseTest {
     assertThat(store.read("chat", second).toolCallId()).isEqualTo("two");
   }
 
+  /** 繰り返されたページ一覧について、変更できない本文を再利用することを確認する。 */
   @Test
   void repeatedPagesReuseImmutableBodyOnlyWithinTheCapturedRun() {
     var store = new RawToolResultStore(dir);
@@ -39,6 +43,7 @@ class RawResultReuseTest {
     }
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void capacityRejectsBeforeCreatingAnOversizedBody() {
     var store = new RawToolResultStore(dir, null, 100, 2048, 2048);

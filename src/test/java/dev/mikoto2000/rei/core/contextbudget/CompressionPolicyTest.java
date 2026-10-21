@@ -9,9 +9,12 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 
+/** 圧縮判断基準の結果と状態の契約を検証するテスト。 */
 class CompressionPolicyTest {
+  /** 検証に使う概算。 */
   final TokenEstimator estimator = TokenEstimator.conservative();
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void countsJapaneseAndToolArgumentsRatherThanOnlyMessageText() {
     assertThat(estimator.text("日本語")).isGreaterThanOrEqualTo(3);
@@ -25,6 +28,7 @@ class CompressionPolicyTest {
     assertThat(estimator.message(call)).isGreaterThanOrEqualTo(100);
   }
 
+  /** 直近予算を保持することを確認する。 */
   @Test
   void retainsRecentBudgetAndNeverSplitsToolPairs() {
     var call =
@@ -41,6 +45,7 @@ class CompressionPolicyTest {
     assertThat(new CompressionPolicy(estimator).prefixToCompress(messages, 40)).isEqualTo(1);
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void protectedSectionsGetBudgetBeforeOptionalOnes() {
     var budget = new ContextBudgetManager(100, 10, 10);

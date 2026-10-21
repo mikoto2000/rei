@@ -23,16 +23,23 @@ import java.util.Map;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 
-/** Provider-independent bounded source data and exact hash evidence. */
+/**
+ * 外部エージェントへの委譲に必要な外部エージェント取得元状態の記録を扱う。
+ *
+ * <p>Provider-independent bounded source data and exact hash evidence.
+ */
 final class ExternalAgentSourceSnapshot {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ExternalAgentSourceSnapshot() {}
 
+  /** 後続の処理を進められるか、現在の条件を確認する。 */
   private static void check(BooleanSupplier cancelled, long deadline) throws IOException {
     if (cancelled.getAsBoolean() || Thread.currentThread().isInterrupted())
       throw new java.util.concurrent.CancellationException();
     if (System.nanoTime() >= deadline) throw new IOException("Snapshot deadline reached");
   }
 
+  /** 外部エージェントへの委譲において、対象外に該当するか判定する。 */
   static boolean excluded(Path relative) {
     for (var part : relative) {
       String name = part.toString().toLowerCase(Locale.ROOT);
@@ -56,6 +63,7 @@ final class ExternalAgentSourceSnapshot {
     return false;
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   static byte[] read(Path file) throws IOException {
     if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS) || Files.size(file) > 65536)
       throw new IOException();
@@ -66,6 +74,7 @@ final class ExternalAgentSourceSnapshot {
     }
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   static String hash(byte[] bytes) {
     try {
       return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
@@ -74,6 +83,7 @@ final class ExternalAgentSourceSnapshot {
     }
   }
 
+  /** 現在の状態を、後から参照できる記録として取り出す。 */
   static List<Map<String, Object>> snapshot(
       Path root, Path target, BooleanSupplier cancelled, long deadline) throws IOException {
     var files = new ArrayList<Map<String, Object>>();
@@ -86,11 +96,13 @@ final class ExternalAgentSourceSnapshot {
         EnumSet.noneOf(FileVisitOption.class),
         16,
         new SimpleFileVisitor<>() {
+          /** 外部エージェントへの委譲に関する対象の確認を処理する。 */
           private void visit(Path path) throws IOException {
             check(cancelled, deadline);
             if (++visited[0] > 512 || !path.toRealPath().startsWith(root)) throw new IOException();
           }
 
+          /** 外部エージェントへの委譲で用いるpre対象の確認ディレクトリを返す。 */
           @Override
           public FileVisitResult preVisitDirectory(Path directory, BasicFileAttributes attrs)
               throws IOException {
@@ -100,6 +112,7 @@ final class ExternalAgentSourceSnapshot {
                 : FileVisitResult.CONTINUE;
           }
 
+          /** 外部エージェントへの委譲で用いる対象の確認ファイルを返す。 */
           @Override
           public FileVisitResult visitFile(Path file, BasicFileAttributes attrs)
               throws IOException {

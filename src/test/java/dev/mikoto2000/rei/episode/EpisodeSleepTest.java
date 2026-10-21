@@ -14,7 +14,9 @@ import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 経験の記録待機の結果と状態の契約を検証するテスト。 */
 class EpisodeSleepTest {
+  /** 過去の経験の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledDoesNotReadHistoryOrCallModel() {
     var turns = mock(ConversationTurnStore.class);
@@ -28,9 +30,11 @@ class EpisodeSleepTest {
             new dev.mikoto2000.rei.memory.configuration.MemoryProperties(
                 true, 0, 0, 0, 0, 0, 0, null))
         .process("s", "p", null, () -> false);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(turns, processor, repository);
   }
 
+  /** 過去の経験の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void rangeIsBoundedAndCompletedTurnsOnly() {
     var store = ConversationTurnStore.inMemory();
@@ -38,6 +42,7 @@ class EpisodeSleepTest {
     assertThrows(IllegalArgumentException.class, () -> store.readRange("s", 0, 500));
   }
 
+  /** 過去の経験の活用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedAttemptIsRetainedAsTerminalEvidenceWithoutInventingSuccess() {
     var turns = mock(ConversationTurnStore.class);

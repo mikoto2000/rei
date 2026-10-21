@@ -20,13 +20,22 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 委譲済みツール承認の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class DelegatedToolApprovalTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
+
+  /** 検証に使う保存と検索の窓口。 */
   ToolApprovalRepository repository;
+
+  /** 検証に使う利用条件の確認。 */
   ToolPermissionGuard guard;
+
+  /** 検証に使う親、子の実行。 */
   AgentRunContext parent, child;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     var clock = Clock.fixed(Instant.parse("2026-10-06T00:00:00Z"), ZoneOffset.UTC);
@@ -44,6 +53,7 @@ class DelegatedToolApprovalTest {
     child = new AgentRunContext("child", "subagent:child", directory, "project");
   }
 
+  /** ツール利用の権限制御で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void parentGrantIsExactAndConsumedOnceByChild() {
     var request = repository.request("readMultiFile", "{}", parent);
@@ -60,6 +70,7 @@ class DelegatedToolApprovalTest {
         () -> guard.checkDelegated("readMultiFile", "{}", child, parent));
   }
 
+  /** ツール利用の権限制御で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void mismatchAndNonReadActionsCannotBorrowParentGrant() {
     var request = repository.request("readMultiFile", "{}", parent);
@@ -82,6 +93,7 @@ class DelegatedToolApprovalTest {
     assertEquals("APPROVED", repository.get("project", write.id()).status());
   }
 
+  /** ツール利用の権限制御で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void missingGrantCreatesReviewableRequestOwnedByParentSession() {
     assertThrows(
@@ -94,6 +106,7 @@ class DelegatedToolApprovalTest {
     assertDoesNotThrow(() -> guard.checkDelegated("readMultiFile", "{}", child, parent));
   }
 
+  /** ツール利用の権限制御で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void explicitDenialStillWinsAndConcurrentChildrenShareOneGrant() throws Exception {
     var request = repository.request("readMultiFile", "{}", parent);

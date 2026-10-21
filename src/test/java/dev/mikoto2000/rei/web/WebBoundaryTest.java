@@ -27,10 +27,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** Web境界条件の結果と状態の契約を検証するテスト。 */
 class WebBoundaryTest {
+  /** 検証条件を再現するためのTracking通知の連携先。 */
   static class TrackingBus extends InMemoryAgentEventBus {
+    /** 検証に使う購読一覧。 */
     final AtomicInteger subscriptions = new AtomicInteger();
 
+    /** {@code subscribe} の条件を再現するための補助情報を返す。 */
     @Override
     public Subscription subscribe(AgentEventListener listener) {
       var actual = super.subscribe(listener);
@@ -45,6 +49,7 @@ class WebBoundaryTest {
     }
   }
 
+  /** 生存確認保有なし発生順序および切断について、通知の受け取り先を解放することを確認する。 */
   @Test
   void heartbeatHasNoSequenceAndDisconnectReleasesListenerAndTimer() throws Exception {
     var bus = new TrackingBus();
@@ -58,6 +63,7 @@ class WebBoundaryTest {
     var beat = new CountDownLatch(1);
     var sink =
         new SseBridgeTest.Sink() {
+          /** {@code heartbeat} の条件を再現するため、検証用の操作や状態を扱う。 */
           public void heartbeat() {
             beat.countDown();
           }
@@ -86,6 +92,7 @@ class WebBoundaryTest {
     assertThat(bus.subscriptions).hasValue(0);
   }
 
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void sendIOExceptionUnsubscribesAndDoesNotCancelRun() throws Exception {
     var bus = new TrackingBus();
@@ -93,6 +100,7 @@ class WebBoundaryTest {
     registry.register(RunRegistryTest.context("run"));
     var sink =
         new SseBridgeTest.Sink() {
+          /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
           public void event(WebApiEventDto event) throws Exception {
             throw new java.io.IOException("disconnected");
           }
@@ -107,6 +115,7 @@ class WebBoundaryTest {
     assertThat(bus.subscriptions).hasValue(0);
   }
 
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void runningCancellationWaitsForActualCleanupBeforeNextProjectRun() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -170,6 +179,7 @@ class WebBoundaryTest {
     }
   }
 
+  /** 検証用に、必要な状態が整ってから先へ進むため、Web境界条件検証を待つ。 */
   private static void await(CountDownLatch latch) {
     boolean interrupted = false;
     for (; ; )

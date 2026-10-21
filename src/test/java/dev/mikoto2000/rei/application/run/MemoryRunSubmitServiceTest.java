@@ -27,9 +27,12 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 記憶実行受付サービスの結果と状態の契約を検証するテスト。 */
 class MemoryRunSubmitServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 旧形式要約および統合について、操作実行待ちを利用することを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void legacySummaryAndConsolidationUseTheOperationQueueWithoutEnteringChat(
@@ -88,6 +91,7 @@ class MemoryRunSubmitServiceTest {
       service.setConsolidation(consolidation);
       if (summaryOperation) service.summarize(project.id(), "session", true, "receipt");
       else service.consolidate(project.id(), "session", true, "receipt");
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(summary, consolidation);
       pending.remove().run();
       if (summaryOperation) {
@@ -101,6 +105,7 @@ class MemoryRunSubmitServiceTest {
     }
   }
 
+  /** 実行の受付と状態管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sleepIsQueuedWithCapturedSessionAndDoesNotEnterTheChatRunner() {
     var projects = new ProjectRegistry(directory.resolve("projects.json"));
@@ -175,6 +180,7 @@ class MemoryRunSubmitServiceTest {
               sleep,
               support);
       assertEquals(captured, service.sleep(project.id(), "session", true, "receipt"));
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(sleep);
       assertEquals(RunStatus.QUEUED, runs.get("run").status());
       pending.remove().run();

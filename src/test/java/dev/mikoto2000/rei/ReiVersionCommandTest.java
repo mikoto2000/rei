@@ -17,7 +17,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import picocli.CommandLine;
 
+/** れい形式のバージョンコマンドの結果と状態の契約を検証するテスト。 */
 class ReiVersionCommandTest {
+  /** コマンド入力の解釈利用可能を維持することを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"--version", "-V"})
   void shellVersionPrintsApplicationVersionAndKeepsCommandParserUsable(String option) {
@@ -30,6 +32,7 @@ class ReiVersionCommandTest {
         new CommandLine(
                 root,
                 new CommandLine.IFactory() {
+                  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
                   @Override
                   public <K> K create(Class<K> type) throws Exception {
                     return type == dev.mikoto2000.rei.ui.shell.ChatCommand.class
@@ -59,6 +62,7 @@ class ReiVersionCommandTest {
         .isEqualTo("chat");
   }
 
+  /** れいの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void startupVersionAndHelpReturnBeforeSpringEvenWithMissingProject() throws Exception {
     String startupVersion = captureStartup("--version");
@@ -73,6 +77,7 @@ class ReiVersionCommandTest {
         .doesNotContain("Starting ReiApplication", "AI Shell");
   }
 
+  /** 形式のバージョンについて、シェル終端書き込み先を利用することを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"UTF-8", "windows-31j"})
   void versionUsesShellTerminalWriter(String encoding) {
@@ -94,6 +99,7 @@ class ReiVersionCommandTest {
     assertThat(command.getOut()).isSameAs(writer);
   }
 
+  /** れいの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void ordinaryStartupStillPassesSpringArgumentsThrough() {
     var options =
@@ -104,6 +110,7 @@ class ReiVersionCommandTest {
     assertThat(options.printHelpIfRequested()).isFalse();
   }
 
+  /** {@code captureStartup} の条件を再現するための補助情報を返す。 */
   private String captureStartup(String... args) {
     var bytes = new ByteArrayOutputStream();
     PrintStream previous = System.out;

@@ -7,13 +7,18 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/** フィード更新のユースケースを実現する。 */
 @Service
 @RequiredArgsConstructor
 public class FeedUpdateService {
 
+  /** フィードサービス。 */
   private final FeedService feedService;
+
+  /** フィード情報の取得元。 */
   private final FeedFetcher feedFetcher;
 
+  /** 指定された変更を、管理中の情報へ反映する。 */
   public FeedUpdateResult update(long feedId) {
     Feed feed = feedService.findById(feedId);
     OffsetDateTime fetchedAt = OffsetDateTime.now(ZoneOffset.UTC);
@@ -29,6 +34,7 @@ public class FeedUpdateService {
     }
   }
 
+  /** 最新の内容を後続の処理に反映するため、全対象を更新する。 */
   public List<FeedUpdateResult> updateAll() {
     List<FeedUpdateResult> results = new ArrayList<>();
     for (Feed feed : feedService.list()) {
@@ -40,6 +46,7 @@ public class FeedUpdateService {
     return results;
   }
 
+  /** フィードの購読と収集で用いるフィード表示名前を返す。 */
   private String feedDisplayName(Feed feed, String fetchedTitle) {
     if (feed.displayName() != null && !feed.displayName().isBlank()) {
       return feed.displayName();

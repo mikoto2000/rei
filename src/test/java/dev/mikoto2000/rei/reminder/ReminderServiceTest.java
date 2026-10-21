@@ -12,11 +12,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** リマインダーサービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ReminderServiceTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** リマインダーの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void addAtAndListActiveReminders() {
     ReminderService service = newService();
@@ -32,6 +35,7 @@ class ReminderServiceTest {
     assertFalse(reminders.getFirst().notified());
   }
 
+  /** リマインダーの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void addBeforeComputesReminderTime() {
     ReminderService service = newService();
@@ -45,6 +49,7 @@ class ReminderServiceTest {
     assertEquals(15, created.minutesBefore());
   }
 
+  /** リマインダーの管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void findDueAndMarkNotified() {
     ReminderService service = newService();
@@ -66,6 +71,7 @@ class ReminderServiceTest {
     assertEquals(1, service.listActive().size());
   }
 
+  /** リマインダーの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void findDueHandlesOffsetDateTimesByInstant() {
     ReminderService service = newService();
@@ -77,6 +83,7 @@ class ReminderServiceTest {
     assertEquals(List.of(due), dueReminders);
   }
 
+  /** 取り除くリマインダーを削除することを確認する。 */
   @Test
   void deleteRemovesReminder() {
     ReminderService service = newService();
@@ -88,6 +95,7 @@ class ReminderServiceTest {
     assertEquals(0, service.listActive().size());
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private ReminderService newService() {
     return new ReminderService(
         new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("reminder.db")));

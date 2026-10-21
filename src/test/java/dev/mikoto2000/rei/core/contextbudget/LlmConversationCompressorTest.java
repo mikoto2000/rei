@@ -34,9 +34,12 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
 import reactor.core.publisher.Flux;
 
+/** 言語モデル会話Compressorの結果と状態の契約を検証するテスト。 */
 class LlmConversationCompressorTest {
+  /** 検証に使う非公開。 */
   private static final String PRIVATE = "private-provider-body-and-request-secret";
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void summaryBudgetOverridesInheritedLimitWithoutChangingParameterFamily(
@@ -48,10 +51,12 @@ class LlmConversationCompressorTest {
             : OpenAiChatOptions.builder().model("configured").maxTokens(4096).build();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、モデルへ渡す文脈の管理の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             captured.set(prompt);
             return Flux.just(
@@ -82,6 +87,7 @@ class LlmConversationCompressorTest {
     }
   }
 
+  /** {@code compressor} の条件を再現するための補助情報を返す。 */
   private LlmConversationCompressor compressor(
       ChatModel model, ContextCompressionProperties properties) {
     var models = mock(LlmModelProvider.class);
@@ -94,6 +100,7 @@ class LlmConversationCompressorTest {
     return new LlmConversationCompressor(provider, properties);
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   private ChatResponse response(String text, String finish) {
     return new ChatResponse(
         List.of(
@@ -104,6 +111,7 @@ class LlmConversationCompressorTest {
                     .build())));
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"", "  \n\t"})
   void blankResponsesHaveTheirOwnReason(String text) {
@@ -118,6 +126,7 @@ class LlmConversationCompressorTest {
             error -> assertThat(error.reason()).isEqualTo(EMPTY_SUMMARY));
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void thinkingOnlyLengthResponseIsOutputLimitInsteadOfEmptySummary() {
     var model = mock(ChatModel.class);
@@ -134,6 +143,7 @@ class LlmConversationCompressorTest {
             });
   }
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void toolResponseCannotBecomeConversationSummary() {
     var model = mock(ChatModel.class);
@@ -154,6 +164,7 @@ class LlmConversationCompressorTest {
             error -> assertThat(error.reason()).isEqualTo(INVALID_RESPONSE));
   }
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @ParameterizedTest
   @CsvSource({
     "401,AUTHENTICATION",
@@ -191,6 +202,7 @@ class LlmConversationCompressorTest {
             });
   }
 
+  /** 状態を利用することを確認する。 */
   @Test
   void sdkFailuresUseStatusInsteadOfTheirBody() {
     var model = mock(ChatModel.class);
@@ -211,6 +223,7 @@ class LlmConversationCompressorTest {
             });
   }
 
+  /** モデルへ渡す文脈の管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void timeoutCancelsTheSummaryStreamAndHasDedicatedReason() {
     var model = mock(ChatModel.class);
@@ -227,6 +240,7 @@ class LlmConversationCompressorTest {
     assertThat(cancelled).isTrue();
   }
 
+  /** モデルへ渡す文脈の管理で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void transportTimeoutCauseKeepsItsSpecificReason() {
     var error =
@@ -246,6 +260,7 @@ class LlmConversationCompressorTest {
         .isEqualTo(UNKNOWN);
   }
 
+  /** モデルへ渡す文脈の管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationIsStillControlFlowInsteadOfDiagnosticFailure() {
     var model = mock(ChatModel.class);
@@ -257,6 +272,7 @@ class LlmConversationCompressorTest {
         .isInstanceOf(CancellationException.class);
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void budgetsCannotBecomeSummaryFailures(boolean wrapped) {
@@ -274,6 +290,7 @@ class LlmConversationCompressorTest {
         .isSameAs(stopped);
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void providerUsageIsReturnedIndependentlyOfTextEstimate() {
     var model = mock(ChatModel.class);
@@ -293,6 +310,7 @@ class LlmConversationCompressorTest {
     assertThat(summary.outputTokens()).isEqualTo(3);
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void absentAndZeroProviderUsageRemainUnknown() {
     var model = mock(ChatModel.class);
@@ -313,6 +331,7 @@ class LlmConversationCompressorTest {
     }
   }
 
+  /** 不明使用状況を維持することを確認する。 */
   @Test
   void legacyFunctionalCompressorsKeepUnknownUsageAndBudgetGuard() {
     ConversationCompressor compressor = (previous, messages, maxTokens, owner) -> "legacy summary";
@@ -323,9 +342,11 @@ class LlmConversationCompressorTest {
     assertThatThrownBy(() -> compressor.summarizeResult("", List.of(), 100, owner, budget))
         .isInstanceOf(dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.class)
         .hasMessageContaining("TOKEN_USAGE_UNKNOWN");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(budget);
   }
 
+  /** モデルへ渡す文脈の管理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void summaryPurposeCopiesContextAndRetainsOwnerAuthority() {
     var captured = new AtomicReference<Prompt>();
@@ -351,6 +372,7 @@ class LlmConversationCompressorTest {
     assertThat(original.getToolContext()).containsEntry("rei.modelCallPurpose", "chat");
   }
 
+  /** モデルへ渡す文脈の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void setupErrorsDoNotCarryProviderText() {
     @SuppressWarnings("unchecked")
@@ -367,6 +389,7 @@ class LlmConversationCompressorTest {
             });
   }
 
+  /** モデルへ渡す文脈の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void numericDiagnosticsAreSafeAndTypedFailuresStayIntact() {
     var error = new ContextCompressionException(INPUT_BUDGET, 4000, 3000);

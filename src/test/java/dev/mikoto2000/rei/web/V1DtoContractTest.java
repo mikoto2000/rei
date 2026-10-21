@@ -7,12 +7,17 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /**
- * Fixed public field names: expectations do not derive from Java reflection or internal entities.
+ * V1Dto契約の結果と状態の契約を検証するテスト。
+ *
+ * <p>Fixed public field names: expectations do not derive from Java reflection or internal
+ * entities.
  */
 class V1DtoContractTest {
+  /** 検証に使う保存や受け渡しに用いるデータ形式の変換。 */
   private final com.fasterxml.jackson.databind.ObjectMapper json =
       new com.fasterxml.jackson.databind.ObjectMapper();
 
+  /** Web APIによる操作で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void phaseTwoThroughFourJsonFieldsRemainCompatible() throws Exception {
     fields(new FeedResponse(1, "url", "title", "name", true), "id url title displayName enabled");
@@ -68,6 +73,7 @@ class V1DtoContractTest {
     fields(new StatefulController.SkillReloadResponse(0), "count");
   }
 
+  /** {@code fields} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void fields(Object dto, String names) throws Exception {
     var tree = json.readTree(json.writeValueAsString(dto));
     assertThat(tree.properties())

@@ -28,26 +28,56 @@ import java.util.UUID;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-/** Derives attention only from owned execution facts, without interpreting model text. */
+/**
+ * 注意のユースケースを実現する。
+ *
+ * <p>Derives attention only from owned execution facts, without interpreting model text.
+ */
 @Component
 public class AttentionService {
+  /**
+   * 注意の管理で受け渡す実行を表す。
+   *
+   * @param project プロジェクト
+   * @param session 会話
+   * @param run 実行
+   */
   private record Run(String project, String session, String run) {}
 
+  /** 受信した案内や確認待ち情報の保存先。 */
   private final AttentionRepository inbox;
+
+  /** 通知の連携先。 */
   private final AgentEventBus bus;
+
+  /** 通知先。 */
   private final AgentEventPublisher publisher;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 時刻。 */
   private final MonotonicTimeSource time;
+
+  /** 待機中。 */
   private final Map<Run, Long> waiting = new LinkedHashMap<>();
+
+  /** 完了済み。 */
   private final Set<Run> finished = new LinkedHashSet<>();
+
+  /** 購読。 */
   private AgentEventBus.Subscription subscription;
+
+  /** 承認一覧。 */
   private dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvals;
 
+  /** 注意の管理で使用する承認一覧を設定する。 */
   @Autowired(required = false)
   public void setApprovals(dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvals) {
     this.approvals = approvals;
   }
 
+  /** 指定された値や利用先を使って、AttentionServiceを初期化する。 */
   @Autowired
   public AttentionService(
       AttentionRepository inbox,
@@ -62,11 +92,13 @@ public class AttentionService {
     this.time = time;
   }
 
+  /** 要求された処理を開始する。 */
   @PostConstruct
   public synchronized void start() {
     if (subscription == null) subscription = bus.subscribe(this::observe);
   }
 
+  /** 注意の管理で利用した資源や登録を解放し、利用を終了する。 */
   @PreDestroy
   public synchronized void close() {
     if (subscription != null) {
@@ -77,6 +109,7 @@ public class AttentionService {
     finished.clear();
   }
 
+  /** 状況を判断する根拠を得るため、注意サービスを観測する。 */
   private synchronized void observe(AgentEvent event) {
     if (event.projectId() == null || event.sessionId() == null) return;
     if (event.type() == AgentEventType.DEPENDENCY_UPDATED
@@ -121,6 +154,7 @@ public class AttentionService {
         if (finished.contains(run)) return;
         long now = time.nanoTime();
         long since = waiting.computeIfAbsent(run, ignored -> now);
+        // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (waiting.size() > 1024) waiting.remove(waiting.keySet().iterator().next());
         if (now - since >= Duration.ofMinutes(2).toNanos())
           notify(
@@ -163,6 +197,7 @@ public class AttentionService {
     }
   }
 
+  /** 注意の管理に関する承認通知を処理する。 */
   private void approvalNotice(AgentEvent event, ToolFailedPayload payload) {
     var match =
         java.util.regex.Pattern.compile("Approval required: ([0-9a-fA-F-]{36})")
@@ -199,6 +234,7 @@ public class AttentionService {
         "Tool approval is required. Review /approval list, decide explicitly, then resume or retry.");
   }
 
+  /** 注意の管理に関する依存条件を処理する。 */
   private void dependency(AgentEvent event) {
     if (!(event.payload() instanceof DependencyStatusPayload payload)
         || event.runId() != null
@@ -235,6 +271,7 @@ public class AttentionService {
           message);
   }
 
+  /** 実行状況を利用先で把握できるよう、注意を通知する。 */
   private void publishAttention(
       AgentEvent source, Optional<AttentionRepository.Item> item, String kind, String message) {
     item.ifPresent(
@@ -255,10 +292,12 @@ public class AttentionService {
                     source.projectId())));
   }
 
+  /** 状態の変化を利用先へ伝えるため、注意サービスを通知する。 */
   private void notify(AgentEvent source, String kind, String reference, String message) {
     publishAttention(source, inbox.create(source, kind, reference, message), kind, message);
   }
 
+  /** 利用先の上限を超えない量へ、指定された内容を調整する。 */
   private static String bounded(String value) {
     String safe = CredentialRedactor.redact(value == null ? "unknown" : value);
     return safe.substring(0, Math.min(128, safe.length()));

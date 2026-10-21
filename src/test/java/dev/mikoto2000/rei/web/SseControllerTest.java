@@ -16,7 +16,9 @@ import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+/** イベント配信受付窓口の結果と状態の契約を検証するテスト。 */
 class SseControllerTest {
+  /** Web APIによる操作で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void lastEventIdResumesAndReplayGapIsRejectedBeforeStreaming() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -47,6 +49,7 @@ class SseControllerTest {
     }
   }
 
+  /** Web APIによる操作で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void streamsSseFramesAndUnknownRunIs404BeforeStartingStream() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());

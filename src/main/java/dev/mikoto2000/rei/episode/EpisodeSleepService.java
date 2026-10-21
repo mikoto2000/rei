@@ -10,25 +10,40 @@ import java.util.UUID;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Service;
 
+/** 経験の記録待機のユースケースを実現する。 */
 @Service
 @EnableConfigurationProperties(EpisodeProperties.class)
 public class EpisodeSleepService {
+  /** 保存と検索の窓口。 */
   private final EpisodeRepository repository;
+
+  /** やり取り一覧。 */
   private final ConversationTurnStore turns;
+
+  /** 記録された経験を整理する処理の窓口。 */
   private final EpisodeProcessor processor;
+
+  /** この機能の動作設定。 */
   private final EpisodeProperties properties;
+
+  /** 記憶。 */
   private final MemoryProperties memory;
+
+  /** ベクトルによる。 */
   private EpisodeDenseIndex dense;
 
+  /** 過去の経験の活用で使用するベクトルによるを設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setDense(EpisodeDenseIndex dense) {
     this.dense = dense;
   }
 
+  /** 作業。 */
   private org.springframework.beans.factory.ObjectProvider<
           dev.mikoto2000.rei.workcontext.WorkContextService>
       work;
 
+  /** 過去の経験の活用で使用する作業文脈を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setWorkContext(
       org.springframework.beans.factory.ObjectProvider<
@@ -37,6 +52,7 @@ public class EpisodeSleepService {
     this.work = work;
   }
 
+  /** 指定された値や利用先を使って、EpisodeSleepServiceを初期化する。 */
   public EpisodeSleepService(
       EpisodeRepository repository,
       ConversationTurnStore turns,
@@ -50,6 +66,7 @@ public class EpisodeSleepService {
     this.memory = memory;
   }
 
+  /** 過去の経験の活用に関するプロセスを処理する。 */
   public void process(
       String session,
       String project,
@@ -94,11 +111,13 @@ public class EpisodeSleepService {
     }
   }
 
+  /** 過去の経験の活用に関するリンク記憶を処理する。 */
   public void linkMemory(
       String project, String session, java.util.List<String> runs, String memoryId) {
     if (properties.enabled()) repository.linkMemory(project, session, runs, memoryId);
   }
 
+  /** 後続の処理で判断できるよう、未完了の対象を返す。 */
   public long pending(String session) {
     return properties.enabled()
         ? Math.max(

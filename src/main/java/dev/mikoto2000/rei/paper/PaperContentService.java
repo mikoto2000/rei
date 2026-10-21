@@ -7,16 +7,29 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
+/** 論文内容のユースケースを実現する。 */
 @Service
 public class PaperContentService {
+  /** 保存先。 */
   private final PaperArtifactStore store;
+
+  /** HTTP通信。 */
   private final PaperHttpClient http;
+
+  /** 論文から本文を抽出する窓口。 */
   private final PaperExtractionService extraction;
+
+  /** 設定。 */
   private final PaperProperties config;
+
+  /** 保存と検索の窓口。 */
   private final PaperRepository repository;
+
+  /** 提供元一覧。 */
   private final List<PaperContentProvider> providers =
       List.of(new ArxivContentProvider(), new OpenAccessContentProvider());
 
+  /** 論文の調査と整理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public PaperContentService(
       PaperArtifactStore store,
       PaperHttpClient http,
@@ -25,6 +38,7 @@ public class PaperContentService {
     this(store, http, extraction, config, null);
   }
 
+  /** 指定された値や利用先を使って、PaperContentServiceを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public PaperContentService(
       PaperArtifactStore store,
@@ -39,10 +53,12 @@ public class PaperContentService {
     this.repository = repository;
   }
 
+  /** 論文の調査と整理で用いる内容を返す。 */
   public StructuredPaper content(Paper paper, PaperOperation op) {
     return PaperLocks.with(paper.id(), op, () -> contentLocked(paper, op));
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private Optional<byte[]> read(Paper paper, String kind, String extension) {
     for (String id :
         repository == null ? List.of(paper.id()) : repository.artifactIds(paper.id())) {
@@ -52,6 +68,7 @@ public class PaperContentService {
     return Optional.empty();
   }
 
+  /** 論文の調査と整理で用いる内容使用中を返す。 */
   private StructuredPaper contentLocked(Paper paper, PaperOperation op) {
     op.check();
     if (repository != null && repository.find(paper.id()).isEmpty())
@@ -108,6 +125,7 @@ public class PaperContentService {
         paper.title(), StructuredPaper.Availability.METADATA_ONLY, List.of(), List.of(), warnings);
   }
 
+  /** 論文の調査と整理に関する取り込みPDFを処理する。 */
   public void importPdf(Paper paper, byte[] pdf, PaperOperation op) {
     PaperLocks.with(
         paper.id(),
@@ -118,6 +136,7 @@ public class PaperContentService {
         });
   }
 
+  /** 論文の調査と整理に関する取り込み使用中を処理する。 */
   private void importLocked(Paper paper, byte[] pdf, PaperOperation op) {
     if (repository != null && repository.find(paper.id()).isEmpty())
       throw new PaperException(PaperException.Code.PAPER_NOT_FOUND, "論文が見つかりません");
@@ -136,6 +155,7 @@ public class PaperContentService {
         op);
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   private void validate(StructuredPaper p) {
     if (p.sections().size() > config.getMaxSections()
         || p.sections().stream().mapToLong(s -> s.text().length()).sum()

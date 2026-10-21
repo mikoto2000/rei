@@ -13,11 +13,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
+/** Web検索提供元予算の結果と状態の契約を検証するテスト。 */
 class WebSearchProviderBudgetTest {
+  /** 検証に使うサーバー。 */
   HttpServer server;
+
+  /** 検証に使うこの機能の動作設定。 */
   WebSearchProperties properties;
+
+  /** 検証に使う最初、秒。 */
   AtomicInteger first, second;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void start() throws Exception {
     first = new AtomicInteger();
@@ -28,11 +35,13 @@ class WebSearchProviderBudgetTest {
     properties.setEnabled(true);
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void close() {
     server.stop(0);
   }
 
+  /** 検証で使用する提供元を、指定された条件に合わせて用意する。 */
   WebSearchProperties.ProviderProperties provider(String path) {
     var result = new WebSearchProperties.ProviderProperties();
     result.setName("duckduckgo");
@@ -40,6 +49,7 @@ class WebSearchProviderBudgetTest {
     return result;
   }
 
+  /** {@code html} の条件を再現するため、検証用の操作や状態を扱う。 */
   void html(String path, AtomicInteger calls, String title) {
     server.createContext(
         path,
@@ -59,6 +69,7 @@ class WebSearchProviderBudgetTest {
         });
   }
 
+  /** Web上の情報の調査で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sufficientFirstProviderAvoidsTheSecondPhysicalCall() throws Exception {
     html("/first", first, "Java streams");
@@ -70,6 +81,7 @@ class WebSearchProviderBudgetTest {
     assertEquals(0, second.get());
   }
 
+  /** Web上の情報の調査で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void wrongVersionDoesNotSuppressLaterProvider() throws Exception {
     html("/first", first, "Java 24 reference");
@@ -81,6 +93,7 @@ class WebSearchProviderBudgetTest {
     assertEquals(1, second.get());
   }
 
+  /** Web上の情報の調査で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void queryExpansionsSharePhysicalRequestBudget() throws Exception {
     html("/empty", first, "unrelated result");
@@ -95,6 +108,7 @@ class WebSearchProviderBudgetTest {
     assertEquals(2, first.get());
   }
 
+  /** Web上の情報の調査で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void redirectsCannotBypassRequestQuota() {
     server.createContext(

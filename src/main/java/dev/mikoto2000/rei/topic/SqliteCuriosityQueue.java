@@ -6,14 +6,18 @@ import java.util.List;
 import javax.sql.DataSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
+/** 話題の管理に必要なSQLite情報への関心実行待ちを扱う。 */
 public class SqliteCuriosityQueue implements CuriosityQueue {
+  /** データベースへの接続クライアント。 */
   private final JdbcClient jdbcClient;
 
+  /** 指定された値や利用先を使って、SqliteCuriosityQueueを初期化する。 */
   public SqliteCuriosityQueue(DataSource dataSource) {
     this.jdbcClient = JdbcClient.create(dataSource);
     initializeSchema();
   }
 
+  /** 新たな対象を登録し、後から利用できるようにする。 */
   @Override
   public synchronized void add(CuriosityItem item) {
     jdbcClient
@@ -36,6 +40,7 @@ public class SqliteCuriosityQueue implements CuriosityQueue {
         .update();
   }
 
+  /** 対象を特定できるよう、候補一覧を探す。 */
   @Override
   public synchronized List<CuriosityItem> findCandidates(CuriosityQuery query) {
     int limit = Math.max(0, query.limit());
@@ -65,16 +70,19 @@ public class SqliteCuriosityQueue implements CuriosityQueue {
         .list();
   }
 
+  /** 後続の判断に現在の状態を反映するため、使用量の状態を記録する。 */
   @Override
   public synchronized void markUsed(String id) {
     updateStatus(id, CuriosityStatus.USED);
   }
 
+  /** 話題の管理に関するdismissを処理する。 */
   @Override
   public synchronized void dismiss(String id) {
     updateStatus(id, CuriosityStatus.DISMISSED);
   }
 
+  /** 最新の内容を後続の処理に反映するため、状態を更新する。 */
   private void updateStatus(String id, CuriosityStatus status) {
     if (id == null || id.isBlank()) return;
     jdbcClient
@@ -83,6 +91,7 @@ public class SqliteCuriosityQueue implements CuriosityQueue {
         .update();
   }
 
+  /** 話題の管理で用いる対応表項目を返す。 */
   private CuriosityItem mapItem(ResultSet rs, int rowNum) throws java.sql.SQLException {
     return new CuriosityItem(
         rs.getString("id"),
@@ -95,6 +104,7 @@ public class SqliteCuriosityQueue implements CuriosityQueue {
         CuriosityStatus.valueOf(rs.getString("status")));
   }
 
+  /** 話題の管理に関する初期化データ形式を処理する。 */
   private void initializeSchema() {
     jdbcClient
         .sql(
@@ -129,6 +139,7 @@ public class SqliteCuriosityQueue implements CuriosityQueue {
         .update();
   }
 
+  /** 新たな対象を管理できるよう、列条件付き未指定を追加する。 */
   private void addColumnIfMissing(String table, String column, String type) {
     boolean exists =
         jdbcClient
@@ -141,10 +152,12 @@ public class SqliteCuriosityQueue implements CuriosityQueue {
     }
   }
 
+  /** 利用先へ渡せるよう、データベース時刻の形式に変換する。 */
   private String toDbTime(Instant value) {
     return value == null ? null : value.toString();
   }
 
+  /** 話題の管理で用いる起点データベース時刻を返す。 */
   private Instant fromDbTime(String value) {
     return value == null ? null : Instant.parse(value);
   }

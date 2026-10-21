@@ -4,9 +4,12 @@ import dev.mikoto2000.rei.event.CredentialRedactor;
 import java.util.ArrayList;
 import java.util.List;
 
+/** Slackとの連携に必要なSlackRepliesを扱う。 */
 public final class SlackReplies {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private SlackReplies() {}
 
+  /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */
   public static String safe(String text) {
     String result = CredentialRedactor.redact(text);
     for (String name : List.of("SLACK_BOT_TOKEN", "SLACK_APP_TOKEN")) {
@@ -16,6 +19,7 @@ public final class SlackReplies {
     return result;
   }
 
+  /** Slackとの連携で用いる部分一覧を返す。 */
   public static List<String> parts(String text) {
     String safe =
         safe(text)

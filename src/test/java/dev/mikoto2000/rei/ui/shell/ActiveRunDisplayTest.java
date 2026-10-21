@@ -14,10 +14,13 @@ import java.util.ArrayList;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 活動中実行表示の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ActiveRunDisplayTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void includesEveryExecutionTypeInRowsAndPrompt() throws Exception {
     var registry = new ProjectRegistry(temp.resolve("projects.json"));
@@ -45,6 +48,7 @@ class ActiveRunDisplayTest extends dev.mikoto2000.rei.core.project.ProjectClient
     assertThat(display.promptStatus()).isEqualTo("[A] [0 running]");
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void runsCommandAndPromptShowAllProjectsAfterSwitchAndCompletion() throws Exception {
     var registry = new ProjectRegistry(temp.resolve("projects.json"));
@@ -83,6 +87,7 @@ class ActiveRunDisplayTest extends dev.mikoto2000.rei.core.project.ProjectClient
     assertThat(display.rows()).isEmpty();
   }
 
+  /** ターミナルでの対話で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateNamesAreDisambiguatedAndPastEventsDoNotBecomeActive() throws Exception {
     var registry = new ProjectRegistry(temp.resolve("projects.json"));

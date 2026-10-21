@@ -11,21 +11,28 @@ import java.util.Locale;
 import java.util.Objects;
 import org.springframework.stereotype.Service;
 
+/** 記憶の指定を解決し、利用する対象を確定する。 */
 @Service
 public class MemoryResolver {
+  /** モデル。 */
   private final MemoryResolutionModel model;
+
+  /** この機能の動作設定。 */
   private final MemoryProperties properties;
 
+  /** 指定された値や利用先を使って、MemoryResolverを初期化する。 */
   public MemoryResolver(MemoryResolutionModel model, MemoryProperties properties) {
     this.model = model;
     this.properties = properties;
   }
 
+  /** 指定や設定を照合し、実際に利用する対象を確定する。 */
   public MemoryResolution resolve(
       MemoryCandidate c, List<LongTermMemory> memories, String project) {
     return resolve(c, memories, project, null);
   }
 
+  /** 指定や設定を照合し、実際に利用する対象を確定する。 */
   public MemoryResolution resolve(
       MemoryCandidate c,
       List<LongTermMemory> memories,
@@ -66,6 +73,7 @@ public class MemoryResolver {
     return result;
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、表記や形式をそろえる。 */
   static String normalize(String text) {
     return text.strip().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT);
   }

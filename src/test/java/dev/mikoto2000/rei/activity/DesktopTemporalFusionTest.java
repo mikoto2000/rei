@@ -8,7 +8,9 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** デスクトップ時系列Fusionの結果と状態の契約を検証するテスト。 */
 class DesktopTemporalFusionTest {
+  /** {@code supplemented} の条件を再現するための補助情報を返す。 */
   static ActivityRecord supplemented(String id, Instant at) {
     var r = TemporalActivityInferenceTest.record(id, at, "コード修正");
     return ActivityBackgroundMerge.merge(
@@ -23,6 +25,7 @@ class DesktopTemporalFusionTest {
         .5);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void includesAttributedDesktopInferenceButExpiresOldContext() {
     var at = TemporalActivityInferenceTest.AT;
@@ -37,6 +40,7 @@ class DesktopTemporalFusionTest {
     assertTrue(old.groups().getFirst().facts().desktop().isEmpty());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void idleAndLongGapBreakTaskContinuity() {
     var at = TemporalActivityInferenceTest.AT;
@@ -83,6 +87,7 @@ class DesktopTemporalFusionTest {
             .status());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void videoNeverBecomesTaskGoalOrAddsTime() {
     var at = TemporalActivityInferenceTest.AT;
@@ -114,6 +119,7 @@ class DesktopTemporalFusionTest {
             .observedSeconds());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void foregroundTransitionsAreSummarizedTogetherWithoutInventingAGoal() {
     var at = TemporalActivityInferenceTest.AT;
@@ -131,6 +137,7 @@ class DesktopTemporalFusionTest {
     assertTrue(text.contains("可能性"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void researchWithoutProjectTitleCanJoinAnExplicitDevelopmentAnchor() {
     var at = TemporalActivityInferenceTest.AT;
@@ -155,6 +162,7 @@ class DesktopTemporalFusionTest {
             .status());
   }
 
+  /** {@code transition} の条件を再現するための補助情報を返す。 */
   private static ActivityRecord transition(
       String id, Instant at, String process, String category, String content, String candidate) {
     var base = TemporalActivityInferenceTest.record(id, at, content);
@@ -200,6 +208,7 @@ class DesktopTemporalFusionTest {
         d);
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void verboseTimelineShowsSupplementalInferenceWithProvenanceAndNoTimeCredit() {
     var record = supplemented("aux-id", TemporalActivityInferenceTest.AT);

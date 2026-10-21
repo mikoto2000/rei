@@ -12,9 +12,12 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 初学者教材分析の結果と状態の契約を検証するテスト。 */
 class BeginnerMaterialAnalyzerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void explicitOrderWinsAndReferenceLinksAreNotRequiredChapters() throws Exception {
     Files.writeString(root.resolve("intro.md"), "# Intro\n[Reference](extra.md)\n");
@@ -28,6 +31,7 @@ class BeginnerMaterialAnalyzerTest {
     assertEquals(List.of("extra.md"), result.unreadFiles());
   }
 
+  /** 限定説明一覧追加知識およびについて、行根拠を保持することを確認する。 */
   @Test
   void onlyExplanationsAddKnowledgeAndPreserveLineEvidence() throws Exception {
     Files.writeString(
@@ -45,6 +49,7 @@ class BeginnerMaterialAnalyzerTest {
     assertEquals(1, chapter.expectedResults().size());
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void partialAndMissingChaptersNeverBecomeReviewed() throws Exception {
     Files.writeString(root.resolve("a.md"), "# A\n" + "x".repeat(100));
@@ -56,6 +61,7 @@ class BeginnerMaterialAnalyzerTest {
     assertFalse(result.complete());
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void navigationJsonSuppliesOrderWithoutExecutingConfigOrMaterial() throws Exception {
     Files.writeString(root.resolve("a.md"), "# A\n");
@@ -65,6 +71,7 @@ class BeginnerMaterialAnalyzerTest {
     assertEquals(List.of("b.md", "a.md"), result.chapters().stream().map(c -> c.file()).toList());
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void refusesEscapeAndReportsMissingExerciseFiles() throws Exception {
     Files.writeString(
@@ -83,6 +90,7 @@ class BeginnerMaterialAnalyzerTest {
                 .analyze(root, "../outside.md", List.of(), Set.of(), 100));
   }
 
+  /** 外部エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationPropagatesWithoutReportingChapterFailure() throws Exception {
     Files.writeString(root.resolve("a.md"), "# A\n");
@@ -96,6 +104,7 @@ class BeginnerMaterialAnalyzerTest {
     }
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void codeAndMentionsAreNotExplanationsAndKnowledgeFlowsAcrossChapters() throws Exception {
     Files.writeString(
@@ -109,6 +118,7 @@ class BeginnerMaterialAnalyzerTest {
     assertEquals(1, result.chapters().getFirst().explained().size());
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void excludedPagesAndInvalidUtf8RemainUnreviewed() throws Exception {
     Files.createDirectory(root.resolve("secrets"));
@@ -123,6 +133,7 @@ class BeginnerMaterialAnalyzerTest {
     assertTrue(result.chapters().getLast().knowledgeAfter().isEmpty());
   }
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void inventoryDepthLimitCannotClaimCompleteCoverage() throws Exception {
     Files.writeString(root.resolve("a.md"), "# A\n");
@@ -135,6 +146,7 @@ class BeginnerMaterialAnalyzerTest {
     assertTrue(result.warnings().stream().anyMatch(w -> w.contains("depth")));
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void partialUnicodeKeepsOnlyCompleteLinesAndDoesNotTeachUnreadConcepts() throws Exception {
     Files.writeString(root.resolve("a.md"), "## Concepts\n- 概念: 説明\n- 未読: 説明\n");
@@ -145,6 +157,7 @@ class BeginnerMaterialAnalyzerTest {
     assertFalse(result.complete());
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void excludedDirectoryCannotBecomeTheMaterialRoot() throws Exception {
     Path excluded = Files.createDirectory(root.resolve("secrets"));

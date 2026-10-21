@@ -27,18 +27,39 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
 /**
- * Requirement traceability around the existing test/static review cycle; model agreement never
+ * 意味による変更差分レビューのユースケースを実現する。
+ *
+ * <p>Requirement traceability around the existing test/static review cycle; model agreement never
  * replaces checks.
  */
 @Service
 public final class SemanticPatchReviewService {
+  /**
+   * 共通の実行基盤で受け渡す要件を表す。
+   *
+   * @param id 識別子
+   * @param statement 記述内容
+   * @param files ファイル一覧
+   * @param tests 検証一覧
+   */
   public record Requirement(String id, String statement, List<String> files, List<String> tests) {
+    /** 受け取った情報からRequirementを作成する。 */
     public Requirement {
       files = files == null ? List.of() : List.copyOf(files);
       tests = tests == null ? List.of() : List.copyOf(tests);
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡す要求を表す。
+   *
+   * @param testCommand 検証コマンド
+   * @param timeoutSeconds タイムアウトの秒数
+   * @param requirements 要件一覧
+   * @param allowedFiles 許可ファイル一覧
+   * @param testReports 検証レポート一覧
+   * @param semantic 意味による
+   */
   public record Request(
       String testCommand,
       Integer timeoutSeconds,
@@ -46,6 +67,7 @@ public final class SemanticPatchReviewService {
       List<String> allowedFiles,
       List<String> testReports,
       boolean semantic) {
+    /** 受け取った情報からRequestを作成する。 */
     public Request {
       requirements = requirements == null ? List.of() : List.copyOf(requirements);
       allowedFiles = allowedFiles == null ? List.of() : List.copyOf(allowedFiles);
@@ -53,8 +75,25 @@ public final class SemanticPatchReviewService {
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡すファイル事実を表す。
+   *
+   * @param path パス
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   * @param exists 存在
+   */
   public record FileFact(String path, String sha256, boolean exists) {}
 
+  /**
+   * 共通の実行基盤で受け渡す検証事実を表す。
+   *
+   * @param path パス
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   * @param modifiedAt 更新日時
+   * @param passedTests passed検証一覧
+   * @param counts 件数
+   * @param complete 完了
+   */
   public record TestFact(
       String path,
       String sha256,
@@ -62,21 +101,47 @@ public final class SemanticPatchReviewService {
       List<String> passedTests,
       TestReportDiagnosisService.Counts counts,
       boolean complete) {
+    /** 受け取った情報からTestFactを作成する。 */
     public TestFact {
       passedTests = List.copyOf(passedTests);
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡す確認を表す。
+   *
+   * @param code コード
+   * @param requirementId 要件識別子
+   * @param path パス
+   */
   public record Check(String code, String requirementId, String path) {}
 
+  /**
+   * 共通の実行基盤で受け渡す評価結果を表す。
+   *
+   * @param status 状態
+   * @param requirements 要件一覧
+   * @param dimensions 次元数
+   */
   public record Verdict(
       String status, Map<String, String> requirements, Map<String, String> dimensions) {
+    /** 受け取った情報からVerdictを作成する。 */
     public Verdict {
       requirements = Map.copyOf(requirements);
       dimensions = Map.copyOf(dimensions);
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡す入力を表す。
+   *
+   * @param originalTask 元のタスク
+   * @param requirements 要件一覧
+   * @param patchVersion 変更差分形式のバージョン
+   * @param diff 差分
+   * @param sources 取得元一覧
+   * @param tests 検証一覧
+   */
   public record Input(
       String originalTask,
       List<Requirement> requirements,
@@ -85,6 +150,25 @@ public final class SemanticPatchReviewService {
       Map<String, String> sources,
       List<TestFact> tests) {}
 
+  /**
+   * 共通の実行基盤で受け渡す詳細を表す。
+   *
+   * @param project プロジェクト
+   * @param root 作業ルート
+   * @param session 会話
+   * @param run 実行
+   * @param status 状態
+   * @param checkedAt 確認済み日時
+   * @param commandSha256 コマンド内容の同一性を照合するSHA-256ハッシュ
+   * @param requirements 要件一覧
+   * @param files ファイル一覧
+   * @param tests 検証一覧
+   * @param checks 確認結果
+   * @param verification 確認結果
+   * @param semantic 意味による
+   * @param truthVerified 確定情報確認済み
+   * @param warnings 注意事項
+   */
   public record Detail(
       String project,
       String root,
@@ -102,8 +186,27 @@ public final class SemanticPatchReviewService {
       boolean truthVerified,
       List<String> warnings) {}
 
+  /**
+   * 共通の実行基盤で受け渡す受付記録を表す。
+   *
+   * @param id 識別子
+   * @param status 状態
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   * @param detail 詳細
+   */
   public record Receipt(String id, String status, String sha256, Detail detail) {}
 
+  /**
+   * 共通の実行基盤で受け渡すInspectionを表す。
+   *
+   * @param id 識別子
+   * @param status 状態
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   * @param completed 完了
+   * @param pid プロセス識別子
+   * @param heartbeat 生存確認
+   * @param warnings 注意事項
+   */
   public record Inspection(
       String id,
       String status,
@@ -113,29 +216,53 @@ public final class SemanticPatchReviewService {
       Instant heartbeat,
       List<String> warnings) {}
 
+  /** 共通の実行基盤に必要な教材読み取り元を扱う。 */
   @FunctionalInterface
   public interface MaterialReader {
+    /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
     GitPatchInspector.Material read(
         Path root, SelfPatchReviewService.Snapshot snapshot, long deadline) throws IOException;
   }
 
+  /** 共通の実行基盤に必要な意味によるReviewerを扱う。 */
   @FunctionalInterface
   public interface SemanticReviewer {
+    /** 共通の実行基盤で用いる評価の判断を返す。 */
     Verdict judge(Input input, RunExecutionContext run, long deadline) throws IOException;
   }
 
+  /** 次元数。 */
   static final Set<String> DIMENSIONS =
       Set.of("requirements", "extraChanges", "security", "tests", "hygiene", "compatibility");
+
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 意味による有効状態。 */
   private final boolean semanticEnabled;
+
+  /** 取得記録。 */
   private final SelfPatchReviewService.Capture capture;
+
+  /** 一回の診断・修復のまとまり。 */
   private final SelfPatchRepairService.Cycle cycle;
+
+  /** 教材の内容を読み取る窓口。 */
   private final MaterialReader materials;
+
+  /** 変更を評価する窓口。 */
   private final SemanticReviewer reviewer;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
+
+  /** 利用権一覧。 */
   private final PersistedReceiptLease leases;
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @org.springframework.beans.factory.annotation.Autowired
   public SemanticPatchReviewService(
       @org.springframework.beans.factory.annotation.Qualifier("memoryConsolidationDataSource")
@@ -158,6 +285,7 @@ public final class SemanticPatchReviewService {
         new PatchSemanticReviewer(models::subAgentChatModel)::judge);
   }
 
+  /** 指定された値や利用先を使って、SemanticPatchReviewServiceを初期化する。 */
   public SemanticPatchReviewService(
       DataSource source,
       Clock clock,
@@ -179,6 +307,7 @@ public final class SemanticPatchReviewService {
     leases = new PersistedReceiptLease(source, "patch_requirement_reviews", clock);
   }
 
+  /** 共通の実行基盤で用いるレビューを返す。 */
   public Receipt review(AgentRunContext owner, Request request, RunExecutionContext run)
       throws IOException {
     Path root = owner(owner);
@@ -412,6 +541,7 @@ public final class SemanticPatchReviewService {
     }
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Receipt get(AgentRunContext owner, String id, String sha) throws IOException {
     Path root = owner(owner);
     if (id == null
@@ -438,6 +568,7 @@ public final class SemanticPatchReviewService {
     return receipt;
   }
 
+  /** 対象の状態や内容を調べ、呼び出し元が確認できる情報として返す。 */
   public Inspection inspect(AgentRunContext owner, String id) throws IOException {
     Path root = owner(owner);
     if (id == null || !id.matches("[0-9a-fA-F-]{36}"))
@@ -470,6 +601,7 @@ public final class SemanticPatchReviewService {
             () -> new IllegalArgumentException("Review not found in this Project/root/session"));
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<Inspection> list(AgentRunContext owner) throws IOException {
     Path root = owner(owner);
     var ids =
@@ -483,6 +615,7 @@ public final class SemanticPatchReviewService {
     return List.copyOf(results);
   }
 
+  /** 共通の実行基盤で用いる保存済みを返す。 */
   private Receipt stored(String id, String status, String payload, String sha) {
     if (payload == null || sha == null)
       throw new IllegalStateException(
@@ -494,6 +627,7 @@ public final class SemanticPatchReviewService {
     return new Receipt(id, status, sha, detail);
   }
 
+  /** 共通の実行基盤において、有効に該当するか判定する。 */
   private static boolean valid(Verdict verdict, Request request) {
     if (verdict == null
         || !Set.of("MATCH", "FAIL", "UNKNOWN").contains(verdict.status())
@@ -516,6 +650,7 @@ public final class SemanticPatchReviewService {
     };
   }
 
+  /** 共通の実行基盤に関するhygieneを処理する。 */
   private static void hygiene(String diff, List<String> changed, List<Check> checks) {
     String path = null;
     boolean inHunk = false;
@@ -537,6 +672,7 @@ public final class SemanticPatchReviewService {
     scanAdded(path, added.toString(), checks);
   }
 
+  /** 共通の実行基盤に関する調査追加済みを処理する。 */
   private static void scanAdded(String path, String text, List<Check> checks) {
     if (path == null || !path.matches(".*\\.(java|ts|tsx|js|jsx|rs|go|py)$")) return;
     var lexical = HeuristicSourceIndex.lex(text, HeuristicSourceIndex.language(path));
@@ -562,6 +698,7 @@ public final class SemanticPatchReviewService {
       checks.add(new Check("SECURITY_BOUNDARY_REVIEW_REQUIRED", "", path));
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、教材を検証する。 */
   private static void validateMaterial(
       SelfPatchReviewService.Snapshot snapshot, GitPatchInspector.Material material)
       throws IOException {
@@ -579,6 +716,7 @@ public final class SemanticPatchReviewService {
         throw new IOException("Review source budget exceeded");
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   private static void validate(Request request) {
     if (request == null
         || request.testCommand() == null
@@ -629,6 +767,7 @@ public final class SemanticPatchReviewService {
     }
   }
 
+  /** 共通の実行基盤に関する一意なパス一覧を処理する。 */
   private static void uniquePaths(List<String> paths) {
     if (new HashSet<>(paths).size() != paths.size())
       throw new IllegalArgumentException("Unique paths required");
@@ -648,6 +787,7 @@ public final class SemanticPatchReviewService {
     }
   }
 
+  /** 共通の実行基盤で用いる所有者を返す。 */
   private static Path owner(AgentRunContext owner) throws IOException {
     RunCancellation.propagate(null);
     if (owner == null
@@ -657,6 +797,7 @@ public final class SemanticPatchReviewService {
     return owner.projectRoot().toRealPath();
   }
 
+  /** 受け渡し先が扱える形式へ、指定された内容を変換する。 */
   private String encode(Object value) {
     try {
       String payload = json.writeValueAsString(value);
@@ -668,8 +809,10 @@ public final class SemanticPatchReviewService {
     }
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   private <T> T decode(String value, Class<T> type) {
     try {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (value.length() > 131072) throw new IllegalStateException("Review receipt exceeds bounds");
       return json.readValue(value, type);
     } catch (IOException invalid) {
@@ -677,6 +820,7 @@ public final class SemanticPatchReviewService {
     }
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(String value) {
     try {
       return HexFormat.of()

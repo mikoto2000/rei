@@ -3,13 +3,17 @@ package dev.mikoto2000.rei.voice;
 import dev.mikoto2000.rei.ui.shell.ShellEventOutput;
 import java.util.function.Consumer;
 
+/** 音声シェルイベントを画面やターミナルへ表示する。 */
 public final class VoiceShellEventRenderer implements Consumer<VoiceEventPublisher.Event> {
+  /** 出力。 */
   private final ShellEventOutput output;
 
+  /** 指定された値や利用先を使って、VoiceShellEventRendererを初期化する。 */
   public VoiceShellEventRenderer(ShellEventOutput output) {
     this.output = output;
   }
 
+  /** 要求を後続の処理へ引き渡すため、音声シェルイベント表示への変換を受け付ける。 */
   public void accept(VoiceEventPublisher.Event event) {
     String text =
         switch (event.type()) {

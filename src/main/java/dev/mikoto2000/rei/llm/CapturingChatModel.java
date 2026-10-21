@@ -14,14 +14,28 @@ import org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomiz
 import org.springframework.ai.openai.setup.OpenAiSetup;
 import reactor.core.publisher.Flux;
 
-/** Each opted-in logical call owns its SDK transport and immutable HTTP attribution. */
+/**
+ * 用途に応じたモデル利用に必要なCapturing応答生成に使うモデルを扱う。
+ *
+ * <p>Each opted-in logical call owns its SDK transport and immutable HTTP attribution.
+ */
 final class CapturingChatModel implements ChatModel {
+  /** 委譲先。 */
   private final OpenAiChatModel delegate;
+
+  /** 保存先。 */
   private final CaptureStore store;
+
+  /** HTTP通信の設定を調整する処理。 */
   private final List<OpenAiHttpClientBuilderCustomizer> customizers;
+
+  /** 観測内容一覧。 */
   private final io.micrometer.observation.ObservationRegistry observations;
+
+  /** 実行状況の計測値を記録する窓口。 */
   private final io.micrometer.core.instrument.MeterRegistry meters;
 
+  /** 指定された値や利用先を使って、CapturingChatModelを初期化する。 */
   CapturingChatModel(
       OpenAiChatModel delegate,
       CaptureStore store,
@@ -35,10 +49,12 @@ final class CapturingChatModel implements ChatModel {
     this.meters = meters;
   }
 
+  /** 用途に応じたモデル利用で参照する選択可能な設定を返す。 */
   public ChatOptions getOptions() {
     return delegate.getOptions();
   }
 
+  /** 用途に応じたモデル利用で用いるlogicalを返す。 */
   private CaptureStore.LogicalCall logical(Prompt prompt) {
     if (!(prompt.getOptions()
             instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options)
@@ -56,8 +72,15 @@ final class CapturingChatModel implements ChatModel {
         : null;
   }
 
+  /**
+   * 用途に応じたモデル利用で受け渡す自分が所有する対象を表す。
+   *
+   * @param model モデル
+   * @param client クライアント
+   */
   private record Owned(OpenAiChatModel model, com.openai.client.OpenAIClient client)
       implements AutoCloseable {
+    /** 用途に応じたモデル利用で利用した資源や登録を解放し、利用を終了する。 */
     public void close() {
       try {
         client.close();
@@ -66,6 +89,7 @@ final class CapturingChatModel implements ChatModel {
     }
   }
 
+  /** 指定された内容から新しい対象を作成する。 */
   private Owned create(CaptureStore.LogicalCall logical) {
     var o = delegate.getOptions();
     var configured = new ArrayList<>(customizers);
@@ -103,6 +127,7 @@ final class CapturingChatModel implements ChatModel {
     }
   }
 
+  /** 用途に応じたモデル利用の要求を実行し、呼び出し元へ結果を返す。 */
   public ChatResponse call(Prompt prompt) {
     var logical = logical(prompt);
     if (logical == null) return delegate.call(prompt);
@@ -118,6 +143,7 @@ final class CapturingChatModel implements ChatModel {
     }
   }
 
+  /** 用途に応じたモデル利用で用いる逐次データを返す。 */
   public Flux<ChatResponse> stream(Prompt prompt) {
     return Flux.defer(
         () -> {

@@ -10,10 +10,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
 
+/** バックエンド起動単位の識別子の構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class BackendInstanceConfiguration {
+  /** Web APIによる操作で用いるバックエンド起動単位の識別子を返す。 */
   @Bean
   @DependsOn("storageMigrationLease")
   BackendInstance backendInstance(org.springframework.core.env.Environment environment) {
@@ -21,6 +23,7 @@ public class BackendInstanceConfiguration {
         new BackendEndpointStore(Path.of(environment.getRequiredProperty("rei.data-dir"))));
   }
 
+  /** 実行状況を利用先で把握できるよう、バックエンド接続先を通知する。 */
   @Bean
   ApplicationListener<ApplicationReadyEvent> publishBackendEndpoint(BackendInstance instance) {
     return event -> {

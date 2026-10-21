@@ -17,31 +17,46 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 保持期間実行の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class RetentionExecutionTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証条件を再現するための変更可能な時刻の取得元。 */
   static final class MutableClock extends Clock {
+    /** 検証に使う時刻。 */
     Instant time = Instant.parse("2026-10-10T00:00:00Z");
 
+    /** 検証用に、データ保存の共通処理で参照するタイムゾーンを返す。 */
     public ZoneId getZone() {
       return ZoneOffset.UTC;
     }
 
+    /** 検証用に、指定されたタイムゾーンを反映した情報を作成する。 */
     public Clock withZone(ZoneId zone) {
       return this;
     }
 
+    /** {@code instant} の条件を再現するための補助情報を返す。 */
     public Instant instant() {
       return time;
     }
   }
 
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final MutableClock clock = new MutableClock();
+
+  /** 検証に使う登録台帳。 */
   StorageObjectRegistry registry;
+
+  /** 検証に使う計画の作成。 */
   RetentionPlanner planner;
+
+  /** 検証に使う実行先。 */
   RetentionExecutor executor;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void prepare() throws Exception {
     try (var gate = new StorageMigrationCoordinator(root)) {
@@ -52,6 +67,7 @@ class RetentionExecutionTest {
     executor = new RetentionExecutor(registry, planner);
   }
 
+  /** {@code archive} の条件を再現するための補助情報を返す。 */
   StorageObjectRegistry.StoredObject archive() throws Exception {
     Path file = root.resolve("logs/activity-archives/" + UUID.randomUUID() + ".jsonl");
     Files.createDirectories(file.getParent());
@@ -66,10 +82,12 @@ class RetentionExecutionTest {
         List.of());
   }
 
+  /** {@code plan} の条件を再現するための補助情報を返す。 */
   RetentionPlanner.Plan plan() {
     return planner.plan("activity-raw", null, 10, 1024 * 1024);
   }
 
+  /** データ保存の共通処理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void approvalIsRequiredAndExactBodyCanBeQuarantinedAndRestored() throws Exception {
     var body = archive();
@@ -92,6 +110,7 @@ class RetentionExecutionTest {
     assertThat(plan().candidates()).isEmpty();
   }
 
+  /** データ保存の共通処理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void newPinAfterApprovalPreventsAnyMove() throws Exception {
     var body = archive();
@@ -102,6 +121,7 @@ class RetentionExecutionTest {
     assertThat(root.resolve(body.relativePath())).exists();
   }
 
+  /** データ保存の共通処理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void purgeNeedsSeparateApprovalAndGraceAndPreservesHeldBodies() throws Exception {
     var body = archive();
@@ -127,6 +147,7 @@ class RetentionExecutionTest {
         .allSatisfy(usage -> assertThat(usage.recordedBodyBytes()).isZero());
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void restorationNeverOverwritesAnExistingOriginal() throws Exception {
     var body = archive();
@@ -140,6 +161,7 @@ class RetentionExecutionTest {
     assertThat(Files.readString(original)).isEqualTo("new content");
   }
 
+  /** データ保存の共通処理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void changedBodyAfterApprovalRemainsAtOriginalPath() throws Exception {
     var body = archive();
@@ -151,6 +173,7 @@ class RetentionExecutionTest {
     assertThat(Files.readString(original)).isEqualTo("changed");
   }
 
+  /** データ保存の共通処理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void policyChangeStopsAnInterruptedApplyAndLeavesRestorationAvailable() throws Exception {
     var body = archive();
@@ -171,6 +194,7 @@ class RetentionExecutionTest {
     assertThat(root.resolve(body.relativePath())).exists();
   }
 
+  /** データ保存の共通処理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void changedPolicyInvalidatesExistingPurgeApproval() throws Exception {
     var body = archive();
@@ -187,6 +211,7 @@ class RetentionExecutionTest {
     assertThat(root.resolve(body.relativePath())).exists();
   }
 
+  /** データ保存の共通処理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"apply", "restore", "purge"})
   void processKillAfterFileMutationCanResumeFromDurableJournal(String action) throws Exception {
@@ -272,6 +297,7 @@ class RetentionExecutionTest {
     assertThat(Files.exists(root.resolve(body.relativePath()))).isEqualTo(!action.equals("purge"));
   }
 
+  /** {@code arg} の条件を再現するための補助情報を返す。 */
   private static String arg(String value) {
     return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
   }

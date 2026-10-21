@@ -8,8 +8,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
+/** テキストツール一覧の結果と状態の契約を検証するテスト。 */
 class TextToolsTest {
 
+  /** 文章の整形で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void countCharactersReturnsUnicodeCodePointCount() {
     TextTools tools = new TextTools();
@@ -20,6 +22,7 @@ class TextToolsTest {
     assertEquals(3, tools.countCharacters("a😀b"));
   }
 
+  /** 件数文字数について、未指定のテキストを受け付けないことを確認する。 */
   @Test
   void countCharactersRejectsNullText() {
     TextTools tools = new TextTools();
@@ -27,6 +30,7 @@ class TextToolsTest {
     assertThrows(IllegalArgumentException.class, () -> tools.countCharacters(null));
   }
 
+  /** 文章の整形で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void methodToolProviderRegistersCountCharactersTool() throws Exception {
     Tool annotation =

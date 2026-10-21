@@ -10,6 +10,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Spec;
 
+/** 会話 Session の一覧・作成・選択を行うための利用者コマンド。 */
 @Component
 @Command(
     name = "session",
@@ -17,16 +18,27 @@ import picocli.CommandLine.Spec;
     mixinStandardHelpOptions = true,
     subcommands = {NewConversationCommand.class, ResumeConversationCommand.class})
 public final class SessionCommand implements java.util.concurrent.Callable<Integer> {
+  /** 会話一覧。 */
   private final ShellConversationService conversations;
+
+  /** 会話一覧。 */
   private final SessionQueryService sessions;
+
+  /** プロジェクト一覧。 */
   private final ProjectService projects;
+
+  /** 形式。 */
   private final HistoryFormatter format = new HistoryFormatter();
+
+  /** 仕様。 */
   @Spec private CommandSpec spec;
 
+  /** ターミナルでの対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SessionCommand() {
     this(null, null, null);
   }
 
+  /** 指定された値や利用先を使って、SessionCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public SessionCommand(
       ShellConversationService conversations,
@@ -37,11 +49,13 @@ public final class SessionCommand implements java.util.concurrent.Callable<Integ
     this.projects = projects;
   }
 
+  /** 会話 Session の一覧・作成・選択を行う。 */
   @Override
   public Integer call() {
     return show();
   }
 
+  /** ターミナルでの対話で用いる終了を返す。 */
   @Command(
       name = "end",
       description = "現在のSessionの利用を終了します。履歴は再開できます",
@@ -59,6 +73,7 @@ public final class SessionCommand implements java.util.concurrent.Callable<Integ
         });
   }
 
+  /** 利用者が対象の情報を確認できるように表示する。 */
   @Command(name = "show", description = "現在の Session を表示", mixinStandardHelpOptions = true)
   public int show() {
     return display(
@@ -79,6 +94,7 @@ public final class SessionCommand implements java.util.concurrent.Callable<Integ
         });
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   @Command(
       name = "list",
       description = "現在の Project の Session を更新日時降順で表示",
@@ -108,6 +124,7 @@ public final class SessionCommand implements java.util.concurrent.Callable<Integ
         });
   }
 
+  /** ターミナルでの対話で用いる表示を返す。 */
   private int display(Runnable action) {
     try {
       action.run();

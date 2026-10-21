@@ -16,14 +16,20 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.MapPropertySource;
 
+/** 保存起動時実行可否の判断の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class StorageStartupGateTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うconstructed。 */
   static final AtomicInteger constructed = new AtomicInteger();
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration
   @Import(StorageMigrationConfiguration.class)
   static class Config {
+    /** 検証で使用する保存と検索の窓口を、指定された条件に合わせて用意する。 */
     @Bean
     Object repository(org.springframework.core.env.Environment env) throws Exception {
       constructed.incrementAndGet();
@@ -35,6 +41,7 @@ class StorageStartupGateTest {
     }
   }
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   AnnotationConfigApplicationContext context() {
     var context = new AnnotationConfigApplicationContext();
     context
@@ -45,6 +52,7 @@ class StorageStartupGateTest {
     return context;
   }
 
+  /** データ保存の共通処理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void gateRunsBeforeRepositoryConstructionAndSameVersionContextsShareLease() {
     constructed.set(0);
@@ -65,6 +73,7 @@ class StorageStartupGateTest {
         .doesNotThrowAnyException();
   }
 
+  /** データ保存の共通処理で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void incompatibleSchemaPreventsEveryOrdinaryBeanFromStarting() throws Exception {
     constructed.set(0);
@@ -78,6 +87,7 @@ class StorageStartupGateTest {
     assertThat(constructed.get()).isZero();
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sharedLeaseStillChecksSchemaBeforeAnotherContextStarts() throws Exception {
     constructed.set(0);
@@ -93,6 +103,7 @@ class StorageStartupGateTest {
     }
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void completionMarkerWithoutRequiredSessionSchemaStopsBeforeNormalBeans() throws Exception {
     try (var migration = new StorageMigrationCoordinator(root)) {

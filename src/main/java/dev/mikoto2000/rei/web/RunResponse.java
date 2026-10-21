@@ -2,6 +2,19 @@ package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.run.RunSnapshot;
 
+/**
+ * Web APIによる操作で受け渡す実行応答を表す。
+ *
+ * @param runId 実行の識別子
+ * @param status 状態
+ * @param sessionId 会話の識別子
+ * @param turnId やり取りの識別子
+ * @param projectId 所属プロジェクトの識別子
+ * @param startedAt 開始日時
+ * @param completedAt 完了日時
+ * @param failure 失敗情報
+ * @param mode 動作モード
+ */
 public record RunResponse(
     String runId,
     String status,
@@ -12,8 +25,15 @@ public record RunResponse(
     String completedAt,
     Failure failure,
     String mode) {
+  /**
+   * Web APIによる操作で受け渡す失敗情報を表す。
+   *
+   * @param type 種別
+   * @param message メッセージ
+   */
   public record Failure(String type, String message) {}
 
+  /** Web APIによる操作で利用する情報を、受け取った形式から変換する。 */
   public static RunResponse from(RunSnapshot run) {
     var context = run.context();
     boolean conversation = !context.conversationId().isEmpty();

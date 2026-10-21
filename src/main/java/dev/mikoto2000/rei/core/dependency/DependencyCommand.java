@@ -11,15 +11,26 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
 
+/** 保存された依存関係の監視を確認・キャンセル・回答しますを行うための利用者コマンド。 */
 @Component
 @Command(name = "dependency", description = "保存された依存関係の監視を確認・キャンセル・回答します")
 public class DependencyCommand implements java.util.concurrent.Callable<Integer> {
+  /** リポジトリ。 */
   private final PersistentDependencyRepository repo;
+
+  /** サービス。 */
   private final DependencyObservationService service;
+
+  /** プロジェクト一覧。 */
   private final ProjectService projects;
+
+  /** 利用条件の確認。 */
   private final ToolPermissionGuard guard;
+
+  /** 仕様。 */
   @Spec picocli.CommandLine.Model.CommandSpec spec;
 
+  /** 操作。 */
   @Parameters(
       index = "0",
       arity = "0..1",
@@ -27,18 +38,23 @@ public class DependencyCommand implements java.util.concurrent.Callable<Integer>
       completionCandidates = ActionCandidates.class)
   String action;
 
+  /** 識別子。 */
   @Parameters(index = "1", arity = "0..1")
   String id;
 
+  /** 値。 */
   @Option(names = "--value", description = "ユーザー本人の回答（LLM ツールからは指定できません）")
   String value;
 
+  /** 出力。 */
   private java.io.PrintWriter output;
 
+  /** 外部条件の待機を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public DependencyCommand() {
     this(null, null, null, null);
   }
 
+  /** 指定された値や利用先を使って、DependencyCommandを初期化する。 */
   @Autowired
   public DependencyCommand(
       PersistentDependencyRepository repo,
@@ -51,10 +67,12 @@ public class DependencyCommand implements java.util.concurrent.Callable<Integer>
     this.guard = guard;
   }
 
+  /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
     this.output = output;
   }
 
+  /** 保存された依存関係の監視を確認・キャンセル・回答しますを行う。 */
   @Override
   public Integer call() {
     var writer = output == null ? spec.commandLine().getOut() : output;
@@ -103,8 +121,10 @@ public class DependencyCommand implements java.util.concurrent.Callable<Integer>
     }
   }
 
+  /** 操作で利用できる入力候補を提供する。 */
   public static final class ActionCandidates
       extends dev.mikoto2000.rei.core.completion.FirstArgumentCandidates {
+    /** 既定の状態でActionCandidatesを初期化する。 */
     public ActionCandidates() {
       super("list", "show", "history", "check", "cancel", "answer");
     }

@@ -12,8 +12,10 @@ import org.springframework.stereotype.Component;
 @RequiredArgsConstructor
 public class ChatResponseNarrator {
 
+  /** 音通知通知サービス。 */
   private final SoundNotificationService soundNotificationService;
 
+  /** narrated判定状態。 */
   private final AtomicBoolean narratedFlag = new AtomicBoolean(false);
 
   /** 読み上げスキップフラグをリセットする。 ChatCommand の実行開始時に呼び出す。 */
@@ -21,7 +23,11 @@ public class ChatResponseNarrator {
     narratedFlag.set(false);
   }
 
-  /** Background run narration does not alter the synchronous Shell command's notification flag. */
+  /**
+   * ターミナルの音通知に関するnarrate完了実行を処理する。
+   *
+   * <p>Background run narration does not alter the synchronous Shell command's notification flag.
+   */
   public void narrateCompletedRun(String responseText) {
     if (responseText == null || responseText.isBlank()) return;
     String sanitized = sanitize(responseText);

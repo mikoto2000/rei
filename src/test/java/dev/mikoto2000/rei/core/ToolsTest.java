@@ -44,11 +44,14 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
+/** ツール一覧の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("e2e")
 class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void readPdfFileExtractsBodyText() throws IOException {
     Path pdf = tempDir.resolve("sample.pdf");
@@ -60,6 +63,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(actual.contains("PDF reading test"));
   }
 
+  /** ファイル保存するおよびについて、通知ファイルイベント一覧を削除することを確認する。 */
   @Test
   void fileWritesAndDeletesPublishFileEvents() throws Exception {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
@@ -89,6 +93,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(events.stream().anyMatch(event -> event.type() == AgentEventType.FILE_DELETED));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void legacySingleOperationToolsAreNotExposed() {
     List<String> toolNames =
@@ -114,6 +119,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(toolNames.contains("killShellProcess"));
   }
 
+  /** 共通の実行基盤で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void runCommandToolSchemaAndDescriptionsPreferAutoHighLevelEntry() throws Exception {
     Tool run =
@@ -159,6 +165,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(schema.contains("timeoutSeconds"));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void multiToolExamplesExecuteWithTwoTargets() throws Exception {
     initGitRepo();
@@ -209,6 +216,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     }
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void codeAndFileToolDescriptionsRouteByIntent() throws Exception {
     Tool search =
@@ -239,6 +247,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(diff.description().contains("surrounding file unchanged"));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void gitLsFilesIncludesTrackedAndUntrackedButExcludesIgnored() throws Exception {
     initGitRepo();
@@ -258,6 +267,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertFalse(files.contains("docs/ignored.txt"));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void findFileMatchesUntrackedFiles() throws Exception {
     initGitRepo();
@@ -270,6 +280,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(files.contains("docs/found-me.txt"));
   }
 
+  /** 共通の実行基盤で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void findFileMatchesAnyKeywordCaseInsensitivelyAndRanksMoreMatchesFirst() throws Exception {
     initGitRepo();
@@ -286,6 +297,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(files.contains("src/SummaryGenerator.java"));
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void findFileLimitsResultsAndExposesStructuredSchema() throws Exception {
     initGitRepo();
@@ -308,6 +320,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(callback.getToolDefinition().inputSchema().contains("maxResults"));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void listFileIncludesUntrackedFiles() throws Exception {
     initGitRepo();
@@ -324,6 +337,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(files.contains("docs/untracked.txt"));
   }
 
+  /** 一覧ファイルについて、空のを返すことを確認する。 */
   @Test
   void listFileReturnsEmptyWhenBaseDirectoryDoesNotExistWithoutGit() throws Exception {
     Tools tools = new Tools();
@@ -333,6 +347,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(List.of(), files);
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void grepFindsMatchesInTrackedAndUntrackedFiles() throws Exception {
     initGitRepo();
@@ -352,6 +367,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertFalse(results.stream().anyMatch(line -> line.contains("ignored.txt")));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void grepSupportsIgnoreCaseAndFixedString() throws Exception {
     initGitRepo();
@@ -365,6 +381,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(List.of("docs/note.txt:1:Hello [Spring]"), results);
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void grepSupportsFileNamesOnly() throws Exception {
     initGitRepo();
@@ -379,6 +396,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(List.of("docs/first.txt", "docs/second.txt"), results);
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void grepSupportsInvertMatchAndContext() throws Exception {
     initGitRepo();
@@ -393,6 +411,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
         List.of("docs/note.txt:1:alpha", "docs/note.txt-2-beta", "docs/note.txt:3:gamma"), results);
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void grepSupportsIncludeGlob() throws Exception {
     initGitRepo();
@@ -421,6 +440,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(List.of("docs/App.java:1:class App { String value = \"spring\"; }"), results);
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void grepSupportsExcludeGlob() throws Exception {
     initGitRepo();
@@ -448,6 +468,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(List.of("docs/App.java:1:spring source"), results);
   }
 
+  /** 内容検索について、不正な照合規則を受け付けないことを確認する。 */
   @Test
   void grepRejectsInvalidRegex() throws Exception {
     Tools tools = new Tools();
@@ -457,6 +478,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
         () -> tools.grep("[", "docs", false, false, false, false, 0, 0, 100, true, tempDir));
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void grepMultiQueryExecutesSingleQuery() throws Exception {
     initGitRepo();
@@ -481,6 +503,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(1, results.get(0).matches().get(0).line());
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void grepMultiQuerySearchesRepositoryRootWithDotBaseDir() throws Exception {
     initGitRepo();
@@ -502,6 +525,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("docs/tracked.txt", results.get(0).matches().get(0).path());
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void grepMultiQueryStripsUtf8BomBeforeMatching() throws Exception {
     initGitRepo();
@@ -533,6 +557,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(results.get(0).fileErrors().isEmpty());
   }
 
+  /** 共通の実行基盤で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void grepMultiQueryDecodesUtf16Bom() throws Exception {
     initGitRepo();
@@ -553,6 +578,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(results.get(0).fileErrors().isEmpty());
   }
 
+  /** 内容検索複数検索条件について、明示的な文字コードを利用することを確認する。 */
   @Test
   void grepMultiQueryUsesExplicitCharset() throws Exception {
     initGitRepo();
@@ -574,6 +600,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(results.get(0).fileErrors().isEmpty());
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void grepMultiQueryFallsBackToCp932() throws Exception {
     initGitRepo();
@@ -594,6 +621,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(results.get(0).fileErrors().isEmpty());
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void grepMultiQueryReportsUndecodableFiles() throws Exception {
     initGitRepo();
@@ -626,6 +654,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("docs/broken.txt", results.get(0).fileErrors().get(0).path());
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchAndReadReportsUndecodableFiles() throws Exception {
     initGitRepo();
@@ -661,6 +690,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(results.get(0).error().startsWith("Unable to read file:"));
   }
 
+  /** 順序を保持することを確認する。 */
   @Test
   void grepMultiQueryExecutesMultipleQueriesAndPreservesOrder() throws Exception {
     initGitRepo();
@@ -690,6 +720,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("docs/b.txt", results.get(1).matches().get(0).path());
   }
 
+  /** 内容検索複数検索条件について、ゼロ一致結果を返すことを確認する。 */
   @Test
   void grepMultiQueryReturnsZeroMatchesForNoHit() throws Exception {
     initGitRepo();
@@ -711,6 +742,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(null, results.get(0).error());
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void grepMultiQuerySameFileHitByMultipleQueries() throws Exception {
     initGitRepo();
@@ -734,6 +766,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("docs/a.txt", results.get(1).matches().get(0).path());
   }
 
+  /** 内容検索複数検索条件部分的な結果失敗情報について、その他検索条件一覧を維持することを確認する。 */
   @Test
   void grepMultiQueryPartialFailureKeepsOtherQueries() throws Exception {
     initGitRepo();
@@ -762,12 +795,14 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(1, results.get(2).matches().size());
   }
 
+  /** 内容検索複数検索条件について、空の検索条件一覧を受け付けないことを確認する。 */
   @Test
   void grepMultiQueryRejectsEmptyQueries() throws Exception {
     Tools tools = new Tools();
     assertThrows(IllegalArgumentException.class, () -> tools.grepMultiQuery(List.of(), tempDir));
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void grepMultiQueryRejectsTooManyQueries() throws Exception {
     Tools tools = new Tools();
@@ -780,6 +815,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertThrows(IllegalArgumentException.class, () -> tools.grepMultiQuery(queries, tempDir));
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchAndReadReadsContextAroundSingleMatch() throws Exception {
     initGitRepo();
@@ -815,6 +851,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(11, results.get(0).sections().get(0).content().size());
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchAndReadClampsContextToFileStart() throws Exception {
     initGitRepo();
@@ -841,6 +878,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(3, results.get(0).sections().get(0).content().size());
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchAndReadClampsContextToFileEnd() throws Exception {
     initGitRepo();
@@ -867,6 +905,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(3, results.get(0).sections().get(0).content().size());
   }
 
+  /** 検索およびについて、対応可否複数検索条件一覧を読み取ることを確認する。 */
   @Test
   void searchAndReadSupportsMultipleQueries() throws Exception {
     initGitRepo();
@@ -896,6 +935,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(3, results.get(0).matches().get(1).line());
   }
 
+  /** 検索およびについて、読み取る複数ファイル一覧を読み取ることを確認する。 */
   @Test
   void searchAndReadReadsMultipleFiles() throws Exception {
     initGitRepo();
@@ -921,6 +961,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("docs/b.txt", results.get(1).path());
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchAndReadPublishesWorkingSetMetricsAndCorrelatesActualAdds() throws Exception {
     initGitRepo();
@@ -980,6 +1021,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(started.correlationId(), added.correlationId());
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchAndReadMergesOverlappingRanges() throws Exception {
     initGitRepo();
@@ -1020,6 +1062,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(130, results.get(0).sections().get(0).endLine());
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchAndReadSeparatesDistantRanges() throws Exception {
     initGitRepo();
@@ -1062,6 +1105,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(220, results.get(0).sections().get(1).endLine());
   }
 
+  /** 共通の実行基盤で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void searchAndReadDeduplicatesFilesAcrossQueries() throws Exception {
     initGitRepo();
@@ -1090,6 +1134,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(1, results.get(0).matches().get(1).queryIndex());
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchAndReadEnforcesMaxFiles() throws Exception {
     initGitRepo();
@@ -1115,6 +1160,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(results.get(0).filesTruncated());
   }
 
+  /** 検索およびについて、保持する成功済みの結果一覧を読み取ることを確認する。 */
   @Test
   void searchAndReadPreservesSuccessfulResultsOnQueryError() throws Exception {
     initGitRepo();
@@ -1145,6 +1191,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(results.get(2).error().contains("Invalid grep pattern"));
   }
 
+  /** 検索およびについて、拒否する空の検索条件一覧を読み取ることを確認する。 */
   @Test
   void searchAndReadRejectsEmptyQueries() throws Exception {
     Tools tools = new Tools();
@@ -1153,6 +1200,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
         () -> tools.searchAndRead(new Tools.SearchAndReadRequest(List.of(), null, null), tempDir));
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void searchAndReadRejectsTooManyQueries() throws Exception {
     Tools tools = new Tools();
@@ -1167,6 +1215,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
         () -> tools.searchAndRead(new Tools.SearchAndReadRequest(queries, null, null), tempDir));
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchAndReadMaintainsPathSecurity() throws Exception {
     initGitRepo();
@@ -1191,6 +1240,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("docs/a.txt", results.get(0).path());
   }
 
+  /** 内容検索複数検索条件について、空白の照合規則を受け付けないことを確認する。 */
   @Test
   void grepMultiQueryRejectsBlankPattern() throws Exception {
     Tools tools = new Tools();
@@ -1204,6 +1254,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(results.get(0).error() != null);
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void grepMultiQueryLimitsMatchesPerQuery() throws Exception {
     initGitRepo();
@@ -1227,6 +1278,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(3, results.get(0).matches().size());
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void grepMultiQueryLimitsTotalMatches() throws Exception {
     initGitRepo();
@@ -1251,6 +1303,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(2, results.get(1).matches().size());
   }
 
+  /** 複数ファイル読み取る単一ファイルを読み取ることを確認する。 */
   @Test
   void readMultiFileReadsSingleFile() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -1268,6 +1321,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(null, results.get(0).error());
   }
 
+  /** 複数ファイル読み取る複数ファイル一覧を読み取ることを確認する。 */
   @Test
   void readMultiFileReadsMultipleFilesAndPreservesOrder() throws Exception {
     Path a = tempDir.resolve("a.txt");
@@ -1290,6 +1344,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(List.of("beta"), results.get(1).content());
   }
 
+  /** 複数ファイル対応可否行対象範囲を読み取ることを確認する。 */
   @Test
   void readMultiFileSupportsLineRange() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -1304,6 +1359,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(3, results.get(0).endLine());
   }
 
+  /** 複数ファイル対応可否開始行を読み取ることを確認する。 */
   @Test
   void readMultiFileSupportsStartLineOnly() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -1316,6 +1372,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(List.of("line2", "line3"), results.get(0).content());
   }
 
+  /** 複数ファイル対応可否なし対象範囲を読み取ることを確認する。 */
   @Test
   void readMultiFileSupportsNoRange() throws Exception {
     Path text = tempDir.resolve("empty.txt");
@@ -1329,6 +1386,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(List.of(), results.get(0).content());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void readMultiFileClampsEndLineToEof() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -1341,6 +1399,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(List.of("line2"), results.get(0).content());
   }
 
+  /** 複数ファイル部分的な結果失敗情報維持するその他ファイル一覧を読み取ることを確認する。 */
   @Test
   void readMultiFilePartialFailureKeepsOtherFiles() throws Exception {
     Path a = tempDir.resolve("a.txt");
@@ -1361,12 +1420,14 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(List.of("alpha"), results.get(2).content());
   }
 
+  /** 複数ファイル拒否する空のファイル一覧を読み取ることを確認する。 */
   @Test
   void readMultiFileRejectsEmptyFiles() throws Exception {
     Tools tools = new Tools();
     assertThrows(IllegalArgumentException.class, () -> tools.readMultiFile(List.of()));
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void readMultiFileRejectsTooManyFiles() throws Exception {
     Tools tools = new Tools();
@@ -1377,6 +1438,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertThrows(IllegalArgumentException.class, () -> tools.readMultiFile(requests));
   }
 
+  /** 複数ファイル拒否する不正な行対象範囲を読み取ることを確認する。 */
   @Test
   void readMultiFileRejectsInvalidLineRange() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -1389,6 +1451,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(results.get(0).error() != null);
   }
 
+  /** 複数ファイル拒否する空白のパスを読み取ることを確認する。 */
   @Test
   void readMultiFileRejectsBlankPath() throws Exception {
     Tools tools = new Tools();
@@ -1399,6 +1462,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(results.get(0).error() != null);
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void readMultiFileTruncatesPerFileLimit() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -1417,6 +1481,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(Tools.MAX_READ_LINES_PER_FILE, results.get(0).content().size());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void readMultiFileMaintainsPathSecurity() throws Exception {
     Path outside = tempDir.getParent().resolve("outside.txt");
@@ -1432,6 +1497,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(results.get(0).error().contains("outside Project"));
   }
 
+  /** 複数ファイル保存する単一ファイルを書き込むことを確認する。 */
   @Test
   void writeMultiFileWritesSingleFile() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -1446,6 +1512,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("hello", Files.readString(text));
   }
 
+  /** 複数ファイル保存する複数ファイル一覧を書き込むことを確認する。 */
   @Test
   void writeMultiFileWritesMultipleFilesAndPreservesOrder() throws Exception {
     Path a = tempDir.resolve("a.txt");
@@ -1465,6 +1532,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("beta", Files.readString(b));
   }
 
+  /** 複数ファイル作成する新規ファイルを書き込むことを確認する。 */
   @Test
   void writeMultiFileCreatesNewFileAndUpdatesExisting() throws Exception {
     Path existing = tempDir.resolve("existing.txt");
@@ -1482,12 +1550,14 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("created", Files.readString(created));
   }
 
+  /** 複数ファイル拒否する空のファイル一覧を書き込むことを確認する。 */
   @Test
   void writeMultiFileRejectsEmptyFiles() throws Exception {
     Tools tools = new Tools();
     assertThrows(IllegalArgumentException.class, () -> tools.writeMultiFile(List.of()));
   }
 
+  /** 複数ファイル拒否する重複の有無パスを書き込むことを確認する。 */
   @Test
   void writeMultiFileRejectsDuplicatePath() throws Exception {
     Path a = tempDir.resolve("a.txt");
@@ -1502,6 +1572,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
                     new Tools.WriteFileRequest(a.toString(), "two", false, null))));
   }
 
+  /** 複数ファイル拒否する空白のパスを書き込むことを確認する。 */
   @Test
   void writeMultiFileRejectsBlankPath() throws Exception {
     Tools tools = new Tools();
@@ -1512,6 +1583,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
             tools.writeMultiFile(List.of(new Tools.WriteFileRequest("", "content", false, null))));
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void writeMultiFileRejectsTooManyFiles() throws Exception {
     Tools tools = new Tools();
@@ -1522,6 +1594,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertThrows(IllegalArgumentException.class, () -> tools.writeMultiFile(requests));
   }
 
+  /** 複数ファイル拒否するごとのファイル大きさ上限を書き込むことを確認する。 */
   @Test
   void writeMultiFileRejectsPerFileSizeLimit() throws Exception {
     Tools tools = new Tools();
@@ -1532,6 +1605,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
         () -> tools.writeMultiFile(List.of(new Tools.WriteFileRequest("a.txt", big, false, null))));
   }
 
+  /** 複数ファイル拒否する集計結果大きさ上限を書き込むことを確認する。 */
   @Test
   void writeMultiFileRejectsAggregateSizeLimit() throws Exception {
     Tools tools = new Tools();
@@ -1542,6 +1616,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
         () -> tools.writeMultiFile(List.of(new Tools.WriteFileRequest("a.txt", big, false, null))));
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void writeMultiFilePerFileIoFailureKeepsOthers() throws Exception {
     Path a = tempDir.resolve("a.txt");
@@ -1563,6 +1638,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(results.get(1).success());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void writeMultiFileMaintainsPathSecurity() throws Exception {
     Path outside = tempDir.getParent().resolve("outside.txt");
@@ -1577,6 +1653,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("outside", Files.readString(outside));
   }
 
+  /** 対象の解決シェルについて、シェル実行環境可変値を利用することを確認する。 */
   @Test
   void resolveShellUsesShellEnvironmentVariableWhenConfigured() {
     Tools tools = new Tools();
@@ -1586,6 +1663,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("/bin/zsh", actual);
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void resolveShellFallsBackToOperatingSystemDefault() {
     Tools tools = new Tools();
@@ -1595,6 +1673,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("bash", tools.resolveShell(Map.of(), "Mac OS X"));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shellCommandLineUsesShellSpecificExecutionOption() {
     Tools tools = new Tools();
@@ -1608,6 +1687,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
         tools.shellCommandLine("/bin/bash", "printf hello"));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void executeShellCommandRunsWithDefaultShell() throws Exception {
     Tools tools = new Tools();
@@ -1621,6 +1701,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertFalse(result.timedOut());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void runCommandForegroundReturnsExistingShellResultShape() throws Exception {
     Tools tools = new Tools();
@@ -1641,6 +1722,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(null, result.processId());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void runCommandForegroundMatchesLegacyCommandSemantics() throws Exception {
     Tools tools = new Tools();
@@ -1661,6 +1743,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(unified.stdout().contains(tempDir.toString()));
   }
 
+  /** 共通の実行基盤で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void runCommandForegroundMatchesLegacyTimeoutSemantics() throws Exception {
     Tools tools = new Tools();
@@ -1680,6 +1763,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("failed", unified.status());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void runCommandBackgroundRegistersWithExistingProcessManager() throws Exception {
     SystemShellService shellService = new SystemShellService();
@@ -1705,6 +1789,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     }
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void runCommandBackgroundMatchesLegacyRegistryStatusOutputAndKillSemantics() throws Exception {
     SystemShellService shellService = new SystemShellService();
@@ -1734,6 +1819,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     }
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void runCommandAutoCompletesShortProcessAsForeground() throws Exception {
     SystemShellService shellService = new SystemShellService();
@@ -1760,6 +1846,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     }
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void runCommandAutoPromotesSameLongProcessWithoutStartingTwice() throws Exception {
     SystemShellService shellService = new SystemShellService();
@@ -1795,6 +1882,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     }
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void runCommandAutoReturnsEarlyNonZeroExitAsForegroundFailure() throws Exception {
     // This fixture must exit inside the existing one-second observation window.
@@ -1802,6 +1890,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     boolean windows = System.getProperty("os.name").toLowerCase().contains("win");
     SystemShellService shellService =
         new SystemShellService() {
+          /** {@code resolveShell} の条件を再現するための補助情報を返す。 */
           @Override
           public String resolveShell(java.util.Map<String, String> environment, String osName) {
             return windows ? "cmd.exe" : super.resolveShell(environment, osName);
@@ -1826,6 +1915,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     }
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void runCommandDoesNotReturnRunningWhenProcessStartFails() throws Exception {
     SystemShellService shellService = new SystemShellService();
@@ -1847,6 +1937,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     }
   }
 
+  /** 今日および現在日時について、追加された時刻の取得元を利用することを確認する。 */
   @Test
   void todayAndNowUseInjectedClock() {
     Clock fixed = Clock.fixed(Instant.parse("2026-08-16T16:35:42Z"), ZoneId.of("Asia/Tokyo"));
@@ -1857,6 +1948,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("2026-08-17T01:35:42+09:00", tools.now());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shellBackgroundProcessToolsSpawnStatusAndKill() throws Exception {
     Tools tools = new Tools();
@@ -1874,6 +1966,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(BackgroundProcessStatus.KILLED, killed.status());
   }
 
+  /** テキストファイル利用する現在プロジェクトを読み取ることを確認する。 */
   @Test
   void readTextFileUsesCurrentProjectForRelativePath() throws Exception {
     Path project = Files.createDirectories(tempDir.resolve("project-a"));
@@ -1888,6 +1981,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(List.of("project note"), tools.readTextFile("note.txt"));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void readTextFileFallsBackToCp932() throws Exception {
     Path csv = tempDir.resolve("gantt.csv");
@@ -1898,6 +1992,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(List.of("タスク,開始日", "設計,2026-08-07"), tools.readTextFile(csv.toString()));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void readTextFileRangeReadsInclusiveLineRange() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -1909,6 +2004,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(List.of("line2", "line3"), lines);
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void readTextFileRangeClampsEndLineToFileEnd() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -1920,6 +2016,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(List.of("line2"), lines);
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void readTextFileRangeFallsBackToCp932() throws Exception {
     Path csv = tempDir.resolve("gantt.csv");
@@ -1932,6 +2029,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(List.of("設計,2026-08-07"), lines);
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void writeTextFileUsesSpecifiedCharset() throws Exception {
     Path csv = tempDir.resolve("gantt.csv");
@@ -1944,6 +2042,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertFalse(new String(bytes, Charset.forName("UTF-8")).equals("タスク,開始日"));
   }
 
+  /** テキストファイル既定値を書き込むことを確認する。 */
   @Test
   void writeTextFileDefaultsToUtf8WhenCharsetIsBlank() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -1954,6 +2053,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("メモ", Files.readString(text, Charset.forName("UTF-8")));
   }
 
+  /** テキストファイル作成する親ディレクトリ一覧を書き込むことを確認する。 */
   @Test
   void writeTextFileCreatesParentDirectories() throws Exception {
     Path text = tempDir.resolve("missing").resolve("nested").resolve("note.txt");
@@ -1964,6 +2064,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("メモ", Files.readString(text, Charset.forName("UTF-8")));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void createDirectoriesCreatesNestedDirectories() throws Exception {
     Path nested = tempDir.resolve("a").resolve("b").resolve("c");
@@ -1975,6 +2076,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(nested.toAbsolutePath().normalize().toString(), createdPath);
   }
 
+  /** ディレクトリ一覧利用する現在プロジェクトを作成することを確認する。 */
   @Test
   void createDirectoriesUsesCurrentProjectForRelativePath() throws Exception {
     Path project = Files.createDirectories(tempDir.resolve("project-a"));
@@ -1991,6 +2093,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(expected.toString(), createdPath);
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void applyTextDiffReplacesExpectedText() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -2004,6 +2107,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("hello\nrei\n", Files.readString(text));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void applyTextDiffDoesNotChangeFileWhenExpectedTextIsMissing() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -2017,6 +2121,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals("hello\nworld\n", Files.readString(text));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void applyTextDiffPrintsExecutionMessageEvenWhenTextIsMissing() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -2036,6 +2141,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(out.toString().contains(text.toString()));
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void editInvalidatesFileSummary() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -2048,6 +2154,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertFalse(tools.fileSummaryCache().find(text.toString()).isPresent());
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void writeInvalidatesFileSummary() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -2060,6 +2167,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertFalse(tools.fileSummaryCache().find(text.toString()).isPresent());
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void deleteInvalidatesFileSummary() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -2072,6 +2180,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertFalse(tools.fileSummaryCache().find(text.toString()).isPresent());
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedEditDoesNotInvalidateFileSummary() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -2084,6 +2193,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(tools.fileSummaryCache().find(text.toString()).isPresent());
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void separateSearchesRefreshFileInventory() throws Exception {
     initGitRepo();
@@ -2104,6 +2214,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(2, tools.grepMultiQuery(List.of(query), tempDir).getFirst().matches().size());
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void editInvalidatesRelatedRelations() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -2116,6 +2227,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(tools.relatedFileGraph().getRelated(text.toString()).isEmpty());
   }
 
+  /** 取り除く関連関連一覧を削除することを確認する。 */
   @Test
   void deleteRemovesRelatedRelations() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -2128,6 +2240,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(tools.relatedFileGraph().getRelated(text.toString()).isEmpty());
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedEditDoesNotInvalidateRelatedRelations() throws Exception {
     Path text = tempDir.resolve("note.txt");
@@ -2140,6 +2253,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertEquals(1, tools.relatedFileGraph().getRelated(text.toString()).size());
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchDiscoversReferencesRelation() throws Exception {
     initGitRepo();
@@ -2163,6 +2277,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
             .anyMatch(r -> r.targetPath().equals("UserService")));
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void editClearsSearchCache() throws Exception {
     initGitRepo();
@@ -2188,6 +2303,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(tools.searchResultCache().isEmpty());
   }
 
+  /** 検証用に、指定された内容を保存先へ反映するため、PDFを書き込む。 */
   private void writePdf(Path pdf, String text) throws IOException {
     try (PDDocument document = new PDDocument()) {
       PDPage page = new PDPage();
@@ -2205,12 +2321,14 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     }
   }
 
+  /** {@code initGitRepo} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void initGitRepo() throws IOException, InterruptedException {
     runGit("init");
     runGit("config", "user.name", "Codex");
     runGit("config", "user.email", "codex@example.com");
   }
 
+  /** 検証用に、依頼された操作を進めるため、Gitの情報を実行する。 */
   private void runGit(String... args) throws IOException, InterruptedException {
     ProcessBuilder processBuilder = new ProcessBuilder(buildGitCommand(args));
     processBuilder.directory(tempDir.toFile());
@@ -2222,11 +2340,13 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     }
   }
 
+  /** 検証用に、必要な状態が整ってから先へ進むため、ツール標準出力を待つ。 */
   private BackgroundProcessSnapshot awaitToolStdout(
       Tools tools, String processId, String expectedLine) throws Exception {
     return awaitToolOutput(tools, processId, expectedLine, null);
   }
 
+  /** 検証用に、必要な状態が整ってから先へ進むため、ツール出力を待つ。 */
   private BackgroundProcessSnapshot awaitToolOutput(
       Tools tools, String processId, String expectedLine, String expectedError) throws Exception {
     long deadline = System.currentTimeMillis() + 5000;
@@ -2244,6 +2364,7 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     return snapshot;
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private List<String> buildGitCommand(String... args) {
     List<String> command = new java.util.ArrayList<>();
     command.add("git");

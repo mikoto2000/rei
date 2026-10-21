@@ -8,27 +8,43 @@ import java.nio.file.Path;
 import java.time.Clock;
 import org.springframework.stereotype.Component;
 
+/** 外部条件の待機に必要な依存条件取得元利用可否の確認を扱う。 */
 @Component
 public class DependencySourceProbe implements DependencyProbe {
+  /** ファイル一覧。 */
   private final FileGoalVerifier files;
+
+  /** Gitの情報。 */
   private final WorkContextGit git;
+
+  /** プロセス一覧。 */
   private final BackgroundProcessManager processes;
+
+  /** HTTP通信。 */
   private final DependencyHttpProbe http;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 状態表示。 */
   private dev.mikoto2000.rei.dot.DotRequestRepository dot;
 
+  /** 外部条件の待機で使用する状態表示要求一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setDotRequests(dev.mikoto2000.rei.dot.DotRequestRepository dot) {
     this.dot = dot;
   }
 
+  /** GitHubの利用設定または連携情報の保存先。 */
   private dev.mikoto2000.rei.github.GitHubFactRepository github;
 
+  /** 外部条件の待機で使用するGit連携先事実一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setGitHubFacts(dev.mikoto2000.rei.github.GitHubFactRepository github) {
     this.github = github;
   }
 
+  /** 指定された値や利用先を使って、DependencySourceProbeを初期化する。 */
   public DependencySourceProbe(
       FileGoalVerifier files,
       WorkContextGit git,
@@ -42,6 +58,7 @@ public class DependencySourceProbe implements DependencyProbe {
     this.clock = clock;
   }
 
+  /** 外部条件の待機で用いるファイル比較の基準を返す。 */
   public String fileBaseline(Path root, String file) {
     var snapshot = files.fingerprint(root, file);
     if (snapshot.available()) return snapshot.sha256();
@@ -51,6 +68,7 @@ public class DependencySourceProbe implements DependencyProbe {
     throw new IllegalStateException("File fingerprint unavailable");
   }
 
+  /** 外部条件の待機で用いるGit比較の基準を返す。 */
   public String gitBaseline(Path root) {
     var captured = git.capture(root, clock.instant());
     if (captured.branch() == null || captured.commit() == null)
@@ -58,6 +76,7 @@ public class DependencySourceProbe implements DependencyProbe {
     return captured.branch() + "\n" + captured.commit();
   }
 
+  /** 外部条件の待機で用いる利用可否の確認を返す。 */
   @Override
   public DependencyObservation probe(PersistentDependencyRepository.Entry entry) {
     var spec = entry.spec();

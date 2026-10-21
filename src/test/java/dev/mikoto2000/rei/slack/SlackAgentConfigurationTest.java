@@ -19,10 +19,13 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** Slackエージェント機能の構成の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SlackAgentConfigurationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** Slackとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void defaultsAndDisabledSlackNeverExposeExternalWriteTools() {
     new ApplicationContextRunner()
@@ -45,6 +48,7 @@ class SlackAgentConfigurationTest {
             });
   }
 
+  /** Slackとの連携の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void enabledConfigurationBindsBotIdentityAndObservesOrdinaryRunCancellation(boolean backend) {

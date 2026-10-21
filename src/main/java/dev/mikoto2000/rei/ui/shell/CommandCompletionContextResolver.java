@@ -14,8 +14,13 @@ import org.jline.reader.ParsedLine;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.ArgSpec;
 
-/** Reads the live command model without parsing/executing commands or rebinding @Spec. */
+/**
+ * コマンド入力補完文脈の指定を解決し、利用する対象を確定する。
+ *
+ * <p>Reads the live command model without parsing/executing commands or rebinding @Spec.
+ */
 public final class CommandCompletionContextResolver {
+  /** 指定や設定を照合し、実際に利用する対象を確定する。 */
   public CompletionContext resolve(CommandLine root, ParsedLine line, Path directory) {
     String prefix = line.word().substring(0, Math.min(line.wordCursor(), line.word().length()));
     var path = new ArrayList<String>();
@@ -107,6 +112,7 @@ public final class CommandCompletionContextResolver {
     return context(line, prefix, path, argument, types, choices, directory);
   }
 
+  /** ターミナルでの対話で用いるコマンドを返す。 */
   private CompletionCandidate command(String name, CommandLine command) {
     return new CompletionCandidate(
         name,
@@ -116,6 +122,7 @@ public final class CommandCompletionContextResolver {
         true);
   }
 
+  /** ターミナルでの対話で用いる文脈を返す。 */
   private CompletionContext context(
       ParsedLine line,
       String prefix,

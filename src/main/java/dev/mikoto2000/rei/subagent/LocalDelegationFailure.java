@@ -9,12 +9,16 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.TimeoutException;
 
 /**
- * Value-free failure categories; provider bodies, tool arguments and exception messages stay
+ * 補助エージェントへの委譲に必要なローカル委譲失敗情報を扱う。
+ *
+ * <p>Value-free failure categories; provider bodies, tool arguments and exception messages stay
  * private.
  */
 public final class LocalDelegationFailure {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private LocalDelegationFailure() {}
 
+  /** 補助エージェントへの委譲で用いる説明を返す。 */
   public static String describe(Throwable failure, boolean setup) {
     var seen = Collections.newSetFromMap(new IdentityHashMap<Throwable, Boolean>());
     Throwable last = failure;
@@ -58,6 +62,7 @@ public final class LocalDelegationFailure {
         + "。子の設定と Backend のログを確認してください。";
   }
 
+  /** 補助エージェントへの委譲で用いる検証を返す。 */
   public static String validation(List<ValidationError> errors) {
     String paths =
         errors.stream()

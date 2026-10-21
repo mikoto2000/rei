@@ -23,7 +23,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
+/** Web検索キャッシュ外部連携の結果と状態の契約を検証するテスト。 */
 class WebSearchCacheIntegrationTest {
+  /** 付随情報について、完全一致の検索条件を再利用することを確認する。 */
   @Test
   void metadataReusesExactQueryAndLatestAlwaysRevalidates() throws Exception {
     var properties = new WebSearchProperties();
@@ -67,6 +69,7 @@ class WebSearchCacheIntegrationTest {
     }
   }
 
+  /** Web上の情報の調査で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void batchCapturesRefreshAndDoesNotLeakItIntoSubsequentWork() {
     try (var batch = new WebFetchBatch(1, 1, 2)) {

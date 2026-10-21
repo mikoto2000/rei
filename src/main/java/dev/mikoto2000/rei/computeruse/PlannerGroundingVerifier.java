@@ -15,20 +15,35 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.util.MimeTypeUtils;
 
-/** Independent planner verdict. Missing, ambiguous, or malformed approval always fails closed. */
+/**
+ * 画面操作の支援に必要な計画の作成Grounding確認の窓口を扱う。
+ *
+ * <p>Independent planner verdict. Missing, ambiguous, or malformed approval always fails closed.
+ */
 final class PlannerGroundingVerifier implements GroundingVerifier {
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(PlannerGroundingVerifier.class);
+
+  /** モデル。 */
   private final ChatModel model;
+
+  /** 選択可能な設定。 */
   private final Supplier<OpenAiChatOptions.Builder> options;
+
+  /** キャンセル済み。 */
   private final BooleanSupplier cancelled;
+
+  /** point利用可否の確認。 */
   private final java.util.function.Function<java.awt.Point, String> pointProbe;
 
+  /** 画面操作の支援を利用するため、指定を補って共通の初期化へ引き渡す。 */
   PlannerGroundingVerifier(
       ChatModel model, Supplier<OpenAiChatOptions.Builder> options, BooleanSupplier cancelled) {
     this(model, options, cancelled, new WindowsFocusProbe(cancelled)::atPoint);
   }
 
+  /** 指定された値や利用先を使って、PlannerGroundingVerifierを初期化する。 */
   PlannerGroundingVerifier(
       ChatModel model,
       Supplier<OpenAiChatOptions.Builder> options,
@@ -41,6 +56,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
     this.pointProbe = pointProbe;
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   @Override
   public void verify(
       ComputerObservation observation, BufferedImage image, String target, double[] point)
@@ -48,6 +64,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
     verify(observation, image, target, point, WindowsFocusProbe.UNKNOWN);
   }
 
+  /** 要求された条件を満たすか判断するため、Pointを確認する。 */
   @Override
   public void verifyPoint(
       ComputerObservation observation, DisplayCapture display, String target, double[] point)
@@ -98,6 +115,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
     verify(observation, display.image(), target, point, evidence.toString());
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   private void verify(
       ComputerObservation observation,
       BufferedImage image,
@@ -184,8 +202,18 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
     requireApproval(call(observation, stage, text, png(image)), stage);
   }
 
+  /**
+   * 画面操作の支援で受け渡す詳細を表す。
+   *
+   * @param image 画像
+   * @param left 左側の位置
+   * @param top 上位
+   * @param width 幅
+   * @param height 高さ
+   */
   record Detail(BufferedImage image, int left, int top, int width, int height) {}
 
+  /** 画面操作の支援で用いる詳細を返す。 */
   static Detail detail(BufferedImage source, double[] point) {
     if (point.length != 2
         || !Double.isFinite(point[0])
@@ -230,6 +258,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
         height);
   }
 
+  /** 後続の判断に現在の状態を反映するため、計画の作成Grounding確認の窓口の状態を記録する。 */
   private static BufferedImage mark(BufferedImage image, double px, double py) {
     var result = new BufferedImage(image.getWidth(), image.getHeight(), BufferedImage.TYPE_INT_RGB);
     var g = result.createGraphics();
@@ -250,6 +279,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
     return result;
   }
 
+  /** 画面操作の支援で用いるPNG画像を返す。 */
   private static byte[] png(BufferedImage image) throws Exception {
     var bytes = new ByteArrayOutputStream();
     if (!ImageIO.write(image, "png", bytes))
@@ -257,6 +287,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
     return bytes.toByteArray();
   }
 
+  /** 画面操作の支援の要求を実行し、呼び出し元へ結果を返す。 */
   private String call(ComputerObservation observation, String stage, String text, byte[]... images)
       throws Exception {
     var requestOptions =
@@ -303,10 +334,13 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
     return response.getResult().getOutput().getText();
   }
 
+  /** 種別一覧。 */
   private static final Set<String> TYPES =
       Set.of("input", "button", "link", "text", "other", "unknown");
 
+  /** 画面操作の支援で用いる厳格なJSON変換を返す。 */
   private static com.fasterxml.jackson.databind.JsonNode strictJson(String text) throws Exception {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (text == null || text.length() > 4000) throw new IllegalArgumentException();
     return new com.fasterxml.jackson.databind.ObjectMapper()
         .enable(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
@@ -314,6 +348,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
         .readTree(text);
   }
 
+  /** 入力を機能内で扱えるよう、説明を解釈する。 */
   static com.fasterxml.jackson.databind.JsonNode parseDescription(String text) {
     try {
       var n = strictJson(text);
@@ -336,6 +371,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
     }
   }
 
+  /** 条件を満たさない操作を拒否するため、一致の前提条件を確認する。 */
   static void requireMatch(String text, String observedType) {
     try {
       var n = strictJson(text);
@@ -357,8 +393,10 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
     }
   }
 
+  /** 条件を満たさない操作を拒否するため、承認の前提条件を確認する。 */
   static void requireApproval(String text, String stage) {
     try {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (text == null || text.length() > 4000) throw new IllegalArgumentException();
       var mapper =
           new com.fasterxml.jackson.databind.ObjectMapper()
@@ -383,11 +421,13 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
     }
   }
 
+  /** 後続の操作を進められるか判断するため、キャンセル済みを確認する。 */
   private void checkCancelled() {
     if (cancelled.getAsBoolean() || Thread.currentThread().isInterrupted())
       throw new java.util.concurrent.CancellationException();
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   private static void save(ComputerObservation o, String stage, String suffix, byte[] bytes) {
     if (o.diagnosticRun() == null) return;
     try {

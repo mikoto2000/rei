@@ -13,14 +13,25 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Uses live-catalog keyword search and existing SemanticSkillSearch with controlled rank streams.
+ * スキル関連情報の取得評価を別の利用先へ接続する。
+ *
+ * <p>Uses live-catalog keyword search and existing SemanticSkillSearch with controlled rank
+ * streams.
  */
 public final class SkillRetrievalEvaluationAdapter implements RetrievalQualityEvaluation.Retriever {
+  /** スキル一覧。 */
   private final List<AgentSkill> skills;
+
+  /** 設定。 */
   private final SemanticSkillProperties settings;
+
+  /** 埋め込み表現。 */
   private final SkillMetadataEmbedding embedding;
+
+  /** 候補の関連度を再評価する窓口。 */
   private final CandidateReranker reranker;
 
+  /** 指定された値や利用先を使って、SkillRetrievalEvaluationAdapterを初期化する。 */
   public SkillRetrievalEvaluationAdapter(
       List<AgentSkill> skills,
       SemanticSkillProperties settings,
@@ -34,6 +45,7 @@ public final class SkillRetrievalEvaluationAdapter implements RetrievalQualityEv
       throw new IllegalArgumentException("Unique fixture skill names required");
   }
 
+  /** 成果の評価で用いる取得を返す。 */
   public List<String> retrieve(
       RetrievalQualityEvaluation.Case fixture,
       RetrievalQualityEvaluation.Mode mode,
@@ -105,15 +117,21 @@ public final class SkillRetrievalEvaluationAdapter implements RetrievalQualityEv
     return result.stream().limit(fixture.topK()).map(c -> c.skill().name()).toList();
   }
 
+  /** 成果の評価において、有限に該当するか判定する。 */
   private static boolean finite(float[] vector) {
     for (float value : vector) if (!Float.isFinite(value)) return false;
     return true;
   }
 
+  /** 成果の評価に必要な厳格なRerankerを扱う。 */
   private static final class StrictReranker implements CandidateReranker {
+    /** 委譲先。 */
     private final CandidateReranker delegate;
+
+    /** 失敗情報。 */
     private final java.util.concurrent.atomic.AtomicReference<RuntimeException> failure;
 
+    /** 指定された値や利用先を使って、StrictRerankerを初期化する。 */
     StrictReranker(
         CandidateReranker delegate,
         java.util.concurrent.atomic.AtomicReference<RuntimeException> failure) {
@@ -121,6 +139,7 @@ public final class SkillRetrievalEvaluationAdapter implements RetrievalQualityEv
       this.failure = failure;
     }
 
+    /** 成果の評価で用いる再評価を返す。 */
     public <T> List<T> rerank(
         String query, List<T> candidates, java.util.function.Function<T, String> text) {
       try {

@@ -6,8 +6,10 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** エージェントスキル明示的な対象の選択条件の結果と状態の契約を検証するテスト。 */
 class AgentSkillExplicitSelectorTest {
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void extractsSkillTokenAndRemovesItFromPrompt() {
     AgentSkill sample = skill("sample", true);
@@ -20,6 +22,7 @@ class AgentSkillExplicitSelectorTest {
     assertThat(selection.warnings()).isEmpty();
   }
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void extractsMultipleSkillsInOrder() {
     AgentSkill first = skill("first", true);
@@ -33,6 +36,7 @@ class AgentSkillExplicitSelectorTest {
     assertThat(selection.sanitizedPrompt()).isEqualTo("run");
   }
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void warnsWhenSkillIsMissingOrDisabled() {
     AgentSkill disabled = skill("disabled", false);
@@ -47,6 +51,7 @@ class AgentSkillExplicitSelectorTest {
         .containsExactly("[warn] Skill が見つかりません: missing", "[warn] Skill は無効です: disabled");
   }
 
+  /** {@code skill} の条件を再現するための補助情報を返す。 */
   private AgentSkill skill(String name, boolean enabled) {
     return new AgentSkill(
         name,
@@ -57,6 +62,7 @@ class AgentSkillExplicitSelectorTest {
         name + " instructions");
   }
 
+  /** 検証で使用する保存と検索の窓口を、指定された条件に合わせて用意する。 */
   private AgentSkillRepository repository(AgentSkill... skills) {
     return new InMemoryAgentSkillRepository(List.of(skills));
   }

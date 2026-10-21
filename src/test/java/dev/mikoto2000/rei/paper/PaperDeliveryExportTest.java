@@ -14,9 +14,12 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 論文配信書き出しの結果と状態の契約を検証するテスト。 */
 class PaperDeliveryExportTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 論文の調査と整理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void exportsOnlyTheRequestedCachedVersionWithoutGeneratingAnother() {
     var repo = mock(PaperRepository.class);

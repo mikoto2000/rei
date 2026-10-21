@@ -20,15 +20,37 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
-/** A durable receipt is claimed before dispatch; an interrupted claim is never replayed. */
+/**
+ * 承認継続入力の記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>A durable receipt is claimed before dispatch; an interrupted claim is never replayed.
+ */
 @Repository
 public class ApprovalContinuationStore {
+  /**
+   * ツール利用の権限制御で受け渡す保存済みメッセージを表す。
+   *
+   * @param kind 種類
+   * @param text テキスト
+   * @param calls 呼び出し回数
+   * @param responses 応答一覧
+   */
   public record StoredMessage(
       String kind,
       String text,
       List<AssistantMessage.ToolCall> calls,
       List<ToolResponseMessage.ToolResponse> responses) {}
 
+  /**
+   * ツール利用の権限制御で受け渡す文書を表す。
+   *
+   * @param owner 所有者
+   * @param request 要求
+   * @param history 履歴
+   * @param pending 待機中
+   * @param budget 予算
+   * @param managedParent 管理対象親
+   */
   public record Document(
       AgentRunContext owner,
       String request,
@@ -37,12 +59,26 @@ public class ApprovalContinuationStore {
       OutputLimitRunBudget.Snapshot budget,
       boolean managedParent) {}
 
+  /**
+   * ツール利用の権限制御で受け渡す項目を表す。
+   *
+   * @param approvalId 承認識別子
+   * @param runId 実行の識別子
+   * @param state 状態
+   * @param document 文書
+   * @param pid プロセス識別子
+   * @param started 開始
+   */
   public record Entry(
       String approvalId, String runId, String state, String document, long pid, String started) {}
 
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule());
 
+  /** 指定された値や利用先を使って、ApprovalContinuationStoreを初期化する。 */
   public ApprovalContinuationStore(@Qualifier("memoryConsolidationDataSource") DataSource source) {
     db = JdbcClient.create(source);
     db.sql(
@@ -53,6 +89,7 @@ public class ApprovalContinuationStore {
         .update();
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   public void save(
       String id,
       AgentRunContext owner,
@@ -95,6 +132,7 @@ public class ApprovalContinuationStore {
         != 1) throw new IllegalStateException("Approval already has a continuation");
   }
 
+  /** 行。 */
   private static final org.springframework.jdbc.core.RowMapper<Entry> ROW =
       (rs, n) ->
           new Entry(
@@ -105,6 +143,7 @@ public class ApprovalContinuationStore {
               rs.getLong("pid"),
               rs.getString("started"));
 
+  /** 対象を特定できるよう、承認継続入力保存先を探す。 */
   public Optional<Entry> find(String id) {
     return db.sql("SELECT * FROM approval_continuations WHERE approval=?")
         .param(id)
@@ -112,6 +151,7 @@ public class ApprovalContinuationStore {
         .optional();
   }
 
+  /** ツール利用の権限制御で用いるresumingを返す。 */
   public Optional<Entry> resuming(String run) {
     return db.sql("SELECT * FROM approval_continuations WHERE run=? AND state='RESUMING'")
         .param(run)
@@ -119,6 +159,7 @@ public class ApprovalContinuationStore {
         .optional();
   }
 
+  /** ツール利用の権限制御で用いる表示対象を返す。 */
   public List<String> visible(String project) {
     return db.sql(
             "SELECT approval FROM approval_continuations WHERE json_extract(document,'$.owner.projectId')=? AND state IN ('WAITING_APPROVAL','QUEUED','RESUMING','UNKNOWN','EXPIRED','DENY_QUEUED') ORDER BY rowid DESC LIMIT 256")
@@ -127,6 +168,7 @@ public class ApprovalContinuationStore {
         .list();
   }
 
+  /** ツール利用の権限制御で用いる活動中を返す。 */
   public List<Entry> active() {
     return db.sql(
             "SELECT * FROM approval_continuations WHERE state IN ('WAITING_APPROVAL','QUEUED','RESUMING','DENY_QUEUED') ORDER BY approval LIMIT 256")
@@ -134,6 +176,7 @@ public class ApprovalContinuationStore {
         .list();
   }
 
+  /** ツール利用の権限制御に関する拒否を処理する。 */
   public void deny(String id) {
     db.sql(
             "UPDATE approval_continuations SET state='DENY_QUEUED' WHERE approval=? AND state='WAITING_APPROVAL'")
@@ -141,6 +184,7 @@ public class ApprovalContinuationStore {
         .update();
   }
 
+  /** ツール利用の権限制御で用いる文書を返す。 */
   public Document document(Entry entry) {
     try {
       return json.readValue(entry.document(), Document.class);
@@ -149,6 +193,7 @@ public class ApprovalContinuationStore {
     }
   }
 
+  /** ツール利用の権限制御で用いる保存済みを返す。 */
   public RunContinuation.Saved saved(Entry entry) {
     var d = document(entry);
     return new RunContinuation.Saved(
@@ -174,6 +219,7 @@ public class ApprovalContinuationStore {
         d.pending());
   }
 
+  /** ツール利用の権限制御において、実行待ちに該当するか判定する。 */
   public boolean queue(String id) {
     return db.sql(
                 "UPDATE approval_continuations SET state='QUEUED' WHERE approval=? AND state='WAITING_APPROVAL'")
@@ -182,6 +228,7 @@ public class ApprovalContinuationStore {
         == 1;
   }
 
+  /** 対象を処理する担当を決めるため、承認継続入力保存先の利用権を確保する。 */
   public boolean claim(String id) {
     return db.sql(
                 "UPDATE approval_continuations SET state='RESUMING',pid=?,started=? WHERE approval=? AND state='QUEUED'")
@@ -193,6 +240,7 @@ public class ApprovalContinuationStore {
         == 1;
   }
 
+  /** ツール利用の権限制御に関する状態を処理する。 */
   public void state(String id, String state) {
     if (!Set.of("COMPLETED", "CANCELLED", "DENIED", "EXPIRED", "UNKNOWN").contains(state))
       throw new IllegalArgumentException("Invalid continuation terminal state");
@@ -202,10 +250,12 @@ public class ApprovalContinuationStore {
         .update();
   }
 
+  /** 終了時の状態を確定するため、実行を完了させる。 */
   public void finishRun(String run, String state) {
     for (var entry : active()) if (entry.runId().equals(run)) state(entry.approvalId(), state);
   }
 
+  /** ツール利用の権限制御に関する案内を処理する。 */
   public void guidance(AgentRunContext owner, List<Message> guidance) {
     for (var entry : active())
       if (entry.runId().equals(owner.runId()) && !entry.state().equals("RESUMING")) {
@@ -220,6 +270,7 @@ public class ApprovalContinuationStore {
             encode(
                 new Document(
                     d.owner(), d.request(), messages, d.pending(), d.budget(), d.managedParent()));
+        // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (encoded.length() > 1048576 || messages.size() > 256)
           throw new IllegalArgumentException("Approval guidance capacity exceeded");
         db.sql("UPDATE approval_continuations SET document=? WHERE approval=? AND state=?")
@@ -228,6 +279,7 @@ public class ApprovalContinuationStore {
       }
   }
 
+  /** ツール利用の権限制御において、所有者稼働中に該当するか判定する。 */
   public boolean ownerAlive(Entry entry) {
     return entry.pid() > 0
         && entry.started() != null
@@ -238,6 +290,7 @@ public class ApprovalContinuationStore {
             .orElse(false);
   }
 
+  /** 受け渡し先が扱える形式へ、指定された内容を変換する。 */
   private String encode(Document d) {
     try {
       return json.writeValueAsString(d);

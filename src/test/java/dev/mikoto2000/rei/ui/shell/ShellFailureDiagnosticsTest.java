@@ -16,20 +16,26 @@ import java.util.concurrent.Callable;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** シェル失敗情報診断情報の結果と状態の契約を検証するテスト。 */
 class ShellFailureDiagnosticsTest {
+  /** 検証条件を再現するための利用可否の確認。 */
   @CommandLine.Command(name = "probe")
   static class Probe implements Callable<Integer> {
+    /** 検証に使うエラー。 */
     final RuntimeException error;
 
+    /** 検証条件に必要な値を受け取り、Probeを用意する。 */
     Probe(RuntimeException error) {
       this.error = error;
     }
 
+    /** 検証用に、ターミナルでの対話の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
       throw error;
     }
   }
 
+  /** ターミナルでの対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void uncaughtFailureShowsCauseAndHonoursExitMapper() {
     var text = new StringWriter();
@@ -47,6 +53,7 @@ class ShellFailureDiagnosticsTest {
     assertFalse(text.toString().contains("at dev."));
   }
 
+  /** ターミナルでの対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void interruptedFailureIsReportedAsCancelled() {
     var text = new StringWriter();
@@ -61,6 +68,7 @@ class ShellFailureDiagnosticsTest {
     assertTrue(text.toString().contains("[cancelled] probe: stop requested → user cancelled"));
   }
 
+  /** ターミナルでの対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void sessionFailureShowsUnderlyingStorageReason() {
     var service = mock(ShellConversationService.class);
@@ -73,6 +81,7 @@ class ShellFailureDiagnosticsTest {
     assertTrue(text.toString().contains("database unavailable → disk full"));
   }
 
+  /** ターミナルでの対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void activityFailureShowsSpecificBackendReason() {
     var capture = mock(dev.mikoto2000.rei.activity.ActivityCapture.class);
@@ -85,6 +94,7 @@ class ShellFailureDiagnosticsTest {
     assertTrue(text.toString().contains("capture unavailable token=[REDACTED]"));
   }
 
+  /** ターミナルでの対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelDistinguishesAcceptedRequestFromNoActiveWork() {
     var service = mock(CommandCancellationService.class);

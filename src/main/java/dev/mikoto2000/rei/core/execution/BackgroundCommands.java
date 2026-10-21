@@ -18,24 +18,47 @@ import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
-/** Command orchestration over the existing runtime registry/executor and project state store. */
+/**
+ * 処理の実行制御に必要なバックグラウンドコマンド一覧を扱う。
+ *
+ * <p>Command orchestration over the existing runtime registry/executor and project state store.
+ */
 @Service
 public class BackgroundCommands {
+  /** 実行一覧。 */
   private final ConversationInputRouter runs;
+
+  /** プロジェクト一覧。 */
   private final ProjectService projects;
+
+  /** 状態一覧。 */
   private final ProjectRunStateStore states;
+
+  /** 要約一覧。 */
   private final WebPageSummarizerService summaries;
+
+  /** 画像一覧。 */
   private final ImageGenerationService images;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** 通知先。 */
   private final AgentEventPublisher publisher;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 読み上げの案内。 */
   private dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator narrator;
 
+  /** 処理の実行制御で使用する読み上げの案内を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setNarrator(dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator narrator) {
     this.narrator = narrator;
   }
 
+  /** 指定された値や利用先を使って、BackgroundCommandsを初期化する。 */
   public BackgroundCommands(
       ConversationInputRouter runs,
       ProjectService projects,
@@ -55,11 +78,13 @@ public class BackgroundCommands {
     this.clock = clock;
   }
 
+  /** 対象の内容を、要点が分かる形にまとめる。 */
   public ActiveExecution summarize(URI source) {
     return start(
         ExecutionType.SUMMARIZE, source.toString(), () -> summaries.summarize(source).summary());
   }
 
+  /** 処理の実行制御で用いる画像を返す。 */
   public ActiveExecution image(ImageGenerationRequest request) {
     return start(
         ExecutionType.IMAGE,
@@ -75,6 +100,7 @@ public class BackgroundCommands {
         });
   }
 
+  /** 要求された処理を開始する。 */
   private ActiveExecution start(ExecutionType type, String source, Supplier<String> operation) {
     var project = projects.currentContext();
     var registered = new java.util.concurrent.atomic.AtomicReference<ActiveExecution>();
@@ -115,6 +141,7 @@ public class BackgroundCommands {
     }
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   private String status(Throwable error) {
     for (Throwable cause = error; cause != null; cause = cause.getCause()) {
       if (cause instanceof java.util.concurrent.CancellationException
@@ -131,6 +158,7 @@ public class BackgroundCommands {
             : "FAILED";
   }
 
+  /** 状態や結果を購読先へ通知する。 */
   private void publish(ActiveExecution execution, String status, String output) {
     try {
       publisher.publish(events.backgroundExecution(execution, status, output));
@@ -140,10 +168,12 @@ public class BackgroundCommands {
     }
   }
 
+  /** 利用者が内容を確認できるよう、直近要約を表示する。 */
   public void showLastSummary(Consumer<String> out) {
     showLastSummary(projects.currentContext(), out, true, java.util.List.of());
   }
 
+  /** 利用者が内容を確認できるよう、直近要約を表示する。 */
   public void showLastSummary(
       ProjectContext project,
       Consumer<String> out,

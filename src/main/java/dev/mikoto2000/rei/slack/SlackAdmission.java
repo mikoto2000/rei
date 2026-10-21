@@ -1,8 +1,11 @@
 package dev.mikoto2000.rei.slack;
 
+/** Slackとの連携に必要なSlack受付を扱う。 */
 public final class SlackAdmission {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private SlackAdmission() {}
 
+  /** 要求を後続の処理へ引き渡すため、Slack受付を受け付ける。 */
   public static boolean accept(
       SlackProperties p, String self, SlackMessage m, boolean knownThread) {
     if (m == null

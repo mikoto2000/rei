@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** Web関連情報の取得評価の結果と状態の契約を検証するテスト。 */
 class WebRetrievalAssessmentTest {
+  /** Web上の情報の調査の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void redirectedDuplicateCannotChangeTheRepresentativesAuthority() {
     var representative = page("https://blog.example/page", "Java official explanation");
@@ -21,6 +23,7 @@ class WebRetrievalAssessmentTest {
     assertTrue(assessment.reasons().contains("official_source_missing"));
   }
 
+  /** Web上の情報の調査で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void oldOrMissingPublicationDatesDoNotMeetFreshnessRequirements() {
     var old =
@@ -45,6 +48,7 @@ class WebRetrievalAssessmentTest {
             .contains("publication_date_unknown"));
   }
 
+  /** {@code page} の条件を再現するための補助情報を返す。 */
   WebSearchPage page(String url, String text) {
     return new WebSearchPage(
         "source",
@@ -57,6 +61,7 @@ class WebRetrievalAssessmentTest {
         List.of(new WebSourceAlias(url, "source", null)));
   }
 
+  /** Web上の情報の調査で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void matchingReadableEvidenceCanSatisfyRetrievalWithoutClaimingVerifiedTruth() {
     var assessment =
@@ -67,6 +72,7 @@ class WebRetrievalAssessmentTest {
     assertTrue(assessment.interpretation().contains("not a verified answer"));
   }
 
+  /** Web上の情報の調査で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void copiedAliasesDoNotBecomeIndependentSources() {
     var copied =
@@ -78,6 +84,7 @@ class WebRetrievalAssessmentTest {
     assertTrue(assessment.reasons().contains("independent_sources_missing"));
   }
 
+  /** Web上の情報の調査の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void requestedAuthorityAndVersionMustComeFromReadableEvidence() {
     assertTrue(
@@ -94,6 +101,7 @@ class WebRetrievalAssessmentTest {
             .contains("version_mismatch"));
   }
 
+  /** Web上の情報の調査で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void LatestCannotBeVerifiedMerelyFromRetrievalTimeOrAClaimedPublicationDate() {
     var assessment =

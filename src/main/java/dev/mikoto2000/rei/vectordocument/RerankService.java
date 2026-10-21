@@ -15,12 +15,20 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.JsonNode;
 
+/** 再評価のユースケースを実現する。 */
 @Service
 @EnableConfigurationProperties(RerankProperties.class)
 public class RerankService implements CandidateReranker {
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger logger = LoggerFactory.getLogger(RerankService.class);
+
+  /** この機能の動作設定。 */
   private final RerankProperties properties;
+
+  /** クライアント。 */
   private final RestClient client;
+
+  /** 予算JSON変換。 */
   private static final tools.jackson.databind.json.JsonMapper BUDGET_JSON =
       tools.jackson.databind.json.JsonMapper.builder(
               tools.jackson.core.json.JsonFactory.builder()
@@ -35,6 +43,7 @@ public class RerankService implements CandidateReranker {
           .enable(tools.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
           .build();
 
+  /** 指定された値や利用先を使って、RerankServiceを初期化する。 */
   public RerankService(RerankProperties properties, RestClient.Builder builder) {
     this.properties = properties;
     if (!properties.enabled() || properties.baseUrl() == null || properties.baseUrl().isBlank()) {
@@ -56,18 +65,24 @@ public class RerankService implements CandidateReranker {
     client = clientBuilder.build();
   }
 
-  /** Reorders all candidates; preserves their original retrieval scores and metadata. */
+  /**
+   * 検索対象文書の管理で用いる再評価を返す。
+   *
+   * <p>Reorders all candidates; preserves their original retrieval scores and metadata.
+   */
   @Override
   public <T> List<T> rerank(String query, List<T> candidates, Function<T, String> text) {
     return rerank(query, candidates, text, false);
   }
 
+  /** 検索対象文書の管理で用いる再評価対象評価を返す。 */
   @Override
   public <T> List<T> rerankForEvaluation(
       String query, List<T> candidates, Function<T, String> text) {
     return rerank(query, candidates, text, true);
   }
 
+  /** 検索対象文書の管理で用いる再評価を返す。 */
   private <T> List<T> rerank(
       String query, List<T> candidates, Function<T, String> text, boolean strict) {
     if (strict) {
@@ -163,5 +178,11 @@ public class RerankService implements CandidateReranker {
     }
   }
 
+  /**
+   * 検索対象文書の管理で受け渡す順位を表す。
+   *
+   * @param index 位置
+   * @param score 評価値
+   */
   private record Rank(int index, double score) {}
 }

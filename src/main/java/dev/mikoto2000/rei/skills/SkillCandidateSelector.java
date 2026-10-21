@@ -9,20 +9,32 @@ import java.util.Locale;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 
+/** スキルの利用に必要なスキル候補対象の選択条件を扱う。 */
 @Component
 public class SkillCandidateSelector {
 
+  /** 名前評価値。 */
   static final int NAME_SCORE = 10;
+
+  /** 検索語句完全一致評価値。 */
   static final int KEYWORD_EXACT_SCORE = 5;
+
+  /** 検索語句部分的な結果評価値。 */
   static final int KEYWORD_PARTIAL_SCORE = 2;
+
+  /** 説明評価値。 */
   static final int DESCRIPTION_SCORE = 1;
+
+  /** 意味による。 */
   private SemanticSkillSearch semantic;
 
+  /** スキルの利用に関する意味による検索を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void semanticSearch(SemanticSkillSearch semantic) {
     this.semantic = semantic;
   }
 
+  /** 条件に合う対象を利用するため、候補一覧を選択する。 */
   public List<SkillCandidate> selectCandidates(
       String userRequest, List<AgentSkill> skills, int limit) {
     if (limit <= 0 || skills == null || skills.isEmpty()) return List.of();
@@ -47,6 +59,7 @@ public class SkillCandidateSelector {
         : lexical;
   }
 
+  /** スキルの利用で用いる評価値を返す。 */
   private SkillCandidate score(String request, AgentSkill skill) {
     int score = 0;
     Set<String> fields = new LinkedHashSet<>();
@@ -80,6 +93,7 @@ public class SkillCandidateSelector {
     return new SkillCandidate(skill, score, List.copyOf(fields), matchedKeywords);
   }
 
+  /** スキルの利用において、lexicallyOverlapsに該当するか判定する。 */
   private boolean lexicallyOverlaps(String left, String right) {
     if (left.contains(right) || right.contains(left)) return true;
     for (String term : terms(right)) {
@@ -88,12 +102,14 @@ public class SkillCandidateSelector {
     return false;
   }
 
+  /** スキルの利用で用いる検索語句一覧を返す。 */
   private List<String> terms(String value) {
     return java.util.Arrays.stream(value.split("[^\\p{L}\\p{N}]+"))
         .filter(term -> !term.isBlank())
         .toList();
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、表記や形式をそろえる。 */
   static String normalize(String value) {
     if (value == null) return "";
     return Normalizer.normalize(value, Normalizer.Form.NFKC)

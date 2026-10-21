@@ -20,7 +20,9 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 音声補正言語モデルの結果と状態の契約を検証するテスト。 */
 class VoiceCorrectionLlmTest {
+  /** 正の独立した予算について、不明使用状況を受け付けないことを確認する。 */
   @Test
   void positiveStandaloneBudgetRejectsUnknownUsage() {
     var model = mock(ChatModel.class);
@@ -44,6 +46,7 @@ class VoiceCorrectionLlmTest {
         .hasMessage("correction_budget");
   }
 
+  /** 音声による対話で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void injectionIsSerializedAsDataAndIndependentBudgetAndNoToolsAreApplied() throws Exception {
     var model = mock(ChatModel.class);

@@ -18,17 +18,26 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 診断済み修復サービスの結果と状態の契約を検証するテスト。 */
 class DiagnosedRepairServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うプロジェクト。 */
   final String project = UUID.randomUUID().toString();
+
+  /** 検証に使う形式のバージョン。 */
   final AtomicInteger version = new AtomicInteger();
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("run", "session", root, project);
   }
 
+  /** 検証に使う共有取得元。 */
   org.springframework.jdbc.datasource.DriverManagerDataSource sharedSource;
 
+  /** 検証で使用する取得元を、指定された条件に合わせて用意する。 */
   org.springframework.jdbc.datasource.DriverManagerDataSource source() {
     if (sharedSource == null)
       sharedSource =
@@ -37,15 +46,18 @@ class DiagnosedRepairServiceTest {
     return sharedSource;
   }
 
+  /** {@code changes} の条件を再現するための補助情報を返す。 */
   TextChangeSetService changes() {
     return new TextChangeSetService(new TextChangeSetRepository(source()));
   }
 
+  /** 検証で使用する状態の記録を、指定された条件に合わせて用意する。 */
   SelfPatchReviewService.Snapshot snapshot() {
     return new SelfPatchReviewService.Snapshot(
         "v" + version.get(), List.of("A.java"), List.of(), true, List.of());
   }
 
+  /** {@code round} の条件を再現するための補助情報を返す。 */
   SelfPatchReviewService.Result round() {
     return new SelfPatchReviewService.Result(
         root.toString(),
@@ -65,6 +77,7 @@ class DiagnosedRepairServiceTest {
         List.of());
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   DiagnosedRepairService service(boolean enabled) {
     return new DiagnosedRepairService(
         source(),
@@ -75,11 +88,13 @@ class DiagnosedRepairServiceTest {
         (r, q, d) -> round());
   }
 
+  /** {@code fixture} の条件を再現するため、検証用の操作や状態を扱う。 */
   void fixture() throws Exception {
     Files.writeString(root.resolve("A.java"), "old");
     report(true);
   }
 
+  /** {@code report} の条件を再現するため、検証用の操作や状態を扱う。 */
   void report(boolean failed) throws Exception {
     Files.createDirectories(root.resolve("target"));
     Files.writeString(
@@ -91,6 +106,7 @@ class DiagnosedRepairServiceTest {
             + "</testcase></testsuite>");
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   DiagnosedRepairService.Request request() {
     return new DiagnosedRepairService.Request(
         "target/TEST.xml",
@@ -99,6 +115,7 @@ class DiagnosedRepairServiceTest {
         10);
   }
 
+  /** 共通の実行基盤の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void persistsDiagnosisProposalAndRequiresExactHumanApprovalBeforeExistingRepairCycle()
       throws Exception {
@@ -156,6 +173,7 @@ class DiagnosedRepairServiceTest {
             .status());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledForeignStaleEvidenceAndChangedPatchCannotApply() throws Exception {
     fixture();
@@ -188,6 +206,7 @@ class DiagnosedRepairServiceTest {
                 (p, o, n) -> fail("no changed patch write")));
   }
 
+  /** 共通の実行基盤で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void uncertainWriteIsDurablyNotReplayableAndSuccessfulReportCannotProposeRepair()
       throws Exception {
@@ -221,6 +240,7 @@ class DiagnosedRepairServiceTest {
                     (p, o, n) -> fail("no uncertain replay")));
   }
 
+  /** ツールについて、信頼済み利用者要求を利用することを確認する。 */
   @Test
   void toolUsesTrustedUserRequestAndPreservesPolicyAndHumanShellEntry() throws Exception {
     fixture();
@@ -278,6 +298,7 @@ class DiagnosedRepairServiceTest {
     org.mockito.Mockito.verifyNoMoreInteractions(conversations);
   }
 
+  /** 共通の実行基盤で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void readOnlyInspectionCanReviewButCannotApproveAndStartedCrashHasNoReplay() throws Exception {
     fixture();

@@ -22,23 +22,29 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
 /**
- * Read-only metadata from the fixed Root declaration. No command object is instantiated or invoked.
+ * 軽量CLI利用可能な項目をWeb APIの操作として受け付ける。
+ *
+ * <p>Read-only metadata from the fixed Root declaration. No command object is instantiated or
+ * invoked.
  */
 @RestController
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public final class CliCatalogController {
+  /** 状態の記録。 */
   private final CliCatalog snapshot =
       new CliCatalog(
           Arrays.stream(RootCommand.class.getAnnotation(Command.class).subcommands())
               .map(CliCatalogController::describe)
               .toList());
 
+  /** Web APIによる操作で用いる利用可能な項目を返す。 */
   @GetMapping("/api/v1/cli/catalog")
   public CliCatalog catalog() {
     return snapshot;
   }
 
+  /** Web APIによる操作で用いる説明を返す。 */
   private static CliCatalog.Command describe(Class<?> type) {
     Command command = type.getAnnotation(Command.class);
     var options = new ArrayList<CliCatalog.Option>();
@@ -105,6 +111,7 @@ public final class CliCatalogController {
         groups);
   }
 
+  /** Web APIによる操作に関する項目一覧を処理する。 */
   private static void fields(
       Class<?> type,
       List<CliCatalog.Option> options,
@@ -129,6 +136,7 @@ public final class CliCatalogController {
       }
   }
 
+  /** Web APIによる操作に関する参加者を処理する。 */
   private static void member(
       AnnotatedElement element,
       Class<?> type,
@@ -181,18 +189,21 @@ public final class CliCatalogController {
     }
   }
 
+  /** Web APIによる操作で用いる参加者名前を返す。 */
   private static String memberName(AnnotatedElement element) {
     return element instanceof Field field
         ? field.getName()
         : element instanceof java.lang.reflect.Parameter parameter ? parameter.getName() : "value";
   }
 
+  /** Web APIによる操作で用いる候補種別を返す。 */
   private static String candidateType(Class<?> candidates, Class<?> type) {
     if (candidates.getSimpleName().contains("NoCompletionCandidates"))
       return type == java.nio.file.Path.class || type == java.io.File.class ? type.getName() : "";
     return candidates.getName();
   }
 
+  /** Web APIによる操作で用いるdeclared選択肢を返す。 */
   private static List<String> declaredChoices(Class<?> type) {
     if (type == dev.mikoto2000.rei.activity.ActivityCommand.ActionCandidates.class)
       return List.of("today", "yesterday", "pause", "resume");
@@ -211,6 +222,7 @@ public final class CliCatalogController {
     return List.of();
   }
 
+  /** Web APIによる操作で用いる選択肢を返す。 */
   private static List<String> choices(Class<?> type, Type generic) {
     if (type.isEnum()) return Arrays.stream(type.getEnumConstants()).map(Object::toString).toList();
     if (generic instanceof ParameterizedType parameterized)
@@ -220,10 +232,12 @@ public final class CliCatalogController {
     return List.of();
   }
 
+  /** Web APIによる操作で用いる既定値を返す。 */
   private static String defaultValue(String value) {
     return value.equals("__no_default_value__") ? null : value;
   }
 
+  /** Web APIによる操作に関する使い方を処理する。 */
   private static void help(Command command, List<CliCatalog.Option> options) {
     if (command.mixinStandardHelpOptions()) {
       options.add(

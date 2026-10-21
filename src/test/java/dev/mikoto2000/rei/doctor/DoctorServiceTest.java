@@ -22,10 +22,15 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.core.env.MapPropertySource;
 import org.springframework.mock.env.MockEnvironment;
 
+/** 環境診断サービスの結果と状態の契約を検証するテスト。 */
 class DoctorServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock = Clock.fixed(Instant.parse("2026-10-10T00:00:00Z"), ZoneOffset.UTC);
 
+  /** {@code manifest} の条件を再現するための補助情報を返す。 */
   VoiceModelManifest manifest() {
     return new VoiceModelManifest(
         "fixture",
@@ -38,6 +43,7 @@ class DoctorServiceTest {
                 "MIT")));
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   DoctorService service(MockEnvironment env, VoiceProperties voice) {
     return new DoctorService(
         env,
@@ -49,16 +55,19 @@ class DoctorServiceTest {
         manifest());
   }
 
+  /** {@code voice} の条件を再現するための補助情報を返す。 */
   VoiceProperties voice() {
     var voice = new VoiceProperties();
     voice.setBundleDirectory(root.toString());
     return voice;
   }
 
+  /** 検証で使用する結果を、指定された条件に合わせて用意する。 */
   DoctorResult result(List<DoctorResult> results, String id) {
     return results.stream().filter(r -> r.id().equals(id)).findFirst().orElseThrow();
   }
 
+  /** 実行環境の診断で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void optionalAbsenceIsNotFailureAndPassiveRuntimeRemainsUnverified() {
     var results = service(new MockEnvironment(), voice()).passive(true);
@@ -73,6 +82,7 @@ class DoctorServiceTest {
                     !r.method().isBlank() && !r.evidence().isBlank() && !r.nextAction().isBlank()));
   }
 
+  /** 実行環境の診断で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void missingRequiredModelAndBadFileConfigurationDoNotSuppressOtherResults() {
     var voice = voice();
@@ -86,6 +96,7 @@ class DoctorServiceTest {
     assertEquals(DoctorResult.Status.OK, result(results, "runtime.java").status());
   }
 
+  /** 実行環境の診断で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void presentFilesProveOnlyStaticPresenceAndNoIntegrityClaim() throws Exception {
     Files.write(root.resolve("model.onnx"), new byte[] {1});
@@ -95,6 +106,7 @@ class DoctorServiceTest {
     assertFalse(Files.exists(root.resolve("managed")));
   }
 
+  /** 実行環境の診断で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void secretsAndSourceNamesNeverReachReport() {
     var env = new MockEnvironment();
@@ -123,6 +135,7 @@ class DoctorServiceTest {
     assertTrue(rendered.contains("UNVERIFIED"));
   }
 
+  /** 実行環境の診断で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void winningPropertySourceIsIdentifiedWithoutDumpingValues() {
     var env =
@@ -138,6 +151,7 @@ class DoctorServiceTest {
     assertFalse(report.evidence().contains("override.invalid"));
   }
 
+  /** 実行環境の診断で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void networkSharePathsAreSkippedBeforeFilesystemAccess() {
     var voice = voice();
@@ -154,6 +168,7 @@ class DoctorServiceTest {
     assertTrue(result(results, "required.file.1").evidence().contains("not inspected"));
   }
 
+  /** 実行環境の診断で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void passiveAdviceDoesNotAdvertiseUnavailableActiveCommands() {
     var env =
@@ -165,6 +180,7 @@ class DoctorServiceTest {
             .noneMatch(r -> r.nextAction().contains("/doctor --check")));
   }
 
+  /** 実行環境の診断で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void malformedEndpointIsAStaticConfigurationErrorWithUsefulEvidence() {
     var results =
@@ -177,6 +193,7 @@ class DoctorServiceTest {
     assertTrue(endpoint.evidence().contains("HTTP(S)"));
   }
 
+  /** 実行環境の診断で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void disabledDoctorReturnsOnlySkippedMetadata() {
     var results =

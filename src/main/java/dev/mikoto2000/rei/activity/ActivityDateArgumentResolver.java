@@ -4,10 +4,18 @@ import java.time.Clock;
 import java.time.DateTimeException;
 import java.time.LocalDate;
 
-/** Single-day arguments in the journal timezone; independent of command parsing. */
+/**
+ * 作業状況の把握で受け渡す作業状況日付引数対象の解決を表す。
+ *
+ * <p>Single-day arguments in the journal timezone; independent of command parsing.
+ *
+ * @param clock 判定や記録に使う時刻の取得元
+ */
 public record ActivityDateArgumentResolver(Clock clock) {
+  /** 使用状況。 */
   public static final String USAGE = "日付は today、yesterday、または YYYY-MM-DD 形式で指定してください。";
 
+  /** 指定や設定を照合し、実際に利用する対象を確定する。 */
   public LocalDate resolve(String input) {
     var today = LocalDate.now(clock);
     LocalDate date;

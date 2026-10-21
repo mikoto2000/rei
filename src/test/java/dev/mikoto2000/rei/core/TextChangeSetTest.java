@@ -16,7 +16,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** テキスト変更集合の結果と状態の契約を検証するテスト。 */
 class TextChangeSetTest {
+  /** 不明単一利用権の確保防ぐ別のについて、終了日時利用者状態の照合結果を書き込むことを確認する。 */
   @Test
   void unknownSingleClaimBlocksAnotherWriteUntilHumanReconciliation() throws Exception {
     Files.writeString(root.resolve("a.txt"), "old");
@@ -48,6 +50,7 @@ class TextChangeSetTest {
         "APPLIED", service.apply(project(), next.id(), next.proposalSha256(), writer()).status());
   }
 
+  /** 共通の実行基盤で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void fatalWriterLeavesUnknownAndExactHumanReconciliationNeverReplays() throws Exception {
     Files.writeString(root.resolve("a.txt"), "old");
@@ -94,6 +97,7 @@ class TextChangeSetTest {
     assertEquals("old", Files.readString(root.resolve("a.txt")));
   }
 
+  /** 共通の実行基盤で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void guardedHistoricalReceiptSurvivesOrdinaryTerminalPruning() {
     var repository = repository();
@@ -129,29 +133,39 @@ class TextChangeSetTest {
     assertEquals(old, repository.get(projectId, old.id()));
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う所属プロジェクトの識別子。 */
   final String projectId = UUID.randomUUID().toString();
+
+  /** 検証に使う日時。 */
   final Instant at = Instant.parse("2026-10-05T10:00:00Z");
 
+  /** 検証で使用するプロジェクトを、指定された条件に合わせて用意する。 */
   ProjectContext project() {
     return new ProjectContext(projectId, "rei", root);
   }
 
+  /** 検証で使用する保存と検索の窓口を、指定された条件に合わせて用意する。 */
   TextChangeSetRepository repository() {
     return new TextChangeSetRepository(
         new org.springframework.jdbc.datasource.DriverManagerDataSource(
             "jdbc:sqlite:" + root.resolve("changes.db")));
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   TextChangeSetService service(TextChangeSetRepository repository) {
     return new TextChangeSetService(
         repository, Clock.fixed(at, ZoneOffset.UTC), () -> UUID.randomUUID().toString());
   }
 
+  /** {@code writer} の条件を再現するための補助情報を返す。 */
   TextChangeSetService.Writer writer() {
     return (path, oldText, newText) -> Files.writeString(path, newText);
   }
 
+  /** 共通の実行基盤で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void previewPersistsDiffWithoutWritingAndExplicitApplyUsesSavedProposal() throws Exception {
     var file = root.resolve("diagram.mmd");
@@ -183,6 +197,7 @@ class TextChangeSetTest {
             .status());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void refusesStaleContentAndForeignOwnerBeforeWriter() throws Exception {
     Files.writeString(root.resolve("note.md"), "old\n");
@@ -212,6 +227,7 @@ class TextChangeSetTest {
         () -> service.apply(other, proposal.id(), proposal.proposalSha256(), writer()));
   }
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void failedOrInterruptedApplyIsNotReplayedAfterRestart() throws Exception {
     Files.writeString(root.resolve("note.md"), "old");
@@ -242,6 +258,7 @@ class TextChangeSetTest {
     assertEquals("partial", Files.readString(root.resolve("note.md")));
   }
 
+  /** 共通の実行基盤で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void boundsTextAndRejectsSensitiveOutsideOrBinaryFiles() throws Exception {
     var service = service(repository());
@@ -269,6 +286,7 @@ class TextChangeSetTest {
                 project(), new TextChangeSetService.Request("note.md", "old", "x".repeat(65537))));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void discardAndSavedApplyingStateNeverInvokeWriterAndMissingFileStillAllowsInspection()
       throws Exception {
@@ -305,6 +323,7 @@ class TextChangeSetTest {
     assertEquals("UNKNOWN", restarted.inspect(project(), pending.id()).status());
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void competingServiceCannotClaimProposalDuringWriteAndRootChangesAreRejected() throws Exception {
     Files.writeString(root.resolve("note.md"), "old");
@@ -334,6 +353,7 @@ class TextChangeSetTest {
     assertThrows(IllegalArgumentException.class, () -> second.inspect(relocated, proposal.id()));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void baselineReadPreservesBomCrLfAndMissingFinalNewlineWithoutSavingProposal() throws Exception {
     var text = "\ufefftitle\r\nbody";

@@ -60,20 +60,32 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 自動待機終了要求の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class AutoSleepEndRequestTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使うプロジェクト。 */
   final String project = "00000000-0000-0000-0000-000000000001";
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-10-06T12:00:00Z");
+
+  /** 検証に使う記憶。 */
   final MemoryProperties memory = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60, null);
+
+  /** 検証に使う情報の抽出。 */
   final MemoryCandidateExtractor extractor =
       mock(MemoryCandidateExtractor.class, CALLS_REAL_METHODS);
 
+  /** 検証で使用する保存と検索の窓口を、指定された条件に合わせて用意する。 */
   MemoryRepository repository() {
     var source = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("memory.db"));
     return new MemoryRepository(source, new MemoryService(source, memory));
   }
 
+  /** {@code sleep} の条件を再現するための補助情報を返す。 */
   SleepService sleep() {
     var resolution = mock(MemoryResolutionModel.class, CALLS_REAL_METHODS);
     when(resolution.resolve(any(), anyList()))
@@ -102,6 +114,7 @@ class AutoSleepEndRequestTest {
         memory);
   }
 
+  /** {@code auto} の条件を再現するための補助情報を返す。 */
   AutoSleepService auto(SleepService sleep, boolean shutdown) {
     return auto(
         sleep,
@@ -110,6 +123,7 @@ class AutoSleepEndRequestTest {
         Clock.fixed(now, ZoneOffset.UTC));
   }
 
+  /** {@code auto} の条件を再現するための補助情報を返す。 */
   AutoSleepService auto(
       SleepService sleep, boolean shutdown, DefaultAgentActivityTracker activity, Clock clock) {
     var service =
@@ -133,6 +147,7 @@ class AutoSleepEndRequestTest {
     return service;
   }
 
+  /** {@code turn} の条件を再現するための補助情報を返す。 */
   AgentRunContext turn(String session) {
     var owner = new AgentRunContext("run-" + session, session, dir, project);
     var turns = new ConversationTurnStore(dir.resolve("turns"));
@@ -143,6 +158,7 @@ class AutoSleepEndRequestTest {
     return owner;
   }
 
+  /** 長期記憶の活用で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void shutdownPersistsWithoutModelAndRestartedIdleBypassesCronAndTurnThreshold() throws Exception {
     var owner = turn("ended");
@@ -164,6 +180,7 @@ class AutoSleepEndRequestTest {
     verify(extractor, times(1)).extract(anyList());
   }
 
+  /** 長期記憶の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void revisionsCoalesceAcrossRestartAndCapacityIsAtomicAndOwnerBounded() throws Exception {
     var repository = repository();
@@ -210,6 +227,7 @@ class AutoSleepEndRequestTest {
         IllegalArgumentException.class, () -> repository.requestAutoSleep("s", project, null));
   }
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void actualSessionEndCliQueuesWithoutDispatchAndRetainsResumableHistory() throws Exception {
     var projects = new ProjectService(dir, new ProjectRegistry(dir.resolve("projects.json")));
@@ -245,6 +263,7 @@ class AutoSleepEndRequestTest {
     }
   }
 
+  /** 失敗終了完了時の処理について、現在クライアント選択内容を維持することを確認する。 */
   @Test
   void failedEndCallbackKeepsCurrentClientSelection() {
     var projects = new ProjectService(dir, new ProjectRegistry(dir.resolve("projects.json")));
@@ -263,6 +282,7 @@ class AutoSleepEndRequestTest {
     }
   }
 
+  /** 提供元失敗情報について、要求を保持することを確認する。 */
   @Test
   void providerFailureRetainsRequestAndDoesNotRetryDuringCooldown() throws Exception {
     var owner = turn("failure");
@@ -288,6 +308,7 @@ class AutoSleepEndRequestTest {
     }
   }
 
+  /** 長期記憶の活用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void newActivityCancelsInFlightSleepWithoutLosingDurableRequest() throws Exception {
     var owner = turn("cancelled");
@@ -323,6 +344,7 @@ class AutoSleepEndRequestTest {
     }
   }
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledFlagsAndUnknownProjectsCannotDispatchStoredExitRequests() {
     var owner = turn("off");
@@ -348,6 +370,7 @@ class AutoSleepEndRequestTest {
     verify(extractor, never()).extract(anyList());
   }
 
+  /** 選択中プロジェクトを利用することを確認する。 */
   @Test
   void queueControlsUseSelectedProjectAndExactRevisionWithoutCallingModel() {
     var sleep = sleep();
@@ -379,6 +402,7 @@ class AutoSleepEndRequestTest {
     verify(extractor, never()).extract(anyList());
   }
 
+  /** 長期記憶の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void endFlagsBindExplicitlyAndOldConstructorsRemainDisabled() {
     var source =
@@ -405,6 +429,7 @@ class AutoSleepEndRequestTest {
     assertFalse(legacy.onShutdown());
   }
 
+  /** 長期記憶の活用で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void durableRequestsStillRespectBusyAndMinimumIdleBeforeCallingModel() {
     var owner = turn("busy");

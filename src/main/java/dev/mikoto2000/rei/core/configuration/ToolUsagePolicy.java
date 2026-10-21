@@ -1,9 +1,15 @@
 package dev.mikoto2000.rei.core.configuration;
 
-/** Tool planning instructions shared without inheriting personality, history or authority. */
+/**
+ * ツール使用状況の判断基準をまとめる。
+ *
+ * <p>Tool planning instructions shared without inheriting personality, history or authority.
+ */
 public final class ToolUsagePolicy {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ToolUsagePolicy() {}
 
+  /** 結果をまとめて扱うための識別値。 */
   public static final String BATCHING =
       """
       For multiple independent, already-known targets of the same Multi tool, pass all targets in one array
@@ -11,6 +17,8 @@ public final class ToolUsagePolicy {
       Split only when a later target depends on an earlier result or documented limits require it
       (file count, bytes, lines, tokens, or staged writes). A one-item array remains valid for a single target.
       """;
+
+  /** ファイルREADS。 */
   public static final String FILE_READS =
       """
       Read file contents with readMultiFile, including a single file. Do not use runCommand with
@@ -20,8 +28,11 @@ public final class ToolUsagePolicy {
       Do not switch to shell to bypass paging or output limits. New delivered file ranges count as
       information acquisition, not completed work; repeated pages do not establish progress.
       """;
+
+  /** 指示一覧。 */
   public static final String INSTRUCTIONS = "Common tool usage policy:\n" + BATCHING + FILE_READS;
 
+  /** 既存の記録へ経緯を残すため、終点を追記する。 */
   public static String appendTo(String prompt) {
     String base = prompt == null ? "" : prompt;
     if (base.contains(INSTRUCTIONS)) return base;

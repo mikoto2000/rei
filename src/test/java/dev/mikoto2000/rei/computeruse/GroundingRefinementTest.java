@@ -17,16 +17,20 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** GroundingRefinementの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class GroundingRefinementTest {
+  /** 検証に使う診断情報。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path diagnostics;
 
+  /** {@code point} の条件を再現するための補助情報を返す。 */
   private String point(GroundingProtocol p, boolean edge) {
     return p == GroundingProtocol.SHOWUI
         ? (edge ? "[1,1]" : "[0.5,0.5]")
         : (edge ? "(1000,1000)" : "(500,500)");
   }
 
+  /** {@code click} の条件を再現するための補助情報を返す。 */
   private ComputerAction click(ComputerObservation o) {
     return new ComputerAction.DoubleClick(
         new ComputerAction.Target(
@@ -35,6 +39,7 @@ class GroundingRefinementTest {
         ComputerAction.Risk.LOW);
   }
 
+  /** 画面操作の支援で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @ParameterizedTest
   @EnumSource(GroundingProtocol.class)
   void edgeCropMapsBackAndKeepsSeparateDiagnostics(GroundingProtocol p) throws Exception {
@@ -70,6 +75,7 @@ class GroundingRefinementTest {
     verify(model, times(2)).call(any(Prompt.class));
   }
 
+  /** 画面操作の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @EnumSource(GroundingProtocol.class)
   void refinementFailureNeverDispatchesCoarseCoordinates(GroundingProtocol p) {
@@ -95,6 +101,7 @@ class GroundingRefinementTest {
     verify(model, times(2)).call(any(Prompt.class));
   }
 
+  /** 画面操作の支援の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @ParameterizedTest
   @EnumSource(GroundingProtocol.class)
   void cancellationAfterOverviewPreventsRefinement(GroundingProtocol p) {

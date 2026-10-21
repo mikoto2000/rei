@@ -7,8 +7,10 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
 
+/** 重なっているトークンテキストSplitterの結果と状態の契約を検証するテスト。 */
 class OverlappingTokenTextSplitterTest {
 
+  /** 分割について、重なっている文書の分割一覧を作成することを確認する。 */
   @Test
   void splitCreatesOverlappingChunks() {
     OverlappingTokenTextSplitter splitter = new OverlappingTokenTextSplitter(6, 2);
@@ -26,6 +28,7 @@ class OverlappingTokenTextSplitterTest {
         secondTokens.subList(0, 2));
   }
 
+  /** 検索対象文書の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void overlapGreaterThanOrEqualToChunkSizeIsRejected() {
     try {
@@ -37,6 +40,7 @@ class OverlappingTokenTextSplitterTest {
     throw new AssertionError("expected IllegalArgumentException");
   }
 
+  /** {@code tokens} の条件を再現するための補助情報を返す。 */
   private List<String> tokens(String text) {
     return List.of(text.trim().split("\\s+"));
   }

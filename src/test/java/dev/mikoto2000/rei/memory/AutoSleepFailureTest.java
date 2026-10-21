@@ -52,27 +52,53 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 自動待機失敗情報の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class AutoSleepFailureTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う記憶。 */
   final MemoryProperties memory = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60, null);
+
+  /** 検証に使う設定。 */
   final AutoSleepProperties config =
       new AutoSleepProperties(true, Duration.ofSeconds(1), 1, Duration.ofSeconds(1));
+
+  /** 検証に使うやり取り一覧。 */
   final ConversationTurnStore turns = ConversationTurnStore.inMemory();
+
+  /** 検証に使う呼び出し回数。 */
   final AtomicInteger calls = new AtomicInteger();
+
+  /** 検証に使う待機する。 */
   final List<Duration> waits = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+  /** 検証に使う失敗情報。 */
   final AtomicReference<RuntimeException> failure = new AtomicReference<>();
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final MutableClock clock = new MutableClock();
+
+  /** 検証に使う保存と検索の窓口。 */
   MemoryRepository repository;
+
+  /** 検証に使う待機。 */
   SleepService sleep;
+
+  /** 検証に使う自動。 */
   AutoSleepService auto;
+
+  /** 通知された出来事と順序を検証するための記録。 */
   MemoryEvents events = mock(MemoryEvents.class);
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     repository = repository();
     MemoryCandidateExtractor extractor =
         new MemoryCandidateExtractor() {
+          /** {@code extract} の条件を再現するための補助情報を返す。 */
           public List<dev.mikoto2000.rei.memory.model.MemoryCandidate> extract(
               List<ConversationTurnStore.Turn> batch) {
             assertFalse(
@@ -84,6 +110,7 @@ class AutoSleepFailureTest {
             return List.of();
           }
 
+          /** {@code extract} の条件を再現するための補助情報を返す。 */
           public List<dev.mikoto2000.rei.memory.model.MemoryCandidate> extract(
               List<ConversationTurnStore.Turn> batch,
               dev.mikoto2000.rei.llm.ModelCallBudget budget) {
@@ -98,11 +125,13 @@ class AutoSleepFailureTest {
     add("s");
   }
 
+  /** 検証で使用する保存と検索の窓口を、指定された条件に合わせて用意する。 */
   MemoryRepository repository() {
     var ds = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("memory.db"));
     return new MemoryRepository(ds, new MemoryService(ds, memory));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   AutoSleepService create() {
     var result =
         new AutoSleepService(
@@ -116,6 +145,7 @@ class AutoSleepFailureTest {
     return result;
   }
 
+  /** 検証用に、新たな対象を登録し、後から利用できるようにする。 */
   void add(String session) {
     var owner = new AgentRunContext(UUID.randomUUID().toString(), session, dir, "p");
     turns.start(owner, "fact");
@@ -123,6 +153,7 @@ class AutoSleepFailureTest {
     auto.afterTerminal(owner);
   }
 
+  /** {@code attempt} の条件を再現するため、検証用の操作や状態を扱う。 */
   void attempt() throws Exception {
     clock.advance();
     auto.tick();
@@ -132,18 +163,22 @@ class AutoSleepFailureTest {
     }
   }
 
+  /** 検証に使う改訂番号。 */
   long revision;
 
+  /** 検証用に、依頼された操作を進めるため、試行を実行する。 */
   void runAttempt() throws Exception {
     revision = repository.autoState("s", "p").revision();
     attempt();
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void close() {
     auto.close();
   }
 
+  /** 三つタイムアウト一覧について、永続化を停止することを確認する。 */
   @Test
   void threeTimeoutsStopPersistAndNotifyOnlyOnceAndResumeWithoutModel() throws Exception {
     failure.set(new AutoSleepExecution.Failure("MODEL_TIMEOUT", null));
@@ -193,6 +228,7 @@ class AutoSleepFailureTest {
     assertEquals(2, repository.lastProcessed("s"));
   }
 
+  /** 長期記憶の活用で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void nonTimeoutAndSuccessMaintainThenResetStage() throws Exception {
     failure.set(new AutoSleepExecution.Failure("MODEL_TIMEOUT", null));
@@ -208,6 +244,7 @@ class AutoSleepFailureTest {
     assertEquals(1, repository.lastProcessed("s"));
   }
 
+  /** 長期記憶の活用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationBudgetAndZeroPendingDoNotResetFailures() throws Exception {
     failure.set(new AutoSleepExecution.Failure("MODEL_TIMEOUT", null));
@@ -239,6 +276,7 @@ class AutoSleepFailureTest {
     assertEquals(1, repository.autoState("s", "p").failures());
   }
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void staleRevisionAndOtherProjectCannotOverwrite() {
     var old = repository.autoState("s", "p");
@@ -250,6 +288,7 @@ class AutoSleepFailureTest {
     assertEquals(changed, repository.autoState("s", "p"));
   }
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void stoppedSessionDoesNotBlockAnother() throws Exception {
     var state = repository.autoState("s", "p");
@@ -264,6 +303,7 @@ class AutoSleepFailureTest {
     assertEquals(1, repository.lastProcessed("other"));
   }
 
+  /** 長期記憶の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void elapsedLimitClampsWaitAndHasSeparateCode() {
     var ticks = new AtomicLong();
@@ -279,6 +319,7 @@ class AutoSleepFailureTest {
         assertThrows(AutoSleepExecution.Failure.class, execution::remaining).code);
   }
 
+  /** 状態について、失敗情報決して行わない開始するモデルを読み取ることを確認する。 */
   @Test
   void stateReadFailureNeverStartsModelAndSuccessWriteFailureDoesNotReapply() throws Exception {
     auto.close();
@@ -333,6 +374,7 @@ class AutoSleepFailureTest {
     assertEquals(2, repository.lastProcessed("s"));
   }
 
+  /** 長期記憶の活用で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void newInputDuringExtendedExecutionLeavesCheckpointAndCountersUnchanged() throws Exception {
     auto.close();
@@ -373,6 +415,7 @@ class AutoSleepFailureTest {
     assertEquals(1, repository.autoState("s", "p").stage());
   }
 
+  /** 長期記憶の活用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void overallWatchdogInterruptsNonStreamWorkWithoutAdvancingProgress() {
     var controlled =
@@ -406,6 +449,7 @@ class AutoSleepFailureTest {
     assertEquals("FAILED", repository.history("p", 10).getFirst().status());
   }
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledResumeResetsStateButNeverRunsModel() {
     var state = repository.autoState("s", "p");
@@ -426,6 +470,7 @@ class AutoSleepFailureTest {
     assertEquals(0, calls.get());
   }
 
+  /** 長期記憶の活用で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void persistenceFailureRollsBackCheckpointAndCountsWithoutAdvancingStage() throws Exception {
     auto.close();
@@ -453,6 +498,7 @@ class AutoSleepFailureTest {
     assertEquals(0, repository.lastProcessed("s"));
   }
 
+  /** 長期記憶の活用で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void overallFailureCountsWithoutIncreasingTimeoutStage() throws Exception {
     failure.set(new AutoSleepExecution.Failure("AUTO_SLEEP_DEADLINE_EXCEEDED", null));
@@ -461,6 +507,7 @@ class AutoSleepFailureTest {
     assertEquals(0, repository.autoState("s", "p").stage());
   }
 
+  /** 長期記憶の活用で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void outputValidationIsCountedAndUnclassifiedIllegalStateIsNotTimeout() throws Exception {
     failure.set(new dev.mikoto2000.rei.subagent.SubAgentValidationException(List.of()));
@@ -472,21 +519,27 @@ class AutoSleepFailureTest {
     assertEquals(0, repository.autoState("s", "p").stage());
   }
 
+  /** 検証条件を再現するための変更可能な時刻の取得元。 */
   static class MutableClock extends Clock {
+    /** 日時や期限の条件を再現するために使う検証時刻。 */
     Instant now = Instant.parse("2026-10-12T00:00:00Z");
 
+    /** {@code advance} の条件を再現するため、検証用の操作や状態を扱う。 */
     void advance() {
       now = now.plusSeconds(10);
     }
 
+    /** {@code instant} の条件を再現するための補助情報を返す。 */
     public Instant instant() {
       return now;
     }
 
+    /** 検証用に、長期記憶の活用で参照するタイムゾーンを返す。 */
     public ZoneId getZone() {
       return ZoneOffset.UTC;
     }
 
+    /** 検証用に、指定されたタイムゾーンを反映した情報を作成する。 */
     public Clock withZone(ZoneId zone) {
       return this;
     }

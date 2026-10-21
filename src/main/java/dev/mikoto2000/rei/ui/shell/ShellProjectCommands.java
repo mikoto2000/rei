@@ -5,10 +5,16 @@ import dev.mikoto2000.rei.core.project.ProjectClient;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import picocli.CommandLine;
 
-/** Shell-only binding and restoration, including commands dispatched to a worker thread. */
+/**
+ * ターミナルでの対話に必要なシェルプロジェクトコマンド一覧を扱う。
+ *
+ * <p>Shell-only binding and restoration, including commands dispatched to a worker thread.
+ */
 public final class ShellProjectCommands {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ShellProjectCommands() {}
 
+  /** ターミナルでの対話に関する設定を処理する。 */
   public static void configure(
       CommandLine command,
       ProjectService projects,
@@ -35,6 +41,7 @@ public final class ShellProjectCommands {
         });
   }
 
+  /** ターミナルでの対話に関するinstall使用中受付後の処理を処理する。 */
   public static void installBusyHandler(CommandLine command) {
     command.setExecutionExceptionHandler(
         (error, line, parsed) -> {

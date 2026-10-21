@@ -13,6 +13,7 @@ public record SearchCacheKey(String tool, String normalizedArguments) {
     return tool + "|" + normalizedArguments;
   }
 
+  /** 指定された値と同じ内容かどうかを判定する。 */
   @Override
   public boolean equals(Object other) {
     if (this == other) {
@@ -24,6 +25,7 @@ public record SearchCacheKey(String tool, String normalizedArguments) {
     return tool.equals(that.tool) && normalizedArguments.equals(that.normalizedArguments);
   }
 
+  /** 同じ内容を同じ対象として扱うためのハッシュ値を返す。 */
   @Override
   public int hashCode() {
     return canonical().hashCode();

@@ -6,18 +6,24 @@ import dev.mikoto2000.rei.llm.LlmModelProvider;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 
+/** 言語モデル画像プロンプトの内容を補強する。 */
 @Component
 public class LlmImagePromptEnhancer implements ImagePromptEnhancer {
 
+  /** モデル提供元。 */
   private final LlmModelProvider modelProvider;
+
+  /** モデル保持先サービス。 */
   private final ModelHolderService modelHolderService;
 
+  /** 指定された値や利用先を使って、LlmImagePromptEnhancerを初期化する。 */
   public LlmImagePromptEnhancer(
       LlmModelProvider modelProvider, ModelHolderService modelHolderService) {
     this.modelProvider = modelProvider;
     this.modelHolderService = modelHolderService;
   }
 
+  /** 画像の生成で用いるenhanceを返す。 */
   @Override
   public String enhance(String userRequest) {
     Prompt prompt =
@@ -37,6 +43,7 @@ public class LlmImagePromptEnhancer implements ImagePromptEnhancer {
     return content.strip();
   }
 
+  /** 利用先に渡せるよう、プロンプトを組み立てる。 */
   private String buildPrompt(String userRequest) {
     return """
         You are an expert prompt writer for image generation models.

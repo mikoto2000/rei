@@ -18,28 +18,39 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 状態表示要求保存と検索の窓口の結果と状態の契約を検証するテスト。 */
 class DotRequestRepositoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証条件を再現するための時刻。 */
   static class Time extends Clock {
+    /** 日時や期限の条件を再現するために使う検証時刻。 */
     Instant now = Instant.parse("2026-10-12T00:00:00Z");
 
+    /** 検証用に、利用者の状態表示で参照するタイムゾーンを返す。 */
     public ZoneId getZone() {
       return ZoneOffset.UTC;
     }
 
+    /** 検証用に、指定されたタイムゾーンを反映した情報を作成する。 */
     public Clock withZone(ZoneId z) {
       return this;
     }
 
+    /** {@code instant} の条件を再現するための補助情報を返す。 */
     public Instant instant() {
       return now;
     }
   }
 
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   Time clock = new Time();
+
+  /** 検証に使うリポジトリ。 */
   DotRequestRepository repo;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void start() throws Exception {
     try (var gate = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(root)) {
@@ -48,6 +59,7 @@ class DotRequestRepositoryTest {
     repo = new DotRequestRepository(root, clock);
   }
 
+  /** {@code publication} の条件を再現するための補助情報を返す。 */
   Map<String, Object> publication() {
     return Map.of(
         "category",
@@ -64,12 +76,14 @@ class DotRequestRepositoryTest {
         List.of("Official evidence"));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   String create() {
     return (String)
         repo.create("project", "session", null, root.toString(), publication(), Duration.ofHours(1))
             .get("request_id");
   }
 
+  /** 利用者の状態表示で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void roundTripIsDurableAndReceiptIsNotVerification() {
     String id = create();
@@ -92,6 +106,7 @@ class DotRequestRepositoryTest {
         () -> restarted.submit("project", id, "claim", "submission", result, "different"));
   }
 
+  /** 利用者の状態表示で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void claimIsIdempotentExclusiveAndProjectScoped() {
     String id = create();
@@ -102,6 +117,7 @@ class DotRequestRepositoryTest {
     assertEquals(List.of(), repo.list(Set.of("other"), "PENDING", null, 5));
   }
 
+  /** 利用者の状態表示で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void leaseExpiryIsUnknownAndDoesNotRequeue() {
     String id = create();
@@ -114,6 +130,7 @@ class DotRequestRepositoryTest {
         () -> repo.submit("project", id, "claim", "s", Map.of("summary", "late"), "f"));
   }
 
+  /** 利用者の状態表示の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledAndExpiredRequestsRejectResults() {
     String cancelled = create();
@@ -128,6 +145,7 @@ class DotRequestRepositoryTest {
     assertThrows(RuntimeException.class, () -> repo.claim("project", expired, "c"));
   }
 
+  /** 利用者の状態表示で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void capacityAndStablePagination() {
     for (int i = 0; i < 10; i++) create();

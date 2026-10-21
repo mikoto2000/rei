@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+/** Slack受付の結果と状態の契約を検証するテスト。 */
 class SlackAdmissionTest {
+  /** 検証で使用する設定を、指定された条件に合わせて用意する。 */
   private SlackProperties settings() {
     var p = new SlackProperties();
     p.setAllowedWorkspaceIds(Set.of("T"));
@@ -16,6 +18,7 @@ class SlackAdmissionTest {
     return p;
   }
 
+  /** {@code message} の条件を再現するための補助情報を返す。 */
   private SlackMessage message(
       String type,
       String channel,
@@ -38,6 +41,7 @@ class SlackAdmissionTest {
         text);
   }
 
+  /** Slackとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void dmAndMentionStartButUnrelatedThreadDoesNot() {
     var p = settings();
@@ -55,6 +59,7 @@ class SlackAdmissionTest {
             p, "B", message("message", "C", "1", "U", null, null, "hello"), true));
   }
 
+  /** Slackとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failClosedAndIgnoreBotsEditsAndDeletes() {
     var p = settings();
@@ -75,6 +80,7 @@ class SlackAdmissionTest {
             false));
   }
 
+  /** Slackとの連携で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void messageIdentityIsSharedAcrossEventTypes() {
     assertEquals(
@@ -82,6 +88,7 @@ class SlackAdmissionTest {
         message("app_mention", "C", null, "U", null, null, "hi").key());
   }
 
+  /** Slackとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void explicitMentionCanInviteBotToAnExistingThreadButUnmentionedMessagesCannot() {
     assertTrue(
@@ -95,6 +102,7 @@ class SlackAdmissionTest {
             settings(), "B", message("message", "C", "parent", "U", null, null, "help"), false));
   }
 
+  /** Slackとの連携で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void rootThreadTimestampAndUnsupportedGroupDmAreDistinguished() {
     assertTrue(

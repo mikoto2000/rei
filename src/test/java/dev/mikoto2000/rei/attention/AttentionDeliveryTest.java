@@ -35,8 +35,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 注意配信の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class AttentionDeliveryTest {
+  /** 起動時について、活動中利用権を保持することを確認する。 */
   @Test
   void startupPreservesActiveLeaseAndLostLeaseBecomesUnknown() {
     start(properties(true, false), true);
@@ -55,6 +57,7 @@ class AttentionDeliveryTest {
     assertEquals(0, calls.get());
   }
 
+  /** 注意の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void oldAttemptCannotOverwriteExplicitlyRetriedClaim() {
     start(properties(true, false), true);
@@ -72,21 +75,45 @@ class AttentionDeliveryTest {
     assertEquals("SENT", outbox.find("project", item.id()).orElseThrow().status());
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   Clock clock = Clock.fixed(Instant.EPOCH, ZoneOffset.UTC);
+
+  /** 検証に使うinbox。 */
   AttentionRepository inbox;
+
+  /** 検証に使うoutbox。 */
   AttentionDeliveryRepository outbox;
+
+  /** 検証に使う通知の連携先。 */
   InMemoryAgentEventBus bus;
+
+  /** 検証に使う注意。 */
   AttentionService attention;
+
+  /** 検証に使う配信。 */
   AttentionDeliveryService delivery;
+
+  /** 検証に使うsender。 */
   JdkAttentionSender sender;
+
+  /** 検証に使うサーバー。 */
   HttpServer server;
+
+  /** 検証に使う呼び出し回数。 */
   AtomicInteger calls = new AtomicInteger();
+
+  /** 検証に使う応答。 */
   AtomicInteger response = new AtomicInteger(204);
+
+  /** 検証に使う本文、権限の確認、照合キー。 */
   AtomicReference<String> body = new AtomicReference<>(),
       authorization = new AtomicReference<>(),
       key = new AtomicReference<>();
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     var source = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("inbox.db"));
@@ -113,6 +140,7 @@ class AttentionDeliveryTest {
     sender = new JdkAttentionSender();
   }
 
+  /** {@code properties} の条件を再現するための補助情報を返す。 */
   AttentionDeliveryProperties properties(boolean enabled, boolean automatic) {
     return new AttentionDeliveryProperties(
         enabled,
@@ -122,6 +150,7 @@ class AttentionDeliveryTest {
         Set.of("project"));
   }
 
+  /** 検証で使用する判断基準を、指定された条件に合わせて用意する。 */
   ToolPermissionPolicy policy(boolean grant) {
     return new ToolPermissionPolicy(
         new ToolPermissionProperties(
@@ -133,11 +162,13 @@ class AttentionDeliveryTest {
             null));
   }
 
+  /** 検証用に、要求された処理を開始する。 */
   void start(AttentionDeliveryProperties props, boolean grant) {
     delivery = new AttentionDeliveryService(props, inbox, outbox, bus, policy(grant), sender);
     delivery.start();
   }
 
+  /** {@code fact} の条件を再現するための補助情報を返す。 */
   AttentionRepository.Item fact(String run) {
     bus.publish(
         new AgentEventFactory(clock)
@@ -153,6 +184,7 @@ class AttentionDeliveryTest {
     return inbox.get("project", id);
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void close() {
     if (delivery != null) delivery.close();
@@ -161,6 +193,7 @@ class AttentionDeliveryTest {
     server.stop(0);
   }
 
+  /** 注意の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void newOwnedFactQueuesThenDeliversOnlyMetadataOnce() {
     start(properties(true, true), true);
@@ -182,6 +215,7 @@ class AttentionDeliveryTest {
     assertThrows(IllegalArgumentException.class, () -> delivery.retry("project", item.id(), true));
   }
 
+  /** 注意の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void githubNoticeUsesTheExistingGatedDeliveryQueueWithoutExportingPayload() {
     start(properties(true, true), true);
@@ -236,6 +270,7 @@ class AttentionDeliveryTest {
     assertFalse(body.get().contains("review notice"));
   }
 
+  /** 注意の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledAutomaticAndPolicyGatesNeverSendAndDoNotBackfill() {
     var old = fact("old");
@@ -254,6 +289,7 @@ class AttentionDeliveryTest {
     assertEquals(0, calls.get());
   }
 
+  /** 注意の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void httpFailureNeverRetriesWithoutExplicitRiskAcknowledgement() {
     response.set(500);
@@ -273,6 +309,7 @@ class AttentionDeliveryTest {
     assertEquals("OPEN", inbox.get("project", item.id()).status());
   }
 
+  /** 再開について、待機中を保持することを確認する。 */
   @Test
   void restartRetainsPendingButNeverReplaysAnUncertainAttempt() {
     start(properties(true, true), true);
@@ -290,6 +327,7 @@ class AttentionDeliveryTest {
     assertEquals("SENT", delivery.status("project", pending.id()).status());
   }
 
+  /** 注意の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void acknowledgementAndDestinationChangeSuppressUnsentNotifications() {
     start(properties(true, true), true);
@@ -312,6 +350,7 @@ class AttentionDeliveryTest {
     assertEquals(0, calls.get());
   }
 
+  /** 注意の管理で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void configurationRejectsAmbiguousDestinationsAndHidesCredentials() {
     assertThrows(
@@ -338,6 +377,7 @@ class AttentionDeliveryTest {
         policy(true).capabilities("deliverAttention"));
   }
 
+  /** 注意の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void forgedEventsForeignProjectsAndDeniedPolicyCannotExportInboxFacts() {
     start(properties(true, true), true);
@@ -384,6 +424,7 @@ class AttentionDeliveryTest {
     assertEquals(0, calls.get());
   }
 
+  /** 注意の管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void queueCapacityAndConcurrentClaimsAreAtomicAndRequestsAreIdempotent() throws Exception {
     start(properties(true, false), true);
@@ -440,6 +481,7 @@ class AttentionDeliveryTest {
     assertEquals(1, wins.get());
   }
 
+  /** 注意の管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void interruptionRecordsUnknownAndRestoresInterruptWithoutAutomaticRetry() {
     var failing = org.mockito.Mockito.mock(JdkAttentionSender.class);
@@ -470,6 +512,7 @@ class AttentionDeliveryTest {
     assertThrows(IllegalArgumentException.class, () -> delivery.retry("project", item.id(), false));
   }
 
+  /** リスク確認記録を必要とすることを確認する。 */
   @Test
   void shellControlsQueueExplicitlyAndRequireRiskAcknowledgement() {
     start(properties(true, false), true);
@@ -494,6 +537,7 @@ class AttentionDeliveryTest {
     assertEquals("PENDING", delivery.status("project", item.id()).status());
   }
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
   @org.springframework.web.servlet.config.annotation.EnableWebMvc
   @org.springframework.context.annotation.Import({
@@ -502,12 +546,14 @@ class AttentionDeliveryTest {
     dev.mikoto2000.rei.web.ApiExceptionHandler.class
   })
   static class WebConfig {
+    /** {@code apiKeyProperties} の条件を再現するための補助情報を返す。 */
     @org.springframework.context.annotation.Bean
     dev.mikoto2000.rei.web.ApiKeyProperties apiKeyProperties() {
       return new dev.mikoto2000.rei.web.ApiKeyProperties("secret");
     }
   }
 
+  /** 注意の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void httpControlsAuthenticateProjectOwnershipAndOnlyQueueTheExplicitRequest() {
     start(properties(true, false), true);
@@ -566,6 +612,7 @@ class AttentionDeliveryTest {
             });
   }
 
+  /** 注意の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void explicitBindingAndBlankDefaultRemainDisabled() {
     var source =
@@ -612,6 +659,7 @@ class AttentionDeliveryTest {
     assertTrue(defaults.projects().isEmpty());
   }
 
+  /** 注意の管理で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void redirectIsNotFollowedAndRealTimeoutLeavesAnUnknownAttempt() throws Exception {
     server.createContext(

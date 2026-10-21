@@ -6,8 +6,13 @@ import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-/** Only a complete, successful single-turn JSONL stream is sufficient usage evidence. */
+/**
+ * 外部エージェントへの委譲に必要なCodexトークン使用状況を扱う。
+ *
+ * <p>Only a complete, successful single-turn JSONL stream is sufficient usage evidence.
+ */
 final class CodexTokenUsage {
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final ObjectMapper JSON =
       new ObjectMapper(
               JsonFactory.builder()
@@ -21,6 +26,7 @@ final class CodexTokenUsage {
                   .build())
           .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
+  /** 外部エージェントへの委譲で用いる合計を返す。 */
   static Integer total(ExternalAgentProcessRunner.Output output) {
     if (output.status() != ExternalAgentResult.Status.SUCCESS
         || output.truncated()

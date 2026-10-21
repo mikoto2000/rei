@@ -15,13 +15,29 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Pure evaluation of fine-session evidence. Summary projections and external context are not
+ * 作業習慣の結果を基準に照らして評価する。
+ *
+ * <p>Pure evaluation of fine-session evidence. Summary projections and external context are not
  * inputs.
  */
 public final class BehaviorEvaluator {
+  /** 設定。 */
   private final BehaviorProperties config;
+
+  /** 役割一覧。 */
   private final ActivityRolePolicy roles;
 
+  /**
+   * 作業習慣の支援で受け渡すサンプルを表す。
+   *
+   * @param start 開始
+   * @param end 終了
+   * @param category 分類
+   * @param service サービス
+   * @param confidence 確信度
+   * @param continuity 継続性
+   * @param disposition 扱い
+   */
   private record Sample(
       Instant start,
       Instant end,
@@ -30,21 +46,25 @@ public final class BehaviorEvaluator {
       double confidence,
       String continuity,
       EntertainmentDisposition disposition) {
+    /** 作業習慣の支援で用いる秒数を返す。 */
     long seconds() {
       return Duration.between(start, end).getSeconds();
     }
 
+    /** 作業習慣の支援において、対象の条件に該当するか判定する。 */
     boolean eligible() {
       return !Set.of("unknown", "other", "idle").contains(category);
     }
   }
 
+  /** 指定された値や利用先を使って、BehaviorEvaluatorを初期化する。 */
   public BehaviorEvaluator(BehaviorProperties config, double minimumConfidence) {
     config.validate();
     this.config = config;
     roles = new ActivityRolePolicy(minimumConfidence);
   }
 
+  /** 対象を判断基準に照らして評価する。 */
   public BehaviorAssessment evaluate(
       List<ActivitySession> sessions, List<ActivityRecord> records, Instant now) {
     var samples = samples(sessions, records, now);
@@ -163,6 +183,7 @@ public final class BehaviorEvaluator {
         qualified);
   }
 
+  /** 作業習慣の支援で用いるサンプル一覧を返す。 */
   private List<Sample> samples(
       List<ActivitySession> sessions, List<ActivityRecord> records, Instant now) {
     var membership = new HashMap<String, List<ActivitySession>>();
@@ -211,6 +232,7 @@ public final class BehaviorEvaluator {
     return result;
   }
 
+  /** 作業習慣の支援において、娯楽に該当するか判定する。 */
   private boolean entertainment(Sample s) {
     return s.eligible()
         && (s.disposition() == null
@@ -218,6 +240,7 @@ public final class BehaviorEvaluator {
             : s.disposition() == EntertainmentDisposition.ENTERTAINMENT);
   }
 
+  /** 作業習慣の支援で用いる継続重大度を返す。 */
   private BehaviorSeverity continuousSeverity(long seconds) {
     var c = config.getContinuous();
     return seconds >= c.getStrongWarningMinutes() * 60L
@@ -229,6 +252,7 @@ public final class BehaviorEvaluator {
                 : BehaviorSeverity.NONE;
   }
 
+  /** 作業習慣の支援で用いる範囲を返す。 */
   private BehaviorAssessment.Window window(
       List<Sample> samples,
       Instant now,
@@ -258,6 +282,7 @@ public final class BehaviorEvaluator {
         observed);
   }
 
+  /** 作業習慣の支援で用いる順位を返す。 */
   private static List<String> rank(Map<String, Long> weights) {
     return weights.entrySet().stream()
         .filter(e -> e.getValue() > 0)
@@ -268,14 +293,17 @@ public final class BehaviorEvaluator {
         .toList();
   }
 
+  /** 作業習慣の支援で用いるoverlapを返す。 */
   private static long overlap(Sample s, Instant start, Instant end) {
     return Math.max(0, Duration.between(max(s.start(), start), min(s.end(), end)).getSeconds());
   }
 
+  /** 作業習慣の支援で用いる最小を返す。 */
   private static Instant min(Instant a, Instant b) {
     return a.isBefore(b) ? a : b;
   }
 
+  /** 作業習慣の支援で用いる最大を返す。 */
   private static Instant max(Instant a, Instant b) {
     return a.isAfter(b) ? a : b;
   }

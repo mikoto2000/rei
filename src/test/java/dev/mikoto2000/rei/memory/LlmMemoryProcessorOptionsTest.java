@@ -27,7 +27,9 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.function.FunctionToolCallback;
 import reactor.core.publisher.Flux;
 
+/** 言語モデル記憶Processor選択可能な設定の結果と状態の契約を検証するテスト。 */
 class LlmMemoryProcessorOptionsTest {
+  /** 要求について、設定済み選択可能な設定を保持することを確認する。 */
   @Test
   void requestRetainsConfiguredOptionsAndDisablesToolsWithoutMutatingTheSource() {
     var provider = mock(LlmModelProvider.class);
@@ -70,6 +72,7 @@ class LlmMemoryProcessorOptionsTest {
     assertEquals("required", configured.getToolChoice());
   }
 
+  /** 長期記憶の活用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rawToolDefinitionsAreRejectedBeforeSendingThePrompt() {
     var provider = mock(LlmModelProvider.class);
@@ -86,6 +89,7 @@ class LlmMemoryProcessorOptionsTest {
     verify(model, never()).stream(any(Prompt.class));
   }
 
+  /** {@code processor} の条件を再現するための補助情報を返す。 */
   private LlmMemoryProcessor processor(LlmModelProvider provider) {
     return new LlmMemoryProcessor(
         provider, new MemoryProperties(true, 20, 80, 10, 3, 2000, 60, null));

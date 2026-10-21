@@ -55,10 +55,13 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import reactor.core.publisher.Flux;
 
+/** 承認チャット外部連携の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ApprovalChatIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 会話の実行で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void realChatReleasesItsWorkerThenContinuesInTheSameRunWithoutFailedNotificationOrNewArguments() {
     var clock = Clock.systemUTC();
@@ -118,6 +121,7 @@ class ApprovalChatIntegrationTest {
     String arguments = "{\"request\":{\"command\":\"npm run textlint\",\"timeoutSeconds\":30}}";
     var tool =
         new ToolCallback() {
+          /** 検証用に、会話の実行で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("runCommand")
@@ -126,6 +130,7 @@ class ApprovalChatIntegrationTest {
                 .build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             assertEquals(arguments, input);
             effects.incrementAndGet();
@@ -134,14 +139,17 @@ class ApprovalChatIntegrationTest {
         };
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public org.springframework.ai.model.tool.ToolCallingChatOptions getOptions() {
             return org.springframework.ai.model.tool.ToolCallingChatOptions.builder().build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new AssertionError();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             if (calls.incrementAndGet() == 1)
               return Flux.just(

@@ -15,17 +15,22 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Component;
 
 /**
- * Supplemental system message after history assembly; never written to history or rolling
+ * 長期記憶の保存と検索に必要な記憶文脈対話の補助を扱う。
+ *
+ * <p>Supplemental system message after history assembly; never written to history or rolling
  * summaries.
  */
 @Component
 public class MemoryContextAdvisor implements BaseAdvisor {
+  /** 関連する記憶を検索する窓口。 */
   private final MemoryRetriever retriever;
 
+  /** 指定された値や利用先を使って、MemoryContextAdvisorを初期化する。 */
   public MemoryContextAdvisor(MemoryRetriever retriever) {
     this.retriever = retriever;
   }
 
+  /** 長期記憶の保存と検索の本処理へ渡す文脈を準備する。 */
   @Override
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     var owner = request.context().get(AgentRunContext.class.getName());
@@ -56,11 +61,13 @@ public class MemoryContextAdvisor implements BaseAdvisor {
     }
   }
 
+  /** 長期記憶の保存と検索の実行結果を受け取り、後続の処理へ反映する。 */
   @Override
   public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
     return response;
   }
 
+  /** 他の補助処理と組み合わせる際の適用順序を返す。 */
   @Override
   public int getOrder() {
     return -110;

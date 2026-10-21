@@ -12,27 +12,39 @@ import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
 
 /**
- * Demand reload of one alias/group snapshot. Invalid edits retain the entire last good
+ * プロジェクト別名の記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>Demand reload of one alias/group snapshot. Invalid edits retain the entire last good
  * configuration.
  */
 public final class ProjectAliasStore implements java.util.function.Supplier<ProjectNameNormalizer> {
+  /** ファイル。 */
   private final Path file;
+
+  /** 現在。 */
   private SummaryThemeConfiguration current =
       new SummaryThemeConfiguration(
           new ProjectNameNormalizer(Map.of()), SummaryThemeGroups.empty());
+
+  /** 前回。 */
   private String previous;
+
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(ProjectAliasStore.class);
 
+  /** 指定された値や利用先を使って、ProjectAliasStoreを初期化する。 */
   public ProjectAliasStore(Path file) {
     this.file = file;
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   @Override
   public ProjectNameNormalizer get() {
     return snapshot().projects();
   }
 
+  /** 現在の状態を、後から参照できる記録として取り出す。 */
   public synchronized SummaryThemeConfiguration snapshot() {
     try {
       if (Files.exists(file) && Files.size(file) > 65536)

@@ -2,6 +2,17 @@ package dev.mikoto2000.rei.websearch;
 
 import java.util.List;
 
+/**
+ * Web上の情報の調査で受け渡すWeb検索文脈を表す。
+ *
+ * @param primaryResults 主要な結果一覧
+ * @param secondaryResults 補助的な結果一覧
+ * @param orderedResults ordered結果一覧
+ * @param assessment 評価
+ * @param omissions 省略した内容
+ * @param searchQueries 検索検索条件一覧
+ * @param pageAttempts ページ試行回数
+ */
 public record WebSearchContext(
     List<WebSearchPage> primaryResults,
     List<WebSearchPage> secondaryResults,
@@ -11,6 +22,7 @@ public record WebSearchContext(
     int searchQueries,
     int pageAttempts) {
 
+  /** Web上の情報の調査を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WebSearchContext(
       List<WebSearchPage> primary, List<WebSearchPage> secondary, List<WebSearchPage> ordered) {
     this(
@@ -23,6 +35,7 @@ public record WebSearchContext(
         0);
   }
 
+  /** 受け取った情報からWebSearchContextを作成する。 */
   public WebSearchContext {
     primaryResults = List.copyOf(primaryResults);
     secondaryResults = List.copyOf(secondaryResults);
@@ -30,6 +43,7 @@ public record WebSearchContext(
     omissions = List.copyOf(omissions);
   }
 
+  /** Web上の情報の調査を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WebSearchContext(
       List<WebSearchPage> primaryResults, List<WebSearchPage> secondaryResults) {
     this(
@@ -39,10 +53,12 @@ public record WebSearchContext(
             .toList());
   }
 
+  /** Web上の情報の調査で用いる主要な限定を返す。 */
   public static WebSearchContext primaryOnly(List<WebSearchPage> primaryResults) {
     return new WebSearchContext(primaryResults, List.of());
   }
 
+  /** Web上の情報の調査で用いる全対象結果一覧を返す。 */
   public List<WebSearchPage> allResults() {
     return orderedResults;
   }

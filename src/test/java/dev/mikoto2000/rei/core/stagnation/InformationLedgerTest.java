@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
+/** 情報記録台帳の結果と状態の契約を検証するテスト。 */
 class InformationLedgerTest {
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void overlapAndAdjacentRangesMergeWithoutCountingOldLines() {
     var ledger = new InformationLedger();
@@ -20,6 +22,7 @@ class InformationLedgerTest {
         .isEqualTo(InformationLedger.Status.DUPLICATE);
   }
 
+  /** 許容件数について、重複一覧を維持することを確認する。 */
   @Test
   void capacityKeepsDuplicatesAndReportsUnknownWithoutEviction() {
     var ledger = new InformationLedger();
@@ -29,6 +32,7 @@ class InformationLedgerTest {
     assertThat(ledger.observe("key0")).isEqualTo(InformationLedger.Status.DUPLICATE);
   }
 
+  /** 実行の停滞への対処で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void restoreKeepsVersionedRangesAndLegacyMissingStateIsUnknown() {
     var first = new InformationLedger();
@@ -45,6 +49,7 @@ class InformationLedgerTest {
         .isEqualTo(InformationLedger.Status.UNKNOWN);
   }
 
+  /** 実行の停滞への対処で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void failedRestoreDoesNotErasePreviouslyKnownInformation() {
     var ledger = new InformationLedger();
@@ -57,6 +62,7 @@ class InformationLedgerTest {
         .isEqualTo(InformationLedger.Status.DUPLICATE);
   }
 
+  /** 並行について、統合を読み取ることを確認する。 */
   @Test
   void concurrentReadsMergeWithoutLosingObservedRanges() throws Exception {
     var ledger = new InformationLedger();

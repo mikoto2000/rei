@@ -47,22 +47,49 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+/** チャットGPT補助エージェント秘密情報の除去の結果と状態の契約を検証するテスト。 */
 class ChatGptSubAgentRedactionTest {
+  /** 検証に使う最初秘密情報。 */
   static final String FIRST_SECRET = "ORIGINAL_CREDENTIAL_VALUE";
+
+  /** 検証に使う秒秘密情報。 */
   static final String SECOND_SECRET = "CHANGED_CREDENTIAL_VALUE";
+
+  /** 検証に使う元の。 */
   static final String ORIGINAL = "Public example\nspring.datasource.password=" + FIRST_SECRET;
+
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う保存や受け渡しに用いるデータ形式の変換。 */
   final com.fasterxml.jackson.databind.ObjectMapper json =
       new com.fasterxml.jackson.databind.ObjectMapper();
+
+  /** 検証に使うクライアント。 */
   PlanClient client;
+
+  /** 検証に使う権限一覧。 */
   ToolPermissionGuard permissions;
+
+  /** 検証に使う実行一覧。 */
   RunRegistry runs;
+
+  /** 検証に使う登録台帳。 */
   SubAgentRegistry registry;
+
+  /** 通知された出来事と順序を検証するための記録。 */
   List<AgentEvent> events;
+
+  /** 検証に使う所有者。 */
   AgentRunContext owner;
+
+  /** 検証に使う予算。 */
   LlmCallReservation budget;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   Clock clock = Clock.systemUTC();
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     Files.writeString(root.resolve("source.md"), ORIGINAL);
@@ -93,6 +120,7 @@ class ChatGptSubAgentRedactionTest {
     when(budget.tryReserve()).thenReturn(true);
   }
 
+  /** {@code backend} の条件を再現するための補助情報を返す。 */
   ChatGptSubAgentBackend backend(ToolPermissionGuard guard) {
     return new ChatGptSubAgentBackend(
         client,
@@ -106,6 +134,7 @@ class ChatGptSubAgentRedactionTest {
         runs);
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   ChatGptSubAgentBackend.Request request() {
     return new ChatGptSubAgentBackend.Request(
         "design-review",
@@ -117,11 +146,13 @@ class ChatGptSubAgentRedactionTest {
         "{\"decision\":\"accept\"}");
   }
 
+  /** {@code hash} の条件を再現するための補助情報を返す。 */
   String hash(String value) {
     return dev.mikoto2000.rei.externalagent.ImplementationProposal.sha256(
         value.getBytes(StandardCharsets.UTF_8));
   }
 
+  /** {@code answer} の条件を再現するための補助情報を返す。 */
   com.fasterxml.jackson.databind.node.ObjectNode answer(String task) throws Exception {
     var input = json.readTree(task);
     var wrapper =
@@ -142,6 +173,7 @@ class ChatGptSubAgentRedactionTest {
     return wrapper;
   }
 
+  /** {@code successfulInference} の条件を再現するため、検証用の操作や状態を扱う。 */
   void successfulInference(List<String> tasks) {
     doAnswer(
             call -> {
@@ -164,6 +196,7 @@ class ChatGptSubAgentRedactionTest {
             any());
   }
 
+  /** 複数の検証で共通する期待結果を確認し、要件に合わない状態を検出する。 */
   void assertNoRawCredentials(ChatGptSubAgentBackend.Receipt receipt) {
     assertThat(receipt.toString()).doesNotContain(FIRST_SECRET, SECOND_SECRET);
     assertThat(events.toString()).doesNotContain(FIRST_SECRET, SECOND_SECRET);
@@ -176,6 +209,7 @@ class ChatGptSubAgentRedactionTest {
         .doesNotContain(FIRST_SECRET, SECOND_SECRET);
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void dispatchedSnapshotAndReferencesUseMaskedContentAndHashWhileOriginalFileStaysIntact()
       throws Exception {
@@ -213,6 +247,7 @@ class ChatGptSubAgentRedactionTest {
     assertNoRawCredentials(receipt);
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void ordinarySourceContentKeepsItsExactBytesAndReportsNoRedaction() throws Exception {
     String content = "Public configuration explanation\nserver.port=8080\n";
@@ -229,6 +264,7 @@ class ChatGptSubAgentRedactionTest {
     assertNoRawCredentials(receipt);
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"raw-hash", "raw-quote"})
   void referencesCannotClaimOriginalHashesOrQuoteValuesAbsentFromTheMaskedSnapshot(String altered) {
@@ -264,6 +300,7 @@ class ChatGptSubAgentRedactionTest {
     assertNoRawCredentials(receipt);
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void repairAndRefinementKeepEveryHistoryEntryAndQuoteWithinTheMaskedSnapshot() throws Exception {
     var history = new ArrayList<List<PlanClient.Input>>();
@@ -318,6 +355,7 @@ class ChatGptSubAgentRedactionTest {
     assertNoRawCredentials(receipt);
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   @Tag("integration")
   void actualApprovalBindsTheMaskedContentAndRedactionMetadataBeforeAnyInference()
@@ -338,6 +376,7 @@ class ChatGptSubAgentRedactionTest {
     var backend = backend(guard);
     var pending = backend.run(request(), owner, false, budget);
     assertThat(pending.error()).isEqualTo(ChatGptException.Code.CONSENT_REQUIRED);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(client);
     var first = approvals.list("project").getFirst();
     assertThat(first.status()).isEqualTo("PENDING");

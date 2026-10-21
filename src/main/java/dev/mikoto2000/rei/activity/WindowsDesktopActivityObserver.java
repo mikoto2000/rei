@@ -13,28 +13,38 @@ import java.util.Base64;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Read-only foreground/visible Win32 metadata probes; pixels use the existing multi-display Robot
- * adapter.
+ * Windowsデスクトップ作業状況の状況を観測し、記録や判断に必要な情報を提供する。
+ *
+ * <p>Read-only foreground/visible Win32 metadata probes; pixels use the existing multi-display
+ * Robot adapter.
  */
 public final class WindowsDesktopActivityObserver implements DesktopActivityObserver {
+  /** 作業状況の把握で用いるlightweightを返す。 */
   @Override
   public Lightweight lightweight() {
     return WindowsInputProbe.read();
   }
 
+  /** この機能の動作設定。 */
   private final ActivityProperties properties;
+
+  /** 直近付随情報。 */
   private volatile Metadata lastMetadata;
 
+  /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WindowsDesktopActivityObserver() {
     this(null);
   }
 
+  /** 指定された値や利用先を使って、WindowsDesktopActivityObserverを初期化する。 */
   public WindowsDesktopActivityObserver(ActivityProperties properties) {
     this.properties = properties;
   }
 
+  /** 取得記録。 */
   private final ScreenCapture capture = new RobotScreenCapture(new AwtRobotDriver());
 
+  /** 後から状況を確認できるよう、Windowsデスクトップ作業状況観測を記録する。 */
   @Override
   public CapturedScreen capture() throws Exception {
     var metadata = lastMetadata;
@@ -46,7 +56,9 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
     return identified ? identify(screen, metadata.monitors()) : screen;
   }
 
+  /** 作業状況の把握で用いるidentifyを返す。 */
   static CapturedScreen identify(CapturedScreen screen, java.util.List<MonitorIdentity> monitors) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (monitors == null || monitors.isEmpty() || monitors.size() > 16)
       throw new IllegalStateException("Desktop identity unavailable");
     var mapped = new java.util.ArrayList<DisplayCapture>();
@@ -83,6 +95,7 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
     return new CapturedScreen(mapped);
   }
 
+  /** 作業状況の把握で用いる付随情報を返す。 */
   @Override
   public Metadata metadata() throws Exception {
     var node = probe("metadata.ps1", 1048576);
@@ -93,6 +106,7 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
     return result;
   }
 
+  /** 作業状況の把握で用いる前面を返す。 */
   @Override
   public ForegroundWindow foreground() throws Exception {
     var node = probe("foreground.ps1", 32768);
@@ -105,6 +119,7 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
         .treeToValue(node, ForegroundWindow.class);
   }
 
+  /** 作業状況の把握で用いる利用可否の確認を返す。 */
   private com.fasterxml.jackson.databind.JsonNode probe(String resource, long maxBytes)
       throws Exception {
     if (!System.getProperty("os.name", "").startsWith("Windows")) return null;
@@ -141,6 +156,7 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
       var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
       return mapper.readTree(Files.readString(output, StandardCharsets.UTF_8).strip());
     } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw e;
     } finally {

@@ -24,17 +24,36 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
-/** One bounded idle batch at a time; persistent Sleep cursors remain the source of truth. */
+/**
+ * 自動待機のユースケースを実現する。
+ *
+ * <p>One bounded idle batch at a time; persistent Sleep cursors remain the source of truth.
+ */
 @Component
 @EnableConfigurationProperties(AutoSleepProperties.class)
 public class AutoSleepService implements AutoCloseable {
+  /** 待機。 */
   private final SleepService sleep;
+
+  /** 記憶。 */
   private final MemoryProperties memory;
+
+  /** この機能の動作設定。 */
   private final AutoSleepProperties properties;
+
+  /** 作業状況。 */
   private final AgentActivityTracker activity;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 会話一覧。 */
   private final Map<String, String> sessions = new LinkedHashMap<>();
+
+  /** 試行回数。 */
   private final Map<String, Instant> attempts = new HashMap<>();
+
+  /** 実行の担当。 */
   private final ExecutorService worker =
       Executors.newSingleThreadExecutor(
           r -> {
@@ -42,30 +61,62 @@ public class AutoSleepService implements AutoCloseable {
             thread.setDaemon(true);
             return thread;
           });
+
+  /** 実行中スレッド。 */
   private volatile Thread runningThread;
+
+  /** 実行中会話。 */
   private volatile String runningSession;
 
+  /**
+   * 長期記憶の保存と検索で受け渡す待機中を表す。
+   *
+   * @param state 状態
+   * @param code コード
+   * @param description 説明
+   * @param timestamp 記録日時
+   */
   private record Pending(
       MemoryRepository.AutoState state, String code, String description, String timestamp) {}
 
+  /** 待機中Updates。 */
   private final Map<String, Pending> pendingUpdates = new ConcurrentHashMap<>();
+
+  /** イベント一覧。 */
   private MemoryEvents events;
 
+  /** 長期記憶の保存と検索で使用するイベント一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setEvents(MemoryEvents events) {
     this.events = events;
   }
 
+  /** 実行中の状態。 */
   private final java.util.concurrent.atomic.AtomicBoolean executing =
       new java.util.concurrent.atomic.AtomicBoolean();
+
+  /** 保存済み会話一覧。 */
   private dev.mikoto2000.rei.application.session.SessionRepository savedSessions;
+
+  /** プロジェクト一覧。 */
   private dev.mikoto2000.rei.core.project.ProjectService projects;
+
+  /** 起動時。 */
   private Iterator<dev.mikoto2000.rei.application.session.SessionMetadata> startup;
+
+  /** 起動時取得済み。 */
   private boolean startupCaptured;
+
+  /** 次付随情報調査。 */
   private Instant nextMetadataScan;
+
+  /** 付随情報続きの取得位置。 */
   private dev.mikoto2000.rei.application.session.CursorKey metadataCursor;
+
+  /** 付随情報Scanning。 */
   private boolean metadataScanning;
 
+  /** 長期記憶の保存と検索で使用する起動時取得元一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public synchronized void setStartupSources(
       dev.mikoto2000.rei.application.session.SessionRepository savedSessions,
@@ -74,7 +125,11 @@ public class AutoSleepService implements AutoCloseable {
     this.projects = projects;
   }
 
-  /** Metadata only: no history reads or model calls until the usual idle gates pass. */
+  /**
+   * 長期記憶の保存と検索に関する利用先の検出起動時を処理する。
+   *
+   * <p>Metadata only: no history reads or model calls until the usual idle gates pass.
+   */
   private void discoverStartup() {
     if (savedSessions == null || projects == null) return;
     if (!startupCaptured) {
@@ -89,6 +144,7 @@ public class AutoSleepService implements AutoCloseable {
     if (!startup.hasNext()) startup = Collections.emptyIterator();
   }
 
+  /** 後から対象を参照できるよう、付随情報を登録する。 */
   private void registerMetadata(
       dev.mikoto2000.rei.application.session.SessionMetadata item,
       List<dev.mikoto2000.rei.core.project.ProjectContext> registered) {
@@ -105,7 +161,9 @@ public class AutoSleepService implements AutoCloseable {
   }
 
   /**
-   * Periodic persistent reads catch metadata added after startup, without an unbounded candidate
+   * 長期記憶の保存と検索に関する利用先の検出保存済みを処理する。
+   *
+   * <p>Periodic persistent reads catch metadata added after startup, without an unbounded candidate
    * queue.
    */
   private void discoverSaved(Instant now) {
@@ -148,11 +206,19 @@ public class AutoSleepService implements AutoCloseable {
     }
   }
 
+  /** 定期実行条件。 */
   private final org.springframework.scheduling.support.CronExpression cron;
+
+  /** 次定期実行条件。 */
   private Instant nextCron;
+
+  /** 実行中形式のバージョン。 */
   private long runningVersion;
+
+  /** 終了済み。 */
   private volatile boolean closed;
 
+  /** 指定された値や利用先を使って、AutoSleepServiceを初期化する。 */
   public AutoSleepService(
       SleepService sleep,
       MemoryProperties memory,
@@ -174,7 +240,11 @@ public class AutoSleepService implements AutoCloseable {
     if (cron != null) advanceCron(clock.instant());
   }
 
-  /** Called only after durable terminal turn metadata. Never invokes the LLM on the user thread. */
+  /**
+   * 実行結果を後続の処理へ渡すため、終端を反映する。
+   *
+   * <p>Called only after durable terminal turn metadata. Never invokes the LLM on the user thread.
+   */
   public synchronized void afterTerminal(AgentRunContext owner) {
     if (closed || !properties.enabled() || !memory.enabled() || owner.projectId() == null) return;
     sessions.put(owner.conversationId(), owner.projectId());
@@ -185,7 +255,11 @@ public class AutoSleepService implements AutoCloseable {
     }
   }
 
-  /** Explicit end never starts a model or destroys resumable conversation history. */
+  /**
+   * 実行結果を後続の処理へ渡すため、会話終了を反映する。
+   *
+   * <p>Explicit end never starts a model or destroys resumable conversation history.
+   */
   public synchronized void afterSessionEnd(
       dev.mikoto2000.rei.application.session.SessionMetadata session) {
     if (closed || !properties.enabled() || !properties.onSessionEnd() || !memory.enabled()) return;
@@ -198,6 +272,7 @@ public class AutoSleepService implements AutoCloseable {
     }
   }
 
+  /** 長期記憶の保存と検索で用いる利用先の検出終了要求一覧を返す。 */
   private Map<String, MemoryRepository.AutoSleepRequest> discoverEndRequests() {
     if (projects == null || (!properties.onSessionEnd() && !properties.onShutdown()))
       return Map.of();
@@ -228,6 +303,7 @@ public class AutoSleepService implements AutoCloseable {
     return requested;
   }
 
+  /** 長期記憶の保存と検索に関する定期確認を処理する。 */
   @Scheduled(fixedDelayString = "${rei.memory.auto-sleep.check-interval:5s}")
   public synchronized void tick() {
     if (closed) return;
@@ -400,6 +476,7 @@ public class AutoSleepService implements AutoCloseable {
     }
   }
 
+  /** 状態の変化を利用先へ伝えるため、停止済みを通知する。 */
   private void notifyStopped(MemoryRepository.AutoState before, MemoryRepository.AutoState after) {
     if (before.stoppedAt() == null && after.stoppedAt() != null && events != null)
       events.publish(
@@ -420,11 +497,13 @@ public class AutoSleepService implements AutoCloseable {
               + "\n未整理の会話は保持しています。\n再開: /sleep auto resume");
   }
 
+  /** 長期記憶の保存と検索に関するwarn状態を処理する。 */
   private void warnState(String session, RuntimeException error) {
     org.slf4j.LoggerFactory.getLogger(getClass())
         .warn("Auto Sleep state unavailable session={} ({})", session, error.getClass().getName());
   }
 
+  /** 長期記憶の保存と検索で用いるタイムアウトを返す。 */
   public Duration timeout(int stage) {
     long multiplier =
         Math.min(properties.maxTimeoutMultiplier(), 1L << Math.min(30, Math.max(0, stage)));
@@ -433,6 +512,7 @@ public class AutoSleepService implements AutoCloseable {
     return value.compareTo(properties.maxTimeout()) > 0 ? properties.maxTimeout() : value;
   }
 
+  /** 得られた情報を分類し、後続の判断で扱い分けられるようにする。 */
   static String classify(Throwable error) {
     for (Throwable cause = error; cause != null; cause = cause.getCause()) {
       if (cause instanceof AutoSleepExecution.Failure failure) return failure.code;
@@ -445,6 +525,7 @@ public class AutoSleepService implements AutoCloseable {
     return error instanceof IllegalArgumentException ? "OUTPUT_INVALID" : "UNKNOWN";
   }
 
+  /** 長期記憶の保存と検索で用いる説明を返す。 */
   private String description(String code, int stage) {
     return switch (code) {
       case "MODEL_TIMEOUT" -> "モデル応答の完了待ちが" + timeout(stage).toSeconds() + "秒でタイムアウト";
@@ -456,10 +537,12 @@ public class AutoSleepService implements AutoCloseable {
     };
   }
 
+  /** 長期記憶の保存と検索において、Executingかどうかを判定する。 */
   public boolean isExecuting(String session) {
     return session != null && session.equals(runningSession);
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   public synchronized String status(String session, String project) {
     var state = sleep.autoState(session, project);
     return "Auto Sleep: "
@@ -490,6 +573,7 @@ public class AutoSleepService implements AutoCloseable {
         + "秒";
   }
 
+  /** 保存された状況を引き継いで、中断した作業を再開する。 */
   public synchronized String resume(String session, String project) {
     if (session.equals(runningSession) || SleepService.isRunning(session))
       throw new IllegalStateException("当該SessionのSleep実行中は再開できません");
@@ -503,11 +587,13 @@ public class AutoSleepService implements AutoCloseable {
             : "次回は既存のアイドル・量・予算・試行間隔に従います。");
   }
 
+  /** 長期記憶の保存と検索に関するadvance定期実行条件を処理する。 */
   private void advanceCron(Instant after) {
     var next = cron.next(after.atZone(ZoneId.of(properties.zone())));
     nextCron = next == null ? null : next.toInstant();
   }
 
+  /** 長期記憶の保存と検索で利用した資源や登録を解放し、利用を終了する。 */
   @jakarta.annotation.PreDestroy
   @Override
   public void close() {
@@ -539,6 +625,7 @@ public class AutoSleepService implements AutoCloseable {
       if (!worker.awaitTermination(2, TimeUnit.SECONDS)) worker.shutdownNow();
     } catch (InterruptedException error) {
       worker.shutdownNow();
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
     }
   }

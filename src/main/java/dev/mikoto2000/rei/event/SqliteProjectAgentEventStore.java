@@ -15,8 +15,13 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-/** Indexed individual events; project counters survive later logical deletion. */
+/**
+ * SQLiteプロジェクトエージェントイベントの記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>Indexed individual events; project counters survive later logical deletion.
+ */
 public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
+  /** 対象を特定できるよう、イベントを探す。 */
   @Override
   public Optional<AgentEvent> findEvent(String project, String id) {
     return database.read(
@@ -35,20 +40,30 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
         });
   }
 
+  /** 最大記録バイト数。 */
   public static final int MAX_RECORD_BYTES = 1024 * 1024;
+
+  /** 読み取り予算。 */
   private static final long READ_BUDGET = 16L * 1024 * 1024;
+
+  /** データベース。 */
   private final StorageDatabase database;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = EventJsonCodec.mapper();
 
+  /** 指定された値や利用先を使って、SqliteProjectAgentEventStoreを初期化する。 */
   public SqliteProjectAgentEventStore(Path root) {
     super(root);
     database = new StorageDatabase(root);
   }
 
+  /** 実行状況の通知で用いる対象範囲を返す。 */
   public static String scope(String project) {
     return UUID.fromString(project).toString();
   }
 
+  /** 既存の記録へ経緯を残すため、SQLiteプロジェクトエージェントイベント保存先を追記する。 */
   @Override
   public AgentEvent append(AgentEvent event) {
     String project = scope(event.projectId());
@@ -90,6 +105,7 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
         });
   }
 
+  /** 実行状況の通知に関する登録を処理する。 */
   public static void put(
       Connection db, AgentEvent event, String record, boolean replayable, Long start, Long end)
       throws Exception {
@@ -133,6 +149,7 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
     StorageObjectRegistry.registerEvent(db, event, record);
   }
 
+  /** 実行状況の通知で用いる直近発生順序を返す。 */
   @Override
   public long lastSequence(String project) {
     return database.read(
@@ -147,6 +164,7 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
         });
   }
 
+  /** 実行状況の通知で用いる直近を返す。 */
   @Override
   public List<AgentEvent> recent(String project, int limit) {
     checkLimit(limit);
@@ -159,6 +177,7 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
         });
   }
 
+  /** 必要な内容を参照できるよう、変更後を読み取る。 */
   @Override
   public List<AgentEvent> readAfter(String project, long after, int limit) {
     checkLimit(limit);
@@ -166,6 +185,7 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
     return database.read(db -> read(db, project, after, limit, false, false).events());
   }
 
+  /** 必要な内容を参照できるよう、ページを読み取る。 */
   @Override
   public Page readPage(String project, long after, boolean discard) {
     if (after < 0 || discard)
@@ -174,6 +194,7 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
     return database.read(db -> read(db, project, after, 128, false, true));
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private Page read(
       Connection db, String project, long after, int limit, boolean reverse, boolean replay)
       throws Exception {
@@ -208,8 +229,10 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
     return new Page(List.copyOf(result), next, false);
   }
 
+  /** 実行状況の通知で用いる参照先状態を返す。 */
   @Override
   public Map<String, String> referenceStatus(String project, Set<String> ids) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (ids.size() > 10000) throw new IllegalArgumentException("Reference lookup exceeds budget");
     return database.read(
         db -> {
@@ -228,6 +251,7 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
         });
   }
 
+  /** 後続の操作を進められるか判断するため、上限を確認する。 */
   private static void checkLimit(int limit) {
     if (limit < 1 || limit > 1000)
       throw new IllegalArgumentException("Event limit must be 1..1000");

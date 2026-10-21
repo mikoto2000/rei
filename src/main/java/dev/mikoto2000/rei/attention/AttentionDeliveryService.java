@@ -21,9 +21,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+/** 注意配信のユースケースを実現する。 */
 @Component
 @EnableConfigurationProperties(AttentionDeliveryProperties.class)
 public class AttentionDeliveryService {
+  /** 種類一覧。 */
   private static final Set<String> KINDS =
       Set.of(
           "APPROVAL_REQUIRED",
@@ -39,14 +41,30 @@ public class AttentionDeliveryService {
           "GITHUB_REVIEW_SUBMITTED",
           "GITHUB_CI_FAILED",
           "GITHUB_PR_MERGED");
+
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger LOG =
       org.slf4j.LoggerFactory.getLogger(AttentionDeliveryService.class);
+
+  /** この機能の動作設定。 */
   private final AttentionDeliveryProperties properties;
+
+  /** 受信した案内や確認待ち情報の保存先。 */
   private final AttentionRepository inbox;
+
+  /** 配信する通知の記録先。 */
   private final AttentionDeliveryRepository outbox;
+
+  /** 通知の連携先。 */
   private final AgentEventBus bus;
+
+  /** 判断基準。 */
   private final ToolPermissionPolicy policy;
+
+  /** 通知の送信先。 */
   private final JdkAttentionSender sender;
+
+  /** 実行の担当。 */
   private final ExecutorService worker =
       Executors.newSingleThreadExecutor(
           r -> {
@@ -54,16 +72,26 @@ public class AttentionDeliveryService {
             t.setDaemon(true);
             return t;
           });
+
+  /** 使用中。 */
   private final AtomicBoolean busy = new AtomicBoolean();
+
+  /** 終了済み。 */
   private volatile boolean closed;
+
+  /** 購読。 */
   private AgentEventBus.Subscription subscription;
+
+  /** Slackとの連携に用いる窓口。 */
   private SlackNotificationProvider slack;
 
+  /** 注意の管理で使用するSlackを設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setSlack(SlackNotificationProvider slack) {
     this.slack = slack;
   }
 
+  /** 指定された値や利用先を使って、AttentionDeliveryServiceを初期化する。 */
   public AttentionDeliveryService(
       AttentionDeliveryProperties properties,
       AttentionRepository inbox,
@@ -79,6 +107,7 @@ public class AttentionDeliveryService {
     this.sender = sender;
   }
 
+  /** 要求された処理を開始する。 */
   @PostConstruct
   public synchronized void start() {
     if (subscription != null || closed) return;
@@ -86,6 +115,7 @@ public class AttentionDeliveryService {
     subscription = bus.subscribe(this::observe);
   }
 
+  /** 状況を判断する根拠を得るため、注意配信サービスを観測する。 */
   private void observe(AgentEvent event) {
     if (closed
         || !properties.enabled()
@@ -104,6 +134,7 @@ public class AttentionDeliveryService {
     }
   }
 
+  /** 注意の管理で用いる対象の条件を返す。 */
   private AttentionRepository.Item eligible(String project, String id) {
     if (!properties.enabled() || !properties.projects().contains(project))
       throw new IllegalArgumentException("Attention delivery is disabled for this project");
@@ -114,6 +145,7 @@ public class AttentionDeliveryService {
     return item;
   }
 
+  /** 注意の管理で用いる提供元を返す。 */
   private NotificationProvider provider() {
     if ("WEBHOOK".equals(properties.provider()))
       return new WebhookNotificationProvider(properties, sender);
@@ -122,10 +154,12 @@ public class AttentionDeliveryService {
     return slack;
   }
 
+  /** 注意の管理で用いる配信先を返す。 */
   private String destination() {
     return provider().destination();
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   public AttentionDeliveryRepository.Delivery status(String project, String id) {
     var item = inbox.get(project, id);
     return outbox
@@ -143,19 +177,23 @@ public class AttentionDeliveryService {
                     item.createdAt()));
   }
 
+  /** 注意の管理で用いる要求を返す。 */
   public AttentionDeliveryRepository.Delivery request(String project, String id) {
     if (closed) throw new IllegalArgumentException("Delivery is closed");
     return outbox.enqueue(eligible(project, id), destination(), "MANUAL", provider().name());
   }
 
+  /** 注意の管理で用いる再試行を返す。 */
   public AttentionDeliveryRepository.Delivery retry(String project, String id, boolean risk) {
     if (closed) throw new IllegalArgumentException("Delivery is closed");
     eligible(project, id);
     return outbox.retry(project, id, destination(), risk, provider().name());
   }
 
+  /** 注意の管理に関する定期確認を処理する。 */
   @Scheduled(fixedDelay = 5000)
   public void tick() {
+    // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
     if (closed || !properties.enabled() || !busy.compareAndSet(false, true)) return;
     try {
       worker.execute(
@@ -174,7 +212,9 @@ public class AttentionDeliveryService {
   }
 
   /**
-   * Also used by deterministic fixtures; all actual sends pass through the same persisted claim.
+   * 注意の管理に関する実行先への引き渡し単一を処理する。
+   *
+   * <p>Also used by deterministic fixtures; all actual sends pass through the same persisted claim.
    */
   public synchronized void dispatchOne() {
     if (closed || !properties.enabled()) return;
@@ -254,6 +294,7 @@ public class AttentionDeliveryService {
     }
   }
 
+  /** 注意の管理で利用した資源や登録を解放し、利用を終了する。 */
   @PreDestroy
   public void close() {
     synchronized (this) {
@@ -268,6 +309,7 @@ public class AttentionDeliveryService {
     try {
       worker.awaitTermination(2, TimeUnit.SECONDS);
     } catch (InterruptedException error) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
     }
   }

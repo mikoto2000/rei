@@ -19,10 +19,38 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Bodies remain in files; metadata and references are committed before publishing a pointer. */
+/**
+ * 保存対象データを登録して管理し、識別子から対象を参照できるようにする。
+ *
+ * <p>Bodies remain in files; metadata and references are committed before publishing a pointer.
+ */
 public final class StorageObjectRegistry {
+  /**
+   * データ保存の共通処理で受け渡す参照先を表す。
+   *
+   * @param kind 種類
+   * @param owner 所有者
+   */
   public record Reference(String kind, String owner) {}
 
+  /**
+   * データ保存の共通処理で受け渡す保存済み対象データを表す。
+   *
+   * @param id 識別子
+   * @param kind 種類
+   * @param scope 対象範囲
+   * @param conversationKey 会話キー
+   * @param runId 実行の識別子
+   * @param relativePath 作業ルートからの相対パス
+   * @param size 大きさ
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   * @param created 作成
+   * @param originVerified 起点確認済み
+   * @param status 状態
+   * @param pinned 固定した対象
+   * @param legalHold 法的な理由による保持の指定
+   * @param revision 改訂番号
+   */
   public record StoredObject(
       String id,
       String kind,
@@ -39,24 +67,33 @@ public final class StorageObjectRegistry {
       boolean legalHold,
       long revision) {}
 
+  /** 作業ルート。 */
   final Path root;
+
+  /** データベース。 */
   final StorageDatabase database;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   final Clock clock;
 
+  /** データ保存の共通処理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public StorageObjectRegistry(Path root) {
     this(root, Clock.systemUTC());
   }
 
+  /** 指定された値や利用先を使って、StorageObjectRegistryを初期化する。 */
   public StorageObjectRegistry(Path root, Clock clock) {
     this.root = root.toAbsolutePath().normalize();
     this.database = new StorageDatabase(root);
     this.clock = clock;
   }
 
+  /** データ保存の共通処理で用いる作業ルートを返す。 */
   public Path root() {
     return root;
   }
 
+  /** 後から対象を参照できるよう、イベントを登録する。 */
   public static void registerEvent(
       Connection db, dev.mikoto2000.rei.event.AgentEvent event, String record) throws Exception {
     String scope = dev.mikoto2000.rei.event.SqliteProjectAgentEventStore.scope(event.projectId());
@@ -78,12 +115,14 @@ public final class StorageObjectRegistry {
     }
   }
 
+  /** データ保存の共通処理で用いるserializedを返す。 */
   public <T> T serialized(java.util.function.Supplier<T> action) {
     synchronized (database.writer) {
       return action.get();
     }
   }
 
+  /** 要求された条件を満たすか判断するため、本文パスを確認する。 */
   public void verifyBodyPath(Path path) {
     Path normalized = path.toAbsolutePath().normalize();
     if (!normalized.startsWith(root))
@@ -95,6 +134,7 @@ public final class StorageObjectRegistry {
     }
   }
 
+  /** 要求された条件を満たすか判断するため、元の読み取り可能なを確認する。 */
   public void verifyRawReadable(String conversation, String ref) {
     verifyBodyPath(rawPath(conversation, ref));
     rawObject(conversation, ref)
@@ -105,15 +145,18 @@ public final class StorageObjectRegistry {
             });
   }
 
+  /** データ保存の共通処理で用いる対象範囲を返す。 */
   static String scope(String conversation) {
     String project = ProjectStorage.projectId(conversation);
     return project == null ? "" : UUID.fromString(project).toString();
   }
 
+  /** 対象を照合・参照するためのキーを返す。 */
   static String key(String conversation) {
     return UUID.nameUUIDFromBytes(conversation.getBytes(StandardCharsets.UTF_8)).toString();
   }
 
+  /** データ保存の共通処理で用いる元のパスを返す。 */
   Path rawPath(String conversation, String ref) {
     UUID.fromString(ref);
     String project = ProjectStorage.projectId(conversation);
@@ -123,6 +166,7 @@ public final class StorageObjectRegistry {
         .resolve(ref + ".json");
   }
 
+  /** データ保存の共通処理で用いる識別子を返す。 */
   static String id(Path root, Path file) throws Exception {
     String path = root.relativize(file.toAbsolutePath().normalize()).toString().replace('\\', '/');
     if (System.getProperty("os.name").startsWith("Windows")) path = path.toLowerCase(Locale.ROOT);
@@ -131,6 +175,7 @@ public final class StorageObjectRegistry {
             MessageDigest.getInstance("SHA-256").digest(path.getBytes(StandardCharsets.UTF_8)));
   }
 
+  /** データ保存の共通処理で用いる登録を返す。 */
   static StoredObject put(
       Connection db,
       Path root,
@@ -178,6 +223,7 @@ public final class StorageObjectRegistry {
     return find(db, objectId).orElseThrow();
   }
 
+  /** 後から対象を参照できるよう、Producedファイルを登録する。 */
   public StoredObject registerProducedFile(
       Path file,
       String kind,
@@ -212,6 +258,7 @@ public final class StorageObjectRegistry {
                 references));
   }
 
+  /** データ保存の共通処理で用いる元の保存済みバイト数を返す。 */
   public long rawStoredBytes() {
     return database.read(
         db -> {
@@ -225,6 +272,7 @@ public final class StorageObjectRegistry {
         });
   }
 
+  /** データ保存の共通処理で用いる元の本文パスを返す。 */
   private Path rawBodyPath(String conversation, String hash) {
     if (hash == null || !hash.matches("[a-f0-9]{64}"))
       throw new IllegalArgumentException("Invalid raw body hash");
@@ -235,6 +283,7 @@ public final class StorageObjectRegistry {
         .resolve(hash + ".json");
   }
 
+  /** 要求された条件を満たすか判断するため、元の本文読み取り可能なを確認する。 */
   public void verifyRawBodyReadable(String conversation, String hash) {
     var path = rawBodyPath(conversation, hash);
     verifyBodyPath(path);
@@ -247,6 +296,7 @@ public final class StorageObjectRegistry {
         });
   }
 
+  /** 後から対象を参照できるよう、元の付き本文を登録する。 */
   public StoredObject registerRawWithBody(
       String conversation,
       String run,
@@ -286,6 +336,7 @@ public final class StorageObjectRegistry {
         });
   }
 
+  /** 後から対象を参照できるよう、元のを登録する。 */
   public StoredObject registerRaw(
       String conversation, String run, String ref, boolean createdByProducer) {
     return database.transaction(
@@ -305,6 +356,7 @@ public final class StorageObjectRegistry {
         });
   }
 
+  /** データ保存の共通処理に関する保護再開用の記録を処理する。 */
   public void protectCheckpoint(dev.mikoto2000.rei.checkpoint.PersistentCheckpoint state) {
     database.transaction(
         db -> {
@@ -314,7 +366,9 @@ public final class StorageObjectRegistry {
   }
 
   /**
-   * Called only after checkpoint history deletion commits; retained revision references stay
+   * 後続の処理が利用できるよう、再開用の記録履歴を解放する。
+   *
+   * <p>Called only after checkpoint history deletion commits; retained revision references stay
    * intact.
    */
   public void releaseCheckpointHistory(List<String> owners) {
@@ -338,6 +392,7 @@ public final class StorageObjectRegistry {
         });
   }
 
+  /** データ保存の共通処理に関する保護再開用の記録を処理する。 */
   static void protectCheckpoint(
       Connection db, Path root, dev.mikoto2000.rei.checkpoint.PersistentCheckpoint state)
       throws Exception {
@@ -386,14 +441,17 @@ public final class StorageObjectRegistry {
     }
   }
 
+  /** データ保存の共通処理で用いる元の対象データを返す。 */
   public Optional<StoredObject> rawObject(String conversation, String ref) {
     return database.read(db -> find(db, id(root, rawPath(conversation, ref))));
   }
 
+  /** データ保存の共通処理で用いる参照先一覧を返す。 */
   public List<Reference> references(String id) {
     return database.read(db -> references(db, id));
   }
 
+  /** データ保存の共通処理で用いる参照先一覧を返す。 */
   static List<Reference> references(Connection db, String id) throws SQLException {
     var result = new ArrayList<Reference>();
     try (var query =
@@ -412,6 +470,7 @@ public final class StorageObjectRegistry {
     return List.copyOf(result);
   }
 
+  /** 新たな対象を管理できるよう、参照先を追加する。 */
   public void addReference(String id, String kind, String owner) {
     database.transaction(
         db -> {
@@ -420,6 +479,7 @@ public final class StorageObjectRegistry {
         });
   }
 
+  /** 新たな対象を管理できるよう、参照先を追加する。 */
   static void addReference(Connection db, String id, String kind, String owner)
       throws SQLException {
     if (kind == null
@@ -444,14 +504,17 @@ public final class StorageObjectRegistry {
     }
   }
 
+  /** データ保存の共通処理に関するpinを処理する。 */
   public void pin(String id, boolean value) {
     flag(id, "pinned", value);
   }
 
+  /** データ保存の共通処理に関する法的な理由による保持の指定を処理する。 */
   public void legalHold(String id, boolean value) {
     flag(id, "legal_hold", value);
   }
 
+  /** データ保存の共通処理に関する判定状態を処理する。 */
   private void flag(String id, String column, boolean value) {
     database.transaction(
         db -> {
@@ -466,6 +529,7 @@ public final class StorageObjectRegistry {
         });
   }
 
+  /** データ保存の共通処理で用いる保護理由を返す。 */
   public Optional<String> protectionReason(StoredObject object) {
     return database.read(
         db -> {
@@ -476,12 +540,14 @@ public final class StorageObjectRegistry {
         });
   }
 
+  /** データ保存の共通処理で用いる保護理由を返す。 */
   Optional<String> protectionReason(Connection db, StoredObject object) throws Exception {
     if (!object.originVerified()) return Optional.of("unverified-origin");
     if (!object.status().equals("AVAILABLE")) return Optional.of("unavailable");
     return protectionWithoutStatus(db, object);
   }
 
+  /** データ保存の共通処理で用いる保護なし状態を返す。 */
   Optional<String> protectionWithoutStatus(Connection db, StoredObject object) throws Exception {
     if (!object.originVerified()) return Optional.of("unverified-origin");
     if (object.pinned()) return Optional.of("pinned");
@@ -526,6 +592,7 @@ public final class StorageObjectRegistry {
     return Optional.empty();
   }
 
+  /** データ保存の共通処理において、変更なしに該当するか判定する。 */
   boolean unchanged(StoredObject object) throws Exception {
     if (object.kind().equals("EVENT"))
       return database.read(
@@ -557,6 +624,7 @@ public final class StorageObjectRegistry {
         && StorageBackup.hash(file).equals(object.sha256());
   }
 
+  /** 対象を特定できるよう、保存対象データ登録台帳を探す。 */
   static Optional<StoredObject> find(Connection db, String id) throws SQLException {
     try (var query = db.prepareStatement("SELECT * FROM stored_objects WHERE id=?")) {
       query.setString(1, id);
@@ -566,6 +634,7 @@ public final class StorageObjectRegistry {
     }
   }
 
+  /** データ保存の共通処理で用いる行を返す。 */
   static StoredObject row(ResultSet rows) throws SQLException {
     String created = rows.getString("created");
     return new StoredObject(

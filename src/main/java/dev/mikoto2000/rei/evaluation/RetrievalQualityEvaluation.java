@@ -13,15 +13,32 @@ import java.util.Objects;
 import java.util.function.LongSupplier;
 
 /**
- * Labelled, provider-independent offline evaluation; does not install or invoke a model by itself.
+ * 成果の評価に必要な関連情報の取得品質評価を扱う。
+ *
+ * <p>Labelled, provider-independent offline evaluation; does not install or invoke a model by
+ * itself.
  */
 public final class RetrievalQualityEvaluation {
+  /** 成果の評価における動作モードの選択肢。 */
   public enum Mode {
+    /** 語句による。 */
     LEXICAL,
+    /** ベクトルによる。 */
     DENSE,
+    /** 複数の検索順位を統合する方式。 */
     RRF
   }
 
+  /**
+   * 成果の評価で受け渡す事例を表す。
+   *
+   * @param id 識別子
+   * @param query 検索条件
+   * @param relevance 関連度
+   * @param hardNegatives 厳しい条件一致しない事例
+   * @param expectedTopK 期待する内容上位件数
+   * @param topK 上位件数
+   */
   public record Case(
       String id,
       String query,
@@ -29,6 +46,7 @@ public final class RetrievalQualityEvaluation {
       List<String> hardNegatives,
       List<String> expectedTopK,
       int topK) {
+    /** 受け取った情報からCaseを作成する。 */
     public Case {
       relevance = Map.copyOf(relevance);
       hardNegatives = List.copyOf(hardNegatives);
@@ -59,29 +77,71 @@ public final class RetrievalQualityEvaluation {
     }
   }
 
+  /**
+   * 成果の評価で受け渡す計測値を表す。
+   *
+   * @param recall 検出率
+   * @param precision 精度
+   * @param mrr 平均逆順位
+   * @param ndcg 検索順位の評価値
+   * @param expectedTopKMatched 期待する内容上位件数一致した
+   */
   public record Metrics(
       double recall, double precision, double mrr, double ndcg, boolean expectedTopKMatched) {}
 
+  /**
+   * 成果の評価で受け渡す実行を表す。
+   *
+   * @param fixtureId 検証用データ識別子
+   * @param mode 動作モード
+   * @param reranked 再評価した順位
+   * @param ranking 順位付け
+   * @param metrics 計測値
+   */
   public record Run(
       String fixtureId, Mode mode, boolean reranked, List<String> ranking, Metrics metrics) {}
 
+  /**
+   * 成果の評価で受け渡す平均を表す。
+   *
+   * @param recall 検出率
+   * @param precision 精度
+   * @param mrr 平均逆順位
+   * @param ndcg 検索順位の評価値
+   * @param cases 事例一覧
+   */
   public record Average(double recall, double precision, double mrr, double ndcg, int cases) {}
 
+  /**
+   * 成果の評価で受け渡す比較結果を表す。
+   *
+   * @param provider 提供元
+   * @param runs 実行一覧
+   * @param aggregate 集計結果
+   * @param truthVerified 確定情報確認済み
+   */
   public record Comparison(
       String provider, List<Run> runs, Map<String, Average> aggregate, boolean truthVerified) {}
 
+  /** 成果の評価に必要なRetrieverを扱う。 */
   @FunctionalInterface
   public interface Retriever {
+    /** 成果の評価で用いる取得を返す。 */
     List<String> retrieve(Case fixture, Mode mode, boolean rerank);
   }
 
+  /** ナノ秒数。 */
   private final LongSupplier nanos;
+
+  /** 上限。 */
   private final long limit;
 
+  /** 成果の評価を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public RetrievalQualityEvaluation() {
     this(System::nanoTime, Duration.ofSeconds(30));
   }
 
+  /** 指定された値や利用先を使って、RetrievalQualityEvaluationを初期化する。 */
   public RetrievalQualityEvaluation(LongSupplier nanos, Duration timeout) {
     if (timeout.isNegative() || timeout.isZero() || timeout.compareTo(Duration.ofSeconds(30)) > 0)
       throw new IllegalArgumentException("Evaluation deadline <=30s");
@@ -89,6 +149,7 @@ public final class RetrievalQualityEvaluation {
     limit = timeout.toNanos();
   }
 
+  /** 成果の評価で用いる評価値を返す。 */
   public Metrics score(Case fixture, List<String> ranking) {
     RunCancellation.propagate(null);
     if (fixture == null
@@ -123,6 +184,7 @@ public final class RetrievalQualityEvaluation {
         selected.equals(fixture.expectedTopK()));
   }
 
+  /** 成果の評価で用いる比較を返す。 */
   public Comparison compare(List<Case> fixtures, String provider, Retriever retriever) {
     if (fixtures == null
         || fixtures.isEmpty()
@@ -160,6 +222,7 @@ public final class RetrievalQualityEvaluation {
     return new Comparison(provider, List.copyOf(runs), Map.copyOf(aggregate), false);
   }
 
+  /** 成果の評価に関する活動中を処理する。 */
   private void active(long started) {
     RunCancellation.propagate(null);
     if (nanos.getAsLong() - started >= limit)
@@ -167,6 +230,7 @@ public final class RetrievalQualityEvaluation {
           "Evaluation deadline exceeded; incomplete comparison is not success");
   }
 
+  /** 成果の評価に関する識別情報を処理する。 */
   private static void identity(String value) {
     if (value == null
         || value.isBlank()
@@ -175,6 +239,7 @@ public final class RetrievalQualityEvaluation {
       throw new IllegalArgumentException("Bounded candidate identity required");
   }
 
+  /** 成果の評価で用いるログ2を返す。 */
   private static double log2(double value) {
     return Math.log(value) / Math.log(2);
   }

@@ -16,7 +16,9 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+/** シェルレポート助言の結果と状態の契約を検証するテスト。 */
 class ShellReportAdviceTest {
+  /** 軽量CLI履歴について、シェルテキストを利用することを確認する。 */
   @Test
   void cliHistoryUsesShellTextWhileOrdinaryWebClientsKeepJson() throws Exception {
     var repo = mock(GoalRepository.class);
@@ -37,6 +39,7 @@ class ShellReportAdviceTest {
         .andExpect(jsonPath("$.text").value("[]"));
   }
 
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void acknowledgingAttentionHasTheExactShellMessageAndOnlyOneMutation() throws Exception {
     var repo = mock(AttentionRepository.class);

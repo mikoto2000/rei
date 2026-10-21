@@ -21,14 +21,19 @@ import org.junit.jupiter.params.provider.MethodSource;
 @org.junit.jupiter.api.Tag("e2e")
 class SoundNotificationServicePropertyTest {
 
+  /** 検証に使う出力先内容。 */
   private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
+
+  /** 検証に使う元の出力先。 */
   private final PrintStream originalOut = System.out;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setUpStreams() {
     System.setOut(new PrintStream(outContent));
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void restoreStreams() {
     System.setOut(originalOut);
@@ -37,6 +42,7 @@ class SoundNotificationServicePropertyTest {
 
   // --- Property 1: enabled=false のとき標準出力にフォールバックする ---
 
+  /** {@code messageVariants} の条件を再現するための補助情報を返す。 */
   static Stream<String> messageVariants() {
     return Stream.of(
         "hello",
@@ -51,6 +57,7 @@ class SoundNotificationServicePropertyTest {
         "  前後にスペース  ");
   }
 
+  /** ターミナルの音通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @ParameterizedTest(name = "message={0}")
   @MethodSource("messageVariants")
   @Tag("sound-notification-property-1-enabledFalse")
@@ -69,6 +76,7 @@ class SoundNotificationServicePropertyTest {
 
   // --- Property 2: command が空のとき標準出力にフォールバックする ---
 
+  /** ターミナルの音通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @ParameterizedTest(name = "message={0}")
   @MethodSource("messageVariants")
   @Tag("sound-notification-property-2-emptyCommand")
@@ -88,6 +96,7 @@ class SoundNotificationServicePropertyTest {
 
   // --- Property 3: {{MESSAGE}} プレースホルダーが正しく置換される ---
 
+  /** {@code messagePlaceholderVariants} の条件を再現するための補助情報を返す。 */
   static Stream<String> messagePlaceholderVariants() {
     return Stream.of(
         "hello",
@@ -102,6 +111,7 @@ class SoundNotificationServicePropertyTest {
         "quote\"here");
   }
 
+  /** ターミナルの音通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @ParameterizedTest(name = "message={0}")
   @MethodSource("messagePlaceholderVariants")
   @Tag("sound-notification-property-3-messagePlaceholder")
@@ -113,6 +123,7 @@ class SoundNotificationServicePropertyTest {
     List<List<String>> capturedCommands = new ArrayList<>();
     SoundNotificationService service =
         new SoundNotificationService(props) {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           protected ProcessBuilder createProcessBuilder(List<String> command) {
             capturedCommands.add(new ArrayList<>(command));
@@ -130,6 +141,7 @@ class SoundNotificationServicePropertyTest {
 
   // --- Property 4: 外部プログラム実行失敗時に標準出力にフォールバックする ---
 
+  /** ターミナルの音通知で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest(name = "message={0}")
   @MethodSource("messageVariants")
   @Tag("sound-notification-property-4-execFailure")
@@ -140,6 +152,7 @@ class SoundNotificationServicePropertyTest {
 
     SoundNotificationService service =
         new SoundNotificationService(props) {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           protected ProcessBuilder createProcessBuilder(List<String> command) {
             return new ProcessBuilder("cmd", "/c", "exit", "1");

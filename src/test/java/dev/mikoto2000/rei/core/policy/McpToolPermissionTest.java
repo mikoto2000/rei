@@ -10,7 +10,9 @@ import java.time.Clock;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** MCPツール権限の結果と状態の契約を検証するテスト。 */
 class McpToolPermissionTest {
+  /** ツール利用の権限制御で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void mcpFixedReadAllowlistExcludesPersonalMemoryPdfPathsAndProcessLogs() {
     var guard =

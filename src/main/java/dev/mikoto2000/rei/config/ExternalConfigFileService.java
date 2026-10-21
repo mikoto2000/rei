@@ -5,27 +5,34 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.springframework.stereotype.Service;
 
+/** 外部設定ファイルのユースケースを実現する。 */
 @Service
 public class ExternalConfigFileService {
 
+  /** 作業ディレクトリ。 */
   private final Path workDirectory;
 
+  /** 設定の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ExternalConfigFileService() {
     this(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current());
   }
 
+  /** 指定された値や利用先を使って、ExternalConfigFileServiceを初期化する。 */
   public ExternalConfigFileService(Path workDirectory) {
     this.workDirectory = workDirectory;
   }
 
+  /** 設定の管理で用いる設定ファイルパスを返す。 */
   public Path configFilePath() {
     return ReiPaths.configFilePath(workDirectory);
   }
 
+  /** 設定の管理で用いる追加システムへの指示ファイルパスを返す。 */
   public Path additionalSystemPromptFilePath() {
     return ReiPaths.additionalSystemPromptFilePath(workDirectory);
   }
 
+  /** 設定の管理で用いる初期化設定ファイルを返す。 */
   public Path initializeConfigFile(boolean force) {
     Path configFile = configFilePath();
     try {
@@ -42,6 +49,7 @@ public class ExternalConfigFileService {
     }
   }
 
+  /** 設定の管理に関する初期化追加システムへの指示ファイルを処理する。 */
   private void initializeAdditionalSystemPromptFile(boolean force) throws Exception {
     Path file = additionalSystemPromptFilePath();
     ReiPaths.ensureParentDirectoryExists(file);
@@ -51,6 +59,7 @@ public class ExternalConfigFileService {
     Files.writeString(file, additionalSystemPromptTemplate());
   }
 
+  /** 設定の管理で用いる追加システムへの指示雛形を返す。 */
   private String additionalSystemPromptTemplate() {
     return """
         # 既定の system prompt に追記する内容を Markdown で直接記述します。
@@ -58,6 +67,7 @@ public class ExternalConfigFileService {
         """;
   }
 
+  /** 設定の管理で用いる雛形を返す。 */
   private String template() {
     return """
         spring:

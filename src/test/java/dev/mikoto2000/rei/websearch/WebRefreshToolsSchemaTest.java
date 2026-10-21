@@ -14,7 +14,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import tools.jackson.databind.json.JsonMapper;
 
+/** Web再確認ツール一覧データ形式の結果と状態の契約を検証するテスト。 */
 class WebRefreshToolsSchemaTest {
+  /** 文脈非表示を維持することを確認する。 */
   @Test
   void fourExistingToolsKeepContextHiddenAndRefreshOptional() {
     var callbacks =

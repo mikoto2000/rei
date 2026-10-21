@@ -9,10 +9,23 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Ordered, anchored service rules. Called only after the OS process has been identified as a
+ * 作業状況の把握に必要なBrowserタイトル規則一覧を扱う。
+ *
+ * <p>Ordered, anchored service rules. Called only after the OS process has been identified as a
  * browser.
  */
 final class BrowserTitleRules {
+  /**
+   * 作業状況の把握で受け渡す判断結果を表す。
+   *
+   * @param category 分類
+   * @param service サービス
+   * @param content 内容
+   * @param project プロジェクト
+   * @param categoryConfidence 分類確信度
+   * @param serviceConfidence サービス確信度
+   * @param projectConfidence プロジェクト確信度
+   */
   private record Decision(
       String category,
       String service,
@@ -22,9 +35,18 @@ final class BrowserTitleRules {
       double serviceConfidence,
       double projectConfidence) {}
 
+  /**
+   * 作業状況の把握で受け渡す規則を表す。
+   *
+   * @param id 識別子
+   * @param priority 優先度
+   * @param pattern 照合規則
+   * @param result 結果
+   */
   private record Rule(
       String id, int priority, Pattern pattern, Function<Matcher, Decision> result) {}
 
+  /** 作業状況の把握で用いる規則を返す。 */
   private static Rule rule(
       String id, int priority, String regex, Function<Matcher, Decision> result) {
     return new Rule(
@@ -34,17 +56,21 @@ final class BrowserTitleRules {
         result);
   }
 
+  /** 作業状況の把握で用いるグループを返す。 */
   private static String group(Matcher m, int group) {
     return Objects.requireNonNullElse(m.group(group), "").strip();
   }
 
+  /** 作業状況の把握で用いるサービスを返す。 */
   private static Decision service(String category, String service, String content) {
     return new Decision(category, service, content, "", .95, .98, 0);
   }
 
+  /** 保存と検索の窓口。 */
   private static final Pattern REPOSITORY =
       Pattern.compile("(?:^|\\s)([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)(?=$|\\s|:)");
 
+  /** 作業状況の把握で用いるgithubを返す。 */
   private static Decision github(String prefix, boolean explicit) {
     var repo = REPOSITORY.matcher(prefix);
     String project = repo.find() ? repo.group(2) : "";
@@ -60,6 +86,7 @@ final class BrowserTitleRules {
         project.isEmpty() ? 0 : explicit ? .8 : .6);
   }
 
+  /** 規則一覧。 */
   private static final List<Rule> RULES =
       java.util.stream.Stream.of(
               rule(
@@ -136,6 +163,7 @@ final class BrowserTitleRules {
           .sorted(Comparator.comparingInt(Rule::priority).reversed())
           .toList();
 
+  /** 得られた情報を分類し、後続の判断で扱い分けられるようにする。 */
   WindowActivityRules.Match classify(ForegroundWindow window, String monitor) {
     String title =
         window
@@ -164,6 +192,7 @@ final class BrowserTitleRules {
         monitor, "unknown", window.processName(), "", "", "", 0, "GENERIC_BROWSER");
   }
 
+  /** 作業状況の把握で用いる利用可能な項目を返す。 */
   static List<OperationalRules.Rule> catalog() {
     return RULES.stream()
         .map(

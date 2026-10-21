@@ -58,35 +58,72 @@ import java.time.Duration;
 import java.time.Instant;
 import org.springframework.core.env.Environment;
 
-/** Append-only Shell presentation adapter for Agent events. */
+/**
+ * シェルエージェントイベントを画面やターミナルへ表示する。
+ *
+ * <p>Append-only Shell presentation adapter for Agent events.
+ */
 public final class ShellAgentEventRenderer implements AgentEventListener {
+  /** 出力。 */
   private final ShellEventOutput output;
+
+  /** 話題通知選択可能な設定。 */
   private final TopicNotificationOptions topicNotificationOptions;
+
+  /** アシスタントメッセージ識別子。 */
   private String assistantMessageId;
+
+  /** アシスタント行開始。 */
   private boolean assistantLineOpen;
+
+  /** ツール中断されたメッセージ。 */
   private boolean toolInterruptedMessage;
+
+  /** 推論識別子。 */
   private String thinkingId;
+
+  /** 推論行開始。 */
   private boolean thinkingLineOpen;
+
+  /** 待機中通知一覧。 */
   private final java.util.List<AgentEvent> pendingNotifications = new java.util.ArrayList<>();
+
+  /** flushing通知一覧。 */
   private boolean flushingNotifications;
+
+  /** 待機中言語モデルCompletions。 */
   private final java.util.List<AgentEvent> pendingLlmCompletions = new java.util.ArrayList<>();
 
+  /**
+   * ターミナルでの対話で受け渡す言語モデル要求キーを表す。
+   *
+   * @param runId 実行の識別子
+   * @param requestId 要求の識別子
+   */
   private record LlmRequestKey(String runId, String requestId) {}
 
+  /** 言語モデル要求Features。 */
   private final java.util.Map<LlmRequestKey, String> llmRequestFeatures;
+
+  /** 直近Throttled話題要約日時。 */
   private Instant lastThrottledTopicSummaryAt;
+
+  /** 補助エージェント名前一覧。 */
   private final java.util.LinkedHashMap<String, String> subAgentNames =
       new java.util.LinkedHashMap<>();
 
+  /** ターミナルでの対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ShellAgentEventRenderer(ShellEventOutput output) {
     this(output, TopicNotificationOptions.summary());
   }
 
+  /** ターミナルでの対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ShellAgentEventRenderer(
       ShellEventOutput output, TopicNotificationOptions topicNotificationOptions) {
     this(output, topicNotificationOptions, new java.util.HashMap<>());
   }
 
+  /** 指定された値や利用先を使って、ShellAgentEventRendererを初期化する。 */
   private ShellAgentEventRenderer(
       ShellEventOutput output,
       TopicNotificationOptions topicNotificationOptions,
@@ -99,6 +136,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
             : topicNotificationOptions;
   }
 
+  /** 通知に応じて状態や表示を更新するため、イベントを受け付ける。 */
   @Override
   public synchronized void onEvent(AgentEvent event) {
     // Checkpoint bookkeeping must not interrupt answer/thinking streams, including child runs.
@@ -171,14 +209,17 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       String prefix = subAgentPrefix(event);
       new ShellAgentEventRenderer(
               new ShellEventOutput() {
+                /** 利用者に結果を伝えるため、を出力する。 */
                 public void print(String text) {
                   output.print(prefix + text);
                 }
 
+                /** ターミナルでの対話に関する改行付きの出力を処理する。 */
                 public void println(String text) {
                   output.println(prefix + text);
                 }
 
+                /** ターミナルでの対話に関する保存の確定を処理する。 */
                 public void flush() {
                   output.flush();
                 }
@@ -191,6 +232,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     renderEvent(event);
   }
 
+  /** ターミナルでの対話において、deferDuring回答に該当するか判定する。 */
   private boolean deferDuringAnswer(AgentEvent event) {
     if (isSubAgentEvent(event)) return true;
     return switch (event.type()) {
@@ -215,16 +257,19 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     };
   }
 
+  /** ターミナルでの対話において、補助エージェントイベントかどうかを判定する。 */
   private boolean isSubAgentEvent(AgentEvent event) {
     return event.sessionId() != null && event.sessionId().startsWith("subagent:");
   }
 
+  /** ターミナルでの対話に関するremember補助エージェントを処理する。 */
   private void rememberSubAgent(dev.mikoto2000.rei.event.SubAgentLifecyclePayload child) {
     subAgentNames.put(child.subAgentRunId(), child.agentId());
     // Retain recent names for late events and replay without growing for the shell's lifetime.
     if (subAgentNames.size() > 128) subAgentNames.pollFirstEntry();
   }
 
+  /** ターミナルでの対話で用いる補助エージェント接頭辞を返す。 */
   private String subAgentPrefix(AgentEvent event) {
     String runId =
         event.runId() == null ? event.sessionId().substring("subagent:".length()) : event.runId();
@@ -232,6 +277,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     return "[subagent:" + (name == null ? "" : name + "/") + runId + "] ";
   }
 
+  /** 利用者が内容を確認できるよう、イベントを表示する。 */
   private void renderEvent(AgentEvent event) {
     if (isTopicEvent(event)
         && topicNotificationOptions.verbosity() != TopicNotificationVerbosity.VERBOSE) {
@@ -928,7 +974,9 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   }
 
   /**
-   * Compact restore mode; audit records remain unchanged and can also be fed to onEvent for full
+   * 通知に応じて状態や表示を更新するため、直近イベントを受け付ける。
+   *
+   * <p>Compact restore mode; audit records remain unchanged and can also be fed to onEvent for full
    * replay.
    */
   public synchronized void onRecentEvent(AgentEvent event) {
@@ -947,6 +995,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
           case null, default -> "";
         };
     detail = detail == null ? "" : detail.replaceAll("\\s+", " ");
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (detail.length() > 100) detail = detail.substring(0, 100) + "…";
     String time =
         java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
@@ -961,12 +1010,14 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
             + (detail.isBlank() ? "" : " " + detail));
   }
 
+  /** 終了時に必要な状態を反映し、処理を完了させる。 */
   public synchronized void finish() {
     closeAssistantLine();
     closeThinkingLine();
     output.flush();
   }
 
+  /** 利用者が内容を確認できるよう、バックグラウンド実行を表示する。 */
   public synchronized void renderBackgroundExecution(
       dev.mikoto2000.rei.event.BackgroundExecutionPayload payload, String projectName) {
     finish();
@@ -994,10 +1045,12 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     output.flush();
   }
 
+  /** ターミナルでの対話において、話題イベントかどうかを判定する。 */
   private boolean isTopicEvent(AgentEvent event) {
     return event.type().name().startsWith("TOPIC_");
   }
 
+  /** 利用者が内容を確認できるよう、話題要約を表示する。 */
   private void renderTopicSummary(AgentEvent event) {
     if (topicNotificationOptions.verbosity() == TopicNotificationVerbosity.QUIET) return;
     switch (event.type()) {
@@ -1052,6 +1105,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     }
   }
 
+  /** ターミナルでの対話において、許可Throttled話題要約に該当するか判定する。 */
   private boolean allowThrottledTopicSummary(AgentEvent event) {
     Duration interval = topicNotificationOptions.minimumInterval();
     if (interval == null || interval.isZero() || interval.isNegative()) return true;
@@ -1063,12 +1117,14 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     return false;
   }
 
+  /** ターミナルでの対話で用いるイベント時刻を返す。 */
   private String eventTime(AgentEvent event) {
     return java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
         .withZone(java.time.ZoneId.systemDefault())
         .format(event.timestamp());
   }
 
+  /** ターミナルでの対話に関するメッセージ開始を処理する。 */
   private void messageStarted(MessageStartedPayload payload, AgentEvent event) {
     if ("assistant".equalsIgnoreCase(payload.role())) {
       closeThinkingLine();
@@ -1077,6 +1133,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     }
   }
 
+  /** ターミナルでの対話に関する推論開始を処理する。 */
   private void thinkingStarted(ThinkingStartedPayload payload, AgentEvent event) {
     closeAssistantLine();
     thinkingId = payload.thinkingId();
@@ -1084,12 +1141,14 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     output.println("=== thinking (" + eventTime(event) + ") ===");
   }
 
+  /** ターミナルでの対話に関する推論差分を処理する。 */
   private void thinkingDelta(ThinkingDeltaPayload payload) {
     if (!payload.thinkingId().equals(thinkingId) || payload.delta() == null) return;
     output.print(payload.delta());
     thinkingLineOpen = true;
   }
 
+  /** ターミナルでの対話に関する推論完了を処理する。 */
   private void thinkingCompleted(ThinkingCompletedPayload payload) {
     if (!payload.thinkingId().equals(thinkingId)) return;
     closeThinkingLine();
@@ -1097,6 +1156,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     if (assistantMessageId == null) flushLlmCompletions();
   }
 
+  /** ターミナルでの対話に関するメッセージ差分を処理する。 */
   private void messageDelta(MessageDeltaPayload payload) {
     if (!payload.messageId().equals(assistantMessageId) || payload.delta() == null) return;
     if (toolInterruptedMessage) {
@@ -1107,6 +1167,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     assistantLineOpen = true;
   }
 
+  /** ターミナルでの対話に関するメッセージ完了を処理する。 */
   private void messageCompleted(MessageCompletedPayload payload) {
     if (!payload.messageId().equals(assistantMessageId)) return;
     closeAssistantLine();
@@ -1115,6 +1176,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     if (thinkingId == null) flushLlmCompletions();
   }
 
+  /** 本処理に必要な文脈や条件を整えるため、ツールを準備する。 */
   private void beforeTool() {
     if (assistantMessageId != null) toolInterruptedMessage = true;
     closeAssistantLine();
@@ -1122,6 +1184,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     flushLlmCompletions();
   }
 
+  /** ターミナルでの対話に関する保存の確定言語モデルCompletionsを処理する。 */
   private void flushLlmCompletions() {
     if (!flushingNotifications) {
       flushingNotifications = true;
@@ -1139,6 +1202,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     pendingLlmCompletions.clear();
   }
 
+  /** 利用者が内容を確認できるよう、モデル応答の完了を表示する。 */
   private void renderLlmCompletion(AgentEvent event) {
     LlmResponseCompletedPayload payload = (LlmResponseCompletedPayload) event.payload();
     String feature =
@@ -1151,6 +1215,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
             + " ms)");
   }
 
+  /** 使い終わった資源や状態を解放するため、アシスタント行の利用を終える。 */
   private void closeAssistantLine() {
     if (assistantLineOpen) {
       output.println("");
@@ -1158,6 +1223,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     }
   }
 
+  /** 使い終わった資源や状態を解放するため、推論行の利用を終える。 */
   private void closeThinkingLine() {
     if (thinkingLineOpen) {
       output.println("");
@@ -1165,6 +1231,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     }
   }
 
+  /** ターミナルでの対話で用いるエラーメッセージを返す。 */
   private String errorMessage(dev.mikoto2000.rei.event.ErrorInformation error) {
     if (error == null) return dev.mikoto2000.rei.event.FailureMessages.text(null);
     String reason = error.message();
@@ -1174,32 +1241,39 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     return dev.mikoto2000.rei.event.FailureMessages.text(reason);
   }
 
+  /** 内容を表示・参照しやすくするため、秒数を整形する。 */
   private String formatSeconds(long durationMillis) {
     return formatDecimal(durationMillis / 1_000.0d);
   }
 
+  /** 内容を表示・参照しやすくするため、継続時間を整形する。 */
   private String formatDuration(long durationMillis) {
     return durationMillis < 1_000L
         ? durationMillis + "ms"
         : String.format(java.util.Locale.ROOT, "%.2fs", durationMillis / 1_000.0d);
   }
 
+  /** ターミナルでの対話で用いる対象の選択条件接尾辞を返す。 */
   private String selectorSuffix(Long durationMillis) {
     return durationMillis == null ? "" : ", selector " + formatDuration(durationMillis);
   }
 
+  /** 内容を表示・参照しやすくするため、小数を整形する。 */
   private String formatDecimal(double value) {
     return String.format(java.util.Locale.ROOT, "%.1f", value);
   }
 
+  /** 内容を表示・参照しやすくするため、Nullable評価値を整形する。 */
   private String formatNullableScore(Double value) {
     return value == null ? "n/a" : String.format(java.util.Locale.ROOT, "%.2f", value);
   }
 
+  /** ターミナルでの対話で用いる小文字を返す。 */
   private String lower(String value) {
     return value == null ? "" : value.toLowerCase(java.util.Locale.ROOT);
   }
 
+  /** ターミナルでの対話で用いる単一行要約を返す。 */
   private String oneLineSummary(String value) {
     if (value == null || value.isBlank()) return "";
     StringBuilder sanitized = new StringBuilder(value.length());
@@ -1210,6 +1284,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     return sanitized.toString().replaceAll("\\s+", " ").trim();
   }
 
+  /** ターミナルでの対話で用いる表示名前を返す。 */
   private String displayName(String identifier, String path) {
     String value = identifier == null || identifier.isBlank() ? path : identifier;
     if (value == null || value.isBlank()) return "item";
@@ -1218,6 +1293,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     return separator < 0 ? normalized : normalized.substring(separator + 1);
   }
 
+  /** ターミナルでの対話で用いる理由接尾辞を返す。 */
   private String reasonSuffix(String reason) {
     String safe = oneLineSummary(reason);
     if (safe.isEmpty()) return "";
@@ -1226,19 +1302,23 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
     return " (" + safe + ")";
   }
 
+  /** 後続の処理で扱える量に制限するため、要約を上限内に収める。 */
   private String boundedSummary(String value, int maxLength) {
     String safe = oneLineSummary(value);
     return safe.length() <= maxLength ? safe : safe.substring(0, maxLength - 1) + "…";
   }
 
+  /** ターミナルでの対話で用いる値またはを返す。 */
   private String valueOr(String preferred, String fallback) {
     return preferred == null ? fallback : preferred;
   }
 
+  /** ターミナルでの対話で用いる値またはを返す。 */
   private int valueOr(Integer preferred, int fallback) {
     return preferred == null ? fallback : preferred;
   }
 
+  /** ターミナルでの対話で用いる行差分接尾辞を返す。 */
   private String lineDeltaSuffix(FileModifiedPayload payload) {
     if (payload.addedLines() == null && payload.removedLines() == null) return "";
     return " (+"
@@ -1248,24 +1328,38 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         + ")";
   }
 
+  /** ターミナルでの対話における話題通知説明量の選択肢。 */
   public enum TopicNotificationVerbosity {
+    /** 案内を控えめにする通知設定。 */
     QUIET,
+    /** 要約。 */
     SUMMARY,
+    /** 詳細な形式。 */
     VERBOSE
   }
 
+  /**
+   * ターミナルでの対話で受け渡す話題通知選択可能な設定を表す。
+   *
+   * @param verbosity 説明量
+   * @param minimumInterval 最小実行間隔
+   * @param showIdleSkipped 表示操作がない状態対象外
+   */
   public record TopicNotificationOptions(
       TopicNotificationVerbosity verbosity, Duration minimumInterval, boolean showIdleSkipped) {
 
+    /** ターミナルでの対話で用いる要約を返す。 */
     public static TopicNotificationOptions summary() {
       return new TopicNotificationOptions(
           TopicNotificationVerbosity.SUMMARY, Duration.ofMinutes(30), false);
     }
 
+    /** ターミナルでの対話で用いる詳細な形式を返す。 */
     public static TopicNotificationOptions verbose() {
       return new TopicNotificationOptions(TopicNotificationVerbosity.VERBOSE, Duration.ZERO, true);
     }
 
+    /** ターミナルでの対話で利用する情報を、受け取った形式から変換する。 */
     public static TopicNotificationOptions from(Environment environment) {
       if (environment == null) return summary();
       String verbosityValue =
@@ -1284,6 +1378,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
       return new TopicNotificationOptions(verbosity, minimumInterval, showIdleSkipped);
     }
 
+    /** 入力を機能内で扱えるよう、説明量を解釈する。 */
     private static TopicNotificationVerbosity parseVerbosity(String value) {
       if (value == null || value.isBlank()) return TopicNotificationVerbosity.SUMMARY;
       try {

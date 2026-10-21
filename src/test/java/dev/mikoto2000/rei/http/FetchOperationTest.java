@@ -9,7 +9,9 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import org.junit.jupiter.api.Test;
 
+/** 取得操作の結果と状態の契約を検証するテスト。 */
 class FetchOperationTest {
+  /** 外部情報の取得の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void deadlineCancelsThePendingFuture() {
     var future = new CompletableFuture<String>();
@@ -20,6 +22,7 @@ class FetchOperationTest {
     assertTrue(future.isCancelled());
   }
 
+  /** 外部情報の取得の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationDoesNotStartOrLeavePendingWork() {
     var operation =
@@ -33,6 +36,7 @@ class FetchOperationTest {
     assertTrue(future.isCancelled());
   }
 
+  /** 外部情報の取得の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void interruptedWaitPreservesInterruptAndCancelsFuture() {
     var future = new CompletableFuture<String>();
@@ -46,6 +50,7 @@ class FetchOperationTest {
     }
   }
 
+  /** 外部情報の取得で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void completedFutureIsReturnedAndReadAndConnectTimeoutsRemainDistinct() {
     assertEquals("ok", FetchOperation.active().await(CompletableFuture.completedFuture("ok")));

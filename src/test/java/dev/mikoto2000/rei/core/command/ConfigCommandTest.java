@@ -11,11 +11,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
+/** 設定コマンドの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ConfigCommandTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void pathPrintsExternalConfigFilePath() {
     ExternalConfigFileService service = new ExternalConfigFileService(tempDir);
@@ -33,6 +36,7 @@ class ConfigCommandTest {
     assertTrue(out.toString().contains(service.configFilePath().toString()));
   }
 
+  /** 初期化について、雛形を作成することを確認する。 */
   @Test
   void initCreatesTemplateAndPrintsPath() {
     ExternalConfigFileService service = new ExternalConfigFileService(tempDir);
@@ -51,10 +55,12 @@ class ConfigCommandTest {
     assertTrue(out.toString().contains(service.configFilePath().toString()));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private CommandLine newCommand(ExternalConfigFileService service) {
     return new CommandLine(
         new ConfigCommand(),
         new CommandLine.IFactory() {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           public <K> K create(Class<K> cls) throws Exception {
             if (cls == ConfigCommand.PathCommand.class) {

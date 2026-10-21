@@ -13,19 +13,26 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+/** 会話検索条件サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SessionQueryServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-09-16T08:00:00Z");
 
+  /** 検証で使用する保存先を、指定された条件に合わせて用意する。 */
   FileSessionRepository store() {
     return new FileSessionRepository(temp.resolve("sessions.json"));
   }
 
+  /** 検証用に、新たな対象を登録し、後から利用できるようにする。 */
   void add(SessionRepository store, String id, String project, Instant time) {
     store.accept(new SessionMetadata(id, project, "title " + id, time, time), () -> {});
   }
 
+  /** 会話の継続管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void emptyUnknownAndPersistedDetail() {
     var repo = store();
@@ -42,6 +49,7 @@ class SessionQueryServiceTest {
     assertThat(query.listSessions("unknown", 1, null).items()).isEmpty();
   }
 
+  /** 追加の後も対象の情報が残ることを確認する。 */
   @Test
   void stableKeysetPaginationSurvivesInsertAndFiltersProjects() {
     var repo = store();
@@ -66,6 +74,7 @@ class SessionQueryServiceTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 会話の継続管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void defaultAndMaximumLimit() {
     var repo = store();
@@ -85,6 +94,7 @@ class SessionQueryServiceTest {
     assertThat(ids).hasSize(101).doesNotHaveDuplicates().isSorted();
   }
 
+  /** 不正な上限を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(ints = {0, -1, 101})
   void rejectsInvalidLimit(int limit) {
@@ -95,6 +105,7 @@ class SessionQueryServiceTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 不正な続きの取得位置を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"", "bad", "%%%%", "e30", "AA=="})
   void rejectsInvalidCursor(String cursor) {

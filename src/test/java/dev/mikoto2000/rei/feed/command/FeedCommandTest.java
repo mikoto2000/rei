@@ -28,11 +28,14 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import picocli.CommandLine;
 
+/** フィードコマンドの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class FeedCommandTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** フィードの購読と収集で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void importOpmlThroughSlashParserWithQuotedPathAndPartialResults() throws Exception {
     FeedService service = newService();
@@ -61,6 +64,7 @@ class FeedCommandTest {
     assertTrue(out.toString().contains("[invalid feed URL] (invalid feed URL)"));
   }
 
+  /** フィードの購読と収集で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void importOpmlNeverPrintsCredentialUrls() throws Exception {
     Path path =
@@ -75,6 +79,7 @@ class FeedCommandTest {
     assertTrue(!out.toString().contains("must-not-print"));
   }
 
+  /** 取り込みOPMLについて、成功済みの取り込みを伝えることを確認する。 */
   @Test
   void importOpmlReportsSuccessfulImport() throws Exception {
     Path path =
@@ -90,6 +95,7 @@ class FeedCommandTest {
     assertTrue(out.toString().contains("Failed: 0"));
   }
 
+  /** 取り込みOPMLについて、パスを必要とすることを確認する。 */
   @Test
   void importOpmlRequiresPath() {
     CommandLine command = newCommand(newService());
@@ -99,6 +105,7 @@ class FeedCommandTest {
     assertTrue(err.toString().contains("PATH"));
   }
 
+  /** 取り込みOPMLについて、ファイルを伝えることを確認する。 */
   @Test
   void importOpmlReportsFileAndXmlErrorsWithoutStackTrace() throws Exception {
     Path broken = Files.writeString(tempDir.resolve("broken.opml"), "<opml>");
@@ -113,6 +120,7 @@ class FeedCommandTest {
     }
   }
 
+  /** 判定期間パス一覧を保持することを確認する。 */
   @Test
   void importOpmlExpandsHomeAndPreservesWindowsPaths() {
     var importer = org.mockito.Mockito.mock(FeedOpmlImportService.class);
@@ -139,6 +147,7 @@ class FeedCommandTest {
                 .normalize());
   }
 
+  /** フィードの購読と収集で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void importOpmlLimitsDetailsAndNeutralizesTerminalControls() throws Exception {
     Path path =
@@ -159,6 +168,7 @@ class FeedCommandTest {
             .count());
   }
 
+  /** 取り込みOPMLについて、不正なパスを伝えることを確認する。 */
   @Test
   void importOpmlReportsInvalidPathWithoutStackTrace() {
     CommandLine command = newCommand(newService());
@@ -169,6 +179,7 @@ class FeedCommandTest {
     assertEquals(1, err.toString().lines().count());
   }
 
+  /** 追加コマンドについて、フィードを作成することを確認する。 */
   @Test
   void addCommandCreatesFeed() {
     FeedService service = newService();
@@ -182,6 +193,7 @@ class FeedCommandTest {
     assertEquals("Example Feed", service.list().getFirst().displayName());
   }
 
+  /** フィードの購読と収集で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void listCommandPrintsEmptyMessageWhenNoFeeds() {
     FeedService service = newService();
@@ -198,6 +210,7 @@ class FeedCommandTest {
     assertTrue(out.toString().contains("登録済みフィードはありません"));
   }
 
+  /** フィードの購読と収集で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void listCommandPrintsRegisteredFeeds() {
     FeedService service = newService();
@@ -217,6 +230,7 @@ class FeedCommandTest {
     assertTrue(output.contains("https://example.com/feed.xml"));
   }
 
+  /** フィードの購読と収集で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void editCommandUpdatesDisplayNameAndEnabledFlag() {
     FeedService service = newService();
@@ -231,6 +245,7 @@ class FeedCommandTest {
     assertEquals(false, updated.enabled());
   }
 
+  /** コマンド取り除くフィードを削除することを確認する。 */
   @Test
   void deleteCommandRemovesFeed() {
     FeedService service = newService();
@@ -241,6 +256,7 @@ class FeedCommandTest {
     assertEquals(0, service.list().size());
   }
 
+  /** フィードの購読と収集で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void updateCommandUpdatesAllFeedsAndPrintsResults() {
     FeedService service = newService();
@@ -279,6 +295,7 @@ class FeedCommandTest {
     assertEquals(1, service.listItemsForFeed(service.list().getFirst().id()).size());
   }
 
+  /** フィードの購読と収集で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void summaryCommandPrintsBriefingSummary() {
     FeedService service = newService();
@@ -315,6 +332,7 @@ class FeedCommandTest {
     assertTrue(out.toString().contains("briefing summary"));
   }
 
+  /** フィードの購読と収集で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void itemListCommandPrintsRecentItemsWithIds() {
     FeedService service = newService();
@@ -357,24 +375,29 @@ class FeedCommandTest {
     assertTrue(output.contains("https://example.com/today"));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private FeedService newService() {
     return new FeedService(
         new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feed-command.db")));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private CommandLine newCommand(FeedService service) {
     return newCommand(service, defaultUpdateService(service), defaultSummaryService(service));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private CommandLine newCommand(FeedService service, FeedUpdateService updateService) {
     return newCommand(service, updateService, defaultSummaryService(service));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private CommandLine newCommand(
       FeedService service, FeedUpdateService updateService, FeedSummaryService summaryService) {
     return new CommandLine(
         new FeedCommand(),
         new CommandLine.IFactory() {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           public <K> K create(Class<K> cls) throws Exception {
             if (cls == FeedCommand.ImportOpmlCommand.class) {
@@ -415,6 +438,7 @@ class FeedCommandTest {
         });
   }
 
+  /** {@code defaultUpdateService} の条件を再現するための補助情報を返す。 */
   private FeedUpdateService defaultUpdateService(FeedService service) {
     return new FeedUpdateService(
         service,
@@ -425,6 +449,7 @@ class FeedCommandTest {
             }));
   }
 
+  /** {@code defaultSummaryService} の条件を再現するための補助情報を返す。 */
   private FeedSummaryService defaultSummaryService(FeedService service) {
     return new FeedSummaryService(
         service,

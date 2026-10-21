@@ -27,8 +27,10 @@ import org.springframework.ai.chat.prompt.Prompt;
 import picocli.CommandLine;
 import reactor.core.publisher.Flux;
 
+/** 検索コマンドキャンセルの結果と状態の契約を検証するテスト。 */
 class SearchCommandCancellationTest {
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void runStopsStreamingAndDoesNotPrintSourcesWhenCancelled() throws Exception {
     ChatClient chatClient = Mockito.mock(ChatClient.class);

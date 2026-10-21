@@ -22,12 +22,20 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Additive migration and transactional persistence on the existing memory DataSource. */
+/**
+ * 記憶を保存・検索するための窓口。
+ *
+ * <p>Additive migration and transactional persistence on the existing memory DataSource.
+ */
 @Repository
 public class MemoryRepository {
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 一連の更新をまとめて確定するための窓口。 */
   private final TransactionTemplate transactions;
 
+  /** 指定された値や利用先を使って、MemoryRepositoryを初期化する。 */
   public MemoryRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, MemoryService legacy) {
     db = JdbcClient.create(source);
@@ -87,6 +95,7 @@ public class MemoryRepository {
         });
   }
 
+  /** 長期記憶の保存と検索に関する列を処理する。 */
   private void column(String table, String name, String definition) {
     if (!db.sql("PRAGMA table_info(" + table + ")")
         .query((r, n) -> r.getString("name"))
@@ -95,10 +104,24 @@ public class MemoryRepository {
       db.sql("ALTER TABLE " + table + " ADD COLUMN " + name + " " + definition).update();
   }
 
+  /** 長期記憶の保存と検索で用いる一連の更新を返す。 */
   public <T> T transaction(Supplier<T> action) {
     return transactions.execute(status -> action.get());
   }
 
+  /**
+   * 長期記憶の保存と検索で受け渡す自動状態を表す。
+   *
+   * @param session 会話
+   * @param project プロジェクト
+   * @param failures 失敗一覧
+   * @param stage 段階
+   * @param stoppedAt 停止済み日時
+   * @param lastFailureAt 直近失敗情報日時
+   * @param code コード
+   * @param description 説明
+   * @param revision 改訂番号
+   */
   public record AutoState(
       String session,
       String project,
@@ -109,12 +132,14 @@ public class MemoryRepository {
       String code,
       String description,
       long revision) {
+    /** 受け取った情報からAutoStateを作成する。 */
     public AutoState {
       if (failures < 0 || stage < 0 || stage > 30 || revision < 0)
         throw new IllegalStateException("Invalid Auto Sleep state");
     }
   }
 
+  /** 長期記憶の保存と検索で用いる自動状態を返す。 */
   public AutoState autoState(String session, String project) {
     if (session == null
         || session.isBlank()
@@ -152,6 +177,7 @@ public class MemoryRepository {
         });
   }
 
+  /** 最新の内容を後続の処理に反映するため、自動状態を更新する。 */
   public AutoState updateAutoState(
       AutoState expected, String code, String description, String timestamp, int limit) {
     return transaction(
@@ -180,9 +206,21 @@ public class MemoryRepository {
         });
   }
 
+  /**
+   * 長期記憶の保存と検索で受け渡す自動待機要求を表す。
+   *
+   * @param sessionId 会話の識別子
+   * @param projectId 所属プロジェクトの識別子
+   * @param revision 改訂番号
+   * @param cause 原因
+   */
   public record AutoSleepRequest(String sessionId, String projectId, long revision, String cause) {}
 
-  /** Ending records intent only; a later idle worker performs consolidation. */
+  /**
+   * 長期記憶の保存と検索に関する要求自動待機を処理する。
+   *
+   * <p>Ending records intent only; a later idle worker performs consolidation.
+   */
   public void requestAutoSleep(String session, String project, String cause) {
     if (session == null
         || session.isBlank()
@@ -211,6 +249,7 @@ public class MemoryRepository {
       throw new IllegalStateException("Auto Sleep request limit or ownership conflict");
   }
 
+  /** 長期記憶の保存と検索で用いる待機中自動待機要求一覧を返す。 */
   public List<AutoSleepRequest> pendingAutoSleepRequests() {
     return db.sql(
             "SELECT session_id,project_id,revision,cause FROM auto_sleep_requests ORDER BY revision,session_id LIMIT 256")
@@ -220,6 +259,7 @@ public class MemoryRepository {
         .list();
   }
 
+  /** 長期記憶の保存と検索において、完了自動待機要求に該当するか判定する。 */
   public boolean completeAutoSleepRequest(AutoSleepRequest request) {
     return db.sql(
                 "DELETE FROM auto_sleep_requests WHERE session_id=? AND project_id=? AND revision=?")
@@ -228,7 +268,11 @@ public class MemoryRepository {
         == 1;
   }
 
-  /** Reserve before the provider call; pending usage survives failure and restart. */
+  /**
+   * 競合する処理と利用範囲を調整するため、待機モデル呼び出しを確保する。
+   *
+   * <p>Reserve before the provider call; pending usage survives failure and restart.
+   */
   public void reserveSleepModelCall(String project, long maxCalls, long maxTokens) {
     if (project == null || project.isBlank() || maxCalls < 0 || maxTokens < 0)
       throw new IllegalArgumentException("Invalid Sleep budget");
@@ -270,7 +314,11 @@ public class MemoryRepository {
         });
   }
 
-  /** This accounting is separate from memory/checkpoint writes, also for previews. */
+  /**
+   * 後から経緯や使用量を確認できるよう、待機トークン数を記録する。
+   *
+   * <p>This accounting is separate from memory/checkpoint writes, also for previews.
+   */
   public void recordSleepTokens(String project, Integer tokens) {
     boolean valid = tokens != null && tokens > 0;
     int changed =
@@ -286,6 +334,7 @@ public class MemoryRepository {
     if (changed != 1) throw new IllegalStateException("No pending Sleep model call");
   }
 
+  /** 後続の操作を進められるか判断するため、待機トークン予算を確認する。 */
   public void checkSleepTokenBudget(String project, long limit) {
     long tokens =
         db.sql("SELECT tokens FROM sleep_model_usage WHERE project_id=?")
@@ -298,10 +347,12 @@ public class MemoryRepository {
               .TOKEN_BUDGET_EXCEEDED);
   }
 
+  /** 長期記憶の保存と検索で用いる追加を返す。 */
   public LongTermMemory insert(MemoryCandidate c, String project, String session) {
     return insert(c, project, session, "mem_" + UUID.randomUUID(), true);
   }
 
+  /** 長期記憶の保存と検索で用いる追加を返す。 */
   private LongTermMemory insert(
       MemoryCandidate c, String project, String session, String id, boolean includeTurns) {
     if (c.scope() == MemoryScope.PROJECT && (project == null || project.isBlank()))
@@ -337,6 +388,7 @@ public class MemoryRepository {
         });
   }
 
+  /** 長期記憶の保存と検索に関するenrichを処理する。 */
   public void enrich(String id, MemoryCandidate c, String session) {
     for (String turn : c.sourceTurnIds())
       db.sql(
@@ -349,6 +401,7 @@ public class MemoryRepository {
     enrichTags(id, c);
   }
 
+  /** 長期記憶の保存と検索に関するenrichタグ一覧を処理する。 */
   private void enrichTags(String id, MemoryCandidate c) {
     for (String tag : c.tags())
       db.sql(
@@ -361,6 +414,17 @@ public class MemoryRepository {
     index(id);
   }
 
+  /**
+   * 長期記憶の保存と検索で受け渡す振り返り確認の根拠を表す。
+   *
+   * @param projectId 所属プロジェクトの識別子
+   * @param reflectionId 振り返り識別子
+   * @param goalId 目標識別子
+   * @param sessionId 会話の識別子
+   * @param memoryId 記憶識別子
+   * @param criteriaSha256 判断基準一覧内容の同一性を照合するSHA-256ハッシュ
+   * @param verifiedAt 確認済み日時
+   */
   public record ReflectionProof(
       String projectId,
       String reflectionId,
@@ -370,6 +434,7 @@ public class MemoryRepository {
       String criteriaSha256,
       java.time.Instant verifiedAt) {}
 
+  /** 確認の根拠。 */
   private static final org.springframework.jdbc.core.RowMapper<ReflectionProof> PROOF =
       (r, n) ->
           new ReflectionProof(
@@ -381,6 +446,7 @@ public class MemoryRepository {
               r.getString("criteria_sha256"),
               java.time.Instant.parse(r.getString("verified_at")));
 
+  /** 長期記憶の保存と検索で用いる確認済み振り返り確認の根拠を返す。 */
   public Optional<ReflectionProof> verifiedReflectionProof(String project, String reflection) {
     return db.sql(
             "SELECT * FROM verified_reflection_memories WHERE project_id=? AND reflection_id=?")
@@ -389,6 +455,7 @@ public class MemoryRepository {
         .optional();
   }
 
+  /** 長期記憶の保存と検索で用いる確認済み振り返り確認の根拠別記憶を返す。 */
   public Optional<ReflectionProof> verifiedReflectionProofByMemory(String project, String memory) {
     return db.sql("SELECT * FROM verified_reflection_memories WHERE project_id=? AND memory_id=?")
         .params(project, memory)
@@ -397,8 +464,10 @@ public class MemoryRepository {
   }
 
   /**
-   * Atomic publication of a fact and its explicit non-conversation proof. Called after independent
-   * verification.
+   * 長期記憶の保存と検索で用いる追加確認済み振り返りを返す。
+   *
+   * <p>Atomic publication of a fact and its explicit non-conversation proof. Called after
+   * independent verification.
    */
   public LongTermMemory insertVerifiedReflection(
       MemoryCandidate candidate,
@@ -443,6 +512,7 @@ public class MemoryRepository {
         });
   }
 
+  /** 指定された変更を、管理中の情報へ反映する。 */
   public void update(String id, MemoryCandidate c, String session) {
     db.sql(
             "UPDATE memories SET content=?,summary=?,confidence=?,importance=?,updated_at=?,content_key=? WHERE id=? AND status='ACTIVE'")
@@ -458,6 +528,7 @@ public class MemoryRepository {
     enrich(id, c, session);
   }
 
+  /** 長期記憶の保存と検索に関するsupersedeを処理する。 */
   public void supersede(String oldId, String replacement, String relation) {
     db.sql(
             "UPDATE memories SET status='SUPERSEDED',superseded_by=?,valid_until=?,updated_at=? WHERE id=? AND status='ACTIVE'")
@@ -466,12 +537,14 @@ public class MemoryRepository {
     relate(oldId, replacement, relation);
   }
 
+  /** 長期記憶の保存と検索に関するrelateを処理する。 */
   public void relate(String from, String to, String type) {
     db.sql("INSERT INTO memory_relations(from_memory_id,to_memory_id,relation_type) VALUES(?,?,?)")
         .params(from, to, type)
         .update();
   }
 
+  /** 長期記憶の保存と検索で用いる関連一覧を返す。 */
   public List<String> relations(String id) {
     return db.sql(
             "SELECT from_memory_id || ' ' || relation_type || ' ' || to_memory_id FROM memory_relations WHERE from_memory_id=? OR to_memory_id=?")
@@ -480,6 +553,7 @@ public class MemoryRepository {
         .list();
   }
 
+  /** 長期記憶の保存と検索に関する複製取得元一覧を処理する。 */
   public void copySources(String from, String to) {
     for (var s : find(from).orElseThrow().sources())
       db.sql(
@@ -498,16 +572,19 @@ public class MemoryRepository {
           .update();
   }
 
+  /** 長期記憶の保存と検索に関する保管を処理する。 */
   public void archive(String id) {
     db.sql("UPDATE memories SET status='ARCHIVED',updated_at=? WHERE id=?")
         .params(now(), id)
         .update();
   }
 
+  /** 長期記憶の保存と検索に関するaccessedを処理する。 */
   public void accessed(String id) {
     db.sql("UPDATE memories SET last_accessed_at=? WHERE id=?").params(now(), id).update();
   }
 
+  /** 対象を特定できるよう、記憶保存と検索の窓口を探す。 */
   public Optional<LongTermMemory> find(String id) {
     return db.sql("SELECT * FROM memories WHERE id=? AND summary IS NOT NULL")
         .param(id)
@@ -515,6 +592,7 @@ public class MemoryRepository {
         .optional();
   }
 
+  /** 長期記憶の保存と検索で用いる完全一致を返す。 */
   public Optional<LongTermMemory> exact(MemoryCandidate candidate, String project) {
     return db.sql(
             "SELECT * FROM memories WHERE status='ACTIVE' AND summary IS NOT NULL AND scope=? AND coalesce(project_id,'')=? AND content_key=?")
@@ -526,9 +604,11 @@ public class MemoryRepository {
         .optional();
   }
 
+  /** 表示対象。 */
   private static final String VISIBLE =
       "summary IS NOT NULL AND (scope='GLOBAL' OR (scope='PROJECT' AND project_id=?))";
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<LongTermMemory> list(String project, int limit, int offset) {
     return db.sql(
             "SELECT * FROM memories WHERE "
@@ -539,6 +619,7 @@ public class MemoryRepository {
         .list();
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public List<LongTermMemory> search(String query, String project, int limit) {
     if (query == null || query.isBlank()) return List.of();
     var terms = MemorySearchTerms.of(query);
@@ -570,6 +651,7 @@ public class MemoryRepository {
         .list();
   }
 
+  /** 長期記憶の保存と検索で用いる件数を返す。 */
   public Map<String, Long> counts(String project) {
     var result = new LinkedHashMap<String, Long>();
     for (String scope : List.of("GLOBAL", "PROJECT"))
@@ -583,6 +665,7 @@ public class MemoryRepository {
     return result;
   }
 
+  /** 長期記憶の保存と検索で用いる直近処理済みを返す。 */
   public long lastProcessed(String session) {
     return db.sql(
             "SELECT coalesce(max(to_sequence),0) FROM sleep_runs WHERE session_id=? AND status='COMPLETED'")
@@ -591,6 +674,7 @@ public class MemoryRepository {
         .single();
   }
 
+  /** 後から参照できるよう、実行を保存する。 */
   public void saveRun(SleepRun r) {
     db.sql("INSERT INTO sleep_runs VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
         .params(
@@ -614,6 +698,7 @@ public class MemoryRepository {
         .update();
   }
 
+  /** 過去の記録を、条件に従って参照できる形で返す。 */
   public List<SleepRun> history(String project, int limit) {
     return db.sql("SELECT * FROM sleep_runs WHERE project_id=? ORDER BY completed_at DESC LIMIT ?")
         .params(project, Math.max(1, Math.min(limit, 100)))
@@ -640,6 +725,7 @@ public class MemoryRepository {
         .list();
   }
 
+  /** 長期記憶の保存と検索に関する位置を処理する。 */
   private void index(String id) {
     db.sql("DELETE FROM long_term_memory_fts WHERE memory_id=?").param(id).update();
     db.sql(
@@ -650,6 +736,7 @@ public class MemoryRepository {
     db.sql("INSERT INTO memory_fts SELECT id,content FROM memories WHERE id=?").param(id).update();
   }
 
+  /** 長期記憶の保存と検索で用いる対応表を返す。 */
   private LongTermMemory map(java.sql.ResultSet r, int n) throws java.sql.SQLException {
     String id = r.getString("id");
     return new LongTermMemory(
@@ -679,10 +766,12 @@ public class MemoryRepository {
             .list());
   }
 
+  /** 長期記憶の保存と検索で用いる時刻を返す。 */
   private static OffsetDateTime time(String value) {
     return value == null ? null : OffsetDateTime.parse(value);
   }
 
+  /** 長期記憶の保存と検索で用いる現在日時を返す。 */
   private static String now() {
     return OffsetDateTime.now(java.time.ZoneOffset.UTC).toString();
   }

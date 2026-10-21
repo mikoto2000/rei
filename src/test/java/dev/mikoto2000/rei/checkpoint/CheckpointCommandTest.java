@@ -15,16 +15,20 @@ import java.io.StringWriter;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** 再開用の記録コマンドの結果と状態の契約を検証するテスト。 */
 class CheckpointCommandTest {
+  /** {@code usage} の条件を再現するための補助情報を返す。 */
   private static CheckpointHistory.Usage usage() {
     return new CheckpointHistory.Usage(10, 30, 4096, 100, 8192);
   }
 
+  /** 検証で使用した資源を解放し、後続の検証に影響を残さないようにする。 */
   private static CheckpointHistory.Cleanup cleanup(boolean applied) {
     return new CheckpointHistory.Cleanup(
         7, 2048, 2, usage(), new CheckpointHistory.Usage(3, 30, 2048, 100, 8192), applied, 3, 2048);
   }
 
+  /** 作業の中断と再開で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void statusIsGlobalAndShowsBothCapacitySettingNames() {
     var service = mock(PersistentCheckpointService.class);
@@ -39,11 +43,13 @@ class CheckpointCommandTest {
     assertTrue(output.toString().contains("10 / 100"));
     assertTrue(output.toString().contains("rei.checkpoint.max-bytes"));
     assertTrue(output.toString().contains("rei.checkpoint.max-revisions"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(projects);
     verify(service).historyUsage();
     verifyNoMoreInteractions(service);
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void cleanupWithoutApplyOnlyPreviewsAndPrintsExactApplyCommand() {
     var service = mock(PersistentCheckpointService.class);
@@ -61,9 +67,11 @@ class CheckpointCommandTest {
     assertTrue(output.toString().contains("実行中・承認待ちのタスクでも不要な過去の履歴は古い順に整理できます"));
     verify(service).cleanupHistory(false);
     verifyNoMoreInteractions(service);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(projects);
   }
 
+  /** 作業の中断と再開で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void explicitApplyDisplaysRemainingStorageAndPreservedEvidence() {
     var service = mock(PersistentCheckpointService.class);
@@ -82,6 +90,7 @@ class CheckpointCommandTest {
     verifyNoMoreInteractions(service);
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void noCleanupCandidatesExplainsThatApplyWillNotRemoveProtectedHistory() {
     var service = mock(PersistentCheckpointService.class);
@@ -99,6 +108,7 @@ class CheckpointCommandTest {
     verifyNoMoreInteractions(service);
   }
 
+  /** 作業の中断と再開で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void legacyCleanupCallerKeepsUnknownProtectionTotalsDistinctFromZero() {
     var cleanup = new CheckpointHistory.Cleanup(0, 0, 2, usage(), usage(), false);
@@ -109,6 +119,7 @@ class CheckpointCommandTest {
     assertTrue(CheckpointHistoryReport.cleanup(cleanup).contains("保護されて削除できない履歴の件数・容量: 未取得"));
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void forceWithoutApplyPreviewsAllCheckpointsWithoutDeleting() {
     var service = mock(PersistentCheckpointService.class);
@@ -131,9 +142,11 @@ class CheckpointCommandTest {
     assertFalse(text.contains("各タスクの最新状態と再開・承認続行に必要な履歴、重複実行防止キーを保持"));
     verify(service).cleanupHistory(false, true);
     verifyNoMoreInteractions(service);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(projects);
   }
 
+  /** 作業の中断と再開で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void forceApplyReportsLossOfResumeAndPreservedNonCheckpointData() {
     var service = mock(PersistentCheckpointService.class);
@@ -159,9 +172,11 @@ class CheckpointCommandTest {
     assertFalse(text.contains("全チェックポイントを削除するには:"));
     verify(service).cleanupHistory(true, true);
     verifyNoMoreInteractions(service);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(projects);
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownCleanupOptionDoesNotRunPreviewOrDeletion() {
     var service = mock(PersistentCheckpointService.class);
@@ -172,6 +187,7 @@ class CheckpointCommandTest {
     verifyNoInteractions(service);
   }
 
+  /** 作業の中断と再開で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void capacityFailuresArePrintedWithoutAStackTrace() {
     var service = mock(PersistentCheckpointService.class);

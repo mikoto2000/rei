@@ -7,9 +7,11 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.sqlite.SQLiteDataSource;
 
+/** 情報への関心実行待ちの構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 public class CuriosityQueueConfiguration {
 
+  /** 話題の管理で用いる情報への関心データ取得元を返す。 */
   @Bean
   @Qualifier("curiosityDataSource")
   public DataSource curiosityDataSource() throws Exception {
@@ -20,6 +22,7 @@ public class CuriosityQueueConfiguration {
     return dataSource;
   }
 
+  /** 話題の管理で用いる情報への関心実行待ちを返す。 */
   @Bean
   public CuriosityQueue curiosityQueue(@Qualifier("curiosityDataSource") DataSource dataSource) {
     return new SqliteCuriosityQueue(dataSource);

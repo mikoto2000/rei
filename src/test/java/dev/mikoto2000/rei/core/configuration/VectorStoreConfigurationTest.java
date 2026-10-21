@@ -16,7 +16,9 @@ import org.springframework.ai.embedding.EmbeddingModel;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import tools.jackson.databind.json.JsonMapper;
 
+/** ベクトル保存先機能の構成の結果と状態の契約を検証するテスト。 */
 class VectorStoreConfigurationTest {
+  /** 機能の組み立てで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void bm25ConfigurationBindsAndStillInitializesLazily() {
     var properties =
@@ -41,6 +43,7 @@ class VectorStoreConfigurationTest {
     Mockito.verifyNoInteractions(dataSource, model);
   }
 
+  /** ベクトルについて、なし初期化SQLite保存先を保存することを確認する。 */
   @Test
   void vectorStoreDoesNotInitializeSqliteStoreAtBeanCreation() {
     VectorStoreConfiguration configuration = new VectorStoreConfiguration();
@@ -55,6 +58,7 @@ class VectorStoreConfigurationTest {
     Mockito.verifyNoInteractions(dataSource, embeddingModel);
   }
 
+  /** 機能の組み立てで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void vectorStoreUsesDedicatedDataSourceWhenFirstUsed() throws Exception {
     VectorStoreConfiguration configuration = new VectorStoreConfiguration();
@@ -78,6 +82,7 @@ class VectorStoreConfigurationTest {
     assertSame(dataSource, extractDataSource(vectorStore));
   }
 
+  /** {@code extractDataSource} の条件を再現するための補助情報を返す。 */
   private DataSource extractDataSource(LazySqliteVectorStore vectorStore) {
     try {
       var delegateField = LazySqliteVectorStore.class.getDeclaredField("delegate");

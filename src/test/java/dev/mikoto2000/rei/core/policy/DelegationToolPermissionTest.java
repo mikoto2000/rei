@@ -26,7 +26,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
+/** 委譲ツール権限の結果と状態の契約を検証するテスト。 */
 class DelegationToolPermissionTest {
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void missingAccountIsRejectedBeforeRequestingOrConsumingApproval() {
     var repository = mock(ToolApprovalRepository.class);
@@ -41,12 +43,17 @@ class DelegationToolPermissionTest {
                 guard.check(
                     "delegateTask", input, owner(AgentRunContext.Mode.EXCLUSIVE, "session")));
     assertTrue(error.getMessage().contains("ACCOUNT_REQUIRED"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(repository);
   }
 
+  /** 検証に使う判断基準。 */
   private ToolPermissionPolicy policy;
+
+  /** 検証に使う登録台帳。 */
   private SubAgentRegistry registry;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   @SuppressWarnings("unchecked")
   void setup() {
@@ -67,6 +74,7 @@ class DelegationToolPermissionTest {
     policy.setDelegationResolver(new DelegationToolPermissionResolver(registries, policies));
   }
 
+  /** {@code definition} の条件を再現するための補助情報を返す。 */
   private SubAgentDefinition definition(String agent, List<String> tools) {
     return new SubAgentDefinition(
         agent,
@@ -80,15 +88,18 @@ class DelegationToolPermissionTest {
         Path.of("agent.yaml"));
   }
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   private AgentRunContext owner(AgentRunContext.Mode mode, String session) {
     return new AgentRunContext(
         "run", session, Path.of("."), "project", AgentRunContext.RequestSource.WEB, mode);
   }
 
+  /** 検証で使用する利用条件の確認を、指定された条件に合わせて用意する。 */
   private ToolPermissionGuard guard() {
     return new ToolPermissionGuard(policy, new AgentEventFactory(Clock.systemUTC()), event -> {});
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void blankBackendIsLocalForPermissionChecks() {
     String input =
@@ -99,6 +110,7 @@ class DelegationToolPermissionTest {
             guard().check("delegateTask", input, owner(AgentRunContext.Mode.EXCLUSIVE, "session")));
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void expectedOutputTemplateIsRejectedBeforeApprovalCreationOrConsumption() {
     var original = definition("reviewer", List.of("readMultiFile"));
@@ -131,12 +143,14 @@ class DelegationToolPermissionTest {
                 guard.check(
                     "delegateTask", input, owner(AgentRunContext.Mode.EXCLUSIVE, "session")));
     assertTrue(error.getMessage().contains("exact-match"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(repository);
     assertTrue(error.getMessage().contains("request.accountRef"));
     assertTrue(error.getMessage().contains("request.modelId"));
     assertTrue(error.getMessage().contains("request.context"));
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void invalidArgumentsNeverCreateOrConsumeApprovalEvenWithoutADenyList() {
     policy =
@@ -161,9 +175,11 @@ class DelegationToolPermissionTest {
                 "delegateTasks",
                 "{\"requests\":[{\"id\":\"same\",\"agent\":\"reviewer\",\"task\":\"review\"},{\"id\":\"same\",\"agent\":\"reviewer\",\"task\":\"review\"}]}",
                 owner(AgentRunContext.Mode.EXCLUSIVE, "session")));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(repository);
   }
 
+  /** ツール利用の権限制御で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void localSingleAndParallelReviewsPassTheRealGuardWithDefaultPolicy() {
     var owner = owner(AgentRunContext.Mode.READ_ONLY, "session");
@@ -183,6 +199,7 @@ class DelegationToolPermissionTest {
                     owner));
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void requiredChildCapabilitiesAreCombinedBeforeAnyChildStarts() {
     String input =
@@ -202,6 +219,7 @@ class DelegationToolPermissionTest {
             "delegateTask", "{\"agent\":\"reviewer\",\"task\":\"review\",\"id\":\"review\"}"));
   }
 
+  /** 実行を必要とすることを確認する。 */
   @Test
   void externalDestinationsRequireSendingAndAppServerRequiresExecution() {
     for (String tool : List.of("delegateTask", "delegateTasks")) {
@@ -225,6 +243,7 @@ class DelegationToolPermissionTest {
     }
   }
 
+  /** ツール利用の権限制御で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unknownMalformedAndDisallowedChildrenFailClosed() {
     for (String input :
@@ -243,6 +262,7 @@ class DelegationToolPermissionTest {
       assertEquals(PermissionDecision.DENY, policy.evaluate("delegateTasks", input));
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void disabledPolicyAndReadRelabelingCannotAuthorizeExternalOrRecursiveDelegation() {
     var resolver =
@@ -278,6 +298,7 @@ class DelegationToolPermissionTest {
                     owner(AgentRunContext.Mode.READ_ONLY, "session")));
   }
 
+  /** 関連図および評価の判断について、子の実行定義一覧を利用することを確認する。 */
   @Test
   void graphAndJudgeUseChildDefinitionsInsteadOfUnknownToolFallback() {
     assertEquals(

@@ -7,16 +7,31 @@ import org.jline.reader.Widget;
 import org.jline.reader.impl.LineReaderImpl;
 
 /**
- * Refreshes through a JLine widget, under JLine's own input lock, without editing the input buffer.
+ * ターミナルでの対話に必要な活動中実行プロンプトを扱う。
+ *
+ * <p>Refreshes through a JLine widget, under JLine's own input lock, without editing the input
+ * buffer.
  */
 public final class ActiveRunPrompt implements AutoCloseable {
+  /** 再確認。 */
   private static final String REFRESH = "rei-active-run-prompt";
+
+  /** 読み取り元。 */
   private final LineReader reader;
+
+  /** プロンプト。 */
   private final Supplier<String> prompt;
+
+  /** 購読。 */
   private final ConversationInputRouter.Subscription subscription;
+
+  /** prior初期化。 */
   private final Widget priorInit;
+
+  /** 通常プロンプト。 */
   private volatile boolean normalPrompt;
 
+  /** 指定された値や利用先を使って、ActiveRunPromptを初期化する。 */
   public ActiveRunPrompt(LineReader reader, ConversationInputRouter runs, Supplier<String> prompt) {
     this.reader = reader;
     this.prompt = prompt;
@@ -47,6 +62,7 @@ public final class ActiveRunPrompt implements AutoCloseable {
     subscription = runs == null ? () -> {} : runs.onChange(this::refresh);
   }
 
+  /** 必要な内容を参照できるよう、行を読み取る。 */
   public String readLine() {
     normalPrompt = true;
     try {
@@ -56,6 +72,7 @@ public final class ActiveRunPrompt implements AutoCloseable {
     }
   }
 
+  /** ターミナルでの対話に関する再確認を処理する。 */
   private void refresh() {
     if (!normalPrompt || !reader.isReading()) return;
     try {
@@ -65,6 +82,7 @@ public final class ActiveRunPrompt implements AutoCloseable {
     }
   }
 
+  /** ターミナルでの対話で利用した資源や登録を解放し、利用を終了する。 */
   public void close() {
     subscription.close();
     reader.getWidgets().remove(REFRESH);

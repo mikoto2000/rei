@@ -16,9 +16,22 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 
-/** Bounded discovery of saved observations, never an assertion about the current test process. */
+/**
+ * 検証レポート集約対象診断のユースケースを実現する。
+ *
+ * <p>Bounded discovery of saved observations, never an assertion about the current test process.
+ */
 public final class TestReportCollectionDiagnosisService {
+  /**
+   * 共通の実行基盤で受け渡す件数を表す。
+   *
+   * @param tests 検証一覧
+   * @param failures 失敗一覧
+   * @param errors エラー一覧
+   * @param skipped 対象外
+   */
   public record Counts(long tests, long failures, long errors, long skipped) {
+    /** 新たな対象を登録し、後から利用できるようにする。 */
     Counts add(TestReportDiagnosisService.Counts other) {
       return new Counts(
           tests + other.tests(),
@@ -28,6 +41,18 @@ public final class TestReportCollectionDiagnosisService {
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡す要約を表す。
+   *
+   * @param path パス
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   * @param modifiedAt 更新日時
+   * @param observedAt 観測日時
+   * @param partial 部分的な結果
+   * @param reported 報告された内容
+   * @param observed 観測
+   * @param warnings 注意事項
+   */
   public record Summary(
       String path,
       String sha256,
@@ -38,10 +63,38 @@ public final class TestReportCollectionDiagnosisService {
       TestReportDiagnosisService.Counts observed,
       List<String> warnings) {}
 
+  /**
+   * 共通の実行基盤で受け渡す根拠を表す。
+   *
+   * @param path パス
+   * @param issue 課題
+   */
   public record Evidence(String path, TestReportDiagnosisService.FailedTest issue) {}
 
+  /**
+   * 共通の実行基盤で受け渡す利用不可を表す。
+   *
+   * @param path パス
+   * @param reason 理由
+   */
   public record Unavailable(String path, String reason) {}
 
+  /**
+   * 共通の実行基盤で受け渡す結果を表す。
+   *
+   * @param mode 動作モード
+   * @param directory ディレクトリ
+   * @param observedAt 観測日時
+   * @param partial 部分的な結果
+   * @param reported 報告された内容
+   * @param observed 観測
+   * @param discoveredPaths discoveredパス一覧
+   * @param reports レポート一覧
+   * @param failedTests 失敗検証一覧
+   * @param unavailable 利用不可
+   * @param nextActions 次操作一覧
+   * @param warnings 注意事項
+   */
   public record Result(
       String mode,
       String directory,
@@ -56,16 +109,30 @@ public final class TestReportCollectionDiagnosisService {
       List<String> nextActions,
       List<String> warnings) {}
 
+  /** 共通の実行基盤における種類の選択肢。 */
   private enum Kind {
+    /** 機能単位。 */
     MODULE,
+    /** 対象。 */
     TARGET,
+    /** 構築。 */
     BUILD,
+    /** 結果一覧。 */
     RESULTS,
+    /** レポート。 */
     REPORT
   }
 
+  /**
+   * 共通の実行基盤で受け渡すフォルダーを表す。
+   *
+   * @param path パス
+   * @param kind 種類
+   * @param moduleDepth 機能単位深さ
+   */
   private record Folder(Path path, Kind kind, int moduleDepth) {}
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   public Result read(Path directory, String relative) throws IOException {
     RunCancellation.propagate(null);
     Path root = directory.toRealPath();
@@ -224,7 +291,9 @@ public final class TestReportCollectionDiagnosisService {
         List.copyOf(warnings));
   }
 
+  /** 指定や設定に応じた対象を利用するため、フォルダーを確定する。 */
   private static Path resolveFolder(Path root, String relative) throws IOException {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (relative.isBlank() || relative.length() > 1024 || relative.contains(":"))
       throw new IllegalArgumentException("Project-relative report directory required");
     Path path = Path.of(relative.replace('\\', '/'));
@@ -241,12 +310,14 @@ public final class TestReportCollectionDiagnosisService {
     return resolved;
   }
 
+  /** 共通の実行基盤において、対象外に該当するか判定する。 */
   private static boolean excluded(Path part) {
     String name = part.toString();
     return !Set.of("target", "build").contains(name)
         && (name.startsWith(".") && !name.equals(".") || RepositoryMapService.sensitive(part));
   }
 
+  /** 後続の操作を進められるか判断するため、範囲内作業ルートを確認する。 */
   private static void checkWithinRoot(Path root, Path path) throws IOException {
     Path checked = root;
     for (var part : root.relativize(path)) {

@@ -4,9 +4,12 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Map;
 
+/** れいが保存するデータの基準ディレクトリを、利用環境と設定から決定する。 */
 public final class ReiDataDirectory {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ReiDataDirectory() {}
 
+  /** データ保存先の利用で用いる現在を返す。 */
   public static Path current() {
     String override = System.getProperty("rei.data-dir");
     return override != null && !override.isBlank()
@@ -17,6 +20,7 @@ public final class ReiDataDirectory {
             System.getenv());
   }
 
+  /** 指定や設定を照合し、実際に利用する対象を確定する。 */
   public static Path resolve(String os, Path home, Map<String, String> env) {
     Path path;
     if (present(env, "REI_DATA_DIR")) path = Path.of(env.get("REI_DATA_DIR"));
@@ -37,6 +41,7 @@ public final class ReiDataDirectory {
     return path.toAbsolutePath().normalize();
   }
 
+  /** データ保存先の利用において、存在するに該当するか判定する。 */
   private static boolean present(Map<String, String> env, String key) {
     return env.get(key) != null && !env.get(key).isBlank();
   }

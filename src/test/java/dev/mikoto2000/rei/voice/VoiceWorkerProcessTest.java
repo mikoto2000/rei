@@ -16,9 +16,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
+/** 音声実行の担当プロセスの結果と状態の契約を検証するテスト。 */
 class VoiceWorkerProcessTest {
+  /** 検証に使う一時的な。 */
   @org.junit.jupiter.api.io.TempDir Path temporary;
 
+  /** {@code launch} の条件を再現するための補助情報を返す。 */
   List<String> launch(String mode) throws Exception {
     return List.of(
         Path.of(
@@ -33,6 +36,7 @@ class VoiceWorkerProcessTest {
         mode);
   }
 
+  /** 音声による対話で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void boundedProtocolDrainsNativeStderrWithoutWritingItToTheTerminal() throws Exception {
     try (var worker =
@@ -43,6 +47,7 @@ class VoiceWorkerProcessTest {
     }
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void crashedTimedOutOrInvalidWorkerIsStoppedWithoutCrashingTheCaller() throws Exception {
     for (String mode : List.of("crash", "stall", "invalid")) {
@@ -59,6 +64,7 @@ class VoiceWorkerProcessTest {
         .isInstanceOf(IOException.class);
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void interruptedCleanupWaitsForOwnedWorkerAndAllowsNextWorker() throws Exception {
     var worker =
@@ -78,6 +84,7 @@ class VoiceWorkerProcessTest {
     }
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void interruptedSecondHandshakeReleasesBothChildrenBeforeRestart() throws Exception {
     var vad =
@@ -127,6 +134,7 @@ class VoiceWorkerProcessTest {
     }
   }
 
+  /** 音声による対話で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void oversizedAndNonfiniteInputsNeverReachWorker() throws Exception {
     try (var worker =
@@ -141,7 +149,9 @@ class VoiceWorkerProcessTest {
     }
   }
 
+  /** 検証条件を再現するための検証用に置き換えた実行の担当。 */
   public static class FakeWorker {
+    /** 検証用に、音声による対話の起動要求を受け付け、実行を開始する。 */
     public static void main(String[] args) throws Exception {
       String mode = args[0];
       if (mode.equals("slowexit"))

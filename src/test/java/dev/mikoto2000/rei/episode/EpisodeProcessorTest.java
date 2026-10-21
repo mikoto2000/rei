@@ -16,11 +16,18 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 経験の記録Processorの結果と状態の契約を検証するテスト。 */
 class EpisodeProcessorTest {
+  /** 検証に使う保存と検索の窓口。 */
   EpisodeRepository repository = mock(EpisodeRepository.class);
+
+  /** 検証に使うやり取り一覧。 */
   ConversationTurnStore turns = mock(ConversationTurnStore.class);
+
+  /** 検証に使う情報の抽出。 */
   EpisodeExtractor extractor = mock(EpisodeExtractor.class);
 
+  /** {@code episode} の条件を再現するための補助情報を返す。 */
   Episode episode(Episode.Evidence evidence, String run, String speaker) {
     return new Episode(
         "e",
@@ -35,6 +42,7 @@ class EpisodeProcessorTest {
         .8);
   }
 
+  /** 過去の経験の活用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rejectsFabricatedSourceAndDoesNotAdvanceCheckpoint() {
     var batch =
@@ -53,6 +61,7 @@ class EpisodeProcessorTest {
     verify(repository, never()).saveBatch(anyString(), anyLong(), anyLong(), anyList());
   }
 
+  /** 提案一覧を保持することを確認する。 */
   @Test
   void preservesProposalsAndCommitsEmptyExtractionForSmallTalk() {
     var batch =
@@ -64,6 +73,7 @@ class EpisodeProcessorTest {
     verify(repository).saveBatch("s", 0, 1, List.of());
   }
 
+  /** 過去の経験の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void assistantCannotBecomeUserDecision() {
     assertThrows(
@@ -74,6 +84,7 @@ class EpisodeProcessorTest {
         () -> episode(Episode.Evidence.TOOL_OBSERVED, "r", "assistant"));
   }
 
+  /** 複数やり取り一覧を受け付けられることを確認する。 */
   @Test
   void acceptsMultipleTurnsAndKeepsAlternativeAndUnknown() {
     var batch =
@@ -96,6 +107,7 @@ class EpisodeProcessorTest {
     verify(repository).saveBatch("s", 0, 2, List.of(e));
   }
 
+  /** 過去の経験の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void modelProposalCannotMarkAnEpisodeCompleted() {
     var batch =

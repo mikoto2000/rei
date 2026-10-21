@@ -7,8 +7,22 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
-/** Compares actual worker results, never caller-supplied verdicts or votes. */
+/**
+ * 補助エージェントへの委譲に必要な計画レビュー比較結果を扱う。
+ *
+ * <p>Compares actual worker results, never caller-supplied verdicts or votes.
+ */
 public final class PlanReviewComparison {
+  /**
+   * 補助エージェントへの委譲で受け渡す比較結果を表す。
+   *
+   * @param truthVerified 確定情報確認済み
+   * @param conclusions 結論一覧
+   * @param commonFindings common指摘一覧
+   * @param independentFindings independent指摘一覧
+   * @param evidence 根拠
+   * @param unresolved 未確定
+   */
   public record Comparison(
       boolean truthVerified,
       List<String> conclusions,
@@ -17,6 +31,7 @@ public final class PlanReviewComparison {
       Map<String, List<String>> evidence,
       List<String> unresolved) {}
 
+  /** 補助エージェントへの委譲で用いる比較を返す。 */
   public static Comparison compare(List<ParallelSubAgentDelegator.Item> items) {
     var conclusions = new LinkedHashSet<String>();
     var findings = new LinkedHashMap<String, List<String>>();
@@ -88,6 +103,7 @@ public final class PlanReviewComparison {
     findings.forEach(
         (id, values) ->
             independent.put(id, values.stream().filter(v -> counts.get(v) == 1).toList()));
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (conclusions.size() > 1)
       unresolved.add(
           "Different conclusions require independent parent assessment; no majority verdict");

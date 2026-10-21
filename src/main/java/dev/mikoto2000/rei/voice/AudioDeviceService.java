@@ -12,30 +12,40 @@ import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.Mixer;
 import javax.sound.sampled.TargetDataLine;
 
+/** 音声Deviceのユースケースを実現する。 */
 public final class AudioDeviceService {
+  /** 利用可能な項目。 */
   private final Supplier<List<AudioDevice>> catalog;
+
+  /** 選択中識別子。 */
   private volatile String selectedId;
 
+  /** 音声による対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public AudioDeviceService() {
     this(AudioDeviceService::scan);
   }
 
+  /** 指定された値や利用先を使って、AudioDeviceServiceを初期化する。 */
   public AudioDeviceService(Supplier<List<AudioDevice>> catalog) {
     this.catalog = Objects.requireNonNull(catalog);
   }
 
+  /** 音声による対話に関するキャッシュの無効化選択内容を処理する。 */
   public void invalidateSelection() {
     selectedId = null;
   }
 
+  /** 保存済みの状態を引き継ぐため、選択内容を復元する。 */
   public void restoreSelection(String id) {
     selectedId = id;
   }
 
+  /** 音声による対話で用いるdevicesを返す。 */
   public List<AudioDevice> devices() {
     return List.copyOf(catalog.get());
   }
 
+  /** 指定された条件に応じて、利用する対象を選ぶ。 */
   public void select(String id) {
     var matches = devices().stream().filter(d -> d.id().equals(id)).toList();
     if (matches.size() != 1)
@@ -43,6 +53,7 @@ public final class AudioDeviceService {
     selectedId = id;
   }
 
+  /** 音声による対話で用いる選択中を返す。 */
   public AudioDevice selected() {
     if (selectedId == null)
       throw new IllegalStateException("Select a microphone with /voice device set ID");
@@ -53,6 +64,7 @@ public final class AudioDeviceService {
     return matches.getFirst();
   }
 
+  /** 音声による対話で用いる説明を返す。 */
   static AudioDevice describe(Mixer.Info info) {
     String identity =
         info.getName()
@@ -75,6 +87,7 @@ public final class AudioDeviceService {
     }
   }
 
+  /** 音声による対話で用いる調査を返す。 */
   private static List<AudioDevice> scan() {
     return Arrays.stream(AudioSystem.getMixerInfo())
         .filter(

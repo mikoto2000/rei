@@ -9,9 +9,12 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 加工前の結果ページ安全性の結果と状態の契約を検証するテスト。 */
 class RawResultPageSafetyTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void requestedLargePageShrinksAndExposesExactContinuation() throws Exception {
     var store = new RawToolResultStore(dir);
@@ -24,6 +27,7 @@ class RawResultPageSafetyTest {
     }
   }
 
+  /** モデルへ渡す文脈の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void lowSurrogateCursorIsRejected() {
     var store = new RawToolResultStore(dir);

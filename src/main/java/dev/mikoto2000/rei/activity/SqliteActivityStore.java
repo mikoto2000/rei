@@ -10,18 +10,31 @@ import java.util.ArrayList;
 import java.util.List;
 import javax.sql.DataSource;
 
-/** Separate indexed tables, one transaction for raw evidence and its daily session projection. */
+/**
+ * SQLite作業状況の記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>Separate indexed tables, one transaction for raw evidence and its daily session projection.
+ */
 public final class SqliteActivityStore implements ActivityStore {
+  /** データ取得元。 */
   private final DataSource dataSource;
+
+  /** 判断基準。 */
   private final SessionMergePolicy policy;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
+
+  /** 初期化済み。 */
   private boolean initialized;
 
+  /** 指定された値や利用先を使って、SqliteActivityStoreを初期化する。 */
   public SqliteActivityStore(DataSource dataSource, SessionMergePolicy policy) {
     this.dataSource = dataSource;
     this.policy = policy;
   }
 
+  /** 作業状況の把握に関する初期化を処理する。 */
   private synchronized void initialize() throws SQLException {
     if (initialized) return;
     try (var connection = dataSource.getConnection();
@@ -38,16 +51,19 @@ public final class SqliteActivityStore implements ActivityStore {
     }
   }
 
+  /** 既存の記録へ経緯を残すため、SQLite作業状況保存先を追記する。 */
   @Override
   public synchronized void append(ActivityRecord record) {
     persist(record, false);
   }
 
+  /** 指定された内容へ切り替えるため、SQLite作業状況保存先を置き換える。 */
   @Override
   public synchronized void replace(ActivityRecord record) {
     persist(record, true);
   }
 
+  /** 後の処理へ引き継げるよう、SQLite作業状況保存先を永続化する。 */
   private void persist(ActivityRecord record, boolean replace) {
     try {
       initialize();
@@ -103,6 +119,7 @@ public final class SqliteActivityStore implements ActivityStore {
     }
   }
 
+  /** 作業状況の把握で用いる記録一覧を返す。 */
   private List<ActivityRecord> records(Connection c, Instant start, Instant end) throws Exception {
     var records = new ArrayList<ActivityRecord>();
     try (var s =
@@ -117,6 +134,7 @@ public final class SqliteActivityStore implements ActivityStore {
     return records;
   }
 
+  /** 対象を特定できるよう、期間を探す。 */
   @Override
   public synchronized List<ActivitySession> findBetween(Instant start, Instant end) {
     if (!start.isBefore(end)) throw new IllegalArgumentException("start must precede end");
@@ -165,8 +183,10 @@ public final class SqliteActivityStore implements ActivityStore {
   }
 
   /**
-   * Read-only overlap query; original payloads are retained even when their estimated intervals are
-   * clipped.
+   * 対象を特定できるよう、記録一覧期間上限内に収めたを探す。
+   *
+   * <p>Read-only overlap query; original payloads are retained even when their estimated intervals
+   * are clipped.
    */
   @Override
   public synchronized List<ActivityRecord> findRecordsBetweenBounded(
@@ -191,6 +211,7 @@ public final class SqliteActivityStore implements ActivityStore {
               throw new IllegalStateException("Activity query cancelled");
             if (candidates.size() >= maxRecords) throw new ActivityQueryLimitException();
             String payload = rows.getString(1);
+            // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
             if (payload == null || payload.length() > 131072)
               throw new ActivityQueryLimitException();
             int size = payload.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
@@ -208,6 +229,7 @@ public final class SqliteActivityStore implements ActivityStore {
     }
   }
 
+  /** 作業状況の把握で用いるoverlapsを返す。 */
   private List<ActivityRecord> overlaps(List<ActivityRecord> candidates, Instant start) {
     var result = new ArrayList<ActivityRecord>();
     for (int i = 0; i < candidates.size(); i++) {
@@ -229,6 +251,7 @@ public final class SqliteActivityStore implements ActivityStore {
     return List.copyOf(result);
   }
 
+  /** 対象を特定できるよう、記録一覧期間を探す。 */
   @Override
   public synchronized List<ActivityRecord> findRecordsBetween(Instant start, Instant end) {
     if (!start.isBefore(end)) throw new IllegalArgumentException("start must precede end");
@@ -246,6 +269,7 @@ public final class SqliteActivityStore implements ActivityStore {
     }
   }
 
+  /** 対象を特定できるよう、観測内容一覧期間上限内に収めたを探す。 */
   @Override
   public synchronized List<ActivityRecord> findObservationsBetweenBounded(
       Instant start, Instant end, int maxRecords) {

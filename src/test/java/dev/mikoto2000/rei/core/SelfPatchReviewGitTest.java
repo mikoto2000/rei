@@ -20,10 +20,15 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Self変更差分レビューGitの結果と状態の契約を検証するテスト。 */
 class SelfPatchReviewGitTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う検証一覧。 */
   final AtomicInteger tests = new AtomicInteger();
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void repository() throws Exception {
     git("init", "--quiet");
@@ -34,6 +39,7 @@ class SelfPatchReviewGitTest {
     git("commit", "--quiet", "--no-gpg-sign", "-m", "fixture");
   }
 
+  /** {@code git} の条件を再現するため、検証用の操作や状態を扱う。 */
   void git(String... arguments) throws Exception {
     var command =
         new ArrayList<String>(
@@ -58,6 +64,7 @@ class SelfPatchReviewGitTest {
     assertEquals(0, process.exitValue(), new String(process.getInputStream().readNBytes(4096)));
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   SelfPatchReviewService service() {
     var inspector = new GitPatchInspector(new ExternalAgentProcessRunner());
     return new SelfPatchReviewService(
@@ -74,10 +81,12 @@ class SelfPatchReviewGitTest {
         });
   }
 
+  /** 検証用に、要求された条件を満たすことを確認する。 */
   SelfPatchReviewService.Result verify() throws Exception {
     return service().verify(root, new SelfPatchReviewService.Request("controlled fixture", 10));
   }
 
+  /** 共通の実行基盤の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void diagnosedRepairConnectsRealFailureReportApprovalApplyAndRealShellVerification()
       throws Exception {
@@ -139,6 +148,7 @@ class SelfPatchReviewGitTest {
     assertArrayEquals(index, Files.readAllBytes(root.resolve(".git/index")));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void requirementReviewUsesRealGitMaterialAndFreshRealCommandReportWithoutChangingIndex()
       throws Exception {
@@ -225,6 +235,7 @@ class SelfPatchReviewGitTest {
     assertArrayEquals(index, Files.readAllBytes(root.resolve(".git/index")));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void savedChangeSetRepairsRealGitFindingThenRunsFinalRealShellTest() throws Exception {
     Files.createDirectories(root.resolve("build"));
@@ -264,6 +275,7 @@ class SelfPatchReviewGitTest {
     assertArrayEquals(index, Files.readAllBytes(root.resolve(".git/index")));
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void realCommandsRunTwiceOnTheSamePatchAndIgnoredOutputsDoNotInvalidateIt() throws Exception {
     Files.writeString(root.resolve("A.txt"), "after\n");
@@ -280,6 +292,7 @@ class SelfPatchReviewGitTest {
     assertArrayEquals(index, Files.readAllBytes(root.resolve(".git/index")));
   }
 
+  /** 登録済み空白について、修正を必要とすることを確認する。 */
   @Test
   void trackedWhitespaceRequiresFixAndACompleteNewCycleAfterFix() throws Exception {
     Files.writeString(root.resolve("A.txt"), "after \n");
@@ -292,6 +305,7 @@ class SelfPatchReviewGitTest {
     assertEquals(3, tests.get());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void untrackedConflictMarkersAreReviewedWithoutAddingFilesToTheIndex() throws Exception {
     byte[] index = Files.readAllBytes(root.resolve(".git/index"));
@@ -305,6 +319,7 @@ class SelfPatchReviewGitTest {
     assertArrayEquals(index, Files.readAllBytes(root.resolve(".git/index")));
   }
 
+  /** 共通の実行基盤で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void binarySecretsOversizedFilesAndSubdirectoryRootsFailClosedBeforeTests() throws Exception {
     Files.write(root.resolve("New.bin"), new byte[] {0, 1});
@@ -323,6 +338,7 @@ class SelfPatchReviewGitTest {
     assertEquals(0, tests.get());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void stagingAndDeletionRefreshTheFingerprint() throws Exception {
     Files.writeString(root.resolve("A.txt"), "after\n");
@@ -338,6 +354,7 @@ class SelfPatchReviewGitTest {
     assertNotEquals(staged.version(), deleted.version());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void repositoryExternalDiffAndFsmonitorConfigurationAreNotExecuted() throws Exception {
     git("config", "diff.external", "definitely-missing-diff-helper");
@@ -346,6 +363,7 @@ class SelfPatchReviewGitTest {
     assertEquals("VERIFIED_CHECKS", verify().status());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void noPatchAndTooManyFilesDoNotStartTests() throws Exception {
     assertEquals("NO_PATCH", verify().status());
@@ -354,6 +372,7 @@ class SelfPatchReviewGitTest {
     assertEquals(0, tests.get());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void successfulExitWithTruncatedRealLogsCannotVerify() throws Exception {
     Files.writeString(root.resolve("A.txt"), "after\n");
@@ -369,6 +388,7 @@ class SelfPatchReviewGitTest {
     assertNull(result.finalTest());
   }
 
+  /** 共通の実行基盤で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void realTestTimeoutStopsTheCycleBeforeReviewAndFinalTest() throws Exception {
     Files.writeString(root.resolve("A.txt"), "after\n");

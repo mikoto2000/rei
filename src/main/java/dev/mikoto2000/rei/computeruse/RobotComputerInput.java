@@ -4,17 +4,25 @@ import java.awt.Point;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 
+/** 画面操作の支援に必要なRobot画面操作入力を扱う。 */
 public final class RobotComputerInput implements ComputerInput {
+  /** 操作の実行先。 */
   private final RobotDriver driver;
+
+  /** クリップボード。 */
   private final ClipboardPaste clipboard;
+
+  /** 待機の実行先。 */
   private final Sleeper sleeper;
 
+  /** 指定された値や利用先を使って、RobotComputerInputを初期化する。 */
   public RobotComputerInput(RobotDriver driver, ClipboardPaste clipboard, Sleeper sleeper) {
     this.driver = driver;
     this.clipboard = clipboard;
     this.sleeper = sleeper;
   }
 
+  /** 要求された処理を実行する。 */
   public void execute(ComputerAction action, CapturedScreen screen) throws Exception {
     ActionValidator.validate(action, screen);
     if (action instanceof ComputerAction.Done
@@ -69,6 +77,7 @@ public final class RobotComputerInput implements ComputerInput {
     }
   }
 
+  /** 画面操作の支援に関するclickを処理する。 */
   private void click(Point point) {
     driver.move(point.x, point.y);
     try {
@@ -78,6 +87,7 @@ public final class RobotComputerInput implements ComputerInput {
     }
   }
 
+  /** 対象を照合・参照するためのキーを返す。 */
   private void key(int code) {
     try {
       driver.keyPress(code);
@@ -86,6 +96,7 @@ public final class RobotComputerInput implements ComputerInput {
     }
   }
 
+  /** 画面操作の支援で用いるキーコードを返す。 */
   private static int keyCode(String key) {
     return switch (key) {
       case "ENTER" -> KeyEvent.VK_ENTER;

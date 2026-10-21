@@ -6,10 +6,13 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** スキル候補対象の選択条件の結果と状態の契約を検証するテスト。 */
 class SkillCandidateSelectorTest {
 
+  /** 検証に使う対象の選択条件。 */
   private final SkillCandidateSelector selector = new SkillCandidateSelector();
 
+  /** スキルの利用で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void ranksSkillNameMatchHighestAndIgnoresCase() {
     List<SkillCandidate> candidates =
@@ -26,6 +29,7 @@ class SkillCandidateSelectorTest {
         .hasSize(1);
   }
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void scoresExactAndPartialKeywordMatches() {
     AgentSkill exact = skill("powershell", "shell", "invoke-webrequest");
@@ -42,6 +46,7 @@ class SkillCandidateSelectorTest {
         .isEqualTo(2);
   }
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void matchesDescriptionAndJapaneseSubstring() {
     assertThat(
@@ -52,6 +57,7 @@ class SkillCandidateSelectorTest {
         .hasSize(1);
   }
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void excludesZeroScoreSkills() {
     assertThat(
@@ -60,6 +66,7 @@ class SkillCandidateSelectorTest {
         .isEmpty();
   }
 
+  /** スキルの利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void limitsSortsAndBreaksTiesBySkillName() {
     List<AgentSkill> skills =
@@ -82,6 +89,7 @@ class SkillCandidateSelectorTest {
         .isSortedAccordingTo(java.util.Comparator.reverseOrder());
   }
 
+  /** {@code skill} の条件を再現するための補助情報を返す。 */
   private AgentSkill skill(String name, String description, String... keywords) {
     return new AgentSkill(
         name,

@@ -7,9 +7,38 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
-/** Exact immutable specifications plus a permanent SQLite one-shot execution claim. */
+/**
+ * 実装要求を保存・検索するための窓口。
+ *
+ * <p>Exact immutable specifications plus a permanent SQLite one-shot execution claim.
+ */
 @Repository
 public class ImplementationRequestRepository {
+  /**
+   * 外部エージェントへの委譲で受け渡す要求を表す。
+   *
+   * @param requestId 要求の識別子
+   * @param specificationVersion 仕様形式のバージョン
+   * @param specificationSha256 仕様内容の同一性を照合するSHA-256ハッシュ
+   * @param projectId 所属プロジェクトの識別子
+   * @param projectRoot 作業対象のルートディレクトリ
+   * @param sessionId 会話の識別子
+   * @param originRunId 起点実行の識別子
+   * @param originUserMessageId 起点利用者メッセージ識別子
+   * @param sourceType 取得元種別
+   * @param provider 提供元
+   * @param baseCommit 基準確定
+   * @param previousRequestId 前回要求の識別子
+   * @param canonicalSpecification 正規仕様
+   * @param executionEnvelope 実行共通の通知属性
+   * @param policyDecision 判断基準判断結果
+   * @param authorizationId 権限の確認識別子
+   * @param executionStatus 実行状態
+   * @param receiptId 受付記録識別子
+   * @param result 結果
+   * @param createdAt 作成日時
+   * @param updatedAt 更新日時
+   */
   public record Request(
       String requestId,
       int specificationVersion,
@@ -33,9 +62,13 @@ public class ImplementationRequestRepository {
       Instant createdAt,
       Instant updatedAt) {}
 
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** 指定された値や利用先を使って、ImplementationRequestRepositoryを初期化する。 */
   public ImplementationRequestRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, Clock clock) {
     db = JdbcClient.create(source);
@@ -51,6 +84,7 @@ public class ImplementationRequestRepository {
         .update();
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   public void save(Request r) {
     db.sql(
             "INSERT INTO implementation_requests(id,version,hash,project,root,session,origin_run,origin_message,source,provider,base,previous,spec,envelope,policy,authorization,status,receipt,result,created,updated) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
@@ -79,6 +113,7 @@ public class ImplementationRequestRepository {
         .update();
   }
 
+  /** 対象を特定できるよう、実装要求保存と検索の窓口を探す。 */
   public java.util.Optional<Request> find(
       String project, String session, String run, String hash, String previous) {
     return db.sql(
@@ -88,6 +123,7 @@ public class ImplementationRequestRepository {
         .optional();
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Request get(String id) {
     return db.sql("SELECT * FROM implementation_requests WHERE id=?")
         .param(id)
@@ -96,6 +132,7 @@ public class ImplementationRequestRepository {
         .orElseThrow(() -> new IllegalArgumentException("Implementation request not found"));
   }
 
+  /** 対象を処理する担当を決めるため、実装要求保存と検索の窓口の利用権を確保する。 */
   public boolean claim(String id, String instance) {
     return db.sql(
                 "UPDATE implementation_requests SET status='EXECUTING',receipt=id,claim_owner=?,updated=? WHERE id=? AND status IN ('AUTHORIZED','AWAITING_APPROVAL') AND claim_owner IS NULL")
@@ -104,6 +141,7 @@ public class ImplementationRequestRepository {
         == 1;
   }
 
+  /** 対象を処理する担当を決めるため、所有者の利用権を確保する。 */
   public String claimOwner(String id) {
     return db.sql("SELECT claim_owner FROM implementation_requests WHERE id=?")
         .param(id)
@@ -112,6 +150,7 @@ public class ImplementationRequestRepository {
         .orElse("");
   }
 
+  /** 外部エージェントへの委譲に関する権限の確認を処理する。 */
   public void authorization(String id, String decision, String authorization, String status) {
     db.sql(
             "UPDATE implementation_requests SET policy=?,authorization=?,status=?,updated=? WHERE id=? AND claim_owner IS NULL")
@@ -119,6 +158,7 @@ public class ImplementationRequestRepository {
         .update();
   }
 
+  /** 終了時に必要な状態を反映し、処理を完了させる。 */
   public void finish(String id, String status, String receipt, String result) {
     if (db.sql(
                 "UPDATE implementation_requests SET status=?,receipt=?,result=?,updated=? WHERE id=? AND status IN ('EXECUTING','VERIFYING','UNKNOWN')")
@@ -134,8 +174,10 @@ public class ImplementationRequestRepository {
     }
   }
 
+  /** 後から参照できるよう、評価一覧を保存する。 */
   public void saveEvaluations(
       String request, String specificationHash, String receipt, String patch, String evaluations) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (evaluations.length() > 32768)
       throw new IllegalArgumentException("Evaluation exceeds 32 KiB");
     db.sql(
@@ -144,6 +186,7 @@ public class ImplementationRequestRepository {
         .update();
   }
 
+  /** 外部エージェントへの委譲で用いる評価一覧を返す。 */
   public java.util.Optional<String> evaluations(
       String request, String specificationHash, String receipt, String patch) {
     return db.sql(
@@ -153,6 +196,7 @@ public class ImplementationRequestRepository {
         .optional();
   }
 
+  /** 外部エージェントへの委譲で用いる行を返す。 */
   private Request row(java.sql.ResultSet r, int index) throws java.sql.SQLException {
     return new Request(
         r.getString("id"),

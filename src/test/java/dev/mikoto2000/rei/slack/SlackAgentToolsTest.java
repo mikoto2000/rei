@@ -35,10 +35,13 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** Slackエージェントツール一覧の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SlackAgentToolsTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 検証で使用する設定を、指定された条件に合わせて用意する。 */
   SlackAgentProperties settings() {
     var p = new SlackAgentProperties();
     p.setEnabled(true);
@@ -48,6 +51,7 @@ class SlackAgentToolsTest {
     return p;
   }
 
+  /** {@code execution} の条件を再現するための補助情報を返す。 */
   RunExecutionContext execution(int calls) {
     var e =
         new RunExecutionContext(
@@ -60,15 +64,18 @@ class SlackAgentToolsTest {
     return e;
   }
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   ToolContext context(RunExecutionContext e) {
     return new ToolContext(Map.of(RunExecutionContext.KEY, e, "toolCallId", "call"));
   }
 
+  /** {@code repo} の条件を再現するための補助情報を返す。 */
   SlackAgentRepository repo() {
     return new SlackAgentRepository(
         new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("storage.db")), Clock.systemUTC());
   }
 
+  /** Slackとの連携の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void policyAuthorizesResolvedDestinationAndExplicitTextBeforeCreation() {
     var r = repo();
@@ -82,6 +89,7 @@ class SlackAgentToolsTest {
     assertEquals(1, r.forRun("run").size());
   }
 
+  /** Slackとの連携の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void deniedPermissionHasNoRequestOrSend() {
     var r = repo();
@@ -96,6 +104,7 @@ class SlackAgentToolsTest {
     assertTrue(r.forRun("run").isEmpty());
   }
 
+  /** Slackとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void exhaustedRunAndInvalidDestinationCannotCreateRequest() {
     var r = repo();
@@ -112,9 +121,11 @@ class SlackAgentToolsTest {
             new SlackAgentTools(p, r, guard)
                 .askExternalAgent("tenten", "q", "", 300, null, context(execution(2))));
     assertTrue(r.forRun("run").isEmpty());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(guard);
   }
 
+  /** Slackとの連携で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void secretPatternsAreRemovedAndNoSessionHistoryIsAttached() {
     var r = repo();
@@ -135,6 +146,7 @@ class SlackAgentToolsTest {
     assertFalse(request.question().contains("PRIVATE SESSION HISTORY"));
   }
 
+  /** Slackとの連携の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void networkWriteCapabilityCannotBeRelabeledAsRead() {
     assertEquals(

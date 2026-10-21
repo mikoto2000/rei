@@ -13,7 +13,9 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** Coreコマンド伝えるの結果と状態の契約を検証するテスト。 */
 class CoreCommandReportsTest {
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void checkpointLabelsMatchResumeListAndWorkEmptyHistoryHasShellMessage() {
     var service = mock(PersistentCheckpointService.class);

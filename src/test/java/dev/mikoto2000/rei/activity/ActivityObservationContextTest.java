@@ -22,15 +22,23 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 作業状況観測内容文脈の結果と状態の契約を検証するテスト。 */
 class ActivityObservationContextTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
+
+  /** 検証に使う日時。 */
   final Instant at = Instant.parse("2026-10-05T09:00:00Z");
+
+  /** 検証に使う所属プロジェクトの識別子。 */
   final String projectId = UUID.randomUUID().toString();
 
+  /** 検証で使用するプロジェクトを、指定された条件に合わせて用意する。 */
   ProjectContext project() {
     return new ProjectContext(projectId, "rei", directory);
   }
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   WorkContext context(String owner, int count) {
     var items = new ArrayList<WorkContext.Item>();
     for (int i = 0; i < count; i++) {
@@ -64,6 +72,7 @@ class ActivityObservationContextTest {
         owner, 3, at.minusSeconds(30), at.minusSeconds(20), null, items, Set.of());
   }
 
+  /** 検証で使用する取得元を、指定された条件に合わせて用意する。 */
   ActivityObservationContextSource source(ActivityProperties properties, WorkContext context) {
     return new ActivityObservationContextSource(
         properties,
@@ -72,6 +81,7 @@ class ActivityObservationContextTest {
         (root, time) -> new WorkContext.GitState(root.toString(), "main", "abc123", time));
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void optInCapturesCurrentGitAndBoundedReferencesWithoutWorkOrCommandText() throws Exception {
     var p = new ActivityProperties();
@@ -91,6 +101,7 @@ class ActivityObservationContextTest {
     assertFalse(saved.toString().contains(directory.toString()));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void defaultOffAndOwnerChangeAvoidCrossProjectOrFutureContext() throws Exception {
     var p = new ActivityProperties();
@@ -109,6 +120,7 @@ class ActivityObservationContextTest {
     assertNull(changing.collect(at).workContext());
   }
 
+  /** 作業状況の把握で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void observationSnapshotSurvivesSQLiteRestartAndMissingWorkContextHistory() throws Exception {
     var p = new ActivityProperties();
@@ -155,6 +167,7 @@ class ActivityObservationContextTest {
     assertTrue(service.links("other", "today").isEmpty());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void aggregatorDropsSnapshotWhenSelectedProjectIsOverridden() throws Exception {
     var p = new ActivityProperties();
@@ -174,6 +187,7 @@ class ActivityObservationContextTest {
     assertNull(evidence.workContext());
   }
 
+  /** 作業状況の把握の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void disabledDoesNoContextOrGitIOAndFailurePreservesProjectButCancellationPropagates()
       throws Exception {
@@ -215,6 +229,7 @@ class ActivityObservationContextTest {
                 null));
   }
 
+  /** 作業状況の把握で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void oldJsonRemainsReadableAndMissingWorkContextStillCapturesGit() throws Exception {
     var json =
@@ -233,6 +248,7 @@ class ActivityObservationContextTest {
     assertEquals("abc123", saved.git().commit());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void configurationBindsOptInIndependently() {
     assertFalse(new ActivityProperties().isWorkContextEnabled());

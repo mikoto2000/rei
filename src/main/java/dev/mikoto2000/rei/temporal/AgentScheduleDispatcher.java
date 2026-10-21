@@ -19,48 +19,76 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Admission shares the existing project FIFO; the durable claim precedes all external execution.
+ * 時刻と期間の解釈に必要なエージェント実行予定実行先の振り分けを扱う。
+ *
+ * <p>Admission shares the existing project FIFO; the durable claim precedes all external execution.
  */
 @Component
 @EnableConfigurationProperties(AgentSchedulerProperties.class)
 public class AgentScheduleDispatcher {
+  /** 状態表示Resumes。 */
   private dev.mikoto2000.rei.dot.DotResumeService dotResumes;
 
+  /** 時刻と期間の解釈に関する設定状態表示Resumesを処理する。 */
   @Autowired(required = false)
   public void configureDotResumes(dev.mikoto2000.rei.dot.DotResumeService service) {
     dotResumes = service;
   }
 
+  /** 継続入力一覧。 */
   private RunContinuation continuations;
 
+  /** 時刻と期間の解釈で使用する継続入力一覧を設定する。 */
   @Autowired(required = false)
   public void setContinuations(RunContinuation continuations) {
     this.continuations = continuations;
   }
 
+  /** 時刻と期間の解釈に必要な受付窓口を扱う。 */
   @FunctionalInterface
   interface Gateway {
+    /** 時刻と期間の解釈に関する実行先への引き渡しを処理する。 */
     void dispatch(PersistentAgentScheduler.Entry entry, Consumer<ChatExecutionResult> completed);
   }
 
+  /** 予約されたエージェント実行を管理する窓口。 */
   private final PersistentAgentScheduler schedules;
+
+  /** この機能の動作設定。 */
   private final AgentSchedulerProperties properties;
+
+  /** 権限一覧。 */
   private final ToolPermissionProperties permissions;
+
+  /** 受付窓口。 */
   private final Gateway gateway;
+
+  /** 入力先Flight。 */
   private final java.util.function.Predicate<PersistentAgentScheduler.Entry> inFlight;
+
+  /** 現在利用権の確保。 */
   private final java.util.concurrent.atomic.AtomicReference<PersistentAgentScheduler.Entry>
       currentClaim = new java.util.concurrent.atomic.AtomicReference<>();
+
+  /** 使用中。 */
   private final AtomicBoolean busy = new AtomicBoolean();
+
+  /** 目標待機一覧。 */
   private dev.mikoto2000.rei.goal.GoalWaitService goalWaits;
 
+  /** 時刻と期間の解釈に関する設定目標待機一覧を処理する。 */
   @Autowired(required = false)
   public void configureGoalWaits(dev.mikoto2000.rei.goal.GoalWaitService service) {
     goalWaits = service;
   }
 
+  /** 実行登録台帳。 */
   private dev.mikoto2000.rei.application.run.RunRegistry runRegistry;
+
+  /** 実行受付から終了までの管理。 */
   private dev.mikoto2000.rei.application.run.RunService runLifecycle;
 
+  /** 時刻と期間の解釈に関する設定実行Trackingを処理する。 */
   @Autowired(required = false)
   public void configureRunTracking(
       dev.mikoto2000.rei.application.run.RunRegistry registry,
@@ -69,6 +97,7 @@ public class AgentScheduleDispatcher {
     this.runLifecycle = lifecycle;
   }
 
+  /** 指定された値や利用先を使って、AgentScheduleDispatcherを初期化する。 */
   @Autowired
   public AgentScheduleDispatcher(
       PersistentAgentScheduler schedules,
@@ -175,6 +204,7 @@ public class AgentScheduleDispatcher {
         };
   }
 
+  /** 時刻と期間の解釈を利用するため、指定を補って共通の初期化へ引き渡す。 */
   AgentScheduleDispatcher(
       PersistentAgentScheduler schedules,
       AgentSchedulerProperties properties,
@@ -183,6 +213,7 @@ public class AgentScheduleDispatcher {
     this(schedules, properties, permissions, gateway, entry -> true);
   }
 
+  /** 指定された値や利用先を使って、AgentScheduleDispatcherを初期化する。 */
   AgentScheduleDispatcher(
       PersistentAgentScheduler schedules,
       AgentSchedulerProperties properties,
@@ -196,6 +227,7 @@ public class AgentScheduleDispatcher {
     this.inFlight = inFlight;
   }
 
+  /** 時刻と期間の解釈において、有効プロジェクトに該当するか判定する。 */
   private static boolean validProject(
       PersistentAgentScheduler.Entry entry, ProjectService projects) {
     var root = Path.of(entry.projectRoot());
@@ -209,8 +241,10 @@ public class AgentScheduleDispatcher {
     }
   }
 
+  /** 時刻と期間の解釈に関する定期確認を処理する。 */
   @Scheduled(fixedDelayString = "${rei.agent-scheduler.check-interval-ms:5000}")
   public synchronized void tick() {
+    // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
     if (!properties.enabled() || !permissions.enabled() || !busy.compareAndSet(false, true)) return;
     PersistentAgentScheduler.Entry claim = null;
     try {
@@ -261,6 +295,7 @@ public class AgentScheduleDispatcher {
     }
   }
 
+  /** 現在の状態と記録を照合し、差異に応じて管理状態を整える。 */
   public synchronized PersistentAgentScheduler.Entry reconcile(
       String project, String id, String expectedRunId) {
     var entry = schedules.get(project, id);
@@ -276,6 +311,7 @@ public class AgentScheduleDispatcher {
     return result;
   }
 
+  /** 後続の処理が利用できるよう、エージェント実行予定実行先の振り分けを解放する。 */
   private synchronized void release(PersistentAgentScheduler.Entry owned) {
     if (currentClaim.compareAndSet(owned, null)) busy.set(false);
   }

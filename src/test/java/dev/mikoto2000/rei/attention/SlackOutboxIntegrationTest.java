@@ -27,20 +27,43 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** SlackOutbox外部連携の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SlackOutboxIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   Clock clock = Clock.fixed(Instant.EPOCH, ZoneOffset.UTC);
+
+  /** 検証に使うデータ。 */
   DriverManagerDataSource data;
+
+  /** 検証に使うinbox。 */
   AttentionRepository inbox;
+
+  /** 検証に使うoutbox。 */
   AttentionDeliveryRepository outbox;
+
+  /** 検証に使うサービス。 */
   AttentionDeliveryService service;
+
+  /** 検証に使うSlack。 */
   SlackNotificationProvider slack;
+
+  /** 検証に使うWebhook通知。 */
   JdkAttentionSender webhook;
+
+  /** 検証に使うサーバー。 */
   HttpServer server;
+
+  /** 検証に使う呼び出し回数、コード。 */
   AtomicInteger calls = new AtomicInteger(), code = new AtomicInteger(200);
+
+  /** 検証に使う通知の連携先。 */
   InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     data = new DriverManagerDataSource("jdbc:sqlite:" + root.resolve("outbox.db"));
@@ -75,6 +98,7 @@ class SlackOutboxIntegrationTest {
     start(clock, true);
   }
 
+  /** 検証用に、要求された処理を開始する。 */
   void start(Clock current, boolean granted) {
     outbox = new AttentionDeliveryRepository(data, current);
     var policy =
@@ -98,6 +122,7 @@ class SlackOutboxIntegrationTest {
     service.start();
   }
 
+  /** {@code fact} の条件を再現するための補助情報を返す。 */
   AttentionRepository.Item fact(String run) {
     var event =
         new AgentEventFactory(clock)
@@ -108,6 +133,7 @@ class SlackOutboxIntegrationTest {
         .orElseThrow();
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void close() {
     service.close();
@@ -116,6 +142,7 @@ class SlackOutboxIntegrationTest {
     server.stop(0);
   }
 
+  /** 注意の管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void sharedOutboxDeduplicatesAndPersistsSlackReceiptAndRateAcrossRestart() {
     var first = fact("first");
@@ -146,6 +173,7 @@ class SlackOutboxIntegrationTest {
     assertFalse(persisted.contains("private message"));
   }
 
+  /** 注意の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void rateLimitBlocksAcknowledgedManualRetryUntilPersistedDeadline() {
     code.set(429);
@@ -169,6 +197,7 @@ class SlackOutboxIntegrationTest {
     assertEquals("SENT", service.status("project", item.id()).status());
   }
 
+  /** 注意の管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void policyOrProviderDisableCannotSendAndUncertainClaimNeverReplays() {
     var item = fact("uncertain");
@@ -191,6 +220,7 @@ class SlackOutboxIntegrationTest {
         IllegalArgumentException.class, () -> service.request("project", fact("disabled").id()));
   }
 
+  /** 明示的な再試行を必要とすることを確認する。 */
   @Test
   void administratorProviderChangeRequiresExplicitRetryAndUpdatesPersistedProvider() {
     var item = fact("provider-change");
@@ -205,6 +235,7 @@ class SlackOutboxIntegrationTest {
     assertEquals(1, calls.get());
   }
 
+  /** 注意の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void oldDatabaseRowsMigrateWithoutLosingPendingWebhookDelivery() {
     var legacy = new DriverManagerDataSource("jdbc:sqlite:" + root.resolve("legacy.db"));
@@ -226,6 +257,7 @@ class SlackOutboxIntegrationTest {
         new AttentionDeliveryRepository(legacy, clock).find("project", id).orElseThrow().status());
   }
 
+  /** 注意の管理で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void credentialRotationBlocksOldDestinationWithoutLeakingEitherSecret() {
     var item = fact("rotation");

@@ -32,7 +32,9 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
 
+/** 言語モデル作業文脈情報の抽出の結果と状態の契約を検証するテスト。 */
 class LlmWorkContextExtractorTest {
+  /** {@code evidence} の条件を再現するための補助情報を返す。 */
   List<Evidence> evidence(String text) {
     var now = Instant.now();
     return List.of(
@@ -40,6 +42,7 @@ class LlmWorkContextExtractorTest {
             "user-1", Origin.USER, "session", "run", "run", null, null, null, now, now, text));
   }
 
+  /** 作業文脈の引き継ぎで、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void truncatedOversizedAndEmptyResponsesHaveDistinctControlledFailures() {
     var models = mock(LlmModelProvider.class);
@@ -91,6 +94,7 @@ class LlmWorkContextExtractorTest {
             .reason());
   }
 
+  /** 固定した言語モデル出力について、なしツール一覧を利用することを確認する。 */
   @Test
   void fixedLlmOutputUsesNoToolsAndHistoricalInstructionsStayInDataMessage() {
     var models = mock(LlmModelProvider.class);
@@ -123,6 +127,7 @@ class LlmWorkContextExtractorTest {
     assertEquals("none", options.getToolChoice());
   }
 
+  /** 作業文脈の引き継ぎで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void requestDisablesToolsWithoutChangingConfiguredModelOptions() {
     var models = mock(LlmModelProvider.class);
@@ -165,6 +170,7 @@ class LlmWorkContextExtractorTest {
     assertEquals("required", configured.getToolChoice());
   }
 
+  /** 作業文脈の引き継ぎで、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rawToolDefinitionsAreRejectedBeforeSendingThePrompt() {
     var models = mock(LlmModelProvider.class);
@@ -186,6 +192,7 @@ class LlmWorkContextExtractorTest {
     verify(model, never()).stream(any(Prompt.class));
   }
 
+  /** 作業文脈の引き継ぎで、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void timeoutInvalidOutputAndOversizedInputFailWithoutInvokingTools() {
     var models = mock(LlmModelProvider.class);
@@ -220,6 +227,7 @@ class LlmWorkContextExtractorTest {
     assertTrue(oversized.diagnostic().message().contains("rei.work-context.max-input-tokens"));
   }
 
+  /** 作業文脈の引き継ぎで、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void aLargeExistingProjectIsProjectedWithinBudgetWithoutErasingItsStoredItems() {
     var models = mock(LlmModelProvider.class);

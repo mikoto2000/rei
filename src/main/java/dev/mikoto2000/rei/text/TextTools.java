@@ -3,9 +3,11 @@ package dev.mikoto2000.rei.text;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+/** テキストをモデルから呼び出せるツールとして提供する。 */
 @Component
 public class TextTools {
 
+  /** 対象の規模を判断するため、文字数を数える。 */
   @Tool(
       name = "countCharacters",
       description =

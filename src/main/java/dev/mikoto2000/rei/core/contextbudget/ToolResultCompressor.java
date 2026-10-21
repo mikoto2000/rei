@@ -10,21 +10,39 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 
 /**
- * Exact source/delegated pages; diagnostic excerpts for general logs. Raw bodies are saved first.
+ * モデルへ渡す文脈の管理に必要なツールの結果Compressorを扱う。
+ *
+ * <p>Exact source/delegated pages; diagnostic excerpts for general logs. Raw bodies are saved
+ * first.
  */
 public class ToolResultCompressor {
+  /** 保存先。 */
   private final RawToolResultStore store;
+
+  /** 概算。 */
   private final TokenEstimator estimator;
+
+  /** 判定の境界値／トークン数。 */
   private final int threshold, tokens;
+
+  /** 配信。 */
   private ToolResultDeliveryProperties delivery = new ToolResultDeliveryProperties();
 
+  /**
+   * モデルへ渡す文脈の管理で受け渡すPaged結果を表す。
+   *
+   * @param ref 参照先
+   * @param offset 開始位置
+   */
   private record PagedResult(String ref, int offset) {}
 
+  /** モデルへ渡す文脈の管理で使用する配信設定を設定する。 */
   public void setDeliveryProperties(ToolResultDeliveryProperties properties) {
     properties.validate();
     delivery = properties;
   }
 
+  /** 指定された値や利用先を使って、ToolResultCompressorを初期化する。 */
   public ToolResultCompressor(
       RawToolResultStore store, TokenEstimator estimator, int threshold, int tokens) {
     this.store = store;
@@ -33,6 +51,7 @@ public class ToolResultCompressor {
     this.tokens = tokens;
   }
 
+  /** モデルへ渡す文脈の管理に関するpreserveを処理する。 */
   public void preserve(Message message, String conversation, String run) {
     if (message instanceof ToolResponseMessage tool)
       for (var response : tool.getResponses())
@@ -45,6 +64,7 @@ public class ToolResultCompressor {
               Objects.toString(response.responseData(), ""));
   }
 
+  /** モデルへ渡す文脈の管理で用いる簡潔な形式を返す。 */
   public Message compact(Message message, String conversation, String run) {
     if (!(message instanceof ToolResponseMessage tool)) return message;
     var pages = new HashMap<String, PagedResult>();
@@ -125,7 +145,9 @@ public class ToolResultCompressor {
   }
 
   /**
-   * Shrink only contiguous source pages after history projection, never excerpts of an existing
+   * 残っている予算に収めるため、ツールの結果Compressorを利用可能な量に整える。
+   *
+   * <p>Shrink only contiguous source pages after history projection, never excerpts of an existing
    * page.
    */
   public org.springframework.ai.chat.prompt.Prompt fit(
@@ -193,6 +215,7 @@ public class ToolResultCompressor {
     return new org.springframework.ai.chat.prompt.Prompt(messages, prompt.getOptions());
   }
 
+  /** モデルへ渡す文脈の管理で用いる判断基準を返す。 */
   public static ResultDelivery.Kind policy(ToolResponseMessage message, String call) {
     Object policies = message.getMetadata().get("rei.deliveryPolicies");
     if (policies instanceof Map<?, ?> registered
@@ -200,10 +223,12 @@ public class ToolResultCompressor {
     return ResultDelivery.Kind.GENERAL;
   }
 
+  /** モデルへ渡す文脈の管理において、losslessに該当するか判定する。 */
   public static boolean lossless(ResultDelivery.Kind kind) {
     return kind == ResultDelivery.Kind.FILE_CONTENT || kind == ResultDelivery.Kind.LOSSLESS_RESULT;
   }
 
+  /** モデルへ渡す文脈の管理で用いるimportantを返す。 */
   private String important(String raw) {
     // JSON command results frequently put escaped stdout/stderr in a single physical line.
     try {
@@ -242,6 +267,7 @@ public class ToolResultCompressor {
         .collect(java.util.stream.Collectors.joining("\n"));
   }
 
+  /** 利用先の上限を超えない量へ、指定された内容を調整する。 */
   private String bounded(String text, int budget) {
     int end = text.length();
     while (end > 0 && estimator.text(text.substring(0, end)) > budget) end = end * 3 / 4;

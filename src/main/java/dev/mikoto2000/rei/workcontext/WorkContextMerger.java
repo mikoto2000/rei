@@ -19,8 +19,13 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-/** Pure merge: omission never deletes; only explicit grounded actions modify existing items. */
+/**
+ * 作業文脈の引き継ぎに必要な作業文脈Mergerを扱う。
+ *
+ * <p>Pure merge: omission never deletes; only explicit grounded actions modify existing items.
+ */
 public class WorkContextMerger {
+  /** 関連する情報をまとめて扱えるよう、作業文脈Mergerを統合する。 */
   public WorkContext merge(
       String project,
       WorkContext old,
@@ -29,6 +34,7 @@ public class WorkContextMerger {
       Map<String, Evidence> sources,
       GitState git,
       Instant now) {
+    // 別のプロジェクトの情報を、この作業の対象として扱わせない。
     if (old != null && !old.projectId().equals(project))
       throw new IllegalArgumentException("Wrong project");
     if (old != null && run != null && old.processedRuns().contains(run)) return old;
@@ -187,6 +193,7 @@ public class WorkContextMerger {
         processed);
   }
 
+  /** 新たな対象を登録し、後から利用できるようにする。 */
   private Item add(
       List<Item> items,
       WorkContextCandidate c,
@@ -212,6 +219,7 @@ public class WorkContextMerger {
     return item;
   }
 
+  /** 作業文脈の引き継ぎで用いる複製を返す。 */
   private Item copy(
       Item old,
       String text,
@@ -224,6 +232,7 @@ public class WorkContextMerger {
     return copy(old, text, reason, status, added, now, corrected, replaced, old.certainty());
   }
 
+  /** 作業文脈の引き継ぎで用いる複製を返す。 */
   private Item copy(
       Item old,
       String text,
@@ -251,6 +260,7 @@ public class WorkContextMerger {
         corrected ? Origin.USER : certainty);
   }
 
+  /** 対象を照合・参照するためのキーを返す。 */
   private String key(String text) {
     return Normalizer.normalize(text, Normalizer.Form.NFKC)
         .strip()

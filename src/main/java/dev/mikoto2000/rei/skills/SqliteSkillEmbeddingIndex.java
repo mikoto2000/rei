@@ -17,18 +17,25 @@ import java.util.Objects;
 import javax.sql.DataSource;
 
 /**
- * Single bounded snapshot in the existing application DB; schema initialized on first opted-in use.
+ * スキルの利用に必要なSQLiteスキル埋め込み表現位置を扱う。
+ *
+ * <p>Single bounded snapshot in the existing application DB; schema initialized on first opted-in
+ * use.
  */
 public final class SqliteSkillEmbeddingIndex implements SkillEmbeddingIndex {
+  /** データ。 */
   private final DataSource data;
 
+  /** 指定された値や利用先を使って、SqliteSkillEmbeddingIndexを初期化する。 */
   public SqliteSkillEmbeddingIndex(DataSource data) {
     this.data = Objects.requireNonNull(data);
   }
 
+  /** 保存された情報を読み込み、現在の処理で使える形にする。 */
   @Override
   public Map<String, float[]> load(String namespace, List<String> profiles) {
     validateNamespace(namespace);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (profiles.size() > 256)
       throw new IllegalArgumentException("Skill index profile limit exceeded");
     var requested = new HashMap<String, String>();
@@ -77,11 +84,21 @@ public final class SqliteSkillEmbeddingIndex implements SkillEmbeddingIndex {
     }
   }
 
+  /** 指定された内容へ切り替えるため、SQLiteスキル埋め込み表現位置を置き換える。 */
   @Override
   public void replace(String namespace, Map<String, float[]> vectors) {
     validateNamespace(namespace);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (vectors.size() > 256)
       throw new IllegalArgumentException("Skill index vector limit exceeded");
+    /**
+     * スキルの利用で受け渡す行を表す。
+     *
+     * @param profile 利用者情報
+     * @param dimension 次元数
+     * @param vector ベクトル
+     * @param checksum 検査値
+     */
     record Row(String profile, int dimension, byte[] vector, String checksum) {}
     var rows = new ArrayList<Row>();
     for (var entry : vectors.entrySet()) {
@@ -135,6 +152,7 @@ public final class SqliteSkillEmbeddingIndex implements SkillEmbeddingIndex {
     }
   }
 
+  /** スキルの利用に関するキャッシュの無効化を処理する。 */
   @Override
   public void invalidate(String namespace) {
     validateNamespace(namespace);
@@ -152,6 +170,7 @@ public final class SqliteSkillEmbeddingIndex implements SkillEmbeddingIndex {
     }
   }
 
+  /** スキルの利用に関する初期化を処理する。 */
   private static void initialize(Connection connection) throws SQLException {
     try (var statement = connection.createStatement()) {
       statement.setQueryTimeout(5);
@@ -164,6 +183,7 @@ public final class SqliteSkillEmbeddingIndex implements SkillEmbeddingIndex {
     }
   }
 
+  /** スキルの利用において、有効に該当するか判定する。 */
   private static boolean valid(float[] vector) {
     if (vector == null || vector.length < 1 || vector.length > 8192) return false;
     double norm = 0;
@@ -174,16 +194,19 @@ public final class SqliteSkillEmbeddingIndex implements SkillEmbeddingIndex {
     return norm == 0 || Math.abs(norm - 1) < 0.0001;
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、識別範囲を検証する。 */
   private static void validateNamespace(String namespace) {
     if (namespace == null || !namespace.matches("[A-Za-z0-9._:-]{1,128}"))
       throw new IllegalArgumentException("Invalid skill index namespace");
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、利用者情報を検証する。 */
   private static void validateProfile(String profile) {
     if (profile == null || profile.length() > 2048)
       throw new IllegalArgumentException("Invalid skill index profile");
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(byte[] bytes) {
     try {
       return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));

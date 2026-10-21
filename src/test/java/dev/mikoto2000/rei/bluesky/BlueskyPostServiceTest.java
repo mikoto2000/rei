@@ -10,8 +10,10 @@ import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 
+/** Bluesky投稿サービスの結果と状態の契約を検証するテスト。 */
 class BlueskyPostServiceTest {
 
+  /** 無効状態を返すことを確認する。 */
   @Test
   void returnsDisabledWhenFeatureOff() {
     BlueskyProperties props = configuredProperties();
@@ -26,6 +28,7 @@ class BlueskyPostServiceTest {
     verify(client, never()).authenticate(props.getHandle(), props.getAppPassword());
   }
 
+  /** Blueskyとの連携で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void returnsCredentialErrorWhenMissing() {
     BlueskyProperties props = configuredProperties();
@@ -39,6 +42,7 @@ class BlueskyPostServiceTest {
     assertEquals("Bluesky credentials are not configured", result.message());
   }
 
+  /** 検証エラーを返すことを確認する。 */
   @Test
   void returnsValidationErrorWhenBlank() {
     BlueskyProperties props = configuredProperties();
@@ -51,6 +55,7 @@ class BlueskyPostServiceTest {
     assertEquals("Post text must not be blank", result.message());
   }
 
+  /** 検証エラーを返すことを確認する。 */
   @Test
   void returnsValidationErrorWhenTooLong() {
     BlueskyProperties props = configuredProperties();
@@ -64,6 +69,7 @@ class BlueskyPostServiceTest {
     assertEquals("Post text exceeds max length: 5", result.message());
   }
 
+  /** 認証失敗を返すことを確認する。 */
   @Test
   void returnsAuthFailedWhenAuthenticateFails() {
     BlueskyProperties props = configuredProperties();
@@ -78,6 +84,7 @@ class BlueskyPostServiceTest {
     assertEquals("Bluesky authentication failed", result.message());
   }
 
+  /** 投稿失敗を返すことを確認する。 */
   @Test
   void returnsPostFailedWhenCreatePostFails() {
     BlueskyProperties props = configuredProperties();
@@ -94,6 +101,7 @@ class BlueskyPostServiceTest {
     assertEquals("Bluesky post failed", result.message());
   }
 
+  /** 投稿URIを返すことを確認する。 */
   @Test
   void returnsPostUriAndUrlWhenSuccess() {
     BlueskyProperties props = configuredProperties();
@@ -113,6 +121,7 @@ class BlueskyPostServiceTest {
     assertEquals("https://bsky.app/profile/did:plc:abc/post/3kxyz", result.postUrl());
   }
 
+  /** 想定外のエラーを返すことを確認する。 */
   @Test
   void returnsUnexpectedErrorWhenExceptionThrown() {
     BlueskyProperties props = configuredProperties();
@@ -127,6 +136,7 @@ class BlueskyPostServiceTest {
     assertEquals("Bluesky post failed due to unexpected error", result.message());
   }
 
+  /** 返信作成を返すことを確認する。 */
   @Test
   void returnsReplyCreatedWhenReplySuccess() {
     BlueskyProperties props = configuredProperties();
@@ -178,6 +188,7 @@ class BlueskyPostServiceTest {
             "at://did:plc:abc/app.bsky.feed.post/reply1");
   }
 
+  /** エラーを返すことを確認する。 */
   @Test
   void returnsErrorWhenReplyTargetCannotBeResolved() {
     BlueskyProperties props = configuredProperties();
@@ -193,6 +204,7 @@ class BlueskyPostServiceTest {
     assertEquals("Failed to resolve reply target", result.message());
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void generatesReplyTextWhenTextOmitted() {
     BlueskyProperties props = configuredProperties();
@@ -245,6 +257,7 @@ class BlueskyPostServiceTest {
             "at://did:plc:abc/app.bsky.feed.post/reply2");
   }
 
+  /** {@code configuredProperties} の条件を再現するための補助情報を返す。 */
   private BlueskyProperties configuredProperties() {
     BlueskyProperties props = new BlueskyProperties();
     props.setEnabled(true);
@@ -254,6 +267,7 @@ class BlueskyPostServiceTest {
     return props;
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private BlueskyPostService createService(BlueskyProperties props, BlueskyApiClient client) {
     return createService(
         props,
@@ -263,6 +277,7 @@ class BlueskyPostServiceTest {
         mock(BlueskyReplyStateRepository.class));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private BlueskyPostService createService(
       BlueskyProperties props,
       BlueskyApiClient client,
@@ -272,6 +287,7 @@ class BlueskyPostServiceTest {
         props, client, conversationRepository, generator, mock(BlueskyReplyStateRepository.class));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private BlueskyPostService createService(
       BlueskyProperties props,
       BlueskyApiClient client,

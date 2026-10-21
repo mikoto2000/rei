@@ -17,10 +17,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 音声モデル管理の結果と状態の契約を検証するテスト。 */
 class VoiceModelManagerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う内容。 */
   final byte[] content = "verified-model".getBytes(java.nio.charset.StandardCharsets.UTF_8);
 
+  /** {@code manifest} の条件を再現するための補助情報を返す。 */
   VoiceModelManifest manifest() throws Exception {
     String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));
     return new VoiceModelManifest(
@@ -40,6 +45,7 @@ class VoiceModelManagerTest {
                 "MIT")));
   }
 
+  /** {@code copies} の条件を再現するための補助情報を返す。 */
   VoiceAssetTransport copies(AtomicInteger calls) {
     return (asset, path, cancel, progress) -> {
       cancel.check();
@@ -49,10 +55,12 @@ class VoiceModelManagerTest {
     };
   }
 
+  /** {@code manager} の条件を再現するための補助情報を返す。 */
   VoiceModelManager manager(VoiceModelManifest manifest, VoiceAssetTransport transport) {
     return new VoiceModelManager(root, manifest, transport, (state) -> {});
   }
 
+  /** {@code finish} の条件を再現するための補助情報を返す。 */
   VoiceModelManager.State finish(VoiceModelManager manager) throws Exception {
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
     while (manager.busy() && System.nanoTime() < deadline) Thread.sleep(5);
@@ -60,6 +68,7 @@ class VoiceModelManagerTest {
     return manager.status().state();
   }
 
+  /** 音声による対話の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void noApprovalMeansNoDownloadOrDirectoryMutation() throws Exception {
     var calls = new AtomicInteger();
@@ -73,6 +82,7 @@ class VoiceModelManagerTest {
     }
   }
 
+  /** 未接続を再利用することを確認する。 */
   @Test
   void activatesOnlyCompleteVerifiedBundleAndReusesItOfflineAfterRestart() throws Exception {
     var calls = new AtomicInteger();
@@ -95,6 +105,7 @@ class VoiceModelManagerTest {
     }
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void halfBundleIsNotVisibleAndCancelCannotActivateIt() throws Exception {
     var entered = new CountDownLatch(1);
@@ -132,6 +143,7 @@ class VoiceModelManagerTest {
     }
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void corruptedOrMixedBundleNeverBecomesReady() throws Exception {
     var m = manifest();
@@ -143,6 +155,7 @@ class VoiceModelManagerTest {
     }
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void retriesTransientFailuresAtMostThreeTimesAndSupportsExplicitRetry() throws Exception {
     var calls = new AtomicInteger();
@@ -163,6 +176,7 @@ class VoiceModelManagerTest {
     }
   }
 
+  /** 音声による対話で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void transientFailureCanRecoverWithinBound() throws Exception {
     var attempts = new AtomicInteger();
@@ -182,6 +196,7 @@ class VoiceModelManagerTest {
     }
   }
 
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void verifiesCompleteManualPlacementAndDetectsLaterCorruption() throws Exception {
     var m = manifest();
@@ -200,6 +215,7 @@ class VoiceModelManagerTest {
     }
   }
 
+  /** 壊れた以前の形式のバージョンを保持することを確認する。 */
   @Test
   void preservesCorruptOldVersionWhenRepairingWithoutExposingPartialFiles() throws Exception {
     var m = manifest();
@@ -217,6 +233,7 @@ class VoiceModelManagerTest {
     }
   }
 
+  /** 作業ルート外の参照保護されていないURL一覧を受け付けないことを確認する。 */
   @Test
   void manifestRejectsTraversalInsecureUrlsAndDuplicateAssets() throws Exception {
     var good = manifest().assets().getFirst();
@@ -239,6 +256,7 @@ class VoiceModelManagerTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void pinnedTurboFp32ManifestIncludesExternalWeightsAndImmutableRevision() {
     var m = VoiceModelManifest.pinned();
@@ -266,6 +284,7 @@ class VoiceModelManagerTest {
     }
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void largeAssetBoundsRemainFiniteAndTotalsDoNotOverflowInt() throws Exception {
     var a = manifest().assets().getFirst();
@@ -283,6 +302,7 @@ class VoiceModelManagerTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 音声による対話の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void newVersionKeepsOldManagedBundleAndRequiresFreshApproval() throws Exception {
     var old = manifest();
@@ -306,6 +326,7 @@ class VoiceModelManagerTest {
     }
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void insufficientDiskFailsBeforeTransferAndNeverActivates() throws Exception {
     var m = manifest();
@@ -328,6 +349,7 @@ class VoiceModelManagerTest {
     }
   }
 
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void externalWeightsAreRequiredForReadyAndOfflineReuse() throws Exception {
     var a = manifest().assets().getFirst();
@@ -345,6 +367,7 @@ class VoiceModelManagerTest {
     }
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void interruptedReuseCheckDoesNotStartANewDownload() throws Exception {
     var m = manifest();
@@ -364,6 +387,7 @@ class VoiceModelManagerTest {
     }
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void integrityHashHonorsCancellationBeforeReading() throws Exception {
     var m = manifest();

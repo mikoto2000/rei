@@ -11,11 +11,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+/** Web検索および読み取りサービスの結果と状態の契約を検証するテスト。 */
 class WebSearchAndReadServiceTest {
+  /** 検証に使うサービス。 */
   private WebSearchAndReadService service;
+
+  /** 検証に使うWeb検索サービス。 */
   private WebSearchService webSearchService;
+
+  /** 検証に使うURL内容取得サービス。 */
   private UrlContentFetchService urlContentFetchService;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setUp() {
     WebSearchProperties properties = new WebSearchProperties();
@@ -27,6 +34,7 @@ class WebSearchAndReadServiceTest {
             webSearchService, urlContentFetchService, new WebPageExtractor(), properties);
   }
 
+  /** 空白の検索条件を受け付けないことを確認する。 */
   @Test
   void rejectsBlankQuery() {
     IllegalArgumentException error =
@@ -36,6 +44,7 @@ class WebSearchAndReadServiceTest {
     assertEquals("query must not be blank", error.getMessage());
   }
 
+  /** 検索結果の件数上限範囲外設定済み対象範囲を受け付けないことを確認する。 */
   @Test
   void rejectsMaxResultsOutsideConfiguredRange() {
     assertThrows(
@@ -46,6 +55,7 @@ class WebSearchAndReadServiceTest {
         () -> service.searchAndRead(new WebSearchAndReadRequest("query", 6, 0)));
   }
 
+  /** 本文を取得する上位件数範囲外検索結果の件数上限を受け付けないことを確認する。 */
   @Test
   void rejectsReadTopOutsideMaxResults() {
     assertThrows(
@@ -56,6 +66,7 @@ class WebSearchAndReadServiceTest {
         () -> service.searchAndRead(new WebSearchAndReadRequest("query", 3, 4)));
   }
 
+  /** 順位を付けた検索付随情報を返すことを確認する。 */
   @Test
   void returnsRankedSearchMetadataWithoutFetchingWhenReadTopIsZero() throws Exception {
     org.mockito.Mockito.when(webSearchService.search("spring ai", 2))
@@ -83,6 +94,7 @@ class WebSearchAndReadServiceTest {
     Mockito.verifyNoInteractions(urlContentFetchService);
   }
 
+  /** Web上の情報の調査で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void fetchesAndNormalizesOnlyRequestedTopResult() throws Exception {
     WebSearchResult first =
@@ -119,6 +131,7 @@ class WebSearchAndReadServiceTest {
             Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class));
   }
 
+  /** Web上の情報の調査で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void marksContentTruncatedAtExtractorLimit() throws Exception {
     WebSearchResult result =
@@ -138,6 +151,7 @@ class WebSearchAndReadServiceTest {
     org.junit.jupiter.api.Assertions.assertTrue(item.truncated());
   }
 
+  /** 順位順序を維持することを確認する。 */
   @Test
   void keepsRankOrderAndReturnsPartialFetchFailures() throws Exception {
     WebSearchResult first = new WebSearchResult("First", "https://example.com/1", "S1", null);
@@ -174,6 +188,7 @@ class WebSearchAndReadServiceTest {
     assertEquals("timeout", items.get(1).errorMessage());
   }
 
+  /** 検索付随情報を返すことを確認する。 */
   @Test
   void returnsSearchMetadataWhenEveryFetchFails() throws Exception {
     WebSearchResult first = new WebSearchResult("First", "https://example.com/1", "S1", null);
@@ -195,6 +210,7 @@ class WebSearchAndReadServiceTest {
     assertEquals(List.of("S1", "S2"), items.stream().map(WebSearchAndReadItem::snippet).toList());
   }
 
+  /** Web上の情報の調査で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void fetchesDuplicateUrlOnlyOnceWhilePreservingCitationMetadata() throws Exception {
     WebSearchResult first = new WebSearchResult("First", "https://example.com/same", "S1", null);
@@ -222,6 +238,7 @@ class WebSearchAndReadServiceTest {
             Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class));
   }
 
+  /** Web上の情報の調査で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void defaultsToConfiguredMaxResultsAndThreePageReads() throws Exception {
     List<WebSearchResult> results =
@@ -250,6 +267,7 @@ class WebSearchAndReadServiceTest {
         .fetch(Mockito.anyString(), Mockito.any(dev.mikoto2000.rei.http.HttpFetchPolicy.class));
   }
 
+  /** Web上の情報の調査で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void propagatesSearchFailureAsWholeToolFailure() throws Exception {
     org.mockito.Mockito.when(webSearchService.search("query", 5))
@@ -264,6 +282,7 @@ class WebSearchAndReadServiceTest {
     Mockito.verifyNoInteractions(urlContentFetchService);
   }
 
+  /** Web上の情報の調査で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void treatsContentExtractionExceptionAsIndividualFailure() throws Exception {
     WebSearchResult result =

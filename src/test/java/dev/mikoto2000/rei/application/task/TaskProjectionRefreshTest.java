@@ -13,10 +13,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** タスク表示用の状態再確認の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class TaskProjectionRefreshTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 実行中タスクの操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void liveObserverDetectsOwnerCrashEvenWhenSavedSnapshotHasNotChanged() throws Exception {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -45,7 +48,9 @@ class TaskProjectionRefreshTest {
     }
   }
 
+  /** 検証条件を再現するための所有者利用可否の確認。 */
   public static class OwnerProbe {
+    /** 検証用に、実行中タスクの操作の起動要求を受け付け、実行を開始する。 */
     public static void main(String[] args) throws Exception {
       Path root = Path.of(args[0]);
       var source = new SQLiteDataSource();
@@ -58,6 +63,7 @@ class TaskProjectionRefreshTest {
     }
   }
 
+  /** 実行中タスクの操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void observerReadsOwnerUpdatesAndRollbackInsteadOfDisplayingStaleRunningTasks() {
     var projects = new ProjectRegistry(root.resolve("projects.json"));

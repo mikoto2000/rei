@@ -10,8 +10,13 @@ import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import reactor.core.publisher.Flux;
 
-/** Retains legacy tool calling while allowing Rei's run loop to own budgets and permissions. */
+/**
+ * 用途に応じたモデル利用に必要な実行AwareツールCalling対話の補助を扱う。
+ *
+ * <p>Retains legacy tool calling while allowing Rei's run loop to own budgets and permissions.
+ */
 public final class RunAwareToolCallingAdvisor extends ToolCallingAdvisor {
+  /** 既定の状態でRunAwareToolCallingAdvisorを初期化する。 */
   public RunAwareToolCallingAdvisor() {
     // The old model-owned loop ran beneath prompt and memory advisors; preserve that boundary.
     super(
@@ -21,6 +26,7 @@ public final class RunAwareToolCallingAdvisor extends ToolCallingAdvisor {
         true);
   }
 
+  /** 用途に応じたモデル利用で用いるadvise呼び出しを返す。 */
   @Override
   public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
     return applicationOwnsTools(request)
@@ -28,6 +34,7 @@ public final class RunAwareToolCallingAdvisor extends ToolCallingAdvisor {
         : super.adviseCall(request, chain);
   }
 
+  /** 用途に応じたモデル利用で用いるadvise逐次データを返す。 */
   @Override
   public Flux<ChatClientResponse> adviseStream(
       ChatClientRequest request, StreamAdvisorChain chain) {
@@ -36,6 +43,7 @@ public final class RunAwareToolCallingAdvisor extends ToolCallingAdvisor {
         : super.adviseStream(request, chain);
   }
 
+  /** 用途に応じたモデル利用において、アプリケーションOwnsツール一覧に該当するか判定する。 */
   private boolean applicationOwnsTools(ChatClientRequest request) {
     return request.prompt().getOptions() instanceof ToolCallingChatOptions options
         && options.getToolContext() != null

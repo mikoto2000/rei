@@ -24,26 +24,32 @@ import org.junit.jupiter.params.provider.MethodSource;
 @org.junit.jupiter.api.Tag("integration")
 class InterestUpdateServicePropertyTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir java.nio.file.Path tempDir;
 
+  /** 検証に使うcounter。 */
   private static final AtomicInteger counter = new AtomicInteger(0);
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private InterestUpdateService createService(String dbName) {
     return new InterestUpdateService(
         new org.springframework.jdbc.datasource.DriverManagerDataSource(
             "jdbc:sqlite:" + tempDir.resolve(dbName)));
   }
 
+  /** {@code uniqueQuery} の条件を再現するための補助情報を返す。 */
   private String uniqueQuery(String prefix) {
     return prefix + "-" + counter.incrementAndGet();
   }
 
   // --- Property 2: 過去クエリ一覧は指定日数以内のものだけを返す ---
 
+  /** {@code daysRange} の条件を再現するための補助情報を返す。 */
   static Stream<Integer> daysRange() {
     return IntStream.rangeClosed(1, 30).boxed();
   }
 
+  /** 関心の管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @ParameterizedTest(name = "days={0}")
   @MethodSource("daysRange")
   @Tag("interest-discovery-property-2-listRecentSearchQueries")
@@ -79,10 +85,12 @@ class InterestUpdateServicePropertyTest {
 
   // --- Property 3（部分）: existsByTopicWithinHours の境界値 ---
 
+  /** {@code hoursRange} の条件を再現するための補助情報を返す。 */
   static Stream<Integer> hoursRange() {
     return IntStream.rangeClosed(1, 30).boxed();
   }
 
+  /** 存在別話題範囲内時間数について、有効を返すことを確認する。 */
   @ParameterizedTest(name = "hours={0}")
   @MethodSource("hoursRange")
   @Tag("interest-discovery-property-3-existsByTopicWithinHours-true")
@@ -105,6 +113,7 @@ class InterestUpdateServicePropertyTest {
         service.existsByTopicWithinHours(topic, hours), "hours=" + hours + " 以内のトピックは true を返すべき");
   }
 
+  /** 存在別話題範囲内時間数について、無効を返すことを確認する。 */
   @ParameterizedTest(name = "hours={0}")
   @MethodSource("hoursRange")
   @Tag("interest-discovery-property-3-existsByTopicWithinHours-false")

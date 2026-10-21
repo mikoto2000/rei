@@ -6,31 +6,42 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.Supplier;
 
+/** 日次要約のユースケースを実現する。 */
 public final class DailySummaryService {
+  /** 機能の構成。 */
   private final Supplier<SummaryThemeConfiguration> configuration;
+
+  /** 書き込み先。 */
   private final DailySummaryWriter writer;
+
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(DailySummaryService.class);
 
+  /** 指定された値や利用先を使って、DailySummaryServiceを初期化する。 */
   public DailySummaryService(Supplier<ProjectNameNormalizer> aliases, DailySummaryWriter writer) {
     this.configuration =
         () -> new SummaryThemeConfiguration(aliases.get(), SummaryThemeGroups.empty());
     this.writer = writer;
   }
 
+  /** 指定された値や利用先を使って、DailySummaryServiceを初期化する。 */
   public DailySummaryService(ProjectAliasStore store, DailySummaryWriter writer) {
     this.configuration = store::snapshot;
     this.writer = writer;
   }
 
+  /** 作業状況の把握で用いるローカルを返す。 */
   public static DailySummaryService local() {
     return new DailySummaryService(() -> new ProjectNameNormalizer(Map.of()), null);
   }
 
+  /** 作業状況の把握で用いるプロジェクト名前一覧を返す。 */
   ProjectNameNormalizer projectNames() {
     return configuration.get().projects();
   }
 
+  /** 対象の内容を、要点が分かる形にまとめる。 */
   public String summarize(
       LocalDate date,
       ActivityQueryRange range,

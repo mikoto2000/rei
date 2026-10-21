@@ -16,13 +16,16 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/** テーマAttributionの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ThemeAttributionTest {
+  /** {@code sample} の条件を再現するための補助情報を返す。 */
   static SummarySegment sample(int minute, int seconds, String project, String topic) {
     return withText(
         segment(minute, seconds, "development", project, "", NON_ENTERTAINMENT), topic, "");
   }
 
+  /** {@code qualityDay} の条件を再現するための補助情報を返す。 */
   static List<SummarySegment> qualityDay() {
     var list = new ArrayList<SummarySegment>();
     list.add(sample(0, 600, "project", ""));
@@ -35,6 +38,7 @@ class ThemeAttributionTest {
     return list;
   }
 
+  /** {@code evidence} の条件を再現するための補助情報を返す。 */
   static SummarySegment evidence(
       SummarySegment s, boolean background, double pc, double tc, String title) {
     var r = s.evidence().getFirst();
@@ -77,6 +81,7 @@ class ThemeAttributionTest {
         List.of());
   }
 
+  /** {@code relations} の条件を再現するための補助情報を返す。 */
   static List<ProjectThemeAssociation> relations(List<SummarySegment> input) {
     var stats = new WorkThemeAggregation();
     for (var s : input)
@@ -94,6 +99,7 @@ class ThemeAttributionTest {
     return stats.associations();
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void repeatedForegroundObservationsHaveProvenanceAndStrongSupport() {
     var source = new ArrayList<SummarySegment>();
@@ -125,6 +131,7 @@ class ThemeAttributionTest {
     assertThat(aggregate(source).dominantThemes()).containsExactly("livevingo の翻訳");
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void backgroundAloneCannotEstablishAssociation() {
     var source = List.of(evidence(sample(0, 1800, "rei", "transcription"), true, .95, .95, "rei"));
@@ -136,6 +143,7 @@ class ThemeAttributionTest {
     assertThat(aggregate(source).dominantThemes()).containsExactly("rei の開発");
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void partialProjectNameInForegroundIsNotCorroboration() {
     var a =
@@ -152,6 +160,7 @@ class ThemeAttributionTest {
     assertThat(a.foregroundObservationCount()).isZero();
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void foregroundMetadataCanCorroboratePairEvenWithBackgroundPresent() {
     var a =
@@ -168,6 +177,7 @@ class ThemeAttributionTest {
     assertThat(a.foregroundObservationCount()).isEqualTo(1);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void durationAndConfidenceAreIndependentInputs() {
     var shortPair = relations(List.of(sample(0, 60, "rei", "transcription"))).getFirst();
@@ -187,6 +197,7 @@ class ThemeAttributionTest {
     assertThat(lowTheme.strong()).isFalse();
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sameSessionAndSegmentDoNotCrossAssociate() {
     var source =
@@ -209,6 +220,7 @@ class ThemeAttributionTest {
         .allMatch(p -> p.supportingObservationCount() == 1 && p.supportingDuration() == 600);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void noisyTextAndWeakThemeOnlyFallBackToGeneric() {
     assertThat(
@@ -221,6 +233,7 @@ class ThemeAttributionTest {
         .containsExactly("音声翻訳");
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void serviceOrApplicationNamesAreNotProjectsButExplicitAliasesWin() {
     assertThat(
@@ -241,6 +254,7 @@ class ThemeAttributionTest {
     assertThat(NAMES.project("rei")).isEqualTo("rei");
   }
 
+  /** 別名について、フィード一覧正規プロジェクト一覧を保存することを確認する。 */
   @Test
   void aliasStoreFeedsCanonicalProjectsToWriterAndFallback(
       @org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
@@ -282,6 +296,7 @@ class ThemeAttributionTest {
         .isEqualTo("sensevoice");
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void strongInputIsBoundedAndDoesNotSerializeObservationIds() throws Exception {
     var source = new ArrayList<SummarySegment>();
@@ -306,6 +321,7 @@ class ThemeAttributionTest {
         .isLessThan(2400);
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void weakAssociationNeverReturnsOnWriterFailure() {
     var source = List.of(sample(0, 60, "rei", "transcription"));
@@ -321,6 +337,7 @@ class ThemeAttributionTest {
         .doesNotContain("rei の文字起こし");
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void genericProjectIsRejected() {
     for (var name :
@@ -343,6 +360,7 @@ class ThemeAttributionTest {
         .containsExactly("開発");
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void weakPairFallsBackEvenWithHighIndividualConfidence() {
     var a = aggregate(List.of(sample(0, 60, "rei", "transcription")));
@@ -350,12 +368,14 @@ class ThemeAttributionTest {
     assertThat(a.timeOfDay().get("lateNight").workThemes()).containsExactly("rei の開発");
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void summaryOnlyDoesNotAttributeEvenAfterLongSupport() {
     var a = aggregate(List.of(withText(sample(0, 1800, "rei", ""), "", "transcription")));
     assertThat(a.dominantThemes()).containsExactly("rei の開発");
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void strongSameObservationPairsAreKeptWithoutCrossProduct() {
     var a =
@@ -368,6 +388,7 @@ class ThemeAttributionTest {
     assertThat(a.dominantThemes()).doesNotContain("rei の文字起こし", "sensevoice-input のActivity分類");
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void naturalOutputDoesNotRepeatMechanicalPhrases() throws Exception {
     for (var source : List.of(ThemeEnrichmentTest.differentProjects(), largeDay())) {
@@ -377,6 +398,7 @@ class ThemeAttributionTest {
     }
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void qualityFixtureComparison() throws Exception {
     var out = new StringBuilder();

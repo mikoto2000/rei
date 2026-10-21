@@ -14,7 +14,9 @@ import dev.mikoto2000.rei.interest.command.InterestCommand;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** Social伝えるの結果と状態の契約を検証するテスト。 */
 class SocialReportsTest {
+  /** 返信について、既存の判断基準を利用することを確認する。 */
   @Test
   void replyUsesTheExistingPolicyAndShowsTheSamePostReferences() {
     var service = mock(BlueskyPostService.class);
@@ -34,6 +36,7 @@ class SocialReportsTest {
     verify(service).reply("at://target", "hello world");
   }
 
+  /** 空の履歴一覧について、シェルメッセージ一覧を保持することを確認する。 */
   @Test
   void emptyHistoriesRetainShellMessagesWithoutPostingOrDiscovery() {
     var history = mock(BlueskyReplyConversationRepository.class);

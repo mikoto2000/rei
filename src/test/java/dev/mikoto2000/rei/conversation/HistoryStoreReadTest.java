@@ -11,25 +11,36 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 履歴保存先読み取りの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class HistoryStoreReadTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
+
+  /** 検証に使うprior。 */
   String prior;
+
+  /** 検証に使うa、b。 */
   String a = UUID.randomUUID().toString(), b = UUID.randomUUID().toString();
+
+  /** 検証に使う保存先。 */
   ConversationLogStore store = new ConversationLogStore();
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     prior = System.getProperty("rei.data-dir");
     System.setProperty("rei.data-dir", temp.toString());
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void cleanup() {
     if (prior == null) System.clearProperty("rei.data-dir");
     else System.setProperty("rei.data-dir", prior);
   }
 
+  /** 会話履歴と受付記録の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void readsOnlyLastMessagesAndListsProjectMetadataWithoutForeignRows() {
     String id = "project:" + a + ":chat:main";
@@ -49,6 +60,7 @@ class HistoryStoreReadTest {
     assertThat(store.recentConversation(a, "project:" + b + ":chat:main", 50)).isEmpty();
   }
 
+  /** 逐次応答全対象について、各対象保存済み役割を保持することを確認する。 */
   @Test
   void streamingAllPreservesEveryStoredRoleAndIntervention() {
     String id = "project:" + a + ":chat:main";

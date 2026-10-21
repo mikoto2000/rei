@@ -17,7 +17,9 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
+/** SQLite会話一回のやり取りの記録を保持し、後続の処理で参照できるようにする。 */
 public final class SqliteConversationTurnStore extends ConversationTurnStore {
+  /** 会話履歴と受付記録の管理で用いる一回のやり取り件数を返す。 */
   @Override
   public long turnCount(String conversation) {
     return database.read(
@@ -35,6 +37,7 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
         });
   }
 
+  /** 必要な内容を参照できるよう、対象範囲を読み取る。 */
   @Override
   public List<Turn> readRange(String conversation, long from, int limit) {
     if (from < 0 || limit < 1 || limit > 100)
@@ -58,6 +61,7 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
         });
   }
 
+  /** 対象を特定できるよう、実行を探す。 */
   @Override
   public Optional<Turn> findRun(String conversation, String run) {
     return database.read(
@@ -77,23 +81,28 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
         });
   }
 
+  /** データベース。 */
   private final StorageDatabase database;
 
+  /** 指定された値や利用先を使って、SqliteConversationTurnStoreを初期化する。 */
   public SqliteConversationTurnStore(Path root) {
     super(null);
     database = new StorageDatabase(root);
   }
 
+  /** 会話履歴と受付記録の管理で用いる対象範囲を返す。 */
   public static String scope(String conversation) {
     String project = ProjectStorage.projectId(conversation);
     return project == null ? "" : UUID.fromString(project).toString();
   }
 
+  /** 対象を照合・参照するためのキーを返す。 */
   public static String key(String conversation) {
     return UUID.nameUUIDFromBytes(conversation.getBytes(java.nio.charset.StandardCharsets.UTF_8))
         .toString();
   }
 
+  /** 会話履歴と受付記録の管理に関する登録を処理する。 */
   public static void put(Connection connection, String scope, String key, long ordinal, Turn turn)
       throws Exception {
     try (var write =
@@ -114,6 +123,7 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
     }
   }
 
+  /** 会話履歴と受付記録の管理で用いる次を返す。 */
   private static long next(Connection connection, String scope, String key) throws SQLException {
     try (var query =
         connection.prepareStatement(
@@ -127,11 +137,13 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
     }
   }
 
+  /** 要求された処理を開始する。 */
   @Override
   public void start(AgentRunContext context, String request) {
     start(context, request, Instant.now());
   }
 
+  /** 要求された処理を開始する。 */
   @Override
   public void start(AgentRunContext context, String request, Instant time) {
     database.transaction(
@@ -147,6 +159,7 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
         });
   }
 
+  /** 要求された処理を利用できるよう、Orderedを開始する。 */
   @Override
   public void startOrdered(AgentRunContext context, String request, Instant observed) {
     database.transaction(
@@ -175,6 +188,7 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
         });
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   @Override
   public List<Turn> read(String conversation) {
     return database.read(
@@ -194,11 +208,13 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
         });
   }
 
+  /** 終了時に必要な状態を反映し、処理を完了させる。 */
   @Override
   public void finish(AgentRunContext context, Status status) {
     finish(context, status, null);
   }
 
+  /** 終了時に必要な状態を反映し、処理を完了させる。 */
   @Override
   public void finish(AgentRunContext context, Status status, String message) {
     if (status == Status.RUNNING)
@@ -218,11 +234,14 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
                 turn.metadata()));
   }
 
+  /** 会話履歴と受付記録の管理に必要なMutationを扱う。 */
   @FunctionalInterface
   private interface Mutation {
+    /** 指定された内容を、現在の対象へ反映する。 */
     Turn apply(Turn turn);
   }
 
+  /** 会話履歴と受付記録の管理に関するmutateを処理する。 */
   private void mutate(AgentRunContext context, boolean runningOnly, Mutation mutation) {
     database.transaction(
         connection -> {
@@ -248,6 +267,7 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
         });
   }
 
+  /** 後から経緯や使用量を確認できるよう、付随情報を記録する。 */
   @Override
   public void recordMetadata(AgentRunContext context, Map<String, String> metadata) {
     mutate(
@@ -268,6 +288,7 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
         });
   }
 
+  /** 既存の記録へ経緯を残すため、アシスタント通知を追記する。 */
   @Override
   public void appendAssistantNotification(ConversationLogEntry entry) {
     database.transaction(
@@ -302,6 +323,7 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
         });
   }
 
+  /** 対象を特定できるよう、やり取り一覧を探す。 */
   @Override
   public List<SessionTurn> findTurns(String conversation, CursorKey after, int limit) {
     if (limit < 1 || limit > 101) throw new IllegalArgumentException("Invalid fetch limit");

@@ -27,10 +27,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
+/** 音声モデルコマンドの結果と状態の契約を検証するテスト。 */
 class VoiceModelCommandTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うデータ。 */
   final byte[] data = "fixture".getBytes();
 
+  /** {@code manifest} の条件を再現するための補助情報を返す。 */
   VoiceModelManifest manifest() throws Exception {
     return new VoiceModelManifest(
         "fixed-approved",
@@ -43,6 +48,7 @@ class VoiceModelCommandTest {
                 "MIT")));
   }
 
+  /** {@code voice} の条件を再現するための補助情報を返す。 */
   VoiceInputCoordinator voice() {
     var voice = mock(VoiceInputCoordinator.class);
     when(voice.state()).thenReturn(VoiceInputCoordinator.State.OFF);
@@ -51,6 +57,7 @@ class VoiceModelCommandTest {
     return voice;
   }
 
+  /** {@code devices} の条件を再現するための補助情報を返す。 */
   AudioDeviceService devices() {
     var devices =
         new AudioDeviceService(
@@ -59,6 +66,7 @@ class VoiceModelCommandTest {
     return devices;
   }
 
+  /** {@code command} の条件を再現するための補助情報を返す。 */
   CommandLine command(
       VoiceInputCoordinator voice,
       ShellConversationService shell,
@@ -71,6 +79,7 @@ class VoiceModelCommandTest {
     return command;
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void missingBundleOnDisclosesSourceLicenseSizeAndDoesNotCaptureOrDownload() throws Exception {
     var calls = new AtomicInteger();
@@ -83,6 +92,7 @@ class VoiceModelCommandTest {
       var command = command(voice, shell, manager, output);
       assertThat(command.execute("on")).isEqualTo(2);
       assertThat(calls).hasValue(0);
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(shell);
       verify(voice, never()).start(any(), any(), any());
       assertThat(output.toString())
@@ -90,6 +100,7 @@ class VoiceModelCommandTest {
     }
   }
 
+  /** 音声による対話の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void approvalDownloadsAsynchronouslyThenOnUsesSameConversationRoute() throws Exception {
     var voice = voice();
@@ -116,6 +127,7 @@ class VoiceModelCommandTest {
     }
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void statusAndCancelRemainAvailableWhileDownloadIsBlocked() throws Exception {
     var entered = new CountDownLatch(1);
@@ -147,6 +159,7 @@ class VoiceModelCommandTest {
     }
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void explicitVerifyChecksLocalHashesWithoutDownloadingAndRejectsCorruption() throws Exception {
     var calls = new AtomicInteger();
@@ -175,6 +188,7 @@ class VoiceModelCommandTest {
     }
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void infoDisclosesFp32SidecarAndLargeTotalWithoutDownloading() {
     var output = new StringWriter();

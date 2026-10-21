@@ -20,7 +20,9 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 記憶最初画像認識の結果と状態の契約を検証するテスト。 */
 class MemoryFirstVisionTest {
+  /** 画素数を保持することを確認する。 */
   @Test
   void pngRoundTripPreservesPixelsAndGlobalCachePolicy() throws Exception {
     boolean useCache = ImageIO.getUseCache();
@@ -36,6 +38,7 @@ class MemoryFirstVisionTest {
     assertEquals(useCache, ImageIO.getUseCache());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unavailablePngWriterFailsWithoutInvokingVision() throws Exception {
     var model = mock(ChatModel.class);
@@ -54,10 +57,12 @@ class MemoryFirstVisionTest {
           () ->
               extractor.extract(
                   ActivityCaptureTest.screen(20), new ForegroundWindow("idea", 1, "rei", "1")));
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(model);
     }
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void visionEncodingNeverUsesTheDiskCacheFactory() throws Exception {
     var model = mock(ChatModel.class);

@@ -14,11 +14,17 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.springframework.stereotype.Component;
 
-/** No redirects, credentials or response-body exposure; one bounded request per probe. */
+/**
+ * 外部条件の待機に必要なJavaHTTP通信依存条件利用可否の確認を扱う。
+ *
+ * <p>No redirects, credentials or response-body exposure; one bounded request per probe.
+ */
 @Component
 public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseable {
+  /** 判定条件一覧有効状態。 */
   private boolean predicatesEnabled;
 
+  /** 外部条件の待機で使用する判定条件一覧有効状態を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setPredicatesEnabled(
       @org.springframework.beans.factory.annotation.Value("${rei.predicates.enabled:false}")
@@ -26,22 +32,38 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
     predicatesEnabled = enabled;
   }
 
+  /** クライアント。 */
   private final HttpClient client =
       HttpClient.newBuilder()
           .connectTimeout(Duration.ofSeconds(2))
           .followRedirects(HttpClient.Redirect.NEVER)
           .build();
 
+  /** 外部条件の待機におけるConnectivity理由の選択肢。 */
   public enum ConnectivityReason {
+    /** 応答。 */
     RESPONSE,
+    /** タイムアウト。 */
     TIMEOUT,
+    /** 接続失敗。 */
     CONNECTION_FAILED,
+    /** 利用不可。 */
     UNAVAILABLE
   }
 
+  /**
+   * 外部条件の待機で受け渡すConnectivityを表す。
+   *
+   * @param reason 理由
+   * @param httpStatus HTTP通信状態
+   */
   public record Connectivity(ConnectivityReason reason, Integer httpStatus) {}
 
-  /** Same managed client/security boundary; no body, credentials or diagnostic exception text. */
+  /**
+   * 外部条件の待機で用いるconnectivityを返す。
+   *
+   * <p>Same managed client/security boundary; no body, credentials or diagnostic exception text.
+   */
   public Connectivity connectivity(String url, Duration timeout, Runnable checkActive) {
     new DependencySpec(DependencySpec.Kind.HTTP_STATUS, url, "200");
     if (timeout == null
@@ -70,6 +92,7 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
         }
       }
     } catch (InterruptedException interrupted) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw new CancellationException("Connectivity observation cancelled");
     } catch (ExecutionException failure) {
@@ -89,6 +112,7 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
     }
   }
 
+  /** 外部条件の待機で用いる利用可否の確認を返す。 */
   @Override
   public DependencyObservation probe(String id, String url, int expectedStatus) {
     new DependencySpec(DependencySpec.Kind.HTTP_STATUS, url, Integer.toString(expectedStatus));
@@ -105,6 +129,7 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
           matches ? DependencyState.COMPLETED : DependencyState.WAITING,
           matches ? "http_status_verified" : "http_status_mismatch");
     } catch (InterruptedException error) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw new CancellationException("HTTP observation cancelled");
     } catch (ExecutionException | TimeoutException error) {
@@ -114,12 +139,14 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
     }
   }
 
+  /** 外部条件の待機で利用した資源や登録を解放し、利用を終了する。 */
   @Override
   @jakarta.annotation.PreDestroy
   public void close() {
     client.shutdownNow();
   }
 
+  /** 外部条件の待機で用いる利用可否の確認本文を返す。 */
   @Override
   public DependencyObservation probeBody(String id, String url, int expectedStatus, String sha256) {
     var spec =
@@ -140,6 +167,7 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
           matches ? DependencyState.COMPLETED : DependencyState.WAITING,
           matches ? "http_body_digest_verified" : "http_body_digest_mismatch");
     } catch (InterruptedException error) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw new CancellationException("HTTP observation cancelled");
     } catch (ExecutionException error) {
@@ -154,8 +182,10 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
     }
   }
 
+  /** 外部条件の待機に必要な本文上限上限超過を扱う。 */
   private static final class BodyLimitExceeded extends java.io.IOException {}
 
+  /** 外部条件の待機で用いる利用可否の確認JSON変換を返す。 */
   @Override
   public DependencyObservation probeJson(String id, String url, String expected) {
     new DependencySpec(DependencySpec.Kind.HTTP_JSON_VALUE, url, expected);
@@ -192,6 +222,7 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
           matches ? DependencyState.COMPLETED : DependencyState.WAITING,
           matches ? "http_json_value_verified" : "http_json_value_mismatch");
     } catch (InterruptedException error) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw new CancellationException("HTTP observation cancelled");
     } catch (ExecutionException error) {
@@ -208,22 +239,33 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
     }
   }
 
+  /** 外部条件の待機に必要なJSON変換購読先を扱う。 */
   private static final class JsonSubscriber implements HttpResponse.BodySubscriber<byte[]> {
+    /** 委譲先。 */
     private final HttpResponse.BodySubscriber<byte[]> delegate =
         HttpResponse.BodySubscribers.ofByteArray();
+
+    /** 購読。 */
     private java.util.concurrent.Flow.Subscription subscription;
+
+    /** 件数。 */
     private long count;
+
+    /** 停止済み。 */
     private boolean stopped;
 
+    /** 外部条件の待機で参照する本文を返す。 */
     public CompletionStage<byte[]> getBody() {
       return delegate.getBody();
     }
 
+    /** 通知に応じて状態や表示を更新するため、購読を受け付ける。 */
     public void onSubscribe(java.util.concurrent.Flow.Subscription incoming) {
       subscription = incoming;
       delegate.onSubscribe(incoming);
     }
 
+    /** 通知に応じて状態や表示を更新するため、次を受け付ける。 */
     public void onNext(java.util.List<java.nio.ByteBuffer> buffers) {
       if (stopped) return;
       for (var buffer : buffers) count += buffer.remaining();
@@ -236,6 +278,7 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
       delegate.onNext(buffers);
     }
 
+    /** 通知に応じて状態や表示を更新するため、エラーを受け付ける。 */
     public void onError(Throwable error) {
       if (!stopped) {
         stopped = true;
@@ -243,6 +286,7 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
       }
     }
 
+    /** 通知に応じて状態や表示を更新するため、完了を受け付ける。 */
     public void onComplete() {
       if (!stopped) {
         stopped = true;
@@ -251,13 +295,25 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
     }
   }
 
-  /** Hash streaming byte buffers; never retain or decode the response body. */
+  /**
+   * 外部条件の待機に必要な内容の照合値購読先を扱う。
+   *
+   * <p>Hash streaming byte buffers; never retain or decode the response body.
+   */
   private static final class DigestSubscriber implements HttpResponse.BodySubscriber<String> {
+    /** 結果。 */
     private final CompletableFuture<String> result = new CompletableFuture<>();
+
+    /** 内容の照合値。 */
     private final java.security.MessageDigest digest;
+
+    /** 購読。 */
     private java.util.concurrent.Flow.Subscription subscription;
+
+    /** 件数。 */
     private long count;
 
+    /** 既定の状態でDigestSubscriberを初期化する。 */
     DigestSubscriber() {
       try {
         digest = java.security.MessageDigest.getInstance("SHA-256");
@@ -266,10 +322,12 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
       }
     }
 
+    /** 外部条件の待機で参照する本文を返す。 */
     public CompletionStage<String> getBody() {
       return result;
     }
 
+    /** 通知に応じて状態や表示を更新するため、購読を受け付ける。 */
     public void onSubscribe(java.util.concurrent.Flow.Subscription incoming) {
       if (subscription != null) {
         incoming.cancel();
@@ -279,6 +337,7 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
       incoming.request(1);
     }
 
+    /** 通知に応じて状態や表示を更新するため、次を受け付ける。 */
     public void onNext(java.util.List<java.nio.ByteBuffer> buffers) {
       if (result.isDone()) return;
       for (var buffer : buffers) {
@@ -293,10 +352,12 @@ public class JavaHttpDependencyProbe implements DependencyHttpProbe, AutoCloseab
       subscription.request(1);
     }
 
+    /** 通知に応じて状態や表示を更新するため、エラーを受け付ける。 */
     public void onError(Throwable error) {
       result.completeExceptionally(error);
     }
 
+    /** 通知に応じて状態や表示を更新するため、完了を受け付ける。 */
     public void onComplete() {
       result.complete(java.util.HexFormat.of().formatHex(digest.digest()));
     }

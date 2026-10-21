@@ -17,8 +17,13 @@ import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
-/** Explicit MXC, no WSL/legacy fallback, selected own OAuth only in the server environment. */
+/**
+ * ChatGPTとの連携に必要なWindows計画アプリケーションサーバー起動を扱う。
+ *
+ * <p>Explicit MXC, no WSL/legacy fallback, selected own OAuth only in the server environment.
+ */
 public final class WindowsPlanAppServerLauncher implements PlanAppServerClient.Launcher {
+  /** 無効状態プラグイン一覧。 */
   private static final String DISABLED_PLUGINS =
       """
       plugins = false
@@ -29,6 +34,8 @@ public final class WindowsPlanAppServerLauncher implements PlanAppServerClient.L
       skill_mcp_dependency_install = false
       skill_search = false
       """;
+
+  /** 期限一覧。 */
   private static final java.util.concurrent.ScheduledThreadPoolExecutor DEADLINES =
       new java.util.concurrent.ScheduledThreadPoolExecutor(
           1,
@@ -42,6 +49,7 @@ public final class WindowsPlanAppServerLauncher implements PlanAppServerClient.L
     DEADLINES.setRemoveOnCancelPolicy(true);
   }
 
+  /** 実行環境。 */
   private static final List<String> PLATFORM =
       List.of(
           "SystemRoot",
@@ -52,26 +60,33 @@ public final class WindowsPlanAppServerLauncher implements PlanAppServerClient.L
           "ProgramW6432",
           "ProgramData",
           "ALLUSERSPROFILE");
+
+  /** 設定。 */
   private final PlanAppServerProperties settings;
 
+  /** 指定された値や利用先を使って、WindowsPlanAppServerLauncherを初期化する。 */
   public WindowsPlanAppServerLauncher(PlanAppServerProperties settings) {
     this.settings = settings;
   }
 
+  /** ChatGPTとの連携で用いる形式のバージョンを返す。 */
   public String version() {
     return "0.162.1";
   }
 
+  /** ChatGPTとの連携で用いる実行環境を返す。 */
   public String platform() {
     return "windows";
   }
 
+  /** ChatGPTとの連携で用いる接続先を返す。 */
   public String authority() {
     return dev.mikoto2000.rei.externalagent.ImplementationProposal.sha256(
         ("windows|" + settings.executable() + "|" + configuration())
             .getBytes(StandardCharsets.UTF_8));
   }
 
+  /** 要求された処理を開始する。 */
   public PlanAppServerClient.Started start(
       TokenSet tokens, Duration timeout, BooleanSupplier stop) {
     if (!settings.enabled()
@@ -154,6 +169,7 @@ public final class WindowsPlanAppServerLauncher implements PlanAppServerClient.L
     }
   }
 
+  /** ChatGPTとの連携で用いるプロセスを返す。 */
   ProcessBuilder process(Path home, Path cwd, String token, List<String> args) {
     var command = new ArrayList<String>();
     command.add(settings.executable());
@@ -177,6 +193,7 @@ public final class WindowsPlanAppServerLauncher implements PlanAppServerClient.L
     return process;
   }
 
+  /** ChatGPTとの連携で用いる機能の構成を返す。 */
   String configuration() {
     String publicKeys =
         "\"SystemRoot\",\"SystemDrive\",\"WINDIR\",\"ProgramFiles\",\"ProgramFiles(x86)\",\"ProgramW6432\",\"ProgramData\",\"ALLUSERSPROFILE\",\"PATH\",\"ComSpec\",\"TEMP\",\"TMP\",\"USERPROFILE\",\"LOCALAPPDATA\",\"APPDATA\"";
@@ -192,6 +209,7 @@ public final class WindowsPlanAppServerLauncher implements PlanAppServerClient.L
         + "\n[windows]\nsandbox = \"mxc\"\n";
   }
 
+  /** ChatGPTとの連携で用いる引用を返す。 */
   private static String quote(String value) {
     try {
       return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(value);
@@ -200,6 +218,7 @@ public final class WindowsPlanAppServerLauncher implements PlanAppServerClient.L
     }
   }
 
+  /** 指定された対象を管理から取り除く。 */
   private static void remove(Path root) {
     if (root == null) return;
     // MXC releases directory handles asynchronously; close the walk before deleting its root.
@@ -217,6 +236,7 @@ public final class WindowsPlanAppServerLauncher implements PlanAppServerClient.L
         try {
           Thread.sleep(100);
         } catch (InterruptedException e) {
+          // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
           Thread.currentThread().interrupt();
           return;
         }

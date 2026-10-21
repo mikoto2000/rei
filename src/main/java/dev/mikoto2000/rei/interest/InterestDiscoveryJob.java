@@ -9,28 +9,40 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+/** 関心の管理に必要な関心利用先の検出実行する作業を扱う。 */
 @Component
 @RequiredArgsConstructor
 public class InterestDiscoveryJob {
 
+  /** 会話関心サービス。 */
   private final ConversationInterestService conversationInterestService;
+
+  /** 検索知識サービス。 */
   private final SearchKnowledgeService searchKnowledgeService;
+
+  /** 関心更新サービス。 */
   private final InterestUpdateService interestUpdateService;
+
+  /** この機能の動作設定。 */
   private final InterestProperties properties;
 
+  /** 関心の管理の操作を実行する。 */
   @Scheduled(cron = "${rei.interest.cron:0 0 7 * * *}")
   public void run() {
     discover(false, message -> {});
   }
 
+  /** 関心の管理で用いる利用先の検出現在日時を返す。 */
   public List<InterestUpdate> discoverNow() {
     return discoverNow(message -> {});
   }
 
+  /** 関心の管理で用いる利用先の検出現在日時を返す。 */
   public List<InterestUpdate> discoverNow(Consumer<String> progressListener) {
     return discover(true, progressListener);
   }
 
+  /** 関心の管理で用いる利用先の検出を返す。 */
   private List<InterestUpdate> discover(boolean force, Consumer<String> progressListener) {
     if (!force && !properties.isEnabled()) {
       return List.of();
@@ -64,6 +76,7 @@ public class InterestDiscoveryJob {
     return savedUpdates;
   }
 
+  /** 関心の管理で用いるプロセス候補一覧を返す。 */
   private java.util.ArrayList<InterestUpdate> processCandidates(
       List<InterestTopicCandidate> candidates, Consumer<String> progressListener) {
     java.util.ArrayList<InterestUpdate> savedUpdates = new java.util.ArrayList<>();
@@ -121,6 +134,7 @@ public class InterestDiscoveryJob {
     return null;
   }
 
+  /** 対象の内容を、要点が分かる形にまとめる。 */
   private String summarize(List<WebSearchPage> pages) {
     return pages.stream()
         .limit(2)

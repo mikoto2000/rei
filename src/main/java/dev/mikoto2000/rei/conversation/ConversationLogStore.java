@@ -19,28 +19,44 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+/** 会話ログの記録を保持し、後続の処理で参照できるようにする。 */
 @Component
 public class ConversationLogStore {
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(ConversationLogStore.class);
+
+  /** ファイル日付。 */
   private static final DateTimeFormatter FILE_DATE = DateTimeFormatter.ISO_LOCAL_DATE;
 
+  /** ディレクトリ。 */
   private final Path directory;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper objectMapper;
+
+  /** 書き込み排他制御。 */
   private final Object writeLock = new Object();
+
+  /** 文脈発生順序一覧。 */
   private final java.util.Map<String, Long> contextSequences = new java.util.HashMap<>();
 
+  /** 会話履歴と受付記録の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ConversationLogStore() {
     this(null, Clock.systemDefaultZone(), new ObjectMapper().registerModule(new JavaTimeModule()));
   }
 
+  /** 指定された値や利用先を使って、ConversationLogStoreを初期化する。 */
   public ConversationLogStore(Path directory, Clock clock, ObjectMapper objectMapper) {
     this.directory = directory;
     this.clock = clock;
     this.objectMapper = objectMapper;
   }
 
+  /** 既存の記録へ経緯を残すため、会話ログ保存先を追記する。 */
   public void append(String conversationId, String speaker, String content) {
     if (conversationId == null
         || conversationId.isBlank()
@@ -80,9 +96,14 @@ public class ConversationLogStore {
     }
   }
 
+  /** 作業習慣通知。 */
   public static final String BEHAVIOR_NOTIFICATION = "BEHAVIOR_NOTIFICATION";
 
-  /** The durable log is the idempotency source, including across restart/project switches. */
+  /**
+   * 対象を特定できるよう、通知を探す。
+   *
+   * <p>The durable log is the idempotency source, including across restart/project switches.
+   */
   public java.util.Optional<ConversationLogEntry> findNotification(String sourceId) {
     synchronized (writeLock) {
       var directories = new ArrayList<Path>();
@@ -123,6 +144,7 @@ public class ConversationLogStore {
     }
   }
 
+  /** 既存の記録へ経緯を残すため、通知を追記する。 */
   public ConversationLogEntry appendNotification(
       String conversationId,
       String sourceId,
@@ -178,12 +200,16 @@ public class ConversationLogStore {
     }
   }
 
+  /** 必要な内容を参照できるよう、全対象を読み取る。 */
   public List<ConversationLogEntry> readAll() {
     return readDirectory(directoryFor(null));
   }
 
   /**
-   * Full append-order conversation source, including interventions and auxiliary command results.
+   * 必要な内容を参照できるよう、会話を読み取る。
+   *
+   * <p>Full append-order conversation source, including interventions and auxiliary command
+   * results.
    */
   public List<ConversationLogEntry> readConversation(String conversationId) {
     synchronized (writeLock) {
@@ -211,7 +237,11 @@ public class ConversationLogStore {
     }
   }
 
-  /** Read a project's authoritative log without changing the selected project or run scope. */
+  /**
+   * 必要な内容を参照できるよう、プロジェクトを読み取る。
+   *
+   * <p>Read a project's authoritative log without changing the selected project or run scope.
+   */
   public List<ConversationLogEntry> readProject(String projectId) {
     var entries = new ArrayList<ConversationLogEntry>();
     visitProject(projectId, entries::add);
@@ -219,7 +249,11 @@ public class ConversationLogStore {
     return entries;
   }
 
-  /** Streams one project without retaining message bodies or changing Shell/Agent scope. */
+  /**
+   * 会話履歴と受付記録の管理に関する対象の確認プロジェクトを処理する。
+   *
+   * <p>Streams one project without retaining message bodies or changing Shell/Agent scope.
+   */
   public void visitProject(
       String projectId, java.util.function.Consumer<ConversationLogEntry> visitor) {
     Path location =
@@ -242,9 +276,17 @@ public class ConversationLogStore {
     }
   }
 
+  /**
+   * 会話履歴と受付記録の管理で受け渡す会話要約を表す。
+   *
+   * @param conversationId 会話の識別子
+   * @param updatedAt 更新日時
+   * @param messageCount メッセージ件数
+   */
   public record ConversationSummary(
       String conversationId, OffsetDateTime updatedAt, long messageCount) {}
 
+  /** 利用可能な対象を確認できるよう、会話一覧を一覧にする。 */
   public List<ConversationSummary> listConversations(String projectId, int limit, int offset) {
     if (limit < 1 || offset < 0) throw new IllegalArgumentException("Invalid history page");
     var summaries = new java.util.HashMap<String, ConversationSummary>();
@@ -270,9 +312,16 @@ public class ConversationLogStore {
         .toList();
   }
 
+  /** 会話履歴と受付記録の管理で用いる直近会話を返す。 */
   public List<ConversationLogEntry> recentConversation(
       String projectId, String conversationId, int limit) {
     if (limit < 1) throw new IllegalArgumentException("limit must be positive");
+    /**
+     * 会話履歴と受付記録の管理で受け渡すOrderedを表す。
+     *
+     * @param entry 項目
+     * @param sequence 発生順序
+     */
     record Ordered(ConversationLogEntry entry, long sequence) {}
     var order =
         Comparator.comparing((Ordered e) -> e.entry().timestamp())
@@ -290,6 +339,7 @@ public class ConversationLogStore {
     return recent.stream().sorted(order).map(Ordered::entry).toList();
   }
 
+  /** 必要な内容を参照できるよう、ディレクトリを読み取る。 */
   private List<ConversationLogEntry> readDirectory(Path directory) {
     if (!Files.isDirectory(directory)) {
       return List.of();
@@ -310,10 +360,12 @@ public class ConversationLogStore {
     return entries;
   }
 
+  /** 必要な内容を参照できるよう、ファイルを読み取る。 */
   private void readFile(Path file, List<ConversationLogEntry> entries) {
     readFile(file, entries::add);
   }
 
+  /** 必要な内容を参照できるよう、ファイルを読み取る。 */
   private void readFile(Path file, java.util.function.Consumer<ConversationLogEntry> visitor) {
     try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
       String line;
@@ -332,6 +384,7 @@ public class ConversationLogStore {
     }
   }
 
+  /** 会話履歴と受付記録の管理で用いる対象範囲所属を返す。 */
   static String scopeOf(String conversationId) {
     if (conversationId.startsWith("project:"))
       conversationId = conversationId.substring(conversationId.indexOf(':', 8) + 1);
@@ -341,10 +394,12 @@ public class ConversationLogStore {
     return "chat";
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、読み上げ先の表記をそろえる。 */
   private String normalizeSpeaker(String speaker) {
     return speaker == null ? "" : speaker.toLowerCase(Locale.ROOT);
   }
 
+  /** 会話履歴と受付記録の管理で用いるディレクトリ対象を返す。 */
   private Path directoryFor(String conversationId) {
     if (directory != null) return directory;
     String id = dev.mikoto2000.rei.core.project.ProjectStorage.projectId(conversationId);

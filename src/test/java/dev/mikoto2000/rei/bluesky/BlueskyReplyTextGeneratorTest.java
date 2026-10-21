@@ -30,8 +30,10 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.ObjectProvider;
 import reactor.core.publisher.Flux;
 
+/** Bluesky返信テキスト生成の結果と状態の契約を検証するテスト。 */
 class BlueskyReplyTextGeneratorTest {
 
+  /** 生成について、モデルへ対話を依頼する窓口を利用することを確認する。 */
   @Test
   void generateUsesChatClientWithCurrentModel() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -69,6 +71,7 @@ class BlueskyReplyTextGeneratorTest {
     assertThat(options.getExtraBody()).isNullOrEmpty();
   }
 
+  /** 返信選択可能な設定について、設定済みモデルを保持することを確認する。 */
   @Test
   void replyOptionsPreserveConfiguredModelWithoutMutatingProviderCallbacks() {
     var client = Mockito.mock(ChatClient.class);
@@ -119,6 +122,7 @@ class BlueskyReplyTextGeneratorTest {
     assertThat(configured.getToolChoice()).isEqualTo("required");
   }
 
+  /** Blueskyとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rawToolDefinitionsAreRejectedBeforeSendingThePrompt() {
     var clients = Mockito.mock(LlmChatClientProvider.class);
@@ -138,6 +142,7 @@ class BlueskyReplyTextGeneratorTest {
     Mockito.verifyNoInteractions(clients);
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void generateSetsBlueskyReplyConversationId() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -167,6 +172,7 @@ class BlueskyReplyTextGeneratorTest {
     verify(spec).param(ChatMemory.CONVERSATION_ID, "bluesky-reply:alice.bsky.social");
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void generateForManualReplySetsBlueskyManualConversationId() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -198,6 +204,7 @@ class BlueskyReplyTextGeneratorTest {
             ChatMemory.CONVERSATION_ID, "bluesky-manual:at://did:plc:xxx/app.bsky.feed.post/abc");
   }
 
+  /** モデルへ対話を依頼する窓口を利用することを確認する。 */
   @Test
   void generateForManualReplyUsesChatClient() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -220,6 +227,7 @@ class BlueskyReplyTextGeneratorTest {
     verify(chatClient).prompt(any(Prompt.class));
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void generateThrowsWhenReplyContentIsBlank() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -241,6 +249,7 @@ class BlueskyReplyTextGeneratorTest {
         .hasMessageContaining("blank content");
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void generateThrowsWhenTargetPostTextIsBlank() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -255,6 +264,7 @@ class BlueskyReplyTextGeneratorTest {
         .hasMessageContaining("target post text is blank");
   }
 
+  /** 生成タイムアウトについて、設定済み秒数を利用することを確認する。 */
   @Test
   void generationTimeoutUsesConfiguredSeconds() {
     BlueskyProperties properties = new BlueskyProperties();
@@ -269,10 +279,12 @@ class BlueskyReplyTextGeneratorTest {
     assertThat(generator.generationTimeout()).isEqualTo(Duration.ofSeconds(5));
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   private static ChatResponse response(String text) {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
   }
 
+  /** 推論を取り除くことを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -292,6 +304,7 @@ class BlueskyReplyTextGeneratorTest {
         .isEqualTo("返信本文");
   }
 
+  /** Blueskyとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -317,6 +330,7 @@ class BlueskyReplyTextGeneratorTest {
         .isInstanceOf(IllegalStateException.class);
   }
 
+  /** Blueskyとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -349,6 +363,7 @@ class BlueskyReplyTextGeneratorTest {
         .hasMessageContaining("tool invocation text");
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -369,6 +384,7 @@ class BlueskyReplyTextGeneratorTest {
         .isEqualTo(expected);
   }
 
+  /** 項目に整理した内容ツール呼び出し一覧を受け付けないことを確認する。 */
   @Test
   void rejectsStructuredToolCallsForAllReplyPaths() {
     ChatResponse toolResponse =
@@ -401,12 +417,14 @@ class BlueskyReplyTextGeneratorTest {
         .hasMessageContaining("returned a tool call");
   }
 
+  /** {@code generatorStreaming} の条件を再現するための補助情報を返す。 */
   private BlueskyReplyTextGenerator generatorStreaming(String content) {
     // One character per chunk exercises every possible tag and invocation boundary.
     return generatorStreaming(
         Flux.fromStream(() -> content.chars().mapToObj(c -> response(String.valueOf((char) c)))));
   }
 
+  /** {@code generatorStreaming} の条件を再現するための補助情報を返す。 */
   private BlueskyReplyTextGenerator generatorStreaming(Flux<ChatResponse> responses) {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
     ObjectProvider<ChatClient> chatClientProvider = Mockito.mock(ObjectProvider.class);

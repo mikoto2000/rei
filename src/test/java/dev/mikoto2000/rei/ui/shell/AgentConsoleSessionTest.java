@@ -13,7 +13,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
+/** エージェントコンソール会話の結果と状態の契約を検証するテスト。 */
 class AgentConsoleSessionTest {
+  /** ターミナルでの対話で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void rawAgentOutputDoesNotHideConcurrentShellOutput() throws Exception {
     var bytes = new ByteArrayOutputStream();

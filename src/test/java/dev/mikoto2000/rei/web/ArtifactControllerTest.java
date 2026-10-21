@@ -20,10 +20,13 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.sqlite.SQLiteDataSource;
 
+/** 成果物受付窓口の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ArtifactControllerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void contentIsOwnerScopedAttachmentWithHashAndDeletedContentIsGone() throws Exception {
     var projects = new ProjectRegistry(root.resolve("projects.json"));

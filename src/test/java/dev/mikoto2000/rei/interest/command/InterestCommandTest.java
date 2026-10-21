@@ -17,11 +17,14 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import picocli.CommandLine;
 
+/** 関心コマンドの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class InterestCommandTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 関心の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void listPrintsRecentInterestUpdates() {
     InterestUpdateService service =
@@ -50,6 +53,7 @@ class InterestCommandTest {
     assertTrue(output.contains("https://example.com/nvim"));
   }
 
+  /** 関心の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void listPrintsEmptyMessageWhenNoUpdatesExist() {
     InterestUpdateService service =
@@ -70,6 +74,7 @@ class InterestCommandTest {
     assertTrue(out.toString().contains("興味更新はありません"));
   }
 
+  /** 関心の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void discoverRunsInterestDiscoveryJobAndPrintsSavedTopics() {
     InterestUpdateService service =
@@ -121,14 +126,17 @@ class InterestCommandTest {
     assertTrue(output.contains("GitHub Actions 最適化"));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private CommandLine newCommand(InterestUpdateService service) {
     return newCommand(service, org.mockito.Mockito.mock(InterestDiscoveryJob.class));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private CommandLine newCommand(InterestUpdateService service, InterestDiscoveryJob job) {
     return new CommandLine(
         new InterestCommand(),
         new CommandLine.IFactory() {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           public <K> K create(Class<K> cls) throws Exception {
             if (cls == InterestCommand.ListCommand.class) {

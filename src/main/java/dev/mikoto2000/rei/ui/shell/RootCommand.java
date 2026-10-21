@@ -23,7 +23,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 
-/** RootCommand */
+/**
+ * AI シェルを行うための利用者コマンド。
+ *
+ * <p>RootCommand
+ */
 @Component
 @Command(
     versionProvider = dev.mikoto2000.rei.ReiVersionProvider.class,
@@ -83,19 +87,24 @@ import picocli.CommandLine.Command;
     mixinStandardHelpOptions = true)
 @RequiredArgsConstructor
 public class RootCommand {
+  /** 埋め込み表現有効状態。 */
   @org.springframework.beans.factory.annotation.Value("${rei.embedding.enabled:true}")
   private boolean embeddingEnabled = true;
 
+  /** 初学者レビュー有効状態。 */
   @org.springframework.beans.factory.annotation.Value(
       "${rei.material-review.beginner.enabled:true}")
   private boolean beginnerReviewEnabled = true;
 
+  /** 環境診断有効状態。 */
   @org.springframework.beans.factory.annotation.Value("${rei.doctor.enabled:true}")
   private boolean doctorEnabled = true;
 
+  /** 時間計測有効状態。 */
   @org.springframework.beans.factory.annotation.Value("${rei.timing.enabled:true}")
   private boolean timingEnabled = true;
 
+  /** ターミナルでの対話に関する設定コマンド一覧を処理する。 */
   public void configureCommands(picocli.CommandLine command) {
     if (!timingEnabled) command.getCommandSpec().removeSubcommand("timing");
     if (!doctorEnabled) command.getCommandSpec().removeSubcommand("doctor");

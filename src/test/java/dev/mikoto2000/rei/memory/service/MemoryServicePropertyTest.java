@@ -22,12 +22,15 @@ import net.jqwik.api.constraints.AlphaChars;
 import net.jqwik.api.constraints.DoubleRange;
 import net.jqwik.api.constraints.NotBlank;
 
+/** 記憶サービスPropertyの結果と状態の契約を検証するテスト。 */
 @net.jqwik.api.Tag("integration")
 class MemoryServicePropertyTest {
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   private static final Clock CLOCK =
       Clock.fixed(Instant.parse("2026-10-04T00:00:00Z"), ZoneOffset.UTC);
 
   // Feature: ai-memory-consolidation, Property 2: 承認記憶の保存ラウンドトリップ
+  /** 長期記憶の保存と検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Property(tries = 100)
   void saveFindRoundTrip(
       @ForAll @NotBlank String content,
@@ -61,6 +64,7 @@ class MemoryServicePropertyTest {
   }
 
   // Feature: ai-memory-consolidation, Property 8: 検索結果の件数上限とフィルタリング
+  /** 長期記憶の保存と検索で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Property(tries = 50)
   void searchResultRespectsLimit(@ForAll @AlphaChars @NotBlank String token) throws Exception {
     try (var database = new SqliteTestDatabase()) {
@@ -87,6 +91,7 @@ class MemoryServicePropertyTest {
   }
 
   // Feature: ai-memory-consolidation, Property 10: 論理削除の不変条件
+  /** 長期記憶の保存と検索で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Property(tries = 50)
   void deletedMemoryIsNotReturnedByListOrSearch(@ForAll @AlphaChars @NotBlank String token)
       throws Exception {
@@ -115,6 +120,7 @@ class MemoryServicePropertyTest {
   }
 
   // Feature: ai-memory-consolidation, Property 18: スコープ別デフォルト有効期限の設定
+  /** 長期記憶の保存と検索で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Property(tries = 50)
   void defaultExpiryDependsOnScope(@ForAll MemoryScope scope) throws Exception {
     try (var database = new SqliteTestDatabase()) {
@@ -150,6 +156,7 @@ class MemoryServicePropertyTest {
   }
 
   // Feature: ai-memory-consolidation, Property 19: 有効期限切れ記憶の自動 deprecated 化
+  /** 長期記憶の保存と検索で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Property(tries = 20)
   void expiredMemoryBecomesDeprecated(@ForAll boolean ignored) throws Exception {
     try (var database = new SqliteTestDatabase()) {
@@ -173,6 +180,7 @@ class MemoryServicePropertyTest {
     }
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private MemoryService newService(DataSource dataSource) {
     var props =
         new MemoryProperties(

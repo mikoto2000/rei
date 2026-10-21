@@ -9,8 +9,10 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+/** エージェントスキル選択内容サービスの結果と状態の契約を検証するテスト。 */
 class AgentSkillSelectionServiceTest {
 
+  /** スキルの利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void measuresImplicitSelectorWithMonotonicClock() {
     AgentSkillsProperties properties = new AgentSkillsProperties();
@@ -37,6 +39,7 @@ class AgentSkillSelectionServiceTest {
     assertThat(selection.selectorDurationMs()).isEqualTo(23L);
   }
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void passesOnlyLexicalTopFiveToImplicitSelector() {
     AgentSkillsProperties properties = new AgentSkillsProperties();
@@ -81,6 +84,7 @@ class AgentSkillSelectionServiceTest {
     assertThat(selection.candidateSkills()).isEqualTo(captor.getValue());
   }
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void explicitSelectionTakesPrecedenceOverImplicitSelection() {
     AgentSkill explicit = skill("explicit");
@@ -98,6 +102,7 @@ class AgentSkillSelectionServiceTest {
     assertThat(selection.sanitizedPrompt()).isEqualTo("do it");
   }
 
+  /** 重複の有無を取り除くことを確認する。 */
   @Test
   void removesDuplicateAndAppliesMaxSelected() {
     AgentSkill first = skill("first");
@@ -115,6 +120,7 @@ class AgentSkillSelectionServiceTest {
     assertThat(selection.selectedSkills()).containsExactly(first);
   }
 
+  /** なし選択内容を返すことを確認する。 */
   @Test
   void returnsNoSelectionWhenDisabled() {
     AgentSkillsProperties properties = new AgentSkillsProperties();
@@ -132,6 +138,7 @@ class AgentSkillSelectionServiceTest {
     assertThat(selection.sanitizedPrompt()).isEqualTo("@skill:sample do it");
   }
 
+  /** {@code skill} の条件を再現するための補助情報を返す。 */
   private AgentSkill skill(String name) {
     return new AgentSkill(
         name,

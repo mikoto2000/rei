@@ -2,16 +2,25 @@ package dev.mikoto2000.rei.core;
 
 import java.util.regex.Pattern;
 
-/** Platform-independent globs for paths relative to the search base directory. */
+/**
+ * 共通の実行基盤に必要な検索パスの照合規則を扱う。
+ *
+ * <p>Platform-independent globs for paths relative to the search base directory.
+ */
 final class SearchGlob {
+  /** 照合規則。 */
   private final Pattern pattern;
+
+  /** ファイル名限定。 */
   private final boolean fileNameOnly;
 
+  /** 指定された値や利用先を使って、SearchGlobを初期化する。 */
   private SearchGlob(Pattern pattern, boolean fileNameOnly) {
     this.pattern = pattern;
     this.fileNameOnly = fileNameOnly;
   }
 
+  /** 共通の実行基盤で用いるコンパイルを返す。 */
   static SearchGlob compile(String glob) {
     if (glob == null || glob.isBlank()) return null;
     String normalized = glob.replace('\\', '/');
@@ -71,6 +80,7 @@ final class SearchGlob {
     return new SearchGlob(Pattern.compile(regex.toString()), !normalized.contains("/"));
   }
 
+  /** 指定された条件と対象が一致するかを判定する。 */
   boolean matches(String relativePath) {
     String normalized = relativePath.replace('\\', '/');
     String target =

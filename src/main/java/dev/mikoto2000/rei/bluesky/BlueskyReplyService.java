@@ -14,21 +14,41 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+/** Bluesky返信のユースケースを実現する。 */
 @Service
 public class BlueskyReplyService {
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(BlueskyReplyService.class);
 
+  /** この機能の動作設定。 */
   private final BlueskyProperties properties;
+
+  /** 検証の窓口。 */
   private final BlueskyReplyPropertiesValidator validator;
+
+  /** 著者フィードクライアント。 */
   private final BlueskyAuthorFeedClient authorFeedClient;
+
+  /** 保存と検索の窓口。 */
   private final BlueskyReplyStateRepository repository;
+
+  /** 会話保存と検索の窓口。 */
   private final BlueskyReplyConversationRepository conversationRepository;
+
+  /** 返信テキスト生成。 */
   private final BlueskyReplyTextGenerator replyTextGenerator;
+
+  /** BlueskyAPIクライアント。 */
   private final BlueskyApiClient blueskyApiClient;
+
+  /** 乱数取得元。 */
   private final DoubleSupplier randomSupplier;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** Blueskyとの連携を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @Autowired
   public BlueskyReplyService(
       BlueskyProperties properties,
@@ -50,6 +70,7 @@ public class BlueskyReplyService {
         Clock.systemUTC());
   }
 
+  /** 指定された値や利用先を使って、BlueskyReplyServiceを初期化する。 */
   BlueskyReplyService(
       BlueskyProperties properties,
       BlueskyReplyPropertiesValidator validator,
@@ -71,6 +92,7 @@ public class BlueskyReplyService {
     this.clock = clock;
   }
 
+  /** 依頼された操作を進めるため、Onceを実行する。 */
   public void runOnce() {
     BlueskyProperties.BlueskyReplyProperties reply = properties.getReply();
     if (reply == null || !reply.isEnabled()) {
@@ -82,6 +104,7 @@ public class BlueskyReplyService {
     }
   }
 
+  /** Blueskyとの連携に関するプロセス利用者を処理する。 */
   private void processUser(
       BlueskyProperties.ReplyUser user, BlueskyProperties.BlueskyReplyProperties reply) {
     try {
@@ -185,6 +208,7 @@ public class BlueskyReplyService {
     }
   }
 
+  /** Blueskyとの連携で用いる認証応答担当を返す。 */
   private BlueskyApiClient.AuthResult authenticateBot() {
     if (properties.getHandle() == null
         || properties.getHandle().isBlank()
@@ -200,6 +224,7 @@ public class BlueskyReplyService {
     }
   }
 
+  /** Blueskyとの連携において、新規投稿かどうかを判定する。 */
   private boolean isNewPost(String handle, BlueskyApiClient.FeedPost post) {
     if (post == null || post.uri() == null || post.indexedAt() == null) {
       return false;
@@ -219,6 +244,7 @@ public class BlueskyReplyService {
         && !post.uri().equals(last.lastSeenPostUri());
   }
 
+  /** Blueskyとの連携において、mentionsれいに該当するか判定する。 */
   private boolean mentionsRei(String text) {
     if (text == null
         || text.isBlank()
@@ -239,6 +265,7 @@ public class BlueskyReplyService {
     return matcher.find();
   }
 
+  /** Blueskyとの連携で用いる対象外理由を返す。 */
   private String skipReason(
       BlueskyApiClient.FeedPost post,
       BlueskyProperties.ReplyUser user,

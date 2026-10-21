@@ -10,7 +10,9 @@ import java.net.URI;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 論文提供元の結果と状態の契約を検証するテスト。 */
 class PaperProviderTest {
+  /** 論文の調査と整理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void normalizesOpenAlexAndCrossref() {
     PaperHttpClient http =
@@ -34,6 +36,7 @@ class PaperProviderTest {
             .publicationYear());
   }
 
+  /** 形式が不正な応答を受け付けないことを確認する。 */
   @Test
   void rejectsMalformedResponse() {
     var provider =
@@ -41,6 +44,7 @@ class PaperProviderTest {
     assertThrows(PaperException.class, () -> provider.search(query(), PaperOperation.local("s")));
   }
 
+  /** 論文の調査と整理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rejectsUnsafeDestinations() throws Exception {
     for (String host :
@@ -58,6 +62,7 @@ class PaperProviderTest {
         PaperException.class, () -> SafePaperHttpClient.validateUri(URI.create("file:///test")));
   }
 
+  /** {@code query} の条件を再現するための補助情報を返す。 */
   static PaperSearchQuery query() {
     return new PaperSearchQuery(
         "GUI", 2025, null, List.of(), List.of(), false, PaperSearchQuery.Sort.RELEVANCE, 10);

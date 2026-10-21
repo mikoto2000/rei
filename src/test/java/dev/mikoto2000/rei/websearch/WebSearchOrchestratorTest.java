@@ -9,8 +9,10 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+/** Web検索Orchestratorの結果と状態の契約を検証するテスト。 */
 class WebSearchOrchestratorTest {
 
+  /** Web上の情報の調査で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchFetchesPageContentForRawResults() throws Exception {
     WebSearchService webSearchService = Mockito.mock(WebSearchService.class);
@@ -39,6 +41,7 @@ class WebSearchOrchestratorTest {
     assertTrue(context.secondaryResults().isEmpty());
   }
 
+  /** 重複の有無URL一覧を取り除くことを確認する。 */
   @Test
   void searchExpandsQueriesAndRemovesDuplicateUrls() throws Exception {
     WebSearchService webSearchService = Mockito.mock(WebSearchService.class);

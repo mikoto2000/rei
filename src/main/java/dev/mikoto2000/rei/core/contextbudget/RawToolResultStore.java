@@ -15,33 +15,80 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Immutable content-addressed bodies with call-specific pointers and conversation-scoped access.
+ * 元のツールの結果の記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>Immutable content-addressed bodies with call-specific pointers and conversation-scoped access.
  */
 public class RawToolResultStore {
+  /**
+   * モデルへ渡す文脈の管理で受け渡す結果を表す。
+   *
+   * @param toolName ツール名
+   * @param toolCallId ツール呼び出し識別子
+   * @param rawResult 元の結果
+   */
   public record Result(String toolName, String toolCallId, String rawResult) {}
 
+  /**
+   * モデルへ渡す文脈の管理で受け渡す保存済みを表す。
+   *
+   * @param toolName ツール名
+   * @param toolCallId ツール呼び出し識別子
+   * @param rawResult 元の結果
+   * @param bodyRef 本文参照先
+   */
   private record Stored(String toolName, String toolCallId, String rawResult, String bodyRef) {}
 
+  /**
+   * モデルへ渡す文脈の管理で受け渡すキャッシュキーを表す。
+   *
+   * @param owner 所有者
+   * @param ref 参照先
+   */
   private record CacheKey(AgentRunContext owner, String ref) {}
 
+  /**
+   * モデルへ渡す文脈の管理で受け渡す保存済みを表す。
+   *
+   * @param result 結果
+   * @param bytes バイト数
+   * @param loaded 読み込み済みの内容
+   * @param bodyRef 本文参照先
+   */
   private record Cached(Result result, long bytes, long loaded, String bodyRef) {}
 
+  /** 基準。 */
   private final Path base;
+
+  /** 登録台帳。 */
   private final dev.mikoto2000.rei.storage.StorageObjectRegistry registry;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper mapper = new ObjectMapper();
+
+  /** 最大結果バイト数／最大保存先バイト数／最大キャッシュバイト数。 */
   private final long maxResultBytes, maxStoreBytes, maxCacheBytes;
+
+  /** キャッシュ。 */
   private final LinkedHashMap<CacheKey, Cached> cache = new LinkedHashMap<>(16, .75f, true);
+
+  /** 保存済みバイト数。 */
   private long cachedBytes;
+
+  /** 本文Reads／本文Writes。 */
   private final AtomicLong bodyReads = new AtomicLong(), bodyWrites = new AtomicLong();
 
+  /** モデルへ渡す文脈の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public RawToolResultStore(Path base) {
     this(base, null);
   }
 
+  /** モデルへ渡す文脈の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public RawToolResultStore(Path base, dev.mikoto2000.rei.storage.StorageObjectRegistry registry) {
     this(base, registry, 16L * 1024 * 1024, 256L * 1024 * 1024, 8L * 1024 * 1024);
   }
 
+  /** 指定された値や利用先を使って、RawToolResultStoreを初期化する。 */
   public RawToolResultStore(
       Path base,
       dev.mikoto2000.rei.storage.StorageObjectRegistry registry,
@@ -57,14 +104,17 @@ public class RawToolResultStore {
     this.maxCacheBytes = maxCacheBytes;
   }
 
+  /** モデルへ渡す文脈の管理で用いる本文読み取り件数を返す。 */
   public long bodyReadCount() {
     return bodyReads.get();
   }
 
+  /** モデルへ渡す文脈の管理で用いる本文書き込み件数を返す。 */
   public long bodyWriteCount() {
     return bodyWrites.get();
   }
 
+  /** 保持している情報を初期状態へ戻すため、実行を消去する。 */
   public synchronized void clearRun(String run) {
     var entries = cache.entrySet().iterator();
     while (entries.hasNext()) {
@@ -76,6 +126,7 @@ public class RawToolResultStore {
     }
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   public String save(String conversation, String run, String toolName, String callId, String raw) {
     if (registry != null)
       return registry.serialized(() -> saveSerialized(conversation, run, toolName, callId, raw));
@@ -84,6 +135,7 @@ public class RawToolResultStore {
     }
   }
 
+  /** 後から参照できるよう、Serializedを保存する。 */
   private String saveSerialized(
       String conversation, String run, String toolName, String callId, String raw) {
     try {
@@ -140,6 +192,7 @@ public class RawToolResultStore {
     }
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   public Result read(String conversation, String ref) {
     var actor = AgentRunScope.current();
     if (actor != null && !actor.conversationId().equals(conversation))
@@ -222,6 +275,7 @@ public class RawToolResultStore {
     }
   }
 
+  /** モデルへ渡す文脈の管理において、存在に該当するか判定する。 */
   public boolean exists(String conversation, String ref) {
     try {
       read(conversation, ref);
@@ -231,10 +285,12 @@ public class RawToolResultStore {
     }
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   private void verify(Path path) {
     if (registry != null) registry.verifyBodyPath(path);
   }
 
+  /** モデルへ渡す文脈の管理で用いるローカルバイト数を返す。 */
   private long localBytes(String conversation) throws java.io.IOException {
     long size = 0;
     for (String folder : List.of("results", "bodies")) {
@@ -252,6 +308,7 @@ public class RawToolResultStore {
     return size;
   }
 
+  /** モデルへ渡す文脈の管理で用いるファイルを返す。 */
   private Path file(String conversation, String ref) {
     return ContextFiles.directory(base, conversation)
         .resolve("results")
@@ -259,6 +316,7 @@ public class RawToolResultStore {
         .resolve(ref + ".json");
   }
 
+  /** モデルへ渡す文脈の管理で用いる本文ファイルを返す。 */
   private Path bodyFile(String conversation, String ref) {
     if (ref == null || !ref.matches("[a-f0-9]{64}"))
       throw new IllegalArgumentException("INVALID_CURSOR");
@@ -268,6 +326,7 @@ public class RawToolResultStore {
         .resolve(ref + ".json");
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(byte[] bytes) {
     try {
       return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));

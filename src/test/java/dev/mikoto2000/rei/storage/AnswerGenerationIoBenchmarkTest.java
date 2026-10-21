@@ -47,21 +47,33 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.core.env.MapPropertySource;
 
-/** Opt-in, real SQLite and managed Activity log; no LLM or user data. */
+/**
+ * 回答生成Io性能測定の結果と状態の契約を検証するテスト。
+ *
+ * <p>Opt-in, real SQLite and managed Activity log; no LLM or user data.
+ */
 @Tag("integration")
 @EnabledIfSystemProperty(named = "rei.io.benchmark", matches = "true")
 class AnswerGenerationIoBenchmarkTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temporary;
+
+  /** 検証に使うプロジェクト。 */
   static final String PROJECT = "00000000-0000-0000-0000-000000000001";
 
+  /** 検証条件を再現するための判定期間Io。 */
   public interface WindowsIo extends Library {
+    /** 検証に使う起動単位の識別子。 */
     WindowsIo INSTANCE = Native.load("kernel32", WindowsIo.class);
 
+    /** 検証用に、データ保存の共通処理で参照する現在プロセスを返す。 */
     Pointer GetCurrentProcess();
 
+    /** 検証用に、データ保存の共通処理において、取得プロセスIoCountersに該当するか判定する。 */
     boolean GetProcessIoCounters(Pointer process, IoCounters counters);
   }
 
+  /** 検証条件を再現するためのIoCounters。 */
   @Structure.FieldOrder({
     "readOperations",
     "writeOperations",
@@ -71,9 +83,11 @@ class AnswerGenerationIoBenchmarkTest {
     "otherBytes"
   })
   public static class IoCounters extends Structure {
+    /** 検証に使う読み取り操作一覧、書き込み操作一覧、その他操作一覧、読み取りバイト数、書き込みバイト数、その他バイト数。 */
     public long readOperations, writeOperations, otherOperations, readBytes, writeBytes, otherBytes;
   }
 
+  /** {@code io} の条件を再現するための補助情報を返す。 */
   static IoCounters io() {
     if (!System.getProperty("os.name").startsWith("Windows")) return null;
     var counters = new IoCounters();
@@ -82,17 +96,25 @@ class AnswerGenerationIoBenchmarkTest {
     return counters;
   }
 
+  /** 検証条件を再現するための利用可否の確認。 */
   static final class Probe implements Driver {
+    /** 検証に使う委譲先。 */
     final Driver delegate;
+
+    /** 検証に使う活動中。 */
     final AtomicBoolean active = new AtomicBoolean();
+
+    /** 検証に使うtransactions、変更履歴、opens。 */
     final AtomicLong transactions = new AtomicLong(),
         commits = new AtomicLong(),
         opens = new AtomicLong();
 
+    /** 検証条件に必要な値を受け取り、Probeを用意する。 */
     Probe(Driver delegate) {
       this.delegate = delegate;
     }
 
+    /** {@code connect} の条件を再現するための補助情報を返す。 */
     public Connection connect(String url, Properties properties) throws SQLException {
       var connection = delegate.connect(url, properties);
       if (connection == null) return null;
@@ -116,31 +138,38 @@ class AnswerGenerationIoBenchmarkTest {
               });
     }
 
+    /** {@code acceptsURL} の条件を再現するための補助情報を返す。 */
     public boolean acceptsURL(String url) throws SQLException {
       return delegate.acceptsURL(url);
     }
 
+    /** 検証用に、データ保存の共通処理で参照するProperty付随情報を返す。 */
     public DriverPropertyInfo[] getPropertyInfo(String url, Properties p) throws SQLException {
       return delegate.getPropertyInfo(url, p);
     }
 
+    /** 検証用に、データ保存の共通処理で参照するMajor形式のバージョンを返す。 */
     public int getMajorVersion() {
       return delegate.getMajorVersion();
     }
 
+    /** 検証用に、データ保存の共通処理で参照するMinor形式のバージョンを返す。 */
     public int getMinorVersion() {
       return delegate.getMinorVersion();
     }
 
+    /** {@code jdbcCompliant} の条件を再現するための補助情報を返す。 */
     public boolean jdbcCompliant() {
       return delegate.jdbcCompliant();
     }
 
+    /** 検証用に、データ保存の共通処理で参照する親ログの出力先を返す。 */
     public Logger getParentLogger() {
       return Logger.getGlobal();
     }
   }
 
+  /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
   AgentEvent event(int index, int run, boolean thinking, int length) {
     AgentEventPayload payload =
         thinking
@@ -161,6 +190,7 @@ class AnswerGenerationIoBenchmarkTest {
         PROJECT);
   }
 
+  /** データ保存の共通処理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void measure() throws Exception {
     int offeredRate = Integer.parseInt(System.getProperty("rei.io.events-per-second", "50"));
@@ -199,6 +229,7 @@ class AnswerGenerationIoBenchmarkTest {
             var persistenceLatency = new ConcurrentLinkedQueue<Long>();
             var measuredProject =
                 new ProjectAgentEventStore(root) {
+                  /** {@code append} の条件を再現するための補助情報を返す。 */
                   @Override
                   public AgentEvent append(AgentEvent event) {
                     long start = System.nanoTime();
@@ -212,6 +243,7 @@ class AnswerGenerationIoBenchmarkTest {
             var activity = new ManagedActivityLog(registry);
             var profile =
                 new ProfileEventLogStore() {
+                  /** {@code append} の条件を再現するため、検証用の操作や状態を扱う。 */
                   @Override
                   public void append(AgentEvent event) {
                     long start = System.nanoTime();
@@ -330,6 +362,7 @@ class AnswerGenerationIoBenchmarkTest {
         output, StorageDatabase.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(results));
   }
 
+  /** 検証用に、必要な状態が整ってから先へ進むため、回答生成Io性能測定検証を待つ。 */
   private static void await(long deadline) {
     long remaining;
     while ((remaining = deadline - System.nanoTime()) > 0) {

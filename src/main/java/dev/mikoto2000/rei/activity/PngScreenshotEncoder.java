@@ -7,10 +7,16 @@ import java.io.OutputStream;
 import javax.imageio.ImageIO;
 import javax.imageio.stream.MemoryCacheImageOutputStream;
 
-/** PNG stays lossless; explicit RAM cache avoids ImageIO's default imageio*.tmp files. */
+/**
+ * PNG画像画面画像を受け渡し先が扱える形式へ整える。
+ *
+ * <p>PNG stays lossless; explicit RAM cache avoids ImageIO's default imageio*.tmp files.
+ */
 final class PngScreenshotEncoder {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private PngScreenshotEncoder() {}
 
+  /** 受け渡し先が扱える形式へ、指定された内容を変換する。 */
   static byte[] encode(BufferedImage image) throws IOException {
     var bytes = new ByteArrayOutputStream();
     write(image, bytes);
@@ -18,7 +24,10 @@ final class PngScreenshotEncoder {
   }
 
   /**
-   * Only the outbound Vision copy is resized; capture geometry and optional evidence stay intact.
+   * 受け渡し先が扱える形式へ、指定された内容を変換する。
+   *
+   * <p>Only the outbound Vision copy is resized; capture geometry and optional evidence stay
+   * intact.
    */
   static byte[] encode(BufferedImage image, double scale) throws IOException {
     if (!Double.isFinite(scale) || scale <= 0 || scale > 1)
@@ -45,6 +54,7 @@ final class PngScreenshotEncoder {
     return encode(resized);
   }
 
+  /** 指定された内容を書き込み先へ反映する。 */
   static void write(BufferedImage image, OutputStream target) throws IOException {
     // Do not change ImageIO.setUseCache globally: other concurrent features own their cache policy.
     try (var output = new MemoryCacheImageOutputStream(target)) {

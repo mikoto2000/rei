@@ -12,7 +12,9 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 再開用の記録Reconcilerの結果と状態の契約を検証するテスト。 */
 class CheckpointReconcilerTest {
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void readingGitBaselineDoesNotExecuteRepositoryConfiguredFsmonitor() throws Exception {
     Path repository = Files.createDirectory(root.resolve("git-fixture"));
@@ -35,8 +37,10 @@ class CheckpointReconcilerTest {
     assertFalse(Files.exists(repository.resolve("fsmonitor-called.txt")));
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 作業の中断と再開で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void detectsChangesWithoutOverwritingAndNeverReplaysUnknownOperations() throws Exception {
     var reconciler = new CheckpointReconciler(null);
@@ -82,6 +86,7 @@ class CheckpointReconcilerTest {
     assertTrue(result.nextAction().contains("再確認"));
   }
 
+  /** 作業の中断と再開の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void missingProjectBlocksResumeAndCancellationStopsInspection() {
     var state =

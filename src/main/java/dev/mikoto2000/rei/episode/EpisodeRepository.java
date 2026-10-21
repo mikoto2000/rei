@@ -14,15 +14,24 @@ import org.springframework.stereotype.Repository;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Additive schema; revision publication and compare-and-set cursor advance share one transaction.
+ * 経験の記録を保存・検索するための窓口。
+ *
+ * <p>Additive schema; revision publication and compare-and-set cursor advance share one
+ * transaction.
  */
 @Repository
 public class EpisodeRepository {
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 一連の更新をまとめて確定するための窓口。 */
   private final TransactionTemplate transactions;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final com.fasterxml.jackson.databind.ObjectMapper json =
       new com.fasterxml.jackson.databind.ObjectMapper();
 
+  /** 指定された値や利用先を使って、EpisodeRepositoryを初期化する。 */
   public EpisodeRepository(@Qualifier("memoryConsolidationDataSource") DataSource source) {
     db = JdbcClient.create(source);
     transactions = new TransactionTemplate(new DataSourceTransactionManager(source));
@@ -72,6 +81,7 @@ public class EpisodeRepository {
         });
   }
 
+  /** 過去の経験の活用で用いる再開用の記録を返す。 */
   public long checkpoint(String session) {
     return db.sql("SELECT position FROM episode_processing_checkpoints WHERE session_id=?")
         .param(session)
@@ -80,10 +90,12 @@ public class EpisodeRepository {
         .orElse(0L);
   }
 
+  /** 過去の経験の活用において、確保に該当するか判定する。 */
   public boolean acquire(String session, String worker) {
     return acquire(session, worker, 600);
   }
 
+  /** 過去の経験の活用において、確保に該当するか判定する。 */
   public boolean acquire(String session, String worker, long seconds) {
     long now = java.time.Instant.now().getEpochSecond();
     return db.sql(
@@ -93,13 +105,16 @@ public class EpisodeRepository {
         == 1;
   }
 
+  /** 後続の処理が利用できるよう、経験の記録保存と検索の窓口を解放する。 */
   public void release(String session, String worker) {
     db.sql("DELETE FROM episode_processing_leases WHERE session_id=? AND owner=?")
         .params(session, worker)
         .update();
   }
 
+  /** 後から参照できるよう、まとめた処理を保存する。 */
   public void saveBatch(String session, long expected, long next, List<Episode> episodes) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (expected < 0 || next < expected || episodes.size() > 50)
       throw new IllegalArgumentException("Invalid episode batch");
     transactions.execute(
@@ -180,6 +195,7 @@ public class EpisodeRepository {
         });
   }
 
+  /** 対象を特定できるよう、経験の記録保存と検索の窓口を探す。 */
   public Optional<Episode> find(String id, String project) {
     return db.sql(
             "SELECT record FROM episodes WHERE id=? AND project_id=? ORDER BY rowid DESC LIMIT 1")
@@ -188,6 +204,7 @@ public class EpisodeRepository {
         .optional();
   }
 
+  /** 過去の経験の活用で用いる改訂一覧を返す。 */
   public List<Episode> revisions(String id, String project) {
     var rows =
         new ArrayList<>(
@@ -200,8 +217,15 @@ public class EpisodeRepository {
     return List.copyOf(rows);
   }
 
+  /**
+   * 過去の経験の活用で受け渡す改訂番号ページを表す。
+   *
+   * @param items 項目一覧
+   * @param nextCursor 次続きの取得位置
+   */
   public record RevisionPage(List<Episode> items, String nextCursor) {}
 
+  /** 過去の経験の活用で用いる改訂番号ページを返す。 */
   public RevisionPage revisionPage(String id, String project, String beforeRevision, int limit) {
     if (limit < 1 || limit > 10)
       throw new IllegalArgumentException("Revision page limit must be 1..10");
@@ -223,6 +247,7 @@ public class EpisodeRepository {
     return new RevisionPage(items, rows.size() > limit ? items.getLast().revision() : null);
   }
 
+  /** 過去の経験の活用で用いる改訂番号を返す。 */
   public Optional<Episode> revision(String id, String project, String revision) {
     return db.sql("SELECT record FROM episodes WHERE id=? AND project_id=? AND revision=?")
         .params(id, project, revision)
@@ -230,10 +255,12 @@ public class EpisodeRepository {
         .optional();
   }
 
+  /** 過去の経験の活用で用いる待機中ベクトルによるを返す。 */
   public List<Episode> pendingDense(String session, int limit) {
     return pendingDense(session, limit, "default");
   }
 
+  /** 過去の経験の活用で用いる待機中ベクトルによるを返す。 */
   public List<Episode> pendingDense(String session, int limit, String generation) {
     if (limit < 1 || limit > 50)
       throw new IllegalArgumentException("Dense batch limit must be 1..50");
@@ -244,10 +271,12 @@ public class EpisodeRepository {
         .list();
   }
 
+  /** 後続の判断に現在の状態を反映するため、ベクトルによるの状態を記録する。 */
   public void markDense(Episode episode) {
     markDense(episode, "default");
   }
 
+  /** 過去の経験の活用において、状態の記録ベクトルによるに該当するか判定する。 */
   public boolean markDense(Episode episode, String generation) {
     return db.sql(
                 "INSERT INTO episode_dense_indexed(id,revision,generation) SELECT id,revision,? FROM episodes WHERE id=? AND revision=? AND rowid=(SELECT MAX(rowid) FROM episodes WHERE id=?) ON CONFLICT(id) DO UPDATE SET revision=excluded.revision,generation=excluded.generation")
@@ -256,10 +285,12 @@ public class EpisodeRepository {
         == 1;
   }
 
+  /** 過去の経験の活用に関するキャッシュの無効化ベクトルによるを処理する。 */
   public void invalidateDense(String id) {
     db.sql("DELETE FROM episode_dense_indexed WHERE id=?").param(id).update();
   }
 
+  /** 過去の経験の活用において、ベクトルによるの有無を判定する。 */
   public boolean hasDense(String project, String generation) {
     return db.sql(
                 "SELECT EXISTS(SELECT 1 FROM episodes e JOIN episode_dense_indexed d ON d.id=e.id AND d.revision=e.revision AND d.generation=? WHERE e.project_id=? AND e.rowid=(SELECT MAX(x.rowid) FROM episodes x WHERE x.id=e.id))")
@@ -269,6 +300,7 @@ public class EpisodeRepository {
         == 1;
   }
 
+  /** 過去の経験の活用に関するリンク記憶を処理する。 */
   public void linkMemory(String project, String session, List<String> runs, String memory) {
     String type =
         db.sql("SELECT type FROM memories WHERE id=? AND (project_id=? OR scope='GLOBAL')")
@@ -287,6 +319,7 @@ public class EpisodeRepository {
         });
   }
 
+  /** 過去の経験の活用で用いる関連一覧を返す。 */
   public List<Map<String, String>> relations(String id, String project) {
     return db.sql(
             "SELECT r.target_id,r.kind FROM episode_relations r WHERE r.episode_id=? AND EXISTS(SELECT 1 FROM episodes e WHERE e.id=r.episode_id AND e.project_id=?) LIMIT 32")
@@ -295,7 +328,11 @@ public class EpisodeRepository {
         .list();
   }
 
-  /** Only actual persisted Work Context items supplied by WorkContextService can be linked. */
+  /**
+   * 過去の経験の活用に関するリンク作業文脈を処理する。
+   *
+   * <p>Only actual persisted Work Context items supplied by WorkContextService can be linked.
+   */
   public void linkWorkContext(dev.mikoto2000.rei.workcontext.WorkContext context, String session) {
     transactions.execute(
         s -> {
@@ -311,11 +348,14 @@ public class EpisodeRepository {
         });
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public List<Episode> search(String query, String project, int limit) {
     return search(query, project, limit, EpisodeTimeRange.of(null, null));
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public List<Episode> search(String query, String project, int limit, EpisodeTimeRange range) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (limit < 1 || limit > 100 || query == null || query.length() > 2000)
       throw new IllegalArgumentException("Invalid episode query");
     var words =
@@ -346,6 +386,7 @@ public class EpisodeRepository {
         .list();
   }
 
+  /** 受け渡し先が扱える形式へ、指定された内容を変換する。 */
   private String encode(Episode episode) {
     try {
       return json.writeValueAsString(episode);
@@ -354,6 +395,7 @@ public class EpisodeRepository {
     }
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   private Episode decode(String record) {
     try {
       return json.readValue(record, Episode.class);

@@ -18,16 +18,24 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** ツール承認保存と検索の窓口の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ToolApprovalRepositoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-10-04T00:00:00Z");
+
+  /** 検証に使う保存と検索の窓口。 */
   ToolApprovalRepository repository;
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner(String project, String session, String run) {
     return new AgentRunContext(run, session, dir, project);
   }
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     repository =
@@ -36,6 +44,7 @@ class ToolApprovalRepositoryTest {
             Clock.fixed(now, ZoneOffset.UTC));
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void exactApprovalSurvivesRestartAndIsConsumedOnce() {
     var request = repository.request("writeMultiFile", "{\"path\":\"a\"}", owner("p", "s", "r"));
@@ -52,6 +61,7 @@ class ToolApprovalRepositoryTest {
         repository.consume("writeMultiFile", "{\"path\":\"a\"}", owner("p", "s", "resume")));
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void approvalCannotCrossArgumentsToolProjectOrSession() {
     var request = repository.request("writeMultiFile", "{}", owner("p", "s", "r"));
@@ -67,6 +77,7 @@ class ToolApprovalRepositoryTest {
     assertTrue(repository.consume("writeMultiFile", "{}", owner("p", "s", "r")));
   }
 
+  /** ツール利用の権限制御で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void denialAndExpiryCannotBeApprovedOrConsumed() {
     var request = repository.request("writeMultiFile", "{}", owner("p", "s", "r"));
@@ -86,6 +97,7 @@ class ToolApprovalRepositoryTest {
     assertFalse(later.consume("writeMultiFile", "{\"path\":\"expired\"}", owner("p", "s", "r3")));
   }
 
+  /** ツール利用の権限制御で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void requestsAreReviewableButCredentialsAreRedactedAndInputsAreBounded() {
     var request =
@@ -98,6 +110,7 @@ class ToolApprovalRepositoryTest {
         () -> repository.request("custom", "a".repeat(16385), owner("p", "s", "r")));
   }
 
+  /** ツール利用の権限制御で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void concurrentClientsCannotConsumeTheSameGrantTwice() throws Exception {
     var request = repository.request("writeMultiFile", "{}", owner("p", "s", "r"));
@@ -115,6 +128,7 @@ class ToolApprovalRepositoryTest {
     }
   }
 
+  /** ツール利用の権限制御で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void guardedActionCanResumeOnceButDenialAlwaysWins() {
     var automatic =

@@ -9,26 +9,60 @@ import java.util.HashSet;
 import java.util.List;
 
 /**
- * Apply only explicitly supplied saved proposals after a complete failed check; rerun the whole
+ * Self変更差分修復のユースケースを実現する。
+ *
+ * <p>Apply only explicitly supplied saved proposals after a complete failed check; rerun the whole
  * cycle.
  */
 public final class SelfPatchRepairService {
+  /**
+   * 共通の実行基盤で受け渡す修復を表す。
+   *
+   * @param id 識別子
+   * @param proposalSha256 提案内容の同一性を照合するSHA-256ハッシュ
+   */
   public record Repair(String id, String proposalSha256) {}
 
+  /**
+   * 共通の実行基盤で受け渡す要求を表す。
+   *
+   * @param testCommand 検証コマンド
+   * @param timeoutSeconds タイムアウトの秒数
+   * @param repairs 修復一覧
+   */
   public record Request(String testCommand, Integer timeoutSeconds, List<Repair> repairs) {
+    /** 受け取った情報からRequestを作成する。 */
     public Request {
       repairs = repairs == null ? List.of() : List.copyOf(repairs);
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡す受付記録を表す。
+   *
+   * @param id 識別子
+   * @param status 状態
+   * @param proposedSha256 提案内容内容の同一性を照合するSHA-256ハッシュ
+   * @param currentSha256 現在内容の同一性を照合するSHA-256ハッシュ
+   */
   public record Receipt(String id, String status, String proposedSha256, String currentSha256) {}
 
+  /**
+   * 共通の実行基盤で受け渡す結果を表す。
+   *
+   * @param root 作業ルート
+   * @param status 状態
+   * @param rounds 実行段階数
+   * @param repairs 修復一覧
+   * @param warnings 注意事項
+   */
   public record Result(
       String root,
       String status,
       List<SelfPatchReviewService.Result> rounds,
       List<Receipt> repairs,
       List<String> warnings) {
+    /** 受け取った情報からResultを作成する。 */
     public Result {
       rounds = List.copyOf(rounds);
       repairs = List.copyOf(repairs);
@@ -36,31 +70,43 @@ public final class SelfPatchRepairService {
     }
   }
 
+  /** 共通の実行基盤に必要なCycleを扱う。 */
   @FunctionalInterface
   public interface Cycle {
+    /** 要求された条件を満たすことを確認する。 */
     SelfPatchReviewService.Result verify(
         Path root, SelfPatchReviewService.Request request, long deadline) throws IOException;
   }
 
+  /** 共通の実行基盤に必要なFixerを扱う。 */
   @FunctionalInterface
   public interface Fixer {
+    /** 指定された内容を、現在の対象へ反映する。 */
     Receipt apply(Path root, Repair repair, long deadline) throws IOException;
   }
 
+  /** 一回の診断・修復のまとまり。 */
   private final Cycle cycle;
+
+  /** 取得記録。 */
   private final SelfPatchReviewService.Capture capture;
+
+  /** 指摘された問題を修正する窓口。 */
   private final Fixer fixer;
 
+  /** 指定された値や利用先を使って、SelfPatchRepairServiceを初期化する。 */
   public SelfPatchRepairService(Cycle cycle, SelfPatchReviewService.Capture capture, Fixer fixer) {
     this.cycle = cycle;
     this.capture = capture;
     this.fixer = fixer;
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   public Result verify(Path directory, Request request) throws IOException {
     return verify(directory, request, System.nanoTime() + Duration.ofSeconds(180).toNanos());
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   public Result verify(Path directory, Request request, long requestedDeadline) throws IOException {
     RunCancellation.propagate(null);
     validate(request);
@@ -124,6 +170,7 @@ public final class SelfPatchRepairService {
     }
   }
 
+  /** 共通の実行基盤において、対象の条件に該当するか判定する。 */
   private static boolean eligible(SelfPatchReviewService.Result result) {
     if ("FIX_REQUIRED".equals(result.status()))
       return result.review() != null
@@ -142,6 +189,7 @@ public final class SelfPatchRepairService {
         && !test.logsTruncated();
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   private static void validate(Request request) {
     if (request == null
         || request.testCommand() == null
@@ -166,6 +214,7 @@ public final class SelfPatchRepairService {
             "Unique bounded saved repair IDs and proposal hashes required");
   }
 
+  /** 共通の実行基盤で用いる出力を返す。 */
   private static Result output(
       Path root,
       String status,

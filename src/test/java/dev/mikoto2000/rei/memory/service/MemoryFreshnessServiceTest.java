@@ -13,11 +13,16 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 
+/** 記憶情報の鮮度サービスの結果と状態の契約を検証するテスト。 */
 class MemoryFreshnessServiceTest {
 
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   private final Clock clock = Clock.fixed(Instant.parse("2026-08-16T16:40:00Z"), ZoneOffset.UTC);
+
+  /** 検証に使うサービス。 */
   private final MemoryFreshnessService service = new MemoryFreshnessService(clock);
 
+  /** 長期記憶の保存と検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void ttlWithinRangeIsFresh() {
     Memory memory = memory(OffsetDateTime.parse("2026-08-16T16:39:40Z"), null);
@@ -28,6 +33,7 @@ class MemoryFreshnessServiceTest {
     assertEquals(Duration.ofSeconds(20), actual.age());
   }
 
+  /** 長期記憶の保存と検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void ttlExceededIsStale() {
     Memory memory = memory(OffsetDateTime.parse("2026-08-16T16:39:00Z"), null);
@@ -38,6 +44,7 @@ class MemoryFreshnessServiceTest {
     assertEquals(Duration.ofSeconds(60), actual.age());
   }
 
+  /** 長期記憶の保存と検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void missingTtlAndValidUntilMeansNoExpiration() {
     Memory memory = memory(OffsetDateTime.parse("2026-08-16T16:00:00Z"), null);
@@ -47,6 +54,7 @@ class MemoryFreshnessServiceTest {
     assertEquals(FreshnessStatus.NO_EXPIRATION, actual.status());
   }
 
+  /** 長期記憶の保存と検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void validUntilBeforeNowIsStale() {
     Memory memory =
@@ -59,6 +67,7 @@ class MemoryFreshnessServiceTest {
     assertEquals(FreshnessStatus.STALE, actual.status());
   }
 
+  /** {@code memory} の条件を再現するための補助情報を返す。 */
   private Memory memory(OffsetDateTime observedAt, OffsetDateTime validUntil) {
     return new Memory(
         "id",

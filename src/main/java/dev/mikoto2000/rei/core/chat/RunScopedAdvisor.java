@@ -11,32 +11,42 @@ import org.springframework.ai.chat.client.advisor.api.CallAdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.StreamAdvisorChain;
 
 /**
- * Restores ownership on the advisor's scheduler without changing existing advisor implementations.
+ * 会話の実行に必要な実行対象を限定した対話の補助を扱う。
+ *
+ * <p>Restores ownership on the advisor's scheduler without changing existing advisor
+ * implementations.
  */
 public final class RunScopedAdvisor implements BaseAdvisor {
+  /** 委譲先。 */
   private final BaseAdvisor delegate;
 
+  /** 指定された値や利用先を使って、RunScopedAdvisorを初期化する。 */
   public RunScopedAdvisor(BaseAdvisor delegate) {
     this.delegate = delegate;
   }
 
+  /** 会話の実行で用いる委譲先を返す。 */
   public BaseAdvisor delegate() {
     return delegate;
   }
 
+  /** 他の補助処理と組み合わせる際の適用順序を返す。 */
   public int getOrder() {
     return delegate.getOrder();
   }
 
+  /** 会話の実行で参照する名前を返す。 */
   public String getName() {
     return delegate.getName();
   }
 
+  /** 会話の実行で参照する実行予定の管理を返す。 */
   @Override
   public reactor.core.scheduler.Scheduler getScheduler() {
     return delegate.getScheduler();
   }
 
+  /** 会話の実行で用いるadvise逐次データを返す。 */
   @Override
   public reactor.core.publisher.Flux<ChatClientResponse> adviseStream(
       ChatClientRequest request, StreamAdvisorChain chain) {
@@ -54,11 +64,13 @@ public final class RunScopedAdvisor implements BaseAdvisor {
     return BaseAdvisor.super.adviseStream(capture(request), chain);
   }
 
+  /** 会話の実行で用いるadvise呼び出しを返す。 */
   @Override
   public ChatClientResponse adviseCall(ChatClientRequest request, CallAdvisorChain chain) {
     return BaseAdvisor.super.adviseCall(capture(request), chain);
   }
 
+  /** 後から状況を確認できるよう、実行対象を限定した対話の補助を記録する。 */
   private ChatClientRequest capture(ChatClientRequest request) {
     var current =
         (AgentRunContext)
@@ -97,6 +109,7 @@ public final class RunScopedAdvisor implements BaseAdvisor {
     return request.mutate().context(context).prompt(prompt).build();
   }
 
+  /** 会話の実行の本処理へ渡す文脈を準備する。 */
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     try (var scope =
         AgentRunScope.open(
@@ -108,6 +121,7 @@ public final class RunScopedAdvisor implements BaseAdvisor {
     }
   }
 
+  /** 会話の実行の実行結果を受け取り、後続の処理へ反映する。 */
   public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
     try (var scope =
         AgentRunScope.open(
@@ -116,6 +130,7 @@ public final class RunScopedAdvisor implements BaseAdvisor {
     }
   }
 
+  /** 会話の実行で用いる共通形式への調整を返す。 */
   public static java.util.List<Advisor> wrap(java.util.List<Advisor> advisors) {
     return advisors.stream()
         .map(a -> a instanceof BaseAdvisor b ? (Advisor) new RunScopedAdvisor(b) : a)

@@ -28,15 +28,30 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** 補助エージェント評価の合意サービスの結果と状態の契約を検証するテスト。 */
 class SubAgentConsensusServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temporary;
+
+  /** 検証に使う保存と検索の窓口。 */
   DurableSubAgentRepository repository;
+
+  /** 検証に使う実行の担当。 */
   SubAgentRunner runner;
+
+  /** 検証に使う登録台帳。 */
   SubAgentRegistry registry;
+
+  /** 検証に使うこの機能の動作設定。 */
   SubAgentProperties properties;
+
+  /** 検証に使う所有者。 */
   AgentRunContext owner;
+
+  /** 検証に使うサービス。 */
   SubAgentConsensusService service;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     Path root = Files.createDirectory(temporary.resolve("project")),
@@ -65,6 +80,7 @@ class SubAgentConsensusServiceTest {
     service = new SubAgentConsensusService(properties, repository, runner, registry);
   }
 
+  /** {@code answer} の条件を再現するための補助情報を返す。 */
   SubAgentConsensusService.Reference answer(String text, String hash, boolean evidence) {
     var child = repository.create(owner, "reviewer", "same question", null, 2, 0, "baseline");
     String run = UUID.randomUUID().toString();
@@ -86,6 +102,7 @@ class SubAgentConsensusServiceTest {
         child.id(), repository.get(owner, child.id()).resultHash());
   }
 
+  /** 補助エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void majorityDoesNotEraseDisagreementOrProvenance() {
     var refs =
@@ -104,10 +121,12 @@ class SubAgentConsensusServiceTest {
     verifyNoInteractionsExceptBaseline();
   }
 
+  /** 検証用に、要求された条件を満たすか判断するため、なし対話一覧Except比較の基準を確認する。 */
   void verifyNoInteractionsExceptBaseline() {
     verify(runner, never()).run(anyString(), anyString(), any(), any());
   }
 
+  /** 補助エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void agreementWithoutEvidenceRemainsUnresolved() {
     var compared =
@@ -119,6 +138,7 @@ class SubAgentConsensusServiceTest {
     assertFalse(compared.truthVerified());
   }
 
+  /** 補助エージェントへの委譲で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void supportedAgreementReportsOnlyAgreementAndKeepsIndependentRunIds() {
     var compared =
@@ -132,6 +152,7 @@ class SubAgentConsensusServiceTest {
         compared.sources().stream().map(SubAgentConsensusService.Source::runId).distinct().count());
   }
 
+  /** 補助エージェントへの委譲で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void ownerHashAndDuplicateGuardsFailBeforeAnyJudge() {
     var first = answer("yes", "a".repeat(64), true);
@@ -153,6 +174,7 @@ class SubAgentConsensusServiceTest {
     verifyNoInteractionsExceptBaseline();
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void boundsDisabledSettingsAndDifferentTasksRejectBeforeJudging() {
     var first = answer("yes", "a".repeat(64), true);
@@ -177,6 +199,7 @@ class SubAgentConsensusServiceTest {
     verifyNoInteractionsExceptBaseline();
   }
 
+  /** 任意評価の判断について、共有予算を利用することを確認する。 */
   @Test
   void optionalJudgeUsesSharedBudgetAndCannotReplaceUnresolvedEvidence() {
     var references =
@@ -210,6 +233,7 @@ class SubAgentConsensusServiceTest {
     assertThrows(IllegalArgumentException.class, () -> service.judge(run, references, "reviewer"));
   }
 
+  /** 補助エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void definitionChangeAndMissingContractCannotUpgradeClaimedEvidence() {
     var refs = List.of(answer("same", "a".repeat(64), true), answer("same", "b".repeat(64), true));

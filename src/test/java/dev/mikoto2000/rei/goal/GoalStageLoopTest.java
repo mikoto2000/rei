@@ -20,14 +20,25 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 目標段階繰り返しの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class GoalStageLoopTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う目標一覧。 */
   GoalRepository goals;
+
+  /** 検証に使う段階一覧。 */
   GoalStageRepository stages;
+
+  /** 検証に使うサービス。 */
   GoalStageService service;
+
+  /** 検証に使うファイル一覧。 */
   FileGoalVerifier files = new FileGoalVerifier();
 
+  /** 検証ごとに状態を分離し、対象を操作できる環境を用意する。 */
   GoalRepository.Goal setup() {
     var data = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("goals.db"));
     goals = new GoalRepository(data, Clock.systemUTC());
@@ -44,15 +55,18 @@ class GoalStageLoopTest {
     return goal;
   }
 
+  /** {@code criterion} の条件を再現するための補助情報を返す。 */
   GoalRepository.FileCriterion criterion(String id) {
     return new GoalRepository.FileCriterion(id + ".json", "", "/ok", "true");
   }
 
+  /** {@code stage} の条件を再現するための補助情報を返す。 */
   GoalStageDefinition stage(String id, String... dependencies) {
     return new GoalStageDefinition(
         id, null, "Produce " + id, List.of(criterion(id)), List.of(dependencies), List.of(), null);
   }
 
+  /** {@code loop} の条件を再現するための補助情報を返す。 */
   GoalLoopService loop(GoalLoopService.Gateway gateway) {
     var loop =
         new GoalLoopService(
@@ -65,6 +79,7 @@ class GoalStageLoopTest {
     return loop;
   }
 
+  /** 検証用に、指定された内容を書き込み先へ反映する。 */
   void write(String id, boolean ok) {
     try {
       Files.writeString(dir.resolve(id + ".json"), "{\"ok\":" + ok + "}");
@@ -73,10 +88,12 @@ class GoalStageLoopTest {
     }
   }
 
+  /** {@code done} の条件を再現するための補助情報を返す。 */
   GoalLoopService.Outcome done() {
     return new GoalLoopService.Outcome(ChatExecutionResult.success("DONE", false));
   }
 
+  /** 目標の達成管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void onlyVerifiedStageUnlocksNextAndDuplicateCallbackDoesNotAdvance() {
     var goal = setup();
@@ -98,6 +115,7 @@ class GoalStageLoopTest {
     assertEquals(3, stages.attempts(goal).size());
   }
 
+  /** 目標の達成管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void laterDamageInvalidatesEarlierEvidenceAndGoalCannotComplete() {
     var goal = setup();
@@ -118,6 +136,7 @@ class GoalStageLoopTest {
     assertEquals("STALE", stages.list(goal).getFirst().state());
   }
 
+  /** プロセス再開について、明示的な状態の照合を必要とすることを確認する。 */
   @Test
   void processRestartRequiresExplicitReconcileAndDoesNotRepeatVerifiedStage() {
     var goal = setup();
@@ -125,6 +144,7 @@ class GoalStageLoopTest {
     var loop =
         loop(
             new GoalLoopService.Gateway() {
+              /** {@code dispatch} の条件を再現するため、検証用の操作や状態を扱う。 */
               public void dispatch(
                   GoalRepository.Claim claim,
                   String run,
@@ -136,6 +156,7 @@ class GoalStageLoopTest {
                 } else callback.set(completed);
               }
 
+              /** 検証用に、目標の達成管理において、入力先Flightかどうかを判定する。 */
               public boolean isInFlight(GoalRepository.Goal ignored) {
                 return false;
               }
@@ -160,6 +181,7 @@ class GoalStageLoopTest {
     assertEquals(1, stages.attempts(goal).stream().filter(a -> a.stageId().equals("a")).count());
   }
 
+  /** 目標の達成管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void parentAndFinalGoalEachNeedTheirOwnIndependentVerification() {
     var goal = setup();

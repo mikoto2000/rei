@@ -24,17 +24,37 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 
-/** Storage transaction commits Session, canonical Run, lease and receipt before dispatch. */
+/**
+ * 会話受付の記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>Storage transaction commits Session, canonical Run, lease and receipt before dispatch.
+ */
 public final class ConversationAdmissionStore implements AutoCloseable {
+  /** 受付記録保持期間。 */
   public static final Duration RECEIPT_RETENTION = Duration.ofDays(7);
+
+  /** 許容件数。 */
   public static final int CAPACITY = 100000;
+
+  /** 開始。 */
   private static final Set<String> OPEN = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+  /** データベース。 */
   private final StorageDatabase database;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 起動単位の識別子。 */
   private final String instance = UUID.randomUUID().toString();
+
+  /** 終了済み。 */
   private boolean closed;
+
+  /** 購読。 */
   private dev.mikoto2000.rei.event.AgentEventBus.Subscription subscription;
 
+  /** 状況を判断する根拠を得るため、会話受付保存先を観測する。 */
   public void observe(dev.mikoto2000.rei.event.AgentEventBus events) {
     subscription =
         events.subscribe(
@@ -52,8 +72,26 @@ public final class ConversationAdmissionStore implements AutoCloseable {
             });
   }
 
+  /**
+   * 会話履歴と受付記録の管理で受け渡す受付記録を表す。
+   *
+   * @param context 文脈
+   * @param replay 再送
+   */
   public record Receipt(AgentRunContext context, boolean replay) {}
 
+  /**
+   * 会話履歴と受付記録の管理で受け渡す文脈を表す。
+   *
+   * @param runId 実行の識別子
+   * @param sessionId 会話の識別子
+   * @param root 作業ルート
+   * @param projectId 所属プロジェクトの識別子
+   * @param source 取得元
+   * @param mode 動作モード
+   * @param voiceInput 音声入力からの依頼かどうか
+   * @param responseStyle 会話の応答形式
+   */
   private record Context(
       String runId,
       String sessionId,
@@ -63,6 +101,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
       AgentRunContext.Mode mode,
       boolean voiceInput,
       ResponseStyle responseStyle) {
+    /** 会話履歴と受付記録の管理で受け渡す情報を、指定された内容から作成する。 */
     static Context of(AgentRunContext c) {
       return new Context(
           c.runId(),
@@ -75,12 +114,14 @@ public final class ConversationAdmissionStore implements AutoCloseable {
           c.responseStyle());
     }
 
+    /** 後続の処理で使う値を返す。 */
     AgentRunContext value() {
       return new AgentRunContext(
           runId, sessionId, Path.of(root), projectId, source, mode, voiceInput, responseStyle);
     }
   }
 
+  /** 指定された値や利用先を使って、ConversationAdmissionStoreを初期化する。 */
   public ConversationAdmissionStore(Path root, Clock clock) {
     this.database = new StorageDatabase(root);
     this.clock = clock;
@@ -93,6 +134,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
     }
   }
 
+  /** 処理を継続できる状態に戻すため、会話受付保存先を復旧する。 */
   private void recover() {
     database.transaction(
         db -> {
@@ -120,6 +162,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
         });
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   public static String hash(String value) {
     try {
       return HexFormat.of()
@@ -131,14 +174,23 @@ public final class ConversationAdmissionStore implements AutoCloseable {
     }
   }
 
+  /** 会話履歴と受付記録の管理で用いるキーハッシュ値を返す。 */
   private static String keyHash(String key) {
     if (key == null || !key.matches("[A-Za-z0-9._:-]{1,128}"))
       throw new IllegalArgumentException("Invalid Idempotency-Key");
     return hash(key);
   }
 
+  /**
+   * 会話履歴と受付記録の管理で受け渡す保存済み受付記録を表す。
+   *
+   * @param fingerprint 要求内容の照合値
+   * @param runId 実行の識別子
+   * @param expires 有効期限
+   */
   private record SavedReceipt(String fingerprint, String runId, Instant expires) {}
 
+  /** 会話履歴と受付記録の管理で用いる受付記録を返す。 */
   private SavedReceipt receipt(Connection db, String hash) throws SQLException {
     try (var query =
         db.prepareStatement(
@@ -153,10 +205,12 @@ public final class ConversationAdmissionStore implements AutoCloseable {
     }
   }
 
+  /** 会話履歴と受付記録の管理に関するunexpiredを処理する。 */
   private void unexpired(SavedReceipt value) {
     if (!clock.instant().isBefore(value.expires())) throw new IdempotencyExpiredException();
   }
 
+  /** 会話履歴と受付記録の管理で用いる照会を返す。 */
   public Optional<RunSnapshot> lookup(String key) {
     String hash = keyHash(key);
     var value = database.read(db -> receipt(db, hash));
@@ -165,10 +219,12 @@ public final class ConversationAdmissionStore implements AutoCloseable {
     return get(value.runId());
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Optional<RunSnapshot> get(String runId) {
     return database.read(db -> snapshot(db, runId));
   }
 
+  /** 現在の状態を、後から参照できる記録として取り出す。 */
   private Optional<RunSnapshot> snapshot(Connection db, String id) throws Exception {
     try (var query =
         db.prepareStatement(
@@ -177,6 +233,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
       try (var rows = query.executeQuery()) {
         if (!rows.next()) return Optional.empty();
         String json = rows.getString(1);
+        // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (json.length() > 20000)
           throw new IllegalStateException("Admission context capacity exceeded");
         var context = StorageDatabase.JSON.readValue(json, Context.class).value();
@@ -198,15 +255,18 @@ public final class ConversationAdmissionStore implements AutoCloseable {
     }
   }
 
+  /** 会話履歴と受付記録の管理で用いる日時を返す。 */
   private static Instant instant(String value) {
     return value == null ? null : Instant.parse(value);
   }
 
+  /** 要求を後続の処理へ引き渡すため、会話受付保存先を受け付ける。 */
   public Receipt accept(
       SessionMetadata metadata, AgentRunContext context, String key, String fingerprint) {
     return accept(metadata, context, key, fingerprint, null);
   }
 
+  /** 要求を後続の処理へ引き渡すため、会話受付保存先を受け付ける。 */
   public Receipt accept(
       SessionMetadata metadata,
       AgentRunContext context,
@@ -278,6 +338,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
                 if (rows.next()) {
                   var old =
                       StorageDatabase.JSON.readValue(rows.getString(1), SessionMetadata.class);
+                  // 別のプロジェクトの情報を、この作業の対象として扱わせない。
                   if (!old.projectId().equals(metadata.projectId())
                       || !old.createdAt().equals(metadata.createdAt())
                       || !old.title().equals(metadata.title()))
@@ -324,6 +385,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
     }
   }
 
+  /** 会話履歴と受付記録の管理に関する許容件数を処理する。 */
   private static void capacity(Connection db, String table) throws SQLException {
     // Table names are private constants, never caller input. Expired key tombstones are not reused.
     try (var query = db.createStatement();
@@ -334,7 +396,11 @@ public final class ConversationAdmissionStore implements AutoCloseable {
     }
   }
 
-  /** Checkpoint/Scheduler entry points also reserve known human Sessions before enqueue. */
+  /**
+   * 競合する処理と利用範囲を調整するため、既知会話を確保する。
+   *
+   * <p>Checkpoint/Scheduler entry points also reserve known human Sessions before enqueue.
+   */
   public void reserveKnownSession(AgentRunContext context) {
     database.transaction(
         db -> {
@@ -353,6 +419,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
         });
   }
 
+  /** 競合する処理と利用範囲を調整するため、会話受付保存先を確保する。 */
   private void reserve(Connection db, AgentRunContext context) throws Exception {
     var existing = snapshot(db, context.runId());
     if (existing.isPresent()) {
@@ -383,6 +450,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
     }
     capacity(db, "conversation_admissions");
     String document = StorageDatabase.JSON.writeValueAsString(Context.of(context));
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (document.length() > 20000)
       throw new IllegalArgumentException("Admission context capacity exceeded");
     try (var write =
@@ -402,12 +470,17 @@ public final class ConversationAdmissionStore implements AutoCloseable {
     }
   }
 
-  /** Shell's existing exclusive queue remains pending until the preceding runner has cleaned up. */
+  /**
+   * 要求された処理を利用できるよう、実行を開始する。
+   *
+   * <p>Shell's existing exclusive queue remains pending until the preceding runner has cleaned up.
+   */
   public void startExecution(AgentRunContext context) {
     database.transaction(
         db -> {
           var saved = snapshot(db, context.runId());
           if (saved.isEmpty()) return null;
+          // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
           if (!saved.get().context().equals(context) || saved.get().status().isTerminal())
             throw new IllegalStateException("Run cannot start");
           try (var query =
@@ -436,6 +509,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
         });
   }
 
+  /** 会話履歴と受付記録の管理に関するMCP受付失敗を処理する。 */
   public void mcpAdmissionFailed(String id, RuntimeException failure) {
     String code =
         failure instanceof java.util.concurrent.RejectedExecutionException
@@ -454,10 +528,12 @@ public final class ConversationAdmissionStore implements AutoCloseable {
         });
   }
 
+  /** 会話履歴と受付記録の管理に関する状態の遷移を処理する。 */
   public void transition(String id, RunStatus next) {
     database.transaction(
         db -> {
           var old = snapshot(db, id);
+          // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
           if (old.isEmpty() || old.get().status().isTerminal() || next == RunStatus.QUEUED)
             return null;
           try (var write =
@@ -480,7 +556,11 @@ public final class ConversationAdmissionStore implements AutoCloseable {
         });
   }
 
-  /** Adopt only a durable external wait whose previous admission owner has exited. */
+  /**
+   * 対象を処理する担当を決めるため、待機中の利用権を確保する。
+   *
+   * <p>Adopt only a durable external wait whose previous admission owner has exited.
+   */
   public boolean claimWaiting(AgentRunContext context) {
     return database.transaction(
         db -> {
@@ -524,6 +604,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
         });
   }
 
+  /** 後続の処理が利用できるよう、会話受付保存先を解放する。 */
   public void release(String id) {
     database.transaction(
         db -> {
@@ -537,6 +618,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
           }
           var old = snapshot(db, id);
           if (old.isEmpty()) return null;
+          // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
           if (!old.get().status().isTerminal() && !old.get().status().isWaiting()) unknown(db, id);
           else
             try (var write =
@@ -550,6 +632,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
         });
   }
 
+  /** 確定できない結果を、判定不能の情報として表す。 */
   private void unknown(Connection db, String id) throws SQLException {
     try (var write =
         db.prepareStatement(
@@ -566,6 +649,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
     }
   }
 
+  /** 会話履歴と受付記録の管理で利用した資源や登録を解放し、利用を終了する。 */
   @Override
   public void close() {
     synchronized (database.writer) {

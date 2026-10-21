@@ -12,7 +12,9 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
+/** 教材レビュー仕様の結果と状態の契約を検証するテスト。 */
 class MaterialReviewSpecificationTest {
+  /** {@code fixture} の条件を再現するための補助情報を返す。 */
   static String fixture() throws Exception {
     try (var stream =
         MaterialReviewSpecificationTest.class.getResourceAsStream(
@@ -21,6 +23,7 @@ class MaterialReviewSpecificationTest {
     }
   }
 
+  /** 外部エージェントへの委譲で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void promptDefinesCompleteTeachingContract() throws Exception {
     try (var stream = getClass().getResourceAsStream("/external-agent/material-review.md")) {
@@ -50,6 +53,7 @@ class MaterialReviewSpecificationTest {
     }
   }
 
+  /** データ形式について、不正な重大度未指定項目一覧を受け付けないことを確認する。 */
   @Test
   void schemaRejectsInvalidSeverityMissingFieldsAndScores() throws Exception {
     var schema =

@@ -8,20 +8,27 @@ import java.util.Map;
 import java.util.Objects;
 import org.springframework.stereotype.Service;
 
+/** 言語モデル経験の記録に必要な情報を入力から取り出す。 */
 @Service
 public class LlmEpisodeExtractor implements EpisodeExtractor {
+  /** モデル。 */
   private final LlmMemoryProcessor model;
+
+  /** イベント一覧。 */
   private dev.mikoto2000.rei.event.ProjectAgentEventStore events;
 
+  /** 過去の経験の活用で使用するイベント一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setEvents(dev.mikoto2000.rei.event.ProjectAgentEventStore events) {
     this.events = events;
   }
 
+  /** 指定された値や利用先を使って、LlmEpisodeExtractorを初期化する。 */
   public LlmEpisodeExtractor(LlmMemoryProcessor model) {
     this.model = model;
   }
 
+  /** 受け取った内容から、後続の処理に必要な情報を取り出す。 */
   public List<Episode> extract(
       String session,
       String project,
@@ -117,6 +124,7 @@ public class LlmEpisodeExtractor implements EpisodeExtractor {
             existing);
   }
 
+  /** 利用先の許容量を超えないよう、言語モデル経験の記録情報の抽出を上限内に収める。 */
   private static String clip(String value) {
     return value.substring(0, Math.min(500, value.length()));
   }

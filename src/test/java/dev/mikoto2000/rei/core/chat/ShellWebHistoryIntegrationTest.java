@@ -47,10 +47,13 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import reactor.core.publisher.Flux;
 
+/** シェルWeb履歴外部連携の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ShellWebHistoryIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 会話の実行で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shellWebShellShareHttpHistoryExecutionOrderAndModelMemory() throws Exception {
     var projects = new ProjectRegistry(directory.resolve("projects.json"));
@@ -62,14 +65,17 @@ class ShellWebHistoryIntegrationTest {
     List<Prompt> modelInputs = new ArrayList<>();
     var model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             modelInputs.add(p);
             return Flux.just(

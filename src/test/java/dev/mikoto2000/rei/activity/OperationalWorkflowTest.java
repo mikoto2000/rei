@@ -20,10 +20,13 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** OperationalWorkflowの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class OperationalWorkflowTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedVisionRetainsObservationThenUserRuleSkipsNextVision() throws Exception {
     var p = new ActivityProperties();
@@ -72,6 +75,7 @@ class OperationalWorkflowTest {
     verify(screenshots, never()).save(any(), any(), any());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void telemetryFailureCannotPreventPrimaryStoreWrite() {
     var ds = mock(javax.sql.DataSource.class);
@@ -88,6 +92,7 @@ class OperationalWorkflowTest {
     verify(store).append(any());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void compiledSnapshotIsReusedEvenIfFileIsRemovedUntilReload() throws Exception {
     var f = dir.resolve("rules.yaml");

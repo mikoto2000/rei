@@ -23,10 +23,13 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** Crash整合性復旧の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class CrashConsistencyRecoveryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 共通の実行基盤で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"review", "repair", "notification", "single"})
   void hardKilledJvmLeavesUnknownWithoutReplayAndLiveProcessIsPreserved(String mode)
@@ -132,11 +135,13 @@ class CrashConsistencyRecoveryTest {
     }
   }
 
+  /** 検証で使用する状態の記録を、指定された条件に合わせて用意する。 */
   static SelfPatchReviewService.Snapshot snapshot() {
     return new SelfPatchReviewService.Snapshot(
         "a".repeat(64), List.of("A.java"), List.of(), true, List.of());
   }
 
+  /** {@code reviewRequest} の条件を再現するための補助情報を返す。 */
   static SemanticPatchReviewService.Request reviewRequest() {
     return new SemanticPatchReviewService.Request(
         "fixture",
@@ -149,6 +154,7 @@ class CrashConsistencyRecoveryTest {
         false);
   }
 
+  /** {@code review} の条件を再現するための補助情報を返す。 */
   static SemanticPatchReviewService review(DriverManagerDataSource source, Path root, Path ready) {
     return new SemanticPatchReviewService(
         source,
@@ -167,6 +173,7 @@ class CrashConsistencyRecoveryTest {
         });
   }
 
+  /** {@code repair} の条件を再現するための補助情報を返す。 */
   static DiagnosedRepairService repair(DriverManagerDataSource source, Path root, Path ready) {
     return new DiagnosedRepairService(
         source,
@@ -180,6 +187,7 @@ class CrashConsistencyRecoveryTest {
         });
   }
 
+  /** {@code hold} の条件を再現するため、検証用の操作や状態を扱う。 */
   static void hold(DriverManagerDataSource source, String table, Path ready)
       throws java.io.IOException {
     if (ready == null) throw new AssertionError("No replay");
@@ -197,13 +205,16 @@ class CrashConsistencyRecoveryTest {
     }
   }
 
+  /** 検証用に、状態や結果を購読先へ通知する。 */
   static void publish(Path ready, String id) throws java.io.IOException {
     var staging = ready.resolveSibling("ready.tmp");
     Files.writeString(staging, id);
     Files.move(staging, ready, StandardCopyOption.ATOMIC_MOVE);
   }
 
+  /** 検証条件を再現するための実行の担当。 */
   public static final class Worker {
+    /** 検証用に、共通の実行基盤の起動要求を受け付け、実行を開始する。 */
     public static void main(String[] arguments) throws Exception {
       String mode = arguments[0];
       Path root = Path.of(arguments[1]), ready = Path.of(arguments[3]);

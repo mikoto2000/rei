@@ -18,8 +18,10 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+/** テーマEnrichmentの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ThemeEnrichmentTest {
+  /** {@code differentProjects} の条件を再現するための補助情報を返す。 */
   static List<SummarySegment> differentProjects() {
     try (var in =
         ThemeEnrichmentTest.class.getResourceAsStream(
@@ -45,6 +47,7 @@ class ThemeEnrichmentTest {
     }
   }
 
+  /** 検証用に、指定されたテキストを反映した情報を作成する。 */
   static SummarySegment withText(SummarySegment s, String title, String summary) {
     var r = s.evidence().getFirst();
     var p = r.inference().activities().getFirst();
@@ -74,6 +77,7 @@ class ThemeEnrichmentTest {
         List.of());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void savedTitleAndSummarySupplyTopicsWithoutInventingFromIdentifiers() {
     var a =
@@ -101,6 +105,7 @@ class ThemeEnrichmentTest {
     assertThat(plain.dominantThemes()).containsExactly("rei の開発");
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void noProjectUsesExplicitTopicThenGenericFallback() {
     var topic =
@@ -113,6 +118,7 @@ class ThemeEnrichmentTest {
     assertThat(generic.dominantThemes()).containsExactly("調査");
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void shortIncidentalProjectDoesNotSuppressMeaningfulGenericWork() {
     var a =
@@ -123,6 +129,7 @@ class ThemeEnrichmentTest {
     assertThat(a.dominantThemes()).containsExactly("開発");
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void statsCountClippedObservationsAndContinuityWithoutCountingGaps() {
     var a =
@@ -142,6 +149,7 @@ class ThemeEnrichmentTest {
         .containsEntry("documentation", 300L);
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void implementationNamesAndProjectFamiliesAreNotInferred() {
     for (var name :
@@ -161,6 +169,7 @@ class ThemeEnrichmentTest {
     assertThat(a.dominantThemes()).hasSize(3).noneMatch(s -> s.contains("翻訳") || s.contains("音声"));
   }
 
+  /** 同じ作業の繰り返しを受け付けないことを確認する。 */
   @Test
   void meaningfulWorkSurvivesMostlyUnknownBucketAndAiValidationRejectsRepetition() {
     var a =
@@ -184,6 +193,7 @@ class ThemeEnrichmentTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void fallbackFailureKeepsEnrichedSavedTopic() {
     var source =
@@ -201,6 +211,7 @@ class ThemeEnrichmentTest {
         .contains("rei のActivity分類");
   }
 
+  /** {@code metrics} の条件を再現するための補助情報を返す。 */
   static String metrics(DailySummaryAggregate a, DailySummary s) {
     var generic = Set.of("開発", "調査", "文書作業", "コミュニケーション");
     return "themes="
@@ -213,6 +224,7 @@ class ThemeEnrichmentTest {
         + new DailySummaryFormatter().format(a, s).length();
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void comparison() throws Exception {
     var out = new StringBuilder();
@@ -227,6 +239,7 @@ class ThemeEnrichmentTest {
     Files.writeString(Path.of("target/theme-enrichment-comparison.txt"), out);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void genericIsSuppressedWhenSpecificWorkExists() {
     var a =
@@ -237,6 +250,7 @@ class ThemeEnrichmentTest {
     assertThat(a.dominantThemes()).containsExactly("rei の開発");
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sameCanonicalProjectMergesCategories() {
     var a =
@@ -249,6 +263,7 @@ class ThemeEnrichmentTest {
     assertThat(a.dominantThemes().getFirst()).contains("sensevoice-input", "開発", "調査", "文書作業");
   }
 
+  /** 各対象集計区分一覧プロジェクトを保持することを確認する。 */
   @Test
   void socialDominanceRetainsEachBucketsProjectAndDoesNotRepeatAi() {
     var a = aggregate(differentProjects());

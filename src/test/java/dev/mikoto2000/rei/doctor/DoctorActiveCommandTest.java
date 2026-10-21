@@ -15,7 +15,9 @@ import java.io.StringWriter;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** 環境診断活動中コマンドの結果と状態の契約を検証するテスト。 */
 class DoctorActiveCommandTest {
+  /** 明示的な活動中確認について、既存の実行待ちを利用することを確認する。 */
   @Test
   void explicitActiveCheckUsesExistingQueueAndPrintsPlanBeforeSubmission() {
     var passive = mock(DoctorService.class);
@@ -32,9 +34,11 @@ class DoctorActiveCommandTest {
         .submit(anyString());
     assertEquals(0, command.execute("--check", "connectivity", "--details"));
     verify(queue).submit("/doctor --check connectivity --details");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(passive);
   }
 
+  /** 実行環境の診断で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidArgumentsCannotLeakValuesOrSubmit() {
     var passive = mock(DoctorService.class);
@@ -44,6 +48,7 @@ class DoctorActiveCommandTest {
     command.setErr(new PrintWriter(errors));
     assertEquals(2, command.execute("--check", "TOKEN-SECRET"));
     assertFalse(errors.toString().contains("TOKEN-SECRET"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(passive, queue);
   }
 }

@@ -20,10 +20,16 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** 時間計測外部連携連携の窓口一覧の結果と状態の契約を検証するテスト。 */
 class TimingIntegrationAdaptersTest {
+  /** 検証に使う定期確認。 */
   final AtomicLong tick = new AtomicLong();
+
+  /** 検証に使う保存先。 */
   final TimingStore store =
       new TimingStore(true, 10, 10, 100, Duration.ofHours(1), Clock.systemUTC(), tick::get);
+
+  /** 検証に使う所有者。 */
   final AgentRunContext owner =
       new AgentRunContext(
           "run",
@@ -32,6 +38,7 @@ class TimingIntegrationAdaptersTest {
           "project",
           AgentRunContext.RequestSource.SHELL);
 
+  /** 観測実行について、結果を保持することを確認する。 */
   @Test
   void observedRunPreservesResultAndDoesNotStoreResponseOrErrors() {
     var execution = new TimingExecution(store);
@@ -50,6 +57,7 @@ class TimingIntegrationAdaptersTest {
     assertFalse(run.toString().contains("RESPONSE-SECRET"));
   }
 
+  /** 実行時間の把握の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void exceptionsCancellationAndTimeoutAreObservedWithoutChangingControlFlow() {
     var execution = new TimingExecution(store);
@@ -69,6 +77,7 @@ class TimingIntegrationAdaptersTest {
     assertEquals(Status.TIMED_OUT, store.latest("project", "session").orElseThrow().status());
   }
 
+  /** 実行時間の把握で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void anOuterRunKeepsNestedChatAndCompletionValidationInOneTimeline() {
     var execution = new TimingExecution(store);
@@ -95,6 +104,7 @@ class TimingIntegrationAdaptersTest {
             .get(Category.COMPLETION_VALIDATION));
   }
 
+  /** 既存の識別子一覧を利用することを確認する。 */
   @Test
   void toolAndNestedSearchUseExistingIdsWithoutCopyingPayloadContent() {
     var bus = new InMemoryAgentEventBus();
@@ -115,6 +125,7 @@ class TimingIntegrationAdaptersTest {
     assertFalse(run.toString().contains("SECRET"));
   }
 
+  /** 軽量CLIについて、現在会話を読み取ることを確認する。 */
   @Test
   void cliReadsCurrentSessionWithoutCreatingAnotherRunAndShowsUnknownMetricsExplicitly() {
     store.beginRun("run", "project", "session");
@@ -135,6 +146,7 @@ class TimingIntegrationAdaptersTest {
     assertFalse(other.toString().contains("SUCCESS"));
   }
 
+  /** 実行時間の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void brokenOrDisabledRecorderCannotChangeTheBusinessResult() {
     var recorder = org.mockito.Mockito.mock(TimingRecorder.class);
@@ -162,6 +174,7 @@ class TimingIntegrationAdaptersTest {
     assertEquals(0, disabled.statistics().runs());
   }
 
+  /** 実行時間の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void cliWithoutSessionAndDisabledFlagDoesNotCreateSessionOrCallModel() {
     var text = new StringWriter();
@@ -202,6 +215,7 @@ class TimingIntegrationAdaptersTest {
     assertEquals(0, off.execute());
   }
 
+  /** 作業ルート判定状態について、時間計測コマンドを取り除くことを確認する。 */
   @Test
   void rootFlagRemovesTimingCommandAndMalformedArgumentsAreRejected() throws Exception {
     var root = new dev.mikoto2000.rei.ui.shell.RootCommand();

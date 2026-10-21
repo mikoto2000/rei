@@ -15,47 +15,75 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * One bounded proposal per explicit command. No file writer/reload capability is exposed to the
+ * 作業状況の把握に必要な分類規則提案一覧を扱う。
+ *
+ * <p>One bounded proposal per explicit command. No file writer/reload capability is exposed to the
  * model.
  */
 public final class ClassificationRuleSuggestions {
+  /** 作業状況の把握に必要なモデルを扱う。 */
   @FunctionalInterface
   public interface Model {
+    /** 後続の判断で選べる候補を用意するため、モデルを提案する。 */
     String propose(String input, String schema) throws Exception;
   }
 
+  /** 補助操作。 */
   private final ClassificationToolkit toolkit;
+
+  /** モデル。 */
   private final Model model;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final JsonMapper JSON =
       JsonMapper.builder().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
+
+  /** データ形式。 */
   static final String SCHEMA = resource();
+
+  /** 検証の窓口。 */
   private static final Schema VALIDATOR =
       SchemaRegistry.withDefaultDialect(
               SpecificationVersion.DRAFT_2020_12,
               b -> b.schemaLoader(l -> l.fetchRemoteResources(false).block(iri -> true)))
           .getSchema(JSON.readTree(SCHEMA));
 
+  /**
+   * 作業状況の把握で受け渡す提案を表す。
+   *
+   * @param rule 規則
+   * @param confidence 確信度
+   * @param rationale 判断理由
+   * @param yaml YAML形式の内容
+   */
   public record Proposal(
       OperationalRules.Rule rule, double confidence, String rationale, String yaml) {}
 
   /**
-   * Only application-owned diagnostics belong in this exception, never model output or API bodies.
+   * 作業状況の把握に必要な失敗情報を扱う。
+   *
+   * <p>Only application-owned diagnostics belong in this exception, never model output or API
+   * bodies.
    */
   static final class Failure extends IllegalArgumentException {
+    /** 指定された値や利用先を使って、Failureを初期化する。 */
     Failure(String code, String detail) {
       super(code + ": " + detail);
     }
   }
 
+  /** 処理を継続できなかった理由を、失敗情報として表す。 */
   static Failure failure(String code, String detail) {
     return new Failure(code, detail);
   }
 
+  /** 指定された値や利用先を使って、ClassificationRuleSuggestionsを初期化する。 */
   public ClassificationRuleSuggestions(ClassificationToolkit toolkit, Model model) {
     this.toolkit = toolkit;
     this.model = model;
   }
 
+  /** 作業状況の把握で用いる提案を返す。 */
   public String suggest(boolean entertainment) {
     if (!toolkit.properties().getClassification().getRuleSuggestion().isEnabled())
       return "ルール候補生成は無効です。";
@@ -104,6 +132,7 @@ public final class ClassificationRuleSuggestions {
               .disable(
                   com.fasterxml.jackson.databind.SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
               .writeValueAsString(input);
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (inputJson.length() > 65536) throw failure("INPUT_TOO_LARGE", "入力が65536文字を超えています。");
       if (new dev.mikoto2000.rei.memory.util.SensitiveInfoDetector()
           .containsSensitiveInfo(inputJson))
@@ -133,6 +162,7 @@ public final class ClassificationRuleSuggestions {
     }
   }
 
+  /** 作業状況の把握で用いる診断を返す。 */
   private static String diagnostic(Exception e) {
     if (e instanceof Failure) return e.getMessage();
     var types = new ArrayList<String>();
@@ -148,6 +178,7 @@ public final class ClassificationRuleSuggestions {
     return "UNEXPECTED_ERROR: " + String.join(" -> ", types);
   }
 
+  /** 作業状況の把握において、確認できた対象に該当するか判定する。 */
   private boolean covered(ClassificationTelemetryRepository.Candidate c, boolean entertainment) {
     if (entertainment)
       return toolkit
@@ -162,8 +193,10 @@ public final class ClassificationRuleSuggestions {
         .usable(toolkit.properties().getDetection().getSkipVisionConfidence());
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public Proposal validate(String text, boolean entertainment) {
     if (text == null || text.isBlank()) throw failure("EMPTY_RESPONSE", "LLMの応答が空です。");
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (text.length() > 16384) throw failure("RESPONSE_TOO_LARGE", "応答が16384文字を超えています。");
     tools.jackson.databind.JsonNode node;
     try {
@@ -240,6 +273,7 @@ public final class ClassificationRuleSuggestions {
     }
   }
 
+  /** 作業状況の把握で用いるデータ形式を返す。 */
   static String schema(boolean entertainment) {
     try {
       var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -281,6 +315,7 @@ public final class ClassificationRuleSuggestions {
     }
   }
 
+  /** 作業状況の把握で用いる補助資料を返す。 */
   private static String resource() {
     try (var in =
         ClassificationRuleSuggestions.class.getResourceAsStream(

@@ -17,18 +17,23 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** JSON変換ファイル目標の結果と状態の契約を検証するテスト。 */
 class JsonFileGoalTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証で使用する保存と検索の窓口を、指定された条件に合わせて用意する。 */
   GoalRepository repository() {
     return new GoalRepository(
         new DriverManagerDataSource("jdbc:sqlite:" + root.resolve("goals.db")), Clock.systemUTC());
   }
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("run", "session", root, "project");
   }
 
+  /** 目標の達成管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void scalarCriteriaSurviveRestartAndRequireEveryTypedField() throws Exception {
     var criteria =
@@ -45,6 +50,7 @@ class JsonFileGoalTest {
     assertEquals("json_value_mismatch", new FileGoalVerifier().verify(saved).reason());
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void completedJsonGoalsReflectVerifiedConditionAndRetryMismatchWithinBudget() throws Exception {
     var repository = repository();
@@ -97,6 +103,7 @@ class JsonFileGoalTest {
     assertTrue(reflection.expectedSha256().contains("expectedJson"));
   }
 
+  /** 目標の達成管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void mixedDigestsEscapedPointersNullAndPreciseNumbersRemainTyped() throws Exception {
     Files.writeString(root.resolve("A.txt"), "a");
@@ -123,6 +130,7 @@ class JsonFileGoalTest {
     assertEquals("digest_mismatch", verifier.verify(goal).reason());
   }
 
+  /** 目標の達成管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void invalidAndDuplicateConditionsLeaveNoPersistedGoal() throws Exception {
     var repository = repository();
@@ -166,6 +174,7 @@ class JsonFileGoalTest {
     assertTrue(repository.list("project").isEmpty());
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void strictBoundedArtifactParsingNeverAcceptsAmbiguousOrInvalidJson() throws Exception {
     var goal =
@@ -198,6 +207,7 @@ class JsonFileGoalTest {
     assertTrue(verifier.verify(goal).satisfied());
   }
 
+  /** 目標の達成管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void projectPathDirectoryAndCancellationGatesStillApply() throws Exception {
     var criterion = new GoalRepository.FileCriterion("result.json", null, "/ready", "true");
@@ -216,6 +226,7 @@ class JsonFileGoalTest {
     }
   }
 
+  /** 既に条件を満たしたかどうかJSON変換について、なし実行を必要とすることを確認する。 */
   @Test
   void alreadySatisfiedJsonRequiresNoRunOrModelAndKeepsReflectionEvidence() throws Exception {
     var repository = repository();
@@ -244,6 +255,7 @@ class JsonFileGoalTest {
     assertThrows(IllegalArgumentException.class, () -> repository.get("other-project", goal.id()));
   }
 
+  /** 重複の有無項目一覧を受け付けないことを確認する。 */
   @Test
   void actualCliCreatesTypedConditionsAndRejectsDuplicateFieldsBeforeSaving() throws Exception {
     var repository = repository();
@@ -281,6 +293,7 @@ class JsonFileGoalTest {
     assertEquals(1, repository.list(projectId).size());
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void legacyCriteriaSchemaUpgradesWithoutLosingDigestOrBudget() throws Exception {
     var source = new DriverManagerDataSource("jdbc:sqlite:" + root.resolve("goals.db"));

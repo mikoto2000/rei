@@ -13,10 +13,20 @@ import java.util.UUID;
 import java.util.function.UnaryOperator;
 
 /**
- * Conversation-independent evidence. API transitions are called by trusted execution boundaries.
+ * 変更内容のレビューに必要なレビュー対象範囲記録台帳を扱う。
+ *
+ * <p>Conversation-independent evidence. API transitions are called by trusted execution boundaries.
  */
 public final class ReviewCoverageLedger {
+  /**
+   * 変更内容のレビューで受け渡す対象範囲を表す。
+   *
+   * @param project プロジェクト
+   * @param conversation 会話
+   * @param run 実行
+   */
   public record Scope(String project, String conversation, String run) {
+    /** 受け取った情報からScopeを作成する。 */
     public Scope {
       require(project);
       require(conversation);
@@ -24,8 +34,19 @@ public final class ReviewCoverageLedger {
     }
   }
 
+  /**
+   * 変更内容のレビューで受け渡す計測区間を表す。
+   *
+   * @param start 開始
+   * @param end 終了
+   * @param startLine 開始行
+   * @param endLine 終了行
+   * @param startOffset 開始開始位置
+   * @param endOffset 終了開始位置
+   */
   public record Span(
       int start, int end, int startLine, int endLine, int startOffset, int endOffset) {
+    /** 受け取った情報からSpanを作成する。 */
     public Span {
       if (start < 0
           || end < start
@@ -37,7 +58,16 @@ public final class ReviewCoverageLedger {
     }
   }
 
+  /**
+   * 変更内容のレビューで受け渡す対象を表す。
+   *
+   * @param path パス
+   * @param version 形式のバージョン
+   * @param lineCount 行件数
+   * @param required 必須
+   */
   public record Target(String path, String version, int lineCount, List<Span> required) {
+    /** 受け取った情報からTargetを作成する。 */
     public Target {
       require(path);
       require(version);
@@ -46,7 +76,16 @@ public final class ReviewCoverageLedger {
     }
   }
 
+  /**
+   * 変更内容のレビューで受け渡す対象範囲を表す。
+   *
+   * @param path パス
+   * @param version 形式のバージョン
+   * @param span 計測区間
+   * @param contentHash 内容を照合するハッシュ
+   */
   public record Range(String path, String version, Span span, String contentHash) {
+    /** 受け取った情報からRangeを作成する。 */
     public Range {
       require(path);
       require(version);
@@ -55,6 +94,18 @@ public final class ReviewCoverageLedger {
     }
   }
 
+  /**
+   * 変更内容のレビューで受け渡す指摘を表す。
+   *
+   * @param id 識別子
+   * @param severity 重大度
+   * @param path パス
+   * @param version 形式のバージョン
+   * @param location 場所
+   * @param evidence 根拠
+   * @param assessment 評価
+   * @param verificationStatus 確認結果状態
+   */
   public record Finding(
       String id,
       String severity,
@@ -64,6 +115,7 @@ public final class ReviewCoverageLedger {
       String evidence,
       String assessment,
       String verificationStatus) {
+    /** 受け取った情報からFindingを作成する。 */
     public Finding {
       require(id);
       require(severity);
@@ -75,9 +127,34 @@ public final class ReviewCoverageLedger {
     }
   }
 
+  /**
+   * 変更内容のレビューで受け渡す項目を表す。
+   *
+   * @param range 対象範囲
+   * @param delivered 提供済みの内容
+   * @param reviewed レビュー済みの内容
+   * @param stale 古い状態
+   * @param assessment 評価
+   */
   public record Entry(
       Range range, boolean delivered, boolean reviewed, boolean stale, String assessment) {}
 
+  /**
+   * 変更内容のレビューで受け渡す実行する作業を表す。
+   *
+   * @param id 識別子
+   * @param owner 所有者
+   * @param participants 参加者一覧
+   * @param criteria 判断基準一覧
+   * @param criteriaVersion 判断基準一覧形式のバージョン
+   * @param targets 対象一覧
+   * @param ranges 対象範囲一覧
+   * @param findings 指摘一覧
+   * @param status 状態
+   * @param revision 改訂番号
+   * @param createdAt 作成日時
+   * @param updatedAt 更新日時
+   */
   public record Job(
       String id,
       Scope owner,
@@ -91,6 +168,7 @@ public final class ReviewCoverageLedger {
       long revision,
       Instant createdAt,
       Instant updatedAt) {
+    /** 受け取った情報からJobを作成する。 */
     public Job {
       participants = List.copyOf(participants);
       targets = List.copyOf(targets);
@@ -99,14 +177,21 @@ public final class ReviewCoverageLedger {
     }
   }
 
+  /** 最大記録バイト数。 */
   private static final int MAX_RECORD_BYTES = 2 * 1024 * 1024;
+
+  /** 最大合計バイト数。 */
   private static final long MAX_TOTAL_BYTES = 64L * 1024 * 1024;
+
+  /** データベース。 */
   private final StorageDatabase database;
 
+  /** 指定された値や利用先を使って、ReviewCoverageLedgerを初期化する。 */
   public ReviewCoverageLedger(StorageDatabase database) {
     this.database = database;
   }
 
+  /** 指定された内容から新しい対象を作成する。 */
   public Job create(Scope scope, String criteria, String criteriaVersion, List<Target> targets) {
     require(criteria);
     require(criteriaVersion);
@@ -148,7 +233,11 @@ public final class ReviewCoverageLedger {
         });
   }
 
-  /** External delegates without a verified manifest remain explicitly unsealed and unverified. */
+  /**
+   * 新たな対象を利用できるよう、外部を作成する。
+   *
+   * <p>External delegates without a verified manifest remain explicitly unsealed and unverified.
+   */
   public Job createExternal(
       Scope scope, String criteria, String criteriaVersion, List<Target> targets) {
     if (!targets.isEmpty()) {
@@ -191,6 +280,7 @@ public final class ReviewCoverageLedger {
         });
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Job get(String id, Scope scope) {
     try {
       return database.read(db -> read(db, id, scope));
@@ -200,6 +290,7 @@ public final class ReviewCoverageLedger {
     }
   }
 
+  /** 変更内容のレビューで用いる実行する作業一覧を返す。 */
   public List<String> jobs(Scope scope) {
     return database.read(
         db -> {
@@ -214,12 +305,14 @@ public final class ReviewCoverageLedger {
               while (rows.next()) ids.add(rows.getString(1));
             }
           }
+          // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
           if (ids.size() > 128)
             throw new IllegalStateException("Review job display capacity exceeded");
           return List.copyOf(ids);
         });
   }
 
+  /** 指定された内容を保存先へ反映するため、参加者一覧を書き込む。 */
   public static void writeParticipants(java.sql.Connection db, Job job)
       throws java.sql.SQLException {
     try (var remove = db.prepareStatement("DELETE FROM review_participants WHERE job=?")) {
@@ -240,6 +333,7 @@ public final class ReviewCoverageLedger {
     }
   }
 
+  /** 変更内容のレビューで用いる許可を返す。 */
   public Job grant(String id, Scope parent, Scope child) {
     return update(
         id,
@@ -250,6 +344,7 @@ public final class ReviewCoverageLedger {
           if (job.participants().contains(child)) return job;
           var participants = new ArrayList<>(job.participants());
           participants.add(child);
+          // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
           if (participants.size() > 64) throw invalid();
           return new Job(
               job.id(),
@@ -267,7 +362,11 @@ public final class ReviewCoverageLedger {
         });
   }
 
-  /** Only the verified checkpoint boundary may transfer an existing job to its resumed Run. */
+  /**
+   * 保存された状況を引き継いで、中断した作業を再開する。
+   *
+   * <p>Only the verified checkpoint boundary may transfer an existing job to its resumed Run.
+   */
   public Job resume(String id, Scope previous, Scope resumed) {
     if (!previous.project().equals(resumed.project())
         || !previous.conversation().equals(resumed.conversation()))
@@ -279,6 +378,7 @@ public final class ReviewCoverageLedger {
           if (job.participants().contains(resumed)) return job;
           var participants = new ArrayList<>(job.participants());
           participants.add(resumed);
+          // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
           if (participants.size() > 64) throw invalid();
           String status =
               Set.of("FAILED", "REVIEW_CANCELLED").contains(job.status())
@@ -300,6 +400,7 @@ public final class ReviewCoverageLedger {
         });
   }
 
+  /** 変更内容のレビューで用いるrebuildを返す。 */
   public Job rebuild(String id, Scope scope, List<Target> targets) {
     return update(
         id,
@@ -357,6 +458,7 @@ public final class ReviewCoverageLedger {
         });
   }
 
+  /** 変更内容のレビューで用いる取得を返す。 */
   public Job fetched(String id, Scope scope, Range range) {
     return update(
         id,
@@ -376,7 +478,11 @@ public final class ReviewCoverageLedger {
         });
   }
 
-  /** Batch only the exact pages retained in a request that received a successful response. */
+  /**
+   * 変更内容のレビューで用いる提供済みの内容を返す。
+   *
+   * <p>Batch only the exact pages retained in a request that received a successful response.
+   */
   public Job delivered(String id, Scope scope, List<Range> ranges) {
     return update(
         id,
@@ -396,9 +502,11 @@ public final class ReviewCoverageLedger {
         });
   }
 
+  /** 変更内容のレビューで用いるレビュー済みの内容を返す。 */
   public Job reviewed(
       String id, Scope scope, Range range, String assessment, List<Finding> findings) {
     require(assessment);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (assessment.length() > 16384 || findings == null || findings.size() > 100) throw invalid();
     return update(
         id,
@@ -434,6 +542,7 @@ public final class ReviewCoverageLedger {
         });
   }
 
+  /** 変更内容のレビューで用いるキャッシュの無効化を返す。 */
   public Job invalidate(String id, Scope scope, String path, String actualVersion) {
     return update(
         id,
@@ -460,6 +569,7 @@ public final class ReviewCoverageLedger {
         });
   }
 
+  /** 変更内容のレビューで用いる外部レポートを返す。 */
   public Job externalReport(String id, Scope scope, String report) {
     require(report);
     return update(
@@ -471,6 +581,7 @@ public final class ReviewCoverageLedger {
                 : copy(job, job.ranges(), job.findings(), "REVIEW_UNVERIFIED"));
   }
 
+  /** 実行中の処理を停止する。 */
   public Job stop(String id, Scope scope, boolean cancelled) {
     return update(
         id,
@@ -478,6 +589,7 @@ public final class ReviewCoverageLedger {
         job -> copy(job, job.ranges(), job.findings(), cancelled ? "REVIEW_CANCELLED" : "FAILED"));
   }
 
+  /** 指定された変更を、管理中の情報へ反映する。 */
   private Job update(String id, Scope scope, UnaryOperator<Job> operation) {
     return database.transaction(
         db -> {
@@ -504,6 +616,7 @@ public final class ReviewCoverageLedger {
         });
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private Job read(java.sql.Connection db, String id, Scope scope) throws Exception {
     UUID.fromString(id);
     try (var query = db.prepareStatement("SELECT record FROM review_jobs WHERE id=?")) {
@@ -518,6 +631,7 @@ public final class ReviewCoverageLedger {
     }
   }
 
+  /** 指定された内容を書き込み先へ反映する。 */
   private void write(java.sql.Connection db, Job job, boolean insert) throws Exception {
     byte[] encoded = StorageDatabase.JSON.writeValueAsBytes(job);
     if (encoded.length > MAX_RECORD_BYTES)
@@ -546,6 +660,7 @@ public final class ReviewCoverageLedger {
     }
   }
 
+  /** 変更内容のレビューで用いる複製を返す。 */
   private static Job copy(Job job, List<Entry> entries, List<Finding> findings, String status) {
     return new Job(
         job.id(),
@@ -562,6 +677,7 @@ public final class ReviewCoverageLedger {
         job.updatedAt());
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、対象を検証する。 */
   private static void validateTarget(Job job, Range range) {
     if ("STALE_VERSION".equals(job.status())) throw new IllegalStateException("STALE_VERSION");
     if (Set.of("REVIEW_CANCELLED", "FAILED").contains(job.status())) throw invalid();
@@ -575,22 +691,26 @@ public final class ReviewCoverageLedger {
         || range.span().endLine() > target.lineCount()) throw invalid();
   }
 
+  /** 変更内容のレビューで判断に用いる含有の条件を確認する。 */
   private static boolean contains(Span outer, Span inner) {
     return outer.start() <= inner.start() && inner.end() <= outer.end();
   }
 
+  /** 変更内容のレビューにおいて、同一場所に該当するか判定する。 */
   private static boolean sameLocation(Range a, Range b) {
     return a.path().equals(b.path())
         && a.version().equals(b.version())
         && a.span().equals(b.span());
   }
 
+  /** 対象を特定できるよう、レビュー対象範囲記録台帳を探す。 */
   private static int find(List<Entry> entries, Range range) {
     for (int i = 0; i < entries.size(); i++)
       if (!entries.get(i).stale() && entries.get(i).range().equals(range)) return i;
     return -1;
   }
 
+  /** 処理の完了を記録し、後続の処理へ結果を引き渡す。 */
   private static boolean complete(List<Target> targets, List<Entry> entries) {
     if (targets.isEmpty()) return false;
     for (var target : targets)
@@ -619,10 +739,12 @@ public final class ReviewCoverageLedger {
     return true;
   }
 
+  /** 条件を満たさない操作を拒否するため、レビュー対象範囲記録台帳の前提条件を確認する。 */
   private static void require(String value) {
     if (value == null || value.isBlank() || value.length() > 16384) throw invalid();
   }
 
+  /** 受け付けられない指定について、入力の問題を伝える。 */
   private static IllegalArgumentException invalid() {
     return new IllegalArgumentException("REVIEW_RESULT_INVALID");
   }

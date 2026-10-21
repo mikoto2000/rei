@@ -13,8 +13,10 @@ import java.time.ZonedDateTime;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+/** Google予定表ツール一覧の結果と状態の契約を検証するテスト。 */
 class GoogleCalendarToolsTest {
 
+  /** 予定の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void createEventPrintsErrorAndRethrowsWhenServiceFails() throws Exception {
     GoogleCalendarService service = Mockito.mock(GoogleCalendarService.class);

@@ -6,8 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** Web検索検索条件計画の作成の結果と状態の契約を検証するテスト。 */
 class WebSearchQueryPlannerTest {
 
+  /** Web上の情報の調査で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void planReturnsExpandedQueriesWithoutDuplicates() {
     WebSearchQueryPlanner planner = new WebSearchQueryPlanner();
@@ -21,6 +23,7 @@ class WebSearchQueryPlannerTest {
     assertEquals(queries.size(), queries.stream().distinct().count());
   }
 
+  /** 最新意図について、日付検索条件を利用することを確認する。 */
   @Test
   void latestIntentUsesDateQueryAndOfficialIntentDoesNotRepeatTheWord() {
     assertTrue(

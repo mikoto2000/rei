@@ -4,6 +4,21 @@ import java.time.Duration;
 import java.util.Set;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * 利用者の状態表示で受け渡す状態表示設定を表す。
+ *
+ * @param enabled 有効状態
+ * @param parentLlmEnabled 親言語モデル有効状態
+ * @param autoResume 自動再開
+ * @param allowedProjects 許可プロジェクト一覧
+ * @param allowedCategories 許可分類一覧
+ * @param activeLimit 活動中上限
+ * @param queueLimit 実行待ち上限
+ * @param defaultTimeout 既定タイムアウト
+ * @param claimLease 利用権の確保利用権
+ * @param resultRetentionDays 結果保持期間日数
+ * @param requestRetentionDays 要求保持期間日数
+ */
 @ConfigurationProperties("rei.dot-delegation")
 public record DotProperties(
     boolean enabled,
@@ -17,6 +32,7 @@ public record DotProperties(
     Duration claimLease,
     int resultRetentionDays,
     int requestRetentionDays) {
+  /** 受け取った情報からDotPropertiesを作成する。 */
   public DotProperties {
     allowedProjects = allowedProjects == null ? Set.of() : Set.copyOf(allowedProjects);
     allowedCategories =

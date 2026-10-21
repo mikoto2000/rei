@@ -19,11 +19,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 目標修復の結果と状態の契約を検証するテスト。 */
 class GoalRepairTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う目標一覧。 */
   GoalRepository goals;
+
+  /** 検証に使う確認の窓口。 */
   FileGoalVerifier verifier;
 
+  /** {@code sha} の条件を再現するための補助情報を返す。 */
   String sha(String value) throws Exception {
     return HexFormat.of()
         .formatHex(
@@ -31,6 +38,7 @@ class GoalRepairTest {
                 .digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
   }
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     goals =
@@ -54,6 +62,7 @@ class GoalRepairTest {
             false));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   GoalRepository.Goal create(int calls) throws Exception {
     var criterion = new GoalRepository.FileCriterion("out.txt", sha("correct"));
     return goals.create(
@@ -65,6 +74,7 @@ class GoalRepairTest {
         calls);
   }
 
+  /** {@code loop} の条件を再現するための補助情報を返す。 */
   GoalLoopService loop(GoalLoopService.Gateway gateway) {
     return new GoalLoopService(
         goals,
@@ -74,6 +84,7 @@ class GoalRepairTest {
         new GoalEvents(e -> {}, Clock.systemUTC()));
   }
 
+  /** 目標の達成管理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void eightFailureClassesKeepUnknownAndApprovalOutOfAutomaticRepair() {
     var expected =
@@ -106,6 +117,7 @@ class GoalRepairTest {
             "external_transient")) assertFalse(GoalRepairDiagnosis.of(reason).repairable());
   }
 
+  /** 目標の達成管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void initialCallSliceLeavesDurableCallsForRepairWithoutReplenishingTokens() throws Exception {
     var goal = create(4);
@@ -125,6 +137,7 @@ class GoalRepairTest {
     assertEquals(4, goals.get("project", goal.id()).llmCallsUsed());
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void knownReserveBoundaryVerifiesThenRepairsWithinExistingGoalLimits() throws Exception {
     var goal = create(4);
@@ -151,6 +164,7 @@ class GoalRepairTest {
     assertEquals(2, goals.get("project", goal.id()).llmCallsUsed());
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void controlledBudgetEndCanCompleteOnlyWithIndependentGateEvidence() throws Exception {
     var goal = create(1);
@@ -172,6 +186,7 @@ class GoalRepairTest {
     assertEquals(1, goals.get("project", goal.id()).llmCallsUsed());
   }
 
+  /** 目標の達成管理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void unknownResultAndPermissionNeverReplayEvenWhenCallsRemain() throws Exception {
     for (String reason : List.of("execution_failed", "permission_required", "external_transient")) {
@@ -192,6 +207,7 @@ class GoalRepairTest {
     }
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void pendingTokenUsageCannotBeHiddenByMatchingFiles() throws Exception {
     var properties = new dev.mikoto2000.rei.llm.LlmProperties();
@@ -217,6 +233,7 @@ class GoalRepairTest {
     assertEquals("token_usage_unknown", goals.get("project", goal.id()).reason());
   }
 
+  /** 目標の達成管理で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void progressKeepsUnknownExecutionSeparateFromRepairableFileMismatch() throws Exception {
     var goal = create(4);
@@ -241,6 +258,7 @@ class GoalRepairTest {
     assertEquals(GoalRepairDiagnosis.Kind.IMPLEMENTATION_INCONSISTENCY, old.diagnosis().kind());
   }
 
+  /** 目標の達成管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationAndUnknownResultDoNotBecomeReserveBoundaryRepair() throws Exception {
     var goal = create(4);
@@ -269,6 +287,7 @@ class GoalRepairTest {
     assertEquals("run_cancelled", goals.get("project", cancelled.id()).reason());
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void reserveForwardsActualTokenUsageAndNeverHidesUnknown() throws Exception {
     var properties = new dev.mikoto2000.rei.llm.LlmProperties();

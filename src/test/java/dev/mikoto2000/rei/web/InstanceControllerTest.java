@@ -16,19 +16,24 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
+/** 起動単位の識別子受付窓口の結果と状態の契約を検証するテスト。 */
 class InstanceControllerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @EnableWebMvc
   @Import({SecurityConfig.class, InstanceController.class})
   static class Config {
+    /** {@code apiKeyProperties} の条件を再現するための補助情報を返す。 */
     @Bean
     ApiKeyProperties apiKeyProperties() {
       return new ApiKeyProperties("test-secret");
     }
   }
 
+  /** Web APIによる操作で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void onlyAuthenticatedClientsSeeReadyInstanceAndNeverCredentials() throws Exception {
     var instance = new BackendInstance(new BackendEndpointStore(root));

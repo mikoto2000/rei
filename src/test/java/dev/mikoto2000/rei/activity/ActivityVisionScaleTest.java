@@ -22,7 +22,9 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 作業状況画像認識倍率の結果と状態の契約を検証するテスト。 */
 class ActivityVisionScaleTest {
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void activityHasIndependentSmallCompletionBudget() throws Exception {
     var model = mock(ChatModel.class);
@@ -42,10 +44,12 @@ class ActivityVisionScaleTest {
     assertNull(options.getMaxTokens());
   }
 
+  /** 検証用に、受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   private BufferedImage decode(byte[] bytes) throws Exception {
     return ImageIO.read(new MemoryCacheImageInputStream(new ByteArrayInputStream(bytes)));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void halfScaleReducesBothDimensionsWithoutChangingOriginal() throws Exception {
     var image = new BufferedImage(1920, 1080, BufferedImage.TYPE_INT_RGB);
@@ -57,6 +61,7 @@ class ActivityVisionScaleTest {
     assertEquals(0xff336699, image.getRGB(20, 20));
   }
 
+  /** 全体倍率について、元の画素数を保持することを確認する。 */
   @Test
   void fullScaleRetainsOriginalPixelsAndTinyImagesStayValid() throws Exception {
     var image = ActivityPolicyTest.image(137);
@@ -70,6 +75,7 @@ class ActivityVisionScaleTest {
     assertEquals(2, tiny.getHeight());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidScaleIsRejectedBySettingsAndEncoder() {
     for (double scale : new double[] {0, -1, 1.1, Double.NaN, Double.POSITIVE_INFINITY}) {
@@ -83,6 +89,7 @@ class ActivityVisionScaleTest {
     assertEquals(.5, new ActivityProperties().getVisionImageScale());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void actualVisionRequestContainsScaledImagesAndSameMonitorIds() throws Exception {
     var model = mock(ChatModel.class);

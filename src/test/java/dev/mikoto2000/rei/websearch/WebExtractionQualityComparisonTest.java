@@ -9,10 +9,22 @@ import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
 
-/** Frozen HTML, no live providers, no model calls, cold extraction with identical source URLs. */
+/**
+ * WebExtraction品質比較結果の結果と状態の契約を検証するテスト。
+ *
+ * <p>Frozen HTML, no live providers, no model calls, cold extraction with identical source URLs.
+ */
 class WebExtractionQualityComparisonTest {
+  /**
+   * 検証条件の再現に使う検証条件の情報。
+   *
+   * @param query 検証に使う検索条件
+   * @param html 検証に使うHTML
+   * @param evidence 検証に使う根拠
+   */
   record Fixture(String query, String html, String evidence) {}
 
+  /** {@code fixtures} の条件を再現するための補助情報を返す。 */
   static List<Fixture> fixtures() {
     String introduction = "<p>" + "unrelated introduction and navigation ".repeat(100) + "</p>";
     return List.of(
@@ -57,6 +69,7 @@ class WebExtractionQualityComparisonTest {
             "evidence-omega|evidence-theta"));
   }
 
+  /** Web上の情報の調査で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void relevantEvidenceAndExactUrlRecallDoNotRegressAgainstLegacyPrefix() {
     var extractor = new WebPageExtractor();

@@ -21,7 +21,9 @@ import java.io.StringWriter;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
+/** 自動待機コマンドの結果と状態の契約を検証するテスト。 */
 class AutoSleepCommandTest {
+  /** コマンド一覧について、選択中会話を利用することを確認する。 */
   @Test
   void commandsUseSelectedSessionWithoutCallingSleep() {
     var projects = mock(ProjectService.class);
@@ -41,23 +43,28 @@ class AutoSleepCommandTest {
     assertTrue(output.toString().contains("MODEL_TIMEOUT"));
     assertEquals(0, cli.execute("auto", "resume"));
     verify(auto).resume("selected", project);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(sleep);
   }
 
+  /** イベント画面一覧バックグラウンド会話を停止することを確認する。 */
   @Test
   void stopEventDisplaysBackgroundSessionAndReason() {
     var text = new StringBuilder();
     var renderer =
         new dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer(
             new dev.mikoto2000.rei.ui.shell.ShellEventOutput() {
+              /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
               public void print(String s) {
                 text.append(s);
               }
 
+              /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
               public void println(String s) {
                 text.append(s).append('\n');
               }
 
+              /** 検証で保留している出力の確定を扱う。 */
               public void flush() {}
             });
     var event =

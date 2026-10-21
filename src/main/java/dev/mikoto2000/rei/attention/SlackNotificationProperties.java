@@ -4,9 +4,19 @@ import java.net.URI;
 import java.util.Set;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * 注意の管理で受け渡すSlack通知設定を表す。
+ *
+ * @param enabled 有効状態
+ * @param endpoint 接続先
+ * @param botToken 応答担当トークン
+ * @param channel チャネル
+ * @param channels チャネル一覧
+ */
 @ConfigurationProperties("rei.attention.slack")
 public record SlackNotificationProperties(
     boolean enabled, String endpoint, String botToken, String channel, Set<String> channels) {
+  /** 受け取った情報からSlackNotificationPropertiesを作成する。 */
   public SlackNotificationProperties {
     endpoint =
         endpoint == null || endpoint.isBlank()
@@ -44,6 +54,7 @@ public record SlackNotificationProperties(
     }
   }
 
+  /** 注意の管理の情報を、表示や診断で確認できる文字列表現にする。 */
   @Override
   public String toString() {
     return "SlackNotificationProperties[enabled="

@@ -30,26 +30,47 @@ import org.springframework.security.oauth2.jwt.JwtIssuerValidator;
 import org.springframework.security.oauth2.jwt.JwtTimestampValidator;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
-/** Public-client authorization. No credentials are read from other applications. */
+/**
+ * ChatGPTとの連携に必要な計画O認証を扱う。
+ *
+ * <p>Public-client authorization. No credentials are read from other applications.
+ */
 public final class PlanOAuth {
+  /** 補助資料。 */
   public static final String RESOURCE = "https://api.openai.com/v1";
+
+  /** トークン。 */
   public static final URI TOKEN = URI.create("https://auth.openai.com/api/accounts/oauth/token");
+
+  /** 利用先の検出。 */
   private static final URI DISCOVERY =
       URI.create("https://auth.openai.com/.well-known/openid-configuration");
 
+  /** ChatGPTとの連携に必要な識別情報確認の窓口を扱う。 */
   public interface IdentityVerifier {
+    /** 要求された条件を満たすことを確認する。 */
     Identity verify(String idToken, String clientId, String nonce);
   }
 
+  /**
+   * ChatGPTとの連携で受け渡す識別情報を表す。
+   *
+   * @param subject 対象
+   * @param email メールアドレス
+   */
   public record Identity(String subject, String email) {}
 
+  /** ChatGPTとの連携に必要な開始AI識別情報確認の窓口を扱う。 */
   public static final class OpenAiIdentityVerifier implements IdentityVerifier {
+    /** 受信形式の解釈。 */
     private final NimbusJwtDecoder decoder;
 
+    /** ChatGPTとの連携を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public OpenAiIdentityVerifier() {
       this(NimbusJwtDecoder.withJwkSetUri("https://auth.openai.com/.well-known/jwks.json").build());
     }
 
+    /** 指定された値や利用先を使って、OpenAiIdentityVerifierを初期化する。 */
     OpenAiIdentityVerifier(NimbusJwtDecoder decoder) {
       this.decoder = decoder;
       decoder.setJwtValidator(
@@ -58,6 +79,7 @@ public final class PlanOAuth {
               new JwtIssuerValidator("https://auth.openai.com")));
     }
 
+    /** 要求された条件を満たすことを確認する。 */
     public Identity verify(String raw, String client, String nonce) {
       try {
         var jwt = decoder.decode(raw);
@@ -75,6 +97,19 @@ public final class PlanOAuth {
     }
   }
 
+  /**
+   * ChatGPTとの連携で受け渡す試行を表す。
+   *
+   * @param account アカウント
+   * @param clientId クライアントの識別子
+   * @param subject 対象
+   * @param state 状態
+   * @param nonce 一回限りの識別値
+   * @param verifier 確認の窓口
+   * @param redirect 転送先
+   * @param expiresAt 有効期限
+   * @param authorization 権限の確認
+   */
   public record Attempt(
       String account,
       String clientId,
@@ -85,19 +120,32 @@ public final class PlanOAuth {
       URI redirect,
       Instant expiresAt,
       URI authorization) {
+    /** ChatGPTとの連携の情報を、表示や診断で確認できる文字列表現にする。 */
     @Override
     public String toString() {
       return "Attempt[protected]";
     }
   }
 
+  /** 保存先。 */
   private final ProtectedCredentialStore store;
+
+  /** 通信経路。 */
   private final PlanTransport transport;
+
+  /** 確認の窓口。 */
   private final IdentityVerifier verifier;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper();
+
+  /** 使用量。 */
   private final Map<String, Instant> used = new java.util.concurrent.ConcurrentHashMap<>();
 
+  /** 指定された値や利用先を使って、PlanOAuthを初期化する。 */
   public PlanOAuth(
       ProtectedCredentialStore store,
       PlanTransport transport,
@@ -109,6 +157,7 @@ public final class PlanOAuth {
     this.clock = clock;
   }
 
+  /** ChatGPTとの連携で用いる開始を返す。 */
   public Attempt begin(String account, URI redirect) {
     if (!"http".equals(redirect.getScheme())
         || !"127.0.0.1".equals(redirect.getHost())
@@ -152,6 +201,7 @@ public final class PlanOAuth {
         });
   }
 
+  /** 処理の完了を記録し、後続の処理へ結果を引き渡す。 */
   public void complete(Attempt attempt, Map<String, String> callback) {
     used.entrySet().removeIf(e -> !clock.instant().isBefore(e.getValue()));
     if (!Objects.equals(attempt.state(), callback.get("state"))
@@ -196,6 +246,7 @@ public final class PlanOAuth {
         });
   }
 
+  /** ChatGPTとの連携で用いるアクセスを返す。 */
   public TokenSet access(String account) {
     return store.locked(
         s -> {
@@ -231,6 +282,7 @@ public final class PlanOAuth {
         });
   }
 
+  /** ChatGPTとの連携において、ログアウトに該当するか判定する。 */
   public boolean logout(String account) {
     return store.locked(
         s -> {
@@ -270,11 +322,13 @@ public final class PlanOAuth {
         });
   }
 
+  /** ChatGPTとの連携で用いる非公開化識別子を返す。 */
   private static String maskIdentifier(String value) {
     if (value == null || value.length() < 12) return "[masked]";
     return value.substring(0, 6) + "…" + value.substring(value.length() - 4);
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   public List<String> status() {
     return store.locked(
         s ->
@@ -297,7 +351,11 @@ public final class PlanOAuth {
                 .toList());
   }
 
-  /** Local authorization labels only; no token, subject, client ID or network request. */
+  /**
+   * ChatGPTとの連携で用いる許可済みアカウント一覧を返す。
+   *
+   * <p>Local authorization labels only; no token, subject, client ID or network request.
+   */
   public java.util.Set<String> authorizedAccounts() {
     return store.locked(
         s ->
@@ -311,6 +369,7 @@ public final class PlanOAuth {
                 .collect(java.util.stream.Collectors.toUnmodifiableSet()));
   }
 
+  /** ChatGPTとの連携で参照する利用先の検出を返す。 */
   private JsonNode getDiscovery() {
     try (var response =
         transport.send(DISCOVERY, "GET", Map.of(), null, Duration.ofSeconds(15), () -> false)) {
@@ -318,6 +377,7 @@ public final class PlanOAuth {
     }
   }
 
+  /** ChatGPTとの連携で用いる要求を返す。 */
   private JsonNode request(URI uri, Map<String, String> fields) {
     try (var response =
         transport.send(
@@ -331,6 +391,7 @@ public final class PlanOAuth {
     }
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   private JsonNode decode(PlanTransport.Response response, String operation) {
     try {
       byte[] bytes =
@@ -373,6 +434,7 @@ public final class PlanOAuth {
     }
   }
 
+  /** ChatGPTとの連携で用いるトークン集合を返す。 */
   private TokenSet tokenSet(JsonNode value, String client, Identity identity, TokenSet previous) {
     if (!"Bearer".equalsIgnoreCase(required(value, "token_type")))
       throw ChatGptException.of(PROTOCOL);
@@ -391,12 +453,14 @@ public final class PlanOAuth {
         clock.instant().plusSeconds(seconds).getEpochSecond());
   }
 
+  /** ChatGPTとの連携で用いる必須を返す。 */
   static String required(JsonNode value, String key) {
     if (!value.path(key).isTextual() || value.path(key).asText().isBlank())
       throw ChatGptException.of(PROTOCOL);
     return value.path(key).asText();
   }
 
+  /** ChatGPTとの連携で用いるformを返す。 */
   static String form(Map<String, String> fields) {
     return fields.entrySet().stream()
         .map(
@@ -407,6 +471,7 @@ public final class PlanOAuth {
         .collect(java.util.stream.Collectors.joining("&"));
   }
 
+  /** ChatGPTとの連携で用いるchallengeを返す。 */
   static String challenge(String verifier) {
     try {
       return Base64.getUrlEncoder()
@@ -419,6 +484,7 @@ public final class PlanOAuth {
     }
   }
 
+  /** ChatGPTとの連携で用いる乱数を返す。 */
   private static String random() {
     byte[] bytes = new byte[32];
     new SecureRandom().nextBytes(bytes);

@@ -8,13 +8,16 @@ import java.io.StringWriter;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** 保存コマンドの結果と状態の契約を検証するテスト。 */
 class StorageCommandTest {
+  /** データ保存の共通処理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void rootRegistersStorage() {
     assertThat(new CommandLine(new dev.mikoto2000.rei.ui.shell.RootCommand()).getSubcommands())
         .containsKey("storage");
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void absentProjectDoesNotSilentlyScanGlobalStorage() {
     var error = new StringWriter();
@@ -25,6 +28,7 @@ class StorageCommandTest {
     assertThat(error.toString()).contains("No current project");
   }
 
+  /** データ保存の共通処理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidScopeIsRejected() {
     var command = new CommandLine(new StorageCommand());

@@ -5,8 +5,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
+/** エージェントスキルの結果と状態の契約を検証するテスト。 */
 class AgentSkillTest {
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void holdsSkillMetadataAndInstructions() {
     Path directory = Path.of(".rei/skills/sample");

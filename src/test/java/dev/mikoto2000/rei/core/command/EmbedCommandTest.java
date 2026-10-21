@@ -20,11 +20,14 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** 埋め込み表現の生成コマンドの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class EmbedCommandTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void positionalArgumentsQueueAsyncEmbedding() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
@@ -45,6 +48,7 @@ class EmbedCommandTest {
     assertTrue(out.toString().contains("追加処理を開始"));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void addCommandQueuesAsyncEmbedding() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
@@ -64,6 +68,7 @@ class EmbedCommandTest {
     assertTrue(out.toString().contains("docs/spec.md"));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void addCommandExpandsWildcardPatterns() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
@@ -89,6 +94,7 @@ class EmbedCommandTest {
     assertTrue(out.toString().contains("docs/*"));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void addCommandExpandsWildcardPatternsWithDotSlashPrefix() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
@@ -109,6 +115,7 @@ class EmbedCommandTest {
     verify(asyncService).addAsync(List.of(text.toString(), markdown.toString()));
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchCommandPrintsHits() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
@@ -144,6 +151,7 @@ class EmbedCommandTest {
     assertTrue(output.contains("score=0.910"));
   }
 
+  /** 共通の実行基盤で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void listCommandPrintsDocumentsGroupedBySource() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
@@ -173,6 +181,7 @@ class EmbedCommandTest {
         output.contains("/tmp/docs/other.md | docs=1 | chunks=1 | latest=2026-03-27T00:00:00Z"));
   }
 
+  /** コマンド対応可否文書の識別子を削除することを確認する。 */
   @Test
   void deleteCommandSupportsDocIdAndSource() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
@@ -200,6 +209,7 @@ class EmbedCommandTest {
     assertTrue(out.toString().contains("削除"));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void useSubcommandIsNotAvailable() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
@@ -209,11 +219,13 @@ class EmbedCommandTest {
             .containsKey("use"));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private CommandLine newCommand(
       VectorDocumentService service, AsyncVectorDocumentService asyncService) {
     return new CommandLine(
         new EmbedCommand(service, asyncService),
         new CommandLine.IFactory() {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           public <K> K create(Class<K> cls) throws Exception {
             if (cls == EmbedCommand.class) {

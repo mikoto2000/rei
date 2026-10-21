@@ -30,7 +30,9 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
+/** 文脈境界条件の結果と状態の契約を検証するテスト。 */
 class ContextBoundaryTest {
+  /** 加工前のプロンプト範囲外表示用の状態を維持することを確認する。 */
   @Test
   void assemblesAfterToolsCompleteAndKeepsRawPromptOutsideProjection() {
     List<String> order = new ArrayList<>();
@@ -56,6 +58,7 @@ class ContextBoundaryTest {
             });
     var tool =
         new ToolCallback() {
+          /** 検証用に、モデルへ渡す文脈の管理で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("readFile")
@@ -64,6 +67,7 @@ class ContextBoundaryTest {
                 .build();
           }
 
+          /** 検証用に、モデルへ渡す文脈の管理の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             order.add("tool completed");
             return "full raw result";
@@ -71,12 +75,15 @@ class ContextBoundaryTest {
         };
     ChatModel model =
         new ChatModel() {
+          /** 検証に使う呼び出し回数。 */
           int calls;
 
+          /** 検証用に、モデルへ渡す文脈の管理の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             order.add("llm");
             if (++calls == 1)

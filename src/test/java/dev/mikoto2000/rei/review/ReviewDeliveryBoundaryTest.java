@@ -24,9 +24,12 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** レビュー配信境界条件の結果と状態の契約を検証するテスト。 */
 class ReviewDeliveryBoundaryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 変更内容のレビューで、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void realToolDispatcherAttachesReceiptButOnlyConfirmedPromptMarksDelivery() throws Exception {
     Files.writeString(dir.resolve("lesson.md"), "本文🙂");

@@ -20,7 +20,9 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** Web調査上限一覧の結果と状態の契約を検証するテスト。 */
 class WebResearchLimitsTest {
+  /** 転送量の合計上限に達したら追加取得を止め、取得済みの根拠を部分結果として返すことを確認する。 */
   @Test
   void aggregateTransferLimitStopsSupplementsAndReturnsPartialEvidence() throws Exception {
     var search = mock(WebSearchService.class);
@@ -52,6 +54,7 @@ class WebResearchLimitsTest {
     }
   }
 
+  /** 親期限について、調査を停止することを確認する。 */
   @Test
   void parentDeadlineStopsResearchBeforeSearchAndScopeIsRestored() throws Exception {
     var search = mock(WebSearchService.class);
@@ -71,12 +74,14 @@ class WebResearchLimitsTest {
               WebResearchPipeline.PAGES);
       assertEquals("unknown", result.assessment().status());
       assertTrue(result.omissions().contains("TOTAL_TIMEOUT"));
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(search);
     }
     assertNull(TransferScope.current());
     assertEquals(0, WebResearchScope.queryCount());
   }
 
+  /** Web上の情報の調査の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void pageInstructionsNeverBecomeQueriesOrPermissionRequests() throws Exception {
     var search = mock(WebSearchService.class);

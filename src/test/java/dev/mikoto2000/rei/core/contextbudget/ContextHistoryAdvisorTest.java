@@ -16,10 +16,13 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
+/** 文脈履歴対話の補助の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ContextHistoryAdvisorTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** モデルへ渡す文脈の管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void includesInterventionsAndAuxiliaryResultsFromPersistentLog() {
     var logs =
@@ -62,6 +65,7 @@ class ContextHistoryAdvisorTest {
         .containsEntry("rei.historySource", "log");
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void initiallyEmptyWorkingSetStillHasDedicatedRefreshSlot() {
     var working = new dev.mikoto2000.rei.core.working.WorkingSet(20, java.time.Clock.systemUTC());
@@ -77,6 +81,7 @@ class ContextHistoryAdvisorTest {
         .anyMatch(m -> Boolean.TRUE.equals(m.getMetadata().get("rei.workingSet")));
   }
 
+  /** 圧縮の後も対象の情報が残ることを確認する。 */
   @Test
   void historyBeyondMemoryWindowSurvivesCompressionAndRestart() {
     var turns = new ConversationTurnStore(dir);

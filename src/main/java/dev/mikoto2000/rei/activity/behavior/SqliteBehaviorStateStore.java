@@ -4,16 +4,27 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import javax.sql.DataSource;
 
-/** Lazy, small checkpoint and bounded transition history; never writes every NONE assessment. */
+/**
+ * SQLite作業習慣状態の記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>Lazy, small checkpoint and bounded transition history; never writes every NONE assessment.
+ */
 public final class SqliteBehaviorStateStore implements BehaviorStateStore {
+  /** データ取得元。 */
   private final DataSource dataSource;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
+
+  /** 初期化済み。 */
   private boolean initialized;
 
+  /** 指定された値や利用先を使って、SqliteBehaviorStateStoreを初期化する。 */
   public SqliteBehaviorStateStore(DataSource dataSource) {
     this.dataSource = dataSource;
   }
 
+  /** 作業習慣の支援に関する初期化を処理する。 */
   private void initialize() throws Exception {
     if (initialized) return;
     try (var c = dataSource.getConnection();
@@ -30,6 +41,7 @@ public final class SqliteBehaviorStateStore implements BehaviorStateStore {
     }
   }
 
+  /** 保存された情報を読み込み、現在の処理で使える形にする。 */
   @Override
   public synchronized BehaviorState load() {
     try {
@@ -46,6 +58,7 @@ public final class SqliteBehaviorStateStore implements BehaviorStateStore {
     }
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   @Override
   public synchronized void save(BehaviorState state, BehaviorAssessment assessment) {
     try {
@@ -79,6 +92,7 @@ public final class SqliteBehaviorStateStore implements BehaviorStateStore {
     }
   }
 
+  /** 既存の記録へ経緯を残すため、イベントを追記する。 */
   @Override
   public synchronized void appendEvent(BehaviorTimelineEvent event) {
     try {
@@ -97,6 +111,7 @@ public final class SqliteBehaviorStateStore implements BehaviorStateStore {
     }
   }
 
+  /** 対象を特定できるよう、イベント一覧期間を探す。 */
   @Override
   public synchronized java.util.List<BehaviorTimelineEvent> findEventsBetween(
       java.time.Instant start, java.time.Instant end) {

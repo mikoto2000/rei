@@ -24,26 +24,61 @@ import java.util.function.Function;
 import java.util.function.LongSupplier;
 
 /**
- * Bounded admission, enqueue-to-completion deadline, exactly one outcome, and independent
+ * 音声補正のユースケースを実現する。
+ *
+ * <p>Bounded admission, enqueue-to-completion deadline, exactly one outcome, and independent
  * late-result invalidation.
  */
 public final class VoiceCorrectionService implements AutoCloseable {
+  /** 音声による対話に必要な言語モデルを扱う。 */
   @FunctionalInterface
   public interface Llm {
+    /** 音声による対話の要求を実行し、呼び出し元へ結果を返す。 */
     String call(String raw, VoiceCorrectionContext.Snapshot context) throws Exception;
   }
 
+  /** この機能の動作設定。 */
   private final VoiceCorrectionProperties properties;
+
+  /** 文脈一覧。 */
   private final Function<ConversationInput, VoiceCorrectionContext.Snapshot> contexts;
+
+  /** 言語モデル。 */
   private final Llm llm;
+
+  /** イベント一覧。 */
   private final VoiceEventPublisher events;
+
+  /** 検証の窓口。 */
   private final VoiceCorrectionValidator validator = new VoiceCorrectionValidator();
+
+  /** 実行の担当一覧。 */
   private final ThreadPoolExecutor workers;
+
+  /** 期限一覧。 */
   private final ScheduledExecutorService deadlines;
+
+  /** 経過時間を測る時刻の取得元。 */
   private final LongSupplier ticks;
+
+  /** 実行する作業一覧。 */
   private final Map<UUID, Job> jobs = new ConcurrentHashMap<>();
+
+  /** 終了済み。 */
   private volatile boolean closed;
 
+  /**
+   * 音声による対話で受け渡す追跡情報を表す。
+   *
+   * @param inputId 入力識別子
+   * @param original 元の
+   * @param correctionInput 補正入力
+   * @param candidate 候補
+   * @param adopted 採用した内容
+   * @param submitted 受付済み
+   * @param reason 理由
+   * @param atNanos 日時ナノ秒数
+   */
   public record Trace(
       UUID inputId,
       String original,
@@ -54,8 +89,10 @@ public final class VoiceCorrectionService implements AutoCloseable {
       String reason,
       long atNanos) {}
 
+  /** 要求と実行を関連付ける追跡情報。 */
   private final Map<UUID, Trace> traces = new LinkedHashMap<>();
 
+  /** 音声による対話に関する追跡情報を処理する。 */
   private void trace(Job job, VoiceCorrectionValidator.Decision decision) {
     synchronized (traces) {
       traces.values().removeIf(t -> ticks.getAsLong() - t.atNanos() > TimeUnit.MINUTES.toNanos(2));
@@ -74,6 +111,7 @@ public final class VoiceCorrectionService implements AutoCloseable {
     }
   }
 
+  /** 音声による対話で用いるtracesを返す。 */
   public List<Trace> traces() {
     synchronized (traces) {
       traces.values().removeIf(t -> ticks.getAsLong() - t.atNanos() > TimeUnit.MINUTES.toNanos(2));
@@ -81,6 +119,7 @@ public final class VoiceCorrectionService implements AutoCloseable {
     }
   }
 
+  /** 音声による対話に関する受付済みを処理する。 */
   public void submitted(ConversationInput input) {
     synchronized (traces) {
       var trace = traces.get(input.inputId());
@@ -103,25 +142,47 @@ public final class VoiceCorrectionService implements AutoCloseable {
     }
   }
 
+  /** 音声による対話に必要な実行する作業を扱う。 */
   private final class Job {
+    /** 入力。 */
     final ConversationInput input;
+
+    /** 元の。 */
     final String original;
+
+    /** 現在。 */
     final BooleanSupplier current;
+
+    /** 結果。 */
     final CompletableFuture<VoiceCorrectionValidator.Decision> result = new CompletableFuture<>();
+
+    /** 待機中日時。 */
     final long queuedAt = ticks.getAsLong();
+
+    /** enqueued日時。 */
     volatile long enqueuedAt;
+
+    /** タスク。 */
     volatile FutureTask<Void> task;
+
+    /** タイムアウト。 */
     volatile ScheduledFuture<?> timeout;
+
+    /** 候補。 */
     volatile String candidate;
+
+    /** 完了済み。 */
     final java.util.concurrent.atomic.AtomicBoolean finished =
         new java.util.concurrent.atomic.AtomicBoolean();
 
+    /** 指定された値や利用先を使って、Jobを初期化する。 */
     Job(ConversationInput input, String original, BooleanSupplier current) {
       this.input = input;
       this.original = original;
       this.current = current;
     }
 
+    /** 終了時に必要な状態を反映し、処理を完了させる。 */
     boolean finish(VoiceCorrectionValidator.Decision decision) {
       // Select one winner before recording diagnostics. Observers recheck the voice generation.
       if (!finished.compareAndSet(false, true)) return false;
@@ -136,6 +197,7 @@ public final class VoiceCorrectionService implements AutoCloseable {
       return true;
     }
 
+    /** 対象の実行をキャンセルする。 */
     boolean cancel() {
       if (!finish(validator.fallback(input.text(), "cancelled"))) return false;
       var pending = task;
@@ -147,6 +209,7 @@ public final class VoiceCorrectionService implements AutoCloseable {
     }
   }
 
+  /** 音声による対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public VoiceCorrectionService(
       VoiceCorrectionProperties properties,
       Function<ConversationInput, VoiceCorrectionContext.Snapshot> contexts,
@@ -161,6 +224,7 @@ public final class VoiceCorrectionService implements AutoCloseable {
         System::nanoTime);
   }
 
+  /** 指定された値や利用先を使って、VoiceCorrectionServiceを初期化する。 */
   VoiceCorrectionService(
       VoiceCorrectionProperties properties,
       Function<ConversationInput, VoiceCorrectionContext.Snapshot> contexts,
@@ -186,21 +250,25 @@ public final class VoiceCorrectionService implements AutoCloseable {
             new ThreadPoolExecutor.AbortPolicy());
   }
 
+  /** 音声による対話で用いる常駐を返す。 */
   private static Thread daemon(Runnable work, String name) {
     var thread = new Thread(work, name);
     thread.setDaemon(true);
     return thread;
   }
 
+  /** 音声による対話で用いる経過時間を返す。 */
   private long elapsed(long start) {
     return Math.max(0, (ticks.getAsLong() - start) / 1_000_000);
   }
 
+  /** 音声による対話で用いるcorrectを返す。 */
   public CompletionStage<VoiceCorrectionValidator.Decision> correct(
       ConversationInput input, BooleanSupplier current) {
     return correct(input, current, null);
   }
 
+  /** 音声による対話で用いるcorrectを返す。 */
   public CompletionStage<VoiceCorrectionValidator.Decision> correct(
       ConversationInput input,
       BooleanSupplier current,
@@ -208,6 +276,7 @@ public final class VoiceCorrectionService implements AutoCloseable {
     return correct(input, input.text(), current, completion);
   }
 
+  /** 音声による対話で用いるcorrectを返す。 */
   public CompletionStage<VoiceCorrectionValidator.Decision> correct(
       ConversationInput input,
       String asrOriginal,
@@ -216,6 +285,7 @@ public final class VoiceCorrectionService implements AutoCloseable {
     return correctInternal(input, Objects.requireNonNull(asrOriginal), current, completion);
   }
 
+  /** 音声による対話で用いるimmediateを返す。 */
   private CompletionStage<VoiceCorrectionValidator.Decision> immediate(
       VoiceCorrectionValidator.Decision decision,
       Consumer<VoiceCorrectionValidator.Decision> completion) {
@@ -223,6 +293,7 @@ public final class VoiceCorrectionService implements AutoCloseable {
     return CompletableFuture.completedFuture(decision);
   }
 
+  /** 音声による対話で用いるcorrect内部を返す。 */
   private CompletionStage<VoiceCorrectionValidator.Decision> correctInternal(
       ConversationInput input,
       String asrOriginal,
@@ -309,10 +380,12 @@ public final class VoiceCorrectionService implements AutoCloseable {
     return job.result;
   }
 
+  /** 利用者が不要とした実行を止めるため、全対象をキャンセルする。 */
   public void cancelAll() {
     for (var job : List.copyOf(jobs.values())) job.cancel();
   }
 
+  /** 後続の処理で判断できるよう、未完了の対象を返す。 */
   public List<ConversationInput> pending() {
     return jobs.values().stream()
         .filter(job -> !job.finished.get() && job.current.getAsBoolean())
@@ -321,11 +394,13 @@ public final class VoiceCorrectionService implements AutoCloseable {
         .toList();
   }
 
+  /** 対象の実行をキャンセルする。 */
   public boolean cancel(UUID id) {
     var job = jobs.get(id);
     return job != null && job.cancel();
   }
 
+  /** 音声による対話で利用した資源や登録を解放し、利用を終了する。 */
   @Override
   public void close() {
     closed = true;

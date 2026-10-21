@@ -23,7 +23,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況根拠安全性の結果と状態の契約を検証するテスト。 */
 class ActivityEvidenceSafetyTest {
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownForegroundBoundsDoNotSilentlySendFullDesktop() throws Exception {
     var p = new ActivityProperties();
@@ -43,9 +45,11 @@ class ActivityEvidenceSafetyTest {
             new ActivityChangeScopeTest.Time())
         .tick();
     verify(store).append(any());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(extractor);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void optInBackgroundHasOneWorkerAndEnrichesOriginalObservation() throws Exception {
     var f = new DesktopContextQueueTest.Fixture();
@@ -67,6 +71,7 @@ class ActivityEvidenceSafetyTest {
                             == VisionDiagnostics.State.USED));
   }
 
+  /** 無効状態代替手段または画像認識引き続きについて、不明観測内容を保存することを確認する。 */
   @Test
   void disabledFallbackOrVisionStillStoresUnknownObservationWithoutPixels() throws Exception {
     for (boolean disableVision : List.of(false, true)) {
@@ -88,11 +93,13 @@ class ActivityEvidenceSafetyTest {
               new ActivityChangeScopeTest.Time())
           .tick();
       verify(store).append(any());
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(extractor);
       verify(observer, never()).capture();
     }
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void screenshotFailureDoesNotEraseOsObservation() throws Exception {
     var p = new ActivityProperties();
@@ -112,9 +119,11 @@ class ActivityEvidenceSafetyTest {
             new ActivityChangeScopeTest.Time())
         .tick();
     verify(store).append(any());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(extractor);
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void backgroundMotionNeverTriggersDefaultVisionEvenAfterInterval() throws Exception {
     var p = new ActivityProperties();
@@ -142,10 +151,12 @@ class ActivityEvidenceSafetyTest {
     }
     verify(store, times(8)).append(any());
     verify(observer, never()).capture();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(extractor);
     assertTrue(backgrounds.isEmpty());
   }
 
+  /** 遅れて届いた結果を受け付けないことを確認する。 */
   @Test
   void observationContinuesWhileVisionIsActuallyBlockedAndPauseRejectsLateResult()
       throws Exception {
@@ -206,6 +217,7 @@ class ActivityEvidenceSafetyTest {
     }
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void optionalSourceFailureAndPrivateInvisibleWindowsAreIsolated() {
     var p = new ActivityProperties();
@@ -235,6 +247,7 @@ class ActivityEvidenceSafetyTest {
         new ActivityClassifier().classify(evidence).inference().activities().getFirst().type());
   }
 
+  /** 作業状況の把握で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void foregroundExclusionBlocksMetadataPersistenceAndVision() throws Exception {
     var p = new ActivityProperties();
@@ -252,10 +265,12 @@ class ActivityEvidenceSafetyTest {
             mock(ScreenshotStore.class),
             new ActivityChangeScopeTest.Time())
         .tick();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(store, extractor);
     verify(observer, never()).capture();
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void projectAndRecentToolTogetherCanIdentifyTerminalButHistoryAloneCannot() {
     var at = Instant.now();
@@ -279,6 +294,7 @@ class ActivityEvidenceSafetyTest {
             .confidence());
   }
 
+  /** 不正な判定の境界値を受け付けないことを確認する。 */
   @Test
   void configBindsDefaultsAndRejectsInvalidThresholds() {
     var defaults = new ActivityProperties();
@@ -304,6 +320,7 @@ class ActivityEvidenceSafetyTest {
     }
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void skipThresholdIsInclusive() throws Exception {
     for (double threshold : new double[] {.95, .96}) {

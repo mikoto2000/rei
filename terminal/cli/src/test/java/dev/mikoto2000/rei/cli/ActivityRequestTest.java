@@ -6,7 +6,9 @@ import dev.mikoto2000.rei.application.cli.ActivityRequest;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況要求の結果と状態の契約を検証するテスト。 */
 class ActivityRequestTest {
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void activityUsesPurePicocliGrammarForParentOptionsAndCoachingDefaults() {
     var summary = ActivityRequest.parse(List.of("--verbose", "summary", "yesterday"));

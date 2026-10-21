@@ -10,7 +10,9 @@ import java.time.ZoneOffset;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** シェルイベント会話の結果と状態の契約を検証するテスト。 */
 class ShellEventSessionTest {
+  /** ターミナルでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void forwardsShellEventsAndUnsubscribesOnClose() {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();

@@ -25,10 +25,13 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** 仕様委譲外部連携の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SpecificationDelegationIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temporary;
 
+  /** 範囲外対象範囲を受け付けないことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(ints = {0, 1, 2, 3, 4, 5, 6})
   void approvedRequirementsUseExistingEngineAndManifestRejectsOutsideScope(int mode)
@@ -44,12 +47,14 @@ class SpecificationDelegationIntegrationTest {
     var calls = new AtomicInteger();
     var executor =
         new ExternalAgentExecutor() {
+          /** 検証用に、要求された処理を実行する。 */
           public ExternalAgentResult execute(
               ExternalAgentRequest request, java.util.function.BooleanSupplier cancelled) {
             fail("Parent budget required");
             return null;
           }
 
+          /** 検証用に、要求された処理を実行する。 */
           public ExternalAgentResult execute(
               ExternalAgentRequest request,
               java.util.function.BooleanSupplier cancelled,
@@ -211,6 +216,7 @@ class SpecificationDelegationIntegrationTest {
     }
   }
 
+  /** {@code git} の条件を再現するため、検証用の操作や状態を扱う。 */
   void git(Path root, String... args) throws Exception {
     var cmd =
         new ArrayList<String>(

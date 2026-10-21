@@ -32,35 +32,71 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * One human decision queues a saved invocation; workers and model calls are released while waiting.
+ * 承認継続入力のユースケースを実現する。
+ *
+ * <p>One human decision queues a saved invocation; workers and model calls are released while
+ * waiting.
  */
 @Component
 @Primary
 public class ApprovalContinuationService implements RunContinuation {
+  /** 承認一覧。 */
   private final ToolApprovalRepository approvals;
+
+  /** 保存先。 */
   private final ApprovalContinuationStore store;
+
+  /** 登録台帳。 */
   private final ObjectProvider<RunRegistry> registry;
+
+  /** 実行一覧。 */
   private final ObjectProvider<RunService> runs;
+
+  /** 入力の振り分け。 */
   private final ObjectProvider<ConversationInputRouter> router;
+
+  /** チャット。 */
   private final ObjectProvider<ChatExecutionService> chat;
+
+  /** Slackとの連携に用いる窓口。 */
   private final ObjectProvider<dev.mikoto2000.rei.slack.SlackAgentService> slack;
+
+  /** プロジェクト一覧。 */
   private final ObjectProvider<dev.mikoto2000.rei.core.project.ProjectRegistry> projects;
+
+  /** 会話一覧。 */
   private final ObjectProvider<dev.mikoto2000.rei.application.session.SessionRepository> sessions;
+
+  /** 一連の更新。 */
   private final TransactionTemplate transaction;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 管理対象。 */
   private final Map<String, Managed> managed = new ConcurrentHashMap<>();
+
+  /** 再開用の記録一覧。 */
   private dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints;
 
+  /** ツール利用の権限制御で使用する再開用の記録一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setCheckpoints(
       dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints) {
     this.checkpoints = checkpoints;
   }
 
+  /**
+   * ツール利用の権限制御で受け渡す管理対象を表す。
+   *
+   * @param reservation 予約
+   * @param completed 完了
+   */
   private record Managed(
       OutputLimitRunBudget.LlmCallReservation reservation,
       Consumer<ChatExecutionResult> completed) {}
 
+  /** 指定された値や利用先を使って、ApprovalContinuationServiceを初期化する。 */
   public ApprovalContinuationService(
       ToolApprovalRepository approvals,
       ApprovalContinuationStore store,
@@ -86,10 +122,12 @@ public class ApprovalContinuationService implements RunContinuation {
     transaction = new TransactionTemplate(new DataSourceTransactionManager(source));
   }
 
+  /** ツール利用の権限制御で用いる状態を返す。 */
   public Optional<String> state(String id) {
     return store.find(id).map(ApprovalContinuationStore.Entry::state);
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<ToolApprovalRepository.Request> list(String project) {
     var rows = new LinkedHashMap<String, ToolApprovalRepository.Request>();
     approvals.list(project).forEach(request -> rows.put(request.id(), request));
@@ -103,6 +141,7 @@ public class ApprovalContinuationService implements RunContinuation {
     return rows.values().stream().limit(256).toList();
   }
 
+  /** ツール利用の権限制御において、待機中承認に該当するか判定する。 */
   public boolean waitingApproval(AgentRunContext owner) {
     return store.active().stream()
         .anyMatch(
@@ -111,6 +150,7 @@ public class ApprovalContinuationService implements RunContinuation {
                     && Set.of("WAITING_APPROVAL", "QUEUED", "DENY_QUEUED").contains(e.state()));
   }
 
+  /** ツール利用の権限制御に関する中断承認を処理する。 */
   public void suspendApproval(
       RunExecutionContext execution, String id, List<Message> history, PendingTools pending) {
     var owner = execution.runContext();
@@ -160,7 +200,11 @@ public class ApprovalContinuationService implements RunContinuation {
     }
   }
 
-  /** Approval and continuation acceptance commit together, with an idempotent durable receipt. */
+  /**
+   * ツール利用の権限制御で用いる判断を返す。
+   *
+   * <p>Approval and continuation acceptance commit together, with an idempotent durable receipt.
+   */
   public ToolApprovalRepository.Request decide(
       String project, String id, boolean approved, boolean continueRun) {
     if (continueRun && !approved)
@@ -205,6 +249,7 @@ public class ApprovalContinuationService implements RunContinuation {
         });
   }
 
+  /** 保存済みの記録から、利用する状態を復元する。 */
   @Override
   public Saved restore(AgentRunContext owner) {
     var entry = store.resuming(owner.runId());
@@ -217,6 +262,7 @@ public class ApprovalContinuationService implements RunContinuation {
     return external == null ? null : external.restore(owner);
   }
 
+  /** ツール利用の権限制御において、中断に該当するか判定する。 */
   @Override
   public boolean suspend(RunExecutionContext execution, List<Message> history) {
     var external = slack.getIfAvailable();
@@ -233,6 +279,7 @@ public class ApprovalContinuationService implements RunContinuation {
     return waiting;
   }
 
+  /** ツール利用の権限制御に関する終端を処理する。 */
   @Override
   public void terminal(AgentRunContext owner) {
     if (store.active().stream().anyMatch(entry -> entry.runId().equals(owner.runId()))) {
@@ -251,6 +298,7 @@ public class ApprovalContinuationService implements RunContinuation {
     if (external != null) external.terminal(owner);
   }
 
+  /** 要求を後続の処理へ引き渡すため、案内を受け付ける。 */
   @Override
   public void acceptGuidance(AgentRunContext owner, List<Message> guidance) {
     if (store.active().stream().anyMatch(e -> e.runId().equals(owner.runId())))
@@ -261,6 +309,7 @@ public class ApprovalContinuationService implements RunContinuation {
     }
   }
 
+  /** ツール利用の権限制御に関する関連付け親を処理する。 */
   @Override
   public void attachParent(
       AgentRunContext owner,
@@ -278,6 +327,7 @@ public class ApprovalContinuationService implements RunContinuation {
           });
   }
 
+  /** ツール利用の権限制御に関する関連付けの解除親を処理する。 */
   @Override
   public void detachParent(AgentRunContext owner) {
     managed.remove(owner.runId());
@@ -285,6 +335,7 @@ public class ApprovalContinuationService implements RunContinuation {
     if (external != null) external.detachParent(owner);
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   private void validate(AgentRunContext owner) {
     if (owner == null || owner.projectId() == null)
       throw new IllegalArgumentException("Owning Project required");
@@ -301,6 +352,7 @@ public class ApprovalContinuationService implements RunContinuation {
             .isEmpty()) throw new IllegalStateException("Project or Session ownership changed");
   }
 
+  /** 後続の操作を進められるか判断するため、実行を確認する。 */
   public void checkExecution(AgentRunContext owner) {
     validate(owner);
     var current = registry.getObject().get(owner.runId());
@@ -311,6 +363,7 @@ public class ApprovalContinuationService implements RunContinuation {
           "Continuation Run no longer owns execution");
   }
 
+  /** ツール利用の権限制御に関するpumpを処理する。 */
   @Scheduled(fixedDelay = 500)
   public synchronized void pump() {
     for (var entry : store.active()) {
@@ -443,6 +496,7 @@ public class ApprovalContinuationService implements RunContinuation {
     }
   }
 
+  /** 実行中の処理を停止する。 */
   private void stop(AgentRunContext owner, ChatExecutionResult result) {
     if (registry.getObject().claimWaiting(owner)) {
       var status =
@@ -455,6 +509,7 @@ public class ApprovalContinuationService implements RunContinuation {
     }
   }
 
+  /** 後続の判断に現在の状態を反映するため、再開用の記録の状態を記録する。 */
   private void markCheckpoint(AgentRunContext owner, String status) {
     if (checkpoints == null) return;
     try {
@@ -480,6 +535,7 @@ public class ApprovalContinuationService implements RunContinuation {
     }
   }
 
+  /** 状態の変化を利用先へ伝えるため、親を通知する。 */
   private void notifyParent(AgentRunContext owner, ChatExecutionResult result) {
     var parent = managed.remove(owner.runId());
     var external = slack.getIfAvailable();

@@ -17,19 +17,27 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
+/** 記憶のユースケースを実現する。 */
 @Service
 public class MemoryService {
 
+  /** データベースへの接続クライアント。 */
   private final JdbcClient jdbcClient;
+
+  /** 記憶設定。 */
   private final MemoryProperties memoryProperties;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** 長期記憶の保存と検索を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public MemoryService(
       @Qualifier("memoryConsolidationDataSource") DataSource dataSource,
       MemoryProperties memoryProperties) {
     this(dataSource, memoryProperties, Clock.systemUTC());
   }
 
+  /** 指定された値や利用先を使って、MemoryServiceを初期化する。 */
   @Autowired
   public MemoryService(
       @Qualifier("memoryConsolidationDataSource") DataSource dataSource,
@@ -41,6 +49,7 @@ public class MemoryService {
     initializeSchema();
   }
 
+  /** 長期記憶の保存と検索に関する初期化データ形式を処理する。 */
   public void initializeSchema() {
     executeDb(
         () -> {
@@ -88,6 +97,7 @@ public class MemoryService {
         "メモリDBの初期化に失敗しました");
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   public Memory save(Memory memory) {
     return executeDb(
         () -> {
@@ -144,6 +154,7 @@ public class MemoryService {
         "メモリ保存に失敗しました");
   }
 
+  /** 対象を特定できるよう、別識別子を探す。 */
   public Optional<Memory> findById(String id) {
     return executeDb(
         () ->
@@ -155,6 +166,7 @@ public class MemoryService {
         "メモリ取得に失敗しました");
   }
 
+  /** 利用可能な対象を確認できるよう、活動中を一覧にする。 */
   public List<Memory> listActive() {
     return executeDb(
         () ->
@@ -165,6 +177,7 @@ public class MemoryService {
         "アクティブメモリ一覧の取得に失敗しました");
   }
 
+  /** 利用可能な対象を確認できるよう、活動中付き有効期限確認を一覧にする。 */
   public List<Memory> listActiveWithExpiryCheck() {
     executeDb(
         () ->
@@ -181,6 +194,7 @@ public class MemoryService {
     return listActive();
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public List<Memory> search(String query, int limit) {
     int safeLimit = Math.max(1, Math.min(limit, memoryProperties.searchMaxResults()));
     return executeDb(
@@ -201,6 +215,7 @@ public class MemoryService {
         "メモリ検索に失敗しました");
   }
 
+  /** 最新の内容を後続の処理に反映するため、状態を更新する。 */
   public boolean updateStatus(String id, MemoryStatus status) {
     return executeDb(
         () -> {
@@ -214,6 +229,7 @@ public class MemoryService {
         "メモリステータス更新に失敗しました");
   }
 
+  /** 後から参照できるよう、タグ一覧を保存する。 */
   public void saveTags(String memoryId, List<String> tags) {
     if (tags == null || tags.isEmpty()) {
       return;
@@ -232,6 +248,7 @@ public class MemoryService {
     }
   }
 
+  /** 対象を特定できるよう、タグ一覧を探す。 */
   public List<String> findTags(String memoryId) {
     return executeDb(
         () ->
@@ -243,6 +260,7 @@ public class MemoryService {
         "メモリタグ取得に失敗しました");
   }
 
+  /** 後から参照できるよう、取得元を保存する。 */
   public void saveSource(String memoryId, String source) {
     if (source == null || source.isBlank()) {
       return;
@@ -256,6 +274,7 @@ public class MemoryService {
         "メモリソース保存に失敗しました");
   }
 
+  /** 対象を特定できるよう、取得元一覧を探す。 */
   public List<String> findSources(String memoryId) {
     return executeDb(
         () ->
@@ -267,6 +286,7 @@ public class MemoryService {
         "メモリソース取得に失敗しました");
   }
 
+  /** 後から参照できるよう、関係を保存する。 */
   public void saveRelation(String fromMemoryId, String toMemoryId, String relationType) {
     if (fromMemoryId == null
         || toMemoryId == null
@@ -286,6 +306,7 @@ public class MemoryService {
         "メモリ関連保存に失敗しました");
   }
 
+  /** 長期記憶の保存と検索で用いる関係件数を返す。 */
   public int relationCount() {
     Integer count =
         executeDb(
@@ -298,6 +319,7 @@ public class MemoryService {
     return count == null ? 0 : count;
   }
 
+  /** 後から参照できるよう、要約を保存する。 */
   public void saveSummary(String memoryId, String summary) {
     if (summary == null || summary.isBlank()) {
       return;
@@ -311,6 +333,7 @@ public class MemoryService {
         "メモリ要約保存に失敗しました");
   }
 
+  /** 対象を特定できるよう、要約を探す。 */
   public Optional<String> findSummary(String memoryId) {
     return executeDb(
         () ->
@@ -323,6 +346,7 @@ public class MemoryService {
         "メモリ要約取得に失敗しました");
   }
 
+  /** 長期記憶の保存と検索で用いる対応表記憶を返す。 */
   private Memory mapMemory(ResultSet rs, int rowNum) throws java.sql.SQLException {
     return new Memory(
         rs.getString("id"),
@@ -338,6 +362,7 @@ public class MemoryService {
         fromDbTime(rs.getString("valid_until")));
   }
 
+  /** 新たな対象を管理できるよう、列条件付き未指定を追加する。 */
   private void addColumnIfMissing(String table, String column, String type) {
     boolean exists =
         jdbcClient
@@ -350,6 +375,7 @@ public class MemoryService {
     }
   }
 
+  /** 依頼された操作を進めるため、データベースへのアクセスを実行する。 */
   private <T> T executeDb(Supplier<T> supplier, String message) {
     try {
       return supplier.get();
@@ -358,6 +384,7 @@ public class MemoryService {
     }
   }
 
+  /** 依頼された操作を進めるため、データベースへのアクセスを実行する。 */
   private void executeDb(Runnable runnable, String message) {
     try {
       runnable.run();
@@ -366,6 +393,7 @@ public class MemoryService {
     }
   }
 
+  /** 長期記憶の保存と検索で用いる既定有効期限を返す。 */
   private OffsetDateTime defaultExpiry(MemoryScope scope, OffsetDateTime base) {
     if (scope == null) {
       return null;
@@ -378,10 +406,12 @@ public class MemoryService {
     };
   }
 
+  /** 利用先へ渡せるよう、データベース時刻の形式に変換する。 */
   private String toDbTime(OffsetDateTime value) {
     return value == null ? null : value.toString();
   }
 
+  /** 長期記憶の保存と検索で用いる起点データベース時刻を返す。 */
   private OffsetDateTime fromDbTime(String value) {
     return value == null ? null : OffsetDateTime.parse(value);
   }

@@ -12,10 +12,13 @@ import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** プロジェクト保存するの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProjectStoresTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** プロジェクトごとの作業環境で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void logsAndSearchStayWithOwnerAfterSwitchAndReload() throws Exception {
     String previous = System.getProperty("rei.data-dir");

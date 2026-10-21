@@ -15,7 +15,9 @@ import java.time.Clock;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** 待機中実行キャンセルの結果と状態の契約を検証するテスト。 */
 class QueuedRunCancellationTest {
+  /** 実行の受付と状態管理で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void runnerFailurePreservesRedactedUnderlyingCause() {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -44,6 +46,7 @@ class QueuedRunCancellationTest {
     }
   }
 
+  /** 実行の受付と状態管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void terminalCompletionCannotOverwriteAcceptedCancellationOrPublishFalseSuccess() {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -67,6 +70,7 @@ class QueuedRunCancellationTest {
     }
   }
 
+  /** 実行の受付と状態管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationAfterQueueDispatchButBeforeLifecycleStartsNotifiesWithoutRunningWork() {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -96,6 +100,7 @@ class QueuedRunCancellationTest {
     }
   }
 
+  /** 実行の受付と状態管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void explicitQueuedCancellationNotifiesOnceAfterTerminalStateIsPublished() {
     var registry = new RunRegistry(Clock.systemUTC());

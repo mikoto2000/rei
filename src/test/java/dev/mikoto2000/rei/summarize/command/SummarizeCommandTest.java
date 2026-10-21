@@ -13,8 +13,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** 要約コマンドの結果と状態の契約を検証するテスト。 */
 class SummarizeCommandTest {
 
+  /** 情報の要約で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void printsUsageAndDoesNotSummarizeWhenUrlIsMissing() {
     RecordingSummarizer summarizer = new RecordingSummarizer("unused");
@@ -29,6 +31,7 @@ class SummarizeCommandTest {
     assertEquals(0, summarizer.calls);
   }
 
+  /** 不正なURLを受け付けないことを確認する。 */
   @Test
   void rejectsInvalidUrlAndDoesNotSummarize() {
     RecordingSummarizer summarizer = new RecordingSummarizer("unused");
@@ -43,6 +46,7 @@ class SummarizeCommandTest {
     assertEquals(0, summarizer.calls);
   }
 
+  /** 情報の要約で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void passesHttpUrlToSummarizerAndPrintsSummary() {
     RecordingSummarizer summarizer = new RecordingSummarizer("要約結果");
@@ -57,6 +61,7 @@ class SummarizeCommandTest {
     assertTrue(out.toString().contains("要約結果"));
   }
 
+  /** 情報の要約で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void narratesSummaryWhenSummarizationSucceeds() {
     RecordingSummarizer summarizer = new RecordingSummarizer("要約結果");
@@ -70,15 +75,23 @@ class SummarizeCommandTest {
     Mockito.verify(narrator).narrateIfCompleted("要約結果");
   }
 
+  /** 検証条件を再現するためのRecordingSummarizer。 */
   private static final class RecordingSummarizer implements WebPageSummarizerService {
+    /** 検証に使う要約。 */
     private final String summary;
+
+    /** 検証に使う参照先のURI。 */
     private URI uri;
+
+    /** 検証に使う呼び出し回数。 */
     private int calls;
 
+    /** 検証条件に必要な値を受け取り、RecordingSummarizerを用意する。 */
     RecordingSummarizer(String summary) {
       this.summary = summary;
     }
 
+    /** {@code summarize} の条件を再現するための補助情報を返す。 */
     @Override
     public SummaryResult summarize(URI uri) {
       calls++;

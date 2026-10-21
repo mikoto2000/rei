@@ -10,32 +10,50 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
-/** Session mutations touch one row; keyset queries use indexed time and Java string order. */
+/**
+ * SQLite会話を保存・検索するための窓口。
+ *
+ * <p>Session mutations touch one row; keyset queries use indexed time and Java string order.
+ */
 public final class SqliteSessionRepository implements SessionRepository {
+  /** データベース。 */
   private final StorageDatabase database;
+
+  /** 入力補完。 */
   private volatile List<SessionMetadata> completion = List.of();
 
+  /**
+   * 会話履歴と受付記録の管理で受け渡す前回を表す。
+   *
+   * @param metadata 付随情報
+   * @param revision 改訂番号
+   */
   private record Previous(SessionMetadata metadata, long revision) {}
 
+  /** 指定された値や利用先を使って、SqliteSessionRepositoryを初期化する。 */
   public SqliteSessionRepository(Path root) {
     database = new StorageDatabase(root);
     refreshCompletion();
   }
 
+  /** 会話履歴と受付記録の管理で用いる入力補完状態の記録を返す。 */
   @Override
   public List<SessionMetadata> completionSnapshot() {
     return completion;
   }
 
+  /** 会話履歴と受付記録の管理に関する再確認入力補完を処理する。 */
   private void refreshCompletion() {
     completion = findPage(null, null, 101);
   }
 
+  /** 会話履歴と受付記録の管理に関する再確認入力補完状態の記録を処理する。 */
   @Override
   public void refreshCompletionSnapshot() {
     refreshCompletion();
   }
 
+  /** 会話履歴と受付記録の管理で用いる前回を返す。 */
   private static Previous previous(Connection connection, String id) throws Exception {
     try (var query =
         connection.prepareStatement("SELECT record,revision FROM sessions WHERE session_id=?")) {
@@ -50,6 +68,7 @@ public final class SqliteSessionRepository implements SessionRepository {
     }
   }
 
+  /** 対象を特定できるよう、別識別子を探す。 */
   @Override
   public Optional<SessionMetadata> findById(String id) {
     return database.read(
@@ -59,6 +78,7 @@ public final class SqliteSessionRepository implements SessionRepository {
         });
   }
 
+  /** 対象を特定できるよう、ページを探す。 */
   @Override
   public List<SessionMetadata> findPage(String project, CursorKey after, int limit) {
     if (limit < 1 || limit > 101) throw new IllegalArgumentException("Invalid fetch limit");
@@ -91,6 +111,7 @@ public final class SqliteSessionRepository implements SessionRepository {
         });
   }
 
+  /** 会話履歴と受付記録の管理に関する登録を処理する。 */
   public static void put(
       Connection connection, SessionMetadata metadata, long revision, Long importOrder)
       throws Exception {
@@ -111,6 +132,7 @@ public final class SqliteSessionRepository implements SessionRepository {
     }
   }
 
+  /** 要求を後続の処理へ引き渡すため、SQLite会話保存と検索の窓口を受け付ける。 */
   @Override
   public void accept(SessionMetadata metadata, Runnable enqueue) {
     synchronized (database.writer) {
@@ -121,6 +143,7 @@ public final class SqliteSessionRepository implements SessionRepository {
                 SessionMetadata next = metadata;
                 if (previous != null) {
                   var row = previous.metadata();
+                  // 別のプロジェクトの情報を、この作業の対象として扱わせない。
                   if (!row.projectId().equals(metadata.projectId())
                       || !row.title().equals(metadata.title())
                       || !row.createdAt().equals(metadata.createdAt()))

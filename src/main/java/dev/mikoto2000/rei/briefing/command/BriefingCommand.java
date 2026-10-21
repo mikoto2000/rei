@@ -9,12 +9,14 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 
+/** 日次ブリーフィングを表示しますを行うための利用者コマンド。 */
 @Component
 @Command(
     name = "briefing",
     description = "日次ブリーフィングを表示します",
     subcommands = {BriefingCommand.TodayCommand.class})
 public class BriefingCommand {
+  /** 日次情報の案内で用いるレポート今日を返す。 */
   public static String reportToday(BriefingService service) {
     var command = new TodayCommand(service);
     var text = new java.io.StringWriter();
@@ -23,14 +25,19 @@ public class BriefingCommand {
     return text.toString().replaceAll("[\\r\\n]+$", "");
   }
 
+  /** 今日の日次ブリーフィングを表示しますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "today", description = "今日の日次ブリーフィングを表示します")
   public static class TodayCommand implements Runnable {
 
+    /** 日次案内サービス。 */
     private final BriefingService briefingService;
+
+    /** 出力先。 */
     private java.io.PrintWriter out = new java.io.PrintWriter(System.out, true);
 
+    /** 今日の日次ブリーフィングを表示しますを行う。 */
     @Override
     public void run() {
       try {
@@ -40,6 +47,7 @@ public class BriefingCommand {
       }
     }
 
+    /** 利用者に結果を伝えるため、今日コマンドを出力する。 */
     private void print(DailyBriefing briefing) {
       out.println("日次ブリーフィング | " + briefing.date());
       out.println("概要: " + briefing.overview());

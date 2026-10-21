@@ -16,8 +16,10 @@ import org.springframework.context.annotation.Configuration;
 @org.junit.jupiter.api.Tag("integration")
 class FileSummaryCacheSessionTest {
 
+  /** 検証に使うタイムゾーン。 */
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
 
+  /** ファイル内容の要約で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void providesFileSummaryCacheBean() {
     FileSummaryCacheConfiguration config = new FileSummaryCacheConfiguration();
@@ -27,6 +29,7 @@ class FileSummaryCacheSessionTest {
     assertTrue(cache.isEmpty());
   }
 
+  /** ファイル内容の要約で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void fileSummaryCacheIsSingletonAcrossContext() {
     try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
@@ -38,9 +41,11 @@ class FileSummaryCacheSessionTest {
     }
   }
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration
   static class TestConfiguration {
 
+    /** {@code clock} の条件を再現するための補助情報を返す。 */
     @Bean
     Clock clock() {
       return Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE);

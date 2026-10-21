@@ -18,7 +18,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** 作業コマンドの結果と状態の契約を検証するテスト。 */
 class WorkCommandTest {
+  /** シェル表示履歴および更新について、共有サービスを利用することを確認する。 */
   @Test
   void shellShowHistoryAndUpdateUseSharedServiceAndCapturedSession() {
     var service = mock(WorkContextService.class);

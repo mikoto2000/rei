@@ -2,6 +2,20 @@ package dev.mikoto2000.rei.memory.configuration;
 
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * 長期記憶の準備で受け渡す記憶設定を表す。
+ *
+ * @param enabled 有効状態
+ * @param autoTriggerMessageThreshold 自動実行条件メッセージ判定の境界値
+ * @param autoTriggerContextPercent 自動実行条件文脈割合
+ * @param searchMaxResults 検索検索結果の件数上限
+ * @param searchMaxInjected 検索最大追加された
+ * @param summarizeMaxLength 要約最大長さ
+ * @param conflictTimeoutSeconds 競合タイムアウトの秒数
+ * @param expiry 有効期限
+ * @param retrieval 関連情報の取得
+ * @param sleep 待機
+ */
 @ConfigurationProperties(prefix = "rei.memory")
 public record MemoryProperties(
     @org.springframework.boot.context.properties.bind.DefaultValue("true") boolean enabled,
@@ -15,6 +29,7 @@ public record MemoryProperties(
     Retrieval retrieval,
     Sleep sleep) {
 
+  /** 長期記憶の準備を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public MemoryProperties(
       boolean enabled,
       int autoTriggerMessageThreshold,
@@ -37,6 +52,7 @@ public record MemoryProperties(
         null);
   }
 
+  /** 受け取った情報からMemoryPropertiesを作成する。 */
   @org.springframework.boot.context.properties.bind.ConstructorBinding
   public MemoryProperties {
     if (retrieval == null) retrieval = new Retrieval(5, 1500);
@@ -64,13 +80,33 @@ public record MemoryProperties(
     }
   }
 
+  /**
+   * 長期記憶の準備で受け渡す関連情報の取得を表す。
+   *
+   * @param maxMemories 最大記憶一覧
+   * @param maxTokens トークン数の上限
+   */
   public record Retrieval(int maxMemories, int maxTokens) {
+    /** 受け取った情報からRetrievalを作成する。 */
     public Retrieval {
       if (maxMemories <= 0) maxMemories = 5;
       if (maxTokens <= 0) maxTokens = 1500;
     }
   }
 
+  /**
+   * 長期記憶の準備で受け渡す待機を表す。
+   *
+   * @param minConfidence 最小確信度
+   * @param minImportance 最小重要度
+   * @param maxTurns 最大やり取り一覧
+   * @param maxInputTokens 最大入力トークン数
+   * @param timeoutSeconds タイムアウトの秒数
+   * @param maxLlmCalls 最大言語モデル呼び出し回数
+   * @param maxTotalTokens 最大使用トークン数の合計
+   * @param maxLlmCallsPerProject 最大言語モデル呼び出し回数ごとのプロジェクト
+   * @param maxTotalTokensPerProject 最大使用トークン数の合計ごとのプロジェクト
+   */
   public record Sleep(
       @org.springframework.boot.context.properties.bind.DefaultValue("0.70") double minConfidence,
       @org.springframework.boot.context.properties.bind.DefaultValue("0.50") double minImportance,
@@ -83,6 +119,7 @@ public record MemoryProperties(
           long maxLlmCallsPerProject,
       @org.springframework.boot.context.properties.bind.DefaultValue("0")
           long maxTotalTokensPerProject) {
+    /** 長期記憶の準備を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Sleep(
         double minConfidence,
         double minImportance,
@@ -103,6 +140,7 @@ public record MemoryProperties(
           0);
     }
 
+    /** 長期記憶の準備を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Sleep(
         double minConfidence,
         double minImportance,
@@ -112,6 +150,7 @@ public record MemoryProperties(
       this(minConfidence, minImportance, maxTurns, maxInputTokens, timeoutSeconds, 0, 0);
     }
 
+    /** 受け取った情報からSleepを作成する。 */
     @org.springframework.boot.context.properties.bind.ConstructorBinding
     public Sleep {
       if (maxLlmCalls < 0
@@ -133,7 +172,14 @@ public record MemoryProperties(
     }
   }
 
+  /**
+   * 長期記憶の準備で受け渡す有効期限既定値を表す。
+   *
+   * @param shortTermDays 短期日数
+   * @param longTermDays 長期日数
+   */
   public record ExpiryDefaults(int shortTermDays, int longTermDays) {
+    /** 受け取った情報からExpiryDefaultsを作成する。 */
     public ExpiryDefaults {
       if (shortTermDays <= 0) {
         shortTermDays = 30;

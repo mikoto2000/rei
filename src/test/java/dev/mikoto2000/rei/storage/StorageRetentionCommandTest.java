@@ -18,10 +18,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
+/** 保存保持期間コマンドの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class StorageRetentionCommandTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void commandPlansApprovesAndShowsHistoryWithoutModifyingBodies() throws Exception {
     try (var migration = new StorageMigrationCoordinator(root)) {
@@ -60,6 +63,7 @@ class StorageRetentionCommandTest {
     assertThat(Files.readString(body)).isEqualTo("record");
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownOrMissingProjectCannotFallBackToGlobalPlan() throws Exception {
     try (var migration = new StorageMigrationCoordinator(root)) {
@@ -74,6 +78,7 @@ class StorageRetentionCommandTest {
     assertThat(planner.history()).isEmpty();
   }
 
+  /** データ保存の共通処理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void commandAppliesRestoresAndSeparatelyApprovesPurgeAndAutomaticConsent() throws Exception {
     try (var migration = new StorageMigrationCoordinator(root)) {

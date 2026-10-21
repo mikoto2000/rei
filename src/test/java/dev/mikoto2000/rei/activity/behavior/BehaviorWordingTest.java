@@ -21,7 +21,9 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 作業習慣Wordingの結果と状態の契約を検証するテスト。 */
 class BehaviorWordingTest {
+  /** プロンプトについて、応答の方針を再利用することを確認する。 */
   @Test
   void promptReusesPersonaAndOnlyStructuredAssessmentWithoutTools() throws Exception {
     var model = mock(ChatModel.class);
@@ -52,6 +54,7 @@ class BehaviorWordingTest {
     assertEquals("test", options.getModel());
   }
 
+  /** 作業習慣の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void weakEvidenceOmitsSpecificServices() throws Exception {
     var model = mock(ChatModel.class);
@@ -87,6 +90,7 @@ class BehaviorWordingTest {
         .generate(new BehaviorNotification("e", a));
   }
 
+  /** 作業習慣の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidWordingIsNotDelivered() {
     var model = mock(ChatModel.class);

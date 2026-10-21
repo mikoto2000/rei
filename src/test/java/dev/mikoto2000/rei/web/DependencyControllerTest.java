@@ -25,10 +25,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 依存条件受付窓口の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class DependencyControllerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** Web APIによる操作の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void namedCheckUsesTheWebPermissionBoundaryBeforeObservingAndCancelIsProjectOwned() {
     var projects =
@@ -58,6 +61,7 @@ class DependencyControllerTest {
     assertEquals(DependencyState.CANCELLED, controller.cancel(project.id(), entry.id()).state());
   }
 
+  /** 明示的な回答について、現在形式のバージョンを必要とすることを確認する。 */
   @Test
   void explicitAnswerRequiresCurrentVersionAndDoesNotCompleteOrExecuteDependency() {
     var repo =
@@ -81,6 +85,7 @@ class DependencyControllerTest {
     assertThrows(
         dev.mikoto2000.rei.application.state.OperationConflictException.class,
         () -> controller.answer("p", entry.id(), new DependencyController.AnswerRequest(99L, "A")));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(events);
     var answered =
         controller.answer(

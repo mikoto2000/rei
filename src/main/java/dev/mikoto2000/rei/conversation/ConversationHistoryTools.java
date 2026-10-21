@@ -5,15 +5,19 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
+/** 会話履歴をモデルから呼び出せるツールとして提供する。 */
 @Component
 public class ConversationHistoryTools {
 
+  /** サービス。 */
   private final ConversationHistorySearchService service;
 
+  /** 指定された値や利用先を使って、ConversationHistoryToolsを初期化する。 */
   public ConversationHistoryTools(ConversationHistorySearchService service) {
     this.service = service;
   }
 
+  /** 依頼に関連する情報を得るため、会話履歴を検索する。 */
   @Tool(
       name = "searchConversationHistory",
       description =
@@ -53,12 +57,17 @@ public class ConversationHistoryTools {
             limit));
   }
 
-  /** Compatibility for non-tool callers; the annotated method exposes explicit retrieval scope. */
+  /**
+   * 依頼に関連する情報を得るため、会話履歴を検索する。
+   *
+   * <p>Compatibility for non-tool callers; the annotated method exposes explicit retrieval scope.
+   */
   public List<ConversationSearchResult> searchConversationHistory(
       String query, String scope, String speaker, String since, String until, Integer limit) {
     return service.search(query, scope, speaker, since, until, limit);
   }
 
+  /** 会話履歴と受付記録の管理で参照する会話履歴を返す。 */
   @Tool(
       name = "getConversationHistory",
       description =

@@ -9,15 +9,19 @@ import dev.mikoto2000.rei.workcontext.WorkContext.Status;
 import java.util.ArrayList;
 import java.util.List;
 
+/** 作業文脈の引き継ぎに必要な作業文脈出力を扱う。 */
 public final class WorkContextOutput {
+  /** データ形式。 */
   private static final SubAgentResultSchema SCHEMA =
       SubAgentResultSchema.load(
           java.nio.file.Path.of("."), "classpath:/subagents/schemas/work-context.schema.json");
 
+  /** 作業文脈の引き継ぎで用いるデータ形式を返す。 */
   public String schema() {
     return SCHEMA.json();
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   public List<WorkContextCandidate> parse(String text) {
     if (text == null || text.isBlank())
       throw new WorkContextExtractionException(WorkContextExtractionException.Reason.EMPTY_OUTPUT);

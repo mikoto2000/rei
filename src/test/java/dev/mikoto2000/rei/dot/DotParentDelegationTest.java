@@ -39,18 +39,39 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 状態表示親委譲の結果と状態の契約を検証するテスト。 */
 class DotParentDelegationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うサービス。 */
   DotDelegationService service;
+
+  /** 検証に使うリポジトリ。 */
   DotRequestRepository repo;
+
+  /** 検証に使うプロジェクト。 */
   ProjectContext project;
+
+  /** 検証に使う実行一覧。 */
   RunRegistry runs;
+
+  /** 検証に使う依存条件一覧。 */
   PersistentDependencyRepository dependencies;
+
+  /** 検証に使う再開用の記録一覧。 */
   PersistentCheckpointRepository checkpoints;
+
+  /** 検証に使う所有者。 */
   AgentRunContext owner;
+
+  /** 検証に使う実行。 */
   RunExecutionContext execution;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   Clock clock = Clock.systemUTC();
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     try (var gate = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(root)) {
@@ -112,10 +133,12 @@ class DotParentDelegationTest {
         new ToolPermissionGuard(policy, new AgentEventFactory(clock), e -> {}));
   }
 
+  /** {@code input} の条件を再現するための補助情報を返す。 */
   Map<String, Object> input() {
     return Map.of("instruction", "Research design", "category", "TECH_RESEARCH");
   }
 
+  /** 利用者の状態表示の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void authorizedParentCreatesDependencyAndSuspendsAtSavedToolBoundary() {
     var accepted = service.requestParent(execution, input());
@@ -138,6 +161,7 @@ class DotParentDelegationTest {
     assertEquals(1, repo.list(Set.of(project.id()), "PENDING", null, 20).size());
   }
 
+  /** 利用者の状態表示の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void userIntentNotGeneratedInstructionGrantsAuthority() {
     execution.setUserRequest("自分で調査してください");
@@ -153,6 +177,7 @@ class DotParentDelegationTest {
     assertEquals(0, execution.budgetSnapshot().llmCalls());
   }
 
+  /** 利用者の状態表示で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void mcpReadOnlyAndSubagentCannotDelegateAgain() {
     execution.setRunContext(
@@ -170,6 +195,7 @@ class DotParentDelegationTest {
     assertEquals(List.of(), repo.list(Set.of(project.id()), "PENDING", null, 20));
   }
 
+  /** 利用者の状態表示で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void sharedExternalDelegationAndModelBudgetAreEnforced() {
     assertTrue(execution.claimExternalDelegation());
@@ -188,20 +214,24 @@ class DotParentDelegationTest {
     assertEquals(List.of(), repo.list(Set.of(project.id()), "PENDING", null, 20));
   }
 
+  /** 利用者の状態表示で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void actualModelToolLoopMakesOneCallThenYieldsWithoutWaitingForDot() {
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     org.springframework.ai.chat.model.ChatModel model =
         new org.springframework.ai.chat.model.ChatModel() {
+          /** 検証用に、利用者の状態表示で参照する選択可能な設定を返す。 */
           public org.springframework.ai.model.tool.ToolCallingChatOptions getOptions() {
             return org.springframework.ai.model.tool.ToolCallingChatOptions.builder().build();
           }
 
+          /** 検証用に、利用者の状態表示の要求を実行し、呼び出し元へ結果を返す。 */
           public org.springframework.ai.chat.model.ChatResponse call(
               org.springframework.ai.chat.prompt.Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public reactor.core.publisher.Flux<org.springframework.ai.chat.model.ChatResponse> stream(
               org.springframework.ai.chat.prompt.Prompt prompt) {
             calls.incrementAndGet();
@@ -243,6 +273,7 @@ class DotParentDelegationTest {
     assertEquals(RunStatus.WAITING, runs.get(owner.runId()).status());
   }
 
+  /** 利用者の状態表示の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void generatedScheduledTextWithoutHumanAdmissionCannotGrantPermission() {
     var synthetic =

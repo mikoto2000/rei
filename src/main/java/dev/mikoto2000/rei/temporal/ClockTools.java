@@ -5,14 +5,18 @@ import java.time.ZonedDateTime;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+/** 判定や記録に使う時刻の取得元をモデルから呼び出せるツールとして提供する。 */
 @Component
 public class ClockTools {
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** 指定された値や利用先を使って、ClockToolsを初期化する。 */
   public ClockTools(Clock clock) {
     this.clock = clock;
   }
 
+  /** 時刻と期間の解釈で参照する現在時刻を返す。 */
   @Tool(
       name = "getCurrentTime",
       description =

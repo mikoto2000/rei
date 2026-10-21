@@ -8,18 +8,37 @@ import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
- * Finite quotas shared by the initial search and deterministic supplements; no recursive planning.
+ * Web上の情報の調査に必要なWeb調査対象範囲を扱う。
+ *
+ * <p>Finite quotas shared by the initial search and deterministic supplements; no recursive
+ * planning.
  */
 final class WebResearchScope implements AutoCloseable {
+  /** 現在。 */
   private static final ThreadLocal<WebResearchScope> CURRENT = new ThreadLocal<>();
+
+  /** 所有者。 */
   private final boolean owner;
+
+  /** 作業ルート。 */
   private final WebResearchScope root;
+
+  /** この機能の動作設定。 */
   private final WebSearchProperties properties;
+
+  /** 検索条件一覧。 */
   private final Set<String> queries = new LinkedHashSet<>();
+
+  /** 取得。 */
   private final FetchScope fetch;
+
+  /** 引き継ぎ。 */
   private final TransferScope transfer;
+
+  /** 検索APIの呼び出し予算。 */
   private final SearchRequestBudget api;
 
+  /** 指定された値や利用先を使って、WebResearchScopeを初期化する。 */
   private WebResearchScope(WebSearchProperties properties) {
     properties.validateSelection();
     this.properties = properties;
@@ -45,10 +64,12 @@ final class WebResearchScope implements AutoCloseable {
     }
   }
 
+  /** Web上の情報の調査で用いる利用開始を返す。 */
   static WebResearchScope enter(WebSearchProperties properties) {
     return new WebResearchScope(properties);
   }
 
+  /** Web上の情報の調査において、登録検索条件に該当するか判定する。 */
   static boolean registerQuery(String query) {
     var scope = CURRENT.get();
     if (scope == null) return true;
@@ -58,15 +79,18 @@ final class WebResearchScope implements AutoCloseable {
     return true;
   }
 
+  /** Web上の情報の調査で用いる検索条件件数を返す。 */
   static int queryCount() {
     var scope = CURRENT.get();
     return scope == null ? 0 : scope.queries.size();
   }
 
+  /** Web上の情報の調査で用いる合計検索条件一覧を返す。 */
   int totalQueries() {
     return root.queries.size();
   }
 
+  /** Web上の情報の調査で利用した資源や登録を解放し、利用を終了する。 */
   public void close() {
     if (owner) {
       api.close();

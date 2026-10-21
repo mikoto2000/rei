@@ -11,15 +11,21 @@ import java.util.Optional;
  */
 public class SearchResultCache {
 
+  /** 既定最大項目一覧。 */
   static final int DEFAULT_MAX_ENTRIES = 100;
+
+  /** 既定有効期間。 */
   static final Duration DEFAULT_TTL = Duration.ofSeconds(60);
 
+  /** 項目一覧。 */
   private final BoundedTtlCache<SearchCacheKey, Object> entries;
 
+  /** 検索結果の再利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SearchResultCache() {
     this(DEFAULT_TTL, DEFAULT_MAX_ENTRIES, Clock.systemDefaultZone());
   }
 
+  /** 指定された値や利用先を使って、SearchResultCacheを初期化する。 */
   public SearchResultCache(Duration ttl, int maxEntries, Clock clock) {
     this.entries =
         new BoundedTtlCache<>(ttl, Math.max(1, maxEntries), Long.MAX_VALUE, clock, ignored -> 1);

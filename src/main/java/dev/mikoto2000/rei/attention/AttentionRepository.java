@@ -11,9 +11,26 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
-/** Persistent human inbox; acknowledging an item never grants permissions or dispatches a run. */
+/**
+ * 注意を保存・検索するための窓口。
+ *
+ * <p>Persistent human inbox; acknowledging an item never grants permissions or dispatches a run.
+ */
 @Repository
 public class AttentionRepository {
+  /**
+   * 注意の管理で受け渡す項目を表す。
+   *
+   * @param id 識別子
+   * @param projectId 所属プロジェクトの識別子
+   * @param sessionId 会話の識別子
+   * @param runId 実行の識別子
+   * @param kind 種類
+   * @param reference 参照先
+   * @param message メッセージ
+   * @param status 状態
+   * @param createdAt 作成日時
+   */
   public record Item(
       String id,
       String projectId,
@@ -25,9 +42,13 @@ public class AttentionRepository {
       String status,
       Instant createdAt) {}
 
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** 指定された値や利用先を使って、AttentionRepositoryを初期化する。 */
   public AttentionRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, Clock clock) {
     db = JdbcClient.create(source);
@@ -40,6 +61,7 @@ public class AttentionRepository {
         .update();
   }
 
+  /** 行。 */
   private static final org.springframework.jdbc.core.RowMapper<Item> ROW =
       (rs, n) ->
           new Item(
@@ -53,11 +75,16 @@ public class AttentionRepository {
               rs.getString("status"),
               Instant.ofEpochMilli(rs.getLong("created")));
 
+  /** 指定された内容から新しい対象を作成する。 */
   public Optional<Item> create(AgentEvent source, String kind, String reference, String message) {
     return create(source, kind, reference, message, false);
   }
 
-  /** Empty stored run denotes an owned dependency fact; the public/API Run ID stays null. */
+  /**
+   * 新たな対象を利用できるよう、依存条件を作成する。
+   *
+   * <p>Empty stored run denotes an owned dependency fact; the public/API Run ID stays null.
+   */
   public Optional<Item> createDependency(
       AgentEvent source, String kind, String reference, String message) {
     if (!(source.payload() instanceof dev.mikoto2000.rei.event.DependencyStatusPayload payload)
@@ -68,6 +95,7 @@ public class AttentionRepository {
     return create(source, kind, reference, message, true);
   }
 
+  /** 新たな対象を利用できるよう、Git連携先を作成する。 */
   public Optional<Item> createGitHub(AgentEvent source, String kind, String message) {
     if (!(source.payload() instanceof dev.mikoto2000.rei.event.GitHubLifecyclePayload payload)
         || source.runId() != null
@@ -79,6 +107,7 @@ public class AttentionRepository {
     return create(source, kind, source.id(), message, true);
   }
 
+  /** 指定された内容から新しい対象を作成する。 */
   private Optional<Item> create(
       AgentEvent source, String kind, String reference, String message, boolean dependency) {
     if (source.projectId() == null
@@ -103,6 +132,7 @@ public class AttentionRepository {
     return inserted == 1 ? Optional.of(get(source.projectId(), id)) : Optional.empty();
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<Item> list(String project) {
     return db.sql(
             "SELECT * FROM agent_attention WHERE project=? AND status='OPEN' ORDER BY created,id LIMIT 256")
@@ -111,6 +141,7 @@ public class AttentionRepository {
         .list();
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Item get(String project, String id) {
     return db.sql("SELECT * FROM agent_attention WHERE project=? AND id=?")
         .params(project, id)
@@ -120,6 +151,7 @@ public class AttentionRepository {
             () -> new IllegalArgumentException("Attention item not found in this project"));
   }
 
+  /** 注意の管理に関するacknowledgeを処理する。 */
   public void acknowledge(String project, String id) {
     get(project, id);
     db.sql(

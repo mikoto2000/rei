@@ -5,8 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.junit.jupiter.api.Test;
 
+/** 表記を統一したCoordinatesの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class NormalizedCoordinatesTest {
+  /** {@code click} の条件を再現するための補助情報を返す。 */
   private String click(String x, String y) {
     return ActionValidationTest.json(
             "CLICK",
@@ -19,6 +21,7 @@ class NormalizedCoordinatesTest {
         .replace("\"confidence\":null", "\"confidence\":0.9");
   }
 
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void mapsFractionsToSelectedImageAndDesktop() {
     var screen = MultiDisplayTest.desktop();
@@ -41,6 +44,7 @@ class NormalizedCoordinatesTest {
         smaller.display("left").desktopPoint(resizedAction.target()));
   }
 
+  /** 画面操作の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void endpointsStayInsideImageAndPixelUnitsAreRejected() {
     var screen = MultiDisplayTest.desktop();
@@ -52,6 +56,7 @@ class NormalizedCoordinatesTest {
           IllegalArgumentException.class, () -> new ActionParser().parse(click(x, "0.5"), screen));
   }
 
+  /** 画面操作の支援で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void diagnosticsRetainReturnedFractionsAndConvertedPixels(
       @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {

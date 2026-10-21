@@ -18,7 +18,9 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 
+/** Hybrid関連情報の取得の結果と状態の契約を検証するテスト。 */
 class HybridRetrievalTest {
+  /** 語句による順位逐次データを利用することを確認する。 */
   @Test
   void optInBm25UsesTheLexicalRankStreamAndPreservesItsEvidence() {
     var backend = mock(RetrievalCandidates.class);
@@ -41,6 +43,7 @@ class HybridRetrievalTest {
     verify(backend, never()).lexicalSearch(any());
   }
 
+  /** {@code doc} の条件を再現するための補助情報を返す。 */
   Document doc(String id, double score) {
     return Document.builder()
         .id(id)
@@ -50,6 +53,7 @@ class HybridRetrievalTest {
         .build();
   }
 
+  /** 候補一覧を維持することを確認する。 */
   @Test
   void rankFusionKeepsCandidatesFromEitherRetrieverAndRewardsAgreement() {
     var fusion = new ReciprocalRankFusion(60);
@@ -62,6 +66,7 @@ class HybridRetrievalTest {
     assertEquals(61.0 / 62, results.getFirst().score(), .000001);
   }
 
+  /** 関連文書の検索で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicatesDoNotAddWeightAndTiesAreStable() {
     var fusion = new ReciprocalRankFusion(60);
@@ -74,6 +79,7 @@ class HybridRetrievalTest {
         () -> fusion.fuse(List.of(Collections.nCopies(257, "z")), s -> s, 2));
   }
 
+  /** 処理の連携について、絞り込み条件を保持することを確認する。 */
   @Test
   void pipelinePreservesFilterAndThresholdAndBoundsBothStreams() {
     var backend = mock(RetrievalCandidates.class);
@@ -102,11 +108,13 @@ class HybridRetrievalTest {
     }
   }
 
+  /** 関連文書の検索の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void blankQueryMakesNoCallsAndFailuresAndCancellationAreNotHidden() {
     var backend = mock(RetrievalCandidates.class);
     var search = new HybridRetriever(backend, new HybridRetrievalProperties(true, 40, 60));
     assertTrue(search.search(SearchRequest.builder().query(" ").topK(3).build()).isEmpty());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(backend);
     when(backend.lexicalSearch(any())).thenThrow(new UnsupportedOperationException("filter"));
     assertThrows(

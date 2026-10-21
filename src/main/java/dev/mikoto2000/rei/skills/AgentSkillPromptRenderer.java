@@ -3,9 +3,11 @@ package dev.mikoto2000.rei.skills;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
+/** エージェントスキルプロンプトを画面やターミナルへ表示する。 */
 @Component
 public class AgentSkillPromptRenderer {
 
+  /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
   public String render(String prompt, List<AgentSkill> skills) {
     if (skills == null || skills.isEmpty()) {
       return prompt;

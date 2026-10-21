@@ -11,13 +11,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** Bluesky返信会話保存と検索の窓口の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class BlueskyReplyConversationRepositoryTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 検証に使う保存と検索の窓口。 */
   private BlueskyReplyConversationRepository repository;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setUp() {
     DataSource dataSource =
@@ -25,6 +29,7 @@ class BlueskyReplyConversationRepositoryTest {
     repository = new BlueskyReplyConversationRepository(dataSource);
   }
 
+  /** 会話ごとの操作対象を保存することを確認する。 */
   @Test
   void storesConversationPerHandle() {
     repository.appendUserMessage("alice.bsky.social", "hello");
@@ -45,6 +50,7 @@ class BlueskyReplyConversationRepositoryTest {
     assertEquals("yo", bob.get(0).content());
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void listsDistinctHandles() {
     repository.appendUserMessage("alice.bsky.social", "hello");

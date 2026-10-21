@@ -23,8 +23,10 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.Mockito;
 
+/** URL内容取得サービスの結果と状態の契約を検証するテスト。 */
 class UrlContentFetchServiceTest {
 
+  /** 内容を返すことを確認する。 */
   @Test
   void returnsContentOn2xxTextResponse() throws Exception {
     HttpClient httpClient = Mockito.mock(HttpClient.class);
@@ -47,6 +49,7 @@ class UrlContentFetchServiceTest {
     assertEquals("text/plain", result.contentType());
   }
 
+  /** URLの内容の参照で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void decodesBodyUsingCharsetFromContentType() throws Exception {
     HttpClient httpClient = Mockito.mock(HttpClient.class);
@@ -69,6 +72,7 @@ class UrlContentFetchServiceTest {
     assertEquals("text/html", result.contentType());
   }
 
+  /** URLの内容の参照で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void decodesHtmlBodyUsingMetaCharsetWhenContentTypeHasNoCharset() throws Exception {
     HttpClient httpClient = Mockito.mock(HttpClient.class);
@@ -97,6 +101,7 @@ class UrlContentFetchServiceTest {
     assertEquals("text/html", result.contentType());
   }
 
+  /** URLの内容の参照で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @ParameterizedTest
   @MethodSource("htmlCharsetCases")
   void decodesHtmlForSummarize(String contentType, String head, String encoding) throws Exception {
@@ -124,6 +129,7 @@ class UrlContentFetchServiceTest {
         new JsoupWebPageContentExtractor().extract("https://example.com", result.content()));
   }
 
+  /** {@code htmlCharsetCases} の条件を再現するための補助情報を返す。 */
   private static Stream<Arguments> htmlCharsetCases() {
     return Stream.of(
         Arguments.of("text/html", "<META CHARSET=Shift_JIS>", "Shift_JIS"),
@@ -148,6 +154,7 @@ class UrlContentFetchServiceTest {
         Arguments.of("text/html", "", "UTF-8"));
   }
 
+  /** HTTP通信エラーを返すことを確認する。 */
   @Test
   void returnsHttpErrorOn4xx() throws Exception {
     HttpClient httpClient = Mockito.mock(HttpClient.class);
@@ -164,6 +171,7 @@ class UrlContentFetchServiceTest {
     assertEquals(404, result.statusCode());
   }
 
+  /** HTTP通信エラーを返すことを確認する。 */
   @Test
   void returnsHttpErrorOn5xx() throws Exception {
     HttpClient httpClient = Mockito.mock(HttpClient.class);
@@ -180,6 +188,7 @@ class UrlContentFetchServiceTest {
     assertEquals(503, result.statusCode());
   }
 
+  /** ネットワークエラーを返すことを確認する。 */
   @Test
   void returnsNetworkErrorOnIoException() throws Exception {
     HttpClient httpClient = Mockito.mock(HttpClient.class);
@@ -193,6 +202,7 @@ class UrlContentFetchServiceTest {
     assertEquals("NETWORK_ERROR", result.errorType());
   }
 
+  /** URLの内容の参照の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void propagatesCancellationOnInterruptedException() throws Exception {
     HttpClient httpClient = Mockito.mock(HttpClient.class);
@@ -210,6 +220,7 @@ class UrlContentFetchServiceTest {
     }
   }
 
+  /** URLの内容の参照で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void returnsExtractionErrorWhenBodyExtractionFails() throws Exception {
     HttpClient httpClient = Mockito.mock(HttpClient.class);

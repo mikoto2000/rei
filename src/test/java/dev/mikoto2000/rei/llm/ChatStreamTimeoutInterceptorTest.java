@@ -10,7 +10,9 @@ import okhttp3.OkHttpClient;
 import okhttp3.Request;
 import org.junit.jupiter.api.Test;
 
+/** チャット逐次データタイムアウトInterceptorの結果と状態の契約を検証するテスト。 */
 class ChatStreamTimeoutInterceptorTest {
+  /** 応答利用可否終了後の残存呼び出しタイムアウトおよびについて、二つ分読み取りタイムアウトを利用することを確認する。 */
   @Test
   void responseCanOutliveCallTimeoutAndUsesTwoMinuteReadTimeout() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

@@ -28,22 +28,43 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-/** Reads existing state without dispatch, reconciliation, or creating another Task lifecycle. */
+/**
+ * タスク管理のユースケースを実現する。
+ *
+ * <p>Reads existing state without dispatch, reconciliation, or creating another Task lifecycle.
+ */
 public final class TaskManagerService {
+  /** プロジェクト一覧。 */
   private final ProjectRegistry projects;
+
+  /** 実行一覧。 */
   private final RunRegistry runs;
+
+  /** 再開用の記録一覧。 */
   private final PersistentCheckpointRepository checkpoints;
+
+  /** 目標一覧。 */
   private final GoalRepository goals;
+
+  /** 依存条件一覧。 */
   private final PersistentDependencyRepository dependencies;
+
+  /** 予約されたエージェント実行を管理する窓口。 */
   private final PersistentAgentScheduler schedules;
+
+  /** 続きの取得位置一覧。 */
   private final CursorCodec cursors = new CursorCodec();
+
+  /** 成果物一覧。 */
   private dev.mikoto2000.rei.artifact.ArtifactStore artifacts;
 
+  /** 実行中タスクの操作で使用する成果物保存先を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setArtifactStore(dev.mikoto2000.rei.artifact.ArtifactStore store) {
     artifacts = store;
   }
 
+  /** 指定された値や利用先を使って、TaskManagerServiceを初期化する。 */
   public TaskManagerService(
       ProjectRegistry projects,
       RunRegistry runs,
@@ -59,6 +80,7 @@ public final class TaskManagerService {
     this.schedules = schedules;
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public HistoryPage<TaskView> list(
       String project, String session, Integer requestedLimit, String cursor) {
     int limit = Pagination.limit(requestedLimit);
@@ -83,7 +105,9 @@ public final class TaskManagerService {
         row -> cursors.encode(scope, new CursorKey(Instant.EPOCH, row.id())));
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public TaskView get(String project, String session, String id) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (id == null || id.isBlank() || id.length() > 256)
       throw new IllegalArgumentException("Invalid Task identity");
     return catalog(project(project), session, null, 1, id).stream()
@@ -92,11 +116,13 @@ public final class TaskManagerService {
         .orElseThrow(() -> new ResourceNotFoundException("Task"));
   }
 
+  /** 実行中タスクの操作で用いるプロジェクトを返す。 */
   private ProjectContext project(String id) {
     if (id == null || id.isBlank()) throw new IllegalArgumentException("Project required");
     return projects.resolveById(id).orElseThrow(() -> new ResourceNotFoundException("Task"));
   }
 
+  /** 実行中タスクの操作で用いる利用可能な項目を返す。 */
   private List<TaskView> catalog(
       ProjectContext project, String session, String after, int limit, String exact) {
     var result = new LinkedHashMap<String, TaskView>();
@@ -454,6 +480,7 @@ public final class TaskManagerService {
         .toList();
   }
 
+  /** 実行中タスクの操作で用いる関連を返す。 */
   private TaskView related(ProjectContext project, TaskView task) {
     var children = new TreeSet<>(task.childIds());
     var deps = new TreeSet<>(task.dependencyIds());
@@ -520,6 +547,7 @@ public final class TaskManagerService {
         .withResults(List.copyOf(references));
   }
 
+  /** 実行中タスクの操作で用いる参照先タスクを返す。 */
   private String referenceTask(ProjectContext project, String run) {
     if (run == null) return null;
     if (checkpoints != null) {
@@ -532,11 +560,13 @@ public final class TaskManagerService {
     return "run:" + run;
   }
 
+  /** 実行中タスクの操作で用いる小文字を返す。 */
   private static String lower(String prefix, String after) {
     if (after == null || after.compareTo(prefix) < 0) return "";
     return after.startsWith(prefix) ? after.substring(prefix.length()) : null;
   }
 
+  /** 実行中タスクの操作で用いるexistingを返す。 */
   private static <T> Optional<T> existing(java.util.function.Supplier<T> get) {
     try {
       return Optional.of(get.get());
@@ -545,6 +575,7 @@ public final class TaskManagerService {
     }
   }
 
+  /** 実行中タスクの操作で用いる取得元行一覧を返す。 */
   private static <T> List<T> sourceRows(
       String prefix,
       String exact,
@@ -559,6 +590,7 @@ public final class TaskManagerService {
     return key == null ? List.of() : page.apply(key);
   }
 
+  /** 実行中タスクの操作で用いる再開用の記録状態を返す。 */
   private String checkpointState(dev.mikoto2000.rei.checkpoint.PersistentCheckpoint saved) {
     return switch (saved.status()) {
       case "RUNNING" ->
@@ -569,6 +601,7 @@ public final class TaskManagerService {
     };
   }
 
+  /** 実行中タスクの操作の操作を実行する。 */
   private RunSnapshot run(ProjectContext project, String session, String id) {
     if (id == null) return null;
     try {
@@ -583,12 +616,14 @@ public final class TaskManagerService {
     }
   }
 
+  /** 実行中タスクの操作で用いる会話を返す。 */
   private static String session(RunSnapshot run) {
     String session =
         run.childOrigin() == null ? run.context().conversationId() : run.childOrigin().sessionId();
     return session.isEmpty() ? null : session;
   }
 
+  /** 実行中タスクの操作において、同一作業ルートに該当するか判定する。 */
   private static boolean sameRoot(ProjectContext project, String root) {
     try {
       return project.root().equals(Path.of(root).toAbsolutePath().normalize());
@@ -597,6 +632,7 @@ public final class TaskManagerService {
     }
   }
 
+  /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */
   private static String safe(String value) {
     if (value == null) return null;
     String text = dev.mikoto2000.rei.event.CredentialRedactor.redact(value);

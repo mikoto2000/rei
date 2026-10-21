@@ -12,9 +12,12 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 変更検証影響サービスの結果と状態の契約を検証するテスト。 */
 class ChangeTestImpactServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void followsReverseImportsAndTestCandidatesAndExplainsMissingFiles() throws Exception {
     var paths =
@@ -37,6 +40,7 @@ class ChangeTestImpactServiceTest {
         IllegalArgumentException.class, () -> service.analyze(root, List.of("../outside"), 20));
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void limitsResultsAndRefreshesWithoutInventingRelationships() throws Exception {
     Files.writeString(root.resolve("A.java"), "class A {}");
@@ -47,6 +51,7 @@ class ChangeTestImpactServiceTest {
     assertThrows(IllegalArgumentException.class, () -> service.analyze(root, List.of(), 20));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void assessesCrossModuleImpactAndIncludesIntegrationCandidatesOutsideImportGraph()
       throws Exception {
@@ -81,6 +86,7 @@ class ChangeTestImpactServiceTest {
     assertEquals(1, result.candidates().size());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void buildChangesRequireBroadRegressionAndDoNotClaimCoverage() throws Exception {
     String path = "module/src/it/java/SmokeIT.java";
@@ -96,6 +102,7 @@ class ChangeTestImpactServiceTest {
     assertTrue(service.analyze(root, List.of(path), 5).candidates().getFirst().testCandidate());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void integrationAssessmentHasIndependentBoundsAndExplicitPartialOutput() throws Exception {
     var paths = new ArrayList<String>();
@@ -114,6 +121,7 @@ class ChangeTestImpactServiceTest {
     assertTrue(result.regressionAssessment().reasons().contains("ASSESSMENT_OUTPUT_LIMITED"));
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void internalSnapshotIsNotRestrictedByMapDisplayLimitAndCyclesTerminate() throws Exception {
     var paths = new ArrayList<String>();

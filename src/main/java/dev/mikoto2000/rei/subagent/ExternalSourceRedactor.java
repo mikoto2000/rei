@@ -4,19 +4,35 @@ import java.util.Objects;
 import java.util.regex.Pattern;
 
 /**
- * Redacts only external document snapshots; original files and the event redactor are untouched.
+ * 補助エージェントへの委譲に必要な外部取得元Redactorを扱う。
+ *
+ * <p>Redacts only external document snapshots; original files and the event redactor are untouched.
  */
 public final class ExternalSourceRedactor {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ExternalSourceRedactor() {}
 
+  /** 目印。 */
   private static final String MARKER = "[REDACTED]";
+
+  /** キー一覧。 */
   private static final String KEYS =
       "api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token(?:[_-]?hint)?|code[_-]?verifier|token|password|secret|credential|authorization|accessJwt|refreshJwt|private[_-]?key";
+
+  /** 照合キー。 */
   private static final String KEY = "(?:[A-Za-z0-9_.-]*)(?:" + KEYS + ")";
+
+  /** 引用済みキー。 */
   private static final String QUOTED_KEY = "(?:[A-Za-z0-9_.-]|\\\\u[0-9a-fA-F]{4}){1,256}";
+
+  /** 秘密を含むキー。 */
   private static final Pattern SENSITIVE_KEY = Pattern.compile(KEY, Pattern.CASE_INSENSITIVE);
+
+  /** UNICODE特殊文字の保護。 */
   private static final Pattern UNICODE_ESCAPE = Pattern.compile("\\\\u([0-9a-fA-F]{4})");
+
   // Horizontal whitespace is deliberate: an empty value must not consume the following line.
+  /** 代入の記述を見つける照合規則。 */
   private static final Pattern ASSIGNMENT =
       Pattern.compile(
           "(?:\"(?<doubleKey>"
@@ -27,29 +43,66 @@ public final class ExternalSourceRedactor {
               + KEY
               + ")[ \\t]*[:=][ \\t]*",
           Pattern.CASE_INSENSITIVE);
+
+  /** 非公開キー開始。 */
   private static final Pattern PRIVATE_KEY_BEGIN =
       Pattern.compile("-----BEGIN ([A-Z ]*PRIVATE KEY)-----");
+
+  /** APIトークン。 */
   private static final Pattern API_TOKEN = Pattern.compile("\\bsk-[A-Za-z0-9_-]{16,}\\b");
+
+  /** Slackトークン。 */
   private static final Pattern SLACK_TOKEN = Pattern.compile("\\bx(?:ox[baprs]|app)-[A-Za-z0-9-]+");
+
+  /** 秘密を含むJWTを検出する規則。 */
   private static final Pattern JWT =
       Pattern.compile("eyJ[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+\\.[A-Za-z0-9_-]+");
+
+  /** 認証通信方式。 */
   private static final Pattern AUTH_SCHEME =
       Pattern.compile(
           "(?i)\\b(Bearer|Basic)([ \\t]+)(\\[REDACTED\\]|<[^>\\r\\n]+>|[A-Za-z0-9+/=_~.:-]+)");
+
+  /** 認証値接頭辞。 */
   private static final Pattern AUTH_VALUE_PREFIX =
       Pattern.compile("[ \\t]*(?:Bearer|Basic)[ \\t]+", Pattern.CASE_INSENSITIVE);
+
+  /** パスワード文字コード接頭辞。 */
   private static final Pattern PASSWORD_ENCODING_PREFIX =
       Pattern.compile(
           "\\{(?:noop|bcrypt|argon2(?:id)?|pbkdf2|scrypt|sha256)\\}(?=\\S)",
           Pattern.CASE_INSENSITIVE);
 
+  /**
+   * 補助エージェントへの委譲で受け渡す結果を表す。
+   *
+   * @param content 内容
+   * @param redacted 秘密情報を除いた内容
+   */
   public record Result(String content, boolean redacted) {}
 
+  /**
+   * 補助エージェントへの委譲で受け渡すAssignment結果を表す。
+   *
+   * @param content 内容
+   * @param unhandled 未処理
+   */
   private record AssignmentResult(String content, boolean unhandled) {}
 
+  /**
+   * 補助エージェントへの委譲で受け渡す値を表す。
+   *
+   * @param end 終了
+   * @param replacement 置換
+   * @param unmasked 元の内容
+   */
   private record Value(int end, String replacement, boolean unmasked) {}
 
-  /** The backend bounds source bytes before this deterministic, local transformation. */
+  /**
+   * 補助エージェントへの委譲で用いるredactを返す。
+   *
+   * <p>The backend bounds source bytes before this deterministic, local transformation.
+   */
   public static Result redact(String content) {
     Objects.requireNonNull(content);
     String safe = redactPrivateKeys(content);
@@ -68,7 +121,10 @@ public final class ExternalSourceRedactor {
   }
 
   /**
-   * Existing exact markers are safe regardless of quote style; unsupported values remain refused.
+   * 補助エージェントへの委譲において、元の内容認証情報の有無を判定する。
+   *
+   * <p>Existing exact markers are safe regardless of quote style; unsupported values remain
+   * refused.
    */
   public static boolean hasUnmaskedCredentials(String content) {
     Objects.requireNonNull(content);
@@ -84,6 +140,7 @@ public final class ExternalSourceRedactor {
     return false;
   }
 
+  /** 補助エージェントへの委譲で用いるredact非公開キー一覧を返す。 */
   private static String redactPrivateKeys(String content) {
     var begin = PRIVATE_KEY_BEGIN.matcher(content);
     var result = new StringBuilder();
@@ -100,6 +157,7 @@ public final class ExternalSourceRedactor {
     return result.toString();
   }
 
+  /** 補助エージェントへの委譲で用いるredactAssignmentsを返す。 */
   private static AssignmentResult redactAssignments(String content) {
     var matcher = ASSIGNMENT.matcher(content);
     var result = new StringBuilder();
@@ -140,6 +198,7 @@ public final class ExternalSourceRedactor {
     return new AssignmentResult(result.toString(), unhandled);
   }
 
+  /** 受信した内容を利用できるよう、照合キーを復元する。 */
   private static String decodeKey(String key) {
     var escape = UNICODE_ESCAPE.matcher(key);
     var result = new StringBuilder();
@@ -152,6 +211,7 @@ public final class ExternalSourceRedactor {
     return result.append(key, cursor, key.length()).toString();
   }
 
+  /** 補助エージェントへの委譲において、装飾のないMarkdown一覧値に該当するか判定する。 */
   private static boolean plainMarkdownListValue(String content, int keyStart, String prefix) {
     if (!prefix.stripTrailing().endsWith(":") || jsonContext(content, keyStart, prefix))
       return false;
@@ -164,6 +224,7 @@ public final class ExternalSourceRedactor {
         && (content.charAt(marker + 1) == ' ' || content.charAt(marker + 1) == '\t');
   }
 
+  /** 後続の処理で使う値を返す。 */
   private static Value value(String content, int start, int keyStart, String prefix) {
     if (start >= content.length() || content.charAt(start) == '\r' || content.charAt(start) == '\n')
       return null;
@@ -215,6 +276,7 @@ public final class ExternalSourceRedactor {
     return bareValue(content, start, keyStart, prefix);
   }
 
+  /** 補助エージェントへの委譲で用いるbare値を返す。 */
   private static Value bareValue(String content, int start, int keyStart, String prefix) {
     boolean json = jsonContext(content, keyStart, prefix);
     char enclosure = enclosure(content, keyStart, prefix);
@@ -262,6 +324,7 @@ public final class ExternalSourceRedactor {
     return new Value(end, replacement + suffix, true);
   }
 
+  /** 補助エージェントへの委譲において、JSON変換文脈に該当するか判定する。 */
   private static boolean jsonContext(String content, int keyStart, String prefix) {
     if (prefix.charAt(0) == '\"' || prefix.charAt(0) == '\'') return true;
     int previous = keyStart - 1;
@@ -270,12 +333,14 @@ public final class ExternalSourceRedactor {
     return previous >= 0 && (content.charAt(previous) == '{' || content.charAt(previous) == ',');
   }
 
+  /** 補助エージェントへの委譲で用いるenclosureを返す。 */
   private static char enclosure(String content, int keyStart, String prefix) {
     if (prefix.charAt(0) == '\"' || prefix.charAt(0) == '\'' || keyStart == 0) return 0;
     char previous = content.charAt(keyStart - 1);
     return previous == '\"' || previous == '\'' ? previous : 0;
   }
 
+  /** 補助エージェントへの委譲において、ambiguous末尾に該当するか判定する。 */
   private static boolean ambiguousTail(
       String content, int end, int keyStart, String prefix, boolean separator) {
     if (separator
@@ -292,6 +357,7 @@ public final class ExternalSourceRedactor {
         && !content.startsWith("//", next);
   }
 
+  /** 補助エージェントへの委譲において、安全性目印末尾に該当するか判定する。 */
   private static boolean safeMarkerTail(String content, int end, int keyStart, String prefix) {
     if (end >= content.length() || content.charAt(end) == '\r' || content.charAt(end) == '\n')
       return true;
@@ -306,6 +372,7 @@ public final class ExternalSourceRedactor {
         && (cursor == content.length() || Character.isWhitespace(content.charAt(cursor)));
   }
 
+  /** 補助エージェントへの委譲において、独立した目印末尾に該当するか判定する。 */
   private static boolean standaloneMarkerTail(String content, int end) {
     if (end >= content.length() || Character.isWhitespace(content.charAt(end))) return true;
     char next = content.charAt(end);
@@ -314,6 +381,7 @@ public final class ExternalSourceRedactor {
         && (end + 1 == content.length() || Character.isWhitespace(content.charAt(end + 1)));
   }
 
+  /** 補助エージェントへの委譲で用いる特殊文字を保護した引用済み値を返す。 */
   private static Value escapedQuotedValue(String content, int start) {
     int quote = start;
     while (quote < content.length() && content.charAt(quote) == '\\') quote++;
@@ -341,6 +409,7 @@ public final class ExternalSourceRedactor {
     return new Value(end, frame + maskValue(inside) + (closing < 0 ? "" : frame), true);
   }
 
+  /** 補助エージェントへの委譲で用いるまとまり値を返す。 */
   private static Value blockValue(String content, int start, int keyStart) {
     int headerEnd = lineEnd(content, start);
     String header = content.substring(start, headerEnd);
@@ -374,12 +443,14 @@ public final class ExternalSourceRedactor {
     return new Value(end, result.toString(), true);
   }
 
+  /** 補助エージェントへの委譲において、非公開化した内容に該当するか判定する。 */
   private static boolean masked(String value) {
     if (MARKER.equals(value.trim())) return true;
     var auth = AUTH_VALUE_PREFIX.matcher(value);
     return auth.lookingAt() && MARKER.equals(value.substring(auth.end()).trim());
   }
 
+  /** 補助エージェントへの委譲で用いる行終了を返す。 */
   private static int lineEnd(String content, int offset) {
     while (offset < content.length()
         && content.charAt(offset) != '\r'
@@ -387,12 +458,14 @@ public final class ExternalSourceRedactor {
     return offset;
   }
 
+  /** 補助エージェントへの委譲で用いる次行を返す。 */
   private static int nextLine(String content, int offset) {
     if (offset < content.length() && content.charAt(offset) == '\r') offset++;
     if (offset < content.length() && content.charAt(offset) == '\n') offset++;
     return offset;
   }
 
+  /** 補助エージェントへの委譲で用いる字下げを返す。 */
   private static int indentation(String content, int start, int end) {
     int cursor = start;
     while (cursor < end && (content.charAt(cursor) == ' ' || content.charAt(cursor) == '\t'))
@@ -400,6 +473,7 @@ public final class ExternalSourceRedactor {
     return cursor - start;
   }
 
+  /** 補助エージェントへの委譲で用いる非公開化値を返す。 */
   private static String maskValue(String content) {
     var auth = AUTH_VALUE_PREFIX.matcher(content);
     return auth.lookingAt()
@@ -407,6 +481,7 @@ public final class ExternalSourceRedactor {
         : maskKeepingNewlines(content);
   }
 
+  /** 補助エージェントへの委譲で用いる非公開化KeepingNewlinesを返す。 */
   private static String maskKeepingNewlines(String content) {
     var result = new StringBuilder(MARKER);
     for (int index = 0; index < content.length(); index++) {

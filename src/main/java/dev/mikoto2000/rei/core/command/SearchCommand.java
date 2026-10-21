@@ -35,23 +35,38 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 import reactor.core.Disposable;
 
+/** ベクトルストアと Web 検索の結果をまとめて回答しますを行うための利用者コマンド。 */
 @Component
 @Command(name = "search", description = "ベクトルストアと Web 検索の結果をまとめて回答します")
 public class SearchCommand implements Runnable {
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(SearchCommand.class);
 
+  /** モデルへ対話を依頼する窓口提供元。 */
   private final LlmChatClientProvider chatClientProvider;
+
+  /** 現在モデル保持先。 */
   private final ModelHolderService currentModelHolder;
+
+  /** モデル提供元。 */
   private final LlmModelProvider modelProvider;
+
+  /** 検索知識サービス。 */
   private final SearchKnowledgeService searchKnowledgeService;
+
+  /** キャンセルサービス。 */
   private final CommandCancellationService cancellationService;
+
+  /** 出力。 */
   private java.util.function.Consumer<String> output = value -> System.out.print(value);
 
+  /** 共通の実行基盤に関する改行付きの出力を処理する。 */
   private void println(String value) {
     output.accept(value + System.lineSeparator());
   }
 
+  /** 共通の実行基盤に関するレポートを処理する。 */
   public void report(
       String query,
       int vectorTopK,
@@ -75,6 +90,7 @@ public class SearchCommand implements Runnable {
     command.run();
   }
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SearchCommand(
       ChatClient chatClient,
       ModelHolderService currentModelHolder,
@@ -88,6 +104,7 @@ public class SearchCommand implements Runnable {
         cancellationService);
   }
 
+  /** 指定された値や利用先を使って、SearchCommandを初期化する。 */
   @Autowired
   public SearchCommand(
       LlmChatClientProvider chatClientProvider,
@@ -102,21 +119,27 @@ public class SearchCommand implements Runnable {
     this.cancellationService = cancellationService;
   }
 
+  /** ベクトル上位件数。 */
   @Option(names = "--vector-top-k", description = "ベクトル検索の返却件数")
   Integer vectorTopK = 3;
 
+  /** Web上位件数。 */
   @Option(names = "--web-top-k", description = "Web 検索の返却件数")
   Integer webTopK = 5;
 
+  /** 判定の境界値。 */
   @Option(names = "--threshold", description = "ベクトル検索の類似度しきい値")
   Double threshold;
 
+  /** 取得元。 */
   @Option(names = "--source", description = "ベクトル検索を source で絞り込みます")
   String source;
 
+  /** 検索条件部分一覧。 */
   @Parameters(arity = "1..*", paramLabel = "QUERY", description = "検索クエリ")
   String[] queryParts;
 
+  /** ベクトルストアと Web 検索の結果をまとめて回答しますを行う。 */
   @Override
   public void run() {
     long startedAtNanos = System.nanoTime();
@@ -150,6 +173,7 @@ public class SearchCommand implements Runnable {
               .content()
               .subscribe(
                   chunk -> {
+                    // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
                     if (headerPrinted.compareAndSet(false, true)) {
                       println(answerHeader(startedAtNanos));
                     }
@@ -188,6 +212,7 @@ public class SearchCommand implements Runnable {
         println("[cancelled] ユーザーの停止要求により検索を中止しました。");
         return;
       }
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       log.warn("Search interrupted", e);
       println("[error] 検索が中断されました: " + dev.mikoto2000.rei.event.FailureMessages.describe(e));
@@ -196,20 +221,24 @@ public class SearchCommand implements Runnable {
     }
   }
 
+  /** 利用先に渡せるよう、利用者Facingメッセージを組み立てる。 */
   private String buildUserFacingMessage(Throwable error) {
     Throwable root = rootCause(error);
     String message = safeMessage(root, "原因不明");
     return "回答の取得に失敗しました: " + message;
   }
 
+  /** 共通の実行基盤で用いる逐次データタイムアウトのミリ秒数を返す。 */
   long streamTimeoutMillis() {
     return 1_800_000L;
   }
 
+  /** 共通の実行基盤で用いる安全性メッセージを返す。 */
   private String safeMessage(Throwable error, String fallback) {
     return error == null ? fallback : dev.mikoto2000.rei.event.FailureMessages.describe(error);
   }
 
+  /** 共通の実行基盤で用いる作業ルート原因を返す。 */
   private Throwable rootCause(Throwable error) {
     Throwable current = error;
     while (current.getCause() != null) {
@@ -218,6 +247,7 @@ public class SearchCommand implements Runnable {
     return current;
   }
 
+  /** 利用先に渡せるよう、プロンプトを組み立てる。 */
   private String buildPrompt(
       String query, List<VectorDocumentSearchResult> vectorResults, WebSearchContext webContext) {
     return """
@@ -247,6 +277,7 @@ public class SearchCommand implements Runnable {
             formatWebResults(webContext.secondaryResults()));
   }
 
+  /** 内容を表示・参照しやすくするため、ベクトル結果一覧を整形する。 */
   private String formatVectorResults(List<VectorDocumentSearchResult> results) {
     if (results.isEmpty()) {
       return "該当なし";
@@ -269,6 +300,7 @@ public class SearchCommand implements Runnable {
     return builder.toString().trim();
   }
 
+  /** 内容を表示・参照しやすくするため、Web結果一覧を整形する。 */
   private String formatWebResults(List<WebSearchPage> results) {
     if (results.isEmpty()) {
       return "該当なし";
@@ -291,6 +323,7 @@ public class SearchCommand implements Runnable {
     return builder.toString().trim();
   }
 
+  /** 利用者に結果を伝えるため、取得元一覧を出力する。 */
   private void printSources(
       List<VectorDocumentSearchResult> vectorResults, WebSearchContext webContext) {
     Set<String> sources = new LinkedHashSet<>();
@@ -309,6 +342,7 @@ public class SearchCommand implements Runnable {
     }
   }
 
+  /** 共通の実行基盤で用いる回答ヘッダーを返す。 */
   String answerHeader(long startedAtNanos) {
     double elapsedSeconds = (System.nanoTime() - startedAtNanos) / 1_000_000_000.0d;
     return "=== answer(" + String.format(Locale.ROOT, "%.1f", elapsedSeconds) + " s) ===";

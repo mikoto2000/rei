@@ -12,10 +12,15 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 検証レポート集約対象診断の結果と状態の契約を検証するテスト。 */
 class TestReportCollectionDiagnosisTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path outside;
 
+  /** {@code report} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void report(String path, boolean failure) throws Exception {
     var file = root.resolve(path);
     Files.createDirectories(file.getParent());
@@ -30,6 +35,7 @@ class TestReportCollectionDiagnosisTest {
             + "</testcase></testsuite>");
   }
 
+  /** ごとのファイル識別情報を保持することを確認する。 */
   @Test
   void discoversStandardMultiModuleReportsAndPreservesPerFileIdentity() throws Exception {
     report("target/surefire-reports/TEST-one.xml", false);
@@ -54,6 +60,7 @@ class TestReportCollectionDiagnosisTest {
     assertTrue(result.warnings().stream().anyMatch(w -> w.contains("current process")));
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void explicitDirectoryDoesNotExpandToOtherReportsAndInvalidFilesArePartial() throws Exception {
     report("custom/TEST-one.xml", true);
@@ -74,6 +81,7 @@ class TestReportCollectionDiagnosisTest {
         () -> new TestReportCollectionDiagnosisService().read(root, ".aws"));
   }
 
+  /** 許容範囲について、件数を伝えることを確認する。 */
   @Test
   void boundsReportCountAndGlobalEvidenceWithoutHidingIncompleteObservation() throws Exception {
     for (int i = 0; i < 33; i++) report("target/surefire-reports/TEST-%02d.xml".formatted(i), true);
@@ -87,6 +95,7 @@ class TestReportCollectionDiagnosisTest {
     assertTrue(result.warnings().stream().anyMatch(w -> w.contains("24 issues")));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void missingCountsDoNotInventReportedTotalsAndOverlappingFilesRemainSeparate() throws Exception {
     report("custom/TEST-one.xml", false);
@@ -109,6 +118,7 @@ class TestReportCollectionDiagnosisTest {
     assertTrue(result.partial());
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void reportedTotalsUseLongsAndFileBytesAndDepthAreBounded() throws Exception {
     for (int i = 0; i < 3; i++) {
@@ -130,6 +140,7 @@ class TestReportCollectionDiagnosisTest {
     assertTrue(result.warnings().stream().anyMatch(w -> w.contains("depth")));
   }
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void directoryAndEntryLimitsArePartialAndCancelledCallsPropagate() throws Exception {
     for (int i = 0; i < 257; i++) Files.createDirectory(root.resolve("module-%03d".formatted(i)));
@@ -152,6 +163,7 @@ class TestReportCollectionDiagnosisTest {
     }
   }
 
+  /** 実行プロジェクトを利用することを確認する。 */
   @Test
   void realToolUsesRunProjectAndRequiresExplicitReadOnlySubAgentAccess() throws Exception {
     report("target/surefire-reports/TEST-one.xml", true);
@@ -188,6 +200,7 @@ class TestReportCollectionDiagnosisTest {
         child.effectiveTools(java.util.List.of("diagnoseTestReports")));
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void linkedOutsideDirectoryIsRejectedWithoutReadingItsReport() throws Exception {
     Files.writeString(

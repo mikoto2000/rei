@@ -15,9 +15,13 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 要約テーマ統合の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SummaryThemeConsolidationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う設定。 */
   static final String CONFIG =
       """
       projectAliases:
@@ -33,6 +37,7 @@ class SummaryThemeConsolidationTest {
           themes: [翻訳, 音声翻訳]
       """;
 
+  /** {@code fixture} の条件を再現するための補助情報を返す。 */
   static List<SummarySegment> fixture() {
     return List.of(
         sample(0, 1200, "sensevoice", ""),
@@ -45,6 +50,7 @@ class SummaryThemeConsolidationTest {
         sample(210, 600, "", ""));
   }
 
+  /** {@code configured} の条件を再現するための補助情報を返す。 */
   DailySummaryAggregate configured(List<SummarySegment> source, String yaml) throws Exception {
     var file = dir.resolve("summary.yaml");
     Files.writeString(file, yaml);
@@ -59,6 +65,7 @@ class SummaryThemeConsolidationTest {
     return captured.get();
   }
 
+  /** 作業状況の把握で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void groupsReplaceMembersAndCoveredThemeOnlyCandidates() throws Exception {
     var a = configured(fixture(), CONFIG);
@@ -68,6 +75,7 @@ class SummaryThemeConsolidationTest {
         .containsExactlyInAnyOrder("音声入力・文字起こし系の開発", "音声翻訳系の開発");
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void aliasesCountAsOneMemberAndDoNotCreateArtificialGroupSupport() throws Exception {
     var a =
@@ -78,6 +86,7 @@ class SummaryThemeConsolidationTest {
     assertThat(a.mainWorkThemeCandidates().getFirst().memberProjectCount()).isEqualTo(1);
   }
 
+  /** 単一主要な対象プロジェクトについて、詳細を保持することを確認する。 */
   @Test
   void singleDominantProjectRetainsDetailInsteadOfWeakGroup() throws Exception {
     var a =
@@ -88,6 +97,7 @@ class SummaryThemeConsolidationTest {
     assertThat(a.dominantThemes()).contains("livevingo の翻訳").noneMatch(s -> s.startsWith("音声翻訳系"));
   }
 
+  /** 作業状況の把握で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void canonicalNamesSurviveConfiguredGroupPipeline() throws Exception {
     var a = configured(fixture(), CONFIG);
@@ -98,6 +108,7 @@ class SummaryThemeConsolidationTest {
     assertThat(json).doesNotContain("\"sensevoice\"", "sensevoice の", "sensorvoice-input");
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void weightedCategoriesAreLimitedAndMemberDurationIsNotDoubleCounted() throws Exception {
     var source =
@@ -135,6 +146,7 @@ class SummaryThemeConsolidationTest {
     assertThat(a.categorySeconds()).containsEntry("research", 600L);
   }
 
+  /** 作業状況の把握で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void groupingRunsBeforeTopFiveTruncation() throws Exception {
     var source = new ArrayList<SummarySegment>();
@@ -144,6 +156,7 @@ class SummaryThemeConsolidationTest {
     assertThat(configured(source, CONFIG).dominantThemes()).contains("音声入力・文字起こし系の開発").hasSize(5);
   }
 
+  /** 対象範囲対象範囲利用可否について、プロジェクト一覧を維持することを確認する。 */
   @Test
   void scopeCoverageCanKeepProjectsForDayButGroupThemWithinBucket() throws Exception {
     var a =
@@ -157,6 +170,7 @@ class SummaryThemeConsolidationTest {
     assertThat(a.timeOfDay().get("lateNight").workThemes()).containsExactly("音声入力・文字起こし系の開発");
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void onlyExplicitlyCoveredPartsOfThemeOnlyCandidateAreSuppressed() throws Exception {
     var a =
@@ -171,6 +185,7 @@ class SummaryThemeConsolidationTest {
         .doesNotContain("音声翻訳", "livevingo の翻訳");
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void noGroupDoesNotGuessFromSimilarNamesAndKeepsStrongAssociation() throws Exception {
     var a =
@@ -182,6 +197,7 @@ class SummaryThemeConsolidationTest {
         .allMatch(c -> c.level() == SummaryThemeCandidate.Level.PROJECT);
   }
 
+  /** 作業状況の把握で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void explicitSingleProjectDisplayGroupIsOptional() throws Exception {
     String yaml =
@@ -198,6 +214,7 @@ class SummaryThemeConsolidationTest {
         .containsExactly("deepseek-vl-flash-vision-exp の開発");
   }
 
+  /** グループ検証について、別名一覧を保持することを確認する。 */
   @Test
   void groupValidationRetainsAliasesAndGroupsAtomically() throws Exception {
     var file = dir.resolve("validation.yaml");
@@ -230,6 +247,7 @@ class SummaryThemeConsolidationTest {
     assertThat(store.get().project("sensevoice")).isEqualTo("sensevoice");
   }
 
+  /** 作業状況の把握で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void aliasChangesRevalidateGroupMembershipRatherThanUsingStaleNames() throws Exception {
     var file = dir.resolve("reload.yaml");
@@ -243,6 +261,7 @@ class SummaryThemeConsolidationTest {
         .doesNotContain("sensevoice-input");
   }
 
+  /** 失敗書き込み先について、統合済み代替手段を利用することを確認する。 */
   @Test
   void failedWriterUsesConsolidatedFallbackAndRejectsChildOutput() throws Exception {
     var a = configured(fixture(), CONFIG);
@@ -272,6 +291,7 @@ class SummaryThemeConsolidationTest {
         .doesNotContain("livevingo の翻訳", "sensevoice の");
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void weakAssociationsAndInvalidProjectsDoNotReturnThroughConsolidation() throws Exception {
     var a =
@@ -284,6 +304,7 @@ class SummaryThemeConsolidationTest {
     assertThat(a.dominantThemes()).contains("rei の開発").doesNotContain("rei の文字起こし", "project の開発");
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void twoHundredSegmentsRemainBoundedAndCategoriesUnchanged() throws Exception {
     var source = new ArrayList<SummarySegment>();
@@ -304,6 +325,7 @@ class SummaryThemeConsolidationTest {
         .isLessThan(2400);
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void shortSpecificThemeDoesNotClaimToDominateLongGenericWork() throws Exception {
     var a =
@@ -314,6 +336,7 @@ class SummaryThemeConsolidationTest {
         .doesNotContain("中心");
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void beforeAfterComparison() throws Exception {
     var out = new StringBuilder();

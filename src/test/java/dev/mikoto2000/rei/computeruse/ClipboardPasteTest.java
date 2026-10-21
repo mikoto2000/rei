@@ -12,7 +12,9 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import org.junit.jupiter.api.Test;
 
+/** クリップボードPasteの結果と状態の契約を検証するテスト。 */
 class ClipboardPasteTest {
+  /** 画面操作の支援で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void unicodeIsAvailableDuringPasteAndOriginalTransferableIsRestored() throws Exception {
     var clipboard = new Clipboard("test");
@@ -23,6 +25,7 @@ class ClipboardPasteTest {
     assertEquals("original", clipboard.getData(DataFlavor.stringFlavor));
   }
 
+  /** 画面操作の支援で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void restoresOnDispatchFailureWithoutOverwritingConcurrentChanges() throws Exception {
     var clipboard = new Clipboard("test");
@@ -43,6 +46,7 @@ class ClipboardPasteTest {
     assertSame(external, clipboard.getContents(null));
   }
 
+  /** 画面操作の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void acquisitionFailureNeverDispatches() {
     var paste =
@@ -55,20 +59,24 @@ class ClipboardPasteTest {
     assertThrows(IllegalStateException.class, () -> paste.paste("new", () -> fail()));
   }
 
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void snapshotsLazyNativeContentsBeforeReplacingClipboard() throws Exception {
     var clipboard = new Clipboard("test");
     var stillAvailable = new java.util.concurrent.atomic.AtomicBoolean(true);
     var original =
         new Transferable() {
+          /** 検証用に、画面操作の支援で参照する引き継ぎデータFlavorsを返す。 */
           public DataFlavor[] getTransferDataFlavors() {
             return new DataFlavor[] {DataFlavor.stringFlavor};
           }
 
+          /** 検証用に、画面操作の支援において、データFlavor対応済みかどうかを判定する。 */
           public boolean isDataFlavorSupported(DataFlavor flavor) {
             return DataFlavor.stringFlavor.equals(flavor);
           }
 
+          /** 検証用に、画面操作の支援で参照する引き継ぎデータを返す。 */
           public Object getTransferData(DataFlavor flavor) {
             if (!stillAvailable.get())
               throw new IllegalStateException("Native clipboard contents were replaced");
@@ -81,13 +89,16 @@ class ClipboardPasteTest {
     assertEquals("before", clipboard.getData(DataFlavor.stringFlavor));
   }
 
+  /** 復元失敗情報を伝えることを確認する。 */
   @Test
   void detectsConcurrentReplacementBeforePasteAndReportsRestoreFailure() throws Exception {
     var external = new StringSelection("external");
     var clipboard =
         new Clipboard("test") {
+          /** 検証に使う保存する。 */
           int writes;
 
+          /** 検証用に、画面操作の支援で使用するContentsを設定する。 */
           @Override
           public synchronized void setContents(Transferable value, ClipboardOwner owner) {
             super.setContents(++writes == 2 ? external : value, owner);
@@ -101,8 +112,10 @@ class ClipboardPasteTest {
     assertSame(external, clipboard.getContents(null));
     var broken =
         new Clipboard("test") {
+          /** 検証に使う保存する。 */
           int writes;
 
+          /** 検証用に、画面操作の支援で使用するContentsを設定する。 */
           @Override
           public synchronized void setContents(Transferable value, ClipboardOwner owner) {
             if (++writes == 3) throw new IllegalStateException("Restore failed");

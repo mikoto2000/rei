@@ -18,27 +18,35 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況変更対象範囲の結果と状態の契約を検証するテスト。 */
 class ActivityChangeScopeTest {
+  /** 検証条件を再現するための時刻。 */
   static class Time extends Clock {
+    /** 日時や期限の条件を再現するために使う検証時刻。 */
     Instant now = Instant.parse("2026-09-23T01:00:00Z");
 
+    /** 検証用に、作業状況の把握で参照するタイムゾーンを返す。 */
     public ZoneId getZone() {
       return ZoneOffset.UTC;
     }
 
+    /** 検証用に、指定されたタイムゾーンを反映した情報を作成する。 */
     public Clock withZone(ZoneId z) {
       return this;
     }
 
+    /** {@code instant} の条件を再現するための補助情報を返す。 */
     public Instant instant() {
       return now;
     }
 
+    /** {@code advance} の条件を再現するため、検証用の操作や状態を扱う。 */
     void advance(int seconds) {
       now = now.plusSeconds(seconds);
     }
   }
 
+  /** {@code screen} の条件を再現するための補助情報を返す。 */
   static CapturedScreen screen(int front, int background) {
     var image = new BufferedImage(32, 32, BufferedImage.TYPE_INT_RGB);
     for (int y = 0; y < 32; y++)
@@ -49,6 +57,7 @@ class ActivityChangeScopeTest {
     return new CapturedScreen(image, new Rectangle(0, 0, 32, 32));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void desktopIsPeriodicRatherThanTriggeredByBackgroundMotion() throws Exception {
     var f = new DesktopContextQueueTest.Fixture();
@@ -64,6 +73,7 @@ class ActivityChangeScopeTest {
     verify(f.extractor, times(4)).extract(any(), any());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void foregroundMotionImmediatelyTriggersAnalysis() throws Exception {
     var p = new ActivityProperties();
@@ -93,6 +103,7 @@ class ActivityChangeScopeTest {
     verify(extractor, times(2)).extract(any(), any());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void foregroundChangeAloneDoesNotCountAsBackgroundChangeWhenRefreshIsDue() throws Exception {
     var p = new ActivityProperties();
@@ -121,6 +132,7 @@ class ActivityChangeScopeTest {
     assertEquals(16, images.getAllValues().getLast().image().getWidth());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void desktopResultIsNotReusedAsFreshBackgroundEvidenceOnForegroundOnlyTicks() throws Exception {
     var f = new DesktopContextQueueTest.Fixture();

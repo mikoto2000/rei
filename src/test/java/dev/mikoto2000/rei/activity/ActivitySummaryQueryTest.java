@@ -14,12 +14,19 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 作業状況要約検索条件の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ActivitySummaryQueryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
+
+  /** 検証に使う保存先。 */
   SqliteActivityStore store;
+
+  /** 検証に使う時系列の記録。 */
   ActivityTimeline timeline;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     var ds = new org.sqlite.SQLiteDataSource();
@@ -29,6 +36,7 @@ class ActivitySummaryQueryTest {
     timeline = new ActivityTimeline(store, Clock.fixed(ActivitySemanticTest.START, ZoneOffset.UTC));
   }
 
+  /** 作業状況の把握で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void compressedSummaryRetainsFineSessionsAndRawEvidenceAcrossReopen() {
     var records =
@@ -57,6 +65,7 @@ class ActivitySummaryQueryTest {
             .size());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void rangeClipsWithoutLosingEvidenceOrInflatingGap() {
     store.append(ActivitySemanticTest.dev(0, "Terminal", "X"));
@@ -79,6 +88,7 @@ class ActivitySummaryQueryTest {
             .isEmpty());
   }
 
+  /** 作業状況の把握で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void existingPersistedSessionJsonNeedsNoMigration() throws Exception {
     store.append(ActivitySemanticTest.dev(0, "Terminal", "X"));
@@ -91,6 +101,7 @@ class ActivitySummaryQueryTest {
                 ActivitySemanticTest.START, ActivitySemanticTest.START.plus(Duration.ofDays(32))));
   }
 
+  /** 元の分類一覧を保持することを確認する。 */
   @Test
   void themeGroupingPreservesOriginalCategoriesAndEvidence() {
     var records =

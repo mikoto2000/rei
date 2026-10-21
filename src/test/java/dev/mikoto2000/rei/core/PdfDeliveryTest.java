@@ -17,9 +17,12 @@ import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** PDF配信の結果と状態の契約を検証するテスト。 */
 class PdfDeliveryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 完全一致のページ続きの取得位置について、位置を保持することを確認する。 */
   @Test
   void exactPageCursorRetainsPositionAndRejectsChangedVersion() throws Exception {
     var path = dir.resolve("source.pdf");

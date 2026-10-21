@@ -5,18 +5,26 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
+/** 作業状況根拠の情報を集計する。 */
 public final class ActivityEvidenceAggregator {
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(ActivityEvidenceAggregator.class);
+
+  /** 取得元一覧。 */
   private final List<ActivityEvidenceSource> sources;
+
+  /** 判断基準。 */
   private final CapturePolicy policy;
 
+  /** 指定された値や利用先を使って、ActivityEvidenceAggregatorを初期化する。 */
   public ActivityEvidenceAggregator(
       ActivityProperties properties, List<ActivityEvidenceSource> sources) {
     this.sources = List.copyOf(sources);
     policy = new CapturePolicy(properties);
   }
 
+  /** 判断に必要な情報を集め、後続の処理へ渡す。 */
   public ActivityEvidence collect(
       Instant at, DesktopActivityObserver.Metadata metadata, ActivityRecord prior) {
     String project = "", projectId = "";

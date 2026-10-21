@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 
+/** 外部コマンド一覧の結果と状態の契約を検証するテスト。 */
 class RemoteCommandsTest {
+  /** 再開用の記録履歴保守全体共通およびについて、明示的な反映を必要とすることを確認する。 */
   @Test
   void checkpointHistoryMaintenanceIsGlobalAndRequiresExplicitApply() {
     var status = RemoteCommands.route(List.of("/checkpoint", "status"), null, null);
@@ -31,6 +33,7 @@ class RemoteCommandsTest {
                 List.of("/checkpoint", "cleanup", "--apply", "extra"), null, null));
   }
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void explicitFilesAreResolvedByTheClientSelectedProject() {
     var base = java.nio.file.Path.of("selected-project").toAbsolutePath().normalize();
@@ -55,6 +58,7 @@ class RemoteCommandsTest {
     assertEquals(base.resolve("feeds.opml").toString(), opml.get("path"));
   }
 
+  /** 検索および画像一覧について、シェル選択可能な設定を維持することを確認する。 */
   @Test
   void searchAndImagesKeepShellOptionsAndSummaryCanShowItsLatestResult() {
     var search =
@@ -103,6 +107,7 @@ class RemoteCommandsTest {
         RemoteCommands.route(List.of("/summarize"), "project", null).path());
   }
 
+  /** フィード操作一覧について、項目対象範囲を保持することを確認する。 */
   @Test
   void feedOperationsPreserveItemRangeAndOptionalUpdateId() {
     assertEquals(
@@ -128,6 +133,7 @@ class RemoteCommandsTest {
         () -> RemoteCommands.route(List.of("/feed", "item", "execute"), "project", "session"));
   }
 
+  /** 取得記録について、固定した受付経路一覧を利用することを確認する。 */
   @Test
   void captureUsesFixedRoutesAndDoesNotApproveRawOutputImplicitly() {
     assertEquals(
@@ -146,6 +152,7 @@ class RemoteCommandsTest {
         () -> RemoteCommands.route(List.of("/llm", "capture", "execute"), "project", "session"));
   }
 
+  /** 任意返信テキストを維持することを確認する。 */
   @Test
   void socialCommandsHaveNamedRoutesAndKeepOptionalReplyText() {
     assertEquals(
@@ -178,6 +185,7 @@ class RemoteCommandsTest {
         () -> RemoteCommands.route(List.of("/bsky", "execute"), "project", "session"));
   }
 
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void activityRoutesItsFullDeclaredOperationsWithoutGenericExecution() {
     assertEquals(
@@ -210,6 +218,7 @@ class RemoteCommandsTest {
                 List.of("/activity", "classification", "execute"), "project", "session"));
   }
 
+  /** 明示的な対象範囲を保持することを確認する。 */
   @Test
   void storageHasOnlyNamedOperationsAndPreservesExplicitScopeAndBudgets() {
     assertEquals(
@@ -267,6 +276,7 @@ class RemoteCommandsTest {
                 List.of("/storage", "maintenance", "vacuum"), "project", "session"));
   }
 
+  /** 埋め込み表現の生成について、検索削除を保持することを確認する。 */
   @Test
   void embedPreservesTheSearchDeleteAndPositionalFileGrammar() {
     var search =
@@ -309,6 +319,7 @@ class RemoteCommandsTest {
         RemoteCommands.route(List.of("/embed", "paper.txt"), "project", "session").body());
   }
 
+  /** 軽量CLIでの対話で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void googleCalendarAndGoogleTasksKeepTheirDistinctShellGrammar() {
     var event =
@@ -358,6 +369,7 @@ class RemoteCommandsTest {
                 "session"));
   }
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void googleTaskAddAndListSendOnlyTheirSupportedFields() {
     var added =
@@ -403,6 +415,7 @@ class RemoteCommandsTest {
         listed.body());
   }
 
+  /** Googleタスクコマンド一覧について、削除済みタグを受け付けないことを確認する。 */
   @Test
   void googleTaskCommandsRejectRemovedTagAndOtherUnknownOptions() {
     for (String action : List.of("add", "list"))
@@ -423,6 +436,7 @@ class RemoteCommandsTest {
       }
   }
 
+  /** 応答動作モードについて、シェル任意真偽値入力規則を受け付けられることを確認する。 */
   @Test
   void responseModeAcceptsShellOptionalBooleanSyntax() {
     assertEquals(
@@ -445,6 +459,7 @@ class RemoteCommandsTest {
             RemoteCommands.route(List.of("/mode", "normal", "--voice-only"), "project", "session"));
   }
 
+  /** 軽量CLIでの対話の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void memoryMaintenancePreservesApprovalAliasesAndRequiresSelectedSession() {
     var summary =
@@ -472,6 +487,7 @@ class RemoteCommandsTest {
             .body());
   }
 
+  /** 軽量CLIでの対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void sleepUsesTheSelectedSessionAndObservedCancellationRevision() {
     var preview = RemoteCommands.route(List.of("/sleep", "preview"), "project", "session");
@@ -495,6 +511,7 @@ class RemoteCommandsTest {
         () -> RemoteCommands.route(List.of("/sleep"), "project", null));
   }
 
+  /** 軽量CLIでの対話で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void reflectionReviewPreservesTheOwningSessionAndRevisionEvidenceOptions() {
     assertEquals(
@@ -535,6 +552,7 @@ class RemoteCommandsTest {
                 null));
   }
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void subagentDefinitionManagementHasOnlyFixedRoutesAndLocalValidationPaths() {
     assertEquals(
@@ -557,6 +575,7 @@ class RemoteCommandsTest {
         () -> RemoteCommands.route(List.of("/subagent", "execute", "arbitrary"), null, null));
   }
 
+  /** 軽量CLIでの対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void dependencyShellAnswerUsesValueOptionAndNamedCheckCancelOperations() {
     var answer =
@@ -572,6 +591,7 @@ class RemoteCommandsTest {
         RemoteCommands.route(List.of("/dependency", "cancel", "dep"), "project", "session").path());
   }
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void configAndSkillUseNamedOperationsAndShellOptions() {
     assertEquals(
@@ -595,6 +615,7 @@ class RemoteCommandsTest {
         RemoteCommands.route(List.of("/skill", "reload"), null, null).path());
   }
 
+  /** 軽量CLIでの対話で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void researchRequestsUseOnlyTheirNamedDomainRoutes() {
     assertEquals(
@@ -636,6 +657,7 @@ class RemoteCommandsTest {
                 List.of("/agent", "arbitrary", "execute", "anything"), "project", "session"));
   }
 
+  /** 承認済みハッシュ値を必要とすることを確認する。 */
   @Test
   void recoveryHasSeparateNamedRoutesAndRequiresTheApprovedHash() {
     String id = "12345678-1234-1234-1234-123456789abc", hash = "a".repeat(64);
@@ -670,6 +692,7 @@ class RemoteCommandsTest {
         () -> RemoteCommands.route(List.of("/document", "show", id, hash), "project", "session"));
   }
 
+  /** 軽量CLIでの対話で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void historyPreservesSessionPaginationLegacyRangesAndSearchScopes() {
     assertEquals(
@@ -721,6 +744,7 @@ class RemoteCommandsTest {
                 List.of("/history", "show", "id", "--limit", "5", "--all"), "project", "session"));
   }
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void timingDefaultsAndArgumentOrderMatchShell() {
     assertEquals(
@@ -742,6 +766,7 @@ class RemoteCommandsTest {
         () -> RemoteCommands.route(List.of("/timing", "one", "two"), "project", "session"));
   }
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void profileAndBriefingHaveAllLegacyReadForms() {
     assertEquals(
@@ -771,6 +796,7 @@ class RemoteCommandsTest {
         () -> RemoteCommands.route(List.of("/profile", "path", "unexpected"), null, null));
   }
 
+  /** 軽量CLIでの対話で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void doctorChecksRemainExplicitBoundedAndDeduplicated() {
     assertEquals(
@@ -803,6 +829,7 @@ class RemoteCommandsTest {
         () -> RemoteCommands.route(List.of("/doctor", "--check", "inference"), null, null));
   }
 
+  /** 再開用の記録および再開について、旧形式シェル入力文法を受け付けられることを確認する。 */
   @Test
   void checkpointAndResumeAcceptTheLegacyShellGrammar() {
     var saved = RemoteCommands.route(List.of("/checkpoint"), "project", "session");
@@ -832,6 +859,7 @@ class RemoteCommandsTest {
         () -> RemoteCommands.route(List.of("/resume", "show", "task", "extra"), "project", null));
   }
 
+  /** 記憶読み取るおよび記憶の削除について、選択中プロジェクトを利用することを確認する。 */
   @Test
   void memoryReadsAndForgetUseSelectedProjectAndShellPagination() {
     assertEquals(
@@ -858,6 +886,7 @@ class RemoteCommandsTest {
                 List.of("/memory", "search", "query", "--unknown"), "project", null));
   }
 
+  /** フィードおよびリマインダーについて、シェル選択項目名前一覧を受け付けられることを確認する。 */
   @Test
   void feedAndReminderAcceptShellOptionNamesAndDeletionGrammar() {
     assertEquals(
@@ -925,6 +954,7 @@ class RemoteCommandsTest {
                 null));
   }
 
+  /** 関心一覧について、シェル時選択項目を利用することを確認する。 */
   @Test
   void interestListUsesShellHourOptionWithoutModelSubmission() {
     assertEquals(
@@ -932,6 +962,7 @@ class RemoteCommandsTest {
         RemoteCommands.route(List.of("/interest", "list", "--hours", "48"), null, null).path());
   }
 
+  /** 軽量CLIでの対話で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void attentionDeliveryRetainsExplicitDuplicateRiskAcknowledgment() {
     assertEquals(
@@ -960,6 +991,7 @@ class RemoteCommandsTest {
                 null));
   }
 
+  /** シェル予算一覧を保持することを確認する。 */
   @Test
   void goalCreationPreservesShellBudgetsAndCriterionOptions() {
     var request =
@@ -996,6 +1028,7 @@ class RemoteCommandsTest {
                 null));
   }
 
+  /** 目標完了について、JSON変換対象データを送信することを確認する。 */
   @Test
   void goalCompletionSendsJsonObjectAndRequiresExactlyOneDefinitionOrProof() {
     var request =
@@ -1024,6 +1057,7 @@ class RemoteCommandsTest {
                   "session"));
   }
 
+  /** 追加引数を受け付けないことを確認する。 */
   @Test
   void modelCommandsHaveNamedRoutesAndRejectExtraArguments() {
     assertEquals("/api/v1/models", RemoteCommands.route(List.of("/models"), null, null).path());
@@ -1040,6 +1074,7 @@ class RemoteCommandsTest {
         () -> RemoteCommands.route(List.of("/model", "fixture", "extra"), null, null));
   }
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shellDenialAliasAndReconciliationRequireExplicitAcknowledgment() {
     assertEquals(
@@ -1067,6 +1102,7 @@ class RemoteCommandsTest {
     }
   }
 
+  /** 目標待機中について、観測形式のバージョンを利用することを確認する。 */
   @Test
   void goalWaitingUsesObservedVersionAndShellOptionNames() {
     assertEquals(
@@ -1118,6 +1154,7 @@ class RemoteCommandsTest {
                 "session"));
   }
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @org.junit.jupiter.api.Test
   void responseStyleIsSeparateFromRunAccess() {
     var request =
@@ -1131,6 +1168,7 @@ class RemoteCommandsTest {
         request.body());
   }
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void projectControlsCarryExplicitOwnershipAndNamedOperationsOnly() {
     var request =
@@ -1146,6 +1184,7 @@ class RemoteCommandsTest {
         () -> RemoteCommands.route(List.of("/sh", "rm", "something"), "project", "session"));
   }
 
+  /** 履歴およびタスク一覧について、実際の公開API受付経路一覧を利用することを確認する。 */
   @Test
   void historyAndTasksUseTheirActualPublicApiRoutes() {
     assertEquals(
@@ -1162,6 +1201,7 @@ class RemoteCommandsTest {
         () -> RemoteCommands.route(List.of("/checkpoint", "list"), null, null));
   }
 
+  /** 依存条件回答一覧について、引用済みテキストを保持することを確認する。 */
   @Test
   void dependencyAnswersPreserveQuotedTextAndExpectedRevision() {
     var request =

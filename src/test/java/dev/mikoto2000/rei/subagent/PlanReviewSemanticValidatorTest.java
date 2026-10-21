@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import org.junit.jupiter.api.Test;
 
+/** 計画レビュー意味による検証の窓口の結果と状態の契約を検証するテスト。 */
 class PlanReviewSemanticValidatorTest {
+  /** 補助エージェントへの委譲で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateFindingsAndUnsupportedLocationsRemainUnsupported() {
     var parser = new SubAgentResultParser();
@@ -19,6 +21,7 @@ class PlanReviewSemanticValidatorTest {
     assertFalse(result.issues().isEmpty());
   }
 
+  /** 補助エージェントへの委譲で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void traceableFindingsArePartialSupportRatherThanTruth() {
     var result =

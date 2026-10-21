@@ -16,8 +16,10 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+/** タスクツール一覧の結果と状態の契約を検証するテスト。 */
 class TaskToolsTest {
 
+  /** タスクの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void taskCreateAndTaskListDelegateToService() {
     TaskService service = Mockito.mock(TaskService.class);
@@ -34,6 +36,7 @@ class TaskToolsTest {
     assertEquals(List.of(created), listed);
   }
 
+  /** タスクの管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void taskCreatePrintsErrorAndRethrowsWhenServiceFails() {
     TaskService service = Mockito.mock(TaskService.class);
@@ -60,6 +63,7 @@ class TaskToolsTest {
             .contains("[error] Google Tasks へのタスク追加に失敗しました: Google Task integration is disabled"));
   }
 
+  /** タスクの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void taskCompleteDelegatesToService() {
     TaskService service = Mockito.mock(TaskService.class);
@@ -73,6 +77,7 @@ class TaskToolsTest {
     verify(service).complete(2L);
   }
 
+  /** タスクの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void taskUpdateDelegatesToService() {
     TaskService service = Mockito.mock(TaskService.class);
@@ -86,6 +91,7 @@ class TaskToolsTest {
     verify(service).update(3L, "要件更新", LocalDate.of(2026, 4, 10), 1);
   }
 
+  /** タスクの管理で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void taskUpdateDeadlineDelegatesToService() {
     TaskService service = Mockito.mock(TaskService.class);
@@ -99,6 +105,7 @@ class TaskToolsTest {
     verify(service).updateDeadline(4L, LocalDate.of(2026, 4, 10));
   }
 
+  /** タスクの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void taskDeleteDelegatesToService() {
     TaskService service = Mockito.mock(TaskService.class);
@@ -109,6 +116,7 @@ class TaskToolsTest {
     verify(service).delete(5L);
   }
 
+  /** タスクについて、受け付ける未指定期限日付を作成することを確認する。 */
   @Test
   void taskCreateAcceptsMissingDueDate() {
     TaskService service = Mockito.mock(TaskService.class);
@@ -122,6 +130,7 @@ class TaskToolsTest {
     verify(service).add("no deadline", null, 3);
   }
 
+  /** タスクの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void taskUpdatePassesNullValuesAsIs() {
     TaskService service = Mockito.mock(TaskService.class);
@@ -135,10 +144,12 @@ class TaskToolsTest {
     verify(service).update(7L, null, null, 1);
   }
 
+  /** {@code task} の条件を再現するための補助情報を返す。 */
   private Task task(long id, String title, LocalDate dueDate, int priority, TaskStatus status) {
     return new Task(id, title, dueDate, priority, status, OffsetDateTime.now(ZoneOffset.UTC), null);
   }
 
+  /** タスクの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void actualTaskCompletionPublishesOwnedLifecycleForReflection() {
     var service = Mockito.mock(TaskService.class);
@@ -173,6 +184,7 @@ class TaskToolsTest {
     assertTrue(!failed.error().message().contains("private"));
   }
 
+  /** タスクの管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   @org.junit.jupiter.api.Tag("integration")
   void taskToolResultReachesPersistentReflection(

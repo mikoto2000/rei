@@ -8,39 +8,79 @@ import java.util.function.Supplier;
 import org.jline.reader.LineReader;
 import org.jline.reader.Reference;
 
-/** Arrow-key approval actions share the ordinary input reader; never read on an event thread. */
+/**
+ * 入力候補の提示に必要な承認操作操作の選択肢を扱う。
+ *
+ * <p>Arrow-key approval actions share the ordinary input reader; never read on an event thread.
+ */
 public final class ApprovalActionMenu implements AutoCloseable {
+  /**
+   * 入力候補の提示で受け渡す所有者を表す。
+   *
+   * @param project プロジェクト
+   * @param session 会話
+   */
   public record Owner(String project, String session) {}
 
+  /**
+   * 入力候補の提示で受け渡す要求を表す。
+   *
+   * @param owner 所有者
+   * @param id 識別子
+   */
   private record Request(Owner owner, String id) {}
 
+  /** 読み取り元。 */
   private final LineReader reader;
+
+  /** 所有者。 */
   private final Supplier<Owner> owner;
+
+  /** 要求一覧。 */
   private final LinkedHashSet<Request> requests = new LinkedHashSet<>();
+
+  /** 選択中。 */
   private Request selected;
+
+  /** 操作。 */
   private int action;
+
+  /** 追加した文章。 */
   private String inserted;
+
+  /** 有効状態。 */
   private volatile boolean enabled;
+
+  /** 終了済み。 */
   private volatile boolean closed;
+
+  /** 改訂番号。 */
   private long revision;
+
+  /** 状態の定期更新を実行する窓口。 */
   private java.util.concurrent.ScheduledExecutorService updates;
 
+  /** 入力候補の提示に必要な待機中取得元を扱う。 */
   @FunctionalInterface
   public interface PendingSource {
+    /** 後続の処理で判断できるよう、未完了の対象を返す。 */
     List<String> pending(Owner owner) throws Exception;
   }
 
+  /** この機能を利用する設定が有効かどうかを返す。 */
   public void enabled(boolean value) {
     enabled = value;
     if (!value) clearDisplay();
     refreshStatus();
   }
 
+  /** 入力候補の提示で用いる待機中件数を返す。 */
   public synchronized int pendingCount() {
     Owner current = owner.get();
     return (int) requests.stream().filter(r -> r.owner.equals(current)).count();
   }
 
+  /** 入力候補の提示に関する再確認状態を処理する。 */
   private void refreshStatus() {
     int count = pendingCount();
     if (reader instanceof ApprovalMenuLineReader menuReader)
@@ -55,7 +95,11 @@ public final class ApprovalActionMenu implements AutoCloseable {
               : "");
   }
 
-  /** Read-only reconciliation; failure retains the last known state, never a grant. */
+  /**
+   * 入力候補の提示に関する追加入力を処理する。
+   *
+   * <p>Read-only reconciliation; failure retains the last known state, never a grant.
+   */
   public synchronized void follow(PendingSource source) {
     if (updates != null) throw new IllegalStateException("Already following approvals");
     updates =
@@ -85,10 +129,12 @@ public final class ApprovalActionMenu implements AutoCloseable {
         java.util.concurrent.TimeUnit.SECONDS);
   }
 
+  /** 現在の状態と記録を照合し、差異に応じて管理状態を整える。 */
   public void reconcile(Owner captured, List<String> ids) {
     reconcile(captured, ids, -1);
   }
 
+  /** 現在の状態と記録を照合し、差異に応じて管理状態を整える。 */
   private void reconcile(Owner captured, List<String> ids, long version) {
     boolean removedSelection;
     synchronized (this) {
@@ -111,6 +157,7 @@ public final class ApprovalActionMenu implements AutoCloseable {
     refreshStatus();
   }
 
+  /** 入力候補の提示で利用した資源や登録を解放し、利用を終了する。 */
   @Override
   public void close() {
     closed = true;
@@ -118,8 +165,10 @@ public final class ApprovalActionMenu implements AutoCloseable {
     enabled(false);
   }
 
+  /** 表示名一覧。 */
   private static final List<String> LABELS = List.of("詳細確認", "承認して続行", "拒否");
 
+  /** 指定された値や利用先を使って、ApprovalActionMenuを初期化する。 */
   public ApprovalActionMenu(LineReader reader, Supplier<Owner> owner) {
     this.reader = reader;
     this.owner = owner;
@@ -135,6 +184,7 @@ public final class ApprovalActionMenu implements AutoCloseable {
     }
   }
 
+  /** 入力候補の提示に関する受付を処理する。 */
   public void offer(String project, String session, String id) {
     try {
       if (!UUID.fromString(id).toString().equalsIgnoreCase(id)) return;
@@ -151,6 +201,7 @@ public final class ApprovalActionMenu implements AutoCloseable {
     if (added) reader.printAbove("承認メニュー: 入力欄が空のとき ↑↓ で選択、Enter で実行（最初は詳細確認）。");
   }
 
+  /** 入力候補の提示において、moveに該当するか判定する。 */
   synchronized boolean move(int direction) {
     if (!enabled) return history(direction);
     String buffer = reader.getBuffer().toString();
@@ -184,6 +235,7 @@ public final class ApprovalActionMenu implements AutoCloseable {
     return true;
   }
 
+  /** 過去の記録を、条件に従って参照できる形で返す。 */
   private boolean history(int direction) {
     clearDisplay();
     reader.callWidget(
@@ -191,6 +243,7 @@ public final class ApprovalActionMenu implements AutoCloseable {
     return true;
   }
 
+  /** 入力候補の提示において、利用開始に該当するか判定する。 */
   synchronized boolean enter() {
     clearDisplay();
     if (enabled && selected != null && Objects.equals(reader.getBuffer().toString(), inserted)) {
@@ -208,10 +261,12 @@ public final class ApprovalActionMenu implements AutoCloseable {
     return true;
   }
 
+  /** 保持している情報を初期状態へ戻すため、表示を消去する。 */
   private void clearDisplay() {
     if (reader instanceof ApprovalMenuLineReader menuReader) menuReader.clearApprovalMenu();
   }
 
+  /** 入力候補の提示で用いるコマンドを返す。 */
   private static String command(String id, int action) {
     return switch (action) {
       case 0 -> "/approval show " + id;

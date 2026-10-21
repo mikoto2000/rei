@@ -13,10 +13,13 @@ import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 判定期間仮想端末の結果と状態の契約を検証するテスト。 */
 @EnabledOnOs(OS.WINDOWS)
 class WindowsPtyTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 軽量CLIの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void interactiveShellReceivesInputInSelectedProjectAndReturnsToJline() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -120,7 +123,9 @@ class WindowsPtyTest {
     }
   }
 
+  /** 検証条件を再現するためのクライアント。 */
   public static final class Client {
+    /** 検証用に、軽量CLIの起動の起動要求を受け付け、実行を開始する。 */
     public static void main(String[] args) throws Exception {
       // Surefire itself has redirected handles. Bind the test client to its actual attached ConPTY.
       var kernel = com.sun.jna.platform.win32.Kernel32.INSTANCE;

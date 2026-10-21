@@ -10,14 +10,20 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
+/** フィードOPML取り込みのユースケースを実現する。 */
 @Service
 @RequiredArgsConstructor
 public class FeedOpmlImportService {
+  /** 最大ファイル大きさバイト数。 */
   public static final int MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024;
 
+  /** 入力の解釈。 */
   private final OpmlParser parser;
+
+  /** フィードサービス。 */
   private final FeedService feedService;
 
+  /** フィードの購読と収集で用いる取り込みファイルを返す。 */
   public FeedOpmlImportResult importFile(Path path) {
     // Parse the complete document before registration; registrations themselves are independent.
     List<OpmlSubscription> subscriptions = readSubscriptions(path);
@@ -43,6 +49,7 @@ public class FeedOpmlImportService {
     return new FeedOpmlImportResult(imported, skipped, failed);
   }
 
+  /** 必要な内容を参照できるよう、購読一覧を読み取る。 */
   private List<OpmlSubscription> readSubscriptions(Path path) {
     try {
       if (!Files.isRegularFile(path)) {
@@ -63,10 +70,12 @@ public class FeedOpmlImportService {
     }
   }
 
+  /** フィードの購読と収集で用いるtooLargeを返す。 */
   private OpmlImportException tooLarge() {
     return new OpmlImportException("OPML file exceeds 10 MiB limit");
   }
 
+  /** フィードの購読と収集において、フィードURLかどうかを判定する。 */
   private boolean isFeedUrl(String value) {
     try {
       FeedUrlSafety.parse(value);

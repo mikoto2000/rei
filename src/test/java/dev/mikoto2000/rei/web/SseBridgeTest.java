@@ -16,7 +16,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
+/** イベント配信連携の結果と状態の契約を検証するテスト。 */
 class SseBridgeTest {
+  /** Web APIによる操作で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void recoveredUnknownRunReturnsReplayGapSoClientsFetchItsStatus() {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -29,6 +31,7 @@ class SseBridgeTest {
     }
   }
 
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void broadcastsShutdownToAllRunsAndDrainsBeforeBridgeCloses() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -55,6 +58,7 @@ class SseBridgeTest {
     assertThat(registry.get("one").status()).isEqualTo(RunStatus.QUEUED);
   }
 
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void connectionOpenedDuringShutdownReceivesNotification() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -72,23 +76,33 @@ class SseBridgeTest {
     }
   }
 
+  /** 検証条件を再現するための出力先。 */
   static class Sink implements SseBridge.Sink {
+    /** 通知された出来事と順序を検証するための記録。 */
     final List<WebApiEventDto> events = new CopyOnWriteArrayList<>();
+
+    /** 検証に使う終了。 */
     final CountDownLatch ended = new CountDownLatch(1);
+
+    /** 検証に使うエラー。 */
     volatile Throwable error;
 
+    /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
     public void event(WebApiEventDto event) throws Exception {
       events.add(event);
     }
 
+    /** {@code heartbeat} の条件を再現するため、検証用の操作や状態を扱う。 */
     public void heartbeat() throws Exception {}
 
+    /** {@code complete} の条件を再現するため、検証用の操作や状態を扱う。 */
     public void complete(Throwable error) {
       this.error = error;
       ended.countDown();
     }
   }
 
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void filtersRunAndCompletesAfterSendingTerminal() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -110,6 +124,7 @@ class SseBridgeTest {
     }
   }
 
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void blockedWriterDoesNotBlockPublisherAndOverflowClosesOnlyConnection() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -120,6 +135,7 @@ class SseBridgeTest {
     var release = new CountDownLatch(1);
     var sink =
         new Sink() {
+          /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
           public void event(WebApiEventDto event) throws Exception {
             entered.countDown();
             release.await();

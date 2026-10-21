@@ -8,13 +8,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** Web内容Deduplicationの結果と状態の契約を検証するテスト。 */
 class WebContentDeduplicationTest {
+  /** 検証に使う情報の抽出。 */
   WebPageExtractor extractor = new WebPageExtractor();
 
+  /** 検証で使用する結果を、指定された条件に合わせて用意する。 */
   WebSearchResult result(String url) {
     return new WebSearchResult("title", url, "snippet", "2026-10-09");
   }
 
+  /** Web上の情報の調査で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void identicalBodiesMergeButKeepBothCitationUrls() {
     var first =
@@ -28,6 +32,7 @@ class WebContentDeduplicationTest {
         merged.getFirst().aliases().stream().map(WebSourceAlias::url).toList());
   }
 
+  /** Web上の情報の調査で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void hashIsComputedBeforeOutputTruncation() {
     String prefix = "common prefix ".repeat(200);
@@ -43,6 +48,7 @@ class WebContentDeduplicationTest {
     assertEquals(2, WebContentDeduplication.pages(List.of(first, second)).size());
   }
 
+  /** Web上の情報の調査で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void indentationChangesInCodeDoNotBecomeDuplicateBodies() {
     var first =
@@ -54,6 +60,7 @@ class WebContentDeduplicationTest {
     assertNotEquals(first.fingerprint(), second.fingerprint());
   }
 
+  /** Web上の情報の調査で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void snippetsOrLegacyTruncatedPagesAreNotHashedAsFullBodies() {
     var first = new WebSearchPage("a", "https://example.com/a", "same", null, "same", true);
@@ -61,6 +68,7 @@ class WebContentDeduplicationTest {
     assertEquals(2, WebContentDeduplication.pages(List.of(first, second)).size());
   }
 
+  /** Web上の情報の調査で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void canonicalIsAClaimAndDoesNotMergeDifferentBodiesOrCrossOrigins() {
     var first =

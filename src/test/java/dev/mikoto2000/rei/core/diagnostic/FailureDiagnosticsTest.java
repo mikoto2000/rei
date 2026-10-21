@@ -8,7 +8,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+/** 失敗情報診断情報の結果と状態の契約を検証するテスト。 */
 class FailureDiagnosticsTest {
+  /** 実行上の問題の診断で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @ParameterizedTest
   @CsvSource({
     "401,authentication_failed",
@@ -42,6 +44,7 @@ class FailureDiagnosticsTest {
     assertFalse(safe.message().contains("SECRET"));
   }
 
+  /** 実行上の問題の診断で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sdkStructuredCodesAreAllowlistedAndOtherProviderFieldsArePrivate() {
     var context =
@@ -84,6 +87,7 @@ class FailureDiagnosticsTest {
       assertFalse(FailureDiagnostics.classify(failure).display().contains("PRIVATE"));
   }
 
+  /** 実行上の問題の診断で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void sdkMalformedAndStreamErrorResponsesHaveSeparateSafeCauses() {
     assertEquals(
@@ -107,6 +111,7 @@ class FailureDiagnosticsTest {
     assertFalse(FailureDiagnostics.classify(stream).display().contains("PRIVATE"));
   }
 
+  /** 実行上の問題の診断で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void nestedTransportAndFileCausesOverrideGenericWrappers() {
     assertEquals(
@@ -147,6 +152,7 @@ class FailureDiagnosticsTest {
             .code());
   }
 
+  /** 実行上の問題の診断で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void unknownCausesAreBoundedAndDoNotCopyArbitraryMessages() {
     var first = new IllegalStateException("PRIVATE_OUTER");
@@ -165,6 +171,7 @@ class FailureDiagnosticsTest {
             .code());
   }
 
+  /** 実行上の問題の診断で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void localDatabaseAndRevisionFailuresExposeOnlyTypedCauses() {
     var types =

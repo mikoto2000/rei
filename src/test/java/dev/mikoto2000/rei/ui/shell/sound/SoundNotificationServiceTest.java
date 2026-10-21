@@ -16,22 +16,29 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/** 音通知通知サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("e2e")
 class SoundNotificationServiceTest {
 
+  /** 検証に使う出力先内容。 */
   private final ByteArrayOutputStream outContent = new ByteArrayOutputStream();
+
+  /** 検証に使う元の出力先。 */
   private final PrintStream originalOut = System.out;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setUpStreams() {
     System.setOut(new PrintStream(outContent));
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void restoreStreams() {
     System.setOut(originalOut);
   }
 
+  /** ターミナルの音通知で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void notifyFallsBackToConsoleWhenDisabled() {
     SoundNotificationProperties props = new SoundNotificationProperties();
@@ -43,6 +50,7 @@ class SoundNotificationServiceTest {
     assertOutputContains("disabled message");
   }
 
+  /** ターミナルの音通知で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void notifyFallsBackToConsoleWhenCommandIsEmpty() {
     SoundNotificationProperties props = new SoundNotificationProperties();
@@ -54,6 +62,7 @@ class SoundNotificationServiceTest {
     assertOutputContains("empty command message");
   }
 
+  /** ターミナルの音通知で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void notifyReplacesMessagePlaceholderInCommand() {
     SoundNotificationProperties props = new SoundNotificationProperties();
@@ -63,6 +72,7 @@ class SoundNotificationServiceTest {
     List<List<String>> capturedCommands = new ArrayList<>();
     SoundNotificationService service =
         new SoundNotificationService(props) {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           protected ProcessBuilder createProcessBuilder(List<String> command) {
             capturedCommands.add(new ArrayList<>(command));
@@ -77,6 +87,7 @@ class SoundNotificationServiceTest {
     assertFalse(capturedCommands.getFirst().contains("{{MESSAGE}}"));
   }
 
+  /** ターミナルの音通知で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void notifyFallsBackToConsoleOnTimeout() {
     SoundNotificationProperties props = new SoundNotificationProperties();
@@ -85,11 +96,13 @@ class SoundNotificationServiceTest {
 
     SoundNotificationService service =
         new SoundNotificationService(props) {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           protected ProcessBuilder createProcessBuilder(List<String> command) {
             return new ProcessBuilder("cmd", "/c", "ping", "-n", "100", "127.0.0.1");
           }
 
+          /** 検証用に、ターミナルの音通知で参照するタイムアウトの秒数を返す。 */
           @Override
           protected long getTimeoutSeconds() {
             return 1L;
@@ -101,6 +114,7 @@ class SoundNotificationServiceTest {
     assertOutputContains("timeout message");
   }
 
+  /** ターミナルの音通知で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void notifyFallsBackToConsoleWhenExternalProgramFails() {
     SoundNotificationProperties props = new SoundNotificationProperties();
@@ -109,6 +123,7 @@ class SoundNotificationServiceTest {
 
     SoundNotificationService service =
         new SoundNotificationService(props) {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           protected ProcessBuilder createProcessBuilder(List<String> command) {
             return new ProcessBuilder("cmd", "/c", "exit", "1");
@@ -120,6 +135,7 @@ class SoundNotificationServiceTest {
     assertOutputContains("failure message");
   }
 
+  /** ターミナルの音通知で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void notifyExecutesSeriallyWhenCalledConcurrently() throws Exception {
     SoundNotificationProperties props = new SoundNotificationProperties();
@@ -131,6 +147,7 @@ class SoundNotificationServiceTest {
 
     SoundNotificationService service =
         new SoundNotificationService(props) {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           protected ProcessBuilder createProcessBuilder(List<String> command) {
             int current = inFlight.incrementAndGet();
@@ -170,6 +187,7 @@ class SoundNotificationServiceTest {
     assertTrue(maxInFlight.get() <= 1, "notification executions should be serialized");
   }
 
+  /** 検証用に、必要な状態が整ってから先へ進むため、音通知通知サービス検証を待つ。 */
   private void await(CountDownLatch latch) {
     try {
       latch.await();
@@ -179,6 +197,7 @@ class SoundNotificationServiceTest {
     }
   }
 
+  /** 複数の検証で共通する期待結果を確認し、要件に合わない状態を検出する。 */
   private void assertOutputContains(String expected) {
     assertTrue(
         outContent.toString().contains(expected),

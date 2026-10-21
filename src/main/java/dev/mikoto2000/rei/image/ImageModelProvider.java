@@ -15,16 +15,29 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+/** 画像モデルを用途や設定に応じて提供する窓口。 */
 @Component
 public class ImageModelProvider {
 
+  /** 既定画像モデル提供元。 */
   private final ObjectProvider<ImageModel> defaultImageModelProvider;
+
+  /** この機能の動作設定。 */
   private final LlmProperties properties;
+
+  /** 画像設定。 */
   private final ImageProperties imageProperties;
+
+  /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
+
+  /** 実行状況の通知先。 */
   private final AgentEventPublisher eventPublisher;
+
+  /** キャッシュ。 */
   private final Map<String, ImageModel> cache = new ConcurrentHashMap<>();
 
+  /** 指定された値や利用先を使って、ImageModelProviderを初期化する。 */
   @Autowired
   public ImageModelProvider(
       ObjectProvider<ImageModel> defaultImageModelProvider,
@@ -39,6 +52,7 @@ public class ImageModelProvider {
     this.eventPublisher = eventPublisher;
   }
 
+  /** 画像の生成を利用するため、指定を補って共通の初期化へ引き渡す。 */
   ImageModelProvider(ImageModel defaultImageModel, LlmProperties properties) {
     this(
         new FixedObjectProvider<>(defaultImageModel),
@@ -48,10 +62,12 @@ public class ImageModelProvider {
         null);
   }
 
+  /** 画像の生成で用いる画像モデルを返す。 */
   public ImageModel imageModel() {
     return cache.computeIfAbsent(LlmFeature.IMAGE_GENERATION, ignored -> createImageModel());
   }
 
+  /** 新たな対象を利用できるよう、画像モデルを作成する。 */
   private ImageModel createImageModel() {
     ImageModel defaultImageModel = defaultImageModel();
     LlmProperties.Server server = properties.feature(LlmFeature.IMAGE_GENERATION);
@@ -69,6 +85,7 @@ public class ImageModelProvider {
             LlmFeature.IMAGE_GENERATION, model, eventFactory, eventPublisher);
   }
 
+  /** 画像の生成で用いるモデルを返す。 */
   public String model(String overrideModel) {
     if (overrideModel != null && !overrideModel.isBlank()) {
       return overrideModel;
@@ -80,12 +97,14 @@ public class ImageModelProvider {
     return configuredModel(defaultImageModel());
   }
 
+  /** 画像の生成で用いる設定済みモデルを返す。 */
   static String configuredModel(ImageModel model) {
     return model instanceof OpenAiImageModel openAi && openAi.getOptions() != null
         ? openAi.getOptions().getModel()
         : null;
   }
 
+  /** 画像の生成で用いる既定画像モデルを返す。 */
   private ImageModel defaultImageModel() {
     ImageModel imageModel = defaultImageModelProvider.getIfAvailable();
     if (imageModel == null) {
@@ -94,6 +113,7 @@ public class ImageModelProvider {
     return imageModel;
   }
 
+  /** 新たな対象を利用できるよう、開始AI互換画像モデルを作成する。 */
   private ImageModel createOpenAiCompatibleImageModel(LlmProperties.Server server) {
     OpenAiImageOptions.Builder options =
         OpenAiImageOptions.builder()
@@ -113,22 +133,31 @@ public class ImageModelProvider {
         .build();
   }
 
+  /**
+   * 画像の生成で受け渡す固定対象データ提供元を表す。
+   *
+   * @param value 値
+   */
   private record FixedObjectProvider<T>(T value) implements ObjectProvider<T> {
+    /** 画像の生成で参照する対象データを返す。 */
     @Override
     public T getObject(Object... args) {
       return value;
     }
 
+    /** 画像の生成で参照する条件付き利用可能を返す。 */
     @Override
     public T getIfAvailable() {
       return value;
     }
 
+    /** 画像の生成で参照する条件付き一意なを返す。 */
     @Override
     public T getIfUnique() {
       return value;
     }
 
+    /** 画像の生成で参照する対象データを返す。 */
     @Override
     public T getObject() {
       return value;

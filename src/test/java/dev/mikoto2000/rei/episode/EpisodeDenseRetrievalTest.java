@@ -20,11 +20,21 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
+/** 経験の記録ベクトルによる関連情報の取得の結果と状態の契約を検証するテスト。 */
 class EpisodeDenseRetrievalTest {
+  /** 検証に使うプロジェクト。 */
   final String project = "11111111-1111-1111-1111-111111111111";
+
+  /** 検証に使うリポジトリ。 */
   EpisodeRepository repo = mock(EpisodeRepository.class);
+
+  /** 検証に使うベクトルによる。 */
   EpisodeDenseIndex dense = mock(EpisodeDenseIndex.class);
+
+  /** 検証に使うやり取り一覧。 */
   ConversationTurnStore turns = mock(ConversationTurnStore.class);
+
+  /** 検証に使うサービス。 */
   EpisodeSearchService service =
       new EpisodeSearchService(
           repo,
@@ -33,6 +43,7 @@ class EpisodeDenseRetrievalTest {
           turns,
           mock(dev.mikoto2000.rei.workcontext.WorkContextService.class));
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   HistorySearchRequest request() {
     return new HistorySearchRequest(
         "semantic synonym",
@@ -46,10 +57,12 @@ class EpisodeDenseRetrievalTest {
         8);
   }
 
+  /** 検証条件に必要な値を受け取り、EpisodeDenseRetrievalTestを用意する。 */
   EpisodeDenseRetrievalTest() {
     service.setDense(dense);
   }
 
+  /** 実行を停止することを確認する。 */
   @Test
   void providerFailureFallsBackButBudgetExhaustionStillStopsTheRun() {
     when(dense.search(anyString(), eq(project), anyInt(), any()))
@@ -67,6 +80,7 @@ class EpisodeDenseRetrievalTest {
             () -> service.search(request(), "known topic")));
   }
 
+  /** 過去の経験の活用で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void denseAndLexicalDuplicatesFuseIntoOneEvidenceCheckedCandidate() {
     var e =
@@ -99,6 +113,7 @@ class EpisodeDenseRetrievalTest {
     assertTrue(service.search(request(), "known topic").isEmpty());
   }
 
+  /** 過去の経験の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledMemoryNeverCallsDenseOrLexicalProviders() {
     service.setMemoryProperties(

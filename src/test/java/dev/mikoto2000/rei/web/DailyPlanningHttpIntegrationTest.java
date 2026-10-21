@@ -20,16 +20,20 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 日次計画HTTP通信外部連携の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class DailyPlanningHttpIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import({
     WebApiIntegrationTest.Config.class,
     dev.mikoto2000.rei.planning.DailyPlanningConfiguration.class
   })
   static class Config {
+    /** {@code data} の条件を再現するための補助情報を返す。 */
     @Bean("memoryConsolidationDataSource")
     javax.sql.DataSource data(
         @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
@@ -37,6 +41,7 @@ class DailyPlanningHttpIntegrationTest {
     }
   }
 
+  /** Web APIによる操作で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void defaultOffBearerAllowlistAndRestartReadOnlyProjection() throws Exception {
     var registry = new ProjectRegistry(root.resolve("projects.json"));
@@ -73,12 +78,14 @@ class DailyPlanningHttpIntegrationTest {
     }
   }
 
+  /** {@code app} の条件を再現するための補助情報を返す。 */
   private SpringApplication app() {
     var app = new SpringApplication(Config.class);
     WebApplication.configure(app, "integration-key");
     return app;
   }
 
+  /** {@code args} の条件を再現するための補助情報を返す。 */
   private String[] args(boolean enabled, String project) {
     return new String[] {
       "--rei.web.port=0",
@@ -89,6 +96,7 @@ class DailyPlanningHttpIntegrationTest {
     };
   }
 
+  /** 検証用に、指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   private static HttpResponse<String> get(HttpClient client, int port, String query, boolean bearer)
       throws Exception {
     var request =

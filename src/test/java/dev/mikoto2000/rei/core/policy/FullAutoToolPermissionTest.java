@@ -21,7 +21,9 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
 
+/** 自動実行の指定ツール権限の結果と状態の契約を検証するテスト。 */
 class FullAutoToolPermissionTest {
+  /** 起動時の自動実行指定を共通の権限判断へ反映し、明示的な禁止を優先することを確認する。 */
   @Test
   void springWiresStartupArgumentsIntoCommonPolicy() {
     new org.springframework.boot.test.context.runner.ApplicationContextRunner()
@@ -45,12 +47,14 @@ class FullAutoToolPermissionTest {
             });
   }
 
+  /** 検証で使用する判断基準を、指定された条件に合わせて用意する。 */
   private ToolPermissionPolicy policy(String... args) {
     return new ToolPermissionPolicy(
         new ToolPermissionProperties(true, Set.of(ActionCapability.READ), Set.of(), Map.of()),
         new FullAutoOptions(new DefaultApplicationArguments(args)));
   }
 
+  /** ツール利用の権限制御で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void startupFlagApprovesCommonToolsIncludingComputerUseAndUnknownCallbacks() {
     for (String flag : List.of("--fullauto", "--fullauto=true")) {
@@ -66,6 +70,7 @@ class FullAutoToolPermissionTest {
     }
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void configuredDenialStillWinsAndAuthorityReflectsStartupFlag() {
     var properties = new ToolPermissionProperties(true, null, null, null);
@@ -82,6 +87,7 @@ class FullAutoToolPermissionTest {
         policy().authorityFingerprint(), policy("--fullauto=false").authorityFingerprint());
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void fullAutoIsExplicitAuthorityEvenWhenConfiguredPolicyIsDisabled() {
     var policy =
@@ -97,6 +103,7 @@ class FullAutoToolPermissionTest {
     assertDoesNotThrow(() -> guard.check("writeMultiFile", "{}", voice));
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void textVoiceAndLocalChildExecuteWithoutCreatingApprovalRequests() {
     var events = new ArrayList<AgentEvent>();
@@ -113,6 +120,7 @@ class FullAutoToolPermissionTest {
     org.mockito.Mockito.verifyNoInteractions(approvals);
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void fullAutoDoesNotBypassExecutionModeOrMcpRestrictions() {
     var guard =

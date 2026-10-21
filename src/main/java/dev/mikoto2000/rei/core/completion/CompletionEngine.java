@@ -6,15 +6,22 @@ import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.CopyOnWriteArrayList;
 
-/** Highest supporting priority wins, even when empty. Ties merge; first value wins duplicates. */
+/**
+ * 入力候補の提示に必要な入力補完エンジンを扱う。
+ *
+ * <p>Highest supporting priority wins, even when empty. Ties merge; first value wins duplicates.
+ */
 public final class CompletionEngine {
+  /** 提供元一覧。 */
   private final List<CompletionProvider> providers = new CopyOnWriteArrayList<>();
 
+  /** 後から対象を参照できるよう、入力補完エンジンを登録する。 */
   public CompletionEngine register(CompletionProvider provider) {
     providers.add(Objects.requireNonNull(provider));
     return this;
   }
 
+  /** 処理の完了を記録し、後続の処理へ結果を引き渡す。 */
   public List<CompletionCandidate> complete(CompletionContext context) {
     var selected = new ArrayList<CompletionProvider>();
     int priority = Integer.MIN_VALUE;

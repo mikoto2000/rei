@@ -21,16 +21,24 @@ import java.util.Objects;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+/** Google予定表のユースケースを実現する。 */
 @Service
 public class GoogleCalendarService {
 
+  /** JSON変換生成元。 */
   private static final JsonFactory JSON_FACTORY = GsonFactory.getDefaultInstance();
+
+  /** 日付時刻表示形式への変換。 */
   private static final DateTimeFormatter DATE_TIME_FORMATTER =
       DateTimeFormatter.ISO_OFFSET_DATE_TIME;
 
+  /** この機能の動作設定。 */
   private final GoogleCalendarProperties properties;
+
+  /** GoogleO認証サービス。 */
   private final GoogleOAuthService googleOAuthService;
 
+  /** 指定された値や利用先を使って、GoogleCalendarServiceを初期化する。 */
   @Autowired
   public GoogleCalendarService(
       GoogleCalendarProperties properties, GoogleOAuthService googleOAuthService) {
@@ -38,14 +46,17 @@ public class GoogleCalendarService {
     this.googleOAuthService = googleOAuthService;
   }
 
+  /** 予定の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public GoogleCalendarService(GoogleCalendarProperties properties) {
     this(properties, new GoogleOAuthService(properties));
   }
 
+  /** 予定の管理に関する権限の確認を処理する。 */
   public void authorize() throws Exception {
     authorize(true);
   }
 
+  /** 予定の管理に関する権限の確認を処理する。 */
   public void authorize(boolean forceReauthorize) throws Exception {
     if (!properties.calendar().enabled()) {
       throw new IllegalStateException("Google Calendar integration is disabled");
@@ -54,6 +65,7 @@ public class GoogleCalendarService {
     googleOAuthService.authorize(httpTransport, forceReauthorize);
   }
 
+  /** 予定の管理に関する認証を更新するトークンを処理する。 */
   public void refreshToken() throws Exception {
     if (!properties.calendar().enabled()) {
       throw new IllegalStateException("Google Calendar integration is disabled");
@@ -62,6 +74,7 @@ public class GoogleCalendarService {
     googleOAuthService.refreshToken();
   }
 
+  /** 利用可能な対象を確認できるよう、イベント一覧を一覧にする。 */
   public List<GoogleCalendarEventSummary> listEvents(Instant from, Instant to) throws Exception {
     Calendar client = getCalendarClient();
 
@@ -79,6 +92,7 @@ public class GoogleCalendarService {
         .toList();
   }
 
+  /** 新たな対象を利用できるよう、イベントを作成する。 */
   public GoogleCalendarEventSummary createEvent(
       String summary, ZonedDateTime start, ZonedDateTime end, String location, String description)
       throws Exception {
@@ -99,12 +113,14 @@ public class GoogleCalendarService {
     return toSummary(created);
   }
 
+  /** 利用可能な対象を確認できるよう、イベント一覧対象日付を一覧にする。 */
   public List<GoogleCalendarEventSummary> listEventsForDate(LocalDate date) throws Exception {
     ZonedDateTime from = date.atStartOfDay(zoneId());
     ZonedDateTime to = date.plusDays(1).atStartOfDay(zoneId());
     return listEvents(from.toInstant(), to.toInstant());
   }
 
+  /** 入力を機能内で扱えるよう、日付時刻を解釈する。 */
   public ZonedDateTime parseDateTime(String value) {
     try {
       return ZonedDateTime.parse(value);
@@ -125,6 +141,7 @@ public class GoogleCalendarService {
         "日時の形式が不正です。ISO-8601 形式で指定してください。例: 2026-03-23T09:00:00+09:00 または 2026-03-23T09:00:00");
   }
 
+  /** 予定の管理で用いるタイムゾーン識別子を返す。 */
   public ZoneId zoneId() {
     if (properties.calendar().timeZone() == null || properties.calendar().timeZone().isBlank()) {
       return ZoneId.systemDefault();
@@ -133,6 +150,7 @@ public class GoogleCalendarService {
     return ZoneId.of(properties.calendar().timeZone());
   }
 
+  /** 予定の管理で参照する予定表クライアントを返す。 */
   private Calendar getCalendarClient() throws Exception {
     if (!properties.calendar().enabled()) {
       throw new IllegalStateException("Google Calendar integration is disabled");
@@ -145,6 +163,7 @@ public class GoogleCalendarService {
         .build();
   }
 
+  /** 利用先へ渡せるよう、要約の形式に変換する。 */
   private GoogleCalendarEventSummary toSummary(Event event) {
     return new GoogleCalendarEventSummary(
         event.getId(),
@@ -155,6 +174,7 @@ public class GoogleCalendarService {
         Objects.toString(event.getStatus(), ""));
   }
 
+  /** 内容を表示・参照しやすくするため、イベント時刻を整形する。 */
   private String formatEventTime(EventDateTime eventDateTime) {
     if (eventDateTime == null) {
       return "";
@@ -176,12 +196,14 @@ public class GoogleCalendarService {
     return "";
   }
 
+  /** 利用先へ渡せるよう、イベント日付時刻の形式に変換する。 */
   private EventDateTime toEventDateTime(ZonedDateTime dateTime) {
     return new EventDateTime()
         .setDateTime(new com.google.api.client.util.DateTime(dateTime.toInstant().toEpochMilli()))
         .setTimeZone(dateTime.getZone().getId());
   }
 
+  /** 予定の管理で用いる既定予定表識別子を返す。 */
   private String defaultCalendarId() {
     return properties.calendar().defaultCalendarId() == null
             || properties.calendar().defaultCalendarId().isBlank()
@@ -189,6 +211,7 @@ public class GoogleCalendarService {
         : properties.calendar().defaultCalendarId();
   }
 
+  /** 予定の管理で用いる空白終点未指定を返す。 */
   private String blankToNull(String value) {
     if (value == null || value.isBlank()) {
       return null;

@@ -16,16 +16,22 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** プロジェクトエージェントイベント保存先の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProjectAgentEventStoreTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
+
+  /** 検証に使う生成元。 */
   AgentEventFactory factory = new AgentEventFactory(Clock.systemUTC());
 
+  /** 検証用に、実行状況の通知の操作を実行する。 */
   AgentRunContext run(String name) {
     return new AgentRunContext(
         name, new ProjectContext(UUID.randomUUID().toString(), name, temp), "chat:main");
   }
 
+  /** 実行状況の通知で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void projectsHaveIndependentDurableSequencesAndTypedPayloads() {
     var a = run("a");
@@ -47,6 +53,7 @@ class ProjectAgentEventStoreTest {
     assertThat(reopened.lastSequence(a.projectId())).isEqualTo(3);
   }
 
+  /** 同一表示への変換を利用することを確認する。 */
   @Test
   void persistedAndLiveEventsUseTheSameRenderer() {
     var a = run("a");
@@ -56,6 +63,7 @@ class ProjectAgentEventStoreTest {
     assertThat(render(store.recent(a.projectId(), 1).getFirst())).isEqualTo(render(event));
   }
 
+  /** 実行状況の通知の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void interruptedTailDoesNotHideFutureEventsOrResetSequence() throws Exception {
     var a = run("a");
@@ -71,6 +79,7 @@ class ProjectAgentEventStoreTest {
     assertThat(reopened.readAfter(a.projectId(), 1, 10)).hasSize(1);
   }
 
+  /** 実施できない書き込みを保存することを確認する。 */
   @Test
   void busContinuesWhenStoreCannotWrite() throws Exception {
     var blocked = Files.writeString(temp.resolve("blocked"), "file");
@@ -84,19 +93,23 @@ class ProjectAgentEventStoreTest {
     assertThat(live).hasSize(1);
   }
 
+  /** 検証用に、利用者が内容を確認できるよう、表示形式へ変換する。 */
   private String render(AgentEvent event) {
     var text = new StringBuilder();
     var renderer =
         new ShellAgentEventRenderer(
             new ShellEventOutput() {
+              /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
               public void print(String value) {
                 text.append(value);
               }
 
+              /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
               public void println(String value) {
                 text.append(value).append('\n');
               }
 
+              /** 検証で保留している出力の確定を扱う。 */
               public void flush() {}
             });
     renderer.onEvent(event);

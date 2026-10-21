@@ -16,8 +16,10 @@ import org.springframework.context.annotation.Configuration;
 @org.junit.jupiter.api.Tag("integration")
 class SearchResultCacheSessionTest {
 
+  /** 検証に使うタイムゾーン。 */
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
 
+  /** 検索結果の再利用で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void providesSearchResultCacheBean() {
     SearchResultCacheConfiguration config = new SearchResultCacheConfiguration();
@@ -27,6 +29,7 @@ class SearchResultCacheSessionTest {
     assertTrue(cache.isEmpty());
   }
 
+  /** 検索結果の再利用で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchResultCacheIsSingletonAcrossContext() {
     try (AnnotationConfigApplicationContext context = new AnnotationConfigApplicationContext()) {
@@ -38,9 +41,11 @@ class SearchResultCacheSessionTest {
     }
   }
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration
   static class TestConfiguration {
 
+    /** {@code clock} の条件を再現するための補助情報を返す。 */
     @Bean
     Clock clock() {
       return Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE);

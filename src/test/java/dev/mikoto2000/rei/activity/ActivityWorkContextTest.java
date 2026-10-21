@@ -22,10 +22,15 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 作業状況作業文脈の結果と状態の契約を検証するテスト。 */
 class ActivityWorkContextTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
+
+  /** 検証に使う日時。 */
   final Instant at = Instant.parse("2026-10-04T09:00:00Z");
 
+  /** 取得元について、自分が所有する対象識別子一覧を保持することを確認する。 */
   @Test
   void sourceRetainsOwnedIdentifiersWithoutToolTextAndExpiresThem() {
     var source = new ActivityAgentEvidenceSource(null);
@@ -53,6 +58,7 @@ class ActivityWorkContextTest {
     assertEquals(0, source.collect(at.plusSeconds(121)).events().size());
   }
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   WorkContext context(long revision, String project) {
     var evidence =
         new WorkContext.Evidence(
@@ -89,6 +95,7 @@ class ActivityWorkContextTest {
         Set.of("run"));
   }
 
+  /** 検証用に、後から経緯を確認できるよう、指定された内容を記録する。 */
   ActivityRecord record(ActivityEvidence.RecentEvent event) {
     var base = ActivitySemanticTest.dev(0, "Terminal", "X");
     var evidence =
@@ -110,6 +117,7 @@ class ActivityWorkContextTest {
             evidence, List.of(), false, "EVIDENCE_ONLY", "READY", Map.of(), ""));
   }
 
+  /** 作業状況の把握で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void matchesPersistedEventReferencesWithProjectIsolationAndSnapshotSemantics() {
     var store = org.mockito.Mockito.mock(ActivityStore.class);
@@ -134,6 +142,7 @@ class ActivityWorkContextTest {
     assertTrue(service.links("other", "today").isEmpty());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void legacyEvidenceAndMismatchedSessionRemainUnlinked() {
     var store = org.mockito.Mockito.mock(ActivityStore.class);
@@ -156,6 +165,7 @@ class ActivityWorkContextTest {
     assertThrows(DateTimeException.class, () -> service.links("project", "2026-10-05"));
   }
 
+  /** 作業状況の把握で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void identifiersRoundTripInSQLiteAndOldJsonRemainsReadable() throws Exception {
     var source =
@@ -189,6 +199,7 @@ class ActivityWorkContextTest {
     assertNull(legacy.eventId());
   }
 
+  /** シェルについて、選択中プロジェクトを利用することを確認する。 */
   @Test
   void shellUsesSelectedProjectAndRequiresSelectionWithoutMutation() {
     var store = org.mockito.Mockito.mock(ActivityStore.class);

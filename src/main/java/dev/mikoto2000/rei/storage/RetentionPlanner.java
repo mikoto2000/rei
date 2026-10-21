@@ -15,8 +15,23 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.UUID;
 
-/** Bounded metadata planning and durable approvals. This class never moves or deletes a body. */
+/**
+ * 保持期間の計画を組み立てる。
+ *
+ * <p>Bounded metadata planning and durable approvals. This class never moves or deletes a body.
+ */
 public final class RetentionPlanner {
+  /**
+   * データ保存の共通処理で受け渡す判断基準を表す。
+   *
+   * @param id 識別子
+   * @param kind 種類
+   * @param retentionSeconds 保持期間秒数
+   * @param maxBytes バイト数の上限
+   * @param maxCount 最大件数
+   * @param automatic 自動
+   * @param version 形式のバージョン
+   */
   public record Policy(
       String id,
       String kind,
@@ -26,6 +41,20 @@ public final class RetentionPlanner {
       boolean automatic,
       long version) {}
 
+  /**
+   * データ保存の共通処理で受け渡す計画を表す。
+   *
+   * @param id 識別子
+   * @param policyId 判断基準識別子
+   * @param policyVersion 判断基準形式のバージョン
+   * @param scope 対象範囲
+   * @param snapshotHash 状態の記録ハッシュ値
+   * @param candidates 候補一覧
+   * @param recoverableBytes 復旧可能なバイト数
+   * @param protectedReasons 保護された理由一覧
+   * @param scanLimited 調査制限された
+   * @param created 作成
+   */
   public record Plan(
       String id,
       String policyId,
@@ -38,8 +67,25 @@ public final class RetentionPlanner {
       boolean scanLimited,
       Instant created) {}
 
+  /**
+   * データ保存の共通処理で受け渡す承認を表す。
+   *
+   * @param planId 計画識別子
+   * @param snapshotHash 状態の記録ハッシュ値
+   * @param created 作成
+   */
   public record Approval(String planId, String snapshotHash, Instant created) {}
 
+  /**
+   * データ保存の共通処理で受け渡す要約を表す。
+   *
+   * @param id 識別子
+   * @param policyId 判断基準識別子
+   * @param scope 対象範囲
+   * @param snapshotHash 状態の記録ハッシュ値
+   * @param recoverableBytes 復旧可能なバイト数
+   * @param created 作成
+   */
   public record Summary(
       String id,
       String policyId,
@@ -48,20 +94,25 @@ public final class RetentionPlanner {
       long recoverableBytes,
       Instant created) {}
 
+  /** 登録台帳。 */
   private final StorageObjectRegistry registry;
 
+  /** 指定された値や利用先を使って、RetentionPlannerを初期化する。 */
   public RetentionPlanner(StorageObjectRegistry registry) {
     this.registry = registry;
   }
 
+  /** データ保存の共通処理で用いる作業ルートを返す。 */
   public java.nio.file.Path root() {
     return registry.root();
   }
 
+  /** データ保存の共通処理で用いる判断基準を返す。 */
   public Policy policy(String id) {
     return registry.database.read(db -> policy(db, id));
   }
 
+  /** データ保存の共通処理で用いる判断基準を返す。 */
   static Policy policy(Connection db, String id) throws SQLException {
     try (var query = db.prepareStatement("SELECT * FROM retention_policies WHERE id=?")) {
       query.setString(1, id);
@@ -79,11 +130,13 @@ public final class RetentionPlanner {
     }
   }
 
+  /** データ保存の共通処理で用いるnullableを返す。 */
   private static Long nullable(ResultSet rows, String column) throws SQLException {
     long value = rows.getLong(column);
     return rows.wasNull() ? null : value;
   }
 
+  /** 最新の内容を後続の処理に反映するため、判断基準を更新する。 */
   public void updatePolicy(String id, Duration retention, Long maxBytes, Long maxCount) {
     if (retention != null && retention.getSeconds() < 1
         || maxBytes != null && maxBytes < 1
@@ -109,6 +162,7 @@ public final class RetentionPlanner {
         });
   }
 
+  /** 依頼を進めるための候補や手順を組み立てる。 */
   public Plan plan(String policyId, String suppliedScope, int maxObjects, long maxBytes) {
     if (maxObjects < 1 || maxObjects > 1000 || maxBytes < 1 || maxBytes > 1024L * 1024 * 1024)
       throw new IllegalArgumentException("Plan budget must be 1..1000 objects and 1..1GiB");
@@ -162,6 +216,7 @@ public final class RetentionPlanner {
                         || policy.maxCount() != null
                             && totalCount - candidates.size() > policy.maxCount();
                 if (!expired && !quota) continue;
+                // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
                 if (candidates.size() >= maxObjects || object.size() > maxBytes - bytes) {
                   limited = true;
                   continue;
@@ -226,6 +281,7 @@ public final class RetentionPlanner {
         });
   }
 
+  /** 現在の状態を、後から参照できる記録として取り出す。 */
   private static String snapshot(
       String policy, long version, String scope, List<StoredObject> candidates) throws Exception {
     var digest = MessageDigest.getInstance("SHA-256");
@@ -234,10 +290,12 @@ public final class RetentionPlanner {
     return HexFormat.of().formatHex(digest.digest());
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Plan get(String id) {
     return registry.database.read(db -> get(db, id));
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   static Plan get(Connection db, String id) throws Exception {
     Plan metadata;
     try (var query = db.prepareStatement("SELECT record FROM retention_plans WHERE id=?")) {
@@ -273,6 +331,7 @@ public final class RetentionPlanner {
         metadata.created());
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   void validate(Connection db, Plan plan) throws Exception {
     Policy policy = policy(db, plan.policyId());
     if (policy.version() != plan.policyVersion())
@@ -290,6 +349,7 @@ public final class RetentionPlanner {
     }
   }
 
+  /** データ保存の共通処理で用いる承認を返す。 */
   public Approval approve(String id) {
     return registry.database.transaction(
         db -> {
@@ -310,6 +370,7 @@ public final class RetentionPlanner {
         });
   }
 
+  /** 過去の記録を、条件に従って参照できる形で返す。 */
   public List<Summary> history() {
     return registry.database.read(
         db -> {
@@ -334,22 +395,42 @@ public final class RetentionPlanner {
         });
   }
 
+  /**
+   * データ保存の共通処理で受け渡す対象データ使用状況を表す。
+   *
+   * @param kind 種類
+   * @param count 件数
+   * @param recordedBodyBytes recorded本文バイト数
+   */
   public record ObjectUsage(String kind, long count, long recordedBodyBytes) {}
 
+  /**
+   * データ保存の共通処理で受け渡す状態を表す。
+   *
+   * @param objects 対象データ一覧
+   * @param protectionReasons 保護理由一覧
+   * @param referenceScanLimited 参照先調査制限された
+   */
   public record Status(
       List<ObjectUsage> objects,
       Map<String, Long> protectionReasons,
       boolean referenceScanLimited) {}
 
-  /** Indexed metadata only; no body hashes, planning, filesystem writes or checkpoints. */
+  /**
+   * データ保存の共通処理で用いる状態全対象を返す。
+   *
+   * <p>Indexed metadata only; no body hashes, planning, filesystem writes or checkpoints.
+   */
   public Status statusAll() {
     return statusScope(null);
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   public Status status(String suppliedScope) {
     return statusScope(suppliedScope == null ? "" : UUID.fromString(suppliedScope).toString());
   }
 
+  /** データ保存の共通処理で用いる状態対象範囲を返す。 */
   private Status statusScope(String scope) {
     return registry.database.read(
         db -> {

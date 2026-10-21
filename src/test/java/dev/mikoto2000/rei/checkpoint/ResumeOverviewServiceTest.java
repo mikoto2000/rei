@@ -23,7 +23,9 @@ import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 再開概要サービスの結果と状態の契約を検証するテスト。 */
 class ResumeOverviewServiceTest {
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void registeredScopeAndFingerprintAreStableWithoutAnyResumeOrReconciliation() {
     var repository = mock(PersistentCheckpointRepository.class);
@@ -53,6 +55,7 @@ class ResumeOverviewServiceTest {
     assertEquals(2, service.overview("A").count());
   }
 
+  /** 受付経路一覧を維持することを確認する。 */
   @Test
   void overviewCommandForcesDisplayAndExistingCommandsKeepTheirRoutes() {
     var service = mock(PersistentCheckpointService.class);
@@ -74,6 +77,7 @@ class ResumeOverviewServiceTest {
     assertEquals(0, command.execute("overview"));
     assertEquals(0, command.execute("overview"));
     assertEquals(2, output.toString().split("最新の再開候補", -1).length - 1);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(service);
     when(service.list("A")).thenReturn(List.of());
     assertEquals(0, command.execute("list"));

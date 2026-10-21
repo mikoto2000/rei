@@ -11,20 +11,25 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+/** 再開用の記録許容件数エラーの結果と状態の契約を検証するテスト。 */
 class CheckpointCapacityErrorTest {
+  /** 検証条件を再現するための許容件数受付窓口。 */
   @RestController
   static class CapacityController {
+    /** {@code full} の条件を再現するため、検証用の操作や状態を扱う。 */
     @GetMapping("/capacity")
     void full() {
       throw CheckpointException.storageCapacity(8, 10, 1000, 25, 1024);
     }
 
+    /** {@code privateMessage} の条件を再現するため、検証用の操作や状態を扱う。 */
     @GetMapping("/private-capacity")
     void privateMessage() {
       throw new CheckpointException(CheckpointException.Code.CAPACITY, "PRIVATE");
     }
   }
 
+  /** Web APIによる操作で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void capacityResponseIncludesSafeUsageAndRecoveryInstructions() throws Exception {
     var mvc =

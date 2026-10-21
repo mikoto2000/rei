@@ -9,10 +9,13 @@ import dev.mikoto2000.rei.memory.model.MemoryType;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 記憶競合対象の解決の結果と状態の契約を検証するテスト。 */
 class MemoryConflictResolverTest {
 
+  /** 検証に使う対象の解決。 */
   private final MemoryConflictResolver resolver = new MemoryConflictResolver();
 
+  /** 長期記憶の保存と検索で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateWhenHighlySimilar() {
     Memory candidate =
@@ -42,6 +45,7 @@ class MemoryConflictResolverTest {
     assertEquals(MemoryConflictResolver.ConflictType.DUPLICATE, result.type());
   }
 
+  /** 長期記憶の保存と検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void noneWhenDissimilar() {
     Memory candidate =

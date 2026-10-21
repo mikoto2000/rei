@@ -22,18 +22,37 @@ import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
 
-/** New diagnostic segments only. Existing activity.jsonl is never adopted or mutated. */
+/**
+ * データ保存の共通処理に必要な管理対象作業状況ログを扱う。
+ *
+ * <p>New diagnostic segments only. Existing activity.jsonl is never adopted or mutated.
+ */
 public final class ManagedActivityLog {
+  /**
+   * データ保存の共通処理で受け渡す区間を表す。
+   *
+   * @param id 識別子
+   * @param scope 対象範囲
+   * @param path パス
+   * @param bytes バイト数
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   * @param created 作成
+   */
   private record Segment(
       String id, String scope, String path, long bytes, String sha256, Instant created) {}
 
+  /** 登録台帳。 */
   private final StorageObjectRegistry registry;
+
+  /** 区間バイト数。 */
   private final long segmentBytes;
 
+  /** データ保存の共通処理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ManagedActivityLog(StorageObjectRegistry registry) {
     this(registry, 4L * 1024 * 1024);
   }
 
+  /** 指定された値や利用先を使って、ManagedActivityLogを初期化する。 */
   ManagedActivityLog(StorageObjectRegistry registry, long bytes) {
     if (bytes < 1024 || bytes > 4L * 1024 * 1024)
       throw new IllegalArgumentException("Segment budget required");
@@ -41,19 +60,23 @@ public final class ManagedActivityLog {
     segmentBytes = bytes;
   }
 
+  /** データ保存の共通処理で用いる対象範囲を返す。 */
   private static String scope(String supplied) {
     return supplied == null ? "" : UUID.fromString(supplied).toString();
   }
 
+  /** データ保存の共通処理で用いるディレクトリを返す。 */
   private Path directory(String scope) {
     return (scope.isEmpty() ? registry.root : registry.root.resolve("projects").resolve(scope))
         .resolve("logs/activity-archives");
   }
 
+  /** データ保存の共通処理で用いる旧形式ファイルを返す。 */
   public Path legacyFile(String supplied) {
     return directory(scope(supplied)).getParent().resolve("activity.jsonl");
   }
 
+  /** データ保存の共通処理で用いるパスを返す。 */
   private Path path(Segment segment) throws Exception {
     Path file = registry.root.resolve(segment.path()).normalize();
     if (!file.getParent().equals(directory(segment.scope()))
@@ -63,6 +86,7 @@ public final class ManagedActivityLog {
     return file;
   }
 
+  /** 必要な対象を利用できるよう、管理対象作業状況ログの利用を開始する。 */
   private static Segment open(Connection db, String scope) throws Exception {
     try (var query =
         db.prepareStatement("SELECT * FROM activity_segments WHERE scope=? AND state='OPEN'")) {
@@ -81,6 +105,7 @@ public final class ManagedActivityLog {
     }
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   private void verify(Segment segment) throws Exception {
     Path file = path(segment);
     if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
@@ -89,12 +114,14 @@ public final class ManagedActivityLog {
           "Open Activity segment changed or interrupted; preserve it for inspection");
   }
 
+  /** データ保存の共通処理で用いるchainを返す。 */
   private static String chain(String previous, byte[] record) throws Exception {
     var digest = java.security.MessageDigest.getInstance("SHA-256");
     digest.update(HexFormat.of().parseHex(previous));
     return HexFormat.of().formatHex(digest.digest(record));
   }
 
+  /** 要求された条件を満たすか判断するため、Chainを確認する。 */
   private static String verifyChain(Path file) throws Exception {
     String hash =
         HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256").digest());
@@ -103,6 +130,7 @@ public final class ManagedActivityLog {
       var line = new ByteArrayOutputStream();
       int value;
       while ((value = input.read()) != -1) {
+        // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (line.size() > 1024 * 1024) throw new IOException("Activity line limit exceeded");
         line.write(value);
         if (value == '\n') {
@@ -115,6 +143,7 @@ public final class ManagedActivityLog {
     return hash;
   }
 
+  /** データ保存の共通処理で利用した資源や登録を解放し、利用を終了する。 */
   private void close(Connection db, Segment segment) throws Exception {
     verify(segment);
     Path file = path(segment);
@@ -159,6 +188,7 @@ public final class ManagedActivityLog {
     }
   }
 
+  /** 使い終わった資源や状態を解放するため、区間の利用を終える。 */
   public void closeSegment(String supplied) {
     String scope = scope(supplied);
     registry.database.transaction(
@@ -169,6 +199,7 @@ public final class ManagedActivityLog {
         });
   }
 
+  /** 既存の記録へ経緯を残すため、管理対象作業状況ログを追記する。 */
   public void append(String supplied, ProfileEventLogEntry entry) {
     Objects.requireNonNull(entry);
     String scope = scope(supplied);
@@ -227,7 +258,11 @@ public final class ManagedActivityLog {
         });
   }
 
-  /** Bounded materializing compatibility API; never returns a silently incomplete list. */
+  /**
+   * 指定された対象の内容を読み取り、後続の処理で参照できるようにする。
+   *
+   * <p>Bounded materializing compatibility API; never returns a silently incomplete list.
+   */
   public List<ProfileEventLogEntry> read(String supplied) {
     String scope = scope(supplied);
     return registry.serialized(
@@ -315,6 +350,7 @@ public final class ManagedActivityLog {
                 }));
   }
 
+  /** データ保存の共通処理に関する対象各対象ファイルを処理する。 */
   private static void forEachFile(
       Path file, java.util.function.Consumer<ProfileEventLogEntry> consumer) throws Exception {
     var mapper =
@@ -334,6 +370,7 @@ public final class ManagedActivityLog {
           line.write(value);
           continue;
         }
+        // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (line.size() > 0) {
           String text =
               StandardCharsets.UTF_8

@@ -20,10 +20,13 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 環境診断実行外部連携の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class DoctorRunIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 会話の実行で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void explicitDoctorRunAvoidsAmbientModelAndBackgroundAutomation() {
     var models = mock(LlmModelProvider.class);
@@ -56,6 +59,7 @@ class DoctorRunIntegrationTest {
     verify(doctor)
         .execute(
             eq("/doctor --check connectivity"), argThat(run -> run.runContext().equals(owner)));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(models, clients, work, sleep);
   }
 }

@@ -13,7 +13,9 @@ import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelUnloadService;
 import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelsService;
 import org.junit.jupiter.api.Test;
 
+/** モデル受付窓口の結果と状態の契約を検証するテスト。 */
 class ModelControllerTest {
+  /** 一覧および選択内容について、シェルモデルサービス一覧を再利用することを確認する。 */
   @Test
   void listAndSelectionReuseShellModelServicesAndSkipUnloadingUnchangedModel() {
     var models = mock(OpenAiCompatibleModelsService.class);
@@ -25,12 +27,14 @@ class ModelControllerTest {
     assertEquals(java.util.List.of("one", "two"), controller.list().models());
     assertEquals("one", controller.current().model());
     controller.select(new ModelController.Selection("one"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(unload);
     controller.select(new ModelController.Selection("two"));
     verify(unload).unload("one");
     verify(holder).set("two");
   }
 
+  /** 選択内容形式を許可することを確認する。 */
   @Test
   void unloadFailureStillAllowsSelectionAsInShellAndInvalidModelsNeverReachServices() {
     var models = mock(OpenAiCompatibleModelsService.class);

@@ -57,29 +57,63 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 目標待機外部連携の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class GoalWaitIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うデータベース接続。 */
   DriverManagerDataSource ds;
+
+  /** 検証に使う目標一覧。 */
   GoalRepository goals;
+
+  /** 検証に使う繰り返し。 */
   GoalLoopService loop;
+
+  /** 検証に使う待機する。 */
   GoalWaitRepository waits;
+
+  /** 検証に使う依存条件一覧。 */
   PersistentDependencyRepository dependencies;
+
+  /** 検証に使う観測内容一覧。 */
   DependencyObservationService observations;
+
+  /** 検証に使うschedules。 */
   PersistentAgentScheduler schedules;
+
+  /** 検証に使う再開用の記録一覧。 */
   PersistentCheckpointRepository checkpoints;
+
+  /** 検証に使う再開用の記録サービス。 */
   PersistentCheckpointService checkpointService;
+
+  /** 検証に使うサービス。 */
   GoalWaitService service;
+
+  /** 検証に使う通知の連携先。 */
   InMemoryAgentEventBus bus;
+
+  /** 検証に使う実行する作業一覧。 */
   ArrayDeque<Runnable> jobs = new ArrayDeque<>();
+
+  /** 検証に使う実行一覧。 */
   AtomicInteger executions = new AtomicInteger();
+
+  /** 検証に使うプロジェクト。 */
   String project = "00000000-0000-0000-0000-000000000001";
+
+  /** 検証に使うファイル一覧。 */
   FileGoalVerifier files = new FileGoalVerifier();
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("human", "session", root, project);
   }
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     ds = new DriverManagerDataSource("jdbc:sqlite:" + root.resolve("state.db"));
@@ -157,6 +191,7 @@ class GoalWaitIntegrationTest {
             new GoalEvents(bus, Clock.systemUTC()));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   PersistentCheckpointService newCheckpointService() {
     var beans = new StaticListableBeanFactory();
     return new PersistentCheckpointService(
@@ -173,11 +208,13 @@ class GoalWaitIntegrationTest {
         beans.getBeanProvider(dev.mikoto2000.rei.core.checkpoint.CheckpointStore.class));
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void close() {
     checkpointService.close();
   }
 
+  /** {@code stopped} の条件を再現するための補助情報を返す。 */
   GoalRepository.Goal stopped() throws Exception {
     String sha =
         HexFormat.of()
@@ -191,6 +228,7 @@ class GoalWaitIntegrationTest {
     return goals.get(project, goal.id());
   }
 
+  /** 目標の達成管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void restartCarriesConditionsAndConfirmedEffectsAndResumesOnlyOnce() throws Exception {
     var goal = stopped();
@@ -242,6 +280,7 @@ class GoalWaitIntegrationTest {
     assertEquals(2, goals.get(project, goal.id()).llmCallsUsed());
   }
 
+  /** 不明影響について、既存の項目確認を必要とすることを確認する。 */
   @Test
   void unknownEffectsRequireExistingItemConfirmationBeforeResume() throws Exception {
     var goal = stopped();
@@ -282,6 +321,7 @@ class GoalWaitIntegrationTest {
     assertEquals("COMPLETED", goals.get(project, goal.id()).status());
   }
 
+  /** 目標の達成管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void schedulerDispatchUsesTypedBindingAndDuplicateEventsDoNotStartSecondGoal() throws Exception {
     var goal = stopped();
@@ -320,12 +360,14 @@ class GoalWaitIntegrationTest {
     assertEquals("RESUMED", service.show(project, goal.id()).state());
     assertEquals("COMPLETED", schedules.get(project, wait.scheduleId()).status());
     assertEquals(1, jobs.size());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(chat);
     jobs.removeFirst().run();
     dispatcher.tick();
     assertEquals(2, executions.get());
   }
 
+  /** 目標の達成管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void terminalDependencyThatRevertsCannotResumeAndCancellationPreventsLaterEvents()
       throws Exception {
@@ -352,6 +394,7 @@ class GoalWaitIntegrationTest {
     assertEquals(1, executions.get());
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
     "external_process,PROCESS_EXIT",
@@ -445,6 +488,7 @@ class GoalWaitIntegrationTest {
             .allMatch(i -> i.getMethod().getName().equals("statusOwned")));
   }
 
+  /** シェル待機について、観測形式のバージョンを利用することを確認する。 */
   @Test
   void shellWaitUsesObservedVersionAndOwningSession() throws Exception {
     var goal = stopped();
@@ -486,6 +530,7 @@ class GoalWaitIntegrationTest {
     assertEquals("COMPLETED", goals.get(project, goal.id()).status());
   }
 
+  /** 目標の達成管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void stoppedButUnreconnectedProcessRequiresInspectionInsteadOfRestart() throws Exception {
     var goal = stopped();
@@ -511,6 +556,7 @@ class GoalWaitIntegrationTest {
     assertEquals(1, executions.get());
   }
 
+  /** 目標の達成管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateBindingAndStaleWaitVersionCannotAdmitNewRun() throws Exception {
     var goal = stopped();
@@ -531,6 +577,7 @@ class GoalWaitIntegrationTest {
     assertEquals(1, schedules.list(project).size());
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void dependencyFactsWithNoRunReachExistingNotificationBusAlongsideCheckpointListener()
       throws Exception {
@@ -554,6 +601,7 @@ class GoalWaitIntegrationTest {
             .anyMatch(e -> e.type() == AgentEventType.DEPENDENCY_COMPLETED && e.runId() == null));
   }
 
+  /** 目標の達成管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void uncertainAdmissionAfterRestartNeverAutomaticallyReplays() throws Exception {
     var goal = stopped();
@@ -576,6 +624,7 @@ class GoalWaitIntegrationTest {
     assertEquals("CANCELLED", service.show(project, goal.id()).state());
   }
 
+  /** 目標の達成管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledAdmissionCannotClaimGoalOrChargeAnotherAttempt() throws Exception {
     var goal = stopped();
@@ -594,6 +643,7 @@ class GoalWaitIntegrationTest {
     assertEquals(1, goals.get(project, goal.id()).attempts());
   }
 
+  /** 目標の達成管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void checkpointLeaseAndRevisionAreCheckedAgainAtActualGoalAdmission() throws Exception {
     var goal = stopped();
@@ -609,6 +659,7 @@ class GoalWaitIntegrationTest {
     assertTrue(jobs.isEmpty());
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void exhaustedWaitBudgetCannotRestoreCallsOrAttempts() throws Exception {
     var goal = goals.create(owner(), "bounded result", "out", "a".repeat(64), 1, 1);
@@ -631,6 +682,7 @@ class GoalWaitIntegrationTest {
     assertEquals("budget_exhausted", service.show(project, goal.id()).lastObservation());
   }
 
+  /** 変更済み利用者完了定義について、明示的な新規関連付けを必要とすることを確認する。 */
   @Test
   void changedHumanCompletionDefinitionRequiresExplicitNewBinding() throws Exception {
     var goal = stopped();

@@ -12,7 +12,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import reactor.core.Disposable;
 
+/** 並行実行キャンセルの結果と状態の契約を検証するテスト。 */
 class ConcurrentRunCancellationTest {
+  /** 対話から使う共通操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void backgroundCommandDoesNotConsumeAgentOrLegacyCancellation() {
     var service = new CommandCancellationService();
@@ -35,6 +37,7 @@ class ConcurrentRunCancellationTest {
     service.clear();
   }
 
+  /** 対話から使う共通操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void cleanupDisposesOnlyItsOwnLiveSubscription() {
     var service = new CommandCancellationService();
@@ -48,6 +51,7 @@ class ConcurrentRunCancellationTest {
     verify(stream).dispose();
   }
 
+  /** 対話から使う共通操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellingAndClearingBDoesNotTouchA() {
     var service = new CommandCancellationService();

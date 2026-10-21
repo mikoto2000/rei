@@ -15,7 +15,9 @@ import java.util.Base64;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
+/** Sapi音声出力の結果と状態の契約を検証するテスト。 */
 class SapiVoiceOutputTest {
+  /** 音声による対話で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void deadlineAlsoBoundsBlockedStdinWrites() throws Exception {
     var process = mock(Process.class);
@@ -29,6 +31,7 @@ class SapiVoiceOutputTest {
     when(process.getOutputStream())
         .thenReturn(
             new java.io.OutputStream() {
+              /** 検証用に、指定された内容を書き込み先へ反映する。 */
               public void write(int b) throws java.io.IOException {
                 try {
                   if (!killed.await(2, TimeUnit.SECONDS))
@@ -47,6 +50,7 @@ class SapiVoiceOutputTest {
     verify(process).destroyForcibly();
   }
 
+  /** そのままの値テキストを利用することを確認する。 */
   @Test
   void textTravelsOnlyThroughStdinAndSpeakUsesLiteralText() throws Exception {
     var process = mock(Process.class);
@@ -71,6 +75,7 @@ class SapiVoiceOutputTest {
     assertThat(stdin.toString(StandardCharsets.UTF_8)).contains("Haruka", text);
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationKillsOnlyOwnedProcess() throws Exception {
     var process = mock(Process.class);

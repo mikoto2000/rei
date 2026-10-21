@@ -2,9 +2,11 @@ package dev.mikoto2000.rei.bluesky;
 
 import org.springframework.stereotype.Component;
 
+/** Blueskyとの連携に必要なBluesky返信設定検証の窓口を扱う。 */
 @Component
 public class BlueskyReplyPropertiesValidator {
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public void validate(BlueskyProperties.BlueskyReplyProperties reply) {
     if (reply == null) {
       throw new IllegalStateException("Bluesky reply configuration is missing");

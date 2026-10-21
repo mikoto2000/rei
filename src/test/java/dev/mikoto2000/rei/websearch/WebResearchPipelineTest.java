@@ -14,7 +14,9 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** Web調査処理の連携の結果と状態の契約を検証するテスト。 */
 class WebResearchPipelineTest {
+  /** 既に取得根拠を保持することを確認する。 */
   @Test
   void supplementalProviderOutageRetainsAlreadyFetchedEvidence() throws Exception {
     var search = mock(WebSearchService.class);
@@ -43,11 +45,13 @@ class WebResearchPipelineTest {
     }
   }
 
+  /** 検証で使用する結果を、指定された条件に合わせて用意する。 */
   WebSearchResult result(String host) {
     return new WebSearchResult(
         "Java streams", "https://" + host + "/page", "Java streams reference", null);
   }
 
+  /** {@code page} の条件を再現するための補助情報を返す。 */
   WebSearchPage page(WebSearchResult result, String body) {
     return new WebSearchPage(
         result.title(),
@@ -60,6 +64,7 @@ class WebResearchPipelineTest {
         List.of(WebSourceAlias.from(result)));
   }
 
+  /** Web上の情報の調査で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void bodyDuplicatesTriggerOneBoundedSupplementAndRetainIndependentEvidence() throws Exception {
     var search = mock(WebSearchService.class);
@@ -105,6 +110,7 @@ class WebResearchPipelineTest {
     }
   }
 
+  /** 上限一覧について、繰り返された失敗情報を停止することを確認する。 */
   @Test
   void limitsStopRepeatedFailureWithoutRefetchingTheSameNormalizedUrl() throws Exception {
     var search = mock(WebSearchService.class);

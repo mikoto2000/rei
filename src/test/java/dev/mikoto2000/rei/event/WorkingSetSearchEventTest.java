@@ -8,10 +8,13 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 
+/** 作業中集合検索イベントの結果と状態の契約を検証するテスト。 */
 class WorkingSetSearchEventTest {
+  /** 通知された出来事と順序を検証するための記録。 */
   private final AgentEventFactory events =
       new AgentEventFactory(Clock.fixed(Instant.parse("2026-08-24T00:00:00Z"), ZoneOffset.UTC));
 
+  /** 実行状況の通知で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void startedAndCompletedShareTheSearchCorrelationId() {
     AgentEvent started =
@@ -34,6 +37,7 @@ class WorkingSetSearchEventTest {
     assertTrue(payload.durationMs() >= 0);
   }
 
+  /** 実行状況の通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void contextInjectedCapturesInjectedContextSize() {
     AgentEvent event = events.workingSetContextInjected(3, 429);

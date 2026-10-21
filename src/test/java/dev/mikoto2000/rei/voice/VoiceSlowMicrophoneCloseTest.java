@@ -17,8 +17,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+/** 音声Slowマイク終了の結果と状態の契約を検証するテスト。 */
 @Timeout(10)
 class VoiceSlowMicrophoneCloseTest {
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void offReturnsWhileDriverCloseIsBlockedButBackendIsHeldUntilCaptureRelease() throws Exception {
     var closeEntered = new CountDownLatch(1);
@@ -28,11 +30,13 @@ class VoiceSlowMicrophoneCloseTest {
     MicrophoneCaptureService capture =
         d ->
             new MicrophoneCaptureService.FrameSource() {
+              /** 検証用に、必要な内容を参照できるよう、音声フレームを読み取る。 */
               public float[] readFrame() throws Exception {
                 Thread.sleep(10);
                 return new float[512];
               }
 
+              /** 検証で利用した対象の終了を扱う。 */
               public void close() {
                 closeCalls.incrementAndGet();
                 closeEntered.countDown();
@@ -50,19 +54,23 @@ class VoiceSlowMicrophoneCloseTest {
         s ->
             new VoiceBackend(
                 new VoiceActivityDetector() {
+                  /** {@code probability} の条件を再現するための補助情報を返す。 */
                   public float probability(float[] frame) {
                     return 0;
                   }
 
+                  /** 検証で利用した対象の終了を扱う。 */
                   public void close() {
                     backendClosed.set(true);
                   }
                 },
                 new SpeechRecognizer() {
+                  /** {@code recognize} の条件を再現するための補助情報を返す。 */
                   public String recognize(SpeechSegment segment) {
                     return "unused";
                   }
 
+                  /** 検証で利用した対象の終了を扱う。 */
                   public void close() {}
                 });
     var voice =

@@ -7,10 +7,13 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** プロジェクト別名保存先の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProjectAliasStoreTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 作業状況の把握で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void reloadsOnDemandAndRetainsLastGoodSnapshotOnConflict() throws Exception {
     var file = directory.resolve("aliases.yaml");
@@ -27,6 +30,7 @@ class ProjectAliasStoreTest {
     assertThat(store.get().normalize("sensorvoice-input")).isEqualTo("sensorvoice-input");
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidYamlDoesNotReplaceValidAliases() throws Exception {
     var file = directory.resolve("aliases.yaml");

@@ -18,10 +18,12 @@ import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** プロンプト不正な指示の混入Propertyの結果と状態の契約を検証するテスト。 */
 @net.jqwik.api.Tag("integration")
 class PromptInjectionPropertyTest {
 
   // Feature: ai-memory-consolidation, Property 9: プロンプト注入の件数上限
+  /** 長期記憶の保存と検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Property(tries = 100)
   void selectedPromptMemoriesAreCapped(@ForAll @IntRange(min = 0, max = 20) int size)
       throws Exception {
@@ -46,6 +48,7 @@ class PromptInjectionPropertyTest {
     assertTrue(selected.size() <= 3);
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private MemoryConsolidatorService newService(int injectedLimit) throws Exception {
     ChatClient chatClient = Mockito.mock(ChatClient.class, Mockito.RETURNS_DEEP_STUBS);
     var tempDir = Files.createTempDirectory("rei-prompt-injection-pbt-");

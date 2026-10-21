@@ -8,27 +8,57 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * Run-local secret key and bounded metadata only. Never exposes input text or a reusable plain
+ * 実行時間の把握に必要な接頭辞診断情報を扱う。
+ *
+ * <p>Run-local secret key and bounded metadata only. Never exposes input text or a reusable plain
  * hash.
  */
 public final class PrefixDiagnostics {
+  /**
+   * 実行時間の把握で受け渡す取得元を表す。
+   *
+   * @param id 識別子
+   * @param content 内容
+   */
   public record Source(String id, String content) {}
 
+  /**
+   * 実行時間の把握で受け渡す地域を表す。
+   *
+   * @param id 識別子
+   * @param order 順序
+   * @param hash ハッシュ値
+   * @param length 長さ
+   * @param changed 変更済み
+   */
   public record Region(String id, int order, String hash, long length, Boolean changed) {}
 
+  /**
+   * 実行時間の把握で受け渡す状態の記録を表す。
+   *
+   * @param regions 対象領域
+   * @param firstChanged 最初変更済み
+   * @param truncated 省略の有無
+   */
   public record Snapshot(List<Region> regions, String firstChanged, boolean truncated) {
+    /** 受け取った情報からSnapshotを作成する。 */
     public Snapshot {
       regions = List.copyOf(regions);
     }
   }
 
+  /** 照合キー。 */
   private final byte[] key = new byte[32];
+
+  /** 前回。 */
   private List<Region> previous = List.of();
 
+  /** 既定の状態でPrefixDiagnosticsを初期化する。 */
   public PrefixDiagnostics() {
     new java.security.SecureRandom().nextBytes(key);
   }
 
+  /** 状況を判断する根拠を得るため、接頭辞診断情報を観測する。 */
   public synchronized Snapshot observe(List<Source> sources) {
     var regions = new ArrayList<Region>();
     String first = null;
@@ -50,6 +80,7 @@ public final class PrefixDiagnostics {
     return new Snapshot(regions, first, sources.size() > 64);
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private String hash(String content) {
     try {
       var mac = Mac.getInstance("HmacSHA256");
@@ -67,6 +98,7 @@ public final class PrefixDiagnostics {
     }
   }
 
+  /** 実行時間の把握で用いる取得元一覧を返す。 */
   public static List<Source> sources(org.springframework.ai.chat.prompt.Prompt prompt) {
     var sources = new ArrayList<Source>();
     if (prompt.getOptions()

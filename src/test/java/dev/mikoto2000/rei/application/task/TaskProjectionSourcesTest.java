@@ -24,8 +24,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** タスク表示用の状態取得元一覧の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class TaskProjectionSourcesTest {
+  /** 実行中タスクの操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void foreignOrUnknownGoalExecutionCannotAdvertiseCancellationOrSuspend() {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -59,6 +61,7 @@ class TaskProjectionSourcesTest {
         .isEqualTo("UNKNOWN");
   }
 
+  /** 目標待機中および失敗情報再開について、既存の予算上限一覧を維持することを確認する。 */
   @Test
   void goalWaitingAndFailureResumeKeepTheExistingBudgetLimits() {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -89,8 +92,10 @@ class TaskProjectionSourcesTest {
     }
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 再開用の記録について、元のタスク識別情報を維持することを確認する。 */
   @Test
   void checkpointKeepsOriginalTaskIdentityAfterResumeAndProjectsProgressWithoutResettingState() {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -134,6 +139,7 @@ class TaskProjectionSourcesTest {
     assertThat(restored.get(project.id(), "session", "run:original").resumeSupported()).isTrue();
   }
 
+  /** 目標依存条件および実行予定について、永続化された取得元状態一覧を再利用することを確認する。 */
   @Test
   void goalDependencyAndScheduleReuseDurableSourceStatesAndShowTheirParents() {
     var projects = new ProjectRegistry(root.resolve("projects.json"));

@@ -20,8 +20,10 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 言語モデルSummarizationクライアントの結果と状態の契約を検証するテスト。 */
 class LlmSummarizationClientTest {
 
+  /** 情報の要約で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void callsFeatureChatModelDirectlyWithExtractedContentPrompt() {
     ChatModel chatModel = Mockito.mock(ChatModel.class);

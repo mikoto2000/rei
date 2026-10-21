@@ -2,8 +2,15 @@ package dev.mikoto2000.rei.core;
 
 import java.util.List;
 
+/**
+ * 共通の実行基盤で受け渡す検索ファイル要求を表す。
+ *
+ * @param keywords 検索語句一覧
+ * @param maxResults 検索結果の件数上限
+ */
 public record FindFileRequest(List<String> keywords, Integer maxResults) {
 
+  /** 受け取った情報からFindFileRequestを作成する。 */
   public FindFileRequest {
     if (keywords == null
         || keywords.stream().noneMatch(value -> value != null && !value.isBlank())) {

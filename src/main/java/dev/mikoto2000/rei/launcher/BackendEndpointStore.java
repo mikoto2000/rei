@@ -19,25 +19,38 @@ import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
 
-/** The Backend writes only while holding its storage lease; launchers only read. */
+/**
+ * バックエンド接続先の記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>The Backend writes only while holding its storage lease; launchers only read.
+ */
 public final class BackendEndpointStore {
+  /** バイト数の上限。 */
   private static final int MAX_BYTES = 16384;
+
+  /** ディレクトリ。 */
   private final Path directory;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper();
 
+  /** 指定された値や利用先を使って、BackendEndpointStoreを初期化する。 */
   public BackendEndpointStore(Path root) {
     directory = root.toAbsolutePath().normalize().resolve(".storage");
   }
 
+  /** 起動環境の準備で用いる接続先を返す。 */
   private Path endpoint() {
     return directory.resolve("backend-endpoint.json");
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   public Optional<BackendEndpoint> read() throws IOException {
     if (Files.notExists(endpoint(), LinkOption.NOFOLLOW_LINKS)) return Optional.empty();
     return Optional.of(json.readValue(bounded(endpoint()), BackendEndpoint.class));
   }
 
+  /** 起動環境の準備で用いる保存識別子を返す。 */
   public String storageId() throws IOException {
     safeDirectory();
     Path file = directory.resolve("storage-id");
@@ -53,7 +66,11 @@ public final class BackendEndpointStore {
     return id;
   }
 
-  /** Launcher identity check never creates or repairs persistent metadata. */
+  /**
+   * 必要な内容を参照できるよう、保存識別子を読み取る。
+   *
+   * <p>Launcher identity check never creates or repairs persistent metadata.
+   */
   public Optional<String> readStorageId() throws IOException {
     Path file = directory.resolve("storage-id");
     if (Files.notExists(file, LinkOption.NOFOLLOW_LINKS)) return Optional.empty();
@@ -66,18 +83,21 @@ public final class BackendEndpointStore {
     return Optional.of(id);
   }
 
+  /** 状態や結果を購読先へ通知する。 */
   public void publish(BackendEndpoint value) throws IOException {
     safeDirectory();
     if (!storageId().equals(value.storageId())) throw new IOException("Storage identity mismatch");
     writeAtomic(endpoint(), json.writeValueAsBytes(value));
   }
 
+  /** 対象を管理から外すため、自分が所有する対象を取り除く。 */
   public void removeOwned(String instanceId) throws IOException {
     var current = read();
     if (current.isPresent() && current.get().instanceId().equals(instanceId))
       Files.delete(endpoint());
   }
 
+  /** 利用先の上限を超えない量へ、指定された内容を調整する。 */
   private byte[] bounded(Path file) throws IOException {
     safePath(file);
     try (var stream = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)) {
@@ -87,11 +107,13 @@ public final class BackendEndpointStore {
     }
   }
 
+  /** 起動環境の準備に関する安全性ディレクトリを処理する。 */
   private void safeDirectory() throws IOException {
     safePath(directory);
     Files.createDirectories(directory);
   }
 
+  /** 起動環境の準備に関する安全性パスを処理する。 */
   private static void safePath(Path path) throws IOException {
     for (Path part = path; part != null; part = part.getParent()) {
       if (Files.notExists(part, LinkOption.NOFOLLOW_LINKS)) continue;
@@ -106,6 +128,7 @@ public final class BackendEndpointStore {
       throw new IOException("Unsupported discovery path");
   }
 
+  /** 指定された内容を保存先へ反映するため、一括反映を書き込む。 */
   private void writeAtomic(Path destination, byte[] bytes) throws IOException {
     safePath(destination);
     Path temporary = Files.createTempFile(directory, ".endpoint-", ".tmp");
@@ -127,6 +150,7 @@ public final class BackendEndpointStore {
     }
   }
 
+  /** 起動環境の準備に関するrestrictを処理する。 */
   private static void restrict(Path file) throws IOException {
     var acl =
         Files.getFileAttributeView(file, AclFileAttributeView.class, LinkOption.NOFOLLOW_LINKS);

@@ -17,28 +17,37 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 文書表示への変換の結果と状態の契約を検証するテスト。 */
 class DocumentRendererTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うプロジェクト。 */
   String project = UUID.randomUUID().toString();
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("run", "session", root, project);
   }
 
+  /** 検証で使用する取得元を、指定された条件に合わせて用意する。 */
   DriverManagerDataSource source() {
     return new DriverManagerDataSource("jdbc:sqlite:" + root.resolve("renderer.db"));
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   DocumentRendererService service(DocumentRendererService.Renderer renderer) {
     return new DocumentRendererService(source(), Clock.systemUTC(), true, renderer, null);
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   DocumentRendererService.Request request() throws Exception {
     String text = "@startuml\nAlice -> Bob : hello\n@enduml\n";
     Files.writeString(root.resolve("diagram.puml"), text);
     return new DocumentRendererService.Request("diagram.puml", TextDocumentTransaction.hash(text));
   }
 
+  /** {@code png} の条件を再現するための補助情報を返す。 */
   byte[] png() throws Exception {
     var output = new java.io.ByteArrayOutputStream();
     javax.imageio.ImageIO.write(
@@ -48,6 +57,7 @@ class DocumentRendererTest {
     return output.toByteArray();
   }
 
+  /** 共通の実行基盤で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void validImageRecordsActualSizeHashAndDuplicateDoesNotExecuteAgain() throws Exception {
     var count = new AtomicInteger();
@@ -72,6 +82,7 @@ class DocumentRendererTest {
         () -> service.inspect(new AgentRunContext("foreign", "other", root, project), result.id()));
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void exitOrParseErrorAndMissingImageCannotBeReportedAsRendered() throws Exception {
     for (var rendered :
@@ -89,6 +100,7 @@ class DocumentRendererTest {
     }
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledStaleUnsafeInputAndReadOnlyDoNotLaunchRenderer() throws Exception {
     var calls = new AtomicInteger();
@@ -135,6 +147,7 @@ class DocumentRendererTest {
     assertEquals(0, calls.get());
   }
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void timeoutCancellationAndFatalStopLeaveHonestDurableReceipts() throws Exception {
     var request = request();
@@ -168,6 +181,7 @@ class DocumentRendererTest {
     assertEquals("UNKNOWN", restarted.validate(other, request).status());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void resourceMarkupCannotLaunchAnotherRendererOrFetchFiles() throws Exception {
     assertThrows(
@@ -177,6 +191,7 @@ class DocumentRendererTest {
                 "@startuml\nnote over Alice : <latex>resource</latex>\n@enduml"));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sourceDriftDuringRenderCannotPublishValidatedCurrentArtifact() throws Exception {
     var request = request();
@@ -194,6 +209,7 @@ class DocumentRendererTest {
     assertEquals("human changed", Files.readString(root.resolve("diagram.puml")));
   }
 
+  /** 共通の実行基盤の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void existingToolUsesCapturedOwnerAndIntrinsicExecutionPermissions() throws Exception {
     var request = request();

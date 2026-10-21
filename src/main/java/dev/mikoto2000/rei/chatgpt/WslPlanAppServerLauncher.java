@@ -19,22 +19,28 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BooleanSupplier;
 
 /**
- * No shell wrapper, token argument or normal Codex home. Native tools disabled and OS reads
+ * ChatGPTとの連携に必要なWsl計画アプリケーションサーバー起動を扱う。
+ *
+ * <p>No shell wrapper, token argument or normal Codex home. Native tools disabled and OS reads
  * restricted.
  */
 public final class WslPlanAppServerLauncher implements PlanAppServerClient.Launcher {
+  /** 設定。 */
   private final PlanAppServerProperties settings;
 
+  /** 指定された値や利用先を使って、WslPlanAppServerLauncherを初期化する。 */
   public WslPlanAppServerLauncher(PlanAppServerProperties settings) {
     this.settings = settings;
   }
 
+  /** ChatGPTとの連携で用いる接続先を返す。 */
   public String authority() {
     return dev.mikoto2000.rei.externalagent.ImplementationProposal.sha256(
         (settings.distribution() + "|" + settings.executable() + "|" + configuration())
             .getBytes(StandardCharsets.UTF_8));
   }
 
+  /** 要求された処理を開始する。 */
   public PlanAppServerClient.Started start(
       TokenSet tokens, Duration timeout, BooleanSupplier stop) {
     if (!settings.enabled()
@@ -97,6 +103,7 @@ public final class WslPlanAppServerLauncher implements PlanAppServerClient.Launc
     }
   }
 
+  /** ChatGPTとの連携で用いるプロセスを返す。 */
   ProcessBuilder process(
       Path home, String linuxCwd, String token, List<String> arguments, String watchdogDuration) {
     if (watchdogDuration == null || !watchdogDuration.matches("[1-9][0-9]{0,3}s"))
@@ -140,6 +147,7 @@ public final class WslPlanAppServerLauncher implements PlanAppServerClient.Launc
     return builder;
   }
 
+  /** 処理の継続を終えるため、Linuxを停止する。 */
   private void stopLinux(Path home, String signal) {
     try {
       String pid = Files.readString(home.resolve("process.pid")).strip();
@@ -170,11 +178,13 @@ public final class WslPlanAppServerLauncher implements PlanAppServerClient.Launc
       var child = kill.start();
       if (!child.waitFor(1500, TimeUnit.MILLISECONDS)) child.destroyForcibly();
     } catch (InterruptedException interrupted) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
     } catch (Exception ignored) {
     }
   }
 
+  /** ChatGPTとの連携で用いるLinuxパスを返す。 */
   static String linuxPath(Path path) {
     String value = path.toAbsolutePath().normalize().toString().replace('\\', '/');
     if (!value.matches("[A-Za-z]:/.*") || value.contains("\n") || value.contains("\r"))
@@ -182,6 +192,7 @@ public final class WslPlanAppServerLauncher implements PlanAppServerClient.Launc
     return "/mnt/" + Character.toLowerCase(value.charAt(0)) + value.substring(2);
   }
 
+  /** ChatGPTとの連携で用いる機能の構成を返す。 */
   static String configuration() {
     return """
       model_provider = "rei_plan"
@@ -219,6 +230,7 @@ public final class WslPlanAppServerLauncher implements PlanAppServerClient.Launc
       """;
   }
 
+  /** 指定された対象を管理から取り除く。 */
   private static void remove(Path root) {
     if (root == null) return;
     // Only the newly created dedicated home; never follow links or recurse into external roots.

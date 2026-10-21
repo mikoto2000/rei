@@ -28,22 +28,29 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.sqlite.SQLiteDataSource;
 
+/** 並行チャットHTTP通信の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ConcurrentChatHttpTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 検証条件を再現するための制御。 */
   static class Control {
+    /** 検証に使う開始、解放。 */
     final CountDownLatch started = new CountDownLatch(1), release = new CountDownLatch(1);
   }
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import(WebApiIntegrationTest.Config.class)
   static class Config {
+    /** {@code control} の条件を再現するための補助情報を返す。 */
     @Bean
     Control control() {
       return new Control();
     }
 
+    /** {@code data} の条件を再現するための補助情報を返す。 */
     @Bean("memoryConsolidationDataSource")
     javax.sql.DataSource data(
         @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String path) {
@@ -52,6 +59,7 @@ class ConcurrentChatHttpTest {
       return source;
     }
 
+    /** {@code concurrentRouter} の条件を再現するための補助情報を返す。 */
     @Bean
     @Primary
     ConversationInputRouter concurrentRouter(
@@ -97,6 +105,7 @@ class ConcurrentChatHttpTest {
     }
   }
 
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void localHttpSeparatesParallelConversationFailureGuidanceSessionEndCancelAndRestart()
       throws Exception {
@@ -179,6 +188,7 @@ class ConcurrentChatHttpTest {
     }
   }
 
+  /** {@code chat} の条件を再現するための補助情報を返す。 */
   private com.fasterxml.jackson.databind.JsonNode chat(
       HttpClient client, int port, String project, String session, String message, String mode)
       throws Exception {
@@ -194,6 +204,7 @@ class ConcurrentChatHttpTest {
     return new com.fasterxml.jackson.databind.ObjectMapper().readTree(receipt.body());
   }
 
+  /** 検証用に、必要な状態が整ってから先へ進むため、状態を待つ。 */
   private void awaitStatus(HttpClient client, int port, String run, String status)
       throws Exception {
     long end = System.nanoTime() + TimeUnit.SECONDS.toNanos(3);
@@ -204,6 +215,7 @@ class ConcurrentChatHttpTest {
     throw new AssertionError("Run did not reach " + status);
   }
 
+  /** {@code send} の条件を再現するための補助情報を返す。 */
   private HttpResponse<String> send(HttpClient client, int port, String path, String body)
       throws Exception {
     var request =

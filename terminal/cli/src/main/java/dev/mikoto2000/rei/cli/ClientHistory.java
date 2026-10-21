@@ -6,19 +6,36 @@ import java.nio.file.*;
 import java.nio.file.attribute.*;
 import java.util.*;
 
-/** Each process owns one bounded history file. History is optional and never a shared writer. */
+/**
+ * 軽量CLIでの対話に必要なクライアント履歴を扱う。
+ *
+ * <p>Each process owns one bounded history file. History is optional and never a shared writer.
+ */
 public final class ClientHistory implements AutoCloseable {
+  /** ファイル。 */
   private final Path file;
+
+  /** チャネル。 */
   private final java.nio.channels.FileChannel channel;
+
+  /** 排他制御。 */
   private final java.nio.channels.FileLock lock;
+
+  /** 項目一覧。 */
   private final ArrayDeque<String> entries = new ArrayDeque<>();
+
+  /** 有効状態。 */
   private boolean enabled = true;
+
+  /** 認証キー。 */
   private final String authenticationKey;
 
+  /** 軽量CLIでの対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ClientHistory(Path directory) throws IOException {
     this(directory, System.getenv("REI_API_KEY"));
   }
 
+  /** 指定された値や利用先を使って、ClientHistoryを初期化する。 */
   ClientHistory(Path directory, String authenticationKey) throws IOException {
     this.authenticationKey = authenticationKey;
     directory = directory.toAbsolutePath().normalize();
@@ -82,6 +99,7 @@ public final class ClientHistory implements AutoCloseable {
     lock = channel.lock();
   }
 
+  /** 軽量CLIでの対話で用いる更新を返す。 */
   private static long modified(Path file) {
     try {
       return Files.getLastModifiedTime(file, LinkOption.NOFOLLOW_LINKS).toMillis();
@@ -90,18 +108,22 @@ public final class ClientHistory implements AutoCloseable {
     }
   }
 
+  /** 軽量CLIでの対話で用いる項目一覧を返す。 */
   public List<String> entries() {
     return List.copyOf(entries);
   }
 
+  /** 軽量CLIでの対話で用いるファイルを返す。 */
   public Path file() {
     return file;
   }
 
+  /** この機能を利用する設定が有効かどうかを返す。 */
   public void enabled(boolean enabled) {
     this.enabled = enabled;
   }
 
+  /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */
   public static boolean safe(String line) {
     String lower = line.toLowerCase(Locale.ROOT);
     return line.length() <= 16384
@@ -120,6 +142,7 @@ public final class ClientHistory implements AutoCloseable {
         && !lower.contains("sk-");
   }
 
+  /** 後から経緯を確認できるよう、指定された内容を記録する。 */
   public void record(String line) throws IOException {
     if (!enabled || !accepts(line)) return;
     entries.addLast(line);
@@ -136,6 +159,7 @@ public final class ClientHistory implements AutoCloseable {
     channel.force(true);
   }
 
+  /** 軽量CLIでの対話で判断に用いるacceptsの条件を確認する。 */
   public boolean accepts(String line) {
     return safe(line)
         && (authenticationKey == null
@@ -143,6 +167,7 @@ public final class ClientHistory implements AutoCloseable {
             || !line.contains(authenticationKey));
   }
 
+  /** 軽量CLIでの対話で利用した資源や登録を解放し、利用を終了する。 */
   @Override
   public void close() throws IOException {
     try {

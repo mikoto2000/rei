@@ -15,9 +15,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Claudeコード拡張機能一覧連携の窓口の結果と状態の契約を検証するテスト。 */
 class ClaudeCodeExtensionsAdapterTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temporary;
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void nativeStorageAliasIntoSourceNeverCreatesDirectoriesOrStartsCli(boolean missingBase)
@@ -47,6 +50,7 @@ class ClaudeCodeExtensionsAdapterTest {
         new ClaudeCodeExternalAgentExecutor(
             properties,
             new ExternalAgentProcessRunner() {
+              /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
               @Override
               public Output run(
                   List<String> command,
@@ -80,6 +84,7 @@ class ClaudeCodeExtensionsAdapterTest {
     assertEquals("before\n", Files.readString(file));
   }
 
+  /** 外部エージェントへの委譲で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void persistedSessionResumesWithToolFreeSubscriptionBoundaryAndConfirmedNativeUuid()
       throws Exception {
@@ -94,6 +99,7 @@ class ClaudeCodeExtensionsAdapterTest {
     var calls = new AtomicInteger();
     var runner =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           @Override
           public Output run(
               List<String> command,
@@ -176,6 +182,7 @@ class ClaudeCodeExtensionsAdapterTest {
     assertEquals(2, calls.get());
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void fixProposalIsStructuredWithoutApplyingAndUnavailableSessionNeverStartsCli()
       throws Exception {
@@ -187,6 +194,7 @@ class ClaudeCodeExtensionsAdapterTest {
     properties.setFixProposalsEnabled(true);
     var runner =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           @Override
           public Output run(
               List<String> command,
@@ -241,6 +249,7 @@ class ClaudeCodeExtensionsAdapterTest {
     assertEquals(1, paid.get());
   }
 
+  /** {@code output} の条件を再現するための補助情報を返す。 */
   static ExternalAgentProcessRunner.Output output(String value) {
     return new ExternalAgentProcessRunner.Output(
         ExternalAgentResult.Status.SUCCESS, value, "", 0, 1, false);

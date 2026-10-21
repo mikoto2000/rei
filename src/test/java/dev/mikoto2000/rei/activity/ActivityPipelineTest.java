@@ -19,7 +19,9 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況処理の連携の結果と状態の契約を検証するテスト。 */
 class ActivityPipelineTest {
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void observationContinuesWhileVisionRunsAndPendingImagesAreLatestOnly() throws Exception {
     var p = new ActivityProperties();
@@ -87,6 +89,7 @@ class ActivityPipelineTest {
     }
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void pauseClearsPendingFramesAndInvalidatesInflightResult() throws Exception {
     var p = new ActivityProperties();
@@ -112,9 +115,11 @@ class ActivityPipelineTest {
     capture.tick();
     capture.pause();
     tasks.forEach(Runnable::run);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(extractor, store);
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void excludedForegroundInvalidatesQueuedPublicImage() throws Exception {
     var p = new ActivityProperties();
@@ -140,9 +145,11 @@ class ActivityPipelineTest {
     when(observer.foreground()).thenReturn(new ForegroundWindow("1password", 2, "vault", "2"));
     capture.tick();
     tasks.forEach(Runnable::run);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(extractor, store);
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rejectedAnalysisSubmissionCanBeRetriedOnNextObservation() throws Exception {
     var p = new ActivityProperties();

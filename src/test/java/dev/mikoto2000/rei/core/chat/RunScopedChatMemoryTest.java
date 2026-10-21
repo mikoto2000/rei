@@ -25,25 +25,31 @@ import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.sqlite.SQLiteDataSource;
 import reactor.core.publisher.Flux;
 
+/** 実行対象を限定したチャット記憶の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class RunScopedChatMemoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** 会話の実行で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void persistsCompleteAnswerOnceWhenFinishChunkHasNullText() {
     checkStream(List.of(chunk("過去の"), chunk("話題です。"), finish(null)), "過去の話題です。");
   }
 
+  /** 会話の実行で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void persistsCompleteAnswerRatherThanOnlyTheLastChunk() {
     checkStream(List.of(chunk("first "), finish("last")), "first last");
   }
 
+  /** 会話の実行で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void persistsAnswerWhenProviderOmitsFinishReason() {
     checkStream(List.of(chunk("first "), chunk("last")), "first last");
   }
 
+  /** 検証用に、後続の操作を進められるか判断するため、逐次データを確認する。 */
   private void checkStream(List<ChatResponse> chunks, String expected) {
     var ds = new SQLiteDataSource();
     ds.setUrl("jdbc:sqlite:" + temp.resolve("memory.db"));
@@ -60,10 +66,12 @@ class RunScopedChatMemoryTest {
     memory.add(other, new AssistantMessage("B history"));
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             return Flux.fromIterable(chunks);
           }
@@ -95,11 +103,13 @@ class RunScopedChatMemoryTest {
     assertThat(AgentRunScope.current()).isNull();
   }
 
+  /** {@code chunk} の条件を再現するための補助情報を返す。 */
   private ChatResponse chunk(String text) {
     return new ChatResponse(
         List.of(new Generation(AssistantMessage.builder().content(text).build())));
   }
 
+  /** {@code finish} の条件を再現するための補助情報を返す。 */
   private ChatResponse finish(String text) {
     return new ChatResponse(
         List.of(

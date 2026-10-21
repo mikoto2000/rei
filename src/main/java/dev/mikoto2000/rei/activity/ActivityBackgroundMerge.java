@@ -1,12 +1,16 @@
 package dev.mikoto2000.rei.activity;
 
 /**
- * Desktop candidates are supplemental inference; they never enter the primary activity candidate
+ * 作業状況の把握に必要な作業状況バックグラウンド統合を扱う。
+ *
+ * <p>Desktop candidates are supplemental inference; they never enter the primary activity candidate
  * list.
  */
 final class ActivityBackgroundMerge {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ActivityBackgroundMerge() {}
 
+  /** 関連する情報をまとめて扱えるよう、作業状況バックグラウンド統合を統合する。 */
   static ActivityRecord merge(
       ActivityRecord r, ActivityExtractor.Result background, double threshold) {
     if (background.confidence() < threshold || background.inference().activities().isEmpty())

@@ -10,7 +10,9 @@ import dev.mikoto2000.rei.event.ExecutionProgressPayload;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;
 
+/** WebAPIイベントDtoの結果と状態の契約を検証するテスト。 */
 class WebApiEventDtoTest {
+  /** 公開受付から終了までの管理対応付け一覧について、共通の通知属性を保持することを確認する。 */
   @Test
   void publicLifecycleMappingsPreserveEnvelopeAndOnlyApprovedPayloadFields() {
     var f =
@@ -116,6 +118,7 @@ class WebApiEventDtoTest {
     }
   }
 
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void activityAggregatesArePublicWithoutInternalEvidenceOrSearchQuery() {
     var factory = new AgentEventFactory(Clock.systemUTC());
@@ -163,6 +166,7 @@ class WebApiEventDtoTest {
         .containsEntry("delta", "considering");
   }
 
+  /** Web APIによる操作で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void thinkingTextReachesClientsWithCredentialRedaction() {
     var factory = new AgentEventFactory(Clock.systemUTC());
@@ -179,6 +183,7 @@ class WebApiEventDtoTest {
         .doesNotContain("api-secret", "bearer-value", "hidden");
   }
 
+  /** 関連付けを維持することを確認する。 */
   @Test
   void toolBoundaryOmitsArbitraryArgumentsAndResultsButKeepsCorrelationAndTiming() {
     var factory = new AgentEventFactory(Clock.systemUTC());
@@ -201,6 +206,7 @@ class WebApiEventDtoTest {
         .doesNotContainKey("resultSummary");
   }
 
+  /** Web APIによる操作で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void stableEnvelopeAndMessagePayloadDoNotExposeInternalClassesOrCredentials() throws Exception {
     var event =
@@ -219,6 +225,7 @@ class WebApiEventDtoTest {
     assertThat(json).doesNotContain("MessageDeltaPayload", "test-secret", "@class");
   }
 
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledStateNormalizesLegacyFailureAndProjectsExternalErrorFields() {
     var event =
@@ -231,6 +238,7 @@ class WebApiEventDtoTest {
         .doesNotContain("internal-code", "errorType", "bad");
   }
 
+  /** Web APIによる操作で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void errorsAreGenericAndCredentialRedactionCoversBearerBasicAndEnvelope() throws Exception {
     var factory = new AgentEventFactory(Clock.systemUTC());

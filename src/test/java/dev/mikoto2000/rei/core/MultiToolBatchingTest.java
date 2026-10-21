@@ -6,7 +6,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.tool.annotation.Tool;
 
+/** 複数ツールBatchingの結果と状態の契約を検証するテスト。 */
 class MultiToolBatchingTest {
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"readMultiFile", "grepMultiQuery", "writeMultiFile"})
   void descriptionsRequireBatchingAndShowMultipleTargets(String name) {

@@ -19,11 +19,21 @@ import java.sql.SQLException;
 import java.util.HexFormat;
 
 /**
- * Strict streamed JSONL import and byte-boundary to sequence conversion in one target transaction.
+ * データ保存の共通処理に必要なイベント移行を扱う。
+ *
+ * <p>Strict streamed JSONL import and byte-boundary to sequence conversion in one target
+ * transaction.
  */
 final class EventMigration {
+  /**
+   * データ保存の共通処理で受け渡す旧形式続きの取得位置を表す。
+   *
+   * @param offset 開始位置
+   * @param discard 破棄
+   */
   private record LegacyCursor(long offset, boolean discard) {}
 
+  /** 指定された内容を、現在の対象へ反映する。 */
   static void apply(Connection db, Path root) throws Exception {
     try (var sql = db.createStatement()) {
       sql.execute(
@@ -64,6 +74,7 @@ final class EventMigration {
     }
   }
 
+  /** データ保存の共通処理において、保存テーブルに該当するか判定する。 */
   private static boolean table(Connection db, String name) throws SQLException {
     try (var query =
         db.prepareStatement("SELECT 1 FROM sqlite_schema WHERE type='table' AND name=?")) {
@@ -74,6 +85,7 @@ final class EventMigration {
     }
   }
 
+  /** データ保存の共通処理に関する取り込み続きの取得位置一覧および参照先一覧を処理する。 */
   private static void importCursorsAndReferences(Connection db, Path root) throws Exception {
     Path file = root.resolve("memory-consolidation.db");
     StorageBackup.requireSafePath(file);
@@ -144,6 +156,7 @@ final class EventMigration {
     }
   }
 
+  /** データ保存の共通処理で用いる続きの取得位置を返す。 */
   private static LegacyCursor cursor(Connection db, String scope) throws SQLException {
     try (var query =
         db.prepareStatement(
@@ -155,6 +168,7 @@ final class EventMigration {
     }
   }
 
+  /** データ保存の共通処理に関するconvertedを処理する。 */
   private static void converted(Connection db, String scope, long sequence) throws SQLException {
     try (var update =
         db.prepareStatement("UPDATE event_cursors SET sequence=?,converted=1 WHERE project_id=?")) {
@@ -164,6 +178,7 @@ final class EventMigration {
     }
   }
 
+  /** データ保存の共通処理に関する取り込みファイルを処理する。 */
   private static void importFile(Connection db, Path root, Path source, String scope)
       throws Exception {
     if (!Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS))
@@ -282,6 +297,7 @@ final class EventMigration {
     }
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   static void verify(Connection db) throws SQLException {
     try (var sql = db.createStatement()) {
       sql.executeQuery(

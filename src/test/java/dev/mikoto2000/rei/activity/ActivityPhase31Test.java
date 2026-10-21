@@ -16,8 +16,10 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況段階31の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ActivityPhase31Test {
+  /** {@code summarize} の条件を再現するための補助情報を返す。 */
   static List<SummarySegment> summarize(ActivityRecord... records) {
     var policy =
         new SemanticSessionPolicy(
@@ -29,15 +31,18 @@ class ActivityPhase31Test {
     return new SummaryGroupingPolicy(policy).aggregate(policy.aggregate(List.of(records)));
   }
 
+  /** {@code web} の条件を再現するための補助情報を返す。 */
   static ActivityRecord web(int minute, String category, String service) {
     return record(minute, "Firefox", service, activity(category, "Firefox", service, ""));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void normalGapMerges() {
     assertEquals(1, summarize(dev(0, "Terminal", "X"), dev(2, "GVIM", "X")).size());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void extendedGapNeedsStrongAgreementAndLowersConfidence() {
     var joined = summarize(dev(0, "Terminal", "X"), dev(4, "GVIM", "X"));
@@ -50,11 +55,13 @@ class ActivityPhase31Test {
     assertEquals(2, summarize(web(0, "social", "X"), web(4, "shopping", "Amazon")).size());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void longGapNeverMergesAtEitherLayer() {
     assertEquals(2, summarize(web(0, "social", "X"), web(10, "social", "X")).size());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void cumulativeMissingTimeCannotGrowWithoutBound() {
     var result =
@@ -67,6 +74,7 @@ class ActivityPhase31Test {
     assertTrue(result.stream().allMatch(s -> s.unobservedSeconds() <= 300));
   }
 
+  /** 作業状況の把握で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void foregroundProcessOutranksOtherVisibleServicesEvenWhenTitleMentionsThem() {
     var r =
@@ -82,6 +90,7 @@ class ActivityPhase31Test {
     assertEquals("rei", roles.primary().projectCandidate());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void foregroundBrowserTitleSelectsX() {
     var r =
@@ -95,6 +104,7 @@ class ActivityPhase31Test {
     assertEquals("social", new ActivityRolePolicy().classify(r).primary().type());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void weakCategoriesBecomeUnknownAndRemainSeparateFromTools() {
     for (var category : List.of("Terminal", "Shell", "Web", "local")) {
@@ -107,6 +117,7 @@ class ActivityPhase31Test {
     }
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void lowConfidenceFallsBackToUnknown() {
     var r = dev(0, "Terminal", "X");
@@ -126,6 +137,7 @@ class ActivityPhase31Test {
     assertNull(new ActivityRolePolicy().classify(r).primary());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void browserThemeCombinesShoppingAndSocial() {
     var result =
@@ -135,6 +147,7 @@ class ActivityPhase31Test {
     assertEquals(3, result.getFirst().evidence().size());
   }
 
+  /** 作業テーマについて、互換プロジェクトを必要とすることを確認する。 */
   @Test
   void workThemeRequiresCompatibleProject() {
     var research =
@@ -145,6 +158,7 @@ class ActivityPhase31Test {
     assertEquals(3, summarize(dev(0, "Terminal", "X"), other, dev(2, "GVIM", "X")).size());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void labelsAreNormalizedAndGenericServiceNamesAreHidden() {
     var r =
@@ -161,6 +175,7 @@ class ActivityPhase31Test {
     assertFalse(text.contains("local"));
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void unknownSummaryStillShowsBoundedVisibleEvidence() {
     var r =
@@ -178,6 +193,7 @@ class ActivityPhase31Test {
     assertFalse(text.contains("画面上の活動"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void missingRatioControlsHumanReadableNotes() {
     var r = dev(0, "Terminal", "X");
@@ -195,6 +211,7 @@ class ActivityPhase31Test {
     }
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void suppliedBrowsingExampleSplitsAtElevenMinuteGap() {
     var records = new ArrayList<ActivityRecord>();
@@ -221,6 +238,7 @@ class ActivityPhase31Test {
     assertEquals(3, result.getFirst().evidence().size());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void halfDayFixtureCompressesTwentyFourFineSessionsToSixThemes() throws Exception {
     var records = new ArrayList<ActivityRecord>();
@@ -241,6 +259,7 @@ class ActivityPhase31Test {
             + new ActivitySummaryFormatter(ZoneOffset.UTC).format(result));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void exactGapBoundariesAndLegacySettingsAreHonored() {
     var gaps = new SessionGapPolicy(Duration.ofSeconds(120), Duration.ofSeconds(300));
@@ -260,6 +279,7 @@ class ActivityPhase31Test {
     assertThrows(IllegalArgumentException.class, p::validate);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void unknownWithOnlyBackgroundEvidenceStillShowsWhatWasVisible() {
     var r = record(0, "unmatched", "", activity("monitoring", "btop", "", ""));

@@ -11,11 +11,14 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
+/** 音声再生サービスの結果と状態の契約を検証するテスト。 */
 class VoicePlaybackServiceTest {
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   AgentRunContext context() {
     return new AgentRunContext("run", "session", Path.of("."), "project").asVoiceInput();
   }
 
+  /** 音声による対話で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void queueIsBoundedAndStopDiscardsQueuedReplies() throws Exception {
     var entered = new java.util.concurrent.CountDownLatch(1);
@@ -51,6 +54,7 @@ class VoicePlaybackServiceTest {
     assertThat(calls).hasValue(1);
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void defaultOffAndUnownedRepliesNeverReachOutput() {
     var calls = new AtomicInteger();
@@ -71,6 +75,7 @@ class VoicePlaybackServiceTest {
     }
   }
 
+  /** 自分が所有する対象音声について、通知の抑制を利用することを確認する。 */
   @Test
   void ownedVoiceUsesSuppressionAndSelectionChangeStopsIt() {
     var gate = new VoiceAudioGate(System::nanoTime);
@@ -98,6 +103,7 @@ class VoicePlaybackServiceTest {
     }
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void keyboardResponsesAndLongMessagesAreNotSpoken() {
     var calls = new AtomicInteger();

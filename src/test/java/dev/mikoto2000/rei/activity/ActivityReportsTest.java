@@ -8,7 +8,9 @@ import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 
+/** 作業状況伝えるの結果と状態の契約を検証するテスト。 */
 class ActivityReportsTest {
+  /** 利用新しいコマンド状態を伝えることを確認する。 */
   @Test
   void reportsUseFreshCommandStateAndKeepSummarySeparateFromVerboseTimeline() {
     var timeline = mock(ActivityTimeline.class);
@@ -22,11 +24,13 @@ class ActivityReportsTest {
     assertEquals("summary", command.reportSummary("today"));
     verify(presentation).format("yesterday", true);
     verify(timeline).trendSummary("today");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(capture);
     assertEquals("Activity Capture を一時停止しました。", command.reportPause());
     verify(capture).pause();
   }
 
+  /** 分類および作業習慣伝えるについて、既存のメッセージ一覧を保持することを確認する。 */
   @Test
   void classificationAndBehaviorReportsPreserveTheExistingMessages() {
     var toolkit = mock(ClassificationToolkit.class);

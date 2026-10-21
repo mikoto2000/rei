@@ -8,8 +8,10 @@ import static org.mockito.Mockito.when;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.tool.annotation.Tool;
 
+/** URL内容取得ツール一覧の結果と状態の契約を検証するテスト。 */
 class UrlContentFetchToolsTest {
 
+  /** 結果を返すことを確認する。 */
   @Test
   void delegatesToServiceAndReturnsResult() {
     UrlContentFetchService service = mock(UrlContentFetchService.class);
@@ -23,6 +25,7 @@ class UrlContentFetchToolsTest {
     verify(service).fetch("https://example.com");
   }
 
+  /** URLの内容の参照で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void descriptionRoutesKnownUrlsWithoutManualSearchChaining() throws Exception {
     Tool tool =

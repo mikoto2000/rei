@@ -13,13 +13,17 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 検証レポート診断の結果と状態の契約を検証するテスト。 */
 class TestReportDiagnosisTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code report} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void report(String text) throws Exception {
     Files.writeString(root.resolve("TEST.xml"), text);
   }
 
+  /** レポート識別情報を保持することを確認する。 */
   @Test
   void observesFailureErrorSkippedAndPreservesReportIdentity() throws Exception {
     report(
@@ -45,6 +49,7 @@ class TestReportDiagnosisTest {
     assertFalse(result.nextActions().isEmpty());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void detectsIncompleteCountsAndNestedSuitesWithoutDoubleCounting() throws Exception {
     report(
@@ -60,6 +65,7 @@ class TestReportDiagnosisTest {
     assertTrue(result.partial());
   }
 
+  /** 共通の実行基盤で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void rejectsDoctypeMalformedXmlAndOutsideOrSensitivePaths() throws Exception {
     var service = new TestReportDiagnosisService();
@@ -77,6 +83,7 @@ class TestReportDiagnosisTest {
         () -> service.read(root, root.resolve("TEST.xml").toString()));
   }
 
+  /** 共通の実行基盤で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void redactsBeforeClippingAndBoundsEvidenceWithoutCopyingOutputsOrProperties() throws Exception {
     String issue =
@@ -98,6 +105,7 @@ class TestReportDiagnosisTest {
     assertFalse(result.toString().contains("private property"));
   }
 
+  /** 許容範囲バイト数深さ要素一覧事例一覧およびについて、不正な件数を受け付けないことを確認する。 */
   @Test
   void boundsBytesDepthNodesCasesAndRejectsInvalidCountOrRoot() throws Exception {
     var service = new TestReportDiagnosisService();
@@ -120,6 +128,7 @@ class TestReportDiagnosisTest {
     assertThrows(java.io.IOException.class, () -> service.read(root, "TEST.xml"));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void completeEmptyReportIsOnlyASavedObservationAndDigestChangesWithContent() throws Exception {
     report("<testsuite tests='0' failures='0' errors='0' skipped='0'/>");
@@ -135,6 +144,7 @@ class TestReportDiagnosisTest {
     assertTrue(second.nextActions().getFirst().contains("current process"));
   }
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void interruptedReadPropagatesCancellation() throws Exception {
     report("<testsuite/>");
@@ -148,6 +158,7 @@ class TestReportDiagnosisTest {
     }
   }
 
+  /** 取得済みプロジェクトを利用することを確認する。 */
   @Test
   void realToolUsesCapturedProjectAndExplicitReadOnlySubAgentAccess() throws Exception {
     report(

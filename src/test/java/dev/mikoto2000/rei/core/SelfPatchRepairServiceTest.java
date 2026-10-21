@@ -11,7 +11,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Self変更差分修復サービスの結果と状態の契約を検証するテスト。 */
 class SelfPatchRepairServiceTest {
+  /** 共通の実行基盤で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void callerDeadlineIsSharedWithoutReplenishment() throws Exception {
     long deadline = System.nanoTime() + java.time.Duration.ofSeconds(2).toNanos();
@@ -38,8 +40,10 @@ class SelfPatchRepairServiceTest {
     assertEquals("BLOCKED", exhausted.verify(root, request(), System.nanoTime() - 1).status());
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code round} の条件を再現するための補助情報を返す。 */
   SelfPatchReviewService.Result round(String status, String version) {
     return new SelfPatchReviewService.Result(
         root.toString(),
@@ -64,16 +68,19 @@ class SelfPatchRepairServiceTest {
         List.of());
   }
 
+  /** 検証で使用する状態の記録を、指定された条件に合わせて用意する。 */
   SelfPatchReviewService.Snapshot snapshot(String version) {
     return new SelfPatchReviewService.Snapshot(
         version, List.of("A.java"), List.of(), true, List.of());
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   SelfPatchRepairService.Request request() {
     return new SelfPatchRepairService.Request(
         "fixture", 10, List.of(new SelfPatchRepairService.Repair("fix", "hash")));
   }
 
+  /** 元の失敗情報を保持することを確認する。 */
   @Test
   void fixesAReportedFailureThenRepeatsEntireReviewAndPreservesOriginalFailure() throws Exception {
     var steps = new ArrayList<String>();
@@ -108,6 +115,7 @@ class SelfPatchRepairServiceTest {
     assertEquals(1, result.repairs().size());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void changedPatchIncompleteReviewOrUncertainRepairNeverStartsAnotherFix() throws Exception {
     for (var status : List.of("PATCH_CHANGED", "BLOCKED", "REVIEW_INCOMPLETE", "NO_PATCH")) {
@@ -142,6 +150,7 @@ class SelfPatchRepairServiceTest {
     assertEquals("REPAIR_REJECTED", uncertain.verify(root, request()).status());
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void noProgressAndRepairLimitStopRatherThanLoopOrClaimSuccess() throws Exception {
     var count = new AtomicInteger();
@@ -163,6 +172,7 @@ class SelfPatchRepairServiceTest {
     assertEquals(1, count.get());
   }
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void invalidPlanAndCancellationStopBeforeAnotherStage() throws Exception {
     var service =
@@ -190,6 +200,7 @@ class SelfPatchRepairServiceTest {
         java.util.concurrent.CancellationException.class, () -> service.verify(root, request()));
   }
 
+  /** 同一上限内に収めた計画を保持することを確認する。 */
   @Test
   void maximumThreeRepairsAndFourWholeCyclesRetainTheSameBoundedPlan() throws Exception {
     var fixes = new AtomicInteger();
@@ -220,6 +231,7 @@ class SelfPatchRepairServiceTest {
     assertEquals(4, cycles.get());
   }
 
+  /** 共通の実行基盤で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void opaqueFailedTestsAndUnknownApplyReceiptsDoNotContinue() throws Exception {
     for (boolean timeout : List.of(true, false)) {

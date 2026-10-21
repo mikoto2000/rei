@@ -10,12 +10,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.*;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Real ConPTY presentation with synthetic requests; never dispatches a command or model. */
+/**
+ * 承認判定期間仮想端末の結果と状態の契約を検証するテスト。
+ *
+ * <p>Real ConPTY presentation with synthetic requests; never dispatches a command or model.
+ */
 @EnabledOnOs(OS.WINDOWS)
 class ApprovalWindowsPtyTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
+
+  /** 検証に使う識別子。 */
   private static final String ID = "ca880320-1482-4d84-8fb9-53c0b3234997";
 
+  /** 状態およびログ一覧について、続きの取得位置を保持することを確認する。 */
   @Test
   void statusAndLogsPreserveCursorAndExistingArrowMenu() throws Exception {
     var argv =
@@ -41,7 +49,9 @@ class ApprovalWindowsPtyTest {
     }
   }
 
+  /** 検証条件を再現するための検証条件。 */
   public static final class Fixture {
+    /** 検証用に、軽量CLIの起動の起動要求を受け付け、実行を開始する。 */
     public static void main(String[] args) throws Exception {
       var kernel = com.sun.jna.platform.win32.Kernel32.INSTANCE;
       var input = kernel.CreateFile("CONIN$", 0x80000000 | 0x40000000, 3, null, 3, 0, null);

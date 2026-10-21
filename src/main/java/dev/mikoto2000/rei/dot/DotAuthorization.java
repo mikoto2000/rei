@@ -4,7 +4,9 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Set;
 
+/** 利用者の状態表示に必要な状態表示権限の確認を扱う。 */
 final class DotAuthorization {
+  /** 利用者の状態表示で用いる分類一覧を返す。 */
   static Set<String> categories(String input) {
     if (input == null) return Set.of();
     String clean = input.replaceAll("(?s)```.*?```|「[^」]*」|\\\"[^\\\"]*\\\"", "");

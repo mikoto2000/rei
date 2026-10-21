@@ -12,18 +12,33 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
-/** Canonical, bounded requirements over existing real Project paths. No silent truncation. */
+/**
+ * 外部エージェントへの委譲に必要な実装仕様検証の窓口を扱う。
+ *
+ * <p>Canonical, bounded requirements over existing real Project paths. No silent truncation.
+ */
 public final class ImplementationSpecificationValidator {
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final ObjectMapper JSON =
       new ObjectMapper()
           .configure(MapperFeature.SORT_PROPERTIES_ALPHABETICALLY, true)
           .configure(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS, true);
 
+  /**
+   * 外部エージェントへの委譲で受け渡す検証済みを表す。
+   *
+   * @param specification 仕様
+   * @param canonical 正規
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   * @param task タスク
+   */
   public record Validated(
       ImplementationSpecification specification, String canonical, String sha256, String task) {}
 
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ImplementationSpecificationValidator() {}
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public static Validated validate(Path directory, ImplementationSpecification input) {
     if (input == null)
       throw new IllegalArgumentException(
@@ -58,6 +73,7 @@ public final class ImplementationSpecificationValidator {
     }
     var references = new ArrayList<ImplementationSpecification.RequirementReference>();
     if (input.references() != null) {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (input.references().size() > 16)
         throw new IllegalArgumentException("At most 16 references");
       for (var reference : input.references()) {
@@ -126,6 +142,7 @@ public final class ImplementationSpecificationValidator {
     }
   }
 
+  /** 外部エージェントへの委譲で用いる保存形式への変換を返す。 */
   static String serialize(Object value) {
     try {
       return JSON.writeValueAsString(value);
@@ -134,15 +151,18 @@ public final class ImplementationSpecificationValidator {
     }
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   static String hash(Object value) {
     return ImplementationProposal.sha256(serialize(value).getBytes(StandardCharsets.UTF_8));
   }
 
+  /** 外部エージェントへの委譲で用いる相対を返す。 */
   private static String relative(Path root, Path path) {
     String result = root.relativize(path).toString().replace('\\', '/');
     return result.isEmpty() ? "." : result;
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   private static String text(String value, int max, String label) {
     if (value == null || value.isBlank() || value.length() > max || value.indexOf(0) >= 0)
       throw new IllegalArgumentException(
@@ -150,8 +170,10 @@ public final class ImplementationSpecificationValidator {
     return value.strip();
   }
 
+  /** 外部エージェントへの委譲で用いるtextsを返す。 */
   private static List<String> texts(
       List<String> values, int min, int max, int length, String label) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (values == null || values.size() < min || values.size() > max)
       throw new IllegalArgumentException(label + " requires " + min + " to " + max + " entries");
     return values.stream().map(value -> text(value, length, label)).toList();

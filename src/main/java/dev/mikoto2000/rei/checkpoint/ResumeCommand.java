@@ -10,6 +10,7 @@ import picocli.CommandLine.Parameters;
 import picocli.CommandLine.ParentCommand;
 import picocli.CommandLine.Spec;
 
+/** 保存タスクの一覧・照合・明示再開・除外を行うための利用者コマンド。 */
 @Component
 @Command(
     name = "resume",
@@ -21,30 +22,45 @@ import picocli.CommandLine.Spec;
       ResumeCommand.Overview.class
     })
 public class ResumeCommand implements Callable<Integer> {
+  /** サービス。 */
   private final PersistentCheckpointService service;
+
+  /** プロジェクト一覧。 */
   private final ProjectService projects;
+
+  /** キャンセル。 */
   private final dev.mikoto2000.rei.core.service.CommandCancellationService cancellation;
+
+  /** 仕様。 */
   @Spec CommandSpec spec;
 
+  /** タスク。 */
   @Parameters(index = "0", arity = "0..1", paramLabel = "taskId")
   String task;
 
+  /** 出力。 */
   private java.io.PrintWriter output;
+
+  /** 概要。 */
   private ResumeOverviewService overview;
 
+  /** 作業の中断と再開で使用する概要を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setOverview(ResumeOverviewService value) {
     overview = value;
   }
 
+  /** 作業の中断と再開を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ResumeCommand() {
     this(null, null, new dev.mikoto2000.rei.core.service.CommandCancellationService());
   }
 
+  /** 作業の中断と再開を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ResumeCommand(PersistentCheckpointService service, ProjectService projects) {
     this(service, projects, new dev.mikoto2000.rei.core.service.CommandCancellationService());
   }
 
+  /** 指定された値や利用先を使って、ResumeCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public ResumeCommand(
       PersistentCheckpointService service,
@@ -55,10 +71,12 @@ public class ResumeCommand implements Callable<Integer> {
     this.cancellation = cancellation;
   }
 
+  /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
     this.output = output;
   }
 
+  /** 利用者に結果を伝えるため、再開コマンドを出力する。 */
   int print(java.util.function.Supplier<Object> action) {
     var writer = output == null ? spec.commandLine().getOut() : output;
     cancellation.begin(Thread.currentThread());
@@ -75,10 +93,12 @@ public class ResumeCommand implements Callable<Integer> {
     }
   }
 
+  /** 作業の中断と再開で用いるプロジェクトを返す。 */
   String project() {
     return projects.currentContext().id();
   }
 
+  /** 保存タスクの一覧・照合・明示再開・除外を行う。 */
   @Override
   public Integer call() {
     return print(
@@ -88,10 +108,13 @@ public class ResumeCommand implements Callable<Integer> {
                 : service.resume(project(), task, AgentRunContext.RequestSource.SHELL));
   }
 
+  /** 作業の中断と再開に必要な一覧タスク一覧を扱う。 */
   @Command(name = "list")
   public static class ListTasks implements Callable<Integer> {
+    /** 親。 */
     @ParentCommand ResumeCommand parent;
 
+    /** 作業の中断と再開の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
       return parent.print(
           () ->
@@ -107,10 +130,13 @@ public class ResumeCommand implements Callable<Integer> {
     }
   }
 
+  /** 作業の中断と再開に必要な概要を扱う。 */
   @Command(name = "overview")
   public static class Overview implements Callable<Integer> {
+    /** 親。 */
     @ParentCommand ResumeCommand parent;
 
+    /** 作業の中断と再開の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
       return parent.print(
           () ->
@@ -121,13 +147,17 @@ public class ResumeCommand implements Callable<Integer> {
     }
   }
 
+  /** 作業の中断と再開に必要な表示を扱う。 */
   @Command(name = "show")
   public static class Show implements Callable<Integer> {
+    /** 親。 */
     @ParentCommand ResumeCommand parent;
 
+    /** タスク。 */
     @Parameters(index = "0")
     String task;
 
+    /** 作業の中断と再開の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
       return parent.print(
           () ->
@@ -137,13 +167,17 @@ public class ResumeCommand implements Callable<Integer> {
     }
   }
 
+  /** 作業の中断と再開に必要なAbandonを扱う。 */
   @Command(name = "abandon")
   public static class Abandon implements Callable<Integer> {
+    /** 親。 */
     @ParentCommand ResumeCommand parent;
 
+    /** タスク。 */
     @Parameters(index = "0")
     String task;
 
+    /** 作業の中断と再開の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
       return parent.print(() -> parent.service.abandon(parent.project(), task));
     }

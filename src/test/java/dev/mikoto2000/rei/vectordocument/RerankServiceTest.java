@@ -28,8 +28,10 @@ import org.springframework.boot.context.properties.source.MapConfigurationProper
 import org.springframework.web.client.RestClient;
 import tools.jackson.databind.json.JsonMapper;
 
+/** 再評価サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class RerankServiceTest {
+  /** 評価について、無効状態を受け付けないことを確認する。 */
   @Test
   void evaluationRejectsDisabledOrFailedProviderWhileRuntimeRetainsFallback() {
     var absent =
@@ -53,14 +55,17 @@ class RerankServiceTest {
     assertEquals(List.of("b", "a"), configured.rerankForEvaluation("q", List.of("a", "b"), s -> s));
   }
 
+  /** 検証に使う作業ルート。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path root;
 
+  /** {@code budgetedService} の条件を再現するための補助情報を返す。 */
   private RerankService budgetedService() {
     return new RerankService(
         new RerankProperties(true, baseUrl, "rerank-key", "reranker", "/custom/rerank", true),
         RestClient.builder());
   }
 
+  /** 検索対象文書の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void unknownMalformedOversizedAndAmbiguousUsageCannotBecomeFreeFallback() {
     var variants = new java.util.ArrayList<String>();
@@ -96,6 +101,7 @@ class RerankServiceTest {
     }
   }
 
+  /** 検索対象文書の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unavailableEndpointUsageStopsButKnownInvalidResultsStillChargeBeforeFallback() {
     status = 500;
@@ -126,6 +132,7 @@ class RerankServiceTest {
     }
   }
 
+  /** 検索対象文書の管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void exhaustedAndCanceledParentsDoNotSendRerankRequests() {
     var empty =
@@ -152,6 +159,7 @@ class RerankServiceTest {
     assertNull(body.get());
   }
 
+  /** 目標再評価使用状況について、保存と検索の窓口再開の後も対象の情報が残ることを確認する。 */
   @Test
   void goalRerankUsageSurvivesRepositoryRestartAfterOvershoot() {
     response = "{\"usage\":{\"total_tokens\":6},\"results\":[{\"index\":0,\"relevance_score\":1}]}";
@@ -189,6 +197,7 @@ class RerankServiceTest {
     assertEquals(1, restarted.get("p", goal.id()).llmCallsUsed());
   }
 
+  /** 検索対象文書の管理で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void defaultDisabledAndEmptyRequestsPreserveLegacyAccounting() {
     var budget = new dev.mikoto2000.rei.llm.OutputLimitRunBudget(0, 10, null, 100);
@@ -205,6 +214,7 @@ class RerankServiceTest {
     assertFalse(budget.usageUnknown());
   }
 
+  /** 検索対象文書の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void parentBudgetSettingBindsWithoutLosingEnabledDefault() {
     var properties = bind(Map.of("rei.rerank.inherit-run-model-budget", "true"));
@@ -213,6 +223,7 @@ class RerankServiceTest {
     assertFalse(new RerankProperties(true, baseUrl, "", "model", null).inheritRunModelBudget());
   }
 
+  /** 検索対象文書の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void semanticSkillRerankCannotAbsorbParentBudgetStopIntoFusionOrder() {
     response = "{\"usage\":{\"total_tokens\":6},\"results\":[{\"index\":0,\"relevance_score\":1}]}";
@@ -255,6 +266,7 @@ class RerankServiceTest {
     assertEquals(6, budget.totalTokens());
   }
 
+  /** 検索対象文書の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void ownedRerankChargesUsageAndExactLimitPreventsNextRequest() {
     response =
@@ -278,16 +290,28 @@ class RerankServiceTest {
     }
   }
 
+  /** 検証に使うサーバー。 */
   private HttpServer server;
+
+  /** 検証に使う接続先の基準URL。 */
   private String baseUrl;
+
+  /** 検証に使う本文。 */
   private final AtomicReference<String> body = new AtomicReference<>();
+
+  /** 検証に使う権限の確認。 */
   private final AtomicReference<String> authorization = new AtomicReference<>();
+
+  /** 検証に使う応答。 */
   private String response =
       """
       {"results":[{"index":0,"relevance_score":0.1},{"index":1,"relevance_score":0.9}]}
       """;
+
+  /** 検証に使う状態。 */
   private int status = 200;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void start() throws Exception {
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -306,17 +330,20 @@ class RerankServiceTest {
     baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void stop() {
     server.stop(0);
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   private RerankService service() {
     return new RerankService(
         new RerankProperties(true, baseUrl, "rerank-key", "reranker", "/custom/rerank"),
         RestClient.builder());
   }
 
+  /** 検索対象文書の管理で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void sendsIndependentCredentialsModelAndFullTextAndReranksBeforeLimit() {
     VectorStore store = mock(VectorStore.class);
@@ -350,6 +377,7 @@ class RerankServiceTest {
     assertEquals("Bearer rerank-key", authorization.get());
   }
 
+  /** 検索対象文書の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledAndEmptySearchDoNotSendRequests() {
     for (String url : new String[] {null, "", "  "}) {
@@ -361,12 +389,14 @@ class RerankServiceTest {
     assertNull(body.get());
   }
 
+  /** 失敗情報について、元の順序を維持することを確認する。 */
   @Test
   void failureKeepsOriginalOrder() {
     status = 500;
     assertEquals(List.of("a", "b"), service().rerank("q", List.of("a", "b"), s -> s));
   }
 
+  /** 形式が不正な未完了のおよび重複の有無結果一覧について、元の順序を維持することを確認する。 */
   @Test
   void malformedIncompleteAndDuplicateResultsKeepOriginalOrder() {
     for (String invalid :
@@ -380,6 +410,7 @@ class RerankServiceTest {
     }
   }
 
+  /** 設定済み接続先について、モデルを必要とすることを確認する。 */
   @Test
   void configuredEndpointRequiresModel() {
     assertThrows(
@@ -389,6 +420,7 @@ class RerankServiceTest {
                 new RerankProperties(true, baseUrl, "", "", null), RestClient.builder()));
   }
 
+  /** 検索対象文書の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void explicitlyDisabledSkipsRequestsAndModelValidation() {
     for (String model : new String[] {null, "", "reranker"}) {
@@ -409,6 +441,7 @@ class RerankServiceTest {
     assertNull(body.get());
   }
 
+  /** 既存の機能の構成を保持することを確認する。 */
   @Test
   void omittedEnabledPreservesExistingConfigurationAndExplicitTrueEnablesReranking() {
     for (String enabled : new String[] {null, "true"}) {
@@ -424,6 +457,7 @@ class RerankServiceTest {
     }
   }
 
+  /** {@code bind} の条件を再現するための補助情報を返す。 */
   private RerankProperties bind(Map<String, ?> values) {
     return new Binder(new MapConfigurationPropertySource(values))
         .bind("rei.rerank", Bindable.of(RerankProperties.class))

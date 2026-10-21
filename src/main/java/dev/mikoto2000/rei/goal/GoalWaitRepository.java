@@ -14,9 +14,24 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Durable binding between existing Goal, Dependency, Scheduler and Checkpoint identities. */
+/**
+ * 目標待機を保存・検索するための窓口。
+ *
+ * <p>Durable binding between existing Goal, Dependency, Scheduler and Checkpoint identities.
+ */
 @org.springframework.stereotype.Repository
 public class GoalWaitRepository {
+  /**
+   * 目標の達成管理で受け渡す状態の記録を表す。
+   *
+   * @param progress 進捗
+   * @param completion 完了条件
+   * @param condition 条件
+   * @param checkpointTask 再開用の記録タスク
+   * @param checkpointRevision 再開用の記録改訂番号
+   * @param operations 操作一覧
+   * @param resumeInfo 再開付随情報
+   */
   public record Snapshot(
       GoalCompletionProgress progress,
       GoalCompletionGate.Definition completion,
@@ -25,11 +40,29 @@ public class GoalWaitRepository {
       long checkpointRevision,
       List<PersistentCheckpoint.Operation> operations,
       String resumeInfo) {
+    /** 受け取った情報からSnapshotを作成する。 */
     public Snapshot {
       operations = List.copyOf(operations);
     }
   }
 
+  /**
+   * 目標の達成管理で受け渡す待機を表す。
+   *
+   * @param id 識別子
+   * @param project プロジェクト
+   * @param goalId 目標識別子
+   * @param runId 実行の識別子
+   * @param attempts 試行回数
+   * @param reason 理由
+   * @param dependencyId 依存条件識別子
+   * @param scheduleId 実行予定識別子
+   * @param state 状態
+   * @param lastObservation 直近観測内容
+   * @param version 形式のバージョン
+   * @param resumedRunId 再開済み実行の識別子
+   * @param snapshot 状態の記録
+   */
   public record Wait(
       String id,
       String project,
@@ -45,12 +78,20 @@ public class GoalWaitRepository {
       String resumedRunId,
       Snapshot snapshot) {}
 
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 一連の更新をまとめて確定するための窓口。 */
   private final TransactionTemplate tx;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
       new com.fasterxml.jackson.databind.ObjectMapper();
 
+  /** 指定された値や利用先を使って、GoalWaitRepositoryを初期化する。 */
   public GoalWaitRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, Clock clock) {
     db = JdbcClient.create(source);
@@ -64,6 +105,7 @@ public class GoalWaitRepository {
         .update();
   }
 
+  /** 受け渡し先が扱える形式へ、指定された内容を変換する。 */
   private static String encode(Snapshot snapshot) {
     try {
       String result = JSON.writeValueAsString(snapshot);
@@ -75,6 +117,7 @@ public class GoalWaitRepository {
     }
   }
 
+  /** 受け渡し先の形式に合わせて、定義を変換する。 */
   private static String encodeDefinition(GoalCompletionGate.Definition definition) {
     try {
       return JSON.writeValueAsString(definition);
@@ -83,6 +126,7 @@ public class GoalWaitRepository {
     }
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   private static Snapshot decode(String json) {
     try {
       return JSON.readValue(json, Snapshot.class);
@@ -91,6 +135,7 @@ public class GoalWaitRepository {
     }
   }
 
+  /** 行。 */
   private final org.springframework.jdbc.core.RowMapper<Wait> row =
       (rs, n) ->
           new Wait(
@@ -108,6 +153,7 @@ public class GoalWaitRepository {
               rs.getString("resumed_run"),
               decode(rs.getString("snapshot")));
 
+  /** 指定された内容から新しい対象を作成する。 */
   public Wait create(
       GoalRepository.Goal goal,
       String dependency,
@@ -159,6 +205,7 @@ public class GoalWaitRepository {
         });
   }
 
+  /** 目標の達成管理で用いる別識別子を返す。 */
   private Wait byId(String project, String id) {
     return db.sql("SELECT * FROM agent_goal_waits WHERE project=? AND id=?")
         .params(project, id)
@@ -166,6 +213,7 @@ public class GoalWaitRepository {
         .single();
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Wait get(String project, String goal) {
     return db.sql(
             "SELECT * FROM agent_goal_waits WHERE project=? AND goal=? ORDER BY sequence DESC LIMIT 1")
@@ -175,6 +223,7 @@ public class GoalWaitRepository {
         .orElseThrow(() -> new IllegalArgumentException("Goal wait not found"));
   }
 
+  /** 目標の達成管理で用いる別実行予定を返す。 */
   public Optional<Wait> bySchedule(String project, String id) {
     return db.sql("SELECT * FROM agent_goal_waits WHERE project=? AND schedule=?")
         .params(project, id)
@@ -182,6 +231,7 @@ public class GoalWaitRepository {
         .optional();
   }
 
+  /** 目標の達成管理において、活動中に該当するか判定する。 */
   public boolean active(String project, String goal) {
     return db.sql(
                 "SELECT COUNT(*) FROM agent_goal_waits WHERE project=? AND goal=? AND state IN ('WAITING','BLOCKED','RESUMING')")
@@ -191,6 +241,7 @@ public class GoalWaitRepository {
         > 0;
   }
 
+  /** 目標の達成管理で用いる状態の遷移を返す。 */
   public Wait transition(Wait expected, String state, String observed, String newRun) {
     if (!Set.of("WAITING", "BLOCKED", "RESUMING", "RESUMED", "CANCELLED").contains(state)
         || observed == null

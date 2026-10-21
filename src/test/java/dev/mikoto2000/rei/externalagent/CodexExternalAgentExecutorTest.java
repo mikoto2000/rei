@@ -8,8 +8,10 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/** Codex外部エージェント実行先の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class CodexExternalAgentExecutorTest {
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void nonzeroExitExtractsJsonErrorWithoutForwardingRawEvents() {
     var result =
@@ -27,6 +29,7 @@ class CodexExternalAgentExecutorTest {
     assertFalse(result.summary().contains("turn.failed"));
   }
 
+  /** 外部エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void nonzeroExitIncludesBoundedRedactedDiagnostic() {
     var result =
@@ -45,6 +48,7 @@ class CodexExternalAgentExecutorTest {
     assertTrue(result.summary().length() < 1200);
   }
 
+  /** 判定期間について、OSの機能実行可能なを利用することを確認する。 */
   @Test
   void windowsUsesNativeExecutableAndPreservesExplicitConfiguration() {
     assertEquals(
@@ -56,6 +60,7 @@ class CodexExternalAgentExecutorTest {
         CodexExternalAgentExecutor.resolveCommand("C:\\Tools\\codex.exe", "Windows 11", List.of()));
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void resolvesNpmNativeBinaryWithoutInvokingShellAndPrefersPathExecutable() throws Exception {
     var npm = java.nio.file.Files.createDirectories(root.resolve("npm with spaces"));
@@ -81,6 +86,7 @@ class CodexExternalAgentExecutorTest {
             "codex", "Windows 11", List.of(npm, nativeDirectory)));
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void startupFailureExplainsConfigurationAndOsError() {
     var result =
@@ -99,6 +105,7 @@ class CodexExternalAgentExecutorTest {
     assertFalse(result.summary().contains("do-not-display"));
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void authenticationFailureInJsonStdoutIsReportedWithoutLeakingText() {
     var result =
@@ -114,13 +121,16 @@ class CodexExternalAgentExecutorTest {
     assertEquals("Codex CLI authentication failed", result.summary());
   }
 
+  /** 検証に使う作業ルート。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path root;
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unsupportedCliFailsClosedWithoutStartingAReview() {
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     var runner =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           @Override
           public Output run(
               List<String> command,
@@ -154,11 +164,13 @@ class CodexExternalAgentExecutorTest {
     assertEquals(1, calls.get());
   }
 
+  /** 標準入力データ形式を利用することを確認する。 */
   @Test
   void capableCliUsesStdinSchemaAndCanonicalCwdAndRemovesTemporarySchema() {
     var schema = new java.util.concurrent.atomic.AtomicReference<java.nio.file.Path>();
     var runner =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           @Override
           public Output run(
               List<String> command,
@@ -202,6 +214,7 @@ class CodexExternalAgentExecutorTest {
     assertFalse(java.nio.file.Files.exists(schema.get()));
   }
 
+  /** 注意事項を保持することを確認する。 */
   @Test
   void parsesStructuredFinalMessageAndPreservesWarnings() {
     String json =
@@ -231,6 +244,7 @@ class CodexExternalAgentExecutorTest {
     assertEquals(ExternalAgentResult.Status.SUCCESS_WITH_WARNINGS, result.status());
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void malformedOutputIsNotExecutionFailure() {
     var result =
@@ -243,6 +257,7 @@ class CodexExternalAgentExecutorTest {
     assertTrue(result.warnings().size() >= 2);
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void cliCommandUsesIsolatedReadOnlyPermissionsAndNoResumeOrShell() {
     var root = java.nio.file.Path.of(".").toAbsolutePath();

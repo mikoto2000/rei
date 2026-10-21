@@ -17,21 +17,28 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 保存される依存条件保存と検索の窓口の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class PersistentDependencyRepositoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-10-04T00:00:00Z");
 
+  /** 検証で使用する保存と検索の窓口を、指定された条件に合わせて用意する。 */
   PersistentDependencyRepository repository(Instant time) {
     return new PersistentDependencyRepository(
         new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("dependencies.db")),
         Clock.fixed(time, ZoneOffset.UTC));
   }
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("run", "session", dir, "project");
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   PersistentDependencyRepository.Entry create(
       PersistentDependencyRepository repo, List<String> parents) {
     return repo.create(
@@ -41,6 +48,7 @@ class PersistentDependencyRepositoryTest {
         parents);
   }
 
+  /** 永続化済み関連図復元するおよびについて、各対象親を必要とすることを確認する。 */
   @Test
   void persistedGraphRestoresAndRequiresEveryParent() {
     var repo = repository(now);
@@ -57,6 +65,7 @@ class PersistentDependencyRepositoryTest {
     assertThrows(IllegalArgumentException.class, () -> repo.get("other", child.id()));
   }
 
+  /** 外部条件の待機の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void staleObservationCancellationAndTimeoutCannotResurrectTerminalState() {
     var repo = repository(now);
@@ -74,6 +83,7 @@ class PersistentDependencyRepositoryTest {
     assertEquals("dependency_deadline_expired", repo.get("project", next.id()).reason());
   }
 
+  /** 外部条件の待機で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void parentsMustExistInSameProjectAndSession() {
     var repo = repository(now);
@@ -92,6 +102,7 @@ class PersistentDependencyRepositoryTest {
     assertEquals(1, repo.list("project").size());
   }
 
+  /** 外部条件の待機で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void factualOutboxIsDurableDeduplicatedAndAcknowledgedOnlyExplicitly() {
     var repo = repository(now);
@@ -108,6 +119,7 @@ class PersistentDependencyRepositoryTest {
     assertEquals(1, repo.pendingFacts().size());
   }
 
+  /** 外部条件の待機で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void answerIsSeparateFromDependenciesAndCannotBeInjectedIntoAnotherKind() {
     var repo = repository(now);
@@ -124,6 +136,7 @@ class PersistentDependencyRepositoryTest {
     assertThrows(IllegalArgumentException.class, () -> repo.answer("project", parent.id(), "x"));
   }
 
+  /** 外部条件の待機で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidSpecsAndLifetimeAreRejectedBeforeAnyRows() {
     var repo = repository(now);

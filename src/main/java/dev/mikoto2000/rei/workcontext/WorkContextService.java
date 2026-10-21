@@ -31,22 +31,48 @@ import java.util.Objects;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 
-/** Shared Shell/Chat Tool/HTTP application service. Extraction completes before any write. */
+/**
+ * 作業文脈のユースケースを実現する。
+ *
+ * <p>Shared Shell/Chat Tool/HTTP application service. Extraction completes before any write.
+ */
 @Service
 public class WorkContextService {
+  /** 保存と検索の窓口。 */
   private final WorkContextRepository repository;
+
+  /** 会話一覧。 */
   private final SessionRepository sessions;
+
+  /** プロジェクト一覧。 */
   private final ProjectService projects;
+
+  /** やり取り一覧。 */
   private final ConversationTurnStore turns;
+
+  /** イベント一覧。 */
   private final ProjectAgentEventStore events;
+
+  /** 情報の抽出。 */
   private final WorkContextExtractor extractor;
+
+  /** Gitの情報。 */
   private final WorkContextGit git;
+
+  /** この機能の動作設定。 */
   private final WorkContextProperties properties;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 作業文脈の変更を既存の記録へ統合する窓口。 */
   private final WorkContextMerger merger = new WorkContextMerger();
+
+  /** 排他制御一覧。 */
   private final java.util.concurrent.ConcurrentHashMap<String, Object> locks =
       new java.util.concurrent.ConcurrentHashMap<>();
 
+  /** 指定された値や利用先を使って、WorkContextServiceを初期化する。 */
   public WorkContextService(
       WorkContextRepository repository,
       SessionRepository sessions,
@@ -68,6 +94,7 @@ public class WorkContextService {
     this.clock = clock;
   }
 
+  /** 作業文脈の引き継ぎで用いるプロジェクトを返す。 */
   public ProjectContext project(String id) {
     if (id == null || id.isBlank())
       throw new IllegalArgumentException("プロジェクトを選択してください (/project cd <directory>)。");
@@ -77,11 +104,13 @@ public class WorkContextService {
         .orElseThrow(() -> new IllegalArgumentException("Unknown registered project"));
   }
 
+  /** 作業文脈の引き継ぎで用いる現在を返す。 */
   public Optional<WorkContext> current(String project) {
     project(project);
     return repository.current(project);
   }
 
+  /** 後から状況を確認できるよう、実行開始を記録する。 */
   public void captureRunStart(dev.mikoto2000.rei.core.chat.AgentRunContext context) {
     if (context.projectId() == null) return;
     var state = git.capture(context.projectRoot(), clock.instant());
@@ -93,11 +122,13 @@ public class WorkContextService {
     turns.recordMetadata(context, metadata);
   }
 
+  /** 過去の記録を、条件に従って参照できる形で返す。 */
   public List<WorkContext> history(String project, int limit) {
     project(project);
     return repository.history(project, limit);
   }
 
+  /** 作業文脈の引き継ぎで用いる改訂番号を返す。 */
   public WorkContext revision(String project, long revision) {
     project(project);
     return repository
@@ -108,10 +139,12 @@ public class WorkContextService {
                     "Work Context revision"));
   }
 
+  /** 指定された変更を、管理中の情報へ反映する。 */
   public Optional<WorkContext> update(String sessionId, String onlyRun) {
     return update(sessionId, onlyRun, false);
   }
 
+  /** 指定された変更を、管理中の情報へ反映する。 */
   public Optional<WorkContext> update(String sessionId, String onlyRun, boolean includeRunning) {
     if (sessionId == null || sessionId.isBlank())
       throw new IllegalArgumentException("Session を選択して会話を開始してください。");
@@ -330,6 +363,7 @@ public class WorkContextService {
     }
   }
 
+  /** 作業文脈の引き継ぎに関する取得元を処理する。 */
   private void source(
       Map<String, Evidence> target,
       String id,
@@ -350,7 +384,11 @@ public class WorkContextService {
         new Evidence(id, origin, session, run, run, tool, null, null, observed, acquired, bounded));
   }
 
-  /** Explicit user operation with a revision precondition: no silent stale correction. */
+  /**
+   * 作業文脈の引き継ぎで用いる編集を返す。
+   *
+   * <p>Explicit user operation with a revision precondition: no silent stale correction.
+   */
   public WorkContext edit(
       String projectId,
       long expected,

@@ -23,42 +23,69 @@ import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+/** 既定BlueskyAPIを外部の接続先へ依頼する窓口。 */
 @Component
 public class DefaultBlueskyApiClient implements BlueskyApiClient {
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(DefaultBlueskyApiClient.class);
 
+  /** 作成会話URI。 */
   private static final URI CREATE_SESSION_URI =
       URI.create("https://bsky.social/xrpc/com.atproto.server.createSession");
+
+  /** 作成記録URI。 */
   private static final URI CREATE_RECORD_URI =
       URI.create("https://bsky.social/xrpc/com.atproto.repo.createRecord");
+
+  /** 取得記録接続先。 */
   private static final String GET_RECORD_ENDPOINT =
       "https://bsky.social/xrpc/com.atproto.repo.getRecord";
+
+  /** 対象の解決操作対象接続先。 */
   private static final String RESOLVE_HANDLE_ENDPOINT =
       "https://bsky.social/xrpc/com.atproto.identity.resolveHandle";
+
+  /** 取得著者フィード接続先。 */
   private static final String GET_AUTHOR_FEED_ENDPOINT =
       "https://bsky.social/xrpc/app.bsky.feed.getAuthorFeed";
+
+  /** URL照合規則。 */
   private static final Pattern URL_PATTERN = Pattern.compile("https?://\\S+");
+
+  /** HASHTAG照合規則。 */
   private static final Pattern HASHTAG_PATTERN =
       Pattern.compile("(?<![A-Za-z0-9_])#([\\p{L}\\p{N}_]+)");
+
+  /** 宛先の指定照合規則。 */
   private static final Pattern MENTION_PATTERN =
       Pattern.compile("(?<![A-Za-z0-9_])@([A-Za-z0-9](?:[A-Za-z0-9.-]*[A-Za-z0-9])?)");
+
+  /** BSKY投稿URL照合規則。 */
   private static final Pattern BSKY_POST_URL_PATTERN =
       Pattern.compile("^https://bsky\\.app/profile/([^/]+)/post/([^/?#]+).*$");
 
+  /** この機能の動作設定。 */
   private final BlueskyProperties properties;
+
+  /** 外部情報を取得するHTTP通信の窓口。 */
   private final HttpClient httpClient;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper objectMapper = new ObjectMapper();
 
+  /** Blueskyとの連携を利用するため、指定を補って共通の初期化へ引き渡す。 */
   DefaultBlueskyApiClient() {
     this(new BlueskyProperties());
   }
 
+  /** 指定された値や利用先を使って、DefaultBlueskyApiClientを初期化する。 */
   @Autowired
   DefaultBlueskyApiClient(BlueskyProperties properties) {
     this.properties = properties;
     this.httpClient = HttpClient.newBuilder().connectTimeout(requestTimeout()).build();
   }
 
+  /** Blueskyとの連携で用いる認証を返す。 */
   @Override
   public AuthResult authenticate(String handle, String appPassword) {
     String requestBody =
@@ -91,12 +118,14 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
       return new AuthResult(true, accessJwt, did);
     } catch (IOException | InterruptedException e) {
       if (e instanceof InterruptedException) {
+        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
       }
       throw new RuntimeException("Bluesky authentication request failed", e);
     }
   }
 
+  /** 新たな対象を利用できるよう、投稿を作成する。 */
   @Override
   public PostResult createPost(String accessJwt, String did, String text) {
     String requestBody =
@@ -128,12 +157,14 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
       return new PostResult(true, postUri);
     } catch (IOException | InterruptedException e) {
       if (e instanceof InterruptedException) {
+        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
       }
       throw new RuntimeException("Bluesky post request failed", e);
     }
   }
 
+  /** 指定や設定に応じた対象を利用するため、操作対象を確定する。 */
   @Override
   public String resolveHandle(String handle) {
     URI uri = URI.create(RESOLVE_HANDLE_ENDPOINT + "?handle=" + encode(handle));
@@ -148,17 +179,20 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
       return textOrNull(body, "did");
     } catch (IOException | InterruptedException e) {
       if (e instanceof InterruptedException) {
+        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
       }
       throw new RuntimeException("Bluesky resolveHandle request failed", e);
     }
   }
 
+  /** Blueskyとの連携で参照する著者フィードを返す。 */
   @Override
   public List<FeedPost> getAuthorFeed(String actorDid, int limit) {
     return getAuthorFeed(actorDid, limit, null);
   }
 
+  /** Blueskyとの連携で参照する著者フィードを返す。 */
   @Override
   public List<FeedPost> getAuthorFeed(String actorDid, int limit, String accessJwt) {
     URI uri =
@@ -225,12 +259,14 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
       return posts;
     } catch (IOException | InterruptedException e) {
       if (e instanceof InterruptedException) {
+        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
       }
       throw new RuntimeException("Bluesky getAuthorFeed request failed", e);
     }
   }
 
+  /** 新たな対象を利用できるよう、返信を作成する。 */
   @Override
   public PostResult createReply(
       String accessJwt,
@@ -260,12 +296,14 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
       return new PostResult(postUri != null && !postUri.isBlank(), postUri);
     } catch (IOException | InterruptedException e) {
       if (e instanceof InterruptedException) {
+        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
       }
       throw new RuntimeException("Bluesky reply request failed", e);
     }
   }
 
+  /** 指定や設定に応じた対象を利用するため、返信対象を確定する。 */
   @Override
   public ReplyTarget resolveReplyTarget(String accessJwt, String targetPostUriOrUrl) {
     PostRef postRef = toPostRef(targetPostUriOrUrl);
@@ -311,12 +349,14 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
       return new ReplyTarget(parentUri, parentCid, rootUri, rootCid, targetText);
     } catch (IOException | InterruptedException e) {
       if (e instanceof InterruptedException) {
+        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
       }
       throw new RuntimeException("Bluesky resolveReplyTarget request failed", e);
     }
   }
 
+  /** Blueskyとの連携において、存在記録に該当するか判定する。 */
   private boolean existsRecord(String accessJwt, String did, String postUri)
       throws IOException, InterruptedException {
     String[] parts = postUri.split("/");
@@ -347,6 +387,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     return postUri.equals(uri);
   }
 
+  /** Blueskyとの連携で用いる非公開化会話応答を返す。 */
   String maskSessionResponse(String responseBody) {
     try {
       JsonNode body = objectMapper.readTree(responseBody);
@@ -366,14 +407,17 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     }
   }
 
+  /** Blueskyとの連携で用いる要求組み立てを返す。 */
   private HttpRequest.Builder requestBuilder(URI uri) {
     return HttpRequest.newBuilder(uri).timeout(requestTimeout());
   }
 
+  /** Blueskyとの連携で用いる要求タイムアウトを返す。 */
   private Duration requestTimeout() {
     return Duration.ofSeconds(Math.max(1, properties.getTimeoutSeconds()));
   }
 
+  /** Blueskyとの連携で用いるテキストまたは未指定を返す。 */
   private String textOrNull(JsonNode node, String fieldName) {
     JsonNode field = node.get(fieldName);
     if (field == null || field.isNull()) {
@@ -383,10 +427,12 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     return text == null || text.isBlank() ? null : text;
   }
 
+  /** 受け渡し先が扱える形式へ、指定された内容を変換する。 */
   private String encode(String value) {
     return URLEncoder.encode(value, StandardCharsets.UTF_8);
   }
 
+  /** Blueskyとの連携で用いる特殊文字の保護JSON変換を返す。 */
   private String escapeJson(String input) {
     return input
         .replace("\\", "\\\\")
@@ -395,15 +441,18 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
         .replace("\r", "\\r");
   }
 
+  /** 新たな対象を利用できるよう、記録要求の本文を作成する。 */
   static String createRecordRequestBody(String did, String text, OffsetDateTime createdAt) {
     return createRecordRequestBody(did, text, createdAt, null);
   }
 
+  /** 新たな対象を利用できるよう、記録要求の本文を作成する。 */
   static String createRecordRequestBody(
       String did, String text, OffsetDateTime createdAt, ReplyRef replyRef) {
     return createRecordRequestBody(did, text, createdAt, replyRef, handle -> null);
   }
 
+  /** 新たな対象を利用できるよう、記録要求の本文を作成する。 */
   static String createRecordRequestBody(
       String did,
       String text,
@@ -445,10 +494,12 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     return request.toString();
   }
 
+  /** 利用先に渡せるよう、FacetsJSON変換を組み立てる。 */
   static String buildFacetsJson(String text) {
     return buildFacetsJson(text, handle -> null);
   }
 
+  /** 利用先に渡せるよう、FacetsJSON変換を組み立てる。 */
   static String buildFacetsJson(String text, Function<String, String> mentionResolver) {
     List<Facet> facets = extractFacets(text, mentionResolver);
     if (facets.isEmpty()) {
@@ -482,10 +533,12 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     return json.toString();
   }
 
+  /** 後続の判断に必要な情報を得るため、Facetsを抽出する。 */
   static List<Facet> extractFacets(String text) {
     return extractFacets(text, handle -> null);
   }
 
+  /** 後続の判断に必要な情報を得るため、Facetsを抽出する。 */
   static List<Facet> extractFacets(String text, Function<String, String> mentionResolver) {
     ArrayList<Facet> facets = new ArrayList<>();
     facets.addAll(
@@ -504,6 +557,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     return facets;
   }
 
+  /** 後続の判断に必要な情報を得るため、リンクFacetsを抽出する。 */
   static List<LinkFacet> extractLinkFacets(String text) {
     ArrayList<LinkFacet> facets = new ArrayList<>();
     if (text == null || text.isBlank()) {
@@ -527,6 +581,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     return facets;
   }
 
+  /** 後続の判断に必要な情報を得るため、タグFacetsを抽出する。 */
   static List<TagFacet> extractTagFacets(String text) {
     ArrayList<TagFacet> facets = new ArrayList<>();
     if (text == null || text.isBlank()) {
@@ -543,6 +598,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     return facets;
   }
 
+  /** 後続の判断に必要な情報を得るため、宛先の指定Facetsを抽出する。 */
   static List<MentionFacet> extractMentionFacets(
       String text, Function<String, String> mentionResolver) {
     ArrayList<MentionFacet> facets = new ArrayList<>();
@@ -565,6 +621,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     return facets;
   }
 
+  /** 指定や設定に応じた対象を利用するため、宛先の指定操作対象を確定する。 */
   private String resolveMentionHandle(String handle) {
     try {
       return resolveHandle(handle);
@@ -577,6 +634,7 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     }
   }
 
+  /** Blueskyとの連携で用いる余白の除去TrailingPunctuationを返す。 */
   private static int trimTrailingPunctuation(String url) {
     int end = url.length();
     while (end > 0) {
@@ -591,10 +649,12 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     return end;
   }
 
+  /** Blueskyとの連携で用いるUTF8バイト長さを返す。 */
   private static int utf8ByteLength(String value) {
     return value.getBytes(StandardCharsets.UTF_8).length;
   }
 
+  /** Blueskyとの連携で用いる特殊文字の保護JSON変換Staticを返す。 */
   private static String escapeJsonStatic(String input) {
     return input
         .replace("\\", "\\\\")
@@ -603,22 +663,65 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
         .replace("\r", "\\r");
   }
 
+  /**
+   * Blueskyとの連携で受け渡すリンクFacetを表す。
+   *
+   * @param byteStart バイト開始
+   * @param byteEnd バイト終了
+   * @param uri 参照先のURI
+   */
   record LinkFacet(int byteStart, int byteEnd, String uri) {}
 
+  /**
+   * Blueskyとの連携で受け渡すタグFacetを表す。
+   *
+   * @param byteStart バイト開始
+   * @param byteEnd バイト終了
+   * @param tag タグ
+   */
   record TagFacet(int byteStart, int byteEnd, String tag) {}
 
+  /**
+   * Blueskyとの連携で受け渡す宛先の指定Facetを表す。
+   *
+   * @param byteStart バイト開始
+   * @param byteEnd バイト終了
+   * @param handle 操作対象
+   * @param did 分散識別子
+   */
   record MentionFacet(int byteStart, int byteEnd, String handle, String did) {}
 
+  /** Blueskyとの連携におけるFacet種別の選択肢。 */
   private enum FacetType {
+    /** リンク。 */
     LINK,
+    /** タグ。 */
     TAG,
+    /** 宛先の指定。 */
     MENTION
   }
 
+  /**
+   * Blueskyとの連携で受け渡すFacetを表す。
+   *
+   * @param byteStart バイト開始
+   * @param byteEnd バイト終了
+   * @param type 種別
+   * @param value 値
+   */
   record Facet(int byteStart, int byteEnd, FacetType type, String value) {}
 
+  /**
+   * Blueskyとの連携で受け渡す返信参照先を表す。
+   *
+   * @param parentUri 親URI
+   * @param parentCid 親内容の識別子
+   * @param rootUri 作業ルートURI
+   * @param rootCid 作業ルート内容の識別子
+   */
   record ReplyRef(String parentUri, String parentCid, String rootUri, String rootCid) {}
 
+  /** 利用先へ渡せるよう、投稿参照先の形式に変換する。 */
   private PostRef toPostRef(String targetPostUriOrUrl) {
     if (targetPostUriOrUrl == null || targetPostUriOrUrl.isBlank()) {
       throw new IllegalArgumentException("target post is blank");
@@ -642,5 +745,12 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
     throw new IllegalArgumentException("unsupported post target format: " + value);
   }
 
+  /**
+   * Blueskyとの連携で受け渡す投稿参照先を表す。
+   *
+   * @param repo リポジトリ
+   * @param collection 集約対象
+   * @param rkey 投稿の識別キー
+   */
   record PostRef(String repo, String collection, String rkey) {}
 }

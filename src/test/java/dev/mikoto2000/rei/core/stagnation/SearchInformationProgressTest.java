@@ -6,9 +6,12 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 検索情報進捗の結果と状態の契約を検証するテスト。 */
 class SearchInformationProgressTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sameQueryCanDiscoverNewWebResultButMetadataDoesNotCreateFacts() {
     var e = new ProgressEvaluator(root);
@@ -23,6 +26,7 @@ class SearchInformationProgressTest {
     assertThat(e.afterTool("webSearch", "{}", result.replace("/one", "/two"), before)).hasSize(1);
   }
 
+  /** 実行の停滞への対処で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void grepMatchesDeduplicateRegardlessOfQueryOrRanking() {
     var e = new ProgressEvaluator(root);

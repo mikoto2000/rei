@@ -11,8 +11,10 @@ import org.springframework.web.bind.annotation.ControllerAdvice;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
 
 /**
- * A CLI-only representation of fixed domain results; execution and Web JSON contracts stay in their
- * controllers.
+ * Web APIによる操作に必要なシェルレポート助言を扱う。
+ *
+ * <p>A CLI-only representation of fixed domain results; execution and Web JSON contracts stay in
+ * their controllers.
  */
 @ControllerAdvice(
     assignableTypes = {
@@ -24,18 +26,32 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
       CheckpointController.class
     })
 public final class ShellReportAdvice implements ResponseBodyAdvice<Object> {
+  /** 依存条件事実一覧。 */
   private dev.mikoto2000.rei.core.dependency.DependencyObservationService dependencyFacts;
 
+  /** Web APIによる操作で使用する依存条件事実一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setDependencyFacts(
       dev.mikoto2000.rei.core.dependency.DependencyObservationService facts) {
     dependencyFacts = facts;
   }
 
+  /**
+   * Web APIによる操作で受け渡すテキストを表す。
+   *
+   * @param text テキスト
+   */
   public record Text(String text) {}
 
+  /**
+   * Web APIによる操作で受け渡す実行テキストを表す。
+   *
+   * @param text テキスト
+   * @param runId 実行の識別子
+   */
   public record RunText(String text, String runId) {}
 
+  /** Web APIによる操作において、シェルレポート助言への対応可否を返す。 */
   public boolean supports(
       MethodParameter method, Class<? extends HttpMessageConverter<?>> converter) {
     return java.util.Set.of(
@@ -48,6 +64,7 @@ public final class ShellReportAdvice implements ResponseBodyAdvice<Object> {
         .contains(method.getContainingClass());
   }
 
+  /** 本処理に必要な文脈や条件を整えるため、本文書き込みを準備する。 */
   public Object beforeBodyWrite(
       Object body,
       MethodParameter method,

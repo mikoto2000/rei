@@ -14,25 +14,39 @@ import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
 /**
- * Reuses the configured LLM provider, without chat memory, advisors, tools, or action execution.
+ * 画像認識作業状況に必要な情報を入力から取り出す。
+ *
+ * <p>Reuses the configured LLM provider, without chat memory, advisors, tools, or action execution.
  */
 public final class VisionActivityExtractor implements ActivityExtractor {
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(VisionActivityExtractor.class);
+
+  /** モデル。 */
   private final Supplier<ChatModel> model;
+
+  /** 選択可能な設定。 */
   private final Supplier<OpenAiChatOptions> options;
+
+  /** 画像倍率。 */
   private final double imageScale;
+
+  /** 最大出力トークン数。 */
   private final int maxOutputTokens;
 
+  /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public VisionActivityExtractor(Supplier<ChatModel> model, Supplier<OpenAiChatOptions> options) {
     this(model, options, .5);
   }
 
+  /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public VisionActivityExtractor(
       Supplier<ChatModel> model, Supplier<OpenAiChatOptions> options, double imageScale) {
     this(model, options, imageScale, 2048);
   }
 
+  /** 指定された値や利用先を使って、VisionActivityExtractorを初期化する。 */
   public VisionActivityExtractor(
       Supplier<ChatModel> model,
       Supplier<OpenAiChatOptions> options,
@@ -47,6 +61,7 @@ public final class VisionActivityExtractor implements ActivityExtractor {
     this.maxOutputTokens = maxOutputTokens;
   }
 
+  /** 受け取った内容から、後続の処理に必要な情報を取り出す。 */
   @Override
   public Result extract(CapturedScreen screen, ForegroundWindow foreground) throws Exception {
     long started = System.nanoTime(),
@@ -186,10 +201,12 @@ public final class VisionActivityExtractor implements ActivityExtractor {
     }
   }
 
+  /** 作業状況の把握で用いるミリ秒を返す。 */
   private static long ms(long nanos) {
     return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(nanos);
   }
 
+  /** 作業状況の把握で用いる推論トークン数を返す。 */
   private static Integer reasoningTokens(Object nativeUsage) {
     if (nativeUsage instanceof com.openai.models.completions.CompletionUsage usage)
       return usage
@@ -203,6 +220,7 @@ public final class VisionActivityExtractor implements ActivityExtractor {
     return null;
   }
 
+  /** 作業状況の把握で用いる不正応答を返す。 */
   private static ActivityOutputParser.InvalidOutput invalidResponse(String code) {
     return new ActivityOutputParser.InvalidOutput(
         List.of(new ActivityOutputParser.ResultError("/", code)));

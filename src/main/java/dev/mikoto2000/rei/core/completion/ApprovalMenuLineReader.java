@@ -9,22 +9,37 @@ import org.jline.utils.AttributedString;
 import org.jline.utils.AttributedStringBuilder;
 import org.jline.utils.AttributedStyle;
 
-/** Uses JLine's redraw area below the input rather than appending menus to scrollback. */
+/**
+ * 入力候補の提示に必要な承認操作の選択肢行読み取り元を扱う。
+ *
+ * <p>Uses JLine's redraw area below the input rather than appending menus to scrollback.
+ */
 public final class ApprovalMenuLineReader extends LineReaderImpl {
+  /** 操作の選択肢／状態。 */
   private String menu = "", status = "";
+
+  /** 対話。 */
   private final boolean interactive;
+
+  /** 承認投稿。 */
   private final Supplier<AttributedString> approvalPost = this::presentation;
 
+  /** 入力候補の提示を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ApprovalMenuLineReader(Terminal terminal) throws IOException {
     this(terminal, ApprovalDisplayState.interactive(terminal));
   }
 
-  /** Explicit capability for in-memory terminal verification. */
+  /**
+   * 入力候補の提示に必要な依存先や設定を受け取り、ApprovalMenuLineReaderを初期化する。
+   *
+   * <p>Explicit capability for in-memory terminal verification.
+   */
   public ApprovalMenuLineReader(Terminal terminal, boolean interactive) throws IOException {
     super(terminal);
     this.interactive = interactive;
   }
 
+  /** 入力候補の提示に関する承認操作の選択肢を処理する。 */
   public void approvalMenu(String text) {
     lock.lock();
     try {
@@ -35,6 +50,7 @@ public final class ApprovalMenuLineReader extends LineReaderImpl {
     }
   }
 
+  /** 保持している情報を初期状態へ戻すため、承認操作の選択肢を消去する。 */
   public void clearApprovalMenu() {
     lock.lock();
     try {
@@ -45,6 +61,7 @@ public final class ApprovalMenuLineReader extends LineReaderImpl {
     }
   }
 
+  /** 入力候補の提示に関する承認状態を処理する。 */
   public void approvalStatus(String text) {
     if (!interactive) text = "";
     lock.lock();
@@ -57,6 +74,7 @@ public final class ApprovalMenuLineReader extends LineReaderImpl {
     }
   }
 
+  /** 入力候補の提示で用いるpresentationを返す。 */
   private AttributedString presentation() {
     var result =
         new AttributedStringBuilder()
@@ -65,6 +83,7 @@ public final class ApprovalMenuLineReader extends LineReaderImpl {
     return result.toAttributedString();
   }
 
+  /** 入力候補の提示で参照するDisplayed一時保持領域付きプロンプト一覧を返す。 */
   @Override
   public AttributedString getDisplayedBufferWithPrompts(List<AttributedString> secondaryPrompts) {
     lock.lock();

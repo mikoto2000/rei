@@ -1,8 +1,20 @@
 package dev.mikoto2000.rei.core.completion;
 
-/** Lexical path handling, independently testable for either platform. */
+/**
+ * 入力候補の提示で受け渡すパス断片を表す。
+ *
+ * <p>Lexical path handling, independently testable for either platform.
+ *
+ * @param parent 親
+ * @param prefix 接頭辞
+ * @param separator 区切り
+ */
 public record PathFragment(String parent, String prefix, String separator) {
-  /** Completion inserts an absolute path because command execution does not expand '~'. */
+  /**
+   * 入力候補の提示で用いる展開Homeを返す。
+   *
+   * <p>Completion inserts an absolute path because command execution does not expand '~'.
+   */
   public static String expandHome(String token, java.nio.file.Path home, boolean windows) {
     if (token.equals("~") || token.startsWith("~/") || windows && token.startsWith("~\\")) {
       String separator = token.startsWith("~\\") ? "\\" : "/";
@@ -12,6 +24,7 @@ public record PathFragment(String parent, String prefix, String separator) {
     return token;
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   public static PathFragment parse(String value, boolean windows) {
     int slash = value.lastIndexOf('/');
     int backslash = windows ? value.lastIndexOf('\\') : -1;

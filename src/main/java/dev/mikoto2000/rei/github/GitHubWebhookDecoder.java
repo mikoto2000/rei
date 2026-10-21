@@ -22,12 +22,22 @@ import java.util.Set;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
-/** Verify raw bytes before parsing a bounded tree; strip all free-form Agent instructions. */
+/**
+ * Git連携先Webhook通知の受信データを解釈し、利用できる情報へ整える。
+ *
+ * <p>Verify raw bytes before parsing a bounded tree; strip all free-form Agent instructions.
+ */
 public final class GitHubWebhookDecoder {
+  /** この機能の動作設定。 */
   private final GitHubWebhookProperties properties;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json;
 
+  /** 指定された値や利用先を使って、GitHubWebhookDecoderを初期化する。 */
   public GitHubWebhookDecoder(GitHubWebhookProperties properties, Clock clock) {
     properties.validateTransport();
     this.properties = properties;
@@ -45,6 +55,7 @@ public final class GitHubWebhookDecoder {
     json = new ObjectMapper(factory).enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   public List<GitHubFact> decode(String event, String signature, byte[] bytes) {
     if (bytes == null || bytes.length > properties.getMaxPayloadBytes())
       throw new IllegalArgumentException("GitHub payload limit");
@@ -95,6 +106,7 @@ public final class GitHubWebhookDecoder {
         throw new IllegalArgumentException("Workflow identity required");
       long run = workflow.path("id").longValue();
       var requests = workflow.path("pull_requests");
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (!requests.isArray() || requests.size() > 16)
         throw new IllegalArgumentException("Bounded workflow pull requests required");
       var facts = new ArrayList<GitHubFact>();
@@ -182,6 +194,7 @@ public final class GitHubWebhookDecoder {
             time(pr, merged ? "merged_at" : "updated_at")));
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   private void verify(String signature, byte[] bytes) {
     if (signature == null || !signature.matches("sha256=[a-f0-9]{64}"))
       throw new SecurityException("Invalid GitHub signature");
@@ -197,6 +210,7 @@ public final class GitHubWebhookDecoder {
     }
   }
 
+  /** GitHubとの連携で用いる時刻を返す。 */
   private Instant time(JsonNode object, String field) {
     final Instant at;
     try {
@@ -210,10 +224,12 @@ public final class GitHubWebhookDecoder {
     return at;
   }
 
+  /** GitHubとの連携で用いる内容照合用のハッシュを返す。 */
   private static String sha(JsonNode object) {
     return sha(object, "sha");
   }
 
+  /** GitHubとの連携で用いる内容照合用のハッシュを返す。 */
   private static String sha(JsonNode object, String field) {
     String sha = text(object, field, 64);
     if (!sha.matches("[a-fA-F0-9]{40}|[a-fA-F0-9]{64}"))
@@ -221,6 +237,7 @@ public final class GitHubWebhookDecoder {
     return sha.toLowerCase(Locale.ROOT);
   }
 
+  /** GitHubとの連携で用いる数値を返す。 */
   private static int number(JsonNode object, String field) {
     var value = object.path(field);
     if (!value.isIntegralNumber() || !value.canConvertToInt() || value.intValue() < 1)
@@ -228,6 +245,7 @@ public final class GitHubWebhookDecoder {
     return value.intValue();
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   private static String text(JsonNode object, String field, int limit) {
     var node = object.path(field);
     if (!node.isTextual()

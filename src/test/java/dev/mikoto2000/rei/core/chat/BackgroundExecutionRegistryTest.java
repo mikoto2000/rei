@@ -20,9 +20,12 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 
+/** バックグラウンド実行登録台帳の結果と状態の契約を検証するテスト。 */
 class BackgroundExecutionRegistryTest {
+  /** 検証に使うディレクトリ。 */
   @org.junit.jupiter.api.io.TempDir Path directory;
 
+  /** 会話の実行で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void summaryCapturesSelectedSessionBeforeClientSwitches() {
     var projects =
@@ -60,8 +63,10 @@ class BackgroundExecutionRegistryTest {
     }
   }
 
+  /** 検証に使うa。 */
   ProjectContext a = new ProjectContext(UUID.randomUUID().toString(), "A", Path.of("a"));
 
+  /** 追加入力一覧を受け付けられることを確認する。 */
   @Test
   void commandExecutionsCoexistAndOnlyAgentAcceptsInterventions() {
     var tasks = new ArrayList<Runnable>();
@@ -93,6 +98,7 @@ class BackgroundExecutionRegistryTest {
     assertThat(ExecutionScope.current()).isNull();
   }
 
+  /** 各対象終端パスについて、コマンド一覧を取り除くことを確認する。 */
   @Test
   void everyTerminalPathRemovesCommandsAndRestartIsEmpty() {
     for (var type : List.of(ExecutionType.SUMMARIZE, ExecutionType.IMAGE))
@@ -124,6 +130,7 @@ class BackgroundExecutionRegistryTest {
     assertThat(rejected.activeExecutions()).isEmpty();
   }
 
+  /** 会話の実行で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void productionExecutorRunsCommandsConcurrently() throws Exception {
     var entered = new CountDownLatch(2);

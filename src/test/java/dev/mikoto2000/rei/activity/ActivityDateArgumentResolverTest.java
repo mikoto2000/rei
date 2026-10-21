@@ -16,7 +16,9 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.NullAndEmptySource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+/** 作業状況日付引数対象の解決の結果と状態の契約を検証するテスト。 */
 class ActivityDateArgumentResolverTest {
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @ParameterizedTest
   @NullAndEmptySource
   @ValueSource(strings = {"today", "2026-09-25"})
@@ -27,6 +29,7 @@ class ActivityDateArgumentResolverTest {
     assertEquals(LocalDate.of(2026, 9, 25), resolver.resolve(input));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sameInstantUsesJournalZone() {
     var instant = Instant.parse("2026-09-24T16:00:00Z");
@@ -40,6 +43,7 @@ class ActivityDateArgumentResolverTest {
     assertEquals(LocalDate.of(2026, 9, 25), tokyo.resolve("2026-09-25"));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @ParameterizedTest
   @CsvSource({"2026-03-08,23", "2026-11-01,25"})
   void pastDaysFollowDst(String day, long hours) {
@@ -51,6 +55,7 @@ class ActivityDateArgumentResolverTest {
         Duration.ofHours(hours), Duration.between(range.fromInclusive(), range.toExclusive()));
   }
 
+  /** 対象範囲組み立てについて、完了待ち日付を受け付けないことを確認する。 */
   @Test
   void rangeBuilderRejectsFutureDate() {
     assertThrows(

@@ -19,11 +19,17 @@ import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
-/** No login/Turn: real native launcher and MXC filesystem helper, opt-in locally. */
+/**
+ * 判定期間計画アプリケーションサーバープロセスの結果と状態の契約を検証するテスト。
+ *
+ * <p>No login/Turn: real native launcher and MXC filesystem helper, opt-in locally.
+ */
 @EnabledOnOs(OS.WINDOWS)
 class WindowsPlanAppServerProcessTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** ChatGPTとの連携で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   @EnabledIfEnvironmentVariable(named = "REI_TEST_WINDOWS_CODEX", matches = "(?i)[A-Z]:.+")
   void nativeProcessHasDeadlineEvenWhenNoRpcIsSent() throws Exception {
@@ -52,6 +58,7 @@ class WindowsPlanAppServerProcessTest {
     }
   }
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   @EnabledIfEnvironmentVariable(named = "REI_TEST_WINDOWS_CODEX", matches = "(?i)[A-Z]:.+")
   void startsNativeRestrictedThreadThenDeletesOwnHome() throws Exception {
@@ -126,6 +133,7 @@ class WindowsPlanAppServerProcessTest {
     assertFalse(ProcessHandle.of(ownedPid).map(ProcessHandle::isAlive).orElse(false));
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   private JsonNode response(PlanAppServerRpc.Session session, int id, ObjectMapper json)
       throws Exception {
     long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();

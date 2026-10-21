@@ -12,16 +12,25 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/** 日次要約の結果と状態の契約を検証するテスト。 */
 class DailySummaryTest {
+  /** 検証に使う日付。 */
   static final LocalDate DATE = LocalDate.of(2026, 9, 24);
+
+  /** 検証に使う開始。 */
   static final Instant START = DATE.atStartOfDay(ZoneOffset.UTC).toInstant();
+
+  /** 検証に使う対象範囲。 */
   static final ActivityQueryRange RANGE = new ActivityQueryRange(START, START.plusSeconds(86400));
+
+  /** 検証に使う名前一覧。 */
   static final ProjectNameNormalizer NAMES =
       new ProjectNameNormalizer(
           Map.of(
               "sensevoice-input",
               List.of("sensevoiceinput", "sensevoice", "sensorvoice-input", "sansvoice-input")));
 
+  /** {@code segment} の条件を再現するための補助情報を返す。 */
   static SummarySegment segment(
       int minute,
       int seconds,
@@ -70,6 +79,7 @@ class DailySummaryTest {
         List.of());
   }
 
+  /** {@code largeDay} の条件を再現するための補助情報を返す。 */
   static List<SummarySegment> largeDay() throws Exception {
     try (var input =
         DailySummaryTest.class.getResourceAsStream("/activity/daily-summary-large-day.csv")) {
@@ -92,10 +102,12 @@ class DailySummaryTest {
     }
   }
 
+  /** {@code aggregate} の条件を再現するための補助情報を返す。 */
   static DailySummaryAggregate aggregate(List<SummarySegment> input) {
     return new DailySummaryAggregator(NAMES, .5).aggregate(DATE, RANGE, ZoneOffset.UTC, input);
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void largeDayIsBoundedAndAliasesMergeWithoutChangingEvidence() throws Exception {
     var source = largeDay();
@@ -118,6 +130,7 @@ class DailySummaryTest {
     assertThat(source).isEqualTo(largeDay());
   }
 
+  /** 作業状況の把握で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void timeBucketsRetainTheirOwnMajorProjectThemes() {
     var a =
@@ -136,6 +149,7 @@ class DailySummaryTest {
     assertThat(a.timeOfDay().get("evening").workThemes()).containsExactly("sensevoice-input の開発");
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void boundariesSplitObservedTimeAndGapsStayUnobserved() {
     var a =
@@ -155,6 +169,7 @@ class DailySummaryTest {
     assertThat(a.categorySeconds()).containsEntry("development", 1200L);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void overlappingAndRepeatedEvidenceIsCountedOnce() {
     var first =
@@ -166,6 +181,7 @@ class DailySummaryTest {
         .isEqualTo(1800);
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void workOnlyAndTechnicalMediaDoNotBecomeLeisure() {
     var a =
@@ -190,6 +206,7 @@ class DailySummaryTest {
     assertThat(a.majorLeisureBlocks()).isEmpty();
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void uncertainMediaDoesNotBecomeEntertainmentAndLeisureDoesNotInventWork() {
     var uncertain =
@@ -203,6 +220,7 @@ class DailySummaryTest {
     assertThat(leisure.majorLeisureBlocks()).hasSize(1);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void safeNormalizationAndExplicitAliasesOnly() {
     assertThat(NAMES.normalize(" SenseVoice_Input ")).isEqualTo("sensevoice-input");
@@ -222,6 +240,7 @@ class DailySummaryTest {
           .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void implementationNamesAreNotWorkThemes() {
     var a =
@@ -253,6 +272,7 @@ class DailySummaryTest {
         .noneMatch(s -> s.contains("AgentEvent") || s.contains("project.cd") || s.contains("repl"));
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void twoHundredSegmentsStillProduceBoundedInputAndOutput() throws Exception {
     var source =
@@ -280,6 +300,7 @@ class DailySummaryTest {
     assertThat(a.frequentProjectSwitches()).isTrue();
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownOnlyHasOneNoteAndNoInventedWorkOrLeisure() {
     var a =
@@ -294,6 +315,7 @@ class DailySummaryTest {
     assertThat(new DailySummaryFormatter().format(a, result).split("活動内容を十分に判定", -1)).hasSize(2);
   }
 
+  /** ローカル時刻の取得元を利用することを確認する。 */
   @Test
   void daylightSavingDayAndSixHourBoundaryUseLocalClock() {
     var zone = ZoneId.of("America/New_York");
@@ -334,6 +356,7 @@ class DailySummaryTest {
     assertThat(a.timeOfDay().get("morning").observedSeconds()).isEqualTo(600);
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidWriterFallsBackAndEmptyDayNeverCallsWriter() {
     var calls = new java.util.concurrent.atomic.AtomicInteger();

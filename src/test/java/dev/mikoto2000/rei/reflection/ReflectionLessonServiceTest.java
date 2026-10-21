@@ -25,16 +25,33 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 振り返り教訓サービスの結果と状態の契約を検証するテスト。 */
 class ReflectionLessonServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   Clock clock = Clock.fixed(Instant.parse("2026-10-07T09:00:00Z"), ZoneOffset.UTC);
+
+  /** 検証に使うデータ。 */
   DriverManagerDataSource data;
+
+  /** 検証に使う実行一覧。 */
   RunReflectionRepository runs;
+
+  /** 検証に使う振り返り一覧。 */
   GoalReflectionRepository reflections;
+
+  /** 検証に使う目標一覧。 */
   GoalRepository goals;
+
+  /** 検証に使う所有者。 */
   AgentRunContext owner;
+
+  /** 検証に使うサービス。 */
   ReflectionLessonService service;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     data = new DriverManagerDataSource("jdbc:sqlite:" + root.resolve("lessons.db"));
@@ -45,11 +62,13 @@ class ReflectionLessonServiceTest {
     service = create(clock, true);
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   ReflectionLessonService create(Clock current, boolean enabled) {
     return new ReflectionLessonService(
         data, runs, reflections, goals, new FileGoalVerifier(), current, enabled);
   }
 
+  /** {@code failure} の条件を再現するための補助情報を返す。 */
   ReflectionLessonService.Observation failure(String run) {
     var events = new AgentEventFactory(clock);
     var source = new AgentRunContext(run, "session", root, "project");
@@ -65,6 +84,7 @@ class ReflectionLessonServiceTest {
     return service.observe(owner, "RUN", item.id());
   }
 
+  /** {@code candidate} の条件を再現するための補助情報を返す。 */
   ReflectionLessonService.Lesson candidate(int count) {
     var evidence =
         java.util.stream.IntStream.range(0, count).mapToObj(i -> failure("run-" + i).id()).toList();
@@ -75,6 +95,7 @@ class ReflectionLessonServiceTest {
         evidence);
   }
 
+  /** 作業の振り返りで、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void repeatedObservedFailuresBecomeCandidateButNeverAutomaticMemory() {
     var lesson = candidate(3);
@@ -95,6 +116,7 @@ class ReflectionLessonServiceTest {
     assertEquals(validated, create(clock, true).get(owner, lesson.id()));
   }
 
+  /** 作業の振り返りで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void countFreshnessRevisionAndCounterexampleReviewGateValidation() {
     var insufficient = candidate(1);
@@ -122,6 +144,7 @@ class ReflectionLessonServiceTest {
     assertEquals(1, validated.revision());
   }
 
+  /** 作業の振り返りで、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void actualCounterexampleAndUserCorrectionInvalidateValidatedLesson() {
     var lesson = candidate(3);
@@ -146,6 +169,7 @@ class ReflectionLessonServiceTest {
     assertEquals("REJECTED", corrected.state());
   }
 
+  /** 作業の振り返りで、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void forgottenStatementCannotRegenerateWithNewEvidenceOrAfterRestart() {
     var lesson = candidate(3);
@@ -163,6 +187,7 @@ class ReflectionLessonServiceTest {
     assertEquals("REJECTED", restored.get(owner, lesson.id()).state());
   }
 
+  /** 作業の振り返りで、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void sourceObservationDeduplicatesAndOtherOwnerOrDisabledFeatureCannotMutate() {
     var first = failure("same-run");
@@ -191,6 +216,7 @@ class ReflectionLessonServiceTest {
                 List.of(first.id(), first.id())));
   }
 
+  /** 作業の振り返りで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void reportedRunCompletionCannotSupportSuccessfulStrategyWithoutIndependentProof() {
     var events = new AgentEventFactory(clock);
@@ -219,6 +245,7 @@ class ReflectionLessonServiceTest {
         () -> service.validate(owner, lesson.id(), 0, lesson.evidenceHash(), "reviewed"));
   }
 
+  /** 作業の振り返りで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void repeatedCorrectionsRequireDistinctHumanSourcesAndRemainScoped() {
     var refs = new ArrayList<String>();
@@ -266,6 +293,7 @@ class ReflectionLessonServiceTest {
                 "A different correction cannot replace the original source."));
   }
 
+  /** 作業の振り返りで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void independentlyVerifiedGoalsSupportScopedStrategyButChangedFilesStopPromotion()
       throws Exception {
@@ -296,6 +324,7 @@ class ReflectionLessonServiceTest {
         service.validate(owner, lesson.id(), 0, lesson.evidenceHash(), "reviewed").state());
   }
 
+  /** 作業の振り返りで、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void shellProvidesHumanLessonOperationsAndDisabledServiceFailsClosed() {
     var projects = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.project.ProjectService.class);
@@ -328,6 +357,7 @@ class ReflectionLessonServiceTest {
     assertEquals(2, cli.execute("lessons"));
   }
 
+  /** 作業の振り返りで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void forgettingAlsoBlocksAlreadyProposedEquivalentCandidate() {
     var first = candidate(3);
@@ -338,6 +368,7 @@ class ReflectionLessonServiceTest {
         () -> service.validate(owner, equivalent.id(), 0, equivalent.evidenceHash(), "reviewed"));
   }
 
+  /** 作業の振り返りの中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationCannotPromoteOrRecordHumanEvidence() {
     var lesson = candidate(3);

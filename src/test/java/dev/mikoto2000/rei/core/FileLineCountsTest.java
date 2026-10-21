@@ -15,9 +15,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
+/** ファイル行件数の結果と状態の契約を検証するテスト。 */
 class FileLineCountsTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void countsLfLikeWcAndReportsIndividualFailures() throws Exception {
     Files.writeString(root.resolve("日本語.md"), "一\r\n二\n末尾");
@@ -36,6 +39,7 @@ class FileLineCountsTest {
     assertNotNull(result.files().get(4).error());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void validatesBatchAndExposesReadOnlyTool() {
     var tools = new Tools();

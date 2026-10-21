@@ -14,12 +14,17 @@ import org.junit.jupiter.api.io.TempDir;
 import org.mockito.Mockito;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** フィード要約サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class FeedSummaryServiceTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
+
+  /** 検証に使うデータベース発生順序。 */
   private int databaseSequence;
 
+  /** フィードの購読と収集で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void summarizeRecentItemsBuildsPromptFromBriefingItems() {
     FeedService feedService = newService();
@@ -63,6 +68,7 @@ class FeedSummaryServiceTest {
     assertTrue(promptRef.get().contains("紹介文の直後に対応する URL"));
   }
 
+  /** 要約日次案内について、生成済み要約形式を返すことを確認する。 */
   @Test
   void summarizeBriefingReturnsGeneratedSummaryAsIs() {
     FeedService feedService = newService();
@@ -100,6 +106,7 @@ class FeedSummaryServiceTest {
     assertEquals("briefing summary", summary);
   }
 
+  /** 要約日次案内について、なし項目一覧メッセージを返すことを確認する。 */
   @Test
   void summarizeBriefingReturnsNoItemsMessageWhenEmpty() {
     FeedSummaryService service =
@@ -123,6 +130,7 @@ class FeedSummaryServiceTest {
     assertEquals("昨日 00:00 以降の新着記事はありませんでした", summary);
   }
 
+  /** フィードの購読と収集で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void summarizeItemBuildsPromptFromSelectedItem() {
     FeedService feedService = newService();
@@ -161,6 +169,7 @@ class FeedSummaryServiceTest {
     assertTrue(promptRef.get().contains("Fetched item body"));
   }
 
+  /** フィードの購読と収集で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void summarizeItemFallsBackToMetadataWhenPageFetchFails() {
     FeedService feedService = newService();
@@ -194,6 +203,7 @@ class FeedSummaryServiceTest {
     assertTrue(promptRef.get().contains("https://example.com/today"));
   }
 
+  /** 記事取得元を伝えることを確認する。 */
   @Test
   void summarizeItemDetailedReportsArticleSourceWhenFetchSucceeds() {
     FeedService feedService =
@@ -215,6 +225,7 @@ class FeedSummaryServiceTest {
     org.junit.jupiter.api.Assertions.assertFalse(promptRef.get().contains("FEED_DESCRIPTION"));
   }
 
+  /** フィードの購読と収集で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void summarizeItemDetailedFallsBackToFeedWhenFetchFailsOrIsEmpty() {
     for (boolean throwsFailure : List.of(true, false)) {
@@ -240,6 +251,7 @@ class FeedSummaryServiceTest {
     }
   }
 
+  /** フィードを利用することを確認する。 */
   @Test
   void summarizeItemDetailedUsesFeedWithoutFetchWhenUrlIsMissing() {
     FeedService feedService = serviceWithItem(null, null, "EMBEDDED_CONTENT_MARKER");
@@ -264,6 +276,7 @@ class FeedSummaryServiceTest {
     assertTrue(promptRef.get().contains("EMBEDDED_CONTENT_MARKER"));
   }
 
+  /** 日次案内について、記事を利用することを確認する。 */
   @Test
   void briefingUsesArticleAndFeedFallbackAndDeduplicatesUrls() {
     FeedService feedService = Mockito.mock(FeedService.class);
@@ -324,6 +337,7 @@ class FeedSummaryServiceTest {
     assertTrue(promptRef.get().contains("articleFetchStatus=failed"));
   }
 
+  /** フィードの購読と収集で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void summarizeItemDoesNotInvokeLlmWhenArticleAndFeedInformationAreEmpty() {
     FeedService feedService = newService();
@@ -359,6 +373,7 @@ class FeedSummaryServiceTest {
     assertEquals(0, generations.get());
   }
 
+  /** {@code serviceWithItem} の条件を再現するための補助情報を返す。 */
   private FeedService serviceWithItem(String url, String description, String content) {
     FeedService service = newService();
     Feed feed = service.add("https://example.com/feed.xml", "Example Feed");
@@ -375,6 +390,7 @@ class FeedSummaryServiceTest {
     return service;
   }
 
+  /** {@code summaryService} の条件を再現するための補助情報を返す。 */
   private FeedSummaryService summaryService(
       FeedService feedService,
       java.util.function.Function<FeedBriefingItem, WebSearchPage> fetcher,
@@ -389,6 +405,7 @@ class FeedSummaryServiceTest {
         new FeedProperties(20));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private FeedService newService() {
     return new FeedService(
         new DriverManagerDataSource(

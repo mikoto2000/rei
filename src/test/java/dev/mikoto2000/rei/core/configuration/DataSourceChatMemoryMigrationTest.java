@@ -13,11 +13,14 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.sqlite.SQLiteDataSource;
 
+/** データ取得元チャット記憶移行の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class DataSourceChatMemoryMigrationTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 機能の組み立てで、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void migratesLegacyMemoryBeforeSpringAiSchemaInitialization() throws Exception {
     var legacyDataSource = new SQLiteDataSource();

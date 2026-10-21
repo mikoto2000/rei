@@ -20,9 +20,12 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 会話形式会話の結果と状態の契約を検証するテスト。 */
 class ConversationStyleSessionTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 会話の継続管理で、音声の取得・認識・入力の受け渡しが、検証条件に従うことを確認する。 */
   @Test
   void defaultStyleAutomaticallySelectsVoiceAndExplicitNormalOverridesIt() {
     var file = root.resolve("sessions.json");
@@ -78,6 +81,7 @@ class ConversationStyleSessionTest {
         .isEqualTo(ResponseStyle.NORMAL);
   }
 
+  /** 会話の継続管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void preferencesPersistAcrossResumeAndAreCapturedForTextAndVoice() {
     var projects = new ProjectService(root, new ProjectRegistry(root.resolve("projects.json")));
@@ -124,6 +128,7 @@ class ConversationStyleSessionTest {
     }
   }
 
+  /** 会話の継続管理で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void voiceOnlyKeepsKeyboardNormalAndProjectBoundaryIsEnforced() {
     var repository = new FileSessionRepository(root.resolve("sessions.json"));
@@ -162,6 +167,7 @@ class ConversationStyleSessionTest {
         .isInstanceOf(dev.mikoto2000.rei.application.run.SessionConflictException.class);
   }
 
+  /** 失敗受付について、全対象形式利用者の好みを復元することを確認する。 */
   @Test
   void failedAdmissionRestoresAllStylePreferencesAndTime() {
     var file = root.resolve("sessions.json");
@@ -181,6 +187,7 @@ class ConversationStyleSessionTest {
     assertThat(new FileSessionRepository(file).findById("s")).contains(original);
   }
 
+  /** 会話の継続管理で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void legacySessionAndRunJsonDefaultToNormalAndStyleSurvivesRoundTrip() throws Exception {
     var mapper =

@@ -17,22 +17,49 @@ import java.util.UUID;
 import java.util.function.Function;
 
 /**
- * Explicit non-conversational operations over the existing Run lifecycle and shared project queue.
+ * バックグラウンド実行受付のユースケースを実現する。
+ *
+ * <p>Explicit non-conversational operations over the existing Run lifecycle and shared project
+ * queue.
  */
 public final class BackgroundRunSubmitService {
+  /** プロジェクト一覧。 */
   private final ProjectRegistry projects;
+
+  /** 登録台帳。 */
   private final RunRegistry registry;
+
+  /** 実行一覧。 */
   private final RunService runs;
+
+  /** 入力の振り分け。 */
   private final ConversationInputRouter router;
+
+  /** キャンセル。 */
   private final CommandCancellationService cancellation;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** 通知の連携先。 */
   private final AgentEventBus bus;
+
+  /** 要約一覧。 */
   private final WebPageSummarizerService summaries;
+
+  /** 画像一覧。 */
   private final ImageGenerationService images;
+
+  /** この機能の動作設定。 */
   private final ImageProperties properties;
+
+  /** 状態一覧。 */
   private dev.mikoto2000.rei.core.project.ProjectRunStateStore states;
+
+  /** バックグラウンド。 */
   private dev.mikoto2000.rei.core.execution.BackgroundCommands background;
 
+  /** 実行の受付と状態管理で使用するシェル状態を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setShellState(
       dev.mikoto2000.rei.core.project.ProjectRunStateStore states,
@@ -41,9 +68,11 @@ public final class BackgroundRunSubmitService {
     this.background = background;
   }
 
+  /** 活動中要約一覧。 */
   private final java.util.concurrent.ConcurrentMap<String, String> activeSummaries =
       new java.util.concurrent.ConcurrentHashMap<>();
 
+  /** 実行の受付と状態管理で用いる要約対象軽量CLIを返す。 */
   public AgentRunContext summaryForCli(String projectId, String url) {
     requireText(url, 4096);
     var source = URI.create(url);
@@ -65,6 +94,7 @@ public final class BackgroundRunSubmitService {
         });
   }
 
+  /** 実行の受付と状態管理で用いる最新要約対象軽量CLIを返す。 */
   public String latestSummaryForCli(String projectId) {
     var project =
         projects.resolveById(projectId).orElseThrow(() -> new ResourceNotFoundException("Project"));
@@ -90,6 +120,7 @@ public final class BackgroundRunSubmitService {
     return String.join(System.lineSeparator(), output);
   }
 
+  /** 実行の受付と状態管理で用いる画像対象軽量CLIを返す。 */
   public AgentRunContext imageForCli(
       String projectId, String prompt, String output, String model, String size, boolean raw) {
     requireText(prompt, 10000);
@@ -140,6 +171,7 @@ public final class BackgroundRunSubmitService {
         });
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   private void save(
       AgentRunContext context,
       dev.mikoto2000.rei.core.execution.ExecutionType type,
@@ -162,6 +194,7 @@ public final class BackgroundRunSubmitService {
               java.time.Instant.now()));
   }
 
+  /** 指定された値や利用先を使って、BackgroundRunSubmitServiceを初期化する。 */
   public BackgroundRunSubmitService(
       ProjectRegistry projects,
       RunRegistry registry,
@@ -185,6 +218,7 @@ public final class BackgroundRunSubmitService {
     this.properties = properties;
   }
 
+  /** 実行の受付と状態管理で用いる要約を返す。 */
   public AgentRunContext summary(String projectId, String url) {
     requireText(url, 4096);
     URI source = URI.create(url);
@@ -195,6 +229,7 @@ public final class BackgroundRunSubmitService {
     return submit(projectId, context -> summaries.summarize(source).summary());
   }
 
+  /** 実行の受付と状態管理で用いる画像を返す。 */
   public AgentRunContext image(String projectId, String prompt, String size) {
     requireText(prompt, 10000);
     var dimensions = ImageSize.parse(size == null ? properties.getSize() : size);
@@ -217,11 +252,13 @@ public final class BackgroundRunSubmitService {
         });
   }
 
+  /** 条件を満たさない操作を拒否するため、テキストの前提条件を確認する。 */
   private static void requireText(String text, int max) {
     if (text == null || text.isBlank() || text.length() > max)
       throw new IllegalArgumentException("Invalid input");
   }
 
+  /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   private AgentRunContext submit(String projectId, Function<AgentRunContext, String> operation) {
     requireText(projectId, 128);
     var project =
@@ -245,6 +282,7 @@ public final class BackgroundRunSubmitService {
     return context;
   }
 
+  /** 要求された処理を実行する。 */
   private void execute(AgentRunContext context, Function<AgentRunContext, String> operation) {
     try (var scope = AgentRunScope.open(context)) {
       cancellation.begin(Thread.currentThread());

@@ -6,9 +6,11 @@ import java.nio.file.Files;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 
+/** 記憶データ取得元外部連携の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class MemoryDataSourceIntegrationTest {
 
+  /** データ取得元について、データベースファイルを作成することを確認する。 */
   @Test
   void dataSourceCreatesDatabaseFile() throws Exception {
     DataSource dataSource = new MemoryDataSourceConfiguration().memoryConsolidationDataSource();

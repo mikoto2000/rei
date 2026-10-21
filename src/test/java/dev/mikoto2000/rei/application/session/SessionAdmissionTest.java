@@ -19,11 +19,16 @@ import java.util.concurrent.RejectedExecutionException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 会話受付の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SessionAdmissionTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-09-16T08:00:00Z");
 
+  /** 会話の継続管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void acceptedQueuedSessionCanContinueAfterRestartAndCacheExpiry() {
     var projects = new ProjectRegistry(temp.resolve("projects.json"));
@@ -69,6 +74,7 @@ class SessionAdmissionTest {
         .isEqualTo(later.instant());
   }
 
+  /** 会話の継続管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void enqueueRejectionDoesNotLeaveSessionOrRun() {
     var projects = new ProjectRegistry(temp.resolve("projects.json"));

@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況分類Tuningの結果と状態の契約を検証するテスト。 */
 class ActivityClassificationTuningTest {
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void browserFixturesRespectServiceBoundariesAndCategoryUncertainty() throws Exception {
     var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -29,6 +31,7 @@ class ActivityClassificationTuningTest {
     }
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void projectAndContentGapsDoNotRequireVisionButUnknownCategoryDoes() {
     var classifier = new ActivityClassifier();
@@ -47,6 +50,7 @@ class ActivityClassificationTuningTest {
     assertTrue(chat.partial());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void genericPullRequestAndRepositoryWordsDoNotIdentifyGithub() {
     for (String title :
@@ -59,6 +63,7 @@ class ActivityClassificationTuningTest {
     }
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void foregroundConfidenceIsIndependentOfSecondaryConfidence() {
     var fg = ActivityEvidenceClassifierTest.window("Code", "a.java - rei - Visual Studio Code");

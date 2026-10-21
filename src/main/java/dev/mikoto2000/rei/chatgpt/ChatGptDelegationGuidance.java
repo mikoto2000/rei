@@ -7,14 +7,26 @@ import java.util.Set;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
-/** Describes effective host configuration without sending credentials or contacting a provider. */
+/**
+ * ChatGPTとの連携に必要なチャットGPT委譲案内を扱う。
+ *
+ * <p>Describes effective host configuration without sending credentials or contacting a provider.
+ */
 @Component
 public final class ChatGptDelegationGuidance {
+  /** 設定。 */
   private final ObjectProvider<PlanProperties> settings;
+
+  /** 自動。 */
   private final ObjectProvider<PlanDelegationProperties> automatic;
+
+  /** OAuth認証。 */
   private final ObjectProvider<PlanOAuth> oauth;
+
+  /** 登録台帳。 */
   private final ObjectProvider<SubAgentRegistry> registry;
 
+  /** 指定された値や利用先を使って、ChatGptDelegationGuidanceを初期化する。 */
   public ChatGptDelegationGuidance(
       ObjectProvider<PlanProperties> settings,
       ObjectProvider<PlanDelegationProperties> automatic,
@@ -26,6 +38,7 @@ public final class ChatGptDelegationGuidance {
     this.registry = registry;
   }
 
+  /** ChatGPTとの連携で用いるプロンプトを返す。 */
   public String prompt() {
     var plan = settings.getIfAvailable();
     if (plan == null || !plan.enabled()) return unavailable("rei.chatgpt-plan.enabled is disabled");
@@ -106,12 +119,14 @@ public final class ChatGptDelegationGuidance {
         + "Saved authentication does not guarantee a valid token, quota or model access. Models listed here are allowed by configuration, not a live catalog check; /chatgpt models --account ACCOUNT confirms access.";
   }
 
+  /** ChatGPTとの連携で用いる利用不可を返す。 */
   private static String unavailable(String reason) {
     return "Current host ChatGPT delegation configuration: automatic delegation unavailable: "
         + reason
         + ". ChatGPT has its own chatgpt-plan route; it is distinct from Codex. Do not substitute Codex or Claude Code without an explicit human request for that provider.";
   }
 
+  /** ChatGPTとの連携で用いるrejection案内を返す。 */
   public String rejectionHint(String userRequest) {
     if (userRequest == null || !userRequest.toLowerCase(Locale.ROOT).matches("(?s).*chat\\s*gpt.*"))
       return "";

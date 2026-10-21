@@ -3,17 +3,38 @@ package dev.mikoto2000.rei.checkpoint;
 import java.util.ArrayList;
 import java.util.List;
 
+/** 作業の中断と再開を継続できない再開用の記録の状況を伝える例外。 */
 public class CheckpointException extends IllegalStateException {
+  /** 作業の中断と再開におけるコードの選択肢。 */
   public enum Code {
+    /** 無効状態。 */
     DISABLED,
+    /** 許容件数。 */
     CAPACITY,
+    /** タスク使用中。 */
     TASK_BUSY,
+    /** 状態の照合結果必須。 */
     RECONCILIATION_REQUIRED,
+    /** 破損再開用の記録。 */
     CORRUPT_CHECKPOINT,
+    /** 非互換データ形式。 */
     INCOMPATIBLE_SCHEMA
   }
 
-  /** Values describe retained snapshot JSON, not the physical SQLite file size. */
+  /**
+   * 作業の中断と再開で受け渡す許容件数詳細を表す。
+   *
+   * <p>Values describe retained snapshot JSON, not the physical SQLite file size.
+   *
+   * @param revisions 改訂一覧
+   * @param maxRevisions 最大改訂一覧
+   * @param bytes バイト数
+   * @param incomingBytes incomingバイト数
+   * @param maxBytes バイト数の上限
+   * @param settingNames setting名前一覧
+   * @param protectedRevisions 保護された改訂一覧
+   * @param protectedBytes 保護されたバイト数
+   */
   public record CapacityDetail(
       long revisions,
       long maxRevisions,
@@ -23,11 +44,16 @@ public class CheckpointException extends IllegalStateException {
       List<String> settingNames,
       long protectedRevisions,
       long protectedBytes) {
+    /** 受け取った情報からCapacityDetailを作成する。 */
     public CapacityDetail {
       settingNames = List.copyOf(settingNames);
     }
 
-    /** Negative protection totals mean that this older caller did not collect them. */
+    /**
+     * 作業の中断と再開を利用するため、指定を補って共通の初期化へ引き渡す。
+     *
+     * <p>Negative protection totals mean that this older caller did not collect them.
+     */
     public CapacityDetail(
         long revisions,
         long maxRevisions,
@@ -39,32 +65,41 @@ public class CheckpointException extends IllegalStateException {
     }
   }
 
+  /** コード。 */
   private final Code code;
+
+  /** 許容件数詳細。 */
   private final CapacityDetail capacityDetail;
 
+  /** 作業の中断と再開を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public CheckpointException(Code code, String message) {
     this(code, message, null);
   }
 
+  /** 指定された値や利用先を使って、CheckpointExceptionを初期化する。 */
   private CheckpointException(Code code, String message, CapacityDetail detail) {
     super(message);
     this.code = code;
     this.capacityDetail = detail;
   }
 
+  /** 作業の中断と再開で用いるコードを返す。 */
   public Code code() {
     return code;
   }
 
+  /** 作業の中断と再開で用いる許容件数詳細を返す。 */
   public CapacityDetail capacityDetail() {
     return capacityDetail;
   }
 
+  /** 作業の中断と再開で用いる保存許容件数を返す。 */
   public static CheckpointException storageCapacity(
       long revisions, long maxRevisions, long bytes, long incomingBytes, long maxBytes) {
     return storageCapacity(revisions, maxRevisions, bytes, incomingBytes, maxBytes, -1, -1);
   }
 
+  /** 作業の中断と再開で用いる保存許容件数を返す。 */
   public static CheckpointException storageCapacity(
       long revisions,
       long maxRevisions,
@@ -126,6 +161,7 @@ public class CheckpointException extends IllegalStateException {
     return new CheckpointException(Code.CAPACITY, message, detail);
   }
 
+  /** 作業の中断と再開で用いる状態の記録許容件数を返す。 */
   public static CheckpointException snapshotCapacity(long bytes, long maxSnapshotBytes) {
     String setting = "rei.checkpoint.max-snapshot-bytes";
     return new CheckpointException(

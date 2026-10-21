@@ -15,7 +15,9 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 
+/** ツール繰り返し補助の結果と状態の契約を検証するテスト。 */
 class ToolLoopSupportTest {
+  /** 会話の実行の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void missingFileDoesNotAbortRemainingToolCalls(
       @org.junit.jupiter.api.io.TempDir java.nio.file.Path root) throws java.io.IOException {
@@ -73,14 +75,20 @@ class ToolLoopSupportTest {
             dev.mikoto2000.rei.event.AgentEventType.TOOL_COMPLETED);
   }
 
+  /** 検証条件を再現するためのサンプルファイルツール一覧。 */
   public static class SampleFileTools {
+    /** 検証に使う作業ルート。 */
     private final java.nio.file.Path root;
+
+    /** 検証に使うattempted。 */
     final java.util.List<String> attempted = new java.util.ArrayList<>();
 
+    /** 検証条件に必要な値を受け取り、SampleFileToolsを用意する。 */
     SampleFileTools(java.nio.file.Path root) {
       this.root = root;
     }
 
+    /** 検証用に、指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
     @org.springframework.ai.tool.annotation.Tool(
         name = "readBinaryFile",
         description = "read test file")
@@ -90,10 +98,12 @@ class ToolLoopSupportTest {
     }
   }
 
+  /** 既定完了時の処理一覧を受け付けないことを確認する。 */
   @Test
   void rejectsDefaultCallbacks() {
     ToolCallback callback =
         new ToolCallback() {
+          /** 検証用に、会話の実行で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("ambient")
@@ -102,6 +112,7 @@ class ToolLoopSupportTest {
                 .build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             throw new AssertionError("must not execute");
           }
@@ -113,6 +124,7 @@ class ToolLoopSupportTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 加工前のツール一覧を受け付けないことを確認する。 */
   @Test
   void rejectsRawToolsInOfficialSdkExtraBody() {
     var options =
@@ -126,6 +138,7 @@ class ToolLoopSupportTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 存在しないを受け付けられることを確認する。 */
   @Test
   void acceptsAbsentAndEmptyToolCollections() {
     assertThatCode(
@@ -142,20 +155,24 @@ class ToolLoopSupportTest {
         .doesNotThrowAnyException();
   }
 
+  /** 会話の実行で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void existingRunBudgetOwnsPerToolLimit() {
     executeAfterPriorResponses(40, 1);
   }
 
+  /** 会話の実行で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void existingRunBudgetOwnsTotalToolLimit() {
     executeAfterPriorResponses(150, 5);
   }
 
+  /** 検証用に、依頼された操作を進めるため、変更後Prior応答一覧を実行する。 */
   private void executeAfterPriorResponses(int priorCalls, int names) {
     var invocations = new java.util.concurrent.atomic.AtomicInteger();
     ToolCallback callback =
         new ToolCallback() {
+          /** 検証用に、会話の実行で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("tool0")
@@ -164,6 +181,7 @@ class ToolLoopSupportTest {
                 .build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             invocations.incrementAndGet();
             return "done";
@@ -196,12 +214,15 @@ class ToolLoopSupportTest {
     assertThat(invocations.get()).isEqualTo(1);
   }
 
+  /** 検証で使用するモデルを、指定された条件に合わせて用意する。 */
   private ChatModel model(ChatOptions options) {
     return new ChatModel() {
+      /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
       public ChatOptions getOptions() {
         return options;
       }
 
+      /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
       public ChatResponse call(Prompt prompt) {
         throw new AssertionError("must not call model");
       }

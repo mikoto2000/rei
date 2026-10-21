@@ -9,12 +9,15 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 目標段階計画変更の結果と状態の契約を検証するテスト。 */
 class GoalStagePlanChangeTest extends GoalStageLoopTest {
+  /** {@code child} の条件を再現するための補助情報を返す。 */
   GoalStageDefinition child(String id, String parent) {
     return new GoalStageDefinition(
         id, parent, "Build child", List.of(criterion(id)), List.of(), List.of(), null);
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void childrenCannotCompleteParentAndPlanHistoryRetainsConditionsAndBudgets() {
     var goal = setup();
@@ -46,6 +49,7 @@ class GoalStagePlanChangeTest extends GoalStageLoopTest {
     assertEquals(stage("a"), stages.list(goal).getFirst().definition());
   }
 
+  /** 目標の達成管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void modelProposalIsValidatedAndAppliedOnlyByHostAfterUnverifiedAttempt() {
     var goal = setup();
@@ -74,6 +78,7 @@ class GoalStagePlanChangeTest extends GoalStageLoopTest {
     assertEquals(10, result.maxRuns());
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void directRepositoryAdmissionCannotBypassDependencies() {
     var goal = setup();
@@ -83,6 +88,7 @@ class GoalStagePlanChangeTest extends GoalStageLoopTest {
         IllegalStateException.class, () -> stages.begin(claim, run, stages.list(goal).get(1)));
   }
 
+  /** 目標の達成管理で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void stagePlanFreezesWholeGoalCompletionContract() {
     var goal = setup();
@@ -100,6 +106,7 @@ class GoalStagePlanChangeTest extends GoalStageLoopTest {
                 new AgentRunContext("human", "session", dir, "project"), goal.id(), definition));
   }
 
+  /** 完了一連の更新取り消しについて、根拠を維持することを確認する。 */
   @Test
   void completionTransactionRollbackKeepsEvidenceAndAttemptConsistent() {
     var goal = setup();

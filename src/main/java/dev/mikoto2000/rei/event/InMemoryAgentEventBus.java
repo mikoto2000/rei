@@ -16,40 +16,57 @@ import org.springframework.stereotype.Component;
 @Component
 public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher {
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(InMemoryAgentEventBus.class);
 
+  /** 通知の受け取り先一覧。 */
   private final List<AgentEventListener> listeners = new CopyOnWriteArrayList<>();
+
+  /** 境界通知の受け取り先一覧。 */
   private final List<AgentEventListener> boundaryListeners = new CopyOnWriteArrayList<>();
 
+  /** 実行状況の通知で用いる購読境界を返す。 */
   @Override
   public Subscription subscribeBoundary(AgentEventListener listener) {
     boundaryListeners.add(listener);
     return () -> boundaryListeners.remove(listener);
   }
 
+  /** 実行状況を利用先で把握できるよう、境界を通知する。 */
   @Override
   public void publishBoundary(AgentEvent event) {
     for (var listener : boundaryListeners) listener.onEvent(event);
     publish(event);
   }
 
+  /** 発生順序。 */
   private final AtomicLong sequence = new AtomicLong(0L);
+
+  /** 待機中。 */
   private final java.util.ArrayDeque<AgentEvent> pending = new java.util.ArrayDeque<>();
+
+  /** 実行先への引き渡し中かどうか。 */
   private boolean dispatching;
+
+  /** 再送。 */
   private final ReplayBuffer replay;
 
+  /** 実行状況の通知を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public InMemoryAgentEventBus() {
     this(new ReplayBuffer(10_000, java.time.Clock.systemUTC()));
   }
 
+  /** 指定された値や利用先を使って、InMemoryAgentEventBusを初期化する。 */
   private InMemoryAgentEventBus(ReplayBuffer replay) {
     this.replay = replay;
   }
 
+  /** 指定された再送一時保持領域を反映した情報を作成する。 */
   public static InMemoryAgentEventBus withReplayBuffer(ReplayBuffer replay) {
     return new InMemoryAgentEventBus(replay);
   }
 
+  /** 実行状況の通知で用いる購読を返す。 */
   @Override
   public synchronized ReplaySubscription subscribe(
       String runId, long fromSequence, AgentEventListener listener) {
@@ -64,21 +81,25 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
         snapshot.events(), subscription, snapshot.latestSequence(), snapshot.terminalSequence());
   }
 
+  /** 実行状況の通知に関する保持期限を過ぎた情報の削除実行を処理する。 */
   @Override
   public synchronized void purgeRun(String runId) {
     replay.purgeRun(runId);
   }
 
+  /** 実行状況の通知に関する保持期限を過ぎた情報の削除期限切れを処理する。 */
   @Override
   public synchronized void purgeExpired() {
     replay.purgeExpired();
   }
 
+  /** 実行状況の通知に関する保持期限を過ぎた情報の削除期限切れを処理する。 */
   @Override
   public synchronized void purgeExpired(java.util.Set<String> protectedRuns) {
     replay.purgeExpired(protectedRuns);
   }
 
+  /** 実行状況の通知で用いる購読を返す。 */
   @Override
   public Subscription subscribe(AgentEventListener listener) {
     if (listener == null) {
@@ -86,8 +107,10 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
     }
     listeners.add(listener);
     return new Subscription() {
+      /** 購読終了済み。 */
       private volatile boolean unsubscribed = false;
 
+      /** 実行状況の通知に関する購読の終了を処理する。 */
       @Override
       public void unsubscribe() {
         if (unsubscribed) {
@@ -99,6 +122,7 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
     };
   }
 
+  /** 状態や結果を購読先へ通知する。 */
   @Override
   public synchronized void publish(AgentEvent event) {
     if (event == null) {
@@ -128,11 +152,13 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
     }
   }
 
+  /** 実行状況の通知で用いる直近発生順序を返す。 */
   @Override
   public long lastSequence() {
     return sequence.get();
   }
 
+  /** 指定された発生順序を反映した情報を作成する。 */
   private AgentEvent withSequence(AgentEvent event) {
     long next = sequence.incrementAndGet();
     return new AgentEvent(

@@ -5,9 +5,12 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.core.env.MapPropertySource;
 
+/** Web APIの設定に応じてWebアプリケーションの起動条件を準備する。 */
 public final class WebApplication {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private WebApplication() {}
 
+  /** Web APIによる操作に関する設定を処理する。 */
   public static void configure(SpringApplication application, String environmentKey) {
     String key = environmentKey == null || environmentKey.isBlank() ? "" : environmentKey;
     var type = key.isEmpty() ? WebApplicationType.NONE : WebApplicationType.SERVLET;

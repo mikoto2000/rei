@@ -13,7 +13,9 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
+/** 会話形式対話の補助の結果と状態の契約を検証するテスト。 */
 class ConversationStyleAdvisorTest {
+  /** 通常識別情報および会話について、文字ツール一覧を保持することを確認する。 */
   @Test
   void normalIsIdentityAndConversationPreservesCharacterToolsAndUser() {
     var options =
@@ -51,6 +53,7 @@ class ConversationStyleAdvisorTest {
         .isSameAs(response);
   }
 
+  /** 会話の実行で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void noBaseSystemStillAddsStyleWithoutChangingPromptHistory() {
     var user = new UserMessage("こんにちは");

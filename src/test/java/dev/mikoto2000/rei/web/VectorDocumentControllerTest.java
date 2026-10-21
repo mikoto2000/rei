@@ -12,7 +12,9 @@ import dev.mikoto2000.rei.vectordocument.VectorDocumentService;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** ベクトル文書受付窓口の結果と状態の契約を検証するテスト。 */
 class VectorDocumentControllerTest {
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void explicitDocumentsAreQueuedWithoutBackendGlobExpansion() {
     var vectors = mock(VectorDocumentService.class);
@@ -28,9 +30,11 @@ class VectorDocumentControllerTest {
     assertThrows(
         IllegalArgumentException.class,
         () -> api.add(new VectorDocumentController.Documents(List.of())));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(vectors);
   }
 
+  /** 検索およびについて、利用既存のサービスを削除することを確認する。 */
   @Test
   void searchAndDeleteUseTheExistingServiceAndShellDisplay() {
     var vectors = mock(VectorDocumentService.class);

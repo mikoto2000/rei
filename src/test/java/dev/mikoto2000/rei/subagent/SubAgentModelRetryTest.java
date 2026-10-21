@@ -33,23 +33,30 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import reactor.core.publisher.Flux;
 
+/** 補助エージェントモデル再試行の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SubAgentModelRetryTest {
+  /** 検証に使う空のHTTPヘッダー。 */
   private static final Headers EMPTY_HEADERS = Headers.builder().build();
+
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** {@code fixture} の条件を再現するための補助情報を返す。 */
   SubAgentRunnerTest fixture() {
     var f = new SubAgentRunnerTest();
     f.directory = dir;
     return f;
   }
 
+  /** {@code configure} の条件を再現するため、検証用の操作や状態を扱う。 */
   void configure(SubAgentRunner runner, int retries) {
     var props = new SubAgentProperties();
     props.setMaxTransientModelRetries(retries);
     runner.setStandaloneBudgetProperties(props);
   }
 
+  /** {@code transientSdkFailures} の条件を再現するための補助情報を返す。 */
   static Stream<Throwable> transientSdkFailures() {
     return Stream.<Throwable>of(
             RateLimitException.builder().headers(EMPTY_HEADERS).build(),
@@ -72,6 +79,7 @@ class SubAgentModelRetryTest {
                 Stream.of(error, new CompletionException(error), new ExecutionException(error)));
   }
 
+  /** {@code permanentSdkFailures} の条件を再現するための補助情報を返す。 */
   static Stream<Throwable> permanentSdkFailures() {
     return Stream.<Throwable>of(
             BadRequestException.builder().headers(EMPTY_HEADERS).build(),
@@ -90,6 +98,7 @@ class SubAgentModelRetryTest {
         .flatMap(error -> Stream.of(error, new CompletionException(error)));
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @MethodSource("transientSdkFailures")
   void optInTransientFailureBeforeAnyChunkRetriesTheSamePromptWithinSharedSteps(Throwable failure)
@@ -120,6 +129,7 @@ class SubAgentModelRetryTest {
     assertEquals(0, result.repairAttempts());
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @MethodSource("permanentSdkFailures")
   void permanentSdkFailuresNeverConsumeTheModelRetryAllowance(Throwable failure) throws Exception {
@@ -140,6 +150,7 @@ class SubAgentModelRetryTest {
     assertTrue(result.modelRetryHistory().isEmpty());
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @MethodSource("transientSdkFailures")
   void sdkFailureAfterAnyChunkIsRecordedWithoutRetry(Throwable failure) throws Exception {
@@ -161,6 +172,7 @@ class SubAgentModelRetryTest {
         List.of("TRANSIENT_MODEL_FAILURE_AFTER_PARTIAL_RESPONSE"), result.modelRetryHistory());
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void defaultsPartialResponsesAndNonTransientFailuresAreNeverRetried() throws Exception {
     var f = fixture();
@@ -200,6 +212,7 @@ class SubAgentModelRetryTest {
     assertEquals(1, calls.get());
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void retriesShareStepAndCallBudgetsAndUnknownUsageStopsBeforeASecondCall() throws Exception {
     var f = fixture();
@@ -239,6 +252,7 @@ class SubAgentModelRetryTest {
     assertTrue(unknown.output().contains("TOKEN_USAGE_UNKNOWN"));
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void retryLimitIsPerInvocationAndTimeoutIncludesBackoff() throws Exception {
     var f = fixture();
@@ -272,6 +286,7 @@ class SubAgentModelRetryTest {
     assertEquals(0, timed.modelRetryAttempts());
   }
 
+  /** 補助エージェントへの委譲で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void transientFailureAfterACompletedToolDoesNotReplayTheToolOrItsReceipt() throws Exception {
     var f = fixture();
@@ -312,6 +327,7 @@ class SubAgentModelRetryTest {
     assertEquals(1, result.modelRetryAttempts());
   }
 
+  /** 補助エージェントへの委譲で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void toolFailureCannotConsumeTheModelRetryAllowanceOrReplayAnAction() throws Exception {
     var f = fixture();
@@ -319,6 +335,7 @@ class SubAgentModelRetryTest {
     var calls = new AtomicInteger();
     var callback =
         new org.springframework.ai.tool.ToolCallback() {
+          /** 検証用に、補助エージェントへの委譲で参照するツール定義を返す。 */
           public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
             return org.springframework.ai.tool.definition.ToolDefinition.builder()
                 .name("readMultiFile")
@@ -327,6 +344,7 @@ class SubAgentModelRetryTest {
                 .build();
           }
 
+          /** 検証用に、補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             invoked.incrementAndGet();
             throw new OpenAIIoException("Tool transport failure");
@@ -359,6 +377,7 @@ class SubAgentModelRetryTest {
     assertTrue(result.modelRetryHistory().isEmpty());
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void repairAndSemanticJudgeShareTheSameInvocationWideRetryLimit() throws Exception {
     var f = fixture();
@@ -411,6 +430,7 @@ class SubAgentModelRetryTest {
     assertEquals(1, result.modelRetryAttempts());
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void explicitChildCancellationInterruptsPendingBackoffBeforeRetry() throws Exception {
     var f = fixture();
@@ -446,6 +466,7 @@ class SubAgentModelRetryTest {
     assertEquals(0, result.get().modelRetryAttempts());
   }
 
+  /** ゼロ再試行回数を保持することを確認する。 */
   @Test
   void configurationBindsExplicitlyAndOldResultConstructorsPreserveZeroRetries() {
     var source =

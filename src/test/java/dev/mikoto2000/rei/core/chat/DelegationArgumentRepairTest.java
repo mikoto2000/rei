@@ -43,19 +43,30 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
+/** 委譲引数修復の結果と状態の契約を検証するテスト。 */
 class DelegationArgumentRepairTest {
+  /** 検証に使う所有者。 */
   final AgentRunContext owner = new AgentRunContext("run", "session", Path.of("."), "project");
+
+  /** 検証に使う承認一覧。 */
   final ToolApprovalRepository approvals = mock(ToolApprovalRepository.class);
+
+  /** 検証に使う利用条件の確認。 */
   final ToolPermissionGuard guard =
       new ToolPermissionGuard(
           new ToolPermissionPolicy(
               new ToolPermissionProperties(true, Set.of(), Set.of(), Map.of())),
           new AgentEventFactory(Clock.systemUTC()),
           e -> {});
+
+  /** 検証に使うinvoked、影響。 */
   final AtomicInteger invoked = new AtomicInteger(), effects = new AtomicInteger();
+
+  /** 検証に使う有効な。 */
   final String valid =
       "{\"agent\":\"reviewer\",\"task\":\"review\",\"backendId\":\"chatgpt-plan\",\"accountRef\":\"default\",\"modelId\":\"model\",\"sourceRefs\":[\"docs/a.md\"],\"expectedOutput\":\"{\\\"unverified\\\":[]}\"}";
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   RunExecutionContext context(OutputLimitRunBudget budget) {
     guard.setApprovals(approvals);
     when(approvals.request(eq("delegateTask"), anyString(), eq(owner)))
@@ -81,8 +92,10 @@ class DelegationArgumentRepairTest {
     return ctx;
   }
 
+  /** {@code callback} の条件を再現するための補助情報を返す。 */
   ToolCallback callback() {
     return new ToolCallback() {
+      /** 検証用に、会話の実行で参照するツール定義を返す。 */
       public ToolDefinition getToolDefinition() {
         return ToolDefinition.builder()
             .name("delegateTask")
@@ -91,6 +104,7 @@ class DelegationArgumentRepairTest {
             .build();
       }
 
+      /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
       public String call(String input) {
         invoked.incrementAndGet();
         guard.check("delegateTask", input, owner);
@@ -100,6 +114,7 @@ class DelegationArgumentRepairTest {
     };
   }
 
+  /** 検証で使用するプロンプトを、指定された条件に合わせて用意する。 */
   Prompt prompt(RunExecutionContext ctx) {
     return new Prompt(
         List.of(new UserMessage("ChatGPT にレビューして")),
@@ -109,6 +124,7 @@ class DelegationArgumentRepairTest {
             .build());
   }
 
+  /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
   ChatResponse call(String id, String input) {
     return new ChatResponse(
         List.of(
@@ -120,16 +136,19 @@ class DelegationArgumentRepairTest {
                     .build())));
   }
 
+  /** 会話の実行の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void modelReceivesValidationResultAndCorrectedCallStillRequiresApproval() {
     var ctx = context(new OutputLimitRunBudget(2, 20));
     var calls = new AtomicInteger();
     var model =
         new ChatModel() {
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new AssertionError();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             if (calls.incrementAndGet() == 1)
               return Flux.just(
@@ -156,6 +175,7 @@ class DelegationArgumentRepairTest {
     verify(approvals).request("delegateTask", valid, owner);
   }
 
+  /** 補正上限について、状態の記録復元の後も対象の情報が残ることを確認する。 */
   @Test
   void correctionLimitSurvivesSnapshotRestoreAndNeverExecutesInvalidCalls() {
     var budget = new OutputLimitRunBudget(2, 20, null, 0, 2);
@@ -163,6 +183,7 @@ class DelegationArgumentRepairTest {
     var loop = new ToolLoopSupport();
     for (int i = 0; i < 2; i++) loop.executeResumable(prompt(ctx), call("bad" + i, "{}"), ctx);
     assertEquals(0, invoked.get());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(approvals);
     var restored = new OutputLimitRunBudget(2, 20, null, 0, 2);
     restored.restore(budget.snapshot());
@@ -174,6 +195,7 @@ class DelegationArgumentRepairTest {
     assertEquals(ExecutionStoppedException.Reason.TOOL_ARGUMENT_REPAIR_EXHAUSTED, stopped.reason());
   }
 
+  /** 会話の実行で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void policyDenialIsNotConvertedIntoAnArgumentRepair() {
     var budget = new OutputLimitRunBudget(2, 20);
@@ -186,10 +208,12 @@ class DelegationArgumentRepairTest {
     var calls = new AtomicInteger();
     var model =
         new ChatModel() {
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new AssertionError();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             calls.incrementAndGet();
             return Flux.just(DelegationArgumentRepairTest.this.call("denied", valid));
@@ -202,6 +226,7 @@ class DelegationArgumentRepairTest {
     assertEquals(0, effects.get());
   }
 
+  /** 会話の実行で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void toolDefinitionsExplainConditionalRequiredFields() {
     var registry = mock(dev.mikoto2000.rei.subagent.SubAgentRegistry.class);

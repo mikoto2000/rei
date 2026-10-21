@@ -47,10 +47,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+/** バックグラウンド実行APIの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class BackgroundRunApiTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void summariesAndImagesUseCommonRunPollingSseReplayAndQueuedCancel() throws Exception {
     var pending = new ArrayDeque<Runnable>();
@@ -120,6 +123,7 @@ class BackgroundRunApiTest {
       assertThat(runs.cancel(image.runId()).accepted()).isTrue();
       pending.remove().run();
       mvc.perform(get(location)).andExpect(jsonPath("$.status").value("COMPLETED"));
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(images);
       var first =
           mvc.perform(get(location + "/events")).andExpect(request().asyncStarted()).andReturn();
@@ -161,6 +165,7 @@ class BackgroundRunApiTest {
     }
   }
 
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void runningCancelStopsWorkAndProjectsShareChatFifoButDifferentProjectsProceed()
       throws Exception {

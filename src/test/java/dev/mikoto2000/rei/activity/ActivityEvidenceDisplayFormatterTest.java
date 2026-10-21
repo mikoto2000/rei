@@ -10,7 +10,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+/** 作業状況根拠表示表示形式への変換の結果と状態の契約を検証するテスト。 */
 class ActivityEvidenceDisplayFormatterTest {
+  /** 検証用に、後から経緯を確認できるよう、指定された内容を記録する。 */
   static ActivityRecord record(
       VisionDiagnostics.Result foreground, VisionDiagnostics.Result background) {
     var r = ActivitySemanticTest.dev(0, "Terminal", "X");
@@ -57,10 +59,12 @@ class ActivityEvidenceDisplayFormatterTest {
         d);
   }
 
+  /** {@code state} の条件を再現するための補助情報を返す。 */
   static VisionDiagnostics.Result state(VisionDiagnostics.State state) {
     return new VisionDiagnostics.Result(state, null);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void windowOnly() {
     assertEquals(
@@ -72,6 +76,7 @@ class ActivityEvidenceDisplayFormatterTest {
                     state(VisionDiagnostics.State.NOT_ATTEMPTED))));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void foregroundAndBackgroundUsedAreIndependent() {
     var f = new ActivityEvidenceDisplayFormatter();
@@ -82,6 +87,7 @@ class ActivityEvidenceDisplayFormatterTest {
     assertEquals("Window + Foreground Vision + Background Vision", f.evidence(record(used, used)));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @ParameterizedTest
   @EnumSource(
       value = VisionDiagnostics.State.class,
@@ -102,6 +108,7 @@ class ActivityEvidenceDisplayFormatterTest {
       assertTrue(f.verbose(r).contains("OUTPUT_LIMIT"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void verboseShowsSavedDiagnosticsWithoutRawData() {
     var text =
@@ -124,6 +131,7 @@ class ActivityEvidenceDisplayFormatterTest {
     assertFalse(text.contains("積極的"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void legacyRecordDoesNotImplyVisionUsage() {
     var f = new ActivityEvidenceDisplayFormatter();

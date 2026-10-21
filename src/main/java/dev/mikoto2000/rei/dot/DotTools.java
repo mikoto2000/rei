@@ -10,17 +10,21 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
+/** 状態表示をモデルから呼び出せるツールとして提供する。 */
 @Component
 @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
     name = "rei.dot-delegation.parent-llm-enabled",
     havingValue = "true")
 public final class DotTools {
+  /** サービス。 */
   private final DotDelegationService service;
 
+  /** 指定された値や利用先を使って、DotToolsを初期化する。 */
   public DotTools(DotDelegationService service) {
     this.service = service;
   }
 
+  /** 利用者の状態表示で用いる完了時の処理一覧を返す。 */
   public org.springframework.ai.tool.ToolCallback[] callbacks() {
     return Arrays.stream(
             org.springframework.ai.tool.method.MethodToolCallbackProvider.builder()
@@ -31,6 +35,7 @@ public final class DotTools {
         .toArray(org.springframework.ai.tool.ToolCallback[]::new);
   }
 
+  /** 利用者の状態表示で用いる要求状態表示調査を返す。 */
   @Tool(
       description =
           "Request asynchronous research/comparison/review from Tenten only with administrator"

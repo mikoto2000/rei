@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
+/** スキル候補統計の結果と状態の契約を検証するテスト。 */
 class SkillCandidateStatisticsTest {
 
+  /** スキルの利用で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void aggregatesOnlyEvaluationsWithAnActualSelection() {
     SkillCandidateStatistics statistics = new SkillCandidateStatistics();

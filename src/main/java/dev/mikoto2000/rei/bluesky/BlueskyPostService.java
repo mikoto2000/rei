@@ -5,18 +5,30 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+/** Bluesky投稿のユースケースを実現する。 */
 @Service
 @RequiredArgsConstructor
 public class BlueskyPostService {
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(BlueskyPostService.class);
 
+  /** この機能の動作設定。 */
   private final BlueskyProperties properties;
+
+  /** BlueskyAPIクライアント。 */
   private final BlueskyApiClient blueskyApiClient;
+
+  /** Bluesky返信テキスト生成。 */
   private final BlueskyReplyTextGenerator blueskyReplyTextGenerator;
+
+  /** 会話保存と検索の窓口。 */
   private final BlueskyReplyConversationRepository conversationRepository;
+
+  /** 返信状態保存と検索の窓口。 */
   private final BlueskyReplyStateRepository replyStateRepository;
 
+  /** Blueskyとの連携で用いる投稿を返す。 */
   public BlueskyPostResult post(String text) {
     try {
       log.debug("Bluesky post requested: textLength={}", text == null ? null : text.length());
@@ -58,6 +70,7 @@ public class BlueskyPostService {
     }
   }
 
+  /** Blueskyとの連携で用いる返信を返す。 */
   public BlueskyPostResult reply(String targetPostUriOrUrl, String text) {
     try {
       log.debug(
@@ -117,6 +130,7 @@ public class BlueskyPostService {
     }
   }
 
+  /** Blueskyとの連携で用いる返信を返す。 */
   public BlueskyPostResult reply(String targetPostUriOrUrl) {
     try {
       if (!properties.isEnabled()) {
@@ -153,6 +167,7 @@ public class BlueskyPostService {
     }
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、投稿要求を検証する。 */
   private BlueskyPostResult validatePostRequest(String text) {
     if (!properties.isEnabled()) {
       log.debug("Bluesky post skipped: feature disabled");
@@ -187,6 +202,7 @@ public class BlueskyPostService {
     return null;
   }
 
+  /** 利用先へ渡せるよう、投稿URLの形式に変換する。 */
   private String toPostUrl(String postUri) {
     if (postUri == null || postUri.isBlank()) {
       return null;
@@ -200,10 +216,12 @@ public class BlueskyPostService {
     return "https://bsky.app/profile/" + did + "/post/" + rkey;
   }
 
+  /** Blueskyとの連携において、空白かどうかを判定する。 */
   private boolean isBlank(String text) {
     return text == null || text.isBlank();
   }
 
+  /** 既存の記録へ経緯を残すため、会話を追記する。 */
   private void appendConversation(BlueskyApiClient.ReplyTarget target, String replyText) {
     String handle = conversationHandle(target);
     if (handle == null || handle.isBlank()) {
@@ -214,6 +232,7 @@ public class BlueskyPostService {
     conversationRepository.appendAssistantMessage(handle, replyText == null ? "" : replyText);
   }
 
+  /** Blueskyとの連携で用いる会話操作対象を返す。 */
   private String conversationHandle(BlueskyApiClient.ReplyTarget target) {
     if (target == null || target.parentUri() == null || target.parentUri().isBlank()) {
       return null;

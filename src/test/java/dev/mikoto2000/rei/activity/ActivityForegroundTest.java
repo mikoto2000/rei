@@ -11,7 +11,9 @@ import java.awt.image.BufferedImage;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況前面の結果と状態の契約を検証するテスト。 */
 class ActivityForegroundTest {
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void cropsAcrossNegativeCoordinateDisplaysUsingPixelScale() {
     var left = new Rectangle(-200, 0, 100, 100);
@@ -37,6 +39,7 @@ class ActivityForegroundTest {
     assertEquals(200, pixels.getWidth());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void missingOrOffscreenBoundsFallBackToWholeScreen() {
     var screen = ActivityCaptureTest.screen(20);
@@ -49,6 +52,7 @@ class ActivityForegroundTest {
             new ForegroundWindow("app", 1, "", "1", new ActivityRecord.Bounds(999, 999, 10, 10))));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void win32BoundsUsePhysicalPixelsWhereAwtWidthsUseLogicalUnits() {
     var logical = new Rectangle(0, 0, 100, 100);

@@ -12,8 +12,10 @@ import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
+/** 実行環境文脈対話の補助の結果と状態の契約を検証するテスト。 */
 class RuntimeContextAdvisorTest {
 
+  /** 時刻と期間の解釈で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void prependsCurrentRuntimeContextForEachRequest() {
     Clock fixed = Clock.fixed(Instant.parse("2026-08-16T16:35:42.152Z"), ZoneId.of("Asia/Tokyo"));

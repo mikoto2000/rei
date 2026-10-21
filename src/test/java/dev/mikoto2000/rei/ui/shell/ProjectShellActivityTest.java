@@ -26,8 +26,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.memory.ChatMemory;
 
+/** プロジェクトシェル作業状況の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
+  /** ターミナルでの対話で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void unselectedShellDoesNotDisplayAnotherClientsConversationOrReplayIt() throws Exception {
     var projects =
@@ -76,6 +78,7 @@ class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectCl
     org.mockito.Mockito.verifyNoInteractions(output);
   }
 
+  /** ターミナルでの対話の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void approvalFramesReachStyledOutputOnlyForTheSelectedSession() throws Exception {
     var projects =
@@ -123,6 +126,7 @@ class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectCl
     verify(output, never()).approvalRequired(anyString());
   }
 
+  /** ターミナルでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void switchingSessionsHidesLateEventsFromPreviousRunEvenOnWorkerThread() throws Exception {
     var projects =
@@ -146,14 +150,17 @@ class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectCl
             mock(ChatMemory.class));
     activity.attach(
         new ShellEventOutput() {
+          /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
           public void print(String value) {
             text.append(value);
           }
 
+          /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
           public void println(String value) {
             text.append(value).append('\n');
           }
 
+          /** 検証で保留している出力の確定を扱う。 */
           public void flush() {}
         });
     var events = new AgentEventFactory(Clock.systemUTC());
@@ -183,6 +190,7 @@ class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectCl
     assertThat(text.toString()).contains("FIRST-CONTENT").doesNotContain("SECOND-LEAK");
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void backgroundNotificationsRemainVisibleAfterProjectSwitch() throws Exception {
     var projects =
@@ -227,6 +235,7 @@ class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectCl
     verify(out, times(2)).println("結果");
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void projectSwitchShowsCountAndHiddenRunCompletionIsVisible() throws Exception {
     var projects =
@@ -258,8 +267,10 @@ class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectCl
     verify(out).println("[agent.run.completed] a");
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** ターミナルでの対話で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void switchRestoresOnlyRecentOwnedActivityAndFiltersLiveEvents() throws Exception {
     Path a = Files.createDirectory(temp.resolve("a"));
@@ -285,14 +296,17 @@ class ProjectShellActivityTest extends dev.mikoto2000.rei.core.project.ProjectCl
     var text = new StringBuilder();
     activity.attach(
         new ShellEventOutput() {
+          /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
           public void print(String value) {
             text.append(value);
           }
 
+          /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
           public void println(String value) {
             text.append(value).append('\n');
           }
 
+          /** 検証で保留している出力の確定を扱う。 */
           public void flush() {}
         });
     projects.cd(a.toString());

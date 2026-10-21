@@ -9,8 +9,24 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.UUID;
 
-/** Scoped, prospective consent. Automatic execution quarantines; it never purges. */
+/**
+ * データ保存の共通処理に必要な自動保持期間を扱う。
+ *
+ * <p>Scoped, prospective consent. Automatic execution quarantines; it never purges.
+ */
 public final class AutomaticRetention {
+  /**
+   * データ保存の共通処理で受け渡すConsentを表す。
+   *
+   * @param id 識別子
+   * @param policy 判断基準
+   * @param scope 対象範囲
+   * @param maxObjects 最大対象データ一覧
+   * @param maxBytes バイト数の上限
+   * @param intervalSeconds 実行間隔秒数
+   * @param snapshotHash 状態の記録ハッシュ値
+   * @param created 作成
+   */
   public record Consent(
       String id,
       RetentionPlanner.Policy policy,
@@ -21,10 +37,16 @@ public final class AutomaticRetention {
       String snapshotHash,
       Instant created) {}
 
+  /** 登録台帳。 */
   private final StorageObjectRegistry registry;
+
+  /** 計画の作成。 */
   private final RetentionPlanner planner;
+
+  /** 実行先。 */
   private final RetentionExecutor executor;
 
+  /** 指定された値や利用先を使って、AutomaticRetentionを初期化する。 */
   public AutomaticRetention(
       StorageObjectRegistry registry, RetentionPlanner planner, RetentionExecutor executor) {
     this.registry = registry;
@@ -32,6 +54,7 @@ public final class AutomaticRetention {
     this.executor = executor;
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(
       RetentionPlanner.Policy policy, String scope, int objects, long bytes, long interval)
       throws Exception {
@@ -43,6 +66,7 @@ public final class AutomaticRetention {
                         List.of(policy, scope, objects, bytes, interval))));
   }
 
+  /** 後続の判断で選べる候補を用意するため、自動保持期間を提案する。 */
   public Consent propose(
       String policyId, String supplied, int objects, long bytes, Duration interval) {
     if (objects < 1
@@ -94,6 +118,7 @@ public final class AutomaticRetention {
         });
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   private static Consent get(Connection db, String id) throws Exception {
     UUID.fromString(id);
     try (var query =
@@ -106,6 +131,7 @@ public final class AutomaticRetention {
     }
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   private static void validate(Connection db, Consent consent) throws Exception {
     var policy = RetentionPlanner.policy(db, consent.policy().id());
     // The automatic flag is operational state; consent binds all deletion conditions.
@@ -129,6 +155,7 @@ public final class AutomaticRetention {
       throw new IllegalStateException("Policy or proposal changed; request new explicit consent");
   }
 
+  /** データ保存の共通処理に関する承認を処理する。 */
   public void approve(String id) {
     registry.database.transaction(
         db -> {
@@ -150,6 +177,7 @@ public final class AutomaticRetention {
         });
   }
 
+  /** データ保存の共通処理に関する無効化を処理する。 */
   public void disable(String id) {
     registry.database.transaction(
         db -> {
@@ -171,6 +199,7 @@ public final class AutomaticRetention {
         });
   }
 
+  /** 過去の記録を、条件に従って参照できる形で返す。 */
   public List<Consent> history() {
     return registry.database.read(
         db -> {
@@ -186,6 +215,7 @@ public final class AutomaticRetention {
         });
   }
 
+  /** データ保存の共通処理で用いる状態を返す。 */
   public String state(String id) {
     return registry.database.read(
         db -> {
@@ -204,6 +234,7 @@ public final class AutomaticRetention {
         });
   }
 
+  /** データ保存の共通処理に関する定期確認を処理する。 */
   @org.springframework.scheduling.annotation.Scheduled(fixedDelay = 60000, initialDelay = 60000)
   public void tick() {
     registry.serialized(

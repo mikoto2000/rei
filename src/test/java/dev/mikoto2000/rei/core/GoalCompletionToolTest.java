@@ -16,7 +16,9 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+/** 目標完了ツールの結果と状態の契約を検証するテスト。 */
 class GoalCompletionToolTest {
+  /** 共通の実行基盤の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void modelEntryCanOnlyAttachForCapturedRunAndCannotChooseHumanAuthority() throws Exception {
     var gate = mock(GoalCompletionGate.class);

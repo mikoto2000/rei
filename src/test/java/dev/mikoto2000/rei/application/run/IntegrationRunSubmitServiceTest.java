@@ -30,9 +30,12 @@ import java.util.ArrayDeque;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 外部連携実行受付サービスの結果と状態の契約を検証するテスト。 */
 class IntegrationRunSubmitServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** クライアント所有権を保持することを確認する。 */
   @Test
   void implicitOAuthOperationsAreQueuedAndRetainClientOwnership() throws Exception {
     var projects = new ProjectRegistry(directory.resolve("projects.json"));
@@ -72,6 +75,7 @@ class IntegrationRunSubmitServiceTest {
               calendar,
               tasks);
       var operation = service.listGoogleTasks(project.id(), "session", null, null);
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(tasks);
       verify(lifecycle).validate("session", project.id());
       pending.remove().run();
@@ -81,6 +85,7 @@ class IntegrationRunSubmitServiceTest {
     }
   }
 
+  /** 項目一覧を保持することを確認する。 */
   @Test
   void taglessTaskCreationRetainsFieldsAndRunsOnlyInsideCapturedOwnership() throws Exception {
     var projects = new ProjectRegistry(directory.resolve("projects.json"));
@@ -122,6 +127,7 @@ class IntegrationRunSubmitServiceTest {
               calendar,
               tasks);
       var operation = service.addGoogleTask(project.id(), "session", "Review", due, 2);
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(tasks, calendar);
       verify(lifecycle).validate("session", project.id());
       pending.remove().run();
@@ -132,6 +138,7 @@ class IntegrationRunSubmitServiceTest {
     }
   }
 
+  /** 実行の受付と状態管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void authorizationBeginsOnlyInsideTheCapturedWebRun() throws Exception {
     var projects = new ProjectRegistry(directory.resolve("projects.json"));
@@ -189,6 +196,7 @@ class IntegrationRunSubmitServiceTest {
               calendar,
               tasks);
       assertEquals(context, service.authorizeCalendar(project.id(), "session", "key"));
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(calendar, tasks);
       pending.remove().run();
       verify(calendar).authorize();

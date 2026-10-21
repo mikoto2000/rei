@@ -2,6 +2,20 @@ package dev.mikoto2000.rei.web;
 
 import java.util.List;
 
+/**
+ * Web APIによる操作で受け渡す日次案内応答を表す。
+ *
+ * @param date 日付
+ * @param overview 概要
+ * @param events イベント一覧
+ * @param openTasks 開始タスク一覧
+ * @param overdueTasks overdueタスク一覧
+ * @param relatedDocuments 関連保存済み文書
+ * @param feedItems フィード項目一覧
+ * @param interestUpdates 関心Updates
+ * @param cautionPoints 確認時に注意する点
+ * @param nextActions 次操作一覧
+ */
 public record BriefingResponse(
     String date,
     String overview,
@@ -13,10 +27,30 @@ public record BriefingResponse(
     List<String> interestUpdates,
     List<String> cautionPoints,
     List<String> nextActions) {
+  /**
+   * Web APIによる操作で受け渡すイベント応答を表す。
+   *
+   * @param id 識別子
+   * @param summary 要約
+   * @param start 開始
+   * @param end 終了
+   * @param location 場所
+   * @param status 状態
+   */
   public record EventResponse(
       String id, String summary, String start, String end, String location, String status) {}
 
+  /**
+   * Web APIによる操作で受け渡すタスク応答を表す。
+   *
+   * @param id 識別子
+   * @param title タイトル
+   * @param dueDate 期限日付
+   * @param priority 優先度
+   * @param status 状態
+   */
   public record TaskResponse(long id, String title, String dueDate, int priority, String status) {
+    /** Web APIによる操作で利用する情報を、受け取った形式から変換する。 */
     static TaskResponse from(dev.mikoto2000.rei.task.Task t) {
       return new TaskResponse(
           t.id(),
@@ -27,9 +61,19 @@ public record BriefingResponse(
     }
   }
 
+  /**
+   * Web APIによる操作で受け渡す記事応答を表す。
+   *
+   * @param id 識別子
+   * @param title タイトル
+   * @param url 参照先のURL
+   * @param publishedAt 公開日時
+   * @param feedName フィード名前
+   */
   public record ArticleResponse(
       long id, String title, String url, String publishedAt, String feedName) {}
 
+  /** Web APIによる操作で利用する情報を、受け取った形式から変換する。 */
   public static BriefingResponse from(dev.mikoto2000.rei.briefing.DailyBriefing b) {
     return new BriefingResponse(
         b.date().toString(),

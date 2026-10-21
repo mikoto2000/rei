@@ -25,20 +25,25 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
+/** 会話受付窓口の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SessionControllerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @EnableWebMvc
   @Import({SecurityConfig.class, SessionController.class, ApiExceptionHandler.class})
   static class Config {
+    /** {@code apiKeyProperties} の条件を再現するための補助情報を返す。 */
     @Bean
     ApiKeyProperties apiKeyProperties() {
       return new ApiKeyProperties("secret");
     }
   }
 
+  /** 空の会話および会話の応答形式について、登録済みプロジェクトを利用することを確認する。 */
   @Test
   void emptySessionAndResponseStyleUseRegisteredProjectWithoutStartingARun() throws Exception {
     var repo = new FileSessionRepository(directory.resolve("sessions.json"));
@@ -116,6 +121,7 @@ class SessionControllerTest {
             });
   }
 
+  /** 明示的な終了について、認証を必要とすることを確認する。 */
   @Test
   void explicitEndRequiresAuthenticationAndMatchingSavedProjectAndKeepsMetadata() {
     var repo = new FileSessionRepository(directory.resolve("sessions.json"));
@@ -171,6 +177,7 @@ class SessionControllerTest {
             });
   }
 
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void authenticatedReadOnlyDtosAndValidation() {
     var repo = new FileSessionRepository(directory.resolve("sessions.json"));

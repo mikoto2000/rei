@@ -44,13 +44,18 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** Capturing応答生成に使うモデルHTTP通信の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.extension.ExtendWith(
     org.springframework.boot.test.system.OutputCaptureExtension.class)
 @Tag("integration")
 class CapturingChatModelHttpTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う応答。 */
   static final String RESPONSE = RequestCapturePhaseZeroTest.RESPONSE;
 
+  /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
   static String event(String delta, String reason) {
     return "data: {\"id\":\"chat\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"probe\",\"choices\":[{\"index\":0,\"delta\":"
         + delta
@@ -59,11 +64,13 @@ class CapturingChatModelHttpTest {
         + "}]}\n\n";
   }
 
+  /** 検証に使う逐次データ。 */
   static final String STREAM =
       event("{\"role\":\"assistant\",\"content\":\"ok\"}", "null")
           + event("{}", "\"stop\"")
           + "data: [DONE]\n\n";
 
+  /** 用途に応じたモデル利用で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
     "false,false",
@@ -90,6 +97,7 @@ class CapturingChatModelHttpTest {
       var calls = new AtomicInteger();
       var callback =
           new org.springframework.ai.tool.ToolCallback() {
+            /** 検証用に、用途に応じたモデル利用で参照するツール定義を返す。 */
             public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
               return org.springframework.ai.tool.definition.ToolDefinition.builder()
                   .name("readFile")
@@ -98,6 +106,7 @@ class CapturingChatModelHttpTest {
                   .build();
             }
 
+            /** 検証用に、用途に応じたモデル利用の要求を実行し、呼び出し元へ結果を返す。 */
             public String call(String input) {
               calls.incrementAndGet();
               return "legacy-tool-result";
@@ -126,6 +135,7 @@ class CapturingChatModelHttpTest {
     }
   }
 
+  /** 用途に応じたモデル利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void captureTransportCreationFailureFallsBackToDelegate() throws Exception {
     try (var fixture = new Fixture((n, e) -> RESPONSE)) {
@@ -153,6 +163,7 @@ class CapturingChatModelHttpTest {
     }
   }
 
+  /** 用途に応じたモデル利用で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void successfulCaptureDoesNotLogRawSecret(
       org.springframework.boot.test.system.CapturedOutput output) throws Exception {
@@ -170,6 +181,7 @@ class CapturingChatModelHttpTest {
     }
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void firstStreamingResponseDoesNotWaitForTheRemainingResponse() throws Exception {
     for (boolean enabled : List.of(false, true))
@@ -191,6 +203,7 @@ class CapturingChatModelHttpTest {
       }
   }
 
+  /** 用途に応じたモデル利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void initialHistoryAndCompressionCaptureProjectedWireBytes() throws Exception {
     try (var fixture = new Fixture((n, e) -> RESPONSE)) {
@@ -245,6 +258,7 @@ class CapturingChatModelHttpTest {
     }
   }
 
+  /** 用途に応じたモデル利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void realStagnationToolLoopRecordsTwoLogicalCalls() throws Exception {
     try (var fixture =
@@ -269,6 +283,7 @@ class CapturingChatModelHttpTest {
       var calls = new AtomicInteger();
       var callback =
           new org.springframework.ai.tool.ToolCallback() {
+            /** 検証用に、用途に応じたモデル利用で参照するツール定義を返す。 */
             public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
               return org.springframework.ai.tool.definition.ToolDefinition.builder()
                   .name("readFile")
@@ -277,6 +292,7 @@ class CapturingChatModelHttpTest {
                   .build();
             }
 
+            /** 検証用に、用途に応じたモデル利用の要求を実行し、呼び出し元へ結果を返す。 */
             public String call(String input) {
               calls.incrementAndGet();
               return "tool-result-marker";
@@ -311,6 +327,7 @@ class CapturingChatModelHttpTest {
     }
   }
 
+  /** 用途に応じたモデル利用で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void sdkRetryRetainsLogicalIdAndIncrementsAttempts() throws Exception {
     try (var fixture =
@@ -335,6 +352,7 @@ class CapturingChatModelHttpTest {
     }
   }
 
+  /** 用途に応じたモデル利用で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void concurrentOtherRootAndBackgroundDoNotEnterTheCapture() throws Exception {
     try (var fixture = new Fixture((n, e) -> RESPONSE);
@@ -356,6 +374,7 @@ class CapturingChatModelHttpTest {
     }
   }
 
+  /** 用途に応じたモデル利用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void streamingCompletionAndCancellationHaveSameResponsesAndRequestCountOnAndOff()
       throws Exception {
@@ -379,6 +398,7 @@ class CapturingChatModelHttpTest {
       }
   }
 
+  /** 用途に応じたモデル利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void httpErrorsPropagateOnAndOff() throws Exception {
     for (boolean enabled : List.of(false, true))
@@ -404,17 +424,30 @@ class CapturingChatModelHttpTest {
       }
   }
 
+  /** 検証条件を再現するための返信。 */
   static class Reply {
+    /** 検証に使う状態。 */
     int status = 200;
   }
 
+  /** 検証条件を再現するための検証条件。 */
   final class Fixture implements AutoCloseable {
+    /** 検証に使う完了実行可否の判断。 */
     volatile CountDownLatch finishGate;
+
+    /** 検証に使う保存先。 */
     final CaptureStore store = new CaptureStore();
+
+    /** 検証に使う受信。 */
     final List<byte[]> received = new CopyOnWriteArrayList<>();
+
+    /** 検証に使うサーバー。 */
     final HttpServer server;
+
+    /** 検証に使う実行の担当一覧。 */
     final ExecutorService workers = Executors.newVirtualThreadPerTaskExecutor();
 
+    /** 検証条件に必要な値を受け取り、Fixtureを用意する。 */
     Fixture(java.util.function.BiFunction<Integer, Reply, String> reply) throws Exception {
       server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
       server.setExecutor(workers);
@@ -448,10 +481,12 @@ class CapturingChatModelHttpTest {
       server.start();
     }
 
+    /** {@code url} の条件を再現するための補助情報を返す。 */
     String url() {
       return "http://127.0.0.1:" + server.getAddress().getPort() + "/v1";
     }
 
+    /** {@code options} の条件を再現するための補助情報を返す。 */
     OpenAiChatOptions options(String run) {
       return OpenAiChatOptions.builder()
           .baseUrl(url())
@@ -464,10 +499,12 @@ class CapturingChatModelHttpTest {
           .build();
     }
 
+    /** 検証で使用するモデルを、指定された条件に合わせて用意する。 */
     CapturingChatModel model() {
       return model(0);
     }
 
+    /** 検証で使用するモデルを、指定された条件に合わせて用意する。 */
     CapturingChatModel model(int retries) {
       return new CapturingChatModel(
           OpenAiChatModel.builder()
@@ -483,11 +520,13 @@ class CapturingChatModelHttpTest {
           null);
     }
 
+    /** {@code activate} の条件を再現するため、検証用の操作や状態を扱う。 */
     void activate() {
       store.reserve("client", "conversation-a");
       store.accept("client", "conversation-a", "submission-a", "run-a");
     }
 
+    /** 複数の検証で共通する期待結果を確認し、要件に合わない状態を検出する。 */
     void assertMatches(int count) throws Exception {
       assertThat(received).hasSize(count);
       var attempts = store.attempts("run-a");
@@ -505,6 +544,7 @@ class CapturingChatModelHttpTest {
       }
     }
 
+    /** 検証で利用した対象の終了を扱う。 */
     public void close() {
       server.stop(0);
       workers.close();

@@ -5,10 +5,15 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
+/** 圧縮再試行利用条件の確認の結果と状態の契約を検証するテスト。 */
 class CompressionRetryGuardTest {
+  /** 検証に使う時刻。 */
   private final AtomicLong time = new AtomicLong();
+
+  /** 検証に使う利用条件の確認。 */
   private final CompressionRetryGuard guard = new CompressionRetryGuard(time::get);
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void suppressesRepeatedRequestsAndAnnouncesOnlyOnceUntilNextAttempt() {
     assertThat(guard.decision("run", "config").allowed()).isTrue();
@@ -24,6 +29,7 @@ class CompressionRetryGuardTest {
     assertThat(guard.inputLimit("run", "config", 100000)).isEqualTo(20000);
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void exponentiallyBacksOffAndBoundsTheShrinkingInputAndWaitingTime() {
     for (long seconds : new long[] {120, 240, 480, 960, 960}) {
@@ -35,6 +41,7 @@ class CompressionRetryGuardTest {
     assertThat(guard.inputLimit("run", "config", 100000)).isEqualTo(6000);
   }
 
+  /** モデルへ渡す文脈の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void runAndConfigurationChangesAndSuccessfulSummaryResetTheirOwnFailureState() {
     guard.failed("run", "config", "summary_authentication", 40000, 3000, 120, false);
@@ -46,6 +53,7 @@ class CompressionRetryGuardTest {
     assertThat(guard.decision("run", "changed-model").allowed()).isTrue();
   }
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void doesNotReduceInputForAuthenticationAndBoundsRetainedRunState() {
     guard.failed("oldest", "config", "summary_authentication", 40000, 3000, 120, false);

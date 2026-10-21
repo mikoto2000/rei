@@ -54,19 +54,42 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.mock.env.MockEnvironment;
 import reactor.core.publisher.Flux;
 
+/** 環境診断活動中サービスの結果と状態の契約を検証するテスト。 */
 class DoctorActiveServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う環境変数。 */
   final MockEnvironment env = new MockEnvironment();
+
+  /** 検証に使う音声。 */
   final VoiceProperties voice = new VoiceProperties();
+
+  /** 検証に使うCodex。 */
   final CodexProperties codex = new CodexProperties();
+
+  /** 検証に使うClaude。 */
   final ClaudeCodeProperties claude = new ClaudeCodeProperties();
+
+  /** 検証に使うモデル一覧。 */
   final LlmModelProvider models = mock(LlmModelProvider.class);
+
+  /** 検証に使うHTTP通信。 */
   final JavaHttpDependencyProbe http = mock(JavaHttpDependencyProbe.class);
+
+  /** 検証に使うマイク。 */
   final DoctorMicrophoneProbe microphone = mock(DoctorMicrophoneProbe.class);
+
+  /** 検証に使うプロセス一覧。 */
   final ExternalAgentProcessRunner processes = mock(ExternalAgentProcessRunner.class);
+
+  /** 検証に使う利用条件の確認。 */
   final ToolPermissionGuard guard = mock(ToolPermissionGuard.class);
+
+  /** 通知された出来事と順序を検証するための記録。 */
   final AgentEventPublisher events = mock(AgentEventPublisher.class);
 
+  /** 検証用に、実行環境の診断の操作を実行する。 */
   RunExecutionContext run(int calls) {
     var run =
         new RunExecutionContext(
@@ -82,6 +105,7 @@ class DoctorActiveServiceTest {
     return run;
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   DoctorActiveService service() {
     env.withProperty("spring.ai.openai.base-url", "http://127.0.0.1:9999");
     return new DoctorActiveService(
@@ -98,6 +122,7 @@ class DoctorActiveServiceTest {
         Clock.systemUTC());
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   DoctorRequest request(String... checks) {
     var args = new ArrayList<String>();
     for (String c : checks) {
@@ -107,6 +132,7 @@ class DoctorActiveServiceTest {
     return DoctorRequest.parse(args.toArray(String[]::new));
   }
 
+  /** 実行環境の診断の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void permissionFailureDoesNotExecuteAndOtherChecksContinue() {
     doThrow(new ToolPermissionException("doctorConnectivity", PermissionDecision.DENY))
@@ -125,11 +151,13 @@ class DoctorActiveServiceTest {
     assertEquals(DoctorResult.Status.SKIPPED, report.results().getFirst().status());
     assertEquals(DoctorResult.Status.OK, report.results().getLast().status());
     assertFalse(report.render().contains("SECRET"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(http, models, microphone);
     verify(processes)
         .run(eq(List.of("codex", "--version")), eq(root), eq(""), any(), any(), eq(4096), any());
   }
 
+  /** 実行環境の診断の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void plannedEventsPrecedePermissionAndNetworkResultDoesNotClaimInference() {
     when(http.connectivity(anyString(), any(), any()))
@@ -143,9 +171,11 @@ class DoctorActiveServiceTest {
     order.verify(guard).check(eq("doctorConnectivity"), anyString(), any());
     order.verify(events).publishBoundary(argThat(e -> e.type() == AgentEventType.TOOL_STARTED));
     order.verify(http).connectivity(eq("http://127.0.0.1:9999/v1/models"), any(), any());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(models, microphone, processes);
   }
 
+  /** 実行環境の診断で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void inferenceIsOneBudgetedToolFreeFixedPromptWithoutResponseExposure() {
     var model = mock(ChatModel.class);
@@ -170,6 +200,7 @@ class DoctorActiveServiceTest {
     verify(model, times(1)).stream(any(Prompt.class));
   }
 
+  /** 実行環境の診断の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void disabledAndCancelledRunsHaveNoSideEffects() {
     var service = service();
@@ -183,9 +214,11 @@ class DoctorActiveServiceTest {
     assertThrows(
         java.util.concurrent.CancellationException.class,
         () -> service.active(cancelled, request("codex")));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(models, http, microphone, processes, guard);
   }
 
+  /** 実行環境の診断の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationStopsSilentModelStreamAndDoesNotStartLaterChecks() throws Exception {
     var model = mock(ChatModel.class);
@@ -210,10 +243,12 @@ class DoctorActiveServiceTest {
               () -> pending.get(1, java.util.concurrent.TimeUnit.SECONDS));
       assertTrue(RunCancellation.isCancellation(failure));
       assertTrue(disposed.await(1, java.util.concurrent.TimeUnit.SECONDS));
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(processes);
     }
   }
 
+  /** 実行環境の診断で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void credentialUrlIsRejectedBeforeNetworkAndNeverDisplayed() {
     var service = service();
@@ -222,9 +257,11 @@ class DoctorActiveServiceTest {
     var report = service.active(run(1), request("connectivity"));
     assertEquals(DoctorResult.Status.ERROR, report.results().getFirst().status());
     assertFalse(report.render().contains("SECRET"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(http);
   }
 
+  /** 実行環境の診断の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void inferenceOptionsAreCapturedBeforePermissionAndApprovalInputContainsOnlyFingerprint() {
     var configured =

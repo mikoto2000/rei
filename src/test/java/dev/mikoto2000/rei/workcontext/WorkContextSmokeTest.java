@@ -36,10 +36,13 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.sqlite.SQLiteDataSource;
 import reactor.core.publisher.Flux;
 
+/** 作業文脈Smokeの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class WorkContextSmokeTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** 作業文脈の引き継ぎで、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void conversationToSchemaValidatedUpdateToReopenedRepositoryAndNewSessionContext()
       throws Exception {

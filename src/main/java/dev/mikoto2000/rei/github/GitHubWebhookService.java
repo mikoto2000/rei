@@ -20,8 +20,23 @@ import java.util.Locale;
 import java.util.Objects;
 import java.util.UUID;
 
-/** Signed facts activate existing reviewed continuations, never commands from webhook text. */
+/**
+ * Git連携先Webhook通知のユースケースを実現する。
+ *
+ * <p>Signed facts activate existing reviewed continuations, never commands from webhook text.
+ */
 public final class GitHubWebhookService {
+  /**
+   * GitHubとの連携で受け渡す対応付け表示内容を表す。
+   *
+   * @param repository 保存と検索の窓口
+   * @param projectId 所属プロジェクトの識別子
+   * @param sessionId 会話の識別子
+   * @param branch ブランチ
+   * @param pullRequest 取得要求
+   * @param notifyReview 通知レビュー
+   * @param sourceId 取得元識別子
+   */
   public record MappingView(
       String repository,
       String projectId,
@@ -31,19 +46,45 @@ public final class GitHubWebhookService {
       boolean notifyReview,
       String sourceId) {}
 
+  /**
+   * GitHubとの連携で受け渡す所有者を表す。
+   *
+   * @param mapping 対応付け
+   * @param project プロジェクト
+   */
   private record Owner(GitHubWebhookProperties.Mapping mapping, ProjectContext project) {}
 
+  /** 受信形式の解釈。 */
   private final GitHubWebhookDecoder decoder;
+
+  /** この機能の動作設定。 */
   private final GitHubWebhookProperties properties;
+
+  /** プロジェクト一覧。 */
   private final ProjectRegistry projects;
+
+  /** 会話一覧。 */
   private final SessionLifecycle sessions;
+
+  /** 事実一覧。 */
   private final GitHubFactRepository facts;
+
+  /** 実行予定の管理。 */
   private final PersistentAgentScheduler scheduler;
+
+  /** 受信した案内や確認待ち情報の保存先。 */
   private final AttentionRepository inbox;
+
+  /** 確認の窓口。 */
   private final GitHubStateVerifier verifier;
+
+  /** 所有者一覧。 */
   private final List<Owner> owners;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** 指定された値や利用先を使って、GitHubWebhookServiceを初期化する。 */
   public GitHubWebhookService(
       GitHubWebhookProperties properties,
       Clock clock,
@@ -82,6 +123,7 @@ public final class GitHubWebhookService {
             .toList();
   }
 
+  /** GitHubとの連携で用いる受信を返す。 */
   public synchronized GitHubFactRepository.Receipt receive(
       String delivery, String event, String signature, byte[] bytes) {
     try {
@@ -164,6 +206,7 @@ public final class GitHubWebhookService {
         });
   }
 
+  /** GitHubとの連携で用いる自分が所有する対象を返す。 */
   private ProjectContext owned(String project, String session) {
     var registered =
         projects
@@ -184,6 +227,7 @@ public final class GitHubWebhookService {
     return registered;
   }
 
+  /** GitHubとの連携で用いる対応付け一覧を返す。 */
   public List<MappingView> mappings(String project, String session) {
     owned(project, session);
     return owners.stream()
@@ -204,11 +248,13 @@ public final class GitHubWebhookService {
         .toList();
   }
 
+  /** GitHubとの連携で用いる対象配信を返す。 */
   public List<GitHubFactRepository.View> forDelivery(
       String project, String session, String delivery) {
     return facts.forDelivery(owned(project, session), session, delivery);
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public GitHubFactRepository.View get(String project, String session, String id) {
     return facts.get(owned(project, session), session, id);
   }

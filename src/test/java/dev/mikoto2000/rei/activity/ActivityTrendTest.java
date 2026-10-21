@@ -16,8 +16,10 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況傾向の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ActivityTrendTest {
+  /** {@code fine} の条件を再現するための補助情報を返す。 */
   static List<SummarySegment> fine(ActivityRecord... records) {
     var p =
         new SemanticSessionPolicy(
@@ -29,10 +31,12 @@ class ActivityTrendTest {
     return new SummaryGroupingPolicy(p).aggregate(p.aggregate(List.of(records)));
   }
 
+  /** {@code trends} の条件を再現するための補助情報を返す。 */
   static List<TrendSummarySegment> trends(ActivityRecord... records) {
     return new TrendSummaryPolicy(ZoneOffset.UTC, .5).aggregate(fine(records));
   }
 
+  /** {@code unknown} の条件を再現するための補助情報を返す。 */
   static ActivityRecord unknown(int minute) {
     return record(
         minute,
@@ -43,6 +47,7 @@ class ActivityTrendTest {
         activity("coding", "Terminal", "", "rei"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownsAreAbsorbedIntoNearbyTrendWithoutRelabelingEvidence() {
     var records =
@@ -62,6 +67,7 @@ class ActivityTrendTest {
     assertTrue(new TrendSummaryFormatter(ZoneOffset.UTC).format(result).contains("主活動を判定できない"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void longObservationGapIsNotContinuousActivity() {
     var result =
@@ -78,6 +84,7 @@ class ActivityTrendTest {
     assertFalse(text.contains("未観測の割合が高い"));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void continuousDevelopmentHasExplicitSemantics() {
     var s =
@@ -87,6 +94,7 @@ class ActivityTrendTest {
     assertEquals(List.of("rei"), s.projects());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sameProjectWorkCategoriesGroupButDifferentProjectsDoNot() {
     var research =
@@ -97,6 +105,7 @@ class ActivityTrendTest {
     assertEquals(2, trends(dev(0, "Terminal", "X"), other).size());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void otherIsUnknownForPresentationOnly() {
     var r = record(0, "Terminal", "", activity("other", "Terminal", "", ""));
@@ -108,6 +117,7 @@ class ActivityTrendTest {
     assertFalse(text.contains("その他の活動が中心"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void displayLabelsAreNormalizedWithoutGuessingProperNouns() {
     for (var pair :
@@ -130,6 +140,7 @@ class ActivityTrendTest {
     assertEquals("spomin dashboard", ActivityDisplayLabels.label("spomin dashboard"));
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void labelsAreBoundedAndFrequentForegroundServiceWins() {
     var r =
@@ -152,6 +163,7 @@ class ActivityTrendTest {
     assertEquals("X", s.labels().getFirst());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void noInventedActivityAndVisibleOnlyHasCautiousWording() {
     var text = new TrendSummaryFormatter(ZoneOffset.UTC).format(trends(unknown(0), unknown(10)));
@@ -160,12 +172,14 @@ class ActivityTrendTest {
     assertTrue(text.contains("表示"));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void gapAndTimeWindowStillBoundTrendExtent() {
     assertEquals(2, trends(unknown(0), unknown(22)).size());
     assertEquals(2, trends(unknown(0), unknown(15), unknown(30), unknown(45), unknown(60)).size());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void mixedWorkAndBrowsingAreNotContinuous() {
     var s =
@@ -177,6 +191,7 @@ class ActivityTrendTest {
     assertEquals(TrendSummarySegment.Continuity.MIXED, s.continuity());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void providedMorningFixtureCompressesThirtyFiveSessionsIntoFiveToTenTrends() throws Exception {
     int[][] times = {
@@ -236,6 +251,7 @@ class ActivityTrendTest {
             + new TrendSummaryFormatter(ZoneOffset.UTC).format(result));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void exactEightOClockExampleBecomesOneIntermittentTrend() {
     int[] starts = {0, 11, 13, 15, 26, 28, 35, 37, 39};
@@ -270,6 +286,7 @@ class ActivityTrendTest {
     assertEquals(1140, result.getFirst().unobservedSeconds());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void continuityChangeAndMidnightCannotBeCalledContinuous() {
     var a = dev(0, "Terminal", "X");

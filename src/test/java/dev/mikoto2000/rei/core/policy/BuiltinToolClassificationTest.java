@@ -11,7 +11,9 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.core.type.classreading.CachingMetadataReaderFactory;
 
+/** 組み込みツール分類の結果と状態の契約を検証するテスト。 */
 class BuiltinToolClassificationTest {
+  /** ツール利用の権限制御で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void everyBuiltinAnnotatedToolHasAnExplicitClassification() throws Exception {
     var resources = new PathMatchingResourcePatternResolver();
@@ -39,6 +41,7 @@ class BuiltinToolClassificationTest {
         "New built-in tools require an audited capability classification");
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void readingWritingSendingAndArbitraryExecutionKeepDistinctPermissions() {
     var policy = new ToolPermissionPolicy(new ToolPermissionProperties(true, null, null, null));

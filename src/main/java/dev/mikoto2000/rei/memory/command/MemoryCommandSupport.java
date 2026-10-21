@@ -11,16 +11,26 @@ import java.util.Objects;
 import org.springframework.stereotype.Component;
 
 /**
- * Read-only reporting and explicit archive; project ownership always comes from the selected
+ * 記憶コマンドで共通に利用する補助処理。
+ *
+ * <p>Read-only reporting and explicit archive; project ownership always comes from the selected
  * client.
  */
 @Component
 public class MemoryCommandSupport {
+  /** 保存と検索の窓口。 */
   private final MemoryRepository repository;
+
+  /** 待機。 */
   private final SleepService sleep;
+
+  /** プロジェクト一覧。 */
   private final ProjectService projects;
+
+  /** この機能の動作設定。 */
   private final MemoryProperties properties;
 
+  /** 指定された値や利用先を使って、MemoryCommandSupportを初期化する。 */
   public MemoryCommandSupport(
       MemoryRepository repository,
       SleepService sleep,
@@ -32,19 +42,23 @@ public class MemoryCommandSupport {
     this.properties = properties;
   }
 
+  /** 長期記憶の活用で用いるプロジェクトを返す。 */
   private String project() {
     return projects.currentContext().id();
   }
 
+  /** この機能を利用する設定が有効かどうかを返す。 */
   public void enabled() {
     if (!properties.enabled())
       throw new IllegalStateException("Memory is disabled (rei.memory.enabled=false)");
   }
 
+  /** 長期記憶の活用で用いる自動待機要求一覧を返す。 */
   public String autoSleepRequests() {
     return autoSleepRequestsForProject(project());
   }
 
+  /** 長期記憶の活用で用いる自動待機要求一覧対象プロジェクトを返す。 */
   public String autoSleepRequestsForProject(String project) {
     var format = new dev.mikoto2000.rei.conversation.HistoryFormatter();
     var rows =
@@ -63,11 +77,14 @@ public class MemoryCommandSupport {
         : dev.mikoto2000.rei.event.CredentialRedactor.redact(String.join("\n", rows));
   }
 
+  /** 利用者が不要とした実行を止めるため、自動待機要求をキャンセルする。 */
   public String cancelAutoSleepRequest(String session, long revision) {
     return cancelAutoSleepRequestForProject(project(), session, revision);
   }
 
+  /** 利用者が不要とした実行を止めるため、自動待機要求対象プロジェクトをキャンセルする。 */
   public String cancelAutoSleepRequestForProject(String project, String session, long revision) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (session == null || session.isBlank() || session.length() > 512 || revision < 1)
       throw new IllegalArgumentException("Session and positive revision are required");
     if (!sleep.completeAutoSleepRequest(
@@ -76,28 +93,34 @@ public class MemoryCommandSupport {
     return "Pending Auto Sleep request cancelled. An already running Sleep is unaffected.";
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public String list(int limit, int offset) {
     return listForProject(project(), limit, offset);
   }
 
+  /** 利用可能な対象を確認できるよう、対象プロジェクトを一覧にする。 */
   public String listForProject(String project, int limit, int offset) {
     enabled();
     return render(repository.list(project, limit, offset));
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public String search(String query, int limit) {
     return searchForProject(project(), query, limit);
   }
 
+  /** 依頼に関連する情報を得るため、対象プロジェクトを検索する。 */
   public String searchForProject(String project, String query, int limit) {
     enabled();
     return render(repository.search(query, project, limit));
   }
 
+  /** 利用者が対象の情報を確認できるように表示する。 */
   public String show(String id) {
     return showForProject(project(), id);
   }
 
+  /** 利用者が内容を確認できるよう、対象プロジェクトを表示する。 */
   public String showForProject(String project, String id) {
     enabled();
     var m = visible(project, id);
@@ -143,10 +166,12 @@ public class MemoryCommandSupport {
             .orElse("");
   }
 
+  /** 長期記憶の活用で用いる記憶の削除を返す。 */
   public String forget(String id) {
     return forgetForProject(project(), id);
   }
 
+  /** 長期記憶の活用で用いる記憶の削除対象プロジェクトを返す。 */
   public String forgetForProject(String project, String id) {
     enabled();
     visible(project, id);
@@ -154,6 +179,7 @@ public class MemoryCommandSupport {
     return "Archived: " + id;
   }
 
+  /** 長期記憶の活用で用いる表示対象を返す。 */
   private LongTermMemory visible(String project, String id) {
     return repository
         .find(id)
@@ -162,6 +188,7 @@ public class MemoryCommandSupport {
             () -> new IllegalArgumentException("Memory not found in GLOBAL/current project"));
   }
 
+  /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
   private String render(List<LongTermMemory> memories) {
     if (memories.isEmpty()) return "No memories.";
     return String.join(
@@ -181,10 +208,12 @@ public class MemoryCommandSupport {
             .toList());
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   public String status() {
     return statusForProject(project(), projects.currentSessionId());
   }
 
+  /** 長期記憶の活用で用いる状態対象プロジェクトを返す。 */
   public String statusForProject(String project, String session) {
     enabled();
     var runs = repository.history(project, 1);
@@ -197,10 +226,12 @@ public class MemoryCommandSupport {
     return text.toString();
   }
 
+  /** 過去の記録を、条件に従って参照できる形で返す。 */
   public String history() {
     return historyForProject(project());
   }
 
+  /** 長期記憶の活用で用いる履歴対象プロジェクトを返す。 */
   public String historyForProject(String project) {
     enabled();
     var runs = repository.history(project, 100);
@@ -210,6 +241,7 @@ public class MemoryCommandSupport {
             : String.join("\n", runs.stream().map(Object::toString).toList()));
   }
 
+  /** 長期記憶の活用で用いるレポートを返す。 */
   public String report(SleepService.Report report) {
     var r = report.run();
     StringBuilder text =

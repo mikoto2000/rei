@@ -19,11 +19,17 @@ import jdk.jfr.consumer.RecordingFile;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Same fixture/API on baseline and each phase; no live LLM or network. */
+/**
+ * ファイル操作一覧性能測定の結果と状態の契約を検証するテスト。
+ *
+ * <p>Same fixture/API on baseline and each phase; no live LLM or network.
+ */
 @org.junit.jupiter.api.Tag("integration")
 class FileOperationsBenchmarkTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void measureJavaSymbolRead() throws Exception {
     var file = root.resolve("SymbolCase.java");
@@ -86,6 +92,7 @@ class FileOperationsBenchmarkTest {
     System.out.println(report);
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void measureTwoPatternSearchAndRead() throws Exception {
     var source = new StringBuilder();
@@ -101,6 +108,7 @@ class FileOperationsBenchmarkTest {
       for (int repeat = 0; repeat < 10; repeat++) {
         var tools =
             new Tools() {
+              /** {@code listFile} の条件を再現するための補助情報を返す。 */
               @Override
               List<String> listFile(String base, Path directory) {
                 return List.of("sample.txt");
@@ -148,11 +156,13 @@ class FileOperationsBenchmarkTest {
     System.out.println(report);
   }
 
+  /** {@code query} の条件を再現するための補助情報を返す。 */
   static Tools.GrepQuery query(String pattern) {
     return new Tools.GrepQuery(
         pattern, ".", false, true, false, false, 0, 0, null, true, null, null);
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void measureSmallEditThroughExistingTools() throws Exception {
     var json =

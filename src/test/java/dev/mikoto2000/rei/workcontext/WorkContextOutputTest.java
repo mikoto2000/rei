@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+/** 作業文脈出力の結果と状態の契約を検証するテスト。 */
 class WorkContextOutputTest {
+  /** 作業文脈の引き継ぎで、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void outputFailuresHaveDistinctControlledReasonsWithoutModelText() {
     var parser = new WorkContextOutput();
@@ -27,6 +29,7 @@ class WorkContextOutputTest {
     assertTrue(schema.diagnostic().display().contains("/work update"));
   }
 
+  /** データ形式を受け付けられることを確認する。 */
   @Test
   void acceptsSchemaAndRejectsInstructionsUnknownEnumsDuplicateKeysAndTrailingText() {
     var parser = new WorkContextOutput();

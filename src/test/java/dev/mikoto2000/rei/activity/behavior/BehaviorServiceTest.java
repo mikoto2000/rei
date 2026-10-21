@@ -41,19 +41,40 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 作業習慣サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class BehaviorServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir java.nio.file.Path directory;
+
+  /** 検証に使うこの機能の動作設定。 */
   final BehaviorProperties properties = new BehaviorProperties();
+
+  /** 検証に使う作業状況。 */
   final ActivityProperties activity = new ActivityProperties();
+
+  /** 検証に使う取得記録。 */
   final ActivityCapture capture = mock(ActivityCapture.class);
+
+  /** 検証に使う保存先。 */
   final ActivityStore store = mock(ActivityStore.class);
+
+  /** 検証に使う状態。 */
   final BehaviorStateStore state = mock(BehaviorStateStore.class);
+
+  /** 検証に使う生成。 */
   final BehaviorMessageGenerator generator = mock(BehaviorMessageGenerator.class);
+
+  /** 検証に使う通知先。 */
   final AgentMessagePublisher publisher = mock(AgentMessagePublisher.class);
+
+  /** 検証に使う追跡。 */
   final AgentActivityTracker tracker = mock(AgentActivityTracker.class);
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock = Clock.fixed(START.plusSeconds(3600), ZoneOffset.UTC);
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   BehaviorService service() throws Exception {
     var r = record(0, 3600, "social");
     when(store.findBetween(any(), any())).thenReturn(sessions(List.of(r)));
@@ -65,6 +86,7 @@ class BehaviorServiceTest {
         properties, activity, capture, store, state, generator, publisher, tracker, clock);
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void noneAssessmentNeverGeneratesOrPublishesHistory() throws Exception {
     var service = service();
@@ -75,6 +97,7 @@ class BehaviorServiceTest {
     verifyNoInteractions(generator, publisher);
   }
 
+  /** 作業習慣の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void oneGenerationFeedsDisplayConversationAndTimelineWithSharedId() throws Exception {
     service();
@@ -114,6 +137,7 @@ class BehaviorServiceTest {
     assertEquals("BEHAVIOR_NOTIFICATION", entries.getFirst().source());
   }
 
+  /** 作業習慣の支援で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void disabledDoesNotReadEvaluatePersistOrCallLlm() throws Exception {
     var service = service();
@@ -122,6 +146,7 @@ class BehaviorServiceTest {
     verifyNoInteractions(store, state, generator, publisher);
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void eligibleNotificationIsReservedBeforeLlmAndDeliveredViaExistingPublisher() throws Exception {
     var service = service();
@@ -137,6 +162,7 @@ class BehaviorServiceTest {
     assertTrue(service.status().contains("cooldownUntil="));
   }
 
+  /** 作業習慣の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void busyOrPausedSuppressesLlm() throws Exception {
     var service = service();
@@ -150,6 +176,7 @@ class BehaviorServiceTest {
     verifyNoInteractions(store, state);
   }
 
+  /** 作業習慣の支援で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void persistenceFailureFailsClosedAndDoesNotEscapeTick() throws Exception {
     var service = service();
@@ -160,6 +187,7 @@ class BehaviorServiceTest {
     assertTrue(service.status().contains("FAILED"));
   }
 
+  /** 作業習慣の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void llmFailureDoesNotStormOrStopCapture() throws Exception {
     var service = service();
@@ -172,6 +200,7 @@ class BehaviorServiceTest {
     verify(capture, never()).pause();
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void manualEvaluationWorksDisabledWithoutNotificationsOrStateWrites() throws Exception {
     var service = service();
@@ -179,6 +208,7 @@ class BehaviorServiceTest {
     verifyNoInteractions(generator, publisher, state);
   }
 
+  /** 作業習慣の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void offDuringSlowGenerationIsNonblockingAndDiscardsResult() throws Exception {
     var service = service();
@@ -201,9 +231,11 @@ class BehaviorServiceTest {
     } finally {
       release.countDown();
     }
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(publisher);
   }
 
+  /** 作業習慣の支援で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void concurrentTickDoesNotQueueAnotherLlm() throws Exception {
     var service = service();
@@ -218,6 +250,7 @@ class BehaviorServiceTest {
     verify(generator, times(1)).generate(any());
   }
 
+  /** 作業習慣の支援で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void recoveryDuringGenerationDiscardsStaleNag() throws Exception {
     var service = service();
@@ -231,6 +264,7 @@ class BehaviorServiceTest {
               return "message";
             });
     service.tick();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(publisher);
     verify(state)
         .appendEvent(
@@ -240,6 +274,7 @@ class BehaviorServiceTest {
                         && e.reason().equals("CONTEXT_CHANGED")));
   }
 
+  /** SQLite再開用の記録について、再開の後も対象の情報が残ることを確認する。 */
   @Test
   void sqliteCheckpointSurvivesRestartAndAvoidsRepeatedWrites() throws Exception {
     var ds = new org.sqlite.SQLiteDataSource();
@@ -265,6 +300,7 @@ class BehaviorServiceTest {
             properties, activity, capture, store, reopened, generator, publisher, tracker, clock);
     service.tick();
     service.tick();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(generator, publisher);
     try (var c = ds.getConnection();
         var s = c.createStatement();
@@ -274,6 +310,7 @@ class BehaviorServiceTest {
     }
   }
 
+  /** 作業習慣の支援で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void transitionsAreBounded() throws Exception {
     var ds = new org.sqlite.SQLiteDataSource();
@@ -289,6 +326,7 @@ class BehaviorServiceTest {
     }
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void notificationHistoryDistinguishesDeliveryFromCooldownAndManualAssessment() throws Exception {
     var service = service();
@@ -306,6 +344,7 @@ class BehaviorServiceTest {
     assertEquals("COOLDOWN", events.getValue().reason());
   }
 
+  /** 作業習慣の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedPublicationNeverRecordsEmittedAndHistoryFailureDoesNotChangeDelivery()
       throws Exception {
@@ -325,20 +364,24 @@ class BehaviorServiceTest {
     assertTrue(service.status().contains("DELIVERED"));
   }
 
+  /** イベントについて、公開情報時刻を利用することを確認する。 */
   @Test
   void eventUsesPublicationTimeAfterGenerationRatherThanReservationTime() throws Exception {
     service();
     var now = new java.util.concurrent.atomic.AtomicReference<>(clock.instant());
     var moving =
         new Clock() {
+          /** 検証用に、作業習慣の支援で参照するタイムゾーンを返す。 */
           public ZoneId getZone() {
             return ZoneOffset.UTC;
           }
 
+          /** 検証用に、指定されたタイムゾーンを反映した情報を作成する。 */
           public Clock withZone(ZoneId zone) {
             return Clock.fixed(instant(), zone);
           }
 
+          /** {@code instant} の条件を再現するための補助情報を返す。 */
           public Instant instant() {
             return now.get();
           }
@@ -366,6 +409,7 @@ class BehaviorServiceTest {
                         && m.id().equals(event.getValue().id())));
   }
 
+  /** 実行環境上書きを利用することを確認する。 */
   @Test
   void slashActionsUseRuntimeOverrideAndEvaluateNeverNotifies() throws Exception {
     var service = service();
@@ -377,6 +421,7 @@ class BehaviorServiceTest {
     assertEquals(0, command.execute("behavior", "status"));
     assertTrue(output.toString().contains("enabled=true"));
     assertEquals(0, command.execute("behavior", "evaluate"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(generator, publisher);
     verify(state, never()).save(any(), any());
     assertTrue(output.toString().contains("60分窓: 観測成功="));

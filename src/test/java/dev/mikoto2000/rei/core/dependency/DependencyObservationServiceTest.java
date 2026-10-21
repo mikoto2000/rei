@@ -35,18 +35,26 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 依存条件観測内容サービスの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class DependencyObservationServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-10-04T00:00:00Z");
+
+  /** 検証に使うプロジェクト。 */
   final String project = UUID.randomUUID().toString();
 
+  /** {@code repo} の条件を再現するための補助情報を返す。 */
   PersistentDependencyRepository repo(Instant time) {
     return new PersistentDependencyRepository(
         new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("deps.db")),
         Clock.fixed(time, ZoneOffset.UTC));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   PersistentDependencyRepository.Entry create(PersistentDependencyRepository repo) {
     return repo.create(
         new AgentRunContext("r", "s", dir, project),
@@ -55,10 +63,12 @@ class DependencyObservationServiceTest {
         List.of());
   }
 
+  /** 検証で使用する判断基準を、指定された条件に合わせて用意する。 */
   ToolPermissionPolicy policy(boolean enabled) {
     return new ToolPermissionPolicy(new ToolPermissionProperties(enabled, null, null, null));
   }
 
+  /** 外部条件の待機の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void automaticObservationsRequireEnabledWatcherAndEnforcedAutoPermission() {
     var repo = repo(now);
@@ -69,6 +79,7 @@ class DependencyObservationServiceTest {
         new DependencyObservationService(
             repo, probe, new DependencyWatcherProperties(false), policy(true), events::add);
     disabled.tick();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(probe);
     var legacy =
         new DependencyObservationService(
@@ -86,6 +97,7 @@ class DependencyObservationServiceTest {
     verify(probe, times(1)).probe(any());
   }
 
+  /** 外部条件の待機の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void deadlineAndPrerequisitesDoNotProbeAndStaleCompletionCannotUndoCancel() {
     var repo = repo(now);
@@ -101,6 +113,7 @@ class DependencyObservationServiceTest {
         new DependencyObservationService(
             repo, probe, new DependencyWatcherProperties(false), policy(true), e -> {});
     assertEquals(DependencyState.BLOCKED, service.inspect(project, child.id(), false).state());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(probe);
     when(probe.probe(any()))
         .thenAnswer(
@@ -122,6 +135,7 @@ class DependencyObservationServiceTest {
     verifyNoInteractions(probe);
   }
 
+  /** 永続化された事実再試行回数について、識別情報を維持することを確認する。 */
   @Test
   void durableFactRetriesKeepIdentityAndDriveExistingEventScheduler() {
     var repo = repo(now);
@@ -180,6 +194,7 @@ class DependencyObservationServiceTest {
     }
   }
 
+  /** 外部条件の待機で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void readOnlyInspectionCannotPerformHttpAndAutomaticNetworkWaitRequiresGrant() {
     var repo = repo(now);
@@ -195,10 +210,12 @@ class DependencyObservationServiceTest {
             repo, probe, new DependencyWatcherProperties(true), policy(true), e -> {});
     assertThrows(IllegalArgumentException.class, () -> service.inspect(project, entry.id(), false));
     service.tick();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(probe);
     assertEquals("permission_required", repo.get(project, entry.id()).reason());
   }
 
+  /** 外部条件の待機で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void missingOrMovedOwnerSessionBlocksObservationUntilOwnerIsValid() {
     var repo = repo(now);
@@ -226,6 +243,7 @@ class DependencyObservationServiceTest {
                 new dev.mikoto2000.rei.application.session.SessionMetadata(
                     "s", "other", "test", now, now)));
     assertEquals(DependencyState.BLOCKED, service.inspect(project, entry.id(), false).state());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(probe);
     when(sessions.findById("s"))
         .thenReturn(

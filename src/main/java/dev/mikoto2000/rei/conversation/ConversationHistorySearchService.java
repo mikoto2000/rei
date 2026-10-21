@@ -15,22 +15,44 @@ import org.springframework.dao.DataAccessException;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
+/** 会話履歴検索のユースケースを実現する。 */
 @Service
 public class ConversationHistorySearchService {
 
+  /** 既定検索上限。 */
   static final int DEFAULT_SEARCH_LIMIT = 10;
+
+  /** 最大検索上限。 */
   static final int MAX_SEARCH_LIMIT = 50;
+
+  /** 既定詳細上限。 */
   static final int DEFAULT_DETAIL_LIMIT = 50;
+
+  /** 最大詳細上限。 */
   static final int MAX_DETAIL_LIMIT = 100;
+
+  /** 要約最大長さ。 */
   private static final int SUMMARY_MAX_LENGTH = 120;
+
+  /** 内容最大長さ。 */
   private static final int CONTENT_MAX_LENGTH = 500;
 
+  /** データベースへの接続クライアント。 */
   private final JdbcClient jdbcClient;
+
+  /** 会話ログ保存先。 */
   private final ConversationLogStore conversationLogStore;
+
+  /** プロジェクト関連情報の取得。 */
   private final ProjectHistoryRetrieval projectRetrieval;
+
+  /** イベント一覧。 */
   private dev.mikoto2000.rei.event.AgentEventFactory events;
+
+  /** 通知先。 */
   private dev.mikoto2000.rei.event.AgentEventPublisher publisher;
 
+  /** 会話履歴と受付記録の管理で使用する履歴イベント一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setHistoryEvents(
       dev.mikoto2000.rei.event.AgentEventFactory events,
@@ -39,6 +61,7 @@ public class ConversationHistorySearchService {
     this.publisher = publisher;
   }
 
+  /** 指定された値や利用先を使って、ConversationHistorySearchServiceを初期化する。 */
   public ConversationHistorySearchService(
       DataSource dataSource, ConversationLogStore conversationLogStore) {
     this.jdbcClient = JdbcClient.create(dataSource);
@@ -50,6 +73,7 @@ public class ConversationHistorySearchService {
                 dev.mikoto2000.rei.core.datasource.ReiPaths.projectsFilePath()));
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public List<ConversationSearchResult> search(
       String query, String scope, String speaker, String since, String until, Integer limit) {
     var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
@@ -102,17 +126,25 @@ public class ConversationHistorySearchService {
   }
 
   /**
-   * Explicit ownership is captured at the tool boundary; retrieval never switches ProjectService.
+   * 指定された検索条件に合う情報を探し、候補を返す。
+   *
+   * <p>Explicit ownership is captured at the tool boundary; retrieval never switches
+   * ProjectService.
    */
   public List<ConversationSearchResult> search(HistorySearchRequest request) {
     return search(request, true);
   }
 
-  /** Shell reads must not append retrieval events or inherit the active AgentRun's ownership. */
+  /**
+   * 依頼に関連する情報を得るため、対象シェルを検索する。
+   *
+   * <p>Shell reads must not append retrieval events or inherit the active AgentRun's ownership.
+   */
   public List<ConversationSearchResult> searchForShell(HistorySearchRequest request) {
     return search(request, false);
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   private List<ConversationSearchResult> search(HistorySearchRequest request, boolean emitEvents) {
     String category = normalizeScope(request.conversationScope());
     String speaker = normalizeSpeaker(request.speaker());
@@ -147,6 +179,7 @@ public class ConversationHistorySearchService {
     return outcome.results();
   }
 
+  /** 会話履歴と受付記録の管理で用いる詳細を返す。 */
   public ConversationHistoryDetail detail(String conversationId, Integer limit) {
     if (conversationId == null || conversationId.isBlank()) {
       throw new IllegalArgumentException("conversationId must not be blank");
@@ -235,6 +268,7 @@ public class ConversationHistorySearchService {
         "conversationId must start with chat:, bluesky-reply:, bluesky-manual:, or tool:");
   }
 
+  /** 依頼に関連する情報を得るため、保存されるログ一覧を検索する。 */
   private List<ConversationSearchResult> searchPersistentLogs(
       String query, String scope, String speaker, TimeRange timeRange) {
     List<String> terms = List.of(query.strip().toLowerCase(Locale.ROOT).split("\\s+"));
@@ -265,6 +299,7 @@ public class ConversationHistorySearchService {
         .toList();
   }
 
+  /** 対象を特定できるよう、保存されるログ詳細を探す。 */
   private List<ConversationHistoryMessage> findPersistentLogDetail(
       String conversationId, int limit) {
     List<ConversationLogEntry> entries =
@@ -280,6 +315,7 @@ public class ConversationHistorySearchService {
         .toList();
   }
 
+  /** 依頼に関連する情報を得るため、チャットを検索する。 */
   private List<ConversationSearchResult> searchChat(
       String query, String speaker, TimeRange timeRange, int limit) {
     StringBuilder sql =
@@ -330,6 +366,7 @@ public class ConversationHistorySearchService {
     }
   }
 
+  /** 依頼に関連する情報を得るため、BlueskyManualを検索する。 */
   private List<ConversationSearchResult> searchBlueskyManual(
       String query, String speaker, TimeRange timeRange, int limit) {
     StringBuilder sql =
@@ -379,6 +416,7 @@ public class ConversationHistorySearchService {
     }
   }
 
+  /** 依頼に関連する情報を得るため、ツールを検索する。 */
   private List<ConversationSearchResult> searchTool(
       String query, String speaker, TimeRange timeRange, int limit) {
     StringBuilder sql =
@@ -428,6 +466,7 @@ public class ConversationHistorySearchService {
     }
   }
 
+  /** 依頼に関連する情報を得るため、Bluesky返信を検索する。 */
   private List<ConversationSearchResult> searchBlueskyReply(
       String query, String speaker, TimeRange timeRange, int limit) {
     StringBuilder sql =
@@ -474,6 +513,7 @@ public class ConversationHistorySearchService {
     }
   }
 
+  /** 対象を特定できるよう、チャット詳細を探す。 */
   private List<ConversationHistoryMessage> findChatDetail(String conversationId, int limit) {
     try {
       List<ConversationHistoryMessage> messages =
@@ -501,6 +541,7 @@ public class ConversationHistorySearchService {
     }
   }
 
+  /** 対象を特定できるよう、チャット詳細付き代替手段を探す。 */
   private List<ConversationHistoryMessage> findChatDetailWithFallback(
       String conversationId, int prefixLength, int limit) {
     List<ConversationHistoryMessage> messages = findChatDetail(conversationId, limit);
@@ -510,6 +551,7 @@ public class ConversationHistorySearchService {
     return findChatDetail(conversationId.substring(prefixLength), limit);
   }
 
+  /** 対象を特定できるよう、Bluesky返信詳細を探す。 */
   private List<ConversationHistoryMessage> findBlueskyReplyDetail(String handle, int limit) {
     try {
       List<ConversationHistoryMessage> messages =
@@ -537,6 +579,7 @@ public class ConversationHistorySearchService {
     }
   }
 
+  /** 新たな対象を管理できるよう、検索条件条件一覧を追加する。 */
   private void addQueryConditions(StringBuilder sql, List<Object> params, String query) {
     for (String term : query.strip().split("\\s+")) {
       if (term.isBlank()) {
@@ -547,6 +590,7 @@ public class ConversationHistorySearchService {
     }
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、対象範囲の表記をそろえる。 */
   private String normalizeScope(String scope) {
     if (scope == null || scope.isBlank()) {
       return "all";
@@ -563,6 +607,7 @@ public class ConversationHistorySearchService {
         "scope must be all, chat, bluesky-reply, bluesky-manual, or tool");
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、読み上げ先の表記をそろえる。 */
   private String normalizeSpeaker(String speaker) {
     if (speaker == null || speaker.isBlank()) {
       return null;
@@ -570,6 +615,7 @@ public class ConversationHistorySearchService {
     return speaker.toLowerCase(Locale.ROOT);
   }
 
+  /** 会話履歴と受付記録の管理で用いるチャット読み上げ先を返す。 */
   private String chatSpeaker(String speaker) {
     if (speaker.equals("assistant")
         || speaker.equals("user")
@@ -580,10 +626,12 @@ public class ConversationHistorySearchService {
     return speaker;
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、チャット読み上げ先の表記をそろえる。 */
   private String normalizeChatSpeaker(String type) {
     return type == null ? "" : type.toLowerCase(Locale.ROOT);
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、上限の表記をそろえる。 */
   private int normalizeLimit(Integer limit, int defaultLimit, int maxLimit) {
     if (limit == null || limit <= 0) {
       return defaultLimit;
@@ -591,6 +639,7 @@ public class ConversationHistorySearchService {
     return Math.min(limit, maxLimit);
   }
 
+  /** 入力を機能内で扱えるよう、時刻対象範囲を解釈する。 */
   private TimeRange parseTimeRange(String since, String until) {
     OffsetDateTime sinceTime = parseDateTime(since, false);
     OffsetDateTime untilTime = parseDateTime(until, true);
@@ -601,6 +650,7 @@ public class ConversationHistorySearchService {
         untilTime == null ? null : untilTime.toString());
   }
 
+  /** 入力を機能内で扱えるよう、日付時刻を解釈する。 */
   private OffsetDateTime parseDateTime(String value, boolean endOfDay) {
     if (value == null || value.isBlank()) {
       return null;
@@ -615,6 +665,7 @@ public class ConversationHistorySearchService {
     }
   }
 
+  /** 会話履歴と受付記録の管理で用いる事前確認を返す。 */
   private String preview(String content, int maxLength) {
     if (content == null) {
       return "";
@@ -626,6 +677,7 @@ public class ConversationHistorySearchService {
     return normalized.substring(0, maxLength) + "...";
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、記録日時の表記をそろえる。 */
   private String normalizeTimestamp(String timestamp) {
     if (timestamp == null || timestamp.isBlank()) {
       return "";
@@ -637,6 +689,14 @@ public class ConversationHistorySearchService {
     }
   }
 
+  /**
+   * 会話履歴と受付記録の管理で受け渡す時刻対象範囲を表す。
+   *
+   * @param sinceEpochMillis 開始日時基準時刻ミリ秒数
+   * @param untilEpochMillis 終了日時基準時刻ミリ秒数
+   * @param sinceText 開始日時テキスト
+   * @param untilText 終了日時テキスト
+   */
   private record TimeRange(
       Long sinceEpochMillis, Long untilEpochMillis, String sinceText, String untilText) {}
 }

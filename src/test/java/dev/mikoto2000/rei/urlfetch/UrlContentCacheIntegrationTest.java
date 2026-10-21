@@ -20,7 +20,9 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** URL内容キャッシュ外部連携の結果と状態の契約を検証するテスト。 */
 class UrlContentCacheIntegrationTest {
+  /** URLの内容の参照で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void managedBodyPathReusesAndRevalidatesWithoutLosingFetchTime() {
     var clock = new AdjustableClock(Instant.parse("2026-01-01T00:00:00Z"));

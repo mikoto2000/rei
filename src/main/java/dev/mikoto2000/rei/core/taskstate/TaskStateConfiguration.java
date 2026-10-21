@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class TaskStateConfiguration {
 
+  /** 作業状態の記録で用いるタスク状態を返す。 */
   @org.springframework.context.annotation.Scope(
       value = "reiProject",
       proxyMode = org.springframework.context.annotation.ScopedProxyMode.TARGET_CLASS)

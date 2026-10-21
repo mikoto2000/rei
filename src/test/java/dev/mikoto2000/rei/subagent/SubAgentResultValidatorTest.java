@@ -13,13 +13,23 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.node.ObjectNode;
 
+/** 補助エージェント結果検証の窓口の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentResultValidatorTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
+
+  /** 検証に使う入力の解釈。 */
   final SubAgentResultParser parser = new SubAgentResultParser();
+
+  /** 検証に使う検証の窓口。 */
   final SubAgentResultValidator validator = new SubAgentResultValidator();
+
+  /** 検証に使う読み込みの窓口。 */
   final SubAgentDefinitionLoader loader =
       new SubAgentDefinitionLoader(new SubAgentToolPolicy(Set.of("readMultiFile")), m -> true);
+
+  /** 検証に使うレビューデータ形式。 */
   static final String REVIEW_SCHEMA =
       """
       {"$schema":"https://json-schema.org/draft/2020-12/schema","type":"object",
@@ -29,6 +39,7 @@ class SubAgentResultValidatorTest {
        "message":{"type":"string"}}}}}}
       """;
 
+  /** {@code definition} の条件を再現するための補助情報を返す。 */
   SubAgentDefinition definition(String schema) throws Exception {
     String yaml = SubAgentConfigurationTest.yaml("reviewer");
     if (schema != null) {
@@ -38,10 +49,12 @@ class SubAgentResultValidatorTest {
     return loader.load(Files.writeString(directory.resolve("reviewer.yaml"), yaml));
   }
 
+  /** {@code envelope} の条件を再現するための補助情報を返す。 */
   ObjectNode envelope() {
     return (ObjectNode) parser.parse(SubAgentResultParserTest.VALID);
   }
 
+  /** 共通の通知属性を受け付けられることを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"SUCCESS", "FAILURE", "PARTIAL"})
   void acceptsEnvelopeWithoutSpecificSchema(String status) throws Exception {
@@ -49,6 +62,7 @@ class SubAgentResultValidatorTest {
         .isTrue();
   }
 
+  /** 未指定項目一覧を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"status", "summary", "result", "warnings"})
   void rejectsMissingFields(String field) throws Exception {
@@ -57,12 +71,14 @@ class SubAgentResultValidatorTest {
     assertThat(validator.validate(definition(null), json).errors()).isNotEmpty();
   }
 
+  /** 以外対象データ一覧を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"[]", "null", "1", "\"text\""})
   void rejectsNonObjects(String json) throws Exception {
     assertThat(validator.validate(definition(null), parser.parse(json)).valid()).isFalse();
   }
 
+  /** 不正な共通の通知属性項目を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -83,6 +99,7 @@ class SubAgentResultValidatorTest {
             });
   }
 
+  /** 結果パスを維持することを確認する。 */
   @Test
   void validatesAgentSpecificShapeAndKeepsResultPathWithoutValues() throws Exception {
     var definition = definition(REVIEW_SCHEMA);
@@ -96,6 +113,7 @@ class SubAgentResultValidatorTest {
     assertThat(errors.toString()).doesNotContain("private-secret");
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -111,6 +129,7 @@ class SubAgentResultValidatorTest {
     assertThat(validator.validate(definition(REVIEW_SCHEMA), json).valid()).isFalse();
   }
 
+  /** 解釈済みの条件データ形式について、ファイル変更一覧の後も対象の情報が残ることを確認する。 */
   @Test
   void compiledSchemaSurvivesFileChangesAndFailedReloadKeepsSnapshot() throws Exception {
     definition(REVIEW_SCHEMA);
@@ -123,6 +142,7 @@ class SubAgentResultValidatorTest {
     assertThat(validator.validate(original, envelope()).valid()).isFalse();
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -145,6 +165,7 @@ class SubAgentResultValidatorTest {
         .hasMessageNotContaining("secret");
   }
 
+  /** 未指定を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -166,6 +187,7 @@ class SubAgentResultValidatorTest {
         .hasMessageContaining("resultSchema");
   }
 
+  /** 補助エージェントへの委譲で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void supportsClasspathSchemaAndLocalDefinitions() throws Exception {
     var file =
@@ -180,6 +202,7 @@ class SubAgentResultValidatorTest {
     assertThat(validator.validate(loader.load(file), json).valid()).isFalse();
   }
 
+  /** 大きすぎるデータ形式を受け付けないことを確認する。 */
   @Test
   void rejectsOversizedSchema() {
     assertThatThrownBy(() -> definition("{\"description\":\"" + "x".repeat(262144) + "\"}"))
@@ -187,6 +210,7 @@ class SubAgentResultValidatorTest {
         .hasMessageContaining("resultSchema");
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void limitsValidationDiagnosticsAndDoesNotEchoInvalidValues() throws Exception {
     var json = envelope();

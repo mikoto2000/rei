@@ -10,9 +10,12 @@ import org.jline.reader.*;
 import org.jline.terminal.TerminalBuilder;
 import org.junit.jupiter.api.Test;
 
+/** 承認操作操作の選択肢の結果と状態の契約を検証するテスト。 */
 class ApprovalActionMenuTest {
+  /** 検証に使う識別子。 */
   private static final String ID = "ca880320-1482-4d84-8fb9-53c0b3234997";
 
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void arrowsAndEnterSelectExactActionsWithoutTypingAnId() throws Exception {
     assertEquals("/approval show " + ID, read("\033[B\r", true));
@@ -20,21 +23,25 @@ class ApprovalActionMenuTest {
     assertEquals("/approval deny " + ID, read("\033[B\033[B\033[B\r", true));
   }
 
+  /** 軽量CLIでの対話の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void unrelatedSessionDoesNotOfferAnApprovalAction() throws Exception {
     assertEquals("", read("\033[B\r", false));
   }
 
+  /** 軽量CLIでの対話の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void typedTextIsNotReplacedByApprovalActions() throws Exception {
     assertEquals("hello", read("hello\033[B\r", true));
   }
 
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void emptyEnterDoesNotAutomaticallyApprove() throws Exception {
     assertEquals("", read("\r", true));
   }
 
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void movingUpdatesOneMenuWithoutAppendingOutputAndEnterRemovesIt() throws Exception {
     var output = new ByteArrayOutputStream();
@@ -67,6 +74,7 @@ class ApprovalActionMenuTest {
     }
   }
 
+  /** 検証用に、指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private String read(String input, boolean sameOwner) throws Exception {
     try (var terminal =
         TerminalBuilder.builder()
@@ -84,6 +92,7 @@ class ApprovalActionMenuTest {
     }
   }
 
+  /** 軽量CLIでの対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void aProjectChangeCancelsTheSelectedActionBeforeEnter() throws Exception {
     try (var terminal =
@@ -105,6 +114,7 @@ class ApprovalActionMenuTest {
     }
   }
 
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void aNewNotificationDoesNotChangeTheSelectedRequest() throws Exception {
     try (var terminal =

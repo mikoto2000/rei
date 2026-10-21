@@ -13,7 +13,9 @@ import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 import org.junit.jupiter.api.Test;
 
+/** 論文Processingの結果と状態の契約を検証するテスト。 */
 class PaperProcessingTest {
+  /** 論文の調査と整理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void extractsPagesAndFallsBackWithoutHeadings() throws Exception {
     try (var doc = new PDDocument();
@@ -36,6 +38,7 @@ class PaperProcessingTest {
     }
   }
 
+  /** 壊れたPDFを受け付けないことを確認する。 */
   @Test
   void rejectsCorruptPdf() {
     assertThrows(
@@ -45,6 +48,7 @@ class PaperProcessingTest {
                 .extract("t", new byte[] {1, 2, 3}, PaperOperation.local("s")));
   }
 
+  /** 各対象文字を保持することを確認する。 */
   @Test
   void chunkingPreservesEveryCharacter() {
     String input = "first 😀 next\n".repeat(100);
@@ -53,6 +57,7 @@ class PaperProcessingTest {
     assertTrue(chunks.stream().allMatch(c -> c.length() <= 31));
   }
 
+  /** 不正な項目に整理した内容出力を受け付けないことを確認する。 */
   @Test
   void rejectsInvalidStructuredOutputAndUngroundedEvidence() {
     var service = new PaperSummaryValidator();

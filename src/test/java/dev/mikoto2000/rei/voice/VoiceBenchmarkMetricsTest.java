@@ -6,7 +6,9 @@ import static org.assertj.core.api.Assertions.within;
 
 import org.junit.jupiter.api.Test;
 
+/** 音声性能測定計測値の結果と状態の契約を検証するテスト。 */
 class VoiceBenchmarkMetricsTest {
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void japaneseCerCountsCodePointsAndNormalizesPresentationOnly() {
     assertThat(VoiceBenchmarkMetrics.characterErrors("こんにちは。 音声入力", "こんにちは音声入カ")).isEqualTo(1);
@@ -14,6 +16,7 @@ class VoiceBenchmarkMetricsTest {
     assertThat(VoiceBenchmarkMetrics.characterErrors("ABC", "abc")).isEqualTo(3);
   }
 
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void insertionDeletionAndEmptyReferenceRemainVisible() {
     assertThat(VoiceBenchmarkMetrics.characterErrors("あいう", "あうえ")).isEqualTo(2);
@@ -23,6 +26,7 @@ class VoiceBenchmarkMetricsTest {
     assertThat(VoiceBenchmarkMetrics.cer("あいう", "あう")).isCloseTo(1.0 / 3, within(0.00001));
   }
 
+  /** 不正なを受け付けないことを確認する。 */
   @Test
   void percentileUsesNearestRankAndRejectsInvalidOrEmptyMeasurements() {
     assertThat(VoiceBenchmarkMetrics.percentile(new double[] {4, 1, 3, 2}, .5)).isEqualTo(2);

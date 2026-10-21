@@ -24,14 +24,18 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Claudeコードレビュー一覧の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ClaudeCodeReviewsTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code output} の条件を再現するための補助情報を返す。 */
   String output() {
     return "{\"type\":\"result\",\"subtype\":\"success\",\"is_error\":false,\"usage\":{\"input_tokens\":3,\"cache_creation_input_tokens\":2,\"cache_read_input_tokens\":1,\"output_tokens\":4},\"structured_output\":{\"summary\":\"ok\",\"findings\":[],\"warnings\":[]}}";
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   ExternalAgentRequest request() throws Exception {
     var file = Files.writeString(root.resolve("note.md"), "review this");
     return new ExternalAgentRequest(
@@ -45,11 +49,13 @@ class ClaudeCodeReviewsTest {
         "id");
   }
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void isolatedClaudeReviewPassesBoundedSourceViaStdinAndAccountsUsage() throws Exception {
     var paid = new AtomicInteger();
     var runner =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           public Output run(
               List<String> command,
               Path cwd,
@@ -99,6 +105,7 @@ class ClaudeCodeReviewsTest {
     assertEquals(9, budget.remainingLlmCalls());
   }
 
+  /** 外部エージェントへの委譲で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void parserAuthorizationAndDefaultsKeepProvidersSeparate() {
     assertEquals(
@@ -113,6 +120,7 @@ class ClaudeCodeReviewsTest {
     assertFalse(new ClaudeCodeProperties().isEnabled());
   }
 
+  /** {@code executor} の条件を再現するための補助情報を返す。 */
   ClaudeCodeExternalAgentExecutor executor(
       AtomicInteger paid, String text, String auth, Runnable effect) {
     var props = new ClaudeCodeProperties();
@@ -120,6 +128,7 @@ class ClaudeCodeReviewsTest {
     return new ClaudeCodeExternalAgentExecutor(
         props,
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           public Output run(
               List<String> command,
               Path cwd,
@@ -148,6 +157,7 @@ class ClaudeCodeReviewsTest {
         });
   }
 
+  /** 購読実行の担当について、OAuth認証を保持することを確認する。 */
   @Test
   void subscriptionRunnerRetainsOauthButRemovesEveryApiAndCloudOverride() {
     var environment =
@@ -178,6 +188,7 @@ class ClaudeCodeReviewsTest {
     assertEquals("1", environment.get("CLAUDE_CODE_SAFE_MODE"));
   }
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void apiOrUnknownAuthenticationCannotStartReviewOrSpendBudget() throws Exception {
     for (String auth :
@@ -200,6 +211,7 @@ class ClaudeCodeReviewsTest {
     }
   }
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void malformedOrUnreportedUsageFailsClosedAndCallLimitPreventsPaidExecution() throws Exception {
     for (String text :
@@ -234,6 +246,7 @@ class ClaudeCodeReviewsTest {
     assertEquals(0, paid.get());
   }
 
+  /** 外部エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void secretOversizedBinaryAndOutsideInputsNeverReachClaude() throws Exception {
     var paid = new AtomicInteger();
@@ -274,6 +287,7 @@ class ClaudeCodeReviewsTest {
     assertEquals(0, paid.get());
   }
 
+  /** 外部エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void directorySnapshotHasHardFileCountBoundAndRedactsCredentialValues() throws Exception {
     var project = Files.createDirectory(root.resolve("project"));
@@ -294,6 +308,7 @@ class ClaudeCodeReviewsTest {
                 project, null, () -> false, System.nanoTime() + Duration.ofSeconds(2).toNanos()));
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidStructuredReviewAndChangedSourceCannotClaimSuccessfulReview() throws Exception {
     var paid = new AtomicInteger();
@@ -327,6 +342,7 @@ class ClaudeCodeReviewsTest {
     assertEquals(10, budget.totalTokens());
   }
 
+  /** 外部エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledPreparationNeverStartsReviewAndNativeShimsAreRejected() throws Exception {
     var paid = new AtomicInteger();
@@ -347,6 +363,7 @@ class ClaudeCodeReviewsTest {
     }
   }
 
+  /** 旧形式履歴移行について、Codexを保持することを確認する。 */
   @Test
   void legacyHistoryMigrationPreservesCodexAndReadToolsFilterProviders() throws Exception {
     var source =
@@ -394,6 +411,7 @@ class ClaudeCodeReviewsTest {
     }
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void routerAndSemanticToolKeepAuthorizedProviderAndBudget() {
     var codex = org.mockito.Mockito.mock(ExternalAgentExecutor.class);
@@ -433,6 +451,7 @@ class ClaudeCodeReviewsTest {
     assertTrue(callback.getToolDefinition().description().contains("explicitly"));
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void obsoleteClaudeVersionCannotStartReviewEvenIfHelpAdvertisesFlags() throws Exception {
     var paid = new AtomicInteger();
@@ -442,6 +461,7 @@ class ClaudeCodeReviewsTest {
         new ClaudeCodeExternalAgentExecutor(
             props,
             new ExternalAgentProcessRunner() {
+              /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
               public Output run(
                   List<String> command,
                   Path cwd,
@@ -478,6 +498,7 @@ class ClaudeCodeReviewsTest {
     assertEquals(0, paid.get());
   }
 
+  /** 使用状況予約について、目標保存と検索の窓口再開の後も対象の情報が残ることを確認する。 */
   @Test
   void usageReservationSurvivesGoalRepositoryRestart() throws Exception {
     var source =
@@ -508,10 +529,12 @@ class ClaudeCodeReviewsTest {
     assertEquals(1, restarted.get("p", goal.id()).llmCallsUsed());
   }
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void disabledInvalidLimitsAndUnsupportedActionsNeverStartCli() throws Exception {
     var runner =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           public Output run(
               List<String> command,
               Path cwd,
@@ -550,6 +573,7 @@ class ClaudeCodeReviewsTest {
             .status());
   }
 
+  /** 結果出力先所属利用者テキストを維持することを確認する。 */
   @Test
   void slashAdvisorSelectsClaudeAndKeepsResultOutOfUserText() {
     var service = org.mockito.Mockito.mock(ExternalAgentDelegationService.class);
@@ -598,6 +622,7 @@ class ClaudeCodeReviewsTest {
             org.mockito.ArgumentMatchers.anyString());
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void configAndHistoryReadPolicyBindWithoutMakingReviewReadOnlyCapability() {
     var source =
@@ -632,6 +657,7 @@ class ClaudeCodeReviewsTest {
             .contains(dev.mikoto2000.rei.core.policy.ActionCapability.EXTERNAL_SIDE_EFFECT));
   }
 
+  /** 外部エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledAndUnexpectedFailureHistoryUseClaudeNameWithoutPrivateExceptionText() {
     var history =
@@ -685,6 +711,7 @@ class ClaudeCodeReviewsTest {
     }
   }
 
+  /** 共有サービスについて、提供元を保存することを確認する。 */
   @Test
   void sharedServiceSavesProviderAndCannotReuseClaudeHistoryAsCodexSession() throws Exception {
     var history =
@@ -697,11 +724,13 @@ class ClaudeCodeReviewsTest {
     var calls = new AtomicInteger();
     var executor =
         new ExternalAgentExecutor() {
+          /** 検証用に、要求された処理を実行する。 */
           public ExternalAgentResult execute(
               ExternalAgentRequest request, java.util.function.BooleanSupplier cancelled) {
             throw new AssertionError();
           }
 
+          /** 検証用に、要求された処理を実行する。 */
           public ExternalAgentResult execute(
               ExternalAgentRequest request,
               java.util.function.BooleanSupplier cancelled,

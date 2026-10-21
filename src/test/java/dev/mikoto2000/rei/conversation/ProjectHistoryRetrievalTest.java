@@ -30,16 +30,31 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** プロジェクト履歴関連情報の取得の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
+
+  /** 検証に使うprior。 */
   String prior;
+
+  /** 検証に使う登録台帳。 */
   ProjectRegistry registry;
+
+  /** 検証に使うプロジェクト一覧。 */
   ProjectService projects;
+
+  /** 検証に使うa、b、c。 */
   ProjectContext a, b, c;
+
+  /** 検証に使うログ一覧。 */
   ConversationLogStore logs;
+
+  /** 検証に使うサービス。 */
   ConversationHistorySearchService service;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     prior = System.getProperty("rei.data-dir");
@@ -55,20 +70,24 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
     service = new ConversationHistorySearchService(ds, logs);
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void cleanup() {
     if (prior == null) System.clearProperty("rei.data-dir");
     else System.setProperty("rei.data-dir", prior);
   }
 
+  /** 検証用に、新たな対象を登録し、後から利用できるようにする。 */
   void add(ProjectContext p, String text) {
     logs.append(p.conversationId("chat:main"), "user", text);
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   HistorySearchRequest request(String query, HistorySearchScope scope, String reference) {
     return new HistorySearchRequest(query, a.id(), reference, scope, "chat", null, null, null, 50);
   }
 
+  /** 読み取るを保存することを確認する。 */
   @Test
   void strongCurrentResultsPreventOtherStoreReads() {
     for (int i = 0; i < 3; i++) add(a, "working set policy " + i);
@@ -81,6 +100,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
     verify(logs, never()).visitProject(eq(c.id()), any());
   }
 
+  /** 関連する代替手段を許可することを確認する。 */
   @Test
   void weakCurrentResultsAllowRelevantFallbackButCurrentComesFirst() {
     add(a, "working set");
@@ -97,6 +117,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
         .containsExactly(a.id(), b.id());
   }
 
+  /** 会話履歴と受付記録の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void missingCurrentResultsFallBackWithStrictCrossProjectBudget() {
     for (int i = 0; i < 10; i++) {
@@ -108,6 +129,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
     assertThat(found).hasSize(3).allMatch(r -> !r.sourceProjectId().equals(a.id()));
   }
 
+  /** 会話履歴と受付記録の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void explicitProjectWinsEvenWhenCurrentHasEnoughMatches() {
     for (int i = 0; i < 4; i++) add(a, "integration policy " + i);
@@ -121,6 +143,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
     assertThat(found).noneMatch(r -> r.sourceProjectId().equals(c.id()));
   }
 
+  /** 安全性宛先の指定解決結果について、プロジェクト名前を取り除くことを確認する。 */
   @Test
   void safeMentionResolutionRemovesProjectNameFromKeywordQuery() {
     add(b, "integration policy");
@@ -134,6 +157,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
     assertThat(found.getFirst().sourceProjectId()).isEqualTo(b.id());
   }
 
+  /** 会話履歴と受付記録の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void ambiguousAndUnknownExplicitNamesAreRejected() throws Exception {
     registry.resolve(Files.createDirectories(temp.resolve("nested/MaCa Editor")));
@@ -149,6 +173,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 会話履歴と受付記録の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void currentOnlyNeverReadsForeignStoreEvenWithExplicitReference() {
     add(a, "needle A");
@@ -159,6 +184,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
     verify(logs, never()).visitProject(eq(b.id()), any());
   }
 
+  /** 会話履歴と受付記録の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void allProjectsRanksByRelevanceWithoutCurrentBoost() {
     add(a, "working set");
@@ -172,6 +198,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
     verify(logs).visitProject(eq(c.id()), any());
   }
 
+  /** 所有権を維持することを確認する。 */
   @Test
   void defaultUsesCurrentPreferredAndRunKeepsOwnershipAcrossSwitchAndIntervention() {
     for (int i = 0; i < 3; i++) {
@@ -190,6 +217,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
         .allMatch(r -> r.sourceProjectId().equals(b.id()));
   }
 
+  /** 会話履歴と受付記録の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void foreignResultAndDetailCarryBoundaryInActualJsonWithoutChangingFilesystemContext()
       throws Exception {
@@ -207,6 +235,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
     assertThat(projects.currentContext()).isEqualTo(a);
   }
 
+  /** 会話履歴と受付記録の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void foreignDetailCannotBypassBudget() {
     for (int i = 0; i < 12; i++) add(b, "needle " + "x".repeat(1000));
@@ -214,6 +243,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
     assertThat(detail.messages()).hasSize(3).allMatch(m -> m.content().length() <= 500);
   }
 
+  /** 会話履歴と受付記録の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void storageStaysIsolatedAcrossSwitchesAndIdenticalLogicalIds() {
     add(a, "A only");
@@ -225,6 +255,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
     assertThat(a.conversationId("chat:main")).isNotEqualTo(b.conversationId("chat:main"));
   }
 
+  /** 会話履歴と受付記録の管理で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void toolSchemaAndReturnedContextExposeScopeProjectAndBoundary() throws Exception {
     add(b, "needle src/foreign.rs");
@@ -245,6 +276,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
     assertThat(projects.currentContext()).isEqualTo(a);
   }
 
+  /** 会話履歴と受付記録の管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchEventHasCountsAndRunOwnershipButNoConversationText() throws Exception {
     add(a, "needle private-message-A");
@@ -275,6 +307,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
         .doesNotContain("private-message", "needle");
   }
 
+  /** 会話履歴と受付記録の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void filtersApplyToFallbackAndResultBudgetCannotBeRaisedByCaller() {
     for (int i = 0; i < 20; i++) {
@@ -314,6 +347,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
         .isEmpty();
   }
 
+  /** 会話履歴と受付記録の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownProjectDetailDoesNotReadArbitraryStores() {
     String id = UUID.randomUUID().toString();
@@ -322,6 +356,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
     verify(logs, never()).visitProject(eq(id), any());
   }
 
+  /** 会話履歴と受付記録の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void equalRelevanceUsesActualInstantOrderIncludingFractionalSeconds() {
     var entries =
@@ -351,6 +386,7 @@ class ProjectHistoryRetrievalTest extends dev.mikoto2000.rei.core.project.Projec
         .containsExactly("needle newer", "needle older");
   }
 
+  /** 非同期ツールについて、実行所有者を復元することを確認する。 */
   @Test
   void asynchronousToolRestoresRunOwnerForInterventionAfterShellSwitch() throws Exception {
     for (int i = 0; i < 3; i++) {

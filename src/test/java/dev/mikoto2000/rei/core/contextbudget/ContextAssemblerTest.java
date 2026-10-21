@@ -17,12 +17,19 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
+/** 文脈文脈の組み立ての結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ContextAssemblerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う概算。 */
   final TokenEstimator estimator = TokenEstimator.conservative();
+
+  /** 検証に使う呼び出し回数。 */
   final AtomicInteger calls = new AtomicInteger();
 
+  /** 検証で使用する設定を、指定された条件に合わせて用意する。 */
   ContextCompressionProperties config() {
     var p = new ContextCompressionProperties();
     p.setThreshold(300);
@@ -32,6 +39,7 @@ class ContextAssemblerTest {
     return p;
   }
 
+  /** {@code assembler} の条件を再現するための補助情報を返す。 */
   ContextAssembler assembler(ConversationCompressor compressor) {
     return new ContextAssembler(
         config(),
@@ -43,6 +51,7 @@ class ContextAssemblerTest {
         null);
   }
 
+  /** 検証で使用するプロンプトを、指定された条件に合わせて用意する。 */
   Prompt prompt(String old) {
     return new Prompt(
         List.of(
@@ -52,6 +61,7 @@ class ContextAssemblerTest {
             new UserMessage("current request and Working Set")));
   }
 
+  /** 会話返信形式について、履歴圧縮の後も対象の情報が残ることを確認する。 */
   @Test
   void conversationReplyStyleSurvivesHistoryCompressionWithoutReplacingCharacter() {
     var request =
@@ -83,6 +93,7 @@ class ContextAssemblerTest {
     assertThat(projected.getUserMessage().getText()).isEqualTo("current request and Working Set");
   }
 
+  /** モデルへ渡す文脈の管理で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void runObservationsFollowOriginalSystemPrefixAndSummaryStaysFrozen() {
     var repository = new ConversationSummaryRepository(dir);
@@ -112,6 +123,7 @@ class ContextAssemblerTest {
     assertThat(calls).hasValue(0);
   }
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void updatedWorkingSetAndNewSystemPolicyAreUsedWithoutStaleSnapshot() {
     var current = new java.util.concurrent.atomic.AtomicReference<>("Working Set: latest revision");
@@ -143,6 +155,7 @@ class ContextAssemblerTest {
     assertThat(raw.getContents()).contains("Working Set: old");
   }
 
+  /** 未満判定の境界値について、元のメッセージ一覧を維持することを確認する。 */
   @Test
   void belowThresholdKeepsOriginalMessages() {
     var p = prompt("short");
@@ -157,6 +170,7 @@ class ContextAssemblerTest {
     assertThat(calls).hasValue(0);
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void reservesTheConfiguredOutputCapForEitherOpenAiTokenParameter(boolean completionTokens) {
@@ -197,6 +211,7 @@ class ContextAssemblerTest {
     assertThat(options.getMaxTokens()).isEqualTo(completionTokens ? null : 800);
   }
 
+  /** モデルへ渡す文脈の管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void compressesOnlyOldHistoryAndPersistsCursorAcrossRestart() {
     var p = prompt("old ".repeat(500));
@@ -222,6 +237,7 @@ class ContextAssemblerTest {
         .isEqualTo(1);
   }
 
+  /** モデルへ渡す文脈の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failureAndInsufficientGainFallBackWithoutRetry() {
     for (boolean fail : List.of(true, false)) {
@@ -241,6 +257,7 @@ class ContextAssemblerTest {
     }
   }
 
+  /** モデルへ渡す文脈の管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationDoesNotCommitSummaryOrFallBack() {
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
@@ -264,6 +281,7 @@ class ContextAssemblerTest {
         .isZero();
   }
 
+  /** モデルへ渡す文脈の管理で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void rollingSummarySeesOnlyPreviousSummaryAndNewPrefix() {
     var a =
@@ -291,6 +309,7 @@ class ContextAssemblerTest {
     assertThat(calls).hasValue(2);
   }
 
+  /** モデルへ渡す文脈の管理で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void concurrentRequestsGenerateOneSummary() throws Exception {
     var a =
@@ -310,6 +329,7 @@ class ContextAssemblerTest {
     assertThat(calls).hasValue(1);
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void hardLimitDoesNotDiscardCurrentRequestOrSystem() {
     assertThatThrownBy(
@@ -326,6 +346,7 @@ class ContextAssemblerTest {
         .hasMessageContaining("CONTEXT_HARD_LIMIT");
   }
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void workingSetIsRefreshedAndNeverSentToSummarizer() {
     var a =

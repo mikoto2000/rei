@@ -25,7 +25,9 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
+/** 実行AwareツールCalling対話の補助の結果と状態の契約を検証するテスト。 */
 class RunAwareToolCallingAdvisorTest {
+  /** 単一ツール所有者を保持することを確認する。 */
   @ParameterizedTest
   @CsvSource({
     "false,false,false",
@@ -42,16 +44,19 @@ class RunAwareToolCallingAdvisorTest {
     var advisorCalls = new AtomicInteger();
     var outerAdvisor =
         new org.springframework.ai.chat.client.advisor.api.BaseAdvisor() {
+          /** 検証用に、他の補助処理と組み合わせる際の適用順序を返す。 */
           @Override
           public int getOrder() {
             return -1000;
           }
 
+          /** 検証用に、用途に応じたモデル利用で参照する名前を返す。 */
           @Override
           public String getName() {
             return "Outer context advisor";
           }
 
+          /** {@code before} の条件を再現するための補助情報を返す。 */
           @Override
           public org.springframework.ai.chat.client.ChatClientRequest before(
               org.springframework.ai.chat.client.ChatClientRequest request,
@@ -60,6 +65,7 @@ class RunAwareToolCallingAdvisorTest {
             return request;
           }
 
+          /** {@code after} の条件を再現するための補助情報を返す。 */
           @Override
           public org.springframework.ai.chat.client.ChatClientResponse after(
               org.springframework.ai.chat.client.ChatClientResponse response,
@@ -69,21 +75,25 @@ class RunAwareToolCallingAdvisorTest {
         };
     ChatModel delegate =
         new ChatModel() {
+          /** 検証用に、用途に応じたモデル利用で参照する選択可能な設定を返す。 */
           @Override
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return OpenAiChatOptions.builder().model("local").build();
           }
 
+          /** 検証用に、用途に応じたモデル利用の要求を実行し、呼び出し元へ結果を返す。 */
           @Override
           public ChatResponse call(Prompt prompt) {
             return next();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           @Override
           public Flux<ChatResponse> stream(Prompt prompt) {
             return Flux.defer(() -> Flux.just(next()));
           }
 
+          /** {@code next} の条件を再現するための補助情報を返す。 */
           private ChatResponse next() {
             if (calls.incrementAndGet() > 1) {
               return new ChatResponse(
@@ -109,6 +119,7 @@ class RunAwareToolCallingAdvisorTest {
         };
     var callback =
         new ToolCallback() {
+          /** 検証用に、用途に応じたモデル利用で参照するツール定義を返す。 */
           @Override
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
@@ -118,6 +129,7 @@ class RunAwareToolCallingAdvisorTest {
                 .build();
           }
 
+          /** 検証用に、用途に応じたモデル利用の要求を実行し、呼び出し元へ結果を返す。 */
           @Override
           public String call(String input) {
             effects.incrementAndGet();

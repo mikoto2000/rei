@@ -13,11 +13,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 経験の記録保存と検索の窓口の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class EpisodeRepositoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う保存と検索の窓口。 */
   EpisodeRepository repository;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     repository =
@@ -25,6 +30,7 @@ class EpisodeRepositoryTest {
             new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("memory.db")));
   }
 
+  /** {@code episode} の条件を再現するための補助情報を返す。 */
   Episode episode(String revision, Episode.Status status) {
     return new Episode(
         "e1",
@@ -44,6 +50,7 @@ class EpisodeRepositoryTest {
         .8);
   }
 
+  /** 過去の経験の活用で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void persistsClaimsAndImmutableRevisionsAcrossRestart() {
     repository.saveBatch("s1", 0, 1, List.of(episode("v1", Episode.Status.IN_PROGRESS)));
@@ -59,6 +66,7 @@ class EpisodeRepositoryTest {
     assertTrue(restarted.find("e1", "p2").isEmpty());
   }
 
+  /** 過去の経験の活用で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void checkpointCompareAndSetIsAtomicAndRetryDoesNotDuplicate() {
     repository.saveBatch("s1", 0, 1, List.of(episode("v1", Episode.Status.COMPLETED)));
@@ -69,6 +77,7 @@ class EpisodeRepositoryTest {
     assertEquals(1, repository.checkpoint("s1"));
   }
 
+  /** 過去の経験の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void lexicalSearchIsBoundedAndProjectScoped() {
     repository.saveBatch("s1", 0, 1, List.of(episode("v1", Episode.Status.COMPLETED)));
@@ -78,12 +87,14 @@ class EpisodeRepositoryTest {
     assertThrows(IllegalArgumentException.class, () -> repository.search("CLI", "p1", 101));
   }
 
+  /** 過去の経験の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void emptyBatchAdvancesCheckpoint() {
     repository.saveBatch("s1", 0, 3, List.of());
     assertEquals(3, repository.checkpoint("s1"));
   }
 
+  /** 過去の経験の活用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failureRollsBackEpisodeAndCheckpointTogether() {
     var valid = episode("v1", Episode.Status.COMPLETED);
@@ -108,6 +119,7 @@ class EpisodeRepositoryTest {
     assertEquals(1, repository.checkpoint("s1"));
   }
 
+  /** 過去の経験の活用で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void sourceLeasePreventsConcurrentModelProcessingAndIsReleased() {
     assertTrue(repository.acquire("s1", "worker1"));
@@ -118,6 +130,7 @@ class EpisodeRepositoryTest {
     assertTrue(repository.acquire("s1", "worker2"));
   }
 
+  /** 判断結果リンク一覧について、既存の同一プロジェクト記憶を必要とすることを確認する。 */
   @Test
   void decisionLinksRequireExistingSameProjectMemory() {
     var db =
@@ -137,6 +150,7 @@ class EpisodeRepositoryTest {
         () -> repository.linkMemory("p1", "s1", List.of("r1"), "invented"));
   }
 
+  /** 過去の経験の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void linksActualWorkContextItemsByTheirSourceRuns() {
     repository.saveBatch("s1", 0, 1, List.of(episode("v1", Episode.Status.COMPLETED)));

@@ -6,8 +6,13 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
 
-/** Display only: never replaces the original bytes. */
+/**
+ * モデル応答の記録に必要な取得記録表示を扱う。
+ *
+ * <p>Display only: never replaces the original bytes.
+ */
 final class CaptureDisplay {
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final ObjectMapper JSON =
       new ObjectMapper(
           com.fasterxml.jackson.core.JsonFactory.builder()
@@ -18,6 +23,7 @@ final class CaptureDisplay {
                       .build())
               .build());
 
+  /** モデル応答の記録で用いる非公開化した内容を返す。 */
   static String masked(byte[] bytes) {
     try {
       var tree = JSON.readTree(bytes);
@@ -33,6 +39,7 @@ final class CaptureDisplay {
     }
   }
 
+  /** モデル応答の記録に関する非公開化を処理する。 */
   private static void mask(JsonNode node, int depth, int[] count) {
     if (depth > 100 || ++count[0] > 65536) throw new IllegalArgumentException("Display limit");
     if (node instanceof ObjectNode object) {
@@ -56,6 +63,7 @@ final class CaptureDisplay {
     }
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   private static String text(String value) {
     if (value.startsWith("data:") || value.length() >= 40 && value.matches("[A-Za-z0-9+/=\\r\\n]+"))
       return "[REDACTED media/base64]";
@@ -66,6 +74,7 @@ final class CaptureDisplay {
         .replaceAll("(?i)(password|api[_-]?key|token)(\\s*[:=]\\s*)[^\\s,;]+", "$1$2[REDACTED]");
   }
 
+  /** モデル応答の記録で用いる特殊文字の保護を返す。 */
   static String escape(String text) {
     if (text == null) return "unknown";
     var out = new StringBuilder();

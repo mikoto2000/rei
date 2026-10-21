@@ -19,8 +19,13 @@ import org.yaml.snakeyaml.LoaderOptions;
 import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
 
-/** Parsing/compilation occurs only on reload. Readers hold one immutable generation. */
+/**
+ * 作業状況の把握に必要なOperational規則一覧を扱う。
+ *
+ * <p>Parsing/compilation occurs only on reload. Readers hold one immutable generation.
+ */
 public final class OperationalRules {
+  /** 分類一覧。 */
   static final Set<String> CATEGORIES =
       Set.of(
           "development",
@@ -36,6 +41,8 @@ public final class OperationalRules {
           "idle",
           "other",
           "unknown");
+
+  /** 一致。 */
   private static final Set<String> MATCH =
       Set.of(
           "processRegex",
@@ -44,6 +51,8 @@ public final class OperationalRules {
           "applicationRegex",
           "contentRegex",
           "activityCategoryRegex");
+
+  /** 分類。 */
   private static final Set<String> CLASSIFY =
       Set.of(
           "category",
@@ -59,6 +68,18 @@ public final class OperationalRules {
           "entertainmentDisposition",
           "confidence");
 
+  /**
+   * 作業状況の把握で受け渡す規則を表す。
+   *
+   * @param id 識別子
+   * @param type 種別
+   * @param source 取得元
+   * @param priority 優先度
+   * @param enabled 有効状態
+   * @param match 一致
+   * @param classify 分類
+   * @param compiled 解釈済みの条件
+   */
   public record Rule(
       String id,
       String type,
@@ -68,6 +89,7 @@ public final class OperationalRules {
       Map<String, String> match,
       Map<String, Object> classify,
       Map<String, Pattern> compiled) {
+    /** 指定された条件と対象が一致するかを判定する。 */
     boolean matches(
         String process, String title, String service, String app, String content, String category) {
       var values =
@@ -89,13 +111,29 @@ public final class OperationalRules {
               .allMatch(e -> e.getValue().matcher(values.get(e.getKey())).find());
     }
 
+    /** 作業状況の把握で用いる具体性を返す。 */
     int specificity() {
       return match.size();
     }
   }
 
+  /**
+   * 作業状況の把握で受け渡す状態の記録を表す。
+   *
+   * @param rules 規則一覧
+   * @param loadedAt 読み込み済みの内容日時
+   */
   public record Snapshot(List<Rule> rules, Instant loadedAt) {}
 
+  /**
+   * 作業状況の把握で受け渡す娯楽を表す。
+   *
+   * @param disposition 扱い
+   * @param confidence 確信度
+   * @param ruleId 規則識別子
+   * @param source 取得元
+   * @param reason 理由
+   */
   public record Entertainment(
       EntertainmentDisposition disposition,
       double confidence,
@@ -103,32 +141,48 @@ public final class OperationalRules {
       String source,
       String reason) {}
 
+  /** パス。 */
   private final Path path;
+
+  /** 現在。 */
   private final AtomicReference<Snapshot> current =
       new AtomicReference<>(new Snapshot(builtIns(), Instant.now()));
+
+  /** 直近試行。 */
   private volatile Instant lastAttempt = Instant.now();
+
+  /** 直近状態。 */
   private volatile String lastStatus = "BUILT_IN";
+
+  /** 要求内容の照合値。 */
   private volatile String fingerprint = "";
+
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(OperationalRules.class);
 
+  /** 指定された値や利用先を使って、OperationalRulesを初期化する。 */
   public OperationalRules(Path path) {
     this.path = path;
     reload();
   }
 
+  /** 作業状況の把握で用いるパスを返す。 */
   public Path path() {
     return path;
   }
 
+  /** 現在の状態を、後から参照できる記録として取り出す。 */
   public Snapshot snapshot() {
     return current.get();
   }
 
+  /** 変更された設定や記録を反映するため、状態を読み直す。 */
   public String reloadStatus() {
     return lastStatus + " at " + lastAttempt;
   }
 
+  /** 作業状況の把握において、再読み込みに該当するか判定する。 */
   public synchronized boolean reload() {
     lastAttempt = Instant.now();
     try {
@@ -156,10 +210,12 @@ public final class OperationalRules {
     }
   }
 
+  /** 作業状況の把握に関する状態確認を処理する。 */
   public void poll() {
     if (!Objects.equals(fingerprint, fingerprint())) reload();
   }
 
+  /** 作業状況の把握で用いる要求内容の照合値を返す。 */
   private String fingerprint() {
     try {
       return Files.exists(path)
@@ -170,11 +226,13 @@ public final class OperationalRules {
     }
   }
 
+  /** 作業状況の把握で用いる内容の照合値を返す。 */
   private static String digest(byte[] bytes) throws Exception {
     return HexFormat.of()
         .formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(bytes));
   }
 
+  /** 作業状況の把握で用いる順序を返す。 */
   static Comparator<Rule> order() {
     return Comparator.comparingInt(Rule::priority)
         .reversed()
@@ -182,6 +240,7 @@ public final class OperationalRules {
         .thenComparing(Rule::id);
   }
 
+  /** 得られた情報を分類し、後続の判断で扱い分けられるようにする。 */
   public ActivityClassification classify(ActivityEvidence evidence) {
     var base = new ActivityClassifier().classify(evidence);
     var a = base.inference().activities().getFirst();
@@ -278,6 +337,7 @@ public final class OperationalRules {
         base.secondaryConfidence());
   }
 
+  /** 作業状況の把握で用いる娯楽を返す。 */
   public Entertainment entertainment(
       String service, String app, String title, String content, String category) {
     var hits = matching(snapshot(), "entertainment", app, title, service, app, content, category);
@@ -313,6 +373,7 @@ public final class OperationalRules {
             : confidence < .8 ? "LOW_ENTERTAINMENT_CONFIDENCE" : "MATCHED");
   }
 
+  /** 作業状況の把握で用いるmatchingを返す。 */
   public static List<Rule> matching(
       Snapshot snapshot,
       String type,
@@ -330,7 +391,9 @@ public final class OperationalRules {
         .toList();
   }
 
+  /** 作業状況の把握で用いるコンパイルを返す。 */
   public static List<Rule> compile(String text, boolean proposal) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (text.length() > 262144) throw invalid();
     var options = new LoaderOptions();
     options.setAllowDuplicateKeys(false);
@@ -456,12 +519,14 @@ public final class OperationalRules {
     return List.copyOf(result);
   }
 
+  /** 作業状況の把握において、broadに該当するか判定する。 */
   private static boolean broad(Pattern p) {
     return p.matcher("").find()
         || List.of("ordinary unrelated page", "random video", "nothing relevant").stream()
             .allMatch(s -> p.matcher(s).find());
   }
 
+  /** 作業状況の把握で用いる対応表を返す。 */
   static Map<String, Object> map(Object value) {
     if (!(value instanceof Map<?, ?> m)) throw invalid();
     var result = new LinkedHashMap<String, Object>();
@@ -472,10 +537,12 @@ public final class OperationalRules {
     return result;
   }
 
+  /** 作業状況の把握に関するキー一覧を処理する。 */
   private static void keys(Map<String, ?> map, Set<String> allowed) {
     if (!allowed.containsAll(map.keySet())) throw invalid();
   }
 
+  /** 作業状況の把握で用いる数値を返す。 */
   static double number(Object value) {
     if (!(value instanceof Number n)
         || !Double.isFinite(n.doubleValue())
@@ -484,39 +551,51 @@ public final class OperationalRules {
     return n.doubleValue();
   }
 
+  /** 作業状況の把握で用いる整数を返す。 */
   private static int integer(Object value) {
     if (!(value instanceof Number n) || n.doubleValue() != n.intValue()) throw invalid();
     return n.intValue();
   }
 
+  /** 作業状況の把握で用いるconfを返す。 */
   static double conf(Map<String, Object> m, String key, double fallback) {
     return m.containsKey(key) ? number(m.get(key)) : fallback;
   }
 
+  /** 作業状況の把握で用いる文字列表現を返す。 */
   static String string(Map<String, Object> m, String key, String fallback) {
     return m.containsKey(key) ? Objects.toString(m.get(key)) : fallback;
   }
 
+  /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */
   private static String safe(String value) {
     return value == null ? "" : value.substring(0, Math.min(512, value.length()));
   }
 
+  /** 受け付けられない指定について、入力の問題を伝える。 */
   private static IllegalArgumentException invalid() {
     return new IllegalArgumentException(
         "Invalid rule definition (id, match, classify, regex, priority or confidence)");
   }
 
-  /** Diagnostics contain only fixed text and validated field names, never rule values. */
+  /**
+   * 作業状況の把握に必要な不正定義を扱う。
+   *
+   * <p>Diagnostics contain only fixed text and validated field names, never rule values.
+   */
   static final class InvalidDefinition extends IllegalArgumentException {
+    /** 指定された値や利用先を使って、InvalidDefinitionを初期化する。 */
     InvalidDefinition(String detail) {
       super(detail);
     }
   }
 
+  /** 受け付けられない指定について、入力の問題を伝える。 */
   private static InvalidDefinition invalid(String detail) {
     return new InvalidDefinition(detail);
   }
 
+  /** 作業状況の把握で用いる構築済みInsを返す。 */
   private static List<Rule> builtIns() {
     try (var in = OperationalRules.class.getResourceAsStream("/activity/operational-rules.yaml")) {
       var rules =

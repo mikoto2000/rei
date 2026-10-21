@@ -11,11 +11,15 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 検索順位付け予算の結果と状態の契約を検証するテスト。 */
 class SearchRankingBudgetTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code tools} の条件を再現するための補助情報を返す。 */
   Tools tools(List<String> paths) {
     return new Tools() {
+      /** {@code listFile} の条件を再現するための補助情報を返す。 */
       @Override
       List<String> listFile(String base, Path directory) {
         return paths;
@@ -23,14 +27,17 @@ class SearchRankingBudgetTest {
     };
   }
 
+  /** {@code query} の条件を再現するための補助情報を返す。 */
   Tools.GrepQuery query(String text) {
     return new Tools.GrepQuery(text, ".", false, true, false, false, 0, 0, null, true, null, null);
   }
 
+  /** 検証用に、指定された内容を書き込み先へ反映する。 */
   void write(String path, String text) throws Exception {
     Files.writeString(root.resolve(path), text);
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void exactFilenameAndAstDeclarationBeatBodyReferences() throws Exception {
     write("a.txt", "UserService reference");
@@ -44,6 +51,7 @@ class SearchRankingBudgetTest {
     assertTrue(result.getFirst().score() > result.getLast().score());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void methodDeclarationsAndExplicitPathsAreRankedWithoutLlmCalls() throws Exception {
     write("A.java", "class A { void reference(){ z.execute(); } }");
@@ -62,6 +70,7 @@ class SearchRankingBudgetTest {
     assertTrue(explicit.getFirst().matchedBy().contains("explicit-path"));
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void aHugeEarlyHitFileCannotHideTheLaterExactTargetOrConsumeItsBudget() throws Exception {
     write("a.txt", "Target reference\n".repeat(2000));
@@ -82,6 +91,7 @@ class SearchRankingBudgetTest {
         dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative().text(json) <= 1200);
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void japaneseTokenLimitsAndContinuationAreAppliedToTheWholeJsonResult() throws Exception {
     write("a.txt", "ヒット" + "日本語".repeat(3000));
@@ -100,6 +110,7 @@ class SearchRankingBudgetTest {
         dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative().text(json) <= 1200);
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void tiedResultsAreStableAndWorkingFilesHaveAnExplicitReason() throws Exception {
     write("a.txt", "hit");
@@ -117,12 +128,14 @@ class SearchRankingBudgetTest {
     assertEquals("z.txt", active.searchAndRead(request, root).getFirst().path());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void inventoryCannotEnumerateOutsideTheProject() throws Exception {
     assertThrows(java.io.IOException.class, () -> new Tools().listFile("..", root));
     assertThrows(java.io.IOException.class, () -> new Tools().listFile(".git", root));
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void noMatchesAreNormalButInvalidBudgetsAreExplicitErrors() throws Exception {
     write("a.txt", "nothing");

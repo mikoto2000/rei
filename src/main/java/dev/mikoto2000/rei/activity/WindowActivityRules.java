@@ -3,17 +3,30 @@ package dev.mikoto2000.rei.activity;
 import java.util.Set;
 
 /**
- * Process guards precede title rules; a document mentioning a service cannot become that service.
+ * 作業状況の把握に必要な範囲作業状況規則一覧を扱う。
+ *
+ * <p>Process guards precede title rules; a document mentioning a service cannot become that
+ * service.
  */
 final class WindowActivityRules {
+  /**
+   * 作業状況の把握で受け渡す一致を表す。
+   *
+   * @param activity 作業状況
+   * @param fields 項目一覧
+   * @param rule 規則
+   */
   record Match(ActivityRecord.Activity activity, ActivityFieldConfidence fields, String rule) {
+    /** 作業状況の把握で用いる確信度を返す。 */
     double confidence() {
       return fields.overall();
     }
   }
 
+  /** ブラウザーのタイトルから作業を判別する規則。 */
   private final BrowserTitleRules browsers = new BrowserTitleRules();
 
+  /** 得られた情報を分類し、後続の判断で扱い分けられるようにする。 */
   Match classify(ForegroundWindow window, String monitor) {
     String process = ActivityRolePolicy.application(window.processName());
     String title = window.windowTitle().strip();
@@ -50,6 +63,7 @@ final class WindowActivityRules {
         process.equals("terminal") ? "GENERIC_TERMINAL" : "UNRECOGNIZED_PROCESS");
   }
 
+  /** 作業状況の把握で用いる一致を返す。 */
   static Match match(
       String monitor,
       String type,

@@ -43,18 +43,28 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import reactor.core.publisher.Flux;
 
+/** 待機モデル予算の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SleepModelBudgetTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う保存と検索の窓口。 */
   MemoryRepository repository;
+
+  /** 検証に使うモデル。 */
   ChatModel model;
+
+  /** 検証に使うやり取り一覧。 */
   ConversationTurnStore turns;
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   SleepService service(
       int calls, long tokens, Integer extractionUsage, Integer resolutionUsage, boolean existing) {
     return service(calls, tokens, extractionUsage, resolutionUsage, existing, 0, 0);
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   SleepService service(
       int calls,
       long tokens,
@@ -100,12 +110,14 @@ class SleepModelBudgetTest {
         repository, turns, processor, new MemoryResolver(processor, props), props);
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   ChatResponse response(String text, Integer tokens) {
     var metadata = ChatResponseMetadata.builder();
     if (tokens != null) metadata.usage(new DefaultUsage(1, tokens - 1));
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))), metadata.build());
   }
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void extractionOvershootCannotWriteMemoryOrAdvanceCheckpoint() {
     var sleep = service(10, 3, 4, 1, false);
@@ -116,6 +128,7 @@ class SleepModelBudgetTest {
     assertEquals("FAILED", repository.history("p", 10).getFirst().status());
   }
 
+  /** 既存の記憶を保持することを確認する。 */
   @Test
   void extractionAndResolutionShareCallLimitAndPreserveExistingMemory() {
     var sleep = service(1, 0, 2, 2, true);
@@ -126,6 +139,7 @@ class SleepModelBudgetTest {
     assertEquals(1, repository.list("p", 10, 0).size());
   }
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void resolutionOvershootCannotCommitPartialPlans() {
     var sleep = service(10, 3, 2, 2, true);
@@ -138,6 +152,7 @@ class SleepModelBudgetTest {
     assertEquals(1, repository.list("p", 10, 0).size());
   }
 
+  /** 長期記憶の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void exactLimitCanCommitWithoutAnotherModelCall() {
     var sleep = service(10, 3, 3, 1, false);
@@ -153,6 +168,7 @@ class SleepModelBudgetTest {
     verify(model, times(1)).stream(any(Prompt.class));
   }
 
+  /** 不明使用状況停止するおよび無効状態予算について、旧形式作業習慣を保持することを確認する。 */
   @Test
   void unknownUsageStopsAndDisabledBudgetPreservesLegacyBehavior() {
     var sleep = service(10, 3, null, null, false);
@@ -165,6 +181,7 @@ class SleepModelBudgetTest {
     assertEquals("COMPLETED", legacy.sleep("s", "p", false).run().status());
   }
 
+  /** 長期記憶の活用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void providerFailureDoesNotBecomeFreeRetryWithinSleep() {
     var sleep = service(10, 3, 2, 2, false);
@@ -179,6 +196,7 @@ class SleepModelBudgetTest {
     verify(model, times(1)).stream(any(Prompt.class));
   }
 
+  /** 事前確認について、同一予算を利用することを確認する。 */
   @Test
   void previewUsesSameBudgetAndDoesNotWriteFailureAudit() {
     var sleep = service(10, 3, 4, 1, false);
@@ -190,6 +208,7 @@ class SleepModelBudgetTest {
     assertTrue(repository.history("p", 10).isEmpty());
   }
 
+  /** 長期記憶の活用で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void exactDuplicateDoesNotSpendResolutionCallAndNextInvocationGetsOwnBudget() {
     var sleep = service(1, 0, null, null, false);
@@ -206,6 +225,7 @@ class SleepModelBudgetTest {
     verify(model, times(2)).stream(any(Prompt.class));
   }
 
+  /** 長期記憶の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void invalidLimitsAreRejectedAndLegacyProcessorCannotBypassTokenCap() {
     assertThrows(
@@ -228,6 +248,7 @@ class SleepModelBudgetTest {
     assertThrows(IllegalStateException.class, () -> legacy.extract(List.of(), budget));
   }
 
+  /** 機能の構成関連付けについて、待機既定値を維持することを確認する。 */
   @Test
   void configurationBindingKeepsSleepDefaultsAndBindsPositiveLimits() {
     var source =
@@ -252,6 +273,7 @@ class SleepModelBudgetTest {
     assertEquals(12000, properties.sleep().maxInputTokens());
   }
 
+  /** 長期記憶の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void previewChargesProjectBudgetAndNewServiceCannotRetryForFree() {
     var sleep = service(0, 0, 2, 2, false, 1, 0);
@@ -267,6 +289,7 @@ class SleepModelBudgetTest {
     assertTrue(repository.list("p", 10, 0).isEmpty());
   }
 
+  /** 長期記憶の活用で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void lifetimeTokensChargeFailedPlanAndBlockProviderAfterRestart() {
     var sleep = service(0, 0, 2, 2, true, 0, 3);
@@ -284,6 +307,7 @@ class SleepModelBudgetTest {
     verify(model, never()).stream(any(Prompt.class));
   }
 
+  /** 長期記憶の活用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void lifetimeUnknownUsageAndProviderFailureBlockLaterInvocations() {
     var sleep = service(0, 0, 2, 2, false, 0, 10);
@@ -306,6 +330,7 @@ class SleepModelBudgetTest {
     verify(model, never()).stream(any(Prompt.class));
   }
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void lifetimeZeroReportedUsageStopsBeforeMemorySaveAndCannotBecomeFreeRetry() {
     var sleep = service(0, 0, 0, 0, false, 0, 10);
@@ -325,6 +350,7 @@ class SleepModelBudgetTest {
     assertEquals("COMPLETED", disabled.sleep("s", "p", false).run().status());
   }
 
+  /** 長期記憶の活用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationLeavesDurablePendingReservationWithoutAdvancingMemory() {
     var sleep = service(0, 0, 2, 2, false, 0, 10);
@@ -341,6 +367,7 @@ class SleepModelBudgetTest {
     verify(model, never()).stream(any(Prompt.class));
   }
 
+  /** 長期記憶の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void lifetimeBudgetBindingAndValidation() {
     var source =

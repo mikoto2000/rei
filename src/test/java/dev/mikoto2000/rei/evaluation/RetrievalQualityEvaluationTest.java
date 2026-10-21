@@ -9,12 +9,15 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/** 関連情報の取得品質評価の結果と状態の契約を検証するテスト。 */
 class RetrievalQualityEvaluationTest {
+  /** {@code fixture} の条件を再現するための補助情報を返す。 */
   RetrievalQualityEvaluation.Case fixture() {
     return new RetrievalQualityEvaluation.Case(
         "graded", "query", Map.of("a", 3, "b", 1), List.of("negative"), List.of("a", "b"), 2);
   }
 
+  /** 成果の評価で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void gradedMetricsUseCutoffFullRelevantSetAndIdealOrdering() {
     var evaluator = new RetrievalQualityEvaluation();
@@ -32,6 +35,7 @@ class RetrievalQualityEvaluationTest {
     assertTrue(perfect.expectedTopKMatched());
   }
 
+  /** 成果の評価で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void shortAndEmptyListsDoNotInflatePrecisionAndDuplicatesAreInvalid() {
     var evaluator = new RetrievalQualityEvaluation();
@@ -46,6 +50,7 @@ class RetrievalQualityEvaluationTest {
                 "bad", "q", Map.of("a", 3), List.of("a"), List.of("a"), 1));
   }
 
+  /** 成果の評価で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void comparingModesRecordsProviderIdentityAndDoesNotClaimLiveQuality() {
     var result =
@@ -66,6 +71,7 @@ class RetrievalQualityEvaluationTest {
     assertEquals(6, result.aggregate().size());
   }
 
+  /** 成果の評価の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationAndProviderFailureDoNotBecomeZeroScoreSuccess() {
     var evaluator = new RetrievalQualityEvaluation();
@@ -89,6 +95,7 @@ class RetrievalQualityEvaluationTest {
                 }));
   }
 
+  /** 合計期限について、比較結果を停止することを確認する。 */
   @Test
   void totalDeadlineStopsComparisonWithoutPublishingPartialMetrics() {
     var nanos = new java.util.concurrent.atomic.AtomicLong();

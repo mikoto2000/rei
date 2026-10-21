@@ -37,19 +37,40 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** バックグラウンドコマンド一覧の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class BackgroundCommandsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
+
+  /** 検証に使うa、b。 */
   ProjectContext a, b;
+
+  /** 検証に使うプロジェクト一覧。 */
   ProjectService projects;
+
+  /** 検証に使う状態一覧。 */
   ProjectRunStateStore states;
+
+  /** 検証に使うタスク一覧。 */
   List<Runnable> tasks;
+
+  /** 通知された出来事と順序を検証するための記録。 */
   List<AgentEvent> events;
+
+  /** 検証に使う入力の振り分け。 */
   ConversationInputRouter router;
+
+  /** 検証に使う要約一覧。 */
   WebPageSummarizerService summaries;
+
+  /** 検証に使う画像一覧。 */
   ImageGenerationService images;
+
+  /** 検証に使うコマンド一覧。 */
   BackgroundCommands commands;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     var registry = new ProjectRegistry(temp.resolve("projects.json"));
@@ -74,12 +95,14 @@ class BackgroundCommandsTest extends dev.mikoto2000.rei.core.project.ProjectClie
             Clock.systemUTC());
   }
 
+  /** 検証用に、利用者が対象の情報を確認できるように表示する。 */
   String show() {
     var out = new ArrayList<String>();
     commands.showLastSummary(out::add);
     return String.join("\n", out);
   }
 
+  /** 会話の実行で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void narratesOnlyWhenSavedSummaryIsDisplayedForCurrentProject() {
     var narrator = mock(dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator.class);
@@ -93,6 +116,7 @@ class BackgroundCommandsTest extends dev.mikoto2000.rei.core.project.ProjectClie
     assertThat(tasks).hasSize(1);
     tasks.removeFirst().run();
     assertThat(tasks).isEmpty(); // Completion must not enqueue audio.
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(narrator);
     projects.cd(b.root().toString());
     show();
@@ -107,6 +131,7 @@ class BackgroundCommandsTest extends dev.mikoto2000.rei.core.project.ProjectClie
     verifyNoMoreInteractions(narrator);
   }
 
+  /** 会話の実行で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void snapshotsOwnershipPersistsLatestPerProjectAndBareDisplayDoesNotStartWork() {
     when(summaries.summarize(any()))
@@ -126,6 +151,7 @@ class BackgroundCommandsTest extends dev.mikoto2000.rei.core.project.ProjectClie
     assertThat(tasks).isEmpty();
     commands.summarize(URI.create("https://a.example"));
     assertThat(show()).contains("currently running", "https://a.example", "No completed summary");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(summaries);
     projects.cd(b.root().toString());
     tasks.getFirst().run();
@@ -148,6 +174,7 @@ class BackgroundCommandsTest extends dev.mikoto2000.rei.core.project.ProjectClie
         .allMatch(e -> e.projectId() != null);
   }
 
+  /** 画像について、所有権を保持することを確認する。 */
   @Test
   void imagePreservesOwnershipWithoutChangingSummaryOrConversation() {
     when(images.generate(any()))
@@ -170,6 +197,7 @@ class BackgroundCommandsTest extends dev.mikoto2000.rei.core.project.ProjectClie
     assertThat(states.latestCompleted(a.id(), ExecutionType.SUMMARIZE)).isEmpty();
   }
 
+  /** 会話の実行で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void failuresAndTimeoutsNotifyAndNeverReplaceSuccessfulResult() {
     when(summaries.summarize(any()))
@@ -199,6 +227,7 @@ class BackgroundCommandsTest extends dev.mikoto2000.rei.core.project.ProjectClie
         .isEmpty();
   }
 
+  /** 会話の実行で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void shellCommandsReturnImmediatelyAndSnapshotParsedArguments() {
     when(summaries.summarize(any()))
@@ -219,6 +248,7 @@ class BackgroundCommandsTest extends dev.mikoto2000.rei.core.project.ProjectClie
     var imageCli = new picocli.CommandLine(generate);
     assertThat(imageCli.execute("--raw", "first picture")).isZero();
     assertThat(imageCli.execute("second picture")).isZero();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(summaries, images);
     assertThat(tasks).hasSize(4);
     tasks.forEach(Runnable::run);

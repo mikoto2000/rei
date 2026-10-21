@@ -26,29 +26,44 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
+/** 音声入力からの依頼かどうか処理の調整の結果と状態の契約を検証するテスト。 */
 class VoiceInputCoordinatorTest {
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock = Clock.fixed(Instant.parse("2026-10-09T00:00:00Z"), ZoneOffset.UTC);
+
+  /** 検証に使う対象。 */
   final ConversationTarget target =
       new ConversationTarget(
           new ProjectContext(UUID.randomUUID().toString(), "test", Path.of(".")), "session");
+
+  /** 検証に使うdevice。 */
   final AudioDevice device = new AudioDevice("device", "test microphone", "test", "vendor", "1");
 
+  /** 検証条件を再現するための取得元。 */
   static final class Source implements MicrophoneCaptureService.FrameSource {
+    /** 検証に使う観測単位一覧。 */
     final BlockingQueue<float[]> frames = new LinkedBlockingQueue<>();
+
+    /** 検証に使う読み取る。 */
     final AtomicInteger reads = new AtomicInteger();
+
+    /** 検証に使う終了済み。 */
     volatile boolean closed;
 
+    /** 検証用に、必要な内容を参照できるよう、音声フレームを読み取る。 */
     public float[] readFrame() throws InterruptedException {
       var frame = frames.take();
       reads.incrementAndGet();
       return frame.length == 0 ? null : frame;
     }
 
+    /** 検証で利用した対象の終了を扱う。 */
     public void close() {
       closed = true;
       frames.offer(new float[0]);
     }
 
+    /** {@code speech} の条件を再現するため、検証用の操作や状態を扱う。 */
     void speech(int utterances) {
       for (int j = 0; j < utterances; j++) {
         for (int i = 0; i < 16; i++) {
@@ -61,13 +76,16 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** {@code backend} の条件を再現するための補助情報を返す。 */
   VoiceBackend backend(SpeechRecognizer recognizer, AtomicInteger vadClosed) {
     return new VoiceBackend(
         new VoiceActivityDetector() {
+          /** {@code probability} の条件を再現するための補助情報を返す。 */
           public float probability(float[] frame) {
             return frame[0] > .2f ? 1 : 0;
           }
 
+          /** 検証で利用した対象の終了を扱う。 */
           public void close() {
             vadClosed.incrementAndGet();
           }
@@ -75,6 +93,7 @@ class VoiceInputCoordinatorTest {
         recognizer);
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationAlsoDiscardsCorrectionAlreadyCompletedButWaitingForPriorAsrInput()
       throws Exception {
@@ -107,10 +126,12 @@ class VoiceInputCoordinatorTest {
                 s ->
                     backend(
                         new SpeechRecognizer() {
+                          /** {@code recognize} の条件を再現するための補助情報を返す。 */
                           public String recognize(SpeechSegment segment) {
                             return count.incrementAndGet() == 1 ? "交配の話" : "機械学習の交配";
                           }
 
+                          /** 検証で利用した対象の終了を扱う。 */
                           public void close() {}
                         },
                         new AtomicInteger()),
@@ -142,6 +163,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void correctedTextIsSubmittedOnceWithOriginalVoiceIdentityAndDiagnosticNeverCallsLlm()
       throws Exception {
@@ -172,10 +194,12 @@ class VoiceInputCoordinatorTest {
                 s ->
                     backend(
                         new SpeechRecognizer() {
+                          /** {@code recognize} の条件を再現するための補助情報を返す。 */
                           public String recognize(SpeechSegment segment) {
                             return "レイ、交配の話";
                           }
 
+                          /** 検証で利用した対象の終了を扱う。 */
                           public void close() {}
                         },
                         new AtomicInteger()),
@@ -220,6 +244,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void voiceOffDuringCorrectionDiscardsLateResultWithoutBlockingAsrCleanup() throws Exception {
     var source = new Source();
@@ -246,10 +271,12 @@ class VoiceInputCoordinatorTest {
                 s ->
                     backend(
                         new SpeechRecognizer() {
+                          /** {@code recognize} の条件を再現するための補助情報を返す。 */
                           public String recognize(SpeechSegment segment) {
                             return "交配の話";
                           }
 
+                          /** 検証で利用した対象の終了を扱う。 */
                           public void close() {}
                         },
                         new AtomicInteger()),
@@ -271,6 +298,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話で、音声の取得・認識・入力の受け渡しが、検証条件に従うことを確認する。 */
   @Test
   void enabledWakePrefixIsRemovedButVoiceOwnershipAndLiteralTextRemain() {
     var source = new Source();
@@ -285,10 +313,12 @@ class VoiceInputCoordinatorTest {
             s ->
                 backend(
                     new SpeechRecognizer() {
+                      /** {@code recognize} の条件を再現するための補助情報を返す。 */
                       public String recognize(SpeechSegment segment) {
                         return count.incrementAndGet() == 1 ? "れいめいを確認" : "レイ、Ａ.txt を確認";
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {}
                     },
                     new AtomicInteger()),
@@ -308,6 +338,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void playbackDiscardsRecognitionAlreadyInFlightAndSuppressesCapturedEcho() throws Exception {
     var source = new Source();
@@ -323,6 +354,7 @@ class VoiceInputCoordinatorTest {
             s ->
                 backend(
                     new SpeechRecognizer() {
+                      /** {@code recognize} の条件を再現するための補助情報を返す。 */
                       public String recognize(SpeechSegment segment) throws Exception {
                         recognized.incrementAndGet();
                         entered.countDown();
@@ -330,6 +362,7 @@ class VoiceInputCoordinatorTest {
                         return "echo";
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {}
                     },
                     new AtomicInteger()),
@@ -359,6 +392,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void stopInterruptsSlowNativeStartupWithoutOpeningMicrophone() throws Exception {
     var entered = new CountDownLatch(1);
@@ -395,6 +429,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void oldStartupHandleCannotWaitOnOrCancelAReplacementRun() throws Exception {
     var entered = new CountDownLatch(1);
@@ -409,10 +444,12 @@ class VoiceInputCoordinatorTest {
               }
               return backend(
                   new SpeechRecognizer() {
+                    /** {@code recognize} の条件を再現するための補助情報を返す。 */
                     public String recognize(SpeechSegment segment) {
                       return "unused";
                     }
 
+                    /** 検証で利用した対象の終了を扱う。 */
                     public void close() {}
                   },
                   new AtomicInteger());
@@ -438,6 +475,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void defaultIsOffAndUnselectedMicDoesNotOpenBackend() {
     var calls = new AtomicInteger();
@@ -459,6 +497,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話で、音声の取得・認識・入力の受け渡しが、検証条件に従うことを確認する。 */
   @Test
   void silenceAutomaticallySubmitsOneVoiceInputToCapturedTarget() {
     var source = new Source();
@@ -470,10 +509,12 @@ class VoiceInputCoordinatorTest {
             s ->
                 backend(
                     new SpeechRecognizer() {
+                      /** {@code recognize} の条件を再現するための補助情報を返す。 */
                       public String recognize(SpeechSegment segment) {
                         return "こんにちは";
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {}
                     },
                     closed),
@@ -496,6 +537,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void slowAsrDoesNotBlockCaptureAndSegmentQueueStaysBounded() throws Exception {
     var source = new Source();
@@ -510,12 +552,14 @@ class VoiceInputCoordinatorTest {
             s ->
                 backend(
                     new SpeechRecognizer() {
+                      /** {@code recognize} の条件を再現するための補助情報を返す。 */
                       public String recognize(SpeechSegment segment) throws Exception {
                         entered.countDown();
                         release.await();
                         return "hello";
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {}
                     },
                     new AtomicInteger()),
@@ -539,6 +583,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void offDoesNotReleaseNativeResourcesDuringDecodeOrSubmitLateResult() throws Exception {
     var source = new Source();
@@ -552,6 +597,7 @@ class VoiceInputCoordinatorTest {
             s ->
                 backend(
                     new SpeechRecognizer() {
+                      /** {@code recognize} の条件を再現するための補助情報を返す。 */
                       public String recognize(SpeechSegment segment) throws Exception {
                         entered.countDown();
                         boolean done = false;
@@ -564,6 +610,7 @@ class VoiceInputCoordinatorTest {
                         return "late";
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {
                         closed.incrementAndGet();
                       }
@@ -590,6 +637,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void nativeInitializationFailureLeavesCliAliveAndMicUnopened() {
     var opens = new AtomicInteger();
@@ -616,6 +664,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void captureDisconnectStopsWithoutSwitchingDevice() {
     var source = new Source();
@@ -631,10 +680,12 @@ class VoiceInputCoordinatorTest {
             s ->
                 backend(
                     new SpeechRecognizer() {
+                      /** {@code recognize} の条件を再現するための補助情報を返す。 */
                       public String recognize(SpeechSegment segment) {
                         return "unused";
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {}
                     },
                     released),
@@ -652,6 +703,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rejectedRecognitionCannotExecuteSlashCommands() {
     var source = new Source();
@@ -665,10 +717,12 @@ class VoiceInputCoordinatorTest {
             s ->
                 backend(
                     new SpeechRecognizer() {
+                      /** {@code recognize} の条件を再現するための補助情報を返す。 */
                       public String recognize(SpeechSegment segment) {
                         return " /voice on";
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {}
                     },
                     new AtomicInteger()),
@@ -687,6 +741,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 発話区間の検出失敗情報について、音声を停止することを確認する。 */
   @Test
   void vadFailureStopsVoiceAndReleasesBothResources() {
     var source = new Source();
@@ -698,19 +753,23 @@ class VoiceInputCoordinatorTest {
             s ->
                 new VoiceBackend(
                     new VoiceActivityDetector() {
+                      /** {@code probability} の条件を再現するための補助情報を返す。 */
                       public float probability(float[] frame) {
                         throw new IllegalStateException("VAD failed");
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {
                         vadClosed.incrementAndGet();
                       }
                     },
                     new SpeechRecognizer() {
+                      /** {@code recognize} の条件を再現するための補助情報を返す。 */
                       public String recognize(SpeechSegment segment) {
                         return "unused";
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {
                         asrClosed.incrementAndGet();
                       }
@@ -729,6 +788,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void diagnosticDisplaysRecognitionWithoutSendingToAgent() {
     var source = new Source();
@@ -742,10 +802,12 @@ class VoiceInputCoordinatorTest {
             s ->
                 backend(
                     new SpeechRecognizer() {
+                      /** {@code recognize} の条件を再現するための補助情報を返す。 */
                       public String recognize(SpeechSegment segment) {
                         return "診断の発話";
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {}
                     },
                     new AtomicInteger()),
@@ -768,6 +830,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void offDuringNativeInitializationClosesEventuallyWithoutOpeningMic() throws Exception {
     var entered = new CountDownLatch(1);
@@ -794,10 +857,12 @@ class VoiceInputCoordinatorTest {
               if (interrupted) Thread.currentThread().interrupt();
               return backend(
                   new SpeechRecognizer() {
+                    /** {@code recognize} の条件を再現するための補助情報を返す。 */
                     public String recognize(SpeechSegment segment) {
                       return "unused";
                     }
 
+                    /** 検証で利用した対象の終了を扱う。 */
                     public void close() {}
                   },
                   closed);
@@ -821,6 +886,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void stalledCaptureIsStoppedByWatchdogWithoutFallback() {
     var source = new Source();
@@ -831,10 +897,12 @@ class VoiceInputCoordinatorTest {
             s ->
                 backend(
                     new SpeechRecognizer() {
+                      /** {@code recognize} の条件を再現するための補助情報を返す。 */
                       public String recognize(SpeechSegment segment) {
                         return "unused";
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {}
                     },
                     closed),
@@ -851,17 +919,20 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void captureCloseFailureIsReportedAsFailedInsteadOfOff() {
     var released = new CountDownLatch(1);
     var closed = new AtomicInteger();
     var source =
         new MicrophoneCaptureService.FrameSource() {
+          /** 検証用に、必要な内容を参照できるよう、音声フレームを読み取る。 */
           public float[] readFrame() throws Exception {
             released.await();
             return null;
           }
 
+          /** 検証で利用した対象の終了を扱う。 */
           public void close() {
             released.countDown();
             throw new IllegalStateException("close failed");
@@ -873,10 +944,12 @@ class VoiceInputCoordinatorTest {
             s ->
                 backend(
                     new SpeechRecognizer() {
+                      /** {@code recognize} の条件を再現するための補助情報を返す。 */
                       public String recognize(SpeechSegment segment) {
                         return "unused";
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {}
                     },
                     closed),
@@ -895,6 +968,7 @@ class VoiceInputCoordinatorTest {
     }
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(ints = {127, 1024, -1})
   void invalidCaptureFrameNeverReachesNativeVad(int kind) {
@@ -909,18 +983,22 @@ class VoiceInputCoordinatorTest {
             s ->
                 new VoiceBackend(
                     new VoiceActivityDetector() {
+                      /** {@code probability} の条件を再現するための補助情報を返す。 */
                       public float probability(float[] value) {
                         nativeCalls.incrementAndGet();
                         return 0;
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {}
                     },
                     new SpeechRecognizer() {
+                      /** {@code recognize} の条件を再現するための補助情報を返す。 */
                       public String recognize(SpeechSegment segment) {
                         return "unused";
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {}
                     }),
             input -> {},

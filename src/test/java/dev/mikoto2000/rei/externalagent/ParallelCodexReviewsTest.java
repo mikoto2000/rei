@@ -35,10 +35,13 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 並列Codexレビュー一覧の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ParallelCodexReviewsTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
   RunExecutionContext run(String request, int calls) {
     var run = new RunExecutionContext("run", new OutputLimitRunBudget(0, calls), null, null, null);
     run.setUserRequest(request);
@@ -46,6 +49,7 @@ class ParallelCodexReviewsTest {
     return run;
   }
 
+  /** {@code requests} の条件を再現するための補助情報を返す。 */
   List<ExternalAgentDelegationService.ParallelRequest> requests(int count) {
     return java.util.stream.IntStream.range(0, count)
         .mapToObj(
@@ -55,6 +59,7 @@ class ParallelCodexReviewsTest {
         .toList();
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   ExternalAgentDelegationService service(ExternalAgentExecutor executor) {
     var service =
         new ExternalAgentDelegationService(
@@ -69,11 +74,13 @@ class ParallelCodexReviewsTest {
     return service;
   }
 
+  /** {@code success} の条件を再現するための補助情報を返す。 */
   ExternalAgentResult success() {
     return new ExternalAgentResult(
         ExternalAgentResult.Status.SUCCESS, "ok", List.of(), List.of(), 1, 0, "private raw");
   }
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void independentReviewsReallyOverlapAndShareOneParentDelegationAndCallBudget() throws Exception {
     var entered = new CountDownLatch(2);
@@ -118,6 +125,7 @@ class ParallelCodexReviewsTest {
     }
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void defaultsOrdinaryOrQuotedRequestsCannotAuthorizeMoreExternalCalls() {
     var calls = new AtomicInteger();
@@ -157,6 +165,7 @@ class ParallelCodexReviewsTest {
     assertEquals(0, calls.get());
   }
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void exhaustedParentBudgetCannotStartAProviderEvenWhenLegacyInheritanceIsDisabled() {
     var calls = new AtomicInteger();
@@ -172,6 +181,7 @@ class ParallelCodexReviewsTest {
     }
   }
 
+  /** 外部エージェントへの委譲で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void partialResultsKeepTheirIndependentPersistedOwnerAndTerminalEvents() {
     var events = new CopyOnWriteArrayList<AgentEvent>();
@@ -225,6 +235,7 @@ class ParallelCodexReviewsTest {
     }
   }
 
+  /** タイムアウトについて、開始レビュー識別子一覧を維持することを確認する。 */
   @Test
   void timeoutKeepsStartedReviewIdsWithoutPretendingTheirProviderOutcomeIsKnown() throws Exception {
     var history =
@@ -277,6 +288,7 @@ class ParallelCodexReviewsTest {
     }
   }
 
+  /** 不正なまとめた処理について、全対象を受け付けないことを確認する。 */
   @Test
   void invalidBatchRejectsAllBeforeClaimOrProviderExecution() throws Exception {
     java.nio.file.Files.writeString(root.resolve("inside.txt"), "safe");
@@ -307,6 +319,7 @@ class ParallelCodexReviewsTest {
     assertEquals(0, calls.get());
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void busyAdmissionDoesNotConsumeAnotherRunsDelegation() throws Exception {
     var entered = new CountDownLatch(2);
@@ -341,6 +354,7 @@ class ParallelCodexReviewsTest {
     }
   }
 
+  /** 外部エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void budgetFailureInLaterItemInterruptsFirstWithoutWaitingForDeadline() throws Exception {
     var firstEntered = new CountDownLatch(1);
@@ -375,6 +389,7 @@ class ParallelCodexReviewsTest {
     }
   }
 
+  /** 外部エージェントへの委譲で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void nativeCodexJsonUsageIsChargedForEachIndependentReview() throws Exception {
     var fixture = new CodexRunModelBudgetTest();
@@ -396,6 +411,7 @@ class ParallelCodexReviewsTest {
     }
   }
 
+  /** 外部エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledParentStopsOnlyItsRunningWorkAndNeverStartsQueuedItems() throws Exception {
     var entered = new CountDownLatch(2);
@@ -421,16 +437,19 @@ class ParallelCodexReviewsTest {
     }
   }
 
+  /** 厳格な親予算を停止することを確認する。 */
   @Test
   void unreportedInFlightUsageAtDeadlineStopsStrictParentBudget() throws Exception {
     var paid = new AtomicInteger();
     var executor =
         new ExternalAgentExecutor() {
+          /** 検証用に、要求された処理を実行する。 */
           public ExternalAgentResult execute(
               ExternalAgentRequest request, java.util.function.BooleanSupplier cancelled) {
             throw new AssertionError("budget must be supplied");
           }
 
+          /** 検証用に、要求された処理を実行する。 */
           public ExternalAgentResult execute(
               ExternalAgentRequest request,
               java.util.function.BooleanSupplier cancelled,
@@ -462,6 +481,7 @@ class ParallelCodexReviewsTest {
     }
   }
 
+  /** 意味によるツールについて、実際の実行を利用することを確認する。 */
   @Test
   void semanticToolUsesActualRunAndExposesOnlyIndependentReviewInputs() {
     var service = org.mockito.Mockito.mock(ExternalAgentDelegationService.class);
@@ -488,6 +508,7 @@ class ParallelCodexReviewsTest {
     assertTrue(callback.getToolDefinition().description().contains("explicitly"));
   }
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void configurationBindsOptInAndBoundedDeadlineAndClosedServiceRejects() {
     var source =

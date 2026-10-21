@@ -10,10 +10,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import tools.jackson.databind.json.JsonMapper;
 
+/** 経験の記録ベクトルによるの構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration
 @ConditionalOnExpression(
     "${rei.memory.episodes.dense-enabled:false} && ${rei.embedding.enabled:true}")
 public class EpisodeDenseConfiguration {
+  /** 過去の経験の活用で用いる経験の記録ベクトルによる位置を返す。 */
   @Bean
   public EpisodeDenseIndex episodeDenseIndex(
       EpisodeRepository repository,

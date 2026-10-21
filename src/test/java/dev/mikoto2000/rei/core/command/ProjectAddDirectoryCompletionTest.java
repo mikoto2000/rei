@@ -6,11 +6,14 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** プロジェクト追加ディレクトリ完了の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProjectAddDirectoryCompletionTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void completesAbsoluteDirectoryFragment() throws Exception {
     Path target = tempDir.resolve("project-alpha");
@@ -23,6 +26,7 @@ class ProjectAddDirectoryCompletionTest {
         .containsExactly(target.toString());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void completesRelativeDirectoryFragmentFromCurrentProject() throws Exception {
     Path target = tempDir.resolve("src-main");
@@ -33,6 +37,7 @@ class ProjectAddDirectoryCompletionTest {
         .containsExactly(target.toString());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void quotesCandidateWhenInputIsQuoted() throws Exception {
     Path target = tempDir.resolve("project space");

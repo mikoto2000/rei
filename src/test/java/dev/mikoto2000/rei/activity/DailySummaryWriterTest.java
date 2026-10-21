@@ -22,7 +22,9 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
 
+/** 日次要約書き込み先の結果と状態の契約を検証するテスト。 */
 class DailySummaryWriterTest {
+  /** {@code aggregate} の条件を再現するための補助情報を返す。 */
   DailySummaryAggregate aggregate() {
     return DailySummaryTest.aggregate(
         List.of(
@@ -35,6 +37,7 @@ class DailySummaryWriterTest {
                 EntertainmentDisposition.NON_ENTERTAINMENT)));
   }
 
+  /** {@code valid} の条件を再現するための補助情報を返す。 */
   String valid() {
     return """
     {"overview":"開発が多く観測されました。","timeOfDay":{"lateNight":"開発の表示が主でした。","morning":null,"afternoon":null,"evening":null},
@@ -42,6 +45,7 @@ class DailySummaryWriterTest {
     """;
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void structuredResponseAndAggregateOnlyPromptWithoutTools() throws Exception {
     var model = mock(ChatModel.class);
@@ -69,6 +73,7 @@ class DailySummaryWriterTest {
     assertThat(prompt.getValue().getUserMessage().getText().length()).isLessThan(16000);
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -83,6 +88,7 @@ class DailySummaryWriterTest {
         .isInstanceOf(Exception.class);
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rejectsExcessiveArraysInventedThemesAbsentBucketsAndTrailingOutput() {
     for (var json :
@@ -100,6 +106,7 @@ class DailySummaryWriterTest {
           .isInstanceOf(Exception.class);
   }
 
+  /** 作業状況の把握の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void timeoutCancelsStreamAndServiceReturnsFallback() {
     var model = mock(ChatModel.class);
@@ -131,6 +138,7 @@ class DailySummaryWriterTest {
     assertThat(output).contains("rei の開発", "全体:");
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void malformedCompletionFallsBackInsteadOfPrintingRawResponse() {
     var model = mock(ChatModel.class);

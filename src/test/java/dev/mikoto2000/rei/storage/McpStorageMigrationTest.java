@@ -8,7 +8,9 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import org.junit.jupiter.api.Test;
 
+/** MCP保存移行の結果と状態の契約を検証するテスト。 */
 class McpStorageMigrationTest {
+  /** 単一呼び出し元要求を保存することを確認する。 */
   @Test
   void storesOnePrincipalRequestAndPreservesExistingAdmission() throws Exception {
     try (var db = DriverManager.getConnection("jdbc:sqlite::memory:");

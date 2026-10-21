@@ -9,9 +9,11 @@ import java.sql.Connection;
 import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 
+/** SQLiteベクトルデータ取得元の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SqliteVecDataSourceTest {
 
+  /** 文書検索用の保存基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void loadsExtensionOnConnectionAcquisition() throws Exception {
     DataSource delegate = mock(DataSource.class);

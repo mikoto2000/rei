@@ -18,7 +18,9 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
+/** 経験の記録Pagingサービスの結果と状態の契約を検証するテスト。 */
 class EpisodePagingServiceTest {
+  /** 過去の経験の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void exactOldRevisionSourcesArePagedAndDeletedSourcesStayHidden() {
     var repo = mock(EpisodeRepository.class);
@@ -61,6 +63,7 @@ class EpisodePagingServiceTest {
         IllegalArgumentException.class, () -> service.sourcesPage("e", "foreign", "old", 0));
   }
 
+  /** 過去の経験の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void revisionPageExposesCursorWithoutReadingUnboundedHistory() {
     var repo = mock(EpisodeRepository.class);

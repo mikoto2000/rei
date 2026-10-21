@@ -7,14 +7,23 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
 
+/** 保存された継続実行の予定を確認・有効化しますを行うための利用者コマンド。 */
 @Component
 @Command(name = "timer", description = "保存された継続実行の予定を確認・有効化します")
 public class TimerCommand implements java.util.concurrent.Callable<Integer> {
+  /** 実行予定の管理。 */
   private final PersistentAgentScheduler scheduler;
+
+  /** プロジェクト一覧。 */
   private final ProjectService projects;
+
+  /** 実行先の振り分け。 */
   private final AgentScheduleDispatcher dispatcher;
+
+  /** 仕様。 */
   @Spec picocli.CommandLine.Model.CommandSpec spec;
 
+  /** 操作。 */
   @Parameters(
       index = "0",
       arity = "0..1",
@@ -23,27 +32,34 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
       completionCandidates = ActionCandidates.class)
   String action;
 
+  /** 識別子。 */
   @Parameters(index = "1", arity = "0..1", paramLabel = "timerId")
   String id;
 
+  /** 期待する内容実行の識別子。 */
   @Option(names = "--run-id", description = "結果が不明な実行の ID")
   String expectedRunId;
 
+  /** acknowledge不確実な。 */
   @Option(
       names = "--acknowledge-uncertain-side-effects",
       description = "実行による影響が不明であることを承認します（スケジュールは再実行しません）")
   boolean acknowledgeUncertain;
 
+  /** 出力。 */
   private java.io.PrintWriter output;
 
+  /** 時刻と期間の解釈を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public TimerCommand() {
     this(null, null, null);
   }
 
+  /** 時刻と期間の解釈を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public TimerCommand(PersistentAgentScheduler scheduler, ProjectService projects) {
     this(scheduler, projects, null);
   }
 
+  /** 指定された値や利用先を使って、TimerCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public TimerCommand(
       PersistentAgentScheduler scheduler,
@@ -54,10 +70,12 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
     this.dispatcher = dispatcher;
   }
 
+  /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
     this.output = output;
   }
 
+  /** 保存された継続実行の予定を確認・有効化しますを行う。 */
   @Override
   public Integer call() {
     var writer = output == null ? spec.commandLine().getOut() : output;
@@ -106,13 +124,16 @@ public class TimerCommand implements java.util.concurrent.Callable<Integer> {
     }
   }
 
+  /** 時刻と期間の解釈で用いる必須識別子を返す。 */
   private String requiredId() {
     if (id == null || id.isBlank()) throw new IllegalArgumentException("timerId is required");
     return id;
   }
 
+  /** 操作で利用できる入力候補を提供する。 */
   public static final class ActionCandidates
       extends dev.mikoto2000.rei.core.completion.FirstArgumentCandidates {
+    /** 既定の状態でActionCandidatesを初期化する。 */
     public ActionCandidates() {
       super("list", "show", "activate", "cancel", "history", "reconcile");
     }

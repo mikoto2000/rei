@@ -4,11 +4,14 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+/** 論文の調査と整理に必要な論文表示内容一覧を扱う。 */
 final class PaperViews {
+  /** 利用先の許容量を超えないよう、論文表示内容一覧を上限内に収める。 */
   static String clip(String text, int limit) {
     return text == null ? null : text.length() <= limit ? text : text.substring(0, limit) + "…";
   }
 
+  /** 論文の調査と整理で用いるlistingを返す。 */
   static Object listing(List<Paper> papers) {
     List<Object> result = new ArrayList<>();
     int n = 1;
@@ -34,6 +37,7 @@ final class PaperViews {
     return result;
   }
 
+  /** 論文の調査と整理で用いる詳細を返す。 */
   static Object detail(Paper p) {
     return new Paper(
         p.id(),
@@ -54,6 +58,7 @@ final class PaperViews {
         p.licenses().stream().limit(10).map(l -> clip(l, 512)).toList());
   }
 
+  /** 論文の調査と整理で用いる内容を返す。 */
   static Object content(StructuredPaper p) {
     List<Object> sections = new ArrayList<>();
     for (int i = 0; i < p.sections().size(); i++) {
@@ -74,6 +79,7 @@ final class PaperViews {
     return Map.of("availability", p.availability(), "sections", sections, "warnings", p.warnings());
   }
 
+  /** 論文の調査と整理で用いる対象範囲を返す。 */
   static String scope(StructuredPaper.Availability a) {
     return switch (a) {
       case FULL_TEXT -> "全文から抽出したセクションを元にしています";
@@ -82,6 +88,7 @@ final class PaperViews {
     };
   }
 
+  /** 論文の調査と整理で用いる翻訳を返す。 */
   static Object translation(PaperTranslation t) {
     return Map.of(
         "paperId",

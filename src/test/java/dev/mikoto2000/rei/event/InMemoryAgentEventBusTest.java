@@ -11,11 +11,14 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 入力先記憶エージェント実行状況を共有する通知先の結果と状態の契約を検証するテスト。 */
 class InMemoryAgentEventBusTest {
 
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   private final Clock clock =
       Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));
 
+  /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
   private AgentEvent event(String type) {
     return new AgentEvent(
         "id-" + type,
@@ -31,6 +34,7 @@ class InMemoryAgentEventBusTest {
         null);
   }
 
+  /** 実行状況の通知で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void listenerReceivesPublishedEvent() {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
@@ -45,6 +49,7 @@ class InMemoryAgentEventBusTest {
     assertEquals(event.type(), received.get(0).type());
   }
 
+  /** 実行状況の通知で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void multipleListenersReceiveEvent() {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
@@ -62,6 +67,7 @@ class InMemoryAgentEventBusTest {
     assertEquals(event.id(), second.get(0).id());
   }
 
+  /** 実行状況の通知で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unsubscribedListenerDoesNotReceive() {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
@@ -74,6 +80,7 @@ class InMemoryAgentEventBusTest {
     assertTrue(received.isEmpty());
   }
 
+  /** 実行状況の通知で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sequenceIsMonotonicallyIncreasing() {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
@@ -89,6 +96,7 @@ class InMemoryAgentEventBusTest {
     assertTrue(received.get(1).sequence() < received.get(2).sequence());
   }
 
+  /** 実行状況の通知で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void sequenceDoesNotDuplicate() {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
@@ -103,6 +111,7 @@ class InMemoryAgentEventBusTest {
     assertEquals(100, distinct);
   }
 
+  /** 実行状況の通知で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void listenerExceptionDoesNotStopOtherListeners() {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
@@ -118,6 +127,7 @@ class InMemoryAgentEventBusTest {
     assertEquals(1, received.size());
   }
 
+  /** 実行状況の通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void publishAssignsSequence() {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
@@ -130,6 +140,7 @@ class InMemoryAgentEventBusTest {
     assertEquals(received.get(0).sequence(), bus.lastSequence());
   }
 
+  /** 実行状況の通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void lastSequenceIsZeroBeforeFirstPublish() {
     assertEquals(0L, new InMemoryAgentEventBus().lastSequence());

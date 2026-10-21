@@ -12,8 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.tool.annotation.Tool;
 
+/** 検索ツール一覧の結果と状態の契約を検証するテスト。 */
 class SearchToolsTest {
 
+  /** 調査情報の整理で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void searchKnowledgeDelegatesToServiceAndFormatsResult() throws Exception {
     SearchKnowledgeService service = Mockito.mock(SearchKnowledgeService.class);
@@ -51,6 +53,7 @@ class SearchToolsTest {
     assertTrue(result.contains("secondary content"));
   }
 
+  /** 調査情報の整理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void descriptionDistinguishesHybridKnowledgeSearchFromPublicWebResearch() throws Exception {
     Tool tool =
@@ -72,6 +75,7 @@ class SearchToolsTest {
     assertTrue(tool.description().contains("webSearchAndRead"));
   }
 
+  /** 選択中順位を維持することを確認する。 */
   @Test
   void renderedWebResultsKeepSelectedRankAcrossPrimaryAndSecondaryClassification()
       throws Exception {

@@ -5,8 +5,25 @@ import java.nio.file.LinkOption;
 import java.sql.Connection;
 import java.time.Duration;
 
-/** Observation is read-only. Space reclamation requires an explicit operation. */
+/**
+ * データ保存の共通処理に必要な保存保守を扱う。
+ *
+ * <p>Observation is read-only. Space reclamation requires an explicit operation.
+ */
 public final class StorageMaintenance {
+  /**
+   * データ保存の共通処理で受け渡す状態を表す。
+   *
+   * @param databaseBytes データベースバイト数
+   * @param walBytes walバイト数
+   * @param temporaryBytes 一時的なバイト数
+   * @param pageSize 一回で返す件数
+   * @param pageCount ページ件数
+   * @param freePages 解放ページ一覧
+   * @param estimatedUsedPageBytes 推定使用量ページバイト数
+   * @param autoVacuum 自動保存領域の整理
+   * @param usableDiskBytes 利用可能Diskバイト数
+   */
   public record Status(
       long databaseBytes,
       long walBytes,
@@ -18,20 +35,31 @@ public final class StorageMaintenance {
       int autoVacuum,
       long usableDiskBytes) {}
 
+  /**
+   * データ保存の共通処理で受け渡す再開用の記録を表す。
+   *
+   * @param busy 使用中
+   * @param logFrames ログ観測単位一覧
+   * @param checkpointedFrames checkpointed観測単位一覧
+   */
   public record Checkpoint(int busy, long logFrames, long checkpointedFrames) {}
 
+  /** 登録台帳。 */
   private final StorageObjectRegistry registry;
 
+  /** 指定された値や利用先を使って、StorageMaintenanceを初期化する。 */
   public StorageMaintenance(StorageObjectRegistry registry) {
     this.registry = registry;
   }
 
+  /** データ保存の共通処理で用いる大きさを返す。 */
   private long size(String name) throws Exception {
     var path = registry.root.resolve(name);
     StorageBackup.requireSafePath(path);
     return Files.exists(path, LinkOption.NOFOLLOW_LINKS) ? Files.size(path) : 0;
   }
 
+  /** データ保存の共通処理で用いるpragmaを返す。 */
   private static long pragma(Connection db, String name) throws Exception {
     try (var query = db.createStatement();
         var rows = query.executeQuery("PRAGMA " + name)) {
@@ -40,6 +68,7 @@ public final class StorageMaintenance {
     }
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   public Status status() {
     return registry.database.read(
         db -> {
@@ -59,6 +88,7 @@ public final class StorageMaintenance {
         });
   }
 
+  /** データ保存の共通処理で用いる再開用の記録を返す。 */
   private static Checkpoint checkpoint(Connection db) throws Exception {
     try (var query = db.createStatement();
         var rows = query.executeQuery("PRAGMA wal_checkpoint(PASSIVE)")) {
@@ -67,10 +97,12 @@ public final class StorageMaintenance {
     }
   }
 
+  /** データ保存の共通処理で用いる再開用の記録を返す。 */
   public Checkpoint checkpoint() {
     return registry.database.maintenance(StorageMaintenance::checkpoint);
   }
 
+  /** データ保存の共通処理において、incremental保存領域の整理に該当するか判定する。 */
   public boolean incrementalVacuum(int pages) {
     if (pages < 1 || pages > 10000)
       throw new IllegalArgumentException("Incremental vacuum requires 1..10,000 pages");
@@ -84,6 +116,7 @@ public final class StorageMaintenance {
         });
   }
 
+  /** データ保存の共通処理に関する保存領域の整理を処理する。 */
   public void vacuum(Duration window) {
     if (window == null || window.toSeconds() < 1 || window.toSeconds() > 3600)
       throw new IllegalArgumentException("Explicit maintenance window must be 1..3600 seconds");
@@ -109,6 +142,7 @@ public final class StorageMaintenance {
               db,
               10000,
               new org.sqlite.ProgressHandler() {
+                /** データ保存の共通処理で用いる進捗を返す。 */
                 @Override
                 protected int progress() {
                   return Thread.currentThread().isInterrupted() || System.nanoTime() >= deadline

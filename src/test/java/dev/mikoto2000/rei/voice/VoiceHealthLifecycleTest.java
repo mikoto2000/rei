@@ -22,41 +22,54 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
+/** 音声稼働状態受付から終了までの管理の結果と状態の契約を検証するテスト。 */
 class VoiceHealthLifecycleTest {
+  /** 検証に使う対象。 */
   final ConversationTarget target =
       new ConversationTarget(
           new ProjectContext(UUID.randomUUID().toString(), "test", Path.of(".")), "session");
+
+  /** 検証に使うdevice。 */
   final AudioDevice device = new AudioDevice("device", "test", "description", "vendor", "1");
 
+  /** 検証条件を再現するための変更可能な時刻の取得元。 */
   static final class MutableClock extends Clock {
+    /** 検証に使う時刻。 */
     final AtomicReference<Instant> time =
         new AtomicReference<>(Instant.parse("2026-10-09T08:00:00Z"));
 
+    /** 検証用に、音声による対話で参照するタイムゾーンを返す。 */
     public ZoneId getZone() {
       return ZoneOffset.UTC;
     }
 
+    /** 検証用に、指定されたタイムゾーンを反映した情報を作成する。 */
     public Clock withZone(ZoneId zone) {
       return this;
     }
 
+    /** {@code instant} の条件を再現するための補助情報を返す。 */
     public Instant instant() {
       return time.get();
     }
   }
 
+  /** {@code backend} の条件を再現するための補助情報を返す。 */
   VoiceBackend backend(SpeechRecognizer recognizer) {
     return new VoiceBackend(
         new VoiceActivityDetector() {
+          /** {@code probability} の条件を再現するための補助情報を返す。 */
           public float probability(float[] frame) {
             return frame[0] > .2f ? 1 : 0;
           }
 
+          /** 検証で利用した対象の終了を扱う。 */
           public void close() {}
         },
         recognizer);
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void changedTargetStopsWithoutSendingLateDecodedText() throws Exception {
     var selected = new AtomicBoolean(true);
@@ -73,6 +86,7 @@ class VoiceHealthLifecycleTest {
             s ->
                 backend(
                     new SpeechRecognizer() {
+                      /** {@code recognize} の条件を再現するための補助情報を返す。 */
                       public String recognize(SpeechSegment segment) {
                         entered.countDown();
                         boolean done = false;
@@ -85,6 +99,7 @@ class VoiceHealthLifecycleTest {
                         return "late";
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {}
                     }),
             submitted::add,
@@ -113,6 +128,7 @@ class VoiceHealthLifecycleTest {
     }
   }
 
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void resumeGapStopsEvenWhenAsrFinishesBeforeNextCaptureFrame() throws Exception {
     var clock = new MutableClock();
@@ -130,12 +146,14 @@ class VoiceHealthLifecycleTest {
             s ->
                 backend(
                     new SpeechRecognizer() {
+                      /** {@code recognize} の条件を再現するための補助情報を返す。 */
                       public String recognize(SpeechSegment segment) throws Exception {
                         entered.countDown();
                         release.await();
                         return "stale";
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {}
                     }),
             submitted::add,
@@ -160,6 +178,7 @@ class VoiceHealthLifecycleTest {
     }
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void deviceHealthFailureStopsEvenIfDriverKeepsReturningSilentFrames() {
     var healthy = new AtomicBoolean(true);
@@ -170,16 +189,19 @@ class VoiceHealthLifecycleTest {
     publisher.subscribe(events::add);
     var source =
         new MicrophoneCaptureService.FrameSource() {
+          /** 検証用に、必要な内容を参照できるよう、音声フレームを読み取る。 */
           public float[] readFrame() throws Exception {
             Thread.sleep(5);
             reads.incrementAndGet();
             return new float[512];
           }
 
+          /** 検証用に、後続の操作を進められるか判断するため、稼働状態を確認する。 */
           public void checkHealth() {
             if (!healthy.get()) throw new IllegalStateException("endpoint gone");
           }
 
+          /** 検証で利用した対象の終了を扱う。 */
           public void close() {
             closed.set(true);
           }
@@ -190,10 +212,12 @@ class VoiceHealthLifecycleTest {
             s ->
                 backend(
                     new SpeechRecognizer() {
+                      /** {@code recognize} の条件を再現するための補助情報を返す。 */
                       public String recognize(SpeechSegment segment) {
                         return "";
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {}
                     }),
             i -> {},
@@ -213,6 +237,7 @@ class VoiceHealthLifecycleTest {
     }
   }
 
+  /** 繰り返されたについて、停止解放する各対象バックエンドを開始することを確認する。 */
   @Test
   void repeatedStartStopReleasesEachBackendAndCaptureExactlyOnce() {
     var sources = new CopyOnWriteArrayList<VoiceInputCoordinatorTest.Source>();
@@ -227,10 +252,12 @@ class VoiceHealthLifecycleTest {
             s ->
                 backend(
                     new SpeechRecognizer() {
+                      /** {@code recognize} の条件を再現するための補助情報を返す。 */
                       public String recognize(SpeechSegment segment) {
                         return "";
                       }
 
+                      /** 検証で利用した対象の終了を扱う。 */
                       public void close() {
                         nativeClosed.incrementAndGet();
                       }

@@ -33,13 +33,22 @@ import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 
+/** シェルファイル読み取り引数修復の結果と状態の契約を検証するテスト。 */
 class ShellFileReadArgumentRepairTest {
+  /** 検証に使う所有者。 */
   final AgentRunContext owner = new AgentRunContext("run", "session", Path.of("."), "project");
+
+  /** 検証に使う承認一覧。 */
   final ToolApprovalRepository approvals = mock(ToolApprovalRepository.class);
+
+  /** 検証に使うシェル実行一覧、読み取る。 */
   final AtomicInteger shellExecutions = new AtomicInteger(), reads = new AtomicInteger();
+
+  /** 検証に使う入力。 */
   final String input =
       "{\"request\":{\"command\":\"git status; powershell -Command \\\"Get-Content -Raw docs/a.md\\\"\"}}";
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   RunExecutionContext context(boolean guarded) {
     var context =
         new RunExecutionContext(
@@ -62,12 +71,15 @@ class ShellFileReadArgumentRepairTest {
     return context;
   }
 
+  /** {@code callback} の条件を再現するための補助情報を返す。 */
   ToolCallback callback(String name, AtomicInteger effects) {
     return new ToolCallback() {
+      /** 検証用に、会話の実行で参照するツール定義を返す。 */
       public ToolDefinition getToolDefinition() {
         return ToolDefinition.builder().name(name).description(name).inputSchema("{}").build();
       }
 
+      /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
       public String call(String input) {
         effects.incrementAndGet();
         return "ok";
@@ -75,6 +87,7 @@ class ShellFileReadArgumentRepairTest {
     };
   }
 
+  /** 検証で使用するプロンプトを、指定された条件に合わせて用意する。 */
   Prompt prompt(RunExecutionContext context) {
     return new Prompt(
         List.of(new UserMessage("Read docs/a.md")),
@@ -85,10 +98,12 @@ class ShellFileReadArgumentRepairTest {
             .build());
   }
 
+  /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
   AssistantMessage.ToolCall call(String id, String name, String args) {
     return new AssistantMessage.ToolCall(id, "function", name, args);
   }
 
+  /** 会話の実行の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void blocksBeforeApprovalAndReturnsRepairWithoutRepeatingSuccessfulSibling() {
     for (boolean guarded : List.of(false, true)) {
@@ -112,6 +127,7 @@ class ShellFileReadArgumentRepairTest {
       assertEquals(before + 1, reads.get());
       assertEquals(0, shellExecutions.get());
       assertEquals(1, context.budgetSnapshot().argumentCorrections());
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(approvals);
       var fixed =
           new ChatResponse(
@@ -131,6 +147,7 @@ class ShellFileReadArgumentRepairTest {
     }
   }
 
+  /** 会話の実行で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void savedApprovedCommandIsRevalidatedBeforeReplay() {
     var context = context(true);
@@ -142,9 +159,11 @@ class ShellFileReadArgumentRepairTest {
     assertTrue(
         feedback.getResponses().getFirst().responseData().contains("INVALID_TOOL_ARGUMENTS"));
     assertEquals(0, shellExecutions.get());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(approvals);
   }
 
+  /** 会話の実行の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void guardRejectsBeforeConsumingOrRequestingApproval() {
     var guard =
@@ -156,6 +175,7 @@ class ShellFileReadArgumentRepairTest {
     guard.setApprovals(approvals);
     assertThrows(
         InvalidToolArgumentsException.class, () -> guard.check("runCommand", input, owner));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(approvals);
   }
 }

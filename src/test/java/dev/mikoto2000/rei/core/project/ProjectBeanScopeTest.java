@@ -10,10 +10,13 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** プロジェクト機能の構成要素対象範囲の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProjectBeanScopeTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** プロジェクトごとの作業環境で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void restrictedRunsHaveSeparateTransientStateAndReleaseItAtTermination() {
     var scope = new ProjectBeanScope(() -> "same-project");
@@ -37,6 +40,7 @@ class ProjectBeanScopeTest extends dev.mikoto2000.rei.core.project.ProjectClient
     assertThat(scope.get("state", Object::new)).isSameAs(original);
   }
 
+  /** プロジェクトごとの作業環境で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void workingSetIsScopedAndPersistsIndependentlyOfEvents() throws Exception {
     Path a = Files.createDirectory(temp.resolve("a"));

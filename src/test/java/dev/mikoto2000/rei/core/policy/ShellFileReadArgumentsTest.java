@@ -10,13 +10,16 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
+/** シェルファイル読み取り引数の結果と状態の契約を検証するテスト。 */
 class ShellFileReadArgumentsTest {
+  /** {@code input} の条件を再現するための補助情報を返す。 */
   static String input(String command) {
     return JsonMapper.builder()
         .build()
         .writeValueAsString(java.util.Map.of("request", java.util.Map.of("command", command)));
   }
 
+  /** 読み取り元一覧を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -61,6 +64,7 @@ class ShellFileReadArgumentsTest {
         error.getMessage().contains(command)); // Avoid echoing arbitrary shell text or credentials.
   }
 
+  /** ツール利用の権限制御で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -89,6 +93,7 @@ class ShellFileReadArgumentsTest {
     assertDoesNotThrow(() -> ShellFileReadArguments.validate("runCommand", input(command)));
   }
 
+  /** ツール利用の権限制御で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void otherToolsAndMalformedRunCommandArgumentsAreHandledSeparately() {
     assertDoesNotThrow(() -> ShellFileReadArguments.validate("readMultiFile", "not json"));

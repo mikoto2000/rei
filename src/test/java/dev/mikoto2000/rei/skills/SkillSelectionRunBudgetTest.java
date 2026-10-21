@@ -19,7 +19,9 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
 
+/** スキル選択内容実行予算の結果と状態の契約を検証するテスト。 */
 class SkillSelectionRunBudgetTest {
+  /** スキルの利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void semanticEmbeddingBudgetFlowsThroughSelectionAndCannotFallBackIntoSelector() {
     var provider = mock(org.springframework.ai.embedding.EmbeddingModel.class);
@@ -52,6 +54,7 @@ class SkillSelectionRunBudgetTest {
       assertThatThrownBy(() -> selection.select("sample", run.modelCallBudget()))
           .hasMessageContaining("TOKEN_BUDGET_EXCEEDED");
       assertThat(budget.totalTokens()).isEqualTo(6);
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(implicit);
       assertThatThrownBy(() -> selection.select("sample", run.modelCallBudget()))
           .hasMessageContaining("TOKEN_BUDGET_EXCEEDED");
@@ -60,6 +63,7 @@ class SkillSelectionRunBudgetTest {
     }
   }
 
+  /** 検証に使うスキル。 */
   private final AgentSkill skill =
       new AgentSkill(
           "sample",
@@ -69,10 +73,12 @@ class SkillSelectionRunBudgetTest {
           Path.of("sample/SKILL.md"),
           "instructions");
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   private RunExecutionContext context(OutputLimitRunBudget budget) {
     return new RunExecutionContext("run", budget, null, null, null);
   }
 
+  /** スキルの利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void advisorPassesRunBudgetAndExplicitSelectionNeedsNoHelperCall() {
     var model = mock(ChatModel.class);
@@ -100,6 +106,7 @@ class SkillSelectionRunBudgetTest {
     assertThat(advisor.before(explicit, null).prompt().getUserMessage().getText())
         .contains("## Skill: sample");
     assertThat(budget.remainingLlmCalls()).isEqualTo(1);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(model);
     var implicit =
         explicit
@@ -114,6 +121,7 @@ class SkillSelectionRunBudgetTest {
     verify(model, times(1)).call(anyString());
   }
 
+  /** スキルの利用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledRunStopsBeforeModelInvocation() {
     var model = mock(ChatModel.class);
@@ -124,23 +132,28 @@ class SkillSelectionRunBudgetTest {
     assertThatThrownBy(
             () -> selector.select("request", Set.of(), List.of(skill), run::consumeNextLlmCall))
         .isInstanceOf(java.util.concurrent.CancellationException.class);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(model);
   }
 
+  /** スキルの利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void helperConsumesSharedBudgetAndStopsBeforeSecondModelCall() {
     var model = mock(ChatModel.class);
     when(model.call(anyString())).thenReturn("[\"sample\"]");
     var parent =
         new OutputLimitRunBudget.LlmCallReservation() {
+          /** 検証に使う残量。 */
           int remaining = 1;
 
+          /** {@code tryReserve} の条件を再現するための補助情報を返す。 */
           public boolean tryReserve() {
             if (remaining == 0) return false;
             remaining--;
             return true;
           }
 
+          /** {@code remaining} の条件を再現するための補助情報を返す。 */
           public int remaining() {
             return remaining;
           }
@@ -157,6 +170,7 @@ class SkillSelectionRunBudgetTest {
     verify(model, times(1)).call(anyString());
   }
 
+  /** スキルの利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void emptyCandidatesDoNotConsumeAndFailedAttemptIsStillCharged() {
     var model = mock(ChatModel.class);

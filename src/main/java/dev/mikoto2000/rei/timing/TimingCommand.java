@@ -14,18 +14,28 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Spec;
 import picocli.CommandLine.Unmatched;
 
+/** 現在のSessionのRun時間内訳を表示ための利用者コマンド。 */
 @Component
 @Command(name = "timing", description = "現在のSessionのRun時間内訳を表示", mixinStandardHelpOptions = true)
 public class TimingCommand implements java.util.concurrent.Callable<Integer> {
+  /** 実行時間を記録する窓口。 */
   private final TimingRecorder recorder;
+
+  /** プロジェクト／会話。 */
   private final Supplier<String> project, session;
+
+  /** 引数。 */
   @Unmatched String[] arguments;
+
+  /** 仕様。 */
   @Spec picocli.CommandLine.Model.CommandSpec spec;
 
+  /** 実行時間の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public TimingCommand() {
     this(null, () -> null, () -> null);
   }
 
+  /** 実行時間の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @org.springframework.beans.factory.annotation.Autowired
   public TimingCommand(
       TimingRecorder recorder,
@@ -34,6 +44,7 @@ public class TimingCommand implements java.util.concurrent.Callable<Integer> {
     this(recorder, () -> projects.currentContext().id(), conversations::currentSessionId);
   }
 
+  /** 指定された値や利用先を使って、TimingCommandを初期化する。 */
   public TimingCommand(
       TimingRecorder recorder, Supplier<String> project, Supplier<String> session) {
     this.recorder = recorder;
@@ -41,6 +52,7 @@ public class TimingCommand implements java.util.concurrent.Callable<Integer> {
     this.session = session;
   }
 
+  /** 現在のSessionのRun時間内訳を表示。 */
   public Integer call() {
     var out = spec.commandLine().getOut();
     try {
@@ -93,14 +105,17 @@ public class TimingCommand implements java.util.concurrent.Callable<Integer> {
     }
   }
 
+  /** 確定できない結果を、判定不能の情報として表す。 */
   static Object unknown(Object value) {
     return value == null ? "UNKNOWN" : value;
   }
 
+  /** 実行時間の把握で用いるミリ秒を返す。 */
   static String ms(long value) {
     return String.format(Locale.ROOT, "%.6f ms", value / 1_000_000d);
   }
 
+  /** 実行時間の把握で用いるレポートを返す。 */
   public static String report(Run run, boolean details, Statistics statistics) {
     var text = new java.io.StringWriter();
     var writer = new PrintWriter(text);
@@ -109,6 +124,7 @@ public class TimingCommand implements java.util.concurrent.Callable<Integer> {
     return text.toString();
   }
 
+  /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
   private static void render(PrintWriter out, Run run, boolean details, Statistics statistics) {
     out.println(
         "Run "

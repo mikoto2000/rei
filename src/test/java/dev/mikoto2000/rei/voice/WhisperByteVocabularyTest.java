@@ -12,9 +12,12 @@ import java.util.Base64;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 音声認識バイト語彙の結果と状態の契約を検証するテスト。 */
 class WhisperByteVocabularyTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** 分割UTF8を保持することを確認する。 */
   @Test
   void preservesSplitUtf8AndTokenIdsAndDeletesOnlyOwnedFile() throws Exception {
     byte[] raw = "短く挨拶😀".getBytes(StandardCharsets.UTF_8);
@@ -41,6 +44,7 @@ class WhisperByteVocabularyTest {
     assertThat(source).exists();
   }
 
+  /** 各対象バイトを保持することを確認する。 */
   @Test
   void preservesEveryByteAndRejectsInvalidOutput() throws Exception {
     String text = "Latin 日本語 😀\n";
@@ -58,6 +62,7 @@ class WhisperByteVocabularyTest {
         .isInstanceOf(CharacterCodingException.class);
   }
 
+  /** 重複の有無識別子一覧を受け付けないことを確認する。 */
   @Test
   void rejectsDuplicateIdsAndMalformedVocabulary() throws Exception {
     Path source = temp.resolve("bad.txt");

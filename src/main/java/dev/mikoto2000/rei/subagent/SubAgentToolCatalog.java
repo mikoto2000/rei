@@ -10,24 +10,40 @@ import java.util.Set;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.stereotype.Component;
 
-/** Local file helpers get transient caches/Working Set, never project-scoped mutable beans. */
+/**
+ * 補助エージェントへの委譲に必要な補助エージェントツール利用可能な項目を扱う。
+ *
+ * <p>Local file helpers get transient caches/Working Set, never project-scoped mutable beans.
+ */
 @Component
 public class SubAgentToolCatalog {
+  /** 知識。 */
   private final SearchTools knowledge;
+
+  /** Web経由の入力または調査に使う窓口。 */
   private final WebSearchTools web;
 
+  /** 指定された値や利用先を使って、SubAgentToolCatalogを初期化する。 */
   public SubAgentToolCatalog(SearchTools knowledge, WebSearchTools web) {
     this.knowledge = knowledge;
     this.web = web;
   }
 
+  /** 記録台帳。 */
   private dev.mikoto2000.rei.review.ReviewCoverageLedger ledger;
+
+  /** 元の。 */
   private dev.mikoto2000.rei.core.contextbudget.RawToolResultStore raw;
+
+  /** 概算。 */
   private dev.mikoto2000.rei.core.contextbudget.TokenEstimator estimator =
       dev.mikoto2000.rei.core.contextbudget.TokenEstimator.tokenizerAware();
+
+  /** この機能の動作設定。 */
   private dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties properties =
       new dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties();
 
+  /** 補助エージェントへの委譲に関する設定を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void configure(
       dev.mikoto2000.rei.review.ReviewCoverageLedger ledger,
@@ -40,6 +56,7 @@ public class SubAgentToolCatalog {
     this.properties = properties;
   }
 
+  /** 新たな対象を利用できるよう、ツール一覧を作成する。 */
   public List<ToolCallback> createTools() {
     var files = new Tools();
     var localPages = new dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties();
@@ -60,6 +77,7 @@ public class SubAgentToolCatalog {
             .getToolCallbacks());
   }
 
+  /** 補助エージェントへの委譲で用いる既知名前一覧を返す。 */
   public Set<String> knownNames() {
     Set<String> names = new HashSet<>();
     createTools().forEach(callback -> names.add(callback.getToolDefinition().name()));

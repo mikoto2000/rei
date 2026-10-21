@@ -23,10 +23,13 @@ import org.springframework.context.annotation.Import;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
+/** プロジェクト受付窓口の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProjectControllerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** ファイル一覧を保持することを確認する。 */
   @Test
   void removalOnlyUnregistersTheExactProjectAndPreservesFiles() throws Exception {
     var registry = new ProjectRegistry(directory.resolve("projects.json"));
@@ -43,21 +46,25 @@ class ProjectControllerTest {
     assertThat(Files.readString(content)).isEqualTo("keep");
   }
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @EnableWebMvc
   @Import({SecurityConfig.class, ProjectController.class})
   static class Config {
+    /** {@code apiKeyProperties} の条件を再現するための補助情報を返す。 */
     @Bean
     ApiKeyProperties apiKeyProperties() {
       return new ApiKeyProperties("test-secret");
     }
 
+    /** {@code projectQueryService} の条件を再現するための補助情報を返す。 */
     @Bean
     ProjectQueryService projectQueryService(ProjectRegistry projects) {
       return new ProjectQueryService(projects);
     }
   }
 
+  /** 識別子一覧利用可能を返すことを確認する。 */
   @Test
   void authenticatedListDistinguishesSameNamedProjectsByPathAndReturnsIdsUsableForChat() {
     var file = directory.resolve("projects.json");

@@ -19,10 +19,13 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import reactor.core.publisher.Flux;
 
+/** 補助エージェント親承認の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentParentApprovalTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 取得済み親を利用することを確認する。 */
   @Test
   void realRunnerUsesCapturedParentOnlyWhenDefinitionOptsInAndNeverReplaysGrant() throws Exception {
     var repository =

@@ -12,8 +12,10 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 
+/** 既定エージェント表示表示用の状態の結果と状態の契約を検証するテスト。 */
 class DefaultAgentUiProjectionTest {
 
+  /** 実行状況の表示用整理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void projectsCancellationAsATerminalStateDistinctFromFailure() {
     var projection = new DefaultAgentUiProjection();
@@ -26,9 +28,11 @@ class DefaultAgentUiProjectionTest {
     assertEquals("CANCELLED", projection.currentState().run().status().name());
   }
 
+  /** 通知された出来事と順序を検証するための記録。 */
   private final AgentEventFactory events =
       new AgentEventFactory(Clock.fixed(Instant.parse("2026-08-23T00:00:00Z"), ZoneOffset.UTC));
 
+  /** 実行状況の表示用整理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void initialStateIsIdleAndEmpty() {
     AgentUiState state = new DefaultAgentUiProjection().currentState();
@@ -39,6 +43,7 @@ class DefaultAgentUiProjectionTest {
     assertEquals(0L, state.lastSequence());
   }
 
+  /** 実行状況の表示用整理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void projectsRunLifecycle() {
     DefaultAgentUiProjection projection = new DefaultAgentUiProjection();
@@ -57,6 +62,7 @@ class DefaultAgentUiProjectionTest {
     assertEquals("IOException", projection.currentState().run().error().type());
   }
 
+  /** 完了済みのテキストを利用することを確認する。 */
   @Test
   void accumulatesStreamingMessageAndUsesCompletedText() {
     DefaultAgentUiProjection projection = new DefaultAgentUiProjection();
@@ -71,6 +77,7 @@ class DefaultAgentUiProjectionTest {
     assertEquals(MessageStatus.COMPLETED, state.messages().getFirst().status());
   }
 
+  /** プロジェクト一覧成功済みのおよび失敗ツール一覧入力先について、順序を開始することを確認する。 */
   @Test
   void projectsSuccessfulAndFailedToolsInStartOrder() {
     DefaultAgentUiProjection projection = new DefaultAgentUiProjection();
@@ -94,6 +101,7 @@ class DefaultAgentUiProjectionTest {
     assertEquals(ToolExecutionStatus.RUNNING, state.tools().get(2).status());
   }
 
+  /** 二つ実行一覧を作成することを確認する。 */
   @Test
   void sameToolNameWithDifferentCorrelationIdsCreatesTwoExecutions() {
     DefaultAgentUiProjection projection = new DefaultAgentUiProjection();
@@ -103,6 +111,7 @@ class DefaultAgentUiProjectionTest {
     assertEquals(2, projection.currentState().tools().size());
   }
 
+  /** 実行状況の表示用整理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void incompleteEventSequencesCreatePlaceholdersWithoutThrowing() {
     DefaultAgentUiProjection projection = new DefaultAgentUiProjection();
@@ -122,6 +131,7 @@ class DefaultAgentUiProjectionTest {
     assertEquals(ToolExecutionStatus.FAILED, state.tools().get(1).status());
   }
 
+  /** 実行状況の表示用整理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void ignoresStaleSequenceAndExposesLastSequence() {
     DefaultAgentUiProjection projection = new DefaultAgentUiProjection();
@@ -132,6 +142,7 @@ class DefaultAgentUiProjectionTest {
     assertEquals(1, projection.currentState().messages().size());
   }
 
+  /** 実行状況の表示用整理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void stateCollectionsAreImmutableSnapshots() {
     DefaultAgentUiProjection projection = new DefaultAgentUiProjection();
@@ -144,6 +155,7 @@ class DefaultAgentUiProjectionTest {
     assertEquals(2, projection.currentState().messages().size());
   }
 
+  /** 実行状況の表示用整理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void subscribesDirectlyToEventBus() {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
@@ -158,6 +170,7 @@ class DefaultAgentUiProjectionTest {
     assertEquals(bus.lastSequence(), projection.currentState().lastSequence());
   }
 
+  /** 実行状況の表示用整理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void newRunDoesNotMixPreviousMessagesAndTools() {
     DefaultAgentUiProjection projection = new DefaultAgentUiProjection();
@@ -171,6 +184,7 @@ class DefaultAgentUiProjectionTest {
     assertEquals(0, projection.currentState().tools().size());
   }
 
+  /** {@code sequence} の条件を再現するための補助情報を返す。 */
   private AgentEvent sequence(AgentEvent event, long sequence) {
     return new AgentEvent(
         event.id(),

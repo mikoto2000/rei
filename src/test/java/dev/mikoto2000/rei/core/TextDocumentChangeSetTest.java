@@ -18,38 +18,49 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** テキスト文書変更集合の結果と状態の契約を検証するテスト。 */
 class TextDocumentChangeSetTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うプロジェクト。 */
   final String project = UUID.randomUUID().toString();
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("run", "session", root, project);
   }
 
+  /** 検証で使用する取得元を、指定された条件に合わせて用意する。 */
   org.springframework.jdbc.datasource.DriverManagerDataSource source() {
     return new org.springframework.jdbc.datasource.DriverManagerDataSource(
         "jdbc:sqlite:" + root.resolve("changes.db"));
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   TextDocumentChangeSetService service() {
     return new TextDocumentChangeSetService(
         new TextChangeSetRepository(source()), Clock.systemUTC(), TextDocumentTransaction::replace);
   }
 
+  /** {@code op} の条件を再現するための補助情報を返す。 */
   TextDocumentChangeSetService.Operation op(
       String kind, String path, String target, String before, String after) {
     return new TextDocumentChangeSetService.Operation(kind, path, target, before, after);
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   TextDocumentChangeSetService.Request request(
       TextDocumentChangeSetService.Operation... operations) {
     return new TextDocumentChangeSetService.Request(List.of(operations));
   }
 
+  /** 検証用に、指定された内容を書き込み先へ反映する。 */
   void write(String path, String value) throws Exception {
     Files.writeString(root.resolve(path), value);
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void discardChecksWholeHashAndNeverWritesAndReadOnlyCannotMutate() throws Exception {
     write("A.md", "old");
@@ -83,6 +94,7 @@ class TextDocumentChangeSetTest {
     assertEquals("old", Files.readString(root.resolve("A.md")));
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void discardedHistoryIsBoundedWithoutBlockingNewProposals() throws Exception {
     write("A.md", "old");
@@ -100,6 +112,7 @@ class TextDocumentChangeSetTest {
     assertEquals("old", Files.readString(root.resolve("A.md")));
   }
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationAfterFirstPublicationRestoresBaselineAndPropagates() throws Exception {
     write("A.md", "old");
@@ -128,6 +141,7 @@ class TextDocumentChangeSetTest {
     assertEquals("ROLLED_BACK", service.inspect(owner(), proposal.id()).status());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void realWindowsJunctionCannotEscapeCapturedRoot() throws Exception {
     if (!System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("windows")) return;
@@ -151,6 +165,7 @@ class TextDocumentChangeSetTest {
     }
   }
 
+  /** 共通の実行基盤で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void mixedUpdateCreateDeleteRenamePersistsPerFileAndWholeHashesBeforeAnyWrite() throws Exception {
     write("A.md", "old");
@@ -190,6 +205,7 @@ class TextDocumentChangeSetTest {
             .allMatch(file -> Objects.equals(file.proposedSha256(), file.currentSha256())));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void staleSecondBaselinePreventsFirstWriteAndUnknownHashOrOwnerCannotClaim() throws Exception {
     write("A.md", "old");
@@ -215,6 +231,7 @@ class TextDocumentChangeSetTest {
     assertEquals("human", Files.readString(root.resolve("B.md")));
   }
 
+  /** 共通の実行基盤で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void secondPublishFailureRollsBackAllFilesAndConsumedAttemptCannotReplay() throws Exception {
     write("A.md", "old");
@@ -249,6 +266,7 @@ class TextDocumentChangeSetTest {
     }
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void externalChangeDuringFailureIsPreservedAndOutcomeRemainsUnknown() throws Exception {
     write("A.md", "old");
@@ -296,6 +314,7 @@ class TextDocumentChangeSetTest {
     assertEquals("human", Files.readString(root.resolve("B.md")));
   }
 
+  /** 明示的な取り消しを必要とすることを確認する。 */
   @Test
   void crashAfterFirstPublishHasDurableJournalAndDeadOwnerRequiresExplicitRollback()
       throws Exception {
@@ -343,6 +362,7 @@ class TextDocumentChangeSetTest {
     assertEquals("old", Files.readString(root.resolve("B.md")));
   }
 
+  /** 共通の実行基盤で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void traversalSecretAliasDuplicateTargetsAndBinaryTextAreRejectedBeforeSaving() throws Exception {
     write("A.md", "old");
@@ -371,6 +391,7 @@ class TextDocumentChangeSetTest {
     assertEquals("old", Files.readString(root.resolve("A.md")));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void historicalAppliedDeletionCannotReportCurrentMatchWhenPathBecomesUnreadable()
       throws Exception {
@@ -385,6 +406,7 @@ class TextDocumentChangeSetTest {
     assertFalse(current.files().getFirst().currentAvailable());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void outstandingUnknownDocumentSetBlocksSingleFileAndAnotherBatchBeforeWriting()
       throws Exception {

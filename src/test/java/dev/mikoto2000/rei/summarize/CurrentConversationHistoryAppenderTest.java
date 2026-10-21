@@ -15,7 +15,9 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.chat.messages.Message;
 
+/** 現在会話履歴Appenderの結果と状態の契約を検証するテスト。 */
 class CurrentConversationHistoryAppenderTest {
+  /** バックグラウンド要約について、取得済み会話を書き込むことを確認する。 */
   @Test
   void backgroundSummaryWritesCapturedConversationAfterShellSwitch() throws Exception {
     var memory = MessageWindowChatMemory.builder().maxMessages(10).build();
@@ -42,6 +44,7 @@ class CurrentConversationHistoryAppenderTest {
     verify(logs).append(conversation, "assistant", "summary A");
   }
 
+  /** 情報の要約で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void appendsSlashCommandConversationToChatMemoryAndConversationLogInOrder() {
     ChatMemory chatMemory = Mockito.mock(ChatMemory.class);
@@ -68,6 +71,7 @@ class CurrentConversationHistoryAppenderTest {
     inOrder.verify(logStore).append(ConversationIds.currentChat(), "assistant", "要約結果");
   }
 
+  /** 情報の要約で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void appendedMessagesAreAvailableToTheCurrentChatConversation() {
     MessageWindowChatMemory chatMemory = MessageWindowChatMemory.builder().maxMessages(10).build();

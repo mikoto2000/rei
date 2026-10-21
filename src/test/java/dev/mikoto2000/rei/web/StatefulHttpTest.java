@@ -20,11 +20,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/** StatefulHTTP通信の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class StatefulHttpTest {
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import({BackgroundRunHttpTest.Config.class, StatefulController.class, ReadController.class})
   static class Config {
+    /** {@code operations} の条件を再現するための補助情報を返す。 */
     @Bean
     StatefulOperationService operations(
         @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
@@ -41,6 +44,7 @@ class StatefulHttpTest {
           mock(AgentSkillRepository.class));
     }
 
+    /** {@code queries} の条件を再現するための補助情報を返す。 */
     @Bean
     ReadQueryService queries(StatefulOperationService ops) {
       return new ReadQueryService(
@@ -52,8 +56,10 @@ class StatefulHttpTest {
     }
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 必須条件キー永続化を書き込むことを確認する。 */
   @Test
   void realHttpWritesRequireKeyPersistAndDoNotExposeDangerousOperations() throws Exception {
     var app = new SpringApplication(Config.class);

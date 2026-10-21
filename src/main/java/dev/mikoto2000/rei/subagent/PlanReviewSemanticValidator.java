@@ -7,22 +7,39 @@ import java.util.List;
 import tools.jackson.databind.JsonNode;
 
 /**
- * Independent mechanical checks after schema and snapshot citation validation. Not an LLM verdict.
+ * 補助エージェントへの委譲に必要な計画レビュー意味による検証の窓口を扱う。
+ *
+ * <p>Independent mechanical checks after schema and snapshot citation validation. Not an LLM
+ * verdict.
  */
 public final class PlanReviewSemanticValidator {
+  /** 補助エージェントへの委譲における補助の選択肢。 */
   public enum Support {
+    /** 対応済み。 */
     SUPPORTED,
+    /** PARTIALLY対応済み。 */
     PARTIALLY_SUPPORTED,
+    /** 未対応。 */
     UNSUPPORTED,
+    /** 未確認。 */
     UNVERIFIED
   }
 
+  /**
+   * 補助エージェントへの委譲で受け渡す評価結果を表す。
+   *
+   * @param support 補助
+   * @param truthVerified 確定情報確認済み
+   * @param issues 課題一覧
+   */
   public record Verdict(Support support, boolean truthVerified, List<ValidationError> issues) {
+    /** 受け取った情報からVerdictを作成する。 */
     public Verdict {
       issues = List.copyOf(issues);
     }
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public Verdict validate(JsonNode wrapper) {
     var errors = new ArrayList<ValidationError>();
     var seen = new HashMap<String, String>();

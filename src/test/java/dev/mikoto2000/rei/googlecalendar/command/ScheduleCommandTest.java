@@ -14,8 +14,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** 実行予定コマンドの結果と状態の契約を検証するテスト。 */
 class ScheduleCommandTest {
 
+  /** 予定の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void addCommandPrintsErrorWhenEventCreationFails() throws Exception {
     GoogleCalendarService service = Mockito.mock(GoogleCalendarService.class);
@@ -50,10 +52,12 @@ class ScheduleCommandTest {
                 "[error] Google Calendar への予定追加に失敗しました: Google Calendar integration is disabled"));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private CommandLine newCommand(GoogleCalendarService service) {
     return new CommandLine(
         new ScheduleCommand(),
         new CommandLine.IFactory() {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           public <K> K create(Class<K> cls) throws Exception {
             if (cls == ScheduleCommand.AddCommand.class) {

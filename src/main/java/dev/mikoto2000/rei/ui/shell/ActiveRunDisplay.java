@@ -8,18 +8,26 @@ import java.time.Duration;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
+/** ターミナルでの対話に必要な活動中実行表示を扱う。 */
 @Component
 public class ActiveRunDisplay {
+  /** 実行一覧。 */
   private final ConversationInputRouter runs;
+
+  /** プロジェクト一覧。 */
   private final ProjectService projects;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** 指定された値や利用先を使って、ActiveRunDisplayを初期化する。 */
   public ActiveRunDisplay(ConversationInputRouter runs, ProjectService projects, Clock clock) {
     this.runs = runs;
     this.projects = projects;
     this.clock = clock;
   }
 
+  /** ターミナルでの対話で用いるプロンプト状態を返す。 */
   public String promptStatus() {
     return "["
         + ActiveRun.summary(projects.currentContext().name())
@@ -28,10 +36,12 @@ public class ActiveRunDisplay {
         + " running]";
   }
 
+  /** ターミナルでの対話で用いる要約を返す。 */
   public String summary() {
     return "Active runs: " + runs.activeExecutions().size() + " (/runs for details)";
   }
 
+  /** ターミナルでの対話で用いるプロジェクト名前を返す。 */
   public String projectName(String id) {
     var all = projects.registeredProjects();
     var project = all.stream().filter(p -> p.id().equals(id)).findFirst().orElse(null);
@@ -42,6 +52,7 @@ public class ActiveRunDisplay {
         : name;
   }
 
+  /** ターミナルでの対話で用いる行一覧を返す。 */
   public List<String> rows() {
     return runs.activeExecutions().stream()
         .map(

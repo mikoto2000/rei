@@ -36,23 +36,33 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
+/** 会話形式実行の結果と状態の契約を検証するテスト。 */
 class ConversationStyleExecutionTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うプロンプト一覧。 */
   final List<Prompt> prompts = new ArrayList<>();
+
+  /** 検証に使うツール一覧。 */
   final AtomicInteger tools = new AtomicInteger();
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   ChatExecutionService service(
       String tool, String arguments, String answer, ToolPermissionGuard guard) {
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public ToolCallingChatOptions getOptions() {
             return ToolCallingChatOptions.builder().build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             prompts.add(p);
             boolean observed =
@@ -72,6 +82,7 @@ class ConversationStyleExecutionTest {
         };
     ToolCallback callback =
         new ToolCallback() {
+          /** 検証用に、会話の実行で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name(tool)
@@ -80,6 +91,7 @@ class ConversationStyleExecutionTest {
                 .build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             tools.incrementAndGet();
             try {
@@ -106,6 +118,7 @@ class ConversationStyleExecutionTest {
     return service;
   }
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner(String run, boolean voice, ResponseStyle style) {
     return new AgentRunContext(
         run,
@@ -118,6 +131,7 @@ class ConversationStyleExecutionTest {
         style);
   }
 
+  /** 会話の実行で、指定した条件に対する結果と状態の変化を確認する。 */
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void sameToolLoopAndFullImportantAnswerWorkForBothInputSources(boolean voice) throws Exception {
@@ -151,6 +165,7 @@ class ConversationStyleExecutionTest {
     assertThat(prompts.getLast().getSystemMessage().getText()).doesNotContain("会話スタイル");
   }
 
+  /** 会話の実行の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void voiceMutationStillRequiresExactOneUseHumanApproval() throws Exception {
     var approvals =

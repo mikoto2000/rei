@@ -14,19 +14,32 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * Read-only opt-in capture. Never copies work text, commands, results or absolute repository paths.
+ * 作業状況の把握に必要な作業状況観測内容文脈取得元を扱う。
+ *
+ * <p>Read-only opt-in capture. Never copies work text, commands, results or absolute repository
+ * paths.
  */
 public final class ActivityObservationContextSource implements ActivityEvidenceSource {
+  /** 作業状況の把握に必要なGit取得記録を扱う。 */
   @FunctionalInterface
   public interface GitCapture {
+    /** 後から状況を確認できるよう、Git取得記録を記録する。 */
     WorkContext.GitState capture(Path root, Instant at);
   }
 
+  /** この機能の動作設定。 */
   private final ActivityProperties properties;
+
+  /** プロジェクト一覧。 */
   private final Supplier<ProjectContext> projects;
+
+  /** 文脈一覧。 */
   private final Function<String, Optional<WorkContext>> contexts;
+
+  /** Gitの情報。 */
   private final GitCapture git;
 
+  /** 指定された値や利用先を使って、ActivityObservationContextSourceを初期化する。 */
   public ActivityObservationContextSource(
       ActivityProperties properties,
       Supplier<ProjectContext> projects,
@@ -38,6 +51,7 @@ public final class ActivityObservationContextSource implements ActivityEvidenceS
     this.git = git;
   }
 
+  /** 判断に必要な情報を集め、後続の処理へ渡す。 */
   @Override
   public Contribution collect(Instant at) {
     var project = projects.get();
@@ -56,6 +70,7 @@ public final class ActivityObservationContextSource implements ActivityEvidenceS
     }
   }
 
+  /** 後から状況を確認できるよう、作業状況観測内容文脈取得元を記録する。 */
   private Contribution capture(ProjectContext project, Instant at) {
     var context = contexts.apply(project.id()).orElse(null);
     if (context != null
@@ -135,11 +150,13 @@ public final class ActivityObservationContextSource implements ActivityEvidenceS
     return new Contribution(project.name(), project.id(), List.of(), saved);
   }
 
+  /** 作業状況の把握で用いるbasicを返す。 */
   private static Contribution basic(ProjectContext project) {
     return new Contribution(
         project == null ? "" : project.name(), project == null ? "" : project.id(), List.of());
   }
 
+  /** 作業状況の把握で用いる相対ファイルを返す。 */
   private static String relativeFile(Path root, String raw) {
     if (raw == null
         || raw.isBlank()

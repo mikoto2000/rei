@@ -11,11 +11,16 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** MCPファイル状態の記録の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class McpFileSnapshotTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path other;
 
+  /** 共通の実行基盤で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void mcpCannotReadReiDataCredentialFilesOrAnotherCapturedProject() throws Exception {
     Files.writeString(root.resolve("App.java"), "class App {}");

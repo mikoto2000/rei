@@ -8,9 +8,12 @@ import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import java.util.List;
 
 /**
- * One tool-free, advisor-free call; supplied utterances/history/dictionaries are untrusted data.
+ * 音声による対話に必要な音声補正言語モデルを扱う。
+ *
+ * <p>One tool-free, advisor-free call; supplied utterances/history/dictionaries are untrusted data.
  */
 public final class VoiceCorrectionLlm {
+  /** システム。 */
   public static final String SYSTEM =
       """
       あなたは日本語音声認識結果の補正専用AIです。Whisper の誤変換、同音異義語、技術用語、
@@ -33,10 +36,17 @@ public final class VoiceCorrectionLlm {
       危険変更拒否例（原文「10個削除しない」、数値/否定/対象を推測しない）:
       {"status":"uncertain","text":"10個削除しない","edits":[],"diagnostic":"protected_argument"}
       """;
+
+  /** クライアント一覧。 */
   private final LlmChatClientProvider clients;
+
+  /** モデル一覧。 */
   private final LlmModelProvider models;
+
+  /** この機能の動作設定。 */
   private final VoiceCorrectionProperties properties;
 
+  /** 指定された値や利用先を使って、VoiceCorrectionLlmを初期化する。 */
   public VoiceCorrectionLlm(
       LlmChatClientProvider clients,
       LlmModelProvider models,
@@ -46,6 +56,7 @@ public final class VoiceCorrectionLlm {
     this.properties = properties;
   }
 
+  /** 音声による対話の要求を実行し、呼び出し元へ結果を返す。 */
   public String call(String original, VoiceCorrectionContext.Snapshot context) throws Exception {
     var base = models.chatOptions(LlmFeature.VOICE_CORRECTION, null);
     var builder =

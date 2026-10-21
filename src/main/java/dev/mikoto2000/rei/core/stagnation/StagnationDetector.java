@@ -10,37 +10,63 @@ import org.slf4j.LoggerFactory;
  */
 public class StagnationDetector {
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(StagnationDetector.class);
 
+  /** 既定判定の境界値。 */
   static final int DEFAULT_THRESHOLD = 4;
+
+  /** 既定最大計画の見直し回数。 */
   static final int DEFAULT_MAX_REPLANS = 2;
 
+  /** 判定の境界値。 */
   private final int threshold;
+
+  /** 最大計画の見直し回数。 */
   private final int maxReplans;
+
+  /** 停滞件数。 */
   private int stagnationCount;
+
+  /** 計画の見直し件数。 */
   private int replanCount;
+
+  /** 計画の見直し要求された。 */
   private boolean replanRequested;
+
+  /** 直近ツール要求内容の照合値。 */
   private String lastToolFingerprint;
+
+  /** 直近失敗情報要求内容の照合値。 */
   private String lastFailureFingerprint;
+
+  /** repeatedツール呼び出し。 */
   private boolean repeatedToolCall;
+
+  /** repeated失敗情報。 */
   private boolean repeatedFailure;
 
+  /** 実行の停滞への対処で用いる判定の境界値を返す。 */
   public int threshold() {
     return threshold;
   }
 
+  /** 実行の停滞への対処で用いる最大計画の見直し回数を返す。 */
   public int maxReplans() {
     return maxReplans;
   }
 
+  /** 実行の停滞への対処を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public StagnationDetector() {
     this(DEFAULT_THRESHOLD, DEFAULT_MAX_REPLANS);
   }
 
+  /** 実行の停滞への対処を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public StagnationDetector(int threshold) {
     this(threshold, DEFAULT_MAX_REPLANS);
   }
 
+  /** 指定された値や利用先を使って、StagnationDetectorを初期化する。 */
   public StagnationDetector(int threshold, int maxReplans) {
     this.threshold = Math.max(1, threshold);
     this.maxReplans = Math.max(1, maxReplans);

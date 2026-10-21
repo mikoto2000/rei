@@ -9,7 +9,9 @@ import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioInputStream;
 import org.junit.jupiter.api.Test;
 
+/** 音声音声Conversionの結果と状態の契約を検証するテスト。 */
 class VoiceAudioConversionTest {
+  /** 受信形式の解釈を読み取ることを確認する。 */
   @Test
   void signedPcm16AndShortReadsDecodeWithoutStaleBytes() {
     var result = VoicePcm.decode(new byte[] {(byte) 255, 0, 0, (byte) 128, 1, 2}, 4);
@@ -18,6 +20,7 @@ class VoiceAudioConversionTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 音声による対話で、音声の取得・認識・入力の受け渡しが、検証条件に従うことを確認する。 */
   @Test
   void stereo48kIsConvertedTo16kMonoBeforeVad() throws Exception {
     byte[] source = new byte[600 * 4];
@@ -36,6 +39,7 @@ class VoiceAudioConversionTest {
     }
   }
 
+  /** 音声による対話で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void bigEndianFormatsAreConvertedRatherThanMisdecoded() throws Exception {
     byte[] bytes = {0x40, 0, 0x40, 0};

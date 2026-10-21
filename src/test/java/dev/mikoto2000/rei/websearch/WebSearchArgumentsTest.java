@@ -10,7 +10,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+/** Web検索引数の結果と状態の契約を検証するテスト。 */
 class WebSearchArgumentsTest {
+  /** 許容範囲を受け付けられることを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -23,6 +25,7 @@ class WebSearchArgumentsTest {
     assertDoesNotThrow(() -> validate("{\"request\":{" + fields + "}}"));
   }
 
+  /** 形式が不正な引数を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -45,6 +48,7 @@ class WebSearchArgumentsTest {
     assertTrue(error.getMessage().contains("実行していません"));
   }
 
+  /** 不正な検索結果の件数上限を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -73,6 +77,7 @@ class WebSearchArgumentsTest {
     assertFalse(error.getMessage().contains("private-query"));
   }
 
+  /** 本文を取得する上位件数範囲外実際に使う最大を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"-1", "3", "2147483648", "0.5", "\"0\"", "true"})
   void rejectsReadTopOutsideEffectiveMaxOrWrongType(String value) {
@@ -87,6 +92,7 @@ class WebSearchArgumentsTest {
     assertTrue(error.getMessage().contains("readTop"));
   }
 
+  /** 大きすぎる検索条件を受け付けないことを確認する。 */
   @Test
   void rejectsOversizedQueryAndInput() {
     assertThrows(
@@ -96,6 +102,7 @@ class WebSearchArgumentsTest {
     assertDoesNotThrow(() -> WebSearchArguments.validate("otherTool", "not JSON", 5));
   }
 
+  /** 設定済み最大を利用することを確認する。 */
   @Test
   void usesConfiguredMaximumRatherThanHardCodedFive() {
     String input = "{\"request\":{\"query\":\"Void\",\"maxResults\":8,\"readTop\":8}}";
@@ -110,6 +117,7 @@ class WebSearchArgumentsTest {
         () -> WebSearchArguments.validate("webSearchAndRead", input, 0));
   }
 
+  /** 検証用に、利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   private void validate(String input) {
     WebSearchArguments.validate("webSearchAndRead", input, 5);
   }

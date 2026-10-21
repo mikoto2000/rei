@@ -26,24 +26,42 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
+/** 記憶Consolidatorのユースケースを実現する。 */
 @Service
 @org.springframework.boot.context.properties.EnableConfigurationProperties(
     MemoryConsolidationProperties.class)
 public class MemoryConsolidatorService {
 
+  /** モデルへ対話を依頼する窓口提供元。 */
   private final LlmChatClientProvider chatClientProvider;
+
+  /** データベースへの接続クライアント。 */
   private final JdbcClient jdbcClient;
+
+  /** 記憶設定。 */
   private final MemoryProperties memoryProperties;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper objectMapper = new ObjectMapper();
+
+  /** 統合。 */
   private MemoryConsolidationProperties consolidation = new MemoryConsolidationProperties(0, 0);
 
+  /** 長期記憶の保存と検索で使用する統合設定を設定する。 */
   @Autowired
   public void setConsolidationProperties(MemoryConsolidationProperties properties) {
     this.consolidation = properties;
   }
 
+  /**
+   * 長期記憶の保存と検索で受け渡す要約を表す。
+   *
+   * @param hasCandidates 保有候補一覧
+   * @param summary 要約
+   */
   public record Summary(boolean hasCandidates, String summary) {}
 
+  /** 利用者が要点を把握できるよう、候補一覧を要約する。 */
   public Summary summarizeCandidates() {
     var budget = new ConsolidationModelBudget(consolidation);
     var candidates = extractCandidates(budget);
@@ -52,6 +70,7 @@ public class MemoryConsolidatorService {
         : new Summary(true, summarize(candidates.stream().map(Memory::content).toList(), budget));
   }
 
+  /** 長期記憶の保存と検索を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public MemoryConsolidatorService(
       ChatClient chatClient,
       @Qualifier("dataSource") javax.sql.DataSource dataSource,
@@ -62,6 +81,7 @@ public class MemoryConsolidatorService {
         memoryProperties);
   }
 
+  /** 指定された値や利用先を使って、MemoryConsolidatorServiceを初期化する。 */
   @Autowired
   public MemoryConsolidatorService(
       LlmChatClientProvider chatClientProvider,
@@ -72,10 +92,12 @@ public class MemoryConsolidatorService {
     this.memoryProperties = memoryProperties;
   }
 
+  /** 後続の判断に必要な情報を得るため、候補一覧を抽出する。 */
   public List<Memory> extractCandidates() {
     return extractCandidates(new ConsolidationModelBudget(consolidation));
   }
 
+  /** 後続の判断に必要な情報を得るため、候補一覧を抽出する。 */
   private List<Memory> extractCandidates(ModelCallBudget budget) {
     RunCancellation.propagate(null);
     List<String> messages =
@@ -133,6 +155,7 @@ public class MemoryConsolidatorService {
     return candidates;
   }
 
+  /** 入力を機能内で扱えるよう、候補一覧を解釈する。 */
   List<Memory> parseCandidates(String llmText) {
     if (llmText == null || llmText.isBlank()) {
       return List.of();
@@ -170,10 +193,12 @@ public class MemoryConsolidatorService {
     }
   }
 
+  /** 対象の内容を、要点が分かる形にまとめる。 */
   public String summarize(List<String> conversation) {
     return summarize(conversation, new ConsolidationModelBudget(consolidation));
   }
 
+  /** 対象の内容を、要点が分かる形にまとめる。 */
   private String summarize(List<String> conversation, ModelCallBudget budget) {
     RunCancellation.propagate(null);
     if (conversation == null || conversation.isEmpty()) {
@@ -195,6 +220,7 @@ public class MemoryConsolidatorService {
     return summary.length() <= max ? summary : summary.substring(0, max);
   }
 
+  /** 長期記憶の保存と検索の要求を実行し、呼び出し元へ結果を返す。 */
   private String call(String prompt, String conversation, ModelCallBudget budget) {
     budget.run();
     boolean invoked = false, reported = false;
@@ -236,6 +262,7 @@ public class MemoryConsolidatorService {
     }
   }
 
+  /** 長期記憶の保存と検索において、提案統合の実施条件を判定する。 */
   public boolean shouldSuggestConsolidation(int messageCount, int contextLength, int contextLimit) {
     if (!memoryProperties.enabled()) {
       return false;
@@ -250,12 +277,14 @@ public class MemoryConsolidatorService {
     return usedPercent >= memoryProperties.autoTriggerContextPercent();
   }
 
+  /** 長期記憶の保存と検索において、提案統合現在日時の実施条件を判定する。 */
   public boolean shouldSuggestConsolidationNow() {
     Integer messageCount =
         jdbcClient.sql("SELECT COUNT(*) FROM SPRING_AI_CHAT_MEMORY").query(Integer.class).single();
     return shouldSuggestConsolidation(messageCount == null ? 0 : messageCount, 0, 0);
   }
 
+  /** 条件に合う対象を利用するため、プロンプト記憶一覧を選択する。 */
   public List<Memory> selectPromptMemories(List<Memory> memories) {
     if (memories == null || memories.isEmpty()) {
       return List.of();
@@ -268,10 +297,12 @@ public class MemoryConsolidatorService {
         .toList();
   }
 
+  /** 長期記憶の保存と検索で用いる競合タイムアウトの秒数を返す。 */
   public int conflictTimeoutSeconds() {
     return memoryProperties.conflictTimeoutSeconds();
   }
 
+  /** 入力を機能内で扱えるよう、種別を解釈する。 */
   private MemoryType parseType(String value) {
     try {
       return value == null ? MemoryType.KNOWLEDGE : MemoryType.valueOf(value.trim());
@@ -280,6 +311,7 @@ public class MemoryConsolidatorService {
     }
   }
 
+  /** 入力を機能内で扱えるよう、対象範囲を解釈する。 */
   private MemoryScope parseScope(String value) {
     try {
       return value == null ? MemoryScope.SHORT_TERM : MemoryScope.valueOf(value.trim());
@@ -288,6 +320,7 @@ public class MemoryConsolidatorService {
     }
   }
 
+  /** 入力を機能内で扱えるよう、確信度を解釈する。 */
   private double parseConfidence(Object value) {
     if (value instanceof Number n) {
       double v = n.doubleValue();
@@ -296,6 +329,7 @@ public class MemoryConsolidatorService {
     return 0.7d;
   }
 
+  /** 長期記憶の保存と検索で用いる文字列表現値を返す。 */
   private String stringValue(Object value) {
     return value == null ? null : value.toString();
   }

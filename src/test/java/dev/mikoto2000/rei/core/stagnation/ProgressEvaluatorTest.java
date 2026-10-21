@@ -7,10 +7,13 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 進捗評価の判断の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProgressEvaluatorTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void planResetAtRunStartDoesNotRetainPreviousRunsCompletedStepIdentities() {
     var plan = new dev.mikoto2000.rei.core.actionplan.ActionPlan();
@@ -27,6 +30,7 @@ class ProgressEvaluatorTest {
         .containsExactly(ProgressEvent.SUBGOAL_COMPLETED);
   }
 
+  /** 実行の停滞への対処で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void readFailureThenActualContentIsErrorResolved() {
     var evaluator = new ProgressEvaluator(root);
@@ -39,6 +43,7 @@ class ProgressEvaluatorTest {
         .contains(ProgressEvent.ERROR_RESOLVED);
   }
 
+  /** 項目に整理した内容について、失敗情報なし件数を読み取ることを確認する。 */
   @Test
   void structuredReadFailureDoesNotCountAndRangesDeduplicateByLine() {
     var evaluator = new ProgressEvaluator(root);
@@ -70,6 +75,7 @@ class ProgressEvaluatorTest {
         .hasSize(1);
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void planCompletionCountsOnceAndNotMerelyChangingStep() {
     var plan = new dev.mikoto2000.rei.core.actionplan.ActionPlan();
@@ -85,6 +91,7 @@ class ProgressEvaluatorTest {
     assertThat(evaluator.afterTool("plan", "{}", "success", before)).isEmpty();
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void equivalentSearchResultsAreNotNewInformationForDifferentQuery() {
     var evaluator = new ProgressEvaluator(root);
@@ -95,6 +102,7 @@ class ProgressEvaluatorTest {
         .isEmpty();
   }
 
+  /** 限定新規について、内容件数を読み取ることを確認する。 */
   @Test
   void onlyNewReadContentCountsEvenWithReorderedArguments() {
     var evaluator = new ProgressEvaluator(root);
@@ -110,6 +118,7 @@ class ProgressEvaluatorTest {
         .hasSize(1);
   }
 
+  /** 必要とする実際の内容変更を書き込むことを確認する。 */
   @Test
   void writeRequiresActualContentChange() throws Exception {
     Files.writeString(root.resolve("A"), "before");
@@ -123,6 +132,7 @@ class ProgressEvaluatorTest {
         .containsExactly(ProgressEvent.STATE_CHANGED);
   }
 
+  /** 実行の停滞への対処で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void structuredFailureIsNotInformationAndSuccessResolvesSameAction() {
     var evaluator = new ProgressEvaluator(root);
@@ -145,6 +155,7 @@ class ProgressEvaluatorTest {
         .contains(ProgressEvent.ERROR_RESOLVED);
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void arbitrarySuccessAndChangingClockAreNotProgress() {
     var evaluator = new ProgressEvaluator(root);

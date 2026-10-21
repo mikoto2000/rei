@@ -17,7 +17,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
 
+/** Hybrid文書関連情報の取得の結果と状態の契約を検証するテスト。 */
 class HybridDocumentRetrievalTest {
+  /** 検索対象文書の管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void bm25OptInFlowsThroughDocumentGroupingAndReranking() {
     var store = mock(VectorStore.class, withSettings().extraInterfaces(RetrievalCandidates.class));
@@ -30,6 +32,7 @@ class HybridDocumentRetrievalTest {
     service.setRetrieval(new HybridRetrievalProperties(true, 40, 60, true));
     service.setRerankService(
         new CandidateReranker() {
+          /** {@code rerank} の条件を再現するための補助情報を返す。 */
           public <T> List<T> rerank(
               String q, List<T> candidates, java.util.function.Function<T, String> text) {
             assertEquals(2, candidates.size());
@@ -41,6 +44,7 @@ class HybridDocumentRetrievalTest {
     verify(backend, never()).lexicalSearch(any());
   }
 
+  /** {@code doc} の条件を再現するための補助情報を返す。 */
   Document doc(String id) {
     return Document.builder()
         .id(id + "#0")
@@ -50,6 +54,7 @@ class HybridDocumentRetrievalTest {
         .build();
   }
 
+  /** 両方逐次データ一覧を利用することを確認する。 */
   @Test
   void optInUsesBothStreamsAndExistingRerankerBeforeFinalLimit() {
     var store = mock(VectorStore.class, withSettings().extraInterfaces(RetrievalCandidates.class));
@@ -63,6 +68,7 @@ class HybridDocumentRetrievalTest {
     var seen = new java.util.concurrent.atomic.AtomicInteger();
     service.setRerankService(
         new CandidateReranker() {
+          /** {@code rerank} の条件を再現するための補助情報を返す。 */
           public <T> List<T> rerank(
               String q, List<T> candidates, java.util.function.Function<T, String> text) {
             seen.set(candidates.size());
@@ -79,6 +85,7 @@ class HybridDocumentRetrievalTest {
     assertThrows(IllegalArgumentException.class, () -> service.search("question", 65, null, null));
   }
 
+  /** 検索対象文書の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void defaultRemainsLegacyAndUnsupportedOptInBackendFailsClearly() {
     var store = mock(VectorStore.class);

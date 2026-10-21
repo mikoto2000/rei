@@ -19,12 +19,17 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 
+/** 加工前の結果ページ契約の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class RawResultPageContractTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う保存や受け渡しに用いるデータ形式の変換。 */
   private final com.fasterxml.jackson.databind.ObjectMapper json =
       new com.fasterxml.jackson.databind.ObjectMapper();
 
+  /** 登録済みツール繰り返しについて、装飾のないHTTPヘッダーを返すことを確認する。 */
   @Test
   void registeredToolLoopReturnsPlainHeadersAndExactUnicodeTextRatherThanJsonString() {
     var store = new RawToolResultStore(dir);
@@ -59,6 +64,7 @@ class RawResultPageContractTest {
     }
   }
 
+  /** モデルへ渡す文脈の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void legacyQuotedPagesAreUnwrappedOnceAndInvalidCursorMetadataHasSafeDiagnostic()
       throws Exception {
@@ -90,6 +96,7 @@ class RawResultPageContractTest {
     }
   }
 
+  /** 最終予算上限への調整について、旧形式引用済み共通の通知属性を読み取ることを確認する。 */
   @Test
   void finalBudgetFitReadsLegacyQuotedEnvelopeAndPreservesExactOffset() throws Exception {
     var store = new RawToolResultStore(dir);
@@ -125,6 +132,7 @@ class RawResultPageContractTest {
     }
   }
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unwrappingLegacyQuotedPagesCannotExtendTheOriginalRequestedSpan() throws Exception {
     var store = new RawToolResultStore(dir);

@@ -13,6 +13,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/** Git連携先Webhook通知の構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(
     name = {"rei.web.enabled", "rei.github.webhook.enabled"},
@@ -21,6 +22,7 @@ import org.springframework.context.annotation.Import;
 @EnableConfigurationProperties(GitHubWebhookProperties.class)
 @Import(dev.mikoto2000.rei.web.GitHubWebhookController.class)
 public class GitHubWebhookConfiguration {
+  /** GitHubとの連携で用いるGit連携先通知Outboxを返す。 */
   @Bean
   GitHubNotificationOutbox gitHubNotificationOutbox(
       GitHubFactRepository facts,
@@ -29,6 +31,7 @@ public class GitHubWebhookConfiguration {
     return new GitHubNotificationOutbox(facts, projects, publisher);
   }
 
+  /** GitHubとの連携で用いるGit連携先事実保存と検索の窓口を返す。 */
   @Bean
   GitHubFactRepository gitHubFactRepository(
       @org.springframework.beans.factory.annotation.Qualifier("memoryConsolidationDataSource")
@@ -37,6 +40,7 @@ public class GitHubWebhookConfiguration {
     return new GitHubFactRepository(source, clock);
   }
 
+  /** GitHubとの連携で用いるGit連携先Webhook通知サービスを返す。 */
   @Bean
   GitHubWebhookService gitHubWebhookService(
       GitHubWebhookProperties properties,

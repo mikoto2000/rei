@@ -21,7 +21,9 @@ import java.util.Map;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
+/** 保存伝えるの結果と状態の契約を検証するテスト。 */
 class StorageReportsTest {
+  /** 計画について、取得済みプロジェクトを利用することを確認する。 */
   @Test
   void planUsesTheCapturedProjectRatherThanBackendShellSelection() {
     var planner = mock(RetentionPlanner.class);
@@ -59,6 +61,7 @@ class StorageReportsTest {
     verify(planner).plan("raw-results", project, 100, 16777216);
   }
 
+  /** 共通の実行基盤の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void maintenanceAndSeparatePurgeApprovalUseTheExistingSafetyServices() {
     var maintenance = mock(StorageMaintenance.class);

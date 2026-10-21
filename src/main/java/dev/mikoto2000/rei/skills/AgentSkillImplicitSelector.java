@@ -14,19 +14,28 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+/** スキルの利用に必要なエージェントスキル暗黙の対象の選択条件を扱う。 */
 @Component
 public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(AgentSkillImplicitSelector.class);
+
+  /** JSON変換文字列表現。 */
   private static final Pattern JSON_STRING = Pattern.compile("\"((?:\\\\.|[^\"])*)\"");
 
+  /** モデル提供元。 */
   private final LlmModelProvider modelProvider;
+
+  /** 保存と検索の窓口。 */
   private final AgentSkillRepository repository;
 
+  /** スキルの利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public AgentSkillImplicitSelector(ChatModel chatModel, AgentSkillRepository repository) {
     this(new FixedLlmModelProvider(chatModel), repository);
   }
 
+  /** 指定された値や利用先を使って、AgentSkillImplicitSelectorを初期化する。 */
   @Autowired
   public AgentSkillImplicitSelector(
       LlmModelProvider modelProvider, AgentSkillRepository repository) {
@@ -34,12 +43,14 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
     this.repository = repository;
   }
 
+  /** 指定された条件に応じて、利用する対象を選ぶ。 */
   @Override
   public List<AgentSkill> select(
       String prompt, Set<String> excludedSkillNames, List<AgentSkill> providedCandidates) {
     return select(prompt, excludedSkillNames, providedCandidates, null);
   }
 
+  /** 指定された条件に応じて、利用する対象を選ぶ。 */
   @Override
   public List<AgentSkill> select(
       String prompt,
@@ -105,6 +116,7 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
     }
   }
 
+  /** 利用先に渡せるよう、選択内容プロンプトを組み立てる。 */
   private String buildSelectionPrompt(String userPrompt, List<AgentSkill> candidates) {
     StringBuilder builder = new StringBuilder();
     builder.append(
@@ -124,6 +136,7 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
     return builder.toString();
   }
 
+  /** 入力を機能内で扱えるよう、JSON変換文字列表現Arrayを解釈する。 */
   private List<String> parseJsonStringArray(String content) {
     String text = content == null ? "" : content.strip();
     if (!text.startsWith("[") || !text.endsWith("]")) {
@@ -137,10 +150,12 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
     return names;
   }
 
+  /** スキルの利用で用いるunescapeを返す。 */
   private String unescape(String value) {
     return value.replace("\\\"", "\"").replace("\\\\", "\\");
   }
 
+  /** 指定や設定に応じた対象を利用するため、選択中スキル一覧を確定する。 */
   private List<AgentSkill> resolveSelectedSkills(List<String> names, List<AgentSkill> candidates) {
     Set<String> uniqueNames = new LinkedHashSet<>(names);
     List<AgentSkill> selected = new ArrayList<>();
@@ -153,14 +168,18 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
     return List.copyOf(selected);
   }
 
+  /** 固定言語モデルモデルを用途や設定に応じて提供する窓口。 */
   private static class FixedLlmModelProvider extends LlmModelProvider {
+    /** 応答生成に使うモデル。 */
     private final ChatModel chatModel;
 
+    /** 指定された値や利用先を使って、FixedLlmModelProviderを初期化する。 */
     FixedLlmModelProvider(ChatModel chatModel) {
       super(chatModel, new dev.mikoto2000.rei.llm.LlmProperties());
       this.chatModel = chatModel;
     }
 
+    /** スキルの利用で用いる応答生成に使うモデルを返す。 */
     @Override
     public ChatModel chatModel(String feature) {
       return chatModel;

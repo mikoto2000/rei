@@ -28,12 +28,27 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Deterministic read projection. No extraction, scheduling, reconciliation, or model invocation.
+ * 日次計画のユースケースを実現する。
+ *
+ * <p>Deterministic read projection. No extraction, scheduling, reconciliation, or model invocation.
  */
 public final class DailyPlanningService {
+  /** 分類一覧。 */
   public static final List<String> CATEGORIES =
       List.of("Today", "Overdue", "Waiting", "Blocked", "Scheduled", "Suggested Next");
 
+  /**
+   * 日々の計画の支援で受け渡す計画を表す。
+   *
+   * @param schemaVersion データ形式形式のバージョン
+   * @param date 日付
+   * @param zone タイムゾーン
+   * @param generatedAt 生成済み日時
+   * @param method メソッド
+   * @param categories 分類一覧
+   * @param projects プロジェクト一覧
+   * @param partial 部分的な結果
+   */
   public record Plan(
       int schemaVersion,
       LocalDate date,
@@ -43,12 +58,23 @@ public final class DailyPlanningService {
       List<String> categories,
       List<ProjectPlan> projects,
       boolean partial) {
+    /** 受け取った情報からPlanを作成する。 */
     public Plan {
       categories = List.copyOf(categories);
       projects = List.copyOf(projects);
     }
   }
 
+  /**
+   * 日々の計画の支援で受け渡すプロジェクト計画を表す。
+   *
+   * @param projectId 所属プロジェクトの識別子
+   * @param name 名前
+   * @param items 項目一覧
+   * @param activity 作業状況
+   * @param partial 部分的な結果
+   * @param warnings 注意事項
+   */
   public record ProjectPlan(
       String projectId,
       String name,
@@ -56,12 +82,29 @@ public final class DailyPlanningService {
       ActivitySummary activity,
       boolean partial,
       List<String> warnings) {
+    /** 受け取った情報からProjectPlanを作成する。 */
     public ProjectPlan {
       items = List.copyOf(items);
       warnings = List.copyOf(warnings);
     }
   }
 
+  /**
+   * 日々の計画の支援で受け渡す項目を表す。
+   *
+   * @param id 識別子
+   * @param source 取得元
+   * @param title タイトル
+   * @param reason 理由
+   * @param status 状態
+   * @param sessionId 会話の識別子
+   * @param updatedAt 更新日時
+   * @param dueAt 期限日時
+   * @param categories 分類一覧
+   * @param tags タグ一覧
+   * @param certainty 確かさ
+   * @param references 参照先一覧
+   */
   public record Item(
       String id,
       String source,
@@ -75,6 +118,7 @@ public final class DailyPlanningService {
       List<String> tags,
       String certainty,
       List<TaskView.Reference> references) {
+    /** 受け取った情報からItemを作成する。 */
     public Item {
       categories = List.copyOf(categories);
       tags = List.copyOf(tags);
@@ -82,13 +126,33 @@ public final class DailyPlanningService {
     }
   }
 
+  /**
+   * 日々の計画の支援で受け渡す観測内容を表す。
+   *
+   * @param recordId 記録識別子
+   * @param capturedAt 観測日時
+   * @param itemIds 項目識別子一覧
+   * @param basis 判断の根拠
+   */
   public record Observation(
       String recordId, Instant capturedAt, List<String> itemIds, String basis) {
+    /** 受け取った情報からObservationを作成する。 */
     public Observation {
       itemIds = List.copyOf(itemIds);
     }
   }
 
+  /**
+   * 日々の計画の支援で受け渡す作業状況要約を表す。
+   *
+   * @param date 日付
+   * @param zone タイムゾーン
+   * @param provenance 情報の来歴
+   * @param linkedObservations linked観測内容一覧
+   * @param partial 部分的な結果
+   * @param missingContextRecords 未指定文脈記録一覧
+   * @param references 参照先一覧
+   */
   public record ActivitySummary(
       LocalDate date,
       String zone,
@@ -97,25 +161,52 @@ public final class DailyPlanningService {
       boolean partial,
       int missingContextRecords,
       List<Observation> references) {
+    /** 受け取った情報からActivitySummaryを作成する。 */
     public ActivitySummary {
       references = List.copyOf(references);
     }
   }
 
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** タイムゾーン。 */
   private final ZoneId zone;
+
+  /** タスク上限／項目上限／予算秒数。 */
   private final int taskLimit, itemLimit, budgetSeconds;
+
+  /** 古い状態変更後。 */
   private final Duration staleAfter;
+
+  /** プロジェクト一覧。 */
   private final ProjectRegistry projects;
+
+  /** 許可。 */
   private final List<ProjectContext> allowed;
+
+  /** タスク一覧。 */
   private final TaskManagerService tasks;
+
+  /** 文脈一覧。 */
   private final WorkContextRepository contexts;
+
+  /** 目標一覧。 */
   private final GoalRepository goals;
+
+  /** 依存条件一覧。 */
   private final PersistentDependencyRepository dependencies;
+
+  /** 予約されたエージェント実行を管理する窓口。 */
   private final PersistentAgentScheduler schedules;
+
+  /** 再開用の記録一覧。 */
   private final PersistentCheckpointRepository checkpoints;
+
+  /** 作業状況。 */
   private final ActivityWorkContextService activity;
 
+  /** 指定された値や利用先を使って、DailyPlanningServiceを初期化する。 */
   public DailyPlanningService(
       DailyPlanningProperties properties,
       Clock clock,
@@ -154,6 +245,7 @@ public final class DailyPlanningService {
             .toList();
   }
 
+  /** 日々の計画の支援で用いる今日を返す。 */
   public Plan today(List<String> requested) {
     var selected = requested == null ? allowed : selection(requested);
     for (var owner : selected) verifyRoot(owner);
@@ -307,6 +399,7 @@ public final class DailyPlanningService {
         results.stream().anyMatch(ProjectPlan::partial));
   }
 
+  /** 日々の計画の支援において、部分的な結果に該当するか判定する。 */
   private boolean partial(String warning) {
     return Set.of(
             "collection_budget_reached",
@@ -319,6 +412,7 @@ public final class DailyPlanningService {
         .contains(warning);
   }
 
+  /** 日々の計画の支援で用いるタスクを返す。 */
   private Item task(ProjectContext owner, TaskView task, Instant now, Instant start, Instant end) {
     String title = task.kind() + " " + task.sourceId();
     Instant due = null;
@@ -365,6 +459,7 @@ public final class DailyPlanningService {
     if (due != null && due.isBefore(now)) categories.add("Overdue");
     if (due != null && !due.isBefore(start) && due.isBefore(end) || categories.isEmpty())
       categories.add("Today");
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (refs.size() > 32) tags.add("REFERENCES_PARTIAL");
     return new Item(
         task.id(),
@@ -386,6 +481,7 @@ public final class DailyPlanningService {
         refs.stream().limit(32).toList());
   }
 
+  /** 日々の計画の支援で用いる選択内容を返す。 */
   private List<ProjectContext> selection(List<String> requested) {
     if (requested.isEmpty()
         || requested.size() > 16
@@ -403,6 +499,7 @@ public final class DailyPlanningService {
         .toList();
   }
 
+  /** 要求された条件を満たすか判断するため、作業ルートを確認する。 */
   private void verifyRoot(ProjectContext owner) {
     if (projects
         .resolveById(owner.id())
@@ -410,6 +507,7 @@ public final class DailyPlanningService {
         .isEmpty()) throw new ResourceNotFoundException("Today Project");
   }
 
+  /** 日々の計画の支援において、同一作業ルートに該当するか判定する。 */
   private static boolean sameRoot(ProjectContext owner, String root) {
     try {
       return root != null && owner.root().equals(Path.of(root).toAbsolutePath().normalize());
@@ -418,10 +516,12 @@ public final class DailyPlanningService {
     }
   }
 
+  /** 日々の計画の支援において、期限切れに該当するか判定する。 */
   private static boolean expired(long deadline) {
     return System.nanoTime() - deadline >= 0;
   }
 
+  /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */
   private static String safe(String value, int limit) {
     var text = CredentialRedactor.redact(Objects.toString(value, ""));
     return text.substring(0, Math.min(limit, text.length()));

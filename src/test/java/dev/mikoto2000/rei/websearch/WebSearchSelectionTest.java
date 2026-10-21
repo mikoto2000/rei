@@ -18,13 +18,17 @@ import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** Web検索選択内容の結果と状態の契約を検証するテスト。 */
 class WebSearchSelectionTest {
+  /** 検証に使うこの機能の動作設定。 */
   WebSearchProperties properties = new WebSearchProperties();
 
+  /** 検証で使用する結果を、指定された条件に合わせて用意する。 */
   WebSearchResult result(String title, String url, String date) {
     return new WebSearchResult(title, url, title, date);
   }
 
+  /** Web上の情報の調査で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void enoughRelevantCandidatesStopAfterOriginalQuery() throws Exception {
     var search = mock(WebSearchService.class);
@@ -39,6 +43,7 @@ class WebSearchSelectionTest {
     verify(search, times(1)).search(anyString(), anyInt());
   }
 
+  /** Web上の情報の調査で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void officialAndVersionRequirementsCauseAdditionalSearchDespiteEnoughResults() throws Exception {
     var search = mock(WebSearchService.class);
@@ -56,6 +61,7 @@ class WebSearchSelectionTest {
     verify(search).search("Spring 2.0.1 official reference", 1);
   }
 
+  /** 最新について、日付別の根拠を必要とすることを確認する。 */
   @Test
   void latestRequiresDatedEvidenceAndMultipleSourcesRequireDifferentDomains() {
     var old = result("Java latest release", "https://docs.oracle.com/old", "2020-01-01");
@@ -73,6 +79,7 @@ class WebSearchSelectionTest {
             2));
   }
 
+  /** Web上の情報の調査で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void normalizationRetainsMeaningfulQueryAndEncoding() {
     assertEquals(
@@ -90,6 +97,7 @@ class WebSearchSelectionTest {
         WebSearchSelection.normalizeUrl("https://example.com?ref=main&source=code"));
   }
 
+  /** 重複一覧について、別名一覧を維持することを確認する。 */
   @Test
   void duplicatesKeepAliasesAndCandidatesAreCappedBeforeFetch() throws Exception {
     var search = mock(WebSearchService.class);
@@ -108,6 +116,7 @@ class WebSearchSelectionTest {
     assertEquals("https://example.org/b", selected.get(1).result().url());
   }
 
+  /** Web上の情報の調査で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unrelatedResultsAndWrongVersionsAreNotSufficient() {
     assertFalse(
@@ -128,6 +137,7 @@ class WebSearchSelectionTest {
     assertFalse(WebSearchSelection.knownOfficial("https://agency.gov.evil.example"));
   }
 
+  /** Web上の情報の調査の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void expansionIsBoundedAndCancellationPropagates() throws Exception {
     var search = mock(WebSearchService.class);

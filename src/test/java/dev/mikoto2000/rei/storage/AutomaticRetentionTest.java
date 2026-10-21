@@ -13,15 +13,28 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 自動保持期間の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class AutomaticRetentionTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final RetentionExecutionTest.MutableClock clock = new RetentionExecutionTest.MutableClock();
+
+  /** 検証に使う登録台帳。 */
   StorageObjectRegistry registry;
+
+  /** 検証に使う計画の作成。 */
   RetentionPlanner planner;
+
+  /** 検証に使う自動。 */
   AutomaticRetention automatic;
+
+  /** 検証に使う実行先。 */
   RetentionExecutor executor;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void prepare() throws Exception {
     try (var gate = new StorageMigrationCoordinator(root)) {
@@ -33,6 +46,7 @@ class AutomaticRetentionTest {
     automatic = new AutomaticRetention(registry, planner, executor);
   }
 
+  /** {@code archive} の条件を再現するための補助情報を返す。 */
   Path archive(String project) throws Exception {
     Path file =
         (project == null ? root : root.resolve("projects").resolve(project))
@@ -50,6 +64,7 @@ class AutomaticRetentionTest {
     return file;
   }
 
+  /** データ保存の共通処理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void defaultOffAndProposalWithoutApprovalNeverRunsAndApprovedScopeHasFixedBudget()
       throws Exception {
@@ -83,6 +98,7 @@ class AutomaticRetentionTest {
     assertThat(executor.history()).hasSize(2);
   }
 
+  /** データ保存の共通処理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void changingPolicyInvalidatesProposalAndExistingConsent() throws Exception {
     var stale = automatic.propose("activity-raw", null, 1, 1024, Duration.ofMinutes(10));

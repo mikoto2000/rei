@@ -22,8 +22,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** タスクコマンドの結果と状態の契約を検証するテスト。 */
 class TaskCommandTest {
 
+  /** 追加コマンドについて、削除済みタグ選択項目を受け付けないことを確認する。 */
   @Test
   void addCommandRejectsRemovedTagOption() {
     TaskService service = Mockito.mock(TaskService.class);
@@ -34,6 +36,7 @@ class TaskCommandTest {
     Mockito.verifyNoInteractions(service);
   }
 
+  /** 一覧コマンドについて、削除済みタグ選択項目を受け付けないことを確認する。 */
   @Test
   void listCommandRejectsRemovedTagOption() {
     TaskService service = Mockito.mock(TaskService.class);
@@ -44,6 +47,7 @@ class TaskCommandTest {
     Mockito.verifyNoInteractions(service);
   }
 
+  /** タスクの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void listReportOmitsRemovedTagColumn() {
     TaskService service = Mockito.mock(TaskService.class);
@@ -54,6 +58,7 @@ class TaskCommandTest {
     assertEquals("1 | 2 | 2026-03-31 | design review", TaskCommand.reportList(service, null, null));
   }
 
+  /** タスクの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void authCommandDelegatesToTaskService() throws Exception {
     TaskService service = Mockito.mock(TaskService.class);
@@ -64,6 +69,7 @@ class TaskCommandTest {
     verify(service).authorize();
   }
 
+  /** タスクの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void addCommandDelegatesToTaskService() {
     TaskService service = Mockito.mock(TaskService.class);
@@ -77,6 +83,7 @@ class TaskCommandTest {
     verify(service).add("設計レビュー", LocalDate.of(2026, 3, 31), 2);
   }
 
+  /** タスクの管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void addCommandPrintsErrorWhenTaskCreationFails() {
     TaskService service = Mockito.mock(TaskService.class);
@@ -101,6 +108,7 @@ class TaskCommandTest {
             .contains("[error] Google Tasks へのタスク追加に失敗しました: Google Task integration is disabled"));
   }
 
+  /** タスクの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void listCommandPrintsOpenTasks() {
     TaskService service = Mockito.mock(TaskService.class);
@@ -120,6 +128,7 @@ class TaskCommandTest {
     assertTrue(out.toString().contains("定例MTG"));
   }
 
+  /** タスクの管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void listCommandBuildsQuery() {
     TaskService service = Mockito.mock(TaskService.class);
@@ -136,6 +145,7 @@ class TaskCommandTest {
     assertEquals(LocalDate.of(2026, 3, 31), actual.dueBefore());
   }
 
+  /** 完了およびについて、コマンド一覧委譲先を削除することを確認する。 */
   @Test
   void doneAndDeleteCommandsDelegateToTaskService() {
     TaskService service = Mockito.mock(TaskService.class);
@@ -148,14 +158,17 @@ class TaskCommandTest {
     verify(service).delete(20L);
   }
 
+  /** {@code task} の条件を再現するための補助情報を返す。 */
   private Task task(long id, String title, LocalDate dueDate, int priority, TaskStatus status) {
     return new Task(id, title, dueDate, priority, status, OffsetDateTime.now(ZoneOffset.UTC), null);
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private CommandLine newCommand(TaskService service) {
     return new CommandLine(
         new TaskCommand(),
         new CommandLine.IFactory() {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           public <K> K create(Class<K> cls) throws Exception {
             if (cls == TaskCommand.AuthCommand.class) {

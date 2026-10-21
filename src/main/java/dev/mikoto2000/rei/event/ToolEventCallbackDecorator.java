@@ -18,6 +18,7 @@ public class ToolEventCallbackDecorator
 
   // Only requested filesystem operations may recover. A missing internal resource in
   // another tool (for example checkpoint storage) must still fail the Run.
+  /** ファイルツール一覧。 */
   private static final java.util.Set<String> FILE_TOOLS =
       java.util.Set.of(
           "readMultiFile",
@@ -41,10 +42,16 @@ public class ToolEventCallbackDecorator
           "moveFile",
           "createDirectories");
 
+  /** 委譲先。 */
   private final ToolCallback delegate;
+
+  /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
+
+  /** 実行状況の通知先。 */
   private final AgentEventPublisher eventPublisher;
 
+  /** 指定された値や利用先を使って、ToolEventCallbackDecoratorを初期化する。 */
   public ToolEventCallbackDecorator(
       ToolCallback delegate, AgentEventFactory eventFactory, AgentEventPublisher eventPublisher) {
     this.delegate = delegate;
@@ -52,6 +59,7 @@ public class ToolEventCallbackDecorator
     this.eventPublisher = eventPublisher;
   }
 
+  /** 実行状況の通知において、レビューページに該当するか判定する。 */
   @Override
   public boolean reviewPage() {
     return delegate
@@ -60,26 +68,31 @@ public class ToolEventCallbackDecorator
         && registered.reviewPage();
   }
 
+  /** 実行状況の通知で用いる配信種類を返す。 */
   @Override
   public dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind deliveryKind() {
     return dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.kind(delegate);
   }
 
+  /** 実行状況の通知で参照するツール定義を返す。 */
   @Override
   public ToolDefinition getToolDefinition() {
     return delegate.getToolDefinition();
   }
 
+  /** 実行状況の通知の要求を実行し、呼び出し元へ結果を返す。 */
   @Override
   public String call(String toolInput) {
     return emitAndCall(toolInput, null, () -> delegate.call(toolInput));
   }
 
+  /** 実行状況の通知の要求を実行し、呼び出し元へ結果を返す。 */
   @Override
   public String call(String toolInput, ToolContext toolContext) {
     return emitAndCall(toolInput, toolContext, () -> delegate.call(toolInput, toolContext));
   }
 
+  /** 実行状況の通知で用いる通知および呼び出しを返す。 */
   private String emitAndCall(String toolInput, ToolContext toolContext, Supplier<String> caller) {
     var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     if (toolContext != null

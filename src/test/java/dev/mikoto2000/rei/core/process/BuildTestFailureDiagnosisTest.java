@@ -8,14 +8,18 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 構築検証失敗情報診断の結果と状態の契約を検証するテスト。 */
 class BuildTestFailureDiagnosisTest {
+  /** 検証に使う検証条件作業ルート。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path fixtureRoot;
 
+  /** 検証で使用する結果を、指定された条件に合わせて用意する。 */
   RunCommandResult result(String status, Integer exit, String out, String err, boolean timeout) {
     return new RunCommandResult(
         status, "foreground", "foreground", exit, out, err, null, null, timeout, null);
   }
 
+  /** 外部プロセスの管理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void extractsReportedTestsAndCausesWithStreamEvidence() {
     var value =
@@ -35,6 +39,7 @@ class BuildTestFailureDiagnosisTest {
     assertFalse(value.nextActions().isEmpty());
   }
 
+  /** 外部プロセスの管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void distinguishesCompilerDependencyAndUnknownExitWithoutInventingCause() {
     assertEquals(
@@ -53,6 +58,7 @@ class BuildTestFailureDiagnosisTest {
     assertTrue(unknown.causes().isEmpty());
   }
 
+  /** 外部プロセスの管理で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void timeoutRunningAndKilledAreProcessFactsNotTestFailures() {
     assertEquals("TIMED_OUT", result("failed", -1, "", "", true).diagnosis().outcome());
@@ -87,6 +93,7 @@ class BuildTestFailureDiagnosisTest {
     assertEquals("UNKNOWN", missing.diagnosis().outcome());
   }
 
+  /** 外部プロセスの管理で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void redactsBeforeEvidenceClippingAndBoundsAnalysis() {
     var value =
@@ -110,6 +117,7 @@ class BuildTestFailureDiagnosisTest {
     assertTrue(many.causes().size() <= 8);
   }
 
+  /** 外部プロセスの管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void successfulOutputDoesNotTurnOrdinaryWordsIntoFailuresAndJsonIncludesDiagnosis() {
     var success =
@@ -128,6 +136,7 @@ class BuildTestFailureDiagnosisTest {
     assertTrue(json.contains("SUCCEEDED"));
   }
 
+  /** 外部プロセスの管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void testClassSummaryIsNotAReportedTestNameAndNegativeTestOutputDoesNotOverrideExitCode() {
     var value =
@@ -148,6 +157,7 @@ class BuildTestFailureDiagnosisTest {
     assertTrue(negative.warnings().stream().anyMatch(w -> w.contains("exit code 0")));
   }
 
+  /** 診断根拠を返すことを確認する。 */
   @Test
   void aRealManagedProcessReturnsDiagnosticEvidenceWithoutStartingAnotherCommand()
       throws Exception {
@@ -169,7 +179,9 @@ class BuildTestFailureDiagnosisTest {
     }
   }
 
+  /** 検証条件を再現するための失敗情報検証条件。 */
   public static class FailureFixture {
+    /** 検証用に、外部プロセスの管理の起動要求を受け付け、実行を開始する。 */
     public static void main(String[] args) {
       System.out.println("[ERROR] demo.AppTest.fail -- Time elapsed: 0.1 s <<< FAILURE!");
       System.err.println("Caused by: java.lang.IllegalStateException: fixture failure");

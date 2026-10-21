@@ -18,9 +18,12 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** テキスト文書変更集合ツールの結果と状態の契約を検証するテスト。 */
 class TextDocumentChangeSetToolTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 延長済み単一ファイルサービスおよび既存のツール一覧について、取得済み所有者を利用することを確認する。 */
   @Test
   void extendedSingleFileServiceAndExistingToolsUseCapturedOwnerAndOneCommittedEvent()
       throws Exception {
@@ -75,6 +78,7 @@ class TextDocumentChangeSetToolTest {
         .fileModified(root.resolve("A.md").toString(), null, null);
   }
 
+  /** 共通の実行基盤で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void humanRecoveryCommandRoutesExactInstructionThroughExistingExclusiveQueue() {
     var conversations =

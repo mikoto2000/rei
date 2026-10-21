@@ -27,13 +27,17 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/** 実行予定HTTP通信の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ScheduleHttpTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import({WebApiIntegrationTest.Config.class, ScheduleController.class})
   static class Config {
+    /** {@code schedules} の条件を再現するための補助情報を返す。 */
     @Bean
     PersistentAgentScheduler schedules(
         @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String path) {
@@ -43,12 +47,14 @@ class ScheduleHttpTest {
           Clock.fixed(Instant.EPOCH, ZoneOffset.UTC));
     }
 
+    /** {@code dispatcher} の条件を再現するための補助情報を返す。 */
     @Bean
     AgentScheduleDispatcher dispatcher() {
       return mock(AgentScheduleDispatcher.class);
     }
   }
 
+  /** 所有権を保持することを確認する。 */
   @Test
   void authenticatedExplicitControlsPreserveOwnershipAndNeverReplayUncertainExecution()
       throws Exception {

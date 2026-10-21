@@ -15,7 +15,9 @@ import java.time.Clock;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
+/** イベント配信要求やイベントの再送の結果と状態の契約を検証するテスト。 */
 class SseReplayTest {
+  /** Web APIによる操作で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void liveToolStartThenReconnectReplaysSemanticCompletionInGlobalOrder() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -27,6 +29,7 @@ class SseReplayTest {
     try (var bridge = new SseBridge(bus, new RunService(registry), "secret-value")) {
       var first =
           new SseBridgeTest.Sink() {
+            /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
             public void event(WebApiEventDto event) {
               events.add(event);
               received.countDown();
@@ -65,6 +68,7 @@ class SseReplayTest {
     }
   }
 
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void disconnectThenResumeDeliversOnlyUnacknowledgedEventsAndNormalizesCancelledReplay()
       throws Exception {
@@ -77,6 +81,7 @@ class SseReplayTest {
     try (var bridge = new SseBridge(bus, new RunService(registry), "")) {
       var first =
           new SseBridgeTest.Sink() {
+            /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
             public void event(WebApiEventDto event) {
               this.events.add(event);
               received.countDown();
@@ -98,6 +103,7 @@ class SseReplayTest {
     }
   }
 
+  /** Web APIによる操作で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void completionDuringReplayFollowsSnapshotWithoutLossOrDuplication() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -109,6 +115,7 @@ class SseReplayTest {
     var release = new java.util.concurrent.CountDownLatch(1);
     var sink =
         new SseBridgeTest.Sink() {
+          /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
           public void event(WebApiEventDto event) throws Exception {
             events.add(event);
             if (event.sequence() == 1) {
@@ -131,6 +138,7 @@ class SseReplayTest {
     }
   }
 
+  /** Web APIによる操作で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void initialConnectionReplaysMoreThanClientQueueCapacityAndThenCompletes() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -157,6 +165,7 @@ class SseReplayTest {
     }
   }
 
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void terminalStateWithoutStoredEventKeepsSubscriptionUntilEventArrives() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -175,6 +184,7 @@ class SseReplayTest {
     }
   }
 
+  /** Web APIによる操作で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void expiredRunAndReplayDisappearTogether() {
     var clock = new RunRegistryTest.MutableClock();

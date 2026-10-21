@@ -18,6 +18,7 @@ import org.springframework.context.annotation.Import;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 
+/** WebAPIの構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @Import({
   dev.mikoto2000.rei.conversation.SessionHistoryConfiguration.class,
@@ -30,12 +31,14 @@ import org.springframework.scheduling.annotation.Scheduled;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @EnableScheduling
 public class WebApiConfiguration {
+  /** Web APIによる操作で用いるWebプロジェクト登録台帳を返す。 */
   @Bean
   ProjectRegistry webProjectRegistry(
       @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
     return new ProjectRegistry(java.nio.file.Path.of(directory).resolve("projects.json"));
   }
 
+  /** Web APIによる操作で用いるWeb実行登録台帳を返す。 */
   @Bean
   RunRegistry webRunRegistry(
       Clock clock,
@@ -54,17 +57,20 @@ public class WebApiConfiguration {
         clock, enabled || tasksEnabled || todayEnabled || slackEnabled ? source.getObject() : null);
   }
 
+  /** Web APIによる操作で用いるWebプロジェクト検索条件サービスを返す。 */
   @Bean
   dev.mikoto2000.rei.application.project.ProjectQueryService webProjectQueryService(
       ProjectRegistry projects) {
     return new dev.mikoto2000.rei.application.project.ProjectQueryService(projects);
   }
 
+  /** Web APIによる操作で用いるWeb会話登録台帳を返す。 */
   @Bean
   SessionRegistry webSessionRegistry(Clock clock) {
     return new SessionRegistry(clock);
   }
 
+  /** Web APIによる操作で用いるWeb実行サービスを返す。 */
   @Bean
   RunService webRunService(
       RunRegistry registry,
@@ -75,6 +81,7 @@ public class WebApiConfiguration {
     return new RunService(registry, bus, events, cancellation, router::cancelQueued);
   }
 
+  /** Web APIによる操作で用いるWebチャット受付サービスを返す。 */
   @Bean
   ChatSubmitService webChatSubmitService(
       ProjectRegistry projects,
@@ -95,25 +102,33 @@ public class WebApiConfiguration {
         concurrentEnabled);
   }
 
+  /** Web APIによる操作で用いるイベント配信連携を返す。 */
   @Bean
   SseBridge sseBridge(AgentEventBus bus, RunService runs, ApiKeyProperties key) {
     return new SseBridge(bus, runs, key.getApiKey());
   }
 
+  /** Web APIによる操作で用いるWeb保守を返す。 */
   @Bean
   Maintenance webMaintenance(RunService runs, SessionRegistry sessions) {
     return new Maintenance(runs, sessions);
   }
 
+  /** Web APIによる操作に必要な保守を扱う。 */
   static final class Maintenance {
+    /** 実行一覧。 */
     private final RunService runs;
+
+    /** 会話一覧。 */
     private final SessionRegistry sessions;
 
+    /** 指定された値や利用先を使って、Maintenanceを初期化する。 */
     Maintenance(RunService runs, SessionRegistry sessions) {
       this.runs = runs;
       this.sessions = sessions;
     }
 
+    /** Web APIによる操作に関する保持期限を過ぎた情報の削除を処理する。 */
     @Scheduled(fixedDelay = 60_000)
     public void purge() {
       runs.purgeExpired();

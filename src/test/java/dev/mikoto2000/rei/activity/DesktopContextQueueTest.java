@@ -13,8 +13,11 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** デスクトップ文脈実行待ちの結果と状態の契約を検証するテスト。 */
 class DesktopContextQueueTest {
+  /** 検証条件を再現するための検証条件。 */
   static class Fixture extends ActivityVisionQueueTest.Fixture {
+    /** 検証条件に必要な値を受け取り、Fixtureを用意する。 */
     Fixture() throws Exception {
       p.getDetection().setBackgroundFullScreenEnabled(true);
       foreground =
@@ -24,6 +27,7 @@ class DesktopContextQueueTest {
           .thenAnswer(i -> new DesktopActivityObserver.Metadata(foreground, List.of(), true));
     }
 
+    /** {@code change} の条件を再現するため、検証用の操作や状態を扱う。 */
     @Override
     void change(String title) {
       foreground =
@@ -36,6 +40,7 @@ class DesktopContextQueueTest {
     }
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void foregroundAndBackgroundShareOneWorkerAndForegroundWins() throws Exception {
     var f = new Fixture();
@@ -61,6 +66,7 @@ class DesktopContextQueueTest {
     assertEquals(0, f.pipeline.desktopPending());
   }
 
+  /** 前面を維持することを確認する。 */
   @Test
   void idleAndMissingEnumerationSuppressDesktopButKeepForeground() throws Exception {
     var f = new Fixture();
@@ -79,6 +85,7 @@ class DesktopContextQueueTest {
     verify(f.store, times(2)).append(any());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void staleDesktopIsDiscardedAndShutdownDropsBothSlots() throws Exception {
     var f = new Fixture();
@@ -95,6 +102,7 @@ class DesktopContextQueueTest {
     assertEquals(0, f.pipeline.desktopPending());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedDesktopLeavesMainRecordAndWorkerAvailable() throws Exception {
     var f = new Fixture();
@@ -117,6 +125,7 @@ class DesktopContextQueueTest {
     verify(f.extractor, times(4)).extract(any(), any());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void monitorEvidenceAndInputAreSavedWithTheOriginalObservation() throws Exception {
     var f = new Fixture();

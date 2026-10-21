@@ -19,10 +19,12 @@ public record AgentRunCompletedPayload(
     Double endToEndTokensPerSecond)
     implements AgentEventPayload {
 
+  /** 実行状況の通知を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public AgentRunCompletedPayload(String runId, long duration) {
     this(runId, duration, null, null, null, null);
   }
 
+  /** 実行状況の通知を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public AgentRunCompletedPayload(String runId, long duration, Long completionTokens) {
     this(runId, duration, completionTokens, null, null, null);
   }

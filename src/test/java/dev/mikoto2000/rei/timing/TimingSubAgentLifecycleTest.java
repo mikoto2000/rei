@@ -13,7 +13,9 @@ import java.time.Clock;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
+/** 時間計測補助エージェント受付から終了までの管理の結果と状態の契約を検証するテスト。 */
 class TimingSubAgentLifecycleTest {
+  /** 既存の受付から終了までの管理を利用することを確認する。 */
   @Test
   void independentChildRunUsesExistingLifecycleWithoutKeepingTaskText() {
     var store =

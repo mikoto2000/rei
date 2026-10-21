@@ -8,7 +8,9 @@ import static org.mockito.Mockito.verify;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** 初学者レビューコマンドの結果と状態の契約を検証するテスト。 */
 class BeginnerReviewCommandTest {
+  /** 外部エージェントへの委譲で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void parsesAudienceKnowledgePlatformOrderAndMode() {
     var r =
@@ -42,6 +44,7 @@ class BeginnerReviewCommandTest {
         IllegalArgumentException.class, () -> BeginnerReviewRequest.parse(new String[] {"expert"}));
   }
 
+  /** 既存の会話実行待ちを利用することを確認する。 */
   @Test
   void thinShellAdapterUsesExistingConversationQueueAndPreservesQuoting() {
     var conversations = mock(dev.mikoto2000.rei.application.session.ShellConversationService.class);

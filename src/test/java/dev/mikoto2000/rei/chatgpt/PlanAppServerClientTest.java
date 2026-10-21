@@ -26,13 +26,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 計画アプリケーションサーバークライアントの結果と状態の契約を検証するテスト。 */
 class PlanAppServerClientTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う入力。 */
   final List<PlanClient.Input> input =
       List.of(
           new PlanClient.Input(
               "user", "{\"sources\":[{\"path\":\"docs/source.md\",\"content\":\"approved\"}]}"));
 
+  /** {@code tokens} の条件を再現するための補助情報を返す。 */
   TokenSet tokens() {
     return new TokenSet(
         "own",
@@ -45,6 +50,7 @@ class PlanAppServerClientTest {
         Instant.now().plusSeconds(100).getEpochSecond());
   }
 
+  /** 利用する実際の実行を読み取ることを確認する。 */
   @Test
   void onlyOwnLeaseIsPassedAndReadUsesActualRun() {
     var accounts = mock(PlanClient.class);
@@ -86,6 +92,7 @@ class PlanAppServerClientTest {
     assertTrue(session.closed);
   }
 
+  /** ChatGPTとの連携で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void logoutDuringStartupPreventsTurnAndClosesProcess() {
     var valid = new AtomicBoolean(true);
@@ -123,6 +130,7 @@ class PlanAppServerClientTest {
     assertTrue(s.sent.isEmpty());
   }
 
+  /** ChatGPTとの連携で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void missingRunAndOversizedInputNeverAcquireCredentialsOrStartProcess() {
     var accounts = mock(PlanClient.class);
@@ -158,10 +166,12 @@ class PlanAppServerClientTest {
                           () -> {}))
               .code());
     }
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(accounts);
     assertFalse(calls.get());
   }
 
+  /** ChatGPTとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   @org.junit.jupiter.api.condition.EnabledOnOs(org.junit.jupiter.api.condition.OS.WINDOWS)
   void wslEnvironmentDoesNotCarryAmbientKeysOrTokenArguments() {
@@ -186,6 +196,7 @@ class PlanAppServerClientTest {
     assertTrue(WslPlanAppServerLauncher.configuration().contains("shell_tool = false"));
   }
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void nativeToolContinuationReservesAndRecordsCumulativeUsageAsDeltas() {
     var accounts = mock(PlanClient.class);
@@ -227,6 +238,7 @@ class PlanAppServerClientTest {
     assertEquals(0, client.takeNativeTokens());
   }
 
+  /** ChatGPTとの連携の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void exhaustedNativeContinuationInterruptsBeforeToolReply() {
     var accounts = mock(PlanClient.class);
@@ -272,6 +284,7 @@ class PlanAppServerClientTest {
     assertEquals(17, client.takeNativeTokens());
   }
 
+  /** ChatGPTとの連携で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void maskedQuotedReferencesCanReturnThroughTheNativeAdapterWhileUnmaskedRepliesStayRestricted()
       throws Exception {

@@ -7,11 +7,16 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
+/** タスク状態ツール一覧の結果と状態の契約を検証するテスト。 */
 class TaskStateToolsTest {
 
+  /** 検証に使う状態。 */
   private final TaskState state = new TaskState();
+
+  /** 検証に使うツール一覧。 */
   private final TaskStateTools tools = new TaskStateTools(state);
 
+  /** 新規タスクを開始することを確認する。 */
   @Test
   void startsNewTaskWithGoal() {
     tools.updateTaskState(
@@ -25,6 +30,7 @@ class TaskStateToolsTest {
     assertEquals(List.of("実装修正"), state.pending());
   }
 
+  /** 作業状態の記録で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void continuesExistingTaskWithoutGoal() {
     tools.updateTaskState("goal", TaskState.STATUS_IN_PROGRESS, List.of(), List.of());
@@ -34,6 +40,7 @@ class TaskStateToolsTest {
     assertEquals(List.of("残り"), state.pending());
   }
 
+  /** 作業状態の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void completesTaskAndClearsPending() {
     tools.updateTaskState("goal", TaskState.STATUS_IN_PROGRESS, List.of(), List.of("残り"));
@@ -42,6 +49,7 @@ class TaskStateToolsTest {
     assertTrue(state.pending().isEmpty());
   }
 
+  /** 作業状態の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void blocksTask() {
     tools.updateTaskState("goal", TaskState.STATUS_IN_PROGRESS, List.of(), List.of());
@@ -49,6 +57,7 @@ class TaskStateToolsTest {
     assertEquals(TaskState.STATUS_BLOCKED, state.status());
   }
 
+  /** 作業状態の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void resetsToIdle() {
     tools.updateTaskState("goal", TaskState.STATUS_IN_PROGRESS, List.of("完了"), List.of("予定"));
@@ -57,18 +66,21 @@ class TaskStateToolsTest {
     assertEquals(TaskState.STATUS_IDLE, state.status());
   }
 
+  /** 不明状態を受け付けないことを確認する。 */
   @Test
   void rejectsUnknownStatus() {
     String result = tools.updateTaskState("goal", "UNKNOWN", List.of(), List.of());
     assertTrue(result.contains("不正な status"));
   }
 
+  /** 未指定目標を受け付けないことを確認する。 */
   @Test
   void rejectsMissingGoalWhenIdle() {
     String result = tools.updateTaskState(null, TaskState.STATUS_IN_PROGRESS, List.of(), List.of());
     assertTrue(result.contains("goal は必須"));
   }
 
+  /** 作業状態の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void toolDefinitionRequiresOnlyStatusAndExplainsStringArrays() throws Exception {
     var definition =
@@ -106,6 +118,7 @@ class TaskStateToolsTest {
     assertTrue(definition.description().contains("\"pending\":[\"レビュー委譲\",\"指摘の検証\"]"));
   }
 
+  /** 作業状態の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void generatedCallbackAcceptsOmittedGoalAndOptionalListsForAnExistingTask() {
     var callback =

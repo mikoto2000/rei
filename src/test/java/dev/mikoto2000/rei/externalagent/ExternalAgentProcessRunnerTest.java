@@ -18,20 +18,25 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 外部エージェントプロセス実行の担当の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("e2e")
 class ExternalAgentProcessRunnerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code command} の条件を再現するための補助情報を返す。 */
   List<String> command(String mode) {
     return dev.mikoto2000.rei.testsupport.JavaFixtureCommand.command(root, Fixture.class, mode);
   }
 
+  /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
   ExternalAgentProcessRunner.Output run(
       String mode, Duration total, Duration idle, int limit, AtomicBoolean cancel) {
     return new ExternalAgentProcessRunner()
         .run(command(mode), root, "hello", total, idle, limit, cancel::get);
   }
 
+  /** 外部エージェントへの委譲で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void capturesBothStreamsAndNonZeroExit() {
     var output =
@@ -42,6 +47,7 @@ class ExternalAgentProcessRunnerTest {
     assertTrue(output.stderr().contains("diagnostic"));
   }
 
+  /** 外部エージェントへの委譲で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void preservesLiteralQuotesSpacesAndBackslashesInNativeArguments() {
     List<String> arguments =
@@ -73,6 +79,7 @@ class ExternalAgentProcessRunnerTest {
         output.stdout().lines().toList());
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void drainsLargeStreamsWithoutGrowingMemory() {
     var output =
@@ -82,6 +89,7 @@ class ExternalAgentProcessRunnerTest {
     assertTrue(output.stdout().length() + output.stderr().length() <= 4096);
   }
 
+  /** 外部エージェントへの委譲で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void distinguishesTimeouts() {
     assertEquals(
@@ -94,6 +102,7 @@ class ExternalAgentProcessRunnerTest {
             .status());
   }
 
+  /** 外部エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationCleansUpChildProcesses() throws Exception {
     AtomicBoolean cancel = new AtomicBoolean();
@@ -112,6 +121,7 @@ class ExternalAgentProcessRunnerTest {
     }
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void missingCommandIsFriendlyFailure() {
     var result =
@@ -129,6 +139,7 @@ class ExternalAgentProcessRunnerTest {
     assertTrue(result.stderr().contains("missing-command"));
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void normalExitAndPeriodicActivity() {
     var result =
@@ -138,6 +149,7 @@ class ExternalAgentProcessRunnerTest {
     assertFalse(result.truncated());
   }
 
+  /** 外部エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void preCancelledDoesNotStartAndInvalidWorkingDirectoryFails() {
     assertEquals(
@@ -159,7 +171,9 @@ class ExternalAgentProcessRunnerTest {
             .status());
   }
 
+  /** 検証条件を再現するための検証条件。 */
   public static class Fixture {
+    /** 検証用に、外部エージェントへの委譲の起動要求を受け付け、実行を開始する。 */
     public static void main(String[] args) throws Exception {
       switch (args[0]) {
         case "args" -> {

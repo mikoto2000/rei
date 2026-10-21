@@ -19,10 +19,12 @@ import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 記憶ConsolidatorサービスPropertyの結果と状態の契約を検証するテスト。 */
 @net.jqwik.api.Tag("integration")
 class MemoryConsolidatorServicePropertyTest {
 
   // Feature: ai-memory-consolidation, Property 13: 自動トリガー判定の閾値
+  /** 長期記憶の保存と検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Property(tries = 100)
   void shouldSuggestByMessageThreshold(
       @ForAll @IntRange(min = 0, max = 200) int messageCount,
@@ -36,6 +38,7 @@ class MemoryConsolidatorServicePropertyTest {
   }
 
   // Feature: ai-memory-consolidation, Property 13: 自動トリガー判定の閾値
+  /** 長期記憶の保存と検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Property(tries = 100)
   void shouldSuggestByContextUsage(
       @ForAll @IntRange(min = 0, max = 20000) int contextLength,
@@ -51,6 +54,7 @@ class MemoryConsolidatorServicePropertyTest {
   }
 
   // Feature: ai-memory-consolidation, Property 16: 要約の長さ制約
+  /** 長期記憶の保存と検索で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Property(tries = 50)
   void summarizeNeverExceedsConfiguredLength(
       @ForAll @AlphaChars @NotBlank String conversation,
@@ -65,6 +69,7 @@ class MemoryConsolidatorServicePropertyTest {
   }
 
   // Feature: ai-memory-consolidation, Property 1: 保存候補の不変条件
+  /** 長期記憶の保存と検索で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Property(tries = 100)
   void parsedCandidatesHaveExpectedInvariants(
       @ForAll @AlphaChars @NotBlank String content,
@@ -86,6 +91,7 @@ class MemoryConsolidatorServicePropertyTest {
     assertTrue(memory.confidence() >= 0.0d && memory.confidence() <= 1.0d);
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private MemoryConsolidatorService newService(
       int threshold, int percent, int summarizeMaxLength, String llmSummary) throws Exception {
     ChatClient chatClient = Mockito.mock(ChatClient.class, Mockito.RETURNS_DEEP_STUBS);

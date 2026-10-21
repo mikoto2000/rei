@@ -11,35 +11,90 @@ import org.jline.reader.*;
 import org.jline.reader.impl.history.DefaultHistory;
 import org.jline.terminal.*;
 
-/** Client-local selection, JLine input and ordinary terminal output. */
+/**
+ * 終端を外部の接続先へ依頼する窓口。
+ *
+ * <p>Client-local selection, JLine input and ordinary terminal output.
+ */
 public final class TerminalClient implements AutoCloseable {
+  /** 再開確認済み。 */
   private final dev.mikoto2000.rei.checkpoint.ResumeOverview.DisplayHistory resumeSeen =
       new dev.mikoto2000.rei.checkpoint.ResumeOverview.DisplayHistory();
+
+  /** 再開起動時読み取り／再開自動有効状態。 */
   private boolean resumeStartupRead, resumeAutoEnabled = true;
+
+  /** 再開タイムゾーン。 */
   private java.time.ZoneId resumeZone = java.time.ZoneId.systemDefault();
+
+  /** バックエンド。 */
   private final BackendClient backend;
+
+  /** 終端。 */
   private final Terminal terminal;
+
+  /** 読み取り元。 */
   private final LineReader reader;
+
+  /** 履歴。 */
   private final ClientHistory history;
+
+  /** 逐次データ一覧。 */
   private final ExecutorService streams = Executors.newVirtualThreadPerTaskExecutor();
+
+  /** 通知の監視を担当する処理。 */
   private Future<?> watching;
+
+  /** 接続済みかどうか。 */
   private volatile boolean attached;
+
+  /** 購読生成。 */
   private final AtomicLong subscriptionGeneration = new AtomicLong();
+
+  /** 動作モード。 */
   private String mode = "EXCLUSIVE";
+
+  /** プロジェクト／会話。 */
   private volatile String project, session;
+
+  /** プロジェクト名前／実行。 */
   private String projectName = "none", run;
+
+  /** 現在モデル。 */
   private String currentModel = "unknown";
+
+  /** プロジェクトディレクトリ。 */
   private Path projectDirectory;
+
+  /** プロジェクト識別子一覧／会話識別子一覧。 */
   private volatile List<String> projectIds = List.of(), sessionIds = List.of();
+
+  /** モデル識別子一覧。 */
   private volatile List<String> modelIds = List.of();
+
+  /** プロジェクトパス一覧。 */
   private volatile List<String> projectPaths = List.of();
+
+  /** 全対象会話識別子一覧。 */
   private volatile List<String> allSessionIds = List.of();
+
+  /** 利用可能な項目。 */
   private volatile CachedCatalog catalog =
       new CachedCatalog(new dev.mikoto2000.rei.application.cli.CliCatalog(List.of()));
+
+  /** 利用可能な項目読み込み済みの内容。 */
   private boolean catalogLoaded;
+
+  /** 記録履歴。 */
   private boolean recordHistory;
+
+  /** 承認別名一覧。 */
   private final ApprovalAliases approvalAliases = new ApprovalAliases();
+
+  /** 承認操作の選択肢。 */
   private final ApprovalActionMenu approvalMenu;
+
+  /** コマンド一覧。 */
   private static final List<String> COMMANDS =
       java.util.stream.Stream.concat(
               java.util.stream.Stream.of(
@@ -60,11 +115,13 @@ public final class TerminalClient implements AutoCloseable {
           .sorted()
           .toList();
 
+  /** 軽量CLIでの対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public TerminalClient(BackendClient backend, Path historyDirectory, boolean noHistory)
       throws IOException {
     this(backend, historyDirectory, noHistory, TerminalBuilder.builder().system(true).build());
   }
 
+  /** 指定された値や利用先を使って、TerminalClientを初期化する。 */
   TerminalClient(BackendClient backend, Path historyDirectory, boolean noHistory, Terminal terminal)
       throws IOException {
     this.backend = backend;
@@ -74,6 +131,7 @@ public final class TerminalClient implements AutoCloseable {
     this.terminal = terminal;
     var memory =
         new DefaultHistory() {
+          /** 新たな対象を登録し、後から利用できるようにする。 */
           @Override
           public void add(java.time.Instant time, String line) {
             if (recordHistory && history.accepts(line)) super.add(time, line);
@@ -101,11 +159,13 @@ public final class TerminalClient implements AutoCloseable {
         });
   }
 
+  /** 軽量CLIでの対話で用いる待機中承認一覧を返す。 */
   List<String> pendingApprovals(ApprovalActionMenu.Owner owner)
       throws IOException, InterruptedException {
     if (owner.project() == null || owner.session() == null) return List.of();
     var rows =
         backend.get("/api/v1/projects/" + BackendClient.segment(owner.project()) + "/approvals");
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (!rows.isArray() || rows.size() > 256) throw new IOException("Invalid approval list");
     var ids = new ArrayList<String>();
     var activeRuns = new HashMap<String, Boolean>();
@@ -136,15 +196,18 @@ public final class TerminalClient implements AutoCloseable {
     return ids;
   }
 
+  /** 条件に合う対象を利用するため、初期プロジェクトを選択する。 */
   public void selectInitialProject(Path path) throws IOException, InterruptedException {
     Path selected = (path == null ? Path.of("") : path).toAbsolutePath().normalize();
     var value = backend.post("/api/v1/projects/register", Map.of("path", selected.toString()));
     selectProject(value.path("id").asText());
   }
 
+  /** パス一覧。 */
   private final CompletionEngine paths =
       new CompletionEngine().register(new FilePathCompletionProvider());
 
+  /** 処理の完了を記録し、後続の処理へ結果を引き渡す。 */
   private void complete(LineReader input, ParsedLine line, List<Candidate> candidates) {
     List<String> values = completionValues(line.words(), line.wordIndex(), line.word());
     for (String value : values)
@@ -161,6 +224,7 @@ public final class TerminalClient implements AutoCloseable {
                 candidate.appendSpace()));
       }
     Set<String> types = catalog.pathTypes(line.words(), line.wordIndex(), line.word());
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (line.words().size() > 1
         && line.words().getFirst().equals("/project")
         && Set.of("register", "add", "cd").contains(line.words().get(1)))
@@ -191,6 +255,7 @@ public final class TerminalClient implements AutoCloseable {
     }
   }
 
+  /** 軽量CLIでの対話で用いる入力補完値一覧を返す。 */
   List<String> completionValues(List<String> words, int wordIndex, String prefix) {
     var values = new LinkedHashSet<>(catalog.complete(words, wordIndex, prefix));
     if (wordIndex == 0) values.addAll(COMMANDS);
@@ -203,6 +268,7 @@ public final class TerminalClient implements AutoCloseable {
     else if (type.endsWith("SessionCompletionCandidates")) values.addAll(allSessionIds);
     if (!words.isEmpty() && words.getFirst().equals("/agent")) {
       if (wordIndex == 1) values.addAll(List.of("codex", "claude"));
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (wordIndex == 2 && words.size() > 1 && Set.of("codex", "claude").contains(words.get(1))) {
         values.addAll(List.of("review", "implement", "implementation", "merge"));
         if (words.get(1).equals("codex")) values.add("material-review");
@@ -217,6 +283,7 @@ public final class TerminalClient implements AutoCloseable {
     return values.stream().filter(value -> value.startsWith(prefix)).toList();
   }
 
+  /** 軽量CLIでの対話に関する再確認利用可能な項目を処理する。 */
   void refreshCatalog() throws IOException, InterruptedException {
     if (catalogLoaded) return;
     try {
@@ -231,6 +298,7 @@ public final class TerminalClient implements AutoCloseable {
     catalogLoaded = true;
   }
 
+  /** 軽量CLIでの対話の操作を実行する。 */
   public void run() throws IOException {
     try {
       refresh();
@@ -265,6 +333,7 @@ public final class TerminalClient implements AutoCloseable {
           for (; ; ) {
             String part = reader.readLine("paste> ");
             if (part.equals(".")) break;
+            // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
             if (paste.length() + part.length() > 16384)
               throw new IllegalArgumentException("Input capacity exceeded");
             paste.append(part).append('\n');
@@ -290,6 +359,7 @@ public final class TerminalClient implements AutoCloseable {
         out(
             "コマンドが割り込みにより中断されました。 原因: "
                 + dev.mikoto2000.rei.event.FailureMessages.describe(interrupted));
+        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
         return;
       } catch (UserInterruptException interrupted) {
@@ -306,6 +376,7 @@ public final class TerminalClient implements AutoCloseable {
     }
   }
 
+  /** 軽量CLIでの対話に関する再確認を処理する。 */
   private void refresh() throws IOException, InterruptedException {
     refreshCatalog();
     try {
@@ -330,6 +401,7 @@ public final class TerminalClient implements AutoCloseable {
     if (project != null) sessionIds = sessionCompletion(project);
   }
 
+  /** 軽量CLIでの対話で用いる会話入力補完を返す。 */
   private List<String> sessionCompletion(String project) throws IOException, InterruptedException {
     var ids = new ArrayList<String>();
     var cursors = new HashSet<String>();
@@ -342,12 +414,14 @@ public final class TerminalClient implements AutoCloseable {
       var page = backend.get(path);
       for (var value : page.path("items")) ids.add(value.path("sessionId").asText());
       cursor = page.path("nextCursor").isTextual() ? page.path("nextCursor").asText() : null;
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (cursor != null && (!cursors.add(cursor) || cursors.size() > 128))
         throw new IOException("Session completion pagination capacity exceeded");
     } while (cursor != null);
     return List.copyOf(ids);
   }
 
+  /** 条件に合う対象を利用するため、プロジェクトを選択する。 */
   private void selectProject(String id) throws IOException, InterruptedException {
     JsonNode match = null;
     for (var value : backend.get("/api/v1/projects"))
@@ -362,6 +436,7 @@ public final class TerminalClient implements AutoCloseable {
     presentResume(false);
   }
 
+  /** 軽量CLIでの対話に関する存在する再開を処理する。 */
   private void presentResume(boolean force) throws InterruptedException {
     try {
       if (!resumeStartupRead) {
@@ -394,12 +469,15 @@ public final class TerminalClient implements AutoCloseable {
     }
   }
 
+  /** 軽量CLIでの対話に関する送信を処理する。 */
   private void send(String message) throws IOException, InterruptedException {
     send(message, mode);
   }
 
+  /** 軽量CLIでの対話に関する送信を処理する。 */
   private void send(String message, String access) throws IOException, InterruptedException {
     requireProject();
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (message.length() > 16384) throw new IllegalArgumentException("Input capacity exceeded");
     String key = UUID.randomUUID().toString();
     out("Receipt: " + key);
@@ -411,24 +489,29 @@ public final class TerminalClient implements AutoCloseable {
     refresh();
   }
 
+  /** 軽量CLIでの対話で用いる所属プロジェクトの識別子を返す。 */
   String projectId() {
     return project;
   }
 
+  /** 軽量CLIでの対話で用いる会話の識別子を返す。 */
   String sessionId() {
     return session;
   }
 
+  /** 軽量CLIでの対話で用いるコマンド入力の解釈を返す。 */
   private static Parser commandParser() {
     return new dev.mikoto2000.rei.ui.shell.ShellCompletionParser(
         Path.of(System.getProperty("user.home")));
   }
 
+  /** 軽量CLIでの対話で用いるコマンド語句一覧を返す。 */
   static List<String> commandWords(String line) {
     return java.util.Arrays.asList(
         new dev.mikoto2000.rei.core.command.UserInputParser().split(line));
   }
 
+  /** 軽量CLIでの対話に関するコマンドを処理する。 */
   void command(String line) throws IOException, InterruptedException {
     var rawWords = commandWords(line);
     String requestedHelp = catalog.requestedHelp(rawWords);
@@ -448,6 +531,7 @@ public final class TerminalClient implements AutoCloseable {
       out(catalog.help(words));
       return;
     }
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (words.size() > 1
         && !words.contains("--")
         && Set.of("--help", "-h").contains(words.getLast())) {
@@ -911,11 +995,13 @@ public final class TerminalClient implements AutoCloseable {
     }
   }
 
+  /** 軽量CLIでの対話に関する承認コマンドを処理する。 */
   private void approvalCommand(List<String> words) throws IOException, InterruptedException {
     requireProject();
     String action = words.size() == 1 ? "list" : words.get(1);
     String base = "/api/v1/projects/" + BackendClient.segment(project) + "/approvals";
     if (action.equals("list")) {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (words.size() > 2) throw new IllegalArgumentException("Usage: /approval list");
       var rows = backend.get(base);
       if (!rows.isArray() || rows.size() > 256) throw new IOException("Invalid approval list");
@@ -953,6 +1039,7 @@ public final class TerminalClient implements AutoCloseable {
     }
   }
 
+  /** 後続の操作を進められるか判断するため、承認を確認する。 */
   private void checkApproval(JsonNode row) throws IOException {
     if (!row.isObject()
         || !row.path("projectId").asText().equals(project)
@@ -962,6 +1049,7 @@ public final class TerminalClient implements AutoCloseable {
       throw new IOException("Invalid approval ownership");
   }
 
+  /** 利用者に結果を伝えるため、承認を出力する。 */
   private void printApproval(JsonNode row, String reference) {
     out(
         "承認 "
@@ -983,6 +1071,7 @@ public final class TerminalClient implements AutoCloseable {
       out("承認して続行: /approval approve " + reference + " --continue");
   }
 
+  /** 新たな対象を利用できるよう、会話を作成する。 */
   private void createSession(String title) throws IOException, InterruptedException {
     var body = new LinkedHashMap<String, Object>();
     body.put("projectId", project);
@@ -992,6 +1081,7 @@ public final class TerminalClient implements AutoCloseable {
     out("Current session: " + session);
   }
 
+  /** 軽量CLIでの対話に関する監視を処理する。 */
   private void watch(String id) {
     long generation = subscriptionGeneration.incrementAndGet();
     backend.detach();
@@ -1065,6 +1155,7 @@ public final class TerminalClient implements AutoCloseable {
                         "Run event stream rejected: "
                             + dev.mikoto2000.rei.event.FailureMessages.describe(error));
                   } catch (InterruptedException interrupt) {
+                    // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
                     Thread.currentThread().interrupt();
                     return;
                   } catch (IOException | IllegalArgumentException error) {
@@ -1093,6 +1184,7 @@ public final class TerminalClient implements AutoCloseable {
             });
   }
 
+  /** 軽量CLIでの対話に関する状態確認を処理する。 */
   private void poll(String id, long generation) {
     for (int attempt = 0;
         attempt < 60 && attached && generation == subscriptionGeneration.get();
@@ -1109,6 +1201,7 @@ public final class TerminalClient implements AutoCloseable {
         }
         Thread.sleep(1000);
       } catch (InterruptedException interrupted) {
+        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
         return;
       } catch (IOException connection) {
@@ -1123,16 +1216,19 @@ public final class TerminalClient implements AutoCloseable {
     out("Status polling ended; inspect /runs " + id + ". Backend execution was not cancelled.");
   }
 
+  /** 条件を満たさない操作を拒否するため、プロジェクトの前提条件を確認する。 */
   private void requireProject() {
     if (project == null)
       throw new IllegalArgumentException(
           "Select a Project with /project select ID or /project register LOCAL_PATH");
   }
 
+  /** 条件を満たさない操作を拒否するため、会話の前提条件を確認する。 */
   private void requireSession() {
     if (session == null) throw new IllegalArgumentException("No Session selected");
   }
 
+  /** 軽量CLIでの対話で用いるローカルプロジェクトパスを返す。 */
   private Path localProjectPath(String value) {
     var path = Path.of(value);
     return (path.isAbsolute()
@@ -1143,15 +1239,18 @@ public final class TerminalClient implements AutoCloseable {
         .normalize();
   }
 
+  /** 軽量CLIでの対話で用いる引数を返す。 */
   private static String argument(List<String> words, int index) {
     if (index >= words.size()) throw new IllegalArgumentException("Missing command argument");
     return words.get(index);
   }
 
+  /** 利用者が対象の情報を確認できるように表示する。 */
   private void show(JsonNode value) throws IOException {
     out(BackendClient.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(value));
   }
 
+  /** 利用先に渡せるよう、プロンプトを組み立てる。 */
   String buildPrompt(java.time.LocalTime time) {
     return time.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
         + " "
@@ -1159,14 +1258,17 @@ public final class TerminalClient implements AutoCloseable {
         + "> ";
   }
 
+  /** 軽量CLIでの対話で用いる安全性出力を返す。 */
   private String safeOutput(String value) {
     return backend.redact(value).replaceAll("[\\x00-\\x08\\x0b\\x0c\\x0e-\\x1f\\x7f]", "");
   }
 
+  /** 軽量CLIでの対話に関する出力先を処理する。 */
   private void out(String value) {
     reader.printAbove(safeOutput(value));
   }
 
+  /** 軽量CLIでの対話に関する承認通知を処理する。 */
   private void approvalNotice(String message) {
     String safe = safeOutput(message);
     if (ApprovalDisplayState.interactive(terminal)) reader.printAbove(ApprovalNotice.format(safe));
@@ -1176,6 +1278,7 @@ public final class TerminalClient implements AutoCloseable {
     }
   }
 
+  /** 軽量CLIでの対話で利用した資源や登録を解放し、利用を終了する。 */
   @Override
   public void close() throws IOException {
     approvalMenu.close();

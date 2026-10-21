@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 経験の記録期間の結果と状態の契約を検証するテスト。 */
 class EpisodePeriodTest {
+  /** 過去の経験の活用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void anUnknownEndRemainsUnknownAndAnInvertedPeriodIsRejected() {
     var claims =

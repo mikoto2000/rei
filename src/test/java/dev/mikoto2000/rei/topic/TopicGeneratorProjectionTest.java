@@ -11,10 +11,13 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 
+/** 話題生成表示用の状態の結果と状態の契約を検証するテスト。 */
 class TopicGeneratorProjectionTest {
+  /** 通知された出来事と順序を検証するための記録。 */
   private final AgentEventFactory events =
       new AgentEventFactory(Clock.fixed(Instant.parse("2026-09-02T00:00:00Z"), ZoneOffset.UTC));
 
+  /** 話題の管理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void rebuildsTopicGeneratorStateFromLifecycleEvents() {
     TopicGeneratorProjection projection = new TopicGeneratorProjection();
@@ -52,6 +55,7 @@ class TopicGeneratorProjectionTest {
     assertEquals(score, state.candidates().getFirst().score());
   }
 
+  /** 拒否済みを保存することを確認する。 */
   @Test
   void storesRejectedAndSkippedStateSeparately() {
     TopicGeneratorProjection projection = new TopicGeneratorProjection();
@@ -85,6 +89,7 @@ class TopicGeneratorProjectionTest {
     assertEquals(TopicRejectionReason.LOW_SCORE, state.candidates().getFirst().rejectionReason());
   }
 
+  /** 直近読み上げ済みを維持することを確認する。 */
   @Test
   void resetsCandidatesOnNewGenerationButKeepsLastSpokenAt() {
     TopicGeneratorProjection projection = new TopicGeneratorProjection();
@@ -115,6 +120,7 @@ class TopicGeneratorProjectionTest {
     assertEquals(Instant.parse("2026-09-02T00:00:00Z"), state.lastSpokenAt());
   }
 
+  /** 話題の管理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void toleratesOutOfOrderCandidateEventsWithPlaceholder() {
     TopicGeneratorProjection projection = new TopicGeneratorProjection();
@@ -128,6 +134,7 @@ class TopicGeneratorProjectionTest {
     assertEquals(TopicCandidateStatus.SCORED, state.candidates().getFirst().status());
   }
 
+  /** 話題の管理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void ignoresUnknownAndStaleEvents() {
     TopicGeneratorProjection projection = new TopicGeneratorProjection();
@@ -143,12 +150,14 @@ class TopicGeneratorProjectionTest {
     assertEquals(2, projection.currentState().lastSequence());
   }
 
+  /** {@code apply} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void apply(TopicGeneratorProjection projection, AgentEvent... events) {
     for (AgentEvent event : events) {
       projection.onEvent(event);
     }
   }
 
+  /** 検証用に、指定された発生順序を反映した情報を作成する。 */
   private AgentEvent withSequence(AgentEvent event, long sequence) {
     return new AgentEvent(
         event.id(),

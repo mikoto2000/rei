@@ -6,10 +6,16 @@ import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Model.OptionSpec;
 import picocli.CommandLine.Model.PositionalParamSpec;
 
-/** Data-only help model. It has no command object, executor, service, or filesystem access. */
+/**
+ * コマンドの案内に必要な軽量CLI入力文法を扱う。
+ *
+ * <p>Data-only help model. It has no command object, executor, service, or filesystem access.
+ */
 public final class CliGrammar {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private CliGrammar() {}
 
+  /** コマンドの案内で用いる説明を返す。 */
   public static CommandSpec describe(CliCatalog.Command command) {
     var spec =
         CommandSpec.create().name(command.name()).aliases(command.aliases().toArray(String[]::new));
@@ -37,6 +43,7 @@ public final class CliGrammar {
     return spec;
   }
 
+  /** コマンドの案内で用いる選択項目を返す。 */
   private static OptionSpec option(CliCatalog.Option option) {
     var builder =
         OptionSpec.builder(option.names().toArray(String[]::new))
@@ -53,11 +60,13 @@ public final class CliGrammar {
     return builder.build();
   }
 
+  /** 判断に必要な情報を集め、後続の処理へ渡す。 */
   private static void collect(CliCatalog.Group group, java.util.Set<CliCatalog.Option> values) {
     values.addAll(group.options());
     group.groups().forEach(child -> collect(child, values));
   }
 
+  /** コマンドの案内で用いるグループを返す。 */
   private static ArgGroupSpec group(CliCatalog.Group group) {
     var builder =
         ArgGroupSpec.builder().exclusive(group.exclusive()).multiplicity(group.multiplicity());

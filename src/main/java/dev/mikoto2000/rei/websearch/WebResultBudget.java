@@ -14,14 +14,26 @@ import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.execution.DefaultToolCallResultConverter;
 import org.springframework.stereotype.Component;
 
-/** Measures the actual tool converter output, including JSON escaping and all citation metadata. */
+/**
+ * Web結果の使用量と上限を管理する。
+ *
+ * <p>Measures the actual tool converter output, including JSON escaping and all citation metadata.
+ */
 @Component
 public final class WebResultBudget {
+  /** この機能の動作設定。 */
   private final WebSearchProperties properties;
+
+  /** 文脈。 */
   private final ContextCompressionProperties context;
+
+  /** 管理。 */
   private final ContextBudgetManager manager;
+
+  /** ツールの結果を受け渡し形式へ変換する窓口。 */
   private final DefaultToolCallResultConverter converter = new DefaultToolCallResultConverter();
 
+  /** 指定された値や利用先を使って、WebResultBudgetを初期化する。 */
   public WebResultBudget(
       WebSearchProperties properties,
       ContextCompressionProperties context,
@@ -31,6 +43,7 @@ public final class WebResultBudget {
     this.manager = manager;
   }
 
+  /** Web上の情報の調査で用いる既定値を返す。 */
   public static WebResultBudget defaults() {
     return new WebResultBudget(
         new WebSearchProperties(),
@@ -38,14 +51,17 @@ public final class WebResultBudget {
         new ContextBudgetManager(128000, 8192, 4000));
   }
 
+  /** Web上の情報の調査で用いるencodedを返す。 */
   public String encoded(Object value) {
     return converter.convert(value, Object.class);
   }
 
+  /** 条件を満たさない操作を拒否するため、利用可能の前提条件を確認する。 */
   public void requireAvailable(ToolContext tool) {
     if (tokens(tool) <= 0) throw new HttpFetchException(HttpFetchException.Code.OUTPUT_BUDGET);
   }
 
+  /** Web上の情報の調査で用いるトークン数を返す。 */
   public int tokens(ToolContext tool) {
     int smallest =
         context.getModelContextLimits().values().stream()
@@ -75,19 +91,23 @@ public final class WebResultBudget {
                 remaining, Math.min(properties.getMaxOutputTokens(), context.getToolReserve())));
   }
 
+  /** Web上の情報の調査において、fitsに該当するか判定する。 */
   public boolean fits(Object value, ToolContext tool) {
     return fits(value, properties.getMaxOutputCharacters(), tokens(tool));
   }
 
+  /** Web上の情報の調査において、fitsに該当するか判定する。 */
   private boolean fits(Object value, int chars, int tokens) {
     String output = encoded(value);
     return output.length() <= chars && TokenEstimator.conservative().text(output) <= tokens;
   }
 
+  /** 利用先の許容量を超えないよう、Web結果予算を上限内に収める。 */
   private static String clip(String value, int cap) {
     return value == null ? null : WebSectionExtractor.clip(value, cap);
   }
 
+  /** Web上の情報の調査で用いる余白の除去を返す。 */
   private WebSearchPage trim(WebSearchPage page, int chars) {
     String content = clip(page.content(), chars),
         title = clip(page.title(), Math.min(chars, 256)),
@@ -104,6 +124,7 @@ public final class WebResultBudget {
     var aliases = new ArrayList<WebSourceAlias>();
     int aliasTokens = 0;
     for (var original : page.aliases()) {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (original.url() == null || original.url().length() > 2048 || aliases.size() >= 4) continue;
       var alias =
           new WebSourceAlias(
@@ -157,6 +178,7 @@ public final class WebResultBudget {
         page.dataTrust());
   }
 
+  /** Web上の情報の調査で用いるページを返す。 */
   private WebSearchPage page(WebSearchPage page, int chars) {
     for (int cap = chars; cap >= 0; cap = cap == 0 ? -1 : cap / 2) {
       var value = trim(page, cap);
@@ -166,10 +188,12 @@ public final class WebResultBudget {
     return null; // The intact source URL alone can exceed the per-page budget.
   }
 
+  /** 残っている予算に収めるため、ページを利用可能な量に整える。 */
   public WebSearchPage fitPage(WebSearchPage page) {
     return page(page, properties.getPageMaxCharacters());
   }
 
+  /** Web上の情報の調査で用いる項目を返す。 */
   private WebSearchAndReadItem item(WebSearchAndReadItem original, int chars) {
     String type = clip(original.contentType(), 64), error = clip(original.errorMessage(), 128);
     for (int cap = chars; cap >= 0; cap = cap == 0 ? -1 : cap / 2) {
@@ -192,6 +216,7 @@ public final class WebResultBudget {
     return null;
   }
 
+  /** 残っている予算に収めるため、Web結果予算を利用可能な量に整える。 */
   public WebSearchAndReadResponse fit(WebSearchAndReadResponse response, ToolContext tool) {
     for (int cap = properties.getPageMaxCharacters(); cap >= 0; cap = cap == 0 ? -1 : cap / 2) {
       var rows = new ArrayList<WebSearchAndReadItem>();
@@ -243,6 +268,7 @@ public final class WebResultBudget {
     throw new HttpFetchException(HttpFetchException.Code.OUTPUT_BUDGET);
   }
 
+  /** 残っている予算に収めるため、付随情報を利用可能な量に整える。 */
   public List<WebSearchResult> fitMetadata(List<WebSearchResult> rows, ToolContext tool) {
     for (int cap = 512; cap >= 0; cap = cap == 0 ? -1 : cap / 2) {
       int bound = cap;
@@ -265,6 +291,7 @@ public final class WebResultBudget {
     throw new HttpFetchException(HttpFetchException.Code.OUTPUT_BUDGET);
   }
 
+  /** 残っている予算に収めるため、Web結果予算を利用可能な量に整える。 */
   public dev.mikoto2000.rei.urlfetch.UrlContentFetchResult fit(
       dev.mikoto2000.rei.urlfetch.UrlContentFetchResult original, ToolContext tool) {
     for (int cap = properties.getPageMaxCharacters(); cap >= 0; cap = cap == 0 ? -1 : cap / 2) {
@@ -291,7 +318,11 @@ public final class WebResultBudget {
     throw new HttpFetchException(HttpFetchException.Code.OUTPUT_BUDGET);
   }
 
-  /** Drop complete rendered entries rather than cut a citation or structured body midway. */
+  /**
+   * 残っている予算に収めるため、項目一覧を利用可能な量に整える。
+   *
+   * <p>Drop complete rendered entries rather than cut a citation or structured body midway.
+   */
   public String fitEntries(String prefix, List<String> entries, ToolContext tool) {
     StringBuilder result = new StringBuilder(prefix);
     String marker = "\n[omitted: output_budget; retrieval=unknown]";

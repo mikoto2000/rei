@@ -13,7 +13,9 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+/** 環境診断活動中判断基準の結果と状態の契約を検証するテスト。 */
 class DoctorActivePolicyTest {
+  /** 実行環境の診断の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void diagnosticsHaveExplicitIntrinsicAuthority() {
     var policy = new ToolPermissionPolicy(new ToolPermissionProperties(true, null, null, null));
@@ -33,6 +35,7 @@ class DoctorActivePolicyTest {
         ToolPermissionPolicy.intrinsicCapabilities("doctorMicrophone"));
   }
 
+  /** 実行環境の診断で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void requestGrammarIsBoundedExplicitAndDoesNotAcceptCommands() {
     assertTrue(DoctorRequest.parse(new String[] {"--details"}).checks().isEmpty());

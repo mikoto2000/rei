@@ -13,16 +13,34 @@ import java.util.UUID;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Per-run observations captured by the runner, never accepted from model claims. */
+/**
+ * 補助エージェントへの委譲に必要な補助エージェント根拠を扱う。
+ *
+ * <p>Per-run observations captured by the runner, never accepted from model claims.
+ */
 final class SubAgentEvidence {
+  /**
+   * 補助エージェントへの委譲で受け渡す観測内容を表す。
+   *
+   * @param tool ツール
+   * @param hash ハッシュ値
+   * @param output 出力
+   * @param arguments 引数
+   * @param truncated 省略の有無
+   */
   private record Observation(
       String tool, String hash, String output, JsonNode arguments, boolean truncated) {}
 
+  /** 観測内容一覧。 */
   private final Map<String, Observation> observations = new LinkedHashMap<>();
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final JsonMapper mapper = JsonMapper.builder().build();
 
+  /** 補助エージェントへの委譲で用いる意味による状態の記録を返す。 */
   synchronized String semanticSnapshot() {
     String snapshot = mapper.writeValueAsString(observations);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (snapshot.length() > 65536)
       throw new SubAgentValidationException(
           List.of(
@@ -31,6 +49,7 @@ final class SubAgentEvidence {
     return snapshot;
   }
 
+  /** 後から状況を確認できるよう、補助エージェント根拠を記録する。 */
   synchronized String capture(String tool, String input, String output) {
     if (observations.size() >= 64 || output == null)
       throw new IllegalStateException("Evidence capture limit or invalid tool output");
@@ -62,14 +81,17 @@ final class SubAgentEvidence {
             retained.length() != output.length()));
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   synchronized ValidationResult validate(List<String> requiredTools, JsonNode json) {
     return validate(requiredTools, List.of(), json);
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   synchronized ValidationResult validate(
       List<String> requiredTools, List<SubAgentRequiredCall> requiredCalls, JsonNode json) {
     var errors = new ArrayList<ValidationError>();
     JsonNode evidence = json.path("result").path("evidence");
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (!evidence.isArray() || evidence.size() > 64) {
       return ValidationResult.of(
           List.of(new ValidationError("/result/evidence", "Expected bounded evidence array")));
@@ -127,6 +149,7 @@ final class SubAgentEvidence {
     return ValidationResult.of(errors);
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   private static boolean text(JsonNode node, String key, int max) {
     var value = node.get(key);
     return value != null
@@ -135,6 +158,7 @@ final class SubAgentEvidence {
         && value.asString().length() <= max;
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(String value) {
     try {
       return HexFormat.of()

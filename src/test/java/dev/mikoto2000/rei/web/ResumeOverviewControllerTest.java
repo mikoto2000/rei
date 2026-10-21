@@ -14,7 +14,9 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+/** 再開概要受付窓口の結果と状態の契約を検証するテスト。 */
 class ResumeOverviewControllerTest {
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void bearerProtectionAndReadOnlyDtoMatchExistingApiPolicy() throws Exception {
     var service = mock(ResumeOverviewService.class);
@@ -42,6 +44,7 @@ class ResumeOverviewControllerTest {
             .addFilters(new ApiKeyAuthenticationFilter(new ApiKeyProperties("fixture")))
             .build();
     mvc.perform(get("/api/v1/resume-overview")).andExpect(status().isUnauthorized());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(service);
     mvc.perform(get("/api/v1/resume-overview").header("Authorization", "Bearer fixture"))
         .andExpect(status().isOk())

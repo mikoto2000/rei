@@ -13,8 +13,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** 記憶要約コマンドの結果と状態の契約を検証するテスト。 */
 class MemorySummarizeCommandTest {
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void summarizeDoesNotSaveWithoutApproveOption() {
     MemoryConsolidatorService consolidator = Mockito.mock(MemoryConsolidatorService.class);
@@ -29,6 +31,7 @@ class MemorySummarizeCommandTest {
     verify(memoryService, never()).save(any());
   }
 
+  /** 長期記憶の活用で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void summarizeSavesWhenApproved() {
     MemoryConsolidatorService consolidator = Mockito.mock(MemoryConsolidatorService.class);

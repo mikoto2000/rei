@@ -20,30 +20,43 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 
+/** 利用者情報イベントログの記録を保持し、後続の処理で参照できるようにする。 */
 @Component
 public class ProfileEventLogStore implements AgentEventListener {
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(ProfileEventLogStore.class);
 
+  /** ファイル。 */
   private final Path file;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper objectMapper;
+
+  /** 書き込み排他制御。 */
   private final Object writeLock = new Object();
+
+  /** 管理対象。 */
   private dev.mikoto2000.rei.storage.ManagedActivityLog managed;
 
+  /** 実行状況の通知で使用する管理対象作業状況ログを設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setManagedActivityLog(dev.mikoto2000.rei.storage.ManagedActivityLog managed) {
     this.managed = managed;
   }
 
+  /** 実行状況の通知を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ProfileEventLogStore() {
     this(null, new ObjectMapper().registerModule(new JavaTimeModule()));
   }
 
+  /** 指定された値や利用先を使って、ProfileEventLogStoreを初期化する。 */
   public ProfileEventLogStore(Path file, ObjectMapper objectMapper) {
     this.file = file;
     this.objectMapper = objectMapper;
   }
 
+  /** 実行状況の通知で用いるファイルを返す。 */
   public Path file() {
     if (managed != null && file == null) {
       var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
@@ -55,11 +68,13 @@ public class ProfileEventLogStore implements AgentEventListener {
             .resolve("logs/activity.jsonl");
   }
 
+  /** 通知に応じて状態や表示を更新するため、イベントを受け付ける。 */
   @Override
   public void onEvent(AgentEvent event) {
     append(event);
   }
 
+  /** 既存の記録へ経緯を残すため、利用者情報イベントログ保存先を追記する。 */
   public void append(AgentEvent event) {
     if (event == null) {
       return;
@@ -91,6 +106,7 @@ public class ProfileEventLogStore implements AgentEventListener {
     }
   }
 
+  /** 必要な内容を参照できるよう、全対象を読み取る。 */
   public List<ProfileEventLogEntry> readAll() {
     if (managed != null && this.file == null) {
       var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
@@ -120,6 +136,7 @@ public class ProfileEventLogStore implements AgentEventListener {
     return entries;
   }
 
+  /** 対象の内容を、要点が分かる形にまとめる。 */
   public ProfileSummary summarize() {
     List<ProfileEventLogEntry> entries = readAll();
     Map<String, Long> countsByType = new LinkedHashMap<>();
@@ -136,6 +153,7 @@ public class ProfileEventLogStore implements AgentEventListener {
     return new ProfileSummary(file(), entries.size(), first, last, countsByType, durationsByType);
   }
 
+  /** 実行状況の通知で用いる集計区分一覧を返す。 */
   public List<ProfileBucket> buckets(Duration bucketSize) {
     if (bucketSize == null || bucketSize.isZero() || bucketSize.isNegative()) {
       throw new IllegalArgumentException("bucketSize must be positive");
@@ -160,6 +178,7 @@ public class ProfileEventLogStore implements AgentEventListener {
     return buckets;
   }
 
+  /** 利用先へ渡せるよう、項目の形式に変換する。 */
   private ProfileEventLogEntry toEntry(AgentEvent event) {
     AgentEventPayload payload = event.payload();
     return new ProfileEventLogEntry(
@@ -177,6 +196,7 @@ public class ProfileEventLogStore implements AgentEventListener {
         summarizePayload(payload));
   }
 
+  /** 利用者が要点を把握できるよう、通知内容を要約する。 */
   private Map<String, Object> summarizePayload(AgentEventPayload payload) {
     if (payload == null) {
       return Map.of();
@@ -190,6 +210,7 @@ public class ProfileEventLogStore implements AgentEventListener {
     return values;
   }
 
+  /** 指定された内容へ切り替えるため、テキスト付き長さを置き換える。 */
   private void replaceTextWithLength(Map<String, Object> values, String key) {
     Object value = values.remove(key);
     if (value instanceof String text) {
@@ -199,6 +220,7 @@ public class ProfileEventLogStore implements AgentEventListener {
     }
   }
 
+  /** 実行状況の通知で用いる継続時間所属を返す。 */
   private Long durationOf(ProfileEventLogEntry entry) {
     if (entry.payload() == null) {
       return null;
@@ -213,6 +235,16 @@ public class ProfileEventLogStore implements AgentEventListener {
     return null;
   }
 
+  /**
+   * 実行状況の通知で受け渡す利用者情報要約を表す。
+   *
+   * @param file ファイル
+   * @param total 合計
+   * @param first 最初
+   * @param last 直近
+   * @param countsByType 件数別種別
+   * @param durationsByType 継続時間一覧別種別
+   */
   public record ProfileSummary(
       Path file,
       int total,
@@ -221,14 +253,29 @@ public class ProfileEventLogStore implements AgentEventListener {
       Map<String, Long> countsByType,
       Map<String, DurationStats> durationsByType) {}
 
+  /**
+   * 実行状況の通知で受け渡す利用者情報集計区分を表す。
+   *
+   * @param start 開始
+   * @param count 件数
+   */
   public record ProfileBucket(Instant start, long count) {}
 
+  /** 実行状況の通知に必要な継続時間統計を扱う。 */
   public static final class DurationStats {
+    /** 件数。 */
     private long count;
+
+    /** 合計ミリ秒数。 */
     private long totalMillis;
+
+    /** 最小ミリ秒数。 */
     private long minMillis = Long.MAX_VALUE;
+
+    /** 最大ミリ秒数。 */
     private long maxMillis = Long.MIN_VALUE;
 
+    /** 新たな対象を登録し、後から利用できるようにする。 */
     void add(long millis) {
       count++;
       totalMillis += millis;
@@ -236,22 +283,27 @@ public class ProfileEventLogStore implements AgentEventListener {
       maxMillis = Math.max(maxMillis, millis);
     }
 
+    /** 対象の規模を判断するため、継続時間統計を数える。 */
     public long count() {
       return count;
     }
 
+    /** 実行状況の通知で用いる合計ミリ秒数を返す。 */
     public long totalMillis() {
       return totalMillis;
     }
 
+    /** 実行状況の通知で用いる最小ミリ秒数を返す。 */
     public long minMillis() {
       return count == 0 ? 0L : minMillis;
     }
 
+    /** 実行状況の通知で用いる最大ミリ秒数を返す。 */
     public long maxMillis() {
       return count == 0 ? 0L : maxMillis;
     }
 
+    /** 実行状況の通知で用いる平均ミリ秒数を返す。 */
     public long averageMillis() {
       return count == 0 ? 0L : Math.round((double) totalMillis / count);
     }

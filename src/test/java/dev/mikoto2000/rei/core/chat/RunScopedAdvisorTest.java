@@ -12,16 +12,20 @@ import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.prompt.Prompt;
 
+/** 実行対象を限定した対話の補助の結果と状態の契約を検証するテスト。 */
 class RunScopedAdvisorTest {
+  /** 記憶対話の補助について、既定会話を保持することを確認する。 */
   @Test
   void memoryAdvisorRetainsDefaultConversationWithoutRunOwner() {
     var memory = org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build();
     var model =
         new org.springframework.ai.chat.model.ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.model.tool.ToolCallingChatOptions.builder().build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public org.springframework.ai.chat.model.ChatResponse call(Prompt prompt) {
             return new org.springframework.ai.chat.model.ChatResponse(
                 java.util.List.of(
@@ -43,34 +47,41 @@ class RunScopedAdvisorTest {
         .containsExactly("question", "answer");
   }
 
+  /** 会話の実行で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void nestedClientCapturesOwnerBeforeAdvisorScheduler() {
     var run = new AgentRunContext("run", "chat:main", Path.of("a"));
     BaseAdvisor delegate =
         new BaseAdvisor() {
+          /** 検証用に、会話の実行で参照する名前を返す。 */
           public String getName() {
             return "test-owner";
           }
 
+          /** 検証用に、他の補助処理と組み合わせる際の適用順序を返す。 */
           public int getOrder() {
             return 1;
           }
 
+          /** {@code before} の条件を再現するための補助情報を返す。 */
           public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
             assertThat(AgentRunScope.current()).isEqualTo(run);
             return request;
           }
 
+          /** {@code after} の条件を再現するための補助情報を返す。 */
           public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
             return response;
           }
         };
     var model =
         new org.springframework.ai.chat.model.ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.model.tool.ToolCallingChatOptions.builder().build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public org.springframework.ai.chat.model.ChatResponse call(Prompt p) {
             return new org.springframework.ai.chat.model.ChatResponse(
                 java.util.List.of(
@@ -78,6 +89,7 @@ class RunScopedAdvisorTest {
                         new org.springframework.ai.chat.messages.AssistantMessage("ok"))));
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public reactor.core.publisher.Flux<org.springframework.ai.chat.model.ChatResponse> stream(
               Prompt p) {
             assertThat(
@@ -97,24 +109,29 @@ class RunScopedAdvisorTest {
     }
   }
 
+  /** スレッドを復元することを確認する。 */
   @Test
   void advisorReentersCapturedContextAndRestoresThread() {
     var run = new AgentRunContext("run", "chat:main", Path.of("a"));
     BaseAdvisor delegate =
         new BaseAdvisor() {
+          /** 検証用に、会話の実行で参照する名前を返す。 */
           public String getName() {
             return "test-owner";
           }
 
+          /** 検証用に、他の補助処理と組み合わせる際の適用順序を返す。 */
           public int getOrder() {
             return 1;
           }
 
+          /** {@code before} の条件を再現するための補助情報を返す。 */
           public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
             assertThat(AgentRunScope.current()).isEqualTo(run);
             return request;
           }
 
+          /** {@code after} の条件を再現するための補助情報を返す。 */
           public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
             return response;
           }

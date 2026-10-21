@@ -44,12 +44,16 @@ import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.sqlite.SQLiteDataSource;
 
+/** 加工前の引数補正再開用の記録の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class RawArgumentCorrectionCheckpointTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 検証に使う保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper();
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void correctionCanBeCheckpointedAndReturnedToTheModelWithoutClaimingRawPageProvenance(
@@ -109,6 +113,7 @@ class RawArgumentCorrectionCheckpointTest {
     }
   }
 
+  /** 保存済み完了済みの補正について、分類を保持することを確認する。 */
   @Test
   void savedCompletedCorrectionRetainsItsClassificationWhenAnotherCallContinues() throws Exception {
     try (var fixture = fixture();
@@ -155,6 +160,7 @@ class RawArgumentCorrectionCheckpointTest {
     }
   }
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void legacySavedBatchWithoutCorrectionMetadataStillResumes() throws Exception {
     try (var fixture = fixture();
@@ -177,6 +183,7 @@ class RawArgumentCorrectionCheckpointTest {
     }
   }
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void correctionMetadataCannotDemoteAnUnexecutedPageCall() {
     try (var fixture = fixture();
@@ -195,6 +202,7 @@ class RawArgumentCorrectionCheckpointTest {
     }
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void genuineRawPagesKeepExactProvenanceThroughCheckpointingAndBudgetFitting() {
     try (var fixture = fixture();
@@ -238,6 +246,7 @@ class RawArgumentCorrectionCheckpointTest {
     }
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void malformedRegisteredPageStillFailsCheckpointingAndBudgetFitting() {
     try (var fixture = fixture();
@@ -275,6 +284,7 @@ class RawArgumentCorrectionCheckpointTest {
     }
   }
 
+  /** {@code compressor} の条件を再現するための補助情報を返す。 */
   private static ToolResultCompressor compressor(RawToolResultStore store) {
     var compressor = new ToolResultCompressor(store, TokenEstimator.conservative(), 8000, 2000);
     var delivery = new ToolResultDeliveryProperties();
@@ -283,6 +293,7 @@ class RawArgumentCorrectionCheckpointTest {
     return compressor;
   }
 
+  /** {@code invalidCall} の条件を再現するための補助情報を返す。 */
   private static AssistantMessage.ToolCall invalidCall(String ref) {
     return new AssistantMessage.ToolCall(
         "invalid-page",
@@ -291,6 +302,7 @@ class RawArgumentCorrectionCheckpointTest {
         "{\"rawResultRef\":\"" + ref + "\",\"nextOffset\":\"3433\",\"limit\":16000}");
   }
 
+  /** {@code validCall} の条件を再現するための補助情報を返す。 */
   private static AssistantMessage.ToolCall validCall(String ref) {
     return new AssistantMessage.ToolCall(
         "valid-page",
@@ -299,6 +311,7 @@ class RawArgumentCorrectionCheckpointTest {
         "{\"rawResultRef\":\"" + ref + "\",\"offset\":0,\"limit\":16000}");
   }
 
+  /** {@code fixture} の条件を再現するための補助情報を返す。 */
   private Fixture fixture() {
     var source = new SQLiteDataSource();
     source.setUrl("jdbc:sqlite:" + dir.resolve("checkpoints.db"));
@@ -340,6 +353,16 @@ class RawArgumentCorrectionCheckpointTest {
     return new Fixture(store, repository, checkpoints, owner, execution, prompt);
   }
 
+  /**
+   * 検証条件の再現に使う検証条件の情報。
+   *
+   * @param store 検証に使う保存先
+   * @param repository 検証に使う保存と検索の窓口
+   * @param checkpoints 検証に使う再開用の記録一覧
+   * @param owner 検証に使う所有者
+   * @param execution 検証に使う実行
+   * @param prompt 検証に使うプロンプト
+   */
   private record Fixture(
       RawToolResultStore store,
       PersistentCheckpointRepository repository,
@@ -348,6 +371,7 @@ class RawArgumentCorrectionCheckpointTest {
       RunExecutionContext execution,
       Prompt prompt)
       implements AutoCloseable {
+    /** 検証で利用した対象の終了を扱う。 */
     @Override
     public void close() {
       checkpoints.close();

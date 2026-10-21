@@ -8,9 +8,12 @@ import java.util.*;
 import org.jline.terminal.TerminalBuilder;
 import org.junit.jupiter.api.Test;
 
+/** 承認表示の結果と状態の契約を検証するテスト。 */
 class ApprovalDisplayTest {
+  /** 検証に使う識別子。 */
   private static final String ID = "ca880320-1482-4d84-8fb9-53c0b3234997";
 
+  /** 軽量CLIでの対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void decisionsExpiryAndContinuationCancellationAreNotPending() {
     var now = java.time.Instant.parse("2026-10-12T12:00:00Z");
@@ -23,6 +26,7 @@ class ApprovalDisplayTest {
     assertFalse(ApprovalDisplayState.pending("PENDING", now, "WAITING_APPROVAL", now));
   }
 
+  /** 軽量CLIでの対話で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void redactionPrecedesClippingAndPlainNoticeNeedsNoTerminalEscapes() {
     String text = ApprovalNotice.text("runCommand\npassword=secret " + "x".repeat(500));
@@ -32,6 +36,7 @@ class ApprovalDisplayTest {
     assertTrue(text.contains("/approval list"));
   }
 
+  /** 参照専用再確認について、確定した要求一覧を取り除くことを確認する。 */
   @Test
   void readOnlyRefreshRemovesResolvedRequestsAndRetainsStateOnFailure() throws Exception {
     try (var terminal =
@@ -71,6 +76,7 @@ class ApprovalDisplayTest {
     }
   }
 
+  /** なし失われたを読み取ることを確認する。 */
   @Test
   void aNotificationDuringSnapshotReadIsNotLost() throws Exception {
     try (var terminal =
@@ -104,12 +110,14 @@ class ApprovalDisplayTest {
     }
   }
 
+  /** 検証用に、必要な状態が整ってから先へ進むため、件数を待つ。 */
   private static void awaitCount(ApprovalActionMenu menu, int count) throws Exception {
     long deadline = System.nanoTime() + java.time.Duration.ofSeconds(3).toNanos();
     while (menu.pendingCount() != count && System.nanoTime() < deadline) Thread.sleep(10);
     assertEquals(count, menu.pendingCount());
   }
 
+  /** 軽量CLIでの対話で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void redirectedAndDumbTerminalsDoNotReceivePersistentStatus() throws Exception {
     for (String type : List.of("dumb", "xterm")) {
@@ -132,6 +140,7 @@ class ApprovalDisplayTest {
     }
   }
 
+  /** 軽量CLIでの対話で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void liveReadKeepsEditedTextAndCursorAcrossStatusAndStreamingOutput() throws Exception {
     assertTimeoutPreemptively(
@@ -195,6 +204,7 @@ class ApprovalDisplayTest {
         });
   }
 
+  /** 軽量CLIでの対話で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void noticeIsBoundedAndContainsExactReviewAndDecisionCommands() {
     String text =
@@ -208,6 +218,7 @@ class ApprovalDisplayTest {
     assertTrue(text.length() < 700);
   }
 
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void statusSurvivesMenuClearingAndLogsWithoutTouchingInput() throws Exception {
     try (var terminal =
@@ -239,6 +250,7 @@ class ApprovalDisplayTest {
     }
   }
 
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void staleOwnerSnapshotCannotReplaceCurrentRequestsAndMultipleRequestsAreCounted()
       throws Exception {

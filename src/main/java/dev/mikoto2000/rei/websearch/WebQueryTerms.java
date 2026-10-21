@@ -8,7 +8,9 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
+/** Web上の情報の調査に必要なWeb検索条件検索語句一覧を扱う。 */
 final class WebQueryTerms {
+  /** 停止。 */
   private static final Set<String> STOP =
       Set.of(
           "the",
@@ -30,6 +32,7 @@ final class WebQueryTerms {
           "docs",
           "reference");
 
+  /** Web上の情報の調査で受け渡す情報を、指定された内容から作成する。 */
   static List<String> of(String query) {
     if (query == null) return List.of();
     var terms = new LinkedHashSet<>(LexicalTerms.query(query));
@@ -41,6 +44,7 @@ final class WebQueryTerms {
       if (literal.group().length() >= 2 && !STOP.contains(literal.group()))
         terms.add(literal.group());
     for (String term : List.copyOf(terms))
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (term.codePoints().anyMatch(c -> c > 127) && term.length() > 4)
         for (int i = 0; i + 2 <= term.length() && terms.size() < 64; i++) {
           if (!Character.isSurrogate(term.charAt(i)) && !Character.isSurrogate(term.charAt(i + 1)))
@@ -49,6 +53,7 @@ final class WebQueryTerms {
     return terms.stream().limit(64).toList();
   }
 
+  /** Web上の情報の調査で用いる実行頻度を返す。 */
   static int frequency(String text, String term) {
     String lower = Objects.toString(text, "").toLowerCase(Locale.ROOT);
     int count = 0, offset = 0;

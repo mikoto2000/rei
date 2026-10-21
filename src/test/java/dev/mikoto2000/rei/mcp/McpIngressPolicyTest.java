@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+/** MCPIngress判断基準の結果と状態の契約を検証するテスト。 */
 class McpIngressPolicyTest {
+  /** MCPによる機能の提供で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void acceptsOnlyDedicatedLoopbackConnectorAndExactHost() {
     var policy = new McpIngressPolicy(8091);

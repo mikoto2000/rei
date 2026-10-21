@@ -18,31 +18,38 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
+/** Security設定の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SecurityConfigTest {
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @EnableWebMvc
   @Import({SecurityConfig.class, Endpoint.class})
   static class Config {
+    /** {@code apiKeyProperties} の条件を再現するための補助情報を返す。 */
     @Bean
     ApiKeyProperties apiKeyProperties() {
       return new ApiKeyProperties("test-secret");
     }
   }
 
+  /** 検証条件を再現するための接続先。 */
   @RestController
   static class Endpoint {
+    /** {@code probe} の条件を再現するための補助情報を返す。 */
     @RequestMapping("/api/v1/probe")
     String probe() {
       return "ok";
     }
 
+    /** {@code health} の条件を再現するための補助情報を返す。 */
     @GetMapping("/actuator/health")
     String health() {
       return "ok";
     }
   }
 
+  /** 投稿を許可することを確認する。 */
   @Test
   void bearerAuthenticationIsStatelessAndAllowsPostAndAsyncDispatch() {
     new WebApplicationContextRunner()

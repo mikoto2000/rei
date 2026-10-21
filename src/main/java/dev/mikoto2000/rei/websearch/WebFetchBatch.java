@@ -27,42 +27,76 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.stereotype.Component;
 
-/** One shared bounded HTTP worker pool; caller deadlines and rank survive executor boundaries. */
+/**
+ * Web上の情報の調査に必要なWeb取得まとめた処理を扱う。
+ *
+ * <p>One shared bounded HTTP worker pool; caller deadlines and rank survive executor boundaries.
+ */
 @Component
 public final class WebFetchBatch implements AutoCloseable {
+  /** Web上の情報の調査における状態の選択肢。 */
   public enum Status {
+    /** 成功。 */
     SUCCESS,
+    /** 失敗。 */
     FAILED,
+    /** タイムアウト。 */
     TIMEOUT,
+    /** 拒否済み。 */
     REJECTED
   }
 
+  /**
+   * Web上の情報の調査で受け渡す最終結果を表す。
+   *
+   * @param status 状態
+   * @param value 値
+   * @param errorType エラー種別
+   */
   public record Outcome<T>(Status status, T value, String errorType) {
+    /** 処理が成功したことを、呼び出し元へ伝える情報として表す。 */
     public boolean success() {
       return status == Status.SUCCESS;
     }
   }
 
+  /** Web上の情報の調査に必要な情報の取得元を扱う。 */
   @FunctionalInterface
   public interface Fetcher<T> {
+    /** 後続の処理に必要な情報を、取得先から読み込む。 */
     T fetch(WebSearchSelection.Candidate candidate) throws Exception;
   }
 
+  /** Web上の情報の調査に必要な既定値を扱う。 */
   private static final class Defaults {
+    /** 起動単位の識別子。 */
     static final WebFetchBatch INSTANCE = new WebFetchBatch(3, 2, 32);
   }
 
+  /** Web上の情報の調査で用いる共有既定値を返す。 */
   static WebFetchBatch sharedDefaults() {
     return Defaults.INSTANCE;
   }
 
+  /** 実行先。 */
   private final ThreadPoolExecutor executor;
+
+  /** 読み込みの窓口受付。 */
   private final HostAdmission loaderAdmission;
+
+  /** 引き継ぎ受付。 */
   private final HostAdmission transferAdmission;
+
+  /** 活動中。 */
   private final Set<OwnedTask<?>> active = ConcurrentHashMap.newKeySet();
+
+  /** 終了済み。 */
   private final AtomicBoolean closed = new AtomicBoolean();
+
+  /** 受付。 */
   private final Object admission = new Object();
 
+  /** Web上の情報の調査を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @org.springframework.beans.factory.annotation.Autowired
   public WebFetchBatch(WebSearchProperties properties) {
     this(
@@ -71,6 +105,7 @@ public final class WebFetchBatch implements AutoCloseable {
         properties.getFetchQueueCapacity());
   }
 
+  /** 指定された値や利用先を使って、WebFetchBatchを初期化する。 */
   WebFetchBatch(int parallelism, int perHost, int queueCapacity) {
     if (parallelism < 1
         || parallelism > 3
@@ -92,6 +127,7 @@ public final class WebFetchBatch implements AutoCloseable {
             new ThreadPoolExecutor.AbortPolicy());
   }
 
+  /** 後続の処理に必要な情報を、取得先から読み込む。 */
   public <T> List<Outcome<T>> fetch(
       List<WebSearchSelection.Candidate> candidates, Duration timeout, Fetcher<T> loader) {
     if (timeout == null
@@ -131,6 +167,7 @@ public final class WebFetchBatch implements AutoCloseable {
         try {
           Thread.sleep(10);
         } catch (InterruptedException interrupted) {
+          // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
           Thread.currentThread().interrupt();
           throw new CancellationException();
         }
@@ -162,6 +199,7 @@ public final class WebFetchBatch implements AutoCloseable {
     return List.copyOf(results);
   }
 
+  /** 保存された情報を読み込み、現在の処理で使える形にする。 */
   private <T> Outcome<T> load(
       WebSearchSelection.Candidate candidate,
       Fetcher<T> loader,
@@ -190,6 +228,7 @@ public final class WebFetchBatch implements AutoCloseable {
     }
   }
 
+  /** Web上の情報の調査で用いる最終結果を返す。 */
   private <T> Outcome<T> outcome(OwnedTask<T> task) {
     if (task.rejected || closed.get() && task.isCancelled())
       return new Outcome<>(Status.REJECTED, null, "FETCH_REJECTED");
@@ -197,6 +236,7 @@ public final class WebFetchBatch implements AutoCloseable {
     try {
       return task.get();
     } catch (InterruptedException interrupted) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw new CancellationException();
     } catch (ExecutionException failed) {
@@ -205,15 +245,23 @@ public final class WebFetchBatch implements AutoCloseable {
     }
   }
 
+  /** Web上の情報の調査に必要な自分が所有する対象タスクを扱う。 */
   private final class OwnedTask<T> extends FutureTask<Outcome<T>> {
+    /** 受付から終了までの管理。 */
     final AtomicInteger lifecycle = new AtomicInteger(); // queued, running, released
+
+    /** 終了済み。 */
     final CountDownLatch exited = new CountDownLatch(1);
+
+    /** 拒否済み。 */
     volatile boolean rejected;
 
+    /** 指定された値や利用先を使って、OwnedTaskを初期化する。 */
     OwnedTask(Callable<Outcome<T>> work) {
       super(work);
     }
 
+    /** Web上の情報の調査の操作を実行する。 */
     @Override
     public void run() {
       if (!lifecycle.compareAndSet(0, 1)) return;
@@ -224,6 +272,7 @@ public final class WebFetchBatch implements AutoCloseable {
       }
     }
 
+    /** Web上の情報の調査に関する完了を処理する。 */
     @Override
     protected void done() {
       if (lifecycle.compareAndSet(0, 2)) {
@@ -232,28 +281,34 @@ public final class WebFetchBatch implements AutoCloseable {
       }
     }
 
+    /** 後続の処理が利用できるよう、自分が所有する対象タスクを解放する。 */
     private void release() {
       active.remove(this);
       exited.countDown();
     }
   }
 
+  /** Web上の情報の調査で用いる活動中タスク一覧を返す。 */
   int activeTasks() {
     return active.size();
   }
 
+  /** Web上の情報の調査で用いる待機中タスク一覧を返す。 */
   int queuedTasks() {
     return executor.getQueue().size();
   }
 
+  /** Web上の情報の調査で用いるホスト項目一覧を返す。 */
   int hostEntries() {
     return loaderAdmission.entries() + transferAdmission.entries();
   }
 
+  /** Web上の情報の調査において、終了済みに該当するか判定する。 */
   boolean terminated() {
     return executor.isTerminated();
   }
 
+  /** Web上の情報の調査で利用した資源や登録を解放し、利用を終了する。 */
   @jakarta.annotation.PreDestroy
   @Override
   public void close() {
@@ -266,6 +321,7 @@ public final class WebFetchBatch implements AutoCloseable {
     try {
       executor.awaitTermination(2, TimeUnit.SECONDS);
     } catch (InterruptedException interrupted) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
     }
   }

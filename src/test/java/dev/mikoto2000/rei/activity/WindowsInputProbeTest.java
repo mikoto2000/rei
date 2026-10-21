@@ -8,7 +8,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 
+/** 判定期間入力利用可否の確認の結果と状態の契約を検証するテスト。 */
 class WindowsInputProbeTest {
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   @EnabledOnOs(OS.WINDOWS)
   void nativeReadDoesNotRequirePowerShellOrCapture() {
@@ -19,6 +21,7 @@ class WindowsInputProbeTest {
     assertTrue(sample.uptimeMillis() > 0);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   @EnabledOnOs(OS.WINDOWS)
   void reproducibleReadOnlyProbeBenchmark() {

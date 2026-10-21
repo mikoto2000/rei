@@ -12,9 +12,12 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
+/** 補助エージェント実行環境モデルデータ形式の結果と状態の契約を検証するテスト。 */
 class SubAgentRuntimeModelSchemaTest {
+  /** 検証に使う保存や受け渡しに用いるデータ形式の変換。 */
   private final JsonMapper json = JsonMapper.builder().build();
 
+  /** 生成済み定義一覧外部への公開現在選択肢および表記の統一について、意味を保持することを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"delegateTask", "delegateTasks"})
   void generatedDefinitionsExposeCurrentChoicesAndCanonicalizationPreservesTheirMeaning(

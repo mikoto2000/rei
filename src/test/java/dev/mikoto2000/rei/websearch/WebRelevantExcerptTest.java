@@ -8,11 +8,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+/** Web関連する根拠として示す抜粋の結果と状態の契約を検証するテスト。 */
 class WebRelevantExcerptTest {
+  /** 検証に使う情報の抽出。 */
   final WebPageExtractor extractor = new WebPageExtractor();
+
+  /** 検証に使う結果。 */
   final WebSearchResult result =
       new WebSearchResult("Guide", "https://example.com/guide", "", null);
 
+  /** Web上の情報の調査で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void findsLateApiCodeAndKeepsHierarchyPositionsAndIndentation() {
     String html =
@@ -37,6 +42,7 @@ class WebRelevantExcerptTest {
     assertTrue(page.content().length() <= 2000);
   }
 
+  /** 取得元順序を維持することを確認する。 */
   @Test
   void combinesSeparatedEvidenceAndKeepsSourceOrder() {
     var page =
@@ -51,6 +57,7 @@ class WebRelevantExcerptTest {
     assertTrue(page.content().indexOf("alpha") < page.content().indexOf("beta mode"));
   }
 
+  /** Web上の情報の調査で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void fullFingerprintDoesNotBecomeAPrefixHash() {
     var first =
@@ -62,6 +69,7 @@ class WebRelevantExcerptTest {
     assertNotEquals(first.fingerprint(), second.fingerprint());
   }
 
+  /** Web上の情報の調査で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void tagDenseInputFailsExplicitlyRatherThanHashingPartialContent() {
     var failure =
@@ -71,6 +79,7 @@ class WebRelevantExcerptTest {
     assertEquals(dev.mikoto2000.rei.http.HttpFetchException.Code.EXTRACTION_LIMIT, failure.code());
   }
 
+  /** Web上の情報の調査で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void supplementaryCharactersAreNotSplitByAnExcerptBoundary() {
     var page =

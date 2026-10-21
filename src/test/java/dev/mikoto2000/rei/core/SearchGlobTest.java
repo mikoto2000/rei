@@ -8,7 +8,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+/** 検索パスの照合規則の結果と状態の契約を検証するテスト。 */
 class SearchGlobTest {
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @ParameterizedTest
   @CsvSource({
     "*.java, A.java, true",
@@ -43,12 +45,14 @@ class SearchGlobTest {
     assertEquals(expected, SearchGlob.compile(glob).matches(path));
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"[abc", "{java,xml", "a}", "{{a,b},c}", "[]"})
   void rejectsMalformedGlobs(String glob) {
     assertThrows(IllegalArgumentException.class, () -> SearchGlob.compile(glob));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"", " "})
   void blankGlobDoesNotFilter(String glob) {

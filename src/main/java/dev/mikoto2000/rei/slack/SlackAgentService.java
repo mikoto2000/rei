@@ -26,35 +26,74 @@ import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 
 /**
- * Socket pump drives persisted dependencies. Waiting occupies neither a worker nor a model call.
+ * Slackエージェントのユースケースを実現する。
+ *
+ * <p>Socket pump drives persisted dependencies. Waiting occupies neither a worker nor a model call.
  */
 public final class SlackAgentService implements RunContinuation {
+  /** 設定。 */
   private final SlackAgentProperties settings;
+
+  /** 要求一覧。 */
   private final SlackAgentRepository requests;
+
+  /** 継続入力一覧。 */
   private final SlackAgentContinuationStore continuations;
+
+  /** 登録台帳。 */
   private final RunRegistry registry;
+
+  /** 実行一覧。 */
   private final RunService runs;
+
+  /** 入力の振り分け。 */
   private final ConversationInputRouter router;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 通信経路。 */
   private volatile SlackTransport transport;
+
+  /** self／チーム。 */
   private volatile String self, team;
+
+  /** accepting要求一覧。 */
   private volatile boolean acceptingRequests;
+
+  /** 再開。 */
   private BiFunction<AgentRunContext, Saved, ChatExecutionResult> resume =
       (o, s) -> {
         throw new IllegalStateException("Chat continuation unavailable");
       };
+
+  /** 検証。 */
   private Consumer<AgentRunContext> validate = o -> {};
+
+  /** 管理対象。 */
   private final Map<String, Managed> managed = new java.util.concurrent.ConcurrentHashMap<>();
+
+  /** 完了条件通知一覧。 */
   private final java.util.Queue<Runnable> completionNotifications =
       new java.util.concurrent.ConcurrentLinkedQueue<>();
 
+  /**
+   * Slackとの連携で受け渡す管理対象を表す。
+   *
+   * @param reservation 予約
+   * @param completed 完了
+   */
   private record Managed(
       OutputLimitRunBudget.LlmCallReservation reservation,
       Consumer<ChatExecutionResult> completed) {}
 
+  /** 依存条件一覧。 */
   private dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository dependencies;
+
+  /** 観測内容一覧。 */
   private dev.mikoto2000.rei.core.dependency.DependencyObservationService observations;
 
+  /** Slackとの連携に関する依存条件一覧を処理する。 */
   public void dependencies(
       dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository dependencies,
       dev.mikoto2000.rei.core.dependency.DependencyObservationService observations) {
@@ -62,6 +101,7 @@ public final class SlackAgentService implements RunContinuation {
     this.observations = observations;
   }
 
+  /** Slackとの連携に関する登録済みを処理する。 */
   public void registered(SlackAgentRepository.Request q) {
     if (transport == null || !acceptingRequests)
       throw new IllegalStateException(
@@ -69,6 +109,7 @@ public final class SlackAgentService implements RunContinuation {
     if (dependencies == null || requests.dependency(q.id()) != null) return;
     var owner = registry.get(q.run()).context();
     validate.accept(owner);
+    // 別のプロジェクトの情報を、この作業の対象として扱わせない。
     if (!owner.projectId().equals(q.project())
         || !owner.conversationId().equals(q.session())
         || !owner.projectRoot().toString().equals(q.root()))
@@ -85,7 +126,9 @@ public final class SlackAgentService implements RunContinuation {
     requests.dependency(q.id(), dependency.id());
   }
 
+  /** 要求された条件を満たすか判断するため、識別情報一覧を確認する。 */
   public void verifyIdentities(String self, String team, Function<String, String> botId) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (settings.getAgents().isEmpty() || settings.getAgents().size() > 16)
       throw new IllegalArgumentException("Explicit external agents required");
     for (String name : settings.getAgents().keySet()) {
@@ -97,6 +140,7 @@ public final class SlackAgentService implements RunContinuation {
     }
   }
 
+  /** 指定された値や利用先を使って、SlackAgentServiceを初期化する。 */
   public SlackAgentService(
       SlackAgentProperties settings,
       SlackAgentRepository requests,
@@ -114,19 +158,23 @@ public final class SlackAgentService implements RunContinuation {
     this.clock = clock;
   }
 
+  /** 通知に応じて状態や表示を更新するため、再開を受け付ける。 */
   public void onResume(BiFunction<AgentRunContext, Saved, ChatExecutionResult> executor) {
     resume = executor;
   }
 
+  /** 通知に応じて状態や表示を更新するため、検証を受け付ける。 */
   public void onValidate(Consumer<AgentRunContext> validate) {
     this.validate = validate;
   }
 
+  /** Slackとの連携で用いる予約を返す。 */
   public OutputLimitRunBudget.LlmCallReservation reservation(String run) {
     var m = managed.get(run);
     return m == null ? null : m.reservation();
   }
 
+  /** Slackとの連携に関する関連付け親を処理する。 */
   @Override
   public void attachParent(
       AgentRunContext owner,
@@ -135,15 +183,18 @@ public final class SlackAgentService implements RunContinuation {
     managed.put(owner.runId(), new Managed(reservation, completed));
   }
 
+  /** Slackとの連携に関する関連付けの解除親を処理する。 */
   @Override
   public void detachParent(AgentRunContext owner) {
     managed.remove(owner.runId());
   }
 
+  /** Slackとの連携に関する関連付けを処理する。 */
   public void attach(String self, String team, SlackTransport transport) {
     attach(self, team, transport, true);
   }
 
+  /** Slackとの連携に関する関連付けを処理する。 */
   public void attach(
       String self, String team, SlackTransport transport, boolean acceptingRequests) {
     for (String name : settings.getAgents().keySet()) {
@@ -157,23 +208,29 @@ public final class SlackAgentService implements RunContinuation {
     this.acceptingRequests = acceptingRequests;
   }
 
+  /** Slackとの連携に関する有効化要求一覧を処理する。 */
   public void enableRequests() {
     if (transport == null) throw new IllegalStateException("Slack transport unavailable");
     acceptingRequests = true;
   }
 
+  /** Slackとの連携に関する関連付けの解除を処理する。 */
   public void detach() {
     acceptingRequests = false;
     transport = null;
   }
 
+  /** 処理を継続できる状態に戻すため、Slackエージェントサービスを復旧する。 */
   public void recover() {
     requests.recover();
     continuations.recover();
   }
 
   /**
-   * Classification only: acceptance still requires exact Bot/Workspace/Channel/Thread/state checks.
+   * Slackとの連携において、応答担当Senderかどうかを判定する。
+   *
+   * <p>Classification only: acceptance still requires exact Bot/Workspace/Channel/Thread/state
+   * checks.
    */
   public boolean isBotSender(String user) {
     if (user == null) return false;
@@ -184,6 +241,7 @@ public final class SlackAgentService implements RunContinuation {
             .anyMatch(agent -> user.equals(agent.botUserId()));
   }
 
+  /** Slackとの連携において、受信に該当するか判定する。 */
   public boolean receive(SlackMessage message) {
     return message != null
         && transport != null
@@ -191,6 +249,7 @@ public final class SlackAgentService implements RunContinuation {
         && requests.receive(message, self, settings);
   }
 
+  /** 保存済みの記録から、利用する状態を復元する。 */
   @Override
   public Saved restore(AgentRunContext owner) {
     if (!"RESUMING".equals(continuations.state(owner.runId()))) return null;
@@ -221,6 +280,7 @@ public final class SlackAgentService implements RunContinuation {
     return new Saved(s.request(), messages, s.budget());
   }
 
+  /** Slackとの連携において、中断に該当するか判定する。 */
   @Override
   public boolean suspend(RunExecutionContext e, List<Message> history) {
     if (history.isEmpty()
@@ -250,16 +310,19 @@ public final class SlackAgentService implements RunContinuation {
     return true;
   }
 
+  /** Slackとの連携に関する終端を処理する。 */
   @Override
   public void terminal(AgentRunContext owner) {
     continuations.complete(owner.runId());
   }
 
+  /** 要求を後続の処理へ引き渡すため、案内を受け付ける。 */
   @Override
   public void acceptGuidance(AgentRunContext owner, List<Message> guidance) {
     continuations.appendGuidance(owner, guidance);
   }
 
+  /** 対象の実行をキャンセルする。 */
   public void cancel(String run) {
     requests.cancelRun(run);
     continuations.cancel(run);
@@ -269,6 +332,7 @@ public final class SlackAgentService implements RunContinuation {
       completionNotifications.add(() -> m.completed().accept(ChatExecutionResult.cancelled()));
   }
 
+  /** 通知に応じて状態や表示を更新するため、イベントを受け付ける。 */
   public void onEvent(AgentEvent event) {
     if (event.type() == AgentEventType.AGENT_RUN_CANCELLED && event.runId() != null) {
       try {
@@ -280,6 +344,7 @@ public final class SlackAgentService implements RunContinuation {
     }
   }
 
+  /** Slackとの連携に関するpumpを処理する。 */
   public synchronized void pump() {
     // Cancellation events arrive under the event-bus monitor; never invoke Goal/Scheduler callbacks
     // there.
@@ -416,6 +481,7 @@ public final class SlackAgentService implements RunContinuation {
     if (observations != null) observations.flushFacts();
   }
 
+  /** 処理の継続を終えるため、不明を停止する。 */
   private void stopUnknown(AgentRunContext owner) {
     if (!registry.claimWaiting(owner)) return;
     continuations.unknown(owner.runId());
@@ -431,6 +497,7 @@ public final class SlackAgentService implements RunContinuation {
                           "External continuation owner unavailable", "external_owner_unknown")));
   }
 
+  /** 最新の内容を後続の処理に反映するため、依存条件一覧を更新する。 */
   private void updateDependencies(String run) {
     if (dependencies == null) return;
     for (var q : requests.forRun(run)) {
@@ -449,6 +516,7 @@ public final class SlackAgentService implements RunContinuation {
     }
   }
 
+  /** Slackとの連携で用いる特殊文字の保護を返す。 */
   private static String escape(String text) {
     return SlackReplies.safe(text).replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
   }

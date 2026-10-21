@@ -18,16 +18,20 @@ import java.util.UUID;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 
+/** 音声レビューInboxの結果と状態の契約を検証するテスト。 */
 class VoiceReviewInboxTest {
+  /** 検証に使う対象。 */
   final ConversationTarget target =
       new ConversationTarget(
           new ProjectContext(UUID.randomUUID().toString(), "test", Path.of(".")), "session");
 
+  /** {@code input} の条件を再現するための補助情報を返す。 */
   ConversationInput input(String text) {
     return new ConversationInput(
         UUID.randomUUID(), InputSource.VOICE, target, text, Instant.parse("2026-10-09T08:00:00Z"));
   }
 
+  /** 自動動作モードについて、既存の受付窓口パスを維持することを確認する。 */
   @Test
   void automaticModeKeepsExistingGatewayPath() {
     var submitted = new ArrayList<ConversationInput>();
@@ -40,6 +44,7 @@ class VoiceReviewInboxTest {
     assertThat(inbox.pending()).isEmpty();
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void confirmationModeStoresAtMostThreeWithoutSendingAndCorrectionRetainsIdentity() {
     var submitted = new ArrayList<ConversationInput>();
@@ -65,6 +70,7 @@ class VoiceReviewInboxTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void slashCorrectionCannotBecomeCliOrDispatchAndCanBeCancelled() {
     var submitted = new ArrayList<ConversationInput>();
@@ -81,6 +87,7 @@ class VoiceReviewInboxTest {
     assertThat(inbox.cancel(input.inputId())).isFalse();
   }
 
+  /** 音声による対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void targetChangeDropsReviewAndPreventsAutomaticOrConfirmedStaleSubmission() {
     var selected = new AtomicBoolean(true);
@@ -102,6 +109,7 @@ class VoiceReviewInboxTest {
     assertThat(submitted).isEmpty();
   }
 
+  /** 音声による対話で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void expiredRecognitionIsNeverConfirmed() {
     var submitted = new ArrayList<ConversationInput>();
@@ -116,6 +124,7 @@ class VoiceReviewInboxTest {
     assertThat(submitted).isEmpty();
   }
 
+  /** 失敗実行先への引き渡しについて、レビューを維持することを確認する。 */
   @Test
   void failedDispatchKeepsReviewForRetryWithoutDuplicateSuccessfulSubmission() {
     var submitted = new ArrayList<ConversationInput>();

@@ -12,7 +12,9 @@ import java.util.ArrayList;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
+/** 活動中実行作業状況の結果と状態の契約を検証するテスト。 */
 class ActiveRunActivityTest {
+  /** 会話の実行で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void oneCompletionDoesNotMakeOtherRunsIdle() {
     var tasks = new ArrayList<Runnable>();

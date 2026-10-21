@@ -10,14 +10,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Explicit external event boundary, independent of Shell presentation. */
+/**
+ * Web APIによる操作に必要なWebAPIイベントデータの変換を扱う。
+ *
+ * <p>Explicit external event boundary, independent of Shell presentation.
+ */
 public final class WebApiEventMapper {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private WebApiEventMapper() {}
 
+  /** データの変換。 */
   private static final com.fasterxml.jackson.databind.ObjectMapper MAPPER =
       new com.fasterxml.jackson.databind.ObjectMapper()
           .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
 
+  /** Web APIによる操作で用いる項目一覧を返す。 */
   private static Set<String> fields(AgentEventType type) {
     String names =
         switch (type) {
@@ -80,6 +87,7 @@ public final class WebApiEventMapper {
     return names.isEmpty() ? Set.of() : Set.of(names.split(" "));
   }
 
+  /** Web APIによる操作で利用する情報を、受け取った形式から変換する。 */
   public static WebApiEventDto from(AgentEvent event, boolean cancelled, String apiKey) {
     Map<String, Object> source =
         event.payload() == null
@@ -131,6 +139,7 @@ public final class WebApiEventMapper {
         Collections.unmodifiableMap(payload));
   }
 
+  /** Web APIによる操作で用いる安全性テキストを返す。 */
   private static String safeText(String text, String key) {
     if (text == null) return null;
     String exact = key == null || key.isEmpty() ? text : text.replace(key, "[REDACTED]");
@@ -138,6 +147,7 @@ public final class WebApiEventMapper {
         .replaceAll("(?i)\\b(?:Bearer|Basic)\\s+[^\\s,;\"']+", "[REDACTED]");
   }
 
+  /** Web APIによる操作で用いる変更なしを返す。 */
   private static Object clean(Object value, String key) {
     if (value instanceof String text) {
       return safeText(text, key);

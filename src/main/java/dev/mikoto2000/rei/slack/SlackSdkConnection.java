@@ -23,17 +23,37 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** One backend owns one socket. All initialization and network work is off the startup thread. */
+/**
+ * Slackとの連携に必要なSlackSdk接続を扱う。
+ *
+ * <p>One backend owns one socket. All initialization and network work is off the startup thread.
+ */
 final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
+  /** 排他制御ファイル。 */
   private FileChannel lockFile;
+
+  /** 排他制御。 */
   private FileLock lock;
+
+  /** Slackとの連携に用いる窓口。 */
   private Slack slack;
+
+  /** 通信の接続。 */
   private SocketModeClient socket;
+
+  /** 購読。 */
   private AgentEventBus.Subscription subscription;
+
+  /** 実行環境。 */
   private SlackRuntime runtime;
+
+  /** 通信経路。 */
   private SdkSlackTransport transport;
+
+  /** Slack上で共同作業の案内を行う窓口。 */
   private SlackAgentService collaboration;
 
+  /** 必要な対象を利用できるよう、SlackSdk接続の利用を開始する。 */
   static SlackSdkConnection open(
       SlackProperties p,
       Path root,
@@ -48,6 +68,7 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
     return open(p, root, clock, repository, projects, registry, runs, router, bus, turns, null);
   }
 
+  /** 必要な対象を利用できるよう、SlackSdk接続の利用を開始する。 */
   static SlackSdkConnection open(
       SlackProperties p,
       Path root,
@@ -91,6 +112,7 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
       if (p.getAllowedWorkspaceIds() == null
           || !p.getAllowedWorkspaceIds().contains(auth.getTeamId()))
         throw new SlackSetupException(SlackSetupException.Code.WORKSPACE_NOT_ALLOWED);
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (p.getAllowedUserIds() == null || p.getAllowedUserIds().size() > 128)
         throw new SlackSetupException(SlackSetupException.Code.USER_VALIDATION_FAILED);
       var humans = new HashSet<String>();
@@ -216,6 +238,7 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
     }
   }
 
+  /** Slackとの連携に関するpumpを処理する。 */
   @Override
   public void pump() {
     runtime.tick();
@@ -223,6 +246,7 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
     runtime.send(transport);
   }
 
+  /** Slackとの連携で利用した資源や登録を解放し、利用を終了する。 */
   @Override
   public void close() {
     if (collaboration != null) {

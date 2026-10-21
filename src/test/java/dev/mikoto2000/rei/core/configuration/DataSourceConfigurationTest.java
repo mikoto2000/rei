@@ -13,11 +13,14 @@ import javax.sql.DataSource;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** データ取得元機能の構成の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class DataSourceConfigurationTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** データ取得元について、記憶データベースを利用することを確認する。 */
   @Test
   void dataSourceUsesMemoryDatabase() throws Exception {
     DataSourceConfiguration configuration = new DataSourceConfiguration();
@@ -30,6 +33,7 @@ class DataSourceConfigurationTest {
     }
   }
 
+  /** 機能の組み立てで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void vectorStoreDataSourceUsesDedicatedDatabaseAndSqliteVecWrapper() throws Exception {
     DataSourceConfiguration configuration = new DataSourceConfiguration();

@@ -20,12 +20,15 @@ import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
 /**
- * Explicit live test sends only synthetic speech/context, never microphone recordings or user
+ * 音声補正Liveの結果と状態の契約を検証するテスト。
+ *
+ * <p>Explicit live test sends only synthetic speech/context, never microphone recordings or user
  * history.
  */
 @Tag("live")
 @EnabledIfEnvironmentVariable(named = "REI_VOICE_CORRECTION_LIVE", matches = "true")
 class VoiceCorrectionLiveTest {
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void realConfiguredLlmCorrectsSyntheticContextualHomophone() throws Exception {
     var options =

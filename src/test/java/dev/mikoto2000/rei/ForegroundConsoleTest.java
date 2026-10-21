@@ -18,7 +18,9 @@ import org.jline.terminal.Terminal;
 import org.jline.utils.NonBlockingReader;
 import org.junit.jupiter.api.Test;
 
+/** 前面コンソールの結果と状態の契約を検証するテスト。 */
 class ForegroundConsoleTest {
+  /** れいの起動で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void commandInputPreservesEscButTurnsExitKeysIntoShellExit() throws Exception {
     var reader = mock(NonBlockingReader.class);
@@ -35,6 +37,7 @@ class ForegroundConsoleTest {
         () -> ForegroundConsole.readCommandInput(reader, 25));
   }
 
+  /** 終端を復元することを確認する。 */
   @Test
   void ctrlDAndCtrlCAndEofRestoreTerminalAndReturn() throws Exception {
     for (int exit : new int[] {4, 3, -1}) {
@@ -51,6 +54,7 @@ class ForegroundConsoleTest {
     }
   }
 
+  /** れいの起動で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void remoteContextShutdownDoesNotWaitForConsoleInput() throws Exception {
     var terminal = mock(Terminal.class);
@@ -59,6 +63,7 @@ class ForegroundConsoleTest {
     verify(terminal, never()).reader();
   }
 
+  /** れいの起動の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void nativeInterruptAlsoEndsForegroundLoop() throws Exception {
     var terminal = mock(Terminal.class);

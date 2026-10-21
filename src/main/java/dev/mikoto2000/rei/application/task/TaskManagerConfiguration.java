@@ -18,6 +18,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/** タスク管理の構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(
     name = {"rei.web.enabled", "rei.task-manager.enabled"},
@@ -25,6 +26,7 @@ import org.springframework.context.annotation.Import;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @Import(TaskController.class)
 public class TaskManagerConfiguration {
+  /** 実行中タスクの操作で用いるタスク管理サービスを返す。 */
   @Bean
   TaskManagerService taskManagerService(
       ProjectRegistry projects,
@@ -36,6 +38,7 @@ public class TaskManagerConfiguration {
     return new TaskManagerService(projects, runs, checkpoints, goals, dependencies, schedules);
   }
 
+  /** 実行中タスクの操作で用いるタスク制御サービスを返す。 */
   @Bean
   TaskControlService taskControlService(
       TaskManagerService tasks,

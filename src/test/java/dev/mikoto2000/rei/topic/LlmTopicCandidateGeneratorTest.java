@@ -18,8 +18,10 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import tools.jackson.databind.json.JsonMapper;
 
+/** 言語モデル話題候補生成の結果と状態の契約を検証するテスト。 */
 class LlmTopicCandidateGeneratorTest {
 
+  /** 言語モデル応答を利用することを確認する。 */
   @Test
   void usesLlmResponseWithoutCallingExternalApiInUnitTest() {
     ChatModel chatModel = org.mockito.Mockito.mock(ChatModel.class);
@@ -51,6 +53,7 @@ class LlmTopicCandidateGeneratorTest {
     assertEquals("測定", candidates.getFirst().topic());
   }
 
+  /** 話題の管理で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void llmTimeoutFailsClosed() {
     ChatModel chatModel = org.mockito.Mockito.mock(ChatModel.class);
@@ -68,6 +71,7 @@ class LlmTopicCandidateGeneratorTest {
     assertTrue(generator.generate(context()).isEmpty());
   }
 
+  /** 話題の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledDoesNotCallLlm() {
     ChatModel chatModel = org.mockito.Mockito.mock(ChatModel.class);
@@ -81,6 +85,7 @@ class LlmTopicCandidateGeneratorTest {
     assertTrue(generator.generate(context()).isEmpty());
   }
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   private TopicGenerationContext context() {
     return new TopicGenerationContext(
         List.of(

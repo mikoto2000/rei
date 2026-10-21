@@ -6,8 +6,13 @@ import java.nio.charset.StandardCharsets;
 import java.util.Locale;
 import java.util.Set;
 
-/** Reject credential-bearing feed URLs before persistence, display or network access. */
+/**
+ * フィードの購読と収集に必要なフィードURLSafetyを扱う。
+ *
+ * <p>Reject credential-bearing feed URLs before persistence, display or network access.
+ */
 public final class FeedUrlSafety {
+  /** 認証情報キー一覧。 */
   private static final Set<String> CREDENTIAL_KEYS =
       Set.of(
           "token",
@@ -29,10 +34,13 @@ public final class FeedUrlSafety {
           "clientsecret",
           "refreshtoken");
 
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private FeedUrlSafety() {}
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   public static URI parse(String value) {
     try {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (value == null || value.length() > 2048) throw invalid();
       URI uri = URI.create(value);
       if (!("https".equalsIgnoreCase(uri.getScheme()) || "http".equalsIgnoreCase(uri.getScheme()))
@@ -57,6 +65,7 @@ public final class FeedUrlSafety {
     }
   }
 
+  /** 受け付けられない指定について、入力の問題を伝える。 */
   private static IllegalArgumentException invalid() {
     return new IllegalArgumentException("フィード URL が不正です。HTTP(S) URL を使い、認証情報・fragment を含めないでください");
   }

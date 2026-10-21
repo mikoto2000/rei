@@ -36,10 +36,33 @@ import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
 import org.xml.sax.helpers.DefaultHandler;
 
-/** Historical report observations. Does not execute tests or certify current-source coverage. */
+/**
+ * 対象範囲影響のユースケースを実現する。
+ *
+ * <p>Historical report observations. Does not execute tests or certify current-source coverage.
+ */
 public final class CoverageImpactService {
+  /**
+   * 共通の実行基盤で受け渡す対象範囲を表す。
+   *
+   * @param path パス
+   * @param first 最初
+   * @param last 直近
+   */
   public record Range(String path, int first, int last) {}
 
+  /**
+   * 共通の実行基盤で受け渡すレポートを表す。
+   *
+   * @param path パス
+   * @param format 形式
+   * @param status 状態
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   * @param modifiedAt 更新日時
+   * @param measuredLines 計測した行一覧
+   * @param unmappedLines unmapped行一覧
+   * @param warnings 注意事項
+   */
   public record Report(
       String path,
       String format,
@@ -49,30 +72,58 @@ public final class CoverageImpactService {
       int measuredLines,
       int unmappedLines,
       List<String> warnings) {
+    /** 受け取った情報からReportを作成する。 */
     public Report {
       warnings = List.copyOf(warnings);
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡す行を表す。
+   *
+   * @param number 数値
+   * @param status 状態
+   * @param reportedTests 報告された内容検証一覧
+   * @param reports レポート一覧
+   */
   public record Line(int number, String status, List<String> reportedTests, List<String> reports) {
+    /** 受け取った情報からLineを作成する。 */
     public Line {
       reportedTests = List.copyOf(reportedTests);
       reports = List.copyOf(reports);
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡すAreaを表す。
+   *
+   * @param path パス
+   * @param sourceSha256 取得元内容の同一性を照合するSHA-256ハッシュ
+   * @param lines 行一覧
+   */
   public record Area(String path, String sourceSha256, List<Line> lines) {
+    /** 受け取った情報からAreaを作成する。 */
     public Area {
       lines = List.copyOf(lines);
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡す結果を表す。
+   *
+   * @param status 状態
+   * @param partial 部分的な結果
+   * @param reports レポート一覧
+   * @param areas 対象領域
+   * @param warnings 注意事項
+   */
   public record Result(
       String status,
       boolean partial,
       List<Report> reports,
       List<Area> areas,
       List<String> warnings) {
+    /** 受け取った情報からResultを作成する。 */
     public Result {
       reports = List.copyOf(reports);
       areas = List.copyOf(areas);
@@ -80,21 +131,57 @@ public final class CoverageImpactService {
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡す行を表す。
+   *
+   * @param source 取得元
+   * @param packageName パッケージ名前
+   * @param line 行
+   * @param covered 確認できた対象
+   * @param test 検証
+   */
   private record Row(String source, String packageName, int line, Boolean covered, String test) {}
 
+  /**
+   * 共通の実行基盤で受け渡す解釈済みを表す。
+   *
+   * @param format 形式
+   * @param roots 作業ルート一覧
+   * @param rows 行一覧
+   */
   private record Parsed(String format, List<String> roots, List<Row> rows) {}
 
+  /**
+   * 共通の実行基盤で受け渡す状態の記録を表す。
+   *
+   * @param bytes バイト数
+   * @param sha 内容照合用のハッシュ
+   * @param modified 更新
+   */
   private record Snapshot(byte[] bytes, String sha, Instant modified) {}
 
+  /**
+   * 共通の実行基盤で受け渡す根拠を表す。
+   *
+   * @param path パス
+   * @param line 行
+   * @param covered 確認できた対象
+   * @param test 検証
+   * @param report レポート
+   * @param modified 更新
+   */
   private record Evidence(
       String path, int line, Boolean covered, String test, String report, Instant modified) {}
 
+  /** 対応表一覧。 */
   private final RepositoryMapService maps;
 
+  /** 指定された値や利用先を使って、CoverageImpactServiceを初期化する。 */
   public CoverageImpactService(RepositoryMapService maps) {
     this.maps = maps;
   }
 
+  /** 共通の実行基盤で用いる存在しないを返す。 */
   public static Result absent() {
     return new Result(
         "NO_REPORTS",
@@ -104,16 +191,19 @@ public final class CoverageImpactService {
         List.of("No coverage report supplied; structural candidates are not coverage"));
   }
 
+  /** 共通の実行基盤で用いる分析を返す。 */
   public Result analyze(Path directory, List<Range> ranges, List<String> reports)
       throws IOException {
     return analyze(maps.snapshot(directory), ranges, reports);
   }
 
+  /** 共通の実行基盤で用いる分析を返す。 */
   Result analyze(RepositoryMapService.View view, List<Range> ranges, List<String> reportPaths)
       throws IOException {
     RunCancellation.propagate(null);
     Path root = Path.of(view.root()).toRealPath();
     var requested = new LinkedHashMap<String, SortedSet<Integer>>();
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (ranges == null || ranges.size() > 64)
       throw new IllegalArgumentException("At most 64 changed ranges required");
     int count = 0;
@@ -272,6 +362,7 @@ public final class CoverageImpactService {
     return new Result(status, true, receipts, areas, List.copyOf(warnings));
   }
 
+  /** 共通の実行基盤で用いる相対を返す。 */
   private static String relative(String input) {
     if (input == null
         || input.isBlank()
@@ -288,6 +379,7 @@ public final class CoverageImpactService {
     return path.normalize().toString().replace('\\', '/');
   }
 
+  /** 共通の実行基盤で用いるレポートパスを返す。 */
   private static String reportPath(String input) {
     String path = relative(input);
     for (var part : Path.of(path))
@@ -299,6 +391,7 @@ public final class CoverageImpactService {
     return path;
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private static Snapshot read(Path root, String path) throws IOException {
     Path file = root;
     for (var part : Path.of(path)) {
@@ -328,6 +421,7 @@ public final class CoverageImpactService {
     return new Snapshot(bytes, hash(bytes), before.lastModifiedTime().toInstant());
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   private static Parsed parse(byte[] bytes, String path, long deadline) throws IOException {
     String text = StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString();
     return path.toLowerCase(Locale.ROOT).endsWith(".xml")
@@ -335,24 +429,28 @@ public final class CoverageImpactService {
         : lcov(text, deadline);
   }
 
+  /** 共通の実行基盤に関する予算を処理する。 */
   private static void budget(long deadline) {
     RunCancellation.propagate(null);
     if (System.nanoTime() - deadline >= 0)
       throw new IllegalArgumentException("Coverage parsing deadline exceeded");
   }
 
+  /** 共通の実行基盤で用いる数値を返す。 */
   private static long number(String value) {
     if (value == null || !value.matches("[0-9]{1,12}"))
       throw new IllegalArgumentException("Invalid coverage count");
     return Long.parseLong(value);
   }
 
+  /** 共通の実行基盤で用いる行数値を返す。 */
   private static int lineNumber(String value) {
     long number = number(value);
     if (number < 1 || number > 1000000) throw new IllegalArgumentException("Invalid coverage line");
     return (int) number;
   }
 
+  /** 利用先の上限を超えない量へ、指定された内容を調整する。 */
   private static String bounded(String value) {
     if (value == null
         || value.length() > 1024
@@ -361,6 +459,7 @@ public final class CoverageImpactService {
     return value;
   }
 
+  /** 共通の実行基盤で用いる検証を返す。 */
   private static String test(String value) {
     String safe = CredentialRedactor.redact(value);
     return value.length() <= 256
@@ -370,6 +469,7 @@ public final class CoverageImpactService {
         : "";
   }
 
+  /** 共通の実行基盤で用いるlcovを返す。 */
   private static Parsed lcov(String text, long deadline) throws IOException {
     var rows = new ArrayList<Row>();
     var pending = new ArrayList<Row>();
@@ -391,6 +491,7 @@ public final class CoverageImpactService {
         } else if (line.equals("end_of_record")) {
           if (source == null) throw new IllegalArgumentException("LCOV section missing");
           rows.addAll(pending);
+          // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
           if (rows.size() > 10000) throw new IllegalArgumentException("Coverage line limit");
           pending.clear();
           source = null;
@@ -420,6 +521,7 @@ public final class CoverageImpactService {
     }
   }
 
+  /** 共通の実行基盤で用いるXML形式を返す。 */
   private static Parsed xml(String text, long deadline) throws IOException {
     int start = text.indexOf("<!DOCTYPE");
     if (start >= 0) {
@@ -464,29 +566,47 @@ public final class CoverageImpactService {
     }
   }
 
+  /** 共通の実行基盤に必要なXML形式Collectorを扱う。 */
   private static final class XmlCollector extends DefaultHandler {
+    /** 期限。 */
     final long deadline;
+
+    /** 呼び出し経路。 */
     final ArrayDeque<String> stack = new ArrayDeque<>();
+
+    /** 行一覧。 */
     final List<Row> rows = new ArrayList<>();
+
+    /** 作業ルート一覧。 */
     final List<String> roots = new ArrayList<>();
+
+    /** 形式／pkg／ファイル。 */
     String format = "", pkg = "", file = "";
+
+    /** 要素一覧。 */
     int elements;
+
+    /** 作業ルートテキスト。 */
     StringBuilder rootText;
 
+    /** 指定された値や利用先を使って、XmlCollectorを初期化する。 */
     XmlCollector(long deadline) {
       this.deadline = deadline;
     }
 
+    /** 指定や設定に応じた対象を利用するため、対象のデータを確定する。 */
     @Override
     public InputSource resolveEntity(String publicId, String systemId) throws SAXException {
       throw new SAXException("External entities rejected");
     }
 
+    /** 要求された処理を利用できるよう、要素を開始する。 */
     @Override
     public void startElement(String uri, String local, String name, Attributes attributes)
         throws SAXException {
       try {
         budget(deadline);
+        // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (++elements > 32768 || stack.size() > 32)
           throw new IllegalArgumentException("Coverage XML tree limit");
         String parent = stack.peek();
@@ -527,6 +647,7 @@ public final class CoverageImpactService {
       }
     }
 
+    /** 共通の実行基盤に関する文字数を処理する。 */
     @Override
     public void characters(char[] chars, int offset, int length) throws SAXException {
       if (rootText != null && "source".equals(stack.peek())) {
@@ -535,6 +656,7 @@ public final class CoverageImpactService {
       }
     }
 
+    /** 共通の実行基盤に関する終了要素を処理する。 */
     @Override
     public void endElement(String uri, String local, String name) throws SAXException {
       budget(deadline);
@@ -548,17 +670,20 @@ public final class CoverageImpactService {
       stack.pop();
     }
 
+    /** 共通の実行基盤に関するエラーを処理する。 */
     @Override
     public void error(SAXParseException error) throws SAXException {
       throw error;
     }
 
+    /** 共通の実行基盤に関する継続できないエラーを処理する。 */
     @Override
     public void fatalError(SAXParseException error) throws SAXException {
       throw error;
     }
   }
 
+  /** 共通の実行基盤で用いる対応表取得元を返す。 */
   private static String mapSource(
       Path root,
       String report,
@@ -593,6 +718,7 @@ public final class CoverageImpactService {
     return candidates.size() == 1 ? candidates.iterator().next() : null;
   }
 
+  /** 共通の実行基盤で用いる取得元パスを返す。 */
   private static String sourcePath(Path root, String value) {
     try {
       if (value == null
@@ -615,6 +741,7 @@ public final class CoverageImpactService {
     }
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(byte[] bytes) {
     try {
       return HexFormat.of()

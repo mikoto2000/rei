@@ -10,14 +10,25 @@ import java.util.Optional;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
+/** 論文翻訳のユースケースを実現する。 */
 @Service
 public class PaperTranslationService {
+  /** リポジトリ。 */
   private final PaperRepository repo;
+
+  /** 保存先。 */
   private final PaperArtifactStore store;
+
+  /** 内容。 */
   private final PaperContentService content;
+
+  /** 言語モデル。 */
   private final PaperLanguageModel llm;
+
+  /** 設定。 */
   private final PaperProperties config;
 
+  /** 指定された値や利用先を使って、PaperTranslationServiceを初期化する。 */
   public PaperTranslationService(
       PaperRepository repo,
       PaperArtifactStore store,
@@ -31,6 +42,7 @@ public class PaperTranslationService {
     this.config = config;
   }
 
+  /** 論文の調査と整理で用いる文書の分割一覧を返す。 */
   public static List<String> chunks(String text, int size) {
     if (size < 1) throw new IllegalArgumentException();
     List<String> result = new ArrayList<>();
@@ -44,12 +56,14 @@ public class PaperTranslationService {
     return result;
   }
 
+  /** 利用者が内容を読めるよう、論文翻訳サービスを翻訳する。 */
   public PaperTranslation translate(
       Paper paper, PaperTranslation.Mode mode, String section, boolean refresh, PaperOperation op) {
     return PaperLocks.with(
         paper.id(), op, () -> translateLocked(paper, mode, section, refresh, op));
   }
 
+  /** 利用者が内容を読めるよう、使用中を翻訳する。 */
   private PaperTranslation translateLocked(
       Paper paper, PaperTranslation.Mode mode, String section, boolean refresh, PaperOperation op) {
     if (mode == null) mode = config.getDefaultTranslationMode();
@@ -108,6 +122,7 @@ public class PaperTranslationService {
               saved -> {
                 var dictionary =
                     new dev.mikoto2000.rei.subagent.SubAgentResultParser().parse(saved);
+                // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
                 if (!dictionary.isObject() || dictionary.size() > 300)
                   throw new IllegalArgumentException("invalid saved glossary");
                 for (var term : dictionary.properties()) {
@@ -187,6 +202,7 @@ public class PaperTranslationService {
     }
   }
 
+  /** 要求された条件を満たすか判断するため、Terminologyを確認する。 */
   static void verifyTerminology(String source, String translated, Map<String, String> glossary) {
     for (var term : glossary.entrySet()) {
       if (!term.getKey().isBlank()

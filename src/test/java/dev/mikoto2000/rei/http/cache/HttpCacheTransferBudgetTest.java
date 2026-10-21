@@ -28,7 +28,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** HTTP通信キャッシュ引き継ぎ予算の結果と状態の契約を検証するテスト。 */
 class HttpCacheTransferBudgetTest {
+  /** 取得した情報の再利用で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void revalidated304ChargesTheReusedDecodedBody() {
     var calls = new AtomicInteger();
@@ -60,8 +62,13 @@ class HttpCacheTransferBudgetTest {
     }
   }
 
+  /** 検証に使う参照先のURI。 */
   final URI uri = URI.create("https://example.com/page");
+
+  /** 検証に使う加工前の。 */
   final SafeHttpFetcher raw = mock(SafeHttpFetcher.class);
+
+  /** 検証に使う要求。 */
   final HttpResponseCache.Request request =
       new HttpResponseCache.Request(
           uri,
@@ -70,15 +77,18 @@ class HttpCacheTransferBudgetTest {
           HttpResponseCache.Namespace.PAGE,
           false);
 
+  /** {@code cache} の条件を再現するための補助情報を返す。 */
   HttpResponseCache cache() {
     return new HttpResponseCache(
         new HttpCacheProperties(), Clock.systemUTC(), new SensitiveInfoDetector());
   }
 
+  /** 検証用に、指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   SafeHttpFetcher.Response get(HttpResponseCache cache) {
     return cache.fetch(request, FetchOperation.active(), HttpFetchObserver.NONE, raw);
   }
 
+  /** キャッシュを使った場合も展開後の内容量を計上し、新たに通信していない転送量は加算しないことを確認する。 */
   @Test
   void cacheHitConsumesDecodedVolumeWithoutChargingNewWireTraffic() {
     var calls = new AtomicInteger();
@@ -105,6 +115,7 @@ class HttpCacheTransferBudgetTest {
     }
   }
 
+  /** 取得した情報の再利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void differentAggregateBudgetsCannotStopEachOthersColdLoad() throws Exception {
     var started = new CountDownLatch(2);

@@ -4,25 +4,35 @@ import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
+/** 元のツールの結果をモデルから呼び出せるツールとして提供する。 */
 public class RawToolResultTools {
+  /** 保存先。 */
   private final RawToolResultStore store;
+
+  /** 概算。 */
   private final TokenEstimator estimator;
+
+  /** ページトークン数。 */
   private final int pageTokens;
 
+  /** モデルへ渡す文脈の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public RawToolResultTools(RawToolResultStore store) {
     this(store, TokenEstimator.conservative());
   }
 
+  /** モデルへ渡す文脈の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public RawToolResultTools(RawToolResultStore store, TokenEstimator estimator) {
     this(store, estimator, 2048);
   }
 
+  /** 指定された値や利用先を使って、RawToolResultToolsを初期化する。 */
   public RawToolResultTools(RawToolResultStore store, TokenEstimator estimator, int pageTokens) {
     this.store = store;
     this.estimator = estimator;
     this.pageTokens = pageTokens;
   }
 
+  /** 必要な内容を参照できるよう、元のツールの結果を読み取る。 */
   @ResultDelivery(ResultDelivery.Kind.RAW_RESULT_PAGE)
   @Tool(
       resultConverter = RawResultPageTextConverter.class,
@@ -47,6 +57,7 @@ public class RawToolResultTools {
     return pageText(rawResultRef, result, offset, limit, pageTokens);
   }
 
+  /** モデルへ渡す文脈の管理で用いるページテキストを返す。 */
   String pageText(String ref, RawToolResultStore.Result result, int offset, int limit, int budget) {
     String raw = result.rawResult();
     if (offset > raw.length()
@@ -73,6 +84,7 @@ public class RawToolResultTools {
     return encoded;
   }
 
+  /** モデルへ渡す文脈の管理で用いる安全性ヘッダーを返す。 */
   private static String safeHeader(String value) {
     return value
         .replace("\\", "\\\\")
@@ -81,6 +93,7 @@ public class RawToolResultTools {
         .replace("\t", "\\t");
   }
 
+  /** 受け渡し先が扱える形式へ、指定された内容を変換する。 */
   private String encode(String ref, RawToolResultStore.Result result, int start, int end) {
     return "toolName: "
         + safeHeader(result.toolName())

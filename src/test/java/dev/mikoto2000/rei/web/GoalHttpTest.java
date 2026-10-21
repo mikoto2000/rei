@@ -27,14 +27,21 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/** 目標HTTP通信の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class GoalHttpTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 検証条件を再現するための受付窓口。 */
   static class Gateway implements GoalLoopService.Gateway {
+    /** 検証に使う引き渡し済み。 */
     final AtomicInteger dispatched = new AtomicInteger();
+
+    /** 検証に使うlive。 */
     final AtomicBoolean live = new AtomicBoolean(true);
 
+    /** {@code dispatch} の条件を再現するため、検証用の操作や状態を扱う。 */
     public void dispatch(
         GoalRepository.Claim claim,
         String run,
@@ -42,14 +49,17 @@ class GoalHttpTest {
       dispatched.incrementAndGet();
     }
 
+    /** 検証用に、web APIによる操作において、入力先Flightかどうかを判定する。 */
     public boolean isInFlight(GoalRepository.Goal goal) {
       return live.get();
     }
   }
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import({WebApiIntegrationTest.Config.class, GoalController.class})
   static class Config {
+    /** {@code goals} の条件を再現するための補助情報を返す。 */
     @Bean
     GoalRepository goals(
         @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String path) {
@@ -59,21 +69,25 @@ class GoalHttpTest {
           Clock.systemUTC());
     }
 
+    /** {@code gateway} の条件を再現するための補助情報を返す。 */
     @Bean
     Gateway gateway() {
       return new Gateway();
     }
 
+    /** {@code waits} の条件を再現するための補助情報を返す。 */
     @Bean
     GoalWaitService waits() {
       return org.mockito.Mockito.mock(GoalWaitService.class);
     }
 
+    /** {@code verifier} の条件を再現するための補助情報を返す。 */
     @Bean
     FileGoalVerifier verifier() {
       return new FileGoalVerifier();
     }
 
+    /** {@code completionGate} の条件を再現するための補助情報を返す。 */
     @Bean
     GoalCompletionGate completionGate(GoalRepository goals) {
       return new GoalCompletionGate(
@@ -91,6 +105,7 @@ class GoalHttpTest {
           false);
     }
 
+    /** {@code loop} の条件を再現するための補助情報を返す。 */
     @Bean
     GoalLoopService loop(GoalRepository repo, Gateway gateway, FileGoalVerifier verifier) {
       return new GoalLoopService(
@@ -102,6 +117,7 @@ class GoalHttpTest {
     }
   }
 
+  /** 完了定義接続先について、認証厳格なJSON変換を必要とすることを確認する。 */
   @Test
   void completionDefinitionEndpointRequiresAuthenticationStrictJsonAndStoppedGoal()
       throws Exception {
@@ -155,6 +171,7 @@ class GoalHttpTest {
     }
   }
 
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void optedInPredicateVerifiesThroughAuthenticatedHttpWithoutModelDispatch() throws Exception {
     var app = new SpringApplication(Config.class);
@@ -190,6 +207,7 @@ class GoalHttpTest {
     }
   }
 
+  /** Web APIによる操作で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void exactRunAcknowledgementAndInFlightCheckGuardRealSavedGoalWithoutReplay() throws Exception {
     var app = new SpringApplication(Config.class);
@@ -259,6 +277,7 @@ class GoalHttpTest {
     }
   }
 
+  /** 認証を必要とすることを確認する。 */
   @Test
   void waitHttpControlsRequireAuthenticationAndObservedVersionWithoutNormalGoalRun()
       throws Exception {

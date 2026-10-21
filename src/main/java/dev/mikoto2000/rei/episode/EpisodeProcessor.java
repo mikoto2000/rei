@@ -8,22 +8,33 @@ import java.util.List;
 import java.util.Objects;
 import org.springframework.stereotype.Service;
 
+/** 過去の経験の活用に必要な経験の記録Processorを扱う。 */
 @Service
 public class EpisodeProcessor {
+  /** 保存と検索の窓口。 */
   private final EpisodeRepository repository;
+
+  /** 情報の抽出。 */
   private final EpisodeExtractor extractor;
+
+  /** 保存先。 */
   private final dev.mikoto2000.rei.conversation.ConversationTurnStore store;
+
+  /** イベント一覧。 */
   private dev.mikoto2000.rei.event.ProjectAgentEventStore events;
 
+  /** 過去の経験の活用で使用するイベント一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setEvents(dev.mikoto2000.rei.event.ProjectAgentEventStore events) {
     this.events = events;
   }
 
+  /** 過去の経験の活用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public EpisodeProcessor(EpisodeRepository repository, EpisodeExtractor extractor) {
     this(repository, extractor, null);
   }
 
+  /** 指定された値や利用先を使って、EpisodeProcessorを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public EpisodeProcessor(
       EpisodeRepository repository,
@@ -34,6 +45,7 @@ public class EpisodeProcessor {
     this.store = store;
   }
 
+  /** 過去の経験の活用に関するプロセスを処理する。 */
   public void process(
       String session,
       String project,
@@ -69,6 +81,7 @@ public class EpisodeProcessor {
     for (var turn : turns) source.put(turn.runId(), turn);
     var verified = new ArrayList<Episode>();
     for (var candidate : candidates) {
+      // 別のプロジェクトの情報を、この作業の対象として扱わせない。
       if (!candidate.projectId().equals(project) || !candidate.sessionId().equals(session))
         throw new IllegalArgumentException("Episode ownership mismatch");
       if (turns.stream()

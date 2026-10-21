@@ -18,11 +18,16 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 管理対象作業状況ログの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ManagedActivityLogTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う登録台帳。 */
   StorageObjectRegistry registry;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void prepare() throws Exception {
     try (var gate = new StorageMigrationCoordinator(root)) {
@@ -33,6 +38,7 @@ class ManagedActivityLogTest {
             root, Clock.fixed(Instant.parse("2026-10-10T00:00:00Z"), ZoneOffset.UTC));
   }
 
+  /** {@code entry} の条件を再現するための補助情報を返す。 */
   ProfileEventLogEntry entry(String id, String session, String run) {
     return new ProfileEventLogEntry(
         id,
@@ -49,6 +55,7 @@ class ManagedActivityLogTest {
         Map.of("日本語", "保持"));
   }
 
+  /** 新規区間一覧について、旧形式ログを保持することを確認する。 */
   @Test
   void newSegmentsPreserveLegacyLogAndOnlyClosedOwnedBodiesCanBePlanned() throws Exception {
     Path legacy = root.resolve("logs/activity.jsonl");
@@ -71,6 +78,7 @@ class ManagedActivityLogTest {
     assertThat(planner.plan("activity-raw", null, 100, 100000).candidates()).hasSize(1);
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void anySessionOrRunArchiveStaysProtectedAndProjectScopesDoNotMix() throws Exception {
     String project = UUID.randomUUID().toString();
@@ -86,6 +94,7 @@ class ManagedActivityLogTest {
     assertThat(planner.status(project).protectionReasons()).containsKey("referenced");
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void changedOpenSegmentIsRetainedAndCannotBeAdoptedAsVerified() throws Exception {
     var log = new ManagedActivityLog(registry, 1024);
@@ -100,6 +109,7 @@ class ManagedActivityLogTest {
     assertThat(new RetentionPlanner(registry).status(null).objects()).isEmpty();
   }
 
+  /** データ保存の共通処理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sameSizeExternalChangeIsDetectedBeforeClosingOrCollection() throws Exception {
     var log = new ManagedActivityLog(registry, 1024);
@@ -116,6 +126,7 @@ class ManagedActivityLogTest {
     assertThat(new RetentionPlanner(registry).status(null).objects()).isEmpty();
   }
 
+  /** データ保存の共通処理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedMetadataCommitDoesNotPublishAnUncommittedArchive() throws Exception {
     registry.database.transaction(
@@ -133,6 +144,7 @@ class ManagedActivityLogTest {
     assertThat(new RetentionPlanner(registry).status(null).objects()).isEmpty();
   }
 
+  /** データ保存の共通処理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void springWiresProductionProfileStoreAndExecutionCommandBeforeServing() throws Exception {
     try (var context =
@@ -174,14 +186,17 @@ class ManagedActivityLogTest {
     }
   }
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @org.springframework.context.annotation.Configuration
   @org.springframework.context.annotation.Import(StorageMigrationConfiguration.class)
   static class Config {
+    /** {@code profile} の条件を再現するための補助情報を返す。 */
     @org.springframework.context.annotation.Bean
     dev.mikoto2000.rei.event.ProfileEventLogStore profile() {
       return new dev.mikoto2000.rei.event.ProfileEventLogStore();
     }
 
+    /** {@code command} の条件を再現するための補助情報を返す。 */
     @org.springframework.context.annotation.Bean
     dev.mikoto2000.rei.core.command.StorageCommand command(RetentionPlanner planner) {
       return new dev.mikoto2000.rei.core.command.StorageCommand(planner);

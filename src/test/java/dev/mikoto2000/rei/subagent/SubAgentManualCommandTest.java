@@ -13,7 +13,9 @@ import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** 補助エージェントManualコマンドの結果と状態の契約を検証するテスト。 */
 class SubAgentManualCommandTest {
+  /** 既存のローカル実行の担当を利用することを確認する。 */
   @Test
   void omittedBackendUsesExistingLocalRunner() {
     var runner = mock(SubAgentRunner.class);
@@ -35,6 +37,7 @@ class SubAgentManualCommandTest {
     verifyNoMoreInteractions(runner);
   }
 
+  /** 外部バックエンドについて、明示的なモデル完了条件を必要とすることを確認する。 */
   @Test
   void externalBackendRequiresExplicitModelCompletionConditionAndMaterials() {
     var runner = mock(SubAgentRunner.class);
@@ -59,6 +62,7 @@ class SubAgentManualCommandTest {
             "unscoped data",
             "--task",
             "task"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(runner);
   }
 }

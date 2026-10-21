@@ -16,20 +16,38 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 /**
- * Bounded observation and durable at-least-once facts. No action execution or automatic replays.
+ * 依存条件観測内容のユースケースを実現する。
+ *
+ * <p>Bounded observation and durable at-least-once facts. No action execution or automatic replays.
  */
 @Component
 @EnableConfigurationProperties(DependencyWatcherProperties.class)
 public class DependencyObservationService {
+  /** リポジトリ。 */
   private final PersistentDependencyRepository repo;
+
+  /** 利用可否の確認。 */
   private final DependencyProbe probe;
+
+  /** この機能の動作設定。 */
   private final DependencyWatcherProperties properties;
+
+  /** 判断基準。 */
   private final ToolPermissionPolicy policy;
+
+  /** 通知先。 */
   private final AgentEventPublisher publisher;
+
+  /** プロジェクト一覧。 */
   private final ProjectService projects;
+
+  /** 会話一覧。 */
   private final SessionRepository sessions;
+
+  /** 変更後。 */
   private String after = "";
 
+  /** 外部条件の待機を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public DependencyObservationService(
       PersistentDependencyRepository repo,
       DependencyProbe probe,
@@ -39,6 +57,7 @@ public class DependencyObservationService {
     this(repo, probe, properties, policy, publisher, null, null);
   }
 
+  /** 指定された値や利用先を使って、DependencyObservationServiceを初期化する。 */
   @Autowired
   public DependencyObservationService(
       PersistentDependencyRepository repo,
@@ -57,6 +76,7 @@ public class DependencyObservationService {
     this.sessions = sessions;
   }
 
+  /** 対象の状態や内容を調べ、呼び出し元が確認できる情報として返す。 */
   public PersistentDependencyRepository.Entry inspect(String project, String id, boolean network) {
     var entry = repo.prepare(project, id);
     if (entry.spec().network() && !network)
@@ -80,21 +100,26 @@ public class DependencyObservationService {
     return updated;
   }
 
+  /** 再開時刻の取得元。 */
   private java.time.Clock resumeClock = java.time.Clock.systemUTC();
 
+  /** 外部条件の待機に関する設定再開時刻の取得元を処理する。 */
   @Autowired
   public void configureResumeClock(java.time.Clock clock) {
     resumeClock = clock;
   }
 
   /**
-   * Fresh read-only observation, including terminal facts and all prerequisites. Never rewrites
+   * 外部条件の待機で用いる再確認対象再開を返す。
+   *
+   * <p>Fresh read-only observation, including terminal facts and all prerequisites. Never rewrites
    * history.
    */
   public DependencyObservation recheckForResume(String project, String id) {
     return recheck(project, id, new java.util.HashMap<>());
   }
 
+  /** 外部条件の待機で用いる再確認を返す。 */
   private DependencyObservation recheck(
       String project, String id, java.util.Map<String, DependencyObservation> visited) {
     if (visited.containsKey(id)) return visited.get(id);
@@ -131,6 +156,7 @@ public class DependencyObservationService {
     return observed;
   }
 
+  /** 外部条件の待機において、有効プロジェクトに該当するか判定する。 */
   private boolean validProject(PersistentDependencyRepository.Entry entry) {
     try {
       var root = Path.of(entry.projectRoot());
@@ -149,6 +175,7 @@ public class DependencyObservationService {
     }
   }
 
+  /** 外部条件の待機に関する定期確認を処理する。 */
   @Scheduled(fixedDelayString = "${rei.dependency-watcher.check-interval-ms:5000}")
   public synchronized void tick() {
     flushFacts();
@@ -183,6 +210,7 @@ public class DependencyObservationService {
     flushFacts();
   }
 
+  /** 外部条件の待機に関する保存の確定事実一覧を処理する。 */
   public synchronized void flushFacts() {
     for (var fact : repo.pendingFacts()) {
       var type =

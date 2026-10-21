@@ -20,15 +20,34 @@ import java.nio.charset.StandardCharsets;
 import java.util.SortedMap;
 import java.util.TreeMap;
 
-/** Text stays in memory until a validated response.completed event allows publication. */
+/**
+ * ChatGPTとの連携に必要な計画イベント配信文脈の組み立てを扱う。
+ *
+ * <p>Text stays in memory until a validated response.completed event allows publication.
+ */
 public final class PlanSseAssembler {
+  /** ChatGPTとの連携における状態の選択肢。 */
   public enum State {
+    /** 完了。 */
     COMPLETED,
+    /** 未完了。 */
     INCOMPLETE,
+    /** 失敗。 */
     FAILED,
+    /** 最終結果不明。 */
     OUTCOME_UNKNOWN
   }
 
+  /**
+   * ChatGPTとの連携で受け渡す結果を表す。
+   *
+   * @param state 状態
+   * @param text テキスト
+   * @param totalTokens 使用トークン数の合計
+   * @param responseId 応答識別子
+   * @param error エラー
+   * @param diagnostic 診断
+   */
   public record Result(
       State state,
       String text,
@@ -36,6 +55,7 @@ public final class PlanSseAssembler {
       String responseId,
       ChatGptException.Code error,
       String diagnostic) {
+    /** ChatGPTとの連携を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Result(
         State state,
         String text,
@@ -51,6 +71,7 @@ public final class PlanSseAssembler {
           "textLength=" + (text == null ? 0 : text.length()) + ", textSource=unavailable");
     }
 
+    /** ChatGPTとの連携の情報を、表示や診断で確認できる文字列表現にする。 */
     @Override
     public String toString() {
       return "Result[state="
@@ -65,13 +86,19 @@ public final class PlanSseAssembler {
     }
   }
 
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json =
       new ObjectMapper()
           .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
           .enable(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
 
+  /** 受信。 */
   private int received;
+
+  /** 部分一覧。 */
   private final SortedMap<PartKey, Part> parts = new TreeMap<>();
+
+  /** 差分イベント一覧／完了イベント一覧／項目完了イベント一覧／終端項目一覧／メッセージ一覧／推論／内容部分一覧。 */
   private int deltaEvents,
       doneEvents,
       itemDoneEvents,
@@ -80,18 +107,30 @@ public final class PlanSseAssembler {
       reasoning,
       contentParts;
 
+  /**
+   * ChatGPTとの連携で受け渡す部分キーを表す。
+   *
+   * @param output 出力
+   * @param content 内容
+   */
   private record PartKey(int output, int content) implements Comparable<PartKey> {
+    /** ChatGPTとの連携で用いる比較終点を返す。 */
     public int compareTo(PartKey other) {
       int order = Integer.compare(output, other.output);
       return order != 0 ? order : Integer.compare(content, other.content);
     }
   }
 
+  /** ChatGPTとの連携に必要な部分を扱う。 */
   private static final class Part {
+    /** テキスト。 */
     final StringBuilder text = new StringBuilder();
+
+    /** 完了。 */
     boolean done;
   }
 
+  /** ChatGPTとの連携で用いる診断を返す。 */
   private String diagnostic(String text, String source) {
     return "terminalItems="
         + terminalItems
@@ -119,6 +158,7 @@ public final class PlanSseAssembler {
         + received;
   }
 
+  /** ChatGPTとの連携で用いる結果を返す。 */
   private Result result(
       State state,
       String text,
@@ -129,6 +169,7 @@ public final class PlanSseAssembler {
     return new Result(state, text, usage, id, error, diagnostic(text, source));
   }
 
+  /** ChatGPTとの連携で用いる位置を返す。 */
   private static int index(JsonNode node, String field) {
     var value = node.path(field);
     if (!value.isIntegralNumber() || !value.canConvertToInt() || value.intValue() < 0)
@@ -136,6 +177,7 @@ public final class PlanSseAssembler {
     return value.intValue();
   }
 
+  /** ChatGPTとの連携に関するテキスト部分を処理する。 */
   private void textPart(PartKey key, JsonNode text, boolean done) {
     if (!text.isTextual()) throw ChatGptException.of(PROTOCOL);
     var part = parts.computeIfAbsent(key, unused -> new Part());
@@ -148,6 +190,7 @@ public final class PlanSseAssembler {
     part.text.append(text.textValue());
   }
 
+  /** ChatGPTとの連携に関する項目を処理する。 */
   private void item(JsonNode item, Integer outputIndex) {
     String kind = item.path("type").asText();
     if (kind.equals("reasoning")) {
@@ -171,14 +214,17 @@ public final class PlanSseAssembler {
     }
   }
 
+  /** ChatGPTとの連携で用いる受信バイト数を返す。 */
   int receivedBytes() {
     return received;
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   public Result read(InputStream input, int maxBytes) {
     return read(input, maxBytes, false);
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   Result read(InputStream input, int maxBytes, boolean requireSseFraming) {
     var line = new ByteArrayOutputStream();
     var data = new StringBuilder();
@@ -228,6 +274,7 @@ public final class PlanSseAssembler {
     }
   }
 
+  /** ChatGPTとの連携において、イベント配信行かどうかを判定する。 */
   private static boolean isSseLine(String line) {
     return line.isEmpty()
         || line.startsWith(":")
@@ -237,6 +284,7 @@ public final class PlanSseAssembler {
         || line.startsWith("retry:");
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   private String decode(byte[] bytes) {
     try {
       return StandardCharsets.UTF_8
@@ -249,6 +297,7 @@ public final class PlanSseAssembler {
     }
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   private Result parse(String event, String data) {
     try {
       var node = json.readTree(data);
@@ -315,6 +364,7 @@ public final class PlanSseAssembler {
     }
   }
 
+  /** ChatGPTとの連携で用いる使用状況を返す。 */
   private Integer usage(JsonNode response) {
     var value = response.path("usage").path("total_tokens");
     return value.isIntegralNumber() && value.canConvertToInt() && value.intValue() >= 0
@@ -322,6 +372,7 @@ public final class PlanSseAssembler {
         : null;
   }
 
+  /** 得られた情報を分類し、後続の判断で扱い分けられるようにする。 */
   static ChatGptException.Code classify(String code, int status) {
     return switch (code) {
       case "subscription_sharing_usage_limit_exceeded" -> USAGE_LIMIT;

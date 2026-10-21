@@ -31,18 +31,37 @@ import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 import picocli.CommandLine;
 
+/** 履歴シェルコマンドの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
+
+  /** 検証に使うprior。 */
   String prior;
+
+  /** 検証に使う登録台帳。 */
   ProjectRegistry registry;
+
+  /** 検証に使うa、b。 */
   ProjectContext a, b;
+
+  /** 検証に使うプロジェクト一覧。 */
   ProjectService projects;
+
+  /** 検証に使うログ一覧。 */
   ConversationLogStore logs;
+
+  /** 検証に使う検索。 */
   ConversationHistorySearchService search;
+
+  /** 検証に使うコマンド。 */
   CommandLine command;
+
+  /** 検証に使う出力。 */
   java.io.StringWriter output;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     prior = System.getProperty("rei.data-dir");
@@ -68,22 +87,26 @@ class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectCli
     command.setErr(new java.io.PrintWriter(output));
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void cleanup() {
     if (prior == null) System.clearProperty("rei.data-dir");
     else System.setProperty("rei.data-dir", prior);
   }
 
+  /** 検証用に、会話履歴と受付記録の管理の操作を実行する。 */
   String run(String... args) {
     output.getBuffer().setLength(0);
     assertThat(command.execute(args)).isZero();
     return output.toString();
   }
 
+  /** 検証用に、新たな対象を登録し、後から利用できるようにする。 */
   void add(ProjectContext project, String id, String role, String text) {
     logs.append(project.conversationId(id), role, text);
   }
 
+  /** 明示的な旧形式表示について、会話を保持することを確認する。 */
   @Test
   void explicitLegacyShowPreservesConversationAndLastLimits() {
     for (int i = 0; i < 65; i++) add(a, "chat:main", "user", "message-" + i);
@@ -101,6 +124,7 @@ class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectCli
     verify(logs, never()).readAll();
   }
 
+  /** 一覧について、プロジェクト付随情報を利用することを確認する。 */
   @Test
   void listUsesProjectMetadataAndSupportsPagingAndEmptyResults() {
     add(a, "chat:main", "user", "one");
@@ -115,6 +139,7 @@ class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectCli
     assertThat(run("list", "--limit", "1", "--offset", "1")).contains("No conversations");
   }
 
+  /** 会話履歴と受付記録の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void explicitProjectAndConversationAreReadWithoutSwitchingShell() {
     add(b, "chat:test", "tool", "tool output");
@@ -125,6 +150,7 @@ class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectCli
     assertThat(projects.currentContext().id()).isEqualTo(a.id());
   }
 
+  /** 会話履歴と受付記録の管理で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void displaysAllPersistedRolesAndInterventionsWithRedactionAndTruncation() {
     for (String role : List.of("system", "user", "assistant", "tool", "user"))
@@ -135,6 +161,7 @@ class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectCli
         .doesNotContain("SECRET_VALUE");
   }
 
+  /** 検索について、既存の権限の範囲を利用することを確認する。 */
   @Test
   void searchUsesExistingScopesAndDisplaysProvenance() {
     add(a, "chat:main", "user", "Working Set local");
@@ -161,6 +188,7 @@ class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectCli
             argThat(r -> r.retrievalScope() == HistorySearchScope.ALL_PROJECTS && r.limit() == 1));
   }
 
+  /** 会話履歴と受付記録の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void controlsUseShellBWhileRunScopeAExistsAndDoNotTouchActiveRuns() {
     add(a, "chat:main", "user", "A only");
@@ -186,6 +214,7 @@ class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectCli
     assertThat(router.activeRuns()).isEmpty();
   }
 
+  /** 会話履歴と受付記録の管理で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void handlesUsageAndResolutionErrorsWithoutStackTraces() throws Exception {
     for (String[] args :
@@ -210,6 +239,7 @@ class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectCli
     assertThat(run("--help")).contains("show", "search", "list");
   }
 
+  /** 会話履歴と受付記録の管理で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void searchStreamsStoresAndRedactsBeforeCreatingSnippetsWithoutPublishingEvents() {
     add(a, "chat:main", "user", "token=" + "SECRET".repeat(200) + " needle");
@@ -220,6 +250,7 @@ class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectCli
     assertThat(run("search", "--current", "needle"))
         .contains("needle", "[REDACTED]")
         .doesNotContain("SECRET");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(publisher);
   }
 }

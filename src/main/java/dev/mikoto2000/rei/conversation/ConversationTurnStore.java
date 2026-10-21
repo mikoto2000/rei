@@ -19,14 +19,21 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
 
-/** Conversation lifecycle metadata, independent of the bounded chat memory window. */
+/**
+ * 会話一回のやり取りの記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>Conversation lifecycle metadata, independent of the bounded chat memory window.
+ */
 public class ConversationTurnStore implements ConversationHistory {
+  /** 会話履歴と受付記録の管理で用いる一回のやり取り件数を返す。 */
   public synchronized long turnCount(String conversation) {
     return read(conversation).size();
   }
 
   /**
-   * Ordinal range for bounded background processing; SQLite overrides without reading earlier
+   * 必要な内容を参照できるよう、対象範囲を読み取る。
+   *
+   * <p>Ordinal range for bounded background processing; SQLite overrides without reading earlier
    * turns.
    */
   public synchronized List<Turn> readRange(String conversation, long from, int limit) {
@@ -35,17 +42,35 @@ public class ConversationTurnStore implements ConversationHistory {
     return read(conversation).stream().skip(from).limit(limit).toList();
   }
 
+  /** 対象を特定できるよう、実行を探す。 */
   public synchronized Optional<Turn> findRun(String conversation, String run) {
     return read(conversation).stream().filter(t -> t.runId().equals(run)).findFirst();
   }
 
+  /** 会話履歴と受付記録の管理における状態の選択肢。 */
   public enum Status {
+    /** 実行中。 */
     RUNNING,
+    /** 完了。 */
     COMPLETED,
+    /** 失敗。 */
     FAILED,
+    /** キャンセル済み。 */
     CANCELLED
   }
 
+  /**
+   * 会話履歴と受付記録の管理で受け渡す一回のやり取りを表す。
+   *
+   * @param runId 実行の識別子
+   * @param request 要求
+   * @param status 状態
+   * @param assistantMessage アシスタントメッセージ
+   * @param createdAt 作成日時
+   * @param source 取得元
+   * @param sourceId 取得元識別子
+   * @param metadata 付随情報
+   */
   public record Turn(
       String runId,
       String request,
@@ -55,10 +80,12 @@ public class ConversationTurnStore implements ConversationHistory {
       String source,
       String sourceId,
       Map<String, String> metadata) {
+    /** 受け取った情報からTurnを作成する。 */
     public Turn {
       metadata = metadata == null ? Map.of() : Map.copyOf(metadata);
     }
 
+    /** 会話履歴と受付記録の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Turn(
         String runId,
         String request,
@@ -69,6 +96,7 @@ public class ConversationTurnStore implements ConversationHistory {
     }
   }
 
+  /** 既存の記録へ経緯を残すため、アシスタント通知を追記する。 */
   public synchronized void appendAssistantNotification(ConversationLogEntry entry) {
     var rows = new ArrayList<>(read(entry.conversationId()));
     if (rows.stream()
@@ -89,29 +117,40 @@ public class ConversationTurnStore implements ConversationHistory {
     save(entry.conversationId(), rows);
   }
 
+  /** 基準。 */
   private final Path base;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper mapper =
       new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+
+  /** 会話一覧。 */
   private final Map<String, List<Turn>> conversations = new HashMap<>();
 
+  /** 会話履歴と受付記録の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ConversationTurnStore() {
     this(ReiDataDirectory.current());
   }
 
+  /** 指定された値や利用先を使って、ConversationTurnStoreを初期化する。 */
   public ConversationTurnStore(Path base) {
     this.base = base;
   }
 
+  /** 会話履歴と受付記録の管理で用いる入力先記憶を返す。 */
   public static ConversationTurnStore inMemory() {
     return new ConversationTurnStore(null);
   }
 
+  /** 要求された処理を開始する。 */
   public synchronized void start(AgentRunContext context, String request) {
     start(context, request, java.time.Instant.now());
   }
 
   /**
-   * Execution starts are serialized by the project queue. Preserve that order even on clock
+   * 要求された処理を利用できるよう、Orderedを開始する。
+   *
+   * <p>Execution starts are serialized by the project queue. Preserve that order even on clock
    * ties/rollback.
    */
   public synchronized void startOrdered(
@@ -126,6 +165,7 @@ public class ConversationTurnStore implements ConversationHistory {
     start(context, request, createdAt);
   }
 
+  /** 要求された処理を開始する。 */
   public synchronized void start(
       AgentRunContext context, String request, java.time.Instant createdAt) {
     var turns = new ArrayList<>(read(context.conversationId()));
@@ -133,10 +173,12 @@ public class ConversationTurnStore implements ConversationHistory {
     save(context.conversationId(), turns);
   }
 
+  /** 終了時に必要な状態を反映し、処理を完了させる。 */
   public synchronized void finish(AgentRunContext context, Status status) {
     finish(context, status, null);
   }
 
+  /** 終了時に必要な状態を反映し、処理を完了させる。 */
   public synchronized void finish(AgentRunContext context, Status status, String assistantMessage) {
     if (status == Status.RUNNING)
       throw new IllegalArgumentException("Expected a terminal turn status");
@@ -161,6 +203,7 @@ public class ConversationTurnStore implements ConversationHistory {
     save(context.conversationId(), turns);
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   public synchronized List<Turn> read(String conversationId) {
     return conversations.computeIfAbsent(
         conversationId,
@@ -174,7 +217,11 @@ public class ConversationTurnStore implements ConversationHistory {
         });
   }
 
-  /** Optional observed work-time metadata, captured by the owner without changing turn identity. */
+  /**
+   * 後から経緯や使用量を確認できるよう、付随情報を記録する。
+   *
+   * <p>Optional observed work-time metadata, captured by the owner without changing turn identity.
+   */
   public synchronized void recordMetadata(AgentRunContext context, Map<String, String> metadata) {
     var rows =
         read(context.conversationId()).stream()
@@ -197,6 +244,7 @@ public class ConversationTurnStore implements ConversationHistory {
     save(context.conversationId(), rows);
   }
 
+  /** 対象を特定できるよう、やり取り一覧を探す。 */
   @Override
   public synchronized List<SessionTurn> findTurns(
       String sessionId, CursorKey after, int fetchLimit) {
@@ -227,6 +275,7 @@ public class ConversationTurnStore implements ConversationHistory {
         .toList();
   }
 
+  /** 会話履歴と受付記録の管理で用いるキャンセル済み文脈を返す。 */
   public synchronized String cancelledContext(String conversationId) {
     var cancelled =
         read(conversationId).stream().filter(t -> t.status() == Status.CANCELLED).toList();
@@ -246,6 +295,7 @@ public class ConversationTurnStore implements ConversationHistory {
     }
   }
 
+  /** 会話履歴と受付記録の管理で用いるファイルを返す。 */
   private Path file(String conversationId) {
     String projectId = dev.mikoto2000.rei.core.project.ProjectStorage.projectId(conversationId);
     Path directory = projectId == null ? base : base.resolve("projects").resolve(projectId);
@@ -255,6 +305,7 @@ public class ConversationTurnStore implements ConversationHistory {
     return directory.resolve("state/turns").resolve(key + ".json");
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   private void save(String id, List<Turn> turns) {
     if (base != null) {
       Path target = file(id);

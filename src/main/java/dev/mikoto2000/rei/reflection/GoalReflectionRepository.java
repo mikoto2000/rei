@@ -13,10 +13,31 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * Append-only observations and conservative review suggestions, separate from validated memories.
+ * 目標振り返りを保存・検索するための窓口。
+ *
+ * <p>Append-only observations and conservative review suggestions, separate from validated
+ * memories.
  */
 @Repository
 public class GoalReflectionRepository {
+  /**
+   * 作業の振り返りで受け渡す項目を表す。
+   *
+   * @param id 識別子
+   * @param projectId 所属プロジェクトの識別子
+   * @param sessionId 会話の識別子
+   * @param goalId 目標識別子
+   * @param runId 実行の識別子
+   * @param goalStatus 目標状態
+   * @param expectedFile 期待する内容ファイル
+   * @param expectedSha256 期待する内容内容の同一性を照合するSHA-256ハッシュ
+   * @param actual 実際の
+   * @param actualReason 実際の理由
+   * @param gap 間隔
+   * @param nextAction 次操作
+   * @param sourceEvent 取得元イベント
+   * @param createdAt 作成日時
+   */
   public record Item(
       String id,
       String projectId,
@@ -33,9 +54,13 @@ public class GoalReflectionRepository {
       String sourceEvent,
       Instant createdAt) {}
 
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** 指定された値や利用先を使って、GoalReflectionRepositoryを初期化する。 */
   public GoalReflectionRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, Clock clock) {
     db = JdbcClient.create(source);
@@ -48,6 +73,7 @@ public class GoalReflectionRepository {
         .update();
   }
 
+  /** 行。 */
   private static final org.springframework.jdbc.core.RowMapper<Item> ROW =
       (rs, n) ->
           new Item(
@@ -66,6 +92,7 @@ public class GoalReflectionRepository {
               rs.getString("source_event"),
               Instant.ofEpochMilli(rs.getLong("created")));
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   Item save(
       GoalRepository.Goal goal,
       AgentEvent source,
@@ -74,6 +101,7 @@ public class GoalReflectionRepository {
       String reason,
       String gap,
       String nextAction) {
+    // 別のプロジェクトの情報を、この作業の対象として扱わせない。
     if (!goal.projectId().equals(source.projectId())
         || !goal.sessionId().equals(source.sessionId())
         || !goal.id().equals(snapshot.goalId()))
@@ -103,6 +131,7 @@ public class GoalReflectionRepository {
         .single();
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<Item> list(String project) {
     return db.sql(
             "SELECT * FROM goal_reflections WHERE project=? ORDER BY created DESC,id LIMIT 256")
@@ -111,6 +140,7 @@ public class GoalReflectionRepository {
         .list();
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Item get(String project, String id) {
     return db.sql("SELECT * FROM goal_reflections WHERE project=? AND id=?")
         .params(project, id)
@@ -119,6 +149,7 @@ public class GoalReflectionRepository {
         .orElseThrow(() -> new IllegalArgumentException("Reflection not found in this Project"));
   }
 
+  /** 条件に合う対象を選ぶため、判断基準一覧との一致を判定する。 */
   public boolean matchesCriteria(Item item, GoalRepository.Goal goal) {
     return item.expectedFile().equals(expectedFiles(goal))
         && item.expectedSha256().equals(expectedDigests(goal));
@@ -126,12 +157,14 @@ public class GoalReflectionRepository {
 
   // Multiple criteria are ordered JSON arrays; single-file observations retain their original
   // representation.
+  /** 作業の振り返りで用いる期待する内容ファイル一覧を返す。 */
   private String expectedFiles(GoalRepository.Goal goal) {
     return goal.criteria().size() == 1
         ? goal.relativeFile()
         : json(goal.criteria().stream().map(GoalRepository.FileCriterion::relativeFile).toList());
   }
 
+  /** 作業の振り返りで用いる期待する内容Digestsを返す。 */
   private String expectedDigests(GoalRepository.Goal goal) {
     if (goal.criteria().stream().anyMatch(GoalRepository.FileCriterion::jsonCriterion))
       return json(goal.criteria());
@@ -140,6 +173,7 @@ public class GoalReflectionRepository {
         : json(goal.criteria().stream().map(GoalRepository.FileCriterion::sha256).toList());
   }
 
+  /** 作業の振り返りで用いる保存・受け渡しに使うJSON変換を返す。 */
   private String json(Object value) {
     try {
       return new com.fasterxml.jackson.databind.ObjectMapper().writeValueAsString(value);

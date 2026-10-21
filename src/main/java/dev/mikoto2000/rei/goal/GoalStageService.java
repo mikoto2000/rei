@@ -4,18 +4,40 @@ import java.util.List;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 
-/** Host decisions inside the existing Goal loop; this class never dispatches a Run. */
+/**
+ * 目標段階のユースケースを実現する。
+ *
+ * <p>Host decisions inside the existing Goal loop; this class never dispatches a Run.
+ */
 @Service
 public class GoalStageService {
+  /**
+   * 目標の達成管理で受け渡すイベント段階を表す。
+   *
+   * @param id 識別子
+   * @param state 状態
+   * @param reason 理由
+   * @param version 形式のバージョン
+   * @param evidenceReference 根拠参照先
+   */
   public record EventStage(
       String id, String state, String reason, long version, String evidenceReference) {}
 
+  /**
+   * 目標の達成管理で受け渡すイベント進捗を表す。
+   *
+   * @param planVersion 計画形式のバージョン
+   * @param currentStageId 現在段階識別子
+   * @param stages 段階一覧
+   */
   public record EventProgress(long planVersion, String currentStageId, List<EventStage> stages) {
+    /** 受け取った情報からEventProgressを作成する。 */
     public EventProgress {
       stages = List.copyOf(stages);
     }
   }
 
+  /** 目標の達成管理で用いるイベント進捗を返す。 */
   public EventProgress eventProgress(GoalRepository.Goal goal) {
     var current = stages.list(goal);
     return new EventProgress(
@@ -37,8 +59,29 @@ public class GoalStageService {
             .toList());
   }
 
+  /**
+   * 目標の達成管理で受け渡す選択内容を表す。
+   *
+   * @param stage 段階
+   * @param allVerified 全対象確認済み
+   * @param blocker 作業を妨げる課題
+   */
   public record Selection(GoalStageRepository.Stage stage, boolean allVerified, String blocker) {}
 
+  /**
+   * 目標の達成管理で受け渡す進捗を表す。
+   *
+   * @param planVersion 計画形式のバージョン
+   * @param stages 段階一覧
+   * @param attempts 試行回数
+   * @param evidence 根拠
+   * @param planHistory 計画履歴
+   * @param remainingRuns 残量実行一覧
+   * @param remainingLlmCalls 残量言語モデル呼び出し回数
+   * @param remainingTokens 残量トークン数
+   * @param stopReason 停止理由
+   * @param resumeAction 再開操作
+   */
   public record Progress(
       long planVersion,
       List<GoalStageRepository.Stage> stages,
@@ -50,6 +93,7 @@ public class GoalStageService {
       Long remainingTokens,
       String stopReason,
       String resumeAction) {
+    /** 受け取った情報からProgressを作成する。 */
     public Progress {
       stages = List.copyOf(stages);
       attempts = List.copyOf(attempts);
@@ -57,6 +101,7 @@ public class GoalStageService {
       planHistory = List.copyOf(planHistory);
     }
 
+    /** 目標の達成管理で用いる現在段階識別子を返す。 */
     @com.fasterxml.jackson.annotation.JsonProperty(
         access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
     public String currentStageId() {
@@ -68,17 +113,28 @@ public class GoalStageService {
     }
   }
 
+  /** 段階一覧。 */
   private final GoalStageRepository stages;
+
+  /** 確認の窓口。 */
   private final GoalStageVerifier verifier;
+
+  /** 目標一覧。 */
   private final GoalRepository goals;
+
+  /** 最大修復一覧。 */
   private int maxRepairs = 2;
+
+  /** 許可分割。 */
   private boolean allowSplit = true;
 
+  /** 目標の達成管理に関する設定分割を処理する。 */
   @org.springframework.beans.factory.annotation.Value("${rei.goal.stage.allow-split:true}")
   public void configureSplit(boolean enabled) {
     allowSplit = enabled;
   }
 
+  /** 目標の達成管理に関する設定修復を処理する。 */
   @org.springframework.beans.factory.annotation.Value("${rei.goal.stage.max-repairs:2}")
   public void configureRepair(int maxRepairs) {
     if (maxRepairs < 0 || maxRepairs > 5)
@@ -86,6 +142,7 @@ public class GoalStageService {
     this.maxRepairs = maxRepairs;
   }
 
+  /** 指定された値や利用先を使って、GoalStageServiceを初期化する。 */
   public GoalStageService(
       GoalStageRepository stages, GoalStageVerifier verifier, GoalRepository goals) {
     this.stages = stages;
@@ -93,10 +150,12 @@ public class GoalStageService {
     this.goals = goals;
   }
 
+  /** この機能を利用する設定が有効かどうかを返す。 */
   public boolean enabled(GoalRepository.Goal goal) {
     return stages.planVersion(goal) > 0;
   }
 
+  /** 目標の達成管理で用いる再確認を返す。 */
   public List<GoalStageRepository.Stage> refresh(GoalRepository.Goal goal) {
     var current = stages.list(goal);
     for (int pass = 0; pass <= current.size(); pass++) {
@@ -146,6 +205,7 @@ public class GoalStageService {
     return current;
   }
 
+  /** 指定された条件に応じて、利用する対象を選ぶ。 */
   public Selection select(GoalRepository.Goal goal) {
     var current = refresh(goal);
     if (current.stream().allMatch(s -> s.state().equals("VERIFIED")))
@@ -187,10 +247,12 @@ public class GoalStageService {
     return new Selection(null, false, "stage_requires_intervention");
   }
 
+  /** 目標の達成管理で用いる段階識別子を返す。 */
   private static String stageId(GoalStageRepository.Stage stage) {
     return stage.definition().id();
   }
 
+  /** 目標の達成管理で用いる修復作業を妨げる課題を返す。 */
   private String repairBlocker(GoalRepository.Goal goal, GoalStageRepository.Stage stage) {
     if (!GoalRepairDiagnosis.of(stage.reason()).repairable()) return "stage_repair_not_allowed";
     var failures =
@@ -201,6 +263,7 @@ public class GoalStageService {
                         && a.planVersion() == stage.planVersion()
                         && a.status().equals("UNSATISFIED"))
             .toList();
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (failures.size() > maxRepairs) return "stage_repair_limit";
     if (failures.size() >= 2) {
       var previous =
@@ -214,11 +277,13 @@ public class GoalStageService {
     return "";
   }
 
+  /** 目標の達成管理で用いる開始を返す。 */
   public GoalStageRepository.Attempt begin(
       GoalRepository.Claim claim, String run, GoalStageRepository.Stage stage) {
     return stages.begin(claim, run, stage);
   }
 
+  /** 要求された条件を満たすか判断するため、実行を確認する。 */
   public GoalStageVerifier.Observation verifyRun(GoalRepository.Goal goal, String run) {
     var attempt = stages.forRun(goal, run);
     if (attempt == null) return null;
@@ -232,6 +297,7 @@ public class GoalStageService {
     return observeRun(goal, run);
   }
 
+  /** 状況を判断する根拠を得るため、実行を観測する。 */
   public GoalStageVerifier.Observation observeRun(GoalRepository.Goal goal, String run) {
     var attempt = stages.forRun(goal, run);
     if (attempt == null) return null;
@@ -244,12 +310,14 @@ public class GoalStageService {
     return verifier.verify(goal, stage, current);
   }
 
+  /** 終了時に必要な状態を反映し、処理を完了させる。 */
   public boolean finish(
       GoalRepository.Claim claim, String run, GoalStageVerifier.Observation observation) {
     var attempt = stages.forRun(claim.goal(), run);
     return attempt != null && stages.finish(claim, attempt, observation);
   }
 
+  /** 目標の達成管理に関する中断されたを処理する。 */
   public void interrupted(GoalRepository.Claim claim, String run, String reason) {
     if (stages.forRun(claim.goal(), run) != null)
       finish(
@@ -259,14 +327,17 @@ public class GoalStageService {
               GoalStageVerifier.Result.UNKNOWN, reason, java.util.Map.of(), java.util.Map.of()));
   }
 
+  /** 現在の状態と記録を照合し、差異に応じて管理状態を整える。 */
   public void reconcile(GoalRepository.Goal goal, String run) {
     stages.reconcile(goal, run);
   }
 
+  /** 目標の達成管理に関するキャンセル済みを処理する。 */
   public void cancelled(GoalRepository.Goal goal) {
     stages.cancelled(goal);
   }
 
+  /** 中断した作業を引き継ぐため、明示的なを再開する。 */
   public void resumeExplicit(GoalRepository.Goal goal) {
     for (var stage : stages.list(goal))
       if (stage.state().equals("BLOCKED")
@@ -274,10 +345,12 @@ public class GoalStageService {
         stages.state(goal, stage, "STALE", stage.reason());
   }
 
+  /** 目標の達成管理において、全対象確認済みに該当するか判定する。 */
   public boolean allVerified(GoalRepository.Goal goal) {
     return refresh(goal).stream().allMatch(s -> s.state().equals("VERIFIED"));
   }
 
+  /** 目標の達成管理で用いるプロンプトを返す。 */
   public String prompt(GoalRepository.Goal goal, String run) {
     var attempt = stages.forRun(goal, run);
     if (attempt == null)
@@ -314,6 +387,7 @@ public class GoalStageService {
         + "DONE is a claim; only the host may mark VERIFIED. Never repeat an unknown side effect. For stage review/test/artifact proof use attachGoalStageEvidence. If prior independent failure cannot be repaired, proposeGoalStageSplit with child contracts and current plan version. The host validates the proposal and independently rechecks the parent.";
   }
 
+  /** 目標の達成管理で用いる進捗を返す。 */
   public Progress progress(GoalRepository.Goal goal) {
     var current = refresh(goal);
     goal = goals.get(goal.projectId(), goal.id());
@@ -332,16 +406,19 @@ public class GoalStageService {
             : "Inspect effects and permissions; explicitly run or use condition-checked wait resume");
   }
 
+  /** 目標の達成管理で用いる定義を返す。 */
   public List<GoalStageRepository.Stage> define(
       GoalRepository.Goal goal, long version, List<GoalStageDefinition> plan) {
     return stages.define(goal, version, plan);
   }
 
+  /** 目標の達成管理に関する関連付けを処理する。 */
   public void attach(
       GoalRepository.Goal goal, String stage, long version, GoalCompletionGate.Proof proof) {
     stages.attachProof(goal, stage, version, proof);
   }
 
+  /** 目標の達成管理で用いるowning実行を返す。 */
   private GoalRepository.Goal owningRun(
       dev.mikoto2000.rei.core.chat.AgentRunContext owner, String id) {
     var goal = goals.get(owner.projectId(), id);
@@ -354,6 +431,7 @@ public class GoalStageService {
     return goal;
   }
 
+  /** 後続の判断で選べる候補を用意するため、分割を提案する。 */
   public void proposeSplit(
       dev.mikoto2000.rei.core.chat.AgentRunContext owner,
       String id,
@@ -377,6 +455,7 @@ public class GoalStageService {
         });
   }
 
+  /** 目標の達成管理に関する関連付け実行中を処理する。 */
   public void attachRunning(
       dev.mikoto2000.rei.core.chat.AgentRunContext owner,
       String id,
@@ -391,6 +470,7 @@ public class GoalStageService {
         });
   }
 
+  /** 目標の達成管理において、反映提案に該当するか判定する。 */
   public boolean applyProposal(GoalRepository.Claim claim, String run) {
     return allowSplit && stages.applyProposal(claim, run);
   }

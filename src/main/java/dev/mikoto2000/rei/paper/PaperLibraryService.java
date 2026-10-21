@@ -5,13 +5,22 @@ import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 
+/** 論文保管資料のユースケースを実現する。 */
 @Service
 public class PaperLibraryService {
+  /** リポジトリ。 */
   private final PaperRepository repo;
+
+  /** 保存先。 */
   private final PaperArtifactStore store;
+
+  /** 参照先一覧。 */
   private final PaperSessionReferences refs;
+
+  /** 設定。 */
   private final PaperProperties config;
 
+  /** 指定された値や利用先を使って、PaperLibraryServiceを初期化する。 */
   public PaperLibraryService(
       PaperRepository repo,
       PaperArtifactStore store,
@@ -23,11 +32,13 @@ public class PaperLibraryService {
     this.config = config;
   }
 
+  /** この機能を利用する設定が有効かどうかを返す。 */
   public void enabled() {
     if (!config.isEnabled())
       throw new PaperException(PaperException.Code.INVALID_QUERY, "Paper Research は無効です");
   }
 
+  /** 論文の調査と整理で用いる説明を返す。 */
   public Object describe(Paper paper) {
     var versions = repo.versions(paper.id());
     boolean original =
@@ -49,6 +60,7 @@ public class PaperLibraryService {
         versions);
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Paper get(String ref, PaperOperation op) {
     enabled();
     op.check();
@@ -56,11 +68,20 @@ public class PaperLibraryService {
         .orElseThrow(() -> new PaperException(PaperException.Code.PAPER_NOT_FOUND, "論文が見つかりません"));
   }
 
+  /**
+   * 論文の調査と整理で受け渡す保存済み書き出しを表す。
+   *
+   * @param mediaType メディア種別
+   * @param filename ファイル名
+   * @param bytes バイト数
+   */
   public record CachedExport(String mediaType, String filename, byte[] bytes) {
+    /** 受け取った情報からCachedExportを作成する。 */
     public CachedExport {
       bytes = bytes.clone();
     }
 
+    /** 論文の調査と整理で用いるバイト数を返す。 */
     @Override
     public byte[] bytes() {
       return bytes.clone();
@@ -68,7 +89,10 @@ public class PaperLibraryService {
   }
 
   /**
-   * Read a specifically selected saved artifact. This boundary never downloads or invokes a model.
+   * 論文の調査と整理で用いる書き出し保存済みを返す。
+   *
+   * <p>Read a specifically selected saved artifact. This boundary never downloads or invokes a
+   * model.
    */
   public CachedExport exportCached(String ref, String kind, String version, PaperOperation op) {
     var paper = get(ref, op);
@@ -116,6 +140,7 @@ public class PaperLibraryService {
     throw new PaperException(PaperException.Code.ARTIFACT_NOT_FOUND, "保存済み内容がありません");
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public List<Paper> search(String query, int limit, PaperOperation op) {
     enabled();
     op.check();
@@ -124,6 +149,7 @@ public class PaperLibraryService {
     return result;
   }
 
+  /** 指定された対象を管理から取り除く。 */
   public void remove(String ref, boolean purge, PaperOperation op) {
     enabled();
     String resolved = refs.resolve(op.sessionId(), ref);
@@ -137,6 +163,7 @@ public class PaperLibraryService {
         });
   }
 
+  /** 対象を管理から外すため、使用中を取り除く。 */
   private void removeLocked(String id, boolean purge, PaperOperation op) {
     op.check();
     if (purge) {

@@ -3,13 +3,17 @@ package dev.mikoto2000.rei.topic;
 import java.time.Duration;
 import java.util.List;
 
+/** 既定読み上げ判断結果の判断基準をまとめる。 */
 public class DefaultSpeakDecisionPolicy implements SpeakDecisionPolicy {
+  /** この機能の動作設定。 */
   private final TopicGeneratorProperties properties;
 
+  /** 指定された値や利用先を使って、DefaultSpeakDecisionPolicyを初期化する。 */
   public DefaultSpeakDecisionPolicy(TopicGeneratorProperties properties) {
     this.properties = properties;
   }
 
+  /** 話題の管理で用いる判断を返す。 */
   @Override
   public SpeakDecision decide(List<RankedTopicCandidate> candidates, SpeakDecisionContext context) {
     if (candidates == null || candidates.isEmpty())

@@ -14,10 +14,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 目標復旧の結果と状態の契約を検証するテスト。 */
 class GoalRecoveryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う保存と検索の窓口。 */
   GoalRepository repository;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     repository =
@@ -26,6 +31,7 @@ class GoalRecoveryTest {
             Clock.systemUTC());
   }
 
+  /** {@code goal} の条件を再現するための補助情報を返す。 */
   GoalRepository.Goal goal() {
     return repository.create(
         new AgentRunContext("source", "session", dir, "project"),
@@ -36,6 +42,7 @@ class GoalRecoveryTest {
         2);
   }
 
+  /** 明示的な状態の照合結果変更後再開について、予算を保持することを確認する。 */
   @Test
   void explicitReconciliationAfterRestartPreservesBudgetAndRevokesOldClaim() {
     var goal = goal();
@@ -61,6 +68,7 @@ class GoalRecoveryTest {
     assertFalse(restarted.reserveLlm(resumed));
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void staleRunAndWrongProjectCannotReconcile() {
     var goal = goal();
@@ -73,6 +81,7 @@ class GoalRecoveryTest {
     assertTrue(repository.active(claim));
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void claimWithoutAttemptCanBeReconciledButTerminalGoalCannot() {
     var goal = goal();

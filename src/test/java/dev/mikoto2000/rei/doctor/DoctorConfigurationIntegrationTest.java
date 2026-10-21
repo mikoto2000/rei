@@ -21,10 +21,13 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.core.env.Environment;
 
+/** 環境診断機能の構成外部連携の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class DoctorConfigurationIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @org.springframework.context.annotation.Configuration(proxyBeanMethods = false)
   @EnableConfigurationProperties({
     VoiceProperties.class,
@@ -33,11 +36,13 @@ class DoctorConfigurationIntegrationTest {
     LlmProperties.class
   })
   static class BoundConfiguration {
+    /** {@code currentModel} の条件を再現するための補助情報を返す。 */
     @Bean
     ModelHolderService currentModel() {
       return new ModelHolderService("MODEL-SECRET");
     }
 
+    /** {@code doctor} の条件を再現するための補助情報を返す。 */
     @Bean
     DoctorService doctor(
         Environment env,
@@ -48,12 +53,14 @@ class DoctorConfigurationIntegrationTest {
       return new DoctorService(env, voice, codex, claude, llm);
     }
 
+    /** {@code command} の条件を再現するための補助情報を返す。 */
     @Bean
     DoctorCommand command(DoctorService doctor) {
       return new DoctorCommand(doctor);
     }
   }
 
+  /** 実際の関連付けについて、機能上書きを利用することを確認する。 */
   @Test
   void actualBindingUsesFeatureOverrideAndCliWithoutRuntimeClients() {
     new ApplicationContextRunner()

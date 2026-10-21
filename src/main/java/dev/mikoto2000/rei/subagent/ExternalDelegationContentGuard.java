@@ -2,10 +2,16 @@ package dev.mikoto2000.rei.subagent;
 
 import tools.jackson.databind.JsonNode;
 
-/** Check decoded reply/condition values so escaped JSON syntax is not mistaken for a credential. */
+/**
+ * 補助エージェントへの委譲に必要な外部委譲内容利用条件の確認を扱う。
+ *
+ * <p>Check decoded reply/condition values so escaped JSON syntax is not mistaken for a credential.
+ */
 public final class ExternalDelegationContentGuard {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ExternalDelegationContentGuard() {}
 
+  /** 補助エージェントへの委譲において、元の内容認証情報の有無を判定する。 */
   public static boolean hasUnmaskedCredentials(String content) {
     try {
       return hasUnmaskedCredentials(new SubAgentResultParser().parse(content));
@@ -14,6 +20,7 @@ public final class ExternalDelegationContentGuard {
     }
   }
 
+  /** 補助エージェントへの委譲において、元の内容認証情報の有無を判定する。 */
   public static boolean hasUnmaskedCredentials(JsonNode value) {
     if (value == null || value.isNull()) return false;
     if (value.isString()) return ExternalSourceRedactor.hasUnmaskedCredentials(value.asString());

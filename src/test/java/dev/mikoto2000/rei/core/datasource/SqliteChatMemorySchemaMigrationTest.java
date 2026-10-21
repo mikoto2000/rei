@@ -20,17 +20,24 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.init.ResourceDatabasePopulator;
 import org.sqlite.SQLiteDataSource;
 
+/** SQLiteチャット記憶データ形式移行の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SqliteChatMemorySchemaMigrationTest {
 
+  /** 検証に使う発生順序位置。 */
   private static final String SEQUENCE_INDEX =
       "SPRING_AI_CHAT_MEMORY_CONVERSATION_ID_SEQUENCE_ID_IDX";
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 検証に使うデータ取得元。 */
   private SQLiteDataSource dataSource;
+
+  /** 検証に使うデータベースへの接続。 */
   private JdbcTemplate jdbc;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setUp() {
     dataSource = new SQLiteDataSource();
@@ -38,6 +45,7 @@ class SqliteChatMemorySchemaMigrationTest {
     jdbc = new JdbcTemplate(dataSource);
   }
 
+  /** データ保存先の利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void leavesNewDatabaseForSpringAiToInitialize() {
     SqliteChatMemorySchemaMigration.migrate(dataSource);
@@ -51,6 +59,7 @@ class SqliteChatMemorySchemaMigrationTest {
         .containsExactly("hello");
   }
 
+  /** 全対象旧形式行一覧を保持することを確認する。 */
   @Test
   void preservesAllLegacyRowsAndOrdersEachConversationByTimestampThenRowid() {
     createLegacySchema();
@@ -88,6 +97,7 @@ class SqliteChatMemorySchemaMigrationTest {
     assertSequenceIndex();
   }
 
+  /** データ保存先の利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void migratedMessagesCanBeReadAndSavedWithSpringAiRepository() {
     createLegacySchema();
@@ -117,6 +127,7 @@ class SqliteChatMemorySchemaMigrationTest {
         .isEqualTo(1000L);
   }
 
+  /** 繰り返された移行について、既存の発生順序を保持することを確認する。 */
   @Test
   void repeatedMigrationPreservesExistingSequenceEvenWhenItDiffersFromTimestampOrder() {
     createLegacySchema();
@@ -140,6 +151,7 @@ class SqliteChatMemorySchemaMigrationTest {
     assertSequenceIndex();
   }
 
+  /** 未指定位置を作成することを確認する。 */
   @Test
   void createsMissingIndexForExistingModernSchemaWithoutChangingRows() {
     initializeSpringAiSchema();
@@ -155,6 +167,7 @@ class SqliteChatMemorySchemaMigrationTest {
     assertSequenceIndex();
   }
 
+  /** データ保存先の利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void migratesEmptyLegacyTable() {
     createLegacySchema();
@@ -169,6 +182,7 @@ class SqliteChatMemorySchemaMigrationTest {
     assertSequenceIndex();
   }
 
+  /** データ保存先の利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rollsBackColumnAndBackfillIfIndexCreationFails() {
     createLegacySchema();
@@ -187,6 +201,7 @@ class SqliteChatMemorySchemaMigrationTest {
         .doesNotContain("sequence_id");
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private void createLegacySchema() {
     jdbc.execute(
         """
@@ -205,6 +220,7 @@ class SqliteChatMemorySchemaMigrationTest {
         """);
   }
 
+  /** {@code initializeSpringAiSchema} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void initializeSpringAiSchema() {
     new ResourceDatabasePopulator(
             new ClassPathResource(
@@ -212,6 +228,7 @@ class SqliteChatMemorySchemaMigrationTest {
         .execute(dataSource);
   }
 
+  /** {@code insert} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void insert(String conversationId, String content, String type, long timestamp) {
     jdbc.update(
         "INSERT INTO SPRING_AI_CHAT_MEMORY (conversation_id, content, type, timestamp) VALUES (?, ?, ?, ?)",
@@ -221,6 +238,7 @@ class SqliteChatMemorySchemaMigrationTest {
         timestamp);
   }
 
+  /** {@code contents} の条件を再現するための補助情報を返す。 */
   private List<String> contents(String conversationId) {
     return jdbc.queryForList(
         "SELECT content FROM SPRING_AI_CHAT_MEMORY WHERE conversation_id = ? ORDER BY sequence_id",
@@ -228,10 +246,12 @@ class SqliteChatMemorySchemaMigrationTest {
         conversationId);
   }
 
+  /** 検証で使用する保存と検索の窓口を、指定された条件に合わせて用意する。 */
   private JdbcChatMemoryRepository repository() {
     return JdbcChatMemoryRepository.builder().dataSource(dataSource).build();
   }
 
+  /** 複数の検証で共通する期待結果を確認し、要件に合わない状態を検出する。 */
   private void assertSequenceIndex() {
     assertThat(jdbc.queryForList("PRAGMA index_info(" + SEQUENCE_INDEX + ")"))
         .extracting(row -> row.get("name"))

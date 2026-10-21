@@ -4,14 +4,25 @@ import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
+/** 論文要約のユースケースを実現する。 */
 @Service
 public class PaperSummaryService {
+  /** リポジトリ。 */
   private final PaperRepository repo;
+
+  /** 内容。 */
   private final PaperContentService content;
+
+  /** 言語モデル。 */
   private final PaperLanguageModel llm;
+
+  /** 検証の窓口。 */
   private final PaperSummaryValidator validator;
+
+  /** 設定。 */
   private final PaperProperties config;
 
+  /** 指定された値や利用先を使って、PaperSummaryServiceを初期化する。 */
   public PaperSummaryService(
       PaperRepository repo,
       PaperContentService content,
@@ -25,11 +36,13 @@ public class PaperSummaryService {
     this.config = config;
   }
 
+  /** 対象の内容を、要点が分かる形にまとめる。 */
   public PaperSummary summarize(
       Paper paper, PaperSummary.Mode mode, boolean refresh, PaperOperation op) {
     return PaperLocks.with(paper.id(), op, () -> summarizeLocked(paper, mode, refresh, op));
   }
 
+  /** 利用者が要点を把握できるよう、使用中を要約する。 */
   private PaperSummary summarizeLocked(
       Paper paper, PaperSummary.Mode mode, boolean refresh, PaperOperation op) {
     if (mode == null) mode = config.getDefaultSummaryMode();

@@ -28,9 +28,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.memory.ChatMemory;
 
+/** 再開概要シェルの結果と状態の契約を検証するテスト。 */
 class ResumeOverviewShellTest extends ProjectClientTestSupport {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** ターミナルへの表示先を利用することを確認する。 */
   @Test
   void startupRestoreSwitchAndFailureUseShellOutput() throws Exception {
     var projects =
@@ -66,14 +69,17 @@ class ResumeOverviewShellTest extends ProjectClientTestSupport {
     var text = new StringBuilder();
     shell.attach(
         new ShellEventOutput() {
+          /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
           public void print(String s) {
             text.append(s);
           }
 
+          /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
           public void println(String s) {
             text.append(s).append('\n');
           }
 
+          /** 検証で保留している出力の確定を扱う。 */
           public void flush() {}
         });
     assertTrue(text.toString().contains("A  2 件"));
@@ -91,6 +97,7 @@ class ResumeOverviewShellTest extends ProjectClientTestSupport {
     assertDoesNotThrow(() -> shell.restore(a));
   }
 
+  /** ターミナルでの対話で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void projectCommandRestoresBeforeAnySessionBackgroundPresentation() throws Exception {
     var projects =

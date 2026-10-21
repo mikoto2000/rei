@@ -17,7 +17,9 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
 
+/** 代替手段応答生成に使うモデルの結果と状態の契約を検証するテスト。 */
 class FallbackChatModelTest {
+  /** 代替手段について、設定済み代替手段モデルを保持することを確認する。 */
   @Test
   void fallbackRetainsConfiguredFallbackModelAndRequestOptionsForCallAndStream() {
     var primary = Mockito.mock(ChatModel.class);
@@ -56,6 +58,7 @@ class FallbackChatModelTest {
     assertThat(options.getModel()).isEqualTo("feature-model");
   }
 
+  /** 用途に応じたモデル利用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void ordinaryTransportErrorAfterRunCancellationDoesNotStartFallback() {
     var primary = Mockito.mock(ChatModel.class);
@@ -87,6 +90,7 @@ class FallbackChatModelTest {
     Mockito.verifyNoInteractions(fallback);
   }
 
+  /** 用途に応じたモデル利用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationDoesNotStartFallback() {
     var primary = Mockito.mock(ChatModel.class);
@@ -103,6 +107,7 @@ class FallbackChatModelTest {
     Mockito.verifyNoInteractions(fallback);
   }
 
+  /** 用途に応じたモデル利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void callFallsBackToDefaultModelWhenPrimaryFails() {
     ChatModel primary = Mockito.mock(ChatModel.class);
@@ -123,6 +128,7 @@ class FallbackChatModelTest {
     assertThat(promptCaptor.getValue().getOptions().getTemperature()).isEqualTo(0.2);
   }
 
+  /** 用途に応じたモデル利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void streamFallsBackToDefaultModelWhenPrimaryFails() {
     ChatModel primary = Mockito.mock(ChatModel.class);
@@ -138,6 +144,7 @@ class FallbackChatModelTest {
     assertThat(model.stream(prompt).collectList().block()).containsExactly(fallbackResponse);
   }
 
+  /** 呼び出しについて、プロンプトモデルを維持することを確認する。 */
   @Test
   void callKeepsPromptModelWhenItIsNotPrimaryFeatureModel() {
     ChatModel primary = Mockito.mock(ChatModel.class);
@@ -156,6 +163,7 @@ class FallbackChatModelTest {
     assertThat(promptCaptor.getValue().getOptions().getModel()).isEqualTo("current-default-model");
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void callFallsBackWithoutCallingMutateWhenOptionsDoNotSupportMutate() {
     ChatModel primary = Mockito.mock(ChatModel.class);
@@ -174,6 +182,7 @@ class FallbackChatModelTest {
     assertThat(promptCaptor.getValue().getOptions().getTemperature()).isEqualTo(0.4);
   }
 
+  /** 呼び出しについて、主要なモデルを取り除くことを確認する。 */
   @Test
   void callRemovesPrimaryModelFromOpenAiOptionsWhenFallingBack() {
     ChatModel primary = Mockito.mock(ChatModel.class);
@@ -194,51 +203,67 @@ class FallbackChatModelTest {
     assertThat(promptCaptor.getValue().getOptions().getTemperature()).isEqualTo(0.5);
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   private static ChatResponse response(String text) {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
   }
 
+  /**
+   * 検証条件の再現に使う最小チャット選択可能な設定の情報。
+   *
+   * @param model 検証に使うモデル
+   * @param temperature 検証に使う生成の揺らぎ
+   */
   private record MinimalChatOptions(String model, Double temperature) implements ChatOptions {
+    /** 検証用に、用途に応じたモデル利用で参照するモデルを返す。 */
     @Override
     public String getModel() {
       return model;
     }
 
+    /** 検証用に、用途に応じたモデル利用で参照する生成の揺らぎを返す。 */
     @Override
     public Double getTemperature() {
       return temperature;
     }
 
+    /** 検証用に、用途に応じたモデル利用で参照する実行頻度減点を返す。 */
     @Override
     public Double getFrequencyPenalty() {
       return null;
     }
 
+    /** 検証用に、用途に応じたモデル利用で参照するトークン数の上限を返す。 */
     @Override
     public Integer getMaxTokens() {
       return null;
     }
 
+    /** 検証用に、用途に応じたモデル利用で参照するPresence減点を返す。 */
     @Override
     public Double getPresencePenalty() {
       return null;
     }
 
+    /** 検証用に、用途に応じたモデル利用で参照する停止発生順序一覧を返す。 */
     @Override
     public List<String> getStopSequences() {
       return null;
     }
 
+    /** 検証用に、用途に応じたモデル利用で参照する上位件数を返す。 */
     @Override
     public Integer getTopK() {
       return null;
     }
 
+    /** 検証用に、用途に応じたモデル利用で参照する上位検証用の設定を返す。 */
     @Override
     public Double getTopP() {
       return null;
     }
 
+    /** {@code mutate} の条件を再現するための補助情報を返す。 */
     @Override
     public ChatOptions.Builder<?> mutate() {
       throw new UnsupportedOperationException();

@@ -12,10 +12,12 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import tools.jackson.databind.json.JsonMapper;
 
+/** ベクトル保存先の構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration
 @EnableConfigurationProperties(HybridRetrievalProperties.class)
 public class VectorStoreConfiguration {
 
+  /** 機能の組み立てで用いるベクトル保存先を返す。 */
   @Bean
   @ConditionalOnProperty(
       name = "rei.embedding.enabled",
@@ -30,12 +32,14 @@ public class VectorStoreConfiguration {
         dataSource, embeddingModel, objectMapper, retrieval.enabled() && retrieval.bm25Enabled());
   }
 
+  /** 機能の組み立てで用いるベクトル保存先を返す。 */
   public LazySqliteVectorStore vectorStore(
       DataSource dataSource, EmbeddingModel embeddingModel, JsonMapper objectMapper) {
     return vectorStore(
         dataSource, embeddingModel, objectMapper, new HybridRetrievalProperties(false, 40, 60));
   }
 
+  /** 機能の組み立てで用いる無効状態ベクトル保存先を返す。 */
   @Bean
   @ConditionalOnProperty(name = "rei.embedding.enabled", havingValue = "false")
   public DisabledVectorStore disabledVectorStore() {

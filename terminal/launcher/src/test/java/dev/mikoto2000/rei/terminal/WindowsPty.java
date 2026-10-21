@@ -12,18 +12,28 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.*;
 
-/** Test-only real ConPTY host. Output is drained independently through final teardown. */
+/**
+ * 検証条件を再現するための判定期間仮想端末。
+ *
+ * <p>Test-only real ConPTY host. Output is drained independently through final teardown.
+ */
 final class WindowsPty implements AutoCloseable {
+  /** 検証条件を再現するためのコンソール。 */
   interface Console extends StdCallLibrary {
+    /** 検証に使うAPI。 */
     Console API = Native.load("kernel32", Console.class);
 
+    /** 検証用に、新たな対象を利用できるよう、Pseudoコンソールを作成する。 */
     int CreatePseudoConsole(
         Coord size, HANDLE input, HANDLE output, int flags, HANDLEByReference console);
 
+    /** {@code ClosePseudoConsole} の条件を再現するため、検証用の操作や状態を扱う。 */
     void ClosePseudoConsole(HANDLE console);
 
+    /** {@code InitializeProcThreadAttributeList} の条件を再現するための補助情報を返す。 */
     boolean InitializeProcThreadAttributeList(Pointer list, int count, int flags, Pointer size);
 
+    /** 検証用に、軽量CLIの起動において、更新Procスレッド属性に該当するか判定する。 */
     boolean UpdateProcThreadAttribute(
         Pointer list,
         int flags,
@@ -33,8 +43,10 @@ final class WindowsPty implements AutoCloseable {
         Pointer previous,
         Pointer returned);
 
+    /** 検証用に、対象を管理から外すため、Procスレッド属性一覧を削除する。 */
     void DeleteProcThreadAttributeList(Pointer list);
 
+    /** 検証用に、軽量CLIの起動において、作成プロセスWに該当するか判定する。 */
     boolean CreateProcessW(
         WString application,
         char[] command,
@@ -48,23 +60,39 @@ final class WindowsPty implements AutoCloseable {
         WinBase.PROCESS_INFORMATION process);
   }
 
+  /** 検証条件を再現するためのCoord。 */
   @Structure.FieldOrder({"x", "y"})
   public static class Coord extends Structure implements Structure.ByValue {
+    /** 検証に使う横方向の位置、縦方向の位置。 */
     public short x = 120, y = 40;
   }
 
+  /** 検証条件を再現するための起動時。 */
   @Structure.FieldOrder({"base", "attributes"})
   public static class Startup extends Structure {
+    /** 検証に使う基準。 */
     public WinBase.STARTUPINFO base = new WinBase.STARTUPINFO();
+
+    /** 検証に使う属性一覧。 */
     public Pointer attributes;
   }
 
+  /** 検証に使う入力、出力、コンソール、プロセス。 */
   private HANDLE input, output, console, process;
+
+  /** 検証に使う属性一覧。 */
   private Memory attributes;
+
+  /** 検証に使う文字起こし結果。 */
   private final ByteArrayOutputStreamBuffer transcript = new ByteArrayOutputStreamBuffer();
+
+  /** 検証に使う保留中の作業の処理。 */
   private Thread drain;
+
+  /** 検証に使う終了済み。 */
   private boolean closed;
 
+  /** 検証条件に必要な値を受け取り、WindowsPtyを用意する。 */
   WindowsPty(List<String> argv, Path directory) throws IOException {
     HANDLE inputRead = null, outputWrite = null;
     try {
@@ -150,10 +178,12 @@ final class WindowsPty implements AutoCloseable {
     }
   }
 
+  /** 検証用に、条件を満たさない操作を拒否するため、判定期間仮想端末の前提条件を確認する。 */
   private static void require(boolean result) throws IOException {
     if (!result) throw new IOException("Windows PTY error " + Kernel32.INSTANCE.GetLastError());
   }
 
+  /** {@code send} の条件を再現するため、検証用の操作や状態を扱う。 */
   void send(String text) throws IOException {
     byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
     var written = new IntByReference();
@@ -161,6 +191,7 @@ final class WindowsPty implements AutoCloseable {
     if (written.getValue() != bytes.length) throw new IOException("Partial PTY input");
   }
 
+  /** {@code output} の条件を再現するための補助情報を返す。 */
   String output() {
     return transcript
         .text()
@@ -168,10 +199,12 @@ final class WindowsPty implements AutoCloseable {
         .replaceAll("\u001b\\][^\u0007]*\u0007", "");
   }
 
+  /** 検証用に、必要な状態が整ってから先へ進むため、判定期間仮想端末を待つ。 */
   void await(String expected) throws Exception {
     awaitAfter(expected, 0);
   }
 
+  /** 検証用に、必要な状態が整ってから先へ進むため、変更後を待つ。 */
   void awaitAfter(String expected, int offset) throws Exception {
     long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();
     while (System.nanoTime() < deadline) {
@@ -185,6 +218,7 @@ final class WindowsPty implements AutoCloseable {
     throw new AssertionError("PTY missing " + expected + "; output: " + output());
   }
 
+  /** {@code exitCode} の条件を再現するための補助情報を返す。 */
   int exitCode() throws IOException {
     if (Kernel32.INSTANCE.WaitForSingleObject(process, 20000) != 0)
       throw new IOException("PTY client did not exit: " + output());
@@ -193,6 +227,7 @@ final class WindowsPty implements AutoCloseable {
     return code.getValue();
   }
 
+  /** 検証で利用した対象の終了を扱う。 */
   @Override
   public void close() {
     if (closed) return;
@@ -216,13 +251,17 @@ final class WindowsPty implements AutoCloseable {
     }
   }
 
+  /** 検証条件を再現するためのバイトArray出力逐次データ一時保持領域。 */
   private static final class ByteArrayOutputStreamBuffer {
+    /** 検証に使うバイト数。 */
     private final java.io.ByteArrayOutputStream bytes = new java.io.ByteArrayOutputStream();
 
+    /** {@code append} の条件を再現するため、検証用の操作や状態を扱う。 */
     synchronized void append(byte[] value, int count) {
       bytes.write(value, 0, count);
     }
 
+    /** {@code text} の条件を再現するための補助情報を返す。 */
     synchronized String text() {
       return bytes.toString(StandardCharsets.UTF_8);
     }

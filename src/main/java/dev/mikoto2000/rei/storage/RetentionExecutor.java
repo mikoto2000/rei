@@ -14,10 +14,25 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
-/** Durable, bounded quarantine. Unproven collectors can never reach file mutation. */
+/**
+ * データ保存の共通処理に必要な保持期間実行先を扱う。
+ *
+ * <p>Durable, bounded quarantine. Unproven collectors can never reach file mutation.
+ */
 public final class RetentionExecutor {
+  /** 保持期限を過ぎた情報の削除判定を猶予する。 */
   public static final Duration PURGE_GRACE = Duration.ofDays(7);
 
+  /**
+   * データ保存の共通処理で受け渡す実行を表す。
+   *
+   * @param id 識別子
+   * @param planId 計画識別子
+   * @param snapshotHash 状態の記録ハッシュ値
+   * @param status 状態
+   * @param created 作成
+   * @param updated 更新
+   */
   public record Execution(
       String id,
       String planId,
@@ -26,6 +41,16 @@ public final class RetentionExecutor {
       Instant created,
       Instant updated) {}
 
+  /**
+   * データ保存の共通処理で受け渡す項目を表す。
+   *
+   * @param objectId 対象データ識別子
+   * @param ordinal 順番
+   * @param state 状態
+   * @param quarantinePath quarantineパス
+   * @param quarantined 隔離された対象
+   * @param original 元の
+   */
   private record Item(
       String objectId,
       int ordinal,
@@ -34,19 +59,28 @@ public final class RetentionExecutor {
       Instant quarantined,
       StoredObject original) {}
 
+  /** データ保存の共通処理に必要な再開用の記録を扱う。 */
   @FunctionalInterface
   interface Checkpoint {
+    /** データ保存の共通処理に関するreachedを処理する。 */
     void reached(String stage, String execution) throws Exception;
   }
 
+  /** 登録台帳。 */
   private final StorageObjectRegistry registry;
+
+  /** 計画の作成。 */
   private final RetentionPlanner planner;
+
+  /** 再開用の記録。 */
   private final Checkpoint checkpoint;
 
+  /** データ保存の共通処理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public RetentionExecutor(StorageObjectRegistry registry, RetentionPlanner planner) {
     this(registry, planner, (stage, id) -> {});
   }
 
+  /** 指定された値や利用先を使って、RetentionExecutorを初期化する。 */
   RetentionExecutor(
       StorageObjectRegistry registry, RetentionPlanner planner, Checkpoint checkpoint) {
     this.registry = registry;
@@ -54,10 +88,12 @@ public final class RetentionExecutor {
     this.checkpoint = checkpoint;
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Execution get(String id) {
     return registry.database.read(db -> get(db, id));
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   private static Execution get(Connection db, String id) throws Exception {
     UUID.fromString(id);
     try (var query = db.prepareStatement("SELECT * FROM retention_executions WHERE id=?")) {
@@ -75,6 +111,7 @@ public final class RetentionExecutor {
     }
   }
 
+  /** 過去の記録を、条件に従って参照できる形で返す。 */
   public List<Execution> history() {
     return registry.database.read(
         db -> {
@@ -89,6 +126,7 @@ public final class RetentionExecutor {
         });
   }
 
+  /** データ保存の共通処理で用いる項目一覧を返す。 */
   private static List<Item> items(Connection db, String id) throws Exception {
     var result = new ArrayList<Item>();
     try (var query =
@@ -114,6 +152,7 @@ public final class RetentionExecutor {
     return List.copyOf(result);
   }
 
+  /** データ保存の共通処理で用いる元のを返す。 */
   private Path original(StoredObject object) throws Exception {
     if (!object.kind().equals("ACTIVITY_RAW"))
       throw new IllegalStateException("This collector has no complete reference proof");
@@ -135,6 +174,7 @@ public final class RetentionExecutor {
     return path;
   }
 
+  /** データ保存の共通処理で用いるquarantineを返す。 */
   private Path quarantine(String execution, Item item) throws Exception {
     Path expected =
         registry
@@ -148,6 +188,7 @@ public final class RetentionExecutor {
     return expected;
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   private static void verify(Path file, StoredObject object) throws Exception {
     StorageBackup.requireSafePath(file);
     if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
@@ -156,6 +197,7 @@ public final class RetentionExecutor {
       throw new IllegalStateException("Body changed or missing; retained for inspection");
   }
 
+  /** データ保存の共通処理に関する保護を処理する。 */
   private void protect(Connection db, Item item) throws Exception {
     var current = StorageObjectRegistry.find(db, item.objectId()).orElseThrow();
     if (!current.relativePath().equals(item.original().relativePath())
@@ -165,6 +207,7 @@ public final class RetentionExecutor {
       throw new IllegalStateException("Body changed or became protected; no mutation admitted");
   }
 
+  /** データ保存の共通処理に関するmoveを処理する。 */
   private static void move(Path source, Path target) throws Exception {
     StorageBackup.requireSafePath(source);
     StorageBackup.requireSafePath(target);
@@ -174,6 +217,7 @@ public final class RetentionExecutor {
     StorageBackup.force(target);
   }
 
+  /** データ保存の共通処理に関する実行状態を処理する。 */
   private void executionState(Connection db, String id, String state) throws Exception {
     try (var query =
         db.prepareStatement("UPDATE retention_executions SET status=?,updated=? WHERE id=?")) {
@@ -184,6 +228,7 @@ public final class RetentionExecutor {
     }
   }
 
+  /** データ保存の共通処理に関する項目状態を処理する。 */
   private void itemState(
       Connection db, String id, Item item, String state, String objectStatus, Instant quarantined)
       throws Exception {
@@ -204,6 +249,7 @@ public final class RetentionExecutor {
     }
   }
 
+  /** 指定された内容を、現在の対象へ反映する。 */
   public Execution apply(String planId) {
     return registry.serialized(
         () -> {
@@ -327,6 +373,7 @@ public final class RetentionExecutor {
         });
   }
 
+  /** 保存済みの記録から、利用する状態を復元する。 */
   public Execution restore(String id) {
     return registry.serialized(
         () -> {
@@ -388,6 +435,7 @@ public final class RetentionExecutor {
         });
   }
 
+  /** データ保存の共通処理で用いる保持期限を過ぎた情報の削除状態の記録を返す。 */
   private String purgeSnapshot(Connection db, String id, boolean verifyBodies) throws Exception {
     var digest = MessageDigest.getInstance("SHA-256");
     digest.update(id.getBytes(java.nio.charset.StandardCharsets.UTF_8));
@@ -431,6 +479,7 @@ public final class RetentionExecutor {
     return HexFormat.of().formatHex(digest.digest());
   }
 
+  /** データ保存の共通処理に関する承認保持期限を過ぎた情報の削除を処理する。 */
   public void approvePurge(String id) {
     registry.serialized(
         () ->
@@ -464,6 +513,7 @@ public final class RetentionExecutor {
                 }));
   }
 
+  /** データ保存の共通処理で用いる保持期限を過ぎた情報の削除を返す。 */
   public Execution purge(String id) {
     return registry.serialized(
         () -> {

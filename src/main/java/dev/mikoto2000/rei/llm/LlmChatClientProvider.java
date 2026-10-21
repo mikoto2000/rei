@@ -35,11 +35,14 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 
+/** 言語モデルモデルへ対話を依頼する窓口を用途や設定に応じて提供する窓口。 */
 @Component
 public class LlmChatClientProvider {
+  /** Slackエージェントツール一覧。 */
   private org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.slack.SlackAgentTools>
       slackAgentTools;
 
+  /** 用途に応じたモデル利用で使用するSlackエージェントツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setSlackAgentTools(
       org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.slack.SlackAgentTools>
@@ -47,63 +50,83 @@ public class LlmChatClientProvider {
     this.slackAgentTools = tools;
   }
 
+  /** 実行予定の管理ツール一覧。 */
   private dev.mikoto2000.rei.temporal.SchedulerTools schedulerTools;
 
+  /** 用途に応じたモデル利用で使用する実行予定の管理ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setSchedulerTools(dev.mikoto2000.rei.temporal.SchedulerTools tools) {
     this.schedulerTools = tools;
   }
 
+  /** 依存条件ツール一覧。 */
   private dev.mikoto2000.rei.core.dependency.DependencyTools dependencyTools;
 
+  /** 用途に応じたモデル利用で使用する依存条件ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setDependencyTools(dev.mikoto2000.rei.core.dependency.DependencyTools tools) {
     this.dependencyTools = tools;
   }
 
+  /** ファイル依存条件ツール一覧。 */
   private dev.mikoto2000.rei.core.FileDependencyTools fileDependencyTools;
 
+  /** 用途に応じたモデル利用で使用するファイル依存条件ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setFileDependencyTools(dev.mikoto2000.rei.core.FileDependencyTools tools) {
     this.fileDependencyTools = tools;
   }
 
+  /** プロセス依存条件ツール一覧。 */
   private dev.mikoto2000.rei.core.ProcessDependencyTools processDependencyTools;
 
+  /** 用途に応じたモデル利用で使用するプロセス依存条件ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setProcessDependencyTools(dev.mikoto2000.rei.core.ProcessDependencyTools tools) {
     this.processDependencyTools = tools;
   }
 
+  /** 論文ツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.paper.PaperTools> paperTools;
 
+  /** 用途に応じたモデル利用で使用する論文ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setPaperTools(ObjectProvider<dev.mikoto2000.rei.paper.PaperTools> tools) {
     this.paperTools = tools;
   }
 
+  /** 要約ツール一覧。 */
   private ObjectProvider<SummaryTools> summaryTools;
 
+  /** 用途に応じたモデル利用で使用する要約ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setSummaryTools(ObjectProvider<SummaryTools> tools) {
     this.summaryTools = tools;
   }
 
+  /** 作業状況ツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.activity.ActivityTools> activityTools;
 
+  /** 用途に応じたモデル利用で使用する作業状況ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setActivityTools(ObjectProvider<dev.mikoto2000.rei.activity.ActivityTools> tools) {
     this.activityTools = tools;
   }
 
+  /** 文脈文脈の組み立て。 */
   private dev.mikoto2000.rei.core.contextbudget.ContextAssembler contextAssembler;
+
+  /** 文脈履歴。 */
   private dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor contextHistory;
 
+  /** レビューツール一覧。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   private dev.mikoto2000.rei.review.ReviewTools reviewTools;
 
+  /** 元の結果ツール一覧。 */
   private dev.mikoto2000.rei.core.contextbudget.RawToolResultTools rawResultTools;
 
+  /** 用途に応じたモデル利用で使用する文脈圧縮を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setContextCompression(
       dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler,
@@ -116,16 +139,22 @@ public class LlmChatClientProvider {
     rawResultTools = rawTools;
   }
 
+  /** 状態表示ツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.dot.DotTools> dotTools;
 
+  /** 用途に応じたモデル利用で使用する状態表示ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setDotTools(ObjectProvider<dev.mikoto2000.rei.dot.DotTools> tools) {
     dotTools = tools;
   }
 
+  /** 外部エージェントツール一覧。 */
   private dev.mikoto2000.rei.externalagent.ExternalAgentTools externalAgentTools;
+
+  /** 外部委譲。 */
   private dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService externalDelegation;
 
+  /** 用途に応じたモデル利用で使用する外部エージェントツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setExternalAgentTools(
       dev.mikoto2000.rei.externalagent.ExternalAgentTools tools,
@@ -134,44 +163,106 @@ public class LlmChatClientProvider {
     this.externalDelegation = service;
   }
 
+  /** モデル提供元。 */
   private final LlmModelProvider modelProvider;
+
+  /** core設定。 */
   private final CoreProperties coreProperties;
+
+  /** システムへの指示サービス。 */
   private final SystemPromptService systemPromptService;
+
+  /** チャット記憶。 */
   private final ChatMemory chatMemory;
+
+  /** ツール一覧。 */
   private final ObjectProvider<Tools> tools;
+
+  /** Google予定表ツール一覧。 */
   private final ObjectProvider<GoogleCalendarTools> googleCalendarTools;
+
+  /** タスクツール一覧。 */
   private final ObjectProvider<TaskTools> taskTools;
+
+  /** 日次案内ツール一覧。 */
   private final ObjectProvider<BriefingTools> briefingTools;
+
+  /** フィードツール一覧。 */
   private final ObjectProvider<FeedTools> feedTools;
+
+  /** リマインダーツール一覧。 */
   private final ObjectProvider<ReminderTools> reminderTools;
+
+  /** 検索ツール一覧。 */
   private final ObjectProvider<SearchTools> searchTools;
+
+  /** Web検索ツール一覧。 */
   private final ObjectProvider<WebSearchTools> webSearchTools;
+
+  /** 音通知通知ツール一覧。 */
   private final ObjectProvider<SoundNotificationTools> soundNotificationTools;
+
+  /** Bluesky投稿ツール一覧。 */
   private final ObjectProvider<BlueskyPostTools> blueskyPostTools;
+
+  /** URL内容取得ツール一覧。 */
   private final ObjectProvider<UrlContentFetchTools> urlContentFetchTools;
+
+  /** テキストツール一覧。 */
   private final ObjectProvider<TextTools> textTools;
+
+  /** 実行環境文脈対話の補助。 */
   private final ObjectProvider<RuntimeContextAdvisor> runtimeContextAdvisor;
+
+  /** エージェントスキル対話の補助。 */
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
+
+  /** 作業中集合対話の補助。 */
   private final ObjectProvider<WorkingSetAdvisor> workingSetAdvisor;
+
+  /** タスク状態対話の補助。 */
   private final ObjectProvider<TaskStateAdvisor> taskStateAdvisor;
+
+  /** タスク状態ツール一覧。 */
   private final ObjectProvider<TaskStateTools> taskStateTools;
+
+  /** ツールイベント完了時の処理提供元。 */
   private final ObjectProvider<ToolEventCallbackProvider> toolEventCallbackProvider;
+
+  /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
+
+  /** 実行状況の通知先。 */
   private final AgentEventPublisher eventPublisher;
+
+  /** キャッシュ。 */
   private final Map<String, ChatClient> cache = new ConcurrentHashMap<>();
+
+  /** 記憶文脈。 */
   private ObjectProvider<dev.mikoto2000.rei.memory.service.MemoryContextAdvisor> memoryContext;
+
+  /** 作業文脈。 */
   private ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextAdvisor> workContext;
+
+  /** 作業ツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextTools> workTools;
+
+  /** 経験の記録ツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.episode.EpisodeTools> episodeTools;
 
+  /** 用途に応じたモデル利用で使用する経験の記録ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setEpisodeTools(ObjectProvider<dev.mikoto2000.rei.episode.EpisodeTools> tools) {
     episodeTools = tools;
   }
 
+  /** 再開文脈。 */
   private ObjectProvider<dev.mikoto2000.rei.checkpoint.ResumeContextAdvisor> resumeContext;
+
+  /** 再開用の記録ツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.checkpoint.CheckpointTools> checkpointTools;
 
+  /** 用途に応じたモデル利用で使用する再開用の記録を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setCheckpoint(
       ObjectProvider<dev.mikoto2000.rei.checkpoint.ResumeContextAdvisor> advisor,
@@ -180,6 +271,7 @@ public class LlmChatClientProvider {
     checkpointTools = tools;
   }
 
+  /** 用途に応じたモデル利用で使用する作業文脈を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setWorkContext(
       ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextAdvisor> advisor,
@@ -188,33 +280,42 @@ public class LlmChatClientProvider {
     workTools = tools;
   }
 
+  /** 用途に応じたモデル利用で使用する記憶文脈を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setMemoryContext(
       ObjectProvider<dev.mikoto2000.rei.memory.service.MemoryContextAdvisor> advisor) {
     memoryContext = advisor;
   }
 
+  /** 画面操作利用ツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.computeruse.ComputerUseTools> computerUseTools;
 
+  /** 用途に応じたモデル利用で使用する画面操作利用ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setComputerUseTools(ObjectProvider<dev.mikoto2000.rei.computeruse.ComputerUseTools> tools) {
     this.computerUseTools = tools;
   }
 
+  /** 補助エージェントツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> subAgentTools;
+
+  /** 補助エージェント設定。 */
   private dev.mikoto2000.rei.subagent.SubAgentProperties subAgentProperties =
       new dev.mikoto2000.rei.subagent.SubAgentProperties();
 
+  /** 用途に応じたモデル利用で使用する補助エージェント設定を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setSubAgentProperties(dev.mikoto2000.rei.subagent.SubAgentProperties settings) {
     this.subAgentProperties = settings;
   }
 
+  /** 用途に応じたモデル利用で使用する補助エージェントツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setSubAgentTools(ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> tools) {
     this.subAgentTools = tools;
   }
 
+  /** 指定された値や利用先を使って、LlmChatClientProviderを初期化する。 */
   public LlmChatClientProvider(
       LlmModelProvider modelProvider,
       CoreProperties coreProperties,
@@ -266,11 +367,16 @@ public class LlmChatClientProvider {
     this.eventPublisher = eventPublisher;
   }
 
+  /** 用途に応じたモデル利用で用いるモデルへ対話を依頼する窓口を返す。 */
   public ChatClient chatClient(String feature) {
     return cache.computeIfAbsent(feature, this::createChatClient);
   }
 
-  /** Restricted runs deliberately have no advisors that mutate conversation or task state. */
+  /**
+   * 用途に応じたモデル利用で用いる並列モデルへ対話を依頼する窓口を返す。
+   *
+   * <p>Restricted runs deliberately have no advisors that mutate conversation or task state.
+   */
   public ChatClient parallelChatClient(dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode) {
     if (mode == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE)
       return chatClient(LlmFeature.CHAT);
@@ -318,6 +424,7 @@ public class LlmChatClientProvider {
         });
   }
 
+  /** 新たな対象を利用できるよう、モデルへ対話を依頼する窓口を作成する。 */
   private ChatClient createChatClient(String feature) {
     // Extraction and summarization process supplied evidence without conversation state or tools.
     if (LlmFeature.MEMORY.equals(feature) || LlmFeature.VOICE_CORRECTION.equals(feature)) {
@@ -464,10 +571,12 @@ public class LlmChatClientProvider {
     return builder.build();
   }
 
+  /** 用途に応じたモデル利用において、エージェントスキル一覧への対応可否を返す。 */
   static boolean supportsAgentSkills(String feature) {
     return LlmFeature.CHAT.equals(feature);
   }
 
+  /** 新たな対象を管理できるよう、条件付き利用可能を追加する。 */
   private void addIfAvailable(List<Object> toolObjects, ObjectProvider<?> provider) {
     Object tool = provider.getIfAvailable();
     if (tool != null) {

@@ -19,40 +19,71 @@ import java.nio.file.Path;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Component;
 
-/** Reuses the Project FIFO and Chat boundaries, capturing ownership before queue admission. */
+/**
+ * 目標チャットの入力を共通の受付経路へつなぐ。
+ *
+ * <p>Reuses the Project FIFO and Chat boundaries, capturing ownership before queue admission.
+ */
 @Component
 public class GoalChatGateway implements GoalLoopService.Gateway {
+  /** 継続入力一覧。 */
   private RunContinuation continuations;
 
+  /** 目標の達成管理で使用する継続入力一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setContinuations(RunContinuation continuations) {
     this.continuations = continuations;
   }
 
+  /** 時間計測。 */
   private dev.mikoto2000.rei.timing.TimingExecution timing;
 
+  /** 目標の達成管理で使用する時間計測を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setTiming(dev.mikoto2000.rei.timing.TimingExecution timing) {
     this.timing = timing;
   }
 
+  /** 目標一覧。 */
   private final GoalRepository goals;
+
+  /** 確認の窓口。 */
   private final FileGoalVerifier verifier;
+
+  /** プロジェクト一覧。 */
   private final ProjectService projects;
+
+  /** 会話一覧。 */
   private final SessionRepository sessions;
+
+  /** 入力の振り分け。 */
   private final ConversationInputRouter router;
+
+  /** チャット。 */
   private final ChatExecutionService chat;
+
+  /** キャンセル。 */
   private final CommandCancellationService cancellation;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** 通知先。 */
   private final AgentEventPublisher publisher;
+
+  /** 修復予約呼び出し回数。 */
   private int repairReserveCalls = 2;
+
+  /** 段階一覧。 */
   private GoalStageService stages;
 
+  /** 目標の達成管理に関する設定段階一覧を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void configureStages(GoalStageService stages) {
     this.stages = stages;
   }
 
+  /** 目標の達成管理に関する設定修復予約を処理する。 */
   @org.springframework.beans.factory.annotation.Value("${rei.goal.repair-reserve-calls:2}")
   public void configureRepairReserve(int calls) {
     if (calls < 0 || calls > 10)
@@ -60,9 +91,13 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
     repairReserveCalls = calls;
   }
 
+  /** 実行登録台帳。 */
   private dev.mikoto2000.rei.application.run.RunRegistry runRegistry;
+
+  /** 実行受付から終了までの管理。 */
   private dev.mikoto2000.rei.application.run.RunService runLifecycle;
 
+  /** 目標の達成管理に関する設定実行Trackingを処理する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void configureRunTracking(
       dev.mikoto2000.rei.application.run.RunRegistry registry,
@@ -71,6 +106,7 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
     this.runLifecycle = lifecycle;
   }
 
+  /** 指定された値や利用先を使って、GoalChatGatewayを初期化する。 */
   public GoalChatGateway(
       GoalRepository goals,
       FileGoalVerifier verifier,
@@ -92,6 +128,7 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
     this.publisher = publisher;
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   @Override
   public void validate(GoalRepository.Goal goal) {
     var root = Path.of(goal.projectRoot());
@@ -108,10 +145,12 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
         sessions
             .findById(goal.sessionId())
             .orElseThrow(() -> new IllegalStateException("Goal Session is missing"));
+    // 別のプロジェクトの情報を、この作業の対象として扱わせない。
     if (!session.projectId().equals(goal.projectId()))
       throw new IllegalStateException("Goal Session belongs to another Project");
   }
 
+  /** 目標の達成管理に関する実行先への引き渡しを処理する。 */
   @Override
   public void dispatch(
       GoalRepository.Claim claim, String run, Consumer<GoalLoopService.Outcome> completed) {
@@ -309,6 +348,7 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
     }
   }
 
+  /** 目標の達成管理において、入力先Flightかどうかを判定する。 */
   @Override
   public boolean isInFlight(GoalRepository.Goal goal) {
     if (goal.currentRunId() == null) return false;
@@ -320,6 +360,7 @@ public class GoalChatGateway implements GoalLoopService.Gateway {
     }
   }
 
+  /** 対象の実行をキャンセルする。 */
   @Override
   public void cancel(GoalRepository.Goal goal) {
     if (goal.currentRunId() == null) return;

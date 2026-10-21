@@ -5,26 +5,35 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+/** フィードをモデルから呼び出せるツールとして提供する。 */
 @Component
 @RequiredArgsConstructor
 public class FeedTools {
 
+  /** フィードサービス。 */
   private final FeedService feedService;
+
+  /** フィード更新サービス。 */
   private final FeedUpdateService feedUpdateService;
+
+  /** フィード要約サービス。 */
   private final FeedSummaryService feedSummaryService;
 
+  /** フィードの購読と収集で用いるフィード一覧を返す。 */
   @Tool(name = "feedList", description = "登録済み RSS/Atom フィード一覧を返します。")
   List<Feed> feedList() {
     IO.println("RSS/Atom フィード一覧を取得するよ");
     return feedService.list();
   }
 
+  /** フィードの購読と収集で用いるフィード追加を返す。 */
   @Tool(name = "feedAdd", description = "RSS/Atom フィードを登録します。")
   Feed feedAdd(String url, String displayName) {
     IO.println("RSS/Atom フィードを追加するよ");
     return feedService.add(url, displayName);
   }
 
+  /** フィードの購読と収集で用いるフィード削除を返す。 */
   @Tool(name = "feedDelete", description = "登録済み RSS/Atom フィードを削除します。")
   String feedDelete(Long id) {
     IO.println("RSS/Atom フィードを削除するよ。id=" + id);
@@ -32,6 +41,7 @@ public class FeedTools {
     return "削除: " + id;
   }
 
+  /** フィードの購読と収集で用いるフィード更新を返す。 */
   @Tool(name = "feedUpdate", description = "RSS/Atom フィードを更新します。id が null の場合は全件更新します。")
   String feedUpdate(Long id) {
     if (id == null) {
@@ -42,6 +52,7 @@ public class FeedTools {
     return formatUpdateResults(List.of(feedUpdateService.update(id)));
   }
 
+  /** フィードの購読と収集で用いるフィード要約日次案内を返す。 */
   @Tool(
       name = "feedSummarizeBriefing",
       description =
@@ -51,6 +62,7 @@ public class FeedTools {
     return feedSummaryService.summarizeBriefing();
   }
 
+  /** フィードの購読と収集で用いるフィード要約項目を返す。 */
   @Tool(
       name = "feedSummarizeItem",
       description =
@@ -60,6 +72,7 @@ public class FeedTools {
     return feedSummaryService.summarizeItemDetailed(itemId);
   }
 
+  /** 内容を表示・参照しやすくするため、更新結果一覧を整形する。 */
   private String formatUpdateResults(List<FeedUpdateResult> results) {
     if (results.isEmpty()) {
       return "更新対象のフィードはありません";

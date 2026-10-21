@@ -9,9 +9,12 @@ import java.util.HexFormat;
 import java.util.List;
 import java.util.Map;
 
+/** Web上の情報の調査に必要なWeb内容Deduplicationを扱う。 */
 public final class WebContentDeduplication {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private WebContentDeduplication() {}
 
+  /** Web上の情報の調査で用いる要求内容の照合値を返す。 */
   public static String fingerprint(String fullContent) {
     try {
       return HexFormat.of()
@@ -23,6 +26,7 @@ public final class WebContentDeduplication {
     }
   }
 
+  /** Web上の情報の調査で用いるページ一覧を返す。 */
   public static List<WebSearchPage> pages(List<WebSearchPage> pages) {
     List<WebSearchPage> result = new ArrayList<>();
     Map<String, Integer> seen = new HashMap<>();
@@ -39,6 +43,7 @@ public final class WebContentDeduplication {
     return List.copyOf(result);
   }
 
+  /** Web上の情報の調査で用いる項目一覧を返す。 */
   public static List<WebSearchAndReadItem> items(List<WebSearchAndReadItem> items) {
     List<WebSearchAndReadItem> result = new ArrayList<>();
     Map<String, Integer> seen = new HashMap<>();
@@ -55,6 +60,7 @@ public final class WebContentDeduplication {
     return List.copyOf(result);
   }
 
+  /** Web上の情報の調査で用いる重複の有無別名一覧を返す。 */
   private static List<WebSourceAlias> duplicateAliases(List<WebSourceAlias> aliases) {
     return aliases.stream()
         .map(

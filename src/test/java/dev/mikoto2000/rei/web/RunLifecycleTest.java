@@ -17,7 +17,9 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 実行受付から終了までの管理の結果と状態の契約を検証するテスト。 */
 class RunLifecycleTest {
+  /** Web APIによる操作で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rejectedQueuedSuccessorIsFailedInsteadOfRemainingQueuedForever() {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -49,6 +51,7 @@ class RunLifecycleTest {
     }
   }
 
+  /** Web APIによる操作で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void executionUpdatesRegistryAndRecoversMissingTerminalEvents() {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -75,6 +78,7 @@ class RunLifecycleTest {
     assertThat(service.get("throws").status()).isEqualTo(RunStatus.FAILED);
   }
 
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void queuedCancelIsIdempotentPublishesOnceAndNeverStartsRunner() {
     var registry = new RunRegistry(Clock.systemUTC());

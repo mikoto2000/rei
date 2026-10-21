@@ -15,10 +15,13 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** プロジェクトCd復元の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProjectCdRestorationTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** シェル実行の担当について、範囲内クライアントを復元することを確認する。 */
   @Test
   void shellWorkerRestoresWithinItsClientAndFailedCdDoesNotRestore() throws Exception {
     Path b = Files.createDirectory(temp.resolve("b"));
@@ -46,6 +49,7 @@ class ProjectCdRestorationTest extends dev.mikoto2000.rei.core.project.ProjectCl
     }
   }
 
+  /** 新規プロジェクトを復元することを確認する。 */
   @Test
   void cdRestoresTheNewProjectAfterSwitchingItsContext() throws Exception {
     Path b = Files.createDirectory(temp.resolve("b"));

@@ -8,8 +8,13 @@ import java.io.IOException;
 import java.time.Instant;
 import java.util.Base64;
 
-/** Versioned opaque transport token, bound to the requested resource/filter, never a file path. */
+/**
+ * 会話の継続管理に必要な続きの取得位置Codecを扱う。
+ *
+ * <p>Versioned opaque transport token, bound to the requested resource/filter, never a file path.
+ */
 public final class CursorCodec {
+  /** 受け渡し先が扱える形式へ、指定された内容を変換する。 */
   public String encode(String scope, CursorKey key) {
     try {
       var bytes = new ByteArrayOutputStream();
@@ -25,9 +30,11 @@ public final class CursorCodec {
     }
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   public CursorKey decode(String scope, String token) {
     if (token == null) return null;
     try {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (token.isEmpty() || token.length() > 4096) throw new IllegalArgumentException();
       var bytes = Base64.getUrlDecoder().decode(token);
       if (!Base64.getUrlEncoder().withoutPadding().encodeToString(bytes).equals(token))

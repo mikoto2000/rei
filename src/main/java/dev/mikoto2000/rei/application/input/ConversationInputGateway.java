@@ -15,19 +15,46 @@ import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 import java.util.function.Predicate;
 
-/** Bounded deduplication and voice admission over the existing Session and Run queue. */
+/**
+ * 会話入力の入力を共通の受付経路へつなぐ。
+ *
+ * <p>Bounded deduplication and voice admission over the existing Session and Run queue.
+ */
 public final class ConversationInputGateway {
+  /**
+   * 会話入力の受付で受け渡す受付済みを表す。
+   *
+   * @param input 入力
+   * @param context 文脈
+   * @param acceptedAt 受付済み日時
+   */
   private record Accepted(ConversationInput input, AgentRunContext context, Instant acceptedAt) {}
 
+  /** 受付から終了までの管理。 */
   private final SessionLifecycle lifecycle;
+
+  /** 実行先への引き渡し。 */
   private final BiConsumer<AgentRunContext, String> dispatch;
+
+  /** 入力の振り分け。 */
   private final ConversationInputRouter router;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 記録台帳上限。 */
   private final int ledgerLimit;
+
+  /** 保持期間。 */
   private final Duration retention;
+
+  /** 受付済み。 */
   private final LinkedHashMap<UUID, Accepted> accepted = new LinkedHashMap<>();
+
+  /** キャンセル。 */
   private Predicate<AgentRunContext> cancel;
 
+  /** 会話入力の受付を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ConversationInputGateway(
       SessionLifecycle lifecycle,
       BiConsumer<AgentRunContext, String> dispatch,
@@ -36,6 +63,7 @@ public final class ConversationInputGateway {
     this(lifecycle, dispatch, router, clock, 4096, Duration.ofMinutes(30));
   }
 
+  /** 指定された値や利用先を使って、ConversationInputGatewayを初期化する。 */
   public ConversationInputGateway(
       SessionLifecycle lifecycle,
       BiConsumer<AgentRunContext, String> dispatch,
@@ -54,14 +82,17 @@ public final class ConversationInputGateway {
     this.cancel = context -> router != null && router.cancelQueued(context.runId());
   }
 
+  /** 通知に応じて状態や表示を更新するため、キャンセルを受け付ける。 */
   public synchronized void onCancel(Predicate<AgentRunContext> cancellation) {
     cancel = Objects.requireNonNull(cancellation);
   }
 
+  /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   public synchronized AgentRunContext submit(ConversationInput input, AgentRunContext.Mode mode) {
     return submit(input, mode, run -> {}, run -> {});
   }
 
+  /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   public synchronized AgentRunContext submit(
       ConversationInput input,
       AgentRunContext.Mode mode,
@@ -71,15 +102,18 @@ public final class ConversationInputGateway {
   }
 
   /**
-   * Render once after admission, before the new run can produce output. Duplicate IDs and rejected
-   * enqueue never notify. May run on the worker before submit returns: the presentation callback
-   * must not reenter admission/selection APIs.
+   * 依頼を受け付け、実行を担当する処理へ引き渡す。
+   *
+   * <p>Render once after admission, before the new run can produce output. Duplicate IDs and
+   * rejected enqueue never notify. May run on the worker before submit returns: the presentation
+   * callback must not reenter admission/selection APIs.
    */
   public synchronized AgentRunContext submit(
       ConversationInput input, AgentRunContext.Mode mode, Runnable afterAccepted) {
     return submit(input, mode, run -> {}, run -> {}, afterAccepted);
   }
 
+  /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   public synchronized AgentRunContext submit(
       ConversationInput input,
       AgentRunContext.Mode mode,
@@ -137,10 +171,13 @@ public final class ConversationInputGateway {
     return context;
   }
 
+  /** 会話入力の受付で用いる受け入れ条件通知を返す。 */
   private Runnable acceptanceNotification(Runnable listener) {
     return new Runnable() {
+      /** 通知済み。 */
       private boolean notified;
 
+      /** 会話入力の受付の操作を実行する。 */
       @Override
       public synchronized void run() {
         if (notified) return;
@@ -157,7 +194,11 @@ public final class ConversationInputGateway {
     };
   }
 
-  /** Read-only identity check for a control input before any cancellation side effect. */
+  /**
+   * 会話入力の受付において、Novelかどうかを判定する。
+   *
+   * <p>Read-only identity check for a control input before any cancellation side effect.
+   */
   public synchronized boolean isNovel(ConversationInput input) {
     Objects.requireNonNull(input);
     prune();
@@ -168,6 +209,7 @@ public final class ConversationInputGateway {
     return false;
   }
 
+  /** 後続の処理で判断できるよう、未完了の対象を返す。 */
   public synchronized List<ConversationInput> pending(ConversationTarget target) {
     return accepted.values().stream()
         .filter(entry -> entry.input().source() == InputSource.VOICE)
@@ -176,6 +218,7 @@ public final class ConversationInputGateway {
         .toList();
   }
 
+  /** 利用者が不要とした実行を止めるため、待機中をキャンセルする。 */
   public synchronized boolean cancelPending(ConversationTarget target, UUID inputId) {
     var entry = accepted.get(inputId);
     return entry != null
@@ -184,6 +227,7 @@ public final class ConversationInputGateway {
         && cancel.test(entry.context());
   }
 
+  /** 会話入力の受付において、同一対象に該当するか判定する。 */
   private boolean sameTarget(Accepted entry, ConversationTarget target) {
     return Objects.equals(entry.context().projectId(), target.project().id())
         && Objects.equals(entry.context().conversationId(), target.sessionId())
@@ -193,10 +237,12 @@ public final class ConversationInputGateway {
             .equals(target.project().root().toAbsolutePath().normalize());
   }
 
+  /** 会話入力の受付において、待機中に該当するか判定する。 */
   private boolean queued(Accepted entry) {
     return router != null && router.isQueued(entry.context().projectId(), entry.context().runId());
   }
 
+  /** 会話入力の受付に関する不要な情報の整理を処理する。 */
   private void prune() {
     var cutoff = clock.instant().minus(retention);
     accepted

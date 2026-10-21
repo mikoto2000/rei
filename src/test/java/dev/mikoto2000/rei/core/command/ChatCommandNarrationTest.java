@@ -23,8 +23,10 @@ import org.springframework.ai.chat.prompt.Prompt;
 import picocli.CommandLine;
 import reactor.core.publisher.Flux;
 
+/** チャットコマンドNarrationの結果と状態の契約を検証するテスト。 */
 class ChatCommandNarrationTest {
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void runCallsResetOnNarratorAtStart() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -59,6 +61,7 @@ class ChatCommandNarrationTest {
     verify(chatResponseNarrator).reset();
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void runCallsNarrateIfCompletedWithFullResponseTextOnSuccess() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -93,6 +96,7 @@ class ChatCommandNarrationTest {
     verify(chatResponseNarrator).narrateIfCompleted("answer text");
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   private static ChatResponse response(String text) {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
   }

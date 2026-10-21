@@ -34,10 +34,13 @@ import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 
+/** 補助エージェント結果配信の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SubAgentResultDeliveryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 単一およびまとめた処理結果一覧について、登録済み判断基準を維持することを確認する。 */
   @ParameterizedTest
   @CsvSource({
     "delegateTask,false",

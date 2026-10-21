@@ -1,10 +1,19 @@
 package dev.mikoto2000.rei.activity;
 
-/** Presentation aliases only: do not change foreground matching or original evidence. */
+/**
+ * 作業状況の把握に必要な作業状況表示表示名一覧を扱う。
+ *
+ * <p>Presentation aliases only: do not change foreground matching or original evidence.
+ */
 public final class ActivityDisplayLabels {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ActivityDisplayLabels() {}
 
-  /** Known aliases tolerate separator differences; unknown proper names retain their spelling. */
+  /**
+   * 作業状況の把握で用いる正規を返す。
+   *
+   * <p>Known aliases tolerate separator differences; unknown proper names retain their spelling.
+   */
   public static String canonical(String value) {
     String normalized = ActivityRolePolicy.normalize(value);
     String compact = normalized.replaceAll("[\\s\\p{Punct}]+", "");
@@ -20,6 +29,7 @@ public final class ActivityDisplayLabels {
     };
   }
 
+  /** 作業状況の把握で用いる表示名を返す。 */
   public static String label(String value) {
     String text = value == null ? "" : value.replaceAll("[\\p{Cntrl}\\s]+", " ").strip();
     String label =
@@ -59,7 +69,11 @@ public final class ActivityDisplayLabels {
     return label.substring(0, Math.min(60, label.length()));
   }
 
-  /** Summary-only project validation. Never reinterpret a topic, app or service as a project. */
+  /**
+   * 作業状況の把握で用いるプロジェクトを返す。
+   *
+   * <p>Summary-only project validation. Never reinterpret a topic, app or service as a project.
+   */
   public static String project(ActivityRecord.Activity candidate, ActivityRecord record) {
     String project = ActivityRolePolicy.normalize(candidate.projectCandidate());
     if (!project.matches("[a-z][a-z0-9_.-]{1,59}")) return "";
@@ -102,6 +116,7 @@ public final class ActivityDisplayLabels {
     return project;
   }
 
+  /** 作業状況の把握で用いる候補を返す。 */
   public static String candidate(ActivityRecord.Activity a) {
     String service = ActivityVocabulary.service(a.service());
     return label(service.isBlank() ? a.application() : a.service());

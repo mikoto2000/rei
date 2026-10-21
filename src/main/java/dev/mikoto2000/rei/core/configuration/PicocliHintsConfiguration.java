@@ -6,11 +6,14 @@ import org.springframework.aot.hint.RuntimeHintsRegistrar;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.ImportRuntimeHints;
 
+/** Picocli案内一覧の構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration
 @ImportRuntimeHints(PicocliRuntimeHints.class)
 public class PicocliHintsConfiguration {}
 
+/** 機能の組み立てに必要なPicocli実行環境案内一覧を扱う。 */
 class PicocliRuntimeHints implements RuntimeHintsRegistrar {
+  /** 後から対象を参照できるよう、案内一覧を登録する。 */
   @Override
   public void registerHints(RuntimeHints hints, ClassLoader classLoader) {
     hints

@@ -13,8 +13,10 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+/** 検索知識サービスの結果と状態の契約を検証するテスト。 */
 class SearchKnowledgeServiceTest {
 
+  /** 調査情報の整理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchCombinesVectorAndWebResults() throws Exception {
     VectorDocumentService vectorDocumentService = Mockito.mock(VectorDocumentService.class);
@@ -53,6 +55,7 @@ class SearchKnowledgeServiceTest {
     assertEquals("https://docs.example.com", result.webContext().primaryResults().getFirst().url());
   }
 
+  /** 調査情報の整理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void searchFallsBackToVectorStoreWhenWebSearchFails() throws Exception {
     VectorDocumentService vectorDocumentService = Mockito.mock(VectorDocumentService.class);

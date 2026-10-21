@@ -46,16 +46,36 @@ import javax.tools.ToolProvider;
 import org.springframework.stereotype.Component;
 
 /**
- * Bounded Java AST and explicit multilingual heuristic index; never executes source or build
+ * 保存と検索の窓口対応表のユースケースを実現する。
+ *
+ * <p>Bounded Java AST and explicit multilingual heuristic index; never executes source or build
  * configuration.
  */
 @Component
 public final class RepositoryMapService {
+  /** 共通の実行基盤に必要な保有情報を扱う。 */
   @FunctionalInterface
   public interface Inventory {
+    /** 共通の実行基盤で用いるファイル一覧を返す。 */
     List<String> files(Path root) throws IOException;
   }
 
+  /**
+   * 共通の実行基盤で受け渡すシンボルを表す。
+   *
+   * @param name 名前
+   * @param kind 種類
+   * @param line 行
+   * @param entryPoint 項目Point
+   * @param symbolId シンボル識別子
+   * @param signature 署名
+   * @param endLine 終了行
+   * @param startOffset 開始開始位置
+   * @param endOffset 終了開始位置
+   * @param owner 所有者
+   * @param signatureEndOffset 署名終了開始位置
+   * @param javadocStartOffset APIの説明開始開始位置
+   */
   public record Symbol(
       String name,
       String kind,
@@ -69,15 +89,30 @@ public final class RepositoryMapService {
       String owner,
       int signatureEndOffset,
       int javadocStartOffset) {
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Symbol(String name, String kind, long line, boolean entryPoint) {
       this(name, kind, line, entryPoint, name, "", line, -1, -1, "", -1, -1);
     }
   }
 
+  /** 共通の実行基盤において、種別種類に該当するか判定する。 */
   static boolean typeKind(String kind) {
     return Set.of("CLASS", "INTERFACE", "ENUM", "RECORD", "ANNOTATION_TYPE").contains(kind);
   }
 
+  /**
+   * 共通の実行基盤で受け渡すファイルを表す。
+   *
+   * @param path パス
+   * @param module 機能単位
+   * @param packageName パッケージ名前
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   * @param status 状態
+   * @param symbols シンボル一覧
+   * @param imports 読み込む宣言
+   * @param language 言語
+   * @param analysisMode 分析動作モード
+   */
   public record File(
       String path,
       String module,
@@ -88,6 +123,7 @@ public final class RepositoryMapService {
       List<String> imports,
       String language,
       String analysisMode) {
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public File(
         String path,
         String module,
@@ -111,14 +147,57 @@ public final class RepositoryMapService {
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡す関係を表す。
+   *
+   * @param source 取得元
+   * @param target 対象
+   * @param kind 種類
+   */
   public record Relation(String source, String target, String kind) {}
 
+  /**
+   * 共通の実行基盤で受け渡す機能単位要約を表す。
+   *
+   * @param name 名前
+   * @param files ファイル一覧
+   * @param parsedJavaFiles 解釈済みJavaファイル一覧
+   * @param testFiles 検証ファイル一覧
+   */
   public record ModuleSummary(String name, int files, int parsedJavaFiles, int testFiles) {}
 
+  /**
+   * 共通の実行基盤で受け渡すパッケージ要約を表す。
+   *
+   * @param name 名前
+   * @param files ファイル一覧
+   */
   public record PackageSummary(String name, int files) {}
 
+  /**
+   * 共通の実行基盤で受け渡す項目Pointを表す。
+   *
+   * @param path パス
+   * @param symbol シンボル
+   * @param line 行
+   */
   public record EntryPoint(String path, String symbol, long line) {}
 
+  /**
+   * 共通の実行基盤で受け渡す要約を表す。
+   *
+   * @param files ファイル一覧
+   * @param parsedJavaFiles 解釈済みJavaファイル一覧
+   * @param unparsedJavaFiles unparsedJavaファイル一覧
+   * @param inventoryOnlyFiles 保有情報限定ファイル一覧
+   * @param modules 機能単位一覧
+   * @param packages パッケージ一覧
+   * @param entryPoints 項目観点
+   * @param importRelations 取り込み関連一覧
+   * @param testNameCandidates 検証名前候補一覧
+   * @param partial 部分的な結果
+   * @param heuristicFiles 推定によるファイル一覧
+   */
   public record Summary(
       int files,
       int parsedJavaFiles,
@@ -131,6 +210,7 @@ public final class RepositoryMapService {
       int testNameCandidates,
       boolean partial,
       int heuristicFiles) {
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Summary(
         int files,
         int parsedJavaFiles,
@@ -157,6 +237,19 @@ public final class RepositoryMapService {
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡す表示内容を表す。
+   *
+   * @param root 作業ルート
+   * @param scannedAt scanned日時
+   * @param version 形式のバージョン
+   * @param filesScanned ファイル一覧Scanned
+   * @param partial 部分的な結果
+   * @param warnings 注意事項
+   * @param items 項目一覧
+   * @param relations 関連一覧
+   * @param summary 要約
+   */
   public record View(
       String root,
       Instant scannedAt,
@@ -168,30 +261,55 @@ public final class RepositoryMapService {
       List<Relation> relations,
       Summary summary) {}
 
+  /**
+   * 共通の実行基盤で受け渡す解釈済みを表す。
+   *
+   * @param packageName パッケージ名前
+   * @param status 状態
+   * @param symbols シンボル一覧
+   * @param imports 読み込む宣言
+   */
   private record Parsed(
       String packageName, String status, List<Symbol> symbols, List<String> imports) {}
 
+  /**
+   * 共通の実行基盤で受け渡す保存済みを表す。
+   *
+   * @param digest 内容の照合値
+   * @param parsed 解釈済み
+   */
   private record Cached(String digest, Parsed parsed) {}
 
+  /** 保有情報。 */
   private final Inventory inventory;
+
+  /** コンパイラー。 */
   private final JavaCompiler compiler;
+
+  /** 保存される位置。 */
   private SqliteRepositoryMapIndex persistentIndex;
+
+  /** キャッシュ一覧。 */
   private final LinkedHashMap<Path, Map<String, Cached>> caches =
       new LinkedHashMap<>(4, .75f, true);
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public RepositoryMapService() {
     this(RepositoryMapService::gitFiles);
   }
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   RepositoryMapService(Inventory inventory) {
     this(inventory, ToolProvider.getSystemJavaCompiler());
   }
 
+  /** 指定された値や利用先を使って、RepositoryMapServiceを初期化する。 */
   RepositoryMapService(Inventory inventory, JavaCompiler compiler) {
     this.inventory = inventory;
     this.compiler = compiler;
   }
 
+  /** 共通の実行基盤に関する設定保存される位置を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void configurePersistentIndex(
       javax.sql.DataSource data,
@@ -201,18 +319,22 @@ public final class RepositoryMapService {
     if (enabled) persistentIndex = new SqliteRepositoryMapIndex(data);
   }
 
+  /** 共通の実行基盤で使用する保存される位置を設定する。 */
   void setPersistentIndex(SqliteRepositoryMapIndex index) {
     persistentIndex = index;
   }
 
+  /** 共通の実行基盤で用いる対応表を返す。 */
   public synchronized View map(Path directory, String query, int limit) throws IOException {
     return build(directory, query, limit, false);
   }
 
+  /** 現在の状態を、後から参照できる記録として取り出す。 */
   synchronized View snapshot(Path directory) throws IOException {
     return build(directory, "", 100, true);
   }
 
+  /** 共通の実行基盤で用いるJava保有情報を返す。 */
   List<String> javaInventory(Path directory, FileSnapshots snapshots) throws IOException {
     try {
       return snapshots
@@ -221,12 +343,17 @@ public final class RepositoryMapService {
           .filter(path -> path.endsWith(".java") && !sensitive(Path.of(path)))
           .toList();
     } catch (InterruptedException interrupted) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw new java.util.concurrent.CancellationException();
     }
   }
 
-  /** Reuse the same Java AST and hash-keyed metadata cache without rereading source bytes. */
+  /**
+   * 共通の実行基盤で用いる説明状態の記録を返す。
+   *
+   * <p>Reuse the same Java AST and hash-keyed metadata cache without rereading source bytes.
+   */
   synchronized File describeSnapshot(Path directory, FileSnapshots.Snapshot snapshot)
       throws IOException {
     RunCancellation.propagate(null);
@@ -270,8 +397,10 @@ public final class RepositoryMapService {
         parsed.imports());
   }
 
+  /** 利用先に渡せるよう、保存と検索の窓口対応表サービスを組み立てる。 */
   private View build(Path directory, String query, int limit, boolean complete) throws IOException {
     RunCancellation.propagate(null);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (limit < 1 || limit > 100 || (query != null && query.length() > 256))
       throw new IllegalArgumentException(
           "Map limit must be 1 to 100 and query at most 256 characters");
@@ -464,7 +593,11 @@ public final class RepositoryMapService {
         summary(files, allRelations, !warnings.isEmpty()));
   }
 
-  /** Observed structure over the bounded scan, independent of the caller's result filter. */
+  /**
+   * 共通の実行基盤で用いる要約を返す。
+   *
+   * <p>Observed structure over the bounded scan, independent of the caller's result filter.
+   */
   private static Summary summary(List<File> files, List<Relation> relations, boolean partial) {
     var modules = new TreeMap<String, List<File>>();
     var packages = new TreeMap<String, Integer>();
@@ -537,12 +670,14 @@ public final class RepositoryMapService {
         heuristic);
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   private static Parsed parse(
       JavaCompiler compiler, StandardJavaFileManager manager, Path path, String text) {
     var diagnostics = new DiagnosticCollector<JavaFileObject>();
     String parseText = text.startsWith("\ufeff") ? " " + text.substring(1) : text;
     var source =
         new SimpleJavaFileObject(path.toUri(), JavaFileObject.Kind.SOURCE) {
+          /** 共通の実行基盤で参照する文字内容を返す。 */
           @Override
           public CharSequence getCharContent(boolean ignored) {
             return parseText;
@@ -564,10 +699,12 @@ public final class RepositoryMapService {
       var owners = new ArrayDeque<String>();
       var positions = Trees.instance(task).getSourcePositions();
       new TreePathScanner<Void, Void>() {
+        /** 共通の実行基盤で用いる所有者を返す。 */
         String owner() {
           return (pkg.isEmpty() ? "" : pkg + ".") + String.join(".", owners);
         }
 
+        /** 新たな対象を登録し、後から利用できるようにする。 */
         void add(
             Tree tree,
             String name,
@@ -590,6 +727,8 @@ public final class RepositoryMapService {
             if (opening >= 0 && opening > closing) docs = opening;
           }
           String signature = text.substring(from, header).strip();
+          // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
+          // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
           if (signature.length() > 2048) signature = signature.substring(0, 2048);
           symbols.add(
               new Symbol(
@@ -607,12 +746,14 @@ public final class RepositoryMapService {
                   docs));
         }
 
+        /** 共通の実行基盤で用いる対象の確認パッケージを返す。 */
         @Override
         public Void visitPackage(PackageTree tree, Void ignored) {
           add(tree, pkg, "PACKAGE", false, pkg, "", (int) positions.getEndPosition(unit, tree));
           return super.visitPackage(tree, ignored);
         }
 
+        /** 共通の実行基盤で用いる対象の確認クラスを返す。 */
         @Override
         public Void visitClass(ClassTree tree, Void ignored) {
           if (tree.getSimpleName().isEmpty()) return null;
@@ -634,6 +775,7 @@ public final class RepositoryMapService {
           return null;
         }
 
+        /** 共通の実行基盤で用いる対象の確認メソッドを返す。 */
         @Override
         public Void visitMethod(MethodTree tree, Void ignored) {
           boolean main =
@@ -671,6 +813,7 @@ public final class RepositoryMapService {
           return super.visitMethod(tree, ignored);
         }
 
+        /** 共通の実行基盤で用いる対象の確認可変値を返す。 */
         @Override
         public Void visitVariable(VariableTree tree, Void ignored) {
           if (getCurrentPath().getParentPath() != null
@@ -709,6 +852,7 @@ public final class RepositoryMapService {
     }
   }
 
+  /** 共通の実行基盤で用いる関連一覧を返す。 */
   private static List<Relation> relations(List<File> files) {
     var types = new HashMap<String, List<File>>();
     for (var file : files)
@@ -744,11 +888,13 @@ public final class RepositoryMapService {
     return List.copyOf(result);
   }
 
+  /** 共通の実行基盤で用いる機能単位を返す。 */
   private static String module(String path) {
     int marker = path.indexOf("/src/");
     return marker < 0 ? "." : path.substring(0, marker);
   }
 
+  /** 共通の実行基盤において、秘密を含むに該当するか判定する。 */
   static boolean sensitive(Path path) {
     for (var part : path) {
       String name = part.toString().toLowerCase(Locale.ROOT);
@@ -761,6 +907,7 @@ public final class RepositoryMapService {
     return false;
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(byte[] bytes) {
     try {
       return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
@@ -769,6 +916,7 @@ public final class RepositoryMapService {
     }
   }
 
+  /** 共通の実行基盤で用いるGitファイル一覧を返す。 */
   private static List<String> gitFiles(Path root) throws IOException {
     var output =
         new dev.mikoto2000.rei.externalagent.ExternalAgentProcessRunner()

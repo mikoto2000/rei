@@ -9,22 +9,33 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 
 /**
- * Explicitly constructed optional encoder/index adapter. Absence leaves existing BM25 retrieval
+ * 関連文書の検索に必要なSparse関連情報の取得を扱う。
+ *
+ * <p>Explicitly constructed optional encoder/index adapter. Absence leaves existing BM25 retrieval
  * intact.
  */
 public final class SparseRetrieval {
+  /** 関連文書の検索に必要な位置を扱う。 */
   public interface Index {
+    /** 関連文書の検索で用いるモデルの識別子を返す。 */
     String modelId();
 
+    /** 関連文書の検索で用いる次元数を返す。 */
     int dimensions();
 
+    /** 関連文書の検索において、絞り込み条件一覧への対応可否を返す。 */
     default boolean supportsFilters() {
       return false;
     }
 
-    /** Implementations must apply the request filter and threshold before topK. */
+    /**
+     * 指定された検索条件に合う情報を探し、候補を返す。
+     *
+     * <p>Implementations must apply the request filter and threshold before topK.
+     */
     List<Document> search(SearchRequest request, SparseEncoder.Vector vector);
 
+    /** 指定された検索条件に合う情報を探し、候補を返す。 */
     default List<Document> search(
         SearchRequest request, SparseEncoder.Vector vector, Runnable active) {
       active.run();
@@ -34,6 +45,15 @@ public final class SparseRetrieval {
     }
   }
 
+  /**
+   * 関連文書の検索で受け渡す結果を表す。
+   *
+   * @param mode 動作モード
+   * @param reason 理由
+   * @param modelId モデルの識別子
+   * @param documents 保存済み文書
+   * @param truthVerified 確定情報確認済み
+   */
   public record Result(
       String mode,
       String reason,
@@ -41,16 +61,27 @@ public final class SparseRetrieval {
       List<Document> documents,
       boolean truthVerified) {}
 
+  /** 比較の基準。 */
   private final RetrievalCandidates baseline;
+
+  /** 送信形式への変換。 */
   private final SparseEncoder encoder;
+
+  /** 位置。 */
   private final Index index;
+
+  /** ナノ秒数。 */
   private final LongSupplier nanos;
+
+  /** タイムアウト。 */
   private final long timeout;
 
+  /** 関連文書の検索を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SparseRetrieval(RetrievalCandidates baseline, SparseEncoder encoder, Index index) {
     this(baseline, encoder, index, System::nanoTime, Duration.ofSeconds(5));
   }
 
+  /** 指定された値や利用先を使って、SparseRetrievalを初期化する。 */
   public SparseRetrieval(
       RetrievalCandidates baseline,
       SparseEncoder encoder,
@@ -66,6 +97,7 @@ public final class SparseRetrieval {
     this.timeout = timeout.toNanos();
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public Result search(SearchRequest request) {
     RunCancellation.propagate(null);
     if (request == null
@@ -114,11 +146,13 @@ public final class SparseRetrieval {
     }
   }
 
+  /** 関連文書の検索で用いる代替手段を返す。 */
   private Result fallback(SearchRequest request, String reason) {
     RunCancellation.propagate(null);
     return new Result("BM25", reason, null, bounded(baseline.bm25Search(request), request), false);
   }
 
+  /** 利用先の上限を超えない量へ、指定された内容を調整する。 */
   private static List<Document> bounded(List<Document> documents, SearchRequest request) {
     if (documents == null
         || documents.size() > request.getTopK()
@@ -129,13 +163,17 @@ public final class SparseRetrieval {
     return List.copyOf(documents);
   }
 
+  /** 関連文書の検索に必要な代替手段を扱う。 */
   private static final class Fallback extends RuntimeException {
+    /** 理由。 */
     private final String reason;
 
+    /** 指定された値や利用先を使って、Fallbackを初期化する。 */
     Fallback(String reason) {
       this.reason = reason;
     }
   }
 
+  /** 関連文書の検索に必要な期限を扱う。 */
   private static final class Deadline extends RuntimeException {}
 }

@@ -13,11 +13,25 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Set;
 
-/** Shared day/bucket display selection over already canonical, quality-checked associations. */
+/**
+ * 作業状況の把握に必要な日次要約テーマConsolidatorを扱う。
+ *
+ * <p>Shared day/bucket display selection over already canonical, quality-checked associations.
+ */
 public final class DailySummaryThemeConsolidator {
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(DailySummaryThemeConsolidator.class);
 
+  /**
+   * 作業状況の把握で受け渡す計測値を表す。
+   *
+   * @param canonicalCandidates 正規候補一覧
+   * @param groupCandidates グループ候補一覧
+   * @param suppressedChildren 抑制された子の一覧
+   * @param suppressedTopics 抑制された話題一覧
+   * @param selectedThemes 選択中テーマ一覧
+   */
   public record Metrics(
       int canonicalCandidates,
       int groupCandidates,
@@ -25,12 +39,20 @@ public final class DailySummaryThemeConsolidator {
       int suppressedTopics,
       int selectedThemes) {}
 
+  /**
+   * 作業状況の把握で受け渡す結果を表す。
+   *
+   * @param candidates 候補一覧
+   * @param metrics 計測値
+   */
   public record Result(List<SummaryThemeCandidate> candidates, Metrics metrics) {
+    /** 作業状況の把握で用いる表示名一覧を返す。 */
     public List<String> labels() {
       return candidates.stream().map(SummaryThemeCandidate::label).toList();
     }
   }
 
+  /** 作業状況の把握で用いるconsolidateを返す。 */
   public Result consolidate(List<ProjectThemeStat> input, SummaryThemeGroups config, int limit) {
     long total = input.stream().mapToLong(ProjectThemeStat::observedSeconds).sum();
     var replacements = new ArrayList<SummaryThemeCandidate>();
@@ -197,6 +219,7 @@ public final class DailySummaryThemeConsolidator {
     return new Result(selected, metrics);
   }
 
+  /** 指定や設定に応じた対象を利用するため、表示を確定する。 */
   private static SummaryThemeCandidate resolveDisplay(
       SummaryThemeCandidate candidate, SummaryThemeGroups config) {
     if (candidate.level() != Level.PROJECT) return candidate;
@@ -237,6 +260,7 @@ public final class DailySummaryThemeConsolidator {
         label);
   }
 
+  /** 作業状況の把握で用いる確信度を返す。 */
   private static double confidence(ProjectThemeStat s) {
     return s.strongAssociations().stream()
         .mapToDouble(ProjectThemeAssociation::associationConfidence)
@@ -244,10 +268,12 @@ public final class DailySummaryThemeConsolidator {
         .orElse(0);
   }
 
+  /** 作業状況の把握で用いる評価値を返す。 */
   private static double score(ProjectThemeStat s) {
     return s.score() * (s.strongAssociations().isEmpty() ? 1 : .9 + .1 * confidence(s));
   }
 
+  /** 作業状況の把握で用いるプロジェクトを返す。 */
   private static SummaryThemeCandidate project(ProjectThemeStat s, SummaryThemeGroups config) {
     var level =
         !s.canonicalProject().isBlank()

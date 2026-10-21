@@ -20,12 +20,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 目標繰り返しサービスの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class GoalLoopServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う目標一覧。 */
   GoalRepository goals;
+
+  /** 検証に使う確認の窓口。 */
   FileGoalVerifier verifier = new FileGoalVerifier();
 
+  /** {@code digest} の条件を再現するための補助情報を返す。 */
   String digest(String text) throws Exception {
     return java.util.HexFormat.of()
         .formatHex(
@@ -33,6 +40,7 @@ class GoalLoopServiceTest {
                 .digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
   }
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     goals =
@@ -41,6 +49,7 @@ class GoalLoopServiceTest {
             Clock.systemUTC());
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   GoalRepository.Goal create(int runs, int calls) throws Exception {
     return goals.create(
         new AgentRunContext("source", "session", dir, "project"),
@@ -51,6 +60,7 @@ class GoalLoopServiceTest {
         calls);
   }
 
+  /** {@code loop} の条件を再現するための補助情報を返す。 */
   GoalLoopService loop(boolean enabled, GoalLoopService.Gateway gateway) {
     return new GoalLoopService(
         goals,
@@ -60,6 +70,7 @@ class GoalLoopServiceTest {
         new GoalEvents(event -> {}, Clock.systemUTC()));
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void modelCompletionClaimCannotCompleteGoalAndOnlyVerifiedFileEndsLoop() throws Exception {
     var goal = create(3, 5);
@@ -87,6 +98,7 @@ class GoalLoopServiceTest {
         goals.attempts("project", goal.id()).stream().map(GoalRepository.Attempt::status).toList());
   }
 
+  /** 成功済みのを停止することを確認する。 */
   @Test
   void wholeGoalBudgetStopsSuccessfulButUnverifiedRunsAndLocalRunCapStillApplies()
       throws Exception {
@@ -98,10 +110,12 @@ class GoalLoopServiceTest {
             (claim, run, done) -> {
               var reservation =
                   new OutputLimitRunBudget.LlmCallReservation() {
+                    /** {@code tryReserve} の条件を再現するための補助情報を返す。 */
                     public boolean tryReserve() {
                       return goals.reserveLlm(claim);
                     }
 
+                    /** {@code remaining} の条件を再現するための補助情報を返す。 */
                     public int remaining() {
                       return goals.remainingLlm(claim);
                     }
@@ -120,6 +134,7 @@ class GoalLoopServiceTest {
     assertThrows(IllegalStateException.class, () -> loop.run("project", goal.id()));
   }
 
+  /** なしモデル呼び出しを必要とすることを確認する。 */
   @Test
   void preexistingEvidenceRequiresNoModelCallAndPolicyDisabledCannotDispatch() throws Exception {
     var goal = create(3, 5);
@@ -134,6 +149,7 @@ class GoalLoopServiceTest {
     assertEquals(0, calls.get());
   }
 
+  /** 目標の達成管理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void permissionFailuresAndCancellationDoNotAutomaticallyRetry() throws Exception {
     var goal = create(3, 5);
@@ -165,6 +181,7 @@ class GoalLoopServiceTest {
     assertEquals(3, goals.get("project", goal.id()).attempts());
   }
 
+  /** 目標の達成管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationInvalidatesBudgetReservationsAndLateCompletion() throws Exception {
     var goal = create(3, 5);
@@ -187,6 +204,7 @@ class GoalLoopServiceTest {
     assertEquals("CANCELLED", goals.attempts("project", goal.id()).getFirst().status());
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void verifierRejectsWrongDigestDirectoriesAndOversizedFiles() throws Exception {
     var goal = create(3, 5);

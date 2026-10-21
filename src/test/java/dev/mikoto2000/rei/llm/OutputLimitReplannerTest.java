@@ -17,8 +17,10 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 出力上限Replannerの結果と状態の契約を検証するテスト。 */
 class OutputLimitReplannerTest {
 
+  /** 必須文脈を送信することを確認する。 */
   @Test
   void sendsRequiredContextToPlannerLlm() {
     ChatModel chatModel = Mockito.mock(ChatModel.class);
@@ -58,10 +60,12 @@ class OutputLimitReplannerTest {
     assertThat(prompt).contains("8");
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   private static ChatResponse response(String text) {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
   }
 
+  /** 計画の作成について、使用状況を伝えることを確認する。 */
   @Test
   void plannerReportsUsageBeforeParsingResult() {
     var model = Mockito.mock(ChatModel.class);

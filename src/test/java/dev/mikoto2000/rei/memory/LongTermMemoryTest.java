@@ -19,23 +19,32 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 長いTerm記憶の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class LongTermMemoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う保存と検索の窓口。 */
   MemoryRepository repository;
+
+  /** 検証に使うprops。 */
   MemoryProperties props = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60, null);
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     var ds = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("memory.db"));
     repository = new MemoryRepository(ds, new MemoryService(ds, props));
   }
 
+  /** {@code candidate} の条件を再現するための補助情報を返す。 */
   static MemoryCandidate candidate(String content, MemoryScope scope) {
     return new MemoryCandidate(
         MemoryType.DECISION, scope, content, content, .95, .9, List.of("turn1"), List.of("vision"));
   }
 
+  /** 長期記憶の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void validatesCandidate() {
     assertThrows(IllegalArgumentException.class, () -> candidate("", MemoryScope.PROJECT));
@@ -54,6 +63,7 @@ class LongTermMemoryTest {
                 List.of()));
   }
 
+  /** 長期記憶の活用で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void persistsScopedMemoryWithSourcesAndTags() {
     var memory =
@@ -69,6 +79,7 @@ class LongTermMemoryTest {
     assertEquals(MemoryStatus.ARCHIVED, repository.find(memory.id()).orElseThrow().status());
   }
 
+  /** 長期記憶の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void transactionRollsBackMemoryAndCheckpoint() {
     assertThrows(

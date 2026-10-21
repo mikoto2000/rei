@@ -16,8 +16,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** 記憶記憶の削除コマンドの結果と状態の契約を検証するテスト。 */
 class MemoryForgetCommandTest {
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void forgetShowsNotFoundMessage() {
     MemoryService service = Mockito.mock(MemoryService.class);
@@ -35,6 +37,7 @@ class MemoryForgetCommandTest {
     assertTrue(out.toString().contains("指定された ID の記憶が見つかりません"));
   }
 
+  /** 長期記憶の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void forgetShowsValidationForBlankId() {
     MemoryService service = Mockito.mock(MemoryService.class);
@@ -51,6 +54,7 @@ class MemoryForgetCommandTest {
     assertTrue(out.toString().contains("有効な記憶 ID を入力してください"));
   }
 
+  /** 長期記憶の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void forgetShowsAlreadyDeletedMessage() {
     MemoryService service = Mockito.mock(MemoryService.class);

@@ -20,9 +20,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 計画HTTP通信外部連携の結果と状態の契約を検証するテスト。 */
 class PlanHttpIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void oauthBearerCatalogAndFragmentedResponsesWorkTogether() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -96,6 +99,7 @@ class PlanHttpIntegrationTest {
     }
   }
 
+  /** ログアウト生成について、開始逐次データを停止することを確認する。 */
   @Test
   void logoutGenerationStopsAnOpenStreamWithoutSuccess() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -176,6 +180,7 @@ class PlanHttpIntegrationTest {
     }
   }
 
+  /** ChatGPTとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void catalogHttpStreamingHonorsTwoMiBBoundaryWithAndWithoutContentLength() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

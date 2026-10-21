@@ -43,43 +43,77 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
+/** 状態表示再開外部連携の結果と状態の契約を検証するテスト。 */
 class DotResumeIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う受付台帳。 */
   dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions;
+
+  /** 検証に使うリポジトリ。 */
   DotRequestRepository repo;
+
+  /** 検証に使うサービス。 */
   DotResumeService service;
+
+  /** 検証に使う再開用の記録一覧。 */
   PersistentCheckpointRepository checkpoints;
+
+  /** 検証に使う再開用の記録サービス。 */
   PersistentCheckpointService checkpointService;
+
+  /** 検証に使う実行予定の管理。 */
   PersistentAgentScheduler scheduler;
+
+  /** 検証に使う依存条件一覧。 */
   dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository dependencies;
+
+  /** 検証に使う実行一覧。 */
   RunRegistry runs;
+
+  /** 検証に使う所有者。 */
   AgentRunContext owner;
+
+  /** 検証に使う識別子。 */
   String id;
+
+  /** 検証に使う実行待ち。 */
   List<Runnable> queue = new ArrayList<>();
+
+  /** 検証に使う開始。 */
   List<AgentRunContext> started = new ArrayList<>();
 
+  /** 検証条件を再現するための検証時刻の取得元。 */
   static final class TestClock extends Clock {
+    /** 日時や期限の条件を再現するために使う検証時刻。 */
     Instant now = Instant.parse("2026-10-12T00:00:00Z");
 
+    /** 検証用に、利用者の状態表示で参照するタイムゾーンを返す。 */
     public ZoneId getZone() {
       return ZoneOffset.UTC;
     }
 
+    /** 検証用に、指定されたタイムゾーンを反映した情報を作成する。 */
     public Clock withZone(ZoneId zone) {
       return this;
     }
 
+    /** {@code instant} の条件を再現するための補助情報を返す。 */
     public Instant instant() {
       return now;
     }
   }
 
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   TestClock clock = new TestClock();
 
+  /** {@code advance} の条件を再現するため、検証用の操作や状態を扱う。 */
   void advance() {
     clock.now = clock.now.plusSeconds(2);
   }
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     try (var gate = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(root)) {
@@ -213,12 +247,14 @@ class DotResumeIntegrationTest {
             clock);
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void close() {
     checkpointService.close();
     admissions.close();
   }
 
+  /** 検証用に、要求された条件を満たすことを確認する。 */
   void verify() {
     service.verify(
         "b2fdbeaa-58b1-4929-b0b3-1f54094181ec",
@@ -234,6 +270,7 @@ class DotResumeIntegrationTest {
             "Source was independently checked"));
   }
 
+  /** 既存の実行予定の管理を利用することを確認する。 */
   @Test
   void manualVerifiedResultUsesExistingSchedulerAndOneReadOnlyCheckpointRun() {
     assertThrows(
@@ -268,6 +305,7 @@ class DotResumeIntegrationTest {
     assertEquals(AgentRunContext.Mode.READ_ONLY, started.getFirst().mode());
   }
 
+  /** 利用者の状態表示の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledParentNeverResumes() {
     verify();
@@ -279,6 +317,7 @@ class DotResumeIntegrationTest {
     assertTrue(queue.isEmpty());
   }
 
+  /** 変更済み再開用の記録変更後予約について、実行先への引き渡しを受け付けないことを確認する。 */
   @Test
   void changedCheckpointAfterReservationRejectsDispatch() {
     verify();
@@ -296,6 +335,7 @@ class DotResumeIntegrationTest {
     assertTrue(queue.isEmpty());
   }
 
+  /** 利用者の状態表示の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void forgedScheduledActionCannotGrantAuthority() {
     verify();
@@ -309,6 +349,7 @@ class DotResumeIntegrationTest {
     assertTrue(queue.isEmpty());
   }
 
+  /** 利用者の状態表示で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownSideEffectCannotBeResumedEvenAfterHumanResultVerification() {
     verify();
@@ -330,6 +371,7 @@ class DotResumeIntegrationTest {
     assertEquals("NOT_REQUESTED", repo.intent(owner.projectId(), id).get("status"));
   }
 
+  /** レビューについて、利用者確認を必要とすることを確認する。 */
   @Test
   void reviewRequiresHumanConfirmationAndAcceptance() {
     assertThrows(

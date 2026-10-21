@@ -44,8 +44,10 @@ import org.springframework.ai.chat.prompt.Prompt;
 import picocli.CommandLine;
 import reactor.core.publisher.Flux;
 
+/** チャットコマンドの結果と状態の契約を検証するテスト。 */
 class ChatCommandTest {
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void runPrintsAnswerWithoutAdvisorContext() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -81,6 +83,7 @@ class ChatCommandTest {
     assertTrue(output.text().contains("[agent] completed"));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void runPrintsGenerationMetricsWhenCompletionUsageIsAvailable() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -117,6 +120,7 @@ class ChatCommandTest {
     assertTrue(output.text().contains("end-to-end "));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void runDoesNotPrintTokensPerSecondWhenCompletionUsageIsUnavailable() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -151,6 +155,7 @@ class ChatCommandTest {
     assertTrue(!out.toString().contains(" tok/s"));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void calculatesGenerationMetricsFromDefinedTimeBoundaries() {
     ChatExecutionService.GenerationMetrics metrics =
@@ -162,6 +167,7 @@ class ChatCommandTest {
     assertEquals(11.0d / 1.5d, metrics.endToEndTokensPerSecond(), 0.0001d);
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void outputSpeedIsUnavailableWhenProviderDeliversAnswerInOneChunk() {
     ChatExecutionService.GenerationMetrics metrics =
@@ -171,6 +177,7 @@ class ChatCommandTest {
     assertTrue(metrics.outputTokensPerSecond() == null);
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void runPrintsChatFailureToStandardError() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -204,6 +211,7 @@ class ChatCommandTest {
     assertTrue(output.text().contains("[agent] failed"));
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void runTreatsLengthFinishReasonAsOutputLimitReached() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -233,6 +241,7 @@ class ChatCommandTest {
     verify(narrator, never()).narrateIfCompleted(any());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void runDoesNotReplanWhenFinishReasonIsStop() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -274,6 +283,7 @@ class ChatCommandTest {
     verify(narrator).narrateIfCompleted("answer");
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void runReplansAndExecutesSubgoalsWhenOutputLimitIsReached() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -334,6 +344,7 @@ class ChatCommandTest {
     verify(narrator).narrateIfCompleted("final result");
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void runStopsReplanningWhenReplanBudgetIsExhausted() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -377,6 +388,7 @@ class ChatCommandTest {
     verify(narrator, never()).narrateIfCompleted(any());
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void runCountsInitialPromptAgainstOutputLimitLlmCallBudget() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -414,6 +426,7 @@ class ChatCommandTest {
     verify(narrator, never()).narrateIfCompleted(any());
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void runReplansSubgoalAgainWhenSubgoalHitsOutputLimit() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -473,6 +486,7 @@ class ChatCommandTest {
     verify(narrator).narrateIfCompleted("final result");
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void runSendsPromptContainingAttachmentToken() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -509,6 +523,7 @@ class ChatCommandTest {
     assertTrue(promptCaptor.getValue().getContents().contains("`@file:path/to/file.txt` please"));
   }
 
+  /** 共通の実行基盤で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void runRendersMemorySuggestionThroughShellAgentEventRendererWhenAutoTriggerIsTrue() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -552,6 +567,7 @@ class ChatCommandTest {
     assertTrue(directOut.toString().isBlank());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void runDoesNotPrintMemorySuggestionWhenAutoTriggerIsFalse() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -589,6 +605,7 @@ class ChatCommandTest {
     assertTrue(!out.toString().contains("[memory]"));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void runPrintsThinkingMetadataBeforeAnswer() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -625,40 +642,50 @@ class ChatCommandTest {
     assertTrue(output.text().indexOf("=== thinking (") < output.text().indexOf("=== answer ("));
   }
 
+  /** 検証条件を再現するためのRecording出力。 */
   private static final class RecordingOutput implements ShellEventOutput {
+    /** 検証に使う値。 */
     private final StringBuilder value = new StringBuilder();
 
+    /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
     public void print(String text) {
       value.append(text);
     }
 
+    /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
     public void println(String text) {
       value.append(text).append('\n');
     }
 
+    /** 検証で保留している出力の確定を扱う。 */
     public void flush() {}
 
+    /** {@code text} の条件を再現するための補助情報を返す。 */
     String text() {
       return value.toString();
     }
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   private static ChatResponse response(String text) {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
   }
 
+  /** {@code responseWithThinking} の条件を再現するための補助情報を返す。 */
   private static ChatResponse responseWithThinking(String text, String thinking) {
     ChatGenerationMetadata metadata =
         ChatGenerationMetadata.builder().metadata("reasoning_content", thinking).build();
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text), metadata)));
   }
 
+  /** {@code responseWithFinishReason} の条件を再現するための補助情報を返す。 */
   private static ChatResponse responseWithFinishReason(String text, String finishReason) {
     ChatGenerationMetadata metadata =
         ChatGenerationMetadata.builder().finishReason(finishReason).build();
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text), metadata)));
   }
 
+  /** {@code responseWithUsage} の条件を再現するための補助情報を返す。 */
   private static ChatResponse responseWithUsage(String text, int completionTokens) {
     ChatResponseMetadata metadata =
         ChatResponseMetadata.builder().usage(new DefaultUsage(0, completionTokens)).build();

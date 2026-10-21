@@ -14,7 +14,9 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** Web検索Orchestrator上限の結果と状態の契約を検証するテスト。 */
 class WebSearchOrchestratorLimitTest {
+  /** Web上の情報の調査で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void pageBudgetIsAppliedBeforeFetching() throws Exception {
     var search = mock(WebSearchService.class);
@@ -36,6 +38,7 @@ class WebSearchOrchestratorLimitTest {
     verify(fetch, times(1)).fetch(any());
   }
 
+  /** Web上の情報の調査の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationAfterMetadataStartsNoPageFetch() throws Exception {
     var search = mock(WebSearchService.class);
@@ -61,6 +64,7 @@ class WebSearchOrchestratorLimitTest {
                       search, fetch, new WebSearchQueryPlanner(), new WebSearchAggregator())
                   .search("Java", 1));
     }
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(fetch);
   }
 }

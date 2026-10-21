@@ -18,15 +18,21 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 複数Hunk変更集合の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class MultiHunkChangeSetTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う所属プロジェクトの識別子。 */
   final String projectId = UUID.randomUUID().toString();
 
+  /** 検証で使用するプロジェクトを、指定された条件に合わせて用意する。 */
   ProjectContext project() {
     return new ProjectContext(projectId, "test", root);
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   TextChangeSetService service() {
     return new TextChangeSetService(
         new TextChangeSetRepository(
@@ -34,12 +40,14 @@ class MultiHunkChangeSetTest {
                 "jdbc:sqlite:" + root.resolve("changes.db"))));
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   TextChangeSetService.Request request(
       TextChangeSetService service, List<TextChangeSetService.Edit> edits) throws Exception {
     return new TextChangeSetService.Request(
         "a.txt", null, null, service.readBase(project(), "a.txt").sha256(), edits);
   }
 
+  /** 元の形式のバージョンを利用することを確認する。 */
   @Test
   void multipleHunksUseTheOriginalVersionAndExplicitApplyIsOneShot() throws Exception {
     Files.writeString(root.resolve("a.txt"), "abcd");
@@ -72,6 +80,7 @@ class MultiHunkChangeSetTest {
             .status());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void ambiguousMissingOverlappingAndStaleEditsNeverModifyTheFile() throws Exception {
     Files.writeString(root.resolve("a.txt"), "abcd abcd");
@@ -106,6 +115,7 @@ class MultiHunkChangeSetTest {
     assertEquals("human", Files.readString(root.resolve("a.txt")));
   }
 
+  /** 共通の実行基盤で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void deletionMultilineJapaneseBomAndLineEndingsArePreserved() throws Exception {
     for (var newline : List.of("\n", "\r\n")) {
@@ -131,6 +141,7 @@ class MultiHunkChangeSetTest {
     }
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void discardAndLegacyFullReplacementRemainCompatible() throws Exception {
     Files.writeString(root.resolve("a.txt"), "old");
@@ -159,6 +170,7 @@ class MultiHunkChangeSetTest {
             "proposeTextChangeSet"));
   }
 
+  /** 対象を保持することを確認する。 */
   @Test
   void failedAtomicReplaceAndLastMomentExternalChangePreserveTarget() throws Exception {
     var file = root.resolve("a.txt");
@@ -202,6 +214,7 @@ class MultiHunkChangeSetTest {
                     (p, o, n) -> fail("no replay")));
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void versionsAndInputModesAreStrictAndHunkCountIsBounded() throws Exception {
     Files.writeString(root.resolve("a.txt"), "old");
@@ -228,6 +241,7 @@ class MultiHunkChangeSetTest {
                     "a.txt", null, null, version, Collections.nCopies(65, edits.getFirst()))));
   }
 
+  /** 共通の実行基盤の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void atomicWritingPreservesPermissionsAndPolicyDenialStillPrecedesCallback() throws Exception {
     var file = root.resolve("a.txt");
@@ -268,6 +282,7 @@ class MultiHunkChangeSetTest {
     assertEquals("new", Files.readString(file));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void partialDiffShowsTheChangedRegionWithoutDumpingUnchangedFile() throws Exception {
     var text = new StringBuilder();
@@ -292,6 +307,7 @@ class MultiHunkChangeSetTest {
             java.nio.charset.StandardCharsets.UTF_8));
   }
 
+  /** 既存のツール完了時の処理について、部分的な結果JSON変換を受け付けられることを確認する。 */
   @Test
   void existingToolCallbackAcceptsPartialJsonWithoutWholeFileFields() throws Exception {
     Files.writeString(root.resolve("a.txt"), "old");

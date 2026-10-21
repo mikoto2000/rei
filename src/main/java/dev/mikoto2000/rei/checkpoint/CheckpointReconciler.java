@@ -21,43 +21,68 @@ import java.util.concurrent.TimeoutException;
 import org.springframework.stereotype.Component;
 
 /**
- * Read-only comparison. Process inspection never attaches, restarts or terminates saved processes.
+ * 作業の中断と再開に必要な再開用の記録Reconcilerを扱う。
+ *
+ * <p>Read-only comparison. Process inspection never attaches, restarts or terminates saved
+ * processes.
  */
 @Component
 public class CheckpointReconciler {
+  /** プロセス一覧。 */
   private final BackgroundProcessManager processes;
+
+  /** レビュー記録台帳。 */
   private dev.mikoto2000.rei.review.ReviewCoverageLedger reviewLedger;
 
+  /** 作業の中断と再開で使用するレビュー記録台帳を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setReviewLedger(dev.mikoto2000.rei.review.ReviewCoverageLedger ledger) {
     reviewLedger = ledger;
   }
 
+  /** イベント保存先。 */
   private dev.mikoto2000.rei.event.ProjectAgentEventStore eventStore;
 
+  /** 作業の中断と再開で使用するイベント保存先を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setEventStore(dev.mikoto2000.rei.event.ProjectAgentEventStore store) {
     eventStore = store;
   }
 
+  /** 元の結果一覧。 */
   private dev.mikoto2000.rei.core.contextbudget.RawToolResultStore rawResults;
 
+  /** 作業の中断と再開で使用する元の結果一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setRawResults(dev.mikoto2000.rei.core.contextbudget.RawToolResultStore store) {
     rawResults = store;
   }
 
+  /** やり取り一覧。 */
   private dev.mikoto2000.rei.conversation.ConversationTurnStore turns;
 
+  /** 作業の中断と再開で使用するやり取り一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setTurns(dev.mikoto2000.rei.conversation.ConversationTurnStore store) {
     turns = store;
   }
 
+  /** 指定された値や利用先を使って、CheckpointReconcilerを初期化する。 */
   public CheckpointReconciler(BackgroundProcessManager processes) {
     this.processes = processes;
   }
 
+  /**
+   * 作業の中断と再開で受け渡す結果を表す。
+   *
+   * @param decision 判断結果
+   * @param usable 利用可能
+   * @param changed 変更済み
+   * @param recheck 再確認
+   * @param unknownOperations 不明操作一覧
+   * @param blockers 作業を妨げる課題
+   * @param nextAction 次操作
+   */
   public record Result(
       String decision,
       List<String> usable,
@@ -66,6 +91,7 @@ public class CheckpointReconciler {
       List<Operation> unknownOperations,
       List<String> blockers,
       String nextAction) {
+    /** 作業の中断と再開において、自動再開安全性に該当するか判定する。 */
     public boolean automaticResumeSafe() {
       return decision.equals("CONTINUE")
           && unknownOperations.isEmpty()
@@ -75,6 +101,7 @@ public class CheckpointReconciler {
     }
   }
 
+  /** 後続の処理を進められるか、現在の条件を確認する。 */
   public Result check(PersistentCheckpoint saved, boolean leased) {
     active();
     var usable = new ArrayList<String>();
@@ -199,10 +226,12 @@ public class CheckpointReconciler {
         next);
   }
 
+  /** 作業の中断と再開に関する活動中を処理する。 */
   static void active() {
     if (Thread.currentThread().isInterrupted()) throw new CancellationException();
   }
 
+  /** 要求された処理を開始する。 */
   static String start(long pid) {
     return ProcessHandle.of(pid)
         .flatMap(p -> p.info().startInstant())
@@ -210,6 +239,7 @@ public class CheckpointReconciler {
         .orElse(null);
   }
 
+  /** 作業の中断と再開で用いる要求内容の照合値を返す。 */
   public static String fingerprint(Path file) {
     active();
     try {
@@ -232,6 +262,7 @@ public class CheckpointReconciler {
     }
   }
 
+  /** 作業の中断と再開で用いるGitの情報を返す。 */
   public static Map<String, String> git(Path root) {
     active();
     var result = new LinkedHashMap<String, String>();
@@ -241,6 +272,7 @@ public class CheckpointReconciler {
     return Map.copyOf(result);
   }
 
+  /** 必要な内容を参照できるよう、Gitの情報を読み取る。 */
   private static String readGit(Path root, String... args) {
     active();
     Process process = null;
@@ -271,6 +303,7 @@ public class CheckpointReconciler {
       if (bytes.length > 65536) return "oversized:recheck";
       return new String(bytes, java.nio.charset.StandardCharsets.UTF_8).strip();
     } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw new CancellationException();
     } catch (java.io.IOException | ExecutionException | TimeoutException e) {

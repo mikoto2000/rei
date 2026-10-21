@@ -14,7 +14,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+/** 日次要約Wordingの結果と状態の契約を検証するテスト。 */
 class DailySummaryWordingTest {
+  /** 作業状況の把握で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void groupPhrasesPreserveThemePunctuationAndSupportThreeActivities() {
     String theme = "音声入力・文字起こし系";
@@ -28,6 +30,7 @@ class DailySummaryWordingTest {
         .isEqualTo(theme + "に関する文書作業や開発、調査");
   }
 
+  /** 作業状況の把握で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void workFreeBucketsRetainTheirOnlyKnownActivityEvenWhenUnknownIsLargest() {
     var source = new ArrayList<SummarySegment>();
@@ -40,6 +43,7 @@ class DailySummaryWordingTest {
         .containsExactly("SNS閲覧が中心でした。", "SNS閲覧が中心でした。");
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void oneActivityStaysConcise() {
     assertThat(
@@ -48,6 +52,7 @@ class DailySummaryWordingTest {
         .containsExactly("rei の開発");
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void twoActivitiesUseNaturalConjunction() {
     assertThat(
@@ -59,6 +64,7 @@ class DailySummaryWordingTest {
         .containsExactly("rei に関する文書作業や開発");
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void threeActivitiesUseNaturalConjunction() {
     assertThat(
@@ -71,6 +77,7 @@ class DailySummaryWordingTest {
         .containsExactly("rei に関する文書作業や開発、調査");
   }
 
+  /** {@code repeated} の条件を再現するための補助情報を返す。 */
   static DailySummaryAggregate repeated(String category, boolean dominantEvening) {
     var source = new ArrayList<SummarySegment>();
     for (int minute : List.of(0, 360, 720, 1080)) {
@@ -81,6 +88,7 @@ class DailySummaryWordingTest {
     return aggregate(source);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @ParameterizedTest
   @CsvSource({"social,SNS閲覧", "shopping,ショッピング", "media,動画・音楽の閲覧", "gaming,ゲーム"})
   void repeatedIncidentalLeisureIsKeptOnlyInDailyList(String category, String label) {
@@ -92,6 +100,7 @@ class DailySummaryWordingTest {
         .allSatisfy(s -> assertThat(s).contains("rei の開発").doesNotContain(label));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void dominantEveningSocialRemainsVisible() {
     var summary = DailySummary.fallback(repeated("social", true));
@@ -99,6 +108,7 @@ class DailySummaryWordingTest {
     assertThat(summary.timeOfDay().get("morning")).doesNotContain("SNS");
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void uniqueIncidentalActivityRemainsVisible() {
     var a =
@@ -109,6 +119,7 @@ class DailySummaryWordingTest {
     assertThat(DailySummary.fallback(a).timeOfDay().get("lateNight")).contains("SNS閲覧");
   }
 
+  /** 作業状況の把握で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void rendererAlsoSuppressesRepetitionFromSuccessfulWriter() {
     var a = repeated("social", false);
@@ -129,6 +140,7 @@ class DailySummaryWordingTest {
     assertThat(text).contains("- SNS閲覧");
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @ParameterizedTest
   @CsvSource({"0,0時間0分0秒,24時間0分0秒", "86400,24時間0分0秒,0時間0分0秒", "83762,23時間16分2秒,0時間43分58秒"})
   void coverageLabelsDescribeDataAvailability(int seconds, String observed, String unobserved) {

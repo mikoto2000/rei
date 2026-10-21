@@ -6,8 +6,10 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** Escキャンセル排他制御の結果と状態の契約を検証するテスト。 */
 class EscCancellationMonitorTest {
 
+  /** れいの起動の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void runCancelsWhenEscapeIsPressed() throws Exception {
     EscCancellationMonitor monitor = new EscCancellationMonitor();

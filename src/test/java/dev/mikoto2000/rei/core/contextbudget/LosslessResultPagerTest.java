@@ -6,9 +6,12 @@ import static org.assertj.core.api.Assertions.offset;
 
 import org.junit.jupiter.api.Test;
 
+/** Lossless結果Pagerの結果と状態の契約を検証するテスト。 */
 class LosslessResultPagerTest {
+  /** 検証に使う概算。 */
   final TokenEstimator estimator = TokenEstimator.conservative();
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void pagesReassembleJapaneseUnicodeAndEscapedTextExactly() throws Exception {
     String raw = "\uFEFF開始\r\n" + "教材🙂\"\\\t中間の誤り\n".repeat(600) + "末尾";
@@ -30,6 +33,7 @@ class LosslessResultPagerTest {
     assertThat(assembled.toString()).isEqualTo(raw);
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void metadataAndEscapingAreIncludedAndInsufficientBudgetStops() {
     var pager = new LosslessResultPager(estimator);
@@ -37,6 +41,7 @@ class LosslessResultPagerTest {
         .hasMessageContaining("CONTEXT_BUDGET_INSUFFICIENT");
   }
 
+  /** 不正な続きの取得位置を受け付けないことを確認する。 */
   @Test
   void rejectsInvalidCursorRatherThanBreakingSurrogates() {
     var pager = new LosslessResultPager(estimator);

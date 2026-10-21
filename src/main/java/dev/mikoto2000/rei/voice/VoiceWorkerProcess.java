@@ -22,18 +22,31 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Bounded binary IPC. Native output never reaches the parent terminal; only this owned child is
+ * 音声による対話に必要な音声実行の担当プロセスを扱う。
+ *
+ * <p>Bounded binary IPC. Native output never reaches the parent terminal; only this owned child is
  * stopped.
  */
 public final class VoiceWorkerProcess implements AutoCloseable {
+  /** MAGIC／形式のバージョン／最大サンプル一覧／最大テキストバイト数。 */
   public static final int MAGIC = 0x52454956,
       VERSION = 1,
       MAX_SAMPLES = 448000,
       MAX_TEXT_BYTES = 65536;
+
+  /** プロセス。 */
   private final Process process;
+
+  /** 入力。 */
   private final DataInputStream input;
+
+  /** 出力。 */
   private final DataOutputStream output;
+
+  /** 要求タイムアウト。 */
   private final Duration requestTimeout;
+
+  /** 入出力を担当する実行先。 */
   private final ExecutorService io =
       Executors.newSingleThreadExecutor(
           r -> {
@@ -41,11 +54,20 @@ public final class VoiceWorkerProcess implements AutoCloseable {
             t.setDaemon(true);
             return t;
           });
+
+  /** 終了済み。 */
   private final AtomicBoolean closed = new AtomicBoolean();
+
+  /** 標準エラー出力バイト数。 */
   private final AtomicLong stderrBytes = new AtomicLong();
+
+  /** 標準エラー出力。 */
   private final Thread stderr;
+
+  /** 使用中。 */
   private volatile boolean busy;
 
+  /** 指定された値や利用先を使って、VoiceWorkerProcessを初期化する。 */
   private VoiceWorkerProcess(Process process, Duration requestTimeout) {
     this.process = process;
     this.requestTimeout = requestTimeout;
@@ -66,6 +88,7 @@ public final class VoiceWorkerProcess implements AutoCloseable {
     stderr.start();
   }
 
+  /** 要求された処理を開始する。 */
   public static VoiceWorkerProcess start(
       List<String> command, Duration startupTimeout, Duration requestTimeout) throws IOException {
     Objects.requireNonNull(command);
@@ -87,6 +110,7 @@ public final class VoiceWorkerProcess implements AutoCloseable {
     return worker;
   }
 
+  /** 音声による対話で用いるprobabilityを返す。 */
   public synchronized float probability(float[] frame) throws IOException {
     VoicePcm.validateFrame(frame);
     float[] copy = frame.clone();
@@ -102,6 +126,7 @@ public final class VoiceWorkerProcess implements AutoCloseable {
         requestTimeout);
   }
 
+  /** 音声による対話で用いるrecognizeを返す。 */
   public synchronized String recognize(float[] samples) throws IOException {
     if (samples == null || samples.length < 1 || samples.length > MAX_SAMPLES)
       throw new IllegalArgumentException("Invalid worker sample count");
@@ -122,6 +147,7 @@ public final class VoiceWorkerProcess implements AutoCloseable {
         requestTimeout);
   }
 
+  /** 指定された内容を書き込み先へ反映する。 */
   private void write(int operation, float[] samples) throws IOException {
     output.writeInt(operation);
     output.writeInt(samples.length);
@@ -129,6 +155,7 @@ public final class VoiceWorkerProcess implements AutoCloseable {
     output.flush();
   }
 
+  /** 音声による対話で用いるexchangeを返す。 */
   private <T> T exchange(Callable<T> action, Duration timeout) throws IOException {
     if (closed.get()) throw new IOException("Voice worker is closed");
     busy = true;
@@ -138,6 +165,7 @@ public final class VoiceWorkerProcess implements AutoCloseable {
       return task.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
     } catch (InterruptedException interrupted) {
       close();
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw new IOException("Voice worker request interrupted");
     } catch (ExecutionException | TimeoutException | RejectedExecutionException failure) {
@@ -149,15 +177,19 @@ public final class VoiceWorkerProcess implements AutoCloseable {
     }
   }
 
+  /** 音声による対話で用いる標準エラー出力バイト数を返す。 */
   public long stderrBytes() {
     return stderrBytes.get();
   }
 
+  /** 音声による対話において、稼働中かどうかを判定する。 */
   public boolean isAlive() {
     return process.isAlive();
   }
 
+  /** 音声による対話で利用した資源や登録を解放し、利用を終了する。 */
   public void close() {
+    // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
     if (!closed.compareAndSet(false, true)) return;
     boolean interrupted = Thread.interrupted();
     try {

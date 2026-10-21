@@ -20,19 +20,27 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Strict decoding, followed by action-specific validation. No markdown, coercion, or action lists.
+ * 操作の入力を解釈し、機能内で扱える情報へ整える。
+ *
+ * <p>Strict decoding, followed by action-specific validation. No markdown, coercion, or action
+ * lists.
  */
 public final class ActionParser {
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper mapper =
       new ObjectMapper()
           .enable(JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
           .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+
+  /** 項目一覧。 */
   private static final Set<String> FIELDS =
       Set.of("action", "risk", "target", "confidence", "text", "key", "amount", "millis", "reason");
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   public ComputerAction parse(String json, CapturedScreen screen) {
     try {
       if (json == null || json.isBlank()) throw new InvalidComputerDecision("No response text");
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (json.length() > 30000)
         throw new InvalidComputerDecision(
             "Response text exceeds 30000 characters: " + json.length());
@@ -88,6 +96,7 @@ public final class ActionParser {
     }
   }
 
+  /** 画面操作の支援に関する項目一覧を処理する。 */
   private static void fields(JsonNode node, Set<String> expected) {
     if (node == null || !node.isObject()) throw new InvalidComputerDecision("Expected object");
     var actual = new HashSet<String>();
@@ -95,6 +104,7 @@ public final class ActionParser {
     if (!actual.equals(expected)) throw new InvalidComputerDecision("Unexpected or missing fields");
   }
 
+  /** 画面操作の支援で用いる文字列表現を返す。 */
   private static String string(JsonNode node, String name) {
     JsonNode value = node.get(name);
     if (value == null || !value.isTextual())
@@ -102,6 +112,7 @@ public final class ActionParser {
     return value.textValue();
   }
 
+  /** 画面操作の支援で用いる整数を返す。 */
   private static int integer(JsonNode node, String name) {
     JsonNode value = node.get(name);
     if (value == null || !value.isIntegralNumber() || !value.canConvertToInt())
@@ -109,6 +120,7 @@ public final class ActionParser {
     return value.intValue();
   }
 
+  /** 画面操作の支援で用いる数値を返す。 */
   private static double number(JsonNode node, String name) {
     JsonNode value = node.get(name);
     if (value == null || !value.isNumber())
@@ -116,6 +128,7 @@ public final class ActionParser {
     return value.doubleValue();
   }
 
+  /** 画面操作の支援で用いる対象を返す。 */
   private static Target target(JsonNode node, CapturedScreen screen) {
     JsonNode value = node.get("target");
     boolean legacy = screen.displays().size() == 1 && value != null && !value.has("displayId");

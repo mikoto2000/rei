@@ -9,7 +9,9 @@ import dev.mikoto2000.rei.event.AgentEventType;
 import java.time.Clock;
 import org.junit.jupiter.api.Test;
 
+/** 追加入力イベントの結果と状態の契約を検証するテスト。 */
 class InterventionEventTest {
+  /** ターミナルでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void receivedAndAppliedAreTypedAndRendered() {
     var factory = new AgentEventFactory(Clock.systemUTC());

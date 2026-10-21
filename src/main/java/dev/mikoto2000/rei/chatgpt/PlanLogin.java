@@ -18,16 +18,25 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Consumer;
 
-/** The system browser is opened only by an explicit human login command. */
+/**
+ * ChatGPTとの連携に必要な計画ログインを扱う。
+ *
+ * <p>The system browser is opened only by an explicit human login command.
+ */
 public final class PlanLogin {
+  /** OAuth認証。 */
   private final PlanOAuth oauth;
+
+  /** 認証用のURLをブラウザーで開く処理。 */
   private final Consumer<URI> browser;
 
+  /** 指定された値や利用先を使って、PlanLoginを初期化する。 */
   public PlanLogin(PlanOAuth oauth, Consumer<URI> browser) {
     this.oauth = oauth;
     this.browser = browser;
   }
 
+  /** ChatGPTとの連携に関するログインを処理する。 */
   public void login(String account) {
     HttpServer server = null;
     try {
@@ -67,6 +76,7 @@ public final class PlanLogin {
     } catch (TimeoutException e) {
       throw ChatGptException.of(TIMEOUT);
     } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw ChatGptException.of(CANCELLED);
     } catch (Exception e) {
@@ -76,7 +86,9 @@ public final class PlanLogin {
     }
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   static Map<String, String> parse(String raw) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (raw == null || raw.length() > 8192) throw ChatGptException.of(AUTH_INVALID);
     var values = new HashMap<String, String>();
     for (var part : raw.split("&")) {

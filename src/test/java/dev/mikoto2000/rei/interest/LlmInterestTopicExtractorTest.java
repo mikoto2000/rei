@@ -19,8 +19,10 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import tools.jackson.databind.json.JsonMapper;
 
+/** 言語モデル関心話題情報の抽出の結果と状態の契約を検証するテスト。 */
 class LlmInterestTopicExtractorTest {
 
+  /** 関心の管理で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void extractBuildsPromptAndParsesJsonResponse() {
     ChatModel chatModel = org.mockito.Mockito.mock(ChatModel.class);
@@ -69,6 +71,7 @@ class LlmInterestTopicExtractorTest {
     assertTrue(promptCaptor.getValue().getContents().contains("vim in devcontainer"));
   }
 
+  /** 関心の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void extractWithPastQueriesIncludesPastQueriesInPrompt() {
     ChatModel chatModel = org.mockito.Mockito.mock(ChatModel.class);
@@ -96,6 +99,7 @@ class LlmInterestTopicExtractorTest {
     assertTrue(prompt.contains("Previously used search queries. Avoid duplicates:"));
   }
 
+  /** 関心の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void extractWithEmptyPastQueriesDoesNotAddPastQueriesSection() {
     ChatModel chatModel = org.mockito.Mockito.mock(ChatModel.class);
@@ -119,6 +123,7 @@ class LlmInterestTopicExtractorTest {
     assertTrue(!prompt.contains("Previously used search queries. Avoid duplicates:"));
   }
 
+  /** 関心の管理で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void normalizeJsonArray_stripsCodeFence() {
     String normalized =
@@ -134,6 +139,7 @@ class LlmInterestTopicExtractorTest {
     assertTrue(normalized.endsWith("]"));
   }
 
+  /** 関心の管理で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void normalizeJsonArray_extractsArrayFromDecoratedText() {
     String normalized =

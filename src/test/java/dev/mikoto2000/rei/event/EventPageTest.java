@@ -13,10 +13,15 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** イベントページの結果と状態の契約を検証するテスト。 */
 class EventPageTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使うプロジェクト。 */
   final String project = UUID.randomUUID().toString();
 
+  /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
   AgentEvent event(int n) {
     return new AgentEvent(
         "event-" + n,
@@ -33,10 +38,12 @@ class EventPageTest {
         project);
   }
 
+  /** {@code file} の条件を再現するための補助情報を返す。 */
   Path file() {
     return dir.resolve("projects").resolve(project).resolve("events/events.jsonl");
   }
 
+  /** ページ一覧境界記録一覧およびについて、各対象イベントを保持することを確認する。 */
   @Test
   void pagesBoundRecordsAndPreserveEveryEventInOrder() {
     var store = new ProjectAgentEventStore(dir);
@@ -51,6 +58,7 @@ class EventPageTest {
     assertTrue(store.readPage(project, three.nextOffset(), false).events().isEmpty());
   }
 
+  /** 実行状況の通知の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void oversizedAndInterruptedLinesCannotProduceFragmentEvents() throws Exception {
     Files.createDirectories(file().getParent());
@@ -78,6 +86,7 @@ class EventPageTest {
     assertEquals(List.of("event-11"), recovered.events().stream().map(AgentEvent::id).toList());
   }
 
+  /** 実行状況の通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void truncationAndMissingFilesResetCursor() throws Exception {
     var store = new ProjectAgentEventStore(dir);

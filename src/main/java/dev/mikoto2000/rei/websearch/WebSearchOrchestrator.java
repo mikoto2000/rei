@@ -3,16 +3,29 @@ package dev.mikoto2000.rei.websearch;
 import java.io.IOException;
 import org.springframework.stereotype.Service;
 
+/** Web上の情報の調査に必要なWeb検索Orchestratorを扱う。 */
 @Service
 public class WebSearchOrchestrator {
 
+  /** Web検索サービス。 */
   private final WebSearchService webSearchService;
+
+  /** Webページ情報の取得元。 */
   private final WebPageFetcher webPageFetcher;
+
+  /** Web検索検索条件計画の作成。 */
   private final WebSearchQueryPlanner webSearchQueryPlanner;
+
+  /** Web検索集計。 */
   private final WebSearchAggregator webSearchAggregator;
+
+  /** この機能の動作設定。 */
   private final WebSearchProperties properties;
+
+  /** まとめた処理。 */
   private final WebFetchBatch batch;
 
+  /** Web上の情報の調査を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WebSearchOrchestrator(
       WebSearchService webSearchService,
       WebPageFetcher webPageFetcher,
@@ -26,6 +39,7 @@ public class WebSearchOrchestrator {
         new WebSearchProperties());
   }
 
+  /** Web上の情報の調査を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WebSearchOrchestrator(
       WebSearchService webSearchService,
       WebPageFetcher webPageFetcher,
@@ -41,6 +55,7 @@ public class WebSearchOrchestrator {
         WebFetchBatch.sharedDefaults());
   }
 
+  /** 指定された値や利用先を使って、WebSearchOrchestratorを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public WebSearchOrchestrator(
       WebSearchService webSearchService,
@@ -57,6 +72,7 @@ public class WebSearchOrchestrator {
     this.batch = batch;
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public WebSearchContext search(String query, Integer limit)
       throws IOException, InterruptedException {
     long started = System.nanoTime();
@@ -69,6 +85,7 @@ public class WebSearchOrchestrator {
     }
   }
 
+  /** 依頼に関連する情報を得るため、観測を検索する。 */
   private WebSearchContext searchObserved(String query, Integer limit)
       throws IOException, InterruptedException {
     int maximum =

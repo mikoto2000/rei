@@ -5,12 +5,16 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Bound plain-text terms; Japanese text also contributes trigrams without needing a morphological
- * engine.
+ * 長期記憶の保存と検索に必要な記憶検索検索語句一覧を扱う。
+ *
+ * <p>Bound plain-text terms; Japanese text also contributes trigrams without needing a
+ * morphological engine.
  */
 public final class MemorySearchTerms {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private MemorySearchTerms() {}
 
+  /** 長期記憶の保存と検索で受け渡す情報を、指定された内容から作成する。 */
   public static List<String> of(String query) {
     if (query == null) return List.of();
     var terms = new LinkedHashSet<String>();

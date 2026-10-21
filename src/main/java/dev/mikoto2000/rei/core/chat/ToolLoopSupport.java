@@ -7,9 +7,17 @@ import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.ai.model.tool.ToolCallingManager;
 import org.springframework.ai.model.tool.ToolExecutionResult;
 
-/** Shared Spring AI tool dispatch boundary for explicit application-owned loops. */
+/**
+ * 対話中のツール実行を補助し、結果の引き継ぎや再試行の条件を整える。
+ *
+ * <p>Shared Spring AI tool dispatch boundary for explicit application-owned loops.
+ */
 public final class ToolLoopSupport {
-  /** Refuse ambient tool authority; isolated requests must explicitly supply their callbacks. */
+  /**
+   * モデルに暗黙のツール権限が付いていないことを確認し、依頼ごとの明示的な登録だけを許す。
+   *
+   * <p>Refuse ambient tool authority; isolated requests must explicitly supply their callbacks.
+   */
   public static void requireNoDefaultTools(org.springframework.ai.chat.model.ChatModel model) {
     var options = model.getOptions();
     requireNoRawTools(options);
@@ -19,7 +27,11 @@ public final class ToolLoopSupport {
     }
   }
 
-  /** SDK extra-body parameters must not bypass Rei's explicit callback/permission boundary. */
+  /**
+   * 追加のモデル設定にツールを紛れ込ませ、れいの権限確認を迂回することを防ぐ。
+   *
+   * <p>SDK extra-body parameters must not bypass Rei's explicit callback/permission boundary.
+   */
   public static void requireNoRawTools(ChatOptions options) {
     if (options instanceof org.springframework.ai.openai.OpenAiChatOptions openAi
         && openAi.getExtraBody() != null) {
@@ -31,20 +43,24 @@ public final class ToolLoopSupport {
     }
   }
 
-  // Rei already bounds explicit loops with durable run budgets/maxSteps and timeouts.
-  // Library history-based limits reset at user interventions and can abort a tool batch
-  // before Rei checkpoints it, so retain the existing application-owned limits.
+  // 実行回数と時間は、れいが保持する予算で制限する。
+  // 履歴に依存するライブラリー側の制限で、追加入力時に予算がリセットされたり、
+  // 実行結果を保存する前にツール群が中断されたりすることを防ぐ。
+  /** 管理。 */
   private final ToolCallingManager manager =
       ToolCallingManager.builder().unlimitedCallsPerTool().unlimitedTotalToolCalls().build();
 
+  /** 要求された処理を実行する。 */
   public ToolExecutionResult execute(Prompt prompt, ChatResponse response) {
     return deliveryMetadata(prompt, manager.executeToolCalls(prompt, response));
   }
 
+  /** 会話の実行で用いる配信付随情報を返す。 */
   private ToolExecutionResult deliveryMetadata(Prompt prompt, ToolExecutionResult result) {
     return deliveryMetadata(prompt, result, java.util.Set.of());
   }
 
+  /** 会話の実行で用いる配信付随情報を返す。 */
   private ToolExecutionResult deliveryMetadata(
       Prompt prompt, ToolExecutionResult result, java.util.Set<String> argumentCorrections) {
     if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return result;
@@ -85,7 +101,7 @@ public final class ToolLoopSupport {
                 response.id(),
                 dev.mikoto2000.rei.review.ReviewTools.receipt(response.responseData()));
           } catch (IllegalArgumentException malformed) {
-            /* A tool error/argument correction is never a delivery receipt. */
+            /* ツールの失敗や引数の修正案内を、資料を読み終えた証拠として扱わない。 */
           }
       var metadata = new java.util.HashMap<>(message.getMetadata());
       metadata.put("rei.deliveryPolicies", java.util.Map.copyOf(calls));
@@ -103,6 +119,7 @@ public final class ToolLoopSupport {
         .build();
   }
 
+  /** 承認による中断や引数の修正を扱える実行経路を選び、未完了のツール呼び出しを進める。 */
   public ToolExecutionResult executeResumable(
       Prompt prompt,
       ChatResponse response,
@@ -134,6 +151,7 @@ public final class ToolLoopSupport {
         false);
   }
 
+  /** 保存済みのツール呼び出しについて、成功済みの結果を引き継ぎながら残りを実行する。 */
   public ToolExecutionResult executePending(
       Prompt prompt,
       RunContinuation.PendingTools pending,
@@ -141,6 +159,7 @@ public final class ToolLoopSupport {
     return executePending(prompt, pending, context, true);
   }
 
+  /** 保存済みのツール呼び出しについて、成功済みの結果を引き継ぎながら残りを実行する。 */
   private ToolExecutionResult executePending(
       Prompt prompt,
       RunContinuation.PendingTools pending,
@@ -151,6 +170,7 @@ public final class ToolLoopSupport {
     options
         .getToolCallbacks()
         .forEach(callback -> callbacks.put(callback.getToolDefinition().name(), callback));
+    // 再開時も、今回許可されたツールだけを使い、同じ呼び出しを重複して実行しない。
     var ids = new java.util.HashSet<String>();
     for (var call : pending.calls())
       if (!callbacks.containsKey(call.name()) || !ids.add(call.id()))
@@ -169,6 +189,7 @@ public final class ToolLoopSupport {
       if (!completed.get(i).id().equals(pending.calls().get(i).id())
           || !completed.get(i).name().equals(pending.calls().get(i).name()))
         throw new IllegalArgumentException("Saved Tool prefix mismatch");
+    // 承認待ちに入る前に成功した呼び出しは再実行せず、未完了の続きだけを処理する。
     for (int i = completed.size(); i < pending.calls().size(); i++) {
       var call = pending.calls().get(i);
       context.checkActive();
@@ -176,6 +197,7 @@ public final class ToolLoopSupport {
       try {
         context.validateToolArguments(call.name(), call.arguments());
       } catch (dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException invalid) {
+        // 引数を直せば実行できる場合は、修正の案内を返す。実行済みの兄弟呼び出しはやり直させない。
         completed.add(
             new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
                 call.id(),
@@ -184,8 +206,7 @@ public final class ToolLoopSupport {
         argumentCorrections.add(call.id());
         continue;
       } catch (dev.mikoto2000.rei.chatgpt.ChatGptException denied) {
-        // Host policy refusals are terminal, not model-correctable arguments. Report them before
-        // the callback boundary so the client can show why no approval or execution occurred.
+        // 接続先の方針による拒否は引数修正で解除できない。承認や実行へ進まなかった理由を通知する。
         context.reportToolPermissionFailure(call.id(), call.name(), denied);
         throw denied;
       }
@@ -204,6 +225,7 @@ public final class ToolLoopSupport {
         for (Throwable cause = error; cause != null; cause = cause.getCause()) {
           if (cause instanceof dev.mikoto2000.rei.core.policy.ToolPermissionException permission
               && permission.approvalId() != null) {
+            // 必要な承認が得られるまで、成功済みの結果と未実行の操作を保存して中断する。
             if (context.suspendForApproval(
                 permission.approvalId(),
                 prompt.getInstructions(),

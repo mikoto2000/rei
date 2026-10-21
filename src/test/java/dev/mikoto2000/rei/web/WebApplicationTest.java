@@ -7,10 +7,13 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.WebApplicationType;
 import org.springframework.context.annotation.Configuration;
 
+/** Webアプリケーションの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class WebApplicationTest {
+  /** 検証条件を再現するための空の。 */
   @Configuration(proxyBeanMethods = false)
   static class Empty {
+    /** {@code serverFactory} の条件を再現するための補助情報を返す。 */
     @org.springframework.context.annotation.Bean
     @org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication
     org.springframework.boot.tomcat.servlet.TomcatServletWebServerFactory serverFactory() {
@@ -20,6 +23,7 @@ class WebApplicationTest {
     }
   }
 
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void commandLineCannotEnableWebWithoutAnEnvironmentKey() {
     var app = new SpringApplication(Empty.class);
@@ -34,6 +38,7 @@ class WebApplicationTest {
     }
   }
 
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void blankEnvironmentDisablesWebBeforeContextCreation() {
     for (String key : new String[] {null, "", "   "}) {
@@ -46,6 +51,7 @@ class WebApplicationTest {
     }
   }
 
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void environmentKeyWinsOverOtherPropertySources() {
     SpringApplication app = new SpringApplication(Empty.class);

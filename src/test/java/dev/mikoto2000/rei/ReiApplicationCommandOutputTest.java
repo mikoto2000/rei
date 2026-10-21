@@ -21,16 +21,20 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 import picocli.CommandLine;
 
+/** れいアプリケーションコマンド出力の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ReiApplicationCommandOutputTest {
 
+  /** 検証に使うsubagentディレクトリ。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path subagentDirectory;
 
+  /** 検証条件を再現するためのSubagent作業ルート。 */
   @CommandLine.Command(
       name = "rei",
       subcommands = dev.mikoto2000.rei.subagent.SubAgentCommand.class)
   static class SubagentRoot {}
 
+  /** フィード使用状況について、終端書き込み先を維持することを確認する。 */
   @ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"UTF-8", "windows-31j"})
   void feedUsageKeepsTerminalWriterWhenConsoleStreamsAreRouted(String encoding) {
@@ -46,6 +50,7 @@ class ReiApplicationCommandOutputTest {
     }
   }
 
+  /** フィード使用状況について、実際の終端を利用することを確認する。 */
   @ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"UTF-8", "windows-31j"})
   void feedUsageUsesActualTerminalWithConsoleEncoding(String encoding) throws Exception {
@@ -77,6 +82,7 @@ class ReiApplicationCommandOutputTest {
     }
   }
 
+  /** フィード使用状況について、終端文字コードを利用することを確認する。 */
   @ParameterizedTest
   @CsvSource({"UTF-8, false", "UTF-8, true", "windows-31j, false", "windows-31j, true"})
   void feedUsageUsesTerminalEncodingAfterCompleterInitialization(
@@ -104,6 +110,7 @@ class ReiApplicationCommandOutputTest {
         .contains("個別記事を操作します");
   }
 
+  /** 終端文字コードを利用することを確認する。 */
   @ParameterizedTest
   @CsvSource({"UTF-8, false", "UTF-8, true", "windows-31j, false", "windows-31j, true"})
   void subagentUsesTerminalEncodingAfterCompletion(String encoding, boolean afterCompletion)
@@ -128,6 +135,7 @@ class ReiApplicationCommandOutputTest {
         new CommandLine(
             new SubagentRoot(),
             new CommandLine.IFactory() {
+              /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
               public <K> K create(Class<K> type) throws Exception {
                 return type == dev.mikoto2000.rei.subagent.SubAgentCommand.class
                     ? type.cast(bean)
@@ -165,6 +173,7 @@ class ReiApplicationCommandOutputTest {
         .contains("存在しない担当");
   }
 
+  /** 要約について、終端文字コードを利用することを確認する。 */
   @ParameterizedTest
   @CsvSource({"UTF-8, false", "UTF-8, true", "windows-31j, false", "windows-31j, true"})
   void summaryUsesTerminalEncodingAndFlushes(String encoding, boolean afterCompletion) {
@@ -181,6 +190,7 @@ class ReiApplicationCommandOutputTest {
     assertEquals(summary + System.lineSeparator(), output.toString(Charset.forName(encoding)));
   }
 
+  /** 要約エラーについて、終端文字コードを利用することを確認する。 */
   @ParameterizedTest
   @CsvSource({"UTF-8, false", "UTF-8, true", "windows-31j, false", "windows-31j, true"})
   void summaryErrorUsesTerminalEncodingAndFlushes(String encoding, boolean afterCompletion) {
@@ -201,6 +211,7 @@ class ReiApplicationCommandOutputTest {
         "要約に失敗しました: 本文が空です" + System.lineSeparator(), output.toString(Charset.forName(encoding)));
   }
 
+  /** {@code configureOutput} の条件を再現するための補助情報を返す。 */
   private ByteArrayOutputStream configureOutput(CommandLine commandLine, String encoding) {
     ByteArrayOutputStream output = new ByteArrayOutputStream();
     Terminal terminal = mock(Terminal.class);
@@ -210,6 +221,7 @@ class ReiApplicationCommandOutputTest {
     return output;
   }
 
+  /** {@code completeSummary} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void completeSummary(CommandLine commandLine) {
     var completer = ReiLineReaderFactory.completer(commandLine);
     var parser = new DefaultParser();

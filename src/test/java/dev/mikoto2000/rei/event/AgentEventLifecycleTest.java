@@ -10,18 +10,28 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** エージェントイベント受付から終了までの管理の結果と状態の契約を検証するテスト。 */
 class AgentEventLifecycleTest {
 
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   private final Clock clock =
       Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));
+
+  /** 検証に使う生成元。 */
   private final AgentEventFactory factory = new AgentEventFactory(clock);
+
+  /** 検証に使う通知の連携先。 */
   private final InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+
+  /** 検証に使う受信。 */
   private final List<AgentEvent> received = new ArrayList<>();
 
+  /** {@code subscribe} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void subscribe() {
     bus.subscribe(received::add);
   }
 
+  /** メッセージ受付から終了までの管理について、開始差分完了済みのを通知することを確認する。 */
   @Test
   void messageLifecycleEmitsStartedDeltaCompleted() {
     subscribe();
@@ -41,6 +51,7 @@ class AgentEventLifecycleTest {
     assertTrue(received.get(2).sequence() < received.get(3).sequence());
   }
 
+  /** 実行状況の通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void multipleDeltasReceivedInOrder() {
     subscribe();
@@ -55,6 +66,7 @@ class AgentEventLifecycleTest {
     assertEquals("c", ((MessageDeltaPayload) received.get(2).payload()).delta());
   }
 
+  /** 推論受付から終了までの管理について、開始差分完了済みのを通知することを確認する。 */
   @Test
   void thinkingLifecycleEmitsStartedDeltaCompleted() {
     subscribe();
@@ -71,6 +83,7 @@ class AgentEventLifecycleTest {
     assertEquals("考えます", ((ThinkingCompletedPayload) received.get(3).payload()).text());
   }
 
+  /** 実行状況の通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void toolStartedAndCompletedShareCorrelationId() {
     subscribe();
@@ -85,6 +98,7 @@ class AgentEventLifecycleTest {
     assertEquals(AgentEventType.TOOL_COMPLETED, received.get(1).type());
   }
 
+  /** 実行状況の通知で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void toolFailedSharesCorrelationId() {
     subscribe();
@@ -100,6 +114,7 @@ class AgentEventLifecycleTest {
     assertEquals(AgentEventType.TOOL_FAILED, received.get(1).type());
   }
 
+  /** 実行状況の通知で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void toolCompletedDoesNotContainFullResult() {
     subscribe();

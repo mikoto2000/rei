@@ -1,7 +1,12 @@
 package dev.mikoto2000.rei.storage;
 
-/** Child JVM fixture: killed inside the schema transaction after DDL, before commit. */
+/**
+ * 検証条件を再現するための保存移行Crash実行の担当。
+ *
+ * <p>Child JVM fixture: killed inside the schema transaction after DDL, before commit.
+ */
 public final class StorageMigrationCrashWorker {
+  /** 検証用に、データ保存の共通処理の起動要求を受け付け、実行を開始する。 */
   public static void main(String[] arguments) throws Exception {
     if (arguments.length > 1 && arguments[1].equals("hot-journal")) {
       try (var lease = new StorageMigrationCoordinator(java.nio.file.Path.of(arguments[0]));

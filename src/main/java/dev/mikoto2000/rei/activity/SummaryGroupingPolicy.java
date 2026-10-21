@@ -11,9 +11,14 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * Human review themes are broader than primary categories, but never bypass missing-time limits.
+ * 作業状況の把握で受け渡す要約Grouping判断基準を表す。
+ *
+ * <p>Human review themes are broader than primary categories, but never bypass missing-time limits.
+ *
+ * @param policy 判断基準
  */
 public record SummaryGroupingPolicy(SemanticSessionPolicy policy) {
+  /** 作業状況の把握で用いるテーマを返す。 */
   public static String theme(ActivityRoles roles) {
     return switch (roles.category()) {
       case "development", "research", "documentation" -> "work-development";
@@ -22,6 +27,7 @@ public record SummaryGroupingPolicy(SemanticSessionPolicy policy) {
     };
   }
 
+  /** 記録された情報を集計し、全体の傾向や結果をまとめる。 */
   public List<SummarySegment> aggregate(List<SummarySegment> sessions) {
     var groups = new ArrayList<List<SummarySegment>>();
     for (var s : sessions) {
@@ -31,6 +37,7 @@ public record SummaryGroupingPolicy(SemanticSessionPolicy policy) {
     return groups.stream().map(g -> g.size() == 1 ? g.getFirst() : combine(g)).toList();
   }
 
+  /** 作業状況の把握において、統合できるか判断する。 */
   private boolean canJoin(List<SummarySegment> group, SummarySegment b) {
     var first = group.getFirst();
     var a = group.getLast();
@@ -56,6 +63,7 @@ public record SummaryGroupingPolicy(SemanticSessionPolicy policy) {
       if (primary != null && !primary.projectCandidate().isBlank())
         projects.add(primary.projectCandidate());
     }
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (projects.size() > 1) return false;
     if (first.theme().equals("work-development")
         && !a.roles().category().equals(b.roles().category())
@@ -76,6 +84,7 @@ public record SummaryGroupingPolicy(SemanticSessionPolicy policy) {
             policy.strongAgreement(a.roles(), b.roles()));
   }
 
+  /** 作業状況の把握で用いる統合を返す。 */
   private SummarySegment combine(List<SummarySegment> group) {
     var votes = new LinkedHashMap<Activity, Long>();
     for (var s : group)

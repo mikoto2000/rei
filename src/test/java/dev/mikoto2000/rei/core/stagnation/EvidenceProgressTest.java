@@ -7,14 +7,18 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 根拠進捗の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class EvidenceProgressTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code observe} の条件を再現するための補助情報を返す。 */
   java.util.List<ProgressEvidence> observe(ProgressEvaluator e, String tool, String result) {
     return e.afterTool(tool, "{}", result, e.beforeTool(tool, "{}"));
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void searchDiscoveryIsAcquisitionButDoesNotProveCompletion() {
     var e = new ProgressEvaluator(root);
@@ -35,6 +39,7 @@ class EvidenceProgressTest {
         .isEmpty();
   }
 
+  /** 実行の停滞への対処で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void actualBodyDeduplicatesAcrossUrlsToolsAndChangingMetadata() {
     var e = new ProgressEvaluator(root);
@@ -54,6 +59,7 @@ class EvidenceProgressTest {
         .hasSize(1);
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void hybridQuestionAndAssessmentAreNotEvidenceButBodyIs() {
     var e = new ProgressEvaluator(root);
@@ -71,6 +77,7 @@ class EvidenceProgressTest {
         .isEmpty();
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void appliedChangeSetNeedsTheActualProposedRevisionAndCountsOnce() throws Exception {
     var e = new ProgressEvaluator(root);
@@ -93,6 +100,7 @@ class EvidenceProgressTest {
     assertThat(observe(e, "applyTextChangeSet", receipt)).isEmpty();
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void progressFingerprintNeverReadsOutsideProject() throws Exception {
     Path outside = Files.createTempFile("rei-progress-outside-", ".txt");
@@ -110,6 +118,7 @@ class EvidenceProgressTest {
     }
   }
 
+  /** 実行の停滞への対処で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void progressCannotReplenishReplanOrModelBudgets() {
     var budget = new dev.mikoto2000.rei.llm.OutputLimitRunBudget(1, 3);
@@ -149,6 +158,7 @@ class EvidenceProgressTest {
         .hasMessageContaining("LLM_CALL_BUDGET_EXCEEDED");
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void evidenceIncludesCurrentRevisionAndOldConstructorRemainsCompatible() throws Exception {
     Files.writeString(root.resolve("A"), "before");
@@ -168,6 +178,7 @@ class EvidenceProgressTest {
         .contains("revision");
   }
 
+  /** 実行の停滞への対処で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void metadataOnlyRecoveryStillHasNoUsefulWebEvidence() {
     var e = new ProgressEvaluator(root);
@@ -181,6 +192,7 @@ class EvidenceProgressTest {
         .contains(ProgressEvent.ERROR_RESOLVED, ProgressEvent.NEW_INFORMATION);
   }
 
+  /** 実行の停滞への対処で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void hugeFilesDoNotCauseUnboundedProgressHashing() throws Exception {
     Files.writeString(root.resolve("large"), "a".repeat(1048577));
@@ -191,6 +203,7 @@ class EvidenceProgressTest {
     assertThat(e.afterTool("writeTextFile", args, "{\"success\":true}", before)).isEmpty();
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void ledgerSaturationNeverMakesAnOldBodyNewAgain() {
     var e = new ProgressEvaluator(root);
@@ -204,6 +217,7 @@ class EvidenceProgressTest {
         .isEmpty();
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void webEvidenceNamesTheSourceAndHashesTheActualBody() throws Exception {
     var e = new ProgressEvaluator(root);
@@ -222,6 +236,7 @@ class EvidenceProgressTest {
     assertThat(evidence.source()).startsWith("web-source:");
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void commandAliasesWithIdenticalOutputDoNotCreateNewEvidence() {
     var e = new ProgressEvaluator(root);
@@ -236,6 +251,7 @@ class EvidenceProgressTest {
         .isEmpty();
   }
 
+  /** 実行の停滞への対処で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void actualHybridCallbackDeduplicatesBodyWhenQueryAndAssessmentChange() throws Exception {
     var service = org.mockito.Mockito.mock(dev.mikoto2000.rei.search.SearchKnowledgeService.class);
@@ -274,6 +290,7 @@ class EvidenceProgressTest {
     assertThat(observe(e, "searchKnowledge", second)).isEmpty();
   }
 
+  /** 実行の停滞への対処で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void oldEvidenceJsonAndMixedWebResultsRemainCompatible() throws Exception {
     var old =
@@ -303,6 +320,7 @@ class EvidenceProgressTest {
         .isEmpty();
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sameFileLinesReadThroughDifferentToolsAreNotNewInformation() {
     var e = new ProgressEvaluator(root);

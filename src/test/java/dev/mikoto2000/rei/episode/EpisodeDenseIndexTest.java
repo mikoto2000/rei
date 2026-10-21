@@ -27,10 +27,13 @@ import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 経験の記録ベクトルによる位置の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class EpisodeDenseIndexTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 過去の経験の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void anOlderWorkerCannotLeaveANewerRevisionMarkedIndexedAfterOverwritingItsVector() {
     var repo =
@@ -51,6 +54,7 @@ class EpisodeDenseIndexTest {
         List.of("v2"), repo.pendingDense("s", 50).stream().map(Episode::revision).toList());
   }
 
+  /** 過去の経験の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void embeddingInputIsBounded() {
     var repo =
@@ -94,6 +98,7 @@ class EpisodeDenseIndexTest {
     new EpisodeDenseIndex(repo, vectors).indexPending("s", null);
   }
 
+  /** 過去の経験の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void rebuildingTheDerivedDatabaseRequeuesPreviouslyIndexedEpisodes() {
     var repo =
@@ -108,6 +113,7 @@ class EpisodeDenseIndexTest {
     assertTrue(repo.pendingDense("s", 50, "rebuilt-database").isEmpty());
   }
 
+  /** 過去の経験の活用で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void failedIndexingRemainsPendingAndRestartRetriesOnlyTheLatestRevision() {
     var ds = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("m.db"));
@@ -135,6 +141,7 @@ class EpisodeDenseIndexTest {
     assertEquals(2, repo.checkpoint("s"));
   }
 
+  /** ベクトルによる検索について、古い改訂一覧を受け付けないことを確認する。 */
   @Test
   void denseSearchRejectsStaleRevisionsAndForeignProjectsBeforeReturningStoredText() {
     var repo =

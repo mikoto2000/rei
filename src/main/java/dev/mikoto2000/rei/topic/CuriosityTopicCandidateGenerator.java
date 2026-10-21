@@ -4,16 +4,22 @@ import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
+/** 情報への関心話題候補の内容を生成する。 */
 public class CuriosityTopicCandidateGenerator implements TopicCandidateGenerator {
+  /** 実行待ち。 */
   private final CuriosityQueue queue;
+
+  /** この機能の動作設定。 */
   private final TopicGeneratorProperties properties;
 
+  /** 指定された値や利用先を使って、CuriosityTopicCandidateGeneratorを初期化する。 */
   public CuriosityTopicCandidateGenerator(
       CuriosityQueue queue, TopicGeneratorProperties properties) {
     this.queue = queue;
     this.properties = properties;
   }
 
+  /** 指定された条件に従って、依頼された内容を生成する。 */
   @Override
   public List<TopicCandidate> generate(TopicGenerationContext context) {
     if (!properties.isEnabled()) return List.of();
@@ -36,6 +42,7 @@ public class CuriosityTopicCandidateGenerator implements TopicCandidateGenerator
         .toList();
   }
 
+  /** 話題の管理で用いる情報の鮮度を返す。 */
   private double freshness(CuriosityItem item, Instant now) {
     if (item.expiresAt() == null || !item.expiresAt().isAfter(item.createdAt())) return 0.7d;
     double total = item.expiresAt().getEpochSecond() - item.createdAt().getEpochSecond();

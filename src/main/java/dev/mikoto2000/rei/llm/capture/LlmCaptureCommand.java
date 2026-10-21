@@ -20,6 +20,7 @@ import picocli.CommandLine.Parameters;
 import picocli.CommandLine.ParentCommand;
 import picocli.CommandLine.Spec;
 
+/** LLM リクエストの記録を操作しますを行うための利用者コマンド。 */
 @Component
 @Command(
     name = "llm",
@@ -27,18 +28,33 @@ import picocli.CommandLine.Spec;
     subcommands = LlmCaptureCommand.Capture.class,
     mixinStandardHelpOptions = true)
 public final class LlmCaptureCommand implements Runnable {
+  /** 保存先。 */
   private final CaptureStore store;
+
+  /** クライアント。 */
   private final Supplier<Object> client;
+
+  /** 会話。 */
   private final Supplier<String> conversation;
+
+  /** 前提条件の確保会話。 */
   private final Runnable ensureConversation;
+
+  /** ターミナルへの表示先。 */
   private PrintWriter shellOutput;
+
+  /** 確認。 */
   private Predicate<String> confirmation = prompt -> false;
+
+  /** 仕様。 */
   @Spec private CommandSpec spec;
 
+  /** モデル応答の記録を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public LlmCaptureCommand() {
     this(null, () -> null, () -> null, () -> {});
   }
 
+  /** モデル応答の記録を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @org.springframework.beans.factory.annotation.Autowired
   public LlmCaptureCommand(
       CaptureStore store,
@@ -53,6 +69,7 @@ public final class LlmCaptureCommand implements Runnable {
         });
   }
 
+  /** 指定された値や利用先を使って、LlmCaptureCommandを初期化する。 */
   public LlmCaptureCommand(
       CaptureStore store,
       Supplier<Object> client,
@@ -64,54 +81,67 @@ public final class LlmCaptureCommand implements Runnable {
     this.ensureConversation = ensureConversation;
   }
 
+  /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(PrintWriter output) {
     shellOutput = output;
   }
 
+  /** モデル応答の記録で使用する確認を設定する。 */
   public void setConfirmation(Predicate<String> confirmation) {
     this.confirmation = Objects.requireNonNull(confirmation);
   }
 
+  /** モデル応答の記録で用いるレポート次を返す。 */
   public String reportNext() {
     return report("next");
   }
 
+  /** モデル応答の記録で用いるレポート状態を返す。 */
   public String reportStatus() {
     return report("status");
   }
 
+  /** モデル応答の記録で用いるレポート無効を返す。 */
   public String reportOff() {
     return report("off");
   }
 
+  /** モデル応答の記録で用いるレポート会話一覧を返す。 */
   public String reportSessions() {
     return report("list");
   }
 
+  /** モデル応答の記録で用いるレポート試行回数を返す。 */
   public String reportAttempts(String run) {
     return report("list", run);
   }
 
+  /** モデル応答の記録で用いるレポート表示を返す。 */
   public String reportShow(String attempt) {
     return report("show", attempt);
   }
 
+  /** モデル応答の記録で用いるレポート元のを返す。 */
   public String reportRaw(String attempt) {
     return report("raw", attempt);
   }
 
+  /** モデル応答の記録で用いるレポート書き出しを返す。 */
   public String reportExport(String attempt, String path) {
     return report("export", attempt, path);
   }
 
+  /** モデル応答の記録で用いるレポート削除を返す。 */
   public String reportDelete(String run) {
     return report("delete", run);
   }
 
+  /** モデル応答の記録で用いるレポート保持内容の消去を返す。 */
   public String reportClear() {
     return report("clear");
   }
 
+  /** モデル応答の記録で用いるレポートを返す。 */
   private String report(String... arguments) {
     var text = new StringWriter();
     setShellOutput(new PrintWriter(text, true));
@@ -119,32 +149,39 @@ public final class LlmCaptureCommand implements Runnable {
     return text.toString().replaceAll("[\\r\\n]+$", "");
   }
 
+  /** モデル応答の記録で用いる出力先を返す。 */
   private PrintWriter out() {
     return shellOutput == null ? spec.commandLine().getOut() : shellOutput;
   }
 
+  /** LLM リクエストの記録を操作しますを行う。 */
   public void run() {
     spec.commandLine().usage(out());
   }
 
+  /** 次のCLI依頼のHTTP本文をJVMメモリへ記録を行うための利用者コマンド。 */
   @Command(
       name = "capture",
       description = "次のCLI依頼のHTTP本文をJVMメモリへ記録",
       mixinStandardHelpOptions = true)
   public static final class Capture implements java.util.concurrent.Callable<Integer> {
+    /** 親。 */
     @ParentCommand LlmCaptureCommand parent;
 
+    /** 引数。 */
     @Parameters(
         arity = "0..*",
         paramLabel = "ACTION [ID] [PATH]",
         completionCandidates = ActionCandidates.class)
     String[] args;
 
+    /** 次のCLI依頼のHTTP本文をJVMメモリへ記録を行う。 */
     public Integer call() {
       return parent.execute(args == null ? new String[0] : args);
     }
   }
 
+  /** 要求された処理を実行する。 */
   private int execute(String[] args) {
     var out = out();
     try {
@@ -241,19 +278,23 @@ public final class LlmCaptureCommand implements Runnable {
     }
   }
 
+  /** モデル応答の記録において、confirmに該当するか判定する。 */
   private boolean confirm() {
     return confirmation.test("秘密情報を含む未加工本文を表示・保存します。端末履歴・保存後のコピーは削除対象外です。続行しますか? [y/N] ");
   }
 
+  /** 条件を満たさない操作を拒否するため、完了の前提条件を確認する。 */
   private static void requireComplete(CaptureStore.AttemptInfo attempt) {
     if (!attempt.captureState().equals("COMPLETE"))
       throw new IllegalArgumentException("Complete original unavailable");
   }
 
+  /** モデル応答の記録に関する引数の数を処理する。 */
   private static void arity(String[] args, int length) {
     if (args.length != length) throw new IllegalArgumentException("Invalid capture arguments");
   }
 
+  /** モデル応答の記録に関する書き出しを処理する。 */
   static void export(byte[] bytes, Path requested) throws IOException {
     for (Path part : requested)
       if (part.toString().equals("..")) throw new IOException("Parent traversal rejected");
@@ -273,8 +314,10 @@ public final class LlmCaptureCommand implements Runnable {
     }
   }
 
+  /** 操作で利用できる入力候補を提供する。 */
   public static final class ActionCandidates
       extends dev.mikoto2000.rei.core.completion.FirstArgumentCandidates {
+    /** 既定の状態でActionCandidatesを初期化する。 */
     public ActionCandidates() {
       super("next", "status", "off", "list", "show", "raw", "export", "delete", "clear");
     }

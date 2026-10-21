@@ -26,10 +26,13 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 @org.junit.jupiter.api.Tag("integration")
 class InterestDiscoveryJobPropertyTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir java.nio.file.Path tempDir;
 
+  /** 検証に使うデータベースCounter。 */
   private static int dbCounter = 0;
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private InterestUpdateService createService() {
     return new InterestUpdateService(
         new DriverManagerDataSource(
@@ -38,6 +41,7 @@ class InterestDiscoveryJobPropertyTest {
 
   // --- Property 3: 頻度制限内のトピックはスキップされる ---
 
+  /** {@code topicVariants} の条件を再現するための補助情報を返す。 */
   static Stream<String> topicVariants() {
     return Stream.of(
         "Neovim 開発環境",
@@ -52,6 +56,7 @@ class InterestDiscoveryJobPropertyTest {
         "Redis cluster");
   }
 
+  /** 関心の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @ParameterizedTest(name = "topic={0}")
   @MethodSource("topicVariants")
   @Tag("interest-discovery-property-3-topicFrequencyLimit")
@@ -87,6 +92,7 @@ class InterestDiscoveryJobPropertyTest {
 
   // --- Property 4: 既存検索クエリはスキップされる ---
 
+  /** {@code queryVariants} の条件を再現するための補助情報を返す。 */
   static Stream<String> queryVariants() {
     return Stream.of(
         "neovim devcontainer best practices",
@@ -101,6 +107,7 @@ class InterestDiscoveryJobPropertyTest {
         "redis cluster setup guide");
   }
 
+  /** 関心の管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @ParameterizedTest(name = "query={0}")
   @MethodSource("queryVariants")
   @Tag("interest-discovery-property-4-existingQuerySkipped")
@@ -134,6 +141,7 @@ class InterestDiscoveryJobPropertyTest {
 
   // --- Property 5: 保存データの完全性 ---
 
+  /** {@code candidateVariants} の条件を再現するための補助情報を返す。 */
   static Stream<InterestTopicCandidate> candidateVariants() {
     return Stream.of(
         new InterestTopicCandidate("Neovim", "vim 話題", "neovim query", 0.9),
@@ -143,6 +151,7 @@ class InterestDiscoveryJobPropertyTest {
         new InterestTopicCandidate("Docker", "docker 話題", "docker compose query", 0.7));
   }
 
+  /** 関心の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @ParameterizedTest(name = "topic={0}")
   @MethodSource("candidateVariants")
   @Tag("interest-discovery-property-5-savedDataIntegrity")

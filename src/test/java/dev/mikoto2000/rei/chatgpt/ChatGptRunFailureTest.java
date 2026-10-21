@@ -7,7 +7,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+/** チャットGPT実行失敗情報の結果と状態の契約を検証するテスト。 */
 class ChatGptRunFailureTest {
+  /** ChatGPTとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @ParameterizedTest
   @EnumSource(ChatGptException.Code.class)
   void everyTypedCodeKeepsControlledDiagnosticsWithoutItsPrivateWrapper(
@@ -22,6 +24,7 @@ class ChatGptRunFailureTest {
         .doesNotContain("PRIVATE", "https://secret");
   }
 
+  /** ChatGPTとの連携の操作が、指定された権限・承認条件に従うことを確認する。 */
   @ParameterizedTest
   @EnumSource(ChatGptException.PermissionReason.class)
   void permissionReasonsKeepTheirEnumAndSuggestOnlyTheMatchingRemedy(
@@ -50,6 +53,7 @@ class ChatGptRunFailureTest {
     }
   }
 
+  /** ChatGPTとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void arbitraryAndCyclicCausesDoNotBecomePublicDiagnostics() {
     assertThat(ChatGptRunFailure.find(new IllegalStateException("PRIVATE"))).isNull();
@@ -59,6 +63,7 @@ class ChatGptRunFailureTest {
     assertThat(ChatGptRunFailure.find(first)).isNull();
   }
 
+  /** ChatGPTとの連携で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void remoteDiagnosticRetainsOnlyAlreadyControlledMetadata() {
     var failure =

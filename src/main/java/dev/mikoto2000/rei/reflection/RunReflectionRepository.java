@@ -16,13 +16,43 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * Durable facts and review candidates; candidates are not automatically promoted to trusted
+ * 実行振り返りを保存・検索するための窓口。
+ *
+ * <p>Durable facts and review candidates; candidates are not automatically promoted to trusted
  * memories.
  */
 @Repository
 public class RunReflectionRepository {
+  /**
+   * 作業の振り返りで受け渡す操作を表す。
+   *
+   * @param callId 呼び出し識別子
+   * @param tool ツール
+   * @param status 状態
+   * @param errorType エラー種別
+   */
   public record Action(String callId, String tool, String status, String errorType) {}
 
+  /**
+   * 作業の振り返りで受け渡す項目を表す。
+   *
+   * @param id 識別子
+   * @param projectId 所属プロジェクトの識別子
+   * @param sessionId 会話の識別子
+   * @param runId 実行の識別子
+   * @param sourceKind 取得元種類
+   * @param sourceId 取得元識別子
+   * @param status 状態
+   * @param expected 期待する内容
+   * @param actions 操作一覧
+   * @param actionsTruncated 操作一覧省略の有無
+   * @param failureReason 失敗情報理由
+   * @param gap 間隔
+   * @param nextAction 次操作
+   * @param knowledgeCandidates 知識候補一覧
+   * @param sourceEvent 取得元イベント
+   * @param createdAt 作成日時
+   */
   public record Item(
       String id,
       String projectId,
@@ -40,16 +70,23 @@ public class RunReflectionRepository {
       List<String> knowledgeCandidates,
       String sourceEvent,
       Instant createdAt) {
+    /** 受け取った情報からItemを作成する。 */
     public Item {
       actions = List.copyOf(actions);
       knowledgeCandidates = List.copyOf(knowledgeCandidates);
     }
   }
 
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper mapper = new ObjectMapper().findAndRegisterModules();
 
+  /** 指定された値や利用先を使って、RunReflectionRepositoryを初期化する。 */
   public RunReflectionRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, Clock clock) {
     db = JdbcClient.create(source);
@@ -67,6 +104,7 @@ public class RunReflectionRepository {
         .update();
   }
 
+  /** 作業の振り返りに関する操作を処理する。 */
   void action(AgentEvent event, Action action) {
     if (event.runId() == null || !valid(action.callId()) || !valid(action.tool())) return;
     // Keep one extra row to prove truncation. Further calls do not grow a Run without bound.
@@ -86,6 +124,7 @@ public class RunReflectionRepository {
         .update();
   }
 
+  /** 作業の振り返りに関するタスクを処理する。 */
   void task(AgentEvent event, TaskCreatedPayload task) {
     if (!valid(task.taskId())) return;
     db.sql("INSERT OR IGNORE INTO run_reflection_tasks VALUES(?,?,?,?)")
@@ -93,6 +132,7 @@ public class RunReflectionRepository {
         .update();
   }
 
+  /** 作業の振り返りで用いるreflectを返す。 */
   Item reflect(AgentEvent event, String kind, String source, String status, String failure) {
     if (!valid(source)) throw new IllegalArgumentException("Reflection source identity required");
     List<Action> observed =
@@ -211,6 +251,7 @@ public class RunReflectionRepository {
             .single());
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<Item> list(String project) {
     return db
         .sql(
@@ -223,6 +264,7 @@ public class RunReflectionRepository {
         .toList();
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Item get(String project, String id) {
     return db.sql("SELECT document FROM run_reflections WHERE project=? AND id=?")
         .params(project, id)
@@ -233,6 +275,7 @@ public class RunReflectionRepository {
             () -> new IllegalArgumentException("Run reflection not found in this Project"));
   }
 
+  /** 作業の振り返りで用いる保存・受け渡しに使うJSON変換を返す。 */
   private String json(Item item) {
     try {
       return mapper.writeValueAsString(item);
@@ -241,6 +284,7 @@ public class RunReflectionRepository {
     }
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private Item read(String json) {
     try {
       return mapper.readValue(json, Item.class);
@@ -249,10 +293,12 @@ public class RunReflectionRepository {
     }
   }
 
+  /** 作業の振り返りにおいて、有効に該当するか判定する。 */
   static boolean valid(String value) {
     return value != null && !value.isBlank() && value.length() <= 512;
   }
 
+  /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */
   static String safe(String value, int length) {
     String safe =
         CredentialRedactor.redact(value == null ? "" : value).replaceAll("[\\p{Cntrl}]", " ");

@@ -6,7 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
+/** 続きの取得位置Codecの結果と状態の契約を検証するテスト。 */
 class CursorCodecTest {
+  /** 会話の継続管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void roundTripsUnicodeAndNanosecondsAndRejectsWrongScopeAndTrailingData() {
     var codec = new CursorCodec();

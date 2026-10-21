@@ -23,10 +23,13 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 import picocli.CommandLine;
 
+/** チャットGPTコマンド出力の結果と状態の契約を検証するテスト。 */
 class ChatGptCommandOutputTest {
+  /** 検証条件を再現するための作業ルート。 */
   @CommandLine.Command(name = "fixture")
   static class Root {}
 
+  /** 終端書き込み先を保持することを確認する。 */
   @Test
   void sharedCommandSpecRebindingPreservesTerminalWriter() {
     @SuppressWarnings("unchecked")
@@ -45,6 +48,7 @@ class ChatGptCommandOutputTest {
     assertTrue(output.toString().contains("日本語の登録状態"));
   }
 
+  /** れいの起動で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void inferDisplaysCompletedStreamTextAndSafeStructureOnShellWriter() {
     String body =
@@ -74,6 +78,7 @@ class ChatGptCommandOutputTest {
     assertFalse(diagnostic.contains("Hello, world!"));
   }
 
+  /** れいの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void emptyCompletedOutputIsExplainedInsteadOfPrintingABlankLine() {
     assertTrue(
@@ -83,6 +88,7 @@ class ChatGptCommandOutputTest {
             .contains("completed without output text"));
   }
 
+  /** {@code inferOutput} の条件を再現するための補助情報を返す。 */
   private String inferOutput(PlanSseAssembler.Result result) {
     @SuppressWarnings("unchecked")
     var provider = (ObjectProvider<PlanClient>) mock(ObjectProvider.class);

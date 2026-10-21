@@ -19,13 +19,22 @@ import org.slf4j.LoggerFactory;
 /** Agent Event を UI framework 非依存の現在状態へ変換する。 */
 public final class DefaultAgentUiProjection implements AgentUiProjection {
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(DefaultAgentUiProjection.class);
 
+  /** 実行。 */
   private AgentRunView run = AgentRunView.idle();
+
+  /** メッセージ一覧。 */
   private final Map<String, MessageView> messages = new LinkedHashMap<>();
+
+  /** ツール一覧。 */
   private final Map<String, ToolExecutionView> tools = new LinkedHashMap<>();
+
+  /** 直近発生順序。 */
   private long lastSequence;
 
+  /** 指定された内容を、現在の対象へ反映する。 */
   @Override
   public synchronized void apply(AgentEvent event) {
     if (event == null) {
@@ -71,12 +80,14 @@ public final class DefaultAgentUiProjection implements AgentUiProjection {
     }
   }
 
+  /** 実行状況の表示用整理で用いる現在状態を返す。 */
   @Override
   public synchronized AgentUiState currentState() {
     return new AgentUiState(
         run, new ArrayList<>(messages.values()), new ArrayList<>(tools.values()), lastSequence);
   }
 
+  /** 指定された変更を有効にするため、実行開始を反映する。 */
   private void applyRunStarted(AgentEvent event, AgentRunStartedPayload payload) {
     messages.clear();
     tools.clear();
@@ -85,6 +96,7 @@ public final class DefaultAgentUiProjection implements AgentUiProjection {
             payload.runId(), AgentRunStatus.RUNNING, event.timestamp(), null, null, null);
   }
 
+  /** 指定された変更を有効にするため、実行完了を反映する。 */
   private void applyRunCompleted(AgentEvent event, AgentRunCompletedPayload payload) {
     run =
         new AgentRunView(
@@ -96,6 +108,7 @@ public final class DefaultAgentUiProjection implements AgentUiProjection {
             null);
   }
 
+  /** 指定された変更を有効にするため、実行失敗を反映する。 */
   private void applyRunFailed(AgentEvent event, AgentRunFailedPayload payload) {
     var status =
         payload.error() != null && "cancelled".equals(payload.error().code())
@@ -111,6 +124,7 @@ public final class DefaultAgentUiProjection implements AgentUiProjection {
             ErrorView.from(payload.error()));
   }
 
+  /** 指定された変更を有効にするため、メッセージ開始を反映する。 */
   private void applyMessageStarted(AgentEvent event, MessageStartedPayload payload) {
     messages.putIfAbsent(
         payload.messageId(),
@@ -123,6 +137,7 @@ public final class DefaultAgentUiProjection implements AgentUiProjection {
             null));
   }
 
+  /** 指定された変更を有効にするため、メッセージ差分を反映する。 */
   private void applyMessageDelta(AgentEvent event, MessageDeltaPayload payload) {
     MessageView current = messages.get(payload.messageId());
     if (current == null) {
@@ -142,6 +157,7 @@ public final class DefaultAgentUiProjection implements AgentUiProjection {
             null));
   }
 
+  /** 指定された変更を有効にするため、メッセージ完了を反映する。 */
   private void applyMessageCompleted(AgentEvent event, MessageCompletedPayload payload) {
     MessageView current = messages.get(payload.messageId());
     if (current == null) {
@@ -162,6 +178,7 @@ public final class DefaultAgentUiProjection implements AgentUiProjection {
             event.timestamp()));
   }
 
+  /** 指定された変更を有効にするため、ツール開始を反映する。 */
   private void applyToolStarted(AgentEvent event, ToolStartedPayload payload) {
     String id = toolId(event, payload.toolCallId());
     tools.putIfAbsent(
@@ -178,6 +195,7 @@ public final class DefaultAgentUiProjection implements AgentUiProjection {
             null));
   }
 
+  /** 指定された変更を有効にするため、ツール完了を反映する。 */
   private void applyToolCompleted(AgentEvent event, ToolCompletedPayload payload) {
     String id = toolId(event, payload.toolCallId());
     ToolExecutionView current = tools.get(id);
@@ -208,6 +226,7 @@ public final class DefaultAgentUiProjection implements AgentUiProjection {
             event.timestamp()));
   }
 
+  /** 指定された変更を有効にするため、ツール失敗を反映する。 */
   private void applyToolFailed(AgentEvent event, ToolFailedPayload payload) {
     String id = toolId(event, payload.toolCallId());
     ToolExecutionView current = tools.get(id);
@@ -238,6 +257,7 @@ public final class DefaultAgentUiProjection implements AgentUiProjection {
             event.timestamp()));
   }
 
+  /** 実行状況の表示用整理で用いるツール識別子を返す。 */
   private String toolId(AgentEvent event, String toolCallId) {
     if (event.correlationId() != null && !event.correlationId().isBlank()) {
       return event.correlationId();
@@ -245,6 +265,7 @@ public final class DefaultAgentUiProjection implements AgentUiProjection {
     return toolCallId == null || toolCallId.isBlank() ? event.id() : toolCallId;
   }
 
+  /** 実行状況の表示用整理で用いる値またはを返す。 */
   private String valueOr(String preferred, String fallback) {
     return preferred == null ? fallback : preferred;
   }

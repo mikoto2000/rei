@@ -11,6 +11,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/** 成果物の構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(
     name = {"rei.web.enabled", "rei.artifacts.enabled"},
@@ -19,6 +20,7 @@ import org.springframework.context.annotation.Import;
 @EnableConfigurationProperties(ArtifactProperties.class)
 @Import(ArtifactController.class)
 public class ArtifactConfiguration {
+  /** 成果物の管理で用いる成果物取得元書き出しを返す。 */
   @Bean
   ArtifactSourceExport artifactSourceExport(
       ArtifactStore store,
@@ -32,6 +34,7 @@ public class ArtifactConfiguration {
         store, projects, sessions, changes.getIfAvailable(), papers.getIfAvailable());
   }
 
+  /** 成果物の管理で用いる成果物保存先を返す。 */
   @Bean
   ArtifactStore artifactStore(
       @org.springframework.beans.factory.annotation.Qualifier("memoryConsolidationDataSource")

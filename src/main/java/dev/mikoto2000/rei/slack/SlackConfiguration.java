@@ -18,10 +18,12 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/** Slackの構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "rei.slack.enabled", havingValue = "true")
 @EnableConfigurationProperties(SlackProperties.class)
 public class SlackConfiguration {
+  /** Slackとの連携で用いるSlack通信の接続受付から終了までの管理を返す。 */
   @Bean
   SlackSocketLifecycle slackSocketLifecycle(
       SlackProperties p,
@@ -53,23 +55,30 @@ public class SlackConfiguration {
                 collaboration.getIfAvailable()));
   }
 
-  /** A headless backend can use Socket Mode without enabling the existing HTTP API. */
+  /**
+   * Slackとの連携に必要なHeadless実行一覧を扱う。
+   *
+   * <p>A headless backend can use Socket Mode without enabling the existing HTTP API.
+   */
   @Configuration(proxyBeanMethods = false)
   @ConditionalOnProperty(name = "rei.slack.enabled", havingValue = "true")
   @org.springframework.boot.autoconfigure.condition.ConditionalOnExpression(
       "!${rei.web.enabled:false}")
   static class HeadlessRuns {
+    /** Slackとの連携で用いるSlackプロジェクト登録台帳を返す。 */
     @Bean
     ProjectRegistry slackProjectRegistry(@Value("${rei.data-dir}") String root) {
       return new ProjectRegistry(Path.of(root).resolve("projects.json"));
     }
 
+    /** Slackとの連携で用いるSlack実行登録台帳を返す。 */
     @Bean
     RunRegistry slackRunRegistry(
         Clock clock, @Qualifier("memoryConsolidationDataSource") DataSource source) {
       return new RunRegistry(clock, source);
     }
 
+    /** Slackとの連携で用いるSlack実行サービスを返す。 */
     @Bean
     RunService slackRunService(
         RunRegistry registry,

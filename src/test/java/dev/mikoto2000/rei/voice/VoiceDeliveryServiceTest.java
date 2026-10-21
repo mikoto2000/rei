@@ -24,15 +24,30 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 音声配信サービスの結果と状態の契約を検証するテスト。 */
 class VoiceDeliveryServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock = Clock.fixed(Instant.parse("2026-10-09T08:00:00Z"), ZoneOffset.UTC);
+
+  /** 検証に使うプロジェクト一覧。 */
   ProjectService projects;
+
+  /** 検証に使うシェル。 */
   ShellConversationService shell;
+
+  /** 検証に使う配信。 */
   VoiceDeliveryService delivery;
+
+  /** 検証に使うタスク一覧。 */
   final List<Runnable> tasks = new ArrayList<>();
+
+  /** 検証に使うプロンプト一覧。 */
   final List<String> prompts = new ArrayList<>();
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     projects = new ProjectService(root, new ProjectRegistry(root.resolve("projects.json")));
@@ -49,11 +64,13 @@ class VoiceDeliveryServiceTest {
     delivery = new VoiceDeliveryService(shell, clock, new VoiceEventPublisher());
   }
 
+  /** {@code input} の条件を再現するための補助情報を返す。 */
   ConversationInput input(ConversationTarget target) {
     return new ConversationInput(
         UUID.randomUUID(), InputSource.VOICE, target, "recognized", clock.instant());
   }
 
+  /** 音声による対話の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void correctionReviewIsNotToolApprovalAndCannotDispatchWithoutExplicitConfirmation() {
     var client = projects.newClient();
@@ -72,6 +89,7 @@ class VoiceDeliveryServiceTest {
     assertThat(prompts).containsExactly(raw.text());
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void switchingAwayAndBackInvalidatesCapturedBinding() {
     var client = projects.newClient();
@@ -88,6 +106,7 @@ class VoiceDeliveryServiceTest {
     assertThat(tasks).isEmpty();
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void stopIdentityCannotBecomeAnAgentInputAfterDisablingInterrupt() {
     var options =
@@ -115,6 +134,7 @@ class VoiceDeliveryServiceTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void ordinaryInputIdentityCannotBeReusedForAStopPayload() {
     var options =
@@ -136,6 +156,7 @@ class VoiceDeliveryServiceTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void explicitStopCancelsOnlyCapturedClientsActiveRunAndIsIdempotent() throws Exception {
     var entered = new java.util.concurrent.CountDownLatch(1);
@@ -206,6 +227,7 @@ class VoiceDeliveryServiceTest {
     }
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void completedVoiceRunOwnershipCannotCrossShellClientsEvenInSameSession() {
     var owners = new ArrayList<AgentRunContext>();
@@ -237,6 +259,7 @@ class VoiceDeliveryServiceTest {
     assertThat(delivery.ownsRun(owners.getFirst())).isFalse();
   }
 
+  /** 取得済みクライアントについて、実行の担当を許可することを確認する。 */
   @Test
   void capturedClientAllowsWorkerWithoutThreadLocalButNotAfterSessionChange() {
     var client = projects.newClient();
@@ -256,6 +279,7 @@ class VoiceDeliveryServiceTest {
         .isInstanceOf(IllegalStateException.class);
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void anotherClientSelectionCannotRedirectOrStopCapturedVoiceClient() {
     var first = projects.newClient();
@@ -273,6 +297,7 @@ class VoiceDeliveryServiceTest {
     assertThat(prompts).containsExactly("recognized");
   }
 
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void confirmationPublishesOnlyIdentityAndCorrectionReachesCommonGateway() {
     var events = new ArrayList<VoiceEventPublisher.Event>();

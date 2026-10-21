@@ -12,8 +12,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** 記憶書き出しコマンドの結果と状態の契約を検証するテスト。 */
 class MemoryExportCommandTest {
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void exportPrintsNoTargetMessageWhenCountZero() {
     MemoryExporter exporter = Mockito.mock(MemoryExporter.class);

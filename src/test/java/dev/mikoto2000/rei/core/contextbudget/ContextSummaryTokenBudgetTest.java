@@ -36,19 +36,24 @@ import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
 import reactor.core.publisher.Flux;
 
+/** 文脈要約トークン予算の結果と状態の契約を検証するテスト。 */
 class ContextSummaryTokenBudgetTest {
+  /** 検証に使うディレクトリ。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir;
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   ChatResponse response(String text, Integer tokens) {
     var metadata = ChatResponseMetadata.builder();
     if (tokens != null) metadata.usage(new DefaultUsage(1, tokens - 1));
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))), metadata.build());
   }
 
+  /** {@code compressor} の条件を再現するための補助情報を返す。 */
   LlmConversationCompressor compressor(ChatModel model) {
     return compressor(model, new ContextCompressionProperties());
   }
 
+  /** {@code compressor} の条件を再現するための補助情報を返す。 */
   LlmConversationCompressor compressor(ChatModel model, ContextCompressionProperties properties) {
     var provider = mock(LlmModelProvider.class);
     when(provider.chatModel(LlmFeature.CHAT)).thenReturn(model);
@@ -61,6 +66,7 @@ class ContextSummaryTokenBudgetTest {
     return new LlmConversationCompressor(models, properties);
   }
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   Prompt owner(RunExecutionContext execution) {
     return new Prompt(
         "current",
@@ -69,6 +75,7 @@ class ContextSummaryTokenBudgetTest {
             .build());
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void summaryChargesAggregatedUsageOnceAndBlocksPrepaidParentAtLimit() {
     var budget = new OutputLimitRunBudget(0, 10, null, 5);
@@ -86,9 +93,11 @@ class ContextSummaryTokenBudgetTest {
     assertThatThrownBy(
             () -> new StagnationChatModel(parent).stream(owner(execution)).collectList().block())
         .hasMessageContaining("TOKEN_BUDGET_EXCEEDED");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(parent);
   }
 
+  /** モデルへ渡す文脈の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void standaloneSummaryRejectsOvershootAndUnknownUsageWithoutRunContext() {
     var properties = new ContextCompressionProperties();
@@ -105,6 +114,7 @@ class ContextSummaryTokenBudgetTest {
     }
   }
 
+  /** モデルへ渡す文脈の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unknownUsageAndProviderFailureStopInsteadOfBecomingFreeFallback() {
     for (Flux<ChatResponse> responses :
@@ -126,6 +136,7 @@ class ContextSummaryTokenBudgetTest {
     }
   }
 
+  /** 要約を受け付けないことを確認する。 */
   @Test
   void overshootRejectsSummaryAndDisabledLimitPreservesUnknownUsage() {
     var model = mock(ChatModel.class);
@@ -145,6 +156,7 @@ class ContextSummaryTokenBudgetTest {
         .isEqualTo("summary");
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void truncatedSummaryChargesKnownUsageBeforeOutputLimitFailure() {
     var model = mock(ChatModel.class);
@@ -172,6 +184,7 @@ class ContextSummaryTokenBudgetTest {
     assertThat(budget.usageUnknown()).isFalse();
   }
 
+  /** モデルへ渡す文脈の管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void summaryTimeoutCancelsProviderAndBlocksUnknownUsage() {
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
@@ -207,6 +220,7 @@ class ContextSummaryTokenBudgetTest {
     assertThat(execution.sharedLlmReservation().tryReserve()).isFalse();
   }
 
+  /** {@code compressionConfig} の条件を再現するための補助情報を返す。 */
   ContextCompressionProperties compressionConfig() {
     var props = new ContextCompressionProperties();
     props.setThreshold(300);
@@ -216,6 +230,7 @@ class ContextSummaryTokenBudgetTest {
     return props;
   }
 
+  /** {@code standaloneHistorical} の条件を再現するための補助情報を返す。 */
   Prompt standaloneHistorical() {
     return new Prompt(
         List.of(
@@ -227,6 +242,7 @@ class ContextSummaryTokenBudgetTest {
         ToolCallingChatOptions.builder().build());
   }
 
+  /** {@code assembler} の条件を再現するための補助情報を返す。 */
   ContextAssembler assembler(
       ContextCompressionProperties props,
       ConversationCompressor compressor,
@@ -242,6 +258,7 @@ class ContextSummaryTokenBudgetTest {
         null);
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   @org.junit.jupiter.api.Tag("integration")
   void ownerlessHistoryAndActiveSummariesShareOneProjectionBudget() {
@@ -265,6 +282,7 @@ class ContextSummaryTokenBudgetTest {
     }
   }
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   @org.junit.jupiter.api.Tag("integration")
   void unknownStandaloneUsageCannotFallBackOrSaveSummary() {
@@ -282,6 +300,7 @@ class ContextSummaryTokenBudgetTest {
     assertThat(summaries.read("chat").throughSequence()).isZero();
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void directStandaloneCallsHaveIndependentBudgetAndExactBoundarySucceeds() {
     var props = new ContextCompressionProperties();
@@ -298,6 +317,7 @@ class ContextSummaryTokenBudgetTest {
     verify(model, times(2)).stream(any(Prompt.class));
   }
 
+  /** モデルへ渡す文脈の管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void standaloneProviderFailureAndTimeoutFailClosedAndCancelStream() {
     var props = new ContextCompressionProperties();
@@ -319,6 +339,7 @@ class ContextSummaryTokenBudgetTest {
     assertThat(cancelled).isTrue();
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void standaloneLimitsDoNotReplaceExistingRunBudget() {
     var props = new ContextCompressionProperties();
@@ -334,6 +355,7 @@ class ContextSummaryTokenBudgetTest {
     assertThat(budget.totalTokens()).isEqualTo(3);
   }
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void standaloneBindingValidationAndUnsupportedCompressorCannotBypassAccounting() {
     var source =
@@ -375,6 +397,7 @@ class ContextSummaryTokenBudgetTest {
     assertThat(invoked).isFalse();
   }
 
+  /** {@code historical} の条件を再現するための補助情報を返す。 */
   Prompt historical(RunExecutionContext execution) {
     return new Prompt(
         List.of(
@@ -384,6 +407,7 @@ class ContextSummaryTokenBudgetTest {
         owner(execution).getOptions());
   }
 
+  /** モデルへ渡す文脈の管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   @org.junit.jupiter.api.Tag("integration")
   void actualCompressionChargesDurableGoalAndCannotFallBackIntoParentModel() {
@@ -434,6 +458,7 @@ class ContextSummaryTokenBudgetTest {
                   new StagnationChatModel(parent, assembler)
                       .stream(historical(execution)).collectList().block())
           .hasMessageContaining(usage == null ? "TOKEN_USAGE_UNKNOWN" : "TOKEN_BUDGET_EXCEEDED");
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(parent);
       var reopened =
           new dev.mikoto2000.rei.goal.GoalRepository(source, java.time.Clock.systemUTC());
@@ -446,6 +471,7 @@ class ContextSummaryTokenBudgetTest {
     }
   }
 
+  /** モデルへ渡す文脈の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   @org.junit.jupiter.api.Tag("integration")
   void rejectedLowQualitySummaryStillChargesUsageBeforeDegradedProjection() {

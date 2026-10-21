@@ -12,8 +12,10 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
+/** 時間計測機能の構成外部連携の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class TimingConfigurationIntegrationTest {
+  /** 実行時間の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void foundationStartsWithoutRequestCaptureOrModelInfrastructure() {
     new org.springframework.boot.test.context.runner.ApplicationContextRunner()
@@ -35,6 +37,7 @@ class TimingConfigurationIntegrationTest {
             });
   }
 
+  /** 実行時間の把握の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void lateHumanApprovalIsClippedToRunOccupancyWithoutLosingItsActualEnd() {
     var tick = new AtomicLong();
@@ -54,6 +57,7 @@ class TimingConfigurationIntegrationTest {
     assertFalse(run.incomplete());
   }
 
+  /** 実行時間の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidAndForeignParentIdsDoNotEnterMetadata() {
     var store =

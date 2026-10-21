@@ -11,7 +11,9 @@ import java.time.Clock;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** 待機中限定実行キャンセルの結果と状態の契約を検証するテスト。 */
 class PendingOnlyRunCancellationTest {
+  /** 実行の受付と状態管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void alreadyDispatchedWorkIsNotCancelledByPendingOnlyRequest() {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -33,6 +35,7 @@ class PendingOnlyRunCancellationTest {
     }
   }
 
+  /** 実行の受付と状態管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void queuedOnlyCancellationPublishesTerminalAndNotifiesOnceOutsideBusLock() {
     var registry = new RunRegistry(Clock.systemUTC());

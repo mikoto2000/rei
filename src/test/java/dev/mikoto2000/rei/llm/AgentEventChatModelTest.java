@@ -22,8 +22,10 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
+/** エージェントイベント応答生成に使うモデルの結果と状態の契約を検証するテスト。 */
 class AgentEventChatModelTest {
 
+  /** 作業状況呼び出し回数について、応答一覧を返すことを確認する。 */
   @Test
   void activityCallsReturnResponsesAndPropagateErrorsWithoutNotifications() {
     ChatModel delegate = mock(ChatModel.class);
@@ -43,6 +45,7 @@ class AgentEventChatModelTest {
     assertEquals(List.of(), events);
   }
 
+  /** 作業状況逐次データ一覧について、トークン数を返すことを確認する。 */
   @Test
   void activityStreamsReturnTokensAndPropagateErrorsWithoutNotifications() {
     ChatModel delegate = mock(ChatModel.class);
@@ -65,6 +68,7 @@ class AgentEventChatModelTest {
     assertEquals(List.of(), events);
   }
 
+  /** 用途に応じたモデル利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void publishesFeatureLifecycleForSynchronousCalls() {
     ChatModel delegate = mock(ChatModel.class);
@@ -87,6 +91,7 @@ class AgentEventChatModelTest {
     assertEquals(AgentEventType.LLM_RESPONSE_COMPLETED, events.get(1).type());
   }
 
+  /** 用途に応じたモデル利用で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void publishesCompletionOnlyForSuccessfulStreams() {
     ChatModel delegate = mock(ChatModel.class);
@@ -105,6 +110,7 @@ class AgentEventChatModelTest {
         events.stream().anyMatch(event -> event.type() == AgentEventType.LLM_RESPONSE_COMPLETED));
   }
 
+  /** 用途に応じたモデル利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void publishesFailureForSynchronousCallErrors() {
     ChatModel delegate = mock(ChatModel.class);
@@ -125,6 +131,7 @@ class AgentEventChatModelTest {
     assertEquals(AgentEventType.LLM_REQUEST_FAILED, events.get(1).type());
   }
 
+  /** 用途に応じたモデル利用で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void publishesFirstTokenForStreams() {
     ChatModel delegate = mock(ChatModel.class);
@@ -145,6 +152,7 @@ class AgentEventChatModelTest {
     assertEquals(3, events.size());
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void summaryPurposeLabelsCallAndStreamWithoutChangingTheDelegatePrompt() {
     for (boolean streaming : List.of(false, true)) {
@@ -174,6 +182,7 @@ class AgentEventChatModelTest {
     }
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownPurposeMarkersStayPrivateAndDoNotChangeFeature() {
     for (Object marker : List.of("private-purpose-secret", 27)) {
@@ -203,6 +212,7 @@ class AgentEventChatModelTest {
     }
   }
 
+  /** 機能を維持することを確認する。 */
   @Test
   void nonChatFeaturesKeepTheirFeatureWhenSummaryMarkerIsPresent() {
     var delegate = mock(ChatModel.class);
@@ -224,6 +234,7 @@ class AgentEventChatModelTest {
         ((LlmRequestStartedPayload) events.getFirst().payload()).feature());
   }
 
+  /** 用途に応じたモデル利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void providerFailureEventsHaveSpecificSafeCodesForCallAndStream() {
     final String secret = "private-provider-message-and-body";

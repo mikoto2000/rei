@@ -10,9 +10,16 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Pure validation before binding, authorization, or web access. */
+/**
+ * Web検索ツールの入力条件を検証し、不正な要求を実行前に拒否する。
+ *
+ * <p>Pure validation before binding, authorization, or web access.
+ */
 public final class WebSearchArguments {
+  /** 最大入力文字数。 */
   private static final int MAX_INPUT_CHARS = 16384;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final JsonMapper JSON =
       JsonMapper.builder(
               JsonFactory.builder()
@@ -27,12 +34,15 @@ public final class WebSearchArguments {
           .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
           .build();
 
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private WebSearchArguments() {}
 
+  /** Web上の情報の調査において、Web検索引数への対応可否を返す。 */
   public static boolean supports(String tool) {
     return "webSearchAndRead".equals(tool);
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public static void validate(String tool, String input, int configuredMaxResults) {
     if (!supports(tool)) return;
     if (configuredMaxResults < 1 || configuredMaxResults > 20)
@@ -40,6 +50,7 @@ public final class WebSearchArguments {
     var problems = new ArrayList<String>();
     JsonNode root;
     try {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (input == null || input.isBlank() || input.length() > MAX_INPUT_CHARS)
         throw new IllegalArgumentException();
       root = JSON.readTree(input);
@@ -63,6 +74,7 @@ public final class WebSearchArguments {
     if (!problems.isEmpty()) throw invalid(String.join("\n", problems));
   }
 
+  /** Web上の情報の調査で用いる整数を返す。 */
   private static Integer integer(JsonNode request, String name, List<String> problems) {
     var value = request.path(name);
     if (value.isMissingNode() || value.isNull()) return null;
@@ -73,6 +85,7 @@ public final class WebSearchArguments {
     return value.intValue();
   }
 
+  /** Web上の情報の調査で用いる対象範囲問題一覧を返す。 */
   private static List<String> rangeProblems(
       Integer maxResults, Integer readTop, int configuredMaxResults) {
     int effectiveMax = maxResults == null ? configuredMaxResults : maxResults;
@@ -84,6 +97,7 @@ public final class WebSearchArguments {
     return problems;
   }
 
+  /** 受け付けられない指定について、入力の問題を伝える。 */
   private static InvalidToolArgumentsException invalid(String guidance) {
     return new InvalidToolArgumentsException(
         "webSearchAndRead: "

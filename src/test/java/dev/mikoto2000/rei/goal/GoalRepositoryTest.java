@@ -15,16 +15,24 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 目標保存と検索の窓口の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class GoalRepositoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う保存と検索の窓口。 */
   GoalRepository repository;
+
+  /** 検証に使う内容の照合値。 */
   String digest = "a".repeat(64);
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("source", "session", dir, "project");
   }
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     repository =
@@ -33,6 +41,7 @@ class GoalRepositoryTest {
             Clock.systemUTC());
   }
 
+  /** 予算について、再開の後も対象の情報が残ることを確認する。 */
   @Test
   void budgetSurvivesRestartAndExplicitResumeNeverReplenishesIt() {
     var goal = repository.create(owner(), "Produce artifact", "out.txt", digest, 3, 2);
@@ -52,6 +61,7 @@ class GoalRepositoryTest {
     assertThrows(IllegalStateException.class, () -> restarted.claim("project", goal.id()));
   }
 
+  /** 目標の達成管理で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void projectBoundaryAndUncertainRunningClaimArePreserved() {
     var goal = repository.create(owner(), "Produce artifact", "out.txt", digest, 3, 5);
@@ -70,6 +80,7 @@ class GoalRepositoryTest {
     assertTrue(other.reserveLlm(resumed));
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void unsafeCriteriaAndUnboundedRunsAreRejected() {
     assertThrows(
@@ -89,6 +100,7 @@ class GoalRepositoryTest {
         () -> repository.create(owner(), "x", "out", digest, 1, 101));
   }
 
+  /** 目標の達成管理で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void concurrentReservationsCannotOverspendAndAnotherGoalCannotOwnTheSession() throws Exception {
     var goal = repository.create(owner(), "Artifact", "out.txt", digest, 3, 1);

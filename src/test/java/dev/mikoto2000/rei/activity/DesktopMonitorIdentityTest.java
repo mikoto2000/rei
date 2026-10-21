@@ -11,7 +11,9 @@ import java.awt.Rectangle;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** デスクトップ排他制御識別情報の結果と状態の契約を検証するテスト。 */
 class DesktopMonitorIdentityTest {
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void interfaceIdsFollowBoundsAcrossAwtEnumerationChanges() {
     var left = new Rectangle(-32, 0, 32, 32);
@@ -44,6 +46,7 @@ class DesktopMonitorIdentityTest {
     assertSame(image, mapped.image());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void missingOrAmbiguousMonitorMappingFailsClosed() {
     var screen = ActivityChangeScopeTest.screen(10, 20);

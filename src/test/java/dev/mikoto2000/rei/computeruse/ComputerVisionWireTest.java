@@ -13,11 +13,17 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
-/** Exercises real SDK serialization against an in-memory HTTP transport, never a live provider. */
+/**
+ * 画面操作画像認識機能の接続の結果と状態の契約を検証するテスト。
+ *
+ * <p>Exercises real SDK serialization against an in-memory HTTP transport, never a live provider.
+ */
 class ComputerVisionWireTest {
+  /** 検証に使う保存や受け渡しに用いるデータ形式の変換。 */
   private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
       new com.fasterxml.jackson.databind.ObjectMapper();
 
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void showUiOverviewAndRefinementSendInstructionImageThenTarget() throws Exception {
     String target = "X post input field with placeholder 'いまどうしてる？'";
@@ -69,6 +75,7 @@ class ComputerVisionWireTest {
     }
   }
 
+  /** 画像を保持することを確認する。 */
   @Test
   void visionRequestOmitsToolFieldsAndRetainsImageAndStrictOutputSchema() throws Exception {
     String response =
@@ -117,6 +124,7 @@ class ComputerVisionWireTest {
         "image_url", request.path("messages").get(1).path("content").get(1).path("type").asText());
   }
 
+  /** {@code options} の条件を再現するための補助情報を返す。 */
   private static OpenAiChatOptions options(String model) {
     return OpenAiChatOptions.builder()
         .baseUrl("https://vision.invalid/v1")
@@ -126,6 +134,7 @@ class ComputerVisionWireTest {
         .build();
   }
 
+  /** 検証で使用するモデルを、指定された条件に合わせて用意する。 */
   private static OpenAiChatModel model(
       OpenAiChatOptions options,
       String response,

@@ -10,19 +10,35 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 
-/** Strict shared schema validation followed by deterministic human-readable rendering. */
+/**
+ * 外部エージェントへの委譲に必要な教材レビューレポートを扱う。
+ *
+ * <p>Strict shared schema validation followed by deterministic human-readable rendering.
+ */
 final class MaterialReviewReport {
+  /** 最大レポート文字数。 */
   static final int MAX_REPORT_CHARS = 120000;
 
+  /**
+   * 外部エージェントへの委譲で受け渡す解釈済みを表す。
+   *
+   * @param summary 要約
+   * @param findings 指摘一覧
+   * @param warnings 注意事項
+   * @param report レポート
+   */
   record Parsed(
       String summary, List<ExternalAgentFinding> findings, List<String> warnings, String report) {}
 
+  /** 外部エージェントへの委譲に必要なデータ形式を扱う。 */
   private static final class Schema {
+    /** 起動単位の識別子。 */
     static final SubAgentResultSchema INSTANCE =
         SubAgentResultSchema.load(
             Path.of("."), "classpath:/subagents/schemas/material-review.schema.json");
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   static Parsed parse(String json) throws java.io.IOException {
     var strict = new SubAgentResultParser().parse(json);
     if (!Schema.INSTANCE.validate(strict).isEmpty())
@@ -32,6 +48,7 @@ final class MaterialReviewReport {
     data.path("findings").forEach(findings::add);
     data.path("crossPageFindings").forEach(cross -> findings.add(cross.path("finding")));
     String report = render(data, findings);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (report.length() > MAX_REPORT_CHARS)
       throw new IllegalArgumentException("Material report exceeds limit");
     var normalized =
@@ -52,6 +69,7 @@ final class MaterialReviewReport {
         safe(data.path("summary").asText()), normalized, List.copyOf(warnings), safe(report));
   }
 
+  /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
   private static String render(JsonNode data, List<JsonNode> findings) {
     var out = new StringBuilder("# 勉強会資料レビュー\n");
     section(out, "1. Executive Summary");
@@ -152,6 +170,7 @@ final class MaterialReviewReport {
     return out.toString();
   }
 
+  /** 既存の記録へ経緯を残すため、指摘一覧を追記する。 */
   private static void appendFindings(StringBuilder out, List<JsonNode> findings) {
     if (findings.isEmpty()) out.append("該当なし\n");
     for (JsonNode finding : findings) {
@@ -175,20 +194,24 @@ final class MaterialReviewReport {
     }
   }
 
+  /** 外部エージェントへの委譲で用いる場所を返す。 */
   private static String location(JsonNode finding) {
     return finding.path("file").asText()
         + (finding.path("line").isNull() ? "" : ":" + finding.path("line").asText());
   }
 
+  /** 外部エージェントへの委譲に関する節を処理する。 */
   private static void section(StringBuilder out, String heading) {
     out.append("\n## ").append(heading).append("\n\n");
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   private static void list(StringBuilder out, JsonNode values) {
     if (values.isEmpty()) out.append("該当なし\n");
     values.forEach(value -> out.append("- ").append(value.asText()).append('\n'));
   }
 
+  /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */
   private static String safe(String text) {
     return dev.mikoto2000.rei.event.CredentialRedactor.redact(text);
   }

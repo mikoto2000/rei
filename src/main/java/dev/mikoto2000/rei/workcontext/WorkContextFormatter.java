@@ -12,8 +12,12 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
+/** 作業文脈を利用者が確認できる表示形式へ整える。 */
 public final class WorkContextFormatter {
+  /** 安全性。 */
   private final HistoryFormatter safe = new HistoryFormatter();
+
+  /** 優先度。 */
   private static final List<Kind> PRIORITY =
       List.of(
           Kind.CURRENT_WORK,
@@ -26,6 +30,7 @@ public final class WorkContextFormatter {
           Kind.PURPOSE,
           Kind.ARTIFACT);
 
+  /** 作業文脈の引き継ぎで用いる条件一覧を返す。 */
   public String conditions(WorkContext context, GitState current) {
     var saved = context.git();
     if (saved == null) return "Git未確認 / historical state";
@@ -44,6 +49,7 @@ public final class WorkContextFormatter {
     return detail + "; historical state, current files may differ";
   }
 
+  /** 作業文脈の引き継ぎで用いる要約を返す。 */
   public String summary(WorkContext context, GitState current) {
     if (context == null) return "Work Context: 引き継ぎはまだありません。/work update で保存できます。";
     var result = new StringBuilder("Work Context (過去の作業状態) revision=" + context.revision() + "\n");
@@ -60,6 +66,7 @@ public final class WorkContextFormatter {
     return result.toString();
   }
 
+  /** 作業文脈の引き継ぎに関する節を処理する。 */
   private void section(StringBuilder out, WorkContext context, String label, Set<Kind> kinds) {
     var selected =
         context.items().stream()
@@ -83,9 +90,11 @@ public final class WorkContextFormatter {
                     .append("; ")
                     .append(origins(i))
                     .append("]\n"));
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (selected.size() > 2) out.append("  他 ").append(selected.size() - 2).append(" 件\n");
   }
 
+  /** 作業文脈の引き継ぎで用いるoriginsを返す。 */
   private String origins(Item item) {
     return "certainty="
         + item.certainty()
@@ -96,6 +105,7 @@ public final class WorkContextFormatter {
             .collect(java.util.stream.Collectors.joining(","));
   }
 
+  /** 作業文脈の引き継ぎで用いる詳細一覧を返す。 */
   public String details(WorkContext context, GitState current) {
     if (context == null) return summary(null, current);
     var result = new StringBuilder(summary(context, current));
@@ -130,6 +140,7 @@ public final class WorkContextFormatter {
     return result.toString();
   }
 
+  /** 作業文脈の引き継ぎで用いる文脈を返す。 */
   public String context(WorkContext context, GitState current, int budget) {
     if (context == null) return "";
     String header =

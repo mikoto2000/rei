@@ -14,7 +14,9 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況Tuning処理の連携の結果と状態の契約を検証するテスト。 */
 class ActivityTuningPipelineTest {
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void conflictingOrUnknownVisionDoesNotEraseStrongerUsableEvidence() throws Exception {
     for (var result :
@@ -55,6 +57,7 @@ class ActivityTuningPipelineTest {
     }
   }
 
+  /** 作業状況の把握で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void knownCategoryWithMissingProjectAndContentSkipsVisionAndPersistsAxes() throws Exception {
     var p = new ActivityProperties();
@@ -77,10 +80,12 @@ class ActivityTuningPipelineTest {
     assertTrue(saved.getValue().detection().fieldConfidence().usable(.8));
     assertFalse(saved.getValue().detection().fieldConfidence().complete());
     assertEquals(0, saved.getValue().detection().fieldConfidence().content());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(extractor);
     verify(observer, never()).capture();
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void visionEnrichesCategoryWithoutErasingKnownServiceOrAddingObservation() throws Exception {
     var p = new ActivityProperties();
@@ -120,6 +125,7 @@ class ActivityTuningPipelineTest {
     assertEquals(.95, updated.getValue().detection().fieldConfidence().service());
   }
 
+  /** 出力上限タイムアウトおよび検証について、部分的な結果根拠を維持することを確認する。 */
   @Test
   void outputLimitTimeoutAndValidationKeepPartialEvidence() throws Exception {
     for (Exception error :
@@ -157,6 +163,7 @@ class ActivityTuningPipelineTest {
     }
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void failureTaxonomyDistinguishesLimitTimeoutAndValidation() {
     assertEquals(

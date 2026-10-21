@@ -25,22 +25,40 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Read-only arithmetic over saved segment evidence. No model, capture, rule reload or persistence.
+ * 日次要約の情報を集計する。
+ *
+ * <p>Read-only arithmetic over saved segment evidence. No model, capture, rule reload or
+ * persistence.
  */
 public final class DailySummaryAggregator {
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(DailySummaryAggregator.class);
+
+  /** 名前一覧。 */
   private final ProjectNameNormalizer names;
+
+  /** 役割一覧。 */
   private final ActivityRolePolicy roles;
+
+  /** グループ一覧。 */
   private final SummaryThemeGroups groups;
+
+  /** 要約のテーマをまとめる窓口。 */
   private final DailySummaryThemeConsolidator consolidator = new DailySummaryThemeConsolidator();
+
+  /** 作業。 */
   private static final Set<String> WORK = Set.of("development", "research", "documentation");
+
+  /** 頻繁な切り替えの回数。 */
   public static final int FREQUENT_SWITCHES = 10;
 
+  /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public DailySummaryAggregator(ProjectNameNormalizer names, double minimumConfidence) {
     this(names, minimumConfidence, SummaryThemeGroups.empty());
   }
 
+  /** 指定された値や利用先を使って、DailySummaryAggregatorを初期化する。 */
   public DailySummaryAggregator(
       ProjectNameNormalizer names, double minimumConfidence, SummaryThemeGroups groups) {
     this.names = names;
@@ -48,16 +66,31 @@ public final class DailySummaryAggregator {
     roles = new ActivityRolePolicy(minimumConfidence);
   }
 
+  /**
+   * 作業状況の把握で受け渡すサンプルを表す。
+   *
+   * @param record 記録
+   * @param start 開始
+   * @param end 終了
+   * @param roles 役割一覧
+   */
   private record Sample(ActivityRecord record, Instant start, Instant end, ActivityRoles roles) {}
 
+  /** 作業状況の把握に必要な件数を扱う。 */
   private static final class Counts {
+    /** 観測。 */
     long observed;
+
+    /** 分類一覧／補助的な／バックグラウンド。 */
     final Map<String, Long> categories = new HashMap<>(),
         secondary = new HashMap<>(),
         background = new HashMap<>();
+
+    /** 作業テーマ一覧。 */
     final WorkThemeAggregation workThemes = new WorkThemeAggregation();
   }
 
+  /** 記録された情報を集計し、全体の傾向や結果をまとめる。 */
   public DailySummaryAggregate aggregate(
       LocalDate date, ActivityQueryRange range, ZoneId zone, List<SummarySegment> source) {
     // A record can appear in multiple projections. Clip it to source coverage, then de-overlap on
@@ -323,6 +356,7 @@ public final class DailySummaryAggregator {
         source.size());
   }
 
+  /** 作業状況の把握で用いる上位を返す。 */
   static List<Weighted> top(Map<String, Long> values, int limit) {
     return values.entrySet().stream()
         .sorted(
@@ -332,6 +366,7 @@ public final class DailySummaryAggregator {
         .toList();
   }
 
+  /** 作業状況の把握で用いるまとまり一覧を返す。 */
   private static List<Block> blocks(List<Block> blocks) {
     return blocks.stream()
         .sorted(
@@ -340,6 +375,7 @@ public final class DailySummaryAggregator {
         .toList();
   }
 
+  /** 新たな対象を管理できるよう、表示対象を追加する。 */
   private static void addVisible(
       Map<String, Long> target, List<ActivityRecord.Activity> activities, long seconds) {
     activities.stream()
@@ -349,6 +385,7 @@ public final class DailySummaryAggregator {
         .forEach(s -> target.merge(s, seconds, Long::sum));
   }
 
+  /** 作業状況の把握で用いるサービス意味を返す。 */
   private static String serviceMeaning(ActivityRecord.Activity a) {
     var service = ActivityVocabulary.service(a.service());
     if (Set.of("x", "bluesky", "mastodon", "twitter").contains(service)) return "SNS";
@@ -368,10 +405,12 @@ public final class DailySummaryAggregator {
     };
   }
 
+  /** 作業状況の把握で用いる最小を返す。 */
   private static Instant min(Instant a, Instant b) {
     return a.isBefore(b) ? a : b;
   }
 
+  /** 作業状況の把握で用いる最大を返す。 */
   private static Instant max(Instant a, Instant b) {
     return a.isAfter(b) ? a : b;
   }

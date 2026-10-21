@@ -20,19 +20,24 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 会話完了の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SessionCompletionTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code row} の条件を再現するための補助情報を返す。 */
   SessionMetadata row(String id, String project) {
     return new SessionMetadata(id, project, "A title", Instant.EPOCH, Instant.EPOCH);
   }
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   CompletionContext context() {
     return new CompletionContext(
         "", 0, List.of(""), 0, 0, "", List.of(), Set.of(), List.of(), root);
   }
 
+  /** ターミナルでの対話で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void snapshotLoadsPersistedIdsAndDoesNotReadOnCompletion() throws Exception {
     var file = root.resolve("sessions.json");
@@ -47,6 +52,7 @@ class SessionCompletionTest {
     assertThat(candidates.choices(context()).getFirst().description()).isEqualTo("A title");
   }
 
+  /** ターミナルでの対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedAdmissionRollsBackSnapshot() {
     var repository = new FileSessionRepository(root.resolve("sessions.json"));
@@ -61,6 +67,7 @@ class SessionCompletionTest {
     assertThat(repository.completionSnapshot()).isEmpty();
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void resumeOnlyOffersCurrentProjectSessionsWithoutRegisteringAProject() {
     var registry = new ProjectRegistry(root.resolve("projects.json"));
@@ -77,6 +84,7 @@ class SessionCompletionTest {
         .containsExactly("here");
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void projectSnapshotTracksRegistryWithoutReadingOnTab() throws Exception {
     Path file = root.resolve("projects.json");
@@ -89,6 +97,7 @@ class SessionCompletionTest {
         .containsExactly(root.toRealPath());
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void springFactoryInjectsSessionMetadataIntoRealCommandModel() {
     var repository = new FileSessionRepository(root.resolve("sessions.json"));

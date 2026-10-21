@@ -19,10 +19,14 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.annotation.Tool;
 import reactor.core.publisher.Flux;
 
+/** 上限内に収めた配信の結果と状態の契約を検証するテスト。 */
 class BoundedDeliveryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 検証条件を再現するための読み取り元。 */
   static class Reader {
+    /** 検証用に、必要な内容を参照できるよう、検証条件を読み取る。 */
     @Tool(description = "read")
     @ResultDelivery(ResultDelivery.Kind.FILE_CONTENT)
     String readFixture() {
@@ -30,6 +34,7 @@ class BoundedDeliveryTest {
     }
   }
 
+  /** 独立した繰り返しについて、同一最終入力利用条件の確認を利用することを確認する。 */
   @Test
   void isolatedLoopUsesSameFinalInputGuardAndRetainsStepLimit() {
     var estimator = TokenEstimator.conservative();
@@ -47,10 +52,12 @@ class BoundedDeliveryTest {
     var calls = new AtomicInteger();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、モデルへ渡す文脈の管理の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             assertThat(ContextBudgetManager.estimateMessages(prompt.getInstructions(), estimator))
                 .isLessThanOrEqualTo(1000);

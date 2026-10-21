@@ -6,10 +6,16 @@ import java.awt.Rectangle;
 import java.awt.Robot;
 import java.awt.image.BufferedImage;
 
-/** Lazy: enabling the tool does not capture or move the desktop during application startup. */
+/**
+ * 画面操作の支援に必要なAwtRobot操作の実行先を扱う。
+ *
+ * <p>Lazy: enabling the tool does not capture or move the desktop during application startup.
+ */
 public final class AwtRobotDriver implements RobotDriver {
+  /** デスクトップの入力操作を実行する窓口。 */
   private Robot robot;
 
+  /** 画面操作の支援で用いる実行環境を返す。 */
   private GraphicsEnvironment environment() {
     if (!System.getProperty("os.name", "").startsWith("Windows")
         || GraphicsEnvironment.isHeadless())
@@ -17,10 +23,12 @@ public final class AwtRobotDriver implements RobotDriver {
     return GraphicsEnvironment.getLocalGraphicsEnvironment();
   }
 
+  /** 画面操作の支援で用いる画面上の位置と大きさを返す。 */
   public ScreenGeometry geometry() throws AWTException {
     return displays().stream().filter(ScreenGeometry::primary).findFirst().orElseThrow();
   }
 
+  /** 画面操作の支援で用いる画面一覧を返す。 */
   public java.util.List<ScreenGeometry> displays() {
     var environment = environment();
     Rectangle virtual = null;
@@ -45,6 +53,7 @@ public final class AwtRobotDriver implements RobotDriver {
     return java.util.List.copyOf(result);
   }
 
+  /** 条件に合う対象を利用するため、表示を選択する。 */
   public void selectDisplay(ScreenGeometry geometry) throws AWTException {
     for (var monitor : environment().getScreenDevices()) {
       if (monitor.getIDstring().equals(geometry.id())) {
@@ -55,6 +64,7 @@ public final class AwtRobotDriver implements RobotDriver {
     throw new IllegalStateException("Selected display disconnected");
   }
 
+  /** 後から状況を確認できるよう、AwtRobot操作の実行先を記録する。 */
   public BufferedImage capture(Rectangle bounds) throws AWTException {
     var display =
         displays().stream().filter(g -> g.bounds().equals(bounds)).findFirst().orElseThrow();
@@ -80,26 +90,32 @@ public final class AwtRobotDriver implements RobotDriver {
     return buffered;
   }
 
+  /** 画面操作の支援に関するmoveを処理する。 */
   public void move(int x, int y) {
     robot.mouseMove(x, y);
   }
 
+  /** 画面操作の支援に関するmousePressを処理する。 */
   public void mousePress(int mask) {
     robot.mousePress(mask);
   }
 
+  /** 画面操作の支援に関するmouse解放を処理する。 */
   public void mouseRelease(int mask) {
     robot.mouseRelease(mask);
   }
 
+  /** 画面操作の支援に関するキーPressを処理する。 */
   public void keyPress(int code) {
     robot.keyPress(code);
   }
 
+  /** 画面操作の支援に関するキー解放を処理する。 */
   public void keyRelease(int code) {
     robot.keyRelease(code);
   }
 
+  /** 画面操作の支援に関するwheelを処理する。 */
   public void wheel(int amount) {
     robot.mouseWheel(amount);
   }

@@ -10,9 +10,12 @@ import org.jline.terminal.TerminalBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 終端クライアントの結果と状態の契約を検証するテスト。 */
 class TerminalClientTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void commandTokenizationOmitsEmptyQuotedArgumentsLikeExistingShell() {
     assertEquals(java.util.List.of("/models"), TerminalClient.commandWords("/models \"\" "));
@@ -21,6 +24,7 @@ class TerminalClientTest {
         TerminalClient.commandWords("/chat \"hello world\" C:\\work\\file"));
   }
 
+  /** 助言について、読み取り改訂番号を利用することを確認する。 */
   @Test
   void coachingUsesTheReadRevisionAndDoesNotWriteBeforeReading() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -67,6 +71,7 @@ class TerminalClientTest {
     }
   }
 
+  /** シェルテキストを利用することを確認する。 */
   @Test
   void modelControlsUseShellTextAndCacheNamesForCompletion() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -113,6 +118,7 @@ class TerminalClientTest {
     }
   }
 
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void startupWithoutProjectOptionSelectsTheClientWorkingDirectory() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -163,6 +169,7 @@ class TerminalClientTest {
     }
   }
 
+  /** タブ完了について、利用可能な項目キャッシュを利用することを確認する。 */
   @Test
   void tabCompletionUsesTheCatalogCacheWithoutAnyAdditionalHttpRequest() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -256,6 +263,7 @@ class TerminalClientTest {
     }
   }
 
+  /** 会話一覧について、各対象ページを読み取ることを確認する。 */
   @Test
   void sessionListReadsEveryPageAndUsesTheShellDisplay() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -313,6 +321,7 @@ class TerminalClientTest {
     }
   }
 
+  /** クライアント会話を保持することを確認する。 */
   @Test
   void changingToTheSameProjectPreservesTheClientSession() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -364,6 +373,7 @@ class TerminalClientTest {
     }
   }
 
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void projectAddDoesNotChangeSelectionAndCdUsesSelectedDirectory() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -429,6 +439,7 @@ class TerminalClientTest {
     }
   }
 
+  /** 軽量CLIでの対話で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void quotedWindowsPathsRetainBackslashes() {
     assertEquals(
@@ -436,6 +447,7 @@ class TerminalClientTest {
         TerminalClient.commandWords("/project register \"C:\\project with spaces\\rei\""));
   }
 
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownSlashCommandsNeverSendAChatRequest() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -469,6 +481,7 @@ class TerminalClientTest {
     }
   }
 
+  /** 軽量CLIでの対話で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void twoClientsKeepProjectSelectionsSeparate() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

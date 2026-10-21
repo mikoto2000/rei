@@ -19,8 +19,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** 画像コマンドキャンセルの結果と状態の契約を検証するテスト。 */
 class ImageCommandCancellationTest {
 
+  /** 画像の生成の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void generateCommandPrintsCancelledWhenCancellationIsRequested() throws Exception {
     CommandCancellationService cancellationService = new CommandCancellationService();
@@ -59,12 +61,14 @@ class ImageCommandCancellationTest {
     assertThat(out.toString(StandardCharsets.UTF_8)).contains("[cancelled]");
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private CommandLine newCommand(
       ImageGenerationService service, CommandCancellationService cancellationService) {
     ImageProperties properties = new ImageProperties();
     return new CommandLine(
         new ImageCommand(),
         new CommandLine.IFactory() {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           public <K> K create(Class<K> cls) throws Exception {
             if (cls.equals(GenerateCommand.class)) {

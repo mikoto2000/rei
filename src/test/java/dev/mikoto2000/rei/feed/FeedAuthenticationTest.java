@@ -12,10 +12,15 @@ import java.util.List;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
+/** フィード認証の結果と状態の契約を検証するテスト。 */
 class FeedAuthenticationTest {
+  /** 検証に使うトークン。 */
   private static final String TOKEN = "a".repeat(43);
+
+  /** 検証に使う参照先のURL。 */
   private static final String URL = "https://feed.example/feed.xml?limit=30";
 
+  /** 実行環境を読み取ることを確認する。 */
   @Test
   void resolvesOnlyExactFeedAndReadsEnvironmentAtFetchTime() {
     AtomicReference<String> value = new AtomicReference<>(TOKEN);
@@ -34,6 +39,7 @@ class FeedAuthenticationTest {
     assertEquals(value.get(), authentication.bearerToken(URI.create(URL)).orElseThrow());
   }
 
+  /** フィードの購読と収集で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void missingInvalidOrOversizedSecretFailsClosedWithoutEchoingValue() {
     for (String value :
@@ -54,6 +60,7 @@ class FeedAuthenticationTest {
     assertThrows(FeedFetchException.class, () -> authentication.bearerToken(URI.create(URL)));
   }
 
+  /** フィードの購読と収集で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void rejectsMisconfiguredBindingsWithoutResolvingSecret() {
     for (String origin :
@@ -96,6 +103,7 @@ class FeedAuthenticationTest {
                 false));
   }
 
+  /** フィードの購読と収集で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateOrOversizedConfigurationFailsClosed() {
     var binding = new FeedProperties.Authentication(URL, "https://feed.example", "REI_FEED_TOKEN");
@@ -113,6 +121,7 @@ class FeedAuthenticationTest {
                 false));
   }
 
+  /** フィードの購読と収集で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void defaultPortIsEquivalentButHttpLoopbackIsNotEnabledInProduction() {
     var authentication =
@@ -128,6 +137,7 @@ class FeedAuthenticationTest {
                 false));
   }
 
+  /** フィードの購読と収集で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void doesNotEchoMistakenSecretInEnvironmentReference() {
     String mistakenValue = "A".repeat(43);
@@ -139,6 +149,7 @@ class FeedAuthenticationTest {
     assertFalse(error.toString().contains(mistakenValue));
   }
 
+  /** 既定値を保持することを確認する。 */
   @Test
   void springBindsReferenceConfigurationAndPreservesDefaults() {
     var source =
@@ -159,6 +170,7 @@ class FeedAuthenticationTest {
     assertEquals(TOKEN, authentication.bearerToken(URI.create(URL)).orElseThrow());
   }
 
+  /** {@code properties} の条件を再現するための補助情報を返す。 */
   static FeedProperties properties(String url, String origin, String env) {
     return new FeedProperties(3, List.of(new FeedProperties.Authentication(url, origin, env)));
   }

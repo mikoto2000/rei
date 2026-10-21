@@ -17,10 +17,15 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Paged読み取り停滞の結果と状態の契約を検証するテスト。 */
 class PagedReadStagnationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper();
 
+  /** 実行の停滞への対処で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void sixtyForwardPagesDoNotStallCompleteWorkOrReplenishModelBudget() {
     var events = new ArrayList<AgentEvent>();
@@ -45,6 +50,7 @@ class PagedReadStagnationTest {
         .hasMessageContaining("LLM_CALL_BUDGET_EXCEEDED");
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void forwardFragmentsOfOneLongLineCountOnlyOncePerDeliveredOffset() {
     var context = context(new OutputLimitRunBudget(2, 100), new ArrayList<>());
@@ -83,6 +89,7 @@ class PagedReadStagnationTest {
     assertThat(context.progressVersion()).isEqualTo(60);
   }
 
+  /** 実行の停滞への対処で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateRangesAndEmptyContinuationPagesStillStall() {
     var context = context(new OutputLimitRunBudget(2, 100), new ArrayList<>());
@@ -113,6 +120,7 @@ class PagedReadStagnationTest {
     assertThat(empty.progressVersion()).isZero();
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void paginationPausesAcquisitionHeuristicWithoutErasingPreviouslySpentAcquisition() {
     var events = new ArrayList<AgentEvent>();
@@ -136,6 +144,7 @@ class PagedReadStagnationTest {
     assertThat(context.progressSnapshot().acquisitionOnlyIterations()).isEqualTo(32);
   }
 
+  /** 復元済み記録台帳について、重複の有無ページ一覧を保持することを確認する。 */
   @Test
   void restoredLedgerRetainsDuplicatePagesAndAllowsOnlyUnseenContinuation() {
     var original = context(new OutputLimitRunBudget(2, 20), new ArrayList<>());
@@ -152,6 +161,7 @@ class PagedReadStagnationTest {
     assertThat(resumed.budgetSnapshot()).isEqualTo(original.budgetSnapshot());
   }
 
+  /** 実行の停滞への対処で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void unknownHistoricalRangesNeverBecomeFalseProgressOrUseUnboundedReplanNotices() {
     var context = context(new OutputLimitRunBudget(2, 100), new ArrayList<>());
@@ -170,6 +180,7 @@ class PagedReadStagnationTest {
     assertThat(context.progressSnapshot().unknownIterations()).isEqualTo(60);
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void rawPagesUseValidatedRangesIncludingLegacyQuotedResponses() throws Exception {
     var context = context(new OutputLimitRunBudget(2, 100), new ArrayList<>());
@@ -197,6 +208,7 @@ class PagedReadStagnationTest {
     assertThat(context.progressSnapshot().unknownIterations()).isEqualTo(1);
   }
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   private RunExecutionContext context(OutputLimitRunBudget budget, List<AgentEvent> events) {
     return new RunExecutionContext(
         "run",
@@ -206,6 +218,7 @@ class PagedReadStagnationTest {
         events::add);
   }
 
+  /** 検証用に、指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private void read(RunExecutionContext context, int start, List<String> lines) {
     iteration(
         context,
@@ -214,6 +227,7 @@ class PagedReadStagnationTest {
         fileResult(start, lines));
   }
 
+  /** {@code fileResult} の条件を再現するための補助情報を返す。 */
   private String fileResult(int start, List<String> lines) {
     var result =
         json.createObjectNode().put("path", "A.md").put("version", "v1").put("startLine", start);
@@ -221,6 +235,7 @@ class PagedReadStagnationTest {
     return "[" + result + "]";
   }
 
+  /** {@code iteration} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void iteration(
       RunExecutionContext context, String tool, String arguments, String result) {
     context.beginIteration();

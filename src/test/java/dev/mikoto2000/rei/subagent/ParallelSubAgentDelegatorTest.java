@@ -36,7 +36,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 並列補助エージェントDelegatorの結果と状態の契約を検証するテスト。 */
 class ParallelSubAgentDelegatorTest {
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void dagFailFastCancelsSlowSiblingEvenWhenItPrecedesFailure() throws Exception {
     var interrupted = new CountDownLatch(1);
@@ -83,8 +85,10 @@ class ParallelSubAgentDelegatorTest {
     }
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** {@code registry} の条件を再現するための補助情報を返す。 */
   SubAgentRegistry registry() throws Exception {
     Files.writeString(
         directory.resolve("reviewer.yaml"), SubAgentConfigurationTest.yaml("reviewer"));
@@ -97,6 +101,7 @@ class ParallelSubAgentDelegatorTest {
     return registry;
   }
 
+  /** {@code requests} の条件を再現するための補助情報を返す。 */
   List<ParallelSubAgentDelegator.Request> requests(int count) {
     return java.util.stream.IntStream.range(0, count)
         .mapToObj(
@@ -104,6 +109,7 @@ class ParallelSubAgentDelegatorTest {
         .toList();
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void blankOptionalFieldsDispatchLocally() throws Exception {
     var runner = mock(SubAgentRunner.class);
@@ -124,6 +130,7 @@ class ParallelSubAgentDelegatorTest {
     }
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void singleDelegationAlsoTreatsBlankOptionsAsOmitted() {
     var runner = mock(SubAgentRunner.class);
@@ -137,6 +144,7 @@ class ParallelSubAgentDelegatorTest {
     verify(runner, never()).runAutomaticBackend(any(), any(), any());
   }
 
+  /** {@code completed} の条件を再現するための補助情報を返す。 */
   SubAgentResult completed() {
     return new SubAgentResult(
         "reviewer",
@@ -147,6 +155,7 @@ class ParallelSubAgentDelegatorTest {
         Instant.now());
   }
 
+  /** {@code externalRequests} の条件を再現するための補助情報を返す。 */
   List<ParallelSubAgentDelegator.Request> externalRequests(int count) {
     return java.util.stream.IntStream.range(0, count)
         .mapToObj(
@@ -164,11 +173,13 @@ class ParallelSubAgentDelegatorTest {
         .toList();
   }
 
+  /** {@code externalSettings} の条件を再現するための補助情報を返す。 */
   dev.mikoto2000.rei.chatgpt.PlanExecutionProperties externalSettings(Duration timeout) {
     return new dev.mikoto2000.rei.chatgpt.PlanExecutionProperties(
         true, null, null, null, null, null, timeout, false, null);
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void externalBatchUsesConfiguredThirtyMinuteDeadlineAndLocalDagLimitsStayBounded()
       throws Exception {
@@ -187,6 +198,7 @@ class ParallelSubAgentDelegatorTest {
     }
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void externalCallCanOutliveTheLocalBatchLimitWithoutWaitingMinutes() throws Exception {
     var runner = mock(SubAgentRunner.class);
@@ -212,6 +224,7 @@ class ParallelSubAgentDelegatorTest {
     }
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void externalDeadlineStillCancelsWorkersAndNeverStartsQueuedChildren() throws Exception {
     var runner = mock(SubAgentRunner.class);
@@ -245,6 +258,7 @@ class ParallelSubAgentDelegatorTest {
     }
   }
 
+  /** 許容範囲同時実行数について、順序を保持することを確認する。 */
   @Test
   void boundsConcurrencyPreservesOrderAndParentScope() throws Exception {
     var runner = mock(SubAgentRunner.class);
@@ -295,6 +309,7 @@ class ParallelSubAgentDelegatorTest {
     }
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void preflightRejectsWholeInvalidBatchBeforeCallingChildren() throws Exception {
     var runner = mock(SubAgentRunner.class);
@@ -315,10 +330,12 @@ class ParallelSubAgentDelegatorTest {
       try (var scope = AgentRunScope.open(child)) {
         assertThrows(IllegalArgumentException.class, () -> delegator.delegate(requests(1)));
       }
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(runner);
     }
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void timeoutCancelsWorkersAndDoesNotStartQueuedChildren() throws Exception {
     var runner = mock(SubAgentRunner.class);
@@ -346,6 +363,7 @@ class ParallelSubAgentDelegatorTest {
     }
   }
 
+  /** 部分的な結果失敗情報について、同時に依頼された別の操作結果一覧を保持することを確認する。 */
   @Test
   void partialFailureRetainsSiblingResultsAndDoesNotEchoException() throws Exception {
     var runner = mock(SubAgentRunner.class);
@@ -363,6 +381,7 @@ class ParallelSubAgentDelegatorTest {
     }
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void parentCancellationCancelsPendingRequestsAndBusyBatchDoesNotDispatch() throws Exception {
     var runner = mock(SubAgentRunner.class);

@@ -21,8 +21,10 @@ import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.test.util.ReflectionTestUtils;
 import picocli.CommandLine;
 
+/** 埋め込み表現無効状態の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class EmbeddingDisabledTest {
+  /** 機能の組み立てで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void briefingWithEventsWorksWithoutVectorDatabase() throws Exception {
     var calendar = mock(dev.mikoto2000.rei.googlecalendar.GoogleCalendarService.class);
@@ -59,6 +61,7 @@ class EmbeddingDisabledTest {
     verify(narrator).narrate(org.mockito.ArgumentMatchers.any());
   }
 
+  /** Web検索を維持することを確認する。 */
   @Test
   void disabledContextNeedsNeitherEmbeddingModelNorDataSourceAndKeepsWebSearch() {
     new ApplicationContextRunner()
@@ -85,6 +88,7 @@ class EmbeddingDisabledTest {
             });
   }
 
+  /** 機能の組み立てで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void disabledEmbedIsRemovedFromParsingAndHelp() {
     RootCommand root = new RootCommand();
@@ -99,6 +103,7 @@ class EmbeddingDisabledTest {
         CommandLine.UnmatchedArgumentException.class, () -> command.parseArgs("embed", "list"));
   }
 
+  /** 機能の組み立てで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void embeddingCommandRemainsEnabledByDefault() {
     CommandLine command = new CommandLine(CommandLine.Model.CommandSpec.create().name("rei"));

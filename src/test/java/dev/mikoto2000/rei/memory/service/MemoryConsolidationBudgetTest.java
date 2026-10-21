@@ -36,12 +36,17 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 記憶統合予算の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.extension.ExtendWith(
     org.springframework.boot.test.system.OutputCaptureExtension.class)
 class MemoryConsolidationBudgetTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うモデル。 */
   ChatModel model;
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   MemoryConsolidatorService service(int calls, long tokens, ChatResponse... responses) {
     var data =
         new DriverManagerDataSource("jdbc:sqlite:" + root.resolve(UUID.randomUUID() + ".db"));
@@ -58,6 +63,7 @@ class MemoryConsolidationBudgetTest {
     return service;
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   ChatResponse response(String text, Integer tokens) {
     return new ChatResponse(
         List.of(new Generation(new AssistantMessage(text))),
@@ -66,10 +72,12 @@ class MemoryConsolidationBudgetTest {
             .build());
   }
 
+  /** {@code candidates} の条件を再現するための補助情報を返す。 */
   String candidates() {
     return "[{\"content\":\"use Java\"}]";
   }
 
+  /** 長期記憶の保存と検索で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void extractAndSummarizeShareOneCallBudget() {
     var service = service(1, 0, response(candidates(), 4), response("summary", 4));
@@ -78,6 +86,7 @@ class MemoryConsolidationBudgetTest {
     verify(model, times(1)).call(any(Prompt.class));
   }
 
+  /** 長期記憶の保存と検索で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void reportedUsageIsSummedAcrossBothPhasesBeforeReturningSummary() {
     var service = service(2, 7, response(candidates(), 4), response("summary", 4));
@@ -86,6 +95,7 @@ class MemoryConsolidationBudgetTest {
     verify(model, times(2)).call(any(Prompt.class));
   }
 
+  /** 次呼び出しを停止することを確認する。 */
   @Test
   void exactExtractionTokenLimitStopsTheNextCallAndUsagePrecedesFallbackAndClipping() {
     var service = service(2, 4, response(candidates(), 4), response("summary", 1));
@@ -105,6 +115,7 @@ class MemoryConsolidationBudgetTest {
             .reason());
   }
 
+  /** 長期記憶の保存と検索で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unknownUsageAndProviderFailureStopWithoutFallbackCandidates() {
     var service = service(0, 10, response(candidates(), null));
@@ -121,6 +132,7 @@ class MemoryConsolidationBudgetTest {
     assertFalse(service.extractCandidates().isEmpty());
   }
 
+  /** 完了済みのコマンド一覧について、完全一致の合計上限を受け付けられることを確認する。 */
   @Test
   void completedCommandsAcceptExactTotalLimitAndDirectInvocationsStartFresh() {
     var service = service(2, 8, response(candidates(), 4), response("summary", 4));
@@ -135,6 +147,7 @@ class MemoryConsolidationBudgetTest {
     verify(model, times(2)).call(any(Prompt.class));
   }
 
+  /** 長期記憶の保存と検索で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void approvedCommandsDoNotSaveAfterBudgetStop(
       org.springframework.boot.test.system.CapturedOutput output) {
@@ -143,6 +156,7 @@ class MemoryConsolidationBudgetTest {
     new picocli.CommandLine(
             new dev.mikoto2000.rei.memory.command.MemoryCommand.SummarizeCommand(service, memories))
         .execute("--approve");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(memories);
     verify(model, times(1)).call(any(Prompt.class));
     assertTrue(output.getOut().contains("[stopped] LLM_CALL_BUDGET_EXCEEDED"));
@@ -159,6 +173,7 @@ class MemoryConsolidationBudgetTest {
     assertFalse(output.getOut().contains("private provider diagnostic"));
   }
 
+  /** 承認済み完了要約について、既存の保存契約を維持することを確認する。 */
   @Test
   void approvedCompleteSummaryKeepsTheExistingSaveContract() {
     var service = service(2, 8, response(candidates(), 4), response("summary", 4));
@@ -172,6 +187,7 @@ class MemoryConsolidationBudgetTest {
     assertEquals(dev.mikoto2000.rei.memory.model.MemoryStatus.CANDIDATE, saved.getValue().status());
   }
 
+  /** 長期記憶の保存と検索の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationIsPreservedBeforeInvocationAndFromWrappedProviderInterruption() {
     var service = service(0, 10, response(candidates(), 1));
@@ -192,6 +208,7 @@ class MemoryConsolidationBudgetTest {
     }
   }
 
+  /** 長期記憶の保存と検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void consolidationSettingsBindWithIndependentZeroDefaults() {
     var defaults = new MemoryConsolidationProperties(0, 0);

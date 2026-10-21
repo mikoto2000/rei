@@ -28,26 +28,32 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
+/** 作業状況期間HTTP通信の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ActivityPeriodHttpTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @EnableWebMvc
   @Import({SecurityConfig.class, ActivityPeriodController.class, ApiExceptionHandler.class})
   static class Config {
+    /** {@code apiKeyProperties} の条件を再現するための補助情報を返す。 */
     @Bean
     ApiKeyProperties apiKeyProperties() {
       return new ApiKeyProperties("secret");
     }
   }
 
+  /** 検証で使用する保存先を、指定された条件に合わせて用意する。 */
   SqliteActivityStore store() {
     return new SqliteActivityStore(
         new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("activity.db")),
         new SessionMergePolicy(Duration.ofMinutes(3), ZoneOffset.UTC));
   }
 
+  /** 認証済み期間について、読み取る保存済み根拠を伝えることを確認する。 */
   @Test
   void authenticatedPeriodReportReadsSavedEvidenceWithoutCapturingOrCallingAModel() {
     var store = store();
@@ -107,6 +113,7 @@ class ActivityPeriodHttpTest {
             .size());
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void boundedSqliteQueryRejectsOverflowWithoutReturningAPartialAnalysis() {
     var store = store();
@@ -125,19 +132,24 @@ class ActivityPeriodHttpTest {
         () -> toolkit.wrap(store).findRecordsBetweenBounded(from, to, 2));
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void unsupportedOldStoreDoesNotFallBackToAnUnboundedRead() {
     var reads = new java.util.concurrent.atomic.AtomicInteger();
     ActivityStore old =
         new ActivityStore() {
+          /** {@code append} の条件を再現するため、検証用の操作や状態を扱う。 */
           public void append(ActivityRecord r) {}
 
+          /** {@code replace} の条件を再現するため、検証用の操作や状態を扱う。 */
           public void replace(ActivityRecord r) {}
 
+          /** 検証用に、対象を特定できるよう、期間を探す。 */
           public java.util.List<ActivitySession> findBetween(Instant a, Instant b) {
             return java.util.List.of();
           }
 
+          /** 検証用に、対象を特定できるよう、記録一覧期間を探す。 */
           public java.util.List<ActivityRecord> findRecordsBetween(Instant a, Instant b) {
             reads.incrementAndGet();
             return java.util.List.of();
@@ -152,6 +164,7 @@ class ActivityPeriodHttpTest {
     assertEquals(0, reads.get());
   }
 
+  /** 根拠上限および無効状態機能について、明示的なエラー一覧を返すことを確認する。 */
   @Test
   void evidenceLimitAndDisabledFeatureReturnExplicitErrorsWithoutAPartialReport() {
     var store = org.mockito.Mockito.mock(ActivityStore.class);
@@ -200,6 +213,7 @@ class ActivityPeriodHttpTest {
         .findRecordsBetween(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
   }
 
+  /** 作業状況の把握の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void oversizedStoredPayloadIsRejectedBeforeDecodingAndCancellationCannotReadStatistics() {
     var store = store();

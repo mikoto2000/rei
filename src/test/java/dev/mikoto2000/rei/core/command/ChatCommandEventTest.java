@@ -35,14 +35,23 @@ import org.springframework.ai.chat.prompt.Prompt;
 import picocli.CommandLine;
 import reactor.core.publisher.Flux;
 
+/** チャットコマンドイベントの結果と状態の契約を検証するテスト。 */
 class ChatCommandEventTest {
 
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   private final Clock clock =
       Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));
+
+  /** 検証に使う生成元。 */
   private final AgentEventFactory factory = new AgentEventFactory(clock);
+
+  /** 検証に使う通知の連携先。 */
   private final InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+
+  /** 検証に使う受信。 */
   private final List<AgentEvent> received = new ArrayList<>();
 
+  /** 実行について、実行を通知することを確認する。 */
   @Test
   void runEmitsRunAndMessageLifecycleOnSuccess() {
     bus.subscribe(received::add);
@@ -86,6 +95,7 @@ class ChatCommandEventTest {
     assertEquals(AgentEventType.AGENT_RUN_COMPLETED, received.get(5).type());
   }
 
+  /** 実行について、失敗終端イベントを通知することを確認する。 */
   @Test
   void runEmitsFailedTerminalEventWhenResponseFails() {
     bus.subscribe(received::add);
@@ -114,6 +124,7 @@ class ChatCommandEventTest {
     assertEquals(AgentEventType.AGENT_RUN_FAILED, received.getLast().type());
   }
 
+  /** 実行について、推論受付から終了までの管理を通知することを確認する。 */
   @Test
   void runEmitsThinkingLifecycleBeforeMessageLifecycle() {
     bus.subscribe(received::add);
@@ -152,6 +163,7 @@ class ChatCommandEventTest {
     assertEquals(AgentEventType.MESSAGE_COMPLETED, received.get(6).type());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void completedRunContainsCompletionTokenUsage() {
     bus.subscribe(received::add);
@@ -190,6 +202,7 @@ class ChatCommandEventTest {
     org.junit.jupiter.api.Assertions.assertTrue(payload.endToEndTokensPerSecond() > 0.0d);
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   private static ChatResponse response(String text) {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
   }

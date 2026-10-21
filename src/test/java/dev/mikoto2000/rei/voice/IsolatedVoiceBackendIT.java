@@ -10,8 +10,13 @@ import java.util.Arrays;
 import javax.sound.sampled.AudioSystem;
 import org.junit.jupiter.api.Test;
 
-/** Explicit local native test: no microphone or download. */
+/**
+ * 検証条件を再現するための独立した音声バックエンドIT。
+ *
+ * <p>Explicit local native test: no microphone or download.
+ */
 class IsolatedVoiceBackendIT {
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void actualJapaneseInferenceIsIsolatedAndRepeatedWorkersExit() throws Exception {
     String configured = System.getProperty("rei.voice.test.bundle");

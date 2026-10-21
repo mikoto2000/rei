@@ -17,7 +17,18 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-/** Bounded chronological aggregation. Adjacent equivalent observations retain every original ID. */
+/**
+ * 作業状況の把握で受け渡す時系列作業状況根拠を表す。
+ *
+ * <p>Bounded chronological aggregation. Adjacent equivalent observations retain every original ID.
+ *
+ * @param windowStart 範囲開始
+ * @param windowEnd 範囲終了
+ * @param groups グループ一覧
+ * @param observationIds 観測内容識別子一覧
+ * @param executions 実行一覧
+ * @param fingerprint 要求内容の照合値
+ */
 public record TemporalActivityEvidence(
     Instant windowStart,
     Instant windowEnd,
@@ -25,8 +36,29 @@ public record TemporalActivityEvidence(
     List<String> observationIds,
     List<WorkActivityInference.Execution> executions,
     String fingerprint) {
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final ObjectMapper JSON = new ObjectMapper().registerModule(new JavaTimeModule());
 
+  /**
+   * 作業状況の把握で受け渡す事実一覧を表す。
+   *
+   * @param process プロセス
+   * @param title タイトル
+   * @param windowId 範囲識別子
+   * @param projectId 所属プロジェクトの識別子
+   * @param project プロジェクト
+   * @param branch ブランチ
+   * @param commit 確定
+   * @param workRevision 作業改訂番号
+   * @param category 分類
+   * @param content 内容
+   * @param candidate 候補
+   * @param confidence 確信度
+   * @param visionState 画像認識状態
+   * @param continuity 継続性
+   * @param desktop デスクトップ
+   * @param input 入力
+   */
   public record Facts(
       String process,
       String title,
@@ -45,17 +77,28 @@ public record TemporalActivityEvidence(
       List<ActivityRecord.Activity> desktop,
       ActivityEvidence.InputReference input) {}
 
+  /**
+   * 作業状況の把握で受け渡すグループを表す。
+   *
+   * @param first 最初
+   * @param last 直近
+   * @param observationIds 観測内容識別子一覧
+   * @param facts 事実一覧
+   */
   public record Group(Instant first, Instant last, List<String> observationIds, Facts facts) {
+    /** 作業状況の把握で用いる所属プロジェクトの識別子を返す。 */
     public String projectId() {
       return facts.projectId();
     }
   }
 
+  /** 利用先に渡せるよう、時系列作業状況根拠を組み立てる。 */
   public static TemporalActivityEvidence build(
       List<ActivityRecord> records,
       List<WorkActivityInference.Execution> executions,
       Instant start,
       Instant end) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (records.size() > 120 || executions.size() > 64)
       throw new IllegalArgumentException("Temporal evidence limit exceeded");
     var sorted =
@@ -128,6 +171,7 @@ public record TemporalActivityEvidence(
         hash(List.of(semantic, ordered)));
   }
 
+  /** 作業状況の把握で用いる事実一覧を返す。 */
   private static Facts facts(ActivityRecord r, Instant end) {
     var d = r.detection();
     var e = d == null ? null : d.evidence();
@@ -179,6 +223,7 @@ public record TemporalActivityEvidence(
         e == null ? null : e.input());
   }
 
+  /** 作業状況の把握で用いる規則推定を返す。 */
   public WorkActivityInference ruleInference() {
     String project = "",
         projectId = "",
@@ -224,6 +269,7 @@ public record TemporalActivityEvidence(
                   .distinct()
                   .limit(3)
                   .toList();
+          // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
           if (transitions.size() > 1) {
             boolean verification =
                 groups.stream().allMatch(g -> workCategory(g.facts().category()))
@@ -283,25 +329,30 @@ public record TemporalActivityEvidence(
         0);
   }
 
+  /** 作業状況の把握において、augmentedに該当するか判定する。 */
   private boolean augmented() {
     return groups.stream()
         .anyMatch(g -> g.facts().input() != null || !g.facts().desktop().isEmpty());
   }
 
+  /** 作業状況の把握において、同一プロジェクトに該当するか判定する。 */
   private static boolean sameProject(Facts f) {
     return !f.project().isBlank()
         && ActivityRolePolicy.normalize(f.project())
             .equals(ActivityRolePolicy.normalize(f.candidate()));
   }
 
+  /** 作業状況の把握において、developmentに該当するか判定する。 */
   private static boolean development(String category) {
     return Set.of("development", "coding").contains(category);
   }
 
+  /** 作業状況の把握において、作業分類に該当するか判定する。 */
   private static boolean workCategory(String category) {
     return Set.of("development", "coding", "research", "documentation").contains(category);
   }
 
+  /** 作業状況の把握において、継続に該当するか判定する。 */
   private boolean continuous() {
     if (!augmented()) return true;
     for (int i = 0; i < groups.size(); i++) {
@@ -317,6 +368,7 @@ public record TemporalActivityEvidence(
     return true;
   }
 
+  /** 作業状況の把握で用いる項目に整理した内容入力を返す。 */
   public String structuredInput(int maximum) {
     try {
       String input =
@@ -332,6 +384,7 @@ public record TemporalActivityEvidence(
                   executions,
                   "desktopMeaning",
                   "Supplemental INFERENCE only; visible does not mean used. Foreground determines primary activity; never infer a goal from background entertainment."));
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (input.length() > maximum)
         throw new IllegalArgumentException("Temporal input exceeds character budget");
       return input;
@@ -340,6 +393,7 @@ public record TemporalActivityEvidence(
     }
   }
 
+  /** 作業状況の把握で用いる変更なしを返す。 */
   static String clean(String value) {
     String text = value == null ? "" : value.replaceAll("[\\p{Cntrl}\\p{Cf}\\s]+", " ").strip();
     text = text.substring(0, Math.min(160, text.length()));
@@ -348,6 +402,7 @@ public record TemporalActivityEvidence(
         : text;
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(Object value) {
     try {
       return HexFormat.of()

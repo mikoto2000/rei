@@ -7,17 +7,32 @@ import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import java.time.Clock;
 import java.util.function.BiConsumer;
 
+/** チャット受付のユースケースを実現する。 */
 public final class ChatSubmitService {
+  /** プロジェクト一覧。 */
   private final ProjectRegistry projects;
+
+  /** 会話一覧。 */
   private final SessionRegistry sessions;
+
+  /** 実行一覧。 */
   private final RunRegistry runs;
+
+  /** 受付から終了までの管理。 */
   private final SessionLifecycle lifecycle;
+
+  /** 実行先への引き渡し。 */
   private final BiConsumer<AgentRunContext, String> dispatch;
+
+  /** 並行有効状態。 */
   private final boolean concurrentEnabled;
+
+  /** 状態表示Delegations。 */
   private org.springframework.beans.factory.ObjectProvider<
           dev.mikoto2000.rei.dot.DotDelegationService>
       dotDelegations;
 
+  /** 実行の受付と状態管理で使用する状態表示Delegationsを設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setDotDelegations(
       org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.dot.DotDelegationService>
@@ -25,13 +40,16 @@ public final class ChatSubmitService {
     this.dotDelegations = dots;
   }
 
+  /** 取得記録一覧。 */
   private dev.mikoto2000.rei.llm.capture.CaptureStore captures;
 
+  /** 実行の受付と状態管理で使用する取得記録一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore store) {
     captures = store;
   }
 
+  /** 実行の受付と状態管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ChatSubmitService(
       ProjectRegistry projects,
       SessionRegistry sessions,
@@ -42,6 +60,7 @@ public final class ChatSubmitService {
     this(projects, sessions, runs, new SessionLifecycle(repository, clock), dispatch);
   }
 
+  /** 実行の受付と状態管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ChatSubmitService(
       ProjectRegistry projects,
       SessionRegistry sessions,
@@ -51,6 +70,7 @@ public final class ChatSubmitService {
     this(projects, sessions, runs, lifecycle, dispatch, false);
   }
 
+  /** 指定された値や利用先を使って、ChatSubmitServiceを初期化する。 */
   public ChatSubmitService(
       ProjectRegistry projects,
       SessionRegistry sessions,
@@ -66,20 +86,24 @@ public final class ChatSubmitService {
     this.concurrentEnabled = concurrentEnabled;
   }
 
+  /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   public AgentRunContext submit(String message, String projectId, String sessionId) {
     return submit(message, projectId, sessionId, AgentRunContext.Mode.EXCLUSIVE);
   }
 
+  /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   public AgentRunContext submit(
       String message, String projectId, String sessionId, AgentRunContext.Mode mode) {
     return submit(message, projectId, sessionId, mode, null);
   }
 
+  /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   public AgentRunContext submit(
       String message, String projectId, String sessionId, AgentRunContext.Mode mode, String key) {
     return submit(message, projectId, sessionId, mode, key, null);
   }
 
+  /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   public AgentRunContext submit(
       String message,
       String projectId,
@@ -138,7 +162,11 @@ public final class ChatSubmitService {
         });
   }
 
-  /** Authenticated adapter context; fixed READ_ONLY and no shell selection side effects. */
+  /**
+   * 依頼を実行経路へ渡すため、MCPを受け付ける。
+   *
+   * <p>Authenticated adapter context; fixed READ_ONLY and no shell selection side effects.
+   */
   public AgentRunContext submitMcp(
       String message,
       String projectId,

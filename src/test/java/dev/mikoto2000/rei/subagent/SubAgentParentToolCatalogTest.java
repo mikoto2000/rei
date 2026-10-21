@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 補助エージェント親ツール利用可能な項目の結果と状態の契約を検証するテスト。 */
 class SubAgentParentToolCatalogTest {
+  /** 補助エージェントへの委譲で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void defaultsKeepOrdinaryDelegationAndHideDisabledManagementFeatures() {
     assertEquals(
@@ -15,6 +17,7 @@ class SubAgentParentToolCatalogTest {
         SubAgentParentToolCatalog.names(new SubAgentProperties()));
   }
 
+  /** 補助エージェントへの委譲で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void featureDependenciesAreAppliedToEveryOptionalToolGroup() {
     var settings = new SubAgentProperties();

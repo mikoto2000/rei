@@ -27,23 +27,38 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 注意サービスの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class AttentionServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   Clock clock = Clock.fixed(Instant.EPOCH, ZoneOffset.UTC);
+
+  /** 検証に使う保存と検索の窓口。 */
   AttentionRepository repository;
+
+  /** 検証に使う通知の連携先。 */
   InMemoryAgentEventBus bus;
+
+  /** 検証に使うサービス。 */
   AttentionService service;
+
+  /** 検証に使う時刻。 */
   AtomicLong time;
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner(String run) {
     return new AgentRunContext(run, "session", dir, "project");
   }
 
+  /** 検証で使用する生成元を、指定された条件に合わせて用意する。 */
   AgentEventFactory factory() {
     return new AgentEventFactory(clock);
   }
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     repository =
@@ -55,11 +70,13 @@ class AttentionServiceTest {
     service.start();
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void close() {
     service.close();
   }
 
+  /** {@code waiting} の条件を再現するための補助情報を返す。 */
   AgentEvent waiting(String run) {
     return factory()
         .executionProgress(
@@ -69,6 +86,7 @@ class AttentionServiceTest {
         .withOwnership(owner(run));
   }
 
+  /** 注意の管理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void permissionEscalationIsPersistentDeduplicatedAndAckDoesNotGrantPermission() {
     var received = new java.util.ArrayList<AgentEvent>();
@@ -97,6 +115,7 @@ class AttentionServiceTest {
     assertTrue(reopened.list("project").isEmpty());
   }
 
+  /** 長い待機について、確認済み待機中を必要とすることを確認する。 */
   @Test
   void longWaitRequiresVerifiedWaitingAndProgressResetsItsDeadline() {
     bus.publish(waiting("run"));
@@ -118,6 +137,7 @@ class AttentionServiceTest {
     assertEquals("LONG_WAIT", repository.list("project").getFirst().kind());
   }
 
+  /** 注意の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void terminalAndUnownedEventsDoNotCreateStaleWaitsOrGlobalItems() {
     bus.publish(waiting("run"));
@@ -141,6 +161,7 @@ class AttentionServiceTest {
     assertEquals("STAGNATION_STOPPED", repository.list("project").getFirst().kind());
   }
 
+  /** 注意の管理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void actualPermissionGuardAndAcknowledgementNeverGrantTheRequestedAction() {
     var approvals =
@@ -163,6 +184,7 @@ class AttentionServiceTest {
     assertTrue(repository.list("project").isEmpty());
   }
 
+  /** 注意の管理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void approvalNoticeIdentifiesTheExactRequestAndDisplaysTheActionAndContinueCommand() {
     var approvals =
@@ -194,6 +216,7 @@ class AttentionServiceTest {
     assertTrue(notice.message().contains("/approval deny " + request.id()));
   }
 
+  /** 注意の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void stoppedGoalProducesOneOwnedAttentionItem() {
     var event =
@@ -216,6 +239,7 @@ class AttentionServiceTest {
     assertEquals("GOAL_STOPPED", repository.list("project").getFirst().kind());
   }
 
+  /** 注意の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shellAndWebControlsAcknowledgeOnlyInsideTheOwningProject() {
     bus.publish(
@@ -242,6 +266,7 @@ class AttentionServiceTest {
     assertTrue(api.list("project").isEmpty());
   }
 
+  /** 注意の管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void terminalRunsProduceDistinctDeduplicatedFactsWithoutErrorDetails() {
     var complete = factory().runCompleted("complete", 1).withOwnership(owner("complete"));
@@ -270,6 +295,7 @@ class AttentionServiceTest {
     assertEquals(1, repository.list("project").size());
   }
 
+  /** {@code dependency} の条件を再現するための補助情報を返す。 */
   AgentEvent dependency(String id, AgentEventType type, String kind, String state, String reason) {
     return new AgentEvent(
         "event-" + id,
@@ -286,6 +312,7 @@ class AttentionServiceTest {
         "project");
   }
 
+  /** 注意の管理で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void humanDecisionAndDependencyTerminalEventsKeepTheirOwnIdentity() {
     var events = new java.util.ArrayList<AgentEvent>();
@@ -334,6 +361,7 @@ class AttentionServiceTest {
     assertTrue(restored.list("project").stream().allMatch(i -> i.runId() == null));
   }
 
+  /** 注意の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void inconsistentDependencyEventsDoNotCreateAttention() {
     bus.publish(

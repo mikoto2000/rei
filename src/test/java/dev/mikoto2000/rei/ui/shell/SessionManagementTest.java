@@ -21,10 +21,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
+/** 会話Managementの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SessionManagementTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** 共有記録台帳を利用することを確認する。 */
   @Test
   void showListNewAndSwitchUseSharedLedgerWithoutSubmittingMessages() throws Exception {
     var repository = new FileSessionRepository(temp.resolve("sessions.json"));
@@ -42,6 +45,7 @@ class SessionManagementTest {
         new CommandLine(
             new SessionCommand(shell, query, projects),
             new CommandLine.IFactory() {
+              /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
               public <K> K create(Class<K> type) throws Exception {
                 if (type == NewConversationCommand.class)
                   return type.cast(new NewConversationCommand(shell));
@@ -103,6 +107,7 @@ class SessionManagementTest {
     }
   }
 
+  /** ターミナルでの対話で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void parserRoutesAllSessionFormsAsCommands() {
     var parser = new UserInputParser();

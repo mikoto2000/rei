@@ -23,6 +23,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+/** 記憶管理コマンドを行うための利用者コマンド。 */
 @Component
 @Command(
     name = "memory",
@@ -38,24 +39,32 @@ import picocli.CommandLine.Parameters;
     })
 public class MemoryCommand {
 
+  /** 保存済みメモリを表示しますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "list", description = "保存済みメモリを表示します")
   public static class ListCommand implements Runnable {
+    /** 記憶サービス。 */
     private final MemoryService memoryService;
+
+    /** 補助。 */
     private MemoryCommandSupport support;
 
+    /** 長期記憶の活用で使用する補助を設定する。 */
     @org.springframework.beans.factory.annotation.Autowired
     public void setSupport(MemoryCommandSupport support) {
       this.support = support;
     }
 
+    /** ページ上限。 */
     @Option(names = "--limit", defaultValue = "20")
     int pageLimit = 20;
 
+    /** 開始位置。 */
     @Option(names = "--offset", defaultValue = "0")
     int offset;
 
+    /** 保存済みメモリを表示しますを行う。 */
     @Override
     public void run() {
       if (support != null) {
@@ -72,11 +81,13 @@ public class MemoryCommand {
       }
     }
 
+    /** 長期記憶の活用で用いる事前確認を返す。 */
     private String preview(String content) {
       return contentPreview(content);
     }
   }
 
+  /** 長期記憶の活用で用いる内容事前確認を返す。 */
   static String contentPreview(String content) {
     if (content == null) {
       return "";
@@ -84,26 +95,35 @@ public class MemoryCommand {
     return content.length() <= 100 ? content : content.substring(0, 100) + "…";
   }
 
+  /** 記憶を検索しますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "search", description = "記憶を検索します")
   public static class SearchCommand implements Runnable {
+    /** 記憶サービス。 */
     private final MemoryService memoryService;
+
+    /** 補助。 */
     private MemoryCommandSupport support;
 
+    /** 長期記憶の活用で使用する補助を設定する。 */
     @org.springframework.beans.factory.annotation.Autowired
     public void setSupport(MemoryCommandSupport support) {
       this.support = support;
     }
 
+    /** 検索条件。 */
     String query;
 
+    /** 検索条件語句一覧。 */
     @Parameters(index = "0..*", arity = "1..*", description = "検索クエリ")
     String[] queryWords;
 
+    /** 上限。 */
     @Option(names = "--limit", defaultValue = "10")
     int limit;
 
+    /** 記憶を検索しますを行う。 */
     @Override
     public void run() {
       if (queryWords != null) query = String.join(" ", queryWords);
@@ -115,6 +135,7 @@ public class MemoryCommand {
         System.out.println("検索クエリを入力してください");
         return;
       }
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (query.length() > 200) {
         System.out.println("検索クエリは 200 文字以内で入力してください");
         return;
@@ -128,21 +149,28 @@ public class MemoryCommand {
     }
   }
 
+  /** 記憶を論理削除しますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "forget", description = "記憶を論理削除します")
   public static class ForgetCommand implements Runnable {
+    /** 記憶サービス。 */
     private final MemoryService memoryService;
+
+    /** 補助。 */
     private MemoryCommandSupport support;
 
+    /** 長期記憶の活用で使用する補助を設定する。 */
     @org.springframework.beans.factory.annotation.Autowired
     public void setSupport(MemoryCommandSupport support) {
       this.support = support;
     }
 
+    /** 識別子。 */
     @Parameters(index = "0", description = "記憶ID")
     String id;
 
+    /** 記憶を論理削除しますを行う。 */
     @Override
     public void run() {
       if (support != null) {
@@ -167,35 +195,45 @@ public class MemoryCommand {
     }
   }
 
+  /** 記憶の詳細と出典を表示しますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "show", description = "記憶の詳細と出典を表示します")
   public static class ShowCommand implements Runnable {
+    /** 補助。 */
     private final MemoryCommandSupport support;
 
+    /** 識別子。 */
     @Parameters(index = "0")
     String id;
 
+    /** 記憶の詳細と出典を表示しますを行う。 */
     public void run() {
       System.out.println(support.show(id));
     }
   }
 
+  /** 記憶をエクスポートしますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "export", description = "記憶をエクスポートします")
   public static class ExportCommand implements Runnable {
+    /** 記憶Exporter。 */
     private final MemoryExporter memoryExporter;
 
+    /** 書き出しDir。 */
     @Option(names = "--dir")
     String exportDir;
 
+    /** レポート出力。 */
     private java.io.PrintWriter reportOutput;
 
+    /** 長期記憶の活用で用いる出力先を返す。 */
     private java.io.PrintWriter out() {
       return reportOutput == null ? new java.io.PrintWriter(System.out, true) : reportOutput;
     }
 
+    /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
     public String render(String directory) {
       var command = new ExportCommand(memoryExporter);
       command.exportDir = directory;
@@ -205,6 +243,7 @@ public class MemoryCommand {
       return text.toString().stripTrailing();
     }
 
+    /** 記憶をエクスポートしますを行う。 */
     @Override
     public void run() {
       MemoryExporter.ExportResult result =
@@ -222,25 +261,33 @@ public class MemoryCommand {
     }
   }
 
+  /** 会話を要約して記憶候補を作りますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "summarize", description = "会話を要約して記憶候補を作ります")
   public static class SummarizeCommand implements Runnable {
+    /** consolidatorサービス。 */
     private final MemoryConsolidatorService consolidatorService;
+
+    /** 記憶サービス。 */
     private final MemoryService memoryService;
 
+    /** 承認。 */
     @Option(
         names = {"--approve", "--save"},
         defaultValue = "false",
         description = "要約の保存を承認します")
     boolean approve;
 
+    /** レポート出力。 */
     private java.io.PrintWriter reportOutput;
 
+    /** 長期記憶の活用で用いる出力先を返す。 */
     private java.io.PrintWriter out() {
       return reportOutput == null ? new java.io.PrintWriter(System.out, true) : reportOutput;
     }
 
+    /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
     public String render(boolean approval) {
       var command = new SummarizeCommand(consolidatorService, memoryService);
       command.approve = approval;
@@ -250,6 +297,7 @@ public class MemoryCommand {
       return text.toString().stripTrailing();
     }
 
+    /** 会話を要約して記憶候補を作りますを行う。 */
     @Override
     public void run() {
       try {
@@ -285,27 +333,39 @@ public class MemoryCommand {
     }
   }
 
+  /** 会話履歴から記憶候補を抽出して保存しますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "consolidate", description = "会話履歴から記憶候補を抽出して保存します")
   public static class ConsolidateCommand implements Runnable {
+    /** consolidatorサービス。 */
     private final MemoryConsolidatorService consolidatorService;
+
+    /** 記憶サービス。 */
     private final MemoryService memoryService;
+
+    /** 秘密を含む付随情報検出の窓口。 */
     private final SensitiveInfoDetector sensitiveInfoDetector;
+
+    /** 競合対象の解決。 */
     private final MemoryConflictResolver conflictResolver;
 
+    /** 承認。 */
     @Option(
         names = {"--approve", "--save"},
         defaultValue = "false",
         description = "抽出候補の保存を承認します")
     boolean approve;
 
+    /** レポート出力。 */
     private java.io.PrintWriter reportOutput;
 
+    /** 長期記憶の活用で用いる出力先を返す。 */
     private java.io.PrintWriter out() {
       return reportOutput == null ? new java.io.PrintWriter(System.out, true) : reportOutput;
     }
 
+    /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
     public String render(boolean approval) {
       var command =
           new ConsolidateCommand(
@@ -317,6 +377,7 @@ public class MemoryCommand {
       return text.toString().stripTrailing();
     }
 
+    /** 会話履歴から記憶候補を抽出して保存しますを行う。 */
     @Override
     public void run() {
       try {
@@ -370,6 +431,7 @@ public class MemoryCommand {
       }
     }
 
+    /** 必要な状態が整ってから先へ進むため、競合確認を待つ。 */
     private MemoryConflictResolver.ConflictResult waitConflictCheck(
         Memory candidate, List<Memory> active) {
       int timeoutSec = Math.max(1, consolidatorService.conflictTimeoutSeconds());

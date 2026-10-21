@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
+/** 履歴表示形式への変換の結果と状態の契約を検証するテスト。 */
 class HistoryFormatterTest {
+  /** 会話履歴と受付記録の管理で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void redactsBeforeTruncationAndPreservesMultilineRoles() {
     var formatter = new HistoryFormatter();

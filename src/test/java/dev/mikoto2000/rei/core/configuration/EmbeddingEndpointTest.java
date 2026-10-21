@@ -12,8 +12,10 @@ import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.ConfigDataApplicationContextInitializer;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
+/** 埋め込み表現接続先の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class EmbeddingEndpointTest {
+  /** 機能の組み立てで、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void embeddingUsesItsOwnEndpointCredentialsAndPath() {
     verify(
@@ -24,6 +26,7 @@ class EmbeddingEndpointTest {
         "REI_OPENAI_EMBEDDING_PATH=/custom/embeddings");
   }
 
+  /** 機能の組み立てで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void emptyEmbeddingSettingsUseCommonConnection() {
     verify(
@@ -33,15 +36,18 @@ class EmbeddingEndpointTest {
         "REI_OPENAI_EMBEDDING_API_KEY=");
   }
 
+  /** 機能の組み立てで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sdkEmbeddingUsageIsChargedBeforeTheNextRequest() {
     verify(true, "https://chat.invalid/v1/embeddings", "chat-key");
   }
 
+  /** 検証用に、要求された条件を満たすことを確認する。 */
   private void verify(String endpoint, String key, String... properties) {
     verify(false, endpoint, key, properties);
   }
 
+  /** 検証用に、要求された条件を満たすことを確認する。 */
   private void verify(boolean budgeted, String endpoint, String key, String... properties) {
     var requests = new java.util.concurrent.atomic.AtomicInteger();
     OpenAiHttpClientBuilderCustomizer transport =

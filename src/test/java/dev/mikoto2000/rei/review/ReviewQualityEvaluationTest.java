@@ -30,13 +30,42 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
+/** レビュー品質評価の結果と状態の契約を検証するテスト。 */
 class ReviewQualityEvaluationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /**
+   * 検証条件の再現に使うGoldの情報。
+   *
+   * @param path 検証に使うパス
+   * @param evidence 検証に使う根拠
+   */
   record Gold(String path, String evidence) {}
 
+  /**
+   * 検証条件の再現に使う回答の情報。
+   *
+   * @param assessment 検証に使う評価
+   * @param findings 検証に使う指摘一覧
+   */
   record Answer(String assessment, List<ReviewCoverageLedger.Finding> findings) {}
 
+  /**
+   * 検証条件の再現に使う計測値の情報。
+   *
+   * @param expected 検出すべき既知の問題の件数
+   * @param detected 実際に検出した既知の問題の件数
+   * @param falsePositives 問題がない箇所を誤って指摘した件数
+   * @param coverage 検証対象のうち根拠を確認できた割合
+   * @param estimatedInputTokens モデルへ渡した入力の推定トークン数
+   * @param modelCalls 評価に要したモデル呼び出し回数
+   * @param toolCalls 評価に要したツール呼び出し回数
+   * @param elapsedMillis 評価に要した時間のミリ秒数
+   * @param rawBodyReads 元の本文を保存先から読み出した回数
+   * @param rawBodyWrites 元の本文を保存先へ書き込んだ回数
+   * @param diskStoredBytes ディスクに保存した情報のバイト数
+   */
   record Metrics(
       int expected,
       int detected,
@@ -50,6 +79,7 @@ class ReviewQualityEvaluationTest {
       long rawBodyWrites,
       long diskStoredBytes) {}
 
+  /** 本文を欠落なく届けて確認範囲を検証した後に、途中に埋め込まれた既知の問題を誤検出なく見つけられることを確認する。 */
   @Test
   void fixedModelFindsMiddleErrorsOnlyAfterLosslessDeliveryAndVerifiedCoverage() throws Exception {
     var gold = gold();
@@ -96,6 +126,7 @@ class ReviewQualityEvaluationTest {
     assertThat(report.modelCalls()).isGreaterThan(5);
   }
 
+  /** {@code gold} の条件を再現するための補助情報を返す。 */
   static List<Gold> gold() throws Exception {
     try (var input =
         ReviewQualityEvaluationTest.class.getResourceAsStream("/review-evaluation/gold.json")) {
@@ -103,6 +134,7 @@ class ReviewQualityEvaluationTest {
     }
   }
 
+  /** {@code evaluate} の条件を再現するための補助情報を返す。 */
   static Metrics evaluate(Path root, Function<Prompt, String> model) throws Exception {
     var gold = gold();
     for (var path : gold.stream().map(Gold::path).distinct().toList()) {
@@ -249,6 +281,7 @@ class ReviewQualityEvaluationTest {
     return metrics;
   }
 
+  /** {@code position} の条件を再現するための補助情報を返す。 */
   static int[] position(String source, int offset) {
     int line = 1, begin = 0;
     for (int i = 0; i < offset; i++)

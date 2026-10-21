@@ -9,17 +9,22 @@ import java.util.regex.Pattern;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+/** 実行予定の管理をモデルから呼び出せるツールとして提供する。 */
 @Component
 public class SchedulerTools {
+  /** SIMPLE継続時間。 */
   private static final Pattern SIMPLE_DURATION =
       Pattern.compile("^(\\d+)(s|m|h|d)$", Pattern.CASE_INSENSITIVE);
 
+  /** 実行予定の管理。 */
   private final AgentScheduler scheduler;
 
+  /** 指定された値や利用先を使って、SchedulerToolsを初期化する。 */
   public SchedulerTools(AgentScheduler scheduler) {
     this.scheduler = scheduler;
   }
 
+  /** 指定された時刻や条件で実行できるよう、変更後を予約する。 */
   @Tool(
       name = "scheduleAfter",
       description =
@@ -34,6 +39,7 @@ public class SchedulerTools {
     return scheduler.scheduleAfter(parseDuration(duration), action, conversationId);
   }
 
+  /** 指定された時刻や条件で実行できるよう、日時を予約する。 */
   @Tool(
       name = "scheduleAt",
       description =
@@ -48,6 +54,7 @@ public class SchedulerTools {
         OffsetDateTime.parse(timestamp).toInstant(), action, conversationId);
   }
 
+  /** 利用可能な対象を確認できるよう、実行予約操作一覧を一覧にする。 */
   @Tool(
       name = "listScheduledActions",
       description = "現在の Project/Session の未終了 continuation を取得します。状態は /timer show ID で確認します。")
@@ -55,6 +62,7 @@ public class SchedulerTools {
     return scheduler.list();
   }
 
+  /** 利用者が不要とした実行を止めるため、実行予約操作をキャンセルする。 */
   @Tool(
       name = "cancelScheduledAction",
       description =
@@ -69,6 +77,7 @@ public class SchedulerTools {
     return "Schedule cancelled";
   }
 
+  /** 指定された時刻や条件で実行できるよう、実行間隔を予約する。 */
   @Tool(
       name = "scheduleInterval",
       description =
@@ -81,6 +90,7 @@ public class SchedulerTools {
         parseDuration(interval), occurrences, action, conversationId);
   }
 
+  /** 指定された時刻や条件で実行できるよう、定期実行条件を予約する。 */
   @Tool(
       name = "scheduleCron",
       description =
@@ -92,6 +102,7 @@ public class SchedulerTools {
     return persistent.scheduleCron(expression, zone, occurrences, action, conversationId);
   }
 
+  /** 指定された時刻や条件で実行できるよう、通知時イベントを予約する。 */
   @Tool(
       name = "scheduleOnEvent",
       description =
@@ -112,6 +123,7 @@ public class SchedulerTools {
         conversationId);
   }
 
+  /** 入力を機能内で扱えるよう、継続時間を解釈する。 */
   Duration parseDuration(String value) {
     if (value == null || value.isBlank()) {
       throw new IllegalArgumentException("duration は空にできません");

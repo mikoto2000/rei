@@ -15,11 +15,16 @@ import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 外部会話継続入力の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ExternalSessionContinuationTest {
+  /** 検証に使う会話。 */
   static final String SESSION = "01234567-89ab-cdef-0123-456789abcdef";
+
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code success} の条件を再現するための補助情報を返す。 */
   ExternalAgentResult success(String session) {
     return new ExternalAgentResult(
         ExternalAgentResult.Status.SUCCESS,
@@ -33,6 +38,7 @@ class ExternalSessionContinuationTest {
         session);
   }
 
+  /** 既定一時的な動作モードを保持することを確認する。 */
   @Test
   void optInCapturesOnlyUnambiguousNativeThreadAndPreservesDefaultEphemeralMode() {
     var properties = new CodexProperties();
@@ -91,6 +97,7 @@ class ExternalSessionContinuationTest {
             .externalSessionId());
   }
 
+  /** 継続入力について、完全一致の保存済み一意な識別子を利用することを確認する。 */
   @Test
   void continuationUsesExactSavedUuidAndSameReadOnlyIsolationWithoutFallback() {
     var properties = new CodexProperties();
@@ -99,6 +106,7 @@ class ExternalSessionContinuationTest {
     var calls = new ArrayList<List<String>>();
     var runner =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           @Override
           public Output run(
               List<String> command,
@@ -156,6 +164,7 @@ class ExternalSessionContinuationTest {
     assertTrue(calls.isEmpty());
   }
 
+  /** 不明最終結果消費量を維持することを確認する。 */
   @Test
   void restartedHistoryContinuesOwnedSuccessfulReviewOnceAndKeepsUnknownOutcomeConsumed()
       throws Exception {
@@ -169,11 +178,13 @@ class ExternalSessionContinuationTest {
     var requests = new ArrayList<ExternalAgentRequest>();
     var executor =
         new ExternalAgentExecutor() {
+          /** 検証用に、外部エージェントへの委譲において、継続入力への対応可否を返す。 */
           @Override
           public boolean supportsContinuation() {
             return true;
           }
 
+          /** 検証用に、要求された処理を実行する。 */
           @Override
           public ExternalAgentResult execute(
               ExternalAgentRequest request, BooleanSupplier cancelled) {
@@ -220,6 +231,7 @@ class ExternalSessionContinuationTest {
     assertNull(legacy.externalSessionId());
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void incompleteFailedAndEphemeralReviewsCannotBeContinued() throws Exception {
     var fixture = new ExternalReviewHistoryTest();
@@ -244,10 +256,12 @@ class ExternalSessionContinuationTest {
             SESSION));
     var executor =
         new ExternalAgentExecutor() {
+          /** 検証用に、外部エージェントへの委譲において、継続入力への対応可否を返す。 */
           public boolean supportsContinuation() {
             return true;
           }
 
+          /** 検証用に、要求された処理を実行する。 */
           public ExternalAgentResult execute(ExternalAgentRequest r, BooleanSupplier c) {
             fail("Must not start");
             return null;
@@ -263,6 +277,7 @@ class ExternalSessionContinuationTest {
     }
   }
 
+  /** 一括反映親利用権の確保について、再開の後も対象の情報が残ることを確認する。 */
   @Test
   void atomicParentClaimSurvivesRestartAndFailedCompletionCannotReplay() throws Exception {
     var fixture = new ExternalReviewHistoryTest();
@@ -330,6 +345,7 @@ class ExternalSessionContinuationTest {
                 fixture.owner(), "retry-failed", root.toRealPath(), null, child.id()));
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unsupportedResumeAndWrongThreadFailClosedWithoutStartingFreshReview() {
     var properties = new CodexProperties();
@@ -339,6 +355,7 @@ class ExternalSessionContinuationTest {
     var unsupported = new java.util.concurrent.atomic.AtomicBoolean(true);
     var runner =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           @Override
           public Output run(
               List<String> command,

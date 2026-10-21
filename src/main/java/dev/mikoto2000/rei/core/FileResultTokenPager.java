@@ -8,16 +8,24 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Keeps the existing result schema; every omitted source suffix has a version-bound native cursor.
+ * 共通の実行基盤に必要なファイル結果トークンPagerを扱う。
+ *
+ * <p>Keeps the existing result schema; every omitted source suffix has a version-bound native
+ * cursor.
  */
 final class FileResultTokenPager {
+  /** 概算。 */
   private final TokenEstimator estimator;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper mapper = new ObjectMapper();
 
+  /** 指定された値や利用先を使って、FileResultTokenPagerを初期化する。 */
   FileResultTokenPager(TokenEstimator estimator) {
     this.estimator = estimator;
   }
 
+  /** 共通の実行基盤で用いるページを返す。 */
   List<Tools.ReadFileResult> page(
       List<Tools.ReadFileResult> results, List<Tools.ReadFileRequest> requests, int tokens)
       throws IOException {
@@ -53,10 +61,12 @@ final class FileResultTokenPager {
     return page;
   }
 
+  /** 利用量や必要量を判断するため、ファイル結果トークンPagerを概算する。 */
   private int estimate(Object value) throws IOException {
     return estimator.text(mapper.writeValueAsString(value));
   }
 
+  /** 共通の実行基盤で用いる接頭辞を返す。 */
   private List<Tools.ReadFileResult> prefix(
       List<Tools.ReadFileResult> results,
       List<Tools.ReadFileRequest> requests,

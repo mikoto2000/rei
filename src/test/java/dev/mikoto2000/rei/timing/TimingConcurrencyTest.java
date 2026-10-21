@@ -15,7 +15,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
+/** 時間計測同時実行数の結果と状態の契約を検証するテスト。 */
 class TimingConcurrencyTest {
+  /** 並行試行回数について、識別子一覧を維持することを確認する。 */
   @Test
   void concurrentAttemptsKeepTheirIdsAndCountersIsolated() throws Exception {
     var tick = new AtomicLong();
@@ -44,6 +46,7 @@ class TimingConcurrencyTest {
     assertEquals(400, store.statistics().spans());
   }
 
+  /** 実行時間の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void disabledEnvironmentDoesNotParseUnusedLimits() {
     var env =

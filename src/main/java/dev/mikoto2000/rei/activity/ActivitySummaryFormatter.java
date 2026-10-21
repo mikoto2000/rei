@@ -5,8 +5,15 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 
-/** Bounded deterministic wording. Vision prose is evidence, never copied into the user summary. */
+/**
+ * 作業状況の把握で受け渡す作業状況要約表示形式への変換を表す。
+ *
+ * <p>Bounded deterministic wording. Vision prose is evidence, never copied into the user summary.
+ *
+ * @param zone タイムゾーン
+ */
 public record ActivitySummaryFormatter(ZoneId zone) {
+  /** 受け取った情報を、表示や受け渡しに適した形式へ整える。 */
   public String format(List<SummarySegment> segments) {
     if (segments.isEmpty()) return "この期間の Activity 記録はありません。";
     var out = new StringBuilder("画面の観測に基づく振り返りです。\n表示内容からの推定を含み、実際の操作・集中を断定するものではありません。\n");
@@ -23,6 +30,7 @@ public record ActivitySummaryFormatter(ZoneId zone) {
     return out.toString();
   }
 
+  /** 内容を表示・参照しやすくするため、項目を整形する。 */
   public String formatEntry(SummarySegment segment) {
     var out = new StringBuilder();
     var time = DateTimeFormatter.ofPattern("HH:mm").withZone(zone);
@@ -77,6 +85,7 @@ public record ActivitySummaryFormatter(ZoneId zone) {
             .toList();
     if (!labels.isEmpty()) {
       out.append(String.join("・", labels.stream().limit(3).toList()));
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (labels.size() > 3) out.append("など");
       out.append(primary == null ? "が表示されていました。" : "も並行して表示。");
     }
@@ -86,11 +95,13 @@ public record ActivitySummaryFormatter(ZoneId zone) {
     return out.toString();
   }
 
+  /** 作業状況の把握で用いる変更なしを返す。 */
   private static String clean(String text, int max) {
     String clean = text.replaceAll("[\\p{Cntrl}\\s]+", " ").strip();
     return clean.substring(0, Math.min(max, clean.length()));
   }
 
+  /** 作業状況の把握で用いる表示名を返す。 */
   private static String label(String category) {
     return switch (ActivityRolePolicy.normalize(category)) {
       case "coding", "development", "debugging", "programming", "devops" -> "開発・確認作業";

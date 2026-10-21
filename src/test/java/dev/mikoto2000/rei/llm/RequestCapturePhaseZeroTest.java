@@ -28,14 +28,22 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
-/** Phase 0 probes: real SDK and local HTTP, with no production capture feature enabled. */
+/**
+ * 要求取得記録段階ゼロの結果と状態の契約を検証するテスト。
+ *
+ * <p>Phase 0 probes: real SDK and local HTTP, with no production capture feature enabled.
+ */
 @Tag("integration")
 class RequestCapturePhaseZeroTest {
+  /** 検証に使う応答。 */
   static final String RESPONSE =
       "{\"id\":\"chat\",\"object\":\"chat.completion\",\"created\":0,\"model\":\"probe\",\"choices\":[{\"index\":0,\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\",\"content\":\"ok\"}}]}";
+
+  /** 検証に使う文書の分割単位。 */
   static final String CHUNK =
       "data: {\"id\":\"chat\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"probe\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"ok\"},\"finish_reason\":null}]}\n\n";
 
+  /** 用途に応じたモデル利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sdkRetryIsObservedAsTwoTransportAttemptsWithIdenticalBytes() throws Exception {
     try (var probe = new Probe(false, true)) {
@@ -54,6 +62,7 @@ class RequestCapturePhaseZeroTest {
     }
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void asynchronousStreamingTransportDoesNotInheritLexicalRunScope() throws Exception {
     try (var probe = new Probe(true, false)) {
@@ -73,6 +82,7 @@ class RequestCapturePhaseZeroTest {
     }
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void capturesShowUiRewrittenWireBytesWithoutExtraRequests() throws Exception {
     try (var probe = new Probe(false, false)) {
@@ -130,20 +140,24 @@ class RequestCapturePhaseZeroTest {
     }
   }
 
+  /** 用途に応じたモデル利用で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void showUiSkipsOneShotTransformationAndTransportConsumesItOnce() throws Exception {
     try (var probe = new Probe(false, false)) {
       var writes = new AtomicInteger();
       var body =
           new RequestBody() {
+            /** {@code contentType} の条件を再現するための補助情報を返す。 */
             public MediaType contentType() {
               return MediaType.get("application/json");
             }
 
+            /** 検証用に、用途に応じたモデル利用において、単一Shotかどうかを判定する。 */
             public boolean isOneShot() {
               return true;
             }
 
+            /** 検証用に、指定された内容を保存先へ反映するため、終点を書き込む。 */
             public void writeTo(okio.BufferedSink sink) throws java.io.IOException {
               if (writes.incrementAndGet() > 1)
                 throw new java.io.IOException("One-shot body already consumed");
@@ -174,6 +188,7 @@ class RequestCapturePhaseZeroTest {
     }
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void reactorContextIsNotAutomaticallyAvailableInsideSdkInterceptor() throws Exception {
     try (var probe = new Probe(true, false)) {
@@ -193,6 +208,7 @@ class RequestCapturePhaseZeroTest {
     }
   }
 
+  /** 用途に応じたモデル利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void publicSdkRequestOptionsAndTransportRequestExposeNoLocalIdentitySlot() {
     assertThat(
@@ -205,8 +221,15 @@ class RequestCapturePhaseZeroTest {
         .doesNotContain("attributes", "tags", "context");
   }
 
+  /** 変更できないクライアント境界識別情報について、逐次応答の後も対象の情報が残ることを確認する。 */
   @Test
   void immutableClientBoundIdentitySurvivesStreamingAndSdkRetriesWithoutWireIds() throws Exception {
+    /**
+     * 検証条件の再現に使う識別情報の情報。
+     *
+     * @param run 検証に使う実行
+     * @param logicalCall 検証に使うlogical呼び出し
+     */
     record Identity(String run, String logicalCall) {}
     var identity = new Identity("run-a", "logical-a");
     var observed = new CopyOnWriteArrayList<Identity>();
@@ -258,13 +281,22 @@ class RequestCapturePhaseZeroTest {
     }
   }
 
+  /** 検証条件を再現するための利用可否の確認。 */
   static final class Probe implements AutoCloseable {
+    /** 検証に使うサーバー。 */
     final HttpServer server;
+
+    /** 検証に使う取得済み、受信。 */
     final List<byte[]> captured = new CopyOnWriteArrayList<>(),
         received = new CopyOnWriteArrayList<>();
+
+    /** 検証に使う対象範囲存在する。 */
     final AtomicInteger scopePresent = new AtomicInteger();
+
+    /** 検証に使う逐次応答。 */
     final boolean streaming;
 
+    /** 検証条件に必要な値を受け取り、Probeを用意する。 */
     Probe(boolean streaming, boolean retry) throws Exception {
       this.streaming = streaming;
       server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -293,10 +325,12 @@ class RequestCapturePhaseZeroTest {
       server.start();
     }
 
+    /** {@code url} の条件を再現するための補助情報を返す。 */
     String url() {
       return "http://127.0.0.1:" + server.getAddress().getPort() + "/v1";
     }
 
+    /** 検証で使用するモデルを、指定された条件に合わせて用意する。 */
     OpenAiChatModel model() {
       return OpenAiChatModel.builder()
           .options(
@@ -312,6 +346,7 @@ class RequestCapturePhaseZeroTest {
           .build();
     }
 
+    /** {@code capture} の条件を再現するための補助情報を返す。 */
     Response capture(Interceptor.Chain chain) throws java.io.IOException {
       if (AgentRunScope.current() != null) scopePresent.incrementAndGet();
       var buffer = new Buffer();
@@ -320,6 +355,7 @@ class RequestCapturePhaseZeroTest {
       return chain.proceed(chain.request());
     }
 
+    /** 検証で利用した対象の終了を扱う。 */
     public void close() {
       server.stop(0);
     }

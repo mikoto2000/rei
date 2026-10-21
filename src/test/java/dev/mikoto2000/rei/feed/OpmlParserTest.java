@@ -11,9 +11,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+/** OPML入力の解釈の結果と状態の契約を検証するテスト。 */
 class OpmlParserTest {
+  /** 検証に使う入力の解釈。 */
   private final OpmlParser parser = new OpmlParser();
 
+  /** 付随情報を保持することを確認する。 */
   @Test
   void parsesSingleFeedAndPreservesMetadata() {
     var feeds =
@@ -31,6 +34,7 @@ class OpmlParserTest {
     assertEquals("https://example.jp/", feed.htmlUrl());
   }
 
+  /** フィードの購読と収集で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void traversesNestedOutlinesWithoutRequiringTypeAndUsesNameFallbacks() {
     var feeds =
@@ -51,6 +55,7 @@ class OpmlParserTest {
     assertThrows(UnsupportedOperationException.class, () -> feeds.clear());
   }
 
+  /** 不正なURL一覧を保持することを確認する。 */
   @Test
   void preservesInvalidUrlsForPerFeedFailureHandling() {
     var feeds =
@@ -58,6 +63,7 @@ class OpmlParserTest {
     assertEquals(List.of("", "not a url"), feeds.stream().map(OpmlSubscription::xmlUrl).toList());
   }
 
+  /** フィードの購読と収集で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void honorsXmlEncodingDeclaration() {
     String xml =
@@ -70,6 +76,7 @@ class OpmlParserTest {
             .displayName());
   }
 
+  /** 不正なを受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -88,6 +95,7 @@ class OpmlParserTest {
     assertThrows(OpmlImportException.class, () -> parse(xml));
   }
 
+  /** フィードの購読と収集で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rejectsExcessiveNesting() {
     assertThrows(
@@ -101,6 +109,7 @@ class OpmlParserTest {
                     + "</body></opml>"));
   }
 
+  /** フィードの購読と収集で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void doesNotResolveXIncludeAlongsideValidFeed() {
     var feeds =
@@ -114,6 +123,7 @@ class OpmlParserTest {
     assertEquals(1, feeds.size());
   }
 
+  /** 検証用に、受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   private List<OpmlSubscription> parse(String xml) {
     return parser.parse(new ByteArrayInputStream(xml.getBytes(StandardCharsets.UTF_8)));
   }

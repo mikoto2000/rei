@@ -13,8 +13,10 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+/** モデルコマンドの結果と状態の契約を検証するテスト。 */
 class ModelCommandTest {
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void switchingModelSendsUnloadForCurrentModel() {
     ModelHolderService holder = Mockito.mock(ModelHolderService.class);
@@ -38,6 +40,7 @@ class ModelCommandTest {
     assertEquals("current model: gpt-5", out.toString().trim());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sameModelDoesNotSendUnload() {
     ModelHolderService holder = Mockito.mock(ModelHolderService.class);

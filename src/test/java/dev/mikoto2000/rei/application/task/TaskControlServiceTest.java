@@ -26,8 +26,10 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** タスク制御サービスの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class TaskControlServiceTest {
+  /** 中断停止する限定再開用の記録実行およびについて、再開取得元を保持することを確認する。 */
   @Test
   void suspendStopsOnlyTheCheckpointRunAndPreservesTheResumeSource() {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -71,8 +73,10 @@ class TaskControlServiceTest {
     assertThat(registry.get("bare").status()).isEqualTo(RunStatus.QUEUED);
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 実行中タスクの操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void exactOwnedCancellationUsesExistingLifecycleAndIsIdempotent() {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -107,6 +111,7 @@ class TaskControlServiceTest {
     assertThat(registry.get("two").status()).isEqualTo(RunStatus.QUEUED);
   }
 
+  /** 実行中タスクの操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void staleRunTargetAndUnsupportedResumeDoNotDispatchOrCancelAnything() {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -130,9 +135,11 @@ class TaskControlServiceTest {
         .isInstanceOf(dev.mikoto2000.rei.application.state.OperationConflictException.class);
     assertThatThrownBy(() -> controls.resume(project.id(), "session", "run:current", "current", 0))
         .isInstanceOf(dev.mikoto2000.rei.application.state.OperationConflictException.class);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(lifecycle, checkpoints);
   }
 
+  /** 実行中タスクの操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void guidanceGoesOnlyToNamedRunNextIterationWithoutCreatingAnotherRun() {
     var projects = new ProjectRegistry(root.resolve("projects.json"));

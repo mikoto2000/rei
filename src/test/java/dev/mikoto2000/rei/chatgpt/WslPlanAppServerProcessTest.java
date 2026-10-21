@@ -18,10 +18,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Optional no-credential native compatibility check; ordinary CI uses the mocked sessions. */
+/**
+ * Wsl計画アプリケーションサーバープロセスの結果と状態の契約を検証するテスト。
+ *
+ * <p>Optional no-credential native compatibility check; ordinary CI uses the mocked sessions.
+ */
 class WslPlanAppServerProcessTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** ChatGPTとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   @EnabledIfEnvironmentVariable(named = "REI_TEST_WSL_CODEX", matches = "/.+")
   void startsRestrictedThreadWithoutTurnThenClosesNativeProcessAndDeletesOwnHome()
@@ -104,6 +110,7 @@ class WslPlanAppServerProcessTest {
     assertNotEquals(0, check.exitValue(), "Dedicated Linux process must have exited");
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   private JsonNode response(PlanAppServerRpc.Session session, int id, ObjectMapper json)
       throws Exception {
     long deadline = System.nanoTime() + Duration.ofSeconds(20).toNanos();

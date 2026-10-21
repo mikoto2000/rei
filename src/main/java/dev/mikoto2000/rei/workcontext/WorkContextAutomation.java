@@ -13,12 +13,23 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Component;
 
-/** Queued only after durable terminal metadata; errors cannot change the original run outcome. */
+/**
+ * 作業文脈の引き継ぎに必要な作業文脈Automationを扱う。
+ *
+ * <p>Queued only after durable terminal metadata; errors cannot change the original run outcome.
+ */
 @Component
 public class WorkContextAutomation implements AutoCloseable {
+  /** サービス。 */
   private final WorkContextService service;
+
+  /** この機能の動作設定。 */
   private final WorkContextProperties properties;
+
+  /** イベント一覧。 */
   private final AgentEventPublisher events;
+
+  /** 実行の担当。 */
   private final ThreadPoolExecutor worker =
       new ThreadPoolExecutor(
           1,
@@ -33,6 +44,7 @@ public class WorkContextAutomation implements AutoCloseable {
           },
           new ThreadPoolExecutor.AbortPolicy());
 
+  /** 指定された値や利用先を使って、WorkContextAutomationを初期化する。 */
   public WorkContextAutomation(
       WorkContextService service, WorkContextProperties properties, AgentEventPublisher events) {
     this.service = service;
@@ -40,6 +52,7 @@ public class WorkContextAutomation implements AutoCloseable {
     this.events = events;
   }
 
+  /** 実行結果を後続の処理へ渡すため、開始を反映する。 */
   public void afterStart(AgentRunContext context) {
     try {
       service.captureRunStart(context);
@@ -52,6 +65,7 @@ public class WorkContextAutomation implements AutoCloseable {
     }
   }
 
+  /** 実行結果を後続の処理へ渡すため、終端を反映する。 */
   public void afterTerminal(AgentRunContext context) {
     if (!properties.autoUpdate() || context.projectId() == null) return;
     try {
@@ -89,6 +103,7 @@ public class WorkContextAutomation implements AutoCloseable {
     }
   }
 
+  /** 状態や結果を購読先へ通知する。 */
   private void publish(AgentRunContext owner, AgentEventType type, Long revision, String status) {
     try {
       events.publish(
@@ -110,6 +125,7 @@ public class WorkContextAutomation implements AutoCloseable {
     }
   }
 
+  /** 作業文脈の引き継ぎで利用した資源や登録を解放し、利用を終了する。 */
   @jakarta.annotation.PreDestroy
   @Override
   public void close() {

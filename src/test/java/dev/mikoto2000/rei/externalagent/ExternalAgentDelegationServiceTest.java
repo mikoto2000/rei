@@ -26,10 +26,13 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 外部エージェント委譲サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ExternalAgentDelegationServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
   RunExecutionContext run(String prompt) {
     var result =
         new RunExecutionContext(
@@ -43,6 +46,7 @@ class ExternalAgentDelegationServiceTest {
     return result;
   }
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void sharesOneRunBudgetAndPublishesOrderedCorrelatedEvents() {
     List<AgentEvent> events = new ArrayList<>();
@@ -78,6 +82,7 @@ class ExternalAgentDelegationServiceTest {
     assertEquals("project", events.getFirst().projectId());
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void unauthorizedAndMissingProjectDoNotExecute() {
     var service =
@@ -100,6 +105,7 @@ class ExternalAgentDelegationServiceTest {
         service.review(noProject, "review", null, "").status());
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void chatGptRequestRejectedByCodexPointsToItsOwnRouteWithoutExecutingCodex() {
     var guidance =
@@ -124,6 +130,7 @@ class ExternalAgentDelegationServiceTest {
     assertTrue(result.summary().contains("backendId=chatgpt-plan"));
   }
 
+  /** 絶対対象を受け付けられることを確認する。 */
   @Test
   void acceptsAbsoluteTargetAfterMissingTargetWithoutConsumingBudget() throws Exception {
     Path file = Files.writeString(root.resolve("design.md"), "design").toRealPath();
@@ -148,6 +155,7 @@ class ExternalAgentDelegationServiceTest {
     assertEquals(file, requests.getFirst().target());
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failureIsAResultAndRunRemainsActive() {
     List<AgentEvent> events = new ArrayList<>();
@@ -168,6 +176,7 @@ class ExternalAgentDelegationServiceTest {
     assertFalse(result.summary().contains("credential"));
   }
 
+  /** 外部エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationPublishesExactlyOneTerminalEventAndCancelsRun() {
     List<AgentEvent> events = new ArrayList<>();
@@ -196,6 +205,7 @@ class ExternalAgentDelegationServiceTest {
     assertTrue(run.isCancelled());
   }
 
+  /** 外部エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void existingRunCancellationReachesTheExternalExecutor() throws Exception {
     var cancellation = new CommandCancellationService();
@@ -241,6 +251,7 @@ class ExternalAgentDelegationServiceTest {
     }
   }
 
+  /** 外部エージェントへの委譲で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void contextIncludesOnlyRelevantSafeWorkingPaths() throws Exception {
     var ws = new dev.mikoto2000.rei.core.working.WorkingSet();

@@ -5,15 +5,21 @@ import java.net.URI;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/** 安全性論文HTTP通信を外部の接続先へ依頼する窓口。 */
 @Component
 public class SafePaperHttpClient implements PaperHttpClient {
+  /** 設定。 */
   private final PaperProperties config;
+
+  /** 情報の取得元。 */
   private final dev.mikoto2000.rei.http.SafeHttpFetcher fetcher;
 
+  /** 論文の調査と整理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SafePaperHttpClient(PaperProperties config) {
     this(config, new dev.mikoto2000.rei.http.SafeHttpFetcher());
   }
 
+  /** 指定された値や利用先を使って、SafePaperHttpClientを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public SafePaperHttpClient(
       PaperProperties config, dev.mikoto2000.rei.http.SafeHttpFetcher fetcher) {
@@ -22,6 +28,7 @@ public class SafePaperHttpClient implements PaperHttpClient {
     this.fetcher = fetcher;
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、参照先のURIを検証する。 */
   public static void validateUri(URI uri) {
     try {
       dev.mikoto2000.rei.http.PublicNetworkPolicy.validate(uri);
@@ -30,18 +37,30 @@ public class SafePaperHttpClient implements PaperHttpClient {
     }
   }
 
+  /** 論文の調査と整理において、公開かどうかを判定する。 */
   public static boolean isPublic(InetAddress address) {
     return dev.mikoto2000.rei.http.PublicNetworkPolicy.isPublic(address);
   }
 
+  /** 論文の調査と整理に必要な公開対象の解決グループを扱う。 */
   static final class PublicResolverGroup extends dev.mikoto2000.rei.http.ValidatingResolverGroup {
+    /** 既定の状態でPublicResolverGroupを初期化する。 */
     PublicResolverGroup() {
       super(SafePaperHttpClient::isPublic, java.util.concurrent.ConcurrentHashMap.newKeySet());
     }
   }
 
+  /**
+   * 論文の調査と整理で受け渡す応答を表す。
+   *
+   * @param status 状態
+   * @param location 場所
+   * @param retryAfter 再試行までの待ち時間
+   * @param body 本文
+   */
   record Response(int status, String location, String retryAfter, byte[] body) {}
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   @Override
   public byte[] get(URI initial, String type, int maxBytes, PaperOperation op) {
     op = op.withDeadline(config.getTimeout());
@@ -110,6 +129,7 @@ public class SafePaperHttpClient implements PaperHttpClient {
     throw failure("Provider retry 上限");
   }
 
+  /** 論文の調査と整理で用いるexchangeを返す。 */
   protected Response exchange(URI uri, String type, int maxBytes, PaperOperation op) {
     int decoded =
         "application/pdf".equals(type)
@@ -158,10 +178,12 @@ public class SafePaperHttpClient implements PaperHttpClient {
     }
   }
 
+  /** 処理を継続できなかった理由を、失敗情報として表す。 */
   private PaperException failure(String message) {
     return new PaperException(PaperException.Code.PDF_DOWNLOAD_FAILED, message);
   }
 
+  /** 論文の調査と整理に関する一時停止を処理する。 */
   private void pause(int attempt, String retry, PaperOperation op) {
     long ms = Math.min(5000, config.getBackoff().toMillis() * (1L << attempt));
     try {
@@ -174,6 +196,7 @@ public class SafePaperHttpClient implements PaperHttpClient {
       try {
         Thread.sleep(Math.max(1, Math.min(100, ms)));
       } catch (InterruptedException e) {
+        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
         op.check();
       }

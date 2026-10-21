@@ -24,9 +24,12 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 変更差分意味によるReviewerの結果と状態の契約を検証するテスト。 */
 class PatchSemanticReviewerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証用に、共通の実行基盤の操作を実行する。 */
   RunExecutionContext run(int calls) {
     var run =
         new RunExecutionContext("run", new OutputLimitRunBudget(0, calls), null, null, event -> {});
@@ -34,6 +37,7 @@ class PatchSemanticReviewerTest {
     return run;
   }
 
+  /** {@code input} の条件を再現するための補助情報を返す。 */
   SemanticPatchReviewService.Input input() {
     return new SemanticPatchReviewService.Input(
         "check required value",
@@ -46,16 +50,20 @@ class PatchSemanticReviewerTest {
         List.of());
   }
 
+  /** {@code valid} の条件を再現するための補助情報を返す。 */
   String valid() {
     return "{\"status\":\"MATCH\",\"requirements\":{\"R1\":\"PASS\"},\"dimensions\":{\"requirements\":\"PASS\",\"extraChanges\":\"PASS\",\"security\":\"PASS\",\"tests\":\"PASS\",\"hygiene\":\"PASS\",\"compatibility\":\"PASS\"}}";
   }
 
+  /** 検証で使用するモデルを、指定された条件に合わせて用意する。 */
   ChatModel model(AtomicInteger calls, String output) {
     return new ChatModel() {
+      /** 検証用に、共通の実行基盤の要求を実行し、呼び出し元へ結果を返す。 */
       public ChatResponse call(Prompt prompt) {
         throw new AssertionError("stream only");
       }
 
+      /** {@code stream} の条件を再現するための補助情報を返す。 */
       public reactor.core.publisher.Flux<ChatResponse> stream(Prompt prompt) {
         calls.incrementAndGet();
         var options = (OpenAiChatOptions) prompt.getOptions();
@@ -69,6 +77,7 @@ class PatchSemanticReviewerTest {
     };
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void oneToolFreeCallConsumesParentBudgetAndExhaustionCannotInvokeAgain() throws Exception {
     var calls = new AtomicInteger();
@@ -81,6 +90,7 @@ class PatchSemanticReviewerTest {
     assertEquals(1, calls.get());
   }
 
+  /** 共通の実行基盤で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void malformedDuplicateTrailingAndOversizedVerdictsAbstain() throws Exception {
     for (String output :
@@ -99,17 +109,20 @@ class PatchSemanticReviewerTest {
     }
   }
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void ambientToolsAndCancellationDoNotReachModel() throws Exception {
     var calls = new AtomicInteger();
     var callback = org.mockito.Mockito.mock(org.springframework.ai.tool.ToolCallback.class);
     ChatModel unsafe =
         new ChatModel() {
+          /** 検証用に、共通の実行基盤の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             fail("no model");
             return null;
           }
 
+          /** 検証用に、共通の実行基盤で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return OpenAiChatOptions.builder().toolCallbacks(List.of(callback)).build();
           }

@@ -18,11 +18,14 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.core.io.Resource;
 
+/** 外部設定ファイルサービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ExternalConfigFileServiceTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 設定ファイルパスについて、外部アプリケーションYAML形式の内容場所を利用することを確認する。 */
   @Test
   void configFilePathUsesExternalApplicationYamlLocation() {
     ExternalConfigFileService service = new ExternalConfigFileService(tempDir);
@@ -30,6 +33,7 @@ class ExternalConfigFileServiceTest {
     assertEquals(tempDir.resolve("application.yaml"), service.configFilePath());
   }
 
+  /** 追加システムへの指示ファイルパスについて、外部アプリケーションYAML形式の内容ディレクトリを利用することを確認する。 */
   @Test
   void additionalSystemPromptFilePathUsesExternalApplicationYamlDirectory() {
     ExternalConfigFileService service = new ExternalConfigFileService(tempDir);
@@ -38,6 +42,7 @@ class ExternalConfigFileServiceTest {
         tempDir.resolve("additional-system-prompt.md"), service.additionalSystemPromptFilePath());
   }
 
+  /** 初期化について、雛形を作成することを確認する。 */
   @Test
   void initializeCreatesTemplateWhenFileDoesNotExist() throws Exception {
     ExternalConfigFileService service = new ExternalConfigFileService(tempDir);
@@ -153,6 +158,7 @@ class ExternalConfigFileServiceTest {
     assertTrue(additionalSystemPrompt.contains("Markdown で直接記述"));
   }
 
+  /** 設定の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void templateIncludesAllEnabledSettingsExceptWeb() {
     ExternalConfigFileService service = new ExternalConfigFileService(tempDir);
@@ -206,12 +212,14 @@ class ExternalConfigFileServiceTest {
     }
   }
 
+  /** 検証用に、保存された情報を利用できるよう、YAML形式の内容を読み込む。 */
   private Properties loadYaml(Resource resource) {
     var factory = new YamlPropertiesFactoryBean();
     factory.setResources(resource);
     return factory.getObject();
   }
 
+  /** {@code enabledKeys} の条件を再現するための補助情報を返す。 */
   private Set<String> enabledKeys(Properties properties) {
     var keys = new TreeSet<String>();
     for (Object name : properties.keySet()) {
@@ -221,6 +229,7 @@ class ExternalConfigFileServiceTest {
     return keys;
   }
 
+  /** 設定の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void initializeDoesNotOverwriteExistingFilesWithoutForce() throws Exception {
     ExternalConfigFileService service = new ExternalConfigFileService(tempDir);
@@ -237,6 +246,7 @@ class ExternalConfigFileServiceTest {
     assertEquals("custom\n", Files.readString(additionalSystemPromptFile));
   }
 
+  /** 初期化について、追加システムへの指示ファイルを作成することを確認する。 */
   @Test
   void initializeCreatesAdditionalSystemPromptFileEvenWhenApplicationYamlExists() throws Exception {
     ExternalConfigFileService service = new ExternalConfigFileService(tempDir);
@@ -250,6 +260,7 @@ class ExternalConfigFileServiceTest {
     assertTrue(Files.exists(service.additionalSystemPromptFilePath()));
   }
 
+  /** 設定の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void initializeOverwritesExistingFilesWhenForceIsTrue() throws Exception {
     ExternalConfigFileService service = new ExternalConfigFileService(tempDir);

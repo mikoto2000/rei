@@ -18,11 +18,14 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import org.junit.jupiter.api.Test;
 
+/** 活動中実行一覧の結果と状態の契約を検証するテスト。 */
 class ActiveRunsTest {
+  /** {@code conversation} の条件を再現するための補助情報を返す。 */
   String conversation(String id) {
     return "project:" + id + ":chat:main";
   }
 
+  /** 会話の実行で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void registersImmediatelyAndSameProjectInputRemainsAnIntervention() {
     var tasks = new ArrayList<Runnable>();
@@ -45,6 +48,7 @@ class ActiveRunsTest {
     assertThat(router.activeRuns()).isEmpty();
   }
 
+  /** 会話の実行で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void independentProjectsActuallyRunConcurrentlyUsingProductionExecutor() throws Exception {
     var entered = new CountDownLatch(2);
@@ -76,6 +80,7 @@ class ActiveRunsTest {
     }
   }
 
+  /** 各対象終端終了について、実行を取り除くことを確認する。 */
   @Test
   void everyTerminalExitRemovesRunAndListenerFailureCannotLeaveGhosts() {
     for (RuntimeException failure :
@@ -109,6 +114,7 @@ class ActiveRunsTest {
     assertThat(router.activeRuns()).isEmpty();
   }
 
+  /** 会話の実行で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void closedMailboxSuccessorWaitsUntilPreviousRunnerExits() {
     var tasks = new ArrayList<Runnable>();
@@ -131,6 +137,7 @@ class ActiveRunsTest {
     assertThat(ref[0].activeRuns()).isEmpty();
   }
 
+  /** 会話の実行で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void concurrentStartsAndCompletionsNeverLoseEntries() throws Exception {
     var tasks = new ConcurrentLinkedQueue<Runnable>();

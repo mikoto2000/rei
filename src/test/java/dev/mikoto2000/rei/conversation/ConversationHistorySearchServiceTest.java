@@ -13,15 +13,23 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 会話履歴検索サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ConversationHistorySearchServiceTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir java.nio.file.Path tempDir;
 
+  /** 検証に使うデータ取得元。 */
   private DriverManagerDataSource dataSource;
+
+  /** 検証に使うサービス。 */
   private ConversationHistorySearchService service;
+
+  /** 検証に使う会話ログ保存先。 */
   private ConversationLogStore conversationLogStore;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setUp() throws Exception {
     dataSource =
@@ -36,6 +44,7 @@ class ConversationHistorySearchServiceTest {
     service = new ConversationHistorySearchService(dataSource, conversationLogStore);
   }
 
+  /** 会話履歴と受付記録の管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchesChatAndBlueskyReplyHistories() throws Exception {
     long now = Instant.parse("2026-08-14T00:00:00Z").toEpochMilli();
@@ -52,6 +61,7 @@ class ConversationHistorySearchServiceTest {
     assertThat(results.get(1).speaker()).isEqualTo("user");
   }
 
+  /** 会話履歴と受付記録の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void filtersByScopeSpeakerAndDate() throws Exception {
     insertChat("c1", "USER", "古い grep の話", Instant.parse("2026-08-01T00:00:00Z").toEpochMilli());
@@ -67,6 +77,7 @@ class ConversationHistorySearchServiceTest {
     assertThat(results.get(0).content()).isEqualTo("grep ツールを追加したい");
   }
 
+  /** チャット詳細を返すことを確認する。 */
   @Test
   void returnsChatDetailInChronologicalOrder() throws Exception {
     long now = Instant.parse("2026-08-14T00:00:00Z").toEpochMilli();
@@ -81,6 +92,7 @@ class ConversationHistorySearchServiceTest {
         .containsExactly("質問", "回答");
   }
 
+  /** Bluesky返信詳細を返すことを確認する。 */
   @Test
   void returnsBlueskyReplyDetailInChronologicalOrder() throws Exception {
     insertBluesky("alice.bsky.social", "user", "元投稿", "2026-08-14T00:00:00Z");
@@ -94,6 +106,7 @@ class ConversationHistorySearchServiceTest {
         .containsExactly("元投稿", "返信");
   }
 
+  /** 会話履歴と受付記録の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void classifiesNewScopes() throws Exception {
     long now = Instant.parse("2026-08-14T00:00:00Z").toEpochMilli();
@@ -109,6 +122,7 @@ class ConversationHistorySearchServiceTest {
         .contains("chat", "tool", "bluesky-manual");
   }
 
+  /** 会話履歴と受付記録の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void filtersByNewScopes() throws Exception {
     long now = Instant.parse("2026-08-14T00:00:00Z").toEpochMilli();
@@ -129,6 +143,7 @@ class ConversationHistorySearchServiceTest {
     assertThat(manualResults.get(0).scope()).isEqualTo("bluesky-manual");
   }
 
+  /** 詳細を返すことを確認する。 */
   @Test
   void returnsDetailForNewScopes() throws Exception {
     long now = Instant.parse("2026-08-14T00:00:00Z").toEpochMilli();
@@ -145,6 +160,7 @@ class ConversationHistorySearchServiceTest {
     assertThat(manualDetail.scope()).isEqualTo("bluesky-manual");
   }
 
+  /** 会話履歴と受付記録の管理で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void keepsLegacyUnprefixedChatHistoriesAsChatScope() throws Exception {
     long now = Instant.parse("2026-08-14T00:00:00Z").toEpochMilli();
@@ -156,6 +172,7 @@ class ConversationHistorySearchServiceTest {
     assertThat(results.get(0).conversationId()).isEqualTo("chat:legacy");
   }
 
+  /** 空白の検索条件を受け付けないことを確認する。 */
   @Test
   void rejectsBlankQuery() {
     assertThatThrownBy(() -> service.search(" ", "all", null, null, null, 10))
@@ -163,6 +180,7 @@ class ConversationHistorySearchServiceTest {
         .hasMessageContaining("query");
   }
 
+  /** 検索の記録およびについて、詳細一覧を返すことを確認する。 */
   @Test
   void searchesAndReturnsDetailsFromPersistentLogsAfterMemoryWindowIsGone() {
     conversationLogStore.append("chat:main", "user", "永続ログだけに残った設計相談");
@@ -178,6 +196,7 @@ class ConversationHistorySearchServiceTest {
         .containsExactly("永続ログだけに残った設計相談", "日次ログから検索できます");
   }
 
+  /** {@code initializeSchema} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void initializeSchema() throws Exception {
     try (Connection connection = dataSource.getConnection();
         Statement statement = connection.createStatement()) {
@@ -203,6 +222,7 @@ class ConversationHistorySearchServiceTest {
     }
   }
 
+  /** {@code insertChat} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void insertChat(String conversationId, String type, String content, long timestamp)
       throws Exception {
     try (Connection connection = dataSource.getConnection();
@@ -216,6 +236,7 @@ class ConversationHistorySearchServiceTest {
     }
   }
 
+  /** {@code insertBluesky} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void insertBluesky(String handle, String role, String content, String createdAt)
       throws Exception {
     OffsetDateTime.parse(createdAt).withOffsetSameInstant(ZoneOffset.UTC);

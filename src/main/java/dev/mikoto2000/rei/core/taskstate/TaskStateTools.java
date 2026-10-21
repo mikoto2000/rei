@@ -13,12 +13,15 @@ import org.springframework.stereotype.Component;
 @Component
 public class TaskStateTools {
 
+  /** タスク状態。 */
   private final TaskState taskState;
 
+  /** 指定された値や利用先を使って、TaskStateToolsを初期化する。 */
   public TaskStateTools(TaskState taskState) {
     this.taskState = taskState;
   }
 
+  /** 作業状態の記録で用いるタスク状態を返す。 */
   TaskState taskState() {
     return taskState;
   }
@@ -90,6 +93,7 @@ public class TaskStateTools {
     return "updated";
   }
 
+  /** 新たな対象を管理できるよう、全対象を追加する。 */
   private void addAll(TaskState taskState, List<String> completed, List<String> pending) {
     if (completed != null) {
       for (String item : completed) {

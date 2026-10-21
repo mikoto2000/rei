@@ -9,9 +9,14 @@ import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
 
-/** Reproducible synthetic diagnostic overhead, never a provider cache benchmark. */
+/**
+ * 先行部分診断Scenariosの結果と状態の契約を検証するテスト。
+ *
+ * <p>Reproducible synthetic diagnostic overhead, never a provider cache benchmark.
+ */
 @org.junit.jupiter.api.Tag("integration")
 class PrefixDiagnosticScenariosTest {
+  /** 実行時間の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void recordsBoundedMetadataForEightRepresentativeStructures() {
     for (String scenario :

@@ -10,10 +10,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+/** 作業習慣通知判断基準の結果と状態の契約を検証するテスト。 */
 class BehaviorNotificationPolicyTest {
+  /** 検証に使う判断基準。 */
   final BehaviorNotificationPolicy policy =
       new BehaviorNotificationPolicy(new BehaviorProperties());
 
+  /** 作業習慣の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void cooldownCoversSameAndChangedReasons() {
     var a = assess(1800, record(0, 1800, "social"));
@@ -24,6 +27,7 @@ class BehaviorNotificationPolicyTest {
         policy.decide(assess(1860, record(0, 1860, "social")), state, true, false).allowed());
   }
 
+  /** 作業習慣の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void escalationCanBreakCooldown() {
     var a = assess(1800, record(0, 1800, "social"));
@@ -31,6 +35,7 @@ class BehaviorNotificationPolicyTest {
     assertTrue(policy.decide(assess(3600, record(0, 3600, "media")), state, true, false).allowed());
   }
 
+  /** 作業習慣の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void disabledAndBusySuppress() {
     var a = assess(3600, record(0, 3600, "social"));
@@ -38,6 +43,7 @@ class BehaviorNotificationPolicyTest {
     assertFalse(policy.decide(a, BehaviorState.empty(), true, true).allowed());
   }
 
+  /** 復旧について、新規経験の記録を開始することを確認する。 */
   @Test
   void recoveryStartsNewEpisodeWithoutRecoveryNotification() {
     var a = assess(1800, record(0, 1800, "social"));
@@ -57,6 +63,7 @@ class BehaviorNotificationPolicyTest {
     assertNotEquals(state.episodeId(), decision.state().episodeId());
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void longUnknownDoesNotResetCooldown() {
     var a = assess(3600, record(0, 3600, "social"));
@@ -67,6 +74,7 @@ class BehaviorNotificationPolicyTest {
         policy.decide(unknown, state, true, false).state().lastNotificationAt());
   }
 
+  /** 作業習慣の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void warningCooldownExpiresAndStrongWarningCanEscalate() {
     var a = assess(3600, record(0, 3600, "social"));

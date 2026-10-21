@@ -5,29 +5,39 @@ import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 
-/** Plain terminal view; no command parsing or persistence responsibility. */
+/**
+ * 履歴を利用者が確認できる表示形式へ整える。
+ *
+ * <p>Plain terminal view; no command parsing or persistence responsibility.
+ */
 public final class HistoryFormatter {
+  /** 最大本文文字数。 */
   public static final int MAX_BODY_CHARS = 2000;
 
+  /** 会話履歴と受付記録の管理で用いる本文を返す。 */
   public String body(String text) {
     return clip(safe(text), MAX_BODY_CHARS);
   }
 
+  /** 会話履歴と受付記録の管理で用いる表示名を返す。 */
   public String label(String text) {
     return clip(safe(text).replaceAll("\\s+", " ").strip(), 200);
   }
 
+  /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */
   private String safe(String text) {
     return CredentialRedactor.redact(text)
         .replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", "")
         .replaceAll("[\\u202A-\\u202E\\u2066-\\u2069]", "");
   }
 
+  /** 利用先の許容量を超えないよう、履歴表示形式への変換を上限内に収める。 */
   private String clip(String value, int length) {
     if (value.codePointCount(0, value.length()) <= length) return value;
     return value.substring(0, value.offsetByCodePoints(0, length)) + "... (truncated)";
   }
 
+  /** 会話履歴と受付記録の管理で用いる記録日時を返す。 */
   public String timestamp(String iso) {
     try {
       return DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")
@@ -38,10 +48,12 @@ public final class HistoryFormatter {
     }
   }
 
+  /** 会話履歴と受付記録の管理で用いるlogical識別子を返す。 */
   public String logicalId(String id) {
     return id != null && id.startsWith("project:") ? id.substring(id.indexOf(':', 8) + 1) : id;
   }
 
+  /** 会話履歴と受付記録の管理で用いるメッセージを返す。 */
   public String message(ConversationLogEntry entry) {
     return "["
         + timestamp(entry.timestamp().toInstant().toString())

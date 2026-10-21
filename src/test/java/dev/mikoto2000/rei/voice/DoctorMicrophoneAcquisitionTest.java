@@ -17,7 +17,9 @@ import javax.sound.sampled.Mixer;
 import javax.sound.sampled.TargetDataLine;
 import org.junit.jupiter.api.Test;
 
+/** 環境診断マイク情報の取得の結果と状態の契約を検証するテスト。 */
 class DoctorMicrophoneAcquisitionTest {
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void acquiresAndClosesWithoutStartingOrReading() throws Exception {
     Mixer.Info info = new Mixer.Info("fixture", "vendor", "description", "1") {};
@@ -36,6 +38,7 @@ class DoctorMicrophoneAcquisitionTest {
     }
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedOpenStillClosesWithoutStarting() throws Exception {
     Mixer.Info info = new Mixer.Info("fixture", "vendor", "description", "1") {};

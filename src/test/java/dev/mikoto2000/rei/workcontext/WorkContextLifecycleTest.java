@@ -24,7 +24,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
+/** 作業文脈受付から終了までの管理の結果と状態の契約を検証するテスト。 */
 class WorkContextLifecycleTest {
+  /** 作業文脈の引き継ぎで、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void manualExtractionFailureDisplaysCountsSettingAndActionWithoutEvidence() {
     var text = new java.io.StringWriter();
@@ -43,6 +45,7 @@ class WorkContextLifecycleTest {
     assertTrue(text.toString().contains("/work update"));
   }
 
+  /** 作業文脈の引き継ぎで、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void autoUpdateDefaultsOffAndEnabledFailureIsIsolatedAndOwnedByOriginalSession()
       throws Exception {
@@ -54,6 +57,7 @@ class WorkContextLifecycleTest {
             service, new WorkContextProperties(false, true, 1200, 12000, 2, 20), bus)) {
       disabled.afterTerminal(context);
     }
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(service);
     var ended = new CountDownLatch(1);
     var events = new CopyOnWriteArrayList<AgentEvent>();
@@ -84,6 +88,7 @@ class WorkContextLifecycleTest {
     assertTrue(status.contains("rei.work-context.timeout-seconds"));
   }
 
+  /** 作業文脈の引き継ぎで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void resumeIsShownOncePerSessionAndCanBeDisabled() {
     var service = mock(WorkContextService.class);

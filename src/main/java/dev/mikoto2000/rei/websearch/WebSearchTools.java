@@ -5,17 +5,25 @@ import java.util.List;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+/** 検索結果の一覧取得と本文付きの調査を、モデルが選べるツールとして提供する。 */
 @Component
 public class WebSearchTools {
 
+  /** 本文を取得せず、検索結果のタイトル・URL・抜粋を集める窓口。 */
   private final WebSearchService webSearchService;
+
+  /** 検索と上位ページの本文取得を一度に行う調査の窓口。 */
   private final WebSearchAndReadService webSearchAndReadService;
+
+  /** モデルへ返す検索結果を、残っている文脈予算に収めるための制御。 */
   private final WebResultBudget resultBudget;
 
+  /** Web上の情報の調査を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WebSearchTools(WebSearchService search, WebSearchAndReadService read) {
     this(search, read, WebResultBudget.defaults());
   }
 
+  /** 指定された値や利用先を使って、WebSearchToolsを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public WebSearchTools(
       WebSearchService search, WebSearchAndReadService read, WebResultBudget budget) {
@@ -24,6 +32,7 @@ public class WebSearchTools {
     this.resultBudget = budget;
   }
 
+  /** タイトル・URL・抜粋を検索結果として返し、本文取得を必要としない調査に利用する。 */
   @Tool(
       name = "webSearch",
       description =
@@ -50,18 +59,21 @@ public class WebSearchTools {
     }
   }
 
+  /** タイトル・URL・抜粋を検索結果として返し、本文取得を必要としない調査に利用する。 */
   List<WebSearchResult> webSearch(
       String query, Integer limit, org.springframework.ai.chat.model.ToolContext context)
       throws IOException, InterruptedException {
     return webSearch(query, limit, null, context);
   }
 
+  /** タイトル・URL・抜粋を検索結果として返し、本文取得を必要としない調査に利用する。 */
   List<WebSearchResult> webSearch(String query, Integer limit)
       throws IOException, InterruptedException {
     IO.println(String.format("Web を検索するよ。limit=%s", limit));
     return webSearchService.search(query, limit);
   }
 
+  /** 公開Webの検索と上位ページの本文取得をまとめて行い、調査の根拠を返す。 */
   @Tool(
       name = "webSearchAndRead",
       description =
@@ -86,6 +98,7 @@ public class WebSearchTools {
     }
   }
 
+  /** 公開Webの検索と上位ページの本文取得をまとめて行い、調査の根拠を返す。 */
   public WebSearchAndReadResponse webSearchAndRead(WebSearchAndReadRequest request)
       throws IOException, InterruptedException {
     return webSearchAndReadService.searchAndRead(request);

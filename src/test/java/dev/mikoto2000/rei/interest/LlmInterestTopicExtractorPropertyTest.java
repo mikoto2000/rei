@@ -30,6 +30,7 @@ import tools.jackson.databind.json.JsonMapper;
 class LlmInterestTopicExtractorPropertyTest {
 
   // テスト用の過去クエリセット（様々なパターン）
+  /** {@code pastQueriesVariants} の条件を再現するための補助情報を返す。 */
   static Stream<List<String>> pastQueriesVariants() {
     return Stream.of(
         List.of("Neovim devcontainer best practices"),
@@ -45,6 +46,7 @@ class LlmInterestTopicExtractorPropertyTest {
         List.of("postgresql performance tuning", "redis cluster setup"));
   }
 
+  /** 関心の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @ParameterizedTest(name = "pastQueries={0}")
   @MethodSource("pastQueriesVariants")
   @Tag("interest-discovery-property-1-pastQueriesInPrompt")

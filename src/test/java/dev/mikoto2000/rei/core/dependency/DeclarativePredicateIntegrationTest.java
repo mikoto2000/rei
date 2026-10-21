@@ -21,11 +21,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** Declarative判定条件外部連携の結果と状態の契約を検証するテスト。 */
 class DeclarativePredicateIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う判定条件。 */
   String predicate =
       "{\"version\":1,\"expression\":{\"op\":\"AND\",\"args\":[{\"op\":\"GTE\",\"pointer\":\"/coverage\",\"value\":80},{\"op\":\"MATCH\",\"pointer\":\"/status\",\"value\":\"passed|complete\"}]}}";
 
+  /** 外部条件の待機で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledPredicateGoalCannotStartAModelRun() {
     var repository =
@@ -52,6 +57,7 @@ class DeclarativePredicateIntegrationTest {
     assertEquals("READY", repository.get("project", goal.id()).status());
   }
 
+  /** ファイル依存条件について、同一判定条件を利用することを確認する。 */
   @Test
   void fileDependencyUsesSamePredicateAndPreservesUnknownObservation() throws Exception {
     var data = new DriverManagerDataSource("jdbc:sqlite:" + root.resolve("dependencies.db"));
@@ -87,6 +93,7 @@ class DeclarativePredicateIntegrationTest {
     assertEquals(DependencyState.BLOCKED, probe.probe(restored).state());
   }
 
+  /** 目標判定条件について、再開の後も対象の情報が残ることを確認する。 */
   @Test
   void goalPredicateSurvivesRestartAndIsDisabledByDefault() throws Exception {
     var source = new DriverManagerDataSource("jdbc:sqlite:" + root.resolve("goals.db"));
@@ -123,6 +130,7 @@ class DeclarativePredicateIntegrationTest {
                 10));
   }
 
+  /** HTTP通信判定条件について、上限内に収めた通信経路を再利用することを確認する。 */
   @Test
   void httpPredicateReusesBoundedTransportWithoutExposingResponseBody() throws Exception {
     var body =

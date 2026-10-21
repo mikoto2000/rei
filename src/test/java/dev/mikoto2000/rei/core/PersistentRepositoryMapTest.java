@@ -24,20 +24,25 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 保存される保存と検索の窓口対応表の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class PersistentRepositoryMapTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code data} の条件を再現するための補助情報を返す。 */
   DriverManagerDataSource data() {
     return new DriverManagerDataSource("jdbc:sqlite:" + root.resolve("index.db"));
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   RepositoryMapService service(JavaCompiler compiler) {
     var result = new RepositoryMapService(path -> List.of("App.java"), compiler);
     result.setPersistentIndex(new SqliteRepositoryMapIndex(data()));
     return result;
   }
 
+  /** 再開について、付随情報を再利用することを確認する。 */
   @Test
   void restartReusesMetadataOnlyAfterCheckingCurrentSourceDigest() throws Exception {
     Files.writeString(
@@ -64,6 +69,7 @@ class PersistentRepositoryMapTest {
     }
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void corruptedMetadataFallsBackToFreshAst() throws Exception {
     Files.writeString(root.resolve("App.java"), "class App {}");
@@ -81,6 +87,7 @@ class PersistentRepositoryMapTest {
     verify(compiler, times(1)).getTask(any(), any(), any(), any(), any(), any());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void rootProfileAndDeletionCannotReuseStaleMetadata() throws Exception {
     Files.writeString(root.resolve("App.java"), "class App {}");
@@ -105,6 +112,7 @@ class PersistentRepositoryMapTest {
     assertTrue(index.load(root).isEmpty());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unavailableDatabaseDoesNotReplaceLiveFactsWithAnEmptyMap() throws Exception {
     Files.writeString(root.resolve("App.java"), "class App {}");
@@ -117,6 +125,7 @@ class PersistentRepositoryMapTest {
     assertEquals("App", result.items().getFirst().symbols().getFirst().name());
   }
 
+  /** 大きすぎる入力を受け付けないことを確認する。 */
   @Test
   void failedReplacementRollsBackAndRejectsOversizedInputBeforeDeletingSnapshot() throws Exception {
     Files.writeString(root.resolve("App.java"), "class App {}");
@@ -137,6 +146,7 @@ class PersistentRepositoryMapTest {
     assertEquals(saved, index.load(root));
   }
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void boundedCorruptRowsAndInterruptedSaveCannotBecomeReusableMetadata() throws Exception {
     Files.writeString(root.resolve("App.java"), "class App {}");
@@ -166,6 +176,7 @@ class PersistentRepositoryMapTest {
                         "../App.java", "a".repeat(64), "", List.of(), List.of()))));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void defaultConfigurationDoesNotCreateOrReadIndexTables() throws Exception {
     Files.writeString(root.resolve("App.java"), "class App {}");
@@ -173,6 +184,7 @@ class PersistentRepositoryMapTest {
     var data = mock(javax.sql.DataSource.class);
     service.configurePersistentIndex(data, false);
     assertEquals(1, service.map(root, "", 10).items().size());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(data);
     var index = new SqliteRepositoryMapIndex(data);
     verifyNoInteractions(data);
@@ -180,6 +192,7 @@ class PersistentRepositoryMapTest {
     assertTrue(generated.contains("${REI_REPOSITORY_MAP_PERSISTENT_INDEX_ENABLED:false}"));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void incompleteInventoryDoesNotEraseTheLastCompleteSnapshot() throws Exception {
     Files.writeString(root.resolve("App.java"), "class App {}");

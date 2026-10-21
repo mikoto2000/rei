@@ -16,8 +16,10 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** 画像コマンドの結果と状態の契約を検証するテスト。 */
 class ImageCommandTest {
 
+  /** 生成を利用することを確認する。 */
   @Test
   void directPromptUsesGenerateAndBareCommandOnlyShowsUsage() {
     ImageGenerationService service = Mockito.mock(ImageGenerationService.class);
@@ -33,6 +35,7 @@ class ImageCommandTest {
     assertThat(request.getValue().prompt()).isEqualTo("system architecture diagram");
   }
 
+  /** 画像の生成で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void generateDelegatesToServiceAndPrintsSavedPath() {
     ImageGenerationService service = Mockito.mock(ImageGenerationService.class);
@@ -66,6 +69,7 @@ class ImageCommandTest {
     assertThat(captor.getValue().size().height()).isEqualTo(480);
   }
 
+  /** 画像の生成で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void generateRawDisablesPromptEnhancement() {
     ImageGenerationService service = Mockito.mock(ImageGenerationService.class);
@@ -83,6 +87,7 @@ class ImageCommandTest {
     assertThat(captor.getValue().enhancePrompt()).isFalse();
   }
 
+  /** 画像の生成で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void generatePrintsErrorWhenServiceFails() {
     ImageGenerationService service = Mockito.mock(ImageGenerationService.class);
@@ -95,6 +100,7 @@ class ImageCommandTest {
     assertThat(execution.output()).contains("[error] 画像生成に失敗しました: api failed");
   }
 
+  /** 生成について、不正な大きさを受け付けないことを確認する。 */
   @Test
   void generateRejectsInvalidSizeBeforeCallingService() {
     ImageGenerationService service = Mockito.mock(ImageGenerationService.class);
@@ -107,6 +113,7 @@ class ImageCommandTest {
     Mockito.verifyNoInteractions(service);
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private CommandLine newCommand(ImageGenerationService service) {
     ImageProperties properties = new ImageProperties();
     CommandCancellationService cancellationService = new CommandCancellationService();
@@ -114,6 +121,7 @@ class ImageCommandTest {
         new CommandLine(
             new ImageCommand(),
             new CommandLine.IFactory() {
+              /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
               @Override
               public <K> K create(Class<K> cls) throws Exception {
                 if (cls.equals(GenerateCommand.class)) {
@@ -125,6 +133,7 @@ class ImageCommandTest {
     return commandLine;
   }
 
+  /** 検証用に、要求された処理を実行する。 */
   private ExecutionResult execute(CommandLine commandLine, String... args) {
     java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
     PrintStream originalOut = System.out;
@@ -137,5 +146,11 @@ class ImageCommandTest {
     }
   }
 
+  /**
+   * 検証条件の再現に使う実行結果の情報。
+   *
+   * @param exitCode 検証に使う終了コード
+   * @param output 検証に使う出力
+   */
   private record ExecutionResult(int exitCode, String output) {}
 }

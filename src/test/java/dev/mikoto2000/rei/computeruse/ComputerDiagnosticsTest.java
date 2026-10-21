@@ -12,10 +12,13 @@ import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 画面操作診断情報の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ComputerDiagnosticsTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 画面操作の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void storesOriginalImagesOverlayAndMappedCoordinatesWithoutChangingModelImage() throws Exception {
     var diagnostics = new ComputerDiagnostics(directory);
@@ -42,6 +45,7 @@ class ComputerDiagnosticsTest {
     assertFalse(Files.readString(step.resolve("dispatched.json")).contains("private label"));
   }
 
+  /** 画面操作の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledDoesNotCreateFiles() throws Exception {
     var diagnostics = new ComputerDiagnostics(null);
@@ -53,6 +57,7 @@ class ComputerDiagnosticsTest {
     }
   }
 
+  /** サービスについて、観測を書き込むことを確認する。 */
   @Test
   void serviceWritesObservedAndDispatchedArtifactsAndAnnouncesLocation() throws Exception {
     var events = new java.util.ArrayList<ComputerProgress>();
@@ -91,6 +96,7 @@ class ComputerDiagnosticsTest {
     }
   }
 
+  /** 画面操作の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void artifactFailureDoesNotRetryOrPreventInput() throws Exception {
     Path file = Files.writeString(directory.resolve("file"), "occupied");

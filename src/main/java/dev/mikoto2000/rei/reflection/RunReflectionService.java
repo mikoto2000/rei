@@ -16,18 +16,31 @@ import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Service;
 
-/** Event facts only: no additional model call and no inferred root causes. */
+/**
+ * 実行振り返りのユースケースを実現する。
+ *
+ * <p>Event facts only: no additional model call and no inferred root causes.
+ */
 @Service
 public class RunReflectionService {
+  /** リポジトリ。 */
   private final RunReflectionRepository repo;
+
+  /** 通知の連携先。 */
   private final AgentEventBus bus;
+
+  /** 履歴。 */
   private final ProjectAgentEventStore history;
+
+  /** 購読。 */
   private AgentEventBus.Subscription subscription;
 
+  /** 作業の振り返りを利用するため、指定を補って共通の初期化へ引き渡す。 */
   public RunReflectionService(RunReflectionRepository repo, AgentEventBus bus) {
     this(repo, bus, null);
   }
 
+  /** 指定された値や利用先を使って、RunReflectionServiceを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public RunReflectionService(
       RunReflectionRepository repo, AgentEventBus bus, ProjectAgentEventStore history) {
@@ -36,7 +49,11 @@ public class RunReflectionService {
     this.history = history;
   }
 
-  /** Bounded human backfill of facts only. Never starts or verifies the saved Run. */
+  /**
+   * 判断に必要な情報を集め、後続の処理へ渡す。
+   *
+   * <p>Bounded human backfill of facts only. Never starts or verifies the saved Run.
+   */
   public synchronized RunReflectionRepository.Item collect(
       String project, String session, String run) {
     if (history == null
@@ -89,11 +106,13 @@ public class RunReflectionService {
         terminal.payload() instanceof AgentRunFailedPayload p ? error(p.error()) : "");
   }
 
+  /** 要求された処理を開始する。 */
   @PostConstruct
   public synchronized void start() {
     if (subscription == null) subscription = bus.subscribe(this::observe);
   }
 
+  /** 作業の振り返りで利用した資源や登録を解放し、利用を終了する。 */
   @PreDestroy
   public synchronized void close() {
     if (subscription != null) {
@@ -102,6 +121,7 @@ public class RunReflectionService {
     }
   }
 
+  /** 状況を判断する根拠を得るため、実行振り返りサービスを観測する。 */
   private synchronized void observe(AgentEvent event) {
     if (!RunReflectionRepository.valid(event.projectId())
         || !RunReflectionRepository.valid(event.sessionId())) return;
@@ -152,10 +172,12 @@ public class RunReflectionService {
     }
   }
 
+  /** 指定された条件と対象が一致するかを判定する。 */
   private boolean matches(AgentEvent event, String id) {
     return RunReflectionRepository.valid(id) && id.equals(event.runId());
   }
 
+  /** 作業の振り返りで用いるエラーを返す。 */
   private String error(ErrorInformation error) {
     return error == null ? "not_recorded" : RunReflectionRepository.safe(error.errorType(), 128);
   }

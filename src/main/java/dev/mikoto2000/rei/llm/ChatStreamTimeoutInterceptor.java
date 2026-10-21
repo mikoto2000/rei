@@ -5,10 +5,16 @@ import java.util.concurrent.TimeUnit;
 import okhttp3.Interceptor;
 import okhttp3.Response;
 
-/** Keep chat requests alive while receiving data, but bound network read inactivity. */
+/**
+ * 用途に応じたモデル利用に必要なチャット逐次データタイムアウトInterceptorを扱う。
+ *
+ * <p>Keep chat requests alive while receiving data, but bound network read inactivity.
+ */
 final class ChatStreamTimeoutInterceptor implements Interceptor {
+  /** 読み取りタイムアウトのミリ秒数。 */
   static final int READ_TIMEOUT_MILLIS = 120_000;
 
+  /** 用途に応じたモデル利用で用いるinterceptを返す。 */
   @Override
   public Response intercept(Chain chain) throws IOException {
     if (!chain.request().url().encodedPath().endsWith("/chat/completions")) {

@@ -31,10 +31,13 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** GoogleO認証サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class GoogleOAuthServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   private GoogleOAuthService service(boolean calendar, boolean task) throws Exception {
     Path credentials = directory.resolve("credentials.json");
     Files.writeString(credentials, "{}");
@@ -48,6 +51,7 @@ class GoogleOAuthServiceTest {
                 new GoogleCalendarProperties.TaskProperties(task))));
   }
 
+  /** {@code stored} の条件を再現するための補助情報を返す。 */
   private Credential stored(GoogleOAuthService service, Long remaining) throws Exception {
     AuthorizationCodeFlow flow = mock(AuthorizationCodeFlow.class);
     Credential credential = mock(Credential.class);
@@ -59,6 +63,7 @@ class GoogleOAuthServiceTest {
     return credential;
   }
 
+  /** Googleサービスの認証で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void refreshesAtBoundaryAndUsesSharedCredentialAfterwards() throws Exception {
     GoogleOAuthService service = service(false, true);
@@ -70,6 +75,7 @@ class GoogleOAuthServiceTest {
     verify(credential, times(1)).refreshToken();
   }
 
+  /** Googleサービスの認証で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void doesNotRefreshEarly() throws Exception {
     GoogleOAuthService service = service(true, false);
@@ -78,6 +84,7 @@ class GoogleOAuthServiceTest {
     verify(credential, never()).refreshToken();
   }
 
+  /** Googleサービスの認証で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void refreshesExpiredAndUnknownExpiry() throws Exception {
     for (Long remaining : new Long[] {-1L, null}) {
@@ -88,6 +95,7 @@ class GoogleOAuthServiceTest {
     }
   }
 
+  /** Googleサービスの認証で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void disabledIntegrationsDoNotLoadCredentials() throws Exception {
     GoogleOAuthService service = service(false, false);
@@ -95,6 +103,7 @@ class GoogleOAuthServiceTest {
     verify(service, never()).createFlow(any());
   }
 
+  /** Googleサービスの認証で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void missingCredentialsDoNotStartAuthorization() throws Exception {
     GoogleOAuthService service = service(true, true);
@@ -104,6 +113,7 @@ class GoogleOAuthServiceTest {
     verify(service, never()).authorize(any(), anyBoolean());
   }
 
+  /** Googleサービスの認証で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void missingStoredTokenAndMissingRefreshTokenAreSkipped() throws Exception {
     GoogleOAuthService service = service(true, true);
@@ -117,6 +127,7 @@ class GoogleOAuthServiceTest {
     verify(service, never()).authorize(any(), anyBoolean());
   }
 
+  /** Googleサービスの認証で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failureCanBeRetried() throws Exception {
     GoogleOAuthService service = service(true, true);
@@ -131,6 +142,7 @@ class GoogleOAuthServiceTest {
     assertTrue(service.refreshIfExpiring(Duration.ofMinutes(5)));
   }
 
+  /** Googleサービスの認証で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void refreshedTokenAndExpiryArePersistedForRestart() throws Exception {
     GoogleOAuthService service = service(true, true);

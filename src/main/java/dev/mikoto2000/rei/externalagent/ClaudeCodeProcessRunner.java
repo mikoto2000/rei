@@ -4,10 +4,13 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * Keep CLI subscription login/OAuth; do not let inherited API/cloud credentials change the billing
- * route.
+ * 外部エージェントへの委譲に必要なClaudeコードプロセス実行の担当を扱う。
+ *
+ * <p>Keep CLI subscription login/OAuth; do not let inherited API/cloud credentials change the
+ * billing route.
  */
 final class ClaudeCodeProcessRunner extends ExternalAgentProcessRunner {
+  /** 外部エージェントへの委譲に関する設定実行環境を処理する。 */
   @Override
   protected void configureEnvironment(Map<String, String> environment) {
     environment

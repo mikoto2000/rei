@@ -26,7 +26,9 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 画面操作利用外部連携の結果と状態の契約を検証するテスト。 */
 class ComputerUseIntegrationTest {
+  /** 画面操作の支援の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void existingRunCancellationInterruptsToolAndRemovesChildRegistration() {
     var factory = new AgentEventFactory(Clock.systemUTC());
@@ -61,6 +63,7 @@ class ComputerUseIntegrationTest {
     }
   }
 
+  /** 画面操作の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void workflowCallbackCarriesRunOwnershipAndProjectsProgressWithoutImagesOrTypedText() {
     var events = new ArrayList<AgentEvent>();
@@ -98,14 +101,17 @@ class ComputerUseIntegrationTest {
     var renderer =
         new ShellAgentEventRenderer(
             new ShellEventOutput() {
+              /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
               public void print(String text) {
                 rendered.append(text);
               }
 
+              /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
               public void println(String text) {
                 rendered.append(text).append('\n');
               }
 
+              /** 検証で保留している出力の確定を扱う。 */
               public void flush() {}
             });
     events.forEach(renderer::onEvent);
@@ -113,6 +119,7 @@ class ComputerUseIntegrationTest {
     assertTrue(rendered.toString().contains("DONE"));
   }
 
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void oneDesktopWorkflowAtATimeIncludingRecursiveEntry() {
     var reference = new java.util.concurrent.atomic.AtomicReference<ComputerUseService>();
@@ -137,6 +144,7 @@ class ComputerUseIntegrationTest {
     assertEquals(ComputerUseResult.Status.DONE, service.run("again").status());
   }
 
+  /** 機能提供元について、ツール一覧を受け付けないことを確認する。 */
   @Test
   void featureProviderRejectsToolsOnFallbackToo() {
     var model = mock(ChatModel.class);

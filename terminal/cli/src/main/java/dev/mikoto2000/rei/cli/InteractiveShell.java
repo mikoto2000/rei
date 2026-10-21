@@ -7,8 +7,13 @@ import java.util.Locale;
 import java.util.Map;
 import org.jline.terminal.Terminal;
 
-/** Explicit user shell command, executed locally in the selected Project. */
+/**
+ * 軽量CLIでの対話に必要な対話シェルを扱う。
+ *
+ * <p>Explicit user shell command, executed locally in the selected Project.
+ */
 final class InteractiveShell {
+  /** 軽量CLIでの対話で用いるコマンドを返す。 */
   static List<String> command(Map<String, String> environment, String osName) {
     String shell = environment.get("SHELL");
     if (shell == null || shell.isBlank())
@@ -19,6 +24,7 @@ final class InteractiveShell {
         : List.of(shell);
   }
 
+  /** 軽量CLIでの対話の操作を実行する。 */
   static int run(Terminal terminal, Path directory) throws IOException, InterruptedException {
     if (!java.nio.file.Files.isDirectory(directory))
       throw new IllegalArgumentException("Project directory is unavailable");

@@ -15,8 +15,10 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 
+/** 操作がない状態話題実行予定の管理の結果と状態の契約を検証するテスト。 */
 class IdleTopicSchedulerTest {
 
+  /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void tickRunsOrchestratorWhenIdleTriggerAccepts() {
     IdleTopicTrigger trigger = mock(IdleTopicTrigger.class);
@@ -38,6 +40,7 @@ class IdleTopicSchedulerTest {
     verify(orchestrator).onUserIdle();
   }
 
+  /** 話題の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void tickSkipsOrchestratorWhenIdleTriggerRejects() {
     IdleTopicTrigger trigger = mock(IdleTopicTrigger.class);
@@ -61,6 +64,7 @@ class IdleTopicSchedulerTest {
     verify(orchestrator, never()).onUserIdle();
   }
 
+  /** 話題の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void tickPublishesRejectedDecisionOnlyWhenReasonChanges() {
     IdleTopicTrigger trigger = mock(IdleTopicTrigger.class);
@@ -99,6 +103,7 @@ class IdleTopicSchedulerTest {
         AgentEventType.TOPIC_IDLE_TRIGGER_EVALUATED);
   }
 
+  /** 複数の検証で共通する期待結果を確認し、要件に合わない状態を検出する。 */
   private void assertEventTypes(java.util.List<AgentEvent> events, AgentEventType... types) {
     org.junit.jupiter.api.Assertions.assertEquals(
         java.util.List.of(types), events.stream().map(AgentEvent::type).toList());

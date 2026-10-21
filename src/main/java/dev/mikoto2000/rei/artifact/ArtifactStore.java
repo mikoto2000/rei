@@ -33,39 +33,73 @@ import java.util.UUID;
 import javax.sql.DataSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
-/** A bounded immutable copy plus durable receipt, with no client-selected filesystem lookup. */
+/**
+ * 成果物の記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>A bounded immutable copy plus durable receipt, with no client-selected filesystem lookup.
+ */
 public final class ArtifactStore {
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** プロジェクト一覧。 */
   private final ProjectRegistry projects;
+
+  /** 作業ルート。 */
   private final Path root;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 上限一覧。 */
   private final ArtifactProperties limits;
 
+  /** 成果物の管理における通知段階の選択肢。 */
   enum PublishStage {
+    /** 予約済み。 */
     RESERVED,
+    /** ファイルMOVED。 */
     FILE_MOVED
   }
 
+  /** 再開用の記録。 */
   private final java.util.function.BiConsumer<PublishStage, String> checkpoint;
+
+  /** 続きの取得位置一覧。 */
   private final CursorCodec cursors = new CursorCodec();
+
+  /** 実行一覧。 */
   private RunRegistry runs;
 
+  /** 成果物の管理で使用する実行登録台帳を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setRunRegistry(RunRegistry runs) {
     this.runs = runs;
   }
 
+  /**
+   * 成果物の管理で受け渡す保存済みを表す。
+   *
+   * @param item 項目
+   * @param projectRoot 作業対象のルートディレクトリ
+   * @param sourceKey 取得元キー
+   * @param pid プロセス識別子
+   * @param processStart プロセス開始
+   */
   private record Stored(
       Artifact item, String projectRoot, String sourceKey, long pid, String processStart) {}
 
+  /** 成果物の管理で用いるnullableを返す。 */
   private static String nullable(String value) {
     return value == null || value.isEmpty() ? null : value;
   }
 
+  /** 後続の処理で使う値を返す。 */
   private static String value(String value) {
     return value == null ? "" : value;
   }
 
+  /** 行。 */
   private static final org.springframework.jdbc.core.RowMapper<Stored> ROW =
       (row, n) ->
           new Stored(
@@ -89,6 +123,7 @@ public final class ArtifactStore {
               row.getLong("pid"),
               row.getString("process_start"));
 
+  /** 成果物の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ArtifactStore(
       DataSource source,
       ProjectRegistry projects,
@@ -98,6 +133,7 @@ public final class ArtifactStore {
     this(source, projects, root, clock, limits, (stage, id) -> {});
   }
 
+  /** 指定された値や利用先を使って、ArtifactStoreを初期化する。 */
   ArtifactStore(
       DataSource source,
       ProjectRegistry projects,
@@ -122,6 +158,7 @@ public final class ArtifactStore {
         .update();
   }
 
+  /** 状態や結果を購読先へ通知する。 */
   public Artifact publish(
       AgentRunContext owner, String sourceKey, String media, String filename, byte[] supplied) {
     var project = project(owner.projectId());
@@ -143,6 +180,7 @@ public final class ArtifactStore {
         project, session, owner.runId(), "RUN", sourceKey, media, filename, supplied);
   }
 
+  /** 実行状況を利用先で把握できるよう、会話を通知する。 */
   public Artifact publishSession(
       ProjectContext owner,
       String session,
@@ -158,6 +196,7 @@ public final class ArtifactStore {
     return publishOwned(registered, session, "", "SESSION", sourceKey, media, filename, supplied);
   }
 
+  /** 実行状況を利用先で把握できるよう、自分が所有する対象を通知する。 */
   private Artifact publishOwned(
       ProjectContext project,
       String session,
@@ -259,6 +298,7 @@ public final class ArtifactStore {
     }
   }
 
+  /** 成果物の管理で用いるrepeatedを返す。 */
   private Artifact repeated(Stored previous, String media, String filename, String sha) {
     var item = previous.item();
     if (!item.sha256().equals(sha)
@@ -271,11 +311,16 @@ public final class ArtifactStore {
     return current;
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Artifact get(String project, String session, String id) {
     return refresh(owned(project, session, id)).item();
   }
 
-  /** Explicit owner-scoped deletion only; retain the tombstone and never remove source files. */
+  /**
+   * 指定された対象を削除する。
+   *
+   * <p>Explicit owner-scoped deletion only; retain the tombstone and never remove source files.
+   */
   public Artifact delete(String project, String session, String id) {
     var item = get(project, session, id);
     if (item.status().equals("DELETED")) return item;
@@ -297,6 +342,7 @@ public final class ArtifactStore {
     }
   }
 
+  /** 成果物の管理で用いる内容を返す。 */
   public byte[] content(String project, String session, String id) {
     var item = get(project, session, id);
     if (!item.status().equals("AVAILABLE")) throw new ArtifactException(code(item.status()));
@@ -331,9 +377,11 @@ public final class ArtifactStore {
     }
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public HistoryPage<Artifact> list(
       String project, String session, String run, Integer requested, String cursor) {
     int limit = Pagination.limit(requested);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (session != null && (session.isBlank() || session.length() > 256)
         || run != null && (run.isBlank() || run.length() > 128))
       throw new IllegalArgumentException("Invalid Artifact filter");
@@ -366,6 +414,7 @@ public final class ArtifactStore {
         item -> cursors.encode(scope, new CursorKey(Instant.EPOCH, item.artifactId())));
   }
 
+  /** 成果物の管理で用いる自分が所有する対象を返す。 */
   private Stored owned(String project, String session, String id) {
     var owner = project(project);
     if (!id(id)) throw new ResourceNotFoundException("Artifact");
@@ -376,6 +425,7 @@ public final class ArtifactStore {
         .orElseThrow(() -> new ResourceNotFoundException("Artifact"));
   }
 
+  /** 成果物の管理で用いる再確認を返す。 */
   private Stored refresh(Stored stored) {
     var item = stored.item();
     String next = null;
@@ -392,16 +442,19 @@ public final class ArtifactStore {
             .single();
   }
 
+  /** 後続の判断に現在の状態を反映するため、成果物保存先の状態を記録する。 */
   private void mark(String id, String before, String after) {
     db.sql("UPDATE rei_artifacts SET status=? WHERE id=? AND status=?")
         .params(after, id, before)
         .update();
   }
 
+  /** 成果物の管理で用いるプロジェクトを返す。 */
   private ProjectContext project(String id) {
     return projects.resolveById(id).orElseThrow(() -> new ResourceNotFoundException("Artifact"));
   }
 
+  /** 成果物の管理で用いるパスを返す。 */
   private Path path(String id) {
     if (!id(id)) throw new ResourceNotFoundException("Artifact");
     safeRoot();
@@ -411,12 +464,14 @@ public final class ArtifactStore {
     return path;
   }
 
+  /** 成果物の管理に関する安全性作業ルートを処理する。 */
   private void safeRoot() {
     for (Path directory = root; directory != null; directory = directory.getParent())
       if (Files.isSymbolicLink(directory))
         throw new ArtifactException(ArtifactException.Code.UNSAFE_STORAGE);
   }
 
+  /** 成果物の管理において、識別子に該当するか判定する。 */
   private static boolean id(String id) {
     try {
       return id != null && UUID.fromString(id).toString().equals(id);
@@ -425,10 +480,12 @@ public final class ArtifactStore {
     }
   }
 
+  /** 成果物の管理で用いるプロセス開始を返す。 */
   private static String processStart() {
     return ProcessHandle.current().info().startInstant().map(Instant::toString).orElse(null);
   }
 
+  /** 成果物の管理において、稼働中に該当するか判定する。 */
   private static boolean alive(Stored stored) {
     return stored.processStart() != null
         && ProcessHandle.of(stored.pid())
@@ -438,6 +495,7 @@ public final class ArtifactStore {
             .orElse(false);
   }
 
+  /** 成果物の管理で用いるコードを返す。 */
   private static ArtifactException.Code code(String status) {
     try {
       return ArtifactException.Code.valueOf(status);
@@ -446,6 +504,7 @@ public final class ArtifactStore {
     }
   }
 
+  /** 成果物の管理に関するファイル名を処理する。 */
   private static void filename(String name) {
     if (name == null
         || name.isBlank()
@@ -457,6 +516,7 @@ public final class ArtifactStore {
       throw new IllegalArgumentException("Invalid Artifact filename");
   }
 
+  /** 成果物の管理に関するメディアを処理する。 */
   private static void media(String media, byte[] bytes) {
     if (media == null
         || !Set.of(
@@ -485,6 +545,7 @@ public final class ArtifactStore {
       throw new IllegalArgumentException("Artifact media differs from content");
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(byte[] bytes) {
     try {
       return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));

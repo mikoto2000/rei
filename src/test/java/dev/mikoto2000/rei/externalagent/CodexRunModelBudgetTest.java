@@ -23,14 +23,18 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Codex実行モデル予算の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class CodexRunModelBudgetTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code output} の条件を再現するための補助情報を返す。 */
   String output(String usage) throws Exception {
     return output(usage, "{\"summary\":\"ok\",\"findings\":[],\"warnings\":[]}");
   }
 
+  /** {@code output} の条件を再現するための補助情報を返す。 */
   String output(String usage, String message) throws Exception {
     var finalMessage =
         new com.fasterxml.jackson.databind.ObjectMapper()
@@ -47,6 +51,7 @@ class CodexRunModelBudgetTest {
         + "}";
   }
 
+  /** {@code executor} の条件を再現するための補助情報を返す。 */
   ExternalAgentExecutor executor(String output, AtomicInteger paid) {
     return executor(
         new ExternalAgentProcessRunner.Output(
@@ -54,9 +59,11 @@ class CodexRunModelBudgetTest {
         paid);
   }
 
+  /** {@code executor} の条件を再現するための補助情報を返す。 */
   ExternalAgentExecutor executor(ExternalAgentProcessRunner.Output output, AtomicInteger paid) {
     var runner =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           public Output run(
               List<String> command,
               Path cwd,
@@ -80,6 +87,7 @@ class CodexRunModelBudgetTest {
     return new CodexExternalAgentExecutor(new CodexProperties(), runner);
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   ExternalAgentDelegationService service(ExternalAgentExecutor executor) {
     var service =
         new ExternalAgentDelegationService(
@@ -94,6 +102,7 @@ class CodexRunModelBudgetTest {
     return service;
   }
 
+  /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
   RunExecutionContext run(OutputLimitRunBudget budget) {
     var run = new RunExecutionContext("run", budget, null, null, null);
     run.setRunContext(new AgentRunContext("run", "chat", root, "p"));
@@ -101,6 +110,7 @@ class CodexRunModelBudgetTest {
     return run;
   }
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void codexUsageChargesParentAndExactLimitBlocksNextModelCall() throws Exception {
     var paid = new AtomicInteger();
@@ -121,6 +131,7 @@ class CodexRunModelBudgetTest {
             .contains("TOKEN_BUDGET_EXCEEDED"));
   }
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void exhaustedCallBudgetNeverStartsPaidCliAndOvershootIsCharged() throws Exception {
     var paid = new AtomicInteger();
@@ -143,6 +154,7 @@ class CodexRunModelBudgetTest {
     assertEquals(1, paid.get());
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void malformedNonpositiveAmbiguousAndIncompleteUsageFailClosed() throws Exception {
     var variants = new ArrayList<String>();
@@ -173,6 +185,7 @@ class CodexRunModelBudgetTest {
     }
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void truncatedAndFailedProcessCannotProvideTrustedUsage() throws Exception {
     for (var output :
@@ -198,6 +211,7 @@ class CodexRunModelBudgetTest {
     }
   }
 
+  /** 外部エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void canceledProcessKeepsCancellationSignal() {
     var paid = new AtomicInteger();
@@ -212,6 +226,7 @@ class CodexRunModelBudgetTest {
     assertEquals(1, paid.get());
   }
 
+  /** 軽量CLI使用状況について、目標保存と検索の窓口再開の後も対象の情報が残ることを確認する。 */
   @Test
   void cliUsageSurvivesGoalRepositoryRestartAndStoppedReviewHasTerminalAudit() throws Exception {
     var source =
@@ -247,6 +262,7 @@ class CodexRunModelBudgetTest {
     assertEquals(1, restarted.get("p", goal.id()).llmCallsUsed());
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void disabledIntegrationPreservesLegacyCliAndCapabilityFailureSpendsNothing() {
     var paid = new AtomicInteger();
@@ -258,6 +274,7 @@ class CodexRunModelBudgetTest {
     assertFalse(budget.usageUnknown());
     var runner =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           public Output run(
               List<String> command,
               Path cwd,
@@ -278,6 +295,7 @@ class CodexRunModelBudgetTest {
     assertEquals(10, budget.remainingLlmCalls());
   }
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void overBudgetFixProposalCannotReachChangeSetService() throws Exception {
     java.nio.file.Files.writeString(root.resolve("note.txt"), "before");
@@ -315,6 +333,7 @@ class CodexRunModelBudgetTest {
     assertEquals("before", java.nio.file.Files.readString(root.resolve("note.txt")));
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void propertyBindingAndUnsupportedTokenAccountingNeverStartLegacyExecutor() {
     var source =

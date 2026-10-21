@@ -9,15 +9,19 @@ import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import org.junit.jupiter.api.Test;
 
+/** Declarative判定条件の結果と状態の契約を検証するテスト。 */
 class DeclarativePredicateTest {
+  /** {@code spec} の条件を再現するための補助情報を返す。 */
   String spec(String expression) {
     return "{\"version\":1,\"expression\":" + expression + "}";
   }
 
+  /** {@code body} の条件を再現するための補助情報を返す。 */
   byte[] body(String text) {
     return text.getBytes(StandardCharsets.UTF_8);
   }
 
+  /** 外部条件の待機で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void composesTypedNumericStringAndBooleanComparisons() {
     var predicate =
@@ -35,6 +39,7 @@ class DeclarativePredicateTest {
         predicate.evaluate(body("{\"coverage\":\"90\",\"status\":\"passed\"}")));
   }
 
+  /** 外部条件の待機で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void notAndInequalityNeverTurnMissingObservationIntoSuccess() {
     var predicate =
@@ -49,6 +54,7 @@ class DeclarativePredicateTest {
         DeclarativePredicate.Result.UNSATISFIED, inequality.evaluate(body("{\"missing\":null}")));
   }
 
+  /** 外部条件の待機で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rejectsSchemaVersionsUnknownFieldsCodeAndExcessiveDepth() {
     for (String invalid :
@@ -66,6 +72,7 @@ class DeclarativePredicateTest {
     assertThrows(IllegalArgumentException.class, () -> DeclarativePredicate.parse(deep));
   }
 
+  /** 外部条件の待機で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void boundedRegexRejectsBackreferencesAndDoesNotBacktrackExponentially() {
     assertThrows(
@@ -87,6 +94,7 @@ class DeclarativePredicateTest {
         predicate.evaluate(body("{\"text\":\"" + "a".repeat(5000) + "\"}")));
   }
 
+  /** 外部条件の待機の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationAndExpiredDeadlineAreUnknownAndDoNotPublishSuccess() {
     var predicate =
@@ -103,6 +111,7 @@ class DeclarativePredicateTest {
     assertEquals(DeclarativePredicate.Result.UNKNOWN, predicate.evaluate(new byte[] {(byte) 0xff}));
   }
 
+  /** またはについて、既知有効を利用することを確認する。 */
   @Test
   void orUsesKnownTrueButCannotResolveUnknownWithFalseAndComparisonsKeepPrecision() {
     var predicate =
@@ -132,6 +141,7 @@ class DeclarativePredicateTest {
     assertThrows(IllegalArgumentException.class, () -> DeclarativePredicate.parse(spec(wide)));
   }
 
+  /** 外部条件の待機で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void existsChecksObservedJsonPresenceIncludingExplicitNull() {
     var predicate = DeclarativePredicate.parse(spec("{\"op\":\"EXISTS\",\"pointer\":\"/value\"}"));

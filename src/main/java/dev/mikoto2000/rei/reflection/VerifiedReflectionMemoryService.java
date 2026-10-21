@@ -18,21 +18,43 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 
 /**
- * Explicit promotion of a re-observed predicate, never a model's lesson or arbitrary Reflection
+ * 確認済み振り返り記憶のユースケースを実現する。
+ *
+ * <p>Explicit promotion of a re-observed predicate, never a model's lesson or arbitrary Reflection
  * prose.
  */
 @Service
 public class VerifiedReflectionMemoryService {
+  /**
+   * 作業の振り返りで受け渡すPromotionを表す。
+   *
+   * @param memory 記憶
+   * @param proof 確認の根拠
+   */
   public record Promotion(LongTermMemory memory, MemoryRepository.ReflectionProof proof) {}
 
+  /** 目標一覧。 */
   private final GoalRepository goals;
+
+  /** 振り返り一覧。 */
   private final GoalReflectionRepository reflections;
+
+  /** 記憶一覧。 */
   private final MemoryRepository memories;
+
+  /** 確認の窓口。 */
   private final FileGoalVerifier verifier;
+
+  /** 所有者。 */
   private final GoalLoopService.Gateway owner;
+
+  /** この機能の動作設定。 */
   private final MemoryProperties properties;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** 指定された値や利用先を使って、VerifiedReflectionMemoryServiceを初期化する。 */
   public VerifiedReflectionMemoryService(
       GoalRepository goals,
       GoalReflectionRepository reflections,
@@ -54,6 +76,7 @@ public class VerifiedReflectionMemoryService {
    * Human-facing only. A repeat returns the original historical proof, including archived memories.
    */
   // Serialize this singleton's human promotions; SQLite reads can otherwise race a sibling writer.
+  /** 作業の振り返りで用いるpromoteを返す。 */
   public synchronized Promotion promote(String project, String reflectionId) {
     if (!properties.enabled()) throw new IllegalStateException("Memory is disabled");
     var reflection = reflections.get(project, reflectionId);

@@ -2,13 +2,16 @@ package dev.mikoto2000.rei.core.sqlitevec;
 
 import org.springframework.stereotype.Component;
 
+/** 文書検索用の保存基盤に必要な実行環境検出の窓口を扱う。 */
 @Component
 public class PlatformDetector {
 
+  /** 文書検索用の保存基盤で用いる検出を返す。 */
   public SqliteVecPlatform detect() {
     return detect(System.getProperty("os.name"), System.getProperty("os.arch"));
   }
 
+  /** 文書検索用の保存基盤で用いる検出を返す。 */
   SqliteVecPlatform detect(String osName, String osArch) {
     String normalizedOs = osName == null ? "" : osName.toLowerCase();
     String normalizedArch = normalizeArch(osArch);
@@ -36,6 +39,7 @@ public class PlatformDetector {
     throw unsupported(osName, osArch);
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、Archの表記をそろえる。 */
   private String normalizeArch(String osArch) {
     if (osArch == null) {
       return "";
@@ -47,6 +51,7 @@ public class PlatformDetector {
     };
   }
 
+  /** 文書検索用の保存基盤で用いる未対応を返す。 */
   private IllegalStateException unsupported(String osName, String osArch) {
     return new IllegalStateException(
         "sqlite-vec 未対応の platform です: os=" + osName + ", arch=" + osArch);

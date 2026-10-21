@@ -16,10 +16,12 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/** バックグラウンド実行の構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class BackgroundRunConfiguration {
+  /** Web APIによる操作で用いるバックグラウンド実行受付サービスを返す。 */
   @Bean
   BackgroundRunSubmitService backgroundRunSubmitService(
       ProjectRegistry projects,

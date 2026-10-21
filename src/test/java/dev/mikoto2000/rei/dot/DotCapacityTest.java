@@ -11,9 +11,12 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 状態表示許容件数の結果と状態の契約を検証するテスト。 */
 class DotCapacityTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 利用者の状態表示で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void pendingReviewAndUnknownKeepTheActiveSlot() throws Exception {
     try (var gate = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(root)) {

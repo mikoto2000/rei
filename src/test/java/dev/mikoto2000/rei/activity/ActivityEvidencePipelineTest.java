@@ -16,7 +16,9 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況根拠処理の連携の結果と状態の契約を検証するテスト。 */
 class ActivityEvidencePipelineTest {
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void codeAndXSaveWithoutScreenshotOrVision() throws Exception {
     for (var fg :
@@ -44,10 +46,12 @@ class ActivityEvidencePipelineTest {
       assertFalse(records.getValue().detection().visionUsed());
       assertEquals("EVIDENCE_ONLY", records.getValue().detection().classificationMode());
       verify(observer, never()).capture();
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(extractor);
     }
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void pendingReplacementAndFailureNeverLoseEvidence() throws Exception {
     var p = new ActivityProperties();
@@ -78,6 +82,7 @@ class ActivityEvidencePipelineTest {
       time.advance(60);
     }
     verify(store, times(4)).append(any());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(extractor);
     assertEquals(1, tasks.size());
     assertTrue(background.isEmpty());
@@ -86,6 +91,7 @@ class ActivityEvidencePipelineTest {
     verify(store, times(4)).append(any());
   }
 
+  /** 作業状況の把握で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void fallbackPersistsFirstAndEnrichesTheSameIdWithCrop() throws Exception {
     var p = new ActivityProperties();

@@ -52,10 +52,13 @@ import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import reactor.core.publisher.Flux;
 
+/** Slackエージェントチャット外部連携の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SlackAgentChatIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 会話の実行で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void actualChatToolLoopWaitsWithoutModelCallsThenIntegratesReplyInSameRun() {
     var clock = Clock.systemUTC();
@@ -94,14 +97,17 @@ class SlackAgentChatIntegrationTest {
     var interventions = new UserInterventionQueue();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public ToolCallingChatOptions getOptions() {
             return ToolCallingChatOptions.builder().build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             if (modelCalls.incrementAndGet() == 1) {
               assertTrue(interventions.offer("Accepted guidance before suspension"));

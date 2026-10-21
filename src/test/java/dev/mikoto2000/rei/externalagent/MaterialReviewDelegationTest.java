@@ -22,10 +22,13 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 教材レビュー委譲の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class MaterialReviewDelegationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
   RunExecutionContext run(String prompt) {
     var run =
         new RunExecutionContext(
@@ -39,6 +42,7 @@ class MaterialReviewDelegationTest {
     return run;
   }
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void selectsDistinctTaskAndSharesEventsAndOneShotBudget() throws Exception {
     var requests = new ArrayList<ExternalAgentRequest>();
@@ -72,6 +76,7 @@ class MaterialReviewDelegationTest {
     }
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void missingTargetIsRejectedBeforeExternalExecution() {
     try (var service =
@@ -88,6 +93,7 @@ class MaterialReviewDelegationTest {
     }
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   ExternalAgentDelegationService service(ExternalAgentExecutor executor, List<AgentEvent> events) {
     return new ExternalAgentDelegationService(
         executor,

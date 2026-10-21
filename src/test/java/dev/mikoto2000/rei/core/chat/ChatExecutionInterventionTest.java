@@ -34,20 +34,25 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
+/** チャット実行追加入力の結果と状態の契約を検証するテスト。 */
 class ChatExecutionInterventionTest {
+  /** 会話の実行で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void stalledConsultationTimesOutAndClosesItsMailbox() {
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             return Flux.<ChatResponse>never().doOnCancel(() -> cancelled.set(true));
           }
@@ -89,6 +94,7 @@ class ChatExecutionInterventionTest {
     assertThat(queue.offer("late")).isFalse();
   }
 
+  /** 会話の実行で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(
       value = AgentRunContext.Mode.class,
@@ -98,14 +104,17 @@ class ChatExecutionInterventionTest {
     var prompts = new ArrayList<Prompt>();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             prompts.add(p);
             return Flux.just(
@@ -153,22 +162,27 @@ class ChatExecutionInterventionTest {
     assertThat(prompts.getFirst().getContents())
         .contains("earlier question", "earlier answer")
         .doesNotContain("unfinished task prompt");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(automation, attachments);
     verify(clients, never()).chatClient(anyString());
   }
 
+  /** 会話の実行の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationAfterCompletedEventDoesNotRewriteCompletedTurn() {
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             return Flux.just(
                 new ChatResponse(List.of(new Generation(new AssistantMessage("done")))));
@@ -198,6 +212,7 @@ class ChatExecutionInterventionTest {
     }
   }
 
+  /** 会話の実行の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void unrelatedTurnsKeepCancellationContextAndExplicitResumeCanUseOriginalRequest() {
     var requests = new ArrayList<Prompt>();
@@ -206,14 +221,17 @@ class ChatExecutionInterventionTest {
     var memory = org.springframework.ai.chat.memory.MessageWindowChatMemory.builder().build();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             requests.add(p);
             return requests.size() == 1
@@ -252,18 +270,22 @@ class ChatExecutionInterventionTest {
     assertThat(workingSet.getFiles()).hasSize(1);
   }
 
+  /** 会話の実行の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledRunDiscardsPendingGuidanceAndRecordsCancellation() {
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             return Flux.error(new java.util.concurrent.CancellationException());
           }
@@ -295,18 +317,22 @@ class ChatExecutionInterventionTest {
     assertThat(queue.offer("late")).isFalse();
   }
 
+  /** 会話の実行の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationStateIsClearedEvenWhenFinalHistoryWriteFails() {
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             return Flux.error(new IllegalStateException("request failed"));
           }
@@ -332,20 +358,24 @@ class ChatExecutionInterventionTest {
     verify(cancellation).clear();
   }
 
+  /** 会話の実行で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void lateGuidanceContinuesSameRunAndIsSavedAsUserMessage() {
     var queue = new UserInterventionQueue();
     List<Prompt> requests = new ArrayList<>();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             requests.add(p);
             if (requests.size() == 1) queue.offer("keep README");

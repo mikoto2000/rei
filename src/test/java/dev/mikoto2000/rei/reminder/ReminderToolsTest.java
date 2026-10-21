@@ -18,11 +18,14 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** リマインダーツール一覧の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ReminderToolsTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private ToolCallback createCallback(ReminderTools tools) {
     return Arrays.stream(
             MethodToolCallbackProvider.builder().toolObjects(tools).build().getToolCallbacks())
@@ -31,6 +34,7 @@ class ReminderToolsTest {
         .orElseThrow();
   }
 
+  /** リマインダーの管理で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void onlyMessageIsRequiredInToolSchema() throws Exception {
     ReminderTools tools = new ReminderTools(null);
@@ -39,6 +43,7 @@ class ReminderToolsTest {
     assertEquals(new ObjectMapper().readTree("[\"message\"]"), schema.get("required"));
   }
 
+  /** {@code atTimeArguments} の条件を再現するための補助情報を返す。 */
   static Stream<String> atTimeArguments() {
     return Stream.of(
         "",
@@ -47,6 +52,7 @@ class ReminderToolsTest {
         ",\"targetAt\":\"   \"");
   }
 
+  /** リマインダーの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @ParameterizedTest
   @MethodSource("atTimeArguments")
   void callbackCreatesAtTimeWithUnusedArguments(String unusedArguments) {
@@ -65,6 +71,7 @@ class ReminderToolsTest {
         OffsetDateTime.parse("2026-09-07T09:00:00+09:00"), reminders.getFirst().remindAt());
   }
 
+  /** リマインダーの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void callbackCreatesBeforeTargetWithRemindAtOmitted() {
     ReminderService service =
@@ -80,6 +87,7 @@ class ReminderToolsTest {
     assertEquals(OffsetDateTime.parse("2026-09-07T08:45:00+09:00"), created.remindAt());
   }
 
+  /** 競合する内容を受け付けないことを確認する。 */
   @Test
   void rejectsConflictingOrIncompleteTimeArguments() {
     ReminderTools tools = new ReminderTools(null);
@@ -92,6 +100,7 @@ class ReminderToolsTest {
         IllegalArgumentException.class, () -> tools.reminderCreate("確認", null, null, null));
   }
 
+  /** リマインダーの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void reminderCreateAtAndList() {
     ReminderService service =
@@ -106,6 +115,7 @@ class ReminderToolsTest {
     assertEquals(ReminderType.AT_TIME, reminders.getFirst().type());
   }
 
+  /** リマインダーの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void reminderCreateBeforeTarget() {
     ReminderService service =

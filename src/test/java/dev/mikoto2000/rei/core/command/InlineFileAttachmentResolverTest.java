@@ -12,11 +12,14 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.content.Media;
 import org.springframework.util.MimeTypeUtils;
 
+/** Inlineファイル添付ファイル対象の解決の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class InlineFileAttachmentResolverTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 対象の解決について、ファイルトークンを維持することを確認する。 */
   @Test
   void resolveKeepsFileTokenAndAddsMediaAttachment() throws Exception {
     Path file = tempDir.resolve("memo.txt");
@@ -41,6 +44,7 @@ class InlineFileAttachmentResolverTest {
     assertTrue(resolved.warnings().isEmpty());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void resolveClipboardAddsTextMedia() {
     InlineFileAttachmentResolver resolver =
@@ -61,6 +65,7 @@ class InlineFileAttachmentResolverTest {
     assertTrue(resolved.warnings().isEmpty());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void resolveClipboardCanAddImageMedia() throws Exception {
     BufferedImage image = new BufferedImage(2, 2, BufferedImage.TYPE_INT_ARGB);
@@ -82,6 +87,7 @@ class InlineFileAttachmentResolverTest {
     assertEquals("image/png", resolved.media().getFirst().getMimeType().toString());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void resolveUnescapesEscapedTokensAndDoesNotAttach() {
     InlineFileAttachmentResolver resolver =

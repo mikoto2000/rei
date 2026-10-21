@@ -38,18 +38,37 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** 作業文脈サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class WorkContextServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
+
+  /** 検証に使うリポジトリ。 */
   WorkContextRepository repo;
+
+  /** 検証に使う会話一覧。 */
   SessionRepository sessions;
+
+  /** 検証に使うプロジェクト一覧。 */
   ProjectService projects;
+
+  /** 検証に使うやり取り一覧。 */
   ConversationTurnStore turns;
+
+  /** 検証に使う情報の抽出。 */
   WorkContextExtractor extractor;
+
+  /** 検証に使うサービス。 */
   WorkContextService service;
+
+  /** 検証に使うa、b。 */
   ProjectContext a, b;
+
+  /** 検証に使うこの機能の動作設定。 */
   WorkContextProperties properties = new WorkContextProperties(false, true, 1200, 12000, 2, 20);
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     a =
@@ -101,6 +120,7 @@ class WorkContextServiceTest {
             Clock.systemUTC());
   }
 
+  /** 作業文脈の引き継ぎで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sessionOwnershipWinsOverChangedUiProjectAndRepeatedRunsSkipLlm() {
     service.update("session-a", null);
@@ -110,6 +130,7 @@ class WorkContextServiceTest {
     verify(extractor, times(1)).extract(anyList(), anyList(), anyString());
   }
 
+  /** 直近状態の記録を維持することを確認する。 */
   @Test
   void extractionFailureAndUnknownSourcesKeepLastSnapshot() {
     service.update("session-a", null);
@@ -132,6 +153,7 @@ class WorkContextServiceTest {
     assertEquals(old, repo.current(a.id()).orElseThrow());
   }
 
+  /** 作業文脈の引き継ぎで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void missingSessionAndMissingProjectDoNotCreateDirectories() {
     when(sessions.findById("missing")).thenReturn(Optional.empty());
@@ -141,6 +163,7 @@ class WorkContextServiceTest {
     assertThrows(IllegalArgumentException.class, () -> service.update("session-a", null));
   }
 
+  /** 作業文脈の引き継ぎで、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void concurrentSessionsMergeWithoutLostItemsAndExplicitEditsRetainHistory() throws Exception {
     when(sessions.findById("session-2"))
@@ -221,6 +244,7 @@ class WorkContextServiceTest {
                 a.id(), old.revision(), id, "CORRECT", "stale", "", Status.OPEN, evidence));
   }
 
+  /** 作業文脈の引き継ぎの中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationAndWorkTimeMetadataAreRetainedWithoutProjectDirectoryCreation() {
     var run = new AgentRunContext("run-meta", "session-a", a.root(), a.id());
@@ -243,6 +267,7 @@ class WorkContextServiceTest {
     assertEquals(Instant.parse(captured), repo.current(a.id()).orElseThrow().git().capturedAt());
   }
 
+  /** 明示的なについて、利用可否含める対象活動中会話を保存することを確認する。 */
   @Test
   void explicitSaveCanIncludeActiveSessionButFinalUpdateStillProcessesItsOutcome() {
     var run = new AgentRunContext("active", "session-a", a.root(), a.id());
@@ -255,6 +280,7 @@ class WorkContextServiceTest {
     assertEquals(1, repo.current(a.id()).orElseThrow().items().size());
   }
 
+  /** 作業文脈の引き継ぎの中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledAssistantCompletionCannotCompleteWholeCurrentWork() {
     var run = new AgentRunContext("cancelled", "session-a", a.root(), a.id());
@@ -278,6 +304,7 @@ class WorkContextServiceTest {
         Status.UNCONFIRMED, repo.current(a.id()).orElseThrow().items().getFirst().status());
   }
 
+  /** 作業文脈の引き継ぎで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void aRunningRecordLeftByProcessExitDoesNotBlockANewerFinalizedRun() {
     var stranded = new AgentRunContext("stranded", "session-a", a.root(), a.id());

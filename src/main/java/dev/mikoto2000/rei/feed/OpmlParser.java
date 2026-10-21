@@ -14,10 +14,13 @@ import org.xml.sax.SAXException;
 import org.xml.sax.SAXParseException;
 import org.xml.sax.helpers.DefaultHandler;
 
+/** OPMLの入力を解釈し、機能内で扱える情報へ整える。 */
 @Component
 public class OpmlParser {
+  /** 最大要素深さ。 */
   private static final int MAX_ELEMENT_DEPTH = 128;
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   public List<OpmlSubscription> parse(InputStream input) {
     try {
       var factory = DocumentBuilderFactory.newDefaultInstance();
@@ -34,11 +37,13 @@ public class OpmlParser {
       var builder = factory.newDocumentBuilder();
       builder.setErrorHandler(
           new DefaultHandler() {
+            /** フィードの購読と収集に関するエラーを処理する。 */
             @Override
             public void error(SAXParseException exception) throws SAXException {
               throw exception;
             }
 
+            /** フィードの購読と収集に関する継続できないエラーを処理する。 */
             @Override
             public void fatalError(SAXParseException exception) throws SAXException {
               throw exception;
@@ -69,6 +74,7 @@ public class OpmlParser {
     }
   }
 
+  /** 判断に必要な情報を集め、後続の処理へ渡す。 */
   private void collect(
       Element parent, List<String> categories, List<OpmlSubscription> subscriptions) {
     for (Node node = parent.getFirstChild(); node != null; node = node.getNextSibling()) {

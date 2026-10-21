@@ -10,7 +10,9 @@ import org.jline.reader.LineReader;
 import org.jline.terminal.Terminal;
 import org.junit.jupiter.api.Test;
 
+/** J行シェルイベント出力の結果と状態の契約を検証するテスト。 */
 class JLineShellEventOutputTest {
+  /** ターミナルでの対話の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void redirectedApprovalNoticeUsesPlainWriterWithoutRedraw() {
     var reader = mock(LineReader.class);
@@ -30,6 +32,7 @@ class JLineShellEventOutputTest {
         .printAbove(org.mockito.ArgumentMatchers.any(org.jline.utils.AttributedString.class));
   }
 
+  /** ターミナルでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void longStreamingOutputIsVisibleBeforeTheMessageCompletes() {
     LineReader reader = mock(LineReader.class);
@@ -47,6 +50,7 @@ class JLineShellEventOutputTest {
     verify(reader).printAbove(chunk.substring(80) + "tail");
   }
 
+  /** 一時保持領域一覧逐次応答およびについて、出力超過を利用することを確認する。 */
   @Test
   void buffersStreamingAndUsesPrintAboveWhileInputIsBeingEdited() {
     LineReader reader = mock(LineReader.class);
@@ -63,6 +67,7 @@ class JLineShellEventOutputTest {
     verify(reader).printAbove("既存入力");
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void newlineFlushDoesNotCommitTheNextIncompleteMarkdownLine() {
     LineReader reader = mock(LineReader.class);
@@ -85,6 +90,7 @@ class JLineShellEventOutputTest {
     verify(reader, never()).printAbove("## 直前の話題\n\n**embed");
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void wrapsWideCharactersAtTerminalColumnsWithoutAnExtraBlankLine() {
     LineReader reader = mock(LineReader.class);
@@ -104,6 +110,7 @@ class JLineShellEventOutputTest {
     verify(reader, never()).printAbove("");
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void flushDrainsPendingTextWhenInputEditingEnds() {
     LineReader reader = mock(LineReader.class);
@@ -119,6 +126,7 @@ class JLineShellEventOutputTest {
     org.assertj.core.api.Assertions.assertThat(text.toString()).isEqualTo("pending");
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void styledBlockIsAtomicAbovePromptAndSeparatesPendingStreamWithoutCountingAnsiBytes() {
     var reader = mock(LineReader.class);
@@ -146,6 +154,7 @@ class JLineShellEventOutputTest {
     ordered.verify(reader).printAbove("応答続き");
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void styledBlockAlwaysUsesJLinesLockedPrintAboveEvenWithoutAnActivePrompt() {
     var reader = mock(LineReader.class);

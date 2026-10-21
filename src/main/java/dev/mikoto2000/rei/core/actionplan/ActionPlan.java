@@ -26,7 +26,10 @@ public class ActionPlan {
   /** 不要になった。 */
   public static final String STATUS_SKIPPED = "SKIPPED";
 
+  /** 手順一覧。 */
   private final List<PlanStep> steps = new ArrayList<>();
+
+  /** 次順序。 */
   private int nextOrder = 1;
 
   /** 現在のステップ一覧。 */
@@ -34,7 +37,9 @@ public class ActionPlan {
     return List.copyOf(steps);
   }
 
+  /** 保存済みの記録から、利用する状態を復元する。 */
   public void restore(List<PlanStep> saved) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (saved.size() > 100
         || saved.stream().map(PlanStep::id).distinct().count() != saved.size()
         || saved.stream()
@@ -146,6 +151,7 @@ public class ActionPlan {
     return sb.toString();
   }
 
+  /** 最新の内容を後続の処理に反映するため、状態を更新する。 */
   private void updateStatus(String stepId, String status) {
     for (int i = 0; i < steps.size(); i++) {
       PlanStep step = steps.get(i);
@@ -155,6 +161,7 @@ public class ActionPlan {
     }
   }
 
+  /** 指定された状態を反映した情報を作成する。 */
   private PlanStep withStatus(PlanStep step, String status) {
     return new PlanStep(step.id(), step.description(), status, step.order(), step.failureCount());
   }

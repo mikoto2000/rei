@@ -47,14 +47,31 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.springframework.stereotype.Component;
 
-/** Shared bounded memory cache; each waiter retains its own deadline and cancellation. */
+/**
+ * 取得した情報の再利用に必要なHTTP通信応答キャッシュを扱う。
+ *
+ * <p>Shared bounded memory cache; each waiter retains its own deadline and cancellation.
+ */
 @Component
 public final class HttpResponseCache implements AutoCloseable {
+  /** 取得した情報の再利用における識別範囲の選択肢。 */
   public enum Namespace {
+    /** 検索。 */
     SEARCH,
+    /** ページ。 */
     PAGE
   }
 
+  /**
+   * 取得した情報の再利用で受け渡す要求を表す。
+   *
+   * @param uri 参照先のURI
+   * @param headers HTTPヘッダー
+   * @param policy 判断基準
+   * @param namespace 識別範囲
+   * @param forceRefresh キャッシュの再確認指定
+   * @param variant 種類
+   */
   public record Request(
       URI uri,
       Map<String, String> headers,
@@ -62,6 +79,7 @@ public final class HttpResponseCache implements AutoCloseable {
       Namespace namespace,
       boolean forceRefresh,
       String variant) {
+    /** 取得した情報の再利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Request(
         URI uri,
         Map<String, String> headers,
@@ -71,6 +89,7 @@ public final class HttpResponseCache implements AutoCloseable {
       this(uri, headers, policy, namespace, forceRefresh, "");
     }
 
+    /** 受け取った情報からRequestを作成する。 */
     public Request {
       Objects.requireNonNull(uri);
       Objects.requireNonNull(policy);
@@ -81,25 +100,44 @@ public final class HttpResponseCache implements AutoCloseable {
       headers = Map.copyOf(normalized);
     }
 
+    /** 取得した情報の再利用の情報を、表示や診断で確認できる文字列表現にする。 */
     @Override
     public String toString() {
       return "HttpCacheRequest[" + namespace + "]";
     }
   }
 
+  /**
+   * 取得した情報の再利用で受け渡す保存済みを表す。
+   *
+   * @param response 応答
+   * @param freshUntil 有効なキャッシュ終了日時
+   * @param validatedNanos 検証済みナノ秒数
+   * @param freshNanos 有効なキャッシュナノ秒数
+   */
   private record Cached(
       SafeHttpFetcher.Response response, Instant freshUntil, long validatedNanos, long freshNanos) {
+    /** 取得した情報の再利用において、有効なキャッシュに該当するか判定する。 */
     boolean fresh(Clock clock) {
       return clock.instant().isBefore(freshUntil)
           && System.nanoTime() - validatedNanos < freshNanos;
     }
   }
 
+  /**
+   * 取得した情報の再利用で受け渡す読み込み済みの内容を表す。
+   *
+   * @param response 応答
+   * @param shareable 共有できるかどうか
+   */
   private record Loaded(SafeHttpFetcher.Response response, boolean shareable) {}
 
+  /** 取得した情報の再利用に必要な無効状態を扱う。 */
   private static final class Disabled {
+    /** 起動単位の識別子。 */
     static final HttpResponseCache INSTANCE = create();
 
+    /** 指定された内容から新しい対象を作成する。 */
     static HttpResponseCache create() {
       var properties = new HttpCacheProperties();
       properties.setEnabled(false);
@@ -107,25 +145,52 @@ public final class HttpResponseCache implements AutoCloseable {
     }
   }
 
+  /** 取得した情報の再利用で用いる無効状態を返す。 */
   public static HttpResponseCache disabled() {
     return Disabled.INSTANCE;
   }
 
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 秘密を含む。 */
   private final SensitiveInfoDetector sensitive;
+
+  /** 有効状態。 */
   private final boolean enabled;
+
+  /** 検索有効期間／ページ有効期間／最大Flights。 */
   private final int searchTtl, pageTtl, maximumFlights;
+
+  /** 最大バイト数。 */
   private final long maximumBytes;
+
+  /** 項目一覧。 */
   private final BoundedTtlCache<String, Cached> entries;
+
+  /** 実行先。 */
   private final ThreadPoolExecutor executor;
+
+  /** 排他制御。 */
   private final Object mutex = new Object();
+
+  /** 同じ対象への取得を共有する実行記録。 */
   private final Map<String, Flight> flights = new HashMap<>();
+
+  /** 取得処理と通信経路の対応。 */
   private final Map<SafeHttpFetcher, String> transports =
       Collections.synchronizedMap(new WeakHashMap<>());
+
+  /** 進行中の読み込み。 */
   private final Set<LoadTask> loads = ConcurrentHashMap.newKeySet();
+
+  /** 終了済み。 */
   private final AtomicBoolean closed = new AtomicBoolean();
+
+  /** 実行中。 */
   private final AtomicInteger running = new AtomicInteger();
 
+  /** 指定された値や利用先を使って、HttpResponseCacheを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public HttpResponseCache(
       HttpCacheProperties properties, Clock clock, SensitiveInfoDetector sensitive) {
@@ -157,6 +222,7 @@ public final class HttpResponseCache implements AutoCloseable {
                 new ThreadPoolExecutor.AbortPolicy());
   }
 
+  /** 後続の処理に必要な情報を、取得先から読み込む。 */
   public SafeHttpFetcher.Response fetch(
       Request request, FetchOperation caller, HttpFetchObserver observer, SafeHttpFetcher fetcher) {
     if (FetchScope.forceRefresh() && !request.forceRefresh())
@@ -267,6 +333,7 @@ public final class HttpResponseCache implements AutoCloseable {
     }
   }
 
+  /** 必要な状態が整ってから先へ進むため、HTTP通信応答キャッシュを待つ。 */
   private static Loaded await(CompletableFuture<Loaded> future, FetchOperation operation) {
     for (; ; ) {
       operation.check();
@@ -280,6 +347,7 @@ public final class HttpResponseCache implements AutoCloseable {
       } catch (TimeoutException pending) {
         operation.check();
       } catch (InterruptedException interrupted) {
+        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
         throw new CancellationException();
       } catch (ExecutionException failure) {
@@ -288,21 +356,48 @@ public final class HttpResponseCache implements AutoCloseable {
     }
   }
 
+  /** 取得した情報の再利用に必要なFlightを扱う。 */
   private final class Flight {
+    /** 識別子／照合キー。 */
     final String id, key;
+
+    /** 要求。 */
     final Request request;
+
+    /** HTTPヘッダー。 */
     final Map<String, String> headers;
+
+    /** 以前の。 */
     final Cached old;
+
+    /** 観測。 */
     final HttpFetchObserver observer;
+
+    /** 情報の取得元。 */
     final SafeHttpFetcher fetcher;
+
+    /** 受付。 */
     final HostAdmission admission;
+
+    /** 引き継ぎ予算。 */
     final TransferBudget transferBudget;
+
+    /** 停止済み。 */
     final AtomicBoolean stopped = new AtomicBoolean();
+
+    /** 結果。 */
     final CompletableFuture<Loaded> result = new CompletableFuture<>();
+
+    /** タスク。 */
     final LoadTask task;
+
+    /** 結果を待っている利用先の数。 */
     int waiters;
+
+    /** 置き換え済みの内容。 */
     boolean superseded;
 
+    /** 指定された値や利用先を使って、Flightを初期化する。 */
     Flight(
         String id,
         String key,
@@ -326,6 +421,7 @@ public final class HttpResponseCache implements AutoCloseable {
     }
   }
 
+  /** 保存された情報を読み込み、現在の処理で使える形にする。 */
   private void load(Flight flight) {
     Request request = flight.request;
     FetchOperation operation =
@@ -391,6 +487,7 @@ public final class HttpResponseCache implements AutoCloseable {
     }
   }
 
+  /** 実行中の処理を停止する。 */
   private void stop(Flight flight, RuntimeException reason) {
     flight.superseded = true;
     flight.stopped.set(true);
@@ -399,10 +496,15 @@ public final class HttpResponseCache implements AutoCloseable {
     flight.task.cancel(true);
   }
 
+  /** 取得した情報の再利用に必要な読み込みタスクを扱う。 */
   private final class LoadTask extends FutureTask<Void> {
+    /** 共有している取得処理の状態。 */
     final Flight flight;
+
+    /** 受付から終了までの管理。 */
     final AtomicInteger lifecycle = new AtomicInteger();
 
+    /** 指定された値や利用先を使って、LoadTaskを初期化する。 */
     LoadTask(Flight flight) {
       super(
           () -> {
@@ -412,6 +514,7 @@ public final class HttpResponseCache implements AutoCloseable {
       this.flight = flight;
     }
 
+    /** 取得した情報の再利用の操作を実行する。 */
     @Override
     public void run() {
       if (!lifecycle.compareAndSet(0, 1)) return;
@@ -425,6 +528,7 @@ public final class HttpResponseCache implements AutoCloseable {
       }
     }
 
+    /** 取得した情報の再利用に関する完了を処理する。 */
     @Override
     protected void done() {
       if (lifecycle.compareAndSet(0, 2)) {
@@ -434,6 +538,7 @@ public final class HttpResponseCache implements AutoCloseable {
     }
   }
 
+  /** 取得した情報の再利用で用いる複製を返す。 */
   private static SafeHttpFetcher.Response copy(SafeHttpFetcher.Response value) {
     return new SafeHttpFetcher.Response(
         value.status(),
@@ -444,6 +549,7 @@ public final class HttpResponseCache implements AutoCloseable {
         value.validatedAt());
   }
 
+  /** 取得した情報の再利用で用いる重みを返す。 */
   private static long weight(SafeHttpFetcher.Response value) {
     long size = 1152L + value.body().length + value.finalUri().toASCIIString().length() * 8L;
     for (var header : value.headers().entrySet())
@@ -451,6 +557,7 @@ public final class HttpResponseCache implements AutoCloseable {
     return size;
   }
 
+  /** 対象を照合・参照するためのキーを返す。 */
   private static String key(
       Request request, Map<String, String> headers, String transport, boolean force) {
     try {
@@ -483,12 +590,14 @@ public final class HttpResponseCache implements AutoCloseable {
     }
   }
 
+  /** 取得した情報の再利用に関する項目を処理する。 */
   private static void field(DataOutputStream output, String value) throws IOException {
     byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
     output.writeInt(bytes.length);
     output.write(bytes);
   }
 
+  /** 取得した情報の再利用に関するイベントを処理する。 */
   private static void event(Namespace namespace, String event) {
     io.micrometer.core.instrument.Metrics.counter(
             "rei.web.cache.events",
@@ -499,34 +608,41 @@ public final class HttpResponseCache implements AutoCloseable {
         .increment();
   }
 
+  /** 取得した情報の再利用で用いる大きさを返す。 */
   int size() {
     return entries.size();
   }
 
+  /** 取得した情報の再利用で用いるバイト数を返す。 */
   long bytes() {
     return entries.bytes();
   }
 
+  /** 取得した情報の再利用で用いる入力先Flightを返す。 */
   int inFlight() {
     synchronized (mutex) {
       return flights.size();
     }
   }
 
+  /** 取得した情報の再利用で用いるwaitersを返す。 */
   int waiters() {
     synchronized (mutex) {
       return flights.values().stream().mapToInt(value -> value.waiters).sum();
     }
   }
 
+  /** 取得した情報の再利用で用いる活動中Loadsを返す。 */
   int activeLoads() {
     return running.get();
   }
 
+  /** 取得した情報の再利用で用いる待機中Loadsを返す。 */
   int queuedLoads() {
     return executor == null ? 0 : executor.getQueue().size();
   }
 
+  /** 取得した情報の再利用で利用した資源や登録を解放し、利用を終了する。 */
   @jakarta.annotation.PreDestroy
   @Override
   public void close() {
@@ -546,6 +662,7 @@ public final class HttpResponseCache implements AutoCloseable {
       try {
         executor.awaitTermination(2, TimeUnit.SECONDS);
       } catch (InterruptedException interrupted) {
+        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
       }
   }

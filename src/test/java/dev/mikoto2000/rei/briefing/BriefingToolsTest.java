@@ -7,8 +7,10 @@ import java.time.LocalDate;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 日次案内ツール一覧の結果と状態の契約を検証するテスト。 */
 class BriefingToolsTest {
 
+  /** 日次情報の案内で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void dailyBriefingReturnsTodaysBriefing() throws Exception {
     BriefingService service = org.mockito.Mockito.mock(BriefingService.class);

@@ -13,10 +13,13 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** プロジェクトクライアント作業の分離の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProjectClientIsolationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** プロジェクトごとの作業環境で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void clientsRetainIndependentSelectionsAcrossReusedWorkerRequests() throws Exception {
     Path a = Files.createDirectory(temp.resolve("a"));
@@ -67,6 +70,7 @@ class ProjectClientIsolationTest {
     }
   }
 
+  /** プロジェクトごとの作業環境で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void parallelClientsResolveStateIndependentlyAndRunOwnershipTakesPrecedence() throws Exception {
     Path a = Files.createDirectory(temp.resolve("a"));
@@ -111,6 +115,7 @@ class ProjectClientIsolationTest {
     }
   }
 
+  /** プロジェクトごとの作業環境で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void nestedScopesAndFailuresRestoreCallerWithoutChangingOtherClients() throws Exception {
     Path a = Files.createDirectory(temp.resolve("a"));

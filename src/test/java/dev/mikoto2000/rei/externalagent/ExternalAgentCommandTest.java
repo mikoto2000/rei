@@ -14,9 +14,12 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ToolContext;
 import picocli.CommandLine;
 
+/** 外部エージェントコマンドの結果と状態の契約を検証するテスト。 */
 class ExternalAgentCommandTest {
+  /** 検証に使う検証専用の一時。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path temp;
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void slashDuringActiveChatGetsItsOwnQueuedRun() {
     var tasks = new java.util.ArrayList<Runnable>();
@@ -46,6 +49,7 @@ class ExternalAgentCommandTest {
     }
   }
 
+  /** 未対応の値一覧を受け付けないことを確認する。 */
   @Test
   void slashAdapterSubmitsCanonicalRequestAndRejectsUnsupportedValues() {
     var router = mock(dev.mikoto2000.rei.application.session.ShellConversationService.class);
@@ -55,9 +59,11 @@ class ExternalAgentCommandTest {
     reset(router);
     for (String[] args : new String[][] {{}, {"codex"}, {"foo", "review"}, {"codex", "implement"}})
       assertNotEquals(0, command.execute(args));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(router);
   }
 
+  /** 意味によるツールについて、共有サービスを利用することを確認する。 */
   @Test
   void semanticToolUsesSharedServiceAndHasNoAgentOrWorkingDirectoryArgument() {
     var service = mock(ExternalAgentDelegationService.class);

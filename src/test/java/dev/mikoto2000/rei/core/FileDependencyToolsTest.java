@@ -18,9 +18,12 @@ import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** ファイル依存条件ツール一覧の結果と状態の契約を検証するテスト。 */
 class FileDependencyToolsTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** {@code tools} の条件を再現するための補助情報を返す。 */
   FileDependencyTools tools() {
     var tools = new FileDependencyTools(new FileGoalVerifier());
     var time = new AtomicLong();
@@ -28,6 +31,7 @@ class FileDependencyToolsTest {
     return tools;
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void existenceDigestAndMissingAreIndependentFacts() throws Exception {
     Files.writeString(dir.resolve("result.txt"), "hello");
@@ -51,6 +55,7 @@ class FileDependencyToolsTest {
     }
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void boundaryAndMalformedInputsCannotClaimCompletion() {
     var tools = tools();
@@ -65,6 +70,7 @@ class FileDependencyToolsTest {
     }
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void callbackHidesContextAndVerifiedWaitingDoesNotCountAsStagnation() throws Exception {
     var tools = tools();
@@ -103,6 +109,7 @@ class FileDependencyToolsTest {
     }
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void existenceWatcherCannotWeakenGoalDigestCriteria() throws Exception {
     Files.writeString(dir.resolve("file"), "value");
@@ -112,6 +119,7 @@ class FileDependencyToolsTest {
     assertFalse(new FileGoalVerifier().verify(goal).satisfied());
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void actualFileCreationDuringPollingCompletesAndOversizedFileIsBlocked() throws Exception {
     var tools = new FileDependencyTools(new FileGoalVerifier());

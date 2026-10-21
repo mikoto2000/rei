@@ -10,7 +10,9 @@ import java.time.ZoneId;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 
+/** 再開概要表示用の情報の結果と状態の契約を検証するテスト。 */
 class ResumeOverviewPresentationTest {
+  /** {@code overview} の条件を再現するための補助情報を返す。 */
   ResumeOverview overview(String project, long revision, long count) {
     return new ResumeOverview(
         project,
@@ -30,6 +32,7 @@ class ResumeOverviewPresentationTest {
         project + revision + count);
   }
 
+  /** 起動時について、同一選択内容を復元することを確認する。 */
   @Test
   void startupRestoreSameSelectionAndSessionDoNotDuplicateDetails() {
     var history = new ResumeOverview.DisplayHistory();
@@ -43,6 +46,7 @@ class ResumeOverviewPresentationTest {
     assertTrue(history.present(overview("A", 2, 3), ZoneOffset.UTC, true).contains("最新の再開候補"));
   }
 
+  /** 作業の中断と再開で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void connectionsAndReconnectsHaveIndependentHistory() {
     var a = overview("A", 1, 1);
@@ -53,6 +57,7 @@ class ResumeOverviewPresentationTest {
               .contains("最新の再開候補"));
   }
 
+  /** 作業の中断と再開で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void timezoneAndExactCommandsAndOtherCountAreIncluded() {
     String text = overview("A", 1, 3).detail(ZoneId.of("America/New_York"));
@@ -62,6 +67,7 @@ class ResumeOverviewPresentationTest {
     assertTrue(text.contains("ほか2件"));
   }
 
+  /** 作業の中断と再開で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void controlsAndSecretsAreRemovedBeforeUnicodeClipping() {
     String text =
@@ -90,6 +96,7 @@ class ResumeOverviewPresentationTest {
                 false));
   }
 
+  /** 作業の中断と再開で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void disappearingCandidatesResetTheHistory() {
     var history = new ResumeOverview.DisplayHistory();
@@ -100,6 +107,7 @@ class ResumeOverviewPresentationTest {
     assertTrue(history.present(a, ZoneOffset.UTC, false).contains("最新の再開候補"));
   }
 
+  /** 作業の中断と再開で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void extremelyLongQuotedJsonSecretsCannotOverflowTheDisplayStack() {
     String secret = "x".repeat(100000);

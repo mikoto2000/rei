@@ -22,7 +22,9 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+/** タスク状態引数の結果と状態の契約を検証するテスト。 */
 class TaskStateArgumentsTest {
+  /** 作業状態の記録の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void stringListsAreRejectedBeforeApprovalRequestOrConsumption() {
     var approvals = mock(ToolApprovalRepository.class);
@@ -45,9 +47,11 @@ class TaskStateArgumentsTest {
                     new AgentRunContext("run", "session", Path.of("."), "project")));
     assertTrue(error.getMessage().contains("pending: must be a JSON array of strings"));
     assertTrue(error.getMessage().contains("[\"review\",\"verify\"]"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(approvals);
   }
 
+  /** 作業状態の記録で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void allTypeProblemsAreReportedTogetherWithoutInputValues() {
     var error =
@@ -64,6 +68,7 @@ class TaskStateArgumentsTest {
     assertFalse(error.getMessage().contains("private-completed"));
   }
 
+  /** 作業状態の記録で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void optionalAndIgnoredValuesKeepExistingTaskStateCompatibility() {
     for (String status : List.of("IDLE", "IN_PROGRESS", "COMPLETED", "BLOCKED")) {
@@ -86,6 +91,7 @@ class TaskStateArgumentsTest {
         () -> TaskStateArguments.validate("readMultiFile", "any unsupported tool input"));
   }
 
+  /** 作業状態の記録で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void malformedDuplicateTrailingAndNonObjectJsonAreRejected() {
     for (String input :
@@ -100,6 +106,7 @@ class TaskStateArgumentsTest {
           () -> TaskStateArguments.validate("updateTaskState", input));
   }
 
+  /** 作業状態の記録で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void diagnosticsRemainBoundedForLargeInvalidArrays() {
     var error =

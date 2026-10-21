@@ -1,9 +1,15 @@
 package dev.mikoto2000.rei.subagent;
 
-/** Advertises the same schemas used locally without coupling validation to prompt construction. */
+/**
+ * 補助エージェントへの委譲に必要な補助エージェント出力プロンプトを扱う。
+ *
+ * <p>Advertises the same schemas used locally without coupling validation to prompt construction.
+ */
 final class SubAgentOutputPrompt {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private SubAgentOutputPrompt() {}
 
+  /** 補助エージェントへの委譲で用いる指示一覧を返す。 */
   static String instructions(SubAgentDefinition definition) {
     return "\n\nReturn exactly one JSON object. Do not output Markdown or code fences."
         + " Do not output explanatory text before or after the JSON."

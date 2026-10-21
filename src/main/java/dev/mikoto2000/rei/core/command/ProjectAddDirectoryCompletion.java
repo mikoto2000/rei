@@ -6,11 +6,17 @@ import java.nio.file.Path;
 import java.util.List;
 import java.util.Set;
 
-/** Compatibility API; the Shell now uses command metadata and FilePathCompletionProvider. */
+/**
+ * 共通の実行基盤に必要なプロジェクト追加ディレクトリ入力補完を扱う。
+ *
+ * <p>Compatibility API; the Shell now uses command metadata and FilePathCompletionProvider.
+ */
 @Deprecated
 public final class ProjectAddDirectoryCompletion {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ProjectAddDirectoryCompletion() {}
 
+  /** 処理の完了を記録し、後続の処理へ結果を引き渡す。 */
   public static List<String> complete(String rawLine, Path currentProject) {
     if (rawLine == null || currentProject == null) return List.of();
     String[] words = new UserInputParser().split(rawLine);

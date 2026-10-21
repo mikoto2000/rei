@@ -2,7 +2,9 @@ package dev.mikoto2000.rei.computeruse;
 
 import java.util.Set;
 
+/** 画面操作の支援に必要な操作検証の窓口を扱う。 */
 public final class ActionValidator {
+  /** キー一覧。 */
   public static final Set<String> KEYS =
       Set.of(
           "ENTER",
@@ -20,8 +22,10 @@ public final class ActionValidator {
           "PAGE_DOWN",
           "SPACE");
 
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ActionValidator() {}
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public static void validate(ComputerAction action, CapturedScreen screen) {
     if (action == null || action.risk() == null)
       throw new InvalidComputerDecision("Missing action or risk");
@@ -46,11 +50,13 @@ public final class ActionValidator {
     }
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   static void text(String text, int limit) {
     if (text == null || text.isBlank() || text.length() > limit)
       throw new InvalidComputerDecision("Missing or oversized text");
   }
 
+  /** 画面操作の支援に関する対象を処理する。 */
   private static void target(
       ComputerAction.Target target, double confidence, CapturedScreen screen) {
     if (target == null) throw new InvalidComputerDecision("Missing target");

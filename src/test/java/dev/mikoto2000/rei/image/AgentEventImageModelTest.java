@@ -20,8 +20,10 @@ import org.springframework.ai.image.ImageModel;
 import org.springframework.ai.image.ImagePrompt;
 import org.springframework.ai.image.ImageResponse;
 
+/** エージェントイベント画像モデルの結果と状態の契約を検証するテスト。 */
 class AgentEventImageModelTest {
 
+  /** 画像の生成で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void publishesImageGenerationLifecycle() {
     ImageModel delegate = mock(ImageModel.class);
@@ -48,6 +50,7 @@ class AgentEventImageModelTest {
     assertEquals(AgentEventType.LLM_RESPONSE_COMPLETED, events.get(1).type());
   }
 
+  /** 画像の生成で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void doesNotPublishResponseWhenImageGenerationFails() {
     ImageModel delegate = mock(ImageModel.class);

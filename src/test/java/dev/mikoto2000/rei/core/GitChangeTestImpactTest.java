@@ -17,11 +17,14 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Git変更検証影響の結果と状態の契約を検証するテスト。 */
 class GitChangeTestImpactTest {
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void quotedPathAndHeaderLikeAddedTextCannotRedirectLineEvidence() throws Exception {
     var fake =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、共通の実行基盤の操作を実行する。 */
           @Override
           public Output run(
               List<String> command,
@@ -48,6 +51,7 @@ class GitChangeTestImpactTest {
             .isEmpty());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void gitCoverageObservesCurrentChangedLinesWithoutExecutingTests() throws Exception {
     init();
@@ -84,9 +88,13 @@ class GitChangeTestImpactTest {
     }
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うプロセス一覧。 */
   private final ExternalAgentProcessRunner processes = new ExternalAgentProcessRunner();
 
+  /** {@code git} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void git(String... args) {
     var command = new ArrayList<String>(List.of("git"));
     command.addAll(List.of(args));
@@ -96,6 +104,7 @@ class GitChangeTestImpactTest {
     assertEquals(ExternalAgentResult.Status.SUCCESS, output.status(), output.stderr());
   }
 
+  /** {@code init} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void init() throws Exception {
     git("init");
     write("A.java", "class A {}");
@@ -111,12 +120,14 @@ class GitChangeTestImpactTest {
         "base");
   }
 
+  /** 検証用に、指定された内容を書き込み先へ反映する。 */
   private void write(String name, String text) throws Exception {
     Path file = root.resolve(name);
     Files.createDirectories(file.getParent());
     Files.writeString(file, text);
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void collectsStagedUnstagedDeletedAndUntrackedPathsWithoutChangingIndex() throws Exception {
     init();
@@ -140,6 +151,7 @@ class GitChangeTestImpactTest {
     assertEquals("class A { int x; }", Files.readString(root.resolve("A.java")));
   }
 
+  /** 未変更の保存と検索の窓口について、空の観測内容を返すことを確認する。 */
   @Test
   void cleanRepositoryReturnsEmptyObservationAndExcludedPathsAreNotExposed() throws Exception {
     init();
@@ -154,6 +166,7 @@ class GitChangeTestImpactTest {
     assertFalse(result.warnings().toString().contains("private fixture"));
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void renameIncludesOldAndNewAndTooManyChangesAreRejected() throws Exception {
     init();
@@ -164,6 +177,7 @@ class GitChangeTestImpactTest {
     assertThrows(java.io.IOException.class, () -> service.analyzeGit(root, 20));
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void nonRepositoryAndNestedRootAreRejected() throws Exception {
     var service = new ChangeTestImpactService(new RepositoryMapService());
@@ -173,6 +187,7 @@ class GitChangeTestImpactTest {
     assertThrows(java.io.IOException.class, () -> service.analyzeGit(root.resolve("nested"), 20));
   }
 
+  /** 共通の実行基盤で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void stagedChangeIsRetainedWhenWorktreeMatchesHeadAndIgnoredFilesStayExcluded() throws Exception {
     init();
@@ -189,6 +204,7 @@ class GitChangeTestImpactTest {
             .changedFiles());
   }
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void collectionRejectsIncompleteOutputAndPropagatesCancellation() throws Exception {
     for (var status :
@@ -198,6 +214,7 @@ class GitChangeTestImpactTest {
             ExternalAgentResult.Status.SUCCESS)) {
       var fake =
           new ExternalAgentProcessRunner() {
+            /** 検証用に、共通の実行基盤の操作を実行する。 */
             @Override
             public Output run(
                 List<String> command,
@@ -215,6 +232,7 @@ class GitChangeTestImpactTest {
     }
     var cancelled =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、共通の実行基盤の操作を実行する。 */
           @Override
           public Output run(
               List<String> command,
@@ -232,6 +250,7 @@ class GitChangeTestImpactTest {
         () -> new GitChangedFiles(cancelled).collect(root.toRealPath()));
     var malformed =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、共通の実行基盤の操作を実行する。 */
           @Override
           public Output run(
               List<String> command,
@@ -252,6 +271,7 @@ class GitChangeTestImpactTest {
         java.io.IOException.class, () -> new GitChangedFiles(malformed).collect(root.toRealPath()));
   }
 
+  /** 共通の実行基盤の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void omittedToolArgumentUsesCapturedProjectAndRetainsReadPermission() throws Exception {
     init();

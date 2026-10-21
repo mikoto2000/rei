@@ -5,15 +5,21 @@ import java.util.List;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 
+/** 関連文書の検索に必要なHybridRetrieverを扱う。 */
 public final class HybridRetriever {
+  /** バックエンド。 */
   private final RetrievalCandidates backend;
+
+  /** 設定。 */
   private final HybridRetrievalProperties settings;
 
+  /** 指定された値や利用先を使って、HybridRetrieverを初期化する。 */
   public HybridRetriever(RetrievalCandidates backend, HybridRetrievalProperties settings) {
     this.backend = backend;
     this.settings = settings;
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public List<Document> search(SearchRequest request) {
     checkCancellation();
     if (request.getTopK() < 1 || request.getTopK() > 256)
@@ -55,6 +61,7 @@ public final class HybridRetriever {
             .toList();
   }
 
+  /** 後続の操作を進められるか判断するため、キャンセルを確認する。 */
   private static void checkCancellation() {
     if (Thread.currentThread().isInterrupted())
       throw new java.util.concurrent.CancellationException("Retrieval cancelled");

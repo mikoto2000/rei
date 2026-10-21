@@ -8,10 +8,16 @@ import java.util.Arrays;
 import java.util.Base64;
 import java.util.List;
 
-/** Exact dependency classpath and Unicode fixture arguments, without shell interpolation. */
+/**
+ * 検証条件を再現するためのJava検証条件コマンド。
+ *
+ * <p>Exact dependency classpath and Unicode fixture arguments, without shell interpolation.
+ */
 public final class JavaFixtureCommand {
+  /** 検証条件に必要な値を受け取り、JavaFixtureCommandを用意する。 */
   private JavaFixtureCommand() {}
 
+  /** {@code command} の条件を再現するための補助情報を返す。 */
   public static List<String> command(Path directory, Class<?> main, String... arguments) {
     return command(
         directory,
@@ -20,6 +26,7 @@ public final class JavaFixtureCommand {
         arguments);
   }
 
+  /** {@code command} の条件を再現するための補助情報を返す。 */
   static List<String> command(
       Path directory, String classpath, Class<?> main, String... arguments) {
     try {
@@ -57,14 +64,18 @@ public final class JavaFixtureCommand {
     }
   }
 
+  /** {@code encoded} の条件を再現するための補助情報を返す。 */
   private static String encoded(String value) {
     return Base64.getEncoder()
         .encodeToString(value.getBytes(java.nio.charset.StandardCharsets.UTF_8));
   }
 
+  /** 検証条件を再現するための連携。 */
   public static final class Bridge {
+    /** 検証条件に必要な値を受け取り、Bridgeを用意する。 */
     private Bridge() {}
 
+    /** 検証用に、機能の提供の起動要求を受け付け、実行を開始する。 */
     public static void main(String[] arguments) throws Throwable {
       int encodedCount = Integer.parseInt(arguments[1]);
       var decoded = Arrays.copyOfRange(arguments, 2, arguments.length);
@@ -78,11 +89,13 @@ public final class JavaFixtureCommand {
       }
     }
 
+    /** {@code decoded} の条件を再現するための補助情報を返す。 */
     private static String decoded(String value) {
       return new String(Base64.getDecoder().decode(value), java.nio.charset.StandardCharsets.UTF_8);
     }
   }
 
+  /** {@code quoted} の条件を再現するための補助情報を返す。 */
   private static String quoted(String value) {
     return "\""
         + value

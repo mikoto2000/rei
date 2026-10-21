@@ -7,7 +7,9 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況根拠分類の判断の結果と状態の契約を検証するテスト。 */
 class ActivityEvidenceClassifierTest {
+  /** バックグラウンド出力先所属主要なを維持することを確認する。 */
   @Test
   void representativeDesktopFixturesKeepBackgroundOutOfPrimary() throws Exception {
     var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -41,17 +43,21 @@ class ActivityEvidenceClassifierTest {
     }
   }
 
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   static final Instant NOW = Instant.parse("2026-09-23T09:00:00Z");
 
+  /** {@code window} の条件を再現するための補助情報を返す。 */
   static ForegroundWindow window(String process, String title) {
     return new ForegroundWindow(
         process, 1, title, "foreground", new ActivityRecord.Bounds(0, 0, 800, 600));
   }
 
+  /** {@code evidence} の条件を再現するための補助情報を返す。 */
   static ActivityEvidence evidence(String process, String title) {
     return new ActivityEvidence(NOW, window(process, title), List.of(), "", "", List.of(), null);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void vscodeWithProjectIsEvidenceOnly() {
     var c =
@@ -62,6 +68,7 @@ class ActivityEvidenceClassifierTest {
     assertTrue(c.confidence() >= .8);
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void knownBrowserTitlesHaveHighConfidenceWhileGenericBrowserDoesNot() {
     var classifier = new ActivityClassifier();
@@ -77,6 +84,7 @@ class ActivityEvidenceClassifierTest {
         classifier.classify(evidence("Unknown.exe", "Some Video - YouTube")).confidence() < .8);
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void visibleCandidatesNeverOverrideForegroundAndHiddenWindowsAreExcluded() {
     var visible =
@@ -100,6 +108,7 @@ class ActivityEvidenceClassifierTest {
     assertEquals("social", c.inference().activities().getLast().type());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void projectContextAloneDoesNotTurnSocialIntoDevelopment() {
     var e =

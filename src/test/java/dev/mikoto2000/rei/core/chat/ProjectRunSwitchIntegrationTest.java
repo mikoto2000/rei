@@ -46,11 +46,14 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
+/** プロジェクト実行Switch外部連携の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProjectRunSwitchIntegrationTest
     extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** 会話の実行で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void toolRunAndInterventionFinishInAAfterShellSwitchesToB() throws Exception {
     String prior = System.getProperty("rei.data-dir");
@@ -71,15 +74,18 @@ class ProjectRunSwitchIntegrationTest
       var calls = new AtomicInteger();
       ChatModel model =
           new ChatModel() {
+            /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
             @Override
             public ToolCallingChatOptions getOptions() {
               return ToolCallingChatOptions.builder().build();
             }
 
+            /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
             public ChatResponse call(Prompt p) {
               throw new UnsupportedOperationException();
             }
 
+            /** {@code stream} の条件を再現するための補助情報を返す。 */
             public Flux<ChatResponse> stream(Prompt p) {
               if (calls.incrementAndGet() == 1)
                 return Flux.just(
@@ -104,6 +110,7 @@ class ProjectRunSwitchIntegrationTest
           };
       var tool =
           new ToolCallback() {
+            /** 検証用に、会話の実行で参照するツール定義を返す。 */
             public ToolDefinition getToolDefinition() {
               return ToolDefinition.builder()
                   .name("readFile")
@@ -112,6 +119,7 @@ class ProjectRunSwitchIntegrationTest
                   .build();
             }
 
+            /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
             public String call(String input) {
               entered.countDown();
               try {
@@ -124,6 +132,7 @@ class ProjectRunSwitchIntegrationTest
               return "read in A";
             }
 
+            /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
             public String call(String input, ToolContext context) {
               return call(input);
             }

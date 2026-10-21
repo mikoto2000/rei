@@ -7,16 +7,29 @@ import java.util.Set;
 import java.util.function.LongSupplier;
 import org.springframework.stereotype.Service;
 
+/** エージェントスキル選択内容のユースケースを実現する。 */
 @Service
 public class AgentSkillSelectionService {
 
+  /** この機能の動作設定。 */
   private final AgentSkillsProperties properties;
+
+  /** 明示的な対象の選択条件。 */
   private final AgentSkillExplicitSelector explicitSelector;
+
+  /** 暗黙の対象の選択条件。 */
   private final AgentSkillImplicitSelection implicitSelector;
+
+  /** 保存と検索の窓口。 */
   private final AgentSkillRepository repository;
+
+  /** 候補対象の選択条件。 */
   private final SkillCandidateSelector candidateSelector;
+
+  /** nano時刻。 */
   private final LongSupplier nanoTime;
 
+  /** スキルの利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @org.springframework.beans.factory.annotation.Autowired
   public AgentSkillSelectionService(
       AgentSkillsProperties properties,
@@ -33,6 +46,7 @@ public class AgentSkillSelectionService {
         System::nanoTime);
   }
 
+  /** スキルの利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public AgentSkillSelectionService(
       AgentSkillsProperties properties,
       AgentSkillExplicitSelector explicitSelector,
@@ -40,6 +54,7 @@ public class AgentSkillSelectionService {
     this(properties, explicitSelector, implicitSelector, null, null, System::nanoTime);
   }
 
+  /** スキルの利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   AgentSkillSelectionService(
       AgentSkillsProperties properties,
       AgentSkillExplicitSelector explicitSelector,
@@ -48,6 +63,7 @@ public class AgentSkillSelectionService {
     this(properties, explicitSelector, implicitSelector, null, null, nanoTime);
   }
 
+  /** 指定された値や利用先を使って、AgentSkillSelectionServiceを初期化する。 */
   AgentSkillSelectionService(
       AgentSkillsProperties properties,
       AgentSkillExplicitSelector explicitSelector,
@@ -63,10 +79,12 @@ public class AgentSkillSelectionService {
     this.nanoTime = nanoTime;
   }
 
+  /** 指定された条件に応じて、利用する対象を選ぶ。 */
   public AgentSkillSelection select(String prompt) {
     return select(prompt, null);
   }
 
+  /** 指定された条件に応じて、利用する対象を選ぶ。 */
   public AgentSkillSelection select(String prompt, Runnable beforeModelCall) {
     var budget =
         beforeModelCall instanceof dev.mikoto2000.rei.llm.ModelCallBudget accounting
@@ -77,6 +95,7 @@ public class AgentSkillSelectionService {
     }
   }
 
+  /** 条件に合う対象を利用するため、Budgetedを選択する。 */
   private AgentSkillSelection selectBudgeted(String prompt, Runnable beforeModelCall) {
     if (!properties.isEnabled()) {
       return new AgentSkillSelection(
@@ -137,6 +156,7 @@ public class AgentSkillSelectionService {
         candidateDurationMs);
   }
 
+  /** スキルの利用で用いるdistinctおよび上限を返す。 */
   private List<AgentSkill> distinctAndLimit(List<AgentSkill> skills, int limit) {
     List<AgentSkill> result = new ArrayList<>();
     Set<String> seen = new LinkedHashSet<>();

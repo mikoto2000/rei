@@ -16,10 +16,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** 実装要求保存と検索の窓口の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ImplementationRequestRepositoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 外部エージェントへの委譲で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void terminalReceiptReconciliationIsIdempotentAndCannotDowngradeResult() {
     var source = new SQLiteDataSource();
@@ -56,6 +59,7 @@ class ImplementationRequestRepositoryTest {
     assertEquals("RESULT_AVAILABLE", second.get("id").executionStatus());
   }
 
+  /** 一括反映利用権の確保について、別の保存と検索の窓口の後も対象の情報が残ることを確認する。 */
   @Test
   void atomicClaimSurvivesAnotherRepositoryAndOnlyOneConcurrentCallerWins() throws Exception {
     var source = new SQLiteDataSource();

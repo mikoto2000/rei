@@ -18,10 +18,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.test.util.ReflectionTestUtils;
 
+/** 初学者レビュー実行外部連携の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class BeginnerReviewRunIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 会話の実行で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void staticReviewCompletesThroughExistingRunWithoutModelOrBackgroundAutomation()
       throws Exception {
@@ -55,9 +58,11 @@ class BeginnerReviewRunIntegrationTest {
             owner, "/material-review beginner --root . --entry a.md --chapter a.md", mailbox);
     assertTrue(result.success(), result.errorMessage());
     assertTrue(result.text().contains("初学者教材レビュー"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(models, clients, work, sleep);
   }
 
+  /** 会話の実行で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void conversationModeCannotTurnReviewCommandIntoUnrestrictedChat() throws Exception {
     Files.writeString(root.resolve("a.md"), "# A\n");
@@ -90,6 +95,7 @@ class BeginnerReviewRunIntegrationTest {
                     AgentRunContext.Mode.CONVERSATION),
                 "/material-review beginner --entry a.md",
                 new UserInterventionQueue()));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(models, clients);
   }
 }

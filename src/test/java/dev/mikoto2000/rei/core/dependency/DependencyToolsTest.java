@@ -29,15 +29,28 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 依存条件ツール一覧の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class DependencyToolsTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使うプロジェクト。 */
   final String project = UUID.randomUUID().toString();
+
+  /** 検証に使うリポジトリ。 */
   PersistentDependencyRepository repo;
+
+  /** 検証に使うサービス。 */
   DependencyObservationService service;
+
+  /** 検証に使う取得元。 */
   DependencySourceProbe source;
+
+  /** 検証に使うツール一覧。 */
   DependencyTools tools;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     repo =
@@ -62,10 +75,12 @@ class DependencyToolsTest {
     tools = new DependencyTools(repo, service, source);
   }
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("r", "s", dir, project);
   }
 
+  /** 外部条件の待機で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void registrationIsScopedAndReadInspectionCannotReachNetwork() {
     assertThrows(
@@ -75,6 +90,7 @@ class DependencyToolsTest {
     try (var scope = AgentRunScope.open(owner())) {
       id = tools.registerDependency("HTTP_STATUS", "https://example.com", "200", "PT1H", null).id();
       assertThrows(IllegalArgumentException.class, () -> tools.checkDependency(id));
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(source);
       assertEquals(DependencyState.WAITING, tools.checkHttpDependency(id).state());
     }
@@ -83,6 +99,7 @@ class DependencyToolsTest {
     }
   }
 
+  /** 停滞状態を保持することを確認する。 */
   @Test
   void callbackHidesContextAndWaitingPreservesStagnationState() throws Exception {
     var execution =
@@ -125,6 +142,7 @@ class DependencyToolsTest {
                 c -> c.getToolDefinition().name().toLowerCase(Locale.ROOT).contains("answer")));
   }
 
+  /** 外部条件の待機で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shellHumanAnswerCompletesOnlyItsOwnedProject() {
     PersistentDependencyRepository.Entry entry;

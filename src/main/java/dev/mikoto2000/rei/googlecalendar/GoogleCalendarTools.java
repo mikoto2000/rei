@@ -6,12 +6,15 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+/** Google予定表をモデルから呼び出せるツールとして提供する。 */
 @Component
 @RequiredArgsConstructor
 public class GoogleCalendarTools {
 
+  /** Google予定表サービス。 */
   private final GoogleCalendarService googleCalendarService;
 
+  /** 利用可能な対象を確認できるよう、イベント一覧を一覧にする。 */
   @Tool(
       name = "googleCalendarListEvents",
       description = "Google Calendar の予定を指定期間で一覧します。日時は ISO-8601 形式で指定します。")
@@ -22,6 +25,7 @@ public class GoogleCalendarTools {
         googleCalendarService.parseDateTime(to).toInstant());
   }
 
+  /** 利用可能な対象を確認できるよう、イベント一覧対象日付を一覧にする。 */
   @Tool(
       name = "googleCalendarListEventsForDate",
       description = "Google Calendar の予定を指定日で一覧します。日付は yyyy-MM-dd 形式で指定します。")
@@ -30,6 +34,7 @@ public class GoogleCalendarTools {
     return googleCalendarService.listEventsForDate(LocalDate.parse(date));
   }
 
+  /** 新たな対象を利用できるよう、イベントを作成する。 */
   @Tool(
       name = "googleCalendarCreateEvent",
       description = "Google Calendar に予定を作成します。日時は ISO-8601 形式で指定します。")
@@ -50,6 +55,7 @@ public class GoogleCalendarTools {
     }
   }
 
+  /** 予定の管理で用いる利用者Facingメッセージを返す。 */
   private String userFacingMessage(Throwable error, String fallback) {
     Throwable root = rootCause(error);
     String message = root.getMessage();
@@ -65,6 +71,7 @@ public class GoogleCalendarTools {
     return fallback + ": " + message;
   }
 
+  /** 予定の管理で用いる作業ルート原因を返す。 */
   private Throwable rootCause(Throwable error) {
     Throwable current = error;
     while (current.getCause() != null) {

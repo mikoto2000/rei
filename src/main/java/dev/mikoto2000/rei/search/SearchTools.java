@@ -8,16 +8,22 @@ import java.util.Locale;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+/** 検索をモデルから呼び出せるツールとして提供する。 */
 @Component
 public class SearchTools {
 
+  /** 検索知識サービス。 */
   private final SearchKnowledgeService searchKnowledgeService;
+
+  /** 結果予算。 */
   private final dev.mikoto2000.rei.websearch.WebResultBudget resultBudget;
 
+  /** 調査情報の整理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SearchTools(SearchKnowledgeService service) {
     this(service, dev.mikoto2000.rei.websearch.WebResultBudget.defaults());
   }
 
+  /** 指定された値や利用先を使って、SearchToolsを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public SearchTools(
       SearchKnowledgeService service, dev.mikoto2000.rei.websearch.WebResultBudget budget) {
@@ -25,6 +31,7 @@ public class SearchTools {
     this.resultBudget = budget;
   }
 
+  /** 依頼に関連する情報を得るため、知識を検索する。 */
   @Tool(
       name = "searchKnowledge",
       description =
@@ -54,6 +61,7 @@ public class SearchTools {
       var entries = new java.util.ArrayList<String>();
       for (var vector : result.vectorResults()) {
         String snippet = vector.snippet();
+        // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (snippet != null && snippet.length() > 512)
           snippet =
               snippet.substring(0, Character.isHighSurrogate(snippet.charAt(511)) ? 511 : 512)
@@ -99,6 +107,7 @@ public class SearchTools {
     }
   }
 
+  /** 依頼に関連する情報を得るため、知識を検索する。 */
   String searchKnowledge(
       String query,
       Integer vectorTopK,
@@ -110,6 +119,7 @@ public class SearchTools {
     return searchKnowledge(query, vectorTopK, webTopK, threshold, source, null, context);
   }
 
+  /** 依頼に関連する情報を得るため、知識を検索する。 */
   String searchKnowledge(
       String query, Integer vectorTopK, Integer webTopK, Double threshold, String source)
       throws IOException, InterruptedException {
@@ -132,6 +142,7 @@ public class SearchTools {
             formatWebResults(result.webContext()));
   }
 
+  /** 内容を表示・参照しやすくするため、ベクトル結果一覧を整形する。 */
   private String formatVectorResults(List<VectorDocumentSearchResult> results) {
     if (results.isEmpty()) {
       return "該当なし";
@@ -154,6 +165,7 @@ public class SearchTools {
     return builder.toString().trim();
   }
 
+  /** 内容を表示・参照しやすくするため、Web結果一覧を整形する。 */
   private String formatWebResults(dev.mikoto2000.rei.websearch.WebSearchContext context) {
     List<WebSearchPage> results = context.allResults();
     if (results.isEmpty()) {

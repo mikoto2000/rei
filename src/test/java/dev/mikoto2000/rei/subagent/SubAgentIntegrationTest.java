@@ -35,29 +35,55 @@ import org.springframework.test.context.DynamicPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import reactor.core.publisher.Flux;
 
+/** 補助エージェント外部連携の結果と状態の契約を検証するテスト。 */
 @SpringBootTest(
     properties = {"spring.ai.openai.api-key=test-key", "rei.tool-permission.enabled=true"})
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentIntegrationTest {
+  /** 検証に使うモデル。 */
   @MockitoBean ChatModel model;
+
+  /** 検証に使う埋め込み表現。 */
   @MockitoBean EmbeddingModel embedding;
+
+  /** 検証に使うベクトル一覧。 */
   @MockitoBean VectorStore vectors;
+
+  /** 検証に使う保存済み文書。 */
   @MockitoBean VectorDocumentRepository documents;
+
+  /** 検証に使う実行の担当。 */
   @Autowired SubAgentRunner runner;
+
+  /** 検証に使う並列。 */
   @Autowired ParallelSubAgentDelegator parallel;
+
+  /** 検証に使う登録台帳。 */
   @Autowired SubAgentRegistry registry;
+
+  /** 検証に使う履歴。 */
   @Autowired ChatMemory history;
+
+  /** 検証に使う作業中集合。 */
   @Autowired WorkingSet workingSet;
+
+  /** 検証に使うクライアント一覧。 */
   @Autowired LlmChatClientProvider clients;
+
+  /** 検証に使う権限一覧。 */
   @Autowired dev.mikoto2000.rei.core.policy.ToolPermissionPolicy permissions;
+
+  /** 検証に使うディレクトリ。 */
   static Path directory;
 
+  /** {@code properties} の条件を再現するため、検証用の操作や状態を扱う。 */
   @DynamicPropertySource
   static void properties(DynamicPropertyRegistry properties) throws Exception {
     directory = Files.createTempDirectory("rei-subagent-test-");
     properties.add("rei.subagents.directory", () -> directory.toString());
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void realCallbacksLeaveMainHistoryAndWorkingSetUntouchedAndParentSeesDelegation()
       throws Exception {

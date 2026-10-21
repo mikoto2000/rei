@@ -28,17 +28,29 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** HTTP通信応答キャッシュの結果と状態の契約を検証するテスト。 */
 class HttpResponseCacheTest {
+  /** 検証に使う参照先のURI。 */
   final URI uri = URI.create("https://example.com/page");
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final AdjustableClock clock = new AdjustableClock(Instant.parse("2026-01-01T00:00:00Z"));
+
+  /** 検証に使うこの機能の動作設定。 */
   final HttpCacheProperties properties = new HttpCacheProperties();
+
+  /** 検証に使う情報の取得元。 */
   final SafeHttpFetcher fetcher = mock(SafeHttpFetcher.class);
+
+  /** 検証に使う呼び出し回数。 */
   final AtomicInteger calls = new AtomicInteger();
 
+  /** {@code cache} の条件を再現するための補助情報を返す。 */
   HttpResponseCache cache() {
     return new HttpResponseCache(properties, clock, new SensitiveInfoDetector());
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   HttpResponseCache.Request request(boolean force) {
     return request(
         uri,
@@ -48,6 +60,7 @@ class HttpResponseCacheTest {
         force);
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   HttpResponseCache.Request request(
       URI url,
       Map<String, String> headers,
@@ -57,15 +70,18 @@ class HttpResponseCacheTest {
     return new HttpResponseCache.Request(url, headers, policy, kind, force);
   }
 
+  /** 検証用に、指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   SafeHttpFetcher.Response get(HttpResponseCache cache, HttpResponseCache.Request request) {
     return cache.fetch(request, FetchOperation.active(), HttpFetchObserver.NONE, fetcher);
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   SafeHttpFetcher.Response response(int status, Map<String, String> headers, String body, URI url) {
     return new SafeHttpFetcher.Response(
         status, headers, body.getBytes(StandardCharsets.UTF_8), url);
   }
 
+  /** {@code fixed} の条件を再現するため、検証用の操作や状態を扱う。 */
   void fixed(int status, Map<String, String> headers, String body) {
     doAnswer(
             invocation -> {
@@ -77,6 +93,7 @@ class HttpResponseCacheTest {
         .fetch(any(), anyMap(), any(), any(), any());
   }
 
+  /** 検索結果について、本文を再利用することを確認する。 */
   @Test
   void hitReusesBodyWithoutAnotherRawFetchAndDefensiveCopiesPreventPoisoning() {
     fixed(200, Map.of(), "evidence");
@@ -90,6 +107,7 @@ class HttpResponseCacheTest {
     }
   }
 
+  /** 取得した情報の再利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void ttlExpirationActuallyReloadsTheSameEntry() {
     properties.setPageTtlSeconds(10);
@@ -105,6 +123,7 @@ class HttpResponseCacheTest {
     }
   }
 
+  /** 元の取得時刻を維持することを確認する。 */
   @Test
   void forceRefreshRevalidatesEtagAndKeepsOriginalFetchTime() {
     when(fetcher.fetch(any(), anyMap(), any(), any(), any()))
@@ -129,6 +148,7 @@ class HttpResponseCacheTest {
     }
   }
 
+  /** 取得した情報の再利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void lastModifiedIsUsedWhenEtagIsAbsent() {
     String modified = "Wed, 31 Dec 2025 00:00:00 GMT";
@@ -149,6 +169,7 @@ class HttpResponseCacheTest {
     }
   }
 
+  /** 取得した情報の再利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void mismatched304CannotValidateAnUnrelatedBody() {
     when(fetcher.fetch(any(), anyMap(), any(), any(), any()))
@@ -165,6 +186,7 @@ class HttpResponseCacheTest {
     }
   }
 
+  /** 取得した情報の再利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void noCacheAndAgeRequireRevalidationBeforeReuse() {
     for (Map<String, String> headers :
@@ -182,6 +204,7 @@ class HttpResponseCacheTest {
     }
   }
 
+  /** 取得した情報の再利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void serverMaxAgeAndExpiresShortenConfiguredTtl() {
     for (Map<String, String> headers :
@@ -204,6 +227,7 @@ class HttpResponseCacheTest {
     }
   }
 
+  /** 非公開なしについて、Cookieを保存することを確認する。 */
   @Test
   void privateNoStoreCookieAndVaryStarAreNeverRetained() {
     for (Map<String, String> headers :
@@ -224,6 +248,7 @@ class HttpResponseCacheTest {
     }
   }
 
+  /** 取得した情報の再利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void private304InvalidatesThePreviouslyPublicEntry() {
     when(fetcher.fetch(any(), anyMap(), any(), any(), any()))
@@ -239,6 +264,7 @@ class HttpResponseCacheTest {
     }
   }
 
+  /** 取得した情報の再利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void errorResponsesAndExceptionsLeaveNoCachedOrInFlightState() {
     for (int status : List.of(404, 429, 500, 503)) {
@@ -261,6 +287,7 @@ class HttpResponseCacheTest {
     }
   }
 
+  /** 取得した情報の再利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void queryProviderLimitHeadersAndPoliciesRemainSeparateConditions() {
     fixed(200, Map.of(), "evidence");
@@ -306,6 +333,7 @@ class HttpResponseCacheTest {
     }
   }
 
+  /** 取得した情報の再利用で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void authenticationAndSensitiveQueryOrBodyBypassStorage() {
     fixed(200, Map.of(), "evidence");
@@ -348,6 +376,7 @@ class HttpResponseCacheTest {
     }
   }
 
+  /** 取得した情報の再利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void privateOriginsAndRedirectedResponsesAreNotStored() {
     fixed(200, Map.of(), "evidence");
@@ -379,6 +408,7 @@ class HttpResponseCacheTest {
     }
   }
 
+  /** 取得した情報の再利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void cacheCapacityBoundsResidentBodies() {
     properties.setMaxEntries(1);

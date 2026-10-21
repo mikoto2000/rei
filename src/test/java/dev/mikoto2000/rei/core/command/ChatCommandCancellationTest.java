@@ -29,8 +29,10 @@ import org.springframework.ai.chat.prompt.Prompt;
 import picocli.CommandLine;
 import reactor.core.publisher.Flux;
 
+/** チャットコマンドキャンセルの結果と状態の契約を検証するテスト。 */
 class ChatCommandCancellationTest {
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void runStopsStreamingWhenCancelled() throws Exception {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -80,24 +82,31 @@ class ChatCommandCancellationTest {
     assertTrue(output.text().contains("[agent] cancelled"));
   }
 
+  /** 検証条件を再現するためのRecording出力。 */
   private static final class RecordingOutput implements ShellEventOutput {
+    /** 検証に使う値。 */
     private final StringBuilder value = new StringBuilder();
 
+    /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
     public void print(String text) {
       value.append(text);
     }
 
+    /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
     public void println(String text) {
       value.append(text).append('\n');
     }
 
+    /** 検証で保留している出力の確定を扱う。 */
     public void flush() {}
 
+    /** {@code text} の条件を再現するための補助情報を返す。 */
     String text() {
       return value.toString();
     }
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   private static ChatResponse response(String text) {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
   }

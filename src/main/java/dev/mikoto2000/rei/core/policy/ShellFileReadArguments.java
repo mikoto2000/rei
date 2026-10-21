@@ -10,16 +10,30 @@ import tools.jackson.core.json.JsonFactory;
 import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Detects direct shell readers as a planning error, not as a shell security boundary. */
+/**
+ * ツール利用の権限制御に必要なシェルファイル読み取り引数を扱う。
+ *
+ * <p>Detects direct shell readers as a planning error, not as a shell security boundary.
+ */
 public final class ShellFileReadArguments {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ShellFileReadArguments() {}
 
+  /** 文字数の上限。 */
   private static final int MAX_CHARS = 1_048_576;
+
+  /** 最大WRAPPERS。 */
   private static final int MAX_WRAPPERS = 8;
+
+  /** 読み取り元一覧。 */
   private static final Set<String> READERS =
       Set.of("get-content", "gc", "cat", "type", "tac", "head", "tail", "more", "less");
+
+  /** シェルとして扱う実行コマンドの集合。 */
   private static final Set<String> SHELLS =
       Set.of("powershell", "pwsh", "cmd", "sh", "bash", "dash", "zsh");
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final JsonMapper JSON =
       JsonMapper.builder(
               JsonFactory.builder()
@@ -32,6 +46,8 @@ public final class ShellFileReadArguments {
                   .build())
           .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
           .build();
+
+  /** 案内。 */
   private static final String GUIDANCE =
       "runCommand: ファイル内容の読み込みには readMultiFile を使用してください。"
           + " 単一ファイルも {\"files\":[{\"path\":\"プロジェクト相対パス\"}]} で指定します。"
@@ -39,14 +55,17 @@ public final class ShellFileReadArguments {
           + " ページ分割や出力上限の回避に shell を使わないでください。コマンドは実行していません。"
           + " 同じバッチの成功済み呼び出しは繰り返さず、不正な呼び出しだけを修正してください。";
 
+  /** ツール利用の権限制御において、シェルファイル読み取り引数への対応可否を返す。 */
   public static boolean supports(String tool) {
     return "runCommand".equals(tool);
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public static void validate(String tool, String input) {
     if (!supports(tool)) return;
     String command;
     try {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (input == null || input.length() > MAX_CHARS) throw new IllegalArgumentException();
       var root = JSON.readTree(input);
       if (root == null
@@ -62,8 +81,13 @@ public final class ShellFileReadArguments {
     validateCommand(command);
   }
 
-  /** Also used at the direct Tools boundary; never rewrites or executes a command. */
+  /**
+   * 利用条件に合わない指定を受け付けないよう、コマンドを検証する。
+   *
+   * <p>Also used at the direct Tools boundary; never rewrites or executes a command.
+   */
   public static void validateCommand(String command) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (command != null && command.length() > MAX_CHARS)
       throw new InvalidToolArgumentsException(
           "runCommand: command exceeds the argument size limit");
@@ -71,6 +95,7 @@ public final class ShellFileReadArguments {
       throw new InvalidToolArgumentsException(GUIDANCE);
   }
 
+  /** ツール利用の権限制御で判断に用いる含有読み取り元の条件を確認する。 */
   private static boolean containsReader(String command, int depth) {
     if (depth > MAX_WRAPPERS) return false;
     List<Token> tokens = tokenize(command);
@@ -113,6 +138,7 @@ public final class ShellFileReadArguments {
     return false;
   }
 
+  /** ツール利用の権限制御において、readsファイルに該当するか判定する。 */
   private static boolean readsFile(String name, List<Token> tokens, int start) {
     if (name.equals("get-content") || name.equals("gc")) return true;
     boolean optionValue = false;
@@ -145,15 +171,28 @@ public final class ShellFileReadArguments {
     return false;
   }
 
+  /** ツール利用の権限制御で用いる実行可能な名前を返す。 */
   private static String executableName(String value) {
     value = value.replace('\\', '/');
     value = value.substring(value.lastIndexOf('/') + 1).toLowerCase(Locale.ROOT);
     return value.endsWith(".exe") ? value.substring(0, value.length() - 4) : value;
   }
 
+  /**
+   * ツール利用の権限制御で受け渡すトークンを表す。
+   *
+   * @param text テキスト
+   * @param start 開始
+   * @param quoted 引用済み
+   * @param separator 区切り
+   */
   private record Token(String text, int start, boolean quoted, boolean separator) {}
 
-  /** Quote-aware lexical scan; argument text such as echo "cat file" is never an executable. */
+  /**
+   * ツール利用の権限制御で用いるtokenizeを返す。
+   *
+   * <p>Quote-aware lexical scan; argument text such as echo "cat file" is never an executable.
+   */
   private static List<Token> tokenize(String script) {
     var tokens = new ArrayList<Token>();
     for (int i = 0; i < script.length(); ) {

@@ -22,45 +22,98 @@ import java.util.Set;
 import org.springframework.stereotype.Service;
 
 /**
- * Additional independent checks in the existing FileGoalVerifier, never a separate execution loop.
+ * 目標の達成管理に必要な目標完了を判定する窓口を扱う。
+ *
+ * <p>Additional independent checks in the existing FileGoalVerifier, never a separate execution
+ * loop.
  */
 @Service
 public final class GoalCompletionGate {
+  /**
+   * 目標の達成管理で受け渡す参照先を表す。
+   *
+   * @param id 識別子
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   */
   public record Reference(String id, String sha256) {}
 
+  /**
+   * 目標の達成管理で受け渡す必須検証一覧を表す。
+   *
+   * @param commandSha256 コマンド内容の同一性を照合するSHA-256ハッシュ
+   * @param tests 検証一覧
+   * @param testCommand 検証コマンド
+   */
   public record RequiredTests(String commandSha256, List<String> tests, String testCommand) {
+    /** 目標の達成管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public RequiredTests(String commandSha256, List<String> tests) {
       this(commandSha256, tests, null);
     }
 
+    /** 受け取った情報からRequiredTestsを作成する。 */
     public RequiredTests {
       tests = tests == null ? List.of() : List.copyOf(tests);
       if (commandSha256 == null && testCommand != null) commandSha256 = commandHash(testCommand);
     }
   }
 
+  /**
+   * 目標の達成管理で受け渡す成果物要件を表す。
+   *
+   * @param filename ファイル名
+   * @param mediaType メディア種別
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   * @param deliveryRequired 配信必須
+   */
   public record ArtifactRequirement(
       String filename, String mediaType, String sha256, boolean deliveryRequired) {
+    /** 目標の達成管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public ArtifactRequirement(String filename, String mediaType, String sha256) {
       this(filename, mediaType, sha256, false);
     }
   }
 
+  /**
+   * 目標の達成管理で受け渡す要件を表す。
+   *
+   * @param id 識別子
+   * @param statement 記述内容
+   * @param required 必須
+   * @param criterion 判断基準
+   */
   public record Requirement(
       String id, String statement, Boolean required, GoalRepository.FileCriterion criterion) {
+    /** 受け取った情報からRequirementを作成する。 */
     public Requirement {
       if (required == null)
         throw new IllegalArgumentException("Explicit required true/false required");
     }
   }
 
+  /**
+   * 目標の達成管理で受け渡すレビュー実行可否の判断を表す。
+   *
+   * @param semanticRequired 意味による必須
+   * @param requirements 要件一覧
+   */
   public record ReviewGate(
       boolean semanticRequired, List<SemanticPatchReviewService.Requirement> requirements) {
+    /** 受け取った情報からReviewGateを作成する。 */
     public ReviewGate {
       requirements = requirements == null ? List.of() : List.copyOf(requirements);
     }
   }
 
+  /**
+   * 目標の達成管理で受け渡す定義を表す。
+   *
+   * @param completionEvidence 完了条件根拠
+   * @param requiredTests 必須検証一覧
+   * @param requiredArtifacts 必須成果物一覧
+   * @param requiredPredicates 必須判定条件一覧
+   * @param reviewGate レビュー実行可否の判断
+   * @param requirements 要件一覧
+   */
   public record Definition(
       List<GoalRepository.FileCriterion> completionEvidence,
       RequiredTests requiredTests,
@@ -68,6 +121,7 @@ public final class GoalCompletionGate {
       List<GoalRepository.FileCriterion> requiredPredicates,
       ReviewGate reviewGate,
       List<Requirement> requirements) {
+    /** 目標の達成管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Definition(
         List<GoalRepository.FileCriterion> evidence,
         RequiredTests tests,
@@ -77,6 +131,7 @@ public final class GoalCompletionGate {
       this(evidence, tests, artifacts, predicates, review, List.of());
     }
 
+    /** 受け取った情報からDefinitionを作成する。 */
     public Definition {
       requirements = requirements == null ? List.of() : List.copyOf(requirements);
       completionEvidence = completionEvidence == null ? List.of() : List.copyOf(completionEvidence);
@@ -85,36 +140,61 @@ public final class GoalCompletionGate {
     }
   }
 
+  /**
+   * 目標の達成管理で受け渡す確認の根拠を表す。
+   *
+   * @param review レビュー
+   * @param artifacts 成果物一覧
+   * @param deliveredArtifacts 提供済みの内容成果物一覧
+   */
   public record Proof(
       Reference review, List<Reference> artifacts, List<Reference> deliveredArtifacts) {
+    /** 目標の達成管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Proof(Reference review, List<Reference> artifacts) {
       this(review, artifacts, List.of());
     }
 
+    /** 受け取った情報からProofを作成する。 */
     public Proof {
       artifacts = artifacts == null ? List.of() : List.copyOf(artifacts);
       deliveredArtifacts = deliveredArtifacts == null ? List.of() : List.copyOf(deliveredArtifacts);
     }
   }
 
+  /** 目標の達成管理に必要なレビュー読み取り元を扱う。 */
   @FunctionalInterface
   public interface ReviewReader {
+    /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
     SemanticPatchReviewService.Receipt read(AgentRunContext owner, Reference reference)
         throws IOException;
   }
 
+  /** 目標の達成管理に必要な成果物読み取り元を扱う。 */
   @FunctionalInterface
   public interface ArtifactReader {
+    /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
     Artifact read(AgentRunContext owner, Reference reference) throws IOException;
   }
 
+  /** 目標一覧。 */
   private final GoalRepository goals;
+
+  /** レビュー一覧。 */
   private final ReviewReader reviews;
+
+  /** 成果物一覧。 */
   private final ArtifactReader artifacts;
+
+  /** 取得記録。 */
   private final SelfPatchReviewService.Capture capture;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 必須条件全対象。 */
   private final boolean requireAll;
 
+  /** 目標の達成管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @org.springframework.beans.factory.annotation.Autowired
   public GoalCompletionGate(
       GoalRepository goals,
@@ -140,6 +220,7 @@ public final class GoalCompletionGate {
         requireAll);
   }
 
+  /** 指定された値や利用先を使って、GoalCompletionGateを初期化する。 */
   public GoalCompletionGate(
       GoalRepository goals,
       ReviewReader reviews,
@@ -155,10 +236,12 @@ public final class GoalCompletionGate {
     this.requireAll = requireAll;
   }
 
+  /** 目標の達成管理で判断に用いる必須の条件を確認する。 */
   public boolean required(GoalRepository.Goal goal) {
     return requireAll || goal.completion() != null;
   }
 
+  /** 対象の状態や内容を調べ、呼び出し元が確認できる情報として返す。 */
   public GoalRepository.Goal inspect(AgentRunContext owner, String id) throws IOException {
     var goal = goals.get(owner.projectId(), id);
     if (!owner.conversationId().equals(goal.sessionId())
@@ -167,6 +250,7 @@ public final class GoalCompletionGate {
     return goal;
   }
 
+  /** 目標の達成管理で用いる関連付けを返す。 */
   public GoalRepository.Goal attach(AgentRunContext owner, String id, Proof proof, boolean human)
       throws IOException {
     validateProof(proof);
@@ -191,6 +275,7 @@ public final class GoalCompletionGate {
     return goals.saveCompletionProof(owner, id, proof, human);
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   public FileGoalVerifier.Verification verify(GoalRepository.Goal goal, FileGoalVerifier files) {
     if (!required(goal)) return new FileGoalVerifier.Verification(true, "criteria_verified");
     return verify(
@@ -204,7 +289,18 @@ public final class GoalCompletionGate {
         files::verify);
   }
 
-  /** Shared evidence subject: Stage verification never fabricates or persists a temporary Goal. */
+  /**
+   * 目標の達成管理で受け渡す対象を表す。
+   *
+   * <p>Shared evidence subject: Stage verification never fabricates or persists a temporary Goal.
+   *
+   * @param projectId 所属プロジェクトの識別子
+   * @param projectRoot 作業対象のルートディレクトリ
+   * @param sessionId 会話の識別子
+   * @param currentRunId 現在実行の識別子
+   * @param completion 完了条件
+   * @param completionProof 完了条件確認の根拠
+   */
   public record Subject(
       String projectId,
       String projectRoot,
@@ -213,11 +309,14 @@ public final class GoalCompletionGate {
       Definition completion,
       Proof completionProof) {}
 
+  /** 目標の達成管理に必要なファイル確認結果を扱う。 */
   @FunctionalInterface
   public interface FileChecks {
+    /** 要求された条件を満たすことを確認する。 */
     FileGoalVerifier.Verification verify(Path root, GoalRepository.FileCriterion criterion);
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   public FileGoalVerifier.Verification verify(Subject goal, FileChecks files) {
     var definition = goal.completion();
     if (definition == null) return failed("completion_definition_missing");
@@ -355,12 +454,14 @@ public final class GoalCompletionGate {
     }
   }
 
+  /** 条件に合う対象を選ぶため、成果物との一致を判定する。 */
   private static boolean matchesArtifact(ArtifactRequirement expected, Artifact item) {
     return item.filename().equals(expected.filename())
         && item.mediaType().equals(expected.mediaType())
         && (expected.sha256() == null || expected.sha256().equals(item.sha256()));
   }
 
+  /** 目標の達成管理において、自分が所有する対象成果物に該当するか判定する。 */
   private boolean ownedArtifact(GoalRepository.Goal goal, Artifact item, Reference ref) {
     return ownedArtifact(
         new Subject(
@@ -374,6 +475,7 @@ public final class GoalCompletionGate {
         ref);
   }
 
+  /** 目標の達成管理において、自分が所有する対象成果物に該当するか判定する。 */
   private boolean ownedArtifact(Subject goal, Artifact item, Reference ref) {
     return item != null
         && "AVAILABLE".equals(item.status())
@@ -385,16 +487,19 @@ public final class GoalCompletionGate {
         && item.expiresAt().isAfter(clock.instant());
   }
 
+  /** 対象の処理が失敗したことを、理由を含む結果として表す。 */
   private static FileGoalVerifier.Verification failed(String reason) {
     return new FileGoalVerifier.Verification(false, reason);
   }
 
+  /** 後続の操作を進められるか判断するため、期限を確認する。 */
   private static void checkDeadline(long deadline) throws IOException {
     RunCancellation.propagate(null);
     if (System.nanoTime() >= deadline)
       throw new IOException("Completion verification deadline exceeded");
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、定義を検証する。 */
   static void validateDefinition(Definition definition) {
     if (definition == null
         || definition.completionEvidence().isEmpty()
@@ -402,6 +507,7 @@ public final class GoalCompletionGate {
         || definition.requiredPredicates().size() > 16
         || definition.requiredArtifacts().size() > 16)
       throw new IllegalArgumentException("Bounded completion evidence required");
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (definition.requirements().size() > 16)
       throw new IllegalArgumentException("At most 16 named requirements");
     var requirementIds = new HashSet<String>();
@@ -508,6 +614,7 @@ public final class GoalCompletionGate {
     }
   }
 
+  /** 目標の達成管理に関する判断基準を処理する。 */
   static void criterion(GoalRepository.FileCriterion item) {
     if (item == null) throw new IllegalArgumentException("File criterion required");
     GoalRepository.validateFile(item.relativeFile());
@@ -524,7 +631,9 @@ public final class GoalCompletionGate {
     }
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、確認の根拠を検証する。 */
   static void validateProof(Proof proof) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (proof == null || proof.artifacts().size() > 16 || proof.deliveredArtifacts().size() > 16)
       throw new IllegalArgumentException("Bounded proof required");
     var ids = new HashSet<String>();
@@ -542,6 +651,7 @@ public final class GoalCompletionGate {
     }
   }
 
+  /** 目標の達成管理に関する参照先を処理する。 */
   private static void reference(Reference ref) {
     if (ref == null
         || ref.id() == null
@@ -551,6 +661,7 @@ public final class GoalCompletionGate {
       throw new IllegalArgumentException("Exact evidence ID/SHA required");
   }
 
+  /** 目標の達成管理で用いるコマンドハッシュ値を返す。 */
   private static String commandHash(String command) {
     try {
       return HexFormat.of()

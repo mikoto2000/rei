@@ -20,8 +20,10 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 話題生成サービスイベントの結果と状態の契約を検証するテスト。 */
 class TopicGeneratorServiceEventTest {
 
+  /** 話題の管理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void publishesFullSpokenLifecycleEvents() {
     TopicGeneratorProperties properties = enabledProperties();
@@ -73,6 +75,7 @@ class TopicGeneratorServiceEventTest {
     assertFalse(events.toString().contains("secret=abc"));
   }
 
+  /** 話題の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void lowScoreCandidateIsRejectedAndNoCandidateIsSkipped() {
     TopicGeneratorProperties properties = enabledProperties();
@@ -107,6 +110,7 @@ class TopicGeneratorServiceEventTest {
     assertEquals(AgentEventType.TOPIC_GENERATION_COMPLETED, events.getLast().type());
   }
 
+  /** 話題の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void cooldownSkipsSelectedCandidateWithoutRejectingIt() {
     TopicGeneratorProperties properties = enabledProperties();
@@ -146,6 +150,7 @@ class TopicGeneratorServiceEventTest {
     assertEquals(Instant.parse("2026-09-02T00:30:00Z"), skipped.nextSpeakAllowedAt());
   }
 
+  /** 話題の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void candidateGenerationFailurePublishesFailedEvent() {
     TopicGeneratorProperties properties = enabledProperties();
@@ -174,6 +179,7 @@ class TopicGeneratorServiceEventTest {
     assertFalse(events.toString().contains("credential=abc"));
   }
 
+  /** 話題の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rankingFailurePublishesFailedEvent() {
     TopicGeneratorProperties properties = enabledProperties();
@@ -197,6 +203,7 @@ class TopicGeneratorServiceEventTest {
     assertEquals(TopicGenerationStage.RANKING, failed.stage());
   }
 
+  /** 話題の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void messageGenerationFailurePublishesFailedEvent() {
     TopicGeneratorProperties properties = enabledProperties();
@@ -220,6 +227,7 @@ class TopicGeneratorServiceEventTest {
     assertEquals(TopicGenerationStage.MESSAGE_GENERATION, failed.stage());
   }
 
+  /** 話題の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledFeatureFlagDoesNotCallGenerators() {
     @SuppressWarnings("unchecked")
@@ -237,9 +245,11 @@ class TopicGeneratorServiceEventTest {
             clock());
 
     assertEquals("disabled", service.run("run", context(), false, false).reason());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(generator);
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   private TopicGeneratorService service(
       TopicGeneratorProperties properties,
       List<TopicCandidateGenerator> generators,
@@ -258,6 +268,7 @@ class TopicGeneratorServiceEventTest {
         clock());
   }
 
+  /** {@code high} の条件を再現するための補助情報を返す。 */
   private TopicCandidate high(String reason) {
     return new TopicCandidate(
         "id",
@@ -273,6 +284,7 @@ class TopicGeneratorServiceEventTest {
         Instant.parse("2026-09-02T00:00:00Z"));
   }
 
+  /** {@code low} の条件を再現するための補助情報を返す。 */
   private TopicCandidate low() {
     return new TopicCandidate(
         "id",
@@ -288,17 +300,20 @@ class TopicGeneratorServiceEventTest {
         Instant.parse("2026-09-02T00:00:00Z"));
   }
 
+  /** {@code enabledProperties} の条件を再現するための補助情報を返す。 */
   private TopicGeneratorProperties enabledProperties() {
     TopicGeneratorProperties properties = new TopicGeneratorProperties();
     properties.setEnabled(true);
     return properties;
   }
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   private TopicGenerationContext context() {
     return new TopicGenerationContext(
         List.of(), List.of(), Instant.parse("2026-09-02T00:00:00Z"), List.of());
   }
 
+  /** {@code clock} の条件を再現するための補助情報を返す。 */
   private Clock clock() {
     return Clock.fixed(Instant.parse("2026-09-02T00:00:00Z"), ZoneOffset.UTC);
   }

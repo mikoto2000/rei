@@ -6,7 +6,9 @@ import dev.mikoto2000.rei.application.cli.CliCatalog;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 保存済み利用可能な項目の結果と状態の契約を検証するテスト。 */
 class CachedCatalogTest {
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void declaredHelpBypassesRequiredArgumentsAtAnyOptionPositionAndRespectsLiteralBoundary() {
     var help = new CliCatalog.Option(List.of("-h", "--help"), "Help", null, "0", false, List.of());
@@ -33,6 +35,7 @@ class CachedCatalogTest {
     assertNull(cache.requestedHelp(List.of("/capture", "export", "--", "--help")));
   }
 
+  /** 表記の統一について、繰り返された根拠を保持することを確認する。 */
   @Test
   void normalizationPreservesRepeatedEvidenceAndZeroArityFlags() {
     var evidence =
@@ -61,6 +64,7 @@ class CachedCatalogTest {
                 "--approve")));
   }
 
+  /** 全体共通選択可能な設定を受け付けられることを確認する。 */
   @Test
   void acceptsGlobalOptionsBeforeActionsWithoutExecutingAnything() {
     var option = new CliCatalog.Option(List.of("--max-runs"), "", null, "1", false, List.of());
@@ -83,6 +87,7 @@ class CachedCatalogTest {
         List.of("/goal", "--", "--literal"), cache.normalize(List.of("/goal", "--", "--literal")));
   }
 
+  /** 使い方を必要とすることを確認する。 */
   @Test
   void endOfOptionsDisablesFlagCompletionAndBareContainersRequireHelp() {
     var option =
@@ -103,6 +108,7 @@ class CachedCatalogTest {
     assertEquals(List.of(), cache.complete(List.of("/config", "--", "--m"), 2, "--m"));
   }
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void optionsBeforeSubcommandsAndDeclaredPathMetadataRemainPure() {
     var option = new CliCatalog.Option(List.of("--verbose"), "", null, "0", false, List.of());
@@ -143,6 +149,7 @@ class CachedCatalogTest {
         cache.pathTypes(List.of("/generate", "--output", "p"), 2, "p"));
   }
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void completesNestedAliasesOptionsAndEnumValuesEntirelyFromImmutableData() {
     var option =

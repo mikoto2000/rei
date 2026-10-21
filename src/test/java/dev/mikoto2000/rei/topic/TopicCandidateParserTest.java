@@ -9,11 +9,14 @@ import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
+/** 話題候補入力の解釈の結果と状態の契約を検証するテスト。 */
 class TopicCandidateParserTest {
+  /** 検証に使う入力の解釈。 */
   private final TopicCandidateParser parser =
       new TopicCandidateParser(
           new JsonMapper(), Clock.fixed(Instant.parse("2026-09-02T00:00:00Z"), ZoneOffset.UTC));
 
+  /** 話題の管理で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void parsesUnfinishedWorkCandidate() {
     var candidates =
@@ -28,6 +31,7 @@ class TopicCandidateParserTest {
     assertEquals(TopicSource.WORKING_SET, candidates.getFirst().source());
   }
 
+  /** 話題の管理で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void parsesFollowUpCandidate() {
     var candidates =
@@ -41,6 +45,7 @@ class TopicCandidateParserTest {
     assertEquals(TopicType.FOLLOW_UP, candidates.getFirst().type());
   }
 
+  /** 話題の管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void ignoresCompletedOrIrrelevantUnsupportedCandidates() {
     var candidates =
@@ -56,11 +61,13 @@ class TopicCandidateParserTest {
     assertTrue(candidates.isEmpty());
   }
 
+  /** 空のを返すことを確認する。 */
   @Test
   void returnsEmptyWhenNoCandidates() {
     assertTrue(parser.parse("{\"candidates\":[]}", 5).isEmpty());
   }
 
+  /** 話題の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void limitsMaximumCandidates() {
     var candidates =
@@ -76,6 +83,7 @@ class TopicCandidateParserTest {
     assertEquals(1, candidates.size());
   }
 
+  /** 話題の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidJsonFailsClosed() {
     assertTrue(parser.parse("not json", 5).isEmpty());

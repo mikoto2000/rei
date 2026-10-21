@@ -26,30 +26,41 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 /**
- * Explicit streaming LLM -> tool-result loop. Existing client advisors still own prompt/memory
+ * 実行の停滞への対処に必要な停滞応答生成に使うモデルを扱う。
+ *
+ * <p>Explicit streaming LLM -> tool-result loop. Existing client advisors still own prompt/memory
  * handling.
  */
 public class StagnationChatModel implements ChatModel {
+  /** 委譲先。 */
   private final ChatModel delegate;
+
+  /** 文脈の組み立て。 */
   private final dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler;
+
+  /** ツール一覧。 */
   private final dev.mikoto2000.rei.core.chat.ToolLoopSupport tools =
       new dev.mikoto2000.rei.core.chat.ToolLoopSupport();
 
+  /** 実行の停滞への対処を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public StagnationChatModel(ChatModel delegate) {
     this(delegate, null);
   }
 
+  /** 指定された値や利用先を使って、StagnationChatModelを初期化する。 */
   public StagnationChatModel(
       ChatModel delegate, dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler) {
     this.delegate = delegate;
     this.assembler = assembler;
   }
 
+  /** 実行の停滞への対処で参照する選択可能な設定を返す。 */
   @Override
   public ChatOptions getOptions() {
     return delegate.getOptions();
   }
 
+  /** 実行の停滞への対処の要求を実行し、呼び出し元へ結果を返す。 */
   @Override
   public ChatResponse call(Prompt prompt) {
     if (context(prompt) == null) return delegate.call(prompt);
@@ -58,6 +69,7 @@ public class StagnationChatModel implements ChatModel {
     return result.get();
   }
 
+  /** 実行の停滞への対処で用いる逐次データを返す。 */
   @Override
   public Flux<ChatResponse> stream(Prompt prompt) {
     RunExecutionContext context = context(prompt);
@@ -114,6 +126,7 @@ public class StagnationChatModel implements ChatModel {
             });
   }
 
+  /** 実行の停滞への対処で用いる繰り返しを返す。 */
   private Flux<ChatResponse> iteration(
       Prompt prompt, RunExecutionContext context, boolean prepaid, long progressAtLimit) {
     return Flux.defer(
@@ -282,6 +295,7 @@ public class StagnationChatModel implements ChatModel {
         });
   }
 
+  /** 実行の停滞への対処で用いる準備を返す。 */
   private Prompt prepare(Prompt prompt, RunExecutionContext context) {
     ToolCallingChatOptions options = (ToolCallingChatOptions) prompt.getOptions();
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
@@ -310,22 +324,27 @@ public class StagnationChatModel implements ChatModel {
             .build());
   }
 
+  /** 状況を判断する根拠を得るため、停滞応答生成に使うモデルを観測する。 */
   private ToolCallback observe(ToolCallback delegateTool, RunExecutionContext context) {
     return dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.preservePolicy(
         delegateTool,
         new ToolCallback() {
+          /** 実行の停滞への対処で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return delegateTool.getToolDefinition();
           }
 
+          /** 実行の停滞への対処で参照するツール付随情報を返す。 */
           public ToolMetadata getToolMetadata() {
             return delegateTool.getToolMetadata();
           }
 
+          /** 実行の停滞への対処の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             return call(input, null);
           }
 
+          /** 実行の停滞への対処の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input, ToolContext toolContext) {
             try (var scope =
                 dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext())) {
@@ -377,6 +396,7 @@ public class StagnationChatModel implements ChatModel {
         });
   }
 
+  /** 実行の停滞への対処で用いる文脈を返す。 */
   private RunExecutionContext context(Prompt prompt) {
     if (prompt.getOptions() instanceof ToolCallingChatOptions options
         && options.getToolContext() != null

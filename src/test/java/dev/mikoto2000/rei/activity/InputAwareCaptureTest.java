@@ -11,7 +11,9 @@ import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 
+/** 入力Aware取得記録の結果と状態の契約を検証するテスト。 */
 class InputAwareCaptureTest {
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void visionFirstRunsRequestedVisionEvenWhenEvidenceFallbackIsDisabled() throws Exception {
     var p = new ActivityProperties();
@@ -43,6 +45,7 @@ class InputAwareCaptureTest {
     verify(extractor).extract(any(), any());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void stableFiveMinutesUseTwoDetailedObservationsAndNeverFillTheGap() throws Exception {
     var p = new ActivityProperties();
@@ -80,6 +83,7 @@ class InputAwareCaptureTest {
     assertEquals(30, sessions.stream().mapToLong(ActivitySession::observedSeconds).sum());
   }
 
+  /** 失敗について、再試行回数を保存することを確認する。 */
   @Test
   void failedSaveRetriesAndDisabledOptimizationRestoresDuration() throws Exception {
     var p = new ActivityProperties();

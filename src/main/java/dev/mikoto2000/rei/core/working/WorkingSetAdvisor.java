@@ -19,14 +19,21 @@ import org.springframework.stereotype.Component;
 @Component
 public class WorkingSetAdvisor implements BaseAdvisor {
 
+  /** 作業中集合。 */
   private final WorkingSet workingSet;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** 実行状況の通知先。 */
   private final AgentEventPublisher eventPublisher;
 
+  /** 作業中の情報管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WorkingSetAdvisor(WorkingSet workingSet) {
     this(workingSet, (AgentEventFactory) null, (AgentEventPublisher) null);
   }
 
+  /** 作業中の情報管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @Autowired
   public WorkingSetAdvisor(
       WorkingSet workingSet,
@@ -35,6 +42,7 @@ public class WorkingSetAdvisor implements BaseAdvisor {
     this(workingSet, events.getIfAvailable(), eventPublisher.getIfAvailable());
   }
 
+  /** 指定された値や利用先を使って、WorkingSetAdvisorを初期化する。 */
   public WorkingSetAdvisor(
       WorkingSet workingSet, AgentEventFactory events, AgentEventPublisher eventPublisher) {
     this.workingSet = workingSet;
@@ -42,6 +50,7 @@ public class WorkingSetAdvisor implements BaseAdvisor {
     this.eventPublisher = eventPublisher;
   }
 
+  /** 作業中の情報管理の本処理へ渡す文脈を準備する。 */
   @Override
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     UserMessage userMessage = request.prompt().getUserMessage();
@@ -73,16 +82,19 @@ public class WorkingSetAdvisor implements BaseAdvisor {
         .build();
   }
 
+  /** 作業中の情報管理の実行結果を受け取り、後続の処理へ反映する。 */
   @Override
   public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
     return response;
   }
 
+  /** 他の補助処理と組み合わせる際の適用順序を返す。 */
   @Override
   public int getOrder() {
     return -90;
   }
 
+  /** 指定された内容へ切り替えるため、利用者メッセージを置き換える。 */
   private List<Message> replaceUserMessage(
       List<Message> messages, UserMessage original, UserMessage replacement) {
     List<Message> replaced = new ArrayList<>(messages.size());
@@ -98,6 +110,7 @@ public class WorkingSetAdvisor implements BaseAdvisor {
     return List.copyOf(replaced);
   }
 
+  /** 実行状況を利用先で把握できるよう、文脈追加されたを通知する。 */
   private void publishContextInjected(String workingSetContext) {
     if (events == null || eventPublisher == null) {
       return;

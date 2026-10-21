@@ -16,9 +16,12 @@ import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.goal.GoalWaitService;
 import org.junit.jupiter.api.Test;
 
+/** 目標受付窓口の結果と状態の契約を検証するテスト。 */
 class GoalControllerTest {
+  /** 検証に使う作業ルート。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path root;
 
+  /** 登録済みプロジェクト検証済み会話を利用することを確認する。 */
   @Test
   void goalCreationUsesRegisteredProjectValidatedSessionAndWebRequestSource() {
     var projects =
@@ -50,6 +53,7 @@ class GoalControllerTest {
                     "session", "objective", "out.txt", "a".repeat(64), null, null, 3, 20)));
   }
 
+  /** Web APIによる操作で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void goalCreationRefusesConflictingCriterionFormatsBeforeCallingLoop() {
     var loop = mock(GoalLoopService.class);
@@ -61,9 +65,11 @@ class GoalControllerTest {
                 "project",
                 new GoalController.CreateRequest(
                     "session", "objective", "out.txt", "a".repeat(64), "[]", null, 3, 20)));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(loop);
   }
 
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void authenticatedHumanEndpointsDelegateCompletionDefinitionAndProofWithoutDispatching() {
     var loop = mock(GoalLoopService.class);
@@ -83,6 +89,7 @@ class GoalControllerTest {
     verifyNoMoreInteractions(loop);
   }
 
+  /** なし実行を読み取ることを確認する。 */
   @Test
   void readsDoNotRunAndReconciliationRequiresExplicitAcknowledgement() {
     var repo = mock(GoalRepository.class);
@@ -91,6 +98,7 @@ class GoalControllerTest {
     api.list("p");
     api.show("p", "goal");
     api.history("p", "goal");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(loop);
     assertThrows(
         IllegalArgumentException.class,
@@ -101,6 +109,7 @@ class GoalControllerTest {
     verifyNoMoreInteractions(loop);
   }
 
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void activeRunConflictsAreSafeAndNeverAutomaticallyRetried() {
     var loop = mock(GoalLoopService.class);
@@ -114,6 +123,7 @@ class GoalControllerTest {
     verifyNoMoreInteractions(loop);
   }
 
+  /** 明示的な形式のバージョンを利用することを確認する。 */
   @Test
   void waitControlsUseExplicitVersionAndNeverDispatchThroughNormalRun() {
     var loop = mock(GoalLoopService.class);
@@ -128,9 +138,11 @@ class GoalControllerTest {
     verify(waits).show("p", "g");
     verify(waits).resume("p", "g", 3);
     verify(waits).activate("p", "g", 4);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(loop);
   }
 
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void selectedCliSessionMustOwnGoalBeforeCreatingWait() {
     var repo = mock(GoalRepository.class);
@@ -143,6 +155,7 @@ class GoalControllerTest {
     assertThrows(
         IllegalArgumentException.class,
         () -> api.waitFor("p", "g", new GoalController.WaitRequest("dep", "job_wait", "other")));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(waits);
     api.waitFor("p", "g", new GoalController.WaitRequest("dep", "job_wait", "owner"));
     verify(waits).waitFor("p", "g", "dep", "job_wait");

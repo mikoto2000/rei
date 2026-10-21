@@ -21,9 +21,12 @@ import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況時系列の記録表示用の情報の結果と状態の契約を検証するテスト。 */
 class ActivityTimelinePresentationTest {
+  /** 検証に使う開始。 */
   static final Instant START = ActivitySemanticTest.START;
 
+  /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
   BehaviorTimelineEvent event(
       int minute, BehaviorSeverity severity, BehaviorTimelineEvent.Outcome outcome) {
     return new BehaviorTimelineEvent(
@@ -37,6 +40,7 @@ class ActivityTimelinePresentationTest {
         List.of(new BehaviorAssessment.Window(60, 3600, 4800, .75, severity, 4800)));
   }
 
+  /** {@code activity} の条件を再現するための補助情報を返す。 */
   ActivityRecord activity(int minute, String project) {
     var r =
         ActivitySemanticTest.record(
@@ -57,6 +61,7 @@ class ActivityTimelinePresentationTest {
         false);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void intervalsAndInstantsMergeInTimestampOrderAndVerboseAddsSuppression() {
     var store = mock(ActivityStore.class);
@@ -102,6 +107,7 @@ class ActivityTimelinePresentationTest {
     assertFalse(verbose.contains("Behavior NONE"));
   }
 
+  /** 作業状況の把握で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void behaviorOnlyAndSameTimestampRemainVisibleAndSummaryIsUnchanged() {
     var store = mock(ActivityStore.class);
@@ -122,6 +128,7 @@ class ActivityTimelinePresentationTest {
     assertEquals(before, timeline.trendSummary("today"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void evidenceChangesWithinGroupAreNotClaimedForTheEntireInterval() {
     var no = ActivityEvidenceDisplayFormatterTest.state(VisionDiagnostics.State.NOT_ATTEMPTED);

@@ -19,7 +19,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** テキスト変更集合ツールの結果と状態の契約を検証するテスト。 */
 class TextChangeSetToolTest {
+  /** 状態の照合結果について、取得済み利用者要求を利用することを確認する。 */
   @Test
   void reconciliationUsesCapturedHumanRequestAndCannotInventApplyProof() throws Exception {
     String project = UUID.randomUUID().toString();
@@ -73,8 +75,10 @@ class TextChangeSetToolTest {
         policy.capabilities("reconcileTextChangeSet"));
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 共通の実行基盤で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void toolsRouteSavedProposalThroughExistingFileEventBoundaryAndPolicy() throws Exception {
     var id = UUID.randomUUID().toString();
@@ -103,6 +107,7 @@ class TextChangeSetToolTest {
     var proposal =
         tools.proposeTextChangeSet(
             new TextChangeSetService.Request(baseline.path(), baseline.text(), "new"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(factory, publisher);
     assertEquals(proposal, tools.inspectTextChangeSet(proposal.id()));
     assertEquals(

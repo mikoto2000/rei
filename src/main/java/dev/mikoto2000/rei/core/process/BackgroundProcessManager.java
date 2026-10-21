@@ -27,19 +27,38 @@ import java.util.stream.Stream;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+/** バックグラウンドプロセスの状態と操作を管理する。 */
 @Component
 public class BackgroundProcessManager {
+  /** ログ行許容件数。 */
   private static final int LOG_LINE_CAPACITY = 200;
+
+  /** 既定末尾行一覧。 */
   private static final int DEFAULT_TAIL_LINES = 100;
+
+  /** 強制終了判定を猶予する期間。 */
   private static final Duration KILL_GRACE_PERIOD = Duration.ofSeconds(5);
 
+  /** システムシェルサービス。 */
   private final SystemShellService systemShellService;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** monotonic時刻取得元。 */
   private final MonotonicTimeSource monotonicTimeSource;
+
+  /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
+
+  /** 実行状況の通知先。 */
   private final AgentEventPublisher eventPublisher;
+
+  /** プロセス一覧。 */
   private final ConcurrentMap<String, ManagedBackgroundProcess> processes =
       new ConcurrentHashMap<>();
+
+  /** 実行先。 */
   private final ExecutorService executor =
       Executors.newCachedThreadPool(
           r -> {
@@ -48,6 +67,7 @@ public class BackgroundProcessManager {
             return thread;
           });
 
+  /** 指定された値や利用先を使って、BackgroundProcessManagerを初期化する。 */
   @Autowired
   public BackgroundProcessManager(
       SystemShellService systemShellService,
@@ -62,6 +82,7 @@ public class BackgroundProcessManager {
     this.eventPublisher = eventPublisher;
   }
 
+  /** 外部プロセスの管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public BackgroundProcessManager(
       SystemShellService systemShellService, Clock clock, MonotonicTimeSource monotonicTimeSource) {
     this(
@@ -72,10 +93,12 @@ public class BackgroundProcessManager {
         new InMemoryAgentEventBus());
   }
 
+  /** 外部プロセスの管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public BackgroundProcessManager(SystemShellService systemShellService) {
     this(systemShellService, Clock.systemDefaultZone(), MonotonicTimeSource.system());
   }
 
+  /** 外部プロセスの管理で用いるspawnシェルを返す。 */
   public BackgroundProcessSnapshot spawnShell(String command, Path workingDirectory) {
     if (command == null || command.isBlank()) {
       throw new IllegalArgumentException("command は空にできません");
@@ -84,6 +107,7 @@ public class BackgroundProcessManager {
     return spawnCommandLine(systemShellService.shellCommandLine(shell, command), workingDirectory);
   }
 
+  /** 外部プロセスの管理で用いるspawnコマンド行を返す。 */
   BackgroundProcessSnapshot spawnCommandLine(List<String> commandLine, Path workingDirectory) {
     String processId = "proc-" + UUID.randomUUID().toString().substring(0, 8);
     try {
@@ -171,6 +195,7 @@ public class BackgroundProcessManager {
         processId, (id, process) -> process.process.isAlive() ? process : null);
   }
 
+  /** 必要な状態が整ってから先へ進むため、読み取り元を待つ。 */
   private void awaitReader(java.util.concurrent.Future<?> reader) {
     if (reader == null) return;
     try {
@@ -178,10 +203,12 @@ public class BackgroundProcessManager {
     } catch (java.util.concurrent.ExecutionException
         | java.util.concurrent.TimeoutException ignored) {
     } catch (InterruptedException exception) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
     }
   }
 
+  /** 外部プロセスの管理で用いる状態自分が所有する対象を返す。 */
   public BackgroundProcessSnapshot statusOwned(
       String processId, String project, String session, Path root) {
     var process = processes.get(processId);
@@ -205,6 +232,7 @@ public class BackgroundProcessManager {
     return status(processId, 0);
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   public BackgroundProcessSnapshot status(String processId, Integer tailLines) {
     ManagedBackgroundProcess managedProcess = processes.get(processId);
     if (managedProcess == null) {
@@ -224,6 +252,7 @@ public class BackgroundProcessManager {
     return snapshot(managedProcess, normalizeTailLines(tailLines), "ok");
   }
 
+  /** 外部プロセスの管理で用いる強制終了を返す。 */
   public BackgroundProcessSnapshot kill(String processId) {
     ManagedBackgroundProcess managedProcess = processes.get(processId);
     if (managedProcess == null) {
@@ -251,12 +280,14 @@ public class BackgroundProcessManager {
     return snapshot(managedProcess, DEFAULT_TAIL_LINES, "killed");
   }
 
+  /** 外部プロセスの管理に関する終了を処理する。 */
   @PreDestroy
   public void shutdown() {
     processes.keySet().forEach(this::kill);
     executor.shutdownNow();
   }
 
+  /** 外部プロセスの管理に関する監視プロセスを処理する。 */
   private void watchProcess(ManagedBackgroundProcess managedProcess) {
     try {
       int exitCode = managedProcess.process.waitFor();
@@ -272,10 +303,12 @@ public class BackgroundProcessManager {
           BackgroundProcessStatus.STARTING, BackgroundProcessStatus.EXITED);
       publishTerminalEvent(managedProcess);
     } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
     }
   }
 
+  /** 外部プロセスの管理に関する終了プロセス構造を処理する。 */
   private void terminateProcessTree(ProcessHandle root) {
     List<ProcessHandle> handles =
         Stream.concat(root.descendants(), Stream.of(root)).distinct().toList();
@@ -295,6 +328,7 @@ public class BackgroundProcessManager {
     waitForExit(handles, Duration.ofSeconds(1));
   }
 
+  /** 必要な状態が整ってから先へ進むため、対象終了を待つ。 */
   private void waitForExit(List<ProcessHandle> handles, Duration timeout) {
     long deadline = System.nanoTime() + timeout.toNanos();
     while (System.nanoTime() < deadline) {
@@ -304,12 +338,14 @@ public class BackgroundProcessManager {
       try {
         Thread.sleep(50);
       } catch (InterruptedException e) {
+        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
         return;
       }
     }
   }
 
+  /** 必要な状態が整ってから先へ進むため、対象Mainプロセスを待つ。 */
   private void waitForMainProcess(ManagedBackgroundProcess managedProcess, Duration timeout) {
     try {
       if (managedProcess.process.waitFor(
@@ -317,10 +353,12 @@ public class BackgroundProcessManager {
         managedProcess.exitCode.compareAndSet(null, managedProcess.process.exitValue());
       }
     } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
     }
   }
 
+  /** 必要な内容を参照できるよう、行一覧を読み取る。 */
   private void readLines(InputStream stream, BoundedLineBuffer buffer) {
     try (BufferedReader reader =
         new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
@@ -333,6 +371,7 @@ public class BackgroundProcessManager {
     }
   }
 
+  /** 現在の状態を、後から参照できる記録として取り出す。 */
   private BackgroundProcessSnapshot snapshot(
       ManagedBackgroundProcess managedProcess, int tailLines, String message) {
     return new BackgroundProcessSnapshot(
@@ -349,7 +388,9 @@ public class BackgroundProcessManager {
         message);
   }
 
+  /** 実行状況を利用先で把握できるよう、終端イベントを通知する。 */
   private void publishTerminalEvent(ManagedBackgroundProcess managedProcess) {
+    // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
     if (!managedProcess.terminalEventPublished.compareAndSet(false, true)) {
       return;
     }
@@ -370,11 +411,13 @@ public class BackgroundProcessManager {
             elapsedSeconds(managedProcess)));
   }
 
+  /** 外部プロセスの管理で用いる経過時間秒数を返す。 */
   private double elapsedSeconds(ManagedBackgroundProcess managedProcess) {
     return Math.max(
         0.0d, (monotonicTimeSource.nanoTime() - managedProcess.startedAtNanos) / 1_000_000_000.0d);
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、末尾行一覧の表記をそろえる。 */
   private int normalizeTailLines(Integer tailLines) {
     if (tailLines == null || tailLines <= 0) {
       return DEFAULT_TAIL_LINES;

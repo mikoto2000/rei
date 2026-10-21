@@ -9,7 +9,9 @@ import java.time.Duration;
 import java.util.concurrent.CancellationException;
 import org.junit.jupiter.api.Test;
 
+/** ホスト受付の結果と状態の契約を検証するテスト。 */
 class HostAdmissionTest {
+  /** 外部情報の取得の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledAndExpiredWaitersDoNotLeakReferencesOrReleaseAnotherOwnersPermit() {
     var admission = new HostAdmission(1);
@@ -45,6 +47,7 @@ class HostAdmissionTest {
     assertEquals(0, admission.entries());
   }
 
+  /** 受付を保持することを確認する。 */
   @Test
   void nestedFetchScopePreservesAdmissionAndCloseRestoresIt() {
     var admission = new HostAdmission(1);
@@ -66,6 +69,7 @@ class HostAdmissionTest {
     assertEquals(0, admission.entries());
   }
 
+  /** 外部情報の取得で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidHostConcurrencyIsRejected() {
     assertThrows(IllegalArgumentException.class, () -> new HostAdmission(0));

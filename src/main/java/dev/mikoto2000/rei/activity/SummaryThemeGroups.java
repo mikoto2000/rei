@@ -7,8 +7,21 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Explicit summary display groups; never infers project identity or topic association. */
+/**
+ * 作業状況の把握に必要な要約テーマグループ一覧を扱う。
+ *
+ * <p>Explicit summary display groups; never infers project identity or topic association.
+ */
 public final class SummaryThemeGroups {
+  /**
+   * 作業状況の把握で受け渡すグループを表す。
+   *
+   * @param id 識別子
+   * @param displayName 表示名前
+   * @param projects プロジェクト一覧
+   * @param themes テーマ一覧
+   * @param allowSingleProject 許可単一プロジェクト
+   */
   public record Group(
       String id,
       String displayName,
@@ -16,20 +29,25 @@ public final class SummaryThemeGroups {
       Set<String> themes,
       boolean allowSingleProject) {}
 
+  /** グループ一覧。 */
   private final List<Group> groups;
 
+  /** 指定された値や利用先を使って、SummaryThemeGroupsを初期化する。 */
   private SummaryThemeGroups(List<Group> groups) {
     this.groups = List.copyOf(groups);
   }
 
+  /** 対象がない場合の結果を表す。 */
   public static SummaryThemeGroups empty() {
     return new SummaryThemeGroups(List.of());
   }
 
+  /** 作業状況の把握で用いるグループ一覧を返す。 */
   public List<Group> groups() {
     return groups;
   }
 
+  /** 作業状況の把握で用いる識別子一覧対象を返す。 */
   List<String> idsFor(String project, List<String> topics) {
     return groups.stream()
         .filter(
@@ -42,8 +60,10 @@ public final class SummaryThemeGroups {
         .toList();
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   static SummaryThemeGroups parse(Object data, ProjectNameNormalizer names) {
     if (data == null) return empty();
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (!(data instanceof Map<?, ?> entries) || entries.size() > 50)
       throw new IllegalArgumentException("Invalid theme groups");
     var result = new ArrayList<Group>();
@@ -93,6 +113,7 @@ public final class SummaryThemeGroups {
     return new SummaryThemeGroups(result);
   }
 
+  /** 作業状況の把握で用いる文字列一覧を返す。 */
   private static List<String> strings(Object value, int max) {
     if (value == null) return List.of();
     if (!(value instanceof List<?> list)

@@ -14,34 +14,44 @@ import java.util.jar.JarOutputStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 保存と検索の窓口対応表コンパイラー作業の分離の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class RepositoryMapCompilerIsolationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う開始。 */
   private static final String STARTED = "rei.test.repository-map.plugin-started";
 
   // A real auto-start compiler plugin in the host classpath must never run during source
   // observation.
+  /** 検証条件を再現するための想定外のプラグイン。 */
   public static final class UnexpectedPlugin implements Plugin {
+    /** 検証条件に必要な値を受け取り、UnexpectedPluginを用意する。 */
     public UnexpectedPlugin() {
       System.setProperty("rei.test.repository-map.plugin-started", "constructed");
     }
 
+    /** 検証用に、共通の実行基盤で参照する名前を返す。 */
     @Override
     public String getName() {
       return "UnexpectedRepositoryMapPlugin";
     }
 
+    /** {@code autoStart} の条件を再現するための補助情報を返す。 */
     @Override
     public boolean autoStart() {
       return true;
     }
 
+    /** {@code init} の条件を再現するため、検証用の操作や状態を扱う。 */
     @Override
     public void init(JavacTask task, String... args) {
       System.setProperty("rei.test.repository-map.plugin-started", "started");
     }
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void repositoryScanDoesNotDiscoverOrRunHostCompilerPlugins() throws Exception {
     withPluginClasspath(
@@ -55,6 +65,7 @@ class RepositoryMapCompilerIsolationTest {
         });
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void singleFileSnapshotDoesNotDiscoverOrRunHostCompilerPlugins() throws Exception {
     withPluginClasspath(
@@ -69,11 +80,14 @@ class RepositoryMapCompilerIsolationTest {
         });
   }
 
+  /** 検証条件を再現するための確認。 */
   @FunctionalInterface
   private interface Check {
+    /** 検証用に、共通の実行基盤の操作を実行する。 */
     void run() throws Exception;
   }
 
+  /** 検証用に、指定されたプラグインClasspathを反映した情報を作成する。 */
   private void withPluginClasspath(Check check) throws Exception {
     Files.writeString(
         root.resolve("App.java"), "import missing.External; class App { External value; }");

@@ -4,10 +4,16 @@ import dev.mikoto2000.rei.event.CredentialRedactor;
 import org.jline.utils.AttributedString;
 import org.jline.utils.AttributedStyle;
 
-/** Bounded, redacted approval presentation shared by both terminal entry points. */
+/**
+ * 入力候補の提示に必要な承認通知を扱う。
+ *
+ * <p>Bounded, redacted approval presentation shared by both terminal entry points.
+ */
 public final class ApprovalNotice {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ApprovalNotice() {}
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   public static String text(String message) {
     String safe = CredentialRedactor.redact(message);
     var command =
@@ -27,12 +33,14 @@ public final class ApprovalNotice {
     return result.append("+--------------------------------------").toString();
   }
 
+  /** 入力候補の提示で用いる要約を返す。 */
   private static String summary(String text) {
     String safe = text.replaceAll("[\\p{Cc}\\p{Cf}]", " ");
     int count = safe.codePointCount(0, safe.length());
     return count <= 120 ? safe : safe.substring(0, safe.offsetByCodePoints(0, 117)) + "...";
   }
 
+  /** 受け取った情報を、表示や受け渡しに適した形式へ整える。 */
   public static AttributedString format(String message) {
     return new AttributedString(
         text(message), AttributedStyle.DEFAULT.foreground(AttributedStyle.YELLOW).bold());

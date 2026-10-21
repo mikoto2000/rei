@@ -6,11 +6,16 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 
 /**
- * Replaceable estimate, not an exact tokenizer. Non-ASCII text is deliberately more conservative.
+ * モデルへ渡す文脈の管理に必要なトークン概算を扱う。
+ *
+ * <p>Replaceable estimate, not an exact tokenizer. Non-ASCII text is deliberately more
+ * conservative.
  */
 public interface TokenEstimator {
+  /** 表示や受け渡しに用いるテキストを返す。 */
   int text(String text);
 
+  /** モデルへ渡す文脈の管理で用いるメッセージを返す。 */
   default int message(Message message) {
     long total = 8L + text(message.getText());
     if (message instanceof AssistantMessage assistant)
@@ -24,7 +29,9 @@ public interface TokenEstimator {
   }
 
   /**
-   * Reuses the bundled byte-pair tokenizers, taking the larger estimate and accounting for wire
+   * モデルへ渡す文脈の管理で用いる語句の分割Awareを返す。
+   *
+   * <p>Reuses the bundled byte-pair tokenizers, taking the larger estimate and accounting for wire
    * escaping.
    */
   static TokenEstimator tokenizerAware() {
@@ -69,19 +76,29 @@ public interface TokenEstimator {
     };
   }
 
+  /** モデルへ渡す文脈の管理に必要な語句の分割保持先を扱う。 */
   final class TokenizerHolder {
+    /** 外部から直接インスタンス化させないためのコンストラクター。 */
     private TokenizerHolder() {}
 
+    /** 保存や受け渡しに用いるデータ形式の変換。 */
     static final com.fasterxml.jackson.databind.ObjectMapper JSON =
         new com.fasterxml.jackson.databind.ObjectMapper();
+
+    /** 登録台帳。 */
     static final com.knuddels.jtokkit.api.EncodingRegistry REGISTRY =
         com.knuddels.jtokkit.Encodings.newDefaultEncodingRegistry();
+
+    /** cl100k形式のトークン数を数える窓口。 */
     static final com.knuddels.jtokkit.api.Encoding CL =
         REGISTRY.getEncoding(com.knuddels.jtokkit.api.EncodingType.CL100K_BASE);
+
+    /** o200k形式のトークン数を数える窓口。 */
     static final com.knuddels.jtokkit.api.Encoding O =
         REGISTRY.getEncoding(com.knuddels.jtokkit.api.EncodingType.O200K_BASE);
   }
 
+  /** モデルへ渡す文脈の管理で用いる慎重な確認を必要とするを返す。 */
   static TokenEstimator conservative() {
     return value -> {
       if (value == null || value.isEmpty()) return 0;

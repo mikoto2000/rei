@@ -25,7 +25,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** Web取得まとめた処理HTTP通信の結果と状態の契約を検証するテスト。 */
 class WebFetchBatchHttpTest {
+  /** Web上の情報の調査で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void realHttpRequestsRespectHostLimitAndKeepSuccessBesideTimeout() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -101,6 +103,7 @@ class WebFetchBatchHttpTest {
     }
   }
 
+  /** Web上の情報の調査で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void batchDeadlineClosesAnActualInFlightSocket() throws Exception {
     try (var listener = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));

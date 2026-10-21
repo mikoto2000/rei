@@ -14,15 +14,24 @@ import java.io.InputStreamReader;
 import java.util.Collections;
 import org.springframework.web.filter.OncePerRequestFilter;
 
-/** Dedicated connector boundary, applied before authentication and MCP dispatch. */
+/**
+ * MCPによる機能の提供に必要なMCPIngress絞り込み条件を扱う。
+ *
+ * <p>Dedicated connector boundary, applied before authentication and MCP dispatch.
+ */
 public final class McpIngressFilter extends OncePerRequestFilter {
+  /** TUNNEL証明書ヘッダー。 */
   private static final String TUNNEL_CERTIFICATE_HEADER = "X-Forwarded-Client-Cert";
+
+  /** 判断基準。 */
   private final McpIngressPolicy policy;
 
+  /** 指定された値や利用先を使って、McpIngressFilterを初期化する。 */
   public McpIngressFilter(int port) {
     policy = new McpIngressPolicy(port);
   }
 
+  /** MCPによる機能の提供に関するdo絞り込み条件内部を処理する。 */
   @Override
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
@@ -65,11 +74,13 @@ public final class McpIngressFilter extends OncePerRequestFilter {
     chain.doFilter(
         new HttpServletRequestWrapper(request) {
           // Tunnel certificate metadata is not a credential or a source of network identity.
+          /** MCPによる機能の提供で参照するヘッダーを返す。 */
           @Override
           public String getHeader(String name) {
             return name.equalsIgnoreCase(TUNNEL_CERTIFICATE_HEADER) ? null : super.getHeader(name);
           }
 
+          /** MCPによる機能の提供で参照するHTTPヘッダーを返す。 */
           @Override
           public java.util.Enumeration<String> getHeaders(String name) {
             return name.equalsIgnoreCase(TUNNEL_CERTIFICATE_HEADER)
@@ -77,6 +88,7 @@ public final class McpIngressFilter extends OncePerRequestFilter {
                 : super.getHeaders(name);
           }
 
+          /** MCPによる機能の提供で参照するヘッダー名前一覧を返す。 */
           @Override
           public java.util.Enumeration<String> getHeaderNames() {
             return Collections.enumeration(
@@ -85,28 +97,34 @@ public final class McpIngressFilter extends OncePerRequestFilter {
                     .toList());
           }
 
+          /** MCPによる機能の提供で参照する入力逐次データを返す。 */
           @Override
           public ServletInputStream getInputStream() {
             var input = new ByteArrayInputStream(body);
             return new ServletInputStream() {
+              /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
               public int read() {
                 return input.read();
               }
 
+              /** MCPによる機能の提供において、完了済みかどうかを判定する。 */
               public boolean isFinished() {
                 return input.available() == 0;
               }
 
+              /** MCPによる機能の提供において、準備完了かどうかを判定する。 */
               public boolean isReady() {
                 return true;
               }
 
+              /** MCPによる機能の提供で使用する読み取り通知の受け取り先を設定する。 */
               public void setReadListener(ReadListener listener) {
                 throw new UnsupportedOperationException();
               }
             };
           }
 
+          /** MCPによる機能の提供で参照する読み取り元を返す。 */
           @Override
           public BufferedReader getReader() {
             return new BufferedReader(

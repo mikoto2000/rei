@@ -11,15 +11,19 @@ import org.jsoup.nodes.Element;
 import org.jsoup.parser.Parser;
 import org.springframework.stereotype.Component;
 
+/** フィードに必要な情報を外部から取得する。 */
 @Component
 public class FeedFetcher {
 
+  /** HTTP通信情報の取得元。 */
   private final FeedHttpFetcher httpFetcher;
 
+  /** 指定された値や利用先を使って、FeedFetcherを初期化する。 */
   public FeedFetcher(FeedHttpFetcher httpFetcher) {
     this.httpFetcher = httpFetcher;
   }
 
+  /** 後続の処理に必要な情報を、取得先から読み込む。 */
   public FetchedFeed fetch(String feedUrl) {
     URI uri;
     try {
@@ -53,6 +57,7 @@ public class FeedFetcher {
     }
   }
 
+  /** 入力を機能内で扱えるよう、RSSを解釈する。 */
   private FetchedFeed parseRss(Element root) {
     Element channel = child(root, "channel");
     if (channel == null) {
@@ -69,6 +74,7 @@ public class FeedFetcher {
     return new FetchedFeed(title, siteUrl, description, items);
   }
 
+  /** 入力を機能内で扱えるよう、RSS項目を解釈する。 */
   private FetchedFeedItem parseRssItem(Element item) {
     return new FetchedFeedItem(
         text(item, "title"),
@@ -78,6 +84,7 @@ public class FeedFetcher {
         firstNonBlank(text(item, "content:encoded"), text(item, "encoded")));
   }
 
+  /** 入力を機能内で扱えるよう、Atomを解釈する。 */
   private FetchedFeed parseAtom(Element root) {
     String title = text(root, "title");
     String siteUrl = atomLink(root);
@@ -90,6 +97,7 @@ public class FeedFetcher {
     return new FetchedFeed(title, siteUrl, description, items);
   }
 
+  /** 入力を機能内で扱えるよう、Atom項目を解釈する。 */
   private FetchedFeedItem parseAtomEntry(Element entry) {
     return new FetchedFeedItem(
         text(entry, "title"),
@@ -99,6 +107,7 @@ public class FeedFetcher {
         text(entry, "content"));
   }
 
+  /** フィードの購読と収集で用いるAtomリンクを返す。 */
   private String atomLink(Element parent) {
     for (Element link : parent.children()) {
       if (!"link".equals(localName(link))) {
@@ -116,6 +125,7 @@ public class FeedFetcher {
     return null;
   }
 
+  /** 入力を機能内で扱えるよう、日付を解釈する。 */
   private OffsetDateTime parseDate(String value) {
     if (value == null || value.isBlank()) {
       return null;
@@ -131,6 +141,7 @@ public class FeedFetcher {
     }
   }
 
+  /** フィードの購読と収集で用いる最初以外空白を返す。 */
   private String firstNonBlank(String first, String second) {
     if (first != null && !first.isBlank()) {
       return first;
@@ -141,6 +152,7 @@ public class FeedFetcher {
     return null;
   }
 
+  /** フィードの購読と収集で用いる子を返す。 */
   private Element child(Element parent, String name) {
     return parent.children().stream()
         .filter(element -> name.equals(localName(element)))
@@ -148,6 +160,7 @@ public class FeedFetcher {
         .orElse(null);
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   private String text(Element parent, String name) {
     Element child = child(parent, name);
     if (child == null) {
@@ -157,6 +170,7 @@ public class FeedFetcher {
     return value == null || value.isBlank() ? null : value.trim();
   }
 
+  /** フィードの購読と収集で用いるローカル名前を返す。 */
   private String localName(Element element) {
     return element.tagName();
   }

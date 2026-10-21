@@ -34,21 +34,28 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.springframework.core.env.MapPropertySource;
 
+/** 会話一回のやり取り移行の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SessionTurnMigrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-10-01T00:00:00.123456789Z");
 
+  /** 検証で使用する付随情報を、指定された条件に合わせて用意する。 */
   SessionMetadata metadata(String id) {
     return new SessionMetadata(id, "project", "日本語の会話", now, now);
   }
 
+  /** {@code prepare} の条件を再現するため、検証用の操作や状態を扱う。 */
   void prepare() throws Exception {
     try (var migration = new StorageMigrationCoordinator(root)) {
       migration.prepare();
     }
   }
 
+  /** 旧形式取り込みについて、行一覧を保持することを確認する。 */
   @Test
   void legacyImportPreservesRowsAndRestartNeverOverwritesNewWrites() throws Exception {
     var legacy = new FileSessionRepository(root.resolve("sessions.json"));
@@ -74,6 +81,7 @@ class SessionTurnMigrationTest {
     assertThat(StorageBackup.hash(root.resolve("sessions.json"))).isEqualTo(before);
   }
 
+  /** データ保存の共通処理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void admissionCommitsBeforeCallbackAndRejectRestoresExactlyPriorMetadata() throws Exception {
     prepare();
@@ -104,6 +112,7 @@ class SessionTurnMigrationTest {
     assertThat(store.findById("one")).contains(first.touched(now.plusSeconds(3)));
   }
 
+  /** データ保存の共通処理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void unicodeKeysetAndNanosecondTurnOrderMatchExistingJavaApi() throws Exception {
     prepare();
@@ -126,6 +135,7 @@ class SessionTurnMigrationTest {
         .isEqualTo(now.minusSeconds(1).plusNanos(2));
   }
 
+  /** データ保存の共通処理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void projectAndGlobalTurnFilesRemainIsolatedIncludingUncataloguedConversations()
       throws Exception {
@@ -144,6 +154,7 @@ class SessionTurnMigrationTest {
         .containsExactly("g");
   }
 
+  /** データ保存の共通処理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void malformedOrDuplicateLegacyRowsAbortAtomicImportAndRetainSource() throws Exception {
     String rows =
@@ -159,15 +170,18 @@ class SessionTurnMigrationTest {
     assertThat(new SqliteSessionRepository(root).findPage(null, null, 10)).isEmpty();
   }
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration
   @Import({StorageMigrationConfiguration.class, SessionHistoryConfiguration.class})
   static class Config {
+    /** {@code clock} の条件を再現するための補助情報を返す。 */
     @Bean
     Clock clock() {
       return Clock.systemUTC();
     }
   }
 
+  /** 退避先を保持することを確認する。 */
   @Test
   void foundationVersionOneUpgradesAtomicallyAndRetainsItsBackupAndMarker() throws Exception {
     try (var db =
@@ -190,6 +204,7 @@ class SessionTurnMigrationTest {
     assertThat(new SqliteSessionRepository(root).findById("one")).contains(metadata("one"));
   }
 
+  /** データ保存の共通処理で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void trailingOrBrokenTurnJsonRollsBackEvenPreviouslyImportedSessions() throws Exception {
     new FileSessionRepository(root.resolve("sessions.json")).accept(metadata("one"), () -> {});
@@ -207,6 +222,7 @@ class SessionTurnMigrationTest {
     assertThat(new SqliteSessionRepository(root).findById("one")).isPresent();
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sourceOrBackupChangedAfterRowsImportCannotCommitAndRetryImportsOnlyOnce() throws Exception {
     new FileSessionRepository(root.resolve("sessions.json")).accept(metadata("one"), () -> {});
@@ -237,6 +253,7 @@ class SessionTurnMigrationTest {
         .containsExactly(metadata("one"));
   }
 
+  /** データ保存の共通処理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void terminalUpdatesMetadataAndNotificationDeduplicationSurviveRestart() throws Exception {
     prepare();
@@ -274,6 +291,7 @@ class SessionTurnMigrationTest {
     assertThat(turns.read("chat").getLast().metadata()).containsEntry("由来", "テスト");
   }
 
+  /** データ保存の共通処理で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void concurrentRepositoryInstancesDoNotLoseAdmissionsOrRegressTimes() throws Exception {
     prepare();
@@ -298,6 +316,7 @@ class SessionTurnMigrationTest {
     assertThat(first.findPage(null, null, 100)).hasSize(21);
   }
 
+  /** データ保存の共通処理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedSqliteWriteNeverDispatches() throws Exception {
     prepare();
@@ -319,6 +338,7 @@ class SessionTurnMigrationTest {
     assertThat(repository.findById("one")).isEmpty();
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void ongoingHistoryReaderDoesNotPreventIndependentTurnCommit() throws Exception {
     prepare();
@@ -336,6 +356,7 @@ class SessionTurnMigrationTest {
     assertThat(new SqliteConversationTurnStore(root).read("chat")).hasSize(2);
   }
 
+  /** データ保存の共通処理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void hundredThousandSessionsImportInChildJvmWithSixtyFourMiBHeap() throws Exception {
     Path source = root.resolve("sessions.json");
@@ -385,6 +406,7 @@ class SessionTurnMigrationTest {
     assertThat(StorageBackup.hash(source)).isEqualTo(original);
   }
 
+  /** データ保存の共通処理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void interruptedLegacyTemporaryFileIsRetainedButNeverPublishedAsCommittedTurns()
       throws Exception {
@@ -404,10 +426,12 @@ class SessionTurnMigrationTest {
         .isEqualTo("uncommitted interrupted write");
   }
 
+  /** {@code javaArgument} の条件を再現するための補助情報を返す。 */
   private static String javaArgument(String value) {
     return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
   }
 
+  /** データ保存の共通処理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void processKilledAfterRowsImportLeavesVersionOneAndRetriesWithoutDuplicates() throws Exception {
     try (var db =
@@ -487,6 +511,7 @@ class SessionTurnMigrationTest {
     assertThat(new SqliteSessionRepository(root).findById("session-14999")).isPresent();
   }
 
+  /** SQLiteを利用することを確認する。 */
   @Test
   void springStartupAutomaticallyImportsBeforeRepositoriesServeAndRestartUsesSqlite()
       throws Exception {

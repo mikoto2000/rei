@@ -10,7 +10,9 @@ import java.util.ArrayDeque;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** MCP実行待ちの結果と状態の契約を検証するテスト。 */
 class McpQueueTest {
+  /** MCPによる機能の提供の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void twoSlotsEightPendingAndCancellationReleaseWithoutChangingOtherRunLimits() {
     var work = new ArrayDeque<Runnable>();

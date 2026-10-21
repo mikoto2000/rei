@@ -19,16 +19,29 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+/** Bluesky返信サービスの結果と状態の契約を検証するテスト。 */
 @ExtendWith(MockitoExtension.class)
 class BlueskyReplyServiceTest {
 
+  /** 検証に使う検証の窓口。 */
   @Mock private BlueskyReplyPropertiesValidator validator;
+
+  /** 検証に使う著者フィードクライアント。 */
   @Mock private BlueskyAuthorFeedClient authorFeedClient;
+
+  /** 検証に使う保存と検索の窓口。 */
   @Mock private BlueskyReplyStateRepository repository;
+
+  /** 検証に使う会話保存と検索の窓口。 */
   @Mock private BlueskyReplyConversationRepository conversationRepository;
+
+  /** 検証に使う返信テキスト生成。 */
   @Mock private BlueskyReplyTextGenerator replyTextGenerator;
+
+  /** 検証に使うBlueskyAPIクライアント。 */
   @Mock private BlueskyApiClient blueskyApiClient;
 
+  /** Blueskyとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void doesNothingWhenReplyDisabled() {
     BlueskyProperties properties = baseProperties(false, false, 1.0d, 0);
@@ -49,6 +62,7 @@ class BlueskyReplyServiceTest {
     verify(authorFeedClient, never()).resolveDid(eq("alice.bsky.social"));
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void skipsByExcludeRulesAndProbability() {
     BlueskyProperties properties = baseProperties(true, false, 0.5d, 0);
@@ -87,6 +101,7 @@ class BlueskyReplyServiceTest {
         .markReplied(eq("at://u/c"), eq("alice.bsky.social"), eq("at://reply"));
   }
 
+  /** Blueskyとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void runsDryRunWithoutPosting() {
     BlueskyProperties properties = baseProperties(true, true, 1.0d, 0);
@@ -121,6 +136,7 @@ class BlueskyReplyServiceTest {
         .markReplied(eq("at://u/a"), eq("alice.bsky.social"), eq("at://reply"));
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void postsReplyAndUpdatesState() {
     when(repository.tryClaimReply("at://u/a")).thenReturn(true);
@@ -177,6 +193,7 @@ class BlueskyReplyServiceTest {
     verify(conversationRepository).appendAssistantMessage("alice.bsky.social", "生成返信");
   }
 
+  /** Blueskyとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void skipsPostWhenReplyTextGenerationFails() {
     BlueskyProperties properties = baseProperties(true, false, 1.0d, 0);
@@ -213,6 +230,7 @@ class BlueskyReplyServiceTest {
     verify(repository).saveLastSeen("alice.bsky.social", "at://u/a", post.indexedAt());
   }
 
+  /** Blueskyとの連携で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void skipsWhenDailyLimitReached() {
     BlueskyProperties properties = baseProperties(true, false, 1.0d, 1);
@@ -247,6 +265,7 @@ class BlueskyReplyServiceTest {
     verify(repository, never()).incrementToday(eq("alice.bsky.social"), any(LocalDate.class));
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void skipsReplyPostFromConfiguredUser() {
     BlueskyProperties properties = baseProperties(true, false, 1.0d, 0);
@@ -286,6 +305,7 @@ class BlueskyReplyServiceTest {
     verify(blueskyApiClient, never()).createReply(any(), any(), any(), any(), any(), any(), any());
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void alwaysRepliesToMentionToReiFromConfiguredUser() {
     when(repository.tryClaimReply("at://u/m1")).thenReturn(true);
@@ -348,6 +368,7 @@ class BlueskyReplyServiceTest {
             eq("cid-root"));
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void skipsReplyPostEvenWhenItMentionsRei() {
     BlueskyProperties properties = baseProperties(true, false, 0.0d, 1);
@@ -387,6 +408,7 @@ class BlueskyReplyServiceTest {
     verify(blueskyApiClient, never()).createReply(any(), any(), any(), any(), any(), any(), any());
   }
 
+  /** {@code baseProperties} の条件を再現するための補助情報を返す。 */
   private BlueskyProperties baseProperties(
       boolean replyEnabled, boolean dryRun, double probability, int maxRepliesPerDay) {
     BlueskyProperties properties = new BlueskyProperties();
@@ -409,6 +431,7 @@ class BlueskyReplyServiceTest {
     return properties;
   }
 
+  /** {@code fixedClock} の条件を再現するための補助情報を返す。 */
   private Clock fixedClock() {
     return Clock.fixed(Instant.parse("2026-06-01T00:00:00Z"), ZoneOffset.UTC);
   }

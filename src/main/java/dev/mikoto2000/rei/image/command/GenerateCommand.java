@@ -15,47 +15,67 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+/** プロンプトから画像を生成しますを行うための利用者コマンド。 */
 @Component
 @Command(name = "generate", description = "プロンプトから画像を生成します。", mixinStandardHelpOptions = true)
 @RequiredArgsConstructor(onConstructor_ = @org.springframework.beans.factory.annotation.Autowired)
 public class GenerateCommand implements Callable<Integer> {
 
-  /** Supports picocli's help-only command tree without a Spring factory. */
+  /**
+   * 画像の生成を利用するため、指定を補って共通の初期化へ引き渡す。
+   *
+   * <p>Supports picocli's help-only command tree without a Spring factory.
+   */
   public GenerateCommand() {
     this(null, new ImageProperties(), new CommandCancellationService());
   }
 
+  /** サービス。 */
   private final ImageGenerationService service;
+
+  /** この機能の動作設定。 */
   private final ImageProperties properties;
+
+  /** キャンセルサービス。 */
   private final CommandCancellationService cancellationService;
+
+  /** バックグラウンド。 */
   private dev.mikoto2000.rei.core.execution.BackgroundCommands background;
 
+  /** 画像の生成で使用するバックグラウンドコマンド一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setBackgroundCommands(
       dev.mikoto2000.rei.core.execution.BackgroundCommands background) {
     this.background = background;
   }
 
+  /** 仕様。 */
   @picocli.CommandLine.Spec private picocli.CommandLine.Model.CommandSpec spec;
 
+  /** 出力パス。 */
   @Option(
       names = "--output",
       description = "保存先ファイルパス",
       completionCandidates = dev.mikoto2000.rei.core.completion.PathCompletionCandidates.Any.class)
   Path outputPath;
 
+  /** モデル。 */
   @Option(names = "--model", description = "画像生成モデル名")
   String model;
 
+  /** 大きさ。 */
   @Option(names = "--size", description = "画像サイズ。例: 1024x1024")
   String size;
 
+  /** 元の。 */
   @Option(names = "--raw", description = "入力を AI で画像生成プロンプト化せず、そのまま画像生成 API に渡します")
   boolean raw;
 
+  /** プロンプト部分一覧。 */
   @Parameters(arity = "1..*", description = "画像生成プロンプト")
   List<String> promptParts;
 
+  /** プロンプトから画像を生成しますを行う。 */
   @Override
   public Integer call() {
     if (background != null) {
@@ -113,10 +133,12 @@ public class GenerateCommand implements Callable<Integer> {
     }
   }
 
+  /** 画像の生成において、キャンセル済み結果かどうかを判定する。 */
   private boolean isCancelledResult(ImageGenerationResult result) {
     return !result.success() && "cancelled".equals(result.message());
   }
 
+  /** 画像の生成で用いるキャンセル済みを返す。 */
   private int cancelled() {
     System.out.println();
     System.out.println("[cancelled] 停止要求または実行の中断により画像生成を中止しました。");

@@ -8,18 +8,24 @@ import dev.mikoto2000.rei.websearch.WebSearchResult;
 import java.util.function.Function;
 import org.springframework.stereotype.Component;
 
+/** 既定フィード記事ページに必要な情報を外部から取得する。 */
 @Component
 public class DefaultFeedArticlePageFetcher implements Function<FeedBriefingItem, WebSearchPage> {
 
+  /** URL内容取得サービス。 */
   private final UrlContentFetchService urlContentFetchService;
+
+  /** Webページ情報の抽出。 */
   private final WebPageExtractor webPageExtractor;
 
+  /** 指定された値や利用先を使って、DefaultFeedArticlePageFetcherを初期化する。 */
   public DefaultFeedArticlePageFetcher(
       UrlContentFetchService urlContentFetchService, WebPageExtractor webPageExtractor) {
     this.urlContentFetchService = urlContentFetchService;
     this.webPageExtractor = webPageExtractor;
   }
 
+  /** 指定された内容を、現在の対象へ反映する。 */
   @Override
   public WebSearchPage apply(FeedBriefingItem item) {
     try {

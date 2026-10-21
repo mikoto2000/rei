@@ -7,43 +7,75 @@ import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
 
 /**
- * Observe -> act using the existing Chat planner -> independently verify -> bounded continuation.
+ * 目標繰り返しのユースケースを実現する。
+ *
+ * <p>Observe -> act using the existing Chat planner -> independently verify -> bounded
+ * continuation.
  */
 @Service
 public class GoalLoopService {
+  /**
+   * 目標の達成管理で受け渡す最終結果を表す。
+   *
+   * @param result 結果
+   * @param stopReason 停止理由
+   */
   public record Outcome(ChatExecutionResult result, String stopReason) {
+    /** 目標の達成管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Outcome(ChatExecutionResult result) {
       this(result, "");
     }
   }
 
+  /** 目標の達成管理に必要な受付窓口を扱う。 */
   @FunctionalInterface
   public interface Gateway {
+    /** 目標の達成管理に関する実行先への引き渡しを処理する。 */
     void dispatch(GoalRepository.Claim claim, String run, Consumer<Outcome> completed);
 
+    /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
     default void validate(GoalRepository.Goal goal) {}
 
+    /** 対象の実行をキャンセルする。 */
     default void cancel(GoalRepository.Goal goal) {}
 
+    /** 目標の達成管理において、入力先Flightかどうかを判定する。 */
     default boolean isInFlight(GoalRepository.Goal goal) {
       return true;
     }
   }
 
+  /** 目標一覧。 */
   private final GoalRepository goals;
+
+  /** 確認の窓口。 */
   private final FileGoalVerifier verifier;
+
+  /** 受付窓口。 */
   private final Gateway gateway;
+
+  /** 権限一覧。 */
   private final ToolPermissionProperties permissions;
+
+  /** イベント一覧。 */
   private final GoalEvents events;
+
+  /** 完了を判定する窓口。 */
   private GoalCompletionGate completionGate;
+
+  /** 待機一覧。 */
   private GoalWaitRepository waits;
+
+  /** 段階一覧。 */
   private GoalStageService stages;
 
+  /** 目標の達成管理に関する設定段階一覧を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void configureStages(GoalStageService stages) {
     this.stages = stages;
   }
 
+  /** 目標の達成管理で用いる段階進捗を返す。 */
   public GoalStageService.Progress stageProgress(String project, String id) {
     var goal = goals.get(project, id);
     gateway.validate(goal);
@@ -51,6 +83,7 @@ public class GoalLoopService {
     return stages.progress(goal);
   }
 
+  /** 目標の達成管理で用いる定義段階一覧を返す。 */
   public java.util.List<GoalStageRepository.Stage> defineStages(
       String project, String id, long version, java.util.List<GoalStageDefinition> plan) {
     var goal = goals.get(project, id);
@@ -63,6 +96,7 @@ public class GoalLoopService {
     return result;
   }
 
+  /** 目標の達成管理で用いる関連付け段階根拠を返す。 */
   public GoalStageService.Progress attachStageEvidence(
       String project, String id, String stage, long version, GoalCompletionGate.Proof proof) {
     var goal = goals.get(project, id);
@@ -73,16 +107,19 @@ public class GoalLoopService {
     return stages.progress(goal);
   }
 
+  /** 目標の達成管理に関する設定待機保存と検索の窓口を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void configureWaitRepository(GoalWaitRepository waits) {
     this.waits = waits;
   }
 
+  /** 目標の達成管理で使用する完了を判定する窓口を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setCompletionGate(GoalCompletionGate gate) {
     completionGate = gate;
   }
 
+  /** 指定された値や利用先を使って、GoalLoopServiceを初期化する。 */
   public GoalLoopService(
       GoalRepository goals,
       FileGoalVerifier verifier,
@@ -96,6 +133,7 @@ public class GoalLoopService {
     this.events = events;
   }
 
+  /** 指定された内容から新しい対象を作成する。 */
   public GoalRepository.Goal create(
       AgentRunContext owner, String objective, String file, String digest, int runs, int calls) {
     gateway.validate(
@@ -119,6 +157,7 @@ public class GoalLoopService {
     return goal;
   }
 
+  /** 指定された内容から新しい対象を作成する。 */
   public GoalRepository.Goal create(
       AgentRunContext owner,
       String objective,
@@ -150,6 +189,7 @@ public class GoalLoopService {
     return goal;
   }
 
+  /** 指定された内容から新しい対象を作成する。 */
   public GoalRepository.Goal create(
       AgentRunContext owner,
       String objective,
@@ -183,6 +223,7 @@ public class GoalLoopService {
     return goal;
   }
 
+  /** 目標の達成管理で用いる定義完了条件を返す。 */
   public GoalRepository.Goal defineCompletion(
       AgentRunContext owner, String id, GoalCompletionGate.Definition definition) {
     gateway.validate(goals.get(owner.projectId(), id));
@@ -191,6 +232,7 @@ public class GoalLoopService {
     return goal;
   }
 
+  /** 目標の達成管理で用いる関連付け完了条件を返す。 */
   public GoalRepository.Goal attachCompletion(
       AgentRunContext owner, String id, GoalCompletionGate.Proof proof) {
     if (completionGate == null) throw new IllegalStateException("Goal gate unavailable");
@@ -204,16 +246,19 @@ public class GoalLoopService {
     }
   }
 
+  /** 目標の達成管理で用いる定義完了条件を返す。 */
   public GoalRepository.Goal defineCompletion(
       String project, String id, GoalCompletionGate.Definition definition) {
     return defineCompletion(humanCompletionOwner(project, id), id, definition);
   }
 
+  /** 目標の達成管理で用いる関連付け完了条件を返す。 */
   public GoalRepository.Goal attachCompletion(
       String project, String id, GoalCompletionGate.Proof proof) {
     return attachCompletion(humanCompletionOwner(project, id), id, proof);
   }
 
+  /** 目標の達成管理で用いる利用者完了条件所有者を返す。 */
   private AgentRunContext humanCompletionOwner(String project, String id) {
     var goal = goals.get(project, id);
     return new AgentRunContext(
@@ -223,7 +268,11 @@ public class GoalLoopService {
         goal.projectId());
   }
 
-  /** Human-facing dispatch only, never a model Tool or automatic startup restoration. */
+  /**
+   * 目標の達成管理の操作を実行する。
+   *
+   * <p>Human-facing dispatch only, never a model Tool or automatic startup restoration.
+   */
   public synchronized GoalRepository.Goal run(String project, String id) {
     if (!permissions.enabled())
       throw new IllegalStateException("Enable rei.tool-permission.enabled before running a Goal");
@@ -242,6 +291,7 @@ public class GoalLoopService {
     return goals.get(project, id);
   }
 
+  /** 中断した作業を引き継ぐため、待機中を再開する。 */
   synchronized GoalRepository.Goal resumeWaiting(
       GoalRepository.Goal expected,
       GoalWaitRepository.Wait wait,
@@ -259,8 +309,15 @@ public class GoalLoopService {
     return result;
   }
 
+  /**
+   * 目標の達成管理で受け渡すInspectionを表す。
+   *
+   * @param goal 目標
+   * @param verification 確認結果
+   */
   public record Inspection(GoalRepository.Goal goal, FileGoalVerifier.Verification verification) {}
 
+  /** 目標の達成管理で用いる進捗を返す。 */
   public GoalCompletionProgress progress(String project, String id) {
     var goal = goals.get(project, id);
     gateway.validate(goal);
@@ -271,6 +328,7 @@ public class GoalLoopService {
     return stageProgress == null ? progress : progress.withStages(stageProgress);
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   public Inspection verify(String project, String id) {
     var goal = goals.get(project, id);
     gateway.validate(goal);
@@ -285,6 +343,7 @@ public class GoalLoopService {
     return new Inspection(goal, verification);
   }
 
+  /** 現在の状態と記録を照合し、差異に応じて管理状態を整える。 */
   public synchronized GoalRepository.Goal reconcile(
       String project, String id, String expectedRunId) {
     var goal = goals.get(project, id);
@@ -303,6 +362,7 @@ public class GoalLoopService {
     return result;
   }
 
+  /** 対象の実行をキャンセルする。 */
   public GoalRepository.Goal cancel(String project, String id) {
     var before = goals.get(project, id);
     var goal =
@@ -317,6 +377,7 @@ public class GoalLoopService {
     return goal;
   }
 
+  /** 対象の実行をキャンセルする。 */
   public GoalRepository.Goal cancel(
       String project, String id, String expectedRun, long expectedAttempts) {
     var before = goals.get(project, id);
@@ -332,10 +393,12 @@ public class GoalLoopService {
     return goal;
   }
 
+  /** 目標の達成管理に関する次を処理する。 */
   private synchronized void next(GoalRepository.Claim claim) {
     next(claim, null);
   }
 
+  /** 目標の達成管理に関する次を処理する。 */
   private synchronized void next(
       GoalRepository.Claim claim, Consumer<AgentRunContext> preparation) {
     if (!goals.active(claim)) return;
@@ -403,6 +466,7 @@ public class GoalLoopService {
     }
   }
 
+  /** 目標の達成管理に関する完了を処理する。 */
   private synchronized void completed(GoalRepository.Claim claim, String run, Outcome outcome) {
     if (!goals.active(claim, run)) return;
     var result = outcome.result();
@@ -517,10 +581,12 @@ public class GoalLoopService {
     next(claim);
   }
 
+  /** 実行中の処理を停止する。 */
   private void stop(GoalRepository.Claim claim, String state, String reason) {
     if (goals.active(claim)) events.publish(goals.stop(claim, state, reason));
   }
 
+  /** 後から経緯や使用量を確認できるよう、試行を記録する。 */
   private void recordAttempt(GoalRepository.Claim claim, String run, String state, String reason) {
     goals.atomic(
         () -> {

@@ -7,34 +7,60 @@ import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
 
-/** Keeps provider chunk boundaries out of terminal lines and preserves the input prompt. */
+/**
+ * 軽量CLIでの対話に必要な実行イベント出力を扱う。
+ *
+ * <p>Keeps provider chunk boundaries out of terminal lines and preserves the input prompt.
+ */
 final class RunEventOutput {
+  /** 出力。 */
   private final Consumer<String> output;
+
+  /** 承認出力。 */
   private final Consumer<String> approvalOutput;
+
+  /** 逐次通知済みの対象。 */
   private final Set<String> streamed = new HashSet<>();
+
+  /** 無視する対象メッセージ一覧。 */
   private final Set<String> ignoredMessages = new HashSet<>();
+
+  /** 待機中。 */
   private final StringBuilder pending = new StringBuilder();
+
+  /** 活動中。 */
   private String active;
 
+  /**
+   * 軽量CLIでの対話で受け渡す通知を表す。
+   *
+   * @param type 種別
+   * @param payload 通知内容
+   */
   private record Notice(String type, JsonNode payload) {}
 
+  /** 案内の回数。 */
   private final List<Notice> notices = new ArrayList<>();
 
+  /** 軽量CLIでの対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   RunEventOutput(Consumer<String> output) {
     this(
         output,
         message -> output.accept(dev.mikoto2000.rei.core.completion.ApprovalNotice.text(message)));
   }
 
+  /** 指定された値や利用先を使って、RunEventOutputを初期化する。 */
   RunEventOutput(Consumer<String> output, Consumer<String> approvalOutput) {
     this.output = output;
     this.approvalOutput = approvalOutput;
   }
 
+  /** 要求を後続の処理へ引き渡すため、実行イベント出力を受け付ける。 */
   void accept(String type, JsonNode payload) {
     accept(type, payload, java.time.Instant.now());
   }
 
+  /** 要求を後続の処理へ引き渡すため、実行イベント出力を受け付ける。 */
   void accept(String type, JsonNode payload, java.time.Instant timestamp) {
     boolean thinking = type.startsWith("thinking.");
     if (thinking || type.startsWith("message.")) {
@@ -84,6 +110,7 @@ final class RunEventOutput {
     renderNotice(type, payload);
   }
 
+  /** 利用者が内容を確認できるよう、通知を表示する。 */
   private void renderNotice(String type, JsonNode payload) {
     if (Set.of(
             "agent.run.failed",
@@ -154,6 +181,7 @@ final class RunEventOutput {
     output.accept(type + ": " + payload);
   }
 
+  /** 軽量CLIでの対話で用いるエラー理由を返す。 */
   private static String errorReason(JsonNode error) {
     String message = error.path("message").asText("");
     if (message.isBlank()) message = error.path("errorType").asText("");
@@ -162,6 +190,7 @@ final class RunEventOutput {
     return dev.mikoto2000.rei.event.FailureMessages.text(message);
   }
 
+  /** 既存の記録へ経緯を残すため、実行イベント出力を追記する。 */
   private void append(String text) {
     pending.append(text);
     int newline;
@@ -172,6 +201,7 @@ final class RunEventOutput {
     }
   }
 
+  /** 軽量CLIでの対話に関する保存の確定を処理する。 */
   void flush() {
     if (!pending.isEmpty()) {
       output.accept(pending.toString());

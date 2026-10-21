@@ -18,10 +18,13 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 表示TarsGroundingの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class UiTarsGroundingTest {
+  /** 検証に使う診断情報。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path diagnostics;
 
+  /** 画面操作の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void parsesLoggedCoordinatesAndDoesNotGuessScale() {
     assertArrayEquals(new double[] {.281, .659}, GroundingProtocol.UITARS.parse("(281,659)"));
@@ -41,6 +44,7 @@ class UiTarsGroundingTest {
     assertThrows(InvalidComputerDecision.class, () -> GroundingProtocol.SHOWUI.parse("(281,659)"));
   }
 
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void usesDedicatedPromptMapsPointAndSavesUiTarsDiagnostics() throws Exception {
     var screen = ComputerUseServiceTest.screen();

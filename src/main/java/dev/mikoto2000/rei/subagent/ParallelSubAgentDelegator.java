@@ -21,25 +21,46 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.stereotype.Component;
 
-/** One admitted batch, bounded global workers and queue; each child uses the existing runner. */
+/**
+ * 補助エージェントへの委譲に必要な並列補助エージェントDelegatorを扱う。
+ *
+ * <p>One admitted batch, bounded global workers and queue; each child uses the existing runner.
+ */
 @Component
 public final class ParallelSubAgentDelegator implements AutoCloseable {
+  /** 独立した予算設定。 */
   private SubAgentProperties standaloneBudgetProperties = new SubAgentProperties();
 
+  /** 補助エージェントへの委譲で使用する独立した予算設定を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setStandaloneBudgetProperties(SubAgentProperties properties) {
     standaloneBudgetProperties = properties;
   }
 
+  /** 外部タイムアウト。 */
   private Duration externalTimeout =
       dev.mikoto2000.rei.chatgpt.PlanExecutionProperties.DEFAULT_TIMEOUT;
 
+  /** 補助エージェントへの委譲で使用する計画実行設定を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setPlanExecutionProperties(
       dev.mikoto2000.rei.chatgpt.PlanExecutionProperties properties) {
     externalTimeout = properties.timeout();
   }
 
+  /**
+   * 補助エージェントへの委譲で受け渡す要求を表す。
+   *
+   * @param id 識別子
+   * @param agent エージェント
+   * @param task タスク
+   * @param context 文脈
+   * @param backendId バックエンド識別子
+   * @param accountRef アカウント参照先
+   * @param modelId モデルの識別子
+   * @param sourceRefs 取得元参照先一覧
+   * @param expectedOutput 期待する内容出力
+   */
   public record Request(
       String id,
       String agent,
@@ -50,10 +71,12 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
       String modelId,
       List<String> sourceRefs,
       String expectedOutput) {
+    /** 補助エージェントへの委譲を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Request(String id, String agent, String task, String context) {
       this(id, agent, task, context, null, null, null, null, null);
     }
 
+    /** 受け取った情報からRequestを作成する。 */
     public Request {
       backendId = DelegationArguments.optional(backendId);
       accountRef = DelegationArguments.optional(accountRef);
@@ -64,41 +87,78 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
     }
   }
 
+  /** 補助エージェントへの委譲における状態の選択肢。 */
   public enum Status {
+    /** 完了。 */
     COMPLETED,
+    /** 部分的な結果。 */
     PARTIAL,
+    /** 失敗。 */
     FAILED,
+    /** キャンセル済み。 */
     CANCELLED,
+    /** タイムアウト。 */
     TIMEOUT,
+    /** 拒否済み。 */
     REJECTED
   }
 
+  /**
+   * 補助エージェントへの委譲で受け渡す項目を表す。
+   *
+   * @param id 識別子
+   * @param agent エージェント
+   * @param status 状態
+   * @param result 結果
+   * @param receipt 受付記録
+   */
   public record Item(
       String id,
       String agent,
       Status status,
       SubAgentResult result,
       ChatGptSubAgentBackend.Receipt receipt) {
+    /** 補助エージェントへの委譲を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Item(String id, String agent, Status status, SubAgentResult result) {
       this(id, agent, status, result, null);
     }
   }
 
+  /**
+   * 補助エージェントへの委譲で受け渡すまとめた処理を表す。
+   *
+   * @param status 状態
+   * @param items 項目一覧
+   * @param comparison 比較結果
+   */
   public record Batch(Status status, List<Item> items, PlanReviewComparison.Comparison comparison) {
+    /** 補助エージェントへの委譲を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Batch(Status status, List<Item> items) {
       this(status, items, null);
     }
 
+    /** 受け取った情報からBatchを作成する。 */
     public Batch {
       items = List.copyOf(items);
     }
   }
 
+  /** 実行の担当。 */
   private final SubAgentRunner runner;
+
+  /** 登録台帳。 */
   private final SubAgentRegistry registry;
+
+  /** キャンセル。 */
   private final CommandCancellationService cancellation;
+
+  /** タイムアウト。 */
   private final Duration timeout;
+
+  /** 受付。 */
   private final Semaphore admission = new Semaphore(1);
+
+  /** 実行先。 */
   private final ThreadPoolExecutor executor =
       new ThreadPoolExecutor(
           2,
@@ -112,12 +172,14 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
             return thread;
           });
 
+  /** 補助エージェントへの委譲を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @org.springframework.beans.factory.annotation.Autowired
   public ParallelSubAgentDelegator(
       SubAgentRunner runner, SubAgentRegistry registry, CommandCancellationService cancellation) {
     this(runner, registry, cancellation, Duration.ofSeconds(120));
   }
 
+  /** 指定された値や利用先を使って、ParallelSubAgentDelegatorを初期化する。 */
   ParallelSubAgentDelegator(
       SubAgentRunner runner,
       SubAgentRegistry registry,
@@ -129,22 +191,26 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
     this.timeout = timeout;
   }
 
+  /** 補助エージェントへの委譲で用いる委譲先を返す。 */
   public Batch delegate(List<Request> input) {
     return delegate(input, null);
   }
 
+  /** 補助エージェントへの委譲で用いる委譲先を返す。 */
   public Batch delegate(
       List<Request> input,
       dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
     return delegate(input, reservation, null, batchDeadline(input));
   }
 
+  /** 補助エージェントへの委譲で用いるまとめた処理期限を返す。 */
   Duration batchDeadline(List<Request> input) {
     boolean hasExternal =
         input != null && input.stream().anyMatch(r -> r != null && external(r.backendId()));
     return hasExternal && externalTimeout.compareTo(timeout) > 0 ? externalTimeout : timeout;
   }
 
+  /** 補助エージェントへの委譲で用いる委譲先を返す。 */
   Batch delegate(
       List<Request> input,
       dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,
@@ -157,6 +223,7 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
     return delegate(input, reservation, child, deadlineLimit, false);
   }
 
+  /** 補助エージェントへの委譲で用いる委譲先を返す。 */
   Batch delegate(
       List<Request> input,
       dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation,
@@ -176,6 +243,7 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
     var parent = AgentRunScope.current();
     if (parent != null && parent.conversationId().startsWith("subagent:"))
       throw new IllegalArgumentException("Recursive delegation is prohibited");
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (input == null || input.isEmpty() || input.size() > 8)
       throw new IllegalArgumentException("Expected 1 to 8 delegation requests");
     var requests = new ArrayList<>(input);
@@ -305,6 +373,7 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
                 } catch (ExecutionException | CancellationException error) {
                   failed = true;
                 } catch (InterruptedException error) {
+                  // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
                   Thread.currentThread().interrupt();
                   terminal = Status.CANCELLED;
                   failed = true;
@@ -388,14 +457,17 @@ public final class ParallelSubAgentDelegator implements AutoCloseable {
     }
   }
 
+  /** 補助エージェントへの委譲において、外部に該当するか判定する。 */
   private static boolean external(String backend) {
     return "chatgpt-plan".equals(backend) || "codex-app-server".equals(backend);
   }
 
+  /** 補助エージェントへの委譲で用いる項目を返す。 */
   private static Item item(Request request, Status status, SubAgentResult result) {
     return new Item(request.id(), request.agent(), status, result);
   }
 
+  /** 補助エージェントへの委譲で利用した資源や登録を解放し、利用を終了する。 */
   @Override
   public void close() {
     for (var pending : executor.shutdownNow())

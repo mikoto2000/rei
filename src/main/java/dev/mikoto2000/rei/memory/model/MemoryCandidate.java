@@ -3,6 +3,18 @@ package dev.mikoto2000.rei.memory.model;
 import java.util.List;
 import java.util.Set;
 
+/**
+ * 長期記憶の表現で受け渡す記憶候補を表す。
+ *
+ * @param type 種別
+ * @param scope 対象範囲
+ * @param content 内容
+ * @param summary 要約
+ * @param confidence 確信度
+ * @param importance 重要度
+ * @param sourceTurnIds 取得元一回のやり取り識別子一覧
+ * @param tags タグ一覧
+ */
 public record MemoryCandidate(
     MemoryType type,
     MemoryScope scope,
@@ -12,6 +24,7 @@ public record MemoryCandidate(
     double importance,
     List<String> sourceTurnIds,
     List<String> tags) {
+  /** 受け取った情報からMemoryCandidateを作成する。 */
   public MemoryCandidate {
     if (type == null
         || !Set.of(

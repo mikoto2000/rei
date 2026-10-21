@@ -18,7 +18,9 @@ import java.util.ArrayList;
 import java.util.concurrent.ExecutorService;
 import org.junit.jupiter.api.Test;
 
+/** 活動中実行Narrationの結果と状態の契約を検証するテスト。 */
 class ActiveRunNarrationTest {
+  /** 会話の実行で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void optedInVoiceCannotFallBackToUnscopedNarrationWhenSelectionChanged() {
     var tasks = new ArrayList<Runnable>();
@@ -52,10 +54,12 @@ class ActiveRunNarrationTest {
     router.submit(context, "hello");
     tasks.removeFirst().run();
     assertThat(tasks).isEmpty();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(narrator);
     verify(playback).offer(context, "answer");
   }
 
+  /** 会話の実行で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void webChatDoesNotScheduleNarration(@org.junit.jupiter.api.io.TempDir Path directory) {
     var tasks = new ArrayList<Runnable>();
@@ -94,9 +98,11 @@ class ActiveRunNarrationTest {
 
     assertThat(router.activeRuns()).isEmpty();
     assertThat(tasks).isEmpty();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(narrator);
   }
 
+  /** 会話の実行で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void completedRunIsRemovedBeforeQueuedNarration() {
     var tasks = new ArrayList<Runnable>();

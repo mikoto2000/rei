@@ -9,10 +9,22 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 
-/** Source selection over the existing Javac AST, using request-local snapshot hashes. */
+/**
+ * 共通の実行基盤に必要なJavaシンボルReadsを扱う。
+ *
+ * <p>Source selection over the existing Javac AST, using request-local snapshot hashes.
+ */
 final class JavaSymbolReads {
+  /**
+   * 共通の実行基盤で受け渡す候補を表す。
+   *
+   * @param path パス
+   * @param version 形式のバージョン
+   * @param symbol シンボル
+   */
   public record Candidate(String path, String version, RepositoryMapService.Symbol symbol) {}
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   static Tools.ReadFileResult read(
       Tools.ReadFileRequest request,
       Path root,
@@ -24,6 +36,7 @@ final class JavaSymbolReads {
       throws IOException {
     RunCancellation.propagate(null);
     long deadline = System.nanoTime() + java.time.Duration.ofSeconds(10).toNanos();
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (request.symbol().isBlank() || request.symbol().length() > 2048)
       throw new IllegalArgumentException("symbol must be 1 to 2048 characters");
     if (request.startLine() != null
@@ -226,6 +239,7 @@ final class JavaSymbolReads {
     return result;
   }
 
+  /** 指定された条件と対象が一致するかを判定する。 */
   private static boolean matches(RepositoryMapService.Symbol symbol, String query) {
     String id = symbol.symbolId();
     return id.equals(query)
@@ -233,6 +247,7 @@ final class JavaSymbolReads {
         || !query.contains("(") && id.startsWith(query + "(");
   }
 
+  /** 共通の実行基盤で用いる行を返す。 */
   private static int line(String text, int end) {
     int line = 1;
     for (int i = 0; i < end; i++)

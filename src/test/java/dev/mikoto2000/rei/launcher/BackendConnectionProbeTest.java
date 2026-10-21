@@ -9,9 +9,12 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** バックエンド接続利用可否の確認の結果と状態の契約を検証するテスト。 */
 class BackendConnectionProbeTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 起動環境の準備で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void distinguishesAuthenticationCompatibilityForeignServiceAndStaleMetadata() throws Exception {
     var server = com.sun.net.httpserver.HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

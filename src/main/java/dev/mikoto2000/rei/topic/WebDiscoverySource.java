@@ -8,15 +8,19 @@ import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
 import org.springframework.stereotype.Component;
 
+/** 話題の管理に必要なWeb利用先の検出取得元を扱う。 */
 @Component
 @ConditionalOnBean(WebSearchAndReadService.class)
 public class WebDiscoverySource implements DiscoverySource {
+  /** サービス。 */
   private final WebSearchAndReadService service;
 
+  /** 指定された値や利用先を使って、WebDiscoverySourceを初期化する。 */
   public WebDiscoverySource(WebSearchAndReadService service) {
     this.service = service;
   }
 
+  /** 話題の管理で用いる利用先の検出を返す。 */
   @Override
   public List<DiscoveryItem> discover(DiscoveryContext context) throws Exception {
     List<DiscoveryItem> items = new ArrayList<>();
@@ -40,6 +44,7 @@ public class WebDiscoverySource implements DiscoverySource {
     return items;
   }
 
+  /** 話題の管理で用いる関連度を返す。 */
   private double relevance(String seed, String text) {
     if (text == null || seed == null) return 0.0d;
     return text.toLowerCase(java.util.Locale.ROOT).contains(seed.toLowerCase(java.util.Locale.ROOT))
@@ -47,6 +52,7 @@ public class WebDiscoverySource implements DiscoverySource {
         : 0.40d;
   }
 
+  /** 入力を機能内で扱えるよう、日時を解釈する。 */
   private Instant parseInstant(String value) {
     if (value == null || value.isBlank()) return null;
     try {

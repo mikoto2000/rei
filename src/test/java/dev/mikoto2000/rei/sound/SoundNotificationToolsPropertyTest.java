@@ -16,6 +16,7 @@ import org.junit.jupiter.params.provider.MethodSource;
  */
 class SoundNotificationToolsPropertyTest {
 
+  /** {@code messageVariants} の条件を再現するための補助情報を返す。 */
   static Stream<String> messageVariants() {
     return Stream.of(
         "hello",
@@ -30,6 +31,7 @@ class SoundNotificationToolsPropertyTest {
         "null文字列ではない");
   }
 
+  /** 以外未指定のを返すことを確認する。 */
   @ParameterizedTest(name = "message={0}")
   @MethodSource("messageVariants")
   @Tag("sound-notification-property-6-toolsDelegation")

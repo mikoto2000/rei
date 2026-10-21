@@ -15,14 +15,18 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 import org.junit.jupiter.api.io.TempDir;
 
 /**
- * Explicit opt-in OpenAI-compatible endpoint. No network, credentials or model choice during normal
- * CI.
+ * レビュー品質Liveの結果と状態の契約を検証するテスト。
+ *
+ * <p>Explicit opt-in OpenAI-compatible endpoint. No network, credentials or model choice during
+ * normal CI.
  */
 @Tag("live")
 @EnabledIfEnvironmentVariable(named = "REI_REVIEW_EVAL_LIVE", matches = "true")
 class ReviewQualityLiveTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 変更内容のレビューで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void measureLiveQualityUsingTheSameVerifiedDeliveryProtocol() throws Exception {
     String url =

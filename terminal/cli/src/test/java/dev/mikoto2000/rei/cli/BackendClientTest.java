@@ -7,7 +7,9 @@ import java.net.*;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** バックエンドクライアントの結果と状態の契約を検証するテスト。 */
 class BackendClientTest {
+  /** 軽量CLIでの対話で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void namedDiagnosticRunRecoversTheSameReceiptWithoutPostingAgain() throws Exception {
     var posts = new AtomicInteger();
@@ -49,6 +51,7 @@ class BackendClientTest {
     }
   }
 
+  /** 権限の確認を維持することを確認する。 */
   @Test
   void eventSubscriptionNegotiatesSseAndKeepsAuthorization() throws Exception {
     var events = new AtomicInteger();
@@ -80,6 +83,7 @@ class BackendClientTest {
     }
   }
 
+  /** 登録を利用することを確認する。 */
   @Test
   void namedModelSelectionCanUsePutWithoutRetrying() throws Exception {
     var requests = new AtomicInteger();
@@ -111,6 +115,7 @@ class BackendClientTest {
     }
   }
 
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {"", "not-json", "{\"message\":\"Bearer test-key\"}"})
@@ -137,6 +142,7 @@ class BackendClientTest {
     }
   }
 
+  /** 軽量CLIでの対話で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void sessionBusyShowsItsTargetRunWithoutResubmissionOrReceiptLookup() throws Exception {
     var requests = new AtomicInteger();
@@ -168,6 +174,7 @@ class BackendClientTest {
     }
   }
 
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void detachWhileWaitingForHeadersCannotAttachAnOldSubscription() throws Exception {
     var entered = new java.util.concurrent.CountDownLatch(1);
@@ -206,6 +213,7 @@ class BackendClientTest {
     }
   }
 
+  /** 軽量CLIでの対話で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void lostAcceptanceResponseLooksUpReceiptWithoutPostingAgain() throws Exception {
     var posts = new AtomicInteger();
@@ -239,6 +247,7 @@ class BackendClientTest {
     }
   }
 
+  /** 軽量CLIでの対話で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void missingReceiptAfterLostResponseRemainsUncertain() throws Exception {
     var posts = new AtomicInteger();
@@ -268,6 +277,7 @@ class BackendClientTest {
     }
   }
 
+  /** 受付記録を利用することを確認する。 */
   @Test
   void serverFailureAfterAcceptanceAlsoUsesReceiptWithoutResubmitting() throws Exception {
     var posts = new AtomicInteger();

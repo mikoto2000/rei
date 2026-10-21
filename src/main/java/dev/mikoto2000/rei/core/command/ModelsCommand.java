@@ -6,14 +6,19 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 
+/** OpenAI 互換 API で利用可能なモデル一覧を表示しますを行うための利用者コマンド。 */
 @Component
 @Command(name = "models", description = "OpenAI 互換 API で利用可能なモデル一覧を表示します")
 @RequiredArgsConstructor
 public class ModelsCommand implements Runnable {
 
+  /** モデル一覧サービス。 */
   private final OpenAiCompatibleModelsService modelsService;
+
+  /** モデル保持先サービス。 */
   private final ModelHolderService modelHolderService;
 
+  /** OpenAI 互換 API で利用可能なモデル一覧を表示しますを行う。 */
   @Override
   public void run() {
     String currentModel = modelHolderService.get();

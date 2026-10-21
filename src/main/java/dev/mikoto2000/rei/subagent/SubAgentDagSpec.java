@@ -8,16 +8,36 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Declarative child execution dependencies, separate from Waiting conditions. No code predicates.
+ * 補助エージェントへの委譲で受け渡す補助エージェント依存関係仕様を表す。
+ *
+ * <p>Declarative child execution dependencies, separate from Waiting conditions. No code
+ * predicates.
+ *
+ * @param nodes 要素一覧
+ * @param failurePolicy 失敗情報判断基準
+ * @param maxConcurrency 最大同時実行数
  */
 public record SubAgentDagSpec(List<Node> nodes, FailurePolicy failurePolicy, int maxConcurrency) {
+  /** 補助エージェントへの委譲における失敗情報判断基準の選択肢。 */
   public enum FailurePolicy {
+    /** 失敗時即座に終了する方針。 */
     FAIL_FAST,
+    /** 継続独立した作業。 */
     CONTINUE_INDEPENDENT
   }
 
+  /**
+   * 補助エージェントへの委譲で受け渡す要素を表す。
+   *
+   * @param id 識別子
+   * @param agent エージェント
+   * @param task タスク
+   * @param context 文脈
+   * @param dependencies 依存条件一覧
+   */
   public record Node(
       String id, String agent, String task, String context, List<String> dependencies) {
+    /** 受け取った情報からNodeを作成する。 */
     public Node {
       if (id == null
           || !id.matches("[A-Za-z][A-Za-z0-9_-]{0,63}")
@@ -38,6 +58,7 @@ public record SubAgentDagSpec(List<Node> nodes, FailurePolicy failurePolicy, int
     }
   }
 
+  /** 受け取った情報からSubAgentDagSpecを作成する。 */
   public SubAgentDagSpec {
     if (nodes == null
         || nodes.isEmpty()
@@ -71,6 +92,7 @@ public record SubAgentDagSpec(List<Node> nodes, FailurePolicy failurePolicy, int
       throw new IllegalArgumentException("Child DAG contains a cycle");
   }
 
+  /** 補助エージェントへの委譲で用いる準備完了を返す。 */
   public List<String> ready(Set<String> completed, Set<String> failed) {
     var ids = nodes.stream().map(Node::id).collect(java.util.stream.Collectors.toSet());
     if (completed == null

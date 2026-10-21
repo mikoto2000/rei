@@ -27,10 +27,13 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** れいアプリケーション色出力の結果と状態の契約を検証するテスト。 */
 class ReiApplicationColorOutputTest {
 
   /**
-   * Creates a mock ANSI-capable Terminal whose writer() returns a PrintWriter wrapping a
+   * {@code mockAnsiTerminal} の条件を再現するための補助情報を返す。
+   *
+   * <p>Creates a mock ANSI-capable Terminal whose writer() returns a PrintWriter wrapping a
    * StringWriter, so output can be captured.
    */
   private Terminal mockAnsiTerminal() {
@@ -44,7 +47,9 @@ class ReiApplicationColorOutputTest {
   }
 
   /**
-   * Returns the StringWriter that backs the terminal's PrintWriter, allowing callers to inspect
+   * {@code captureTerminalOutput} の条件を再現するための補助情報を返す。
+   *
+   * <p>Returns the StringWriter that backs the terminal's PrintWriter, allowing callers to inspect
    * what was written.
    */
   private StringWriter captureTerminalOutput(Terminal terminal) {
@@ -56,6 +61,7 @@ class ReiApplicationColorOutputTest {
     return sw;
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private ReiApplication newApp() {
     AsyncVectorDocumentService asyncVectorDocumentService =
         Mockito.mock(AsyncVectorDocumentService.class);
@@ -75,8 +81,10 @@ class ReiApplicationColorOutputTest {
   }
 
   /**
-   * Requirement 2.1: printUserInput(String, Terminal) must write to terminal.writer() at least once
-   * via print() and flush().
+   * れいの起動で、指定した条件に対する結果と状態の変化を確認する。
+   *
+   * <p>Requirement 2.1: printUserInput(String, Terminal) must write to terminal.writer() at least
+   * once via print() and flush().
    */
   @Test
   void printUserInputWritesToTerminalWriter() {
@@ -92,6 +100,7 @@ class ReiApplicationColorOutputTest {
     verify(mockWriter, atLeastOnce()).flush();
   }
 
+  /** れいの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void printUserInputIfNeededSkipsProjectCommand() {
     ReiApplication app = newApp();
@@ -106,7 +115,9 @@ class ReiApplicationColorOutputTest {
   }
 
   /**
-   * Requirement 2.3: When the terminal does not support ANSI colors (dumb terminal),
+   * れいの起動で、指定した条件に対する結果と状態の変化を確認する。
+   *
+   * <p>Requirement 2.3: When the terminal does not support ANSI colors (dumb terminal),
    * printUserInput(String, Terminal) must output plain text without ANSI escape sequences, and the
    * output must equal formatUserInput(input).
    */

@@ -9,11 +9,14 @@ import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 画像出力パス対象の解決の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ImageOutputPathResolverTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** バックグラウンドパス一覧について、取得済みプロジェクトを利用することを確認する。 */
   @Test
   void backgroundPathsUseCapturedProjectAndUniqueExecutionId() {
     var properties = new ImageProperties();
@@ -36,6 +39,7 @@ class ImageOutputPathResolverTest {
     }
   }
 
+  /** 画像の生成で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void resolvesExplicitRelativePathFromWorkDirectory() {
     ImageProperties properties = new ImageProperties();
@@ -46,6 +50,7 @@ class ImageOutputPathResolverTest {
         .isEqualTo(tempDir.resolve("images/out.png"));
   }
 
+  /** 画像の生成で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void resolvesDefaultPathFromConfiguredOutputDirectory() {
     ImageProperties properties = new ImageProperties();
@@ -57,6 +62,7 @@ class ImageOutputPathResolverTest {
         .isEqualTo(tempDir.resolve("generated/image-20260814-123456.png"));
   }
 
+  /** {@code fixedClock} の条件を再現するための補助情報を返す。 */
   private Clock fixedClock() {
     return Clock.fixed(Instant.parse("2026-08-14T12:34:56Z"), ZoneId.of("UTC"));
   }

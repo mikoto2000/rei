@@ -3,8 +3,13 @@ package dev.mikoto2000.rei.storage;
 import java.sql.Connection;
 import java.sql.SQLException;
 
-/** Execution journals contain bounded per-object metadata, never body arrays. */
+/**
+ * データ保存の共通処理に必要な保持期間実行移行を扱う。
+ *
+ * <p>Execution journals contain bounded per-object metadata, never body arrays.
+ */
 final class RetentionExecutionMigration {
+  /** 指定された内容を、現在の対象へ反映する。 */
   static void apply(Connection db) throws SQLException {
     try (var sql = db.createStatement()) {
       sql.execute(
@@ -25,6 +30,7 @@ final class RetentionExecutionMigration {
     }
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   static void verify(Connection db) throws SQLException {
     try (var sql = db.createStatement()) {
       sql.executeQuery(

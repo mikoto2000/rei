@@ -8,7 +8,9 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** ファイル結果トークンPagerの結果と状態の契約を検証するテスト。 */
 class FileResultTokenPagerTest {
+  /** 長い行について、OSの機能読み取り続きの取得位置を維持することを確認する。 */
   @Test
   void longLineKeepsNativeReadCursorAndOriginalVersionWithoutSplittingSurrogates()
       throws Exception {
@@ -35,6 +37,7 @@ class FileResultTokenPagerTest {
         .isLessThanOrEqualTo(512);
   }
 
+  /** 継続入力開始する日時実際の要求された開始位置およびについて、文字コードを保持することを確認する。 */
   @Test
   void continuationStartsAtActualRequestedOffsetAndPreservesCharset() throws Exception {
     var request = new Tools.ReadFileRequest("lesson.md", 3, 3, "sha", 17, "Shift_JIS");
@@ -49,6 +52,7 @@ class FileResultTokenPagerTest {
     assertThat(result.nextRead().charset()).isEqualTo("Shift_JIS");
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void largeBatchReturnsAContiguousPrefixForEveryFileWithinTheSharedTokenBudget() throws Exception {
     var requests = new ArrayList<Tools.ReadFileRequest>();
@@ -95,6 +99,7 @@ class FileResultTokenPagerTest {
         .isLessThanOrEqualTo(4096);
   }
 
+  /** OSの機能続きの取得位置を維持することを確認する。 */
   @Test
   void shortFilesGiveUnusedTokenQuotaToLaterFilesAndKeepTheirNativeCursor() throws Exception {
     var requests =
@@ -116,6 +121,7 @@ class FileResultTokenPagerTest {
     assertThat(results.getLast().truncationReason()).isEqualTo("RESULT_TOKEN_BUDGET");
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void aPageTooSmallForTheBatchFailsExplicitlyRatherThanSilentlyStarvingLaterFiles() {
     var request = new Tools.ReadFileRequest("a".repeat(1024), 1, 1);

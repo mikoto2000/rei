@@ -22,10 +22,13 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.test.util.ReflectionTestUtils;
 import picocli.CommandLine;
 
+/** 起動時プロジェクトの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("e2e")
 class StartupProjectTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** れいの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void absoluteAndShortOptionSelectTheSameProjectAsCd() throws Exception {
     var root = Files.createDirectory(temp.resolve("project with spaces"));
@@ -61,6 +64,7 @@ class StartupProjectTest {
     }
   }
 
+  /** 相対パス一覧について、起動時ディレクトリを利用することを確認する。 */
   @Test
   void relativePathsUseStartupDirectoryAndRegistryCanonicalization() throws Exception {
     var cwd = Files.createDirectory(temp.resolve("cwd"));
@@ -73,6 +77,7 @@ class StartupProjectTest {
     }
   }
 
+  /** 存在しない選択項目について、起動時を保持することを確認する。 */
   @Test
   void absentOptionPreservesStartupAndDoesNotRegisterAnything() throws Exception {
     var file = temp.resolve("projects.json");
@@ -95,6 +100,7 @@ class StartupProjectTest {
         .isNull();
   }
 
+  /** れいの起動で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidPathsDoNotStartShellOrChangeRegistryOrSelection() throws Exception {
     var file = temp.resolve("projects.json");
@@ -118,6 +124,7 @@ class StartupProjectTest {
     }
   }
 
+  /** れいの起動で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void missingValueIsParserErrorAndHelpDocumentsBothNames() {
     assertThatThrownBy(() -> StartupOptions.parse(new String[] {"--project"}, temp))
@@ -128,6 +135,7 @@ class StartupProjectTest {
         .contains("-p", "--project", "<directory>");
   }
 
+  /** 不正な入力を受け付けないことを確認する。 */
   @Test
   void mainRejectsInvalidInputBeforeSpringAndHelpExitsSuccessfully() throws Exception {
     var regular = Files.writeString(temp.resolve("file.txt"), "text");

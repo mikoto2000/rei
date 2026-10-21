@@ -5,10 +5,16 @@ import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.Locale;
 
-/** Share the controlled ChatGPT diagnostic between tool preflight and terminal Run events. */
+/**
+ * ChatGPTとの連携に必要なチャットGPT実行失敗情報を扱う。
+ *
+ * <p>Share the controlled ChatGPT diagnostic between tool preflight and terminal Run events.
+ */
 public final class ChatGptRunFailure {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ChatGptRunFailure() {}
 
+  /** ChatGPTとの連携で用いる診断を返す。 */
   public static ErrorInformation diagnostic(ChatGptException failure) {
     String guidance =
         failure.permissionReason() == null
@@ -37,6 +43,7 @@ public final class ChatGptRunFailure {
         "chatgpt_" + failure.code().name().toLowerCase(Locale.ROOT));
   }
 
+  /** 対象を特定できるよう、チャットGPT実行失敗情報を探す。 */
   public static ErrorInformation find(Throwable error) {
     var seen = Collections.newSetFromMap(new IdentityHashMap<Throwable, Boolean>());
     for (Throwable cause = error;

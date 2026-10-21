@@ -32,34 +32,42 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
+/** 作業状況助言設定HTTP通信の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ActivityCoachingSettingsHttpTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @EnableWebMvc
   @Import({SecurityConfig.class, ActivityCoachingController.class, ApiExceptionHandler.class})
   static class Config {
+    /** {@code apiKeyProperties} の条件を再現するための補助情報を返す。 */
     @Bean
     ApiKeyProperties apiKeyProperties() {
       return new ApiKeyProperties("secret");
     }
   }
 
+  /** {@code data} の条件を再現するための補助情報を返す。 */
   DriverManagerDataSource data() {
     return new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("coaching.db"));
   }
 
+  /** {@code body} の条件を再現するための補助情報を返す。 */
   String body(long revision, PeriodCoaching.Settings settings) throws Exception {
     return new com.fasterxml.jackson.databind.ObjectMapper()
         .writeValueAsString(Map.of("expectedRevision", revision, "settings", settings));
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   PeriodCoachingService service(PeriodCoachingStore store, ActivityStore activity) {
     return new PeriodCoachingService(
         new ActivityTimeline(activity, Clock.systemUTC()), store, Clock.systemUTC());
   }
 
+  /** 認証済み設定について、完全一致の改訂番号を必要とすることを確認する。 */
   @Test
   void authenticatedSettingsRequireExactRevisionAndExplicitEnableWithoutAdvice() {
     var store = new SqlitePeriodCoachingStore(data());
@@ -109,6 +117,7 @@ class ActivityCoachingSettingsHttpTest {
     assertEquals(2, store.load().revision());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void twoInstancesCannotOverwriteSettingsFromTheSameViewedRevision() throws Exception {
     var a = new SqlitePeriodCoachingStore(data());
@@ -136,6 +145,7 @@ class ActivityCoachingSettingsHttpTest {
     assertEquals(1, a.load().revision());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void missingFlagsInvalidCriteriaAndStaleConfigureCannotMutateEnabledSettings() {
     var store = new SqlitePeriodCoachingStore(data());
@@ -194,6 +204,7 @@ class ActivityCoachingSettingsHttpTest {
     org.mockito.Mockito.verifyNoInteractions(activity);
   }
 
+  /** 作業状況の把握で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void savedCriteriaDisablePersistAndPreserveAdviceDeduplicationAfterRestart() {
     var store = new SqlitePeriodCoachingStore(data());
@@ -216,6 +227,7 @@ class ActivityCoachingSettingsHttpTest {
     org.mockito.Mockito.verifyNoInteractions(activity);
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void disabledActivityAndOldPortsRejectUpdatesWithoutLegacyFallback() {
     new WebApplicationContextRunner()
@@ -240,18 +252,22 @@ class ActivityCoachingSettingsHttpTest {
             });
     PeriodCoachingStore old =
         new PeriodCoachingStore() {
+          /** 検証用に、保存された情報を読み込み、現在の処理で使える形にする。 */
           public Snapshot load() {
             return new Snapshot(0, PeriodCoaching.Settings.defaults());
           }
 
+          /** {@code configure} の条件を再現するための補助情報を返す。 */
           public Snapshot configure(PeriodCoaching.Settings settings) {
             throw new AssertionError("legacy configure");
           }
 
+          /** 検証用に、作業状況の把握で使用する有効状態を設定する。 */
           public Snapshot setEnabled(boolean enabled) {
             throw new AssertionError("legacy enable");
           }
 
+          /** {@code reserve} の条件を再現するための補助情報を返す。 */
           public String reserve(Snapshot expected, String key, String reason, Instant now) {
             throw new AssertionError("reserve");
           }
@@ -279,6 +295,7 @@ class ActivityCoachingSettingsHttpTest {
             });
   }
 
+  /** 作業状況の把握で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void revisionExhaustionCannotOverflowOrRestoreAStaleRevision() throws Exception {
     var store = new SqlitePeriodCoachingStore(data());
@@ -296,6 +313,7 @@ class ActivityCoachingSettingsHttpTest {
     assertEquals(initial.settings(), store.load().settings());
   }
 
+  /** 作業状況の把握で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void successfulHttpCriteriaSaveDisablesAndASecondPostCannotReplayIt() {
     var store = new SqlitePeriodCoachingStore(data());

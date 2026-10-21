@@ -15,23 +15,30 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 定期実行条件実行予定の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class CronScheduleTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-10-04T00:00:00Z");
 
+  /** {@code scheduler} の条件を再現するための補助情報を返す。 */
   PersistentAgentScheduler scheduler(Instant time) {
     return new PersistentAgentScheduler(
         new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("cron.db")),
         Clock.fixed(time, ZoneOffset.UTC));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   String create(PersistentAgentScheduler scheduler, String cron, String zone, int occurrences) {
     try (var scope = AgentRunScope.open(new AgentRunContext("parent", "session", dir, "project"))) {
       return scheduler.scheduleCron(cron, zone, occurrences, "Check project", "session").id();
     }
   }
 
+  /** 時刻と期間の解釈で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void timezonePersistenceCoalescingAndBoundedCompletion() {
     var first = scheduler(now);
@@ -55,6 +62,7 @@ class CronScheduleTest {
     assertThrows(IllegalArgumentException.class, () -> last.cron("other", id));
   }
 
+  /** 時刻と期間の解釈で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidConfigurationLeavesNoPartialSchedule() {
     var scheduler = scheduler(now);
@@ -67,6 +75,7 @@ class CronScheduleTest {
     assertTrue(scheduler.list("project").isEmpty());
   }
 
+  /** 時刻と期間の解釈の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void uncertainFailureAndCancellationNeverAutomaticallyRepeat() {
     var first = scheduler(now);
@@ -89,6 +98,7 @@ class CronScheduleTest {
     assertTrue(scheduler(now.plusSeconds(1200)).claimDue().isEmpty());
   }
 
+  /** 時刻と期間の解釈で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void localWallClockHandlesSpringDstGap() {
     var scheduler = scheduler(Instant.parse("2026-03-07T08:00:00Z"));
@@ -97,6 +107,7 @@ class CronScheduleTest {
         Instant.parse("2026-03-09T06:30:00Z"), scheduler.get("project", id).task().executeAt());
   }
 
+  /** 完全一致の会話所有権を維持することを確認する。 */
   @Test
   void toolRegistrationKeepsExactSessionOwnershipAndPendingState() {
     var scheduler = scheduler(now);

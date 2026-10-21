@@ -6,8 +6,10 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** スキル候補Smokeの結果と状態の契約を検証するテスト。 */
 class SkillCandidateSmokeTest {
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void evaluatesRepresentativeRequests() {
     SkillCandidateSelector selector = new SkillCandidateSelector();
@@ -56,6 +58,7 @@ class SkillCandidateSmokeTest {
         totalNanos / (double) cases.size() / 1_000_000.0);
   }
 
+  /** {@code skills} の条件を再現するための補助情報を返す。 */
   private List<AgentSkill> skills() {
     return List.of(
         skill(
@@ -74,6 +77,7 @@ class SkillCandidateSmokeTest {
         skill("database", "SQL database schema と query の設計", "sql", "database"));
   }
 
+  /** {@code skill} の条件を再現するための補助情報を返す。 */
   private AgentSkill skill(String name, String description, String... keywords) {
     return new AgentSkill(
         name,
@@ -85,5 +89,11 @@ class SkillCandidateSmokeTest {
         "not searched");
   }
 
+  /**
+   * 検証条件の再現に使う事例の情報。
+   *
+   * @param request 検証に使う要求
+   * @param actual 検証に使う実際の
+   */
   private record Case(String request, String actual) {}
 }

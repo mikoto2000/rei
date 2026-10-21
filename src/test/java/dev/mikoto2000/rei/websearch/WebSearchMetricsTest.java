@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 
+/** Web検索計測値の結果と状態の契約を検証するテスト。 */
 class WebSearchMetricsTest {
+  /** テキストについて、共有予算概算を利用することを確認する。 */
   @Test
   void textUsesTheSharedBudgetEstimatorForMixedJapaneseAndEnglish() {
     var registry = new SimpleMeterRegistry();
@@ -21,6 +23,7 @@ class WebSearchMetricsTest {
         registry.get("rei.web.search.events").tag("event", "output_characters").counter().count());
   }
 
+  /** Web上の情報の調査で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void recordsOnlyObservedEventsAndBoundsProviderLabels() {
     var registry = new SimpleMeterRegistry();

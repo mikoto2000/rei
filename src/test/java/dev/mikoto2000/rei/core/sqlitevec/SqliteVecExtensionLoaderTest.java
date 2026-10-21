@@ -10,9 +10,11 @@ import java.sql.Connection;
 import java.sql.PreparedStatement;
 import org.junit.jupiter.api.Test;
 
+/** SQLiteベクトル拡張子読み込みの窓口の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SqliteVecExtensionLoaderTest {
 
+  /** 文書検索用の保存基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void loadsResolvedExtensionIntoConnection() throws Exception {
     SqliteVecProperties properties = new SqliteVecProperties();

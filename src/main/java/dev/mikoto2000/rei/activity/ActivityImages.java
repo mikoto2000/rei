@@ -7,12 +7,16 @@ import java.awt.Rectangle;
 import java.util.ArrayList;
 
 /**
- * Win32 window bounds are physical pixels. Windows AWT retains physical origins but scales display
- * sizes.
+ * 作業状況の把握に必要な作業状況画像一覧を扱う。
+ *
+ * <p>Win32 window bounds are physical pixels. Windows AWT retains physical origins but scales
+ * display sizes.
  */
 final class ActivityImages {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ActivityImages() {}
 
+  /** 作業状況の把握で用いる前面を返す。 */
   static CapturedScreen foreground(CapturedScreen screen, ForegroundWindow window) {
     if (window == null || window.bounds() == null) return screen;
     var w = window.bounds();
@@ -53,12 +57,17 @@ final class ActivityImages {
     return selected.isEmpty() ? screen : new CapturedScreen(selected);
   }
 
-  /** Fail closed when the enumeration is incomplete. Copies pixels before applying masks. */
+  /**
+   * 作業状況の把握で用いる非公開デスクトップを返す。
+   *
+   * <p>Fail closed when the enumeration is incomplete. Copies pixels before applying masks.
+   */
   static CapturedScreen privateDesktop(
       CapturedScreen screen, DesktopActivityObserver.Metadata metadata, ActivityProperties p) {
     return privateDesktop(screen, metadata, p, true);
   }
 
+  /** 作業状況の把握で用いる非公開デスクトップを返す。 */
   static CapturedScreen privateDesktop(
       CapturedScreen screen,
       DesktopActivityObserver.Metadata metadata,
@@ -110,6 +119,7 @@ final class ActivityImages {
     return selected.isEmpty() ? null : new CapturedScreen(selected);
   }
 
+  /** 条件に合う対象を利用するため、デスクトップを選択する。 */
   static CapturedScreen selectDesktop(CapturedScreen screen, ActivityProperties p) {
     var selected =
         screen.displays().stream()
@@ -121,6 +131,7 @@ final class ActivityImages {
     return selected.isEmpty() ? null : new CapturedScreen(selected);
   }
 
+  /** 作業状況の把握に関する非公開化を処理する。 */
   private static void mask(
       java.awt.Graphics2D graphics,
       Rectangle rect,
@@ -135,6 +146,7 @@ final class ActivityImages {
     graphics.fillRect(x, y, right - x, bottom - y);
   }
 
+  /** 作業状況の把握で用いるphysical許容範囲を返す。 */
   static Rectangle physicalBounds(ScreenGeometry g) {
     var b = g.bounds();
     return new Rectangle(

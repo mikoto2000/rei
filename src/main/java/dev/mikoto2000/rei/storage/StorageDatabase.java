@@ -9,29 +9,48 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Independent commits through one serialized application writer per data directory. */
+/**
+ * データ保存の共通処理に必要な保存データベースを扱う。
+ *
+ * <p>Independent commits through one serialized application writer per data directory.
+ */
 public final class StorageDatabase {
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   public static final ObjectMapper JSON =
       new ObjectMapper()
           .registerModule(new JavaTimeModule())
           .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
           .enable(SerializationFeature.ORDER_MAP_ENTRIES_BY_KEYS);
 
+  /** データ保存の共通処理に必要な書き込み先状態を扱う。 */
   private static final class WriterState {
+    /** 処理中に再利用するデータベース接続。 */
     Connection retained;
+
+    /** keep開始／一連の更新。 */
     boolean keepOpen, transaction;
   }
 
+  /** 書き込み先一覧。 */
   private static final ConcurrentHashMap<Path, WriterState> WRITERS = new ConcurrentHashMap<>();
+
+  /** ファイル。 */
   private final Path file;
+
+  /** 状態。 */
   private final WriterState state;
+
+  /** 書き込み先。 */
   public final Object writer;
 
+  /** データ保存の共通処理に必要な作業を扱う。 */
   @FunctionalInterface
   public interface Work<T> {
+    /** データ保存の共通処理の操作を実行する。 */
     T run(Connection connection) throws Exception;
   }
 
+  /** 指定された値や利用先を使って、StorageDatabaseを初期化する。 */
   public StorageDatabase(Path root) {
     file = root.toAbsolutePath().normalize().resolve("storage.db");
     state = WRITERS.computeIfAbsent(file, p -> new WriterState());
@@ -39,6 +58,7 @@ public final class StorageDatabase {
     read(connection -> null);
   }
 
+  /** 必要な対象を利用できるよう、保存データベースの利用を開始する。 */
   private Connection open(boolean readOnly) throws Exception {
     StorageBackup.requireSafePath(file);
     Connection connection =
@@ -56,7 +76,9 @@ public final class StorageDatabase {
   }
 
   /**
-   * Reuses the writer for the owning application's lifetime without retaining a read snapshot or
+   * データ保存の共通処理で用いるkeepWal開始を返す。
+   *
+   * <p>Reuses the writer for the owning application's lifetime without retaining a read snapshot or
    * changing checkpoint/durability settings. Closing the last connection after every event
    * otherwise checkpoints and deletes the WAL. The startup gate must close this handle before
    * releasing its process lease.
@@ -68,8 +90,10 @@ public final class StorageDatabase {
       state.retained = open(false);
       state.keepOpen = true;
       return new AutoCloseable() {
+        /** 終了済み。 */
         private boolean closed;
 
+        /** データ保存の共通処理で利用した資源や登録を解放し、利用を終了する。 */
         @Override
         public void close() throws Exception {
           synchronized (writer) {
@@ -85,6 +109,7 @@ public final class StorageDatabase {
     }
   }
 
+  /** 条件を満たさない操作を拒否するため、現在データ形式の前提条件を確認する。 */
   private static void requireCurrentSchema(Connection connection) throws SQLException {
     try (var query = connection.createStatement();
         var rows = query.executeQuery("PRAGMA user_version")) {
@@ -93,6 +118,7 @@ public final class StorageDatabase {
     }
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   public <T> T read(Work<T> work) {
     try (var connection = open(true)) {
       return work.run(connection);
@@ -101,6 +127,7 @@ public final class StorageDatabase {
     }
   }
 
+  /** データ保存の共通処理で用いる一連の更新を返す。 */
   public <T> T transaction(Work<T> work) {
     synchronized (writer) {
       if (state.transaction)
@@ -145,7 +172,11 @@ public final class StorageDatabase {
     }
   }
 
-  /** Explicit maintenance statements such as VACUUM require autocommit. */
+  /**
+   * データ保存の共通処理で用いる保守を返す。
+   *
+   * <p>Explicit maintenance statements such as VACUUM require autocommit.
+   */
   <T> T maintenance(Work<T> work) {
     synchronized (writer) {
       try (var connection = open(false)) {
@@ -159,7 +190,11 @@ public final class StorageDatabase {
     }
   }
 
-  /** SQLite BINARY compares UTF-8; this key preserves String.compareTo's UTF-16 ordering. */
+  /**
+   * データ保存の共通処理で用いる順序キーを返す。
+   *
+   * <p>SQLite BINARY compares UTF-8; this key preserves String.compareTo's UTF-16 ordering.
+   */
   public static byte[] orderKey(String value) {
     byte[] result = new byte[Math.multiplyExact(value.length(), 2)];
     for (int i = 0; i < value.length(); i++) {

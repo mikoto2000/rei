@@ -18,42 +18,82 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
 /**
- * One asynchronous, explicitly approved transaction. Only a verified whole directory is activated.
+ * 音声モデルの状態と操作を管理する。
+ *
+ * <p>One asynchronous, explicitly approved transaction. Only a verified whole directory is
+ * activated.
  */
 public final class VoiceModelManager implements AutoCloseable {
+  /** 音声による対話における状態の選択肢。 */
   public enum State {
+    /** 未指定。 */
     MISSING,
+    /** 破損。 */
     CORRUPT,
+    /** モデルを取得している状態。 */
     DOWNLOADING,
+    /** 結果を確認中の状態。 */
     VERIFYING,
+    /** 準備完了。 */
     READY,
+    /** 失敗。 */
     FAILED,
+    /** キャンセル済み。 */
     CANCELLED,
+    /** 終了済み。 */
     CLOSED
   }
 
+  /**
+   * 音声による対話で受け渡す状態を表す。
+   *
+   * @param state 状態
+   * @param bytes バイト数
+   * @param totalBytes 合計バイト数
+   * @param asset 素材
+   * @param attempt 試行
+   * @param failure 失敗情報
+   */
   public record Status(
       State state, long bytes, long totalBytes, String asset, int attempt, String failure) {}
 
+  /** 取得タイムアウト。 */
   static final Duration DOWNLOAD_TIMEOUT = Duration.ofHours(1);
+
+  /** DISK予約バイト数。 */
   static final long DISK_RESERVE_BYTES = 64L * 1024 * 1024;
 
+  /** 音声による対話に必要な利用可能Spaceを扱う。 */
   @FunctionalInterface
   interface AvailableSpace {
+    /** 音声による対話で用いるバイト数を返す。 */
     long bytes(Path path) throws IOException;
   }
 
+  /** 音声による対話を継続できないInsufficient保存の状況を伝える例外。 */
   private static final class InsufficientStorageException extends IOException {
+    /** 指定された値や利用先を使って、InsufficientStorageExceptionを初期化する。 */
     InsufficientStorageException(long required) {
       super("insufficient free space; requires " + required + " bytes including reserve");
     }
   }
 
+  /** 利用可能Space。 */
   private final AvailableSpace availableSpace;
+
+  /** 作業ルート。 */
   private final Path root;
+
+  /** 音声モデルの構成と入手先の情報。 */
   private final VoiceModelManifest manifest;
+
+  /** 通信経路。 */
   private final VoiceAssetTransport transport;
+
+  /** 通知の受け取り先。 */
   private final Consumer<Status> listener;
+
+  /** 実行の担当。 */
   private final ExecutorService worker =
       Executors.newSingleThreadExecutor(
           r -> {
@@ -61,6 +101,8 @@ public final class VoiceModelManager implements AutoCloseable {
             t.setDaemon(true);
             return t;
           });
+
+  /** 期限一覧。 */
   private final ScheduledExecutorService deadlines =
       Executors.newSingleThreadScheduledExecutor(
           r -> {
@@ -68,13 +110,26 @@ public final class VoiceModelManager implements AutoCloseable {
             t.setDaemon(true);
             return t;
           });
+
+  /** 状態。 */
   private volatile Status status;
+
+  /** 使用中。 */
   private volatile boolean busy;
+
+  /** 終了済み。 */
   private boolean closed;
+
+  /** キャンセル。 */
   private VoiceAssetTransport.Cancellation cancellation;
+
+  /** 所有者。 */
   private volatile Thread owner;
+
+  /** 直近進捗。 */
   private long lastProgress;
 
+  /** 音声による対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public VoiceModelManager(
       Path root,
       VoiceModelManifest manifest,
@@ -83,6 +138,7 @@ public final class VoiceModelManager implements AutoCloseable {
     this(root, manifest, transport, listener, path -> Files.getFileStore(path).getUsableSpace());
   }
 
+  /** 指定された値や利用先を使って、VoiceModelManagerを初期化する。 */
   VoiceModelManager(
       Path root,
       VoiceModelManifest manifest,
@@ -97,19 +153,26 @@ public final class VoiceModelManager implements AutoCloseable {
     status = new Status(State.MISSING, 0, manifest.totalBytes(), "", 0, "");
   }
 
+  /** 音声による対話で用いるmanifestを返す。 */
   public VoiceModelManifest manifest() {
     return manifest;
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   public Status status() {
     return status;
   }
 
+  /** 音声による対話において、使用中に該当するか判定する。 */
   public boolean busy() {
     return busy;
   }
 
-  /** Hashes are checked on every reuse, including manually placed bundles, without loading JNI. */
+  /**
+   * 音声による対話で用いる準備完了ディレクトリを返す。
+   *
+   * <p>Hashes are checked on every reuse, including manually placed bundles, without loading JNI.
+   */
   public Path readyDirectory() throws IOException {
     Path managed = VoiceModelManifest.assetPath(root, "managed/" + manifest.id());
     try {
@@ -149,12 +212,14 @@ public final class VoiceModelManager implements AutoCloseable {
     }
   }
 
+  /** 音声による対話で用いる確認済みディレクトリを返す。 */
   private synchronized Path verifiedDirectory(Path directory) {
     if (!busy && !closed && status.state() != State.READY)
       update(State.READY, manifest.totalBytes(), "", 0, "");
     return directory;
   }
 
+  /** 音声による対話において、installに該当するか判定する。 */
   public synchronized boolean install(String approvedManifestId) {
     if (!manifest.id().equals(approvedManifestId))
       throw new IllegalArgumentException(
@@ -177,6 +242,7 @@ public final class VoiceModelManager implements AutoCloseable {
     return true;
   }
 
+  /** 指定された変更を、管理中の情報へ反映する。 */
   private void update(State state, long bytes, String asset, int attempt, String failure) {
     status = new Status(state, bytes, manifest.totalBytes(), asset, attempt, failure);
     long now = System.nanoTime();
@@ -192,6 +258,7 @@ public final class VoiceModelManager implements AutoCloseable {
     }
   }
 
+  /** 対象の実行をキャンセルする。 */
   public boolean cancel() {
     VoiceAssetTransport.Cancellation token;
     Thread thread;
@@ -206,6 +273,7 @@ public final class VoiceModelManager implements AutoCloseable {
     return true;
   }
 
+  /** 音声による対話に関する取得を処理する。 */
   private void download(VoiceAssetTransport.Cancellation token) {
     Path stage = null;
     State result = State.FAILED;
@@ -287,6 +355,7 @@ public final class VoiceModelManager implements AutoCloseable {
         update(State.READY, completed, "", 0, "");
       }
     } catch (InterruptedException error) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       result = State.CANCELLED;
       failure = "cancelled";
@@ -319,6 +388,7 @@ public final class VoiceModelManager implements AutoCloseable {
     }
   }
 
+  /** 対象を管理から外すため、段階を削除する。 */
   private void deleteStage(Path stage) throws IOException {
     Path staging = root.resolve("staging").normalize();
     Path checked = stage.toAbsolutePath().normalize();
@@ -329,6 +399,7 @@ public final class VoiceModelManager implements AutoCloseable {
     }
   }
 
+  /** 音声による対話で利用した資源や登録を解放し、利用を終了する。 */
   public void close() {
     synchronized (this) {
       if (closed) return;
@@ -340,6 +411,7 @@ public final class VoiceModelManager implements AutoCloseable {
     try {
       worker.awaitTermination(15, TimeUnit.SECONDS);
     } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
     }
     synchronized (this) {

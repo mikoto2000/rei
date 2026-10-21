@@ -18,10 +18,13 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況期間分析の結果と状態の契約を検証するテスト。 */
 class ActivityPeriodAnalysisTest {
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   private static final Clock CLOCK =
       Clock.fixed(Instant.parse("2026-10-04T12:00:00Z"), ZoneOffset.UTC);
 
+  /** 検証用に、後から経緯を確認できるよう、指定された内容を記録する。 */
   private static ActivityRecord record(String id, String time, long seconds) {
     var base = ActivitySemanticTest.dev(0, "Terminal", "X");
     return new ActivityRecord(
@@ -38,6 +41,7 @@ class ActivityPeriodAnalysisTest {
         "one");
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void calendarWeekStartsMondayAndCurrentRangeStopsAtFrozenNow() {
     var service = new ActivityPeriodAnalysis(CLOCK, .5);
@@ -50,6 +54,7 @@ class ActivityPeriodAnalysisTest {
         () -> service.range(ActivityPeriodAnalysis.Period.MONTH, LocalDate.of(2026, 10, 5)));
   }
 
+  /** 作業状況の把握で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void overlapDuplicateAndMidnightDoNotInflateObservation() {
     var service = new ActivityPeriodAnalysis(CLOCK, .5);
@@ -66,6 +71,7 @@ class ActivityPeriodAnalysisTest {
         result.unobservedSeconds());
   }
 
+  /** 予定表境界条件を利用することを確認する。 */
   @Test
   void daylightSavingMonthUsesCalendarBoundaryAndRealSeconds() {
     var service =
@@ -76,6 +82,7 @@ class ActivityPeriodAnalysisTest {
         30 * 86400L + 3600, Duration.between(r.fromInclusive(), r.toExclusive()).getSeconds());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void emptyAndUnknownRemainUnknownWithoutProductivityScore() {
     var service = new ActivityPeriodAnalysis(CLOCK, .5);
@@ -104,6 +111,7 @@ class ActivityPeriodAnalysisTest {
     assertFalse(text.contains("NaN"));
   }
 
+  /** 作業状況の把握で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void previousMonthHandlesUnequalLengthsAndFormatsPartialComparison() {
     var service = new ActivityPeriodAnalysis(CLOCK, .5);
@@ -118,6 +126,7 @@ class ActivityPeriodAnalysisTest {
     assertTrue(text.contains("成果・集中・中断の実測ではありません"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void shellQueriesTwoOwnedCalendarRangesWithoutDailyWriterOrMutation() {
     var store = org.mockito.Mockito.mock(ActivityStore.class);
@@ -136,6 +145,7 @@ class ActivityPeriodAnalysisTest {
     assertTrue(out.toString().contains("週次 Activity 分析"));
   }
 
+  /** 月次シェルについて、完了待ちを受け付けないことを確認する。 */
   @Test
   void monthlyShellRejectsFutureAndHandlesEmptyCurrentMonth() {
     var store = org.mockito.Mockito.mock(ActivityStore.class);
@@ -156,6 +166,7 @@ class ActivityPeriodAnalysisTest {
     assertTrue(out.toString().contains("月次 Activity 分析"));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void userCriteriaScoreTracksDaysAndUnknownTimeIsExcluded() {
     var analysis =
@@ -189,6 +200,7 @@ class ActivityPeriodAnalysisTest {
     assertNull(noCriteria.metrics().score());
   }
 
+  /** 作業状況の把握の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void focusCandidatesUseObservedSecondsAndGapsDoNotCountAsInterruptions() {
     var analysis =
@@ -205,6 +217,7 @@ class ActivityPeriodAnalysisTest {
     assertEquals(0, result.metrics().interruptionCandidates());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void classifiedSharesAndAdjacentThemeSwitchesAreComparedWithoutScoringGaps() {
     var analysis =
@@ -266,6 +279,7 @@ class ActivityPeriodAnalysisTest {
                 CLOCK, .5, new ProjectNameNormalizer(Map.of()), Set.of("unknown")));
   }
 
+  /** 作業状況の把握で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   @org.junit.jupiter.api.Tag("integration")
   void savedUserCategoriesReachWeeklyAndMonthlyReportsAfterRestart(

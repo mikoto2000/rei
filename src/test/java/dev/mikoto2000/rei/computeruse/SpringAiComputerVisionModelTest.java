@@ -26,7 +26,9 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** SpringAI画面操作画像認識モデルの結果と状態の契約を検証するテスト。 */
 class SpringAiComputerVisionModelTest {
+  /** 画面操作の支援で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void outputLimitStopsWithoutRepeatingTheSameExpensiveRequest() {
     var model = mock(ChatModel.class);
@@ -45,6 +47,7 @@ class SpringAiComputerVisionModelTest {
     verify(model).call(any(Prompt.class));
   }
 
+  /** 画面操作の支援で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void repairReceivesSafeValidationReasonAndExplicitSchema() throws Exception {
     var model = mock(ChatModel.class);
@@ -73,15 +76,18 @@ class SpringAiComputerVisionModelTest {
             .contains("missing fields"));
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   static ChatResponse response(String text) {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
   }
 
+  /** {@code observation} の条件を再現するための補助情報を返す。 */
   static ComputerObservation observation() {
     return new ComputerObservation(
         "Enter abc", ComputerUseServiceTest.screen(), List.of("Clicked editor"), 2, 20);
   }
 
+  /** 画像目標履歴を送信することを確認する。 */
   @Test
   void sendsImageGoalHistoryAndStrictSchemaWithoutTools() throws Exception {
     var model = mock(ChatModel.class);
@@ -103,6 +109,7 @@ class SpringAiComputerVisionModelTest {
     assertTrue(options.getToolCallbacks().isEmpty());
   }
 
+  /** 画面操作の支援で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void invalidOutputRetriesWithinBudgetAndThenFails() throws Exception {
     var model = mock(ChatModel.class);
@@ -118,6 +125,7 @@ class SpringAiComputerVisionModelTest {
     verify(model, times(2)).call(any(Prompt.class));
   }
 
+  /** 画面操作の支援の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationBetweenRepairsPreventsAnotherRequest() {
     var model = mock(ChatModel.class);
@@ -135,6 +143,7 @@ class SpringAiComputerVisionModelTest {
     verify(model).call(any(Prompt.class));
   }
 
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void refusesAmbientToolsBeforeInference() {
     var model = mock(ChatModel.class);
@@ -149,6 +158,7 @@ class SpringAiComputerVisionModelTest {
     verify(model, never()).call(any(Prompt.class));
   }
 
+  /** 指定された提供元選択可能な設定を保持することを確認する。 */
   @Test
   void preservesSuppliedProviderOptionsWithoutMutatingSharedDefaults() throws Exception {
     var model = mock(ChatModel.class);
@@ -176,6 +186,7 @@ class SpringAiComputerVisionModelTest {
     assertNull(defaults.getResponseFormat());
   }
 
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void refusesRawToolsInRequestOptionsBeforeInference() {
     var model = mock(ChatModel.class);

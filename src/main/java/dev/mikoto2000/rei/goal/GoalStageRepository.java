@@ -9,12 +9,31 @@ import java.util.UUID;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
-/** Additive SQLite storage. All writes join the existing Goal transaction and claim fence. */
+/**
+ * 目標段階を保存・検索するための窓口。
+ *
+ * <p>Additive SQLite storage. All writes join the existing Goal transaction and claim fence.
+ */
 @Repository
 public class GoalStageRepository {
+  /** 段階一覧データ形式。 */
   static final String STAGES_SCHEMA =
       "CREATE TABLE IF NOT EXISTS agent_goal_stages(goal TEXT NOT NULL,id TEXT NOT NULL,ordinal INTEGER NOT NULL,definition TEXT NOT NULL,plan_version INTEGER NOT NULL,version INTEGER NOT NULL,state TEXT NOT NULL,reason TEXT NOT NULL DEFAULT '',evidence TEXT,proof TEXT,PRIMARY KEY(goal,id))";
 
+  /**
+   * 目標の達成管理で受け渡す根拠を表す。
+   *
+   * @param goalId 目標識別子
+   * @param stageId 段階識別子
+   * @param attemptId 試行識別子
+   * @param planVersion 計画形式のバージョン
+   * @param conditionVersion 条件形式のバージョン
+   * @param artifactVersions 成果物Versions
+   * @param dependencyVersions 依存条件Versions
+   * @param result 結果
+   * @param verifiedAt 確認済み日時
+   * @param reference 参照先
+   */
   public record Evidence(
       String goalId,
       String stageId,
@@ -26,12 +45,24 @@ public class GoalStageRepository {
       GoalStageVerifier.Result result,
       String verifiedAt,
       String reference) {
+    /** 受け取った情報からEvidenceを作成する。 */
     public Evidence {
       artifactVersions = Map.copyOf(artifactVersions);
       dependencyVersions = Map.copyOf(dependencyVersions);
     }
   }
 
+  /**
+   * 目標の達成管理で受け渡す段階を表す。
+   *
+   * @param definition 定義
+   * @param planVersion 計画形式のバージョン
+   * @param version 形式のバージョン
+   * @param state 状態
+   * @param reason 理由
+   * @param evidence 根拠
+   * @param proof 確認の根拠
+   */
   public record Stage(
       GoalStageDefinition definition,
       long planVersion,
@@ -41,6 +72,22 @@ public class GoalStageRepository {
       Evidence evidence,
       GoalCompletionGate.Proof proof) {}
 
+  /**
+   * 目標の達成管理で受け渡す試行を表す。
+   *
+   * @param id 識別子
+   * @param stageId 段階識別子
+   * @param runId 実行の識別子
+   * @param number 数値
+   * @param planVersion 計画形式のバージョン
+   * @param status 状態
+   * @param reason 理由
+   * @param startedAt 開始日時
+   * @param finishedAt 完了済み日時
+   * @param callsUsed 呼び出し回数使用量
+   * @param tokensUsed トークン数使用量
+   * @param observation 観測内容
+   */
   public record Attempt(
       String id,
       String stageId,
@@ -55,6 +102,7 @@ public class GoalStageRepository {
       long tokensUsed,
       String observation) {}
 
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final ObjectMapper JSON =
       new ObjectMapper(
               com.fasterxml.jackson.core.JsonFactory.builder()
@@ -66,10 +114,17 @@ public class GoalStageRepository {
                           .build())
                   .build())
           .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 目標一覧。 */
   private final GoalRepository goals;
 
+  /** 指定された値や利用先を使って、GoalStageRepositoryを初期化する。 */
   public GoalStageRepository(Clock clock, GoalRepository goals) {
     db = goals.jdbc();
     this.clock = clock;
@@ -95,9 +150,11 @@ public class GoalStageRepository {
         .update();
   }
 
+  /** 受け渡し先が扱える形式へ、指定された内容を変換する。 */
   static String encode(Object value) {
     try {
       String result = JSON.writeValueAsString(value);
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (result.length() > 262144) throw new IllegalArgumentException("Stage data exceeds 256KiB");
       return result;
     } catch (java.io.IOException invalid) {
@@ -105,6 +162,7 @@ public class GoalStageRepository {
     }
   }
 
+  /** 目標の達成管理で用いる条件形式のバージョンを返す。 */
   static String conditionVersion(GoalStageDefinition definition) {
     try {
       return java.util.HexFormat.of()
@@ -116,8 +174,10 @@ public class GoalStageRepository {
     }
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   static <T> T decode(String value, Class<T> type) {
     if (value == null) return null;
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (value.length() > 262144) throw new IllegalArgumentException("Stage data exceeds 256KiB");
     try {
       return JSON.readValue(value, type);
@@ -126,10 +186,12 @@ public class GoalStageRepository {
     }
   }
 
+  /** 入力を機能内で扱えるよう、計画を解釈する。 */
   public static List<GoalStageDefinition> parsePlan(String json) {
     return List.of(decode(json, GoalStageDefinition[].class));
   }
 
+  /** 依頼を進める方針を決めるため、形式のバージョンの計画を組み立てる。 */
   public long planVersion(GoalRepository.Goal goal) {
     goals.get(goal.projectId(), goal.id());
     return db.sql("SELECT version FROM agent_goal_stage_plans WHERE goal=?")
@@ -139,6 +201,7 @@ public class GoalStageRepository {
         .orElse(0L);
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<Stage> list(GoalRepository.Goal goal) {
     goals.get(goal.projectId(), goal.id());
     return db.sql("SELECT * FROM agent_goal_stages WHERE goal=? ORDER BY ordinal")
@@ -156,6 +219,7 @@ public class GoalStageRepository {
         .list();
   }
 
+  /** 目標の達成管理に関する排他制御を処理する。 */
   private void lock(GoalRepository.Goal goal) {
     if (db.sql("UPDATE agent_goals SET attempts=attempts WHERE project=? AND id=?")
             .params(goal.projectId(), goal.id())
@@ -163,11 +227,13 @@ public class GoalStageRepository {
         != 1) throw new IllegalStateException("Goal disappeared");
   }
 
+  /** 目標の達成管理で用いる定義を返す。 */
   public List<Stage> define(
       GoalRepository.Goal expected, long expectedVersion, List<GoalStageDefinition> plan) {
     return define(expected, expectedVersion, plan, null);
   }
 
+  /** 目標の達成管理で用いる定義を返す。 */
   private List<Stage> define(
       GoalRepository.Goal expected,
       long expectedVersion,
@@ -236,6 +302,7 @@ public class GoalStageRepository {
         });
   }
 
+  /** 目標の達成管理で用いる試行回数を返す。 */
   public List<Attempt> attempts(GoalRepository.Goal goal) {
     goals.get(goal.projectId(), goal.id());
     return db.sql("SELECT * FROM agent_goal_stage_attempts WHERE goal=? ORDER BY rowid")
@@ -258,6 +325,7 @@ public class GoalStageRepository {
         .list();
   }
 
+  /** 目標の達成管理で用いる根拠を返す。 */
   public List<Evidence> evidence(GoalRepository.Goal goal) {
     goals.get(goal.projectId(), goal.id());
     return db.sql("SELECT evidence FROM agent_goal_stage_evidence WHERE goal=? ORDER BY rowid")
@@ -266,6 +334,7 @@ public class GoalStageRepository {
         .list();
   }
 
+  /** 依頼を進める方針を決めるため、履歴の計画を組み立てる。 */
   public List<String> planHistory(GoalRepository.Goal goal) {
     goals.get(goal.projectId(), goal.id());
     return db.sql(
@@ -275,6 +344,7 @@ public class GoalStageRepository {
         .list();
   }
 
+  /** 目標の達成管理で用いる開始を返す。 */
   public Attempt begin(GoalRepository.Claim claim, String run, Stage expected) {
     return goals.atomic(
         () -> {
@@ -328,6 +398,7 @@ public class GoalStageRepository {
         });
   }
 
+  /** 目標の達成管理で用いる対象実行を返す。 */
   public Attempt forRun(GoalRepository.Goal goal, String run) {
     return attempts(goal).stream()
         .filter(a -> a.runId().equals(run) && a.status().equals("RUNNING"))
@@ -335,6 +406,7 @@ public class GoalStageRepository {
         .orElse(null);
   }
 
+  /** 終了時に必要な状態を反映し、処理を完了させる。 */
   public boolean finish(
       GoalRepository.Claim claim, Attempt attempt, GoalStageVerifier.Observation observed) {
     return goals.atomic(
@@ -401,11 +473,13 @@ public class GoalStageRepository {
         });
   }
 
+  /** 目標の達成管理に関する状態を処理する。 */
   public void state(GoalRepository.Goal goal, Stage expected, String state, String reason) {
     if (!compareState(goal, expected, state, reason))
       throw new IllegalStateException("Stage CAS failed");
   }
 
+  /** 目標の達成管理において、比較状態に該当するか判定する。 */
   boolean compareState(GoalRepository.Goal goal, Stage expected, String state, String reason) {
     if (!java.util.Set.of("STALE", "TODO", "BLOCKED", "VERIFYING").contains(state))
       throw new IllegalArgumentException("Host transition required");
@@ -422,6 +496,7 @@ public class GoalStageRepository {
         == 1;
   }
 
+  /** 目標の達成管理に関する関連付け確認の根拠を処理する。 */
   public void attachProof(
       GoalRepository.Goal expected, String stageId, long version, GoalCompletionGate.Proof proof) {
     GoalCompletionGate.validateProof(proof);
@@ -449,7 +524,11 @@ public class GoalStageRepository {
         });
   }
 
-  /** Only after the human reconciles the exact Goal Run; never an automatic startup replay. */
+  /**
+   * 現在の状態と記録を照合し、差異に応じて管理状態を整える。
+   *
+   * <p>Only after the human reconciles the exact Goal Run; never an automatic startup replay.
+   */
   void reconcile(GoalRepository.Goal goal, String run) {
     db.sql(
             "UPDATE agent_goal_stage_attempts SET status='UNKNOWN',reason='uncertain_run_reconciled',finished_at=?,calls_used=?-calls_start,tokens_used=?-tokens_start WHERE goal=? AND run=? AND status='RUNNING'")
@@ -461,6 +540,7 @@ public class GoalStageRepository {
         .update();
   }
 
+  /** 目標の達成管理に関するキャンセル済みを処理する。 */
   void cancelled(GoalRepository.Goal goal) {
     db.sql(
             "UPDATE agent_goal_stage_attempts SET status='CANCELLED',reason='human_cancelled',finished_at=?,calls_used=?-calls_start,tokens_used=?-tokens_start WHERE goal=? AND status='RUNNING'")
@@ -472,6 +552,7 @@ public class GoalStageRepository {
         .update();
   }
 
+  /** 後続の判断で選べる候補を用意するため、目標段階保存と検索の窓口を提案する。 */
   public void propose(
       GoalRepository.Goal goal, Attempt attempt, List<GoalStageDefinition> children) {
     if (children == null
@@ -491,6 +572,7 @@ public class GoalStageRepository {
         .update();
   }
 
+  /** 目標の達成管理において、反映提案に該当するか判定する。 */
   boolean applyProposal(GoalRepository.Claim claim, String run) {
     return goals.atomic(
         () -> {
@@ -516,6 +598,7 @@ public class GoalStageRepository {
         });
   }
 
+  /** 目標の達成管理に関する関連付け実行中確認の根拠を処理する。 */
   void attachRunningProof(
       GoalRepository.Goal goal, Attempt attempt, GoalCompletionGate.Proof proof) {
     GoalCompletionGate.validateProof(proof);

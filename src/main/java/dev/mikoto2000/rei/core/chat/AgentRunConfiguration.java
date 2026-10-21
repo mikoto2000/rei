@@ -7,12 +7,15 @@ import java.util.concurrent.RejectedExecutionException;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/** エージェント実行の構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration
 public class AgentRunConfiguration {
+  /** 音声再生。 */
   private org.springframework.beans.factory.ObjectProvider<
           dev.mikoto2000.rei.voice.VoicePlaybackService>
       voicePlayback;
 
+  /** 会話の実行で使用する音声再生を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setVoicePlayback(
       org.springframework.beans.factory.ObjectProvider<
@@ -21,6 +24,7 @@ public class AgentRunConfiguration {
     voicePlayback = playback;
   }
 
+  /** 会話の実行で用いるシェル会話一覧を返す。 */
   @Bean
   public dev.mikoto2000.rei.application.session.ShellConversationService shellConversations(
       dev.mikoto2000.rei.core.project.ProjectService projects,
@@ -71,11 +75,13 @@ public class AgentRunConfiguration {
     return shell;
   }
 
+  /** 会話の実行で用いるエージェント実行実行先を返す。 */
   @Bean(destroyMethod = "shutdownNow")
   public ExecutorService agentRunExecutor() {
     return Executors.newThreadPerTaskExecutor(Thread.ofVirtual().name("rei-agent-", 0).factory());
   }
 
+  /** 会話の実行で用いる会話入力入力の振り分けを返す。 */
   @Bean
   public ConversationInputRouter conversationInputRouter(
       ExecutorService agentRunExecutor,

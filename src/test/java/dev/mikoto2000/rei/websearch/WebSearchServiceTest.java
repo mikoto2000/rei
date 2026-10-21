@@ -17,11 +17,14 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
+/** Web検索サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class WebSearchServiceTest {
 
+  /** 検証に使うサーバー。 */
   private HttpServer server;
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void tearDown() {
     if (server != null) {
@@ -29,6 +32,7 @@ class WebSearchServiceTest {
     }
   }
 
+  /** Web上の情報の調査で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void searchCallsBraveCompatibleEndpointAndParsesResults() throws Exception {
     AtomicReference<String> observedQuery = new AtomicReference<>();
@@ -58,6 +62,7 @@ class WebSearchServiceTest {
     assertEquals("https://example.com/spring-ai", results.getFirst().url());
   }
 
+  /** Web上の情報の調査で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void searchCallsDuckDuckGoCompatibleEndpointAndParsesResults() throws Exception {
     AtomicReference<String> observedQuery = new AtomicReference<>();
@@ -86,6 +91,7 @@ class WebSearchServiceTest {
     assertEquals("https://example.com/duck", results.get(1).url());
   }
 
+  /** Web上の情報の調査で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchCombinesMultipleProvidersInConfiguredOrder() throws Exception {
     AtomicReference<String> observedDuckQuery = new AtomicReference<>();
@@ -126,6 +132,7 @@ class WebSearchServiceTest {
         results.stream().map(WebSearchResult::url).toList());
   }
 
+  /** Web上の情報の調査で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void searchCollectsUpToLimitResultsFromEveryProvider() throws Exception {
     AtomicReference<String> observedDuckQuery = new AtomicReference<>();
@@ -167,6 +174,7 @@ class WebSearchServiceTest {
         results.stream().map(WebSearchResult::url).toList());
   }
 
+  /** Web上の情報の調査で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void searchFallsBackToLaterProviderWhenEarlierOneFails() throws Exception {
     AtomicReference<String> observedBraveQuery = new AtomicReference<>();
@@ -195,6 +203,7 @@ class WebSearchServiceTest {
     assertEquals(2, results.size());
   }
 
+  /** Web上の情報の調査で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void configuredProvidersRequiresAtLeastOneValidProvider() {
     WebSearchProperties properties = new WebSearchProperties();
@@ -207,6 +216,7 @@ class WebSearchServiceTest {
     assertTrue(error.getMessage().startsWith("No web search providers are configured."));
   }
 
+  /** 検索について、APIキーを必要とすることを確認する。 */
   @Test
   void searchRequiresApiKeyForBrave() {
     WebSearchProperties properties = new WebSearchProperties();
@@ -221,6 +231,7 @@ class WebSearchServiceTest {
     assertEquals("Web search API key is not configured for provider brave.", error.getMessage());
   }
 
+  /** 検索について、機能判定状態を必要とすることを確認する。 */
   @Test
   void searchRequiresFeatureFlag() {
     WebSearchProperties properties = new WebSearchProperties();
@@ -236,6 +247,7 @@ class WebSearchServiceTest {
         error.getMessage());
   }
 
+  /** 空の一覧を返すことを確認する。 */
   @Test
   void parseBraveResultsReturnsEmptyListWhenWebResultsAreMissing() throws IOException {
     WebSearchProperties properties = new WebSearchProperties();
@@ -246,6 +258,7 @@ class WebSearchServiceTest {
     assertTrue(results.isEmpty());
   }
 
+  /** 空の一覧を返すことを確認する。 */
   @Test
   void parseDuckDuckGoResultsReturnsEmptyListWhenResultsAreMissing() {
     WebSearchProperties properties = new WebSearchProperties();
@@ -256,6 +269,7 @@ class WebSearchServiceTest {
     assertTrue(results.isEmpty());
   }
 
+  /** 検索について、空の一覧を返すことを確認する。 */
   @Test
   void searchReturnsEmptyListWhenProvidersAreConfiguredButNoResultsAreFound() throws Exception {
     server = HttpServer.create(new InetSocketAddress(0), 0);
@@ -283,6 +297,7 @@ class WebSearchServiceTest {
     assertTrue(results.isEmpty());
   }
 
+  /** 検証で使用する提供元を、指定された条件に合わせて用意する。 */
   private ProviderProperties provider(String name, String baseUrl, String apiKey) {
     ProviderProperties provider = new ProviderProperties();
     provider.setName(name);
@@ -291,6 +306,7 @@ class WebSearchServiceTest {
     return provider;
   }
 
+  /** {@code respondWithSearchResults} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void respondWithSearchResults(
       HttpExchange exchange,
       AtomicReference<String> observedQuery,
@@ -326,6 +342,7 @@ class WebSearchServiceTest {
     }
   }
 
+  /** {@code respondWithDuckDuckGoResults} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void respondWithDuckDuckGoResults(
       HttpExchange exchange,
       AtomicReference<String> observedQuery,
@@ -355,6 +372,7 @@ class WebSearchServiceTest {
     }
   }
 
+  /** {@code respondWithBraveUniqueResults} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void respondWithBraveUniqueResults(
       HttpExchange exchange,
       AtomicReference<String> observedQuery,

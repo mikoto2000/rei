@@ -13,17 +13,33 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 
-/** Reflects on saved verification facts, not model statements or inferred failure causes. */
+/**
+ * 目標振り返りのユースケースを実現する。
+ *
+ * <p>Reflects on saved verification facts, not model statements or inferred failure causes.
+ */
 @Service
 public class GoalReflectionService {
+  /** 停止済み。 */
   private static final Set<String> STOPPED =
       Set.of("COMPLETED", "BLOCKED", "FAILED", "PAUSED", "CANCELLED", "WAITING_APPROVAL");
+
+  /** 目標一覧。 */
   private final GoalRepository goals;
+
+  /** 振り返り一覧。 */
   private final GoalReflectionRepository reflections;
+
+  /** 通知の連携先。 */
   private final AgentEventBus bus;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 購読。 */
   private AgentEventBus.Subscription subscription;
 
+  /** 指定された値や利用先を使って、GoalReflectionServiceを初期化する。 */
   public GoalReflectionService(
       GoalRepository goals, GoalReflectionRepository reflections, AgentEventBus bus, Clock clock) {
     this.goals = goals;
@@ -32,11 +48,13 @@ public class GoalReflectionService {
     this.clock = clock;
   }
 
+  /** 要求された処理を開始する。 */
   @PostConstruct
   public synchronized void start() {
     if (subscription == null) subscription = bus.subscribe(this::observe);
   }
 
+  /** 作業の振り返りで利用した資源や登録を解放し、利用を終了する。 */
   @PreDestroy
   public synchronized void close() {
     if (subscription != null) {
@@ -45,6 +63,7 @@ public class GoalReflectionService {
     }
   }
 
+  /** 状況を判断する根拠を得るため、目標振り返りサービスを観測する。 */
   private void observe(AgentEvent source) {
     if (source.type() != AgentEventType.GOAL_UPDATED
         || source.projectId() == null
@@ -53,7 +72,11 @@ public class GoalReflectionService {
     reflect(source, snapshot);
   }
 
-  /** Human backfill after missed delivery/restart; this does not re-run or re-verify a Goal. */
+  /**
+   * 判断に必要な情報を集め、後続の処理へ渡す。
+   *
+   * <p>Human backfill after missed delivery/restart; this does not re-run or re-verify a Goal.
+   */
   public GoalReflectionRepository.Item collect(String project, String id) {
     var goal = goals.get(project, id);
     if (!STOPPED.contains(goal.status()))
@@ -84,6 +107,7 @@ public class GoalReflectionService {
         snapshot);
   }
 
+  /** 作業の振り返りで用いるreflectを返す。 */
   private GoalReflectionRepository.Item reflect(AgentEvent source, GoalLifecyclePayload snapshot) {
     var goal = goals.get(source.projectId(), snapshot.goalId());
     var attempt =

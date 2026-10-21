@@ -8,9 +8,16 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Pure timeout validation before approval, process inspection, or waiting. */
+/**
+ * ツール利用の権限制御に必要なプロセス待機引数を扱う。
+ *
+ * <p>Pure timeout validation before approval, process inspection, or waiting.
+ */
 public final class ProcessWaitArguments {
+  /** 最大入力文字数。 */
   private static final int MAX_INPUT_CHARS = 1_048_576;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final JsonMapper JSON =
       JsonMapper.builder(
               JsonFactory.builder()
@@ -24,6 +31,8 @@ public final class ProcessWaitArguments {
                   .build())
           .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
           .build();
+
+  /** 案内。 */
   private static final String GUIDANCE =
       "waitForShellProcess: timeoutSeconds は 0〜"
           + DependencyAwaiter.MAX_TIMEOUT_SECONDS
@@ -32,16 +41,20 @@ public final class ProcessWaitArguments {
           + " プロセスの確認・待機は実行していません。同じ processId で待機時間だけを修正してください。"
           + " WAITING なら同じ processId で上限内の待機を再度指定できます。プロセスを起動し直さないでください。";
 
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ProcessWaitArguments() {}
 
+  /** ツール利用の権限制御において、プロセス待機引数への対応可否を返す。 */
   public static boolean supports(String tool) {
     return "waitForShellProcess".equals(tool);
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public static void validate(String tool, String input) {
     if (!supports(tool)) return;
     JsonNode root;
     try {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (input == null || input.isBlank() || input.length() > MAX_INPUT_CHARS)
         throw new IllegalArgumentException();
       root = JSON.readTree(input);

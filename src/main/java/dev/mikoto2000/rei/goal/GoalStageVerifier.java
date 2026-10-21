@@ -7,17 +7,34 @@ import java.util.Map;
 import org.springframework.stereotype.Component;
 
 /**
- * Read-only independent verification, sharing the Goal file and evidence verification contracts.
+ * 目標の達成管理に必要な目標段階確認の窓口を扱う。
+ *
+ * <p>Read-only independent verification, sharing the Goal file and evidence verification contracts.
  */
 @Component
 public final class GoalStageVerifier {
+  /** 目標の達成管理における結果の選択肢。 */
   public enum Result {
+    /** 確認済み。 */
     VERIFIED,
+    /** 条件を満たしていない結果。 */
     UNSATISFIED,
+    /** 不明。 */
     UNKNOWN,
+    /** 拒否済み。 */
     REJECTED
   }
 
+  /**
+   * 目標の達成管理で受け渡す観測内容を表す。
+   *
+   * @param result 結果
+   * @param reason 理由
+   * @param artifactVersions 成果物Versions
+   * @param dependencyVersions 依存条件Versions
+   * @param satisfiedConditions 条件を満たしたかどうか条件一覧
+   * @param totalConditions 合計条件一覧
+   */
   public record Observation(
       Result result,
       String reason,
@@ -25,6 +42,7 @@ public final class GoalStageVerifier {
       Map<String, Long> dependencyVersions,
       int satisfiedConditions,
       int totalConditions) {
+    /** 目標の達成管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Observation(
         Result result,
         String reason,
@@ -33,27 +51,36 @@ public final class GoalStageVerifier {
       this(result, reason, artifacts, dependencies, 0, 0);
     }
 
+    /** 受け取った情報からObservationを作成する。 */
     public Observation {
       artifactVersions = Map.copyOf(artifactVersions);
       dependencyVersions = Map.copyOf(dependencyVersions);
     }
   }
 
+  /** ファイル一覧。 */
   private final GoalCompletionGate.FileChecks files;
+
+  /** 内容の同一性を判断する情報。 */
   private final java.util.function.BiFunction<Path, String, FileGoalVerifier.Fingerprint>
       fingerprints;
+
+  /** 実行可否の判断。 */
   private GoalCompletionGate gate;
 
+  /** 指定された値や利用先を使って、GoalStageVerifierを初期化する。 */
   public GoalStageVerifier(FileGoalVerifier files) {
     this.files = files::verify;
     this.fingerprints = files::fingerprint;
   }
 
+  /** 目標の達成管理に関する設定実行可否の判断を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void configureGate(GoalCompletionGate gate) {
     this.gate = gate;
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   public Observation verify(
       GoalRepository.Goal goal,
       GoalStageRepository.Stage stage,

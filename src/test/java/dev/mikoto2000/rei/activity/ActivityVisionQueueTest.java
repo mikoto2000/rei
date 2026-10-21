@@ -17,21 +17,40 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況画像認識実行待ちの結果と状態の契約を検証するテスト。 */
 class ActivityVisionQueueTest {
+  /** 検証条件を再現するための検証条件。 */
   static class Fixture {
+    /** 検証に使う検証用の設定。 */
     final ActivityProperties p = new ActivityProperties();
+
+    /** 検証に使う時刻。 */
     final ActivityChangeScopeTest.Time time = new ActivityChangeScopeTest.Time();
+
+    /** 検証に使う観測。 */
     final DesktopActivityObserver observer = mock(DesktopActivityObserver.class);
+
+    /** 検証に使う情報の抽出。 */
     final ActivityExtractor extractor = mock(ActivityExtractor.class);
+
+    /** 検証に使う保存先。 */
     final ActivityStore store = mock(ActivityStore.class);
+
+    /** 検証に使うタスク一覧。 */
     final List<Runnable> tasks = new ArrayList<>();
+
+    /** 検証に使う処理の連携。 */
     final ActivityEvidencePipeline pipeline;
+
+    /** 検証に使う前面。 */
     ForegroundWindow foreground = new ForegroundWindow("Firefox", 1, "Mozilla Firefox", "1");
 
+    /** 検証条件に必要な値を受け取り、Fixtureを用意する。 */
     Fixture() throws Exception {
       this(List.of());
     }
 
+    /** 検証条件に必要な値を受け取り、Fixtureを用意する。 */
     Fixture(List<ActivityEvidenceSource> sources) throws Exception {
       p.setEnabled(true);
       p.getDetection().setForegroundCrop(false);
@@ -54,15 +73,18 @@ class ActivityVisionQueueTest {
               sources);
     }
 
+    /** 検証用に、作業状況の把握の操作を実行する。 */
     void run() {
       tasks.removeFirst().run();
     }
 
+    /** {@code change} の条件を再現するため、検証用の操作や状態を扱う。 */
     void change(String title) {
       foreground = new ForegroundWindow("Firefox", 1, "Mozilla Firefox " + title, "1");
     }
   }
 
+  /** 作業状況の把握で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateMetadataAvoidsImagesAndApiUntilRefresh() throws Exception {
     var f = new Fixture();
@@ -81,6 +103,7 @@ class ActivityVisionQueueTest {
     assertEquals(1, f.pipeline.queueMetrics().duplicateSkipped());
   }
 
+  /** 通知を控える期間保持する限定最新およびについて、各対象OS観測内容を維持することを確認する。 */
   @Test
   void cooldownRetainsOnlyLatestAndKeepsEveryOsObservation() throws Exception {
     var f = new Fixture();
@@ -106,6 +129,7 @@ class ActivityVisionQueueTest {
     assertTrue(f.pipeline.queueMetrics().deferred() > 0);
   }
 
+  /** 作業状況の把握で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void inFlightWorkNeverRunsInParallelAndLateResultKeepsOriginalId() throws Exception {
     var f = new Fixture();
@@ -146,6 +170,7 @@ class ActivityVisionQueueTest {
     verify(f.extractor, times(2)).extract(any(), any());
   }
 
+  /** 失敗情報について、別の試行を許可することを確認する。 */
   @Test
   void failureAllowsAnotherAttemptAndTimingsReferenceTheSource() throws Exception {
     var f = new Fixture();
@@ -177,6 +202,7 @@ class ActivityVisionQueueTest {
     assertEquals(15000, f.pipeline.queueMetrics().endToEndMillis());
   }
 
+  /** 繰り返された分析を復元することを確認する。 */
   @Test
   void disablingOptimizationRestoresRepeatedAnalysis() throws Exception {
     var f = new Fixture();
@@ -188,6 +214,7 @@ class ActivityVisionQueueTest {
     verify(f.extractor, times(2)).extract(any(), any());
   }
 
+  /** 対象範囲を維持することを確認する。 */
   @Test
   void fiveMinuteSyntheticComparisonKeepsCoverageAndReducesDuplicateCalls() throws Exception {
     for (boolean enabled : List.of(false, true)) {
@@ -211,6 +238,7 @@ class ActivityVisionQueueTest {
     }
   }
 
+  /** 作業状況の把握で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void imageTimestampIsCaptureCompletionAndOldJsonRemainsReadable() throws Exception {
     var f = new Fixture();
@@ -247,6 +275,7 @@ class ActivityVisionQueueTest {
     assertEquals(VisionDiagnostics.State.ATTEMPTED_FAILED, old.state());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void intervalIsMeasuredBetweenStartsRatherThanCompletions() throws Exception {
     var f = new Fixture();
@@ -275,6 +304,7 @@ class ActivityVisionQueueTest {
     assertEquals(30, Duration.between(starts.getFirst(), starts.getLast()).getSeconds());
   }
 
+  /** 作業状況の把握で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void contextCaptureTimeDoesNotCauseDuplicatesButRevisionAndGitChangesDo() throws Exception {
     var revision = new java.util.concurrent.atomic.AtomicLong(1);
@@ -311,6 +341,7 @@ class ActivityVisionQueueTest {
     verify(f.observer, times(3)).capture();
   }
 
+  /** 作業状況の把握で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateKeepsClassificationAsBoundedHistoricalInferenceWithSourceId() throws Exception {
     var f = new Fixture();

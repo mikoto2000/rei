@@ -14,7 +14,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
+/** 取得対象範囲の結果と状態の契約を検証するテスト。 */
 class FetchScopeTest {
+  /** 外部情報の取得の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void toolContextCancellationAndNestedScopesAreRestored() {
     var run = mock(RunExecutionContext.class);
@@ -31,6 +33,7 @@ class FetchScopeTest {
     assertDoesNotThrow(() -> FetchScope.current().check());
   }
 
+  /** ツールデータ形式一覧について、引数を保持することを確認する。 */
   @Test
   void toolSchemasPreserveArgumentsAndHideExecutionContext() {
     var tools =

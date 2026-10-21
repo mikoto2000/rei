@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import org.junit.jupiter.api.Test;
 
+/** 失敗情報メッセージ一覧の結果と状態の契約を検証するテスト。 */
 class FailureMessagesTest {
+  /** 実行状況の通知で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void showsNestedCauseAndMasksSecretsBeforeClipping() {
     assertEquals(
@@ -17,6 +19,7 @@ class FailureMessagesTest {
     assertEquals(600, FailureMessages.text("a".repeat(900)).length());
   }
 
+  /** 空白のメッセージについて、例外種別を利用することを確認する。 */
   @Test
   void blankMessageUsesExceptionTypeAndCyclesTerminate() {
     var first = new IllegalStateException();

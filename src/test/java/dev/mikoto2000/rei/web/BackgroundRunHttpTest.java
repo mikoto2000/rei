@@ -20,8 +20,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/** バックグラウンド実行HTTP通信の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class BackgroundRunHttpTest {
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import({
     WebApiIntegrationTest.Config.class,
@@ -29,6 +31,7 @@ class BackgroundRunHttpTest {
     BackgroundRunController.class
   })
   static class Config {
+    /** {@code summaries} の条件を再現するための補助情報を返す。 */
     @Bean
     WebPageSummarizerService summaries() {
       var service = mock(WebPageSummarizerService.class);
@@ -37,6 +40,7 @@ class BackgroundRunHttpTest {
       return service;
     }
 
+    /** {@code images} の条件を再現するための補助情報を返す。 */
     @Bean
     ImageGenerationService images() {
       var service = mock(ImageGenerationService.class);
@@ -48,14 +52,17 @@ class BackgroundRunHttpTest {
       return service;
     }
 
+    /** {@code properties} の条件を再現するための補助情報を返す。 */
     @Bean
     ImageProperties properties() {
       return new ImageProperties();
     }
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** Web APIによる操作で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void authenticatedBackgroundRunsReuseRealSseAndRunContracts() throws Exception {
     var app = new SpringApplication(Config.class);

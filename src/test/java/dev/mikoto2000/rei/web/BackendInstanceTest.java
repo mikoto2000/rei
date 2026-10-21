@@ -10,9 +10,12 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** バックエンド起動単位の識別子の結果と状態の契約を検証するテスト。 */
 class BackendInstanceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void publishesOnlyAfterReadyAndRemovesOnlyOwnEndpoint() throws Exception {
     var store = new BackendEndpointStore(root);

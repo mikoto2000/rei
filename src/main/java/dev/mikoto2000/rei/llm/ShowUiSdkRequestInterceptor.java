@@ -7,8 +7,13 @@ import okhttp3.RequestBody;
 import okhttp3.Response;
 import okio.Buffer;
 
-/** Applies ShowUI's wire format to both synchronous and streaming SDK requests. */
+/**
+ * 用途に応じたモデル利用に必要な表示表示Sdk要求Interceptorを扱う。
+ *
+ * <p>Applies ShowUI's wire format to both synchronous and streaming SDK requests.
+ */
 public final class ShowUiSdkRequestInterceptor implements Interceptor {
+  /** 用途に応じたモデル利用で用いるinterceptを返す。 */
   @Override
   public Response intercept(Chain chain) throws IOException {
     var request = chain.request();

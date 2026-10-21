@@ -6,14 +6,18 @@ import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+/** 論文をモデルから呼び出せるツールとして提供する。 */
 @Component
 public class PaperTools {
+  /** サービス。 */
   private final PaperResearchService service;
 
+  /** 指定された値や利用先を使って、PaperToolsを初期化する。 */
   public PaperTools(PaperResearchService service) {
     this.service = service;
   }
 
+  /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */
   private Object safe(Supplier<Object> action) {
     try {
       service.library.enabled();
@@ -32,6 +36,7 @@ public class PaperTools {
     }
   }
 
+  /** 依頼に関連する情報を得るため、論文一覧を検索する。 */
   @Tool(
       description =
           "Search academic papers using OpenAlex, with Crossref fallback. Converts natural-language"
@@ -45,6 +50,7 @@ public class PaperTools {
         });
   }
 
+  /** 論文の調査と整理で参照する論文を返す。 */
   @Tool(
       description =
           "Get saved paper metadata by session result number or permanent UUID. enrich=true"
@@ -58,6 +64,7 @@ public class PaperTools {
         });
   }
 
+  /** 依頼に関連する情報を得るため、論文保管資料を検索する。 */
   @Tool(
       description =
           "Search previously saved/read papers in Paper Library by title, author, abstract, venue,"
@@ -68,6 +75,7 @@ public class PaperTools {
             PaperViews.listing(service.library.search(query, limit, PaperOperation.from(context))));
   }
 
+  /** 論文の調査と整理で参照する論文内容を返す。 */
   @Tool(
       description =
           "Download/parse a public paper if possible. Returns availability and section index only,"
@@ -81,6 +89,7 @@ public class PaperTools {
         });
   }
 
+  /** 論文の調査と整理で参照する論文節を返す。 */
   @Tool(
       description =
           "Retrieve a single paper section by zero-based index from getPaperContent, with character"
@@ -110,6 +119,7 @@ public class PaperTools {
         });
   }
 
+  /** 利用者が要点を把握できるよう、論文を要約する。 */
   @Tool(
       description =
           "Summarize a paper in Japanese with validated evidence. Modes QUICK/STANDARD/DETAILED."
@@ -132,6 +142,7 @@ public class PaperTools {
         });
   }
 
+  /** 利用者が内容を読めるよう、論文を翻訳する。 */
   @Tool(
       description =
           "Translate paper sections into Japanese; TECHNICAL default, or LITERAL/NATURAL. Empty"
@@ -152,6 +163,7 @@ public class PaperTools {
         });
   }
 
+  /** 論文の調査と整理で参照する論文翻訳文書の分割単位を返す。 */
   @Tool(
       description =
           "Read a saved Japanese translation chunk (zero-based index), at most 4000 characters from"

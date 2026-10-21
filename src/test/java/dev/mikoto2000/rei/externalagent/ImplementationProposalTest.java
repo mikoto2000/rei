@@ -11,9 +11,12 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 実装提案の結果と状態の契約を検証するテスト。 */
 class ImplementationProposalTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 外部エージェントへの委譲で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void sharedTextTransactionRestoresDisposableTreeWhenSecondPublishFails() throws Exception {
     Files.writeString(root.resolve("A.txt"), "before");
@@ -44,10 +47,12 @@ class ImplementationProposalTest {
     }
   }
 
+  /** {@code sha} の条件を再現するための補助情報を返す。 */
   String sha(String text) {
     return ImplementationProposal.sha256(text.getBytes(java.nio.charset.StandardCharsets.UTF_8));
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void validatesAllBaselinesBeforeWritingAnyFile() throws Exception {
     Files.writeString(root.resolve("A.txt"), "before\n");
@@ -68,6 +73,7 @@ class ImplementationProposalTest {
     assertEquals("next\n", Files.readString(root.resolve("B.txt")));
   }
 
+  /** 外部エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void excludesUnexpectedTraversalSecretDuplicateBinaryAndOversizedChanges() throws Exception {
     Files.writeString(root.resolve("A.txt"), "before");
@@ -95,6 +101,7 @@ class ImplementationProposalTest {
     assertEquals("before", Files.readString(root.resolve("A.txt")));
   }
 
+  /** 未完了のを受け付けないことを確認する。 */
   @Test
   void rejectsIncompleteOrExtraStructuredFields() throws Exception {
     var mapper = new com.fasterxml.jackson.databind.ObjectMapper();

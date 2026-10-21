@@ -8,11 +8,19 @@ package dev.mikoto2000.rei.llm;
  */
 public final class ConversationIds {
 
+  /** チャット接頭辞。 */
   public static final String CHAT_PREFIX = "chat:";
+
+  /** Bluesky返信接頭辞。 */
   public static final String BLUESKY_REPLY_PREFIX = "bluesky-reply:";
+
+  /** BlueskyMANUAL接頭辞。 */
   public static final String BLUESKY_MANUAL_PREFIX = "bluesky-manual:";
+
+  /** ツール接頭辞。 */
   public static final String TOOL_PREFIX = "tool:";
 
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ConversationIds() {}
 
   /**
@@ -24,6 +32,7 @@ public final class ConversationIds {
     return CHAT_PREFIX + "main";
   }
 
+  /** 用途に応じたモデル利用で用いる現在チャットを返す。 */
   public static String currentChat() {
     var execution = dev.mikoto2000.rei.core.execution.ExecutionScope.current();
     if (execution != null) return execution.conversationId();
@@ -55,6 +64,7 @@ public final class ConversationIds {
     return TOOL_PREFIX + requireNonBlank(toolName, "tool");
   }
 
+  /** 条件を満たさない操作を拒否するため、以外空白の前提条件を確認する。 */
   private static String requireNonBlank(String value, String fallback) {
     if (value == null || value.isBlank()) {
       throw new IllegalArgumentException(fallback + " conversation id must not be blank");

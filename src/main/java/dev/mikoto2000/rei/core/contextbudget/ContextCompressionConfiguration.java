@@ -10,12 +10,14 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/** 文脈圧縮の構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({
   ContextCompressionProperties.class,
   ToolResultDeliveryProperties.class
 })
 public class ContextCompressionConfiguration {
+  /** モデルへ渡す文脈の管理で用いるレビュー対象範囲記録台帳を返す。 */
   @Bean
   public dev.mikoto2000.rei.review.ReviewCoverageLedger reviewCoverageLedger(
       @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
@@ -23,6 +25,7 @@ public class ContextCompressionConfiguration {
         new dev.mikoto2000.rei.storage.StorageDatabase(java.nio.file.Path.of(directory)));
   }
 
+  /** モデルへ渡す文脈の管理で用いるレビューツール一覧を返す。 */
   @Bean
   @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
       name = "rei.tool-result-delivery.review-ledger.enabled",
@@ -36,17 +39,20 @@ public class ContextCompressionConfiguration {
     return new dev.mikoto2000.rei.review.ReviewTools(ledger, raw, files::getObject, estimator);
   }
 
+  /** モデルへ渡す文脈の管理で用いる文脈トークン概算を返す。 */
   @Bean
   public TokenEstimator contextTokenEstimator() {
     return TokenEstimator.tokenizerAware();
   }
 
+  /** モデルへ渡す文脈の管理で用いる会話要約保存と検索の窓口を返す。 */
   @Bean
   public ConversationSummaryRepository conversationSummaryRepository(
       @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
     return new ConversationSummaryRepository(java.nio.file.Path.of(directory));
   }
 
+  /** モデルへ渡す文脈の管理で用いる元のツールの結果保存先を返す。 */
   @Bean
   public RawToolResultStore rawToolResultStore(
       @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory,
@@ -61,12 +67,14 @@ public class ContextCompressionConfiguration {
         delivery.getRawCacheMaxBytes());
   }
 
+  /** モデルへ渡す文脈の管理で用いる元のツールの結果ツール一覧を返す。 */
   @Bean
   public RawToolResultTools rawToolResultTools(
       RawToolResultStore store, TokenEstimator estimator, ToolResultDeliveryProperties delivery) {
     return new RawToolResultTools(store, estimator, delivery.getPageTargetTokens());
   }
 
+  /** モデルへ渡す文脈の管理で用いる文脈履歴対話の補助を返す。 */
   @Bean
   public ContextHistoryAdvisor contextHistoryAdvisor(
       ConversationTurnStore turns,
@@ -76,6 +84,7 @@ public class ContextCompressionConfiguration {
     return new ContextHistoryAdvisor(turns, memory, summaries, logs);
   }
 
+  /** モデルへ渡す文脈の管理で用いる文脈文脈の組み立てを返す。 */
   @Bean
   public ContextAssembler contextAssembler(
       ContextCompressionProperties properties,

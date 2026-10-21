@@ -29,10 +29,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+/** タスク受付窓口の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class TaskControllerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 利用既存の実行境界条件を書き込むことを確認する。 */
   @Test
   void listSubmitExactOwnerControlsStaleTargetsAndStrictWritesUseExistingRunBoundary()
       throws Exception {

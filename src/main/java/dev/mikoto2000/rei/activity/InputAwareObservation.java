@@ -6,26 +6,44 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.Objects;
 
-/** Successful persistence owns the baseline. All state transitions share one monitor. */
+/**
+ * 作業状況の把握に必要な入力Aware観測内容を扱う。
+ *
+ * <p>Successful persistence owns the baseline. All state transitions share one monitor.
+ */
 final class InputAwareObservation {
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 実行間隔／最大。 */
   private final int interval, maximum;
+
+  /** 確認済み／比較の基準／試行。 */
   private Lightweight checked, baseline, attempt;
+
+  /** 確認済み日時／保存済み日時。 */
   private Instant checkedAt, savedAt;
+
+  /** 使用中／forced／保存済み。 */
   private boolean busy, forced = true, saved;
+
+  /** 改訂番号／試行改訂番号。 */
   private long revision, attemptRevision;
 
+  /** 指定された値や利用先を使って、InputAwareObservationを初期化する。 */
   InputAwareObservation(Clock clock, int interval, int maximum) {
     this.clock = clock;
     this.interval = interval;
     this.maximum = maximum;
   }
 
+  /** 作業状況の把握に関する強制を処理する。 */
   synchronized void force() {
     forced = true;
     revision++;
   }
 
+  /** 作業状況の把握において、開始に該当するか判定する。 */
   synchronized boolean begin(Lightweight current) {
     if (busy) {
       if (changed(attempt, current)) force();
@@ -76,14 +94,17 @@ final class InputAwareObservation {
     return true;
   }
 
+  /** 作業状況の把握に関する保存済みを処理する。 */
   synchronized void saved() {
     if (busy) saved = true;
   }
 
+  /** 作業状況の把握において、lightweight試行に該当するか判定する。 */
   synchronized boolean lightweightAttempt() {
     return busy && attempt != null;
   }
 
+  /** 作業状況の把握に関する終了を処理する。 */
   synchronized void end(Lightweight current) {
     if (!busy) return;
     if (saved && attemptRevision == revision) {
@@ -95,6 +116,7 @@ final class InputAwareObservation {
     attempt = null;
   }
 
+  /** 作業状況の把握において、変更済みに該当するか判定する。 */
   private static boolean changed(Lightweight a, Lightweight b) {
     return a == null
         || b == null

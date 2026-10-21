@@ -7,11 +7,17 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 
-/** Presentation policy over existing ranks and durations; never reclassifies observations. */
+/**
+ * 日次要約集計区分を利用者が確認できる表示形式へ整える。
+ *
+ * <p>Presentation policy over existing ranks and durations; never reclassifies observations.
+ */
 public final class DailySummaryBucketFormatter {
+  /** 余暇。 */
   private static final Map<String, String> LEISURE =
       Map.of("social", "SNS", "media", "動画・音楽", "shopping", "ショッピング", "gaming", "ゲーム");
 
+  /** 作業状況の把握で用いるredundant表示名一覧を返す。 */
   Set<String> redundantLabels(DailySummaryAggregate a, Bucket b) {
     var hidden = new HashSet<String>();
     for (var entry : LEISURE.entrySet()) {
@@ -37,6 +43,7 @@ public final class DailySummaryBucketFormatter {
     return hidden;
   }
 
+  /** 作業状況の把握において、appearsに該当するか判定する。 */
   private static boolean appears(Bucket b, String category, String shortLabel) {
     return b.categorySeconds().getOrDefault(category, 0L) > 0
         || b.secondary().contains(shortLabel)
@@ -44,9 +51,11 @@ public final class DailySummaryBucketFormatter {
         || b.secondaryThemes().contains(categoryLabel(category));
   }
 
+  /** 受け取った情報を、表示や受け渡しに適した形式へ整える。 */
   public String format(DailySummaryAggregate a, Bucket b) {
     var hidden = redundantLabels(a, b);
     var work = b.workThemes().stream().limit(2).toList();
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (String.join("、", work).length() > 130) work = work.subList(0, 1);
     var nonWork =
         DailySummaryAggregator.top(b.categorySeconds(), 1).stream()

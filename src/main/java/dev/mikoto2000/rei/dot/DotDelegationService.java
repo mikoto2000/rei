@@ -12,13 +12,22 @@ import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 
+/** 状態表示委譲のユースケースを実現する。 */
 @Service
 public class DotDelegationService {
+  /** リポジトリ。 */
   final DotRequestRepository repo;
+
+  /** この機能の動作設定。 */
   final DotProperties properties;
+
+  /** プロジェクト一覧。 */
   final ProjectService projects;
+
+  /** 会話一覧。 */
   final SessionRepository sessions;
 
+  /** 指定された値や利用先を使って、DotDelegationServiceを初期化する。 */
   public DotDelegationService(
       DotRequestRepository repo,
       DotProperties properties,
@@ -30,6 +39,7 @@ public class DotDelegationService {
     this.sessions = sessions;
   }
 
+  /** 利用者の状態表示で用いるプロジェクトを返す。 */
   ProjectContext project(String id) {
     if (!properties.enabled()) throw new DotException("FEATURE_DISABLED");
     if (!properties.allowedProjects().contains(id)) throw new DotException("NOT_FOUND");
@@ -39,21 +49,40 @@ public class DotDelegationService {
         .orElseThrow(() -> new DotException("NOT_FOUND"));
   }
 
+  /** 実行環境実行一覧。 */
   private dev.mikoto2000.rei.application.run.RunRegistry runtimeRuns;
+
+  /** 依存条件一覧。 */
   private dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository dependencies;
+
+  /** 再開用の記録保存と検索の窓口。 */
   private dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpointRepository;
+
+  /** 判断基準。 */
   private dev.mikoto2000.rei.core.policy.ToolPermissionPolicy policy;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private java.time.Clock clock = java.time.Clock.systemUTC();
 
+  /**
+   * 利用者の状態表示で受け渡す利用枠を表す。
+   *
+   * @param owner 所有者
+   * @param categories 分類一覧
+   * @param expires 有効期限
+   * @param inputHash 入力ハッシュ値
+   */
   private record Permit(
       dev.mikoto2000.rei.core.chat.AgentRunContext owner,
       Set<String> categories,
       Instant expires,
       String inputHash) {}
 
+  /** 利用枠。 */
   private final java.util.concurrent.ConcurrentMap<String, Permit> permits =
       new java.util.concurrent.ConcurrentHashMap<>();
 
+  /** 利用者の状態表示に関する実行環境を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void runtime(
       org.springframework.beans.factory.ObjectProvider<
@@ -67,6 +96,7 @@ public class DotDelegationService {
     configureRuntime(runs.getIfAvailable(), dependencies, checkpoints, policy);
   }
 
+  /** 利用者の状態表示に関する設定実行環境を処理する。 */
   public void configureRuntime(
       dev.mikoto2000.rei.application.run.RunRegistry runs,
       dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository dependencies,
@@ -79,7 +109,9 @@ public class DotDelegationService {
   }
 
   /**
-   * Called only by human Web/Shell admission, never from scheduler/model/MCP callbacks. Restart
+   * 利用者の状態表示に関するauthorise利用者入力を処理する。
+   *
+   * <p>Called only by human Web/Shell admission, never from scheduler/model/MCP callbacks. Restart
    * drops permits.
    */
   public void authoriseHumanInput(dev.mikoto2000.rei.core.chat.AgentRunContext owner, String text) {
@@ -104,6 +136,7 @@ public class DotDelegationService {
               dev.mikoto2000.rei.conversation.ConversationAdmissionStore.hash(text)));
   }
 
+  /** 利用者の状態表示で用いる要求親を返す。 */
   public Map<String, Object> requestParent(
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution, Map<String, Object> input) {
     if (!properties.parentLlmEnabled()
@@ -203,6 +236,7 @@ public class DotDelegationService {
     }
   }
 
+  /** 利用者の状態表示において、中断に該当するか判定する。 */
   private boolean suspend(
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution,
       List<org.springframework.ai.chat.messages.Message> history) {
@@ -228,11 +262,13 @@ public class DotDelegationService {
     return true;
   }
 
+  /** 処理を継続できる状態に戻すため、状態表示委譲サービスを復旧する。 */
   @jakarta.annotation.PostConstruct
   void recover() {
     repo.recoverAdmissions();
   }
 
+  /** 新たな対象を利用できるよう、利用者を作成する。 */
   public Map<String, Object> createHuman(
       String project, String session, Map<String, Object> input) {
     var owner = project(project);
@@ -261,21 +297,25 @@ public class DotDelegationService {
         requestId);
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<Map<String, Object>> list(String project) {
     project(project);
     return repo.open(project);
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Map<String, Object> get(String project, String id) {
     project(project);
     return repo.status(project, id);
   }
 
+  /** 利用者の状態表示で用いる結果を返す。 */
   public Map<String, Object> result(String project, String id) {
     project(project);
     return repo.result(project, id);
   }
 
+  /** 対象の実行をキャンセルする。 */
   public Map<String, Object> cancel(String project, String id) {
     project(project);
     return repo.cancel(project, id);

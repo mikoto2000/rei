@@ -19,7 +19,9 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 言語モデル時系列作業状況モデルの結果と状態の契約を検証するテスト。 */
 class LlmTemporalActivityModelTest {
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   static ChatResponse response(String text, Integer tokens) {
     return new ChatResponse(
         List.of(new Generation(new AssistantMessage(text))),
@@ -28,6 +30,7 @@ class LlmTemporalActivityModelTest {
             : ChatResponseMetadata.builder().usage(new DefaultUsage(1, tokens - 1)).build());
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void boundedNoToolRequestAccountsActualTokens() throws Exception {
     var chat = mock(ChatModel.class);
@@ -48,6 +51,7 @@ class LlmTemporalActivityModelTest {
     assertTrue(prompt.getValue().getSystemMessage().getText().contains("actor=REI"));
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void missingOrExceededTokensBlocksRetryAndParentBudgetIsInherited() {
     for (Integer tokens : Arrays.asList(null, 300)) {
@@ -69,6 +73,7 @@ class LlmTemporalActivityModelTest {
     }
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rejectsTrailingOrAdditionalFieldsInsteadOfUsingUnstructuredClaims() {
     var chat = mock(ChatModel.class);

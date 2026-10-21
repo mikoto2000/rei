@@ -9,7 +9,9 @@ import dev.mikoto2000.rei.goal.GoalLoopService;
 import dev.mikoto2000.rei.goal.GoalRepository;
 import org.junit.jupiter.api.Test;
 
+/** 目標段階受付窓口の結果と状態の契約を検証するテスト。 */
 class GoalStageControllerTest {
+  /** 段階一覧について、明示的な形式のバージョンを利用することを確認する。 */
   @Test
   void stagesUseExplicitVersionAndNeverDispatchFromReadsOrPlanWrites() {
     var loop = mock(GoalLoopService.class);

@@ -16,7 +16,9 @@ import java.time.Instant;
 import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 
+/** シェルエージェントイベント表示への変換の結果と状態の契約を検証するテスト。 */
 class ShellAgentEventRendererTest {
+  /** ターミナルでの対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void checkpointNotificationsStaySilentAndDoNotInterruptAnswerStreams() {
     var output = new RecordingOutput();
@@ -62,6 +64,7 @@ class ShellAgentEventRendererTest {
     assertEquals(before + " second\n", output.text());
   }
 
+  /** ターミナルでの対話で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void cancellationShowsCodeAndSpecificRedactedReason() {
     var output = new RecordingOutput();
@@ -75,6 +78,7 @@ class ShellAgentEventRendererTest {
         "[agent] cancelled: [approval_denied] approval denied token=[REDACTED]\n", output.text());
   }
 
+  /** ターミナルでの対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void compressionFailureIsVisibleAtStreamBoundary() {
     var output = new RecordingOutput();
@@ -92,6 +96,7 @@ class ShellAgentEventRendererTest {
         output.text().contains("answer\n[context.compression] failed: compression_unavailable\n"));
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void compressionDetailsAndRetryDelayWaitUntilAnswerCompletes() {
     var output = new RecordingOutput();
@@ -120,6 +125,7 @@ class ShellAgentEventRendererTest {
     assertTrue(!output.text().contains("hidden"));
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void oldCompressionPayloadAndBlankSkippedDetailsDoNotAddEmptySuffix() {
     var output = new RecordingOutput();
@@ -132,6 +138,7 @@ class ShellAgentEventRendererTest {
     assertEquals("[context.compression] skipped: retry_cooldown\n", output.text());
   }
 
+  /** ターミナルでの対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void subAgentFailureDisplaysTheSpecificFailureReason() {
     var output = new RecordingOutput();
@@ -160,6 +167,7 @@ class ShellAgentEventRendererTest {
     assertTrue(output.text().contains("原因: SEND_LIMIT: 資料を分割してください。"));
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void distinguishesUnknownEvidenceFromConfirmedNoProgressInDiagnostics() {
     var output = new RecordingOutput();
@@ -180,6 +188,7 @@ class ShellAgentEventRendererTest {
     assertTrue(output.text().contains("reason=REPEATED_READ ledgerStatus=HEALTHY"));
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void defersNotificationsUntilAnswerIsComplete() {
     var output = new RecordingOutput();
@@ -209,6 +218,7 @@ class ShellAgentEventRendererTest {
     assertEquals(completed, output.text());
   }
 
+  /** ターミナルでの対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void flushesDeferredNotificationsOnCancellationWithoutLeakingIntoNextRun() {
     var output = new RecordingOutput();
@@ -231,6 +241,7 @@ class ShellAgentEventRendererTest {
     assertEquals(cancelled + "[agent] running\n", output.text());
   }
 
+  /** ターミナルでの対話で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void rendersVerifiedGoalStateAndBudgets() {
     var output = new RecordingOutput();
@@ -255,6 +266,7 @@ class ShellAgentEventRendererTest {
         output.text());
   }
 
+  /** ターミナルでの対話で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void rendersPersistentAttentionWithReviewCommand() {
     var output = new RecordingOutput();
@@ -279,6 +291,7 @@ class ShellAgentEventRendererTest {
         output.text());
   }
 
+  /** ターミナルでの対話の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void approvalNoticeKeepsTheContinueCommandOnItsOwnLine() {
     var output = new RecordingOutput();
@@ -306,6 +319,7 @@ class ShellAgentEventRendererTest {
     assertTrue(output.text().contains("\n" + command + "\n"));
   }
 
+  /** ターミナルでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void rendersDependencyWaitingSeparatelyFromStagnation() {
     var output = new RecordingOutput();
@@ -319,6 +333,7 @@ class ShellAgentEventRendererTest {
     assertEquals("[waiting] awaiting dependency\n", output.text());
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void rendersShutdownNotification() {
     var output = new RecordingOutput();
@@ -326,6 +341,7 @@ class ShellAgentEventRendererTest {
     assertEquals("[application] グレースフルシャットダウンを開始します。\n", output.text());
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void rendersHistorySearchCountsWithoutMessageContent() {
     var output = new RecordingOutput();
@@ -341,6 +357,7 @@ class ShellAgentEventRendererTest {
                 "[history.search] scope=CURRENT_PROJECT_PREFERRED currentHits=2 crossProjectHits=1 projectsSearched=3"));
   }
 
+  /** ターミナルでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void rendersProgressAndStagnationLifecycle() {
     RecordingOutput output = new RecordingOutput();
@@ -370,13 +387,17 @@ class ShellAgentEventRendererTest {
     assertTrue(output.text().contains("STAGNATED"));
   }
 
+  /** 検証に使うイベント時刻。 */
   private final String eventTime =
       java.time.format.DateTimeFormatter.ofPattern("HH:mm:ss")
           .withZone(java.time.ZoneId.systemDefault())
           .format(Instant.parse("2026-08-23T00:00:00Z"));
+
+  /** 通知された出来事と順序を検証するための記録。 */
   private final AgentEventFactory events =
       new AgentEventFactory(Clock.fixed(Instant.parse("2026-08-23T00:00:00Z"), ZoneOffset.UTC));
 
+  /** ターミナルでの対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rendersRunLifecycleAndFailureSummary() {
     RecordingOutput output = new RecordingOutput();
@@ -390,6 +411,7 @@ class ShellAgentEventRendererTest {
         output.text());
   }
 
+  /** 利用できないトークン数を伝えることを確認する。 */
   @Test
   void reportsUnavailableTokensWhenProviderDoesNotReturnUsage() {
     RecordingOutput output = new RecordingOutput();
@@ -400,6 +422,7 @@ class ShellAgentEventRendererTest {
         output.text());
   }
 
+  /** ターミナルでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void rendersLlmRequestAndResponseLifecycle() {
     RecordingOutput output = new RecordingOutput();
@@ -410,6 +433,7 @@ class ShellAgentEventRendererTest {
         "[llm] request sent (chat)\n[llm] response received (chat, 1234 ms)\n", output.text());
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void matchesDeferredResponsesToInterleavedRequests() {
     RecordingOutput output = new RecordingOutput();
@@ -428,6 +452,7 @@ class ShellAgentEventRendererTest {
                     + "[llm] response received (chat, 30 ms)\n"));
   }
 
+  /** ターミナルでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void defersLlmCompletionUntilTheLastAnswerChunkIsRendered() {
     RecordingOutput output = new RecordingOutput();
@@ -446,6 +471,7 @@ class ShellAgentEventRendererTest {
         output.text());
   }
 
+  /** ターミナルでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void defersLlmCompletionUntilThinkingIsRendered() {
     RecordingOutput output = new RecordingOutput();
@@ -462,6 +488,7 @@ class ShellAgentEventRendererTest {
         output.text());
   }
 
+  /** ターミナルでの対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void flushesPendingCompletionOnFailureWithoutLeakingIntoNextRun() {
     RecordingOutput output = new RecordingOutput();
@@ -482,6 +509,7 @@ class ShellAgentEventRendererTest {
         output.text());
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void flushesPendingCompletionBeforeToolsAndResumesAnswer() {
     RecordingOutput output = new RecordingOutput();
@@ -500,6 +528,7 @@ class ShellAgentEventRendererTest {
         output.text());
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void streamsJapaneseMessageWithoutRepeatingPrefixes() {
     RecordingOutput output = new RecordingOutput();
@@ -511,6 +540,7 @@ class ShellAgentEventRendererTest {
     assertEquals("=== answer (" + eventTime + ") ===\n既存実装を確認します。\n", output.text());
   }
 
+  /** ターミナルでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void streamsThinkingWithAnExplicitHeadingBeforeTheAnswer() {
     RecordingOutput output = new RecordingOutput();
@@ -532,6 +562,7 @@ class ShellAgentEventRendererTest {
         output.text());
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void putsInterleavedToolsOnSeparateLinesAndResumesAssistant() {
     RecordingOutput output = new RecordingOutput();
@@ -549,6 +580,7 @@ class ShellAgentEventRendererTest {
         output.text());
   }
 
+  /** ターミナルでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void rendersToolArgumentsAsOneSafeLineAndOmitsEmptyArguments() {
     RecordingOutput output = new RecordingOutput();
@@ -558,6 +590,7 @@ class ShellAgentEventRendererTest {
     assertEquals("  → writeFile { \"path\": \"memo.txt\" }\n  → listFiles\n", output.text());
   }
 
+  /** ターミナルでの対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rendersToolFailureWithoutInventingMissingDuration() {
     RecordingOutput output = new RecordingOutput();
@@ -567,6 +600,7 @@ class ShellAgentEventRendererTest {
     assertEquals("  ✗ writeFile: denied\n", output.text());
   }
 
+  /** ターミナルでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void rendersSkillSelectionLifecycleAndWarnings() {
     RecordingOutput output = new RecordingOutput();
@@ -589,6 +623,7 @@ class ShellAgentEventRendererTest {
         output.text());
   }
 
+  /** ターミナルでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void rendersSkillRoutingMetricsSelectionAndNoSelection() {
     RecordingOutput output = new RecordingOutput();
@@ -630,6 +665,7 @@ class ShellAgentEventRendererTest {
         output.text());
   }
 
+  /** ターミナルでの対話で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void rendersSkillRoutingFailureAsBoundedSummary() {
     RecordingOutput output = new RecordingOutput();
@@ -646,6 +682,7 @@ class ShellAgentEventRendererTest {
         "[skill] selection failed after 742ms: selection unavailable secret\n", output.text());
   }
 
+  /** ターミナルでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void rendersSkillCandidateShadowEvaluationCompactly() {
     RecordingOutput output = new RecordingOutput();
@@ -669,6 +706,7 @@ class ShellAgentEventRendererTest {
         "[skill-candidate] 42 -> 2 skills (4ms), actual=rspress, top5=hit\n", output.text());
   }
 
+  /** ターミナルでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void rendersWorkingSetItemChangesWithExistingReasons() {
     RecordingOutput output = new RecordingOutput();
@@ -683,6 +721,7 @@ class ShellAgentEventRendererTest {
         output.text());
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void rendersWorkingSetItemsWithoutInventingAReasonAndTruncatesLongReasons() {
     RecordingOutput output = new RecordingOutput();
@@ -696,6 +735,7 @@ class ShellAgentEventRendererTest {
     assertTrue(lines[1].length() <= 170);
   }
 
+  /** ターミナルでの対話で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void rendersWorkingSetSearchLifecycleAsCompactSummaries() {
     RecordingOutput output = new RecordingOutput();
@@ -710,6 +750,7 @@ class ShellAgentEventRendererTest {
         output.text());
   }
 
+  /** ターミナルでの対話で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void rendersWorkingSetContextInjectionAsCompactSummary() {
     RecordingOutput output = new RecordingOutput();
@@ -719,6 +760,7 @@ class ShellAgentEventRendererTest {
     assertEquals("[working-set] injected 2 items into context (427 chars)\n", output.text());
   }
 
+  /** ターミナルでの対話で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void rendersAdditionalOperationalEventsAsCompactSummaries() {
     RecordingOutput output = new RecordingOutput();
@@ -763,6 +805,7 @@ class ShellAgentEventRendererTest {
         output.text());
   }
 
+  /** ターミナルでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void rendersMemoryConsolidationSuggestion() {
     RecordingOutput output = new RecordingOutput();
@@ -772,6 +815,7 @@ class ShellAgentEventRendererTest {
     assertEquals("[memory] 記憶整理を実行することをお勧めします。/memory consolidate を実行してください。\n", output.text());
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void rendersTopicEventsAndUnknownEventsDoNotBreakRenderer() {
     RecordingOutput output = new RecordingOutput();
@@ -883,6 +927,7 @@ class ShellAgentEventRendererTest {
         output.text());
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void rendersTopicSummaryWithoutFillingShellDuringIdleCooldown() {
     RecordingOutput output = new RecordingOutput();
@@ -905,19 +950,25 @@ class ShellAgentEventRendererTest {
     assertEquals("", output.text());
   }
 
+  /** 検証条件を再現するためのRecording出力。 */
   private static final class RecordingOutput implements ShellEventOutput {
+    /** 検証に使う値。 */
     private final StringBuilder value = new StringBuilder();
 
+    /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
     public void print(String text) {
       value.append(text);
     }
 
+    /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
     public void println(String text) {
       value.append(text).append('\n');
     }
 
+    /** 検証で保留している出力の確定を扱う。 */
     public void flush() {}
 
+    /** {@code text} の条件を再現するための補助情報を返す。 */
     String text() {
       return value.toString();
     }

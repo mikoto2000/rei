@@ -12,7 +12,9 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+/** 並行実行権限の結果と状態の契約を検証するテスト。 */
 class ConcurrentRunPermissionTest {
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void readOnlyAuthorityCannotBeEscalatedByDisabledPolicyOrConfiguredShellCapability() {
     var policy =
@@ -42,6 +44,7 @@ class ConcurrentRunPermissionTest {
           .isInstanceOf(ToolPermissionException.class);
   }
 
+  /** ツール利用の権限制御で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void conversationCannotUseEvenReadToolsButExclusiveRunsRetainConfiguredPolicy() {
     var guard =

@@ -8,15 +8,30 @@ import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.ErrorInformation;
 import java.util.function.Predicate;
 
+/** 実行のユースケースを実現する。 */
 public class RunService implements AutoCloseable {
+  /** 登録台帳。 */
   private final RunRegistry registry;
+
+  /** 通知の連携先。 */
   private final AgentEventBus bus;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** キャンセル。 */
   private final CommandCancellationService cancellation;
+
+  /** キャンセル待機中。 */
   private final Predicate<String> cancelQueued;
+
+  /** 購読。 */
   private final AgentEventBus.Subscription subscription;
+
+  /** 待機中キャンセル。 */
   private final java.util.Map<String, Runnable> queuedCancellation = new java.util.HashMap<>();
 
+  /** 通知に応じて状態や表示を更新するため、待機中キャンセルを受け付ける。 */
   public void onQueuedCancellation(String runId, Runnable cancelled) {
     synchronized (monitor()) {
       if (registry.get(runId).status() != RunStatus.QUEUED
@@ -26,16 +41,19 @@ public class RunService implements AutoCloseable {
     }
   }
 
+  /** 実行の受付と状態管理に関する記憶の削除待機中キャンセルを処理する。 */
   public void forgetQueuedCancellation(String runId) {
     synchronized (monitor()) {
       queuedCancellation.remove(runId);
     }
   }
 
+  /** 実行の受付と状態管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public RunService(RunRegistry registry) {
     this(registry, null, null, null, null);
   }
 
+  /** 指定された値や利用先を使って、RunServiceを初期化する。 */
   public RunService(
       RunRegistry registry,
       AgentEventBus bus,
@@ -50,10 +68,12 @@ public class RunService implements AutoCloseable {
     subscription = bus == null ? null : bus.subscribe(this::onEvent);
   }
 
+  /** 実行の受付と状態管理で用いる排他制御を返す。 */
   private Object monitor() {
     return bus == null ? registry : bus;
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public RunSnapshot get(String runId) {
     synchronized (monitor()) {
       purgeExpired();
@@ -61,12 +81,14 @@ public class RunService implements AutoCloseable {
     }
   }
 
+  /** 実行の受付と状態管理において、復元済みに該当するか判定する。 */
   public boolean restored(String runId) {
     synchronized (monitor()) {
       return registry.restored(runId);
     }
   }
 
+  /** 実行の受付と状態管理に関する保持期限を過ぎた情報の削除期限切れを処理する。 */
   public void purgeExpired() {
     synchronized (monitor()) {
       var expired = registry.purgeExpired();
@@ -78,9 +100,19 @@ public class RunService implements AutoCloseable {
     }
   }
 
+  /**
+   * 実行の受付と状態管理で受け渡すキャンセル結果を表す。
+   *
+   * @param accepted 受付済み
+   * @param run 実行
+   */
   public record CancellationResult(boolean accepted, RunSnapshot run) {}
 
-  /** Pending input cancellation must never turn into cancellation of already executing work. */
+  /**
+   * 利用者が不要とした実行を止めるため、待機中限定をキャンセルする。
+   *
+   * <p>Pending input cancellation must never turn into cancellation of already executing work.
+   */
   public CancellationResult cancelQueuedOnly(String runId) {
     Runnable notify;
     CancellationResult result;
@@ -105,6 +137,7 @@ public class RunService implements AutoCloseable {
     return result;
   }
 
+  /** 対象の実行をキャンセルする。 */
   public CancellationResult cancel(String runId) {
     Runnable notify = null;
     CancellationResult result;
@@ -134,6 +167,7 @@ public class RunService implements AutoCloseable {
     return result;
   }
 
+  /** 状態の変化を利用先へ伝えるため、キャンセルを通知する。 */
   private void notifyCancellation(Runnable notify) {
     if (notify != null)
       try {
@@ -144,7 +178,11 @@ public class RunService implements AutoCloseable {
       }
   }
 
-  /** Invoked inside the project executor, and returns only after runner cleanup. */
+  /**
+   * 要求された処理を実行する。
+   *
+   * <p>Invoked inside the project executor, and returns only after runner cleanup.
+   */
   public void execute(AgentRunContext context, Runnable runner) {
     Runnable skipped;
     boolean started;
@@ -170,6 +208,7 @@ public class RunService implements AutoCloseable {
     }
   }
 
+  /** 実行の受付と状態管理に関するfailを処理する。 */
   private void fail(AgentRunContext context, String message) {
     synchronized (monitor()) {
       var failure = new RunFailure("ExecutionFailure", message);
@@ -183,10 +222,13 @@ public class RunService implements AutoCloseable {
   }
 
   /**
-   * For application shortcuts that never entered Chat; transition and event publication are atomic
-   * with cancel.
+   * 終了時の状態を確定するため、未指定終端を完了させる。
+   *
+   * <p>For application shortcuts that never entered Chat; transition and event publication are
+   * atomic with cancel.
    */
   public void finishMissingTerminal(AgentRunContext context, RunStatus terminal) {
+    // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
     if (!terminal.isTerminal()) throw new IllegalArgumentException("Terminal state required");
     synchronized (monitor()) {
       var failure =
@@ -212,6 +254,7 @@ public class RunService implements AutoCloseable {
     }
   }
 
+  /** 通知に応じて状態や表示を更新するため、イベントを受け付ける。 */
   private void onEvent(AgentEvent event) {
     if (event.runId() == null) return;
     RunStatus status =
@@ -236,6 +279,7 @@ public class RunService implements AutoCloseable {
     }
   }
 
+  /** 実行の受付と状態管理で利用した資源や登録を解放し、利用を終了する。 */
   @Override
   public void close() {
     if (subscription != null) subscription.unsubscribe();

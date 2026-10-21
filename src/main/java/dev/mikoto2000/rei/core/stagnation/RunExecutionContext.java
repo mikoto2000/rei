@@ -26,17 +26,34 @@ import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
-/** One user run, explicitly passed in ToolContext across reactive scheduler boundaries. */
+/**
+ * 一回の実行で使った予算と進捗を保持し、実行を継続できるか判断するための文脈。
+ *
+ * <p>One user run, explicitly passed in ToolContext across reactive scheduler boundaries.
+ */
 public class RunExecutionContext {
+  /** 情報の取得限定上限。 */
   private static final int ACQUISITION_ONLY_LIMIT = 32;
+
+  /** 不明判定を猶予する繰り返し回数。 */
   private static final int UNKNOWN_GRACE_ITERATIONS = 16;
 
+  /**
+   * 実行の停滞への対処で受け渡す進捗状態を表す。
+   *
+   * @param information 情報
+   * @param budget 予算
+   * @param acquisitionOnlyIterations 情報の取得限定繰り返し回数
+   * @param unknownIterations 不明繰り返し回数
+   * @param unknownReplanNotices 不明計画の見直し案内の回数
+   */
   public record ProgressState(
       InformationLedger.State information,
       OutputLimitRunBudget.Snapshot budget,
       int acquisitionOnlyIterations,
       int unknownIterations,
       int unknownReplanNotices) {
+    /** 実行の停滞への対処を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public ProgressState(
         InformationLedger.State information,
         OutputLimitRunBudget.Snapshot budget,
@@ -46,6 +63,7 @@ public class RunExecutionContext {
     }
   }
 
+  /** 実行の停滞への対処で用いる進捗状態の記録を返す。 */
   public synchronized ProgressState progressSnapshot() {
     return new ProgressState(
         evaluator.informationSnapshot(),
@@ -55,6 +73,7 @@ public class RunExecutionContext {
         unknownReplanNotices);
   }
 
+  /** 保存済みの状態を引き継ぐため、進捗を復元する。 */
   public synchronized void restoreProgress(ProgressState saved) {
     if (saved == null) {
       evaluator.restoreInformation(null);
@@ -72,15 +91,21 @@ public class RunExecutionContext {
     unknownReplanNotices = saved.unknownReplanNotices();
   }
 
+  /** 継続入力。 */
   private dev.mikoto2000.rei.core.chat.RunContinuation continuation;
+
+  /** 再開メッセージ一覧。 */
   private List<org.springframework.ai.chat.messages.Message> resumeMessages = List.of();
 
+  /** 実行の停滞への対処で使用する継続入力を設定する。 */
   public void setContinuation(dev.mikoto2000.rei.core.chat.RunContinuation continuation) {
     this.continuation = continuation;
   }
 
+  /** 待機中承認ツール一覧。 */
   private dev.mikoto2000.rei.core.chat.RunContinuation.PendingTools pendingApprovalTools;
 
+  /** 保存された状況を引き継いで、中断した作業を再開する。 */
   public void resume(dev.mikoto2000.rei.core.chat.RunContinuation.Saved saved) {
     if (saved != null) {
       budget.restore(saved.budget());
@@ -90,22 +115,26 @@ public class RunExecutionContext {
     }
   }
 
+  /** 実行の停滞への対処で用いる取り出し待機中承認ツール一覧を返す。 */
   public dev.mikoto2000.rei.core.chat.RunContinuation.PendingTools takePendingApprovalTools() {
     var pending = pendingApprovalTools;
     pendingApprovalTools = null;
     return pending;
   }
 
+  /** 実行の停滞への対処において、承認継続入力の有無を判定する。 */
   public boolean hasApprovalContinuation() {
     return continuation instanceof dev.mikoto2000.rei.core.policy.ApprovalContinuationService;
   }
 
+  /** 後続の操作を進められるか判断するため、承認継続入力実行を確認する。 */
   public void checkApprovalContinuationExecution() {
     if (continuation
         instanceof dev.mikoto2000.rei.core.policy.ApprovalContinuationService approvals)
       approvals.checkExecution(runContext);
   }
 
+  /** 実行の停滞への対処において、中断対象承認に該当するか判定する。 */
   public boolean suspendForApproval(
       String approvalId,
       List<org.springframework.ai.chat.messages.Message> history,
@@ -118,27 +147,33 @@ public class RunExecutionContext {
     return false;
   }
 
+  /** 実行の停滞への対処で用いる取り出し再開メッセージ一覧を返す。 */
   public List<org.springframework.ai.chat.messages.Message> takeResumeMessages() {
     var saved = resumeMessages;
     resumeMessages = List.of();
     return saved;
   }
 
+  /** 実行の停滞への対処で用いる予算状態の記録を返す。 */
   public OutputLimitRunBudget.Snapshot budgetSnapshot() {
     return budget.snapshot();
   }
 
+  /** 実行の停滞への対処において、親予約の有無を判定する。 */
   public boolean hasParentReservation() {
     return budget.sharedLlmReservation() != null;
   }
 
+  /** 状態表示待機。 */
   private java.util.function.Predicate<List<org.springframework.ai.chat.messages.Message>> dotWait;
 
+  /** 実行の停滞への対処で使用する状態表示待機を設定する。 */
   public void setDotWait(
       java.util.function.Predicate<List<org.springframework.ai.chat.messages.Message>> wait) {
     this.dotWait = wait;
   }
 
+  /** 実行の停滞への対処に関する中断条件付き待機中を処理する。 */
   public void suspendIfWaiting(List<org.springframework.ai.chat.messages.Message> history) {
     checkActive();
     if (dotWait != null && dotWait.test(history))
@@ -147,14 +182,19 @@ public class RunExecutionContext {
       throw new dev.mikoto2000.rei.core.chat.RunWaitingException();
   }
 
+  /** 照合キー。 */
   public static final String KEY = RunExecutionContext.class.getName();
+
+  /** 権限一覧。 */
   private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
 
+  /** 実行の停滞への対処で使用するツール権限利用条件の確認を設定する。 */
   public void setToolPermissionGuard(
       dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {
     this.permissions = permissions;
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、ツール引数を検証する。 */
   public void validateToolArguments(String name, String input) {
     if (permissions != null) permissions.validateArguments(name, input, runContext);
     else {
@@ -167,6 +207,7 @@ public class RunExecutionContext {
     }
   }
 
+  /** 実行の停滞への対処に関するレポートツール権限失敗情報を処理する。 */
   public void reportToolPermissionFailure(
       String callId, String name, dev.mikoto2000.rei.chatgpt.ChatGptException error) {
     publisher.publishBoundary(
@@ -176,12 +217,15 @@ public class RunExecutionContext {
             .withOwnership(runContext));
   }
 
+  /** 未実行のツール引数について、修正回数の上限内でモデルへ修正理由を返す。 */
   public String argumentCorrection(
       String callId,
       String name,
       dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException error) {
+    // 引数の修正を無制限に繰り返さないよう、実行全体で共有する修正回数の予算を守る。
     if (!budget.tryCorrectArguments())
       throw new ExecutionStoppedException(TOOL_ARGUMENT_REPAIR_EXHAUSTED);
+    // モデルや画面へ修正理由を返す前に、認証情報が説明へ漏れないようにする。
     String guidance = dev.mikoto2000.rei.event.CredentialRedactor.redact(error.getMessage());
     publisher.publish(
         factory
@@ -208,6 +252,7 @@ public class RunExecutionContext {
                 budget.maxArgumentCorrections()));
   }
 
+  /** 後続の操作を進められるか判断するため、ツール権限を確認する。 */
   public void checkToolPermission(String name, String input) {
     if (permissions != null) {
       permissions.check(name, input, runContext);
@@ -222,15 +267,29 @@ public class RunExecutionContext {
           name, dev.mikoto2000.rei.core.policy.PermissionDecision.DENY);
   }
 
+  /** 実行の識別子。 */
   private final String runId;
+
+  /** 予算。 */
   private final OutputLimitRunBudget budget;
+
+  /** 検出の窓口。 */
   private final StagnationDetector detector = new StagnationDetector();
+
+  /** 評価の判断。 */
   private final ProgressEvaluator evaluator;
+
+  /** 生成元。 */
   private final AgentEventFactory factory;
+
+  /** 通知先。 */
   private final AgentEventPublisher publisher;
+
+  /** plannedツール一覧。 */
   private final List<org.springframework.ai.chat.messages.AssistantMessage.ToolCall> plannedTools =
       new ArrayList<>();
 
+  /** 依頼を進める方針を決めるため、ツール一覧の計画を組み立てる。 */
   public void planTools(
       List<org.springframework.ai.chat.messages.AssistantMessage.ToolCall> calls) {
     synchronized (this) {
@@ -256,6 +315,7 @@ public class RunExecutionContext {
     }
   }
 
+  /** 対象を処理する担当を決めるため、ツール識別子の利用権を確保する。 */
   public synchronized String claimToolId(String name, String input) {
     for (int i = 0; i < plannedTools.size(); i++)
       if (plannedTools.get(i).name().equals(name) && plannedTools.get(i).arguments().equals(input))
@@ -263,31 +323,38 @@ public class RunExecutionContext {
     return UUID.randomUUID().toString();
   }
 
+  /** ツールの結果一覧再開用の記録。 */
   private java.util.function.Consumer<List<org.springframework.ai.chat.messages.Message>>
       toolResultsCheckpoint = messages -> {};
 
+  /** 実行の停滞への対処で使用するツールの結果一覧再開用の記録を設定する。 */
   public void setToolResultsCheckpoint(
       java.util.function.Consumer<List<org.springframework.ai.chat.messages.Message>> observer) {
     toolResultsCheckpoint = observer;
   }
 
+  /** 実行の停滞への対処に関するpreserveツールの結果一覧を処理する。 */
   public void preserveToolResults(List<org.springframework.ai.chat.messages.Message> messages) {
     toolResultsCheckpoint.accept(messages);
   }
 
+  /** 実行の停滞への対処で用いる開始永続化されたツールを返す。 */
   public String beginDurableTool(String call, String name, String input) {
     publisher.publishBoundary(
         factory.toolStarted(call, name, "Structured tool execution").withOwnership(runContext));
     return call;
   }
 
+  /** 実行結果を後続の処理へ引き渡すため、永続化されたツールを完了させる。 */
   public void completeDurableTool(String call, String name, String result) {
     String summary = CredentialRedactor.redact(result == null ? "" : result);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (summary.length() > 1000) summary = summary.substring(0, 1000);
     publisher.publishBoundary(
         factory.toolCompleted(call, name, 0, summary).withOwnership(runContext));
   }
 
+  /** 実行の停滞への対処に関するfail永続化されたツールを処理する。 */
   public void failDurableTool(String call, String name, RuntimeException error) {
     publisher.publishBoundary(
         factory
@@ -296,16 +363,25 @@ public class RunExecutionContext {
             .withOwnership(runContext));
   }
 
+  /** 待機中。 */
   private final List<ProgressEvidence> pending = new ArrayList<>();
+
+  /** 依存条件一覧。 */
   private final Map<String, dev.mikoto2000.rei.core.dependency.DependencyState> dependencies =
       new LinkedHashMap<>();
+
+  /** ツール呼び出し一覧／待機中観測内容一覧。 */
   private int toolCalls, waitingObservations;
+
+  /** 繰り返し失敗。 */
   private boolean iterationFailed;
 
+  /** 状況を判断する根拠を得るため、依存条件を観測する。 */
   public synchronized void observeDependency(
       dev.mikoto2000.rei.core.dependency.DependencyObservation observation) {
     checkActive();
     var previous = dependencies.put(observation.id(), observation.state());
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (dependencies.size() > 64) dependencies.remove(dependencies.keySet().iterator().next());
     if (observation.state() == dev.mikoto2000.rei.core.dependency.DependencyState.WAITING)
       waitingObservations++;
@@ -318,61 +394,105 @@ public class RunExecutionContext {
               observation.state().name()));
   }
 
+  /** 直近操作一覧。 */
   private final Deque<String> recentActions = new ArrayDeque<>();
+
+  /** 完了小さな目標。 */
   private final Set<String> completedSubgoals = new HashSet<>();
+
+  /** 直近エラー。 */
   private String lastError = "none";
+
+  /** 直近ツール名。 */
   private String lastToolName = "";
+
+  /** 進捗の更新番号。 */
   private long progressVersion;
+
+  /** 情報の取得限定繰り返し回数。 */
   private int acquisitionOnlyIterations;
+
+  /** 不明繰り返し回数。 */
   private int unknownIterations;
+
+  /** 不明計画の見直し案内の回数。 */
   private int unknownReplanNotices;
+
+  /** 停滞理由。 */
   private String stagnationReason = "no_progress";
+
+  /** 応答生成に使ったトークン数。 */
   private long completionTokens;
+
+  /** 終了済み。 */
   private boolean closed;
+
+  /** キャンセル済み。 */
   private boolean cancelled;
+
+  /** 完了。 */
   private boolean completed;
+
+  /** 繰り返し開始。 */
   private boolean iterationOpen;
+
+  /** 文脈区間。 */
   private long contextSegment;
 
+  /** 実行の停滞への対処で用いる次文脈区間を返す。 */
   public synchronized long nextContextSegment() {
     return ++contextSegment * 1_000_000_000L;
   }
 
+  /** 利用者要求。 */
   private String userRequest = "";
+
+  /** 会話状態の記録。 */
   private List<org.springframework.ai.chat.messages.Message> conversationSnapshot = List.of();
 
+  /** 実行の停滞への対処で使用する会話状態の記録を設定する。 */
   public void setConversationSnapshot(List<org.springframework.ai.chat.messages.Message> messages) {
     conversationSnapshot = List.copyOf(messages);
   }
 
+  /** 実行の停滞への対処で用いる会話状態の記録を返す。 */
   public List<org.springframework.ai.chat.messages.Message> conversationSnapshot() {
     return conversationSnapshot;
   }
 
+  /** 外部委譲使用量。 */
   private boolean externalDelegationUsed;
+
+  /** 外部レビュー結果。 */
   private dev.mikoto2000.rei.externalagent.ExternalAgentResult externalReviewResult;
 
+  /** 実行の停滞への対処で用いる外部レビュー結果を返す。 */
   public synchronized dev.mikoto2000.rei.externalagent.ExternalAgentResult externalReviewResult() {
     return externalReviewResult;
   }
 
+  /** 実行の停滞への対処で使用する外部レビュー結果を設定する。 */
   public synchronized void setExternalReviewResult(
       dev.mikoto2000.rei.externalagent.ExternalAgentResult result) {
     externalReviewResult = result;
   }
 
+  /** 実行の停滞への対処で使用する利用者要求を設定する。 */
   public synchronized void setUserRequest(String request) {
     userRequest = request;
   }
 
+  /** 実行の停滞への対処で用いる利用者要求を返す。 */
   public synchronized String userRequest() {
     return userRequest;
   }
 
+  /** 実行の停滞への対処において、外部委譲使用量に該当するか判定する。 */
   public synchronized boolean externalDelegationUsed() {
     return externalDelegationUsed;
   }
 
+  /** 対象を処理する担当を決めるため、外部委譲の利用権を確保する。 */
   public synchronized boolean claimExternalDelegation() {
     checkActive();
     if (externalDelegationUsed) return false;
@@ -380,19 +500,26 @@ public class RunExecutionContext {
     return true;
   }
 
+  /** 実行文脈。 */
   private dev.mikoto2000.rei.core.chat.AgentRunContext runContext;
 
+  /** 実行の停滞への対処で使用する実行文脈を設定する。 */
   public void setRunContext(dev.mikoto2000.rei.core.chat.AgentRunContext context) {
     this.runContext = context;
   }
 
+  /** 依頼された操作を進めるため、文脈を実行する。 */
   public dev.mikoto2000.rei.core.chat.AgentRunContext runContext() {
     return runContext;
   }
 
+  /** 追加入力一覧。 */
   private dev.mikoto2000.rei.core.chat.UserInterventionQueue interventions;
+
+  /** 追加入力反映済みの内容。 */
   private java.util.function.Consumer<String> interventionApplied = text -> {};
 
+  /** 実行の停滞への対処で使用する追加入力一覧を設定する。 */
   public void setInterventions(
       dev.mikoto2000.rei.core.chat.UserInterventionQueue queue,
       java.util.function.Consumer<String> applied) {
@@ -400,6 +527,7 @@ public class RunExecutionContext {
     this.interventionApplied = applied;
   }
 
+  /** 指定された変更を有効にするため、追加入力一覧を反映する。 */
   public synchronized List<org.springframework.ai.chat.messages.Message> applyInterventions() {
     if (cancelled) return List.of();
     if (interventions == null) return List.of();
@@ -418,6 +546,7 @@ public class RunExecutionContext {
         .toList();
   }
 
+  /** 指定された値や利用先を使って、RunExecutionContextを初期化する。 */
   public RunExecutionContext(
       String runId,
       OutputLimitRunBudget budget,
@@ -431,9 +560,14 @@ public class RunExecutionContext {
     this.publisher = publisher;
   }
 
-  /** Children share the local Run counter as well as its optional durable Goal reservation. */
+  /**
+   * 実行の停滞への対処で用いる共有言語モデル予約を返す。
+   *
+   * <p>Children share the local Run counter as well as its optional durable Goal reservation.
+   */
   public OutputLimitRunBudget.LlmCallReservation sharedLlmReservation() {
     return new OutputLimitRunBudget.LlmCallReservation() {
+      /** 実行の停滞への対処で判断に用いる試行予約の条件を確認する。 */
       public boolean tryReserve() {
         synchronized (RunExecutionContext.this) {
           checkActive();
@@ -441,38 +575,46 @@ public class RunExecutionContext {
         }
       }
 
+      /** 実行の停滞への対処で用いる残量を返す。 */
       public int remaining() {
         synchronized (RunExecutionContext.this) {
           return budget.remainingLlmCalls();
         }
       }
 
+      /** トークン数による実行予算の制限が有効かどうかを返す。 */
       public boolean tokenLimitEnabled() {
         return budget.tokenLimitEnabled();
       }
 
+      /** 使用したトークン数を実行予算へ記録する。 */
       public void recordTotalTokens(Integer tokens) {
         RunExecutionContext.this.recordTotalTokens(tokens);
       }
     };
   }
 
+  /** 実行の停滞への対処で用いるモデル呼び出し予算を返す。 */
   public dev.mikoto2000.rei.llm.ModelCallBudget modelCallBudget() {
     return new dev.mikoto2000.rei.llm.ModelCallBudget() {
+      /** 実行の停滞への対処の操作を実行する。 */
       public void run() {
         consumeNextLlmCall();
       }
 
+      /** トークン数による実行予算の制限が有効かどうかを返す。 */
       public boolean tokenLimitEnabled() {
         return budget.tokenLimitEnabled();
       }
 
+      /** 使用したトークン数を実行予算へ記録する。 */
       public void recordTotalTokens(Integer tokens) {
         RunExecutionContext.this.recordTotalTokens(tokens);
       }
     };
   }
 
+  /** 使用したトークン数を実行予算へ記録する。 */
   public synchronized void recordTotalTokens(Integer tokens) {
     checkActive();
     budget.recordTotalTokens(tokens);
@@ -480,6 +622,7 @@ public class RunExecutionContext {
     if (budget.tokenExceeded()) throw new ExecutionStoppedException(TOKEN_BUDGET_EXCEEDED);
   }
 
+  /** 後続の操作を進められるか判断するため、モデルトークン予算を確認する。 */
   public synchronized void checkModelTokenBudget() {
     checkActive();
     if (budget.tokenExhausted())
@@ -487,28 +630,35 @@ public class RunExecutionContext {
           budget.usageUnknown() ? TOKEN_USAGE_UNKNOWN : TOKEN_BUDGET_EXCEEDED);
   }
 
+  /** 実行の停滞への対処で用いる検出の窓口を返す。 */
   public StagnationDetector detector() {
     return detector;
   }
 
+  /** 実行の停滞への対処で用いる評価の判断を返す。 */
   public ProgressEvaluator evaluator() {
     return evaluator;
   }
 
+  /** 実行の停滞への対処で用いる進捗の更新番号を返す。 */
   public long progressVersion() {
     return progressVersion;
   }
 
+  /** 実行の停滞への対処で用いる応答生成に使ったトークン数を返す。 */
   public synchronized long completionTokens() {
     return completionTokens;
   }
 
+  /** 後から経緯や使用量を確認できるよう、応答生成に使ったトークン数を記録する。 */
   public synchronized void recordCompletionTokens(long tokens) {
     completionTokens += Math.max(0, tokens);
   }
 
   /**
-   * Called only by the executor after a planned subgoal returns SUCCESS, not on arbitrary tool
+   * 実行結果を後続の処理へ引き渡すため、Subgoalを完了させる。
+   *
+   * <p>Called only by the executor after a planned subgoal returns SUCCESS, not on arbitrary tool
    * success.
    */
   public synchronized void completeSubgoal(String goal) {
@@ -526,16 +676,19 @@ public class RunExecutionContext {
     if (recovering) emit(AgentEventType.STAGNATION_RECOVERED, evidence, "progress_resumed");
   }
 
+  /** 実行の停滞への対処で利用した資源や登録を解放し、利用を終了する。 */
   public synchronized void close() {
     closed = true;
     pending.clear();
   }
 
+  /** 実行の停滞への対処に関するexpireを処理する。 */
   public synchronized void expire() {
     close();
     if (interventions != null) interventions.discardAndFinish();
   }
 
+  /** 対象の実行をキャンセルする。 */
   public synchronized void cancel() {
     if (completed) return;
     cancelled = true;
@@ -546,20 +699,24 @@ public class RunExecutionContext {
           .info("Cancelled run {}: discarded {} pending guidance", runId, discarded);
   }
 
+  /** 実行の停滞への対処において、キャンセル済みかどうかを判定する。 */
   public synchronized boolean isCancelled() {
     return cancelled;
   }
 
+  /** 実行結果を後続の処理へ引き渡すため、実行を完了させる。 */
   public synchronized void completeRun() {
     checkActive();
     completed = true;
   }
 
+  /** 後続の操作を進められるか判断するため、活動中を確認する。 */
   public synchronized void checkActive() {
     if (closed || Thread.currentThread().isInterrupted())
       throw new java.util.concurrent.CancellationException();
   }
 
+  /** 実行の停滞への対処に関する開始繰り返しを処理する。 */
   public synchronized void beginIteration() {
     checkActive();
     pending.clear();
@@ -569,6 +726,7 @@ public class RunExecutionContext {
     iterationOpen = true;
   }
 
+  /** 後から経緯や使用量を確認できるよう、ツールを記録する。 */
   public synchronized void recordTool(
       String name, String arguments, String result, ProgressEvaluator.Snapshot before) {
     toolCalls++;
@@ -582,10 +740,12 @@ public class RunExecutionContext {
     }
     detector.recordToolCall(name, action);
     recentActions.addLast(action);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (recentActions.size() > 6) recentActions.removeFirst();
     pending.addAll(evaluator.afterTool(name, arguments, result, before));
   }
 
+  /** 後から経緯や使用量を確認できるよう、失敗情報を記録する。 */
   public synchronized void recordFailure(String name, String arguments, RuntimeException error) {
     iterationFailed = true;
     if (closed) return;
@@ -594,9 +754,11 @@ public class RunExecutionContext {
     detector.recordFailure(error.getClass().getSimpleName(), name);
   }
 
+  /** 実行の停滞への対処に関する終了繰り返しを処理する。 */
   public synchronized void endIteration() {
     if (closed || !iterationOpen) return;
     iterationOpen = false;
+    // 依存条件の成立を待っているだけの反復を、作業の停滞として数えない。
     if (pending.isEmpty()
         && toolCalls > 0
         && toolCalls == waitingObservations
@@ -614,9 +776,10 @@ public class RunExecutionContext {
     boolean acquisitionProgress = pending.stream().anyMatch(ProgressEvidence::acquisitionProgress);
     boolean known = pending.stream().anyMatch(e -> e.kind() != ProgressEvent.INFORMATION_UNKNOWN);
     boolean unknown = pending.stream().anyMatch(e -> e.kind() == ProgressEvent.INFORMATION_UNKNOWN);
+    // 作業状態の変化と情報収集の進展を区別し、読み取りだけで成果が完成したと見なさない。
     if (work) acquisitionOnlyIterations = 0;
-    // Reading another exact range is necessary acquisition, even if one file needs many pages.
-    // Pause this heuristic only: reads do not complete work or replenish any shared Run budget.
+    // 同じファイルでも未確認の範囲を読むことは情報収集の進展として認める。
+    // ただし、作業の完了や共有予算の回復としては扱わない。
     else if (known && !acquisitionProgress) acquisitionOnlyIterations++;
     if (unknown && !known) unknownIterations++;
     else unknownIterations = 0;
@@ -636,7 +799,7 @@ public class RunExecutionContext {
                         : toolCalls > 0 && !known
                             ? "DUPLICATE_OR_UNSUPPORTED_INFORMATION"
                             : "no_progress";
-    // Unknown is neither progress nor a duplicate. Allow bounded diagnosis time before replanning.
+    // 判定不能を進捗や重複と決め付けず、限られた猶予の中で診断を続ける。
     if (!(unknown && !known)) detector.recordIteration(known && !stalledWork);
     for (ProgressEvidence evidence : pending) {
       if (evidence.kind() == ProgressEvent.INFORMATION_UNKNOWN) {
@@ -656,15 +819,18 @@ public class RunExecutionContext {
     pending.clear();
   }
 
+  /** 中断状態とトークン予算を確認し、次のモデル呼び出しに使う回数枠を消費する。 */
   public synchronized void consumeNextLlmCall() {
     checkModelTokenBudget();
     checkActive();
+    // 次のモデル呼び出しを開始する前に、共有する実行予算の残量を確保する。
     if (!budget.tryConsumeLlmCall()) throw new ExecutionStoppedException(LLM_CALL_BUDGET_EXCEEDED);
   }
 
+  /** 停滞や判定不能の状態に応じて方針の見直しを促し、継続できる予算がなければ実行を止める。 */
   public synchronized String requestReplan() {
     if (!detector.isReplanRequested()) {
-      // Without a call ceiling, inconclusive tracking must not allow an endless loop.
+      // 呼び出し回数の上限がない場合も、判定不能のまま無限に実行を続けない。
       if (!budget.llmCallBudgetEnabled()
           && unknownReplanNotices >= 2
           && unknownIterations >= 3 * UNKNOWN_GRACE_ITERATIONS) {
@@ -717,6 +883,7 @@ public class RunExecutionContext {
     return notice;
   }
 
+  /** 実行の停滞への対処に関する通知を処理する。 */
   private void emit(AgentEventType type, ProgressEvidence evidence, String reason) {
     publisher.publish(
         factory

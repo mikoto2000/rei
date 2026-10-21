@@ -25,16 +25,39 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Saved failure -> existing Change Set -> exact human approval -> bounded existing repair cycle.
+ * 診断済み修復のユースケースを実現する。
+ *
+ * <p>Saved failure -> existing Change Set -> exact human approval -> bounded existing repair cycle.
  */
 @Service
 public final class DiagnosedRepairService {
+  /**
+   * 共通の実行基盤で受け渡す要求を表す。
+   *
+   * @param reportPath レポートパス
+   * @param change 変更
+   * @param testCommand 検証コマンド
+   * @param timeoutSeconds タイムアウトの秒数
+   */
   public record Request(
       String reportPath,
       TextChangeSetService.Request change,
       String testCommand,
       Integer timeoutSeconds) {}
 
+  /**
+   * 共通の実行基盤で受け渡す表示内容を表す。
+   *
+   * @param id 識別子
+   * @param status 状態
+   * @param receiptSha256 受付記録内容の同一性を照合するSHA-256ハッシュ
+   * @param diagnosis 診断
+   * @param patchVersion 変更差分形式のバージョン
+   * @param changeSet 変更集合
+   * @param testCommand 検証コマンド
+   * @param timeoutSeconds タイムアウトの秒数
+   * @param verification 確認結果
+   */
   public record View(
       String id,
       String status,
@@ -46,6 +69,20 @@ public final class DiagnosedRepairService {
       int timeoutSeconds,
       SelfPatchRepairService.Result verification) {}
 
+  /**
+   * 共通の実行基盤で受け渡す保存済みを表す。
+   *
+   * @param id 識別子
+   * @param project プロジェクト
+   * @param root 作業ルート
+   * @param session 会話
+   * @param receiptHash 受付記録ハッシュ値
+   * @param diagnosis 診断
+   * @param patchVersion 変更差分形式のバージョン
+   * @param changeHash 変更ハッシュ値
+   * @param testCommand 検証コマンド
+   * @param timeoutSeconds タイムアウトの秒数
+   */
   private record Saved(
       String id,
       String project,
@@ -58,18 +95,43 @@ public final class DiagnosedRepairService {
       String testCommand,
       int timeoutSeconds) {}
 
+  /**
+   * 共通の実行基盤で受け渡す保存済みを表す。
+   *
+   * @param saved 保存済み
+   * @param status 状態
+   * @param result 結果
+   */
   private record Stored(Saved saved, String status, SelfPatchRepairService.Result result) {}
 
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 一連の更新。 */
   private final TransactionTemplate transaction;
+
+  /** 変更一覧。 */
   private final TextChangeSetService changes;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 有効状態。 */
   private final boolean enabled;
+
+  /** 取得記録。 */
   private final SelfPatchReviewService.Capture capture;
+
+  /** 一回の診断・修復のまとまり。 */
   private final SelfPatchRepairService.Cycle cycle;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
+
+  /** 利用権一覧。 */
   private final PersistedReceiptLease leases;
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @org.springframework.beans.factory.annotation.Autowired
   public DiagnosedRepairService(
       @org.springframework.beans.factory.annotation.Qualifier("memoryConsolidationDataSource")
@@ -89,6 +151,7 @@ public final class DiagnosedRepairService {
         new SelfPatchReviewService(shell)::verify);
   }
 
+  /** 指定された値や利用先を使って、DiagnosedRepairServiceを初期化する。 */
   public DiagnosedRepairService(
       DataSource source,
       TextChangeSetService changes,
@@ -109,6 +172,7 @@ public final class DiagnosedRepairService {
     leases = new PersistedReceiptLease(source, "diagnosed_repairs", clock);
   }
 
+  /** 後続の判断で選べる候補を用意するため、診断済み修復サービスを提案する。 */
   public View propose(AgentRunContext owner, Request request) throws IOException {
     requireEnabled();
     requireExclusive(owner);
@@ -187,10 +251,12 @@ public final class DiagnosedRepairService {
     return view(owner, new Stored(saved, "PROPOSED", null));
   }
 
+  /** 対象の状態や内容を調べ、呼び出し元が確認できる情報として返す。 */
   public View inspect(AgentRunContext owner, String id) throws IOException {
     return view(owner, owned(owner, id));
   }
 
+  /** 指定された内容を、現在の対象へ反映する。 */
   public View apply(
       AgentRunContext owner,
       String id,
@@ -234,6 +300,7 @@ public final class DiagnosedRepairService {
       SelfPatchRepairService.Cycle bounded =
           (path, request, budget) -> {
             var observed = capture.capture(path, budget);
+            // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
             if (!observed.complete() || observed.changedFiles().size() > 32)
               throw new IOException("Repair patch exceeds 32 files or is incomplete");
             return cycle.verify(path, request, Math.min(deadline, budget));
@@ -289,6 +356,7 @@ public final class DiagnosedRepairService {
     }
   }
 
+  /** 共通の実行基盤で用いる自分が所有する対象を返す。 */
   private Stored owned(AgentRunContext owner, String id) throws IOException {
     Path root = owner(owner);
     if (id == null || !id.matches("[0-9a-fA-F-]{36}"))
@@ -323,6 +391,7 @@ public final class DiagnosedRepairService {
     return new Stored(stored.saved(), currentStatus, stored.result());
   }
 
+  /** 共通の実行基盤で用いる表示内容を返す。 */
   private View view(AgentRunContext owner, Stored stored) throws IOException {
     var saved = stored.saved();
     return new View(
@@ -337,6 +406,7 @@ public final class DiagnosedRepairService {
         stored.result());
   }
 
+  /** 条件を満たさない操作を拒否するため、失敗情報の前提条件を確認する。 */
   private void requireFailure(TestReportDiagnosisService.Result diagnosis) {
     if (diagnosis.partial()
         || diagnosis.failedTests().isEmpty()
@@ -347,6 +417,7 @@ public final class DiagnosedRepairService {
       throw new IllegalStateException("Failure report is stale or future dated");
   }
 
+  /** 共通の実行基盤で用いる失敗情報識別情報一覧を返す。 */
   private static Set<String> failureIdentities(TestReportDiagnosisService.Result diagnosis) {
     var identities = new TreeSet<String>();
     for (var failure : diagnosis.failedTests())
@@ -354,6 +425,7 @@ public final class DiagnosedRepairService {
     return identities;
   }
 
+  /** 共通の実行基盤で用いる所有者を返す。 */
   private static Path owner(AgentRunContext owner) throws IOException {
     RunCancellation.propagate(null);
     if (owner == null
@@ -363,22 +435,26 @@ public final class DiagnosedRepairService {
     return owner.projectRoot().toRealPath();
   }
 
+  /** 条件を満たさない操作を拒否するため、排他の前提条件を確認する。 */
   private static void requireExclusive(AgentRunContext owner) {
     RunCancellation.propagate(null);
     if (owner == null || owner.mode() != AgentRunContext.Mode.EXCLUSIVE)
       throw new IllegalArgumentException("Exclusive human Run required for repair writes");
   }
 
+  /** 共通の実行基盤で用いるプロジェクトを返す。 */
   private static ProjectContext project(AgentRunContext owner, Path root) {
     return new ProjectContext(owner.projectId(), "", root);
   }
 
+  /** 条件を満たさない操作を拒否するため、有効状態の前提条件を確認する。 */
   private void requireEnabled() {
     if (!enabled)
       throw new IllegalStateException(
           "Enable rei.repair.diagnosed-enabled before diagnosed repair");
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   private static void validate(Request request) {
     if (request == null
         || request.change() == null
@@ -393,10 +469,12 @@ public final class DiagnosedRepairService {
           "Bounded explicit repair, nonsecret test command and 1..60 seconds required");
   }
 
+  /** 共通の実行基盤で用いる期限を返す。 */
   private static long deadline() {
     return System.nanoTime() + Duration.ofSeconds(180).toNanos();
   }
 
+  /** 受け渡し先が扱える形式へ、指定された内容を変換する。 */
   private String encode(Object value) {
     try {
       String encoded = json.writeValueAsString(value);
@@ -408,8 +486,10 @@ public final class DiagnosedRepairService {
     }
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   private <T> T decode(String value, Class<T> type) {
     try {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (value.length() > 131072) throw new IllegalStateException("Repair receipt exceeds bounds");
       return json.readValue(value, type);
     } catch (IOException invalid) {
@@ -417,6 +497,7 @@ public final class DiagnosedRepairService {
     }
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(String value) {
     try {
       return HexFormat.of()

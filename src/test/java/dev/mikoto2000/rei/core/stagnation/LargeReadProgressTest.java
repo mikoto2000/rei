@@ -8,9 +8,12 @@ import java.util.stream.IntStream;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 大きな読み取り進捗の結果と状態の契約を検証するテスト。 */
 class LargeReadProgressTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void newRangeStillCountsAfter1024Lines() throws Exception {
     var evaluator = new ProgressEvaluator(root);
@@ -35,6 +38,7 @@ class LargeReadProgressTest {
         .contains(ProgressEvent.NEW_INFORMATION);
   }
 
+  /** 単一対象範囲ごとの形式のバージョンを利用することを確認する。 */
   @Test
   void manyLargeMarkdownFilesUseOneRangePerVersionAndCountOnlyReturnedLines() throws Exception {
     var e = new ProgressEvaluator(root);
@@ -60,6 +64,7 @@ class LargeReadProgressTest {
             f -> assertThat(f.ranges()).containsExactly(new InformationLedger.LineRange(1, 10001)));
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void byteTruncatedLineAndContinuationSuffixDoNotClaimWholeLine() {
     var e = new ProgressEvaluator(root);
@@ -87,6 +92,7 @@ class LargeReadProgressTest {
         .contains(ProgressEvent.NEW_INFORMATION);
   }
 
+  /** 実行の停滞への対処で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void emptyOutsideRangeAndFailedResultsDoNotRecordRanges() {
     var e = new ProgressEvaluator(root);
@@ -108,6 +114,7 @@ class LargeReadProgressTest {
     assertThat(e.informationSnapshot().files()).isEmpty();
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void fragmentOfFullyObservedLineDoesNotCreateNewInformation() {
     var e = new ProgressEvaluator(root);
@@ -126,6 +133,7 @@ class LargeReadProgressTest {
         .isEmpty();
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void identicalCharactersAtDifferentContinuationOffsetsAreNewObservedFragments() {
     var e = new ProgressEvaluator(root);
@@ -141,6 +149,7 @@ class LargeReadProgressTest {
     assertThat(e.afterTool("readMultiFile", args, next, before)).isEmpty();
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void batchRequestsForSameFileAssociateTheirOwnContinuationOffsets() {
     var e = new ProgressEvaluator(root);

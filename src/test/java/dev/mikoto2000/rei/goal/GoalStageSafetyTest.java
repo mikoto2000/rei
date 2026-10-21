@@ -9,7 +9,9 @@ import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 目標段階安全性の結果と状態の契約を検証するテスト。 */
 class GoalStageSafetyTest extends GoalStageLoopTest {
+  /** 目標の達成管理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void evidenceAttachmentCannotAuthorizeReplayOfUnknownSideEffect() {
     var goal = setup();
@@ -30,6 +32,7 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
     assertEquals("BLOCKED", stages.list(goal).getFirst().state());
   }
 
+  /** 不明上位の実行を受け付けないことを確認する。 */
   @Test
   void rejectsUnknownAncestorBeforeWalkingParentChain() {
     var goal = setup();
@@ -44,6 +47,7 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
         () -> GoalStagePlanValidator.validate(goal, List.of(child, parent)));
   }
 
+  /** 目標の達成管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void restartAfterVerificationCommitSkipsConfirmedStage() {
     var goal = setup();
@@ -62,6 +66,7 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
     var loop =
         loop(
             new GoalLoopService.Gateway() {
+              /** {@code dispatch} の条件を再現するため、検証用の操作や状態を扱う。 */
               public void dispatch(
                   GoalRepository.Claim ignored,
                   String next,
@@ -71,6 +76,7 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
                 complete.accept(done());
               }
 
+              /** 検証用に、目標の達成管理において、入力先Flightかどうかを判定する。 */
               public boolean isInFlight(GoalRepository.Goal ignored) {
                 return false;
               }
@@ -81,6 +87,7 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
     assertEquals(1, stages.attempts(goal).stream().filter(a -> a.stageId().equals("a")).count());
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void stagesCannotExceedWholeGoalTokenLimit() {
     setup();
@@ -114,6 +121,7 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
     assertEquals("TODO", stages.list(goal).get(1).state());
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void changedEvidenceReopensCompletedStagedGoalWithoutResettingBudget() {
     var goal = setup();
@@ -136,6 +144,7 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
     assertEquals(10, goals.get("project", goal.id()).maxRuns());
   }
 
+  /** 目標の達成管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void repairedPredecessorAllowsIndependentRecheckOfKnownFinishedSuccessor() {
     var goal = setup();
@@ -157,6 +166,7 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
     assertEquals("COMPLETED", repaired.run("project", goal.id()).status());
   }
 
+  /** 目標の達成管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellingOwningGoalClosesStageAttemptAtomically() {
     var goal = setup();
@@ -167,6 +177,7 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
     assertEquals("CANCELLED", stages.attempts(goal).getFirst().status());
   }
 
+  /** 目標の達成管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void independentConditionCountsMeasureRepairImprovement() {
     var goal = setup();
@@ -191,6 +202,7 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
     assertEquals(GoalStageVerifier.Result.VERIFIED, after.result());
   }
 
+  /** 目標の達成管理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void splitCapabilityCanBeDisabledForRepairOnlyEvaluation() {
     var goal = setup();
@@ -219,6 +231,7 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
     assertEquals(1, stages.planVersion(goal));
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void finalGoalRepairCannotBypassReverificationOfPreviouslyVerifiedStages() {
     setup();
@@ -245,6 +258,7 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
     assertTrue(files.verify(result).satisfied());
   }
 
+  /** 目標完了について、確認済み定義状態の記録を維持することを確認する。 */
   @Test
   void goalCompletionKeepsTheVerifiedDefinitionSnapshotAcrossConcurrentChanges() {
     setup();
@@ -260,6 +274,7 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
             null);
     files =
         new FileGoalVerifier() {
+          /** 検証用に、要求された条件を満たすことを確認する。 */
           @Override
           public Verification verify(GoalRepository.Goal snapshot) {
             goals.defineCompletion(owner, snapshot.id(), stronger);
@@ -271,6 +286,7 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
     assertEquals("READY", goals.get("project", goal.id()).status());
   }
 
+  /** 目標の達成管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void reconciliationPreservesReservedUsageOfInterruptedStageAttempt() {
     var goal = setup();
@@ -282,11 +298,13 @@ class GoalStageSafetyTest extends GoalStageLoopTest {
     var loop =
         loop(
             new GoalLoopService.Gateway() {
+              /** {@code dispatch} の条件を再現するため、検証用の操作や状態を扱う。 */
               public void dispatch(
                   GoalRepository.Claim ignored,
                   String next,
                   java.util.function.Consumer<GoalLoopService.Outcome> complete) {}
 
+              /** 検証用に、目標の達成管理において、入力先Flightかどうかを判定する。 */
               public boolean isInFlight(GoalRepository.Goal ignored) {
                 return false;
               }

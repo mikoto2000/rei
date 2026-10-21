@@ -12,14 +12,17 @@ import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** リマインダー実行する作業の結果と状態の契約を検証するテスト。 */
 class ReminderJobTest {
 
+  /** リマインダーの管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void runDueRemindersPrintsNarratesAndMarksThemNotified() {
     ReminderService service = org.mockito.Mockito.mock(ReminderService.class);
     SoundNotificationService sound = org.mockito.Mockito.mock(SoundNotificationService.class);
     ReminderJob job =
         new ReminderJob(service, sound) {
+          /** {@code now} の条件を再現するための補助情報を返す。 */
           @Override
           OffsetDateTime now() {
             return OffsetDateTime.of(2026, 3, 27, 9, 0, 0, 0, ZoneOffset.UTC);

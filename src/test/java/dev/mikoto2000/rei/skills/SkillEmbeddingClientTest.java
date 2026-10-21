@@ -11,7 +11,9 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
+/** スキル埋め込み表現クライアントの結果と状態の契約を検証するテスト。 */
 class SkillEmbeddingClientTest {
+  /** スキルの利用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void timeoutCancelsProviderWork() throws Exception {
     var interrupted = new CountDownLatch(1);
@@ -33,6 +35,7 @@ class SkillEmbeddingClientTest {
     }
   }
 
+  /** スキルの利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledSearchNeverResolvesProvider() {
     try (var client =

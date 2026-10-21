@@ -14,8 +14,13 @@ import java.util.EnumSet;
 import java.util.List;
 import java.util.UUID;
 
-/** Metadata only: unknown legacy ownership is never inferred from filenames or mtimes. */
+/**
+ * データ保存の共通処理に必要な参照先移行を扱う。
+ *
+ * <p>Metadata only: unknown legacy ownership is never inferred from filenames or mtimes.
+ */
 final class ReferenceMigration {
+  /** 指定された内容を、現在の対象へ反映する。 */
   static void apply(Connection db, Path root) throws Exception {
     try (var sql = db.createStatement()) {
       sql.execute(
@@ -71,6 +76,7 @@ final class ReferenceMigration {
     importCheckpoints(db, root);
   }
 
+  /** データ保存の共通処理に関する取り込み再開用の記録一覧を処理する。 */
   private static void importCheckpoints(Connection db, Path root) throws Exception {
     Path source = root.resolve("memory-consolidation.db");
     StorageBackup.requireSafePath(source);
@@ -100,6 +106,7 @@ final class ReferenceMigration {
     }
   }
 
+  /** データ保存の共通処理に関する取り込み元のを処理する。 */
   private static void importRaw(Connection db, Path root, Path directory, String scope)
       throws Exception {
     StorageBackup.requireSafePath(directory);
@@ -110,6 +117,7 @@ final class ReferenceMigration {
         EnumSet.noneOf(FileVisitOption.class),
         4,
         new SimpleFileVisitor<>() {
+          /** データ保存の共通処理で用いるpre対象の確認ディレクトリを返す。 */
           @Override
           public FileVisitResult preVisitDirectory(Path path, BasicFileAttributes attrs)
               throws IOException {
@@ -117,6 +125,7 @@ final class ReferenceMigration {
             return FileVisitResult.CONTINUE;
           }
 
+          /** データ保存の共通処理で用いる対象の確認ファイルを返す。 */
           @Override
           public FileVisitResult visitFile(Path path, BasicFileAttributes attrs)
               throws IOException {
@@ -141,6 +150,7 @@ final class ReferenceMigration {
         });
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   static void verify(Connection db) throws SQLException {
     try (var sql = db.createStatement()) {
       sql.executeQuery(

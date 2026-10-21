@@ -14,7 +14,9 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/** Web結果予算の結果と状態の契約を検証するテスト。 */
 class WebResultBudgetTest {
+  /** Web上の情報の調査で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void perPageBudgetAlsoIncludesResponseContentTypeAndErrors() {
     var budget = WebResultBudget.defaults();
@@ -38,6 +40,7 @@ class WebResultBudgetTest {
     assertTrue(fitted.results().getFirst().omissions().contains("response_metadata_omitted"));
   }
 
+  /** Web上の情報の調査で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void oversizedPublicationClaimIsOmittedWithoutLosingEvidence() {
     var page =
@@ -55,6 +58,7 @@ class WebResultBudgetTest {
     assertTrue(fitted.results().getFirst().omissions().contains("publication_date_omitted"));
   }
 
+  /** Web上の情報の調査で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void existingConversationConsumesTheAvailableContextBudget() {
     var run =
@@ -69,6 +73,7 @@ class WebResultBudgetTest {
     org.mockito.Mockito.verify(run).checkModelTokenBudget();
   }
 
+  /** Web上の情報の調査で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void oversizedOptionalAliasDoesNotRemoveTheMainEvidenceSource() {
     var budget = budget(1600, 600);
@@ -98,6 +103,7 @@ class WebResultBudgetTest {
     assertTrue(fitted.results().getFirst().omissions().contains("citation_aliases_omitted"));
   }
 
+  /** Web上の情報の調査で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void exhaustedContextRejectsBeforeNetworkStarts() {
     var props = new WebSearchProperties();
@@ -117,6 +123,7 @@ class WebResultBudgetTest {
     org.mockito.Mockito.verifyNoInteractions(service);
   }
 
+  /** {@code budget} の条件を再現するための補助情報を返す。 */
   WebResultBudget budget(int chars, int tokens) {
     var props = new WebSearchProperties();
     props.setMaxOutputCharacters(chars);
@@ -125,6 +132,7 @@ class WebResultBudgetTest {
         props, new ContextCompressionProperties(), new ContextBudgetManager(128000, 8192, 4000));
   }
 
+  /** Web上の情報の調査で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void measuresEscapesAndCitationMetadataAndKeepsIntactSource() {
     var budget = budget(1600, 600);
@@ -164,6 +172,7 @@ class WebResultBudgetTest {
     assertTrue(encoded.contains("external_untrusted"));
   }
 
+  /** Web上の情報の調査で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void oversizedSourceIsOmittedRatherThanInventingATruncatedCitation() {
     var budget = budget(1600, 600);
@@ -180,6 +189,7 @@ class WebResultBudgetTest {
     assertTrue(budget.fits(fitted, null));
   }
 
+  /** Web上の情報の調査で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void rawHtmlResultIsBoundedAndExplicitlyPartial() {
     var budget = budget(1600, 600);
@@ -194,6 +204,7 @@ class WebResultBudgetTest {
     assertEquals("https://example.com", fitted.finalUrl());
   }
 
+  /** 付随情報限定について、URL一覧を維持することを確認する。 */
   @Test
   void metadataOnlyKeepsUrlsAndMarksOmission() {
     var budget = budget(1600, 600);
@@ -207,6 +218,7 @@ class WebResultBudgetTest {
     assertTrue(budget.fits(rows, null));
   }
 
+  /** Web上の情報の調査で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void modelContextReserveCanRejectEvenSmallOutput() {
     var props = new WebSearchProperties();
@@ -222,6 +234,7 @@ class WebResultBudgetTest {
             .code());
   }
 
+  /** Web上の情報の調査で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void knowledgeEntriesAreDroppedWholeIncludingTheirCitation() {
     var budget = budget(600, 256);

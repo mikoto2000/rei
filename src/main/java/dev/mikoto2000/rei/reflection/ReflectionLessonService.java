@@ -24,16 +24,39 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Human-reviewed, scoped recommendations. No automatic long-term memory promotion. */
+/**
+ * 振り返り教訓のユースケースを実現する。
+ *
+ * <p>Human-reviewed, scoped recommendations. No automatic long-term memory promotion.
+ */
 @Service
 @ConditionalOnProperty(name = "rei.reflection.lessons-enabled", havingValue = "true")
 public class ReflectionLessonService {
+  /** 作業の振り返りにおける種類の選択肢。 */
   public enum Kind {
+    /** 失敗情報照合規則。 */
     FAILURE_PATTERN,
+    /** SUCCESSFUL方針。 */
     SUCCESSFUL_STRATEGY,
+    /** REPEATED補正。 */
     REPEATED_CORRECTION
   }
 
+  /**
+   * 作業の振り返りで受け渡す観測内容を表す。
+   *
+   * @param id 識別子
+   * @param state 状態
+   * @param sourceKind 取得元種類
+   * @param sourceId 取得元識別子
+   * @param origin 起点
+   * @param expected 期待する内容
+   * @param actual 実際の
+   * @param sourceHash 取得元ハッシュ値
+   * @param createdAt 作成日時
+   * @param complete 完了
+   * @param verified 確認済み
+   */
   public record Observation(
       String id,
       String state,
@@ -47,6 +70,21 @@ public class ReflectionLessonService {
       boolean complete,
       boolean verified) {}
 
+  /**
+   * 作業の振り返りで受け渡す教訓を表す。
+   *
+   * @param id 識別子
+   * @param state 状態
+   * @param kind 種類
+   * @param statement 記述内容
+   * @param revision 改訂番号
+   * @param occurrenceCount occurrence件数
+   * @param evidence 根拠
+   * @param evidenceHash 根拠ハッシュ値
+   * @param counterexamples 反例
+   * @param corrections 補正一覧
+   * @param review レビュー
+   */
   public record Lesson(
       String id,
       String state,
@@ -59,6 +97,7 @@ public class ReflectionLessonService {
       List<String> counterexamples,
       List<String> corrections,
       String review) {
+    /** 受け取った情報からLessonを作成する。 */
     public Lesson {
       evidence = List.copyOf(evidence);
       counterexamples = List.copyOf(counterexamples);
@@ -66,16 +105,34 @@ public class ReflectionLessonService {
     }
   }
 
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 一連の更新をまとめて確定するための窓口。 */
   private final TransactionTemplate tx;
+
+  /** 実行一覧。 */
   private final RunReflectionRepository runs;
+
+  /** 振り返り一覧。 */
   private final GoalReflectionRepository reflections;
+
+  /** 目標一覧。 */
   private final GoalRepository goals;
+
+  /** 確認の窓口。 */
   private final FileGoalVerifier verifier;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 有効状態。 */
   private final boolean enabled;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
 
+  /** 指定された値や利用先を使って、ReflectionLessonServiceを初期化する。 */
   public ReflectionLessonService(
       @Qualifier("memoryConsolidationDataSource") DataSource source,
       RunReflectionRepository runs,
@@ -103,6 +160,7 @@ public class ReflectionLessonService {
         .update();
   }
 
+  /** 作業の振り返りで用いる所有者を返す。 */
   private String owner(AgentRunContext context) {
     if (Thread.currentThread().isInterrupted())
       throw new IllegalArgumentException("Reflection review cancelled");
@@ -120,6 +178,7 @@ public class ReflectionLessonService {
     }
   }
 
+  /** 状況を判断する根拠を得るため、振り返り教訓サービスを観測する。 */
   public Observation observe(AgentRunContext context, String kind, String id) {
     String scope = owner(context);
     Observation current = source(context, kind, id);
@@ -140,6 +199,7 @@ public class ReflectionLessonService {
         });
   }
 
+  /** 作業の振り返りで用いる取得元を返す。 */
   private Observation source(AgentRunContext context, String kind, String id) {
     if ("USER_CORRECTION".equals(kind)) return observation(owner(context), id);
     if ("RUN".equals(kind)) {
@@ -193,6 +253,7 @@ public class ReflectionLessonService {
     throw new IllegalArgumentException("Unknown reflection source kind");
   }
 
+  /** 作業の振り返りで用いる観測内容を返す。 */
   private Observation observation(String scope, String id) {
     return db.sql("SELECT document FROM reflection_lesson_observations WHERE owner=? AND id=?")
         .params(scope, id)
@@ -203,6 +264,7 @@ public class ReflectionLessonService {
             () -> new IllegalArgumentException("Observation not found in this owner scope"));
   }
 
+  /** 状況を判断する根拠を得るため、補正を観測する。 */
   public Observation observeCorrection(
       AgentRunContext context, String correctionId, String observationId, String correction) {
     String scope = owner(context);
@@ -248,6 +310,7 @@ public class ReflectionLessonService {
         });
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<Lesson> list(AgentRunContext context) {
     String scope = owner(context);
     return db
@@ -260,10 +323,12 @@ public class ReflectionLessonService {
         .toList();
   }
 
+  /** 後続の判断で選べる候補を用意するため、振り返り教訓サービスを提案する。 */
   public Lesson propose(AgentRunContext context, Kind kind, String statement, List<String> ids) {
     String scope = owner(context);
     Objects.requireNonNull(kind);
     String text = note(statement);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (ids == null || ids.isEmpty() || ids.size() > 16 || new HashSet<>(ids).size() != ids.size())
       throw new IllegalArgumentException("One to sixteen distinct observations required");
     var facts = ids.stream().map(id -> observation(scope, id)).toList();
@@ -296,11 +361,13 @@ public class ReflectionLessonService {
         });
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Lesson get(AgentRunContext context, String id) {
     String scope = owner(context);
     return read(scope, id);
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private Lesson read(String scope, String id) {
     return db.sql("SELECT document FROM reflection_lessons WHERE owner=? AND id=?")
         .params(scope, id)
@@ -310,6 +377,7 @@ public class ReflectionLessonService {
         .orElseThrow(() -> new IllegalArgumentException("Lesson not found in this owner scope"));
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public Lesson validate(
       AgentRunContext context, String id, long revision, String evidenceHash, String review) {
     String scope = owner(context);
@@ -363,6 +431,7 @@ public class ReflectionLessonService {
         });
   }
 
+  /** 作業の振り返りで用いるcounterexampleを返す。 */
   public Lesson counterexample(
       AgentRunContext context, String id, long revision, String observationId, String description) {
     String scope = owner(context);
@@ -389,6 +458,7 @@ public class ReflectionLessonService {
             lesson.review()));
   }
 
+  /** 作業の振り返りで用いるcorrectを返す。 */
   public Lesson correct(AgentRunContext context, String id, long revision, String correction) {
     String scope = owner(context);
     var lesson = read(scope, id);
@@ -413,6 +483,7 @@ public class ReflectionLessonService {
             lesson.review()));
   }
 
+  /** 作業の振り返りで用いる記憶の削除を返す。 */
   public Lesson forget(AgentRunContext context, String id, long revision) {
     String scope = owner(context);
     return tx.execute(
@@ -440,6 +511,7 @@ public class ReflectionLessonService {
         });
   }
 
+  /** 指定された変更を、管理中の情報へ反映する。 */
   private Lesson update(String scope, Lesson previous, Lesson next) {
     if (db.sql(
                 "UPDATE reflection_lessons SET revision=?,document=? WHERE owner=? AND id=? AND revision=?")
@@ -449,10 +521,12 @@ public class ReflectionLessonService {
     return next;
   }
 
+  /** 後続の処理を進められるか、現在の条件を確認する。 */
   private void check(Lesson lesson, long revision) {
     if (lesson.revision() != revision) throw new IllegalArgumentException("Stale lesson revision");
   }
 
+  /** 作業の振り返りに関する使用枠を処理する。 */
   private void quota(String table, int limit) {
     if (db.sql("SELECT COUNT(*) FROM " + table).query(Integer.class).single() >= limit
         || db.sql("SELECT COALESCE(SUM(length(document)),0) FROM " + table)
@@ -462,19 +536,23 @@ public class ReflectionLessonService {
       throw new IllegalArgumentException("Reflection ledger quota exceeded");
   }
 
+  /** 作業の振り返りで用いる補足を返す。 */
   private String note(String value) {
     if (value == null || value.isBlank() || value.length() > 2048)
       throw new IllegalArgumentException("Nonblank note up to 2048 characters required");
     return RunReflectionRepository.safe(value, 2048).strip();
   }
 
+  /** 作業の振り返りで用いる記述内容ハッシュ値を返す。 */
   private String statementHash(String value) {
     return hash(value.strip().replaceAll("\\s+", " ").toLowerCase(Locale.ROOT));
   }
 
+  /** 受け渡し先が扱える形式へ、指定された内容を変換する。 */
   private String encode(Object value) {
     try {
       String encoded = json.writeValueAsString(value);
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (encoded.length() > 65536)
         throw new IllegalArgumentException("Reflection record too large");
       return encoded;
@@ -483,6 +561,7 @@ public class ReflectionLessonService {
     }
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   private <T> T decode(String value, Class<T> type) {
     try {
       return json.readValue(value, type);
@@ -491,6 +570,7 @@ public class ReflectionLessonService {
     }
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(String value) {
     try {
       return HexFormat.of()

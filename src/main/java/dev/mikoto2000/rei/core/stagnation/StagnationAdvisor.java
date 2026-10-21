@@ -15,16 +15,20 @@ import org.springframework.stereotype.Component;
 @Component
 public class StagnationAdvisor implements BaseAdvisor {
 
+  /** 停滞検出の窓口。 */
   private final StagnationDetector stagnationDetector;
 
+  /** 指定された値や利用先を使って、StagnationAdvisorを初期化する。 */
   public StagnationAdvisor(StagnationDetector stagnationDetector) {
     this.stagnationDetector = stagnationDetector;
   }
 
+  /** 実行の停滞への対処で用いる停滞検出の窓口を返す。 */
   StagnationDetector stagnationDetector() {
     return stagnationDetector;
   }
 
+  /** 実行の停滞への対処の本処理へ渡す文脈を準備する。 */
   @Override
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     UserMessage userMessage = request.prompt().getUserMessage();
@@ -47,7 +51,11 @@ public class StagnationAdvisor implements BaseAdvisor {
         .build();
   }
 
-  /** Used at the internal LLM/tool iteration boundary as well as the outer advisor chain. */
+  /**
+   * 実行の停滞への対処で用いる計画の見直し通知を返す。
+   *
+   * <p>Used at the internal LLM/tool iteration boundary as well as the outer advisor chain.
+   */
   public String replanNotice(String recentActions, String lastError) {
     return """
         ## Replan Notice
@@ -66,16 +74,19 @@ public class StagnationAdvisor implements BaseAdvisor {
             lastError);
   }
 
+  /** 実行の停滞への対処の実行結果を受け取り、後続の処理へ反映する。 */
   @Override
   public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
     return response;
   }
 
+  /** 他の補助処理と組み合わせる際の適用順序を返す。 */
   @Override
   public int getOrder() {
     return -55;
   }
 
+  /** 指定された内容へ切り替えるため、利用者メッセージを置き換える。 */
   private List<Message> replaceUserMessage(
       List<Message> messages, UserMessage original, UserMessage replacement) {
     List<Message> replaced = new ArrayList<>(messages.size());

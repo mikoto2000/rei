@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+/** 委譲引数集計の結果と状態の契約を検証するテスト。 */
 class DelegationArgumentsAggregationTest {
+  /** 全対象未指定外部選択可能な設定を伝えることを確認する。 */
   @Test
   void reportsAllMissingExternalOptionsAndContextConflictTogether() {
     String input =
@@ -21,6 +23,7 @@ class DelegationArgumentsAggregationTest {
     assertFalse(error.getMessage().contains("PRIVATE CONTEXT"));
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void batchErrorsIdentifyEveryRequestRatherThanStoppingAtTheFirst() {
     String input =
@@ -31,6 +34,7 @@ class DelegationArgumentsAggregationTest {
     assertTrue(issues.stream().anyMatch(s -> s.contains("requests[1].id")));
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void malformedFieldTypesDoNotHideOtherProblems() {
     var issues =

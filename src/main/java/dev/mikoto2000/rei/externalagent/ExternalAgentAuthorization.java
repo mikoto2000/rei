@@ -2,10 +2,16 @@ package dev.mikoto2000.rei.externalagent;
 
 import java.util.Locale;
 
-/** Conservative gate over actual user input, never tool arguments or repository text. */
+/**
+ * 外部エージェントへの委譲に必要な外部エージェント権限の確認を扱う。
+ *
+ * <p>Conservative gate over actual user input, never tool arguments or repository text.
+ */
 public final class ExternalAgentAuthorization {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ExternalAgentAuthorization() {}
 
+  /** 外部エージェントへの委譲において、明示的な要求に該当するか判定する。 */
   public static boolean explicitRequest(String input, ExternalAgentRequest.Agent agent) {
     if (input == null) return false;
     if (input.strip().startsWith("/agent ")) {
@@ -25,10 +31,12 @@ public final class ExternalAgentAuthorization {
             .replaceAll("\\bclaude(?:\\s+code)?\\b", "codex"));
   }
 
+  /** 外部エージェントへの委譲において、明示的な並列要求に該当するか判定する。 */
   public static boolean explicitParallelRequest(String input) {
     return explicitParallelRequest(input, ExternalAgentRequest.Agent.CODEX);
   }
 
+  /** 外部エージェントへの委譲において、明示的な並列要求に該当するか判定する。 */
   public static boolean explicitParallelRequest(String input, ExternalAgentRequest.Agent agent) {
     if (!explicitRequest(input, agent) || input.strip().startsWith("/agent ")) return false;
     String text = input.toLowerCase(Locale.ROOT).replaceAll("(?s)```.*?```|「[^」]*」|\"[^\"]*\"", "");
@@ -37,10 +45,12 @@ public final class ExternalAgentAuthorization {
     return text.contains("並列") || text.matches("(?s).*\\bparallel\\b.*");
   }
 
+  /** 外部エージェントへの委譲において、明示的な修正提案要求に該当するか判定する。 */
   public static boolean explicitFixProposalRequest(String input) {
     return explicitFixProposalRequest(input, ExternalAgentRequest.Agent.CODEX);
   }
 
+  /** 外部エージェントへの委譲において、明示的な修正提案要求に該当するか判定する。 */
   public static boolean explicitFixProposalRequest(String input, ExternalAgentRequest.Agent agent) {
     if (input == null) return false;
     String text = input.toLowerCase(Locale.ROOT);
@@ -53,6 +63,7 @@ public final class ExternalAgentAuthorization {
     return !normalized.equals(text) && explicitRequest(normalized, agent);
   }
 
+  /** 外部エージェントへの委譲において、明示的な継続入力要求に該当するか判定する。 */
   public static boolean explicitContinuationRequest(
       String input, ExternalAgentRequest.Agent agent) {
     if (!explicitRequest(input, agent)) return false;
@@ -62,6 +73,7 @@ public final class ExternalAgentAuthorization {
         || text.matches("(?s).*\\b(?:continue|continuation|resume)\\b.*");
   }
 
+  /** 外部エージェントへの委譲において、明示的な要求に該当するか判定する。 */
   public static boolean explicitRequest(String input) {
     if (input == null) return false;
     if (input.strip().startsWith("/agent ")) {
@@ -88,6 +100,7 @@ public final class ExternalAgentAuthorization {
                 "(?s).*(ask|use|have|let|request|please).*\\bcodex\\b.*\\breview\\b.*"));
   }
 
+  /** 外部エージェントへの委譲において、レビュー操作に該当するか判定する。 */
   private static boolean reviewAction(ExternalAgentCommandRequest command) {
     return command.action().equals("review") || command.action().equals("material-review");
   }

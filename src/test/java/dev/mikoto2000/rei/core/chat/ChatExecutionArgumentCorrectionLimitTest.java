@@ -42,7 +42,9 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
+/** チャット実行引数補正上限の結果と状態の契約を検証するテスト。 */
 class ChatExecutionArgumentCorrectionLimitTest {
+  /** 会話の実行で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @ParameterizedTest
   @ValueSource(ints = {3, 0})
   void configuredCorrectionLimitReachesTheRealToolLoopAndActionableTerminalMessage(int limit) {
@@ -51,14 +53,17 @@ class ChatExecutionArgumentCorrectionLimitTest {
     var remaining = new ArrayList<Integer>();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public ToolCallingChatOptions getOptions() {
             return ToolCallingChatOptions.builder().build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             int invocation = calls.incrementAndGet();
             if (invocation > limit + 1)
@@ -94,6 +99,7 @@ class ChatExecutionArgumentCorrectionLimitTest {
         };
     ToolCallback tool =
         new ToolCallback() {
+          /** 検証用に、会話の実行で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("delegateTask")
@@ -102,6 +108,7 @@ class ChatExecutionArgumentCorrectionLimitTest {
                 .build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             effects.incrementAndGet();
             return "unexpected execution";
@@ -151,6 +158,7 @@ class ChatExecutionArgumentCorrectionLimitTest {
         .contains(limit + "回", "rei.llm.output-limit.max-tool-argument-corrections-per-run");
     assertThat(calls).hasValue(limit + 1);
     assertThat(effects).hasValue(0);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(approvals);
     assertThat(remaining)
         .containsExactlyElementsOf(

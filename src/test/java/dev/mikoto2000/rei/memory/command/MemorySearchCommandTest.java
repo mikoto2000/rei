@@ -16,8 +16,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** 記憶検索コマンドの結果と状態の契約を検証するテスト。 */
 class MemorySearchCommandTest {
 
+  /** 長期記憶の活用で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchShowsValidationForTooLongQuery() {
     MemoryService service = Mockito.mock(MemoryService.class);
@@ -36,6 +38,7 @@ class MemorySearchCommandTest {
     assertTrue(out.toString().contains("検索クエリは 200 文字以内で入力してください"));
   }
 
+  /** 長期記憶の活用で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchShowsValidationForEmptyQuery() {
     MemoryService service = Mockito.mock(MemoryService.class);
@@ -53,6 +56,7 @@ class MemorySearchCommandTest {
     assertTrue(out.toString().contains("検索クエリを入力してください"));
   }
 
+  /** 長期記憶の活用で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchShowsResultWhenFound() {
     MemoryService service = Mockito.mock(MemoryService.class);
@@ -83,6 +87,7 @@ class MemorySearchCommandTest {
     assertTrue(out.toString().contains("1 | KNOWLEDGE | java tips"));
   }
 
+  /** 長期記憶の活用で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchShowsNoResultMessageWhenEmpty() {
     MemoryService service = Mockito.mock(MemoryService.class);

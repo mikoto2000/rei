@@ -15,8 +15,10 @@ import java.util.concurrent.Executors;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+/** 環境診断Connectivity利用可否の確認の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class DoctorConnectivityProbeTest {
+  /** 外部条件の待機で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void httpResponseReportsOnlyStatusWithoutBodyOrCredentials() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -48,6 +50,7 @@ class DoctorConnectivityProbeTest {
     }
   }
 
+  /** 外部条件の待機で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void refusedConnectionAndTimeoutRemainDistinct() throws Exception {
     int unused;
@@ -85,6 +88,7 @@ class DoctorConnectivityProbeTest {
     }
   }
 
+  /** 外部条件の待機の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationStopsPendingObservation() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);

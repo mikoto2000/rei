@@ -7,16 +7,20 @@ import javax.sql.DataSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
+/** フィードのユースケースを実現する。 */
 @Service
 public class FeedService {
 
+  /** データベースへの接続クライアント。 */
   private final JdbcClient jdbcClient;
 
+  /** 指定された値や利用先を使って、FeedServiceを初期化する。 */
   public FeedService(DataSource dataSource) {
     this.jdbcClient = JdbcClient.create(dataSource);
     initializeSchema(dataSource);
   }
 
+  /** 新たな対象を登録し、後から利用できるようにする。 */
   public Feed add(String url, String displayName) {
     FeedUrlSafety.parse(url);
     if (existsByUrl(url)) {
@@ -39,6 +43,7 @@ public class FeedService {
     return findById(id);
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<Feed> list() {
     return jdbcClient
         .sql(
@@ -51,6 +56,7 @@ public class FeedService {
         .list();
   }
 
+  /** 利用可能な対象を確認できるよう、活動中を一覧にする。 */
   public List<Feed> listActive() {
     return jdbcClient
         .sql(
@@ -64,6 +70,7 @@ public class FeedService {
         .list();
   }
 
+  /** 指定された変更を、管理中の情報へ反映する。 */
   public Feed update(long id, String displayName, Boolean enabled) {
     Feed current = findById(id);
     String resolvedDisplayName =
@@ -84,6 +91,7 @@ public class FeedService {
     return findById(id);
   }
 
+  /** 対象を特定できるよう、別識別子を探す。 */
   public Feed findById(long id) {
     return jdbcClient
         .sql(
@@ -97,6 +105,7 @@ public class FeedService {
         .single();
   }
 
+  /** 最新の内容を後続の処理に反映するため、取得付随情報を更新する。 */
   public Feed updateFetchedMetadata(
       long id, String title, String siteUrl, String description, OffsetDateTime fetchedAt) {
     Feed current = findById(id);
@@ -118,6 +127,7 @@ public class FeedService {
     return findById(id);
   }
 
+  /** 後から参照できるよう、取得項目一覧を保存する。 */
   public int saveFetchedItems(long feedId, List<FetchedFeedItem> items, OffsetDateTime fetchedAt) {
     int added = 0;
     for (FetchedFeedItem item : items) {
@@ -151,6 +161,7 @@ public class FeedService {
     return added;
   }
 
+  /** 利用可能な対象を確認できるよう、項目一覧対象フィードを一覧にする。 */
   public List<FeedItem> listItemsForFeed(long feedId) {
     return jdbcClient
         .sql(
@@ -165,6 +176,7 @@ public class FeedService {
         .list();
   }
 
+  /** 後から経緯や使用量を確認できるよう、取得失敗情報を記録する。 */
   public void recordFetchFailure(
       long feedId, OffsetDateTime failedAt, String errorMessage, Integer httpStatus) {
     jdbcClient
@@ -177,6 +189,7 @@ public class FeedService {
         .update();
   }
 
+  /** 利用可能な対象を確認できるよう、失敗一覧を一覧にする。 */
   public List<FeedFetchFailure> listFailures(long feedId) {
     return jdbcClient
         .sql(
@@ -191,6 +204,7 @@ public class FeedService {
         .list();
   }
 
+  /** 利用可能な対象を確認できるよう、日次案内項目一覧を一覧にする。 */
   public List<FeedBriefingItem> listBriefingItems(
       OffsetDateTime from, OffsetDateTime to, int maxItemsPerFeed) {
     return jdbcClient
@@ -216,6 +230,7 @@ public class FeedService {
         .list();
   }
 
+  /** 対象を特定できるよう、日次案内項目を探す。 */
   public FeedBriefingItem findBriefingItem(long itemId) {
     return jdbcClient
         .sql(
@@ -231,12 +246,14 @@ public class FeedService {
         .single();
   }
 
+  /** 指定された対象を削除する。 */
   public void delete(long id) {
     jdbcClient.sql("DELETE FROM feed_fetch_failures WHERE feed_id = ?").param(id).update();
     jdbcClient.sql("DELETE FROM feed_items WHERE feed_id = ?").param(id).update();
     jdbcClient.sql("DELETE FROM feeds WHERE id = ?").param(id).update();
   }
 
+  /** フィードの購読と収集において、存在別URLに該当するか判定する。 */
   private boolean existsByUrl(String url) {
     Long count =
         jdbcClient
@@ -247,6 +264,7 @@ public class FeedService {
     return count != null && count > 0;
   }
 
+  /** フィードの購読と収集で用いる対応表フィードを返す。 */
   private Feed mapFeed(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
     String lastFetchedAt = rs.getString("last_fetched_at");
     String rawUrl = rs.getString("url");
@@ -265,6 +283,7 @@ public class FeedService {
         lastFetchedAt == null ? null : OffsetDateTime.parse(lastFetchedAt));
   }
 
+  /** フィードの購読と収集で用いる対応表フィード項目を返す。 */
   private FeedItem mapFeedItem(java.sql.ResultSet rs, int rowNum) throws java.sql.SQLException {
     String publishedAt = rs.getString("published_at");
     return new FeedItem(
@@ -280,6 +299,7 @@ public class FeedService {
         OffsetDateTime.parse(rs.getString("updated_at")));
   }
 
+  /** フィードの購読と収集で用いる安全性フィードURLを返す。 */
   private String safeFeedUrl(String url) {
     try {
       FeedUrlSafety.parse(url);
@@ -290,6 +310,7 @@ public class FeedService {
     }
   }
 
+  /** フィードの購読と収集で用いる対応表フィード取得失敗情報を返す。 */
   private FeedFetchFailure mapFeedFetchFailure(java.sql.ResultSet rs, int rowNum)
       throws java.sql.SQLException {
     int httpStatus = rs.getInt("http_status");
@@ -301,6 +322,7 @@ public class FeedService {
         rs.wasNull() ? null : httpStatus);
   }
 
+  /** フィードの購読と収集で用いる対応表フィード日次案内項目を返す。 */
   private FeedBriefingItem mapFeedBriefingItem(java.sql.ResultSet rs, int rowNum)
       throws java.sql.SQLException {
     return new FeedBriefingItem(
@@ -313,6 +335,7 @@ public class FeedService {
         rs.getString("feed_name"));
   }
 
+  /** フィードの購読と収集で用いる重複の排除キーを返す。 */
   private String dedupeKey(FetchedFeedItem item) {
     if (item.url() != null && !item.url().isBlank()) {
       return "url:" + item.url().trim();
@@ -323,6 +346,7 @@ public class FeedService {
     return null;
   }
 
+  /** フィードの購読と収集に関する初期化データ形式を処理する。 */
   private void initializeSchema(DataSource dataSource) {
     try (var connection = dataSource.getConnection();
         var statement = connection.createStatement()) {
@@ -381,6 +405,7 @@ public class FeedService {
     }
   }
 
+  /** 新たな対象を管理できるよう、列条件付き未指定を追加する。 */
   private void addColumnIfMissing(
       java.sql.Connection connection, String table, String column, String type)
       throws java.sql.SQLException {

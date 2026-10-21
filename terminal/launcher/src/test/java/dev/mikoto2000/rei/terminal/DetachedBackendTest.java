@@ -8,15 +8,19 @@ import java.util.*;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 独立起動バックエンドの結果と状態の契約を検証するテスト。 */
 class DetachedBackendTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 軽量CLIの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void quotesSpacesQuotesAndTrailingBackslashes() {
     assertEquals("\"C:\\directory name\\\\\"", DetachedBackend.quote("C:\\directory name\\"));
     assertEquals("\"a\\\"b\"", DetachedBackend.quote("a\"b"));
   }
 
+  /** 軽量CLIの起動で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void detachedWorkerSurvivesAbruptLauncherTermination() throws Exception {
     if (!System.getProperty("os.name").toLowerCase().contains("win")) return;
@@ -58,6 +62,7 @@ class DetachedBackendTest {
     }
   }
 
+  /** 検証用に、指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private static String read(Path file) {
     try {
       return Files.readString(file);

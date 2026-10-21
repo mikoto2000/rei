@@ -11,8 +11,10 @@ import java.time.Duration;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
+/** 時間計測記憶利用可否の確認の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class TimingMemoryProbeTest {
+  /** 実行時間の把握で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void measuresRepresentativeRetainedHeapAtDefaultSpanCap() throws Exception {
     var warm =

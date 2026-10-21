@@ -19,7 +19,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 意味による変更差分レビューサービスの結果と状態の契約を検証するテスト。 */
 class SemanticPatchReviewServiceTest {
+  /** 共通の実行基盤で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void lostStartedReviewCanBeInspectedWithoutReplayOrProof() throws Exception {
     var ds =
@@ -55,18 +57,33 @@ class SemanticPatchReviewServiceTest {
                 new AgentRunContext("foreign", "foreign", root, project), inspection.id()));
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うプロジェクト。 */
   final String project = UUID.randomUUID().toString();
+
+  /** 検証に使うモデル一覧。 */
   final AtomicInteger models = new AtomicInteger();
+
+  /** 検証に使う差分上書き。 */
   String diffOverride;
+
+  /** 検証に使う古い。 */
   boolean stale;
+
+  /** 検証に使う目的からのずれ変更後。 */
   int driftAfter = Integer.MAX_VALUE;
+
+  /** 検証に使う取得記録一覧。 */
   final AtomicInteger captures = new AtomicInteger();
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("run", "session", root, project);
   }
 
+  /** 検証用に、共通の実行基盤の操作を実行する。 */
   dev.mikoto2000.rei.core.stagnation.RunExecutionContext run() {
     var run =
         org.mockito.Mockito.mock(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.class);
@@ -75,10 +92,12 @@ class SemanticPatchReviewServiceTest {
     org.mockito.Mockito.when(run.sharedLlmReservation())
         .thenReturn(
             new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation() {
+              /** {@code tryReserve} の条件を再現するための補助情報を返す。 */
               public boolean tryReserve() {
                 return true;
               }
 
+              /** {@code remaining} の条件を再現するための補助情報を返す。 */
               public int remaining() {
                 return 2;
               }
@@ -86,17 +105,20 @@ class SemanticPatchReviewServiceTest {
     return run;
   }
 
+  /** 検証で使用する状態の記録を、指定された条件に合わせて用意する。 */
   SelfPatchReviewService.Snapshot snapshot() {
     return new SelfPatchReviewService.Snapshot(
         "a".repeat(64), List.of("A.java", "ATest.java"), List.of(), true, List.of());
   }
 
+  /** 検証用に、指定された内容を書き込み先へ反映する。 */
   void write(String path, String content) throws Exception {
     Path file = root.resolve(path);
     Files.createDirectories(file.getParent());
     Files.writeString(file, content);
   }
 
+  /** {@code report} の条件を再現するため、検証用の操作や状態を扱う。 */
   void report(String test, boolean skipped) throws Exception {
     write(
         "target/TEST.xml",
@@ -109,6 +131,7 @@ class SemanticPatchReviewServiceTest {
             + "</testcase></testsuite>");
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   SemanticPatchReviewService.Request request(boolean semantic) {
     return new SemanticPatchReviewService.Request(
         "fixture-test",
@@ -124,6 +147,7 @@ class SemanticPatchReviewServiceTest {
         semantic);
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   SemanticPatchReviewService service(
       boolean semanticEnabled, boolean skipped, String test, String source) {
     var ds =
@@ -190,6 +214,7 @@ class SemanticPatchReviewServiceTest {
         });
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void deterministicEvidenceAndOptionalReviewAreSavedWithoutClaimingProof() throws Exception {
     var receipt = service(true, false, "value", "class A {}").review(owner(), request(true), run());
@@ -211,6 +236,7 @@ class SemanticPatchReviewServiceTest {
                     receipt.sha256()));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void positiveModelCannotOverrideMissingRequiredTestSkippedTestOrAddedTodo() throws Exception {
     for (var data :
@@ -230,6 +256,7 @@ class SemanticPatchReviewServiceTest {
     assertEquals(0, models.get());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unapprovedExtraFilesAndUncoveredRequirementsCannotPass() throws Exception {
     var original = request(true);
@@ -247,6 +274,7 @@ class SemanticPatchReviewServiceTest {
     assertEquals(0, models.get());
   }
 
+  /** 共通の実行基盤で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void disabledSemanticReviewAndDuplicateAttemptNeverInvokeProviderOrCommandAgain()
       throws Exception {
@@ -258,6 +286,7 @@ class SemanticPatchReviewServiceTest {
     assertEquals(receipt, repeated);
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void hygieneDistinguishesLiteralExamplesFromRealCommentAnnotationsAndEmptyCatch()
       throws Exception {
@@ -285,6 +314,7 @@ class SemanticPatchReviewServiceTest {
     }
   }
 
+  /** 共通の実行基盤の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void toolEntryKeepsArbitraryCommandAuthorityAndReadOnlyReceiptLookup() throws Exception {
     var tools = new Tools();
@@ -313,6 +343,7 @@ class SemanticPatchReviewServiceTest {
         policy.capabilities("listPatchRequirementReviews"));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unmappedDiffHeaderCannotSilentlySkipHygiene() throws Exception {
     diffOverride =
@@ -323,6 +354,7 @@ class SemanticPatchReviewServiceTest {
     assertEquals(0, models.get());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void staleReportAndPatchChangedDuringJudgementDoNotComplete() throws Exception {
     stale = true;

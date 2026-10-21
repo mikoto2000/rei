@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.topic;
 
+/** 雛形話題メッセージの内容を生成する。 */
 public class TemplateTopicMessageGenerator implements TopicMessageGenerator {
+  /** 指定された条件に従って、依頼された内容を生成する。 */
   @Override
   public String generate(TopicCandidate candidate, TopicMessageContext context) {
     String prefix =

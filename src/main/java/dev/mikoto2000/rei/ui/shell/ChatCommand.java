@@ -19,36 +19,48 @@ import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
 
+/** AI と会話しますを行うための利用者コマンド。 */
 @Command(name = "chat", description = "AI と会話します")
 @Component
 public class ChatCommand implements Runnable {
 
+  /** チャット実行サービス。 */
   private final ChatExecutionService chatExecutionService;
+
+  /** チャット応答読み上げの案内。 */
   private final ChatResponseNarrator chatResponseNarrator;
+
+  /** 会話一覧。 */
   private dev.mikoto2000.rei.application.session.ShellConversationService conversations;
 
+  /** ターミナルでの対話で使用するシェル会話一覧を設定する。 */
   @Autowired
   public void setShellConversations(
       dev.mikoto2000.rei.application.session.ShellConversationService conversations) {
     this.conversations = conversations;
   }
 
+  /** ターミナルでの対話で判断に用いるacceptsAsynchronouslyの条件を確認する。 */
   public boolean acceptsAsynchronously() {
     return conversations != null;
   }
 
+  /** プロンプト一覧。 */
   @Parameters(arity = "1..*", paramLabel = "PROMPT", description = "メッセージ")
   private String[] prompts;
 
+  /** 動作モード。 */
   @picocli.CommandLine.Option(
       names = "--mode",
       defaultValue = "EXCLUSIVE",
       description = "実行モード（EXCLUSIVE / CONVERSATION / READ_ONLY）")
   private dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode;
 
+  /** 対象実行。 */
   @picocli.CommandLine.Option(names = "--run", description = "指定Runへ追加指示を送る（独立Runは作成しない）")
   private String targetRun;
 
+  /** ターミナルでの対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ChatCommand(
       ChatClient chatClient,
       ModelHolderService currentModelHolder,
@@ -61,6 +73,7 @@ public class ChatCommand implements Runnable {
         chatResponseNarrator);
   }
 
+  /** ターミナルでの対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ChatCommand(
       ChatClient chatClient,
       ModelHolderService currentModelHolder,
@@ -80,6 +93,7 @@ public class ChatCommand implements Runnable {
         chatResponseNarrator);
   }
 
+  /** ターミナルでの対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ChatCommand(
       LlmChatClientProvider chatClientProvider,
       ModelHolderService currentModelHolder,
@@ -101,6 +115,7 @@ public class ChatCommand implements Runnable {
         chatResponseNarrator);
   }
 
+  /** 指定された値や利用先を使って、ChatCommandを初期化する。 */
   @Autowired
   public ChatCommand(
       ChatExecutionService chatExecutionService, ChatResponseNarrator chatResponseNarrator) {
@@ -108,6 +123,7 @@ public class ChatCommand implements Runnable {
     this.chatResponseNarrator = chatResponseNarrator;
   }
 
+  /** AI と会話しますを行う。 */
   @Override
   public void run() {
     if (conversations != null) {

@@ -19,12 +19,22 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * Read-only MMDevice inventory. Native resources belong to one query and are released on every
+ * 音声による対話に必要なWindows音声接続先一覧を扱う。
+ *
+ * <p>Read-only MMDevice inventory. Native resources belong to one query and are released on every
  * path.
  */
 public final class WindowsAudioEndpoints {
+  /**
+   * 音声による対話で受け渡す接続先を表す。
+   *
+   * @param id 識別子
+   * @param name 名前
+   * @param state 状態
+   */
   public record Endpoint(String id, String name, int state) {}
 
+  /** 後から状況を確認できるよう、接続先一覧を記録する。 */
   public List<Endpoint> captureEndpoints() {
     if (!System.getProperty("os.name", "").startsWith("Windows") || ADDRESS.byteSize() != 8)
       throw new IllegalStateException("Windows x64 endpoint monitoring is required");
@@ -48,25 +58,35 @@ public final class WindowsAudioEndpoints {
     }
   }
 
+  /** 音声による対話に必要なComを扱う。 */
   private static final class Com {
+    /** OS連携で使う資源の管理範囲。 */
     final Arena arena;
+
+    /** OSの機能を呼び出す窓口。 */
     final Linker linker;
+
+    /** 保管資料。 */
     final SymbolLookup library;
 
+    /** 指定された値や利用先を使って、Comを初期化する。 */
     Com(Arena arena, Linker linker, SymbolLookup library) {
       this.arena = arena;
       this.linker = linker;
       this.library = library;
     }
 
+    /** 音声による対話で用いる変換処理を返す。 */
     MethodHandle function(String name, MemoryLayout result, MemoryLayout... args) {
       return linker.downcallHandle(library.find(name).orElseThrow(), descriptor(result, args));
     }
 
+    /** 音声による対話で用いるdescriptorを返す。 */
     FunctionDescriptor descriptor(MemoryLayout result, MemoryLayout... args) {
       return result == null ? FunctionDescriptor.ofVoid(args) : FunctionDescriptor.of(result, args);
     }
 
+    /** 音声による対話の要求を実行し、呼び出し元へ結果を返す。 */
     Object call(MethodHandle handle, Object... args) {
       try {
         return handle.invokeWithArguments(args);
@@ -75,12 +95,14 @@ public final class WindowsAudioEndpoints {
       }
     }
 
+    /** 後続の処理を進められるか、現在の条件を確認する。 */
     void check(Object result) {
       if ((Integer) result < 0)
         throw new IllegalStateException(
             "Windows endpoint API failed (HRESULT " + Integer.toHexString((Integer) result) + ")");
     }
 
+    /** 音声による対話で用いるメソッドを返す。 */
     MethodHandle method(MemorySegment object, int slot, MemoryLayout... args) {
       var table = object.reinterpret(ADDRESS.byteSize()).get(ADDRESS, 0);
       var address = table.reinterpret((slot + 1) * ADDRESS.byteSize()).getAtIndex(ADDRESS, slot);
@@ -90,10 +112,12 @@ public final class WindowsAudioEndpoints {
       return linker.downcallHandle(address, FunctionDescriptor.of(JAVA_INT, layouts));
     }
 
+    /** 後続の処理が利用できるよう、Comを解放する。 */
     void release(MemorySegment object) {
       if (!object.equals(MemorySegment.NULL)) call(method(object, 2), object);
     }
 
+    /** 音声による対話で用いるguidを返す。 */
     MemorySegment guid(String text) {
       var value = UUID.fromString(text);
       var segment = arena.allocate(16, 4);
@@ -105,6 +129,7 @@ public final class WindowsAudioEndpoints {
       return segment;
     }
 
+    /** 音声による対話で用いるwide文字列表現を返す。 */
     String wideString(MemorySegment pointer) {
       if (pointer.equals(MemorySegment.NULL))
         throw new IllegalStateException("Windows endpoint string is missing");
@@ -118,6 +143,7 @@ public final class WindowsAudioEndpoints {
       throw new IllegalStateException("Windows endpoint string exceeds the supported bound");
     }
 
+    /** 音声による対話で用いる接続先一覧を返す。 */
     List<Endpoint> endpoints() {
       var output = arena.allocate(ADDRESS);
       MemorySegment enumerator = MemorySegment.NULL, collection = MemorySegment.NULL;
@@ -158,6 +184,7 @@ public final class WindowsAudioEndpoints {
       }
     }
 
+    /** 音声による対話で用いる接続先を返す。 */
     Endpoint endpoint(MemorySegment device) {
       var output = arena.allocate(ADDRESS);
       var state = arena.allocate(JAVA_INT);
@@ -193,6 +220,7 @@ public final class WindowsAudioEndpoints {
     }
   }
 
+  /** 音声による対話の起動要求を受け付け、実行を開始する。 */
   public static void main(String[] args) {
     new WindowsAudioEndpoints().captureEndpoints().forEach(System.out::println);
   }

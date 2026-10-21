@@ -12,19 +12,26 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.filter.OncePerRequestFilter;
 
+/** Web APIによる操作に必要なAPIキー認証絞り込み条件を扱う。 */
 final class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
+  /** 期待する内容。 */
   private final byte[] expected;
+
+  /** GitHubの利用設定または連携情報の保存先。 */
   private final boolean github;
 
+  /** Web APIによる操作を利用するため、指定を補って共通の初期化へ引き渡す。 */
   ApiKeyAuthenticationFilter(ApiKeyProperties properties) {
     this(properties, false);
   }
 
+  /** 指定された値や利用先を使って、ApiKeyAuthenticationFilterを初期化する。 */
   ApiKeyAuthenticationFilter(ApiKeyProperties properties, boolean github) {
     expected = properties.getApiKey().getBytes(StandardCharsets.UTF_8);
     this.github = github;
   }
 
+  /** Web APIによる操作に関するdo絞り込み条件内部を処理する。 */
   @Override
   protected void doFilterInternal(
       HttpServletRequest request, HttpServletResponse response, FilterChain chain)
@@ -57,6 +64,7 @@ final class ApiKeyAuthenticationFilter extends OncePerRequestFilter {
     }
   }
 
+  /** Web APIによる操作において、否定絞り込み条件非同期実行先への引き渡しの実施条件を判定する。 */
   @Override
   protected boolean shouldNotFilterAsyncDispatch() {
     return false;

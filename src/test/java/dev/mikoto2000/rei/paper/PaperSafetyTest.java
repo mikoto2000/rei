@@ -23,12 +23,19 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+/** 論文安全性の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class PaperSafetyTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う設定。 */
   PaperProperties config = new PaperProperties();
+
+  /** 検証に使う操作の種別。 */
   PaperOperation op = PaperOperation.local("s");
 
+  /** 通信経路について、非公開対象一覧を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -44,6 +51,7 @@ class PaperSafetyTest {
         () -> new SafePaperHttpClient(config).get(URI.create(url), "application/pdf", 1000, op));
   }
 
+  /** 論文の調査と整理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void resolverValidatesAlreadyResolvedAddresses() throws Exception {
     var executor = new io.netty.util.concurrent.DefaultEventExecutor();
@@ -60,6 +68,7 @@ class PaperSafetyTest {
     }
   }
 
+  /** 論文の調査と整理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void pdfPageLimitAndEmptyPdf() throws Exception {
     try (var doc = new PDDocument();
@@ -82,6 +91,7 @@ class PaperSafetyTest {
     }
   }
 
+  /** {@code pdf} の条件を再現するための補助情報を返す。 */
   byte[] pdf() throws Exception {
     try (var doc = new PDDocument();
         var out = new ByteArrayOutputStream()) {
@@ -101,6 +111,7 @@ class PaperSafetyTest {
     }
   }
 
+  /** 論文の調査と整理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void recognizesHeadingsAndExtractionLimit() throws Exception {
     byte[] bytes = pdf();
@@ -111,6 +122,7 @@ class PaperSafetyTest {
         PaperException.class, () -> new PaperExtractionService(config).extract("t", bytes, op));
   }
 
+  /** 論文の調査と整理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void importThenRestartDoesNotDownloadOrParseAgain() throws Exception {
     var store = new PaperArtifactStore(dir, config);
@@ -141,6 +153,7 @@ class PaperSafetyTest {
     content.importPdf(paper, pdf(), op);
     var parser =
         new PaperExtractionService(config) {
+          /** {@code extract} の条件を再現するための補助情報を返す。 */
           @Override
           public StructuredPaper extract(String t, byte[] b, PaperOperation o) {
             throw new AssertionError("parse");
@@ -158,6 +171,7 @@ class PaperSafetyTest {
         StructuredPaper.Availability.FULL_TEXT, restarted.content(paper, op).availability());
   }
 
+  /** 論文の調査と整理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void arxivAndOaResolution() {
     var paper =
@@ -183,12 +197,14 @@ class PaperSafetyTest {
         paper.pdfUrl(), new OpenAccessContentProvider().resolve(paper).orElseThrow().toString());
   }
 
+  /** 論文の調査と整理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidResourceConfigFailsEarly() {
     config.setTranslationChunkSize(0);
     assertThrows(IllegalArgumentException.class, config::validate);
   }
 
+  /** 論文の調査と整理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void artifactSizeLimit() {
     config.setMaxPdfBytes(4);
@@ -199,6 +215,7 @@ class PaperSafetyTest {
         () -> store.write(UUID.randomUUID().toString(), "originals", "pdf", new byte[9], op));
   }
 
+  /** 論文の調査と整理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void toolSchemasAreSeparateAndIncludeContextWithoutAdvertisingIt() {
     var callbacks =
@@ -211,6 +228,7 @@ class PaperSafetyTest {
       assertFalse(callback.getToolDefinition().inputSchema().contains("RunExecutionContext"));
   }
 
+  /** 論文の調査と整理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shellQuotesRoundTripWindowsPathAndEmbeddedQuotes() {
     String[] args = {"search", "GUI \"agents\""};

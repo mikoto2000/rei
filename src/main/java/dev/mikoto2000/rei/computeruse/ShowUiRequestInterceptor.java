@@ -9,13 +9,20 @@ import org.springframework.http.client.ClientHttpRequestInterceptor;
 import org.springframework.http.client.ClientHttpResponse;
 
 /**
- * Spring AI UserMessage puts all text before media. Restore ShowUI's ordered content on the wire.
+ * 画面操作の支援に必要な表示表示要求Interceptorを扱う。
+ *
+ * <p>Spring AI UserMessage puts all text before media. Restore ShowUI's ordered content on the
+ * wire.
  */
 public final class ShowUiRequestInterceptor implements ClientHttpRequestInterceptor {
+  /** 指示。 */
   public static final String INSTRUCTION =
       "Based on the screenshot of the page, I give a text description and you give its corresponding location. The coordinate represents a clickable location [x, y] for an element, which is a relative coordinate on the screenshot, scaled from 0 to 1.";
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final ObjectMapper JSON = new ObjectMapper();
 
+  /** 画面操作の支援で用いるinterceptを返す。 */
   @Override
   public ClientHttpResponse intercept(
       HttpRequest request, byte[] body, ClientHttpRequestExecution execution) throws IOException {
@@ -26,7 +33,11 @@ public final class ShowUiRequestInterceptor implements ClientHttpRequestIntercep
     return execution.execute(request, rewritten);
   }
 
-  /** Shared JSON transformation for Spring HTTP and the OpenAI SDK transport. */
+  /**
+   * 画面操作の支援で用いるrewrite本文を返す。
+   *
+   * <p>Shared JSON transformation for Spring HTTP and the OpenAI SDK transport.
+   */
   public static byte[] rewriteBody(byte[] body) throws IOException {
     var root = JSON.readTree(body);
     var messages = root.path("messages");

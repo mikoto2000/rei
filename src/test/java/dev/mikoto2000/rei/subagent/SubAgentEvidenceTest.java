@@ -11,9 +11,12 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
+/** 補助エージェント根拠の結果と状態の契約を検証するテスト。 */
 class SubAgentEvidenceTest {
+  /** 検証に使う保存や受け渡しに用いるデータ形式の変換。 */
   final JsonMapper mapper = JsonMapper.builder().build();
 
+  /** {@code answer} の条件を再現するための補助情報を返す。 */
   String answer(String status, Object evidence) {
     return mapper.writeValueAsString(
         Map.of(
@@ -27,6 +30,7 @@ class SubAgentEvidenceTest {
             List.of()));
   }
 
+  /** {@code claim} の条件を再現するための補助情報を返す。 */
   Map<String, String> claim(String receipt, String quote) {
     var json = new SubAgentResultParser().parse(receipt);
     return Map.of(
@@ -40,6 +44,7 @@ class SubAgentEvidenceTest {
         quote);
   }
 
+  /** 成功について、観測必須ツール一覧を必要とすることを確認する。 */
   @Test
   void successRequiresObservedRequiredToolsAndMatchingQuotes() {
     var ledger = new SubAgentEvidence();
@@ -59,6 +64,7 @@ class SubAgentEvidenceTest {
             .valid());
   }
 
+  /** 未指定作業を伝えることを確認する。 */
   @Test
   void partialMayReportMissingWorkButCannotForgeEvidenceOrDuplicateReferences() {
     var ledger = new SubAgentEvidence();
@@ -85,6 +91,7 @@ class SubAgentEvidenceTest {
             .valid());
   }
 
+  /** 補助エージェントへの委譲で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void receiptOutputIsBoundedAndDisclosesTruncation() {
     var ledger = new SubAgentEvidence();
@@ -100,6 +107,7 @@ class SubAgentEvidenceTest {
             .valid());
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void successRequiresTheSpecifiedArgumentsOnCitedActualCalls() {
     var ledger = new SubAgentEvidence();
@@ -146,6 +154,7 @@ class SubAgentEvidenceTest {
             .valid());
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void requiredArgumentsMustBeBoundedJsonObjects() {
     assertThrows(

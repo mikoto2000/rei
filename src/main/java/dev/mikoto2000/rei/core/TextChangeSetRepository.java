@@ -6,9 +6,28 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
-/** Durable single-file proposals and one-way application claims. No automatic recovery writes. */
+/**
+ * テキスト変更集合を保存・検索するための窓口。
+ *
+ * <p>Durable single-file proposals and one-way application claims. No automatic recovery writes.
+ */
 @Repository
 public class TextChangeSetRepository {
+  /**
+   * 共通の実行基盤で受け渡す保存済みを表す。
+   *
+   * @param id 識別子
+   * @param projectId 所属プロジェクトの識別子
+   * @param root 作業ルート
+   * @param path パス
+   * @param baseline 比較の基準
+   * @param proposed 提案内容
+   * @param baselineHash 比較の基準ハッシュ値
+   * @param proposedHash 提案内容ハッシュ値
+   * @param proposalHash 提案ハッシュ値
+   * @param status 状態
+   * @param createdAt 作成日時
+   */
   record Saved(
       String id,
       String projectId,
@@ -22,9 +41,13 @@ public class TextChangeSetRepository {
       String status,
       Instant createdAt) {}
 
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 利用権一覧。 */
   private final PersistedReceiptLease leases;
 
+  /** 指定された値や利用先を使って、TextChangeSetRepositoryを初期化する。 */
   public TextChangeSetRepository(@Qualifier("memoryConsolidationDataSource") DataSource source) {
     db = JdbcClient.create(source);
     db.sql(
@@ -42,16 +65,19 @@ public class TextChangeSetRepository {
     leases = new PersistedReceiptLease(source, "text_change_sets", java.time.Clock.systemUTC());
   }
 
+  /** 共通の実行基盤で用いる保存済み文書データベースを返す。 */
   org.springframework.jdbc.core.simple.JdbcClient documentsDb() {
     return db;
   }
 
+  /** 共通の実行基盤に関する保護診断済みを処理する。 */
   void protectDiagnosed(String project, String id) {
     db.sql("INSERT INTO text_change_set_apply_guards VALUES(?,?,'DIAGNOSED_REPAIR')")
         .params(project, id)
         .update();
   }
 
+  /** 指定された変更を有効にするため、利用条件の確認を反映する。 */
   String applyGuard(String project, String id) {
     return db.sql("SELECT guard FROM text_change_set_apply_guards WHERE project_id=? AND id=?")
         .params(project, id)
@@ -60,14 +86,17 @@ public class TextChangeSetRepository {
         .orElse(null);
   }
 
+  /** 共通の実行基盤で用いるactivateを返す。 */
   PersistedReceiptLease.AutoCloseableLease activate(String id) {
     return leases.activate(id);
   }
 
+  /** 共通の実行基盤に関する生存確認を処理する。 */
   void heartbeat(String id) {
     leases.heartbeat(id);
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   void save(Saved saved) {
     // Bounded per-owner history. Pending/uncertain proposals are never silently evicted.
     db.sql(
@@ -95,6 +124,7 @@ public class TextChangeSetRepository {
       throw new IllegalStateException("Change Set capacity reached; inspect existing proposals");
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   Saved get(String project, String id) {
     var saved = load(project, id);
     if (saved.status().equals("APPLYING")) {
@@ -104,10 +134,12 @@ public class TextChangeSetRepository {
     return saved;
   }
 
+  /** 保存された情報を読み込み、現在の処理で使える形にする。 */
   private Saved load(String project, String id) {
     return peek(project, id);
   }
 
+  /** 共通の実行基盤で用いる次の対象の確認を返す。 */
   Saved peek(String project, String id) {
     return db.sql("SELECT * FROM text_change_sets WHERE project_id=? AND id=?")
         .params(project, id)
@@ -129,6 +161,7 @@ public class TextChangeSetRepository {
         .orElseThrow(() -> new IllegalArgumentException("Unknown Change Set in this Project"));
   }
 
+  /** 共通の実行基盤において、状態の遷移に該当するか判定する。 */
   boolean transition(String project, String id, String before, String after) {
     if (before.equals("PROPOSED") && after.equals("APPLYING"))
       return db.sql(

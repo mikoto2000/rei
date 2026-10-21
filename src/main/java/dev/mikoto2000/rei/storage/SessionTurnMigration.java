@@ -16,10 +16,16 @@ import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.UUID;
 
-/** Stream old arrays into individual rows, then verify their count and canonical row digest. */
+/**
+ * データ保存の共通処理に必要な会話一回のやり取り移行を扱う。
+ *
+ * <p>Stream old arrays into individual rows, then verify their count and canonical row digest.
+ */
 final class SessionTurnMigration {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private SessionTurnMigration() {}
 
+  /** 指定された内容を、現在の対象へ反映する。 */
   static void apply(Connection connection, Path root) throws Exception {
     try (var schema = connection.createStatement()) {
       schema.execute(
@@ -64,6 +70,7 @@ final class SessionTurnMigration {
       }
   }
 
+  /** データ保存の共通処理に関するやり取り一覧を処理する。 */
   private static void turns(Connection connection, Path root, Path directory, String scope)
       throws Exception {
     StorageBackup.requireSafePath(directory);
@@ -117,11 +124,14 @@ final class SessionTurnMigration {
     }
   }
 
+  /** データ保存の共通処理に必要な行書き込み先を扱う。 */
   @FunctionalInterface
   private interface RowWriter<T> {
+    /** 指定された内容を書き込み先へ反映する。 */
     void write(T row, long ordinal) throws Exception;
   }
 
+  /** データ保存の共通処理に関する取り込みファイルを処理する。 */
   private static <T> void importFile(
       Connection connection,
       Path root,
@@ -184,6 +194,7 @@ final class SessionTurnMigration {
     }
   }
 
+  /** データ保存の共通処理に関する内容の照合値行を処理する。 */
   private static void digestRow(MessageDigest digest, String row) {
     digest.update(row.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     digest.update((byte) '\n');

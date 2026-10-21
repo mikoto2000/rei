@@ -20,13 +20,24 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 状態表示利用者サービスの結果と状態の契約を検証するテスト。 */
 class DotHumanServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うサービス。 */
   DotDelegationService service;
+
+  /** 検証に使うリポジトリ。 */
   DotRequestRepository repo;
+
+  /** 検証に使うプロジェクト一覧。 */
   ProjectService projects;
+
+  /** 検証に使うプロジェクト。 */
   ProjectContext project;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     try (var gate = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(root)) {
@@ -44,6 +55,7 @@ class DotHumanServiceTest {
     service = new DotDelegationService(repo, properties, projects, mock(SessionRepository.class));
   }
 
+  /** 利用者の状態表示の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void explicitHumanRequestIsSanitizedAndCancelledThroughShell() {
     var command = new picocli.CommandLine(new DotCommand(service, projects));
@@ -67,6 +79,7 @@ class DotHumanServiceTest {
     assertEquals("CANCELLED", service.cancel(project.id(), id).get("status"));
   }
 
+  /** 利用者の状態表示で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void adminProjectCategoryAndSessionBoundariesAreChecked() {
     assertThrows(

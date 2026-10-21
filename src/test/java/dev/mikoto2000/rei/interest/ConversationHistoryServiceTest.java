@@ -9,11 +9,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 会話履歴サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ConversationHistoryServiceTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir java.nio.file.Path tempDir;
 
+  /** 検索直近利用者メッセージ一覧について、直近利用者メッセージ一覧を返すことを確認する。 */
   @Test
   void findRecentUserMessagesReturnsRecentUserMessagesOnly() throws Exception {
     DriverManagerDataSource dataSource =
@@ -45,6 +48,7 @@ class ConversationHistoryServiceTest {
     assertEquals("c1", snippets.get(0).conversationId());
   }
 
+  /** {@code initializeSchema} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void initializeSchema(DriverManagerDataSource dataSource) throws Exception {
     try (Connection connection = dataSource.getConnection();
         Statement statement = connection.createStatement()) {

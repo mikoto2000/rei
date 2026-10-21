@@ -21,7 +21,9 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.core.Ordered;
 import org.springframework.core.annotation.Order;
 
+/** 開始AISdk機能の構成の結果と状態の契約を検証するテスト。 */
 class OpenAiSdkConfigurationTest {
+  /** 接続先表記の統一について、先行部分を保持することを確認する。 */
   @Test
   void endpointNormalizationRetainsPrefixAndAvoidsDuplicateVersion() {
     assertThat(OpenAiCompatibleEndpoint.baseUrl("http://ollama.local:11434/"))
@@ -34,6 +36,7 @@ class OpenAiSdkConfigurationTest {
     assertThat(OpenAiCompatibleEndpoint.baseUrl(null)).isNull();
   }
 
+  /** 境界接続選択可能な設定について、旧形式機能の接続パス一覧を維持することを確認する。 */
   @Test
   void boundConnectionOptionsKeepLegacyWirePathsAndConfiguredModels() {
     runner()
@@ -62,6 +65,7 @@ class OpenAiSdkConfigurationTest {
             });
   }
 
+  /** 検証で使用する実行の担当を、指定された条件に合わせて用意する。 */
   private ApplicationContextRunner runner() {
     return new ApplicationContextRunner()
         .withConfiguration(
@@ -81,18 +85,25 @@ class OpenAiSdkConfigurationTest {
             "spring.ai.openai.embedding.embeddings-path=/custom/embeddings");
   }
 
+  /** 検証条件を再現するための要求一覧。 */
   static class Requests {
+    /** 検証に使うURL一覧。 */
     final List<String> urls = new ArrayList<>();
+
+    /** 検証に使うbodies。 */
     final List<String> bodies = new ArrayList<>();
   }
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   static class RecordingConfiguration {
+    /** {@code requests} の条件を再現するための補助情報を返す。 */
     @Bean
     Requests requests() {
       return new Requests();
     }
 
+    /** 検証用に、後から経緯や使用量を確認できるよう、要求一覧を記録する。 */
     @Bean
     @Order(Ordered.LOWEST_PRECEDENCE)
     OpenAiHttpClientBuilderCustomizer recordRequests(Requests requests) {

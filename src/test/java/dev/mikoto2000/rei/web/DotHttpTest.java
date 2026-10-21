@@ -27,10 +27,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/** 状態表示HTTP通信の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class DotHttpTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import({
     WebApiIntegrationTest.Config.class,
@@ -38,33 +41,39 @@ class DotHttpTest {
     dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver.class
   })
   static class Config {
+    /** {@code dots} の条件を再現するための補助情報を返す。 */
     @Bean
     DotDelegationService dots() {
       return mock(DotDelegationService.class);
     }
 
+    /** {@code dependencies} の条件を再現するための補助情報を返す。 */
     @Bean
     dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository dependencies() {
       return mock(dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository.class);
     }
 
+    /** {@code checkpoints} の条件を再現するための補助情報を返す。 */
     @Bean
     dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints() {
       return mock(dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository.class);
     }
 
+    /** 検証で使用する判断基準を、指定された条件に合わせて用意する。 */
     @Bean
     dev.mikoto2000.rei.core.policy.ToolPermissionPolicy policy() {
       return new dev.mikoto2000.rei.core.policy.ToolPermissionPolicy(
           new dev.mikoto2000.rei.core.policy.ToolPermissionProperties(false, null, null, null));
     }
 
+    /** {@code resumes} の条件を再現するための補助情報を返す。 */
     @Bean
     DotResumeService resumes() {
       return mock(DotResumeService.class);
     }
   }
 
+  /** 状態表示のAPIにも認証を要求し、書き込み内容の契約を厳密に適用することを確認する。 */
   @Test
   void bearerAuthAndStrictFixedWriteDtosApplyToDotRoutes() throws Exception {
     var app = new SpringApplication(Config.class);
@@ -88,6 +97,7 @@ class DotHttpTest {
           401,
           ReadHttpTest.send(client, port, base, "POST", "{\"instruction\":\"research\"}", false)
               .statusCode());
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(dots, resumes);
       assertEquals(
           200,

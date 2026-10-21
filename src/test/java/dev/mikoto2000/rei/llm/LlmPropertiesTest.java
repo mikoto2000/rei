@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
+/** 言語モデル設定の結果と状態の契約を検証するテスト。 */
 class LlmPropertiesTest {
 
+  /** 用途に応じたモデル利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void callBudgetDefaultsToEnabledAndBindsFalse() {
     assertThat(new LlmProperties().getOutputLimit().isLlmCallBudgetEnabled()).isTrue();
@@ -19,6 +21,7 @@ class LlmPropertiesTest {
     assertThat(properties.getOutputLimit().isLlmCallBudgetEnabled()).isFalse();
   }
 
+  /** 用途に応じたモデル利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void outputLimitReplanBudgetsHaveSafeDefaults() {
     LlmProperties properties = new LlmProperties();
@@ -28,6 +31,7 @@ class LlmPropertiesTest {
     assertThat(properties.getOutputLimit().getMaxLlmCallsPerRun()).isEqualTo(120);
   }
 
+  /** 用途に応じたモデル利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void outputLimitReplanBudgetsFallbackWhenInvalid() {
     LlmProperties properties = new LlmProperties();

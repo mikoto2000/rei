@@ -24,24 +24,39 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 目標要件配信の結果と状態の契約を検証するテスト。 */
 class GoalRequirementDeliveryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
+
+  /** 検証に使う作業ルート。 */
   Path root;
+
+  /** 検証に使う目標一覧。 */
   GoalRepository goals;
+
+  /** 検証に使う確認の窓口。 */
   FileGoalVerifier verifier;
+
+  /** 検証に使う実行可否の判断。 */
   GoalCompletionGate gate;
+
+  /** 検証に使う成果物。 */
   Artifact artifact;
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("human", "session", root, "project");
   }
 
+  /** {@code sha} の条件を再現するための補助情報を返す。 */
   String sha(String value) throws Exception {
     return HexFormat.of()
         .formatHex(
             MessageDigest.getInstance("SHA-256").digest(value.getBytes(StandardCharsets.UTF_8)));
   }
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     root = directory.toRealPath();
@@ -66,6 +81,7 @@ class GoalRequirementDeliveryTest {
     Files.writeString(root.resolve("out.txt"), "correct");
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   GoalRepository.Goal create(GoalCompletionGate.Definition definition) throws Exception {
     return goals.create(
         owner(),
@@ -76,6 +92,7 @@ class GoalRequirementDeliveryTest {
         3);
   }
 
+  /** 目標の達成管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void namedMandatoryConditionsBlockButOptionalConditionsDoNotAndRestoreAfterRestart()
       throws Exception {
@@ -109,6 +126,7 @@ class GoalRequirementDeliveryTest {
     assertTrue(verifier.verify(restarted.get("project", goal.id())).satisfied());
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void savedArtifactDoesNotProveHumanHandoverAndModelCannotAttachIt() throws Exception {
     artifact =
@@ -169,6 +187,7 @@ class GoalRequirementDeliveryTest {
                     + "\"}]}"));
   }
 
+  /** 目標の達成管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidRequirementCannotWeakenVerification() throws Exception {
     var base =
@@ -184,6 +203,7 @@ class GoalRequirementDeliveryTest {
     assertThrows(IllegalArgumentException.class, () -> create(base));
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void runningVerificationAndRepairAreDistinguishedWithoutChangingClaimsOrBudgets()
       throws Exception {
@@ -221,6 +241,7 @@ class GoalRequirementDeliveryTest {
     assertEquals("COMPLETED", restored.completionPhase("project", goal.id()));
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sameFilenameCannotSubstituteDifferentRevisionForHandover() throws Exception {
     var correct =
@@ -287,6 +308,7 @@ class GoalRequirementDeliveryTest {
         "completion_delivery_pending", verifier.verify(goals.get("project", goal.id())).reason());
   }
 
+  /** 目標の達成管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void progressShowsOptionalFailureAndCurrentRevisionWithoutClaimingCompletion() throws Exception {
     var definition =
@@ -320,6 +342,7 @@ class GoalRequirementDeliveryTest {
     assertEquals(0, goals.get("project", goal.id()).llmCallsUsed());
   }
 
+  /** 目標の達成管理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void verificationAndRepairPhaseArePublishedThroughExistingGoalEvents() throws Exception {
     var goal = goals.create(owner(), "repair", "state.json", sha("correct"), 3, 3);
@@ -355,6 +378,7 @@ class GoalRequirementDeliveryTest {
     assertEquals(List.of("RUNNING", "VERIFYING", "REPAIRING", "VERIFYING", "COMPLETED"), phases);
   }
 
+  /** 目標の達成管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void unknownRequirementEvidenceIsBlockedInsteadOfTreatedAsRepairableMismatch() throws Exception {
     Files.writeString(root.resolve("state.json"), "malformed");
@@ -375,6 +399,7 @@ class GoalRequirementDeliveryTest {
     assertEquals("json_file_invalid", verifier.verify(goal).reason());
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void omittedRequiredFlagMustNotSilentlyTurnAHumanConditionOptional() throws Exception {
     var definition =

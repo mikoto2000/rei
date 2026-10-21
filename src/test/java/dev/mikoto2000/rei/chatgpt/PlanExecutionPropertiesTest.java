@@ -8,14 +8,18 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.springframework.context.annotation.Configuration;
 
+/** 計画実行設定の結果と状態の契約を検証するテスト。 */
 class PlanExecutionPropertiesTest {
+  /** 検証条件を再現するための設定。 */
   @Configuration(proxyBeanMethods = false)
   @EnableConfigurationProperties(PlanExecutionProperties.class)
   static class Settings {}
 
+  /** 検証に使う実行の担当。 */
   private final ApplicationContextRunner runner =
       new ApplicationContextRunner().withUserConfiguration(Settings.class);
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void startsWithDefaultSettings() {
     runner.run(
@@ -28,6 +32,7 @@ class PlanExecutionPropertiesTest {
         });
   }
 
+  /** 長い合計期限一覧を受け付けられることを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"10m", "20m", "30m", "120s"})
   void acceptsLongTotalDeadlinesAndExistingShortLimits(String timeout) {
@@ -42,6 +47,7 @@ class PlanExecutionPropertiesTest {
             });
   }
 
+  /** 不正なを受け付けないことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"0s", "-1s", "1801s", "31m"})
   void rejectsInvalidOrUnboundedDeadlinesWithTheExactSettingName(String timeout) {
@@ -56,6 +62,7 @@ class PlanExecutionPropertiesTest {
             });
   }
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void bindsSettingsIncludingRefinementRounds() {
     runner

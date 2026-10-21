@@ -17,41 +17,79 @@ import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
 
-/** Trigger-independent consolidation. No CLI, timers or history writes. */
+/**
+ * 待機のユースケースを実現する。
+ *
+ * <p>Trigger-independent consolidation. No CLI, timers or history writes.
+ */
 @Service
 public class SleepService {
+  /** 実行中。 */
   private static final Set<String> RUNNING = ConcurrentHashMap.newKeySet();
+
+  /** 保存と検索の窓口。 */
   private final MemoryRepository repository;
+
+  /** やり取り一覧。 */
   private final ConversationTurnStore turns;
+
+  /** 情報の抽出。 */
   private final MemoryCandidateExtractor extractor;
+
+  /** 対象の解決。 */
   private final MemoryResolver resolver;
+
+  /** この機能の動作設定。 */
   private final MemoryProperties properties;
+
+  /** イベント一覧。 */
   private MemoryEvents events;
+
+  /** 経験の記録一覧。 */
   private dev.mikoto2000.rei.episode.EpisodeSleepService episodes;
 
+  /** 長期記憶の保存と検索で使用する経験の記録一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setEpisodes(dev.mikoto2000.rei.episode.EpisodeSleepService service) {
     episodes = service;
   }
 
+  /** 長期記憶の保存と検索で使用するイベント一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setEvents(MemoryEvents events) {
     this.events = events;
   }
 
+  /**
+   * 長期記憶の保存と検索で受け渡す計画を表す。
+   *
+   * @param candidate 候補
+   * @param resolution 解決結果
+   * @param targets 対象一覧
+   */
   public record Plan(
       MemoryCandidate candidate, MemoryResolution resolution, List<LongTermMemory> targets) {
+    /** 受け取った情報からPlanを作成する。 */
     public Plan {
       targets = List.copyOf(targets);
     }
   }
 
+  /**
+   * 長期記憶の保存と検索で受け渡すレポートを表す。
+   *
+   * @param run 実行
+   * @param plans 計画一覧
+   * @param preview 事前確認
+   */
   public record Report(SleepRun run, List<Plan> plans, boolean preview) {
+    /** 受け取った情報からReportを作成する。 */
     public Report {
       plans = List.copyOf(plans);
     }
   }
 
+  /** 指定された値や利用先を使って、SleepServiceを初期化する。 */
   public SleepService(
       MemoryRepository repository,
       ConversationTurnStore turns,
@@ -65,10 +103,12 @@ public class SleepService {
     this.properties = properties;
   }
 
+  /** 長期記憶の保存と検索で用いる待機を返す。 */
   public Report sleep(String session, String project, boolean preview) {
     return sleep(session, project, preview, () -> false);
   }
 
+  /** 長期記憶の保存と検索で用いる待機を返す。 */
   public Report sleep(
       String session,
       String project,
@@ -77,6 +117,7 @@ public class SleepService {
     return sleep(session, project, preview, cancellation, null);
   }
 
+  /** 長期記憶の保存と検索で用いる待機を返す。 */
   public Report sleep(
       String session,
       String project,
@@ -303,6 +344,7 @@ public class SleepService {
     }
   }
 
+  /** 指定された内容を、現在の対象へ反映する。 */
   private void apply(Plan plan, String project, String session) {
     var c = plan.candidate();
     var r = plan.resolution();
@@ -329,6 +371,7 @@ public class SleepService {
           .ifPresent(m -> episodes.linkMemory(project, session, c.sourceTurnIds(), m.id()));
   }
 
+  /** 長期記憶の保存と検索の操作を実行する。 */
   private static SleepRun run(
       String id,
       String session,
@@ -363,6 +406,7 @@ public class SleepService {
         failed);
   }
 
+  /** 長期記憶の保存と検索で用いるunsleptやり取り一覧を返す。 */
   public long unsleptTurns(String session) {
     return session == null
         ? 0
@@ -371,33 +415,41 @@ public class SleepService {
             episodes == null ? 0 : episodes.pending(session));
   }
 
+  /** 長期記憶の保存と検索に関する要求自動待機を処理する。 */
   public void requestAutoSleep(String session, String project, String cause) {
     if (!properties.enabled()) throw new IllegalStateException("Memory is disabled");
     repository.requestAutoSleep(session, project, cause);
   }
 
+  /** 長期記憶の保存と検索で用いる待機中自動待機要求一覧を返す。 */
   public List<MemoryRepository.AutoSleepRequest> pendingAutoSleepRequests() {
     return repository.pendingAutoSleepRequests();
   }
 
+  /** 長期記憶の保存と検索において、完了自動待機要求に該当するか判定する。 */
   public boolean completeAutoSleepRequest(MemoryRepository.AutoSleepRequest request) {
     return repository.completeAutoSleepRequest(request);
   }
 
+  /** 長期記憶の保存と検索において、実行中かどうかを判定する。 */
   public static boolean isRunning(String session) {
     return RUNNING.contains(session);
   }
 
+  /** 長期記憶の保存と検索を継続できない待機使用中の状況を伝える例外。 */
   public static class SleepBusyException extends IllegalStateException {
+    /** 既定の状態でSleepBusyExceptionを初期化する。 */
     public SleepBusyException() {
       super("Sleep already running for this session");
     }
   }
 
+  /** 長期記憶の保存と検索で用いる自動状態を返す。 */
   public MemoryRepository.AutoState autoState(String session, String project) {
     return repository.autoState(session, project);
   }
 
+  /** 最新の内容を後続の処理に反映するため、自動状態を更新する。 */
   public MemoryRepository.AutoState updateAutoState(
       MemoryRepository.AutoState state,
       String code,
@@ -407,6 +459,7 @@ public class SleepService {
     return repository.updateAutoState(state, code, description, timestamp, limit);
   }
 
+  /** 後続の処理を進められるか、現在の条件を確認する。 */
   private static void check() {
     if (Thread.currentThread().isInterrupted()) throw new CancellationException("Sleep cancelled");
   }

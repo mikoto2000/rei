@@ -18,21 +18,28 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** Slackエージェント保存と検索の窓口の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SlackAgentRepositoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-10-11T00:00:00Z");
 
+  /** {@code repo} の条件を再現するための補助情報を返す。 */
   SlackAgentRepository repo() {
     return new SlackAgentRepository(
         new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("storage.db")),
         Clock.fixed(now, ZoneOffset.UTC));
   }
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("run", "session", dir, "project");
   }
 
+  /** 検証で使用する設定を、指定された条件に合わせて用意する。 */
   SlackAgentProperties settings() {
     var p = new SlackAgentProperties();
     p.setEnabled(true);
@@ -42,10 +49,12 @@ class SlackAgentRepositoryTest {
     return p;
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   SlackAgentRepository.Request create(SlackAgentRepository r, String call) {
     return r.create(owner(), call, "tenten", "question " + call, "expected", 300, null, settings());
   }
 
+  /** Slackとの連携で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void creationIsIdempotentAndBudgetIsDurable() {
     var r = repo();
@@ -60,6 +69,7 @@ class SlackAgentRepositoryTest {
         () -> r.create(owner(), "x", "other", "q", "", 300, null, settings()));
   }
 
+  /** Slackとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sendAndAnswerAreDifferentStatesAndTransitionsAreFenced() {
     var r = repo();
@@ -75,11 +85,13 @@ class SlackAgentRepositoryTest {
     assertEquals(1, r.responses(q.id()).size());
   }
 
+  /** {@code message} の条件を再現するための補助情報を返す。 */
   SlackMessage message(String event, String ts, String text) {
     return new SlackMessage(
         event, "T1", "C1", ts, "100.1", "U2", "B2", "bot_message", "message", "channel", text);
   }
 
+  /** Slackとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void exactConfiguredMarkerCanCompleteButSilenceCannot() {
     var p = settings();
@@ -96,6 +108,7 @@ class SlackAgentRepositoryTest {
     assertEquals("configured_final_prefix", r.get(q.id()).reason());
   }
 
+  /** Slackとの連携の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void terminalCancellationRejectsLateReplyAndTimeoutRetainsPartial() {
     var r = repo();
@@ -112,6 +125,7 @@ class SlackAgentRepositoryTest {
     assertEquals("CANCELLED", r.get(other.id()).state());
   }
 
+  /** Slackとの連携で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void uncertainSendIsNeverAutomaticallyReplayed() {
     var r = repo();
@@ -122,6 +136,7 @@ class SlackAgentRepositoryTest {
     assertFalse(r.claimSend(q.id()));
   }
 
+  /** Slackとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void untrustedIdentityAndUnrelatedThreadsAreRejected() {
     var r = repo();
@@ -206,6 +221,7 @@ class SlackAgentRepositoryTest {
     assertTrue(r.responses(q.id()).isEmpty());
   }
 
+  /** Slackとの連携で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void followUpTurnsAreBoundedAndCannotBorrowAnotherParentsRequest() {
     var r = repo();

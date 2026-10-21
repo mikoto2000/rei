@@ -18,8 +18,29 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 import javax.sql.DataSource;
 
-/** Metadata only, separate from ActivityRecord. Observation IDs make enrichment idempotent. */
+/**
+ * 分類計測記録を保存・検索するための窓口。
+ *
+ * <p>Metadata only, separate from ActivityRecord. Observation IDs make enrichment idempotent.
+ */
 public final class ClassificationTelemetryRepository {
+  /**
+   * 作業状況の把握で受け渡す行を表す。
+   *
+   * @param id 識別子
+   * @param at 日時
+   * @param process プロセス
+   * @param title タイトル
+   * @param application アプリケーション
+   * @param service サービス
+   * @param content 内容
+   * @param category 分類
+   * @param diagnostics 診断情報
+   * @param visionAttempted 画像認識Attempted
+   * @param visionSuccess 画像認識成功
+   * @param visionFailure 画像認識失敗情報
+   * @param initialVisionRequired 初期画像認識必須
+   */
   public record Row(
       String id,
       Instant at,
@@ -35,6 +56,31 @@ public final class ClassificationTelemetryRepository {
       String visionFailure,
       boolean initialVisionRequired) {}
 
+  /**
+   * 作業状況の把握で受け渡す候補を表す。
+   *
+   * @param key 照合キー
+   * @param process プロセス
+   * @param title タイトル
+   * @param application アプリケーション
+   * @param service サービス
+   * @param content 内容
+   * @param category 分類
+   * @param count 件数
+   * @param firstSeen 最初確認済み
+   * @param lastSeen 最後に確認した日時
+   * @param open 開始
+   * @param state 状態
+   * @param visionAttempted 画像認識Attempted
+   * @param visionSuccess 画像認識成功
+   * @param outcomes 最終結果一覧
+   * @param reasons 理由一覧
+   * @param confidence 確信度
+   * @param visionFailure 画像認識失敗情報
+   * @param disposition 扱い
+   * @param entertainmentConfidence 娯楽確信度
+   * @param entertainmentRule 娯楽規則
+   */
   public record Candidate(
       String key,
       String process,
@@ -58,14 +104,21 @@ public final class ClassificationTelemetryRepository {
       double entertainmentConfidence,
       String entertainmentRule) {}
 
+  /** データベースへの接続元。 */
   private final DataSource ds;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule());
+
+  /** 初期化済み。 */
   private boolean initialized;
 
+  /** 指定された値や利用先を使って、ClassificationTelemetryRepositoryを初期化する。 */
   public ClassificationTelemetryRepository(DataSource ds) {
     this.ds = ds;
   }
 
+  /** 作業状況の把握に関する初期化を処理する。 */
   private void initialize() throws Exception {
     if (initialized) return;
     try (var c = ds.getConnection();
@@ -84,6 +137,7 @@ public final class ClassificationTelemetryRepository {
     }
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   public synchronized void save(Row row, ActivityProperties.Classification settings, Instant now)
       throws Exception {
     initialize();
@@ -247,6 +301,7 @@ public final class ClassificationTelemetryRepository {
     }
   }
 
+  /** 作業状況の把握で用いる行一覧を返す。 */
   public synchronized List<Row> rows(Instant since) throws Exception {
     initialize();
     try (var c = ds.getConnection();
@@ -262,6 +317,7 @@ public final class ClassificationTelemetryRepository {
     }
   }
 
+  /** 作業状況の把握で用いる候補一覧を返す。 */
   public synchronized List<Candidate> candidates(String kind, Instant since) throws Exception {
     if (!Set.of("unknown", "uncertain").contains(kind))
       throw new IllegalArgumentException("Unknown registry");
@@ -287,6 +343,7 @@ public final class ClassificationTelemetryRepository {
         .toList();
   }
 
+  /** 作業状況の把握で用いるmembersを返す。 */
   private List<Row> members(java.sql.Connection c, String kind, String key, Instant since)
       throws Exception {
     var rows = new ArrayList<Row>();
@@ -304,6 +361,7 @@ public final class ClassificationTelemetryRepository {
     return rows;
   }
 
+  /** 作業状況の把握に関する再確認を処理する。 */
   private void refresh(java.sql.Connection c, String kind, String key) throws Exception {
     var candidate = aggregate(key, members(c, kind, key, Instant.EPOCH), kind);
     if (candidate == null) {
@@ -327,6 +385,7 @@ public final class ClassificationTelemetryRepository {
     }
   }
 
+  /** 記録された情報を集計し、全体の傾向や結果をまとめる。 */
   private static Candidate aggregate(String key, List<Row> rows, String kind) {
     if (rows.isEmpty()) return null;
     var last = rows.getLast();
@@ -372,6 +431,7 @@ public final class ClassificationTelemetryRepository {
         d.matchedEntertainmentRuleId());
   }
 
+  /** 対象を照合・参照するためのキーを返す。 */
   private static String key(Row r, boolean entertainment) {
     return normalize(r.process())
         + "\n"
@@ -379,6 +439,7 @@ public final class ClassificationTelemetryRepository {
         + (entertainment ? "\n" + normalize(r.service()) + "\n" + normalize(r.content()) : "");
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、表記や形式をそろえる。 */
   private static String normalize(String s) {
     return s.toLowerCase(Locale.ROOT).replaceAll("\\s+", " ").strip();
   }

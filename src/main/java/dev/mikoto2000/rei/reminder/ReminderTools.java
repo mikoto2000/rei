@@ -7,12 +7,15 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
+/** リマインダーをモデルから呼び出せるツールとして提供する。 */
 @Component
 @RequiredArgsConstructor
 public class ReminderTools {
 
+  /** リマインダーサービス。 */
   private final ReminderService reminderService;
 
+  /** リマインダーの管理で用いるリマインダー作成を返す。 */
   @Tool(
       name = "reminderCreate",
       description =
@@ -46,6 +49,7 @@ public class ReminderTools {
     throw new IllegalArgumentException("remindAt か targetAt と minutesBefore の組み合わせを指定してください");
   }
 
+  /** リマインダーの管理で用いるリマインダー一覧を返す。 */
   @Tool(name = "reminderList", description = "未通知のリマインドを一覧します")
   List<Reminder> reminderList() {
     IO.println("未通知のリマインドを一覧するよ");

@@ -11,9 +11,12 @@ import java.sql.DriverManager;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 状態表示移行の結果と状態の契約を検証するテスト。 */
 class DotMigrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code versionSeven} の条件を再現するため、検証用の操作や状態を扱う。 */
   void versionSeven() throws Exception {
     try (var gate = new StorageMigrationCoordinator(root)) {
       gate.prepare();
@@ -35,6 +38,7 @@ class DotMigrationTest {
     }
   }
 
+  /** 既存のデータを保持することを確認する。 */
   @Test
   void verifiedSevenMigratesAtomicallyAndPreservesExistingData() throws Exception {
     versionSeven();
@@ -53,6 +57,7 @@ class DotMigrationTest {
     assertTrue(Files.isDirectory(root.resolve(".storage/backups")));
   }
 
+  /** データ保存の共通処理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void interruptedMigrationRollsBackAndRestartDoesNotDuplicate() throws Exception {
     versionSeven();

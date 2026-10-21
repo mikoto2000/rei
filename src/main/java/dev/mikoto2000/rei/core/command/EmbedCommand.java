@@ -15,6 +15,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+/** 文書のベクトルストア操作を行いますを行うための利用者コマンド。 */
 @Component
 @RequiredArgsConstructor
 @Command(
@@ -27,14 +28,18 @@ import picocli.CommandLine.Parameters;
       EmbedCommand.DeleteCommand.class
     })
 public class EmbedCommand implements Runnable {
+  /** 共通の実行基盤のうち、レポートの操作を利用者コマンドとして受け付ける。 */
   private abstract static class ReportCommand implements Runnable {
+    /** レポート出力。 */
     private java.io.PrintWriter reportOutput;
 
+    /** 共通の実行基盤で用いる出力先を返す。 */
     java.io.PrintWriter out() {
       return reportOutput == null ? new java.io.PrintWriter(System.out, true) : reportOutput;
     }
   }
 
+  /** 共通の実行基盤で用いるレポートを返す。 */
   private static String report(ReportCommand command) {
     var text = new java.io.StringWriter();
     command.reportOutput = new java.io.PrintWriter(text, true);
@@ -42,6 +47,7 @@ public class EmbedCommand implements Runnable {
     return text.toString().replaceFirst("[\\r\\n]+$", "");
   }
 
+  /** 共通の実行基盤で用いるレポート検索を返す。 */
   public static String reportSearch(
       VectorDocumentService service, String query, Integer topK, Double threshold, String source) {
     var command = new SearchCommand(service);
@@ -52,10 +58,12 @@ public class EmbedCommand implements Runnable {
     return report(command);
   }
 
+  /** 共通の実行基盤で用いるレポート一覧を返す。 */
   public static String reportList(VectorDocumentService service) {
     return report(new ListCommand(service));
   }
 
+  /** 共通の実行基盤で用いるレポート削除を返す。 */
   public static String reportDelete(VectorDocumentService service, String id, String source) {
     var command = new DeleteCommand(service);
     command.docId = id;
@@ -63,9 +71,13 @@ public class EmbedCommand implements Runnable {
     return report(command);
   }
 
+  /** ベクトル文書サービス。 */
   private final VectorDocumentService vectorDocumentService;
+
+  /** 非同期ベクトル文書サービス。 */
   private final AsyncVectorDocumentService asyncVectorDocumentService;
 
+  /** 保存済み文書。 */
   @Parameters(
       arity = "0..*",
       paramLabel = "DOCUMENTS...",
@@ -73,6 +85,7 @@ public class EmbedCommand implements Runnable {
       completionCandidates = dev.mikoto2000.rei.core.completion.PathCompletionCandidates.Any.class)
   String[] documents;
 
+  /** 文書のベクトルストア操作を行いますを行う。 */
   @Override
   public void run() {
     if (documents == null || documents.length == 0) {
@@ -84,13 +97,16 @@ public class EmbedCommand implements Runnable {
     printQueued(List.of(documents));
   }
 
+  /** 文書をベクトルストアへ追加しますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "add", description = "文書をベクトルストアへ追加します")
   public static class AddCommand implements Runnable {
 
+    /** 非同期ベクトル文書サービス。 */
     private final AsyncVectorDocumentService asyncVectorDocumentService;
 
+    /** 保存済み文書。 */
     @Parameters(
         arity = "1..*",
         paramLabel = "DOCUMENTS...",
@@ -99,6 +115,7 @@ public class EmbedCommand implements Runnable {
             dev.mikoto2000.rei.core.completion.PathCompletionCandidates.Any.class)
     String[] documents;
 
+    /** 文書をベクトルストアへ追加しますを行う。 */
     @Override
     public void run() {
       List<String> resolvedDocuments = resolveDocuments(List.of(documents));
@@ -107,25 +124,32 @@ public class EmbedCommand implements Runnable {
     }
   }
 
+  /** ベクトルストア内の文書を検索しますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "search", description = "ベクトルストア内の文書を検索します")
   public static class SearchCommand extends ReportCommand {
 
+    /** ベクトル文書サービス。 */
     private final VectorDocumentService vectorDocumentService;
 
+    /** 上位件数。 */
     @Option(names = "--top-k", description = "返却件数")
     Integer topK;
 
+    /** 判定の境界値。 */
     @Option(names = "--threshold", description = "類似度しきい値")
     Double threshold;
 
+    /** 取得元。 */
     @Option(names = "--source", description = "source で絞り込みます")
     String source;
 
+    /** 検索条件部分一覧。 */
     @Parameters(arity = "1..*", paramLabel = "QUERY", description = "検索クエリ")
     String[] queryParts;
 
+    /** ベクトルストア内の文書を検索しますを行う。 */
     @Override
     public void run() {
       List<VectorDocumentSearchResult> results =
@@ -150,13 +174,16 @@ public class EmbedCommand implements Runnable {
     }
   }
 
+  /** 登録済み文書を一覧しますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "list", description = "登録済み文書を一覧します")
   public static class ListCommand extends ReportCommand {
 
+    /** ベクトル文書サービス。 */
     private final VectorDocumentService vectorDocumentService;
 
+    /** 登録済み文書を一覧しますを行う。 */
     @Override
     public void run() {
       List<VectorDocumentEntry> entries = vectorDocumentService.list();
@@ -190,19 +217,24 @@ public class EmbedCommand implements Runnable {
     }
   }
 
+  /** 登録済み文書を削除しますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "delete", description = "登録済み文書を削除します")
   public static class DeleteCommand extends ReportCommand {
 
+    /** ベクトル文書サービス。 */
     private final VectorDocumentService vectorDocumentService;
 
+    /** 文書の識別子。 */
     @Option(names = "--doc-id", description = "削除対象 docId")
     String docId;
 
+    /** 取得元。 */
     @Option(names = "--source", description = "削除対象 source")
     String source;
 
+    /** 登録済み文書を削除しますを行う。 */
     @Override
     public void run() {
       if (docId != null && !docId.isBlank() && (source == null || source.isBlank())) {
@@ -219,6 +251,7 @@ public class EmbedCommand implements Runnable {
     }
   }
 
+  /** 利用者に結果を伝えるため、追加済みを出力する。 */
   private static void printAdded(List<VectorDocumentEntry> entries) {
     for (VectorDocumentEntry entry : entries) {
       System.out.println(
@@ -226,21 +259,32 @@ public class EmbedCommand implements Runnable {
     }
   }
 
+  /** 利用者に結果を伝えるため、待機中を出力する。 */
   private static void printQueued(List<String> sources) {
     System.out.println("追加処理を開始: " + String.join(", ", sources));
   }
 
+  /** 指定や設定に応じた対象を利用するため、保存済み文書を確定する。 */
   static List<String> resolveDocuments(List<String> documents) {
     return dev.mikoto2000.rei.core.completion.DocumentPathResolver.resolve(
         documents, Path.of(System.getProperty("user.dir")));
   }
 
+  /** 内容を表示・参照しやすくするため、評価値を整形する。 */
   private static String formatScore(Double score) {
     return score == null ? "n/a" : String.format(Locale.ROOT, "%.3f", score);
   }
 
+  /**
+   * 共通の実行基盤で受け渡す取得元要約を表す。
+   *
+   * @param docCount 文書件数
+   * @param chunkCount 文書の分割単位件数
+   * @param latestIngestedAt 最新Ingested日時
+   */
   private record SourceSummary(int docCount, int chunkCount, String latestIngestedAt) {
 
+    /** 新たな対象を登録し、後から利用できるようにする。 */
     SourceSummary add(int additionalChunks, String candidateLatest) {
       String resolvedLatest =
           Comparator.nullsLast(String::compareTo).compare(candidateLatest, latestIngestedAt) > 0

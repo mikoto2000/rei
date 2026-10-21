@@ -22,6 +22,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/** 成果物をWeb APIの操作として受け付ける。 */
 @RestController
 @ConditionalOnProperty(
     name = {"rei.web.enabled", "rei.artifacts.enabled"},
@@ -29,23 +30,37 @@ import org.springframework.web.bind.annotation.RestController;
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @RequestMapping("/api/v1/artifacts")
 public class ArtifactController {
+  /** 保存先。 */
   private final ArtifactStore store;
 
+  /** 指定された値や利用先を使って、ArtifactControllerを初期化する。 */
   public ArtifactController(ArtifactStore store) {
     this.store = store;
   }
 
+  /** 出典を成果物として書き出す窓口。 */
   private ArtifactSourceExport exports;
 
+  /** Web APIによる操作で使用する取得元書き出しを設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setSourceExport(ArtifactSourceExport exports) {
     this.exports = exports;
   }
 
+  /**
+   * Web APIによる操作で受け渡す書き出し要求を表す。
+   *
+   * @param projectId 所属プロジェクトの識別子
+   * @param sessionId 会話の識別子
+   * @param sourceKind 取得元種類
+   * @param sourceId 取得元識別子
+   * @param version 形式のバージョン
+   */
   public record ExportRequest(
       String projectId, String sessionId, String sourceKind, String sourceId, String version)
       implements StrictApiRequest {}
 
+  /** Web APIによる操作で用いる書き出しを返す。 */
   @PostMapping("/export")
   public ResponseEntity<Artifact> export(@RequestBody ExportRequest request)
       throws java.io.IOException {
@@ -62,6 +77,7 @@ public class ArtifactController {
         .body(item);
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   @GetMapping
   public HistoryPage<Artifact> list(
       @RequestParam(required = false) String projectId,
@@ -72,6 +88,7 @@ public class ArtifactController {
     return store.list(projectId, sessionId, runId, limit, cursor);
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   @GetMapping("/{id}")
   public Artifact get(
       @PathVariable String id,
@@ -80,6 +97,7 @@ public class ArtifactController {
     return store.get(projectId, sessionId, id);
   }
 
+  /** Web APIによる操作で用いる内容を返す。 */
   @GetMapping("/{id}/content")
   public ResponseEntity<byte[]> content(
       @PathVariable String id,
@@ -108,8 +126,15 @@ public class ArtifactController {
         .body(bytes);
   }
 
+  /**
+   * Web APIによる操作で受け渡す削除要求を表す。
+   *
+   * @param projectId 所属プロジェクトの識別子
+   * @param sessionId 会話の識別子
+   */
   public record DeleteRequest(String projectId, String sessionId) implements StrictApiRequest {}
 
+  /** 指定された対象を削除する。 */
   @DeleteMapping("/{id}")
   public Artifact delete(@PathVariable String id, @RequestBody DeleteRequest request) {
     return store.delete(request.projectId(), request.sessionId(), id);

@@ -17,17 +17,26 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 
-/** Extraction has no tools or persistence. Historical text can never invoke an action here. */
+/**
+ * 言語モデル作業文脈に必要な情報を入力から取り出す。
+ *
+ * <p>Extraction has no tools or persistence. Historical text can never invoke an action here.
+ */
 @Service
 public class LlmWorkContextExtractor implements WorkContextExtractor {
+  /** モデル一覧。 */
   private final LlmModelProvider models;
+
+  /** この機能の動作設定。 */
   private final WorkContextProperties properties;
 
+  /** 指定された値や利用先を使って、LlmWorkContextExtractorを初期化する。 */
   public LlmWorkContextExtractor(LlmModelProvider models, WorkContextProperties properties) {
     this.models = models;
     this.properties = properties;
   }
 
+  /** 受け取った内容から、後続の処理に必要な情報を取り出す。 */
   @Override
   public List<WorkContextCandidate> extract(
       List<Evidence> evidence, List<WorkContext.Item> existing, String runStatus) {

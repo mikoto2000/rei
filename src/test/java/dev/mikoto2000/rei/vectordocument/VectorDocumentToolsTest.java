@@ -8,8 +8,10 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+/** ベクトル文書ツール一覧の結果と状態の契約を検証するテスト。 */
 class VectorDocumentToolsTest {
 
+  /** 検索対象文書の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void vectorDocumentAddDelegatesToService() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
@@ -24,6 +26,7 @@ class VectorDocumentToolsTest {
     verify(service).add(List.of("/tmp/docs/spec.md"));
   }
 
+  /** 検索対象文書の管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void vectorDocumentSearchDelegatesToService() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
@@ -41,6 +44,7 @@ class VectorDocumentToolsTest {
     verify(service).search("spring ai", 3, 0.4d, "/tmp/docs/spec.md");
   }
 
+  /** 検索対象文書の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void vectorDocumentListDelegatesToService() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
@@ -55,6 +59,7 @@ class VectorDocumentToolsTest {
     verify(service).list();
   }
 
+  /** 検索対象文書の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void vectorDocumentDeleteByDocIdDelegatesToService() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);
@@ -67,6 +72,7 @@ class VectorDocumentToolsTest {
     verify(service).deleteByDocId("doc-1");
   }
 
+  /** 検索対象文書の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void vectorDocumentDeleteBySourceDelegatesToService() throws Exception {
     VectorDocumentService service = Mockito.mock(VectorDocumentService.class);

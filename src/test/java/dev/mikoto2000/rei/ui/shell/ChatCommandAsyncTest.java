@@ -16,9 +16,12 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import org.junit.jupiter.api.Test;
 
+/** チャットコマンド非同期の結果と状態の契約を検証するテスト。 */
 class ChatCommandAsyncTest {
+  /** 検証に使う検証専用の一時。 */
   @org.junit.jupiter.api.io.TempDir Path temp;
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shellSeparatesIndependentConsultationFromExplicitRunGuidance() {
     var tasks = new ArrayList<Runnable>();
@@ -65,6 +68,7 @@ class ChatCommandAsyncTest {
     }
   }
 
+  /** シェルコマンド返す変更前エージェントおよびについて、案内を受け付けられることを確認する。 */
   @Test
   void shellCommandReturnsBeforeAgentAndAcceptsGuidance() {
     var tasks = new ArrayList<Runnable>();
@@ -89,6 +93,7 @@ class ChatCommandAsyncTest {
     try (var scope = projects.newClient().open()) {
       assertThat(cli.execute("start")).isZero();
       assertThat(cli.execute("guidance")).isZero();
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(service);
       assertThat(tasks).hasSize(1);
       tasks.removeFirst().run();

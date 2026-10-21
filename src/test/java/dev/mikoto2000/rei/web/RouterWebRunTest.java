@@ -10,7 +10,9 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
+/** 入力の振り分けWeb実行の結果と状態の契約を検証するテスト。 */
 class RouterWebRunTest {
+  /** Web実行一覧について、指定された識別情報を維持することを確認する。 */
   @Test
   void webRunsKeepSuppliedIdentityAndShareFifoWithCliWithoutSharingInterventions() {
     List<Runnable> tasks = new ArrayList<>();

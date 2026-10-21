@@ -14,8 +14,10 @@ import java.time.Duration;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
+/** Googleトークン再確認実行する作業の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class GoogleTokenRefreshJobTest {
+  /** Googleサービスの認証で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void continuesAfterFailure() throws Exception {
     GoogleOAuthService service = mock(GoogleOAuthService.class);
@@ -27,6 +29,7 @@ class GoogleTokenRefreshJobTest {
     verify(service, times(2)).refreshIfExpiring(advance);
   }
 
+  /** Googleサービスの認証で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rejectsNonPositiveAdvance() {
     assertThrows(
@@ -34,6 +37,7 @@ class GoogleTokenRefreshJobTest {
         () -> new GoogleTokenRefreshJob(mock(GoogleOAuthService.class), "0s"));
   }
 
+  /** 実行予定の管理機能の構成要素について、既定値を利用することを確認する。 */
   @Test
   void schedulerBeanUsesDefaultsAndCanBeDisabled() {
     var runner =

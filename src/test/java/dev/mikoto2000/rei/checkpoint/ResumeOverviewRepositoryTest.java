@@ -20,10 +20,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** 再開概要保存と検索の窓口の結果と状態の契約を検証するテスト。 */
 class ResumeOverviewRepositoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
+
+  /** 検証に使うリポジトリ。 */
   PersistentCheckpointRepository repo;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void open() {
     var ds = new SQLiteDataSource();
@@ -31,6 +36,7 @@ class ResumeOverviewRepositoryTest {
     repo = new PersistentCheckpointRepository(ds, new CheckpointProperties());
   }
 
+  /** 検証用に、後から参照できるよう、指定された情報を保存する。 */
   PersistentCheckpoint save(String task, String status, long revision) {
     var state = PersistentCheckpoint.initial(task, "A", "session", "run", directory, "request");
     var fields = repo.fields(state);
@@ -38,6 +44,7 @@ class ResumeOverviewRepositoryTest {
     return repo.save(repo.fields(fields), revision, task + revision);
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void aggregatesLatestRevisionBeforeFilteringAndDoesNotMixProjects() {
     save("old", "INTERRUPTED", 0);
@@ -50,6 +57,7 @@ class ResumeOverviewRepositoryTest {
     assertEquals("old", rows.getFirst().taskId());
   }
 
+  /** 作業の中断と再開で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void distinguishesActiveAndLostRunningOwnership() {
     save("active", "RUNNING", 0);
@@ -61,6 +69,7 @@ class ResumeOverviewRepositoryTest {
     assertTrue(rows.getFirst().notice().contains("所有権"));
   }
 
+  /** 作業の中断と再開で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void onlyOldFailuresAreFilteredButUnknownOperationsRemain() throws Exception {
     save("failed", "FAILED", 0);
@@ -90,6 +99,7 @@ class ResumeOverviewRepositoryTest {
                 .toList()));
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void corruptionFallsBackWithoutPretendingToBeLatest() throws Exception {
     save("task", "INTERRUPTED", 0);
@@ -107,6 +117,7 @@ class ResumeOverviewRepositoryTest {
     assertTrue(candidate.notice().contains("参考"));
   }
 
+  /** 作業の中断と再開で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void countAndLatestQueryUsePrimaryKeyIndexesAndLeaveDatabaseUntouched() throws Exception {
     for (int i = 0; i < 20; i++) {
@@ -130,6 +141,7 @@ class ResumeOverviewRepositoryTest {
     assertFalse(plan.stream().anyMatch(line -> line.equals("SCAN r")));
   }
 
+  /** 一致について、時刻一覧利用タスク識別情報を保存することを確認する。 */
   @Test
   void equalSaveTimesUseTaskIdentityAndFractionalTimeOrderingIsExact() throws Exception {
     save("b", "INTERRUPTED", 0);
@@ -146,6 +158,7 @@ class ResumeOverviewRepositoryTest {
     }
   }
 
+  /** 作業の中断と再開で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void identityMismatchFallsBackAndCompletelyBrokenTaskNeedsReview() throws Exception {
     save("task", "WAITING", 0);
@@ -164,6 +177,7 @@ class ResumeOverviewRepositoryTest {
     assertTrue(rows.stream().allMatch(ResumeOverview.Candidate::fallback));
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void representativeHistoryProjectsOnlyOneCandidateWithoutJavaSnapshotReads() throws Exception {
     try (var c =
@@ -214,6 +228,7 @@ class ResumeOverviewRepositoryTest {
             + timings.get(2) / 1_000_000.0);
   }
 
+  /** 作業の中断と再開で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failureCutoffIsInclusiveAndDoesNotHideUnknownFailures() throws Exception {
     save("boundary", "FAILED", 0);
@@ -245,6 +260,7 @@ class ResumeOverviewRepositoryTest {
                 .toList()));
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void completionUsesRecordedPlanAndClaimsButNeverRawToolOutput() {
     var state = save("task", "INTERRUPTED", 0);
@@ -287,6 +303,7 @@ class ResumeOverviewRepositoryTest {
         repo.overviewSelection("A", Instant.EPOCH).latest().completed());
   }
 
+  /** 作業の中断と再開で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void unsupportedSchemaAndNullCollectionFallBackToTheExistingDecoder() throws Exception {
     save("schema", "WAITING_APPROVAL", 0);

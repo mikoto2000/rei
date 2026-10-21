@@ -18,7 +18,9 @@ import dev.mikoto2000.rei.memory.util.SensitiveInfoDetector;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 記憶伝えるの結果と状態の契約を検証するテスト。 */
 class MemoryReportsTest {
+  /** 長期記憶の活用の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void summaryRendererPreservesPreviewAndApprovalWithoutSharedOutputState() {
     var consolidation = mock(MemoryConsolidatorService.class);
@@ -36,6 +38,7 @@ class MemoryReportsTest {
     verify(memories, times(1)).save(any());
   }
 
+  /** 長期記憶の活用の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void approvalAliasesRejectDuplicateSpecificationLikeShell() {
     var command =
@@ -46,6 +49,7 @@ class MemoryReportsTest {
         () -> new picocli.CommandLine(command).parseArgs("--approve=true", "--save=false"));
   }
 
+  /** 長期記憶の活用で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void consolidationRendererHandlesNoCandidatesUsingTheExistingService() {
     var consolidation = mock(MemoryConsolidatorService.class);

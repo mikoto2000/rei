@@ -6,8 +6,10 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/** システムシェルサービスの結果と状態の契約を検証するテスト。 */
 class SystemShellServiceTest {
 
+  /** 対話から使う共通操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void resolvesShellFromEnvironment() {
     SystemShellService service = new SystemShellService();
@@ -16,6 +18,7 @@ class SystemShellServiceTest {
         .isEqualTo("/bin/zsh");
   }
 
+  /** 対話から使う共通操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void resolvesDefaultShellByOperatingSystem() {
     SystemShellService service = new SystemShellService();
@@ -25,6 +28,7 @@ class SystemShellServiceTest {
     assertThat(service.resolveShell(Map.of(), "Mac OS X")).isEqualTo("bash");
   }
 
+  /** 対話から使う共通操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void buildsShellCommandLine() {
     SystemShellService service = new SystemShellService();
@@ -37,6 +41,7 @@ class SystemShellServiceTest {
         .isEqualTo(List.of("/bin/bash", "-lc", "printf hello"));
   }
 
+  /** 対話から使う共通操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void buildsInteractiveShellCommandLine() {
     SystemShellService service = new SystemShellService();

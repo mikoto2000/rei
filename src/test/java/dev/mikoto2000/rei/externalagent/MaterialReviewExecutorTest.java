@@ -11,14 +11,18 @@ import java.util.Map;
 import java.util.function.BooleanSupplier;
 import org.junit.jupiter.api.Test;
 
+/** 教材レビュー実行先の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class MaterialReviewExecutorTest {
+  /** 検証に使う作業ルート。 */
   @org.junit.jupiter.api.io.TempDir Path root;
 
+  /** レポートを保持することを確認する。 */
   @Test
   void selectsMaterialPromptSchemaAndPreservesReportForEvaluation() throws Exception {
     var runner =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           @Override
           public Output run(
               List<String> command,
@@ -76,6 +80,7 @@ class MaterialReviewExecutorTest {
     assertEquals(ExternalAgentFinding.Severity.high, result.findings().getFirst().severity());
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidAndTruncatedResultsFailWithoutRetry() throws Exception {
     String valid = MaterialReviewSpecificationTest.fixture();
@@ -90,6 +95,7 @@ class MaterialReviewExecutorTest {
       var calls = new java.util.concurrent.atomic.AtomicInteger();
       var runner =
           new ExternalAgentProcessRunner() {
+            /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
             @Override
             public Output run(
                 List<String> command,
@@ -111,6 +117,7 @@ class MaterialReviewExecutorTest {
     }
     var runner =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           @Override
           public Output run(
               List<String> command,
@@ -130,6 +137,7 @@ class MaterialReviewExecutorTest {
             .status());
   }
 
+  /** 外部エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void preservesProcessFailureTimeoutAndCancellation() {
     for (var status :
@@ -140,6 +148,7 @@ class MaterialReviewExecutorTest {
             ExternalAgentResult.Status.CANCELLED)) {
       var runner =
           new ExternalAgentProcessRunner() {
+            /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
             @Override
             public Output run(
                 List<String> command,
@@ -162,6 +171,7 @@ class MaterialReviewExecutorTest {
     }
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   ExternalAgentRequest request() {
     return new ExternalAgentRequest(
         ExternalAgentRequest.Agent.CODEX,
@@ -174,6 +184,7 @@ class MaterialReviewExecutorTest {
         "id");
   }
 
+  /** {@code capabilities} の条件を再現するための補助情報を返す。 */
   static ExternalAgentProcessRunner.Output capabilities() {
     return new ExternalAgentProcessRunner.Output(
         ExternalAgentResult.Status.SUCCESS,
@@ -184,6 +195,7 @@ class MaterialReviewExecutorTest {
         false);
   }
 
+  /** {@code output} の条件を再現するための補助情報を返す。 */
   static ExternalAgentProcessRunner.Output output(String text, boolean truncated) {
     try {
       String event =

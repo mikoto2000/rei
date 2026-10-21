@@ -7,8 +7,16 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Short structured prose; uncertainty notices are owned by the formatter, not repeated by the
+ * 作業状況の把握で受け渡す日次要約を表す。
+ *
+ * <p>Short structured prose; uncertainty notices are owned by the formatter, not repeated by the
  * model.
+ *
+ * @param overview 概要
+ * @param timeOfDay 時刻所属日
+ * @param workThemes 作業テーマ一覧
+ * @param nonWorkActivities 以外作業作業状況の記録
+ * @param trend 傾向
  */
 public record DailySummary(
     String overview,
@@ -16,6 +24,7 @@ public record DailySummary(
     List<String> workThemes,
     List<String> nonWorkActivities,
     String trend) {
+  /** 受け取った情報からDailySummaryを作成する。 */
   public DailySummary {
     timeOfDay =
         timeOfDay == null ? Map.of() : Collections.unmodifiableMap(new LinkedHashMap<>(timeOfDay));
@@ -23,6 +32,7 @@ public record DailySummary(
     nonWorkActivities = nonWorkActivities == null ? List.of() : List.copyOf(nonWorkActivities);
   }
 
+  /** 作業状況の把握で用いる検証済みを返す。 */
   public DailySummary validated(DailySummaryAggregate a) {
     text(overview, 400);
     text(trend, 240);
@@ -43,10 +53,12 @@ public record DailySummary(
     return this;
   }
 
+  /** 対象の規模を判断するため、AIを数える。 */
   private static int countAi(String s) {
     return s == null ? 0 : s.split("AI支援", -1).length - 1;
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   private static void text(String s, int max) {
     if (s == null
         || s.isBlank()
@@ -56,6 +68,7 @@ public record DailySummary(
       throw new IllegalArgumentException("Invalid daily summary text");
   }
 
+  /** 作業状況の把握で用いる代替手段を返す。 */
   public static DailySummary fallback(DailySummaryAggregate a) {
     var dominant =
         DailySummaryAggregator.top(a.categorySeconds(), 3).stream()

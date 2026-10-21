@@ -12,6 +12,7 @@ import picocli.CommandLine.Parameters;
 import picocli.CommandLine.ParentCommand;
 import picocli.CommandLine.Spec;
 
+/** 音声入力（既定OFF・選択したマイクのみ）を行うための利用者コマンド。 */
 @Component
 @Command(
     name = "voice",
@@ -23,27 +24,56 @@ import picocli.CommandLine.Spec;
       VoiceCommand.Models.class
     })
 public class VoiceCommand {
+  /** 音声。 */
   private final VoiceInputCoordinator voice;
+
+  /** 利用可能な音声機器を管理する窓口。 */
   private final AudioDeviceService devices;
+
+  /** この機能の動作設定。 */
   private final VoiceProperties properties;
+
+  /** シェル。 */
   private final ShellConversationService shell;
+
+  /** モデル一覧。 */
   private final VoiceModelManager models;
+
+  /** 配信。 */
   private final VoiceDeliveryService delivery;
+
+  /** 排他制御。 */
   private final WindowsMicrophoneMonitor monitor;
+
+  /** 対象。 */
   private volatile ConversationTarget target;
+
+  /** 開始利用条件の確認。 */
   private final Object startGuard = new Object();
+
+  /** 開始生成。 */
   private long startGeneration;
+
+  /** 自動開始Attempted／シェル終了済み。 */
   private boolean autoStartAttempted, shellClosed;
+
+  /** 自動開始スレッド。 */
   private Thread autoStartThread;
+
+  /** 補正設定。 */
   private VoiceCorrectionProperties correctionProperties;
+
+  /** 補正サービス。 */
   private VoiceCorrectionService correctionService;
 
+  /** 音声による対話で使用する補正を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setCorrection(VoiceCorrectionProperties properties, VoiceCorrectionService service) {
     correctionProperties = properties;
     correctionService = service;
   }
 
+  /** 音声による対話で用いる補正を返す。 */
   @Command(
       name = "correction",
       description = "LLM補正の設定・有界メモリ内診断。Tool承認とは別です",
@@ -82,18 +112,25 @@ public class VoiceCommand {
         });
   }
 
+  /** 音声による対話で用いる補正表示を返す。 */
   private static String correctionDisplay(String value) {
     return dev.mikoto2000.rei.event.CredentialRedactor.redact(java.util.Objects.toString(value))
         .replaceAll("[\\p{Cntrl}\\p{Cf}]", " ");
   }
 
+  /** 仕様。 */
   @Spec private CommandSpec spec;
 
-  /** Metadata-only construction for help/completion without Spring or native initialization. */
+  /**
+   * 音声による対話を利用するため、指定を補って共通の初期化へ引き渡す。
+   *
+   * <p>Metadata-only construction for help/completion without Spring or native initialization.
+   */
   public VoiceCommand() {
     this(null, null, null, null);
   }
 
+  /** 音声による対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public VoiceCommand(
       VoiceInputCoordinator voice,
       AudioDeviceService devices,
@@ -102,6 +139,7 @@ public class VoiceCommand {
     this(voice, devices, properties, shell, null);
   }
 
+  /** 音声による対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public VoiceCommand(
       VoiceInputCoordinator voice,
       AudioDeviceService devices,
@@ -111,6 +149,7 @@ public class VoiceCommand {
     this(voice, devices, properties, shell, models, null, null);
   }
 
+  /** 音声による対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public VoiceCommand(
       VoiceInputCoordinator voice,
       AudioDeviceService devices,
@@ -121,6 +160,7 @@ public class VoiceCommand {
     this(voice, devices, properties, shell, models, delivery, null);
   }
 
+  /** 指定された値や利用先を使って、VoiceCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public VoiceCommand(
       VoiceInputCoordinator voice,
@@ -139,6 +179,7 @@ public class VoiceCommand {
     this.monitor = monitor;
   }
 
+  /** 後続の照会で対応する対象を見つけられるよう、配信を関連付ける。 */
   private void bindDelivery() {
     if (delivery != null) {
       delivery.setConfirmation(properties.isConfirmation());
@@ -146,12 +187,14 @@ public class VoiceCommand {
     }
   }
 
+  /** 音声による対話で用いる認識レビュー一覧を返す。 */
   private VoiceDeliveryService recognitionReviews() {
     if (delivery == null)
       throw new IllegalStateException("Recognition review service is unavailable");
     return delivery;
   }
 
+  /** 音声による対話で用いるconfirmを返す。 */
   @Command(
       name = "confirm",
       description = "認識文を確認して送信。ツール実行の承認とは別です",
@@ -167,6 +210,7 @@ public class VoiceCommand {
         });
   }
 
+  /** 音声による対話で用いる試行を返す。 */
   private int attempt(IntSupplier action) {
     try {
       if (voice == null || devices == null || properties == null || shell == null)
@@ -178,13 +222,18 @@ public class VoiceCommand {
     }
   }
 
+  /** 条件を満たさない操作を拒否するため、無効の前提条件を確認する。 */
   private void requireOff() {
     if (voice.state() != VoiceInputCoordinator.State.OFF
         && voice.state() != VoiceInputCoordinator.State.FAILED)
       throw new IllegalStateException("先に /voice off を実行し、OFFになるまで待ってください");
   }
 
-  /** Manual changes take precedence over an automatic start still verifying local assets. */
+  /**
+   * 音声による対話で用いるmanual変更を返す。
+   *
+   * <p>Manual changes take precedence over an automatic start still verifying local assets.
+   */
   private long manualChange() {
     synchronized (startGuard) {
       requireOff();
@@ -193,6 +242,7 @@ public class VoiceCommand {
     }
   }
 
+  /** 利用者が不要とした実行を止めるため、自動開始をキャンセルする。 */
   private void cancelAutoStart() {
     autoStartAttempted = true;
     startGeneration++;
@@ -200,6 +250,7 @@ public class VoiceCommand {
       autoStartThread.interrupt();
   }
 
+  /** 使い終わった資源や状態を解放するため、自動開始の利用を終える。 */
   public void closeAutoStart() {
     synchronized (startGuard) {
       shellClosed = true;
@@ -207,13 +258,18 @@ public class VoiceCommand {
     }
   }
 
+  /** 音声による対話において、自動開始実行中に該当するか判定する。 */
   boolean autoStartRunning() {
     synchronized (startGuard) {
       return autoStartThread != null;
     }
   }
 
-  /** Called only by the ready interactive Shell; bean creation never opens a microphone. */
+  /**
+   * 音声による対話に関する自動開始を処理する。
+   *
+   * <p>Called only by the ready interactive Shell; bean creation never opens a microphone.
+   */
   public void autoStart(boolean interactive, java.util.function.Consumer<String> output) {
     synchronized (startGuard) {
       if (autoStartAttempted || shellClosed) return;
@@ -255,6 +311,7 @@ public class VoiceCommand {
     }
   }
 
+  /** 音声による対話に関する自動開始失敗情報を処理する。 */
   private static void autoStartFailure(
       java.util.function.Consumer<String> output, Throwable failure) {
     output.accept(
@@ -262,6 +319,7 @@ public class VoiceCommand {
     output.accept("[voice] テキスト入力を続行します。設定を確認し、/voice on で再試行してください。");
   }
 
+  /** 要求された処理を利用できるよう、入力を開始する。 */
   private void startInput(
       long generation,
       AudioDevice selected,
@@ -297,6 +355,7 @@ public class VoiceCommand {
     }
   }
 
+  /** 通知に応じて状態や表示を更新するため、音声コマンドを受け付ける。 */
   @Command(name = "on", description = "選択マイクで開始。確定した発話は会話入力として送信", mixinStandardHelpOptions = true)
   int on() {
     return attempt(
@@ -316,6 +375,7 @@ public class VoiceCommand {
         });
   }
 
+  /** 音声による対話で用いる無効を返す。 */
   @Command(name = "off", description = "録音を停止し、未確定・未認識発話を破棄", mixinStandardHelpOptions = true)
   int off() {
     return attempt(
@@ -330,6 +390,7 @@ public class VoiceCommand {
         });
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   @Command(name = "status", description = "音声入力と固定した送信先の状態", mixinStandardHelpOptions = true)
   int status() {
     return attempt(
@@ -346,6 +407,7 @@ public class VoiceCommand {
         });
   }
 
+  /** 音声による対話で用いるdevicesを返す。 */
   @Command(name = "devices", description = "入力デバイスと明示選択用IDを表示", mixinStandardHelpOptions = true)
   int devices() {
     return attempt(
@@ -358,6 +420,7 @@ public class VoiceCommand {
         });
   }
 
+  /** 音声による対話で用いる検証を返す。 */
   @Command(
       name = "test",
       description = "20秒間のマイク認識診断。Agentへは送信しません",
@@ -380,6 +443,7 @@ public class VoiceCommand {
         });
   }
 
+  /** 音声による対話で用いる設定を返す。 */
   @Command(name = "config", description = "音声・推論設定。変更はOFF時のみ", mixinStandardHelpOptions = true)
   int config(
       @Option(names = "--threshold") Float threshold,
@@ -435,6 +499,7 @@ public class VoiceCommand {
         });
   }
 
+  /** 音声による対話で用いるfeaturesを返す。 */
   @Command(
       name = "features",
       description = "高度な音声機能（既定OFF）。変更は音声入力OFF時のみ",
@@ -472,11 +537,13 @@ public class VoiceCommand {
         });
   }
 
+  /** 音声による対話で用いるモデル管理を返す。 */
   private VoiceModelManager modelManager() {
     if (models == null) throw new IllegalStateException("Voice model manager is unavailable");
     return models;
   }
 
+  /** 利用者に結果を伝えるため、モデル一覧を出力する。 */
   private void printModels() {
     var manifest = modelManager().manifest();
     var out = spec.commandLine().getOut();
@@ -492,6 +559,7 @@ public class VoiceCommand {
     out.println("取得後に /voice on を実行してください。取得中はマイクを開きません。");
   }
 
+  /** 条件を満たさない操作を拒否するため、モデル一覧準備完了の前提条件を確認する。 */
   private void requireModelsReady(boolean automatic) {
     if (models == null) return; // compatibility for metadata-only and legacy injected tests
     if (models.busy())
@@ -504,11 +572,14 @@ public class VoiceCommand {
     }
   }
 
+  /** 固定モデル一式の案内・明示承認付き取得ための利用者コマンド。 */
   @Component
   @Command(name = "models", description = "固定モデル一式の案内・明示承認付き取得", mixinStandardHelpOptions = true)
   public static class Models implements Runnable {
+    /** 親。 */
     @ParentCommand VoiceCommand parent;
 
+    /** 固定モデル一式の案内・明示承認付き取得。 */
     public void run() {
       parent.attempt(
           () -> {
@@ -517,6 +588,7 @@ public class VoiceCommand {
           });
     }
 
+    /** 音声による対話で用いる付随情報を返す。 */
     @Command(name = "info", description = "配布元・ライセンス・サイズ・固定SHAを表示", mixinStandardHelpOptions = true)
     int info() {
       return parent.attempt(
@@ -526,6 +598,7 @@ public class VoiceCommand {
           });
     }
 
+    /** 対象の現在の状態を、照会用の情報として返す。 */
     @Command(name = "status", description = "非同期取得の状態と進捗", mixinStandardHelpOptions = true)
     int status() {
       return parent.attempt(
@@ -552,6 +625,7 @@ public class VoiceCommand {
           });
     }
 
+    /** 要求された条件を満たすことを確認する。 */
     @Command(
         name = "verify",
         description = "ローカル固定一式のサイズ・SHAを検証。取得やマイク起動は行いません",
@@ -574,6 +648,7 @@ public class VoiceCommand {
           });
     }
 
+    /** 音声による対話で用いるinstallを返す。 */
     @Command(
         name = "install",
         description = "表示したmanifest IDを承認して非同期取得。失敗後は同じコマンドで再試行",
@@ -595,6 +670,7 @@ public class VoiceCommand {
           });
     }
 
+    /** 対象の実行をキャンセルする。 */
     @Command(name = "cancel", description = "取得を取り消し、不完全な一式を破棄", mixinStandardHelpOptions = true)
     int cancel() {
       return parent.attempt(
@@ -612,11 +688,14 @@ public class VoiceCommand {
     }
   }
 
+  /** 入力デバイスの明示選択を行うための利用者コマンド。 */
   @Component
   @Command(name = "device", description = "入力デバイスの明示選択", mixinStandardHelpOptions = true)
   public static class Device {
+    /** 親。 */
     @ParentCommand VoiceCommand parent;
 
+    /** 以後の処理で使う値を、指定された内容へ切り替える。 */
     @Command(name = "set", description = "一覧のIDを選択（OFF時のみ）", mixinStandardHelpOptions = true)
     int set(@Parameters(paramLabel = "ID") String id) {
       return parent.attempt(
@@ -635,11 +714,14 @@ public class VoiceCommand {
     }
   }
 
+  /** 固定した送信先の待機中VOICE入力を行うための利用者コマンド。 */
   @Component
   @Command(name = "pending", description = "固定した送信先の待機中VOICE入力", mixinStandardHelpOptions = true)
   public static class Pending implements Runnable {
+    /** 親。 */
     @ParentCommand VoiceCommand parent;
 
+    /** 固定した送信先の待機中VOICE入力を行う。 */
     public void run() {
       if (parent.voice != null)
         for (var input : parent.voice.pendingCorrectionInputs())
@@ -663,6 +745,7 @@ public class VoiceCommand {
         parent.spec.commandLine().getOut().println(input.inputId() + " " + input.text());
     }
 
+    /** 対象の実行をキャンセルする。 */
     @Command(name = "cancel", description = "未実行のVOICE入力をキャンセル", mixinStandardHelpOptions = true)
     int cancel(@Parameters(paramLabel = "ID") UUID id) {
       return parent.attempt(

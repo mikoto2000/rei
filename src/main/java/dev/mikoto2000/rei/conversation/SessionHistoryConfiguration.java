@@ -8,10 +8,15 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.DependsOn;
 import org.springframework.context.annotation.Import;
 
-/** Shared by the interactive Shell and the Web application. */
+/**
+ * 会話履歴の構成要素を接続し、設定に従って利用できるようにする。
+ *
+ * <p>Shared by the interactive Shell and the Web application.
+ */
 @Configuration(proxyBeanMethods = false)
 @Import(dev.mikoto2000.rei.storage.StorageMigrationConfiguration.class)
 public class SessionHistoryConfiguration {
+  /** 会話履歴と受付記録の管理で用いる会話受付保存先を返す。 */
   @Bean
   @DependsOn("storageMigrationLease")
   ConversationAdmissionStore conversationAdmissionStore(
@@ -24,6 +29,7 @@ public class SessionHistoryConfiguration {
     return admissions;
   }
 
+  /** 会話履歴と受付記録の管理で用いる会話受付から終了までの管理を返す。 */
   @Bean
   dev.mikoto2000.rei.application.session.SessionLifecycle sessionLifecycle(
       SessionRepository repository,
@@ -44,17 +50,20 @@ public class SessionHistoryConfiguration {
     return lifecycle;
   }
 
+  /** 会話履歴と受付記録の管理で用いる会話検索条件サービスを返す。 */
   @Bean
   dev.mikoto2000.rei.application.session.SessionQueryService sessionQueryService(
       SessionRepository repository, ConversationTurnStore turns) {
     return new dev.mikoto2000.rei.application.session.SessionQueryService(repository, turns);
   }
 
+  /** 会話履歴と受付記録の管理で用いる会話一回のやり取り保存先を返す。 */
   @Bean
   ConversationTurnStore conversationTurnStore(@Value("${rei.data-dir}") String directory) {
     return new SqliteConversationTurnStore(Path.of(directory));
   }
 
+  /** 会話履歴と受付記録の管理で用いる会話保存と検索の窓口を返す。 */
   @Bean
   SessionRepository sessionRepository(@Value("${rei.data-dir}") String directory) {
     return new SqliteSessionRepository(Path.of(directory));

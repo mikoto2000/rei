@@ -17,10 +17,13 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * Summary-only candidates from saved text. A small explicit vocabulary avoids interpreting code
+ * 作業状況の把握に必要な作業テーマ集計を扱う。
+ *
+ * <p>Summary-only candidates from saved text. A small explicit vocabulary avoids interpreting code
  * identifiers.
  */
 final class WorkThemeAggregation {
+  /** 話題一覧。 */
   private static final Map<String, Pattern> TOPICS = new LinkedHashMap<>();
 
   static {
@@ -41,12 +44,21 @@ final class WorkThemeAggregation {
     TOPICS.put("フィード要約", Pattern.compile("フィード要約|\\bfeed summary\\b", Pattern.CASE_INSENSITIVE));
   }
 
+  /** 作業状況の把握において、既知話題に該当するか判定する。 */
   static boolean knownTopic(String value) {
     return TOPICS.containsKey(value);
   }
 
+  /**
+   * 作業状況の把握で受け渡す候補を表す。
+   *
+   * @param theme テーマ
+   * @param origin 起点
+   * @param confidence 確信度
+   */
   record Candidate(String theme, ProjectThemeAssociation.Origin origin, double confidence) {}
 
+  /** 作業状況の把握で用いる話題一覧を返す。 */
   static List<Candidate> topics(ActivityRecord.Activity primary, ActivityRecord record) {
     // Record-wide prose can refer to another monitor. Only use it for an unambiguous single
     // activity.
@@ -78,6 +90,7 @@ final class WorkThemeAggregation {
     return result.stream().limit(2).toList();
   }
 
+  /** 作業状況の把握において、mentionsに該当するか判定する。 */
   private static boolean mentions(String title, String value) {
     String token = ActivityRolePolicy.normalize(value);
     return !token.isBlank()
@@ -86,6 +99,7 @@ final class WorkThemeAggregation {
             .find();
   }
 
+  /** 作業状況の把握で用いる項目一覧を返す。 */
   static ActivityFieldConfidence fields(ActivityRecord.Activity primary, ActivityRecord record) {
     var d = record.detection();
     if (primary == null || d == null) return null;
@@ -98,23 +112,42 @@ final class WorkThemeAggregation {
         .orElse(ActivityFieldConfidence.from(primary, Math.min(.5, record.confidence())));
   }
 
+  /** 作業状況の把握に必要なStatを扱う。 */
   private static final class Stat {
+    /** プロジェクト。 */
     final String project;
+
+    /** 分類一覧。 */
     final Map<String, Long> categories = new HashMap<>();
+
+    /** 対応可否。 */
     final Map<String, Map<String, ProjectThemeAssociation.Support>> supports = new HashMap<>();
+
+    /** 観測内容一覧。 */
     final Set<String> observations = new HashSet<>();
+
+    /** 秒数／実行／longest。 */
     long seconds, run, longest;
+
+    /** 終了。 */
     Instant end;
+
+    /** 継続性。 */
     String continuity;
 
+    /** 指定された値や利用先を使って、Statを初期化する。 */
     Stat(String project) {
       this.project = project;
     }
   }
 
+  /** 値一覧。 */
   private final Map<String, Stat> values = new HashMap<>();
+
+  /** 合計。 */
   private long total;
 
+  /** 新たな対象を登録し、後から利用できるようにする。 */
   void add(
       String project,
       String category,
@@ -182,6 +215,7 @@ final class WorkThemeAggregation {
     s.continuity = record.continuityId();
   }
 
+  /** 作業状況の把握で用いる順位を付けたを返す。 */
   List<ProjectThemeStat> ranked(int limit) {
     // Relative floor for short days, capped at five minutes so social-heavy periods retain real
     // work.
@@ -238,6 +272,7 @@ final class WorkThemeAggregation {
         .toList();
   }
 
+  /** 作業状況の把握で用いる関連付け一覧を返す。 */
   private static List<ProjectThemeAssociation> associations(Stat s) {
     return s.supports.entrySet().stream()
         .map(e -> ProjectThemeAssociation.summarize(s.project, e.getKey(), e.getValue().values()))
@@ -251,6 +286,7 @@ final class WorkThemeAggregation {
         .toList();
   }
 
+  /** 作業状況の把握で用いる関連付け一覧を返す。 */
   List<ProjectThemeAssociation> associations() {
     return values.values().stream()
         .flatMap(s -> associations(s).stream())
@@ -260,6 +296,7 @@ final class WorkThemeAggregation {
         .toList();
   }
 
+  /** 作業状況の把握で用いる表示名一覧を返す。 */
   List<String> labels(int limit) {
     return ranked(limit).stream().map(ProjectThemeStat::label).toList();
   }

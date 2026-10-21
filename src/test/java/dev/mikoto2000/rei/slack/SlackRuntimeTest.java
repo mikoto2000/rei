@@ -44,23 +44,43 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Slack実行環境の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SlackRuntimeTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う保存先。 */
   private SlackStore store;
+
+  /** 検証に使う検証用の設定。 */
   private SlackProperties p;
+
+  /** 検証に使うプロジェクト一覧。 */
   private ProjectRegistry projects;
+
+  /** 検証に使う会話一覧。 */
   private SessionLifecycle sessions;
+
+  /** 検証に使う登録台帳。 */
   private RunRegistry registry;
+
+  /** 検証に使う実行一覧。 */
   private RunService runs;
+
+  /** 検証に使う入力の振り分け。 */
   private ConversationInputRouter router;
+
+  /** 検証に使う保存済み。 */
   private final Map<String, SessionMetadata> saved = new HashMap<>();
 
+  /** {@code runtime} の条件を再現するための補助情報を返す。 */
   private SlackRuntime runtime() {
     return new SlackRuntime(
         p, store, "B", projects, sessions, registry, runs, router, Clock.systemUTC());
   }
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     store = new SlackStore(root);
@@ -95,10 +115,12 @@ class SlackRuntimeTest {
             router::cancelQueued);
   }
 
+  /** {@code m} の条件を再現するための補助情報を返す。 */
   private SlackMessage m(String ts, String thread, String text) {
     return new SlackMessage("E" + ts, "T", "D", ts, thread, "U", null, null, "message", "im", text);
   }
 
+  /** スレッド会話を維持することを確認する。 */
   @Test
   void submitsThroughExistingRunQueueAndKeepsThreadSession() {
     var runtime = runtime();
@@ -117,6 +139,7 @@ class SlackRuntimeTest {
         first.session(), store.latest(m("3", null, "separate")).orElseThrow().session());
   }
 
+  /** Slackとの連携で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void restartRecoversAcceptedButNeverReexecutesAnAlreadyDispatchedEvent() {
     assertTrue(runtime().accept(m("1", null, "hello")));
@@ -140,6 +163,7 @@ class SlackRuntimeTest {
     verify(router, times(1)).submit(any(AgentRunContext.class), anyString(), any());
   }
 
+  /** Slackとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedSendRetriesOutboxWithoutExecutingRunAgain() {
     var runtime = runtime();
@@ -150,6 +174,7 @@ class SlackRuntimeTest {
     verify(router, times(1)).submit(any(AgentRunContext.class), anyString(), any());
   }
 
+  /** Slackとの連携の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void statusAndCancelDoNotStartAnAgentRun() {
     var runtime = runtime();
@@ -171,6 +196,7 @@ class SlackRuntimeTest {
     assertTrue(store.replies().stream().anyMatch(r -> r.text().contains("キャンセル完了")));
   }
 
+  /** Slackとの連携の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void permissionRequiredUsesExistingApprovalAndRepliesToOwningThread() {
     var runtime = runtime();
@@ -199,6 +225,7 @@ class SlackRuntimeTest {
     assertTrue(store.replies().stream().noneMatch(row -> row.text().contains("unsafe raw data")));
   }
 
+  /** Slackとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unrelatedEventNeverLeaksToSlack() {
     var runtime = runtime();
@@ -221,6 +248,7 @@ class SlackRuntimeTest {
     assertTrue(store.replies().stream().noneMatch(r -> r.text().contains("private")));
   }
 
+  /** Slackとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void immediateFollowupToAcceptedParentIsNotLostBeforeWorkerRuns() {
     var runtime = runtime();
@@ -233,6 +261,7 @@ class SlackRuntimeTest {
         store.latest(m("2", "1", "next")).orElseThrow().session());
   }
 
+  /** Slackとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void immediateFollowupToExplicitInvitationInExistingThreadIsAccepted() {
     var runtime = runtime();
@@ -248,6 +277,7 @@ class SlackRuntimeTest {
     verify(router, times(2)).submit(any(AgentRunContext.class), anyString(), any());
   }
 
+  /** Slackとの連携で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void unknownDispatchAfterRestartIsNeverSubmittedAgain() {
     var m = m("1", null, "hello");
@@ -256,10 +286,12 @@ class SlackRuntimeTest {
     var binding = store.bind(m, p.getDmProjectId(), session.sessionId());
     store.prepare(m, "interrupted", binding);
     runtime().tick();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(router);
     assertEquals("UNKNOWN", store.byRun("interrupted").orElseThrow().state());
   }
 
+  /** Slackとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void resumedRunBecomesCurrentWithoutLosingOriginalEventMapping() {
     var runtime = runtime();
@@ -294,6 +326,7 @@ class SlackRuntimeTest {
     assertEquals(original.run(), store.byRun(original.run()).orElseThrow().run());
   }
 
+  /** Slackとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void changedChannelAllowlistSuppressesPendingReplies() {
     var runtime = runtime();
@@ -305,6 +338,7 @@ class SlackRuntimeTest {
     verifyNoInteractions(transport);
   }
 
+  /** 最終返信について、完了済みの一回のやり取りを利用することを確認する。 */
   @Test
   void finalReplyUsesCompletedTurnAfterCleanupAndRecoversWithoutMessageEvents() {
     var runtime = runtime();
@@ -332,6 +366,7 @@ class SlackRuntimeTest {
         1, store.replies().stream().filter(r -> r.text().contains("final\nanswer")).count());
   }
 
+  /** 失敗情報を伝えることを確認する。 */
   @Test
   void capacityRejectionReportsFailureWithoutExecutingOrLeavingAnActiveReceipt() {
     doThrow(new ProjectRunQueue.CapacityExceededException())
@@ -350,6 +385,7 @@ class SlackRuntimeTest {
     verify(router, times(1)).submit(any(AgentRunContext.class), anyString(), any());
   }
 
+  /** Slackとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void ambiguousAdmissionWithoutAQueueSlotIsFencedAndDoesNotRemainActiveForever() {
     doThrow(new IllegalStateException("unsafe diagnostics"))

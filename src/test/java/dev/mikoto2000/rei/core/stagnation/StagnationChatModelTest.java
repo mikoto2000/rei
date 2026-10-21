@@ -29,7 +29,9 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
+/** 停滞応答生成に使うモデルの結果と状態の契約を検証するテスト。 */
 class StagnationChatModelTest {
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void completedToolBatchSuspendsBeforeAnotherModelCall() {
     var context = context(5, new ArrayList<>());
@@ -37,10 +39,12 @@ class StagnationChatModelTest {
     var saved = new AtomicInteger();
     context.setContinuation(
         new dev.mikoto2000.rei.core.chat.RunContinuation() {
+          /** {@code restore} の条件を再現するための補助情報を返す。 */
           public Saved restore(dev.mikoto2000.rei.core.chat.AgentRunContext owner) {
             return null;
           }
 
+          /** {@code suspend} の条件を再現するための補助情報を返す。 */
           public boolean suspend(RunExecutionContext execution, List<Message> history) {
             assertThat(history.getLast()).isInstanceOf(ToolResponseMessage.class);
             saved.incrementAndGet();
@@ -56,6 +60,7 @@ class StagnationChatModelTest {
     assertThat(saved.get()).isEqualTo(1);
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void acceptsUnsetCallbacksAndDoesNotMutateRequestContext() {
     var context = context(3, new ArrayList<>());
@@ -66,10 +71,12 @@ class StagnationChatModelTest {
             .build();
     ChatModel delegate =
         new ChatModel() {
+          /** 検証用に、実行の停滞への対処の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             var actual = (org.springframework.ai.openai.OpenAiChatOptions) prompt.getOptions();
             assertThat(actual.getModel()).isEqualTo("configured-model");
@@ -87,6 +94,7 @@ class StagnationChatModelTest {
     assertThat(options.getToolCallbacks()).isNull();
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void policyBlocksAChatToolBeforeTheCallbackIsInvoked() {
     var events = new ArrayList<AgentEvent>();
@@ -114,15 +122,18 @@ class StagnationChatModelTest {
     assertThat(events).anyMatch(e -> e.type() == AgentEventType.TOOL_FAILED);
   }
 
+  /** 実行の停滞への対処で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void modelFailureStillEndsTheIteration() {
     var context = context(3, new ArrayList<>());
     ChatModel failing =
         new ChatModel() {
+          /** 検証用に、実行の停滞への対処の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             return Flux.error(new IllegalStateException("network failed"));
           }
@@ -135,6 +146,7 @@ class StagnationChatModelTest {
     assertThat(context.detector().stagnationCount()).isEqualTo(1);
   }
 
+  /** 実行の停滞への対処の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledRunCannotExecuteAnotherToolOrLlmCall() {
     var context = context(5, new ArrayList<>());
@@ -148,16 +160,19 @@ class StagnationChatModelTest {
     assertThat(calls.get()).isZero();
   }
 
+  /** 実行の停滞への対処で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void outputLimitsWithVerifiedProgressContinueWithoutSpendingReplans() {
     var calls = new AtomicInteger();
     var context = context(10, new ArrayList<>());
     ChatModel delegate =
         new ChatModel() {
+          /** 検証用に、実行の停滞への対処の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             int n = calls.incrementAndGet();
             if (n > 7) return Flux.error(new IllegalStateException("unexpected call"));
@@ -190,16 +205,19 @@ class StagnationChatModelTest {
     assertThat(context.detector().replanCount()).isZero();
   }
 
+  /** 実行の停滞への対処で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void batchOfFourDuplicateToolsIsOneIteration() {
     var calls = new AtomicInteger();
     var context = context(3, new ArrayList<>());
     ChatModel delegate =
         new ChatModel() {
+          /** 検証用に、実行の停滞への対処の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             int n = calls.incrementAndGet();
             var batch =
@@ -223,6 +241,7 @@ class StagnationChatModelTest {
     assertThat(context.detector().stagnationCount()).isEqualTo(2);
   }
 
+  /** 繰り返された成功済みのについて、停止するを読み取ることを確認する。 */
   @Test
   void repeatedSuccessfulReadStopsAfterTwoUnsuccessfulReplans() {
     var calls = new AtomicInteger();
@@ -244,6 +263,7 @@ class StagnationChatModelTest {
     assertThat(events.getLast().type()).isEqualTo(AgentEventType.STAGNATION_STOPPED);
   }
 
+  /** 新規情報について、実行中終了日時厳格な言語モデル予算を維持することを確認する。 */
   @Test
   void newInformationKeepsRunningUntilHardLlmBudget() {
     var calls = new AtomicInteger();
@@ -261,6 +281,7 @@ class StagnationChatModelTest {
     assertThat(events).noneMatch(e -> e.type() == AgentEventType.STAGNATION_REPLAN_REQUESTED);
   }
 
+  /** 復旧変更後計画の見直しについて、通常完了を許可することを確認する。 */
   @Test
   void recoveryAfterReplanAllowsNormalCompletion() {
     var calls = new AtomicInteger();
@@ -276,6 +297,7 @@ class StagnationChatModelTest {
     assertThat(context.detector().replanCount()).isZero();
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void guidanceDuringToolIsAppliedAfterResultAndBeforeNextRequest() {
     var context = context(10, new ArrayList<>());
@@ -285,10 +307,12 @@ class StagnationChatModelTest {
     List<Prompt> requests = new ArrayList<>();
     var delegate =
         new ChatModel() {
+          /** 検証用に、実行の停滞への対処の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             requests.add(p);
             return Flux.just(
@@ -327,6 +351,7 @@ class StagnationChatModelTest {
         .containsSubsequence("do not change README", "keep API");
   }
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   private RunExecutionContext context(int limit, List<AgentEvent> events) {
     var budget = new OutputLimitRunBudget(2, limit);
     budget.tryConsumeLlmCall(); // top-level prompt is reserved by ChatExecutionService
@@ -338,9 +363,11 @@ class StagnationChatModelTest {
         events::add);
   }
 
+  /** 検証で使用するプロンプトを、指定された条件に合わせて用意する。 */
   private Prompt prompt(RunExecutionContext context, java.util.function.Supplier<String> result) {
     ToolCallback callback =
         new ToolCallback() {
+          /** 検証用に、実行の停滞への対処で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("readFile")
@@ -349,10 +376,12 @@ class StagnationChatModelTest {
                 .build();
           }
 
+          /** 検証用に、実行の停滞への対処の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             return result.get();
           }
 
+          /** 検証用に、実行の停滞への対処の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input, ToolContext toolContext) {
             return call(input);
           }
@@ -365,13 +394,16 @@ class StagnationChatModelTest {
             .build());
   }
 
+  /** 検証で使用するモデルを、指定された条件に合わせて用意する。 */
   private StagnationChatModel model(List<Prompt> prompts, AtomicInteger calls, boolean finish) {
     ChatModel delegate =
         new ChatModel() {
+          /** 検証用に、実行の停滞への対処の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             assertThat(((ToolCallingChatOptions) prompt.getOptions()).getToolCallbacks())
                 .hasSize(1);

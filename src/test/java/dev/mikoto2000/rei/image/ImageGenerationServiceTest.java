@@ -11,8 +11,10 @@ import java.util.Base64;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 画像生成サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ImageGenerationServiceTest {
+  /** 自分が所有する対象成果物受付記録を返すことを確認する。 */
   @Test
   void enabledDeliveryCopiesGeneratedBytesAndReturnsAnOwnedArtifactReceipt() throws Exception {
     var buffer = new java.io.ByteArrayOutputStream();
@@ -52,8 +54,10 @@ class ImageGenerationServiceTest {
     assertThat(store.get(project.id(), "session", result.artifactId()).runId()).isEqualTo("image");
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 生成済み画像を保存することを確認する。 */
   @Test
   void savesGeneratedImageToExplicitOutputPath() throws Exception {
     byte[] png = new byte[] {1, 2, 3};
@@ -73,6 +77,7 @@ class ImageGenerationServiceTest {
     assertThat(client.request.size()).isEqualTo(new ImageSize(512, 512));
   }
 
+  /** 画像の生成で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void enhancesPromptBeforeCallingClient() {
     byte[] png = new byte[] {4, 5, 6};
@@ -97,6 +102,7 @@ class ImageGenerationServiceTest {
     assertThat(result.prompt()).isEqualTo("enhanced cat");
   }
 
+  /** 画像の生成で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void skipsPromptEnhancementWhenRequestDisablesIt() {
     RecordingClient client =
@@ -119,6 +125,7 @@ class ImageGenerationServiceTest {
     assertThat(client.request.prompt()).isEqualTo("cat");
   }
 
+  /** 生成済み画像を保存することを確認する。 */
   @Test
   void savesGeneratedImageToDefaultOutputDirectory() {
     RecordingClient client =
@@ -133,6 +140,7 @@ class ImageGenerationServiceTest {
     assertThat(result.savedPath()).exists();
   }
 
+  /** 失敗情報を返すことを確認する。 */
   @Test
   void returnsFailureWhenPromptIsBlankWithoutCallingClient() {
     RecordingClient client = new RecordingClient("unused");
@@ -147,6 +155,7 @@ class ImageGenerationServiceTest {
     assertThat(client.request).isNull();
   }
 
+  /** 失敗情報を返すことを確認する。 */
   @Test
   void returnsFailureWhenClientFails() {
     ImageGenerationService service =
@@ -164,6 +173,7 @@ class ImageGenerationServiceTest {
     assertThat(result.message()).contains("api failed");
   }
 
+  /** 失敗情報を返すことを確認する。 */
   @Test
   void returnsFailureWhenBase64IsInvalid() {
     ImageGenerationService service = service(new RecordingClient("not base64"));
@@ -177,6 +187,7 @@ class ImageGenerationServiceTest {
     assertThat(result.message()).contains("デコード");
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   private ImageGenerationService service(ImageGenerationClient client) {
     ImageProperties properties = new ImageProperties();
     properties.setOutputDirectory(tempDir.resolve("images"));
@@ -188,14 +199,20 @@ class ImageGenerationServiceTest {
     return new ImageGenerationService(client, resolver);
   }
 
+  /** 検証条件を再現するためのRecordingクライアント。 */
   private static class RecordingClient implements ImageGenerationClient {
+    /** 検証に使う応答。 */
     private final String response;
+
+    /** 検証に使う要求。 */
     private ImageGenerationRequest request;
 
+    /** 検証条件に必要な値を受け取り、RecordingClientを用意する。 */
     RecordingClient(String response) {
       this.response = response;
     }
 
+    /** {@code generate} の条件を再現するための補助情報を返す。 */
     @Override
     public String generate(ImageGenerationRequest request) {
       this.request = request;

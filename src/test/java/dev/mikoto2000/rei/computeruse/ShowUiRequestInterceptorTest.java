@@ -7,10 +7,13 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/** 表示表示要求Interceptorの結果と状態の契約を検証するテスト。 */
 class ShowUiRequestInterceptorTest {
+  /** 検証に使う保存や受け渡しに用いるデータ形式の変換。 */
   private final com.fasterxml.jackson.databind.ObjectMapper json =
       new com.fasterxml.jackson.databind.ObjectMapper();
 
+  /** その他項目一覧を保持することを確認する。 */
   @Test
   void rewritesOnlyTheIsolatedShowUiRequestAndPreservesOtherFields() throws Exception {
     var input =
@@ -48,6 +51,7 @@ class ShowUiRequestInterceptorTest {
     assertEquals("保存ボタン", content.get(2).path("text").asText());
   }
 
+  /** 画面操作の支援で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void unrelatedAndAlreadyOrderedRequestsAreUnchanged() throws Exception {
     for (String input :

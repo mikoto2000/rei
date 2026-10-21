@@ -3,13 +3,19 @@ package dev.mikoto2000.rei.core;
 import java.io.IOException;
 import java.util.List;
 
-/** Fair per-file allocations; every omitted source prefix has a version-bound continuation. */
+/**
+ * 検索結果の使用量と上限を管理する。
+ *
+ * <p>Fair per-file allocations; every omitted source prefix has a version-bound continuation.
+ */
 final class SearchResultBudget {
+  /** 残っている予算に収めるため、検索結果予算を利用可能な量に整える。 */
   static Tools.SearchAndReadResult fit(
       Tools.SearchAndReadResult result, int bytes, int tokens, String charset) throws IOException {
     return FileResultBudget.fit(result, bytes, tokens, value -> smaller(value, charset));
   }
 
+  /** 共通の実行基盤で用いる複製を返す。 */
   private static Tools.SearchAndReadResult copy(
       Tools.SearchAndReadResult value,
       List<Tools.SearchMatch> matches,
@@ -30,6 +36,7 @@ final class SearchResultBudget {
         omitted);
   }
 
+  /** 共通の実行基盤で用いる続きの取得位置を返す。 */
   private static Tools.ReadFileRequest cursor(
       Tools.SearchAndReadResult value, int line, int offset, String charset) {
     var old = value.nextRead();
@@ -40,12 +47,14 @@ final class SearchResultBudget {
     return new Tools.ReadFileRequest(value.path(), line, null, value.version(), offset, charset);
   }
 
+  /** 共通の実行基盤で用いるsmallerを返す。 */
   private static Tools.SearchAndReadResult smaller(
       Tools.SearchAndReadResult value, String charset) {
     var matches = value.matches();
     var sections = value.sections();
     var next = value.nextRead();
     int omitted = value.omittedMatches();
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (matches.size() > 1) {
       int keep = (matches.size() + 1) / 2;
       return copy(

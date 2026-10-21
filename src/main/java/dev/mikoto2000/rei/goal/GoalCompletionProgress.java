@@ -5,7 +5,20 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-/** Read-only completion view including optional checks and current content revisions. */
+/**
+ * 目標の達成管理で受け渡す目標完了条件進捗を表す。
+ *
+ * <p>Read-only completion view including optional checks and current content revisions.
+ *
+ * @param goalId 目標識別子
+ * @param runId 実行の識別子
+ * @param state 状態
+ * @param verification 確認結果
+ * @param conditions 条件一覧
+ * @param deliveryPending 配信待機中
+ * @param diagnosis 診断
+ * @param stageProgress 段階進捗
+ */
 public record GoalCompletionProgress(
     String goalId,
     String runId,
@@ -15,6 +28,7 @@ public record GoalCompletionProgress(
     boolean deliveryPending,
     GoalRepairDiagnosis diagnosis,
     GoalStageService.Progress stageProgress) {
+  /** 目標の達成管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public GoalCompletionProgress(
       String goalId,
       String runId,
@@ -26,6 +40,7 @@ public record GoalCompletionProgress(
     this(goalId, runId, state, verification, conditions, deliveryPending, diagnosis, null);
   }
 
+  /** 指定された段階一覧を反映した情報を作成する。 */
   public GoalCompletionProgress withStages(GoalStageService.Progress stages) {
     var observed =
         stages.stages().stream().anyMatch(s -> !s.state().equals("VERIFIED"))
@@ -35,6 +50,7 @@ public record GoalCompletionProgress(
         goalId, runId, state, observed, conditions, deliveryPending, diagnosis, stages);
   }
 
+  /** 目標の達成管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public GoalCompletionProgress(
       String goalId,
       String runId,
@@ -52,12 +68,23 @@ public record GoalCompletionProgress(
         GoalRepairDiagnosis.of(verification == null ? "" : verification.reason()));
   }
 
+  /** 受け取った情報からGoalCompletionProgressを作成する。 */
   public GoalCompletionProgress {
     conditions = conditions == null ? List.of() : List.copyOf(conditions);
     if (diagnosis == null)
       diagnosis = GoalRepairDiagnosis.of(verification == null ? "" : verification.reason());
   }
 
+  /**
+   * 目標の達成管理で受け渡す確認を表す。
+   *
+   * @param id 識別子
+   * @param statement 記述内容
+   * @param required 必須
+   * @param satisfied 条件を満たしたかどうか
+   * @param reason 理由
+   * @param revision 改訂番号
+   */
   public record Check(
       String id,
       String statement,
@@ -66,6 +93,7 @@ public record GoalCompletionProgress(
       String reason,
       String revision) {}
 
+  /** 対象の状態や内容を調べ、呼び出し元が確認できる情報として返す。 */
   static GoalCompletionProgress inspect(
       GoalRepository.Goal goal, String phase, FileGoalVerifier verifier) {
     var checks = new ArrayList<Check>();
@@ -128,6 +156,7 @@ public record GoalCompletionProgress(
         GoalRepairDiagnosis.of(reason));
   }
 
+  /** 後続の処理を進められるか、現在の条件を確認する。 */
   private static Check check(
       String id,
       String statement,

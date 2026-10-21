@@ -17,11 +17,14 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 記憶Consolidatorサービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class MemoryConsolidatorServiceTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 長期記憶の保存と検索で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void parseCandidatesParsesJsonArray() {
     MemoryConsolidatorService service = newService();
@@ -37,12 +40,14 @@ class MemoryConsolidatorServiceTest {
     assertEquals(0.9d, result.getFirst().confidence());
   }
 
+  /** 入力の解釈候補一覧について、空のを返すことを確認する。 */
   @Test
   void parseCandidatesReturnsEmptyOnInvalidJson() {
     MemoryConsolidatorService service = newService();
     assertTrue(service.parseCandidates("```json\n[]\n```").isEmpty());
   }
 
+  /** 長期記憶の保存と検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shouldSuggestConsolidationByMessageThreshold() {
     MemoryConsolidatorService service = newService();
@@ -50,6 +55,7 @@ class MemoryConsolidatorServiceTest {
     assertFalse(service.shouldSuggestConsolidation(19, 0, 0));
   }
 
+  /** 長期記憶の保存と検索で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void extractCandidatesThrowsWhenChatClientFails() {
     ChatClient chatClient = Mockito.mock(ChatClient.class, Mockito.RETURNS_DEEP_STUBS);
@@ -77,6 +83,7 @@ class MemoryConsolidatorServiceTest {
     assertThrows(IllegalStateException.class, service::extractCandidates);
   }
 
+  /** 長期記憶の保存と検索で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void summarizeThrowsWhenChatClientFails() {
     ChatClient chatClient = Mockito.mock(ChatClient.class, Mockito.RETURNS_DEEP_STUBS);
@@ -96,6 +103,7 @@ class MemoryConsolidatorServiceTest {
     assertThrows(IllegalStateException.class, () -> service.summarize(List.of("a", "b")));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private MemoryConsolidatorService newService() {
     ChatClient chatClient = Mockito.mock(ChatClient.class, Mockito.RETURNS_DEEP_STUBS);
     var ds = new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("consolidator-test.db"));

@@ -13,9 +13,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
+/** 環境診断マイク利用可否の確認の結果と状態の契約を検証するテスト。 */
 class DoctorMicrophoneProbeTest {
+  /** 検証に使うdevice。 */
   final AudioDevice device = new AudioDevice("id", "private name", "description", "vendor", "1");
 
+  /** 実行環境の診断で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void onlyExplicitDeviceIsAcquiredAndEmptyConfigurationDoesNotEnumerate() {
     var acquired = new java.util.concurrent.atomic.AtomicInteger();
@@ -43,6 +46,7 @@ class DoctorMicrophoneProbeTest {
     }
   }
 
+  /** 実行環境の診断の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void uninterruptibleDriverCannotCreateUnboundedAcquisitions() throws Exception {
     var entered = new CountDownLatch(1);
@@ -71,6 +75,7 @@ class DoctorMicrophoneProbeTest {
     }
   }
 
+  /** 実行環境の診断の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationPropagatesBeforeAcquisition() {
     try (var probe =

@@ -16,14 +16,18 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Javaシンボル読み取りの結果と状態の契約を検証するテスト。 */
 class JavaSymbolReadTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   Tools.ReadFileRequest request(String symbol, boolean body, boolean docs) {
     return new Tools.ReadFileRequest(
         "C.java", null, null, null, null, null, symbol, body, docs, 0, true, null);
   }
 
+  /** 選択内容を必要とすることを確認する。 */
   @Test
   void overloadsRequireSelectionAndExactMethodPreservesDocsAndSignature() throws Exception {
     Files.writeString(
@@ -47,6 +51,7 @@ class JavaSymbolReadTest {
           tools.readMultiFile(List.of(request(id, true, false)), root).getFirst().error(), id);
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void sourceEditsInvalidateOffsetsAndContinuationIsVersionBound() throws Exception {
     Files.writeString(
@@ -75,6 +80,7 @@ class JavaSymbolReadTest {
     assertNotEquals(first.version(), fresh.version());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void syntaxAndMissingSymbolAreExplicitAndCrLfBodyIsReadable() throws Exception {
     Files.writeString(
@@ -100,6 +106,7 @@ class JavaSymbolReadTest {
             .contains("SYNTAX_ERROR"));
   }
 
+  /** 単一状態の記録ごとのファイルを利用することを確認する。 */
   @Test
   void projectWideAmbiguityAndRepeatedDeclarationsUseOneSnapshotPerFile() throws Exception {
     Files.writeString(root.resolve("C.java"), "class C { void work() {} int field; }");
@@ -107,6 +114,7 @@ class JavaSymbolReadTest {
     var reads = new java.util.concurrent.atomic.AtomicInteger();
     var tools =
         new Tools() {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           FileSnapshots newSnapshots() {
             return new FileSnapshots(
@@ -129,6 +137,7 @@ class JavaSymbolReadTest {
     assertEquals(1, reads.get());
   }
 
+  /** 構文情報境界条件を利用することを確認する。 */
   @Test
   void interfacesRecordsEnumsAndAnnotationLiteralsUseAstBoundaries() throws Exception {
     Files.writeString(
@@ -142,6 +151,7 @@ class JavaSymbolReadTest {
     assertEquals("@SuppressWarnings(\"{ }\") class C", String.join("\n", read.content()).strip());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void compilerUnavailableOversizeAndOutsidePathsAreExplicit() throws Exception {
     Files.writeString(root.resolve("C.java"), "class C {}");
@@ -184,6 +194,7 @@ class JavaSymbolReadTest {
             .contains("outside"));
   }
 
+  /** 既存のツール完了時の処理について、シンボルを受け付けられることを確認する。 */
   @Test
   void existingToolCallbackAcceptsSymbolOnlyJsonWithoutLineFields() throws Exception {
     Files.writeString(root.resolve("C.java"), "class C { void work() {} }");
@@ -211,6 +222,7 @@ class JavaSymbolReadTest {
     }
   }
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationDoesNotTurnIntoAnEmptySearchResult() throws Exception {
     Files.writeString(root.resolve("C.java"), "class C {}");
@@ -224,6 +236,7 @@ class JavaSymbolReadTest {
     }
   }
 
+  /** 共通の実行基盤で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void unicodeEscapedClassBracesNeverExposeBodiesAsSignatures() throws Exception {
     String source =

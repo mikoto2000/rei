@@ -17,13 +17,22 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+/** 既定フィードHTTP通信情報の取得元の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class DefaultFeedHttpFetcherTest {
+  /** 検証に使うサーバー。 */
   private HttpServer server;
+
+  /** 検証に使うその他。 */
   private HttpServer other;
+
+  /** 検証に使う起点。 */
   private String origin;
+
+  /** 検証に使うトークン。 */
   private final String token = "a".repeat(43);
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setUp() throws Exception {
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -33,12 +42,14 @@ class DefaultFeedHttpFetcherTest {
     other.start();
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void tearDown() {
     server.stop(0);
     other.stop(0);
   }
 
+  /** 認証ヘッダーを設定済みの購読先だけへ送り、ほかの公開フィードへ転送しないことを確認する。 */
   @Test
   void sendsBearerOnlyForConfiguredFeedAndNeverForOtherPublicFeed() {
     AtomicReference<String> header = new AtomicReference<>();
@@ -64,6 +75,7 @@ class DefaultFeedHttpFetcherTest {
     assertNull(header.get());
   }
 
+  /** フィードの購読と収集で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void missingSecretMakesNoRequest() {
     AtomicInteger calls = new AtomicInteger();
@@ -82,6 +94,7 @@ class DefaultFeedHttpFetcherTest {
     assertEquals(0, calls.get());
   }
 
+  /** フィードの購読と収集で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void authenticatedRedirectsAreNeverFollowedEvenToSameOrigin() {
     AtomicInteger forwarded = new AtomicInteger();
@@ -120,6 +133,7 @@ class DefaultFeedHttpFetcherTest {
     assertEquals(0, forwarded.get());
   }
 
+  /** フィードの購読と収集で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void publicRedirectBehaviorIsPreservedWithoutAuthorization() {
     AtomicReference<String> header = new AtomicReference<>();
@@ -141,6 +155,7 @@ class DefaultFeedHttpFetcherTest {
     assertNull(header.get());
   }
 
+  /** フィードの購読と収集の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void unauthorizedResponsesAreActionableButNeverEchoBody() {
     AtomicInteger status = new AtomicInteger(401);
@@ -165,6 +180,7 @@ class DefaultFeedHttpFetcherTest {
     }
   }
 
+  /** フィードの購読と収集で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void reflectedTokenInSuccessfulResponseIsNotReturnedForPersistence() {
     server.createContext(
@@ -180,6 +196,7 @@ class DefaultFeedHttpFetcherTest {
     assertFalse(response.body().contains(token));
   }
 
+  /** {@code authenticated} の条件を再現するための補助情報を返す。 */
   private DefaultFeedHttpFetcher authenticated() {
     return new DefaultFeedHttpFetcher(
         new FeedAuthentication(

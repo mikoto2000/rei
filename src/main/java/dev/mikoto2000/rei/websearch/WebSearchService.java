@@ -21,22 +21,31 @@ import org.springframework.stereotype.Service;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+/** Web検索のユースケースを実現する。 */
 @Service
 public class WebSearchService {
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(WebSearchService.class);
 
+  /** この機能の動作設定。 */
   private final WebSearchProperties properties;
 
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final JsonMapper objectMapper;
 
+  /** 情報の取得元。 */
   private final dev.mikoto2000.rei.http.SafeHttpFetcher fetcher;
+
+  /** キャッシュ。 */
   private final dev.mikoto2000.rei.http.cache.HttpResponseCache cache;
 
+  /** Web上の情報の調査を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WebSearchService(WebSearchProperties properties, JsonMapper objectMapper) {
     this(properties, objectMapper, new dev.mikoto2000.rei.http.SafeHttpFetcher());
   }
 
+  /** Web上の情報の調査を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WebSearchService(
       WebSearchProperties properties,
       JsonMapper objectMapper,
@@ -48,6 +57,7 @@ public class WebSearchService {
         dev.mikoto2000.rei.http.cache.HttpResponseCache.disabled());
   }
 
+  /** 指定された値や利用先を使って、WebSearchServiceを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public WebSearchService(
       WebSearchProperties properties,
@@ -60,6 +70,7 @@ public class WebSearchService {
     this.cache = cache;
   }
 
+  /** 鮮度の要求と検索回数の予算を適用し、検索結果の候補を集める。 */
   public List<WebSearchResult> search(String query, Integer limit)
       throws IOException, InterruptedException {
     long started = System.nanoTime();
@@ -75,6 +86,7 @@ public class WebSearchService {
     }
   }
 
+  /** 設定済みの検索先を順に利用し、URLの重複と情報の充足度を考慮して候補を集める。 */
   private List<WebSearchResult> searchObserved(String query, Integer limit)
       throws IOException, InterruptedException {
     if (!properties.isEnabled()) {
@@ -83,11 +95,13 @@ public class WebSearchService {
     }
 
     int requestedLimit = limit == null ? properties.getMaxResults() : limit;
+    // 利用者の希望件数を、設定された検索結果の上限に収める。
     int clampedLimit = Math.max(1, Math.min(requestedLimit, properties.getMaxResults()));
     List<ProviderProperties> providers = configuredProviders();
     Map<String, WebSearchResult> resultsByUrl = new LinkedHashMap<>();
     Exception firstError = null;
 
+    // 検索回数の予算を守りながら複数の検索先を利用し、必要な情報が集まれば追加検索を終える。
     for (ProviderProperties provider : providers) {
       if (SearchRequestBudget.exhausted()) break;
       dev.mikoto2000.rei.http.FetchScope.current().check();
@@ -96,6 +110,7 @@ public class WebSearchService {
           WebSearchMetrics.OBSERVED.add("results", 1);
           if (resultsByUrl.containsKey(result.url()))
             WebSearchMetrics.OBSERVED.add("duplicate_urls", 1);
+          // 同じURLの候補は重ねて返さず、検索目的に対する優先度が高い情報を残す。
           resultsByUrl.merge(
               result.url(),
               result,
@@ -108,6 +123,7 @@ public class WebSearchService {
         if (WebSearchSelection.sufficient(
             query, new ArrayList<>(resultsByUrl.values()), clampedLimit)) break;
       } catch (IOException | InterruptedException | RuntimeException e) {
+        // 中断や取得制限は継続させず、通常の検索先の障害だけを次の候補で補う。
         dev.mikoto2000.rei.http.FetchOperation.propagateControls(e);
         if (firstError == null) {
           firstError = e;
@@ -115,6 +131,7 @@ public class WebSearchService {
       }
     }
 
+    // 一部の検索先が失敗しても、得られた候補があれば調査を継続できるようにする。
     if (!resultsByUrl.isEmpty()) {
       return new ArrayList<>(resultsByUrl.values());
     }
@@ -130,6 +147,7 @@ public class WebSearchService {
     return List.of();
   }
 
+  /** 有効な検索先の設定を取り出し、検索先がない場合は設定の問題を伝える。 */
   List<ProviderProperties> configuredProviders() {
     if (properties.getProviders() == null || properties.getProviders().isEmpty()) {
       String detail = "enabled=%s, providersCount=0".formatted(properties.isEnabled());
@@ -154,6 +172,7 @@ public class WebSearchService {
     return providers;
   }
 
+  /** 依頼に関連する情報を得るため、付き提供元を検索する。 */
   private List<WebSearchResult> searchWithProvider(
       ProviderProperties provider, String query, int limit)
       throws IOException, InterruptedException {
@@ -166,6 +185,7 @@ public class WebSearchService {
     };
   }
 
+  /** 依頼に関連する情報を得るため、Braveを検索する。 */
   private List<WebSearchResult> searchBrave(ProviderProperties provider, String query, int limit)
       throws IOException, InterruptedException {
     if (provider.getApiKey() == null || provider.getApiKey().isBlank()) {
@@ -191,6 +211,7 @@ public class WebSearchService {
     return parseBraveResults(new String(response.body(), StandardCharsets.UTF_8), limit);
   }
 
+  /** 依頼に関連する情報を得るため、DuckDuckGoを検索する。 */
   private List<WebSearchResult> searchDuckDuckGo(
       ProviderProperties provider, String query, int limit)
       throws IOException, InterruptedException {
@@ -213,6 +234,7 @@ public class WebSearchService {
     return parseDuckDuckGoResults(new String(response.body(), StandardCharsets.UTF_8), limit);
   }
 
+  /** 入力を機能内で扱えるよう、Brave結果一覧を解釈する。 */
   List<WebSearchResult> parseBraveResults(String responseBody, int limit) throws IOException {
     JsonNode root = objectMapper.readTree(responseBody);
     JsonNode results = root.path("web").path("results");
@@ -237,6 +259,7 @@ public class WebSearchService {
     return parsed;
   }
 
+  /** Web上の情報の調査で用いる送信を返す。 */
   private dev.mikoto2000.rei.http.SafeHttpFetcher.Response send(
       HttpRequest request, ProviderProperties provider, int limit) {
     Map<String, String> headers = new LinkedHashMap<>();
@@ -247,23 +270,28 @@ public class WebSearchService {
     var gate = SearchRequestBudget.captureGate();
     var observer =
         new dev.mikoto2000.rei.http.HttpFetchObserver() {
+          /** Web上の情報の調査に関する要求を処理する。 */
           public void request(boolean redirect) {
             gate.run();
             observed.request(redirect);
           }
 
+          /** 対象の現在の状態を、照会用の情報として返す。 */
           public void status(int status) {
             observed.status(status);
           }
 
+          /** Web上の情報の調査に関するバイト数を処理する。 */
           public void bytes(int bytes) {
             observed.bytes(bytes);
           }
 
+          /** 処理を継続できなかった理由を、失敗情報として表す。 */
           public void failure(dev.mikoto2000.rei.http.HttpFetchException.Code code) {
             observed.failure(code);
           }
 
+          /** Web上の情報の調査に関するキャンセルを処理する。 */
           public void cancellation() {
             observed.cancellation();
           }
@@ -281,6 +309,7 @@ public class WebSearchService {
         fetcher);
   }
 
+  /** 入力を機能内で扱えるよう、DuckDuckGo結果一覧を解釈する。 */
   List<WebSearchResult> parseDuckDuckGoResults(String responseBody, int limit) {
     Document document = Jsoup.parse(responseBody);
     List<WebSearchResult> parsed = new ArrayList<>();
@@ -308,6 +337,7 @@ public class WebSearchService {
     return parsed;
   }
 
+  /** 後続の判断に必要な情報を得るため、DuckDuckGo対象URLを抽出する。 */
   String extractDuckDuckGoTargetUrl(String href) {
     if (href == null || href.isBlank()) {
       return "";

@@ -10,9 +10,12 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/** 意味による検証品質の結果と状態の契約を検証するテスト。 */
 class SemanticValidationQualityTest {
+  /** 検証に使うディレクトリ。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory;
 
+  /** 補助エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void actualValidatorScoresAnonymousFixtureWithoutToolCalls() throws Exception {
     var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
@@ -23,11 +26,13 @@ class SemanticValidationQualityTest {
     var captured = new java.util.concurrent.atomic.AtomicInteger();
     var model =
         new org.springframework.ai.chat.model.ChatModel() {
+          /** 検証用に、補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           public org.springframework.ai.chat.model.ChatResponse call(
               org.springframework.ai.chat.prompt.Prompt prompt) {
             throw new AssertionError();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public reactor.core.publisher.Flux<org.springframework.ai.chat.model.ChatResponse> stream(
               org.springframework.ai.chat.prompt.Prompt prompt) {
             captured.incrementAndGet();
@@ -71,6 +76,7 @@ class SemanticValidationQualityTest {
         java.nio.file.Path.of("target/evaluation/subagent-semantic-quality.json").toFile(), result);
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void confusionMatrixSeparatesAbstentionFromCorrectDecisions() {
     var cases =
@@ -103,6 +109,7 @@ class SemanticValidationQualityTest {
     assertFalse(result.truthVerified());
   }
 
+  /** 補助エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void agreementIsOptionalAndNeverTruth() {
     var cases = List.of(fixture("correct", SemanticValidationQuality.Decision.ACCEPT));
@@ -118,6 +125,7 @@ class SemanticValidationQualityTest {
     assertFalse(result.truthVerified());
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void invalidFixturesAndCancellationCannotProduceCompletedReport() {
     assertThrows(
@@ -138,6 +146,7 @@ class SemanticValidationQualityTest {
                 null));
   }
 
+  /** {@code fixture} の条件を再現するための補助情報を返す。 */
   static SemanticValidationQuality.Case fixture(
       String id, SemanticValidationQuality.Decision expected) {
     return new SemanticValidationQuality.Case(

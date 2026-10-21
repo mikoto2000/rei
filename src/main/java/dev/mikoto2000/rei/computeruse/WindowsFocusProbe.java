@@ -8,25 +8,35 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 /**
- * Read-only UIA query, including bounded non-password editable field content; never changes focus.
+ * 画面操作の支援に必要なWindowsFocus利用可否の確認を扱う。
+ *
+ * <p>Read-only UIA query, including bounded non-password editable field content; never changes
+ * focus.
  */
 final class WindowsFocusProbe implements Supplier<String> {
+  /** 不明。 */
   static final String UNKNOWN = "{\"status\":\"unknown\"}";
+
+  /** キャンセル済み。 */
   private final BooleanSupplier cancelled;
 
+  /** 指定された値や利用先を使って、WindowsFocusProbeを初期化する。 */
   WindowsFocusProbe(BooleanSupplier cancelled) {
     this.cancelled = cancelled;
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   @Override
   public String get() {
     return query(null);
   }
 
+  /** 画面操作の支援で用いる日時Pointを返す。 */
   String atPoint(java.awt.Point point) {
     return query(java.util.Objects.requireNonNull(point));
   }
 
+  /** 画面操作の支援で用いる検索条件を返す。 */
   private String query(java.awt.Point point) {
     if (!System.getProperty("os.name", "").startsWith("Windows"))
       return unknown("unsupported_os", "Windows UIA required");
@@ -81,6 +91,7 @@ final class WindowsFocusProbe implements Supplier<String> {
         return unknown("response_too_large", "UIA output exceeded 131072 bytes");
       return validate(Files.readString(output, StandardCharsets.UTF_8));
     } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw new java.util.concurrent.CancellationException();
     } catch (java.util.concurrent.CancellationException e) {
@@ -102,6 +113,7 @@ final class WindowsFocusProbe implements Supplier<String> {
     }
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   static String validate(String text) throws Exception {
     com.fasterxml.jackson.databind.JsonNode node;
     try {
@@ -141,6 +153,7 @@ final class WindowsFocusProbe implements Supplier<String> {
     return node.toString();
   }
 
+  /** 確定できない結果を、判定不能の情報として表す。 */
   static String unknown(String reason, String detail) {
     var node = new com.fasterxml.jackson.databind.ObjectMapper().createObjectNode();
     node.put("status", "unknown")

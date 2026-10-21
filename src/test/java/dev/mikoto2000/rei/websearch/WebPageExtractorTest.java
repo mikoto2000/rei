@@ -6,8 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+/** Webページ情報の抽出の結果と状態の契約を検証するテスト。 */
 class WebPageExtractorTest {
 
+  /** Web上の情報の調査で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void extractBuildsReadablePageContentFromHtml() {
     WebPageExtractor extractor = new WebPageExtractor();

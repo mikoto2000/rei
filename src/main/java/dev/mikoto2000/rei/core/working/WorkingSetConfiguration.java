@@ -10,6 +10,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class WorkingSetConfiguration {
 
+  /** 作業中の情報管理で用いる作業中集合を返す。 */
   @org.springframework.context.annotation.Scope(
       value = "reiConversation",
       proxyMode = org.springframework.context.annotation.ScopedProxyMode.TARGET_CLASS)

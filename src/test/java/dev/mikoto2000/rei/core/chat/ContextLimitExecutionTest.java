@@ -15,7 +15,9 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
+/** 文脈上限実行の結果と状態の契約を検証するテスト。 */
 class ContextLimitExecutionTest {
+  /** 会話の実行で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void hardContextLimitIsAnExplicitUserFacingFailure() {
     var model = mock(ChatModel.class);

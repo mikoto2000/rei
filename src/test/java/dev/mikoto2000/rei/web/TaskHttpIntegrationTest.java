@@ -28,13 +28,17 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.sqlite.SQLiteDataSource;
 
+/** タスクHTTP通信外部連携の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class TaskHttpIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import({WebApiIntegrationTest.Config.class, TaskManagerConfiguration.class})
   static class Config {
+    /** {@code data} の条件を再現するための補助情報を返す。 */
     @Bean("memoryConsolidationDataSource")
     javax.sql.DataSource data(
         @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String path) {
@@ -43,37 +47,44 @@ class TaskHttpIntegrationTest {
       return source;
     }
 
+    /** {@code checkpoints} の条件を再現するための補助情報を返す。 */
     @Bean
     PersistentCheckpointRepository checkpoints(javax.sql.DataSource source) {
       return new PersistentCheckpointRepository(source, new CheckpointProperties());
     }
 
+    /** {@code goals} の条件を再現するための補助情報を返す。 */
     @Bean
     GoalRepository goals(javax.sql.DataSource source, Clock clock) {
       return new GoalRepository(source, clock);
     }
 
+    /** {@code dependencies} の条件を再現するための補助情報を返す。 */
     @Bean
     PersistentDependencyRepository dependencies(javax.sql.DataSource source, Clock clock) {
       return new PersistentDependencyRepository(source, clock);
     }
 
+    /** {@code schedules} の条件を再現するための補助情報を返す。 */
     @Bean
     PersistentAgentScheduler schedules(javax.sql.DataSource source, Clock clock) {
       return new PersistentAgentScheduler(source, clock);
     }
 
+    /** {@code loop} の条件を再現するための補助情報を返す。 */
     @Bean
     GoalLoopService loop() {
       return mock(GoalLoopService.class);
     }
 
+    /** {@code checkpointService} の条件を再現するための補助情報を返す。 */
     @Bean
     PersistentCheckpointService checkpointService() {
       return mock(PersistentCheckpointService.class);
     }
   }
 
+  /** Web APIによる操作で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void defaultOffAuthenticatedTaskSubmissionAndRestartRestorationDoNotExecuteAgain()
       throws Exception {
@@ -141,12 +152,14 @@ class TaskHttpIntegrationTest {
     }
   }
 
+  /** {@code application} の条件を再現するための補助情報を返す。 */
   private SpringApplication application() {
     var app = new SpringApplication(Config.class);
     WebApplication.configure(app, "integration-key");
     return app;
   }
 
+  /** {@code args} の条件を再現するための補助情報を返す。 */
   private String[] args(boolean enabled) {
     return new String[] {
       "--rei.web.port=0",
@@ -156,6 +169,7 @@ class TaskHttpIntegrationTest {
     };
   }
 
+  /** {@code send} の条件を再現するための補助情報を返す。 */
   private HttpResponse<String> send(
       HttpClient client, int port, String path, String body, boolean auth) throws Exception {
     var request =

@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 
+/** 承認別名一覧の結果と状態の契約を検証するテスト。 */
 class ApprovalAliasesTest {
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void displayedNumbersNeverMoveWhenTheListChanges() {
     var aliases = new ApprovalAliases();
@@ -21,6 +23,7 @@ class ApprovalAliasesTest {
         () -> new ApprovalAliases().resolve("project", "session", "1"));
   }
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void explicitContinueRoutesAsAnExplicitDecision() {
     var request =

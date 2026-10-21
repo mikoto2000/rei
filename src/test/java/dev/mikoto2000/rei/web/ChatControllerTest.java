@@ -15,10 +15,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+/** チャット受付窓口の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ChatControllerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 全体実行実行待ちについて、受付を受け付けないことを確認する。 */
   @Test
   void fullRunQueueRejectsAdmissionWithoutLeakingInternalError() throws Exception {
     var projects = new ProjectRegistry(directory.resolve("projects.json"));
@@ -49,6 +52,7 @@ class ChatControllerTest {
     assertThat(registry.runIds()).isEmpty();
   }
 
+  /** Web APIによる操作で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void acceptedResponseHasLocationAndInvalidRequestsHaveExplicitStatuses() throws Exception {
     var projects = new ProjectRegistry(directory.resolve("projects.json"));

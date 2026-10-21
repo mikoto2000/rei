@@ -8,7 +8,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
+/** 利用者追加入力実行待ちの結果と状態の契約を検証するテスト。 */
 class UserInterventionQueueTest {
+  /** 会話の実行で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void mailboxIsBoundedAndCapacityReturnsAfterDrain() {
     var queue = new UserInterventionQueue();
@@ -21,6 +23,7 @@ class UserInterventionQueueTest {
     assertThatThrownBy(() -> queue.offer("  ")).isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 会話の実行で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void appliesInOrderOnlyAtSafePoint() {
     var queue = new UserInterventionQueue();
@@ -32,6 +35,7 @@ class UserInterventionQueueTest {
     assertThat(queue.offer("late")).isFalse();
   }
 
+  /** 会話の実行で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void completionRacingInputEitherAcceptsOrHandsBackInput() throws Exception {
     try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {

@@ -9,15 +9,19 @@ import javax.sql.DataSource;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
+/** 会話履歴のユースケースを実現する。 */
 @Service
 public class ConversationHistoryService {
 
+  /** データベースへの接続クライアント。 */
   private final JdbcClient jdbcClient;
 
+  /** 指定された値や利用先を使って、ConversationHistoryServiceを初期化する。 */
   public ConversationHistoryService(DataSource dataSource) {
     this.jdbcClient = JdbcClient.create(dataSource);
   }
 
+  /** 対象を特定できるよう、直近利用者メッセージ一覧を探す。 */
   public List<ConversationSnippet> findRecentUserMessages(int lookbackDays, int limit) {
     long cutoffEpochMillis =
         Instant.now().minusSeconds((long) lookbackDays * 24 * 60 * 60).toEpochMilli();

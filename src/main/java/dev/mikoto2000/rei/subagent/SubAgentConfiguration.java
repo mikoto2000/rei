@@ -11,14 +11,17 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/** 補助エージェントの構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(SubAgentProperties.class)
 public class SubAgentConfiguration {
+  /** 補助エージェントへの委譲で用いる補助エージェントツール判断基準を返す。 */
   @Bean
   SubAgentToolPolicy subAgentToolPolicy(SubAgentToolCatalog catalog) {
     return new SubAgentToolPolicy(catalog.knownNames());
   }
 
+  /** 補助エージェントへの委譲で用いる補助エージェント定義読み込みの窓口を返す。 */
   @Bean
   SubAgentDefinitionLoader subAgentDefinitionLoader(
       SubAgentToolPolicy policy,
@@ -35,6 +38,7 @@ public class SubAgentConfiguration {
                 || model.equals(provider.model(LlmFeature.CHAT, current.get())));
   }
 
+  /** 補助エージェントへの委譲で用いる補助エージェント登録台帳を返す。 */
   @Bean
   SubAgentRegistry subAgentRegistry(
       SubAgentProperties properties, SubAgentDefinitionLoader loader) {
@@ -44,6 +48,7 @@ public class SubAgentConfiguration {
     return registry;
   }
 
+  /** 補助エージェントへの委譲で用いる補助エージェント実行の担当を返す。 */
   @Bean
   SubAgentRunner subAgentRunner(
       SubAgentRegistry registry,

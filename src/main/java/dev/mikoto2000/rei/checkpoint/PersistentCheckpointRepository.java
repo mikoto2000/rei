@@ -23,24 +23,37 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.support.TransactionTemplate;
 
+/** 保存される再開用の記録を保存・検索するための窓口。 */
 @Repository
 public class PersistentCheckpointRepository {
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 一連の更新。 */
   private final TransactionTemplate transaction;
+
+  /** 設定。 */
   private final CheckpointProperties settings;
+
+  /** 対象データ一覧。 */
   private dev.mikoto2000.rei.storage.StorageObjectRegistry objects;
 
+  /** 作業の中断と再開で使用する保存対象データ登録台帳を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setStorageObjectRegistry(dev.mikoto2000.rei.storage.StorageObjectRegistry objects) {
     this.objects = objects;
   }
 
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule());
+
+  /** 所有者。 */
   static final String OWNER =
       ProcessHandle.current().pid()
           + "@"
           + ProcessHandle.current().info().startInstant().orElseThrow();
 
+  /** 指定された値や利用先を使って、PersistentCheckpointRepositoryを初期化する。 */
   public PersistentCheckpointRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source,
       CheckpointProperties settings) {
@@ -62,6 +75,7 @@ public class PersistentCheckpointRepository {
         .update();
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public PersistentCheckpoint get(String project, String task) {
     RuntimeException invalid = null;
     try (var rows = rows(project, task)) {
@@ -77,6 +91,7 @@ public class PersistentCheckpointRepository {
     throw new IllegalArgumentException("Checkpoint task not found");
   }
 
+  /** 作業の中断と再開で用いる診断情報を返す。 */
   public List<String> diagnostics(String project, String task) {
     var warnings = new ArrayList<String>();
     try (var rows = rows(project, task)) {
@@ -92,6 +107,7 @@ public class PersistentCheckpointRepository {
     return List.copyOf(warnings);
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<PersistentCheckpoint> list(String project) {
     return db
         .sql(
@@ -104,8 +120,15 @@ public class PersistentCheckpointRepository {
         .toList();
   }
 
+  /**
+   * 作業の中断と再開で受け渡す概要選択内容を表す。
+   *
+   * @param count 件数
+   * @param latest 最新
+   */
   public record OverviewSelection(long count, ResumeOverview.Candidate latest) {}
 
+  /** 概要HEADS。 */
   private static final String OVERVIEW_HEADS =
       """
       WITH heads AS MATERIALIZED (
@@ -116,6 +139,8 @@ public class PersistentCheckpointRepository {
         WHERE h.project=:project AND h.revision>0
       )
       """;
+
+  /** 有効概要先頭。 */
   private static final String VALID_OVERVIEW_HEAD =
       """
       snapshot IS NOT NULL AND json_extract(snapshot,'$.schemaVersion')=1
@@ -150,7 +175,9 @@ public class PersistentCheckpointRepository {
       """;
 
   /**
-   * Normal heads are projected in SQLite; only damaged heads need the existing decoder/fallback.
+   * 作業の中断と再開で用いる概要検索条件を返す。
+   *
+   * <p>Normal heads are projected in SQLite; only damaged heads need the existing decoder/fallback.
    */
   private JdbcClient.StatementSpec overviewQuery(
       String project, Instant failedCutoff, boolean latestOnly, boolean explain) {
@@ -235,6 +262,7 @@ public class PersistentCheckpointRepository {
     }
   }
 
+  /** 作業の中断と再開で用いる概要候補を返す。 */
   private ResumeOverview.Candidate overviewCandidate(java.sql.ResultSet row)
       throws java.sql.SQLException {
     boolean fallback = row.getBoolean("fallback"), unknown = row.getBoolean("unknown");
@@ -260,6 +288,7 @@ public class PersistentCheckpointRepository {
         fallback);
   }
 
+  /** 作業の中断と再開で用いる概要日時を返す。 */
   private Instant overviewInstant(String value) {
     if (value.matches("-?\\d+(?:\\.\\d+)?")) {
       var seconds = new java.math.BigDecimal(value);
@@ -271,6 +300,7 @@ public class PersistentCheckpointRepository {
     return Instant.parse(value);
   }
 
+  /** 作業の中断と再開で用いる概要選択内容を返す。 */
   public OverviewSelection overviewSelection(String project, Instant cutoff) {
     // A deferred read transaction keeps damage, lease and candidate reads on one SQLite snapshot.
     return transaction.execute(
@@ -282,6 +312,7 @@ public class PersistentCheckpointRepository {
                 .orElse(new OverviewSelection(0, null)));
   }
 
+  /** 作業の中断と再開で用いる概要候補一覧を返す。 */
   List<ResumeOverview.Candidate> overviewCandidates(String project, Instant cutoff) {
     return transaction.execute(
         tx ->
@@ -290,13 +321,18 @@ public class PersistentCheckpointRepository {
                 .list());
   }
 
+  /** 作業の中断と再開で用いる概要検索条件計画を返す。 */
   List<String> overviewQueryPlan(String project, Instant cutoff) {
     return overviewQuery(project, cutoff, true, true)
         .query((row, n) -> row.getString("detail"))
         .list();
   }
 
-  /** Page immutable original Run identities, including a valid older revision of a damaged head. */
+  /**
+   * 作業の中断と再開で用いるタスクページを返す。
+   *
+   * <p>Page immutable original Run identities, including a valid older revision of a damaged head.
+   */
   public List<PersistentCheckpoint> taskPage(
       String project, String root, String session, String after, int limit) {
     if (limit < 1 || limit > 101)
@@ -322,6 +358,7 @@ public class PersistentCheckpointRepository {
         .toList();
   }
 
+  /** 対象を特定できるよう、別実行を探す。 */
   public Optional<PersistentCheckpoint> findByRun(String project, String run) {
     return db.sql(
             """
@@ -337,6 +374,7 @@ public class PersistentCheckpointRepository {
         .map(task -> get(project, task));
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   public PersistentCheckpoint save(PersistentCheckpoint state, long expected, String event) {
     var next = state.revision(expected + 1);
     String encoded = encode(next);
@@ -426,6 +464,7 @@ public class PersistentCheckpointRepository {
     return saved;
   }
 
+  /** 作業の中断と再開で用いる履歴使用状況を返す。 */
   public CheckpointHistory.Usage historyUsage() {
     return db.sql(
             "SELECT COUNT(*) AS revisions,COALESCE(SUM(length(CAST(snapshot AS BLOB))),0) AS bytes,(SELECT COUNT(*) FROM checkpoint_event_keys) AS keys FROM checkpoint_revisions")
@@ -441,13 +480,16 @@ public class PersistentCheckpointRepository {
   }
 
   /**
-   * Preview and apply share the same eligibility rules; apply re-evaluates under SQLite's writer
+   * 作業の中断と再開で用いる後片付け履歴を返す。
+   *
+   * <p>Preview and apply share the same eligibility rules; apply re-evaluates under SQLite's writer
    * lock.
    */
   public CheckpointHistory.Cleanup cleanupHistory(boolean apply) {
     return cleanupHistory(apply, false);
   }
 
+  /** 作業の中断と再開で用いる後片付け履歴を返す。 */
   public CheckpointHistory.Cleanup cleanupHistory(boolean apply, boolean force) {
     if (force) return clearHistory(apply);
     var removed = new ArrayList<HistoricalRow>();
@@ -480,7 +522,9 @@ public class PersistentCheckpointRepository {
   }
 
   /**
-   * Explicit reset of checkpoint snapshots/heads; durable replay keys and approval receipts
+   * 保持している情報を初期状態へ戻すため、履歴を消去する。
+   *
+   * <p>Explicit reset of checkpoint snapshots/heads; durable replay keys and approval receipts
    * survive.
    */
   private CheckpointHistory.Cleanup clearHistory(boolean apply) {
@@ -522,6 +566,7 @@ public class PersistentCheckpointRepository {
     return result;
   }
 
+  /** 作業の中断と再開において、recordedイベントに該当するか判定する。 */
   public boolean recordedEvent(String project, String task, String event) {
     return db.sql(
                 "SELECT EXISTS(SELECT 1 FROM checkpoint_event_keys WHERE project=? AND task=? AND event=?)")
@@ -531,23 +576,66 @@ public class PersistentCheckpointRepository {
         != 0;
   }
 
+  /**
+   * 作業の中断と再開で受け渡すタスクキーを表す。
+   *
+   * @param project プロジェクト
+   * @param task タスク
+   */
   private record TaskKey(String project, String task) {}
 
+  /**
+   * 作業の中断と再開で受け渡す改訂番号キーを表す。
+   *
+   * @param project プロジェクト
+   * @param task タスク
+   * @param revision 改訂番号
+   */
   private record RevisionKey(String project, String task, long revision) {}
 
+  /**
+   * 作業の中断と再開で受け渡すHistorical行を表す。
+   *
+   * @param project プロジェクト
+   * @param task タスク
+   * @param revision 改訂番号
+   * @param bytes バイト数
+   * @param created 作成
+   */
   private record HistoricalRow(
       String project, String task, long revision, long bytes, String created) {}
 
+  /**
+   * 作業の中断と再開で受け渡す履歴候補一覧を表す。
+   *
+   * @param rows 行一覧
+   * @param protectedTasks 保護されたタスク一覧
+   * @param protectedRevisions 保護された改訂一覧
+   * @param protectedBytes 保護されたバイト数
+   */
   private record HistoryCandidates(
       List<HistoricalRow> rows,
       long protectedTasks,
       long protectedRevisions,
       long protectedBytes) {}
 
+  /**
+   * 作業の中断と再開で受け渡す承認参照先を表す。
+   *
+   * @param project プロジェクト
+   * @param task タスク
+   * @param run 実行
+   * @param session 会話
+   * @param root 作業ルート
+   */
   private record ApprovalReference(
       String project, String task, String run, String session, String root) {}
 
-  /** Called under the save/apply writer lock, or the preview's consistent read transaction. */
+  /**
+   * 作業の中断と再開で用いる履歴候補一覧を返す。
+   *
+   * <p>Called under the save/apply writer lock, or the preview's consistent read transaction.
+   */
   private HistoryCandidates historyCandidates(PersistentCheckpoint incoming) {
     var protectedRevisions = new HashSet<RevisionKey>();
     var heads = new HashMap<TaskKey, Long>();
@@ -683,6 +771,7 @@ public class PersistentCheckpointRepository {
         List.copyOf(rows), protectedTasks.size(), protectedCount, protectedBytes);
   }
 
+  /** 作業の中断と再開において、replacesに該当するか判定する。 */
   private boolean replaces(PersistentCheckpoint incoming, TaskKey task) {
     // Unknown schemas must not evict the last readable state. Deletions and insert commit together.
     return incoming != null
@@ -691,11 +780,13 @@ public class PersistentCheckpointRepository {
         && incoming.taskId().equals(task.task());
   }
 
+  /** 作業の中断と再開に関する保護状態を処理する。 */
   private void protectState(Set<RevisionKey> protectedRevisions, PersistentCheckpoint state) {
     protectedRevisions.add(new RevisionKey(state.projectId(), state.taskId(), state.revision()));
     protectResumeSource(protectedRevisions, state);
   }
 
+  /** 作業の中断と再開に関する保護再開取得元を処理する。 */
   private void protectResumeSource(
       Set<RevisionKey> protectedRevisions, PersistentCheckpoint state) {
     // This is lineage, not an incremental snapshot chain: do not recursively pin all ancestors.
@@ -704,6 +795,7 @@ public class PersistentCheckpointRepository {
           new RevisionKey(state.projectId(), state.taskId(), state.resumedFromRevision()));
   }
 
+  /** 作業の中断と再開に関する保護承認実行を処理する。 */
   private void protectApprovalRun(
       Set<RevisionKey> protectedRevisions, ApprovalReference reference) {
     for (String field : List.of("runId", "originalRunId", "resumedFromRunId")) {
@@ -730,6 +822,7 @@ public class PersistentCheckpointRepository {
     }
   }
 
+  /** 作業の中断と再開において、承認所有者一致結果に該当するか判定する。 */
   private boolean approvalOwnerMatches(ApprovalReference reference, PersistentCheckpoint state) {
     if (reference.session() != null && !reference.session().equals(state.sessionId())) return false;
     if (reference.root() == null) return true;
@@ -747,6 +840,7 @@ public class PersistentCheckpointRepository {
     } // A damaged receipt must not cause evidence deletion.
   }
 
+  /** 作業の中断と再開で用いる履歴時刻を返す。 */
   private Instant historyTime(String created) {
     try {
       return Instant.parse(created);
@@ -755,11 +849,13 @@ public class PersistentCheckpointRepository {
     }
   }
 
+  /** 作業の中断と再開において、exceedsに該当するか判定する。 */
   private boolean exceeds(CheckpointHistory.Usage usage, long incomingBytes) {
     return usage.revisions() >= usage.maxRevisions()
         || incomingBytes > usage.maxBytes() - usage.snapshotBytes();
   }
 
+  /** 実行結果を後続の処理へ渡すため、Removalを反映する。 */
   private CheckpointHistory.Usage afterRemoval(
       CheckpointHistory.Usage usage, long count, long bytes) {
     return new CheckpointHistory.Usage(
@@ -770,6 +866,7 @@ public class PersistentCheckpointRepository {
         usage.maxBytes());
   }
 
+  /** 指定された対象を管理から取り除く。 */
   private void remove(HistoricalRow row) {
     db.sql("DELETE FROM checkpoint_revisions WHERE project=? AND task=? AND revision=?")
         .params(row.project(), row.task(), row.revision())
@@ -777,6 +874,7 @@ public class PersistentCheckpointRepository {
     // Keep deduplication keys: a late event must never resurrect a removed revision or side effect.
   }
 
+  /** 後続の処理が利用できるよう、参照先一覧を解放する。 */
   private void releaseReferences(List<HistoricalRow> removed) {
     if (objects != null && !removed.isEmpty())
       try {
@@ -789,6 +887,7 @@ public class PersistentCheckpointRepository {
       }
   }
 
+  /** 作業の中断と再開において、確保に該当するか判定する。 */
   public boolean acquire(String project, String task, String run) {
     return Boolean.TRUE.equals(
         transaction.execute(
@@ -810,6 +909,7 @@ public class PersistentCheckpointRepository {
             }));
   }
 
+  /** 作業の中断と再開において、leasedに該当するか判定する。 */
   public boolean leased(String project, String task) {
     return db.sql("SELECT owner FROM checkpoint_heads WHERE project=? AND task=?")
         .params(project, task)
@@ -819,6 +919,7 @@ public class PersistentCheckpointRepository {
         .orElse(false);
   }
 
+  /** 後続の処理が利用できるよう、保存される再開用の記録保存と検索の窓口を解放する。 */
   public void release(String project, String task, String run) {
     db.sql(
             "UPDATE checkpoint_heads SET owner=NULL,lease_run=NULL WHERE project=? AND task=? AND owner=? AND lease_run=?")
@@ -826,6 +927,7 @@ public class PersistentCheckpointRepository {
         .update();
   }
 
+  /** 作業の中断と再開において、稼働中に該当するか判定する。 */
   static boolean alive(String owner) {
     try {
       var parts = owner.split("@", 2);
@@ -839,16 +941,25 @@ public class PersistentCheckpointRepository {
     }
   }
 
+  /** 作業の中断と再開で用いる項目一覧を返す。 */
   public Map<String, Object> fields(PersistentCheckpoint state) {
     return json.convertValue(state, new com.fasterxml.jackson.core.type.TypeReference<>() {});
   }
 
+  /** 作業の中断と再開で用いる項目一覧を返す。 */
   public PersistentCheckpoint fields(Map<String, Object> fields) {
     return json.convertValue(fields, PersistentCheckpoint.class);
   }
 
+  /**
+   * 作業の中断と再開で受け渡す行を表す。
+   *
+   * @param revision 改訂番号
+   * @param snapshot 状態の記録
+   */
   private record Row(long revision, String snapshot) {}
 
+  /** 作業の中断と再開で用いる行一覧を返す。 */
   private java.util.stream.Stream<Row> rows(String project, String task) {
     return db
         .sql(
@@ -858,6 +969,7 @@ public class PersistentCheckpointRepository {
         .stream();
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   private PersistentCheckpoint decode(Row row, String project, String task) {
     try {
       var state = json.readValue(row.snapshot(), PersistentCheckpoint.class);
@@ -877,6 +989,7 @@ public class PersistentCheckpointRepository {
     }
   }
 
+  /** 受け渡し先が扱える形式へ、指定された内容を変換する。 */
   public String encode(PersistentCheckpoint state) {
     try {
       return json.writeValueAsString(state);

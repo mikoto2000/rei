@@ -13,7 +13,9 @@ import org.jline.terminal.spi.TerminalProvider;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** れいアプリケーション音声自動開始の結果と状態の契約を検証するテスト。 */
 class ReiApplicationVoiceAutoStartTest {
+  /** 実際の対話入力を必要とすることを確認する。 */
   @Test
   void requiresActualInteractiveInputAndAUsableSystemTerminal() {
     var terminal = mock(TerminalExt.class);
@@ -35,6 +37,7 @@ class ReiApplicationVoiceAutoStartTest {
     assertThat(ReiApplication.isInteractiveTerminal(null)).isFalse();
   }
 
+  /** れいの起動の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void terminalProbeFailureCannotAbortShellStartup() {
     var terminal = mock(TerminalExt.class);
@@ -47,6 +50,7 @@ class ReiApplicationVoiceAutoStartTest {
     assertThat(ReiApplication.isInteractiveTerminal(terminal)).isFalse();
   }
 
+  /** シェル起動時について、設定済み音声コマンドを利用することを確認する。 */
   @Test
   void shellStartupUsesConfiguredVoiceCommandAndPinnedShellWriter() {
     var voice = mock(VoiceCommand.class);

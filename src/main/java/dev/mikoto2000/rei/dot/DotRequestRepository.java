@@ -21,11 +21,19 @@ import java.util.Set;
 import java.util.TreeSet;
 import java.util.UUID;
 
-/** One serialized application writer. Receipt and resume intent commit together. */
+/**
+ * 状態表示要求を保存・検索するための窓口。
+ *
+ * <p>One serialized application writer. Receipt and resume intent commit together.
+ */
 public class DotRequestRepository {
+  /** データベースへのアクセス。 */
   private final StorageDatabase db;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** 利用者の状態表示において、親利用可能に該当するか判定する。 */
   private static boolean parentAvailable(Connection c, Owner owner) throws SQLException {
     if (owner.run() == null) return true;
     return count(
@@ -44,16 +52,21 @@ public class DotRequestRepository {
         == 1;
   }
 
+  /** 活動中上限／実行待ち上限。 */
   private int activeLimit = 2, queueLimit = 8;
+
+  /** 利用権／結果保持期間／要求保持期間。 */
   private Duration lease = Duration.ofMinutes(30),
       resultRetention = Duration.ofDays(30),
       requestRetention = Duration.ofDays(90);
 
+  /** 指定された値や利用先を使って、DotRequestRepositoryを初期化する。 */
   public DotRequestRepository(Path root, Clock clock) {
     db = new StorageDatabase(root);
     this.clock = clock;
   }
 
+  /** 利用者の状態表示に関する上限一覧を処理する。 */
   public void limits(int active, int queue, Duration lease, Duration result, Duration requests) {
     activeLimit = active;
     queueLimit = queue;
@@ -62,6 +75,20 @@ public class DotRequestRepository {
     requestRetention = requests;
   }
 
+  /**
+   * 利用者の状態表示で受け渡す所有者を表す。
+   *
+   * @param id 識別子
+   * @param project プロジェクト
+   * @param session 会話
+   * @param run 実行
+   * @param root 作業ルート
+   * @param task タスク
+   * @param dependency 依存条件
+   * @param status 状態
+   * @param expires 有効期限
+   * @param validation 検証
+   */
   public record Owner(
       String id,
       String project,
@@ -74,6 +101,7 @@ public class DotRequestRepository {
       long expires,
       String validation) {}
 
+  /** 利用者の状態表示で用いる保存・受け渡しに使うJSON変換を返す。 */
   private static String json(Object value) {
     try {
       return StorageDatabase.JSON.writeValueAsString(value);
@@ -82,6 +110,7 @@ public class DotRequestRepository {
     }
   }
 
+  /** 利用者の状態表示で用いる文書を返す。 */
   @SuppressWarnings("unchecked")
   private static Map<String, Object> document(String text) {
     try {
@@ -91,6 +120,7 @@ public class DotRequestRepository {
     }
   }
 
+  /** 指定された変更を、管理中の情報へ反映する。 */
   private static int update(Connection c, String sql, Object... values) throws SQLException {
     try (var s = c.prepareStatement(sql)) {
       for (int i = 0; i < values.length; i++) s.setObject(i + 1, values[i]);
@@ -98,6 +128,7 @@ public class DotRequestRepository {
     }
   }
 
+  /** 対象の規模を判断するため、状態表示要求保存と検索の窓口を数える。 */
   private static long count(Connection c, String sql, Object... values) throws SQLException {
     try (var s = c.prepareStatement(sql)) {
       for (int i = 0; i < values.length; i++) s.setObject(i + 1, values[i]);
@@ -108,6 +139,7 @@ public class DotRequestRepository {
     }
   }
 
+  /** 利用者の状態表示で用いる所有者を返す。 */
   private static Owner owner(Connection c, String project, String id) throws SQLException {
     try (var s = c.prepareStatement("SELECT * FROM dot_requests WHERE id=? AND project=?")) {
       s.setString(1, id);
@@ -129,11 +161,13 @@ public class DotRequestRepository {
     }
   }
 
+  /** 利用者の状態表示で用いる所有者を返す。 */
   public Owner owner(String project, String id) {
     maintain();
     return read(c -> owner(c, project, id));
   }
 
+  /** 利用者の状態表示で用いる続きの取得位置キーを返す。 */
   public byte[] cursorKey() {
     return read(
         c -> {
@@ -145,6 +179,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 利用者の状態表示で用いるプロジェクトを返す。 */
   public Optional<String> project(String id) {
     return read(
         c -> {
@@ -157,6 +192,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 利用者の状態表示に関する監査記録を処理する。 */
   private void audit(
       Connection c, String id, String project, String actor, String operation, String outcome)
       throws SQLException {
@@ -172,6 +208,7 @@ public class DotRequestRepository {
         clock.millis());
   }
 
+  /** 利用者の状態表示に関する監査記録を処理する。 */
   public void audit(String project, String id, String actor, String operation, String outcome) {
     db.transaction(
         c -> {
@@ -180,6 +217,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 指定された内容から新しい対象を作成する。 */
   public Map<String, Object> create(
       String project,
       String session,
@@ -190,6 +228,7 @@ public class DotRequestRepository {
     return create(project, session, run, root, publication, timeout, null);
   }
 
+  /** 指定された内容から新しい対象を作成する。 */
   public Map<String, Object> create(
       String project,
       String session,
@@ -252,6 +291,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<Map<String, Object>> list(
       Set<String> projects, String status, String after, int limit) {
     if (limit < 1
@@ -309,6 +349,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   private Map<String, Object> get(Connection c, String project, String id) throws SQLException {
     owner(c, project, id);
     try (var s =
@@ -334,11 +375,13 @@ public class DotRequestRepository {
     }
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Map<String, Object> get(String project, String id) {
     maintain();
     return read(c -> get(c, project, id));
   }
 
+  /** 対象を処理する担当を決めるため、状態表示要求保存と検索の窓口の利用権を確保する。 */
   public Map<String, Object> claim(String project, String id, String claim) {
     maintain();
     return db.transaction(
@@ -389,6 +432,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   public Map<String, Object> submit(
       String project,
       String id,
@@ -466,6 +510,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 対象の実行をキャンセルする。 */
   public Map<String, Object> cancel(String project, String id) {
     maintain();
     return db.transaction(
@@ -487,6 +532,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 利用者の状態表示で用いる結果を返す。 */
   public Map<String, Object> result(String project, String id) {
     maintain();
     return read(
@@ -508,6 +554,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 利用者の状態表示において、公開に該当するか判定する。 */
   public boolean published(String project, String id) {
     return read(
         c ->
@@ -519,6 +566,7 @@ public class DotRequestRepository {
                 == 1);
   }
 
+  /** 利用者の状態表示で用いる別実行を返す。 */
   public Optional<Owner> byRun(String project, String run) {
     return read(
         c -> {
@@ -533,6 +581,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 後続の照会で対応する対象を見つけられるよう、状態表示要求保存と検索の窓口を関連付ける。 */
   public void bind(
       String id, String project, String task, String dependency, Map<String, Object> authority) {
     db.transaction(
@@ -551,6 +600,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 状態や結果を購読先へ通知する。 */
   public void publish(String project, String id) {
     db.transaction(
         c -> {
@@ -563,6 +613,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 利用者の状態表示に関するabandon受付を処理する。 */
   public void abandonAdmission(String project, String id) {
     db.transaction(
         c -> {
@@ -576,6 +627,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 処理を継続できる状態に戻すため、受付台帳を復旧する。 */
   public void recoverAdmissions() {
     db.transaction(
         c -> {
@@ -585,6 +637,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 利用者の状態表示に関するmaintainを処理する。 */
   public void maintain() {
     db.transaction(
         c -> {
@@ -612,6 +665,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 利用者の状態表示で用いるレビューを返す。 */
   public Map<String, Object> review(
       String project, String id, String status, List<Integer> satisfied, String note) {
     maintain();
@@ -646,6 +700,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 利用者の状態表示において、要求再開に該当するか判定する。 */
   public boolean requestResume(String project, String id, long revision) {
     maintain();
     return db.transaction(
@@ -672,6 +727,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 利用者の状態表示に関する関連付け実行予定を処理する。 */
   public void attachSchedule(String project, String id, String schedule) {
     db.transaction(
         c -> {
@@ -688,6 +744,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 要求された処理を利用できるよう、再開を開始する。 */
   public boolean startResume(String project, String id, String schedule, String run) {
     return db.transaction(
         c -> {
@@ -705,6 +762,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 利用者の状態表示で用いる意図を返す。 */
   public Map<String, Object> intent(String project, String id) {
     return read(
         c -> {
@@ -724,6 +782,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 終了時の状態を確定するため、再開を完了させる。 */
   public void finishResume(String project, String id, String status) {
     db.transaction(
         c -> {
@@ -740,6 +799,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 処理を継続できる状態に戻すため、再開Intentsを復旧する。 */
   public void recoverResumeIntents() {
     db.transaction(
         c -> {
@@ -753,7 +813,10 @@ public class DotRequestRepository {
   }
 
   /**
-   * Human-only unfinished metadata, including unpublished/expired snapshots needing cancellation.
+   * 必要な対象を利用できるよう、状態表示要求保存と検索の窓口の利用を開始する。
+   *
+   * <p>Human-only unfinished metadata, including unpublished/expired snapshots needing
+   * cancellation.
    */
   public List<Map<String, Object>> open(String project) {
     maintain();
@@ -794,6 +857,7 @@ public class DotRequestRepository {
         });
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private <T> T read(StorageDatabase.Work<T> work) {
     try {
       return db.read(work);
@@ -803,6 +867,7 @@ public class DotRequestRepository {
     }
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   private Map<String, Object> status(Connection c, String project, String id) throws SQLException {
     try {
       return get(c, project, id);
@@ -836,12 +901,17 @@ public class DotRequestRepository {
     }
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   public Map<String, Object> status(String project, String id) {
     maintain();
     return read(c -> status(c, project, id));
   }
 
-  /** Immutable acknowledgement only; never grants a new claim, validation or resume. */
+  /**
+   * 利用者の状態表示で用いる再送受付記録を返す。
+   *
+   * <p>Immutable acknowledgement only; never grants a new claim, validation or resume.
+   */
   public Optional<Map<String, Object>> replayReceipt(
       String project, String id, String submission, String fingerprint) {
     return read(

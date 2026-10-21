@@ -24,16 +24,30 @@ import java.util.List;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-/** Shares one credential, including SDK-triggered refreshes, across both Google APIs. */
+/**
+ * GoogleO認証のユースケースを実現する。
+ *
+ * <p>Shares one credential, including SDK-triggered refreshes, across both Google APIs.
+ */
 @Service
 @RequiredArgsConstructor
 public class GoogleOAuthService {
+  /** 利用者識別子。 */
   private static final String USER_ID = "user";
+
+  /** この機能の動作設定。 */
   private final GoogleCalendarProperties properties;
+
+  /** 認証情報。 */
   private Credential credential;
+
+  /** イベント一覧。 */
   private dev.mikoto2000.rei.event.AgentEventFactory events;
+
+  /** 通知の連携先。 */
   private dev.mikoto2000.rei.event.AgentEventBus bus;
 
+  /** Googleサービスの認証で使用する実行イベント一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setRunEvents(
       dev.mikoto2000.rei.event.AgentEventFactory events,
@@ -42,6 +56,7 @@ public class GoogleOAuthService {
     this.bus = bus;
   }
 
+  /** Googleサービスの認証で用いる権限の確認を返す。 */
   public synchronized Credential authorize(NetHttpTransport transport, boolean force)
       throws Exception {
     if (credential != null && !force) {
@@ -58,11 +73,16 @@ public class GoogleOAuthService {
     return credential;
   }
 
+  /** Googleサービスの認証に関する認証を更新するトークンを処理する。 */
   public synchronized void refreshToken() throws Exception {
     refresh(authorize(GoogleNetHttpTransport.newTrustedTransport(), false));
   }
 
-  /** Never starts interactive authorization from a scheduler thread. */
+  /**
+   * Googleサービスの認証において、再確認条件付きExpiringに該当するか判定する。
+   *
+   * <p>Never starts interactive authorization from a scheduler thread.
+   */
   public synchronized boolean refreshIfExpiring(Duration advance) throws Exception {
     if (!isEnabled()) {
       return false;
@@ -98,11 +118,13 @@ public class GoogleOAuthService {
     return true;
   }
 
+  /** Googleサービスの認証において、有効状態かどうかを判定する。 */
   private boolean isEnabled() {
     return (properties.calendar() != null && properties.calendar().enabled())
         || (properties.task() != null && properties.task().enabled());
   }
 
+  /** Googleサービスの認証に関する再確認を処理する。 */
   private void refresh(Credential target) throws IOException {
     if (!target.refreshToken()) {
       throw new IllegalStateException(
@@ -110,6 +132,7 @@ public class GoogleOAuthService {
     }
   }
 
+  /** 新たな対象を利用できるよう、Flowを作成する。 */
   AuthorizationCodeFlow createFlow(NetHttpTransport transport) throws IOException {
     Path path = Path.of(properties.credentialsPath());
     if (!Files.exists(path)) {
@@ -129,6 +152,7 @@ public class GoogleOAuthService {
     }
   }
 
+  /** Googleサービスの認証に関するbrowseを処理する。 */
   private void browse(String url) throws IOException {
     IO.println("Google OAuth を開始します。ブラウザが開かない場合は次の URL を開いてください:");
     IO.println(url);

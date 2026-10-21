@@ -67,22 +67,49 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import reactor.core.publisher.Flux;
 
+/** 承認継続入力の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ApprovalContinuationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
+
+  /** 検証に使う取得元。 */
   org.sqlite.SQLiteDataSource source;
+
+  /** 検証に使う承認一覧。 */
   ToolApprovalRepository approvals;
+
+  /** 検証に使う保存先。 */
   ApprovalContinuationStore store;
+
+  /** 検証に使うサービス。 */
   ApprovalContinuationService service;
+
+  /** 検証に使う登録台帳。 */
   RunRegistry registry;
+
+  /** 検証に使う実行一覧。 */
   RunService runs;
+
+  /** 検証に使う入力の振り分け。 */
   ConversationInputRouter router;
+
+  /** 検証に使うチャット。 */
   ChatExecutionService chat;
+
+  /** 検証に使うプロジェクト一覧。 */
   ProjectRegistry projects;
+
+  /** 検証に使う所有者。 */
   AgentRunContext owner;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   Clock clock = Clock.fixed(Instant.parse("2026-10-12T07:00:00Z"), ZoneOffset.UTC);
+
+  /** 検証に使う機能の構成要素一覧。 */
   StaticListableBeanFactory beans;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     source = new org.sqlite.SQLiteDataSource();
@@ -122,6 +149,7 @@ class ApprovalContinuationTest {
     registry.transition(owner.runId(), RunStatus.RUNNING, null);
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   ApprovalContinuationService createService(Clock time) {
     return new ApprovalContinuationService(
         approvals,
@@ -137,6 +165,7 @@ class ApprovalContinuationTest {
         time);
   }
 
+  /** {@code execution} の条件を再現するための補助情報を返す。 */
   RunExecutionContext execution() {
     var context =
         new RunExecutionContext(
@@ -160,6 +189,7 @@ class ApprovalContinuationTest {
     return context;
   }
 
+  /** {@code pending} の条件を再現するための補助情報を返す。 */
   RunContinuation.PendingTools pending() {
     return new RunContinuation.PendingTools(
         "run validation",
@@ -172,6 +202,7 @@ class ApprovalContinuationTest {
         List.of());
   }
 
+  /** {@code pause} の条件を再現するための補助情報を返す。 */
   String pause() {
     var context = execution();
     context.consumeNextLlmCall();
@@ -181,6 +212,7 @@ class ApprovalContinuationTest {
     return id;
   }
 
+  /** ツール利用の権限制御で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void approveAndContinueIsDurableAndQueuesOnlyOnce() {
     String id = pause();
@@ -195,6 +227,7 @@ class ApprovalContinuationTest {
     assertEquals("RESUMING", store.find(id).orElseThrow().state());
   }
 
+  /** ツール利用の権限制御で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void completedContinuationRetiresAnyGrantNotConsumedByAnAutomaticPolicy() {
     String id = pause();
@@ -218,6 +251,7 @@ class ApprovalContinuationTest {
     verify(router, times(1)).submitOperation(eq(owner), any(), any());
   }
 
+  /** Web判断結果について、継続入力一度だけを受け付けられることを確認する。 */
   @Test
   void webDecisionAcceptsContinuationOnceAndReturnsTheSameOwnedRun() throws Exception {
     String id = pause();
@@ -245,6 +279,7 @@ class ApprovalContinuationTest {
     verify(router, times(1)).submitOperation(eq(owner), any(), any());
   }
 
+  /** ツール利用の権限制御で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void resumeExecutesExactArgumentsBeforeTheModelAndSkipsTheSuccessfulPrefix() {
     var readCalls = new AtomicInteger();
@@ -273,10 +308,12 @@ class ApprovalContinuationTest {
             new AssistantMessage.ToolCall("command", "function", "runCommand", arguments));
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、ツール利用の権限制御の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new AssertionError();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             if (modelCalls.incrementAndGet() == 1)
               return Flux.just(
@@ -331,18 +368,22 @@ class ApprovalContinuationTest {
     assertEquals("CONSUMED", approvals.get(owner.projectId(), request.id()).status());
   }
 
+  /** {@code callback} の条件を再現するための補助情報を返す。 */
   ToolCallback callback(String name, java.util.function.Function<String, String> call) {
     return new ToolCallback() {
+      /** 検証用に、ツール利用の権限制御で参照するツール定義を返す。 */
       public ToolDefinition getToolDefinition() {
         return ToolDefinition.builder().name(name).description(name).inputSchema("{}").build();
       }
 
+      /** 検証用に、ツール利用の権限制御の要求を実行し、呼び出し元へ結果を返す。 */
       public String call(String input) {
         return call.apply(input);
       }
     };
   }
 
+  /** 検証で使用するプロンプトを、指定された条件に合わせて用意する。 */
   Prompt prompt(RunExecutionContext context, ToolCallback... callbacks) {
     return new Prompt(
         List.of(new UserMessage("review")),
@@ -352,6 +393,7 @@ class ApprovalContinuationTest {
             .build());
   }
 
+  /** ツール利用の権限制御の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void denialExpiryAndCancellationNeverDispatchTheSavedCommand() {
     String id = pause();
@@ -362,6 +404,7 @@ class ApprovalContinuationTest {
     verifyNoInteractions(chat);
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void expiredApprovalCannotBeContinued() {
     String id = pause();
@@ -371,9 +414,11 @@ class ApprovalContinuationTest {
     expired.pump();
     assertEquals("EXPIRED", store.find(id).orElseThrow().state());
     verify(router, never()).submitOperation(any(), any(), any());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(chat);
   }
 
+  /** ツール利用の権限制御の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledRunCannotAcceptOrExecuteContinuation() {
     String id = pause();
@@ -385,6 +430,7 @@ class ApprovalContinuationTest {
     verifyNoInteractions(router, chat);
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void changedProjectAndOtherProjectCannotUseTheSavedApproval() {
     String id = pause();
@@ -396,9 +442,11 @@ class ApprovalContinuationTest {
     assertThrows(
         IllegalStateException.class, () -> service.decide(owner.projectId(), id, true, true));
     assertEquals("PENDING", approvals.get(owner.projectId(), id).status());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(router, chat);
   }
 
+  /** 待機中受け入れ条件について、再開の後も対象の情報が残ることを確認する。 */
   @Test
   void queuedAcceptanceSurvivesRestartWithoutChangingTheInvocation() {
     String id = pause();
@@ -420,6 +468,7 @@ class ApprovalContinuationTest {
     assertEquals(pending().calls(), service.restore(owner).pendingTools().calls());
   }
 
+  /** ツール利用の権限制御で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void aDeadClaimIsUnknownAndNeverAutomaticallyRetried() {
     String id = pause();
@@ -433,9 +482,11 @@ class ApprovalContinuationTest {
     assertEquals("UNKNOWN", store.find(id).orElseThrow().state());
     assertThrows(
         IllegalStateException.class, () -> service.decide(owner.projectId(), id, true, true));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(router, chat);
   }
 
+  /** ツール利用の権限制御で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void currentPolicyCanDenyAnAlreadyApprovedInvocationBeforeItsEffect() {
     String id = pause();
@@ -467,10 +518,12 @@ class ApprovalContinuationTest {
             });
     var model =
         new ChatModel() {
+          /** 検証用に、ツール利用の権限制御の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new AssertionError();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             modelCalls.incrementAndGet();
             throw new AssertionError();
@@ -484,6 +537,7 @@ class ApprovalContinuationTest {
     assertEquals("APPROVED", approvals.get(owner.projectId(), id).status());
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void malformedTaskStateSavedByAnOlderVersionIsRepairedAndRequiresFreshApproval() {
     String malformed =
@@ -527,10 +581,12 @@ class ApprovalContinuationTest {
             });
     var model =
         new ChatModel() {
+          /** 検証用に、ツール利用の権限制御の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new AssertionError();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             if (modelCalls.incrementAndGet() == 1) {
               assertEquals(0, effects.get());
@@ -611,6 +667,7 @@ class ApprovalContinuationTest {
     assertEquals("CONSUMED", approvals.get(owner.projectId(), fresh.id()).status());
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void aSecondApprovalInTheSameBatchDoesNotSpendAModelCallOrRepeatTheFirstEffect() {
     var effects = new ArrayList<String>();
@@ -630,10 +687,12 @@ class ApprovalContinuationTest {
             new AssistantMessage.ToolCall("second", "function", "runCommand", second));
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、ツール利用の権限制御の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new AssertionError();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             return Flux.just(
                 new ChatResponse(

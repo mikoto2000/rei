@@ -17,8 +17,10 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 画像認識Refinementの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class VisionRefinementTest {
+  /** {@code click} の条件を再現するための補助情報を返す。 */
   static ChatResponse click(double x, double y, String risk) {
     return SpringAiComputerVisionModelTest.response(
         ActionValidationTest.json(
@@ -33,6 +35,7 @@ class VisionRefinementTest {
             .replace("\"LOW\"", "\"" + risk + "\""));
   }
 
+  /** 画面操作の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void refinesOnlySelectedDisplayAndMapsCropBackWithoutReducingRisk() throws Exception {
     var model = mock(ChatModel.class);
@@ -56,6 +59,7 @@ class VisionRefinementTest {
     assertTrue(user.getText().contains("REFINEMENT"));
   }
 
+  /** 画面操作の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void neverFallsBackToCoarseClickWhenRefinementCannotFindTarget() throws Exception {
     var model = mock(ChatModel.class);
@@ -70,6 +74,7 @@ class VisionRefinementTest {
             .decide(new ComputerObservation("goal", MultiDisplayTest.desktop(), List.of(), 1, 20)));
   }
 
+  /** 画面操作の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void cropCannotDeclareWholeGoalDoneAndRecordsItsBounds(
       @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) throws Exception {
@@ -95,6 +100,7 @@ class VisionRefinementTest {
     assertEquals(300, metadata.get("top").asInt());
   }
 
+  /** 画面操作の支援の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationAfterOverviewPreventsRefinement() {
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();

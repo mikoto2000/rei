@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+/** 停滞経験の記録の結果と状態の契約を検証するテスト。 */
 class StagnationEpisodeTest {
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void replanningGivesFourMoreAttemptsWithoutErasingEpisode() {
     StagnationDetector detector = new StagnationDetector();
@@ -22,6 +24,7 @@ class StagnationEpisodeTest {
     assertTrue(detector.isMaxReplanReached());
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void meaningfulProgressEndsEpisode() {
     StagnationDetector detector = new StagnationDetector();
@@ -36,6 +39,7 @@ class StagnationEpisodeTest {
     assertFalse(detector.isStagnant());
   }
 
+  /** 実行の停滞への対処で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void firstToolCallAndFirstFailureAreNotRepetitions() {
     StagnationDetector detector = new StagnationDetector();

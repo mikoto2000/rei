@@ -14,11 +14,16 @@ import java.util.ArrayList;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** シェル会話受付から終了までの管理の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ShellSessionLifecycleTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-09-17T00:00:00Z");
 
+  /** 会話の継続管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shellCreatesBeforeEnqueueAndContinuesWithImmutableMetadata() {
     var projects = new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json")));

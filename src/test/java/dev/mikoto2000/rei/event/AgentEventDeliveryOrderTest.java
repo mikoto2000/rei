@@ -13,7 +13,9 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
+/** エージェントイベント配信順序の結果と状態の契約を検証するテスト。 */
 class AgentEventDeliveryOrderTest {
+  /** 実行状況の通知で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void reentrantPublishDoesNotOvertakeItsParentEvent() {
     var bus = new InMemoryAgentEventBus();
@@ -28,6 +30,7 @@ class AgentEventDeliveryOrderTest {
     assertThat(delivered).containsExactly(1L, 2L);
   }
 
+  /** 実行状況の通知で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void concurrentPublishersDeliverEventsInAssignedSequenceOrder() throws Exception {
     var bus = new InMemoryAgentEventBus();

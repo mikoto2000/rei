@@ -13,17 +13,29 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
+/** フィード要約のユースケースを実現する。 */
 @Service
 public class FeedSummaryService {
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(FeedSummaryService.class);
+
+  /** 最大フィード内容の長さ。 */
   private static final int MAX_FEED_CONTENT_LENGTH = 2000;
 
+  /** フィードサービス。 */
   private final FeedService feedService;
+
+  /** フィード記事ページ情報の取得元。 */
   private final Function<FeedBriefingItem, WebSearchPage> feedArticlePageFetcher;
+
+  /** フィード要約生成。 */
   private final FeedSummaryGenerator feedSummaryGenerator;
+
+  /** フィード設定。 */
   private final FeedProperties feedProperties;
 
+  /** 指定された値や利用先を使って、FeedSummaryServiceを初期化する。 */
   public FeedSummaryService(
       FeedService feedService,
       Function<FeedBriefingItem, WebSearchPage> feedArticlePageFetcher,
@@ -35,6 +47,7 @@ public class FeedSummaryService {
     this.feedProperties = feedProperties;
   }
 
+  /** 利用者が要点を把握できるよう、日次案内を要約する。 */
   public String summarizeBriefing() {
     LocalDate today = LocalDate.now(ZoneOffset.UTC);
     return summarizeBriefing(
@@ -42,6 +55,7 @@ public class FeedSummaryService {
         OffsetDateTime.now(ZoneOffset.UTC));
   }
 
+  /** 利用者が要点を把握できるよう、日次案内を要約する。 */
   public String summarizeBriefing(OffsetDateTime from, OffsetDateTime to) {
     List<FeedBriefingItem> items =
         feedService.listBriefingItems(from, to, feedProperties.briefingMaxItems());
@@ -55,10 +69,12 @@ public class FeedSummaryService {
     }
   }
 
+  /** 利用者が要点を把握できるよう、項目を要約する。 */
   public String summarizeItem(long itemId) {
     return summarizeItemDetailed(itemId).summary();
   }
 
+  /** 利用者が要点を把握できるよう、項目Detailedを要約する。 */
   public FeedItemSummaryResult summarizeItemDetailed(long itemId) {
     FeedBriefingItem item = feedService.findBriefingItem(itemId);
     ResolvedContent resolved = resolveContent(item);
@@ -81,6 +97,7 @@ public class FeedSummaryService {
     }
   }
 
+  /** 利用先に渡せるよう、日次案内プロンプトを組み立てる。 */
   private String buildBriefingPrompt(
       OffsetDateTime from, OffsetDateTime to, List<FeedBriefingItem> items) {
     StringBuilder builder = new StringBuilder();
@@ -130,6 +147,7 @@ public class FeedSummaryService {
     return builder.toString().trim();
   }
 
+  /** 利用先に渡せるよう、項目プロンプトを組み立てる。 */
   private String buildItemPrompt(FeedBriefingItem item, ResolvedContent resolved) {
     if ("article".equals(resolved.source())) {
       return """
@@ -163,10 +181,12 @@ public class FeedSummaryService {
             item.feedName(), item.publishedAt(), item.title(), item.url(), resolved.content());
   }
 
+  /** 指定や設定に応じた対象を利用するため、内容を確定する。 */
   private ResolvedContent resolveContent(FeedBriefingItem item) {
     return resolveContent(item, new LinkedHashMap<>());
   }
 
+  /** 指定や設定に応じた対象を利用するため、内容を確定する。 */
   private ResolvedContent resolveContent(
       FeedBriefingItem item, Map<String, ArticleFetch> fetchCache) {
     if (isBlank(item.url())) {
@@ -179,6 +199,7 @@ public class FeedSummaryService {
     return feedContent(item, "failed");
   }
 
+  /** 外部の情報を利用できるよう、記事を取得する。 */
   private ArticleFetch fetchArticle(FeedBriefingItem item) {
     try {
       WebSearchPage page = feedArticlePageFetcher.apply(item);
@@ -199,6 +220,7 @@ public class FeedSummaryService {
     return new ArticleFetch("", false, false);
   }
 
+  /** フィードの購読と収集で用いるフィード内容を返す。 */
   private ResolvedContent feedContent(FeedBriefingItem item, String fetchStatus) {
     String content = firstNonBlank(item.content(), item.description(), item.title());
     String normalized =
@@ -214,6 +236,7 @@ public class FeedSummaryService {
     return new ResolvedContent(normalized, "feed", fetchStatus, truncated);
   }
 
+  /** フィードの購読と収集で用いる最初以外空白を返す。 */
   private String firstNonBlank(String... values) {
     for (String value : values) {
       if (!isBlank(value)) return value;
@@ -221,12 +244,28 @@ public class FeedSummaryService {
     return "";
   }
 
+  /** フィードの購読と収集において、空白かどうかを判定する。 */
   private boolean isBlank(String value) {
     return value == null || value.isBlank();
   }
 
+  /**
+   * フィードの購読と収集で受け渡す確定した内容を表す。
+   *
+   * @param content 内容
+   * @param source 取得元
+   * @param fetchStatus 取得状態
+   * @param truncated 省略の有無
+   */
   private record ResolvedContent(
       String content, String source, String fetchStatus, boolean truncated) {}
 
+  /**
+   * フィードの購読と収集で受け渡す記事取得を表す。
+   *
+   * @param content 内容
+   * @param success 成功
+   * @param truncated 省略の有無
+   */
   private record ArticleFetch(String content, boolean success, boolean truncated) {}
 }

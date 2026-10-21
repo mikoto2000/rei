@@ -15,9 +15,12 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import reactor.core.publisher.Flux;
 
+/** 補助エージェント意味による検証の結果と状態の契約を検証するテスト。 */
 class SubAgentSemanticValidationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** {@code fixture} の条件を再現するための補助情報を返す。 */
   SubAgentRunnerTest fixture(int steps) {
     var fixture = new SubAgentRunnerTest();
     fixture.directory = directory;
@@ -27,6 +30,7 @@ class SubAgentSemanticValidationTest {
     return fixture;
   }
 
+  /** 評価の判断について、モデル選択可能な設定を保持することを確認する。 */
   @Test
   void judgePreservesModelOptionsAndIsolatesToolsWithoutMutatingOriginal() {
     var owner = new dev.mikoto2000.rei.core.chat.AgentRunContext("judge", "session", directory);
@@ -58,11 +62,13 @@ class SubAgentSemanticValidationTest {
             org.springframework.ai.chat.prompt.Prompt>();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           @Override
           public ChatResponse call(org.springframework.ai.chat.prompt.Prompt prompt) {
             throw new AssertionError("Expected streaming");
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           @Override
           public Flux<ChatResponse> stream(org.springframework.ai.chat.prompt.Prompt prompt) {
             captured.set(prompt);
@@ -105,6 +111,7 @@ class SubAgentSemanticValidationTest {
     assertThat(originalOptions.getToolContext()).containsOnlyKeys("parent-private");
   }
 
+  /** 未対応の回答を受け付けないことを確認する。 */
   @Test
   void independentJudgeRejectsUnsupportedAnswerAndRepairRetainsDiagnosis() throws Exception {
     var fixture = fixture(4);
@@ -139,6 +146,7 @@ class SubAgentSemanticValidationTest {
     assertThat(calls).hasValue(4);
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void judgeCannotBypassSharedBudgetOrStepLimit() throws Exception {
     for (boolean shared : List.of(false, true)) {
@@ -155,14 +163,17 @@ class SubAgentSemanticValidationTest {
               "2s");
       var parent =
           new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation() {
+            /** 検証に使う残量。 */
             int remaining = 1;
 
+            /** {@code tryReserve} の条件を再現するための補助情報を返す。 */
             public boolean tryReserve() {
               if (remaining == 0) return false;
               remaining--;
               return true;
             }
 
+            /** {@code remaining} の条件を再現するための補助情報を返す。 */
             public int remaining() {
               return remaining;
             }
@@ -175,6 +186,7 @@ class SubAgentSemanticValidationTest {
     }
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void malformedVerdictsFailWithoutExposingModelText() throws Exception {
     for (String verdict :
@@ -204,6 +216,7 @@ class SubAgentSemanticValidationTest {
     }
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void judgeReceivesRunnerObservationsAndCanRejectContradiction() throws Exception {
     var fixture = fixture(3);
@@ -273,6 +286,7 @@ class SubAgentSemanticValidationTest {
     assertThat(calls).hasValue(3);
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationDuringJudgeDisposesStreamingAndCannotComplete() throws Exception {
     var fixture = fixture(2);
@@ -310,6 +324,7 @@ class SubAgentSemanticValidationTest {
             event -> event.type() == dev.mikoto2000.rei.event.AgentEventType.SUBAGENT_COMPLETED);
   }
 
+  /** 補助エージェントへの委譲で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void judgeSharesOriginalDeadlineAndCannotHangRun() throws Exception {
     var fixture = fixture(2);
@@ -331,6 +346,7 @@ class SubAgentSemanticValidationTest {
     assertThat(calls).hasValue(2);
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void oversizedSemanticInputFailsBeforeCallingJudge() throws Exception {
     var fixture = fixture(2);

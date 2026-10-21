@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+/** 実行キャンセル原因の結果と状態の契約を検証するテスト。 */
 class RunCancellationCauseTest {
+  /** 会話の実行の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cyclesTerminateAndWrappedInterruptionIsStillControlFlow() {
     var outer = new RuntimeException("private");

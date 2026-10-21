@@ -7,8 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 操作履歴の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ActionHistoryTest {
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void nextDecisionReceivesKeysScrollDirectionAndWaitDuration(
       @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) throws Exception {

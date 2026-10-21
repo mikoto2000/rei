@@ -17,7 +17,9 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** 環境診断コマンドの結果と状態の契約を検証するテスト。 */
 class DoctorCommandTest {
+  /** 実行環境の診断で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void defaultAndDetailsOnlyPerformPassiveDiagnosis() {
     var service = mock(DoctorService.class);
@@ -31,6 +33,7 @@ class DoctorCommandTest {
     verifyNoMoreInteractions(service);
   }
 
+  /** 実行環境の診断で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unknownActiveCheckIsRejectedWithoutDiagnosis() {
     var service = mock(DoctorService.class);
@@ -40,6 +43,7 @@ class DoctorCommandTest {
     verifyNoInteractions(service);
   }
 
+  /** 実行環境の診断で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void rootRegistersDoctorAndCanDisableItWithoutRemovingOtherCommands() {
     var root = new dev.mikoto2000.rei.ui.shell.RootCommand();
@@ -51,6 +55,7 @@ class DoctorCommandTest {
     assertTrue(command.getSubcommands().containsKey("agent"));
   }
 
+  /** 実行環境の診断で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unexpectedConfigurationFailureCannotLeakExceptionDetails() {
     var service = mock(DoctorService.class);

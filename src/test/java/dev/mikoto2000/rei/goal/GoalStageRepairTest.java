@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.fail;
 import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
 import org.junit.jupiter.api.Test;
 
+/** 目標段階修復の結果と状態の契約を検証するテスト。 */
 class GoalStageRepairTest extends GoalStageLoopTest {
+  /** 変更なし根拠について、修復を停止することを確認する。 */
   @Test
   void unchangedEvidenceStopsRepairWithoutConsumingAllRuns() {
     var goal = setup();
@@ -23,6 +25,7 @@ class GoalStageRepairTest extends GoalStageLoopTest {
     assertEquals(2, stages.attempts(goal).size());
   }
 
+  /** 予算を維持することを確認する。 */
   @Test
   void changingButUnsuccessfulRepairHasStageLimitAndKeepsBudget() {
     var goal = setup();
@@ -47,6 +50,7 @@ class GoalStageRepairTest extends GoalStageLoopTest {
     assertEquals(10, result.maxRuns());
   }
 
+  /** 目標の達成管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void noRepairModeStopsAtFirstFailedIndependentVerification() {
     var goal = setup();
@@ -56,6 +60,7 @@ class GoalStageRepairTest extends GoalStageLoopTest {
     assertEquals("BLOCKED", result.status());
   }
 
+  /** 目標の達成管理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void unknownExternalResultAndApprovalNeverAutomaticallyRepeat() {
     for (String reason : java.util.List.of("external_result_unknown", "permission_required")) {

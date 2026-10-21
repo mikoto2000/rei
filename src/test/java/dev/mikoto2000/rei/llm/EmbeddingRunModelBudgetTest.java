@@ -27,15 +27,19 @@ import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.springframework.ai.embedding.EmbeddingResponseMetadata;
 
+/** 埋め込み表現実行モデル予算の結果と状態の契約を検証するテスト。 */
 class EmbeddingRunModelBudgetTest {
+  /** 検証に使う作業ルート。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path root;
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   EmbeddingResponse response(Integer tokens) {
     var metadata = new EmbeddingResponseMetadata();
     if (tokens != null) metadata.setUsage(new DefaultUsage(tokens, 0));
     return new EmbeddingResponse(List.of(new Embedding(new float[] {1, 0}, 0)), metadata);
   }
 
+  /** 次提供元呼び出しを停止することを確認する。 */
   @Test
   void embeddingUsageSharesParentBudgetAndStopsNextProviderCallAtExactLimit() {
     var provider = mock(EmbeddingModel.class);
@@ -59,6 +63,7 @@ class EmbeddingRunModelBudgetTest {
     assertNull(ModelCallBudgetScope.current());
   }
 
+  /** 用途に応じたモデル利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void overshootUnknownAndProviderFailureCannotReturnUsableVectors() {
     for (Integer tokens : Arrays.asList(6, null, 0)) {
@@ -94,6 +99,7 @@ class EmbeddingRunModelBudgetTest {
     }
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void documentFormattingAndDimensionProbeAreAccountedWithoutDoubleCharge() {
     var provider = mock(EmbeddingModel.class);
@@ -115,6 +121,7 @@ class EmbeddingRunModelBudgetTest {
     assertEquals(4, budget.totalTokens());
   }
 
+  /** 用途に応じたモデル利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void workerCapturesBudgetAndRestoresItBeforeUnownedTask() {
     var provider = mock(EmbeddingModel.class);
@@ -141,6 +148,7 @@ class EmbeddingRunModelBudgetTest {
     verify(provider, times(1)).embed(anyList());
   }
 
+  /** 用途に応じたモデル利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void toolContextProvidesParentBudgetAndRestoresOuterScope() {
     var provider = mock(EmbeddingModel.class);
@@ -180,6 +188,7 @@ class EmbeddingRunModelBudgetTest {
     verify(provider, times(1)).call(any(EmbeddingRequest.class));
   }
 
+  /** 埋め込み表現使用状況について、目標保存と検索の窓口再開の後も対象の情報が残ることを確認する。 */
   @Test
   @org.junit.jupiter.api.Tag("integration")
   void embeddingUsageSurvivesGoalRepositoryRestart() {
@@ -217,6 +226,7 @@ class EmbeddingRunModelBudgetTest {
     assertEquals(1, reopened.get("p", goal.id()).llmCallsUsed());
   }
 
+  /** 旧形式モデルを保持することを確認する。 */
   @Test
   void nestedBudgetScopesAndDefaultBeanConfigurationPreserveLegacyModel() {
     var outer = mock(ModelCallBudget.class);

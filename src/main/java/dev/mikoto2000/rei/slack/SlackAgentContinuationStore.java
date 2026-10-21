@@ -15,17 +15,44 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.jdbc.core.simple.JdbcClient;
 
-/** Persist only the non-system conversation and exact ToolCall/ToolResponse pairs. */
+/**
+ * Slackエージェント継続入力の記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>Persist only the non-system conversation and exact ToolCall/ToolResponse pairs.
+ */
 public final class SlackAgentContinuationStore {
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper();
 
+  /**
+   * Slackとの連携で受け渡す保存済みメッセージを表す。
+   *
+   * @param kind 種類
+   * @param text テキスト
+   * @param calls 呼び出し回数
+   * @param responses 応答一覧
+   */
   public record StoredMessage(
       String kind,
       String text,
       List<AssistantMessage.ToolCall> calls,
       List<ToolResponseMessage.ToolResponse> responses) {}
 
+  /**
+   * Slackとの連携で受け渡す文書を表す。
+   *
+   * @param run 実行
+   * @param project プロジェクト
+   * @param root 作業ルート
+   * @param session 会話
+   * @param request 要求
+   * @param messages メッセージ一覧
+   * @param budget 予算
+   * @param managedParent 管理対象親
+   */
   public record Document(
       String run,
       String project,
@@ -36,6 +63,7 @@ public final class SlackAgentContinuationStore {
       OutputLimitRunBudget.Snapshot budget,
       boolean managedParent) {}
 
+  /** 指定された値や利用先を使って、SlackAgentContinuationStoreを初期化する。 */
   public SlackAgentContinuationStore(DataSource source) {
     db = JdbcClient.create(source);
     db.sql(
@@ -43,6 +71,7 @@ public final class SlackAgentContinuationStore {
         .update();
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   public void save(
       AgentRunContext o,
       String request,
@@ -51,6 +80,7 @@ public final class SlackAgentContinuationStore {
     save(o, request, history, budget, false);
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   public void save(
       AgentRunContext o,
       String request,
@@ -97,6 +127,7 @@ public final class SlackAgentContinuationStore {
                   messages,
                   budget,
                   managedParent));
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (document.length() > 524288 || messages.size() > 256)
         throw new IllegalArgumentException("Continuation capacity exceeded");
       if (db.sql(
@@ -109,6 +140,7 @@ public final class SlackAgentContinuationStore {
     }
   }
 
+  /** Slackとの連携で用いる文書を返す。 */
   public Document document(String run) {
     try {
       return json.readValue(
@@ -122,6 +154,7 @@ public final class SlackAgentContinuationStore {
     }
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public RunContinuation.Saved get(AgentRunContext o) {
     var d = document(o.runId());
     if (!Objects.equals(d.project(), o.projectId())
@@ -148,6 +181,7 @@ public final class SlackAgentContinuationStore {
     return new RunContinuation.Saved(d.request(), messages, d.budget());
   }
 
+  /** Slackとの連携で用いる状態を返す。 */
   public String state(String run) {
     return db.sql("SELECT state FROM slack_agent_continuations WHERE run=?")
         .param(run)
@@ -156,6 +190,7 @@ public final class SlackAgentContinuationStore {
         .orElse(null);
   }
 
+  /** 既存の記録へ経緯を残すため、案内を追記する。 */
   public void appendGuidance(AgentRunContext owner, List<Message> guidance) {
     get(owner);
     var d = document(owner.runId());
@@ -177,6 +212,7 @@ public final class SlackAgentContinuationStore {
                   messages,
                   d.budget(),
                   d.managedParent()));
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (value.length() > 524288 || messages.size() > 256)
         throw new IllegalArgumentException("Continuation capacity exceeded");
       if (db.sql("UPDATE slack_agent_continuations SET document=? WHERE run=? AND state='WAITING'")
@@ -190,6 +226,7 @@ public final class SlackAgentContinuationStore {
     }
   }
 
+  /** 対象を処理する担当を決めるため、Slackエージェント継続入力保存先の利用権を確保する。 */
   public boolean claim(String run) {
     return db.sql(
                 "UPDATE slack_agent_continuations SET state='RESUMING' WHERE run=? AND state='WAITING'")
@@ -198,6 +235,7 @@ public final class SlackAgentContinuationStore {
         == 1;
   }
 
+  /** Slackとの連携で用いる待機中を返す。 */
   public List<String> waiting() {
     return db.sql(
             "SELECT run FROM slack_agent_continuations WHERE state='WAITING' ORDER BY run LIMIT 256")
@@ -205,6 +243,7 @@ public final class SlackAgentContinuationStore {
         .list();
   }
 
+  /** 対象の実行をキャンセルする。 */
   public void cancel(String run) {
     db.sql(
             "UPDATE slack_agent_continuations SET state='CANCELLED' WHERE run=? AND state IN ('WAITING','RESUMING')")
@@ -212,6 +251,7 @@ public final class SlackAgentContinuationStore {
         .update();
   }
 
+  /** 処理の完了を記録し、後続の処理へ結果を引き渡す。 */
   public void complete(String run) {
     db.sql(
             "UPDATE slack_agent_continuations SET state='COMPLETED' WHERE run=? AND state='RESUMING'")
@@ -219,6 +259,7 @@ public final class SlackAgentContinuationStore {
         .update();
   }
 
+  /** 確定できない結果を、判定不能の情報として表す。 */
   public void unknown(String run) {
     db.sql(
             "UPDATE slack_agent_continuations SET state='UNKNOWN' WHERE run=? AND state IN ('WAITING','RESUMING')")
@@ -226,6 +267,7 @@ public final class SlackAgentContinuationStore {
         .update();
   }
 
+  /** 処理を継続できる状態に戻すため、Slackエージェント継続入力保存先を復旧する。 */
   public void recover() {
     db.sql("UPDATE slack_agent_continuations SET state='UNKNOWN' WHERE state='RESUMING'").update();
   }

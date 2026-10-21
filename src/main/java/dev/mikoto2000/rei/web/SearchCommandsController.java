@@ -8,16 +8,30 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
+/** 検索コマンド一覧をWeb APIの操作として受け付ける。 */
 @RestController
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public final class SearchCommandsController {
+  /** 実行一覧。 */
   private final IntegrationRunSubmitService runs;
 
+  /** 指定された値や利用先を使って、SearchCommandsControllerを初期化する。 */
   public SearchCommandsController(IntegrationRunSubmitService runs) {
     this.runs = runs;
   }
 
+  /**
+   * Web APIによる操作で受け渡す検索を表す。
+   *
+   * @param projectId 所属プロジェクトの識別子
+   * @param sessionId 会話の識別子
+   * @param query 検索条件
+   * @param vectorTopK ベクトル上位件数
+   * @param webTopK Web上位件数
+   * @param threshold 判定の境界値
+   * @param source 取得元
+   */
   public record Search(
       String projectId,
       String sessionId,
@@ -28,6 +42,7 @@ public final class SearchCommandsController {
       String source)
       implements StrictApiRequest {}
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   @PostMapping("/api/v1/search/answers")
   public ResponseEntity<BackgroundRunController.AcceptedRunResponse> search(
       @RequestBody Search request) {

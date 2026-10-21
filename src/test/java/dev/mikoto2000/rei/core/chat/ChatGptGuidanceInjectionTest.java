@@ -24,7 +24,9 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
+/** チャットGPT案内不正な指示の混入の結果と状態の契約を検証するテスト。 */
 class ChatGptGuidanceInjectionTest {
+  /** 会話の実行で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void currentGuidanceReachesTheChatModelAsSystemContextWithTheHumanRequestUnchanged() {
     var client = mock(ChatClient.class);

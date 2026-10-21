@@ -6,21 +6,33 @@ import java.time.Instant;
 import java.util.Objects;
 import java.util.Optional;
 
-/** Post-ASR wake prefix gate. It still requires ASR and is not speaker identification. */
+/**
+ * 音声による対話に必要な音声待機の解除実行可否の判断を扱う。
+ *
+ * <p>Post-ASR wake prefix gate. It still requires ASR and is not speaker identification.
+ */
 public final class VoiceWakeGate {
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** armed対象。 */
   private ConversationTarget armedTarget;
+
+  /** armed終了日時。 */
   private Instant armedUntil;
 
+  /** 指定された値や利用先を使って、VoiceWakeGateを初期化する。 */
   public VoiceWakeGate(Clock clock) {
     this.clock = Objects.requireNonNull(clock);
   }
 
+  /** 新たな処理を開始できるよう、音声待機の解除実行可否の判断を初期状態へ戻す。 */
   public synchronized void reset() {
     armedTarget = null;
     armedUntil = null;
   }
 
+  /** 音声による対話で用いる絞り込み条件を返す。 */
   public synchronized Optional<String> filter(
       String text, ConversationTarget target, VoiceAdvancedOptions options) {
     Objects.requireNonNull(text);
@@ -53,11 +65,13 @@ public final class VoiceWakeGate {
     return Optional.of(body);
   }
 
+  /** 音声による対話において、接頭辞に該当するか判定する。 */
   private static boolean prefix(String body, String word) {
     return body.startsWith(word)
         && (body.length() == word.length() || boundary(body.codePointAt(word.length())));
   }
 
+  /** 音声による対話において、境界に該当するか判定する。 */
   private static boolean boundary(int cp) {
     return Character.isWhitespace(cp) || Character.isSpaceChar(cp) || "、。,.!?！？：:".indexOf(cp) >= 0;
   }

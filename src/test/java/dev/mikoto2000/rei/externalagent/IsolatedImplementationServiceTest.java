@@ -16,12 +16,21 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 独立した実装サービスの結果と状態の契約を検証するテスト。 */
 class IsolatedImplementationServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temporary;
+
+  /** 検証に使う作業ルート。 */
   Path root;
+
+  /** 検証に使う所有者。 */
   AgentRunContext owner;
+
+  /** 検証に使うサービス。 */
   IsolatedImplementationService service;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     root = Files.createDirectory(temporary.resolve("project"));
@@ -38,10 +47,12 @@ class IsolatedImplementationServiceTest {
             new SelfPatchReviewService(new dev.mikoto2000.rei.core.service.SystemShellService()));
   }
 
+  /** {@code command} の条件を再現するための補助情報を返す。 */
   String command() {
     return System.getProperty("os.name").startsWith("Windows") ? "exit 0" : "true";
   }
 
+  /** {@code implement} の条件を再現するための補助情報を返す。 */
   IsolatedImplementationService.Receipt implement() throws Exception {
     return service.implement(
         owner,
@@ -55,6 +66,7 @@ class IsolatedImplementationServiceTest {
                     new ImplementationProposal.Edit("A.txt", manifest.get("A.txt"), "after\n"))));
   }
 
+  /** 再開の後も対象の情報が残ることを確認する。 */
   @Test
   void parentStaysUnchangedUntilExplicitVerifiedMergeAndReceiptSurvivesRestart() throws Exception {
     var receipt = implement();
@@ -128,6 +140,7 @@ class IsolatedImplementationServiceTest {
                 "/agent codex merge " + receipt.id() + " " + receipt.patchHash()));
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void dirtyParentAndStaleParentRejectWithoutLosingEdits() throws Exception {
     Files.writeString(root.resolve("A.txt"), "human edit\n");
@@ -147,6 +160,7 @@ class IsolatedImplementationServiceTest {
     assertEquals("later human edit\n", Files.readString(root.resolve("A.txt")));
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void failedTestsUnexpectedFilesAndForeignOwnershipNeverAuthorizeMerge() throws Exception {
     var bad =
@@ -183,6 +197,7 @@ class IsolatedImplementationServiceTest {
     assertEquals("before\n", Files.readString(root.resolve("A.txt")));
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void modifiedCommittedWorktreeRequiresReReviewBeforeMerge() throws Exception {
     var receipt = implement();
@@ -198,11 +213,13 @@ class IsolatedImplementationServiceTest {
     assertEquals("before\n", Files.readString(root.resolve("A.txt")));
   }
 
+  /** 外部エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void aConcurrentConflictingCommitIsDetectedWithoutAbortingOrRetryingTheMerge() throws Exception {
     var receipt = implement();
     var racing =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           @Override
           public Output run(
               List<String> command,
@@ -247,6 +264,7 @@ class IsolatedImplementationServiceTest {
                 "/agent codex merge " + receipt.id() + " " + receipt.patchHash()));
   }
 
+  /** {@code git} の条件を再現するため、検証用の操作や状態を扱う。 */
   void git(Path directory, String... args) throws Exception {
     var cmd =
         new ArrayList<String>(

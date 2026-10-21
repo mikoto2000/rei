@@ -33,11 +33,16 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.web.servlet.config.annotation.EnableWebMvc;
 
+/** 作業状況観測内容文脈HTTP通信の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ActivityObservationContextHttpTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う日時。 */
   final Instant at = Instant.parse("2026-10-05T09:00:00Z");
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @EnableWebMvc
   @Import({
@@ -46,12 +51,14 @@ class ActivityObservationContextHttpTest {
     ApiExceptionHandler.class
   })
   static class Config {
+    /** {@code apiKeyProperties} の条件を再現するための補助情報を返す。 */
     @Bean
     ApiKeyProperties apiKeyProperties() {
       return new ApiKeyProperties("secret");
     }
   }
 
+  /** 検証用に、後から経緯を確認できるよう、指定された内容を記録する。 */
   ActivityRecord record(String project, String id, ActivityEvidence.WorkReference reference) {
     var base = ActivitySemanticTest.dev(0, "Terminal", "X");
     var evidence =
@@ -73,6 +80,7 @@ class ActivityObservationContextHttpTest {
             evidence, List.of(), false, "EVIDENCE_ONLY", "READY", Map.of(), ""));
   }
 
+  /** {@code reference} の条件を再現するための補助情報を返す。 */
   ActivityEvidence.WorkReference reference(String project) {
     return new ActivityEvidence.WorkReference(
         project,
@@ -98,6 +106,7 @@ class ActivityObservationContextHttpTest {
         false);
   }
 
+  /** 認証済みプロジェクト観測内容について、残る再開を伝えることを確認する。 */
   @Test
   void authenticatedProjectObservationReportSurvivesRestartWithoutCurrentHistory() {
     var projects = new ProjectRegistry(dir.resolve("projects.json"));
@@ -156,6 +165,7 @@ class ActivityObservationContextHttpTest {
             });
   }
 
+  /** 未対応の以前のについて、実施できない代替手段を保存することを確認する。 */
   @Test
   void unsupportedOldStoreCannotFallbackToUnboundedRecords() {
     var store =
@@ -169,6 +179,7 @@ class ActivityObservationContextHttpTest {
         .findRecordsBetween(org.mockito.ArgumentMatchers.any(), org.mockito.ArgumentMatchers.any());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void missingMismatchedAndFutureSnapshotsCannotBecomeCurrentEvidence() {
     var store = org.mockito.Mockito.mock(ActivityStore.class);
@@ -203,6 +214,7 @@ class ActivityObservationContextHttpTest {
     assertEquals("saved", links.links().getFirst().recordId());
   }
 
+  /** 作業状況の把握で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void linkLimitIsExplicitAndDuplicateObservationsAreNotCountedTwice() {
     var store = org.mockito.Mockito.mock(ActivityStore.class);
@@ -224,6 +236,7 @@ class ActivityObservationContextHttpTest {
     assertEquals(0, result.missingContextRecords());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void outputOverflowCannotPublishAPartialReportAndStoredItemBoundsAreEnforced() {
     var store = org.mockito.Mockito.mock(ActivityStore.class);
@@ -269,6 +282,7 @@ class ActivityObservationContextHttpTest {
         ActivityQueryLimitException.class, () -> service.observationLinksBounded("p", "today"));
   }
 
+  /** 作業状況の把握の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledAndEmptyMidnightQueriesDoNotReadSavedEvidence() {
     var store = org.mockito.Mockito.mock(ActivityStore.class);
@@ -289,6 +303,7 @@ class ActivityObservationContextHttpTest {
     org.mockito.Mockito.verifyNoInteractions(store);
   }
 
+  /** 大きすぎる根拠および無効状態作業状況について、なし部分的な結果HTTP通信結果を返すことを確認する。 */
   @Test
   void oversizedEvidenceAndDisabledActivityReturnNoPartialHttpResult() {
     var projects = new ProjectRegistry(dir.resolve("projects.json"));
@@ -341,6 +356,7 @@ class ActivityObservationContextHttpTest {
             });
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void longDisplayReferencesAreMarkedIncompleteAndFutureToolSourcesAreMissing() {
     var store = org.mockito.Mockito.mock(ActivityStore.class);

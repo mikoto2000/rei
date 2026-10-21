@@ -17,9 +17,12 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** レビューツール一覧の結果と状態の契約を検証するテスト。 */
 class ReviewToolsTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 変更内容のレビューで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void changedSourceRebuildsCoverageWithoutReusingOldReview() throws Exception {
     Files.writeString(dir.resolve("lesson.md"), "old text");
@@ -50,6 +53,7 @@ class ReviewToolsTest {
     }
   }
 
+  /** 変更内容のレビューで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void allExactSourcePagesMustBeConfirmedAndReviewedBeforeCompletion() throws Exception {
     String source = "\uFEFF教材🙂\r\n" + "中間の矛盾\\\"\n".repeat(100);

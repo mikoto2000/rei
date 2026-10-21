@@ -12,7 +12,9 @@ import java.time.Clock;
 import java.time.Duration;
 import java.util.List;
 
+/** 検証条件を再現するためのMCPCrash実行の担当。 */
 public final class McpCrashWorker {
+  /** 検証用に、mCPによる機能の提供の起動要求を受け付け、実行を開始する。 */
   public static void main(String[] args) throws Exception {
     Path root = Path.of(args[0]);
     Clock clock = Clock.systemUTC();

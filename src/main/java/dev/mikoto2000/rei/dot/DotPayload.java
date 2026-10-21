@@ -12,9 +12,12 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
+/** 利用者の状態表示に必要な状態表示通知内容を扱う。 */
 public final class DotPayload {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private DotPayload() {}
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   public static String text(Map<String, Object> a, String key, boolean required, int max) {
     Object v = a.get(key);
     if (v == null && !required) return "";
@@ -25,6 +28,7 @@ public final class DotPayload {
     return s;
   }
 
+  /** 利用者の状態表示で用いる整数を返す。 */
   public static int integer(Object value, int fallback, int min, int max) {
     if (value == null) return fallback;
     if (!(value instanceof Number n)
@@ -34,6 +38,7 @@ public final class DotPayload {
     return n.intValue();
   }
 
+  /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */
   public static String safe(String value) {
     return CredentialRedactor.redact(value)
         .replaceAll("\\\\\\\\[^\\s\\\"<>]+", "[LOCAL_PATH]")
@@ -41,6 +46,7 @@ public final class DotPayload {
         .replaceAll("(?<![:/\\w])/(?:[^\\s\\\"<>]+)", "[LOCAL_PATH]");
   }
 
+  /** 後続の処理で扱える量に制限するため、安全性を上限内に収める。 */
   private static String boundedSafe(String value, int bytes) {
     String safe = safe(value);
     if (safe.getBytes(StandardCharsets.UTF_8).length > bytes)
@@ -48,9 +54,11 @@ public final class DotPayload {
     return safe;
   }
 
+  /** 利用者の状態表示で用いる文字列一覧を返す。 */
   public static List<String> strings(
       Map<String, Object> a, String key, int maxCount, int maxBytes) {
     if (!a.containsKey(key) || a.get(key) == null) return List.of();
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (!(a.get(key) instanceof List<?> list) || list.size() > maxCount)
       throw new DotException("INVALID_ARGUMENT");
     var result = new ArrayList<String>();
@@ -64,6 +72,7 @@ public final class DotPayload {
     return List.copyOf(result);
   }
 
+  /** 利用者の状態表示で用いる識別子を返す。 */
   public static String id(Map<String, Object> a, String key) {
     String id = text(a, key, true, 100);
     try {
@@ -74,6 +83,7 @@ public final class DotPayload {
     }
   }
 
+  /** 利用者の状態表示で用いる公開情報を返す。 */
   public static Map<String, Object> publication(Map<String, Object> a) {
     keys(
         a,
@@ -100,6 +110,7 @@ public final class DotPayload {
     return out;
   }
 
+  /** 利用者の状態表示で用いる結果を返す。 */
   @SuppressWarnings("unchecked")
   public static Map<String, Object> result(Map<String, Object> a, List<?> criteria) {
     keys(
@@ -123,6 +134,7 @@ public final class DotPayload {
     out.put("content", boundedSafe(text(a, "content", false, 65536), 65536));
     out.put("unresolved_items", strings(a, "unresolved_items", 20, 2048));
     Object raw = a.getOrDefault("evidence", List.of());
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (!(raw instanceof List<?> evidence) || evidence.size() > 20)
       throw new DotException("INVALID_ARGUMENT");
     var facts = new ArrayList<Map<String, Object>>();
@@ -182,6 +194,7 @@ public final class DotPayload {
     return out;
   }
 
+  /** 利用者の状態表示に関するキー一覧を処理する。 */
   public static void keys(Map<String, Object> a, Set<String> keys) {
     if (a == null || !keys.containsAll(a.keySet())) throw new DotException("INVALID_ARGUMENT");
   }

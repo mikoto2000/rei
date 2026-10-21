@@ -18,27 +18,35 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 保存されるエージェント実行予定の管理の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class PersistentAgentSchedulerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-10-04T03:00:00Z");
 
+  /** {@code scheduler} の条件を再現するための補助情報を返す。 */
   PersistentAgentScheduler scheduler(Instant instant) {
     return new PersistentAgentScheduler(
         new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("timers.db")),
         Clock.fixed(instant, ZoneOffset.UTC));
   }
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("source-run", "session", dir, "project");
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   String create(PersistentAgentScheduler scheduler) {
     try (var scope = AgentRunScope.open(owner())) {
       return scheduler.scheduleAfter(Duration.ofSeconds(1), "Check build status", "session").id();
     }
   }
 
+  /** 時刻と期間の解釈の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void toolCancellationPersistsAndPreventsDispatch() {
     var scheduler = scheduler(now);
@@ -57,6 +65,7 @@ class PersistentAgentSchedulerTest {
     }
   }
 
+  /** 時刻と期間の解釈の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void toolCancellationRejectsForeignOwnersAndRunningSchedules() {
     var scheduler = scheduler(now);
@@ -84,6 +93,7 @@ class PersistentAgentSchedulerTest {
     assertEquals("RUNNING", due.get("project", id).status());
   }
 
+  /** 時刻と期間の解釈の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void toolCancellationStopsRecurringAndEventSchedules() {
     var scheduler = scheduler(now);
@@ -102,6 +112,7 @@ class PersistentAgentSchedulerTest {
     }
   }
 
+  /** 再開の後も対象の情報が残ることを確認する。 */
   @Test
   void pendingRequiresHumanActivationAndSurvivesRestart() {
     var first = scheduler(now);
@@ -120,6 +131,7 @@ class PersistentAgentSchedulerTest {
     assertEquals(4, first.history("project", id).size());
   }
 
+  /** 時刻と期間の解釈で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void exactOwnerValidationAndProjectIsolation() {
     var scheduler = scheduler(now);
@@ -144,6 +156,7 @@ class PersistentAgentSchedulerTest {
     assertTrue(scheduler.claimDue().isEmpty());
   }
 
+  /** 時刻と期間の解釈で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void concurrentClaimsAndRestartNeverRepeatAnUncertainRun() throws Exception {
     var first = scheduler(now);
@@ -161,6 +174,7 @@ class PersistentAgentSchedulerTest {
     assertTrue(later.claimDue().isEmpty());
   }
 
+  /** 時刻と期間の解釈で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void intervalPersistsCoalescesAndStopsAtBound() {
     var first = scheduler(now);
@@ -188,6 +202,7 @@ class PersistentAgentSchedulerTest {
     assertTrue(last.claimDue().isEmpty());
   }
 
+  /** 時刻と期間の解釈の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void intervalFailureAndCancellationDoNotRepeat() {
     var first = scheduler(now);

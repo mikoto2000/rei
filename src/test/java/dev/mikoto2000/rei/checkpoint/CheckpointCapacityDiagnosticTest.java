@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 再開用の記録許容件数診断の結果と状態の契約を検証するテスト。 */
 class CheckpointCapacityDiagnosticTest {
+  /** 作業の中断と再開で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void storageFailureExplainsEveryReachedLimitAndRecoveryCommands() {
     var failure = CheckpointException.storageCapacity(10, 10, 1000, 25, 1024);
@@ -29,6 +31,7 @@ class CheckpointCapacityDiagnosticTest {
             "以前の履歴は保持");
   }
 
+  /** 作業の中断と再開で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void byteLimitDoesNotSuggestIncreasingAnUnreachedRevisionLimit() {
     var failure = CheckpointException.storageCapacity(2, 10, 1000, 25, 1024);
@@ -36,6 +39,7 @@ class CheckpointCapacityDiagnosticTest {
     assertThat(failure.getMessage()).doesNotContain("rei.checkpoint.max-revisions");
   }
 
+  /** 許容件数失敗情報について、保護された合計を伝えることを確認する。 */
   @Test
   void capacityFailureReportsProtectedTotalsAndWhyCleanupCannotMakeEnoughSpace() {
     var failure = CheckpointException.storageCapacity(10, 10, 1000, 250, 1024, 3, 900);
@@ -51,6 +55,7 @@ class CheckpointCapacityDiagnosticTest {
     assertThat(failure.getMessage()).doesNotContain("実行中・承認待ち・破損した履歴は保護");
   }
 
+  /** 作業の中断と再開で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void allProtectedRevisionsExplainThatCleanupHasNoCandidates() {
     var failure = CheckpointException.storageCapacity(2, 10, 1000, 25, 1024, 2, 1000);
@@ -58,6 +63,7 @@ class CheckpointCapacityDiagnosticTest {
         .contains("保護されて削除できない履歴: 2 件 / 1000 バイト", "保存済み履歴はすべて保護対象", "履歴整理では空きを増やせません");
   }
 
+  /** 作業の中断と再開で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void protectedRevisionCountCanRequireIncreasingOnlyTheRevisionLimit() {
     var failure = CheckpointException.storageCapacity(3, 3, 100, 25, 1024, 3, 100);
@@ -66,6 +72,7 @@ class CheckpointCapacityDiagnosticTest {
     assertThat(failure.getMessage()).contains("今回の保存には上限の引き上げが必要");
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void legacyCallersDoNotMisreportMissingProtectionAccountingAsZero() {
     var failure = CheckpointException.storageCapacity(2, 10, 1000, 25, 1024);
@@ -79,6 +86,7 @@ class CheckpointCapacityDiagnosticTest {
     assertThat(detail.protectedBytes()).isEqualTo(-1);
   }
 
+  /** 作業の中断と再開で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void singleSnapshotHasItsOwnLimitAndCannotBeRepairedByPruningOtherSnapshots() {
     var failure = CheckpointException.snapshotCapacity(2048, 1024);

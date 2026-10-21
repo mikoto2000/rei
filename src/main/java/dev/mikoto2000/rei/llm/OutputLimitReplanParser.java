@@ -5,18 +5,23 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
 import java.util.List;
 
+/** 出力上限計画の見直しの入力を解釈し、機能内で扱える情報へ整える。 */
 public class OutputLimitReplanParser {
 
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper objectMapper;
 
+  /** 用途に応じたモデル利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public OutputLimitReplanParser() {
     this(new ObjectMapper());
   }
 
+  /** 指定された値や利用先を使って、OutputLimitReplanParserを初期化する。 */
   OutputLimitReplanParser(ObjectMapper objectMapper) {
     this.objectMapper = objectMapper;
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   public OutputLimitReplanPlan parse(String plannerOutput, int maxSubgoals) {
     try {
       PlannerPlan plan =
@@ -29,6 +34,7 @@ public class OutputLimitReplanParser {
     }
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   private OutputLimitReplanPlan validate(PlannerPlan plan, int maxSubgoals) {
     if (plan == null || plan.subgoals == null || plan.subgoals.isEmpty()) {
       throw new IllegalArgumentException("Planner subgoals must not be empty");
@@ -54,6 +60,7 @@ public class OutputLimitReplanParser {
     return new OutputLimitReplanPlan(subgoals, finalGoal == null ? "サブゴールの結果を統合する" : finalGoal);
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、JSON変換対象データの表記をそろえる。 */
   static String normalizeJsonObject(String response) {
     if (response == null || response.isBlank()) {
       return "{}";
@@ -77,6 +84,7 @@ public class OutputLimitReplanParser {
     return trimmed;
   }
 
+  /** 用途に応じたモデル利用で用いる余白の除去終点未指定を返す。 */
   private String trimToNull(String value) {
     if (value == null) {
       return null;
@@ -85,15 +93,23 @@ public class OutputLimitReplanParser {
     return trimmed.isEmpty() ? null : trimmed;
   }
 
+  /** 用途に応じたモデル利用に必要な計画の作成計画を扱う。 */
   @JsonIgnoreProperties(ignoreUnknown = true)
   private static class PlannerPlan {
+    /** 小さな目標。 */
     public List<PlannerSubgoal> subgoals;
+
+    /** 最終目標。 */
     public String finalGoal;
   }
 
+  /** 用途に応じたモデル利用に必要な計画の作成Subgoalを扱う。 */
   @JsonIgnoreProperties(ignoreUnknown = true)
   private static class PlannerSubgoal {
+    /** 識別子。 */
     public String id;
+
+    /** 目標。 */
     public String goal;
   }
 }

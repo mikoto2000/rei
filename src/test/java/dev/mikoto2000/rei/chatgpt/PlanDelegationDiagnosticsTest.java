@@ -8,10 +8,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+/** 計画委譲診断情報の結果と状態の契約を検証するテスト。 */
 class PlanDelegationDiagnosticsTest {
+  /** 検証に使う設定。 */
   final PlanDelegationProperties settings =
       new PlanDelegationProperties(true, Set.of("default"), Set.of("model"));
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void missingAndDisallowedDestinationsHaveDistinctSafeReasons() {
     assertTrue(

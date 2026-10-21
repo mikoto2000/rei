@@ -16,7 +16,9 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 実行実行文脈の結果と状態の契約を検証するテスト。 */
 class RunExecutionContextTest {
+  /** 永続化されたツール失敗情報について、呼び出し識別情報を維持することを確認する。 */
   @Test
   void durableToolFailureKeepsCallIdentityAndSpecificSafeCause() {
     var events = new ArrayList<AgentEvent>();
@@ -46,6 +48,7 @@ class RunExecutionContextTest {
     assertThat(events.getFirst().sessionId()).isEqualTo("session");
   }
 
+  /** 実行の停滞への対処の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void restrictedModeCannotBypassPermissionWhenNoGuardIsInstalled() {
     var context =
@@ -69,6 +72,7 @@ class RunExecutionContextTest {
         .doesNotThrowAnyException();
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void mixedNoProgressActionsStillCountAndTerminalObservationIsProgressOnce() {
     var context =
@@ -106,6 +110,7 @@ class RunExecutionContextTest {
     assertThat(context.progressVersion()).isEqualTo(1);
   }
 
+  /** 実行の停滞への対処で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void verifiedWaitingDoesNotCountAsStagnationOrReplenishBudget() {
     var budget = new OutputLimitRunBudget(1, 3);
@@ -143,6 +148,7 @@ class RunExecutionContextTest {
                     && "waiting_for_dependency".equals(p.reason()));
   }
 
+  /** 実行の停滞への対処で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void completedSubgoalRecoversOnceButDoesNotReplenishHardBudget() {
     var budget = new OutputLimitRunBudget(1, 30);

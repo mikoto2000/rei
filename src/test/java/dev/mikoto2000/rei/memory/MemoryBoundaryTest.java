@@ -28,10 +28,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 記憶境界条件の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class MemoryBoundaryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 評価値既定値を保持することを確認する。 */
   @Test
   void partiallySpecifiedSleepConfigurationRetainsScoreDefaults() {
     var binder =
@@ -50,6 +53,7 @@ class MemoryBoundaryTest {
     assertEquals(3, properties.sleep().maxTurns());
   }
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledSleepDoesNotReadOrExtract() {
     var repository = mock(MemoryRepository.class);
@@ -62,9 +66,11 @@ class MemoryBoundaryTest {
         () ->
             new SleepService(repository, turns, extractor, resolver, properties)
                 .sleep("s", "p", false));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(repository, turns, extractor, resolver);
   }
 
+  /** 長期記憶の活用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void interruptDuringPersistenceRollsBackAndRestoresInterrupt() {
     var props = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60, null);
@@ -100,6 +106,7 @@ class MemoryBoundaryTest {
     assertEquals(0, repository.lastProcessed("s"));
   }
 
+  /** 長期記憶の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void batchLimitLeavesRemainderForNextManualSleep() {
     var props =
@@ -135,6 +142,7 @@ class MemoryBoundaryTest {
     assertEquals(0, service.unsleptTurns("s"));
   }
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void supersededAndFutureDatedMemoriesAreNotRetrieved() {
     var props = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60, null);

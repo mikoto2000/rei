@@ -9,7 +9,9 @@ import java.nio.file.*;
 import java.time.*;
 import java.util.*;
 
+/** バックエンドの利用可否を確認し、軽量CLIを起動して終了まで管理する。 */
 public final class Launcher {
+  /** 軽量CLIの起動の起動要求を受け付け、実行を開始する。 */
   public static void main(String[] args) {
     try {
       System.exit(execute(LauncherOptions.parse(args)));
@@ -17,6 +19,7 @@ public final class Launcher {
       System.err.println(invalid.getMessage());
       System.exit(2);
     } catch (InterruptedException interrupted) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       System.exit(130);
     } catch (IOException failure) {
@@ -25,6 +28,7 @@ public final class Launcher {
     }
   }
 
+  /** 要求された処理を実行する。 */
   static int execute(LauncherOptions options) throws IOException, InterruptedException {
     if (options.help()) {
       System.out.println(
@@ -70,10 +74,12 @@ public final class Launcher {
             .followRedirects(HttpClient.Redirect.NEVER)
             .proxy(
                 new java.net.ProxySelector() {
+                  /** 指定された条件に応じて、利用する対象を選ぶ。 */
                   public List<java.net.Proxy> select(java.net.URI uri) {
                     return List.of(java.net.Proxy.NO_PROXY);
                   }
 
+                  /** 軽量CLIの起動に関する接続失敗を処理する。 */
                   public void connectFailed(
                       java.net.URI uri, java.net.SocketAddress address, IOException error) {}
                 })

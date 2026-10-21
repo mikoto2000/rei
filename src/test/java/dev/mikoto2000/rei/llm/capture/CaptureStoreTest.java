@@ -12,9 +12,12 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
 import org.junit.jupiter.api.Test;
 
+/** 取得記録保存先の結果と状態の契約を検証するテスト。 */
 class CaptureStoreTest {
+  /** 検証に使う保存先。 */
   CaptureStore store = new CaptureStore(Clock.systemUTC());
 
+  /** モデル応答の記録の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void initiallyOffAndReservationIsScopedAndCancellable() {
     assertThat(store.sessions()).isEmpty();
@@ -25,6 +28,7 @@ class CaptureStoreTest {
     assertThat(store.accept("client-a", "conversation-a", "submission-a", "run-a")).isFalse();
   }
 
+  /** モデル応答の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void submissionConsumesReservationOnceAndOnlyExactRootIsCaptured() {
     store.reserve("client-a", "conversation-a");
@@ -35,6 +39,7 @@ class CaptureStoreTest {
     assertThat(store.sessions().getFirst().submissionId()).isEqualTo("submission-a");
   }
 
+  /** モデル応答の記録で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void onlyOneConcurrentSubmissionWins() throws Exception {
     store.reserve("client", "conversation");
@@ -57,6 +62,7 @@ class CaptureStoreTest {
     }
   }
 
+  /** モデル応答の記録で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void limitsRejectWholeBodiesAndMarkAttemptOverflow() {
     activate();
@@ -80,6 +86,7 @@ class CaptureStoreTest {
     assertThat(store.sessions().getFirst().bytes()).isEqualTo(CaptureStore.RUN_LIMIT);
   }
 
+  /** 保持内容の消去を削除することを確認する。 */
   @Test
   void deleteClearAndStartFailureRemoveActiveOwnership() {
     activate();
@@ -92,6 +99,7 @@ class CaptureStoreTest {
     assertThat(store.sessions()).isEmpty();
   }
 
+  /** モデル応答の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void ttlStartsAtRunEndAndMaximumThreeSessions() {
     var clock = new MutableClock();
@@ -110,6 +118,7 @@ class CaptureStoreTest {
     assertThat(store.sessions()).hasSize(3);
   }
 
+  /** モデル応答の記録で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void originalsAreDefensiveAndIdsCannotCrossSessions() {
     activate();
@@ -125,22 +134,28 @@ class CaptureStoreTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** {@code activate} の条件を再現するため、検証用の操作や状態を扱う。 */
   void activate() {
     store.reserve("client", "conversation");
     store.accept("client", "conversation", "submission", "run");
   }
 
+  /** 検証条件を再現するための変更可能な時刻の取得元。 */
   static class MutableClock extends Clock {
+    /** 日時や期限の条件を再現するために使う検証時刻。 */
     Instant now = Instant.parse("2026-10-09T00:00:00Z");
 
+    /** 検証用に、モデル応答の記録で参照するタイムゾーンを返す。 */
     public ZoneId getZone() {
       return ZoneOffset.UTC;
     }
 
+    /** 検証用に、指定されたタイムゾーンを反映した情報を作成する。 */
     public Clock withZone(ZoneId zone) {
       return this;
     }
 
+    /** {@code instant} の条件を再現するための補助情報を返す。 */
     public Instant instant() {
       return now;
     }

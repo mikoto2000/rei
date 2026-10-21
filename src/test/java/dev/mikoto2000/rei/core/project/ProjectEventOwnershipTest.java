@@ -14,7 +14,9 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
+/** プロジェクトイベント所有権の結果と状態の契約を検証するテスト。 */
 class ProjectEventOwnershipTest {
+  /** 生成元および通知の連携先について、取得済みプロジェクトを保持することを確認する。 */
   @Test
   void factoryAndBusPreserveCapturedProjectOnEventsWithoutExplicitRunId() {
     var project = new ProjectContext(UUID.randomUUID().toString(), "a", Path.of("a"));

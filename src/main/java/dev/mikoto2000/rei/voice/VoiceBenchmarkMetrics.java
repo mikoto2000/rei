@@ -4,15 +4,22 @@ import java.text.Normalizer;
 import java.util.Arrays;
 import java.util.Objects;
 
-/** Reproducible benchmark statistics; punctuation/spacing normalization does not rewrite words. */
+/**
+ * 音声による対話に必要な音声性能測定計測値を扱う。
+ *
+ * <p>Reproducible benchmark statistics; punctuation/spacing normalization does not rewrite words.
+ */
 public final class VoiceBenchmarkMetrics {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private VoiceBenchmarkMetrics() {}
 
+  /** 同じ意味の指定を共通に扱えるよう、表記や形式をそろえる。 */
   public static String normalize(String text) {
     return Normalizer.normalize(Objects.requireNonNull(text), Normalizer.Form.NFKC)
         .replaceAll("[\\p{P}\\p{Z}\\s]", "");
   }
 
+  /** 音声による対話で用いる文字エラー一覧を返す。 */
   public static int characterErrors(String reference, String hypothesis) {
     int[] expected = normalize(reference).codePoints().toArray(),
         actual = normalize(hypothesis).codePoints().toArray();
@@ -32,6 +39,7 @@ public final class VoiceBenchmarkMetrics {
     return previous[actual.length];
   }
 
+  /** 音声による対話で用いるcerを返す。 */
   public static double cer(String reference, String hypothesis) {
     int count = normalize(reference).codePointCount(0, normalize(reference).length());
     if (count == 0)
@@ -40,6 +48,7 @@ public final class VoiceBenchmarkMetrics {
     return (double) characterErrors(reference, hypothesis) / count;
   }
 
+  /** 音声による対話で用いるpercentileを返す。 */
   public static double percentile(double[] measurements, double quantile) {
     if (measurements == null
         || measurements.length == 0

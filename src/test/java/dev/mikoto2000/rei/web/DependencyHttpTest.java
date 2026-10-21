@@ -27,13 +27,17 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/** 依存条件HTTP通信の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class DependencyHttpTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import({WebApiIntegrationTest.Config.class, DependencyController.class})
   static class Config {
+    /** {@code dependencies} の条件を再現するための補助情報を返す。 */
     @Bean
     PersistentDependencyRepository dependencies(
         @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
@@ -43,22 +47,26 @@ class DependencyHttpTest {
           Clock.systemUTC());
     }
 
+    /** {@code observations} の条件を再現するための補助情報を返す。 */
     @Bean
     DependencyObservationService observations() {
       return mock(DependencyObservationService.class);
     }
 
+    /** 検証で使用する利用条件の確認を、指定された条件に合わせて用意する。 */
     @Bean
     dev.mikoto2000.rei.core.policy.ToolPermissionGuard guard() {
       return mock(dev.mikoto2000.rei.core.policy.ToolPermissionGuard.class);
     }
 
+    /** {@code approvals} の条件を再現するための補助情報を返す。 */
     @Bean
     dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvals() {
       return mock(dev.mikoto2000.rei.core.policy.ToolApprovalRepository.class);
     }
   }
 
+  /** Web APIによる操作で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void authenticatedVersionedAnswerPersistsWithoutDispatchAndRejectsReplay() throws Exception {
     var app = new SpringApplication(Config.class);

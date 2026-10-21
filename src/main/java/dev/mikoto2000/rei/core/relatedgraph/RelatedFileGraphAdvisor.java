@@ -21,15 +21,24 @@ import org.springframework.stereotype.Component;
 @Component
 public class RelatedFileGraphAdvisor implements BaseAdvisor {
 
+  /** 関連ファイル関連図。 */
   private final RelatedFileGraph relatedFileGraph;
+
+  /** 作業中集合。 */
   private final WorkingSet workingSet;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** 実行状況の通知先。 */
   private final AgentEventPublisher eventPublisher;
 
+  /** 関連情報の探索を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public RelatedFileGraphAdvisor(RelatedFileGraph relatedFileGraph, WorkingSet workingSet) {
     this(relatedFileGraph, workingSet, (AgentEventFactory) null, (AgentEventPublisher) null);
   }
 
+  /** 関連情報の探索を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @Autowired
   public RelatedFileGraphAdvisor(
       RelatedFileGraph relatedFileGraph,
@@ -39,6 +48,7 @@ public class RelatedFileGraphAdvisor implements BaseAdvisor {
     this(relatedFileGraph, workingSet, events.getIfAvailable(), eventPublisher.getIfAvailable());
   }
 
+  /** 指定された値や利用先を使って、RelatedFileGraphAdvisorを初期化する。 */
   public RelatedFileGraphAdvisor(
       RelatedFileGraph relatedFileGraph,
       WorkingSet workingSet,
@@ -50,10 +60,12 @@ public class RelatedFileGraphAdvisor implements BaseAdvisor {
     this.eventPublisher = eventPublisher;
   }
 
+  /** 関連情報の探索で用いる関連ファイル関連図を返す。 */
   RelatedFileGraph relatedFileGraph() {
     return relatedFileGraph;
   }
 
+  /** 関連情報の探索の本処理へ渡す文脈を準備する。 */
   @Override
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     UserMessage userMessage = request.prompt().getUserMessage();
@@ -82,16 +94,19 @@ public class RelatedFileGraphAdvisor implements BaseAdvisor {
         .build();
   }
 
+  /** 関連情報の探索の実行結果を受け取り、後続の処理へ反映する。 */
   @Override
   public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
     return response;
   }
 
+  /** 他の補助処理と組み合わせる際の適用順序を返す。 */
   @Override
   public int getOrder() {
     return -50;
   }
 
+  /** 指定された内容へ切り替えるため、利用者メッセージを置き換える。 */
   private List<Message> replaceUserMessage(
       List<Message> messages, UserMessage original, UserMessage replacement) {
     List<Message> replaced = new ArrayList<>(messages.size());
@@ -107,6 +122,7 @@ public class RelatedFileGraphAdvisor implements BaseAdvisor {
     return List.copyOf(replaced);
   }
 
+  /** 実行状況を利用先で把握できるよう、追加されたを通知する。 */
   private void publishInjected(String context) {
     if (events != null && eventPublisher != null) {
       eventPublisher.publish(events.contextInjected("related_files", null, context.length()));

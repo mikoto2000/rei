@@ -24,19 +24,24 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** Slackエージェント継続入力の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SlackAgentContinuationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 検証で使用する保存先を、指定された条件に合わせて用意する。 */
   SlackAgentContinuationStore store() {
     return new SlackAgentContinuationStore(
         new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("storage.db")));
   }
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("run", "session", dir, "project");
   }
 
+  /** {@code messages} の条件を再現するための補助情報を返す。 */
   List<Message> messages() {
     return List.of(
         new SystemMessage("never persist system"),
@@ -54,6 +59,7 @@ class SlackAgentContinuationTest {
             .build());
   }
 
+  /** 再開について、同一所有者を復元することを確認する。 */
   @Test
   void restartRestoresSameOwnerAndStructuredToolHistoryButNeverSystemMessages() {
     var s = store();
@@ -72,6 +78,7 @@ class SlackAgentContinuationTest {
         () -> s.get(new AgentRunContext("run", "other", dir, "project")));
   }
 
+  /** Slackとの連携で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void durableResumeClaimIsOneShotAndOwnerLossNeverReplays() {
     var s = store();
@@ -83,6 +90,7 @@ class SlackAgentContinuationTest {
     assertFalse(s.claim("run"));
   }
 
+  /** Slackとの連携の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationMakesSavedContinuationIneligible() {
     var s = store();
@@ -92,6 +100,7 @@ class SlackAgentContinuationTest {
     assertEquals("CANCELLED", s.state("run"));
   }
 
+  /** Slackとの連携で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void budgetRestoreNeverReplenishesCallsTokensOrReplans() {
     var b = new OutputLimitRunBudget(2, 3, null, 100);
@@ -104,6 +113,7 @@ class SlackAgentContinuationTest {
     assertTrue(b.tokenExhausted());
   }
 
+  /** 登録台帳待機中について、再開の後も対象の情報が残ることを確認する。 */
   @Test
   void registryWaitingSurvivesRestartAndSameRunCanResume() {
     var source = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("runs.db"));
@@ -119,6 +129,7 @@ class SlackAgentContinuationTest {
     assertFalse(restored.claimWaiting(owner()));
   }
 
+  /** Slackとの連携の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void restoredWaitingRunCanBeCancelledBeforeItsReplyArrives() {
     var clock = Clock.systemUTC();

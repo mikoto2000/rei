@@ -7,8 +7,10 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 情報への関心実行待ちの結果と状態の契約を検証するテスト。 */
 class CuriosityQueueTest {
 
+  /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void addsAndFindsPendingCuriosityByPriority() {
     InMemoryCuriosityQueue queue = new InMemoryCuriosityQueue();
@@ -21,6 +23,7 @@ class CuriosityQueueTest {
     assertEquals(2, candidates.size());
   }
 
+  /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void marksUsedAndDismissed() {
     InMemoryCuriosityQueue queue = new InMemoryCuriosityQueue();
@@ -33,6 +36,7 @@ class CuriosityQueueTest {
     assertTrue(queue.findCandidates(new CuriosityQuery(now(), 10)).isEmpty());
   }
 
+  /** 話題の管理で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void expiredItemIsNotCandidate() {
     InMemoryCuriosityQueue queue = new InMemoryCuriosityQueue();
@@ -41,6 +45,7 @@ class CuriosityQueueTest {
     assertTrue(queue.findCandidates(new CuriosityQuery(now(), 10)).isEmpty());
   }
 
+  /** 話題の管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateQuestionIsSuppressed() {
     InMemoryCuriosityQueue queue = new InMemoryCuriosityQueue();
@@ -50,6 +55,7 @@ class CuriosityQueueTest {
     assertEquals(1, queue.findCandidates(new CuriosityQuery(now(), 10)).size());
   }
 
+  /** 話題の管理で、音声の取得・認識・入力の受け渡しが、検証条件に従うことを確認する。 */
   @Test
   void curiosityConvertsToTopicCandidateAndIsMarkedUsedAfterSpeech() {
     InMemoryCuriosityQueue queue = new InMemoryCuriosityQueue();
@@ -65,6 +71,7 @@ class CuriosityQueueTest {
     assertEquals(TopicSource.CURIOSITY_QUEUE, candidates.getFirst().source());
   }
 
+  /** {@code item} の条件を再現するための補助情報を返す。 */
   private CuriosityItem item(String id, String question, double priority, Instant expiresAt) {
     return new CuriosityItem(
         id,
@@ -77,10 +84,12 @@ class CuriosityQueueTest {
         CuriosityStatus.PENDING);
   }
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   private TopicGenerationContext context() {
     return new TopicGenerationContext(List.of(), List.of(), now(), List.of());
   }
 
+  /** {@code now} の条件を再現するための補助情報を返す。 */
   private Instant now() {
     return Instant.parse("2026-09-02T00:00:00Z");
   }

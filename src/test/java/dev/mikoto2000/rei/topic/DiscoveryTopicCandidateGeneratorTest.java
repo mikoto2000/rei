@@ -7,8 +7,10 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 利用先の検出話題候補生成の結果と状態の契約を検証するテスト。 */
 class DiscoveryTopicCandidateGeneratorTest {
 
+  /** 話題の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void generatesLimitedSeedsFromWorkingSetRecentTopicAndConversation() {
     TopicGeneratorProperties properties = enabledProperties();
@@ -29,6 +31,7 @@ class DiscoveryTopicCandidateGeneratorTest {
     assertEquals("Dify MCP authentication.md", seeds.getFirst());
   }
 
+  /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sourceItemsBecomeDiscoveryTopicCandidates() {
     TopicGeneratorProperties properties = enabledProperties();
@@ -55,6 +58,7 @@ class DiscoveryTopicCandidateGeneratorTest {
     assertEquals(TopicSource.GITHUB, candidates.getFirst().source());
   }
 
+  /** 話題の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void sourceFailureDoesNotBreakOtherSources() {
     TopicGeneratorProperties properties = enabledProperties();
@@ -72,6 +76,7 @@ class DiscoveryTopicCandidateGeneratorTest {
         1, generator(properties, List.of(failing, succeeding)).generate(seedContext()).size());
   }
 
+  /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void lowRelevanceAndSeenItemsAreExcluded() {
     TopicGeneratorProperties properties = enabledProperties();
@@ -93,6 +98,7 @@ class DiscoveryTopicCandidateGeneratorTest {
     assertTrue(generator.generate(seedContext()).isEmpty());
   }
 
+  /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void oldItemHasLowerFreshness() {
     TopicGeneratorProperties properties = enabledProperties();
@@ -103,6 +109,7 @@ class DiscoveryTopicCandidateGeneratorTest {
             < generator.freshness(now(), now()));
   }
 
+  /** 話題の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void seenItemIsNotReturnedTwice() {
     TopicGeneratorProperties properties = enabledProperties();
@@ -116,6 +123,7 @@ class DiscoveryTopicCandidateGeneratorTest {
     assertTrue(generator.generate(seedContext()).isEmpty());
   }
 
+  /** 話題の管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void discoveryCandidatePassesThroughRankerAndCooldownPolicy() {
     TopicCandidate candidate =
@@ -133,6 +141,7 @@ class DiscoveryTopicCandidateGeneratorTest {
             .decision());
   }
 
+  /** {@code generator} の条件を再現するための補助情報を返す。 */
   private DiscoveryTopicCandidateGenerator generator(
       TopicGeneratorProperties properties, List<DiscoverySource> sources) {
     return new DiscoveryTopicCandidateGenerator(
@@ -142,6 +151,7 @@ class DiscoveryTopicCandidateGeneratorTest {
         properties);
   }
 
+  /** {@code seedContext} の条件を再現するための補助情報を返す。 */
   private TopicGenerationContext seedContext() {
     return new TopicGenerationContext(
         List.of(),
@@ -150,12 +160,14 @@ class DiscoveryTopicCandidateGeneratorTest {
         List.of());
   }
 
+  /** {@code enabledProperties} の条件を再現するための補助情報を返す。 */
   private TopicGeneratorProperties enabledProperties() {
     TopicGeneratorProperties properties = new TopicGeneratorProperties();
     properties.setEnabled(true);
     return properties;
   }
 
+  /** {@code now} の条件を再現するための補助情報を返す。 */
   private Instant now() {
     return Instant.parse("2026-09-02T00:00:00Z");
   }

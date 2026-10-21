@@ -28,14 +28,25 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 
+/** 文脈圧縮診断情報の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ContextCompressionDiagnosticsTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使うトークン数。 */
   private final TokenEstimator tokens = TokenEstimator.conservative();
+
+  /** 検証に使うミリ秒数。 */
   private final AtomicLong millis = new AtomicLong();
+
+  /** 通知された出来事と順序を検証するための記録。 */
   private final List<AgentEvent> events = new ArrayList<>();
+
+  /** 検証に使うこの機能の動作設定。 */
   private final ContextCompressionProperties properties = config();
 
+  /** 検証で使用する設定を、指定された条件に合わせて用意する。 */
   private static ContextCompressionProperties config() {
     var p = new ContextCompressionProperties();
     p.setThreshold(300);
@@ -45,26 +56,32 @@ class ContextCompressionDiagnosticsTest {
     return p;
   }
 
+  /** {@code clock} の条件を再現するための補助情報を返す。 */
   private Clock clock() {
     return new Clock() {
+      /** 検証用に、モデルへ渡す文脈の管理で参照するタイムゾーンを返す。 */
       public ZoneId getZone() {
         return ZoneOffset.UTC;
       }
 
+      /** 検証用に、指定されたタイムゾーンを反映した情報を作成する。 */
       public Clock withZone(ZoneId zone) {
         return this;
       }
 
+      /** {@code instant} の条件を再現するための補助情報を返す。 */
       public Instant instant() {
         return Instant.ofEpochMilli(millis.get());
       }
     };
   }
 
+  /** {@code assembler} の条件を再現するための補助情報を返す。 */
   private ContextAssembler assembler(ConversationCompressor compressor) {
     return assembler(compressor, new ConversationSummaryRepository(dir));
   }
 
+  /** {@code assembler} の条件を再現するための補助情報を返す。 */
   private ContextAssembler assembler(
       ConversationCompressor compressor, ConversationSummaryRepository summaries) {
     var a =
@@ -80,6 +97,7 @@ class ContextCompressionDiagnosticsTest {
     return a;
   }
 
+  /** {@code history} の条件を再現するための補助情報を返す。 */
   private Prompt history() {
     return new Prompt(
         List.of(
@@ -90,6 +108,7 @@ class ContextCompressionDiagnosticsTest {
             new UserMessage("current")));
   }
 
+  /** {@code payloads} の条件を再現するための補助情報を返す。 */
   private List<ContextCompressionPayload> payloads(AgentEventType type) {
     return events.stream()
         .filter(e -> e.type() == type)
@@ -97,6 +116,7 @@ class ContextCompressionDiagnosticsTest {
         .toList();
   }
 
+  /** モデルへ渡す文脈の管理で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void timeoutIsNotRetriedOnEveryLoopAndNextAttemptUsesSmallerCompletePrefix() {
     List<Integer> sizes = new ArrayList<>();
@@ -130,6 +150,7 @@ class ContextCompressionDiagnosticsTest {
         .satisfies(p -> assertThat(p.afterEstimatedTokens()).isEqualTo(p.beforeEstimatedTokens()));
   }
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void newRunOrModelOrChangedSettingsCanRetryWithoutWaiting() {
     var calls = new AtomicInteger();
@@ -153,6 +174,7 @@ class ContextCompressionDiagnosticsTest {
         .allSatisfy(p -> assertThat(p.details()).doesNotContain("raw-secret"));
   }
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void reportsOutputValidationSeparatelyWithoutDiscardingExistingSummary() {
     for (var reason :
@@ -183,14 +205,17 @@ class ContextCompressionDiagnosticsTest {
     }
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void actualOutputUsageAvoidsRejectingJapaneseSummaryButFinalInputBudgetRemainsStrict() {
     ConversationCompressor c =
         new ConversationCompressor() {
+          /** {@code summarize} の条件を再現するための補助情報を返す。 */
           public String summarize(String previous, List<Message> messages, int max, Prompt owner) {
             throw new AssertionError();
           }
 
+          /** {@code summarizeResult} の条件を再現するための補助情報を返す。 */
           public Summary summarizeResult(
               String previous, List<Message> messages, int max, Prompt owner) {
             return new Summary("あ".repeat(60), 80);
@@ -210,17 +235,20 @@ class ContextCompressionDiagnosticsTest {
         .hasMessageContaining("CONTEXT_HARD_LIMIT");
   }
 
+  /** 不明またはゼロ使用状況引き続きについて、慎重な確認を必要とする推定値を利用することを確認する。 */
   @Test
   void unknownOrZeroUsageStillUsesConservativeEstimateForSummaryCap() {
     for (Integer usage : Arrays.asList(null, 0)) {
       events.clear();
       ConversationCompressor c =
           new ConversationCompressor() {
+            /** {@code summarize} の条件を再現するための補助情報を返す。 */
             public String summarize(
                 String previous, List<Message> messages, int max, Prompt owner) {
               throw new AssertionError();
             }
 
+            /** {@code summarizeResult} の条件を再現するための補助情報を返す。 */
             public Summary summarizeResult(
                 String previous, List<Message> messages, int max, Prompt owner) {
               return new Summary("あ".repeat(60), usage);
@@ -237,10 +265,12 @@ class ContextCompressionDiagnosticsTest {
     }
   }
 
+  /** 要約保存を伝えることを確認する。 */
   @Test
   void reportsSummaryStorageAndOversizedAtomicInputBeforeSendingToModel() {
     var summaries =
         new ConversationSummaryRepository(dir) {
+          /** 検証用に、後から参照できるよう、指定された情報を保存する。 */
           @Override
           public void save(String key, ConversationSummary summary) {
             throw new IllegalStateException(
@@ -281,6 +311,7 @@ class ContextCompressionDiagnosticsTest {
         .satisfies(p -> assertThat(p.reason()).isEqualTo("summary_input_budget"));
   }
 
+  /** HTTP通信状態を保持することを確認する。 */
   @Test
   void retainsHttpStatusAndSafeUnderlyingCauseWithoutProviderBodyOrHeaders() {
     var failure =
@@ -306,6 +337,7 @@ class ContextCompressionDiagnosticsTest {
             });
   }
 
+  /** モデルへ渡す文脈の管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void budgetAndCancellationStayFatalAndReportOriginalTimeoutSafely() {
     var stopped =

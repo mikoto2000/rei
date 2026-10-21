@@ -11,12 +11,19 @@ import tools.jackson.databind.DeserializationFeature;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * A single foreground inference; OS observations and monitor identity never come from the model.
+ * 前面作業状況の入力を解釈し、機能内で扱える情報へ整える。
+ *
+ * <p>A single foreground inference; OS observations and monitor identity never come from the model.
  */
 public final class ForegroundActivityParser {
+  /** データの変換。 */
   private static final JsonMapper MAPPER =
       JsonMapper.builder().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).build();
+
+  /** データ形式。 */
   public static final String SCHEMA = resource();
+
+  /** 検証の窓口。 */
   private static final Schema VALIDATOR =
       SchemaRegistry.withDefaultDialect(
               SpecificationVersion.DRAFT_2020_12,
@@ -28,8 +35,10 @@ public final class ForegroundActivityParser {
                       .schemaLoader(l -> l.fetchRemoteResources(false).block(iri -> true)))
           .getSchema(MAPPER.readTree(SCHEMA));
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   public ActivityExtractor.Result parse(String text, String monitor) {
     if (text == null || text.isBlank()) throw invalid("empty_output");
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (text.length() > 8192) throw invalid("size");
     try {
       var n = MAPPER.readTree(text);
@@ -61,15 +70,18 @@ public final class ForegroundActivityParser {
     }
   }
 
+  /** 後続の処理で使う値を返す。 */
   private static String value(tools.jackson.databind.JsonNode n, String key) {
     return n.get(key).isNull() ? "" : n.get(key).asString();
   }
 
+  /** 受け付けられない指定について、入力の問題を伝える。 */
   private static ActivityOutputParser.InvalidOutput invalid(String code) {
     return new ActivityOutputParser.InvalidOutput(
         List.of(new ActivityOutputParser.ResultError("/", code)));
   }
 
+  /** 作業状況の把握で用いる補助資料を返す。 */
   private static String resource() {
     try (var stream =
         ForegroundActivityParser.class.getResourceAsStream(

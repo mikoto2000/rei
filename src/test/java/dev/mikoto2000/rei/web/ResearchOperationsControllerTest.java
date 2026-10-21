@@ -15,7 +15,9 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 調査操作一覧受付窓口の結果と状態の契約を検証するテスト。 */
 class ResearchOperationsControllerTest {
+  /** Web APIによる操作で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void namedResearchRoutesValidateExistingGrammarAndCaptureTheRequestedSession() {
     var chat = mock(ChatSubmitService.class);

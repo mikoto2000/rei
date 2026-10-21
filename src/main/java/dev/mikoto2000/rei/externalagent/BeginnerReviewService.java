@@ -30,17 +30,39 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.stereotype.Service;
 
 /**
- * Reuses the existing bounded model loop, permissions, source exclusions and strict result parser.
+ * 初学者レビューのユースケースを実現する。
+ *
+ * <p>Reuses the existing bounded model loop, permissions, source exclusions and strict result
+ * parser.
  */
 @Service
 public class BeginnerReviewService {
+  /** 外部エージェントへの委譲における確認結果の選択肢。 */
   public enum Verification {
+    /** STATIC事実。 */
     STATIC_FACT,
+    /** EXECUTED事実。 */
     EXECUTED_FACT,
+    /** 推定した。 */
     INFERRED,
+    /** 未確認。 */
     UNVERIFIED
   }
 
+  /**
+   * 外部エージェントへの委譲で受け渡す指摘を表す。
+   *
+   * @param id 識別子
+   * @param file ファイル
+   * @param line 行
+   * @param issue 課題
+   * @param evidence 根拠
+   * @param impact 影響
+   * @param severity 重大度
+   * @param confidence 確信度
+   * @param fix 修正
+   * @param verification 確認結果
+   */
   public record Finding(
       String id,
       String file,
@@ -53,8 +75,26 @@ public class BeginnerReviewService {
       String fix,
       Verification verification) {}
 
+  /**
+   * 外部エージェントへの委譲で受け渡すLearning状態を表す。
+   *
+   * @param file ファイル
+   * @param before 変更前
+   * @param after 変更後
+   */
   public record LearningState(String file, Set<String> before, Set<String> after) {}
 
+  /**
+   * 外部エージェントへの委譲で受け渡すレポートを表す。
+   *
+   * @param scope 対象範囲
+   * @param analysis 分析
+   * @param findings 指摘一覧
+   * @param reviewedFiles レビュー済みの内容ファイル一覧
+   * @param learningState learning状態
+   * @param warnings 注意事項
+   * @param complete 完了
+   */
   public record Report(
       BeginnerReviewRequest scope,
       BeginnerMaterialAnalyzer.Analysis analysis,
@@ -63,6 +103,7 @@ public class BeginnerReviewService {
       List<LearningState> learningState,
       List<String> warnings,
       boolean complete) {
+    /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
     public String render() {
       var out = new StringBuilder("# 初学者教材レビュー（静的レビュー・コマンド実行なし）\n");
       out.append("Scope: ")
@@ -135,20 +176,29 @@ public class BeginnerReviewService {
     }
   }
 
+  /** 有効状態。 */
   @org.springframework.beans.factory.annotation.Value(
       "${rei.material-review.beginner.enabled:true}")
   private boolean enabled = true;
 
+  /** モデル一覧。 */
   private final LlmModelProvider models;
+
+  /** 権限一覧。 */
   private final ToolPermissionGuard permissions;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final ObjectMapper JSON = new ObjectMapper();
 
+  /** 外部エージェントへの委譲に必要なデータ形式を扱う。 */
   private static final class Schema {
+    /** 値。 */
     static final SubAgentResultSchema VALUE =
         SubAgentResultSchema.load(
             Path.of("."), "classpath:/subagents/schemas/beginner-review.schema.json");
   }
 
+  /** 判断基準。 */
   static final String POLICY =
       """
       You review training material as a beginner, using only the supplied static source data.
@@ -165,11 +215,13 @@ public class BeginnerReviewService {
       Reference links and incidental names do not teach a concept. Return empty arrays when appropriate.
       """;
 
+  /** 指定された値や利用先を使って、BeginnerReviewServiceを初期化する。 */
   public BeginnerReviewService(LlmModelProvider models, ToolPermissionGuard permissions) {
     this.models = models;
     this.permissions = permissions;
   }
 
+  /** 外部エージェントへの委譲で用いるレビューを返す。 */
   public Report review(RunExecutionContext run, BeginnerReviewRequest request) {
     if (!enabled) throw new IllegalStateException("Beginner review is disabled");
     run.checkActive();
@@ -306,6 +358,7 @@ public class BeginnerReviewService {
                         run::checkActive,
                         run.sharedLlmReservation())
                     .block(java.time.Duration.ofSeconds(120));
+            // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
             if (outcome == null || outcome.output().length() > 120000)
               throw new IllegalArgumentException("Invalid review output");
             var strict = new SubAgentResultParser().parse(outcome.output());
@@ -371,6 +424,7 @@ public class BeginnerReviewService {
     }
   }
 
+  /** 外部エージェントへの委譲において、creation提供されたに該当するか判定する。 */
   private static boolean creationProvided(String[] lines, String file) {
     return Arrays.stream(lines)
         .anyMatch(
@@ -379,6 +433,7 @@ public class BeginnerReviewService {
                     && line.matches("(?i).*(?:New-Item|touch|cp|Copy-Item|作成|保存|create|write).*"));
   }
 
+  /** 外部エージェントへの委譲において、groundedに該当するか判定する。 */
   private static boolean grounded(String[] lines, int line, String evidence) {
     return line >= 1
         && line <= lines.length
@@ -386,6 +441,7 @@ public class BeginnerReviewService {
         && lines[line - 1].contains(evidence);
   }
 
+  /** 新たな対象を登録し、後から利用できるようにする。 */
   private static void add(
       List<Finding> findings,
       String file,
@@ -415,10 +471,12 @@ public class BeginnerReviewService {
             verification));
   }
 
+  /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */
   private static String safe(String value) {
     return dev.mikoto2000.rei.event.CredentialRedactor.redact(value);
   }
 
+  /** 要求された処理を実行する。 */
   public String execute(String text, RunExecutionContext run) {
     var request = BeginnerReviewRequest.parseText(text);
     var report = review(run, request);

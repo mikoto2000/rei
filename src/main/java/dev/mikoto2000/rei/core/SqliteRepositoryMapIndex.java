@@ -23,20 +23,35 @@ import java.util.Objects;
 import java.util.Set;
 import javax.sql.DataSource;
 
-/** One bounded metadata snapshot, initialized only on explicit opted-in use. */
+/**
+ * 共通の実行基盤に必要なSQLite保存と検索の窓口対応表位置を扱う。
+ *
+ * <p>One bounded metadata snapshot, initialized only on explicit opted-in use.
+ */
 public final class SqliteRepositoryMapIndex {
+  /**
+   * 共通の実行基盤で受け渡す項目を表す。
+   *
+   * @param path パス
+   * @param digest 内容の照合値
+   * @param packageName パッケージ名前
+   * @param symbols シンボル一覧
+   * @param imports 読み込む宣言
+   */
   public record Entry(
       String path,
       String digest,
       String packageName,
       List<RepositoryMapService.Symbol> symbols,
       List<String> imports) {
+    /** 受け取った情報からEntryを作成する。 */
     public Entry {
       symbols = List.copyOf(symbols);
       imports = List.copyOf(imports);
     }
   }
 
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final ObjectMapper JSON =
       com.fasterxml.jackson.databind.json.JsonMapper.builder(
               JsonFactory.builder()
@@ -49,6 +64,8 @@ public final class SqliteRepositoryMapIndex {
                   .build())
           .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
           .build();
+
+  /** 利用者情報。 */
   private static final String PROFILE =
       hash(
           ("repository-java-ast-v2-source-positions/"
@@ -56,12 +73,16 @@ public final class SqliteRepositoryMapIndex {
                   + "/"
                   + System.getProperty("java.version"))
               .getBytes(StandardCharsets.UTF_8));
+
+  /** データ。 */
   private final DataSource data;
 
+  /** 指定された値や利用先を使って、SqliteRepositoryMapIndexを初期化する。 */
   public SqliteRepositoryMapIndex(DataSource data) {
     this.data = Objects.requireNonNull(data);
   }
 
+  /** 保存された情報を読み込み、現在の処理で使える形にする。 */
   public Map<String, Entry> load(Path root) {
     RunCancellation.propagate(null);
     try (var connection = data.getConnection()) {
@@ -100,9 +121,18 @@ public final class SqliteRepositoryMapIndex {
     }
   }
 
+  /** 指定された内容へ切り替えるため、SQLite保存と検索の窓口対応表位置を置き換える。 */
   public void replace(Path root, Collection<Entry> entries) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (entries.size() > 1024)
       throw new IllegalArgumentException("Repository metadata entry limit exceeded");
+    /**
+     * 共通の実行基盤で受け渡す行を表す。
+     *
+     * @param path パス
+     * @param bytes バイト数
+     * @param checksum 検査値
+     */
     record Row(String path, byte[] bytes, String checksum) {}
     var rows = new ArrayList<Row>();
     long total = 0;
@@ -157,6 +187,7 @@ public final class SqliteRepositoryMapIndex {
     }
   }
 
+  /** 共通の実行基盤に関する初期化を処理する。 */
   private static void initialize(Connection connection) throws SQLException {
     try (var statement = connection.createStatement()) {
       statement.setQueryTimeout(5);
@@ -165,6 +196,7 @@ public final class SqliteRepositoryMapIndex {
     }
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   private static void validate(Entry entry) {
     if (entry == null
         || !text(entry.path(), 1024)
@@ -211,6 +243,7 @@ public final class SqliteRepositoryMapIndex {
       if (!text(imported, 2048)) throw new IllegalArgumentException("Invalid repository import");
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   private static boolean text(String value, int max) {
     return value != null
         && !value.isBlank()
@@ -218,6 +251,7 @@ public final class SqliteRepositoryMapIndex {
         && value.codePoints().noneMatch(Character::isISOControl);
   }
 
+  /** 共通の実行基盤で用いる作業ルートハッシュ値を返す。 */
   private static String rootHash(Path root) {
     try {
       return hash(root.toRealPath().toString().getBytes(StandardCharsets.UTF_8));
@@ -226,6 +260,7 @@ public final class SqliteRepositoryMapIndex {
     }
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(byte[] bytes) {
     try {
       return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));

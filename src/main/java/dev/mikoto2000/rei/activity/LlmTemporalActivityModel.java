@@ -17,10 +17,13 @@ import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
 /**
- * No tools, bounded text/stream deadline, explicit accounting with the existing run-budget
+ * 作業状況の把握に必要な言語モデル時系列作業状況モデルを扱う。
+ *
+ * <p>No tools, bounded text/stream deadline, explicit accounting with the existing run-budget
  * mechanism.
  */
 public final class LlmTemporalActivityModel implements TemporalActivityInferenceService.Model {
+  /** 指示一覧。 */
   static final String INSTRUCTIONS =
       """
       直近の構造化された画面観測とれいの実行記録から、作業の可能性を日本語で240文字以内に説明する。
@@ -34,18 +37,26 @@ public final class LlmTemporalActivityModel implements TemporalActivityInference
       背景画面・未観測時間をユーザーの作業時間へ加算しない。根拠不足では具体的に推定不能とする。
       activity文字列とconfidence数値(0..0.8)だけをJSONで返す。確信度は統計的な確率ではない。
       """;
+
+  /** データ形式。 */
   static final String SCHEMA =
       """
       {"type":"object","additionalProperties":false,"required":["activity","confidence"],"properties":{"activity":{"type":"string","maxLength":240},"confidence":{"type":"number","minimum":0,"maximum":0.8}}}
       """;
+
+  /** モデル一覧。 */
   private final Supplier<ChatModel> models;
+
+  /** 選択可能な設定。 */
   private final Supplier<OpenAiChatOptions> options;
 
+  /** 指定された値や利用先を使って、LlmTemporalActivityModelを初期化する。 */
   public LlmTemporalActivityModel(Supplier<ChatModel> models, Supplier<OpenAiChatOptions> options) {
     this.models = models;
     this.options = options;
   }
 
+  /** 作業状況の把握で用いる推定を返す。 */
   @Override
   public TemporalActivityInferenceService.Outcome infer(
       String input, int outputTokens, int timeoutSeconds, long tokenLimit) throws Exception {
@@ -75,6 +86,7 @@ public final class LlmTemporalActivityModel implements TemporalActivityInference
     var budget = new OutputLimitRunBudget(0, 1, null, tokenLimit);
     ModelCallBudget accounting =
         new ModelCallBudget() {
+          /** 作業状況の把握の操作を実行する。 */
           public void run() {
             if (!budget.tryConsumeLlmCall())
               throw new TemporalActivityInferenceService.BudgetFailure();
@@ -85,10 +97,12 @@ public final class LlmTemporalActivityModel implements TemporalActivityInference
             }
           }
 
+          /** トークン数による実行予算の制限が有効かどうかを返す。 */
           public boolean tokenLimitEnabled() {
             return true;
           }
 
+          /** 使用したトークン数を実行予算へ記録する。 */
           public void recordTotalTokens(Integer tokens) {
             budget.recordTotalTokens(tokens);
             try {
@@ -123,6 +137,7 @@ public final class LlmTemporalActivityModel implements TemporalActivityInference
                   var output = generation == null ? null : generation.getOutput();
                   var content = output == null ? null : output.getText();
                   if (content != null) text.append(content);
+                  // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
                   if (text.length() > 2000)
                     throw new IllegalArgumentException("Temporal output exceeds limit");
                 })

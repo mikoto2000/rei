@@ -9,8 +9,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+/** HTTP通信依存条件利用可否の確認の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class HttpDependencyProbeTest {
+  /** 外部条件の待機で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void realHttpStatusTransitionAndRedirectRefusal() throws Exception {
     var status = new AtomicInteger(202);
@@ -50,6 +52,7 @@ class HttpDependencyProbeTest {
     }
   }
 
+  /** 外部条件の待機の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void interruptionAbortsObservationWithoutClaimingSuccess() {
     try (var probe = new JavaHttpDependencyProbe()) {

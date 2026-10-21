@@ -15,6 +15,7 @@ import java.util.Map;
  */
 public class RelatedFileGraph {
 
+  /** 既定最大関連一覧。 */
   static final int DEFAULT_MAX_RELATIONS = 200;
 
   /** 参照関係。 */
@@ -38,14 +39,21 @@ public class RelatedFileGraph {
   /** 明示的なツール結果から確認された関係。 */
   public static final String EVIDENCE_EXPLICIT_TOOL_RESULT = "EXPLICIT_TOOL_RESULT";
 
+  /** 最大関連一覧。 */
   private final int maxRelations;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 関連一覧。 */
   private final Map<String, FileRelation> relations = new LinkedHashMap<>();
 
+  /** 関連情報の探索を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public RelatedFileGraph() {
     this(DEFAULT_MAX_RELATIONS, Clock.systemDefaultZone());
   }
 
+  /** 指定された値や利用先を使って、RelatedFileGraphを初期化する。 */
   public RelatedFileGraph(int maxRelations, Clock clock) {
     this.maxRelations = Math.max(1, maxRelations);
     this.clock = clock;
@@ -134,6 +142,7 @@ public class RelatedFileGraph {
     return sb.toString();
   }
 
+  /** 関連情報の探索に関する保持対象からの除外条件付きNeededを処理する。 */
   private void evictIfNeeded() {
     while (relations.size() > maxRelations) {
       String oldest =
@@ -148,10 +157,12 @@ public class RelatedFileGraph {
     }
   }
 
+  /** 対象を照合・参照するためのキーを返す。 */
   private String key(String sourcePath, String targetPath, String type) {
     return sourcePath + "\u0001" + targetPath + "\u0001" + type;
   }
 
+  /** 関連情報の探索で用いる現在日時を返す。 */
   private OffsetDateTime now() {
     return OffsetDateTime.now(clock);
   }

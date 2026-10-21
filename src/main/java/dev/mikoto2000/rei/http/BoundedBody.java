@@ -9,11 +9,16 @@ import java.util.zip.InflaterInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 
 /**
- * Wire limits are checked before each chunk copy; decompression never builds an unbounded result.
+ * 外部情報の取得に必要な上限内に収めた本文を扱う。
+ *
+ * <p>Wire limits are checked before each chunk copy; decompression never builds an unbounded
+ * result.
  */
 public final class BoundedBody {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private BoundedBody() {}
 
+  /** 後続の操作を進められるか判断するため、機能の接続大きさを確認する。 */
   public static void checkWireSize(long current, long incoming, long maximum) {
     if (current < 0
         || incoming < 0
@@ -23,11 +28,13 @@ public final class BoundedBody {
       throw new HttpFetchException(HttpFetchException.Code.WIRE_LIMIT);
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   public static byte[] decode(
       byte[] body, String encoding, int maxWire, int maxDecoded, Runnable check) {
     return decode(body, encoding, maxWire, maxDecoded, check, ignored -> {});
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   public static byte[] decode(
       byte[] body,
       String encoding,
@@ -64,6 +71,7 @@ public final class BoundedBody {
     }
   }
 
+  /** 外部情報の取得で用いる復元済み逐次データを返す。 */
   private static InputStream decodedStream(byte[] body, String coding, Runnable check)
       throws IOException {
     var raw = new ByteArrayInputStream(body);

@@ -16,22 +16,44 @@ import java.util.function.LongSupplier;
 import java.util.function.Supplier;
 
 /**
- * Live-catalog metadata search with an optional persisted vector cache; never caches queries or
+ * スキルの利用に必要な意味によるスキル検索を扱う。
+ *
+ * <p>Live-catalog metadata search with an optional persisted vector cache; never caches queries or
  * instructions.
  */
 public final class SemanticSkillSearch {
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(SemanticSkillSearch.class);
+
+  /** 設定。 */
   private final SemanticSkillProperties settings;
+
+  /** 埋め込み表現。 */
   private final Supplier<SkillMetadataEmbedding> embedding;
+
+  /** 候補の関連度を再評価する窓口。 */
   private final Supplier<CandidateReranker> reranker;
+
+  /** ナノ秒数。 */
   private final LongSupplier nanos;
+
+  /** 位置。 */
   private final SkillEmbeddingIndex index;
+
+  /** indexed利用者情報一覧。 */
   private volatile Set<String> indexedProfiles;
+
+  /** bypass保存される。 */
   private volatile boolean bypassPersistent;
+
+  /** キャッシュ。 */
   private volatile Map<String, float[]> cache = Map.of();
+
+  /** 失敗情報日時。 */
   private volatile Long failureAt;
 
+  /** スキルの利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SemanticSkillSearch(
       SemanticSkillProperties settings,
       Supplier<SkillMetadataEmbedding> embedding,
@@ -40,6 +62,7 @@ public final class SemanticSkillSearch {
     this(settings, embedding, reranker, nanos, null);
   }
 
+  /** 指定された値や利用先を使って、SemanticSkillSearchを初期化する。 */
   public SemanticSkillSearch(
       SemanticSkillProperties settings,
       Supplier<SkillMetadataEmbedding> embedding,
@@ -53,10 +76,12 @@ public final class SemanticSkillSearch {
     this.index = index;
   }
 
+  /** この機能を利用する設定が有効かどうかを返す。 */
   public boolean enabled() {
     return settings.enabled();
   }
 
+  /** 指定された条件に応じて、利用する対象を選ぶ。 */
   public List<SkillCandidate> select(
       String request, List<AgentSkill> skills, List<SkillCandidate> lexical, int limit) {
     RunCancellation.propagate(null);
@@ -221,6 +246,7 @@ public final class SemanticSkillSearch {
     return ordered.stream().limit(limit).toList();
   }
 
+  /** スキルの利用で用いる利用者情報を返す。 */
   static String profile(AgentSkill skill) {
     return "name: "
         + SkillCandidateSelector.normalize(skill.name())
@@ -231,10 +257,12 @@ public final class SemanticSkillSearch {
             ", ", skill.keywords().stream().map(SkillCandidateSelector::normalize).toList());
   }
 
+  /** スキルの利用において、保存されるに該当するか判定する。 */
   private boolean persistent() {
     return settings.persistentIndexEnabled() && index != null;
   }
 
+  /** スキルの利用で用いる識別情報を返す。 */
   static String identity(AgentSkill skill) {
     return (skill.skillFile() == null
             ? ""
@@ -243,8 +271,15 @@ public final class SemanticSkillSearch {
         + SkillCandidateSelector.normalize(skill.name());
   }
 
+  /**
+   * スキルの利用で受け渡すベクトルによるを表す。
+   *
+   * @param skill スキル
+   * @param score 評価値
+   */
   private record Dense(AgentSkill skill, double score) {}
 
+  /** スキルの利用で用いる表記を統一したを返す。 */
   private static float[] normalized(float[] vector) {
     if (vector == null || vector.length < 1 || vector.length > 8192)
       throw new IllegalStateException("Invalid embedding size");
@@ -261,12 +296,14 @@ public final class SemanticSkillSearch {
     return result;
   }
 
+  /** スキルの利用で用いるcosineを返す。 */
   private static double cosine(float[] a, float[] b) {
     double score = 0;
     for (int i = 0; i < a.length; i++) score += (double) a[i] * b[i];
     return Math.max(-1, Math.min(1, score));
   }
 
+  /** スキルの利用において、ゼロに該当するか判定する。 */
   private static boolean zero(float[] vector) {
     for (float value : vector) if (value != 0) return false;
     return true;

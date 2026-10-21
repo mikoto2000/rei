@@ -5,7 +5,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
+/** 文脈圧縮設定の結果と状態の契約を検証するテスト。 */
 class ContextCompressionPropertiesTest {
+  /** 既定値終点二つ分数およびについて、境界条件を受け付けられることを確認する。 */
   @Test
   void defaultsToTwoMinutesAndAcceptsBoundaries() {
     var properties = new ContextCompressionProperties();
@@ -17,6 +19,7 @@ class ContextCompressionPropertiesTest {
     properties.validate();
   }
 
+  /** 上限のないを受け付けないことを確認する。 */
   @Test
   void rejectsUnboundedOrDisabledRetryCooldowns() {
     var properties = new ContextCompressionProperties();

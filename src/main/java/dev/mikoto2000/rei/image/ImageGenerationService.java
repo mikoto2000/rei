@@ -7,21 +7,34 @@ import java.util.Base64;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+/** 画像生成のユースケースを実現する。 */
 @Service
 public class ImageGenerationService {
+  /** 成果物一覧。 */
   private dev.mikoto2000.rei.artifact.ArtifactStore artifacts;
 
+  /** 画像の生成で使用する成果物保存先を設定する。 */
   @Autowired(required = false)
   public void setArtifactStore(dev.mikoto2000.rei.artifact.ArtifactStore artifacts) {
     this.artifacts = artifacts;
   }
 
+  /** クライアント。 */
   private final ImageGenerationClient client;
+
+  /** 出力パス対象の解決。 */
   private final ImageOutputPathResolver outputPathResolver;
+
+  /** キャンセルサービス。 */
   private final CommandCancellationService cancellationService;
+
+  /** プロンプト内容の補強。 */
   private final ImagePromptEnhancer promptEnhancer;
+
+  /** この機能の動作設定。 */
   private final ImageProperties properties;
 
+  /** 画像の生成を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @Autowired
   public ImageGenerationService(
       ImageGenerationClient client,
@@ -39,10 +52,12 @@ public class ImageGenerationService {
         properties);
   }
 
+  /** 画像の生成を利用するため、指定を補って共通の初期化へ引き渡す。 */
   ImageGenerationService(ImageGenerationClient client, ImageOutputPathResolver outputPathResolver) {
     this(client, outputPathResolver, null, new NoOpImagePromptEnhancer(), new ImageProperties());
   }
 
+  /** 画像の生成を利用するため、指定を補って共通の初期化へ引き渡す。 */
   ImageGenerationService(
       ImageGenerationClient client,
       ImageOutputPathResolver outputPathResolver,
@@ -55,6 +70,7 @@ public class ImageGenerationService {
         new ImageProperties());
   }
 
+  /** 指定された値や利用先を使って、ImageGenerationServiceを初期化する。 */
   ImageGenerationService(
       ImageGenerationClient client,
       ImageOutputPathResolver outputPathResolver,
@@ -68,6 +84,7 @@ public class ImageGenerationService {
     this.properties = properties;
   }
 
+  /** 指定された条件に従って、依頼された内容を生成する。 */
   public ImageGenerationResult generate(ImageGenerationRequest request) {
     if (request.prompt() == null || request.prompt().isBlank()) {
       return ImageGenerationResult.failure("画像生成プロンプトを指定してください");
@@ -125,6 +142,7 @@ public class ImageGenerationService {
     }
   }
 
+  /** 利用先の制約に合う形式にするため、メッセージを整える。 */
   private String sanitizeMessage(Exception e) {
     String message = e.getMessage();
     if (message == null || message.isBlank()) {
@@ -133,6 +151,7 @@ public class ImageGenerationService {
     return message;
   }
 
+  /** 画像の生成で用いる実際に使う要求を返す。 */
   private ImageGenerationRequest effectiveRequest(ImageGenerationRequest request) {
     if (!properties.isPromptEnhancementEnabled() || !request.enhancePrompt()) {
       return request;
@@ -145,6 +164,7 @@ public class ImageGenerationService {
         enhancedPrompt.strip(), request.outputPath(), request.model(), request.size(), false);
   }
 
+  /** 画像の生成において、キャンセル要求されたかどうかを判定する。 */
   private boolean isCancellationRequested() {
     return Thread.currentThread().isInterrupted()
         || cancellationService != null && cancellationService.isCancellationRequested();

@@ -1,7 +1,12 @@
 package dev.mikoto2000.rei.computeruse;
 
-/** Geometry/protocol unit tests use a trusted verifier; rejection is tested separately. */
+/**
+ * 検証条件を再現するための検証Groundingモデル一覧。
+ *
+ * <p>Geometry/protocol unit tests use a trusted verifier; rejection is tested separately.
+ */
 final class TestGroundingModels {
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   static ShowUiComputerVisionModel create(
       ComputerVisionModel planner,
       org.springframework.ai.chat.model.ChatModel model,
@@ -10,6 +15,7 @@ final class TestGroundingModels {
     return create(planner, model, options, cancelled, GroundingProtocol.SHOWUI);
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   static ShowUiComputerVisionModel create(
       ComputerVisionModel planner,
       org.springframework.ai.chat.model.ChatModel model,

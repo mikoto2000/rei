@@ -40,16 +40,31 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 記憶統合の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class MemoryConsolidationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う保存と検索の窓口。 */
   MemoryRepository repository;
+
+  /** 検証に使うデータベース接続。 */
   DriverManagerDataSource ds;
+
+  /** 検証に使うやり取り一覧。 */
   ConversationTurnStore turns = ConversationTurnStore.inMemory();
+
+  /** 検証に使うprops。 */
   MemoryProperties props = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60, null);
+
+  /** 検証に使うモデル。 */
   MemoryResolutionModel model = mock(MemoryResolutionModel.class);
+
+  /** 検証に使う対象の解決。 */
   MemoryResolver resolver;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     ds = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("memory.db"));
@@ -60,10 +75,12 @@ class MemoryConsolidationTest {
     turns.finish(context, ConversationTurnStore.Status.COMPLETED, "agreed");
   }
 
+  /** {@code existing} の条件を再現するための補助情報を返す。 */
   LongTermMemory existing(String text) {
     return repository.insert(LongTermMemoryTest.candidate(text, MemoryScope.PROJECT), "p", "old");
   }
 
+  /** 検証用に、長期記憶の活用の操作を実行する。 */
   SleepService.Report run(String text, MemoryAction action, List<String> targets) {
     when(model.resolve(any(), anyList())).thenReturn(new MemoryResolution(action, targets));
     return new SleepService(
@@ -75,6 +92,7 @@ class MemoryConsolidationTest {
         .sleep("s", "p", false);
   }
 
+  /** 長期記憶の活用で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateDoesNotCreateRowAndAddsSource() {
     var old = existing("Vision first");
@@ -84,6 +102,7 @@ class MemoryConsolidationTest {
     assertEquals(2, repository.find(old.id()).orElseThrow().sources().size());
   }
 
+  /** 完全一致の重複の有無範囲外検索範囲引き続きについて、元のを利用することを確認する。 */
   @Test
   void exactDuplicateOutsideSearchWindowStillUsesOriginal() {
     var old = existing("Vision first");
@@ -94,6 +113,7 @@ class MemoryConsolidationTest {
     verifyNoInteractions(model);
   }
 
+  /** 更新について、識別情報を保持することを確認する。 */
   @Test
   void updatePreservesIdentityAndOriginalSource() {
     var old = existing("Vision first");
@@ -105,6 +125,7 @@ class MemoryConsolidationTest {
     assertEquals(1, repository.search("fallback", "p", 10).size());
   }
 
+  /** 元のを保持することを確認する。 */
   @Test
   void supersedeRetainsOriginalAndLinksNewDecision() {
     var old = existing("Vision disabled");
@@ -116,6 +137,7 @@ class MemoryConsolidationTest {
     assertEquals(1, repository.search("Vision", "p", 10).size());
   }
 
+  /** 長期記憶の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void mergeCombinesSourcesAndSupersedesBoth() {
     var a = existing("Vision Windows");
@@ -127,6 +149,7 @@ class MemoryConsolidationTest {
     assertEquals(2, repository.relations(active.getFirst().id()).size());
   }
 
+  /** 競合について、両方を保持することを確認する。 */
   @Test
   void conflictPreservesBothButDoesNotInjectUnresolvedClaims() {
     var old = existing("Vision disabled");
@@ -137,6 +160,7 @@ class MemoryConsolidationTest {
     assertTrue(new MemoryRetriever(repository, props).retrieve("Vision", "p").memories().isEmpty());
   }
 
+  /** 出力先所属対象範囲解決結果対象一覧を受け付けないことを確認する。 */
   @Test
   void thresholdIgnoresLowValueAndRejectsOutOfScopeResolutionTargets() {
     var low =
@@ -162,6 +186,7 @@ class MemoryConsolidationTest {
                 "p"));
   }
 
+  /** 長期記憶の活用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rollbackIncludesMemoriesAndCheckpointWhenRunInsertFails() {
     JdbcClient.create(ds)
@@ -173,6 +198,7 @@ class MemoryConsolidationTest {
     assertEquals(0, repository.lastProcessed("s"));
   }
 
+  /** 状態の保存について、保存と検索の窓口再開の後も対象の情報が残ることを確認する。 */
   @Test
   void persistenceSurvivesRepositoryRestartAndKeepsLegacyData() {
     var old = existing("Vision persistent");
@@ -195,6 +221,7 @@ class MemoryConsolidationTest {
     assertEquals(1, reopened.list("p", 20, 0).size());
   }
 
+  /** 長期記憶の活用で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void sameSessionConcurrentSleepIsRejected() throws Exception {
     var entered = new CountDownLatch(1);

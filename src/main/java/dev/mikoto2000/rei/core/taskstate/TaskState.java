@@ -22,18 +22,30 @@ public class TaskState {
   /** 外部要因・不足情報・エラー等で進められない。 */
   public static final String STATUS_BLOCKED = "BLOCKED";
 
+  /** 既定最大項目一覧。 */
   static final int DEFAULT_MAX_ITEMS = 20;
 
+  /** 最大項目一覧。 */
   private final int maxItems;
+
+  /** 目標。 */
   private String goal;
+
+  /** 状態。 */
   private String status;
+
+  /** 完了。 */
   private final List<String> completed = new ArrayList<>();
+
+  /** 待機中。 */
   private final List<String> pending = new ArrayList<>();
 
+  /** 作業状態の記録を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public TaskState() {
     this(DEFAULT_MAX_ITEMS);
   }
 
+  /** 指定された値や利用先を使って、TaskStateを初期化する。 */
   public TaskState(int maxItems) {
     this.maxItems = Math.max(1, maxItems);
     this.goal = "";
@@ -105,6 +117,7 @@ public class TaskState {
     return STATUS_IDLE.equals(status) && goal == null || goal.isBlank();
   }
 
+  /** 新たな対象を管理できるよう、一意なを追加する。 */
   private void addUnique(List<String> items, String item) {
     if (item == null || item.isBlank()) {
       return;
@@ -115,6 +128,7 @@ public class TaskState {
     }
   }
 
+  /** 作業状態の記録に関する保持対象からの除外条件付きNeededを処理する。 */
   private void evictIfNeeded(List<String> items) {
     while (items.size() > maxItems) {
       items.remove(0);

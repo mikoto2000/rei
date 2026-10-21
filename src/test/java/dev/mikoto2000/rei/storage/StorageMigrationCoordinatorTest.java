@@ -13,10 +13,13 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 保存移行処理の調整の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class StorageMigrationCoordinatorTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** データ保存の共通処理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void freshInstallInitializesAndRestartOnlyChecksVersion() throws Exception {
     try (var migration = new StorageMigrationCoordinator(root)) {
@@ -31,6 +34,7 @@ class StorageMigrationCoordinatorTest {
         .isEqualTo(StorageMigrationCoordinator.SCHEMA_VERSION);
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void legacyDataIsBackedUpVerifiedAndNeverChanged() throws Exception {
     String legacy =
@@ -58,6 +62,7 @@ class StorageMigrationCoordinatorTest {
     }
   }
 
+  /** データ保存の共通処理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void onlineBackupIncludesCommittedWalRowsAndRestoresToEmptyDirectory() throws Exception {
     Path database = root.resolve("memory-consolidation.db");
@@ -88,6 +93,7 @@ class StorageMigrationCoordinatorTest {
     }
   }
 
+  /** データ保存の共通処理で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void memoryDatabaseIsSnapshottedBeforeOrdinaryStartupCanAlterItsSchema() throws Exception {
     Path database = root.resolve("memory.db");
@@ -113,6 +119,7 @@ class StorageMigrationCoordinatorTest {
     }
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sqliteHeaderWithoutDatabaseExtensionStillIncludesWalRows() throws Exception {
     Path database = Files.createDirectories(root.resolve("state")).resolve("cache.snapshot");
@@ -135,6 +142,7 @@ class StorageMigrationCoordinatorTest {
     }
   }
 
+  /** データ保存の共通処理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void newerSchemaIsRejectedWithoutTouchingLegacyData() throws Exception {
     Files.writeString(root.resolve("sessions.json"), "[]");
@@ -152,6 +160,7 @@ class StorageMigrationCoordinatorTest {
     assertThat(root.resolve(".storage/backups")).doesNotExist();
   }
 
+  /** 確認済み退避先について、作業状況を復元することを確認する。 */
   @Test
   void verifiedBackupRestoresActivityAndQuarantineAlongsideDatabaseWithoutAdoptingOldLogs()
       throws Exception {
@@ -180,6 +189,7 @@ class StorageMigrationCoordinatorTest {
         .isEmpty();
   }
 
+  /** 両方退避先一覧を維持することを確認する。 */
   @Test
   void corruptedBackupStopsBeforeSchemaSwitchAndRetryKeepsBothBackups() throws Exception {
     Files.writeString(root.resolve("sessions.json"), "[]");
@@ -203,6 +213,7 @@ class StorageMigrationCoordinatorTest {
     }
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sourceChangedDuringBackupCannotBeAcceptedAsConsistent() throws Exception {
     Files.writeString(root.resolve("sessions.json"), "[]");
@@ -220,6 +231,7 @@ class StorageMigrationCoordinatorTest {
     assertThat(root.resolve("storage.db")).doesNotExist();
   }
 
+  /** データ保存の共通処理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void backupChangedAfterVerificationIsRecheckedBeforeSwitch() throws Exception {
     Files.writeString(root.resolve("sessions.json"), "[]");
@@ -236,6 +248,7 @@ class StorageMigrationCoordinatorTest {
     assertThat(Files.readString(root.resolve("sessions.json"))).isEqualTo("[]");
   }
 
+  /** データ保存の共通処理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void diskFailureAndInterruptedApplyAreRetriedWithoutSuccessMarker() throws Exception {
     Files.writeString(root.resolve("sessions.json"), "[]");
@@ -265,6 +278,7 @@ class StorageMigrationCoordinatorTest {
     assertThat(Files.readString(root.resolve("sessions.json"))).isEqualTo("[]");
   }
 
+  /** 排他利用権について、別の処理の調整を受け付けないことを確認する。 */
   @Test
   void exclusiveLeaseRejectsAnotherCoordinatorAndReleasesOnClose() throws Exception {
     try (var first = new StorageMigrationCoordinator(root)) {
@@ -279,6 +293,7 @@ class StorageMigrationCoordinatorTest {
     }
   }
 
+  /** データ保存の共通処理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failureAfterSchemaWritesRollsBackBeforeRetry() throws Exception {
     Files.writeString(root.resolve("sessions.json"), "[]");
@@ -307,6 +322,7 @@ class StorageMigrationCoordinatorTest {
     assertThat(Files.readString(root.resolve("sessions.json"))).isEqualTo("[]");
   }
 
+  /** データ保存の共通処理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void backupMetadataIsBoundedEvenWhenItsJsonRemainsValid() throws Exception {
     Files.writeString(root.resolve("sessions.json"), "[]");
@@ -321,6 +337,7 @@ class StorageMigrationCoordinatorTest {
         .hasMessageContaining("metadata");
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void orphanWalIsNotSilentlyOmittedFromBackup() throws Exception {
     Path state = Files.createDirectories(root.resolve("state"));
@@ -333,6 +350,7 @@ class StorageMigrationCoordinatorTest {
     assertThat(root.resolve("storage.db")).doesNotExist();
   }
 
+  /** 複製について、失敗情報なし初期化を書き込むことを確認する。 */
   @Test
   void copyWriteFailureDoesNotInitializeOrModifySource() throws Exception {
     Files.writeString(root.resolve("sessions.json"), "[]");
@@ -349,6 +367,7 @@ class StorageMigrationCoordinatorTest {
     assertThat(Files.readString(root.resolve("sessions.json"))).isEqualTo("[]");
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownUnversionedDatabaseIsNeverOverwritten() throws Exception {
     try (var db = DriverManager.getConnection("jdbc:sqlite:" + root.resolve("storage.db"));
@@ -364,6 +383,7 @@ class StorageMigrationCoordinatorTest {
     assertThat(version(root.resolve("storage.db"))).isZero();
   }
 
+  /** データ保存の共通処理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void negativeSchemaVersionIsRejectedBeforeChangingDatabaseOrMakingBackups() throws Exception {
     try (var db = DriverManager.getConnection("jdbc:sqlite:" + root.resolve("storage.db"));
@@ -380,6 +400,7 @@ class StorageMigrationCoordinatorTest {
     assertThat(root.resolve(".storage/backups")).doesNotExist();
   }
 
+  /** 利用権を解放することを確認する。 */
   @Test
   void forcedProcessTerminationReleasesLeaseAndRetriesVerifiedButUnappliedBackup()
       throws Exception {
@@ -437,6 +458,7 @@ class StorageMigrationCoordinatorTest {
     }
   }
 
+  /** データ保存の共通処理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(ints = {1, 2, 3})
   void hotJournalFromOwnedInterruptedMigrationIsRecoveredBeforeVersionProbe(int interruptedTarget)
@@ -500,6 +522,7 @@ class StorageMigrationCoordinatorTest {
     }
   }
 
+  /** データ保存の共通処理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {
@@ -573,6 +596,7 @@ class StorageMigrationCoordinatorTest {
     assertThat(StorageBackup.hash(root.resolve("storage.db-journal"))).isEqualTo(journalHash);
   }
 
+  /** {@code startHotJournalWorker} の条件を再現するための補助情報を返す。 */
   private Process startHotJournalWorker() throws Exception {
     Path arguments = root.resolve("hot-journal-child.args");
     String classpath =
@@ -597,10 +621,12 @@ class StorageMigrationCoordinatorTest {
         .start();
   }
 
+  /** {@code javaArgument} の条件を再現するための補助情報を返す。 */
   private static String javaArgument(String value) {
     return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
   }
 
+  /** {@code version} の条件を再現するための補助情報を返す。 */
   static int version(Path path) throws Exception {
     try (var db = DriverManager.getConnection("jdbc:sqlite:" + path);
         var statement = db.createStatement();

@@ -7,11 +7,15 @@ import java.util.Locale;
 import java.util.Set;
 
 /**
- * Conservative public HTTP destinations; DNS and actual peers are also checked by the transport.
+ * 公開ネットワークの判断基準をまとめる。
+ *
+ * <p>Conservative public HTTP destinations; DNS and actual peers are also checked by the transport.
  */
 public final class PublicNetworkPolicy {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private PublicNetworkPolicy() {}
 
+  /** 利用条件に合わない指定を受け付けないよう、入力規則を検証する。 */
   public static void validateSyntax(URI uri) {
     if (uri == null
         || uri.toString().length() > 8192
@@ -25,6 +29,7 @@ public final class PublicNetworkPolicy {
       throw new HttpFetchException(HttpFetchException.Code.URL_NOT_ALLOWED);
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public static void validate(URI uri) {
     validateSyntax(uri);
     int expectedPort = "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
@@ -38,6 +43,7 @@ public final class PublicNetworkPolicy {
       throw new HttpFetchException(HttpFetchException.Code.URL_NOT_ALLOWED);
   }
 
+  /** 外部情報の取得で用いるそのままの値を返す。 */
   public static InetAddress literal(String host) {
     if (!io.netty.util.NetUtil.isValidIpV4Address(host)
         && !io.netty.util.NetUtil.isValidIpV6Address(host)) return null;
@@ -48,6 +54,7 @@ public final class PublicNetworkPolicy {
     }
   }
 
+  /** 外部情報の取得において、公開かどうかを判定する。 */
   public static boolean isPublic(InetAddress address) {
     if (address == null
         || address.isAnyLocalAddress()

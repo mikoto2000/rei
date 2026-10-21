@@ -11,7 +11,9 @@ import dev.mikoto2000.rei.application.run.ChatSubmitService;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import org.junit.jupiter.api.Test;
 
+/** 復旧受付窓口の結果と状態の契約を検証するテスト。 */
 class RecoveryControllerTest {
+  /** Web APIによる操作で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void recoveryValidatesNamedActionsAndHashesBeforeDurableAdmission() {
     var chat = mock(ChatSubmitService.class);

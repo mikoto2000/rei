@@ -28,7 +28,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** 承認表示用の情報の結果と状態の契約を検証するテスト。 */
 class ApprovalPresentationTest {
+  /** ツール利用の権限制御で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shellNumbersStayBoundToTheDisplayedRequestAndContinueIsExplicit() {
     var repository = mock(ToolApprovalRepository.class);
@@ -81,6 +83,7 @@ class ApprovalPresentationTest {
     verify(repository, never()).get(other, "first");
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void showAndApprovePrintTheTaskIdInsteadOfApprovalOrRunId() {
     var repository = mock(ToolApprovalRepository.class);
@@ -121,6 +124,7 @@ class ApprovalPresentationTest {
     assertFalse(output.toString().contains("/resume approval-id"));
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void missingCheckpointStillReportsSuccessfulApprovalWithLookupInstructions() {
     var repository = mock(ToolApprovalRepository.class);
@@ -148,6 +152,7 @@ class ApprovalPresentationTest {
     assertFalse(output.toString().contains("/resume approval-id"));
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   @org.junit.jupiter.api.Tag("integration")
   void approvalFromAnEarlierResumeResolvesThroughCheckpointHistory(
@@ -168,6 +173,7 @@ class ApprovalPresentationTest {
     assertTrue(checkpoints.findByRun("other-project", "approval-run").isEmpty());
   }
 
+  /** シェル判断結果一覧について、選択中プロジェクトを利用することを確認する。 */
   @Test
   void shellDecisionsUseSelectedProjectAndRequireAnId() {
     var repository = mock(ToolApprovalRepository.class);
@@ -185,6 +191,7 @@ class ApprovalPresentationTest {
     verify(repository, times(2)).decide(anyString(), anyString(), anyBoolean());
   }
 
+  /** Web判断結果について、明示的な真偽値を必要とすることを確認する。 */
   @Test
   void webDecisionRequiresExplicitBooleanAndDoesNotDispatch() {
     var repository = mock(ToolApprovalRepository.class);
@@ -192,6 +199,7 @@ class ApprovalPresentationTest {
     assertThrows(
         org.springframework.web.server.ResponseStatusException.class,
         () -> controller.decide("p", "id", new ApprovalController.Decision(null)));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(repository);
     controller.decide("p", "id", new ApprovalController.Decision(true));
     verify(repository).decide("p", "id", true);

@@ -8,9 +8,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 補助エージェントツール最終結果の結果と状態の契約を検証するテスト。 */
 class SubAgentToolOutcomeTest {
+  /** 検証に使う検証条件。 */
   final SubAgentEvidenceTest fixture = new SubAgentEvidenceTest();
 
+  /** 補助エージェントへの委譲で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void successNeedsMatchingArgumentsAndObservedOutputFieldsOnTheSameReceipt() {
     var ledger = new SubAgentEvidence();
@@ -49,6 +52,7 @@ class SubAgentToolOutcomeTest {
             .valid());
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidTruncatedAndTypeMismatchedOutputsCannotSatisfyContract() {
     var required = List.of(new SubAgentRequiredCall("readMultiFile", "{}", "{\"found\":true}"));
@@ -72,6 +76,7 @@ class SubAgentToolOutcomeTest {
     }
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void expectedOutputMustBeANonemptyBoundedObject() {
     for (String value :

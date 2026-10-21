@@ -8,8 +8,15 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
-/** Evidence-based wording; the introduction qualifies all inferred activities. */
+/**
+ * 作業状況の把握で受け渡す傾向要約表示形式への変換を表す。
+ *
+ * <p>Evidence-based wording; the introduction qualifies all inferred activities.
+ *
+ * @param zone タイムゾーン
+ */
 public record TrendSummaryFormatter(ZoneId zone) {
+  /** 受け取った情報を、表示や受け渡しに適した形式へ整える。 */
   public String format(List<TrendSummarySegment> segments) {
     if (segments.isEmpty()) return "この期間の Activity 記録はありません。";
     var out = new StringBuilder("画面の観測に基づく振り返りです。表示内容からの推定を含み、実際の操作・集中を断定するものではありません。\n");
@@ -53,6 +60,7 @@ public record TrendSummaryFormatter(ZoneId zone) {
     return out.toString();
   }
 
+  /** 作業状況の把握において、確かな根拠に該当するか判定する。 */
   private static boolean strongEvidence(TrendSummarySegment s) {
     if (s.knownSeconds() < s.observedSeconds() * .7) return false;
     double confidence = 0;
@@ -75,6 +83,7 @@ public record TrendSummaryFormatter(ZoneId zone) {
     return seconds > 0 && confidence / seconds >= .7;
   }
 
+  /** 作業状況の把握で用いる説明を返す。 */
   private static String description(TrendSummarySegment s) {
     var parts = new ArrayList<String>();
     var work =
@@ -97,6 +106,7 @@ public record TrendSummaryFormatter(ZoneId zone) {
     return parts.isEmpty() ? "複数の活動" : String.join("と", parts.stream().limit(3).toList());
   }
 
+  /** 作業状況の把握で用いる分類表示名を返す。 */
   private static String categoryLabel(String category) {
     return switch (category) {
       case "development" -> "開発・確認";

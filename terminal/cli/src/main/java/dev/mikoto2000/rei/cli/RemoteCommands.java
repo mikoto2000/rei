@@ -3,10 +3,13 @@ package dev.mikoto2000.rei.cli;
 import java.util.*;
 
 /**
- * Fixed public API adapters. No endpoint, shell text, or reflection target is supplied by a
+ * 軽量CLIでの対話に必要な外部コマンド一覧を扱う。
+ *
+ * <p>Fixed public API adapters. No endpoint, shell text, or reflection target is supplied by a
  * command.
  */
 public final class RemoteCommands {
+  /** コマンドJSON変換。 */
   private static final com.fasterxml.jackson.databind.ObjectMapper COMMAND_JSON =
       com.fasterxml.jackson.databind.json.JsonMapper.builder(
               com.fasterxml.jackson.core.JsonFactory.builder()
@@ -21,8 +24,16 @@ public final class RemoteCommands {
           .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
           .build();
 
+  /**
+   * 軽量CLIでの対話で受け渡す要求を表す。
+   *
+   * @param method メソッド
+   * @param path パス
+   * @param body 本文
+   */
   public record Request(String method, String path, Object body) {}
 
+  /** 名前一覧。 */
   public static final Set<String> NAMES =
       Set.of(
           "/dot",
@@ -68,10 +79,12 @@ public final class RemoteCommands {
           "/model",
           "/models");
 
+  /** 軽量CLIでの対話で用いる受付経路を返す。 */
   public static Request route(List<String> words, String project, String session) {
     return route(words, project, session, java.nio.file.Path.of(System.getProperty("user.dir")));
   }
 
+  /** 軽量CLIでの対話で用いる受付経路を返す。 */
   public static Request route(
       List<String> words, String project, String session, java.nio.file.Path localBase) {
     var request = routeDirect(words, project, session, localBase);
@@ -104,6 +117,7 @@ public final class RemoteCommands {
     return post("/api/v1/google-operations" + path, body);
   }
 
+  /** 軽量CLIでの対話で用いる受付経路Directを返す。 */
   private static Request routeDirect(
       List<String> words, String project, String session, java.nio.file.Path localBase) {
     String name = words.getFirst(), action = words.size() > 1 ? words.get(1) : "list";
@@ -186,6 +200,7 @@ public final class RemoteCommands {
         return new Request("DELETE", base + "/" + longInteger(words.get(2)), null);
       }
       if (Set.of("update", "summary").contains(action)) {
+        // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (project == null || words.size() > 3 || action.equals("summary") && words.size() != 2)
           throw invalid();
         var body = new LinkedHashMap<String, Object>();
@@ -1487,6 +1502,7 @@ public final class RemoteCommands {
     throw unsupported();
   }
 
+  /** 過去の記録を、条件に従って参照できる形で返す。 */
   private static Request history(List<String> words, String project, String session) {
     String action = words.size() > 1 ? words.get(1) : "";
     var query = new LinkedHashMap<String, Object>();
@@ -1511,6 +1527,7 @@ public final class RemoteCommands {
       var parsed =
           parse(words, 2, Set.of("--project", "--last", "--limit", "--cursor"), Set.of("--all"));
       var selected = parsed.options();
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (parsed.arguments().size() > 1
           || selected.containsKey("--last") && selected.containsKey("--all")) throw invalid();
       boolean legacy =
@@ -1554,6 +1571,7 @@ public final class RemoteCommands {
     throw unsupported();
   }
 
+  /** 軽量CLIでの対話で用いる検索条件を返す。 */
   private static Request query(String path, Map<String, ?> parameters) {
     return get(
         path
@@ -1569,11 +1587,13 @@ public final class RemoteCommands {
                         .collect(java.util.stream.Collectors.joining("&"))));
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   private static String text(List<String> words, int start) {
     if (words.size() <= start) throw invalid();
     return String.join(" ", words.subList(start, words.size()));
   }
 
+  /** 軽量CLIでの対話で用いる選択可能な設定を返す。 */
   private static Map<String, String> options(
       List<String> words, int start, Set<String> values, Set<String> flags) {
     var parsed = parse(words, start, values, flags);
@@ -1581,8 +1601,15 @@ public final class RemoteCommands {
     return parsed.options();
   }
 
+  /**
+   * 軽量CLIでの対話で受け渡す解釈済みを表す。
+   *
+   * @param arguments 引数
+   * @param options 選択可能な設定
+   */
   private record Parsed(List<String> arguments, Map<String, String> options) {}
 
+  /** 入力を機能内で扱えるよう、Repeatingを解釈する。 */
   private static Parsed parseRepeating(
       List<String> words, int start, Set<String> values, Set<String> flags, String repeated) {
     var normalized = new ArrayList<String>();
@@ -1604,6 +1631,7 @@ public final class RemoteCommands {
     return parse(normalized, 0, values, flags);
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   private static Parsed parse(
       List<String> words, int start, Set<String> values, Set<String> flags) {
     var parsed = new HashMap<String, String>();
@@ -1641,6 +1669,7 @@ public final class RemoteCommands {
     return new Parsed(List.copyOf(arguments), Map.copyOf(parsed));
   }
 
+  /** 軽量CLIでの対話で用いる改訂番号を返す。 */
   private static long revision(String value) {
     try {
       long revision = Long.parseLong(value);
@@ -1651,6 +1680,7 @@ public final class RemoteCommands {
     }
   }
 
+  /** 軽量CLIでの対話で用いる整数を返す。 */
   private static long longInteger(String value) {
     try {
       return Long.parseLong(value);
@@ -1659,6 +1689,7 @@ public final class RemoteCommands {
     }
   }
 
+  /** 軽量CLIでの対話において、現在保存対象範囲に該当するか判定する。 */
   private static boolean currentStorageScope(Map<String, String> options, String project) {
     String scope = options.get("--project");
     if (scope != null && !scope.equals("current")) throw invalid();
@@ -1667,6 +1698,7 @@ public final class RemoteCommands {
     return scope != null;
   }
 
+  /** 軽量CLIでの対話で用いる保存計画選択可能な設定を返す。 */
   private static LinkedHashMap<String, Object> storagePlanOptions(
       Map<String, String> options, String project) {
     var body = new LinkedHashMap<String, Object>();
@@ -1678,6 +1710,7 @@ public final class RemoteCommands {
     return body;
   }
 
+  /** 軽量CLIでの対話で用いる整数を返す。 */
   private static int integer(String value) {
     try {
       return Integer.parseInt(value);
@@ -1686,34 +1719,41 @@ public final class RemoteCommands {
     }
   }
 
+  /** 軽量CLIでの対話に関する完全一致を処理する。 */
   private static void exact(List<String> words, int size) {
     if (words.size() != size) throw invalid();
   }
 
+  /** 軽量CLIでの対話で用いる識別子を返す。 */
   private static String id(String value) {
     if (value == null || value.isBlank() || value.length() > 256) throw invalid();
     return BackendClient.segment(value);
   }
 
+  /** 後続の処理で使う値を返す。 */
   private static String value(String value) {
     if (value == null || value.isBlank() || value.length() > 16384 || value.indexOf('\0') >= 0)
       throw invalid();
     return BackendClient.segment(value);
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   private static Request get(String path) {
     return new Request("GET", path, null);
   }
 
+  /** 軽量CLIでの対話で用いる投稿を返す。 */
   private static Request post(String path, Object body) {
     return new Request("POST", path, body);
   }
 
+  /** 受け付けられない指定について、入力の問題を伝える。 */
   private static IllegalArgumentException invalid() {
     return new IllegalArgumentException(
         "Invalid command arguments; inspect /help and docs/lightweight-cli-client.md");
   }
 
+  /** 軽量CLIでの対話で用いる未対応を返す。 */
   private static IllegalArgumentException unsupported() {
     return new IllegalArgumentException(
         "This operation is not yet available in CLI; use legacy-shell. This input was not sent to the model.");

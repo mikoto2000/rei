@@ -7,8 +7,10 @@ import java.io.StringWriter;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** フィードコマンド使い方文字コードの結果と状態の契約を検証するテスト。 */
 class FeedCommandHelpEncodingTest {
 
+  /** フィードの購読と収集で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void helpContainsReadableJapaneseDescription() {
     CommandLine commandLine = new CommandLine(new FeedCommand());

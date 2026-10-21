@@ -41,37 +41,58 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 自動待機付随情報再確認の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class AutoSleepMetadataRefreshTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使うプロジェクト。 */
   final String project = "00000000-0000-0000-0000-000000000001";
+
+  /** 検証に使う初期。 */
   final Instant initial = Instant.parse("2026-10-06T00:00:00Z");
+
+  /** 検証に使う時刻。 */
   final java.util.concurrent.atomic.AtomicReference<Instant> time =
       new java.util.concurrent.atomic.AtomicReference<>(initial);
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock =
       new Clock() {
+        /** 検証用に、長期記憶の活用で参照するタイムゾーンを返す。 */
         public ZoneId getZone() {
           return ZoneOffset.UTC;
         }
 
+        /** 検証用に、指定されたタイムゾーンを反映した情報を作成する。 */
         public Clock withZone(ZoneId zone) {
           return this;
         }
 
+        /** {@code instant} の条件を再現するための補助情報を返す。 */
         public Instant instant() {
           return time.get();
         }
       };
+
+  /** 検証に使う待機。 */
   final SleepService sleep = mock(SleepService.class);
+
+  /** 検証に使う作業状況。 */
   final DefaultAgentActivityTracker activity =
       new DefaultAgentActivityTracker(Clock.fixed(initial.minusSeconds(600), ZoneOffset.UTC));
+
+  /** 検証に使うサービス。 */
   AutoSleepService service;
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void close() {
     if (service != null) service.close();
   }
 
+  /** 検証ごとに状態を分離し、対象を操作できる環境を用意する。 */
   void setup(SessionRepository saved, boolean enabled) {
     service =
         new AutoSleepService(
@@ -85,10 +106,12 @@ class AutoSleepMetadataRefreshTest {
     service.setStartupSources(saved, projects);
   }
 
+  /** 検証で使用する付随情報を、指定された条件に合わせて用意する。 */
   SessionMetadata metadata(String id) {
     return new SessionMetadata(id, project, "old", initial, initial);
   }
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void externalMetadataCreatedAfterStartupIsDiscoveredWithoutNewChat() throws Exception {
     var file = dir.resolve("sessions.json");
@@ -112,6 +135,7 @@ class AutoSleepMetadataRefreshTest {
     assertTrue(done.await(2, TimeUnit.SECONDS));
   }
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void pagesContinueAcrossTicksWithoutRecapturingStartupSnapshot() throws Exception {
     var saved = mock(SessionRepository.class);
@@ -141,6 +165,7 @@ class AutoSleepMetadataRefreshTest {
     verify(saved, times(1)).findPage(null, cursor, 100);
   }
 
+  /** 長期記憶の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void failedRefreshIsContainedRateLimitedAndCanRecover() throws Exception {
     var saved = mock(SessionRepository.class);
@@ -153,6 +178,7 @@ class AutoSleepMetadataRefreshTest {
     assertDoesNotThrow(service::tick);
     service.tick();
     verify(saved, times(1)).findPage(null, null, 100);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(sleep);
     when(sleep.unsleptTurns("recovered")).thenReturn(2L);
     var done = new CountDownLatch(1);
@@ -169,11 +195,13 @@ class AutoSleepMetadataRefreshTest {
     verify(saved, times(2)).findPage(null, null, 100);
   }
 
+  /** 長期記憶の活用で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void disabledBusyAndRecentActivityPreventPersistentRefresh() {
     var saved = mock(SessionRepository.class);
     setup(saved, false);
     service.tick();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(saved, sleep);
     service.close();
     setup(saved, true);
@@ -190,6 +218,7 @@ class AutoSleepMetadataRefreshTest {
     verify(saved, times(1)).findPage(null, null, 100);
   }
 
+  /** 登録済みプロジェクトを維持することを確認する。 */
   @Test
   void refreshedRowsKeepRegisteredProjectAndEncodedSessionBoundaries() {
     var saved = mock(SessionRepository.class);
@@ -214,6 +243,7 @@ class AutoSleepMetadataRefreshTest {
     verify(sleep, never()).sleep(anyString(), anyString(), anyBoolean(), any(), any());
   }
 
+  /** 長期記憶の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void oversizedProviderPageIsRejectedBeforeHistoryReads() {
     var saved = mock(SessionRepository.class);
@@ -226,9 +256,11 @@ class AutoSleepMetadataRefreshTest {
     assertDoesNotThrow(service::tick);
     service.tick();
     verify(saved, times(1)).findPage(null, null, 100);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(sleep);
   }
 
+  /** {@code stubState} の条件を再現するための補助情報を返す。 */
   static SleepService stubState(SleepService sleep) {
     when(sleep.autoState(anyString(), anyString()))
         .thenAnswer(
@@ -238,6 +270,7 @@ class AutoSleepMetadataRefreshTest {
     return sleep;
   }
 
+  /** {@code emptyReport} の条件を再現するための補助情報を返す。 */
   static SleepService.Report emptyReport() {
     var report = mock(SleepService.Report.class);
     when(report.run()).thenReturn(mock(dev.mikoto2000.rei.memory.service.SleepRun.class));

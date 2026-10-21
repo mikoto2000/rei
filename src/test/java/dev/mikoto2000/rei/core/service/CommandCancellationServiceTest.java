@@ -8,8 +8,10 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import reactor.core.Disposable;
 
+/** コマンドキャンセルサービスの結果と状態の契約を検証するテスト。 */
 class CommandCancellationServiceTest {
 
+  /** 対話から使う共通操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelDisposesSubscriptionAndInterruptsExecutionThread() throws Exception {
     CommandCancellationService service = new CommandCancellationService();
@@ -33,11 +35,13 @@ class CommandCancellationServiceTest {
 
     service.register(
         new Disposable() {
+          /** {@code dispose} の条件を再現するため、検証用の操作や状態を扱う。 */
           @Override
           public void dispose() {
             disposed.countDown();
           }
 
+          /** 検証用に、対話から使う共通操作において、解放済みかどうかを判定する。 */
           @Override
           public boolean isDisposed() {
             return disposed.getCount() == 0;
@@ -52,6 +56,7 @@ class CommandCancellationServiceTest {
     executionThread.join(1000);
   }
 
+  /** 対話から使う共通操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void clearResetsCancellationState() {
     CommandCancellationService service = new CommandCancellationService();

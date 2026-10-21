@@ -22,14 +22,20 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 計画O認証の結果と状態の契約を検証するテスト。 */
 class PlanOAuthTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock = Clock.fixed(Instant.parse("2026-10-11T00:00:00Z"), ZoneOffset.UTC);
 
+  /** 検証で使用する保存先を、指定された条件に合わせて用意する。 */
   ProtectedCredentialStore store() {
     return new ProtectedCredentialStore(root, ProtectedCredentialStoreTest.TEST_PROTECTION);
   }
 
+  /** {@code reply} の条件を再現するための補助情報を返す。 */
   static PlanTransport.Response reply(int status, String body) {
     return new PlanTransport.Response(
         status,
@@ -38,6 +44,7 @@ class PlanOAuthTest {
         "application/json");
   }
 
+  /** {@code grant} の条件を再現するための補助情報を返す。 */
   String grant(String access, String refresh) {
     return "{\"access_token\":\""
         + access
@@ -47,6 +54,7 @@ class PlanOAuthTest {
         + " offline_access\"}";
   }
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void newRegistrationExchangesIssuedClientAndValidatesNonce() {
     AtomicReference<String> form = new AtomicReference<>();
@@ -85,6 +93,7 @@ class PlanOAuthTest {
                 Map.of("code", "code", "state", attempt.state(), "client_id", "oaiapp_issued")));
   }
 
+  /** ChatGPTとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void stateAndMissingIssuedClientFailBeforeExchange() {
     AtomicInteger requests = new AtomicInteger();
@@ -111,6 +120,7 @@ class PlanOAuthTest {
     assertEquals(0, requests.get());
   }
 
+  /** ChatGPTとの連携で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void serverRejectedPkceGrantCannotCreateCredentials() {
     var oauth =
@@ -137,6 +147,7 @@ class PlanOAuthTest {
     assertNull(store().locked(s -> s.load("default")));
   }
 
+  /** ChatGPTとの連携で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void idTokenFailureDoesNotReplaceCredentials() {
     var oauth =
@@ -157,6 +168,7 @@ class PlanOAuthTest {
     assertNull(store().locked(s -> s.load("default")));
   }
 
+  /** ChatGPTとの連携で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void concurrentRefreshIsSingleFlightAcrossInstances() throws Exception {
     store()
@@ -193,6 +205,7 @@ class PlanOAuthTest {
     assertEquals(1, refreshes.get());
   }
 
+  /** ChatGPTとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void terminalRefreshFailureClearsTokensButNetworkFailureKeepsThem() {
     store()
@@ -231,6 +244,7 @@ class PlanOAuthTest {
     assertNull(store().locked(s -> s.load("default")).refreshToken());
   }
 
+  /** ログアウトについて、利用先の検出を利用することを確認する。 */
   @Test
   void logoutUsesDiscoveryAndReportsUnconfirmedRevocation() {
     store()

@@ -18,39 +18,80 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplicat
 import org.springframework.stereotype.Service;
 
 /**
- * Explicit integration operations; no command text, reflection target or service selector is
+ * 外部連携実行受付のユースケースを実現する。
+ *
+ * <p>Explicit integration operations; no command text, reflection target or service selector is
  * accepted.
  */
 @Service
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public final class IntegrationRunSubmitService {
+  /** プロジェクト一覧。 */
   private final ProjectRegistry projects;
+
+  /** 受付から終了までの管理。 */
   private final SessionLifecycle lifecycle;
+
+  /** 登録台帳。 */
   private final RunRegistry registry;
+
+  /** 実行一覧。 */
   private final RunService runs;
+
+  /** 入力の振り分け。 */
   private final ConversationInputRouter router;
+
+  /** キャンセル。 */
   private final CommandCancellationService cancellation;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** 通知の連携先。 */
   private final AgentEventBus bus;
+
+  /** 予定表。 */
   private final GoogleCalendarService calendar;
+
+  /** タスク一覧。 */
   private final TaskService tasks;
+
+  /** 作業状況。 */
   private dev.mikoto2000.rei.activity.ActivityCommand activity;
+
+  /** Blueskyへの投稿を依頼する窓口。 */
   private dev.mikoto2000.rei.bluesky.BlueskyPostService bluesky;
+
+  /** 関心一覧。 */
   private dev.mikoto2000.rei.interest.InterestDiscoveryJob interests;
+
+  /** フィードUpdates。 */
   private dev.mikoto2000.rei.feed.FeedUpdateService feedUpdates;
+
+  /** フィード要約一覧。 */
   private dev.mikoto2000.rei.feed.FeedSummaryService feedSummaries;
+
+  /** 検索。 */
   private dev.mikoto2000.rei.core.command.SearchCommand search;
+
+  /** 日次案内。 */
   private dev.mikoto2000.rei.briefing.BriefingService briefing;
+
+  /** 作業。 */
   private dev.mikoto2000.rei.workcontext.WorkContextService work;
+
+  /** 埋め込み表現。 */
   private dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService embeddings;
 
+  /** 実行の受付と状態管理で使用する埋め込み表現を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setEmbeddings(
       dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService embeddings) {
     this.embeddings = embeddings;
   }
 
+  /** 実行の受付と状態管理で用いるingestベクトル一覧を返す。 */
   public AgentRunContext ingestVectors(
       String project, String session, java.util.List<String> documents) {
     return submitAuxiliary(
@@ -73,16 +114,19 @@ public final class IntegrationRunSubmitService {
         });
   }
 
+  /** 実行の受付と状態管理で使用する日次案内を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setBriefing(dev.mikoto2000.rei.briefing.BriefingService briefing) {
     this.briefing = briefing;
   }
 
+  /** 実行の受付と状態管理で使用する作業を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setWork(dev.mikoto2000.rei.workcontext.WorkContextService work) {
     this.work = work;
   }
 
+  /** 実行の受付と状態管理で用いる日次案内を返す。 */
   public AgentRunContext briefing(String project, String session) {
     return submitAuxiliary(
         project,
@@ -93,6 +137,7 @@ public final class IntegrationRunSubmitService {
                 java.util.Objects.requireNonNull(briefing, "Briefing unavailable")));
   }
 
+  /** 最新の内容を後続の処理に反映するため、作業を更新する。 */
   public AgentRunContext updateWork(String project, String session) {
     if (session == null) throw new IllegalArgumentException("Session を選択して会話を開始してください。");
     return submitAuxiliary(
@@ -111,11 +156,13 @@ public final class IntegrationRunSubmitService {
                 .orElse("保存できる会話はまだありません。"));
   }
 
+  /** 実行の受付と状態管理で使用する検索を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setSearch(dev.mikoto2000.rei.core.command.SearchCommand search) {
     this.search = search;
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public AgentRunContext search(
       String project,
       String session,
@@ -146,6 +193,7 @@ public final class IntegrationRunSubmitService {
         });
   }
 
+  /** 実行の受付と状態管理で使用するフィード一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setFeeds(
       dev.mikoto2000.rei.feed.FeedUpdateService updates,
@@ -154,6 +202,7 @@ public final class IntegrationRunSubmitService {
     feedSummaries = summaries;
   }
 
+  /** 最新の内容を後続の処理に反映するため、フィード一覧を更新する。 */
   public AgentRunContext updateFeeds(String project, String session, Long id) {
     return submitAuxiliary(
         project,
@@ -164,6 +213,7 @@ public final class IntegrationRunSubmitService {
                 java.util.Objects.requireNonNull(feedUpdates, "Feed updates unavailable"), id));
   }
 
+  /** 利用者が要点を把握できるよう、フィード一覧を要約する。 */
   public AgentRunContext summarizeFeeds(String project, String session) {
     return submitAuxiliary(
         project,
@@ -174,6 +224,7 @@ public final class IntegrationRunSubmitService {
                 java.util.Objects.requireNonNull(feedSummaries, "Feed summary unavailable")));
   }
 
+  /** 利用者が要点を把握できるよう、フィード項目を要約する。 */
   public AgentRunContext summarizeFeedItem(String project, String session, long id) {
     return submitAuxiliary(
         project,
@@ -184,16 +235,19 @@ public final class IntegrationRunSubmitService {
                 java.util.Objects.requireNonNull(feedSummaries, "Feed summary unavailable"), id));
   }
 
+  /** 実行の受付と状態管理で使用するBlueskyを設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setBluesky(dev.mikoto2000.rei.bluesky.BlueskyPostService service) {
     bluesky = service;
   }
 
+  /** 実行の受付と状態管理で使用する関心一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setInterests(dev.mikoto2000.rei.interest.InterestDiscoveryJob job) {
     interests = job;
   }
 
+  /** 実行の受付と状態管理で用いる返信Blueskyを返す。 */
   public AgentRunContext replyBluesky(String project, String session, String target, String text) {
     return submitAuxiliary(
         project,
@@ -206,6 +260,7 @@ public final class IntegrationRunSubmitService {
                 text == null ? java.util.List.of() : java.util.List.of(text)));
   }
 
+  /** 実行の受付と状態管理で用いる利用先の検出関心一覧を返す。 */
   public AgentRunContext discoverInterests(String project, String session) {
     return submitAuxiliary(
         project,
@@ -216,11 +271,13 @@ public final class IntegrationRunSubmitService {
                 java.util.Objects.requireNonNull(interests, "Interest discovery unavailable")));
   }
 
+  /** 実行の受付と状態管理で使用する作業状況を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setActivity(dev.mikoto2000.rei.activity.ActivityCommand activity) {
     this.activity = activity;
   }
 
+  /** 指定された値や利用先を使って、IntegrationRunSubmitServiceを初期化する。 */
   public IntegrationRunSubmitService(
       ProjectRegistry projects,
       SessionLifecycle lifecycle,
@@ -244,6 +301,7 @@ public final class IntegrationRunSubmitService {
     this.tasks = tasks;
   }
 
+  /** 実行の受付と状態管理で用いる権限の確認予定表を返す。 */
   public AgentRunContext authorizeCalendar(String project, String session, String key) {
     return submit(
         project,
@@ -253,6 +311,7 @@ public final class IntegrationRunSubmitService {
         () -> ScheduleCommand.reportAuthorization(calendar));
   }
 
+  /** 実行の受付と状態管理で用いる再確認予定表を返す。 */
   public AgentRunContext refreshCalendar(String project, String session, String key) {
     return submit(
         project,
@@ -262,6 +321,7 @@ public final class IntegrationRunSubmitService {
         () -> ScheduleCommand.reportRefresh(calendar));
   }
 
+  /** 実行の受付と状態管理で用いる権限の確認タスク一覧を返す。 */
   public AgentRunContext authorizeTasks(String project, String session, String key) {
     return submit(
         project,
@@ -271,6 +331,7 @@ public final class IntegrationRunSubmitService {
         () -> TaskCommand.reportAuthorization(tasks));
   }
 
+  /** 利用可能な対象を確認できるよう、Googleタスク一覧を一覧にする。 */
   public AgentRunContext listGoogleTasks(
       String project, String session, Integer priority, java.time.LocalDate dueBefore) {
     return submitAuxiliary(
@@ -280,6 +341,7 @@ public final class IntegrationRunSubmitService {
         () -> TaskCommand.reportList(tasks, priority, dueBefore));
   }
 
+  /** 新たな対象を管理できるよう、Googleタスクを追加する。 */
   public AgentRunContext addGoogleTask(
       String project, String session, String title, java.time.LocalDate due, int priority) {
     return submitAuxiliary(
@@ -289,16 +351,19 @@ public final class IntegrationRunSubmitService {
         () -> TaskCommand.reportAdd(tasks, title, due, priority));
   }
 
+  /** 実行結果を後続の処理へ引き渡すため、Googleタスクを完了させる。 */
   public AgentRunContext completeGoogleTask(String project, String session, long id) {
     return submitAuxiliary(
         project, session, "google.tasks.done", () -> TaskCommand.reportDone(tasks, id));
   }
 
+  /** 対象を管理から外すため、Googleタスクを削除する。 */
   public AgentRunContext deleteGoogleTask(String project, String session, long id) {
     return submitAuxiliary(
         project, session, "google.tasks.delete", () -> TaskCommand.reportDelete(tasks, id));
   }
 
+  /** 利用可能な対象を確認できるよう、予定表を一覧にする。 */
   public AgentRunContext listCalendar(
       String project, String session, java.time.LocalDate date, String from, String to) {
     return submitAuxiliary(
@@ -308,6 +373,7 @@ public final class IntegrationRunSubmitService {
         () -> ScheduleCommand.reportList(calendar, date, from, to));
   }
 
+  /** 新たな対象を管理できるよう、予定表イベントを追加する。 */
   public AgentRunContext addCalendarEvent(
       String project,
       String session,
@@ -323,6 +389,7 @@ public final class IntegrationRunSubmitService {
         () -> ScheduleCommand.reportAdd(calendar, title, start, end, location, description));
   }
 
+  /** 実行の受付と状態管理で用いる提案分類規則一覧を返す。 */
   public AgentRunContext suggestClassificationRules(String project, String session) {
     return submitAuxiliary(
         project,
@@ -334,6 +401,7 @@ public final class IntegrationRunSubmitService {
         });
   }
 
+  /** 実行の受付と状態管理で用いる提案作業習慣規則一覧を返す。 */
   public AgentRunContext suggestBehaviorRules(String project, String session) {
     return submitAuxiliary(
         project,
@@ -345,6 +413,7 @@ public final class IntegrationRunSubmitService {
         });
   }
 
+  /** 依頼を実行経路へ渡すため、Auxiliaryを受け付ける。 */
   private AgentRunContext submitAuxiliary(
       String projectId,
       String sessionId,
@@ -371,6 +440,7 @@ public final class IntegrationRunSubmitService {
     return context;
   }
 
+  /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   private AgentRunContext submit(
       String projectId,
       String sessionId,
@@ -415,6 +485,7 @@ public final class IntegrationRunSubmitService {
         });
   }
 
+  /** 要求された処理を実行する。 */
   private void execute(
       AgentRunContext context, String operation, java.util.function.Supplier<String> report) {
     try (var scope = AgentRunScope.open(context)) {

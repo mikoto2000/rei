@@ -43,8 +43,10 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
 
+/** AI機能の構成の結果と状態の契約を検証するテスト。 */
 class AiConfigurationTest {
 
+  /** 機能の組み立てで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
     "false,false,false,false,delegateTask|delegateTasks",
@@ -104,6 +106,7 @@ class AiConfigurationTest {
         .containsExactly(expectedNames.split("\\|"));
   }
 
+  /** {@code subAgentConfiguration} の条件を再現するための補助情報を返す。 */
   private AiConfiguration subAgentConfiguration() {
     return new AiConfiguration(
         new CoreProperties("system prompt", 100),
@@ -141,6 +144,7 @@ class AiConfigurationTest {
         mockProviderReturning(null));
   }
 
+  /** {@code namedCallback} の条件を再現するための補助情報を返す。 */
   private org.springframework.ai.tool.ToolCallback namedCallback(String name) {
     var callback = Mockito.mock(org.springframework.ai.tool.ToolCallback.class);
     when(callback.getToolDefinition())
@@ -153,6 +157,7 @@ class AiConfigurationTest {
     return callback;
   }
 
+  /** 機能の組み立てで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void chatClientIncludesMcpToolCallbackProviderWhenAvailable() throws Exception {
     ToolEventCallbackProvider mcpToolCallbackProvider =
@@ -247,6 +252,7 @@ class AiConfigurationTest {
             .count());
   }
 
+  /** 機能の組み立てで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void chatClientOmitsMcpToolCallbackProviderWhenUnavailable() throws Exception {
     ObjectProvider<ToolEventCallbackProvider> provider = mockProviderReturning(null);
@@ -293,6 +299,7 @@ class AiConfigurationTest {
     assertEquals(0, toolCallbackProviders.size());
   }
 
+  /** 機能の組み立てで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void chatClientIncludesAgentSkillAdvisorWhenAvailable() throws Exception {
     AgentSkillAdvisor agentSkillAdvisor = Mockito.mock(AgentSkillAdvisor.class);
@@ -341,6 +348,7 @@ class AiConfigurationTest {
         ((dev.mikoto2000.rei.core.chat.RunScopedAdvisor) advisors.getLast()).delegate());
   }
 
+  /** モデルへ対話を依頼する窓口について、設定済み最大出力トークン数形式既定選択項目を利用することを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void chatClientUsesConfiguredMaxOutputTokensAsDefaultOption(boolean completionTokens)
@@ -409,6 +417,7 @@ class AiConfigurationTest {
             .count());
   }
 
+  /** 検証用に、機能の組み立てで参照する既定ツール完了時の処理提供元一覧を返す。 */
   @SuppressWarnings("unchecked")
   private List<?> getDefaultToolCallbackProviders(ChatClient chatClient) throws Exception {
     Object defaultRequest = getDefaultChatClientRequest(chatClient);
@@ -419,6 +428,7 @@ class AiConfigurationTest {
     return (List<?>) toolCallbackProvidersField.get(defaultRequest);
   }
 
+  /** 検証用に、機能の組み立てで参照する既定Advisorsを返す。 */
   @SuppressWarnings("unchecked")
   private List<?> getDefaultAdvisors(ChatClient chatClient) throws Exception {
     Object defaultRequest = getDefaultChatClientRequest(chatClient);
@@ -428,6 +438,7 @@ class AiConfigurationTest {
     return (List<Advisor>) advisorsField.get(defaultRequest);
   }
 
+  /** 検証用に、機能の組み立てで参照する既定チャット選択可能な設定を返す。 */
   private ChatOptions getDefaultChatOptions(ChatClient chatClient) throws Exception {
     Object defaultRequest = getDefaultChatClientRequest(chatClient);
     Field chatOptionsField = defaultRequest.getClass().getDeclaredField("optionsCustomizer");
@@ -435,12 +446,14 @@ class AiConfigurationTest {
     return ((ChatOptions.Builder<?>) chatOptionsField.get(defaultRequest)).build();
   }
 
+  /** 検証用に、機能の組み立てで参照する既定モデルへ対話を依頼する窓口要求を返す。 */
   private Object getDefaultChatClientRequest(ChatClient chatClient) throws Exception {
     Field defaultRequestField = chatClient.getClass().getDeclaredField("defaultChatClientRequest");
     defaultRequestField.setAccessible(true);
     return defaultRequestField.get(chatClient);
   }
 
+  /** {@code mockProviderReturning} の条件を再現するための補助情報を返す。 */
   private <T> ObjectProvider<T> mockProviderReturning(T value) {
     @SuppressWarnings("unchecked")
     ObjectProvider<T> provider = Mockito.mock(ObjectProvider.class);
@@ -448,6 +461,7 @@ class AiConfigurationTest {
     return provider;
   }
 
+  /** {@code systemPromptService} の条件を再現するための補助情報を返す。 */
   private SystemPromptService systemPromptService() {
     SystemPromptService service = Mockito.mock(SystemPromptService.class);
     when(service.systemPrompt()).thenReturn("system prompt");

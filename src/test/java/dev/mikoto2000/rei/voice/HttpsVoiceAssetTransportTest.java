@@ -21,10 +21,15 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** HTTPS音声素材通信経路の結果と状態の契約を検証するテスト。 */
 class HttpsVoiceAssetTransportTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う内容。 */
   final byte[] content = "fixed asset".getBytes();
 
+  /** {@code asset} の条件を再現するための補助情報を返す。 */
   VoiceModelManifest.Asset asset() throws Exception {
     return new VoiceModelManifest.Asset(
         "asset",
@@ -34,6 +39,7 @@ class HttpsVoiceAssetTransportTest {
         "MIT");
   }
 
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void exactContentPassesSizeAndHashChecks() throws Exception {
     var counts = new ArrayList<Long>();
@@ -47,6 +53,7 @@ class HttpsVoiceAssetTransportTest {
     assertThat(counts.getLast()).isEqualTo((long) content.length);
   }
 
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void refusesOversizeShortOrSameSizeCorruptBody() throws Exception {
     for (byte[] invalid :
@@ -67,6 +74,7 @@ class HttpsVoiceAssetTransportTest {
     }
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationClosesBlockedBodyAndPreventsReadyFile() throws Exception {
     var entered = new CountDownLatch(1);
@@ -74,10 +82,12 @@ class HttpsVoiceAssetTransportTest {
     var token = new VoiceAssetTransport.Cancellation();
     var input =
         new InputStream() {
+          /** 検証用に、指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
           public int read() {
             throw new UnsupportedOperationException();
           }
 
+          /** 検証用に、指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
           public int read(byte[] b, int offset, int length) throws IOException {
             entered.countDown();
             try {
@@ -89,6 +99,7 @@ class HttpsVoiceAssetTransportTest {
             return -1;
           }
 
+          /** 検証で利用した対象の終了を扱う。 */
           public void close() {
             closed.countDown();
           }
@@ -114,6 +125,7 @@ class HttpsVoiceAssetTransportTest {
     }
   }
 
+  /** 音声による対話で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void redirectCannotDowngradeHttpsOrCarryCredentials() {
     for (String invalid :

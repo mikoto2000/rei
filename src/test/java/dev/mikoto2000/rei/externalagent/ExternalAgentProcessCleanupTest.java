@@ -16,8 +16,13 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
 
-/** No real process is signalled: adversarial process snapshots use mocks. */
+/**
+ * 外部エージェントプロセス後片付けの結果と状態の契約を検証するテスト。
+ *
+ * <p>No real process is signalled: adversarial process snapshots use mocks.
+ */
 class ExternalAgentProcessCleanupTest {
+  /** {@code process} の条件を再現するための補助情報を返す。 */
   Process process(boolean alive, ProcessHandle... descendants) throws Exception {
     var process = mock(Process.class);
     var info = mock(ProcessHandle.Info.class);
@@ -29,6 +34,7 @@ class ExternalAgentProcessCleanupTest {
     return process;
   }
 
+  /** {@code child} の条件を再現するための補助情報を返す。 */
   ProcessHandle child(long pid, Instant start) {
     var child = mock(ProcessHandle.class);
     var info = mock(ProcessHandle.Info.class);
@@ -40,6 +46,7 @@ class ExternalAgentProcessCleanupTest {
     return child;
   }
 
+  /** 検証で使用した資源を解放し、後続の検証に影響を残さないようにする。 */
   void cleanup(Process process, Set<ProcessHandle> known) throws Exception {
     var method =
         ExternalAgentProcessRunner.class.getDeclaredMethod("cleanup", Process.class, Set.class);
@@ -47,6 +54,7 @@ class ExternalAgentProcessCleanupTest {
     method.invoke(null, process, known);
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void exitedRootIsNeverEnumeratedAgain() throws Exception {
     var child = child(999999, Instant.parse("2026-01-02T00:00:00Z"));
@@ -56,6 +64,7 @@ class ExternalAgentProcessCleanupTest {
     verify(child, never()).destroyForcibly();
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void currentJvmAndItsAncestorsAreNeverSignalledEvenIfAlreadyRetained() throws Exception {
     var protectedIds = new ArrayList<Long>();
@@ -71,6 +80,7 @@ class ExternalAgentProcessCleanupTest {
     }
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void olderOrUnknownStartTimeCannotEstablishDescendantOwnership() throws Exception {
     var older = child(999998, Instant.parse("2025-01-01T00:00:00Z"));
@@ -80,6 +90,7 @@ class ExternalAgentProcessCleanupTest {
     verify(unknown, never()).destroyForcibly();
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void rootExitDuringEnumerationDiscardsTheSnapshot() throws Exception {
     var child = child(999999, Instant.parse("2026-01-02T00:00:00Z"));
@@ -89,6 +100,7 @@ class ExternalAgentProcessCleanupTest {
     verify(child, never()).destroyForcibly();
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void verifiedLiveDescendantIsStillCleanedUp() throws Exception {
     var child = child(999999, Instant.parse("2026-01-02T00:00:00Z"));
@@ -98,6 +110,7 @@ class ExternalAgentProcessCleanupTest {
     verify(process).destroyForcibly();
   }
 
+  /** 作業ルート終了の後も対象の情報が残ることを確認する。 */
   @Test
   void previouslyVerifiedHandleSurvivesRootExit() throws Exception {
     var child = child(999999, Instant.parse("2026-01-02T00:00:00Z"));
@@ -105,6 +118,7 @@ class ExternalAgentProcessCleanupTest {
     verify(child).destroyForcibly();
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void changedRootStartTimeDiscardsSnapshot() throws Exception {
     var child = child(999999, Instant.parse("2026-01-02T00:00:00Z"));

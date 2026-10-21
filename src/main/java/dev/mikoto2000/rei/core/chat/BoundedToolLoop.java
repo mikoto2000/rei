@@ -24,23 +24,35 @@ import org.springframework.ai.model.tool.ToolExecutionResult;
 import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
-/** Ephemeral explicit loop: no advisors, persistence, planner, or ambient tool resolution. */
+/**
+ * 会話の実行に必要な上限内に収めたツール繰り返しを扱う。
+ *
+ * <p>Ephemeral explicit loop: no advisors, persistence, planner, or ambient tool resolution.
+ */
 public final class BoundedToolLoop {
+  /** ツール一覧。 */
   private final ToolLoopSupport tools = new ToolLoopSupport();
+
+  /** 文脈の組み立て。 */
   private final dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler;
 
+  /** 会話の実行を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public BoundedToolLoop() {
     this(null);
   }
 
+  /** 指定された値や利用先を使って、BoundedToolLoopを初期化する。 */
   public BoundedToolLoop(dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler) {
     this.assembler = assembler;
   }
 
+  /** 会話の実行に必要な共有予算上限超過を扱う。 */
   public static final class SharedBudgetExceeded extends RuntimeException {}
 
+  /** 会話の実行に必要な最大手順一覧上限超過を扱う。 */
   public static final class MaxStepsExceeded extends RuntimeException {}
 
+  /** 会話の実行において、一時的なモデル失敗情報かどうかを判定する。 */
   private static boolean isTransientModelFailure(Throwable error) {
     // Spring AI 2 streams SDK failures through async completion wrappers. Do not
     // follow arbitrary causes: an application failure may have a transient cause.
@@ -60,21 +72,33 @@ public final class BoundedToolLoop {
     return false;
   }
 
-  /** One invocation-wide retry allowance, also shared by repair cycles and the tool-free judge. */
+  /**
+   * 会話の実行に必要なモデル再試行回数を扱う。
+   *
+   * <p>One invocation-wide retry allowance, also shared by repair cycles and the tool-free judge.
+   */
   public static final class ModelRetries {
+    /** 残量。 */
     private final AtomicInteger remaining;
+
+    /** 試行回数。 */
     private final AtomicInteger attempts = new AtomicInteger();
+
+    /** 失敗一覧。 */
     private final List<String> failures = new java.util.concurrent.CopyOnWriteArrayList<>();
 
+    /** 指定された値や利用先を使って、ModelRetriesを初期化する。 */
     public ModelRetries(int max) {
       if (max < 0 || max > 3) throw new IllegalArgumentException("Model retries must be 0 to 3");
       remaining = new AtomicInteger(max);
     }
 
+    /** 会話の実行において、予約に該当するか判定する。 */
     private boolean reserve() {
       return remaining.getAndUpdate(value -> Math.max(0, value - 1)) > 0;
     }
 
+    /** 処理を継続できなかった理由を、失敗情報として表す。 */
     private void failure(Throwable error, boolean received) {
       if (isTransientModelFailure(error) && failures.size() < 4)
         failures.add(
@@ -83,21 +107,31 @@ public final class BoundedToolLoop {
                 : "TRANSIENT_MODEL_FAILURE_BEFORE_RESPONSE");
     }
 
+    /** 会話の実行で用いる試行回数を返す。 */
     public int attempts() {
       return attempts.get();
     }
 
+    /** 過去の記録を、条件に従って参照できる形で返す。 */
     public List<String> history() {
       return List.copyOf(failures);
     }
   }
 
+  /**
+   * 会話の実行で受け渡す最終結果を表す。
+   *
+   * @param output 出力
+   * @param history 履歴
+   */
   public record Outcome(String output, List<Message> history) {
+    /** 受け取った情報からOutcomeを作成する。 */
     public Outcome {
       history = List.copyOf(history);
     }
   }
 
+  /** 会話の実行の操作を実行する。 */
   public Mono<String> run(
       ChatModel model, Prompt prompt, int maxSteps, AgentRunContext owner, Runnable checkActive) {
     return Mono.defer(
@@ -105,6 +139,7 @@ public final class BoundedToolLoop {
         .map(Outcome::output);
   }
 
+  /** 依頼された操作を進めるため、付き履歴を実行する。 */
   public Mono<Outcome> runWithHistory(
       ChatModel model,
       Prompt prompt,
@@ -114,6 +149,7 @@ public final class BoundedToolLoop {
     return runWithHistory(model, prompt, remaining, owner, checkActive, null);
   }
 
+  /** 依頼された操作を進めるため、付き履歴を実行する。 */
   public Mono<Outcome> runWithHistory(
       ChatModel model,
       Prompt prompt,
@@ -125,6 +161,7 @@ public final class BoundedToolLoop {
         model, prompt, remaining, owner, checkActive, reservation, new ModelRetries(0));
   }
 
+  /** 依頼された操作を進めるため、付き履歴を実行する。 */
   public Mono<Outcome> runWithHistory(
       ChatModel model,
       Prompt prompt,
@@ -143,6 +180,7 @@ public final class BoundedToolLoop {
         retries);
   }
 
+  /** 会話の実行で用いる応答を返す。 */
   private Mono<ChatResponse> response(
       ChatModel model,
       Prompt prompt,
@@ -298,6 +336,7 @@ public final class BoundedToolLoop {
         });
   }
 
+  /** 会話の実行で用いる繰り返しを返す。 */
   private Mono<Outcome> iteration(
       ChatModel model,
       Prompt prompt,
@@ -311,6 +350,7 @@ public final class BoundedToolLoop {
               if (assembler == null) return prompt;
               var summaryBudget =
                   new dev.mikoto2000.rei.llm.ModelCallBudget() {
+                    /** 会話の実行の操作を実行する。 */
                     public void run() {
                       checkActive.run();
                       if (remaining.getAndDecrement() <= 0) throw new MaxStepsExceeded();
@@ -318,10 +358,12 @@ public final class BoundedToolLoop {
                         throw new SharedBudgetExceeded();
                     }
 
+                    /** トークン数による実行予算の制限が有効かどうかを返す。 */
                     public boolean tokenLimitEnabled() {
                       return reservation != null && reservation.tokenLimitEnabled();
                     }
 
+                    /** 使用したトークン数を実行予算へ記録する。 */
                     public void recordTotalTokens(Integer tokens) {
                       if (reservation != null) reservation.recordTotalTokens(tokens);
                       checkActive.run();

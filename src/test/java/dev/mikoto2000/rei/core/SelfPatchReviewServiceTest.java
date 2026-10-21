@@ -16,14 +16,18 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Self変更差分レビューサービスの結果と状態の契約を検証するテスト。 */
 class SelfPatchReviewServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証で使用する状態の記録を、指定された条件に合わせて用意する。 */
   SelfPatchReviewService.Snapshot snapshot(String version) {
     return new SelfPatchReviewService.Snapshot(
         version, List.of("A.java"), List.of(), true, List.of());
   }
 
+  /** {@code test} の条件を再現するための補助情報を返す。 */
   SelfPatchReviewService.TestObservation test(boolean success) {
     return new SelfPatchReviewService.TestObservation(
         success ? "completed" : "failed",
@@ -34,10 +38,12 @@ class SelfPatchReviewServiceTest {
             success ? "completed" : "failed", success ? 0 : 1, false, "", "", null));
   }
 
+  /** {@code review} の条件を再現するための補助情報を返す。 */
   SelfPatchReviewService.Review review() {
     return new SelfPatchReviewService.Review(true, List.of(), List.of());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void verifiesInitialTestReviewAndFinalTestAgainstTheSamePatchInOrder() throws Exception {
     var steps = new ArrayList<String>();
@@ -66,6 +72,7 @@ class SelfPatchReviewServiceTest {
     assertNotNull(result.finalTest());
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedInitialTestNeverReviewsOrRunsFinalTest() throws Exception {
     var calls = new AtomicInteger();
@@ -86,6 +93,7 @@ class SelfPatchReviewServiceTest {
     assertEquals(1, calls.get());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void reviewFindingsReturnToTheExistingFixLoopWithoutClaimingVerification() throws Exception {
     var calls = new AtomicInteger();
@@ -107,6 +115,7 @@ class SelfPatchReviewServiceTest {
     assertNull(result.finalTest());
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void changesDuringInitialOrFinalTestInvalidateTheCycle() throws Exception {
     for (int changeAt : List.of(2, 4)) {
@@ -127,6 +136,7 @@ class SelfPatchReviewServiceTest {
     }
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void incompleteReviewOrTruncatedTestLogsCannotVerify() throws Exception {
     var incomplete =
@@ -149,6 +159,7 @@ class SelfPatchReviewServiceTest {
         truncated.verify(root, new SelfPatchReviewService.Request("fixture", 10)).status());
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedFinalTestIsPreservedAndDoesNotVerify() throws Exception {
     var calls = new AtomicInteger();
@@ -162,6 +173,7 @@ class SelfPatchReviewServiceTest {
     assertEquals(1, result.finalTest().exitCode());
   }
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void invalidArgumentsAndCancellationStopBeforeAnotherStage() throws Exception {
     var service =

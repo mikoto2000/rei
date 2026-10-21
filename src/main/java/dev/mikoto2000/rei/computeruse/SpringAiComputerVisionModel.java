@@ -20,18 +20,38 @@ import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.util.MimeTypeUtils;
 
-/** Provider adapter only. No ChatClient, advisors, memory, or tool-calling loop is used. */
+/**
+ * 画面操作の支援に必要なSpringAI画面操作画像認識モデルを扱う。
+ *
+ * <p>Provider adapter only. No ChatClient, advisors, memory, or tool-calling loop is used.
+ */
 public final class SpringAiComputerVisionModel implements ComputerVisionModel {
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(SpringAiComputerVisionModel.class);
+
+  /** モデル。 */
   private final ChatModel model;
+
+  /** 選択可能な設定。 */
   private final Supplier<OpenAiChatOptions.Builder> options;
+
+  /** キャンセル済み。 */
   private final BooleanSupplier cancelled;
+
+  /** 修復一覧。 */
   private final int repairs;
+
+  /** 入力の解釈。 */
   private final ActionParser parser = new ActionParser();
+
+  /** システム。 */
   private final String system = resource("system.md");
+
+  /** データ形式。 */
   private final String schema = resource("action.schema.json");
 
+  /** 指定された値や利用先を使って、SpringAiComputerVisionModelを初期化する。 */
   public SpringAiComputerVisionModel(
       ChatModel model,
       Supplier<OpenAiChatOptions.Builder> options,
@@ -45,6 +65,7 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
     this.repairs = repairs;
   }
 
+  /** 画面操作の支援で用いる判断を返す。 */
   public ComputerAction decide(ComputerObservation observation) throws Exception {
     var coarse =
         decideOnce(
@@ -104,6 +125,7 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
     return result;
   }
 
+  /** 画面操作の支援で用いる判断概要を返す。 */
   ComputerAction decideOverview(ComputerObservation observation) throws Exception {
     return decideOnce(
         observation,
@@ -112,12 +134,14 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
             + "your coordinates are only a proposal and will never be clicked directly.");
   }
 
+  /** 画面操作の支援で用いる対象を返す。 */
   private static ComputerAction.Target target(ComputerAction action) {
     return action instanceof ComputerAction.Click a
         ? a.target()
         : action instanceof ComputerAction.DoubleClick a ? a.target() : null;
   }
 
+  /** 後から参照できるよう、表示範囲の調整を保存する。 */
   private static void saveCrop(
       ComputerObservation observation,
       DisplayCapture display,
@@ -155,6 +179,7 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
     }
   }
 
+  /** 画面操作の支援で用いる判断Onceを返す。 */
   private ComputerAction decideOnce(ComputerObservation observation, String stage)
       throws Exception {
     var screen = observation.screenshot();
@@ -270,11 +295,13 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
     throw new IllegalStateException("Repair budget exhausted");
   }
 
+  /** 後続の操作を進められるか判断するため、キャンセル済みを確認する。 */
   private void checkCancelled() {
     if (cancelled.getAsBoolean() || Thread.currentThread().isInterrupted())
       throw new java.util.concurrent.CancellationException();
   }
 
+  /** 画面操作の支援で用いる補助資料を返す。 */
   private static String resource(String name) {
     try {
       return new ClassPathResource("computer-use/" + name)

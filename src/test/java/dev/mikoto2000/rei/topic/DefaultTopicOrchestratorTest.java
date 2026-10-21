@@ -20,8 +20,10 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 既定話題Orchestratorの結果と状態の契約を検証するテスト。 */
 class DefaultTopicOrchestratorTest {
 
+  /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void refreshReturnsBeforeGenerationAndDiscardsSupersededResults() {
     var properties = enabledProperties();
@@ -60,6 +62,7 @@ class DefaultTopicOrchestratorTest {
         events.stream().filter(e -> e.type() == AgentEventType.TOPIC_CANDIDATES_REFRESHED).count());
   }
 
+  /** 話題の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void chatCompletedRefreshesCandidateStoreWithoutPublishingMessage() {
     TopicGeneratorProperties properties = enabledProperties();
@@ -83,6 +86,7 @@ class DefaultTopicOrchestratorTest {
     assertTrue(publisher.messages.isEmpty());
   }
 
+  /** 話題の管理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void userIdlePublishesAssistantMessageBeforeTopicSpokenEvent() {
     TopicGeneratorProperties properties = enabledProperties();
@@ -123,6 +127,7 @@ class DefaultTopicOrchestratorTest {
     assertEquals(AgentEventType.TOPIC_GENERATION_COMPLETED, types.getLast());
   }
 
+  /** 話題の管理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void userActivityDuringGenerationPreventsPublishing() {
     TopicGeneratorProperties properties = enabledProperties();
@@ -161,11 +166,13 @@ class DefaultTopicOrchestratorTest {
             .anyMatch(event -> event.type() == AgentEventType.TOPIC_AUTO_SPEAK_SUPPRESSED));
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   private TopicGeneratorService service(
       TopicGeneratorProperties properties, TopicMessageGenerator messageGenerator) {
     return service(properties, messageGenerator, new InMemoryAgentEventBus());
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   private TopicGeneratorService service(
       TopicGeneratorProperties properties,
       TopicMessageGenerator messageGenerator,
@@ -182,6 +189,7 @@ class DefaultTopicOrchestratorTest {
         clock());
   }
 
+  /** {@code enabledProperties} の条件を再現するための補助情報を返す。 */
   private TopicGeneratorProperties enabledProperties() {
     TopicGeneratorProperties properties = new TopicGeneratorProperties();
     properties.setEnabled(true);
@@ -190,10 +198,12 @@ class DefaultTopicOrchestratorTest {
     return properties;
   }
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   private TopicGenerationContext context() {
     return new TopicGenerationContext(List.of(), List.of(), now(), List.of());
   }
 
+  /** {@code candidate} の条件を再現するための補助情報を返す。 */
   private TopicCandidate candidate() {
     return new TopicCandidate(
         "id",
@@ -209,67 +219,90 @@ class DefaultTopicOrchestratorTest {
         now());
   }
 
+  /** {@code now} の条件を再現するための補助情報を返す。 */
   private Instant now() {
     return Instant.parse("2026-09-02T00:10:00Z");
   }
 
+  /** {@code clock} の条件を再現するための補助情報を返す。 */
   private Clock clock() {
     return Clock.fixed(now(), ZoneOffset.UTC);
   }
 
+  /** 検証条件を再現するためのRecordingメッセージ通知先。 */
   private static class RecordingMessagePublisher implements AgentMessagePublisher {
+    /** 検証に使うメッセージ一覧。 */
     private final List<AgentMessage> messages = new ArrayList<>();
 
+    /** 検証用に、状態や結果を購読先へ通知する。 */
     @Override
     public void publish(AgentMessage message) {
       messages.add(message);
     }
   }
 
+  /** 検証条件を再現するためのRecording作業状況追跡。 */
   private static class RecordingActivityTracker implements AgentActivityTracker {
+    /** 検証に使うアプリケーション開始日時。 */
     private final Instant applicationStartedAt;
+
+    /** 検証に使う直近利用者作業状況日時。 */
     private Instant lastUserActivityAt;
+
+    /** 検証に使う直近エージェント作業状況日時。 */
     private Instant lastAgentActivityAt;
+
+    /** 検証に使うエージェント使用中。 */
     private boolean agentBusy;
+
+    /** 検証に使う作業状況形式のバージョン。 */
     private long activityVersion;
 
+    /** 検証条件に必要な値を受け取り、RecordingActivityTrackerを用意する。 */
     RecordingActivityTracker(Instant applicationStartedAt) {
       this.applicationStartedAt = applicationStartedAt;
       this.lastUserActivityAt = applicationStartedAt;
       this.lastAgentActivityAt = applicationStartedAt;
     }
 
+    /** {@code applicationStartedAt} の条件を再現するための補助情報を返す。 */
     @Override
     public Instant applicationStartedAt() {
       return applicationStartedAt;
     }
 
+    /** {@code lastUserActivityAt} の条件を再現するための補助情報を返す。 */
     @Override
     public Instant lastUserActivityAt() {
       return lastUserActivityAt;
     }
 
+    /** {@code lastAgentActivityAt} の条件を再現するための補助情報を返す。 */
     @Override
     public Instant lastAgentActivityAt() {
       return lastAgentActivityAt;
     }
 
+    /** 検証用に、話題の管理において、エージェント使用中かどうかを判定する。 */
     @Override
     public boolean isAgentBusy() {
       return agentBusy;
     }
 
+    /** {@code activityVersion} の条件を再現するための補助情報を返す。 */
     @Override
     public long activityVersion() {
       return activityVersion;
     }
 
+    /** 検証用に、後から経緯や使用量を確認できるよう、利用者作業状況を記録する。 */
     @Override
     public void recordUserActivity(Instant at) {
       lastUserActivityAt = at;
       activityVersion++;
     }
 
+    /** 検証用に、後から経緯や使用量を確認できるよう、エージェント開始を記録する。 */
     @Override
     public void recordAgentStarted(Instant at) {
       lastAgentActivityAt = at;
@@ -277,6 +310,7 @@ class DefaultTopicOrchestratorTest {
       activityVersion++;
     }
 
+    /** 検証用に、後から経緯や使用量を確認できるよう、エージェント完了済みのを記録する。 */
     @Override
     public void recordAgentCompleted(Instant at) {
       lastAgentActivityAt = at;

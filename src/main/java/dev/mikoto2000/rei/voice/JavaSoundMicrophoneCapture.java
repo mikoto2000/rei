@@ -10,7 +10,9 @@ import javax.sound.sampled.DataLine;
 import javax.sound.sampled.Mixer;
 import javax.sound.sampled.TargetDataLine;
 
+/** 音声による対話に必要なJava音通知マイク取得記録を扱う。 */
 public final class JavaSoundMicrophoneCapture implements MicrophoneCaptureService {
+  /** 必要な対象を利用できるよう、Java音通知マイク取得記録の利用を開始する。 */
   public FrameSource open(AudioDevice device) throws Exception {
     Mixer mixer = resolveMixer(device);
     AudioFormat format = selectFormat(mixer);
@@ -21,8 +23,10 @@ public final class JavaSoundMicrophoneCapture implements MicrophoneCaptureServic
       var raw = new AudioInputStream(line);
       var pcm = AudioFormatConverter.toPcm16(raw);
       return new FrameSource() {
+        /** 終了済み。 */
         final AtomicBoolean closed = new AtomicBoolean();
 
+        /** 必要な内容を参照できるよう、観測単位を読み取る。 */
         public float[] readFrame() throws IOException {
           byte[] bytes = new byte[VoiceSettings.WINDOW * 2];
           int offset = 0, empty = 0;
@@ -39,7 +43,9 @@ public final class JavaSoundMicrophoneCapture implements MicrophoneCaptureServic
           return offset == bytes.length && !closed.get() ? VoicePcm.decode(bytes) : null;
         }
 
+        /** 音声による対話で利用した資源や登録を解放し、利用を終了する。 */
         public void close() {
+          // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
           if (closed.compareAndSet(false, true)) {
             line.stop();
             line.close();
@@ -56,6 +62,7 @@ public final class JavaSoundMicrophoneCapture implements MicrophoneCaptureServic
     }
   }
 
+  /** 指定や設定に応じた対象を利用するため、Mixerを確定する。 */
   private Mixer resolveMixer(AudioDevice device) {
     var matches =
         Arrays.stream(AudioSystem.getMixerInfo())
@@ -66,7 +73,11 @@ public final class JavaSoundMicrophoneCapture implements MicrophoneCaptureServic
     return AudioSystem.getMixer(matches.getFirst());
   }
 
-  /** Diagnostic acquisition only: no start, stream creation or audio read. */
+  /**
+   * 音声による対話に関する確保なしRecordingを処理する。
+   *
+   * <p>Diagnostic acquisition only: no start, stream creation or audio read.
+   */
   public void acquireWithoutRecording(AudioDevice device) throws Exception {
     if (Thread.currentThread().isInterrupted())
       throw new java.util.concurrent.CancellationException();
@@ -84,6 +95,7 @@ public final class JavaSoundMicrophoneCapture implements MicrophoneCaptureServic
     }
   }
 
+  /** 条件に合う対象を利用するため、形式を選択する。 */
   private AudioFormat selectFormat(Mixer mixer) {
     var preferred = AudioFormatConverter.PCM16;
     if (mixer.isLineSupported(new DataLine.Info(TargetDataLine.class, preferred))) return preferred;

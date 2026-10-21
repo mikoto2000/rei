@@ -51,6 +51,7 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/** AIの構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({
   CoreProperties.class,
@@ -67,30 +68,40 @@ import org.springframework.context.annotation.Configuration;
 })
 @RequiredArgsConstructor
 public class AiConfiguration {
+  /** 依存条件ツール一覧。 */
   private dev.mikoto2000.rei.core.dependency.DependencyTools dependencyTools;
 
+  /** 機能の組み立てで使用する依存条件ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setDependencyTools(dev.mikoto2000.rei.core.dependency.DependencyTools tools) {
     this.dependencyTools = tools;
   }
 
+  /** ファイル依存条件ツール一覧。 */
   private dev.mikoto2000.rei.core.FileDependencyTools fileDependencyTools;
 
+  /** 機能の組み立てで使用するファイル依存条件ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setFileDependencyTools(dev.mikoto2000.rei.core.FileDependencyTools tools) {
     this.fileDependencyTools = tools;
   }
 
+  /** プロセス依存条件ツール一覧。 */
   private dev.mikoto2000.rei.core.ProcessDependencyTools processDependencyTools;
 
+  /** 機能の組み立てで使用するプロセス依存条件ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setProcessDependencyTools(dev.mikoto2000.rei.core.ProcessDependencyTools tools) {
     this.processDependencyTools = tools;
   }
 
+  /** 実行状況の通知を生成する窓口。 */
   private dev.mikoto2000.rei.event.AgentEventFactory eventFactory;
+
+  /** 実行状況の通知先。 */
   private dev.mikoto2000.rei.event.AgentEventPublisher eventPublisher;
 
+  /** 機能の組み立てで使用する作業イベント一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setWorkEvents(
       dev.mikoto2000.rei.event.AgentEventFactory factory,
@@ -99,18 +110,28 @@ public class AiConfiguration {
     eventPublisher = publisher;
   }
 
+  /** 作業文脈。 */
   private ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextAdvisor> workContext;
+
+  /** 作業ツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextTools> workTools;
+
+  /** 経験の記録ツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.episode.EpisodeTools> episodeTools;
 
+  /** 機能の組み立てで使用する経験の記録ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setEpisodeTools(ObjectProvider<dev.mikoto2000.rei.episode.EpisodeTools> tools) {
     episodeTools = tools;
   }
 
+  /** 再開文脈。 */
   private ObjectProvider<dev.mikoto2000.rei.checkpoint.ResumeContextAdvisor> resumeContext;
+
+  /** 再開用の記録ツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.checkpoint.CheckpointTools> checkpointTools;
 
+  /** 機能の組み立てで使用する再開用の記録を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setCheckpoint(
       ObjectProvider<dev.mikoto2000.rei.checkpoint.ResumeContextAdvisor> advisor,
@@ -119,6 +140,7 @@ public class AiConfiguration {
     checkpointTools = tools;
   }
 
+  /** 機能の組み立てで使用する作業文脈を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setWorkContext(
       ObjectProvider<dev.mikoto2000.rei.workcontext.WorkContextAdvisor> advisor,
@@ -127,21 +149,29 @@ public class AiConfiguration {
     workTools = tools;
   }
 
+  /** 論文ツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.paper.PaperTools> paperTools;
 
+  /** 機能の組み立てで使用する論文ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setPaperTools(ObjectProvider<dev.mikoto2000.rei.paper.PaperTools> tools) {
     this.paperTools = tools;
   }
 
+  /** 文脈文脈の組み立て。 */
   private dev.mikoto2000.rei.core.contextbudget.ContextAssembler contextAssembler;
+
+  /** 文脈履歴。 */
   private dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor contextHistory;
 
+  /** レビューツール一覧。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   private dev.mikoto2000.rei.review.ReviewTools reviewTools;
 
+  /** 元の結果ツール一覧。 */
   private dev.mikoto2000.rei.core.contextbudget.RawToolResultTools rawResultTools;
 
+  /** 機能の組み立てで使用する文脈圧縮を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setContextCompression(
       dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler,
@@ -153,16 +183,22 @@ public class AiConfiguration {
     if (properties.isEnabled()) contextHistory = history;
   }
 
+  /** 状態表示ツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.dot.DotTools> dotTools;
 
+  /** 機能の組み立てで使用する状態表示ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setDotTools(ObjectProvider<dev.mikoto2000.rei.dot.DotTools> tools) {
     dotTools = tools;
   }
 
+  /** 外部エージェントツール一覧。 */
   private dev.mikoto2000.rei.externalagent.ExternalAgentTools externalAgentTools;
+
+  /** 外部委譲。 */
   private dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService externalDelegation;
 
+  /** 機能の組み立てで使用する外部エージェントツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setExternalAgentTools(
       dev.mikoto2000.rei.externalagent.ExternalAgentTools tools,
@@ -171,61 +207,134 @@ public class AiConfiguration {
     this.externalDelegation = service;
   }
 
+  /** 画面操作利用ツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.computeruse.ComputerUseTools> computerUseTools;
 
+  /** 機能の組み立てで使用する画面操作利用ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setComputerUseTools(ObjectProvider<dev.mikoto2000.rei.computeruse.ComputerUseTools> tools) {
     this.computerUseTools = tools;
   }
 
+  /** 補助エージェントツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> subAgentTools;
+
+  /** 補助エージェント設定。 */
   private dev.mikoto2000.rei.subagent.SubAgentProperties subAgentProperties =
       new dev.mikoto2000.rei.subagent.SubAgentProperties();
 
+  /** 機能の組み立てで使用する補助エージェント設定を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setSubAgentProperties(dev.mikoto2000.rei.subagent.SubAgentProperties settings) {
     this.subAgentProperties = settings;
   }
 
+  /** 機能の組み立てで使用する補助エージェントツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setSubAgentTools(ObjectProvider<dev.mikoto2000.rei.subagent.SubAgentTools> tools) {
     this.subAgentTools = tools;
   }
 
+  /** core設定。 */
   private final CoreProperties coreProperties;
+
+  /** システムへの指示サービス。 */
   private final SystemPromptService systemPromptService;
+
+  /** 応答生成に使うモデル。 */
   private final ChatModel chatModel;
+
+  /** チャット記憶。 */
   private final ChatMemory chatMemory;
+
+  /** ツール一覧。 */
   private final Tools tools;
+
+  /** Google予定表ツール一覧。 */
   private final GoogleCalendarTools googleCalendarTools;
+
+  /** タスクツール一覧。 */
   private final TaskTools taskTools;
+
+  /** 日次案内ツール一覧。 */
   private final BriefingTools briefingTools;
+
+  /** フィードツール一覧。 */
   private final FeedTools feedTools;
+
+  /** リマインダーツール一覧。 */
   private final ReminderTools reminderTools;
+
+  /** 検索ツール一覧。 */
   private final SearchTools searchTools;
+
+  /** Web検索ツール一覧。 */
   private final WebSearchTools webSearchTools;
+
+  /** 音通知通知ツール一覧。 */
   private final SoundNotificationTools soundNotificationTools;
+
+  /** Bluesky投稿ツール一覧。 */
   private final BlueskyPostTools blueskyPostTools;
+
+  /** 要約ツール一覧。 */
   private final dev.mikoto2000.rei.summarize.SummaryTools summaryTools;
+
+  /** URL内容取得ツール一覧。 */
   private final UrlContentFetchTools urlContentFetchTools;
+
+  /** テキストツール一覧。 */
   private final TextTools textTools;
+
+  /** 時刻の取得元ツール一覧。 */
   private final ClockTools clockTools;
+
+  /** 実行予定の管理ツール一覧。 */
   private final SchedulerTools schedulerTools;
+
+  /** 会話履歴ツール一覧。 */
   private final ConversationHistoryTools conversationHistoryTools;
+
+  /** 実行環境文脈対話の補助。 */
   private final RuntimeContextAdvisor runtimeContextAdvisor;
+
+  /** 作業中集合対話の補助。 */
   private final WorkingSetAdvisor workingSetAdvisor;
+
+  /** タスク状態対話の補助。 */
   private final TaskStateAdvisor taskStateAdvisor;
+
+  /** 直近変更一覧対話の補助。 */
   private final RecentChangesAdvisor recentChangesAdvisor;
+
+  /** ファイル要約対話の補助。 */
   private final FileSummaryAdvisor fileSummaryAdvisor;
+
+  /** 関連ファイル関連図対話の補助。 */
   private final RelatedFileGraphAdvisor relatedFileGraphAdvisor;
+
+  /** 再開用の記録対話の補助。 */
   private final CheckpointAdvisor checkpointAdvisor;
+
+  /** 操作計画対話の補助。 */
   private final ActionPlanAdvisor actionPlanAdvisor;
+
+  /** 停滞対話の補助。 */
   private final StagnationAdvisor stagnationAdvisor;
+
+  /** タスク状態ツール一覧。 */
   private final TaskStateTools taskStateTools;
+
+  /** 言語モデル設定。 */
   private final LlmProperties llmProperties;
+
+  /** エージェントスキル対話の補助。 */
   private final ObjectProvider<AgentSkillAdvisor> agentSkillAdvisor;
+
+  /** ツールイベント完了時の処理提供元。 */
   private final ObjectProvider<ToolEventCallbackProvider> toolEventCallbackProvider;
 
+  /** 機能の組み立てで用いる既定チャット選択可能な設定を返す。 */
   private OpenAiChatOptions.Builder defaultChatOptions() {
     var options = OpenAiChatOptions.builder();
     if (chatModel.getOptions() instanceof OpenAiChatOptions defaults
@@ -235,6 +344,7 @@ public class AiConfiguration {
     return options;
   }
 
+  /** 機能の組み立てで用いるモデルへ対話を依頼する窓口を返す。 */
   @Bean
   public ChatClient chatClient() {
     List<Advisor> advisors = new ArrayList<>();

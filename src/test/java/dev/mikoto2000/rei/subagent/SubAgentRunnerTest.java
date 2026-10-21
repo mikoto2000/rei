@@ -43,8 +43,10 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
+/** 補助エージェント実行の担当の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentRunnerTest {
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void localFailureReturnsAndPublishesItsCategoryToTheParentRun() throws Exception {
     var runner = runner(p -> Flux.error(new IllegalStateException("password=secret")), "2s");
@@ -64,6 +66,7 @@ class SubAgentRunnerTest {
     }
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void durableChildCancellationCanResumeUnderTheSameHumanWithConsumedCallsRetained()
       throws Exception {
@@ -93,10 +96,12 @@ class SubAgentRunnerTest {
     var reservations = new AtomicInteger();
     var shared =
         new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation() {
+          /** {@code tryReserve} の条件を再現するための補助情報を返す。 */
           public boolean tryReserve() {
             return reservations.incrementAndGet() <= 5;
           }
 
+          /** {@code remaining} の条件を再現するための補助情報を返す。 */
           public int remaining() {
             return 5 - reservations.get();
           }
@@ -141,6 +146,7 @@ class SubAgentRunnerTest {
     assertThat(calls.get()).isEqualTo(1);
   }
 
+  /** 補助エージェントへの委譲で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void durableToolFailureIsUnknownAndCannotBeAutomaticallyResumed() throws Exception {
     var source = new org.sqlite.SQLiteDataSource();
@@ -166,10 +172,12 @@ class SubAgentRunnerTest {
             () ->
                 List.of(
                     new ToolCallback() {
+                      /** 検証用に、補助エージェントへの委譲で参照するツール定義を返す。 */
                       public ToolDefinition getToolDefinition() {
                         return callback().getToolDefinition();
                       }
 
+                      /** 検証用に、補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
                       public String call(String input) {
                         toolCalls.incrementAndGet();
                         throw new IllegalStateException("unknown transport result");
@@ -179,10 +187,12 @@ class SubAgentRunnerTest {
     var parent = new AgentRunContext("parent", "session", directory, "project");
     var shared =
         new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation() {
+          /** {@code tryReserve} の条件を再現するための補助情報を返す。 */
           public boolean tryReserve() {
             return true;
           }
 
+          /** {@code remaining} の条件を再現するための補助情報を返す。 */
           public int remaining() {
             return 3;
           }
@@ -221,6 +231,7 @@ class SubAgentRunnerTest {
     lifecycle.close();
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void taskTrackingUsesTheExistingChildRunAndCommonCancellation() throws Exception {
     var runs = new dev.mikoto2000.rei.application.run.RunRegistry(Clock.systemUTC());
@@ -264,6 +275,7 @@ class SubAgentRunnerTest {
     service.close();
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void commonPolicyBlocksChildToolBeforeInvocation() throws Exception {
     var runner =
@@ -298,20 +310,41 @@ class SubAgentRunnerTest {
                     && "PermissionRequired".equals(failed.error().errorType()));
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
+
+  /** 通知された出来事と順序を検証するための記録。 */
   final List<AgentEvent> events = new CopyOnWriteArrayList<>();
+
+  /** 検証に使うキャンセル。 */
   final CommandCancellationService cancellation = new CommandCancellationService();
+
+  /** 検証に使うツール呼び出し一覧。 */
   final AtomicInteger toolCalls = new AtomicInteger();
+
+  /** 検証に使うデータ形式。 */
   String schema;
+
+  /** 検証に使う根拠検証。 */
   boolean evidenceValidation;
+
+  /** 検証に使う必須呼び出し回数機能の構成。 */
   String requiredCallsConfiguration = "";
+
+  /** 検証に使う最大修復一覧。 */
   int maxRepairs;
+
+  /** 検証に使う最大手順一覧。 */
   int maxSteps = 2;
+
+  /** 検証に使う判断基準。 */
   final SubAgentToolPolicy policy =
       new SubAgentToolPolicy(Set.of("readMultiFile", "runCommand", "delegateTask"));
 
+  /** {@code callback} の条件を再現するための補助情報を返す。 */
   ToolCallback callback() {
     return new ToolCallback() {
+      /** 検証用に、補助エージェントへの委譲で参照するツール定義を返す。 */
       public ToolDefinition getToolDefinition() {
         return ToolDefinition.builder()
             .name("readMultiFile")
@@ -320,6 +353,7 @@ class SubAgentRunnerTest {
             .build();
       }
 
+      /** 検証用に、補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
       public String call(String input) {
         toolCalls.incrementAndGet();
         return "private intermediate result";
@@ -327,11 +361,13 @@ class SubAgentRunnerTest {
     };
   }
 
+  /** 検証で使用する実行の担当を、指定された条件に合わせて用意する。 */
   SubAgentRunner runner(Function<Prompt, Flux<ChatResponse>> response, String timeout)
       throws Exception {
     return runner(response, timeout, () -> List.of(callback()));
   }
 
+  /** 検証で使用する実行の担当を、指定された条件に合わせて用意する。 */
   SubAgentRunner runner(
       Function<Prompt, Flux<ChatResponse>> response,
       String timeout,
@@ -344,6 +380,7 @@ class SubAgentRunnerTest {
         ignored -> ToolCallingChatOptions.builder().model("inherited-model").build());
   }
 
+  /** 検証で使用する実行の担当を、指定された条件に合わせて用意する。 */
   SubAgentRunner runner(
       Function<Prompt, Flux<ChatResponse>> response,
       String timeout,
@@ -365,10 +402,12 @@ class SubAgentRunnerTest {
     registry.reload();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new AssertionError("must use cancellable streaming");
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             return response.apply(prompt);
           }
@@ -385,10 +424,12 @@ class SubAgentRunnerTest {
         Clock.systemUTC());
   }
 
+  /** {@code answer} の条件を再現するための補助情報を返す。 */
   ChatResponse answer(String text) {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
   }
 
+  /** 修復について、元の検証エラーを保持することを確認する。 */
   @Test
   void repairRetainsOriginalValidationErrorAndStopsAtConfiguredLimit() throws Exception {
     maxRepairs = 1;
@@ -410,6 +451,7 @@ class SubAgentRunnerTest {
     assertThat(result.validationErrors()).isEqualTo(result.validationHistory().getLast());
   }
 
+  /** 履歴を維持することを確認する。 */
   @Test
   void repairedResultKeepsHistoryAndSharesOriginalStepBudget() throws Exception {
     maxRepairs = 3;
@@ -444,6 +486,7 @@ class SubAgentRunnerTest {
     assertThat(exhausted.repairAttempts()).isZero();
   }
 
+  /** 補助エージェントへの委譲で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void repairDoesNotRetryProviderFailureAndTimeoutPreservesOriginalError() throws Exception {
     maxRepairs = 1;
@@ -468,6 +511,7 @@ class SubAgentRunnerTest {
     assertThat(timed.validationHistory()).hasSize(1);
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void evidenceValidationRejectsUnperformedWorkWithoutReturningRawAnswer() throws Exception {
     evidenceValidation = true;
@@ -481,6 +525,7 @@ class SubAgentRunnerTest {
     assertThat(events.getLast().type()).isEqualTo(AgentEventType.SUBAGENT_FAILED);
   }
 
+  /** 修復について、ツール受付記録一覧を保持することを確認する。 */
   @Test
   void repairPreservesToolReceiptsWithoutReplayingCompletedCalls() throws Exception {
     maxRepairs = 1;
@@ -540,6 +585,7 @@ class SubAgentRunnerTest {
     assertThat(calls).hasValue(3);
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellingDuringRepairDisposesUpstreamAndKeepsOriginalDiagnostics() throws Exception {
     maxRepairs = 1;
@@ -573,6 +619,7 @@ class SubAgentRunnerTest {
     assertThat(calls).hasValue(2);
   }
 
+  /** 補助エージェントへの委譲で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void evidenceReceiptsAreCapturedAfterActualToolAndValidatedBeforeCompletion() throws Exception {
     evidenceValidation = true;
@@ -626,6 +673,7 @@ class SubAgentRunnerTest {
     assertThat(calls).hasValue(2);
   }
 
+  /** 補助エージェントへの委譲で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void exactArgumentContractsAreValidatedOnActualRunnerCalls() throws Exception {
     evidenceValidation = true;
@@ -686,6 +734,7 @@ class SubAgentRunnerTest {
     }
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidJsonAndInvalidEnvelopeFailWithoutRetryOrRawOutput() throws Exception {
     for (String raw :
@@ -712,6 +761,7 @@ class SubAgentRunnerTest {
     }
   }
 
+  /** 上限内に収めた修復履歴を利用することを確認する。 */
   @Test
   void outputContractRejectsContradictorySuccessAndUsesBoundedRepairHistory() throws Exception {
     evidenceValidation = true;
@@ -764,10 +814,12 @@ class SubAgentRunnerTest {
             () ->
                 List.of(
                     new ToolCallback() {
+                      /** 検証用に、補助エージェントへの委譲で参照するツール定義を返す。 */
                       public ToolDefinition getToolDefinition() {
                         return callback().getToolDefinition();
                       }
 
+                      /** 検証用に、補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
                       public String call(String input) {
                         toolCalls.incrementAndGet();
                         return "{\"found\":false}";
@@ -785,6 +837,7 @@ class SubAgentRunnerTest {
     assertThat(toolCalls).hasValue(1);
   }
 
+  /** 補助エージェントへの委譲で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void validEnvelopeIsReturnedThroughDelegationWithJsonInstructions() throws Exception {
     var runner =
@@ -803,6 +856,7 @@ class SubAgentRunnerTest {
     assertThat(result.validationErrors()).isEmpty();
   }
 
+  /** 不正な結果を受け付けないことを確認する。 */
   @Test
   void specificSchemaIsInPromptAndRejectsInvalidResultBeforeCompletion() throws Exception {
     schema = SubAgentResultValidatorTest.REVIEW_SCHEMA;
@@ -838,6 +892,7 @@ class SubAgentRunnerTest {
     }
   }
 
+  /** 補助エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void childCannotExpandMcpReadOnlyAuthority() throws Exception {
     var runner =
@@ -865,6 +920,7 @@ class SubAgentRunnerTest {
     }
   }
 
+  /** 子の実行について、Web依頼を受け付けた入力元を保持することを確認する。 */
   @Test
   void childPreservesWebRequestSource() throws Exception {
     var runner =
@@ -886,6 +942,7 @@ class SubAgentRunnerTest {
     }
   }
 
+  /** {@code tool} の条件を再現するための補助情報を返す。 */
   ChatResponse tool(String name) {
     return new ChatResponse(
         List.of(
@@ -897,6 +954,7 @@ class SubAgentRunnerTest {
                     .build())));
   }
 
+  /** 補助エージェントへの委譲で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void reviewerHasIndependentHistoryAndRestrictedToolsAndCorrelatedEvents() throws Exception {
     List<Prompt> requests = new CopyOnWriteArrayList<>();
@@ -953,10 +1011,12 @@ class SubAgentRunnerTest {
         .isNotEqualTo("parent");
   }
 
+  /** 補助エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void childOptionsReplaceAmbientToolsAndContextWithoutChangingProviderOptions() throws Exception {
     ToolCallback ambient =
         new ToolCallback() {
+          /** 検証用に、補助エージェントへの委譲で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("runCommand")
@@ -965,6 +1025,7 @@ class SubAgentRunnerTest {
                 .build();
           }
 
+          /** 検証用に、補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             throw new AssertionError("ambient tool must never execute");
           }
@@ -1006,6 +1067,7 @@ class SubAgentRunnerTest {
     assertThat(toolCalls).hasValue(0);
   }
 
+  /** 補助エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void rawToolsCannotBypassTheChildToolAllowlist() throws Exception {
     var configured =
@@ -1029,6 +1091,7 @@ class SubAgentRunnerTest {
     assertThat(toolCalls).hasValue(0);
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void maxStepsBoundsLlmCalls() throws Exception {
     AtomicInteger calls = new AtomicInteger();
@@ -1044,6 +1107,7 @@ class SubAgentRunnerTest {
     assertThat(calls.get()).isEqualTo(2);
   }
 
+  /** 補助エージェントへの委譲で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void timeoutDisposesActiveUpstream() throws Exception {
     CountDownLatch disposed = new CountDownLatch(1);
@@ -1053,6 +1117,7 @@ class SubAgentRunnerTest {
     assertThat(disposed.await(1, TimeUnit.SECONDS)).isTrue();
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void parentCancellationStopsChildWithoutReplacingParentSubscription() throws Exception {
     CountDownLatch started = new CountDownLatch(1);
@@ -1089,6 +1154,7 @@ class SubAgentRunnerTest {
     }
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unknownAgentFailureAndUnrequestedCallsFailClosed() throws Exception {
     var runner = runner(p -> Flux.just(tool("runCommand")), "2s");
@@ -1100,6 +1166,7 @@ class SubAgentRunnerTest {
     assertThat(events).anyMatch(e -> e.type() == AgentEventType.SUBAGENT_FAILED);
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void eventsDoNotCopySecretsOrUnboundedTask() throws Exception {
     var runner = runner(p -> Flux.error(new IllegalStateException("password=hidden")), "2s");
@@ -1107,16 +1174,19 @@ class SubAgentRunnerTest {
     assertThat(events.toString()).doesNotContain("hidden").doesNotContain("x".repeat(121));
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void timeoutInterruptsToolWorkerAndDoesNotStartNextIteration() throws Exception {
     CountDownLatch interrupted = new CountDownLatch(1);
     AtomicInteger calls = new AtomicInteger();
     ToolCallback blocking =
         new ToolCallback() {
+          /** 検証用に、補助エージェントへの委譲で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return callback().getToolDefinition();
           }
 
+          /** 検証用に、補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             try {
               new CountDownLatch(1).await();
@@ -1141,6 +1211,7 @@ class SubAgentRunnerTest {
     assertThat(calls).hasValue(1);
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void siblingsHaveSeparateRunIdsAndIndividualCancellation() throws Exception {
     CountDownLatch started = new CountDownLatch(2);
@@ -1173,9 +1244,11 @@ class SubAgentRunnerTest {
     assertThat(runner.cancel(ids.getFirst())).isFalse();
   }
 
+  /** {@code reservation} の条件を再現するための補助情報を返す。 */
   dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation(
       int limit, AtomicInteger used) {
     return new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation() {
+      /** {@code tryReserve} の条件を再現するための補助情報を返す。 */
       public boolean tryReserve() {
         for (; ; ) {
           int value = used.get();
@@ -1184,12 +1257,14 @@ class SubAgentRunnerTest {
         }
       }
 
+      /** {@code remaining} の条件を再現するための補助情報を返す。 */
       public int remaining() {
         return Math.max(0, limit - used.get());
       }
     };
   }
 
+  /** 引き継いだ予算について、子の実行モデルを受け付けないことを確認する。 */
   @Test
   void inheritedBudgetRejectsChildModelBeforeAnyInvocation() throws Exception {
     var calls = new AtomicInteger();
@@ -1208,6 +1283,7 @@ class SubAgentRunnerTest {
     assertThat(used).hasValue(0);
   }
 
+  /** 元の診断情報を保持することを確認する。 */
   @Test
   void inheritedBudgetChargesRepairAndRetainsOriginalDiagnostics() throws Exception {
     maxRepairs = 1;
@@ -1229,6 +1305,7 @@ class SubAgentRunnerTest {
     assertThat(result.validationHistory()).hasSize(1);
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void actualParentChatDelegationChargesBothModelsToDurableGoalBudget() throws Exception {
     var childCalls = new AtomicInteger();
@@ -1248,14 +1325,17 @@ class SubAgentRunnerTest {
         .doesNotContain("toolContext", "reservation");
     ChatModel parentModel =
         new ChatModel() {
+          /** 検証用に、補助エージェントへの委譲で参照する選択可能な設定を返す。 */
           public ToolCallingChatOptions getOptions() {
             return ToolCallingChatOptions.builder().build();
           }
 
+          /** 検証用に、補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             parentCalls.incrementAndGet();
             return Flux.just(
@@ -1308,10 +1388,12 @@ class SubAgentRunnerTest {
     String run = goals.beginAttempt(claim);
     var reservation =
         new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation() {
+          /** {@code tryReserve} の条件を再現するための補助情報を返す。 */
           public boolean tryReserve() {
             return goals.reserveLlm(claim);
           }
 
+          /** {@code remaining} の条件を再現するための補助情報を返す。 */
           public int remaining() {
             return goals.remainingLlm(claim);
           }
@@ -1329,6 +1411,7 @@ class SubAgentRunnerTest {
     assertThat(goals.reserveLlm(claim)).isFalse();
   }
 
+  /** 補助エージェントへの委譲で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void parallelChildrenAtomicallyShareOneRemainingCall() throws Exception {
     var calls = new AtomicInteger();
@@ -1361,6 +1444,7 @@ class SubAgentRunnerTest {
     }
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void inheritedBudgetChargesEveryChildToolCycleBeforeCallingModel() throws Exception {
     var calls = new AtomicInteger();
@@ -1389,6 +1473,7 @@ class SubAgentRunnerTest {
     assertThat(used).hasValue(1);
   }
 
+  /** 並列ツール呼び出し時の文脈について、同一永続化された目標予約を利用することを確認する。 */
   @Test
   void parallelToolContextUsesTheSameDurableGoalReservationAcrossWorkers() throws Exception {
     var calls = new AtomicInteger();
@@ -1419,10 +1504,12 @@ class SubAgentRunnerTest {
     goals.beginAttempt(claim);
     var reservation =
         new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation() {
+          /** {@code tryReserve} の条件を再現するための補助情報を返す。 */
           public boolean tryReserve() {
             return goals.reserveLlm(claim);
           }
 
+          /** {@code remaining} の条件を再現するための補助情報を返す。 */
           public int remaining() {
             return goals.remainingLlm(claim);
           }

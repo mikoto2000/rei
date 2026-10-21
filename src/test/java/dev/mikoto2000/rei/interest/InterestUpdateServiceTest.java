@@ -11,13 +11,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 関心更新サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class InterestUpdateServiceTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir java.nio.file.Path tempDir;
 
+  /** 検証に使うサービス。 */
   InterestUpdateService service;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setUp() {
     service =
@@ -27,6 +31,7 @@ class InterestUpdateServiceTest {
 
   // --- existsByTopicWithinHours ---
 
+  /** 存在別話題範囲内時間数について、有効を返すことを確認する。 */
   @Test
   void existsByTopicWithinHours_returnsTrueWhenRecordExistsWithinLimit() {
     // 1時間前に保存されたレコード（制限: 2時間）
@@ -34,6 +39,7 @@ class InterestUpdateServiceTest {
     assertTrue(service.existsByTopicWithinHours("Neovim", 2));
   }
 
+  /** 存在別話題範囲内時間数について、無効を返すことを確認する。 */
   @Test
   void existsByTopicWithinHours_returnsFalseWhenRecordExistsOutsideLimit() {
     // 3時間前に保存されたレコード（制限: 2時間）
@@ -41,11 +47,13 @@ class InterestUpdateServiceTest {
     assertFalse(service.existsByTopicWithinHours("Neovim", 2));
   }
 
+  /** 存在別話題範囲内時間数について、無効を返すことを確認する。 */
   @Test
   void existsByTopicWithinHours_returnsFalseWhenNoRecord() {
     assertFalse(service.existsByTopicWithinHours("NonExistentTopic", 24));
   }
 
+  /** 存在別話題範囲内時間数について、無効を返すことを確認する。 */
   @Test
   void existsByTopicWithinHours_returnsFalseForDifferentTopic() {
     saveWithCreatedAt("Neovim", "query-3", OffsetDateTime.now(ZoneOffset.UTC).minusHours(1));
@@ -53,6 +61,7 @@ class InterestUpdateServiceTest {
   }
 
   // ヘルパー: 任意の createdAt で保存する
+  /** 検証用に、後から参照できるよう、付き作成日時を保存する。 */
   private void saveWithCreatedAt(String topic, String searchQuery, OffsetDateTime createdAt) {
     service.saveWithCreatedAt(
         topic, "reason", searchQuery, "summary", java.util.List.of(), createdAt);
@@ -60,6 +69,7 @@ class InterestUpdateServiceTest {
 
   // --- listRecentSearchQueries ---
 
+  /** 一覧直近検索検索条件一覧について、検索条件一覧範囲内日数を返すことを確認する。 */
   @Test
   void listRecentSearchQueries_returnsQueriesWithinDays() {
     saveWithCreatedAt("Topic A", "query-within", OffsetDateTime.now(ZoneOffset.UTC).minusDays(1));
@@ -71,6 +81,7 @@ class InterestUpdateServiceTest {
     assertFalse(result.contains("query-outside"));
   }
 
+  /** 関心の管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void listRecentSearchQueries_deduplicatesQueries() {
     // 同一クエリを 2 回保存しようとしても UNIQUE 制約で 1 件になる
@@ -81,6 +92,7 @@ class InterestUpdateServiceTest {
     assertEquals(1, result.stream().filter(q -> q.equals("unique-query")).count());
   }
 
+  /** 一覧直近検索検索条件一覧について、空のを返すことを確認する。 */
   @Test
   void listRecentSearchQueries_returnsEmptyWhenNoRecentQueries() {
     saveWithCreatedAt("Topic A", "old-query", OffsetDateTime.now(ZoneOffset.UTC).minusDays(30));

@@ -29,25 +29,42 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/** 経験の記録Federated検索の結果と状態の契約を検証するテスト。 */
 class EpisodeFederatedSearchTest {
+  /** 検証に使うプロジェクト。 */
   final String project = "11111111-1111-1111-1111-111111111111";
+
+  /** 検証に使う経験の記録一覧。 */
   EpisodeRepository episodes = mock(EpisodeRepository.class);
+
+  /** 検証に使う記憶。 */
   MemoryRepository memory = mock(MemoryRepository.class);
+
+  /** 検証に使う履歴。 */
   ConversationHistorySearchService history = mock(ConversationHistorySearchService.class);
+
+  /** 検証に使うやり取り一覧。 */
   ConversationTurnStore turns = mock(ConversationTurnStore.class);
+
+  /** 検証に使う作業。 */
   WorkContextService work = mock(WorkContextService.class);
+
+  /** 検証に使うサービス。 */
   EpisodeSearchService service = new EpisodeSearchService(episodes, memory, history, turns, work);
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   HistorySearchRequest request() {
     return new HistorySearchRequest(
         "CLI", project, null, HistorySearchScope.CURRENT_PROJECT_ONLY, "all", null, null, null, 8);
   }
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     when(work.current(project)).thenReturn(Optional.empty());
   }
 
+  /** {@code raw} の条件を再現するための補助情報を返す。 */
   ConversationSearchResult raw() {
     return new ConversationSearchResult(
         "s",
@@ -62,6 +79,7 @@ class EpisodeFederatedSearchTest {
         1);
   }
 
+  /** 過去の経験の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void rawConversationsAreSearchableWithoutAnySleepOrEpisode() {
     when(history.search(any(HistorySearchRequest.class))).thenReturn(List.of(raw()));
@@ -71,6 +89,7 @@ class EpisodeFederatedSearchTest {
     verify(episodes, never()).checkpoint(anyString());
   }
 
+  /** 過去の経験の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void candidatesOmitClaimBodiesUntilDetailIsRequested() {
     var episode =
@@ -108,6 +127,7 @@ class EpisodeFederatedSearchTest {
     assertTrue(service.detail("e", project).toString().contains("detailed isolation reasoning"));
   }
 
+  /** 過去の経験の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disablingMemoryLeavesRawHistoryButNeverReadsSavedMemory() {
     when(history.search(any(HistorySearchRequest.class))).thenReturn(List.of(raw()));
@@ -115,9 +135,11 @@ class EpisodeFederatedSearchTest {
         new dev.mikoto2000.rei.memory.configuration.MemoryProperties(
             false, 0, 0, 0, 0, 0, 0, null));
     assertEquals("conversation", service.search(request(), null).getFirst().kind());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(episodes, memory, turns);
   }
 
+  /** 実際の直近会話話題を利用することを確認する。 */
   @Test
   void ambiguousQuestionUsesActualRecentSessionTopic() {
     var old =

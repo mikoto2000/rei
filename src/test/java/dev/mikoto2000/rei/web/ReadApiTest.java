@@ -22,7 +22,9 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+/** 読み取りAPIの結果と状態の契約を検証するテスト。 */
 class ReadApiTest {
+  /** Web APIによる操作で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failuresAndMalformedJsonUseSafeCommonErrors() throws Exception {
     var feeds = mock(FeedService.class);
@@ -46,6 +48,7 @@ class ReadApiTest {
         .andExpect(jsonPath("$.message").value("Invalid request"));
   }
 
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void readsUseExplicitDtosAndDoNotExposeWritesOrFilesystem() throws Exception {
     var feeds = mock(FeedService.class);
@@ -86,6 +89,7 @@ class ReadApiTest {
     mvc.perform(post("/api/v1/feed")).andExpect(status().isMethodNotAllowed());
     mvc.perform(post("/api/v1/search").contentType("application/json").content("{\"query\":\" \"}"))
         .andExpect(status().isBadRequest());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(service.searches());
   }
 }

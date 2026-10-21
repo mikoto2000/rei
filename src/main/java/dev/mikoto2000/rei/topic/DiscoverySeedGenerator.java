@@ -3,13 +3,17 @@ package dev.mikoto2000.rei.topic;
 import java.util.LinkedHashSet;
 import java.util.List;
 
+/** 利用先の検出生成の初期値の内容を生成する。 */
 public class DiscoverySeedGenerator {
+  /** この機能の動作設定。 */
   private final TopicGeneratorProperties properties;
 
+  /** 指定された値や利用先を使って、DiscoverySeedGeneratorを初期化する。 */
   public DiscoverySeedGenerator(TopicGeneratorProperties properties) {
     this.properties = properties;
   }
 
+  /** 指定された条件に従って、依頼された内容を生成する。 */
   public List<String> generate(TopicGenerationContext context) {
     LinkedHashSet<String> seeds = new LinkedHashSet<>();
     context.workingSet().stream()
@@ -29,6 +33,7 @@ public class DiscoverySeedGenerator {
     return seeds.stream().limit(properties.getDiscovery().getMaxSeeds()).toList();
   }
 
+  /** 話題の管理で用いる生成の初期値テキストを返す。 */
   private String seedText(String value) {
     if (value == null) return "";
     String safe = value.replace('\\', '/');

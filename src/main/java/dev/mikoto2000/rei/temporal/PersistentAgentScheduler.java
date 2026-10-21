@@ -23,11 +23,23 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
 /**
- * Persistent bounded continuations. A claimed action is never automatically retried after uncertain
- * execution.
+ * 時刻と期間の解釈に必要な保存されるエージェント実行予定の管理を扱う。
+ *
+ * <p>Persistent bounded continuations. A claimed action is never automatically retried after
+ * uncertain execution.
  */
 @Component
 public class PersistentAgentScheduler implements AgentScheduler {
+  /**
+   * 時刻と期間の解釈で受け渡す項目を表す。
+   *
+   * @param task タスク
+   * @param projectId 所属プロジェクトの識別子
+   * @param projectRoot 作業対象のルートディレクトリ
+   * @param status 状態
+   * @param runId 実行の識別子
+   * @param outcome 最終結果
+   */
   public record Entry(
       ScheduledAgentTask task,
       String projectId,
@@ -36,24 +48,43 @@ public class PersistentAgentScheduler implements AgentScheduler {
       String runId,
       String outcome) {}
 
+  /**
+   * 時刻と期間の解釈で受け渡す履歴を表す。
+   *
+   * @param status 状態
+   * @param timestamp 記録日時
+   * @param detail 詳細
+   */
   public record History(String status, Instant timestamp, String detail) {}
 
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 一連の更新。 */
   private final TransactionTemplate transaction;
+
+  /** イベント続きの取得位置一覧。 */
   private dev.mikoto2000.rei.storage.SqliteEventCursorStore eventCursors;
+
+  /** 保存対象データ一覧。 */
   private dev.mikoto2000.rei.storage.StorageObjectRegistry storageObjects;
 
+  /** 時刻と期間の解釈で使用するイベント続きの取得位置保存先を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setEventCursorStore(dev.mikoto2000.rei.storage.SqliteEventCursorStore cursors) {
     eventCursors = cursors;
   }
 
+  /** 時刻と期間の解釈で使用する保存対象データ一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setStorageObjects(dev.mikoto2000.rei.storage.StorageObjectRegistry objects) {
     storageObjects = objects;
   }
 
+  /** 指定された値や利用先を使って、PersistentAgentSchedulerを初期化する。 */
   public PersistentAgentScheduler(
       @Qualifier("memoryConsolidationDataSource") DataSource source, Clock clock) {
     db = JdbcClient.create(source);
@@ -92,6 +123,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .update();
   }
 
+  /** 行。 */
   private static final RowMapper<Entry> ROW =
       (rs, n) ->
           new Entry(
@@ -107,6 +139,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
               rs.getString("run"),
               rs.getString("outcome"));
 
+  /** 指定された時刻や条件で実行できるよう、変更後を予約する。 */
   @Override
   public ScheduledAgentTask scheduleAfter(Duration duration, String action, String conversationId) {
     if (duration == null || duration.isNegative() || duration.compareTo(Duration.ofDays(366)) > 0)
@@ -114,6 +147,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
     return scheduleAt(clock.instant().plus(duration), action, conversationId);
   }
 
+  /** 指定された時刻や条件で実行できるよう、日時を予約する。 */
   @Override
   public ScheduledAgentTask scheduleAt(Instant executeAt, String action, String conversationId) {
     var owner = AgentRunScope.current();
@@ -123,6 +157,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         || !owner.conversationId().equals(conversationId))
       throw new IllegalArgumentException(
           "Schedule requires the current owning project and exact conversationId");
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (action == null || action.isBlank() || action.length() > 4096)
       throw new IllegalArgumentException("Action must contain 1..4096 characters");
     if (executeAt == null
@@ -156,8 +191,15 @@ public class PersistentAgentScheduler implements AgentScheduler {
     return task;
   }
 
+  /**
+   * 時刻と期間の解釈で受け渡す実行間隔を表す。
+   *
+   * @param interval 実行間隔
+   * @param remaining 残量
+   */
   public record Interval(Duration interval, int remaining) {}
 
+  /** 時刻と期間の解釈で用いる実行間隔を返す。 */
   public Optional<Interval> interval(String project, String id) {
     get(project, id);
     return db.sql("SELECT interval_ms,remaining FROM agent_schedule_intervals WHERE id=?")
@@ -166,7 +208,11 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .optional();
   }
 
-  /** Bounded repeat; successful occurrences coalesce missed time from completion. */
+  /**
+   * 指定された時刻や条件で実行できるよう、実行間隔を予約する。
+   *
+   * <p>Bounded repeat; successful occurrences coalesce missed time from completion.
+   */
   public ScheduledAgentTask scheduleInterval(
       Duration interval, int occurrences, String action, String conversationId) {
     if (interval == null
@@ -185,8 +231,16 @@ public class PersistentAgentScheduler implements AgentScheduler {
         });
   }
 
+  /**
+   * 時刻と期間の解釈で受け渡す定期実行条件を表す。
+   *
+   * @param expression 条件式
+   * @param zone タイムゾーン
+   * @param remaining 残量
+   */
   public record Cron(String expression, String zone, int remaining) {}
 
+  /** 時刻と期間の解釈で用いる定期実行条件を返す。 */
   public Optional<Cron> cron(String project, String id) {
     get(project, id);
     return db.sql("SELECT expression,zone,remaining FROM agent_schedule_crons WHERE id=?")
@@ -195,9 +249,14 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .optional();
   }
 
-  /** Six-field cron at minute granularity; wall clock evaluated in the explicit zone. */
+  /**
+   * 指定された時刻や条件で実行できるよう、定期実行条件を予約する。
+   *
+   * <p>Six-field cron at minute granularity; wall clock evaluated in the explicit zone.
+   */
   public ScheduledAgentTask scheduleCron(
       String expression, String zone, int occurrences, String action, String conversationId) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (expression == null || expression.length() > 256 || !expression.trim().matches("0\\s+.*"))
       throw new IllegalArgumentException("Cron must have six fields and seconds fixed to 0");
     if (zone == null || zone.length() > 128)
@@ -221,6 +280,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         });
   }
 
+  /** 時刻と期間の解釈で用いる次定期実行条件を返す。 */
   private static Instant nextCron(String expression, String zone, Instant after) {
     var next =
         org.springframework.scheduling.support.CronExpression.parse(expression)
@@ -228,6 +288,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
     return next == null ? null : next.toInstant();
   }
 
+  /** 指定された時刻や条件で実行できるよう、次を予約する。 */
   private void scheduleNext(String id, Instant due, String reason) {
     db.sql("UPDATE agent_schedules SET status='SCHEDULED',due=?,run=NULL WHERE id=?")
         .params(due.toEpochMilli(), id)
@@ -235,6 +296,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
     history(id, "SCHEDULED", reason);
   }
 
+  /** 終端イベント一覧。 */
   private static final Set<AgentEventType> TERMINAL_EVENTS =
       Set.of(
           AgentEventType.GITHUB_PR_UPDATED,
@@ -252,6 +314,15 @@ public class PersistentAgentScheduler implements AgentScheduler {
           AgentEventType.DEPENDENCY_FAILED,
           AgentEventType.DEPENDENCY_CANCELLED);
 
+  /**
+   * 時刻と期間の解釈で受け渡すイベント実行条件を表す。
+   *
+   * @param sourceRunId 取得元実行の識別子
+   * @param type 種別
+   * @param expiresAt 有効期限
+   * @param activatedAt activated日時
+   * @param matchedEventId 一致したイベントの識別子
+   */
   public record EventTrigger(
       String sourceRunId,
       AgentEventType type,
@@ -259,6 +330,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
       Long activatedAt,
       String matchedEventId) {}
 
+  /** 時刻と期間の解釈で用いるイベント実行条件を返す。 */
   public Optional<EventTrigger> eventTrigger(String project, String id) {
     get(project, id);
     return db.sql("SELECT * FROM agent_schedule_events WHERE id=?")
@@ -277,6 +349,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .optional();
   }
 
+  /** 指定された時刻や条件で実行できるよう、通知時イベントを予約する。 */
   public ScheduledAgentTask scheduleOnEvent(
       String sourceRun,
       AgentEventType type,
@@ -304,7 +377,11 @@ public class PersistentAgentScheduler implements AgentScheduler {
         });
   }
 
-  /** Event facts make an activated wait due; no model or external action executes here. */
+  /**
+   * 時刻と期間の解釈で用いるイベント取得元を返す。
+   *
+   * <p>Event facts make an activated wait due; no model or external action executes here.
+   */
   private static String eventSource(AgentEvent event) {
     if (event.type().name().startsWith("GITHUB_")) {
       if (!(event.payload() instanceof dev.mikoto2000.rei.event.GitHubLifecyclePayload payload)
@@ -332,10 +409,12 @@ public class PersistentAgentScheduler implements AgentScheduler {
     return dependency.dependencyId();
   }
 
+  /** 時刻と期間の解釈に関する通知イベントを処理する。 */
   public void signalEvent(AgentEvent event) {
     signalExternalEvent(event, null);
   }
 
+  /** 時刻と期間の解釈に関する通知外部イベントを処理する。 */
   public void signalExternalEvent(AgentEvent event, java.nio.file.Path root) {
     if (event == null
         || !TERMINAL_EVENTS.contains(event.type())
@@ -344,6 +423,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         || event.id().length() > 128
         || event.timestamp().isAfter(clock.instant())) return;
     String source = eventSource(event);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (source == null || source.length() > 128) return;
     // Protect a fact before another DB can publish a durable pointer to it.
     if (storageObjects != null)
@@ -381,6 +461,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         });
   }
 
+  /** 時刻と期間の解釈に関するexpireイベント待機一覧を処理する。 */
   public void expireEventWaits() {
     transaction.executeWithoutResult(
         status -> {
@@ -394,8 +475,16 @@ public class PersistentAgentScheduler implements AgentScheduler {
         });
   }
 
+  /**
+   * 時刻と期間の解釈で受け渡す再送続きの取得位置を表す。
+   *
+   * @param offset 開始位置
+   * @param discardingLine discarding行
+   * @param generation 生成
+   */
   public record ReplayCursor(long offset, boolean discardingLine, long generation) {}
 
+  /** 時刻と期間の解釈で用いる再送続きの取得位置を返す。 */
   ReplayCursor replayCursor(String project) {
     if (eventCursors != null) {
       var cursor = eventCursors.get(project);
@@ -410,6 +499,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .single();
   }
 
+  /** 後から参照できるよう、再送続きの取得位置を保存する。 */
   void saveReplayCursor(String project, ReplayCursor expected, long offset, boolean discard) {
     if (eventCursors != null) {
       if (discard)
@@ -427,6 +517,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .update();
   }
 
+  /** 時刻と期間の解釈で用いる待機中イベントプロジェクト一覧を返す。 */
   List<String> waitingEventProjects(String after) {
     return db.sql(
             "SELECT DISTINCT project FROM agent_schedules WHERE status='WAITING_EVENT' AND project>? ORDER BY project LIMIT 8")
@@ -435,6 +526,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .list();
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   @Override
   public List<ScheduledAgentTask> list() {
     var owner = AgentRunScope.current();
@@ -451,6 +543,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .toList();
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<Entry> list(String project) {
     return db.sql(
             "SELECT * FROM agent_schedules WHERE project=? ORDER BY created DESC,id LIMIT 256")
@@ -459,6 +552,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .list();
   }
 
+  /** 時刻と期間の解釈で用いるタスクページを返す。 */
   public List<Entry> taskPage(
       String project, String root, String session, String after, int limit) {
     if (limit < 1 || limit > 101)
@@ -474,6 +568,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .list();
   }
 
+  /** 時刻と期間の解釈で用いる作成別実行を返す。 */
   public List<Entry> createdByRun(String project, String root, String session, String run) {
     return db.sql(
             "SELECT * FROM agent_schedules WHERE project=:project AND root=:root AND session=:session AND creator_run=:run ORDER BY id LIMIT 101")
@@ -485,6 +580,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .list();
   }
 
+  /** 時刻と期間の解釈で用いるタスク起点を返す。 */
   public Optional<Entry> taskOrigin(String project, String root, String session, String run) {
     return db.sql(
             "SELECT * FROM agent_schedules WHERE project=:project AND root=:root AND session=:session AND (run=:run OR id IN (SELECT id FROM agent_schedule_history WHERE status='RUNNING' AND detail=:run)) ORDER BY id LIMIT 1")
@@ -496,6 +592,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .optional();
   }
 
+  /** 時刻と期間の解釈で用いるcreator実行を返す。 */
   public String creatorRun(String project, String id) {
     get(project, id);
     return db.sql("SELECT creator_run FROM agent_schedules WHERE project=? AND id=?")
@@ -505,6 +602,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .orElse(null);
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Entry get(String project, String id) {
     return db.sql("SELECT * FROM agent_schedules WHERE project=? AND id=?")
         .params(project, id)
@@ -513,7 +611,11 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .orElseThrow(() -> new IllegalArgumentException("Schedule not found in this project"));
   }
 
-  /** Human-facing control only; no Tool exposes activation. */
+  /**
+   * 時刻と期間の解釈に関するactivateを処理する。
+   *
+   * <p>Human-facing control only; no Tool exposes activation.
+   */
   public void activate(String project, String id) {
     // Rewind before activation publishes WAITING_EVENT. A failed activation may
     // cause extra idempotent replay, but cannot skip a newly activated wait.
@@ -544,6 +646,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         });
   }
 
+  /** 対象の実行をキャンセルする。 */
   @Override
   public void cancel(String id) {
     if (id == null || id.isBlank()) throw new IllegalArgumentException("timerId is required");
@@ -560,14 +663,17 @@ public class PersistentAgentScheduler implements AgentScheduler {
         });
   }
 
+  /** 対象の実行をキャンセルする。 */
   public void cancel(String project, String id) {
     cancel(project, id, (Long) null);
   }
 
+  /** 対象の実行をキャンセルする。 */
   public void cancel(String project, String id, long expectedRevision) {
     cancel(project, id, Long.valueOf(expectedRevision));
   }
 
+  /** 対象の実行をキャンセルする。 */
   private void cancel(String project, String id, Long expectedRevision) {
     transaction.executeWithoutResult(
         status -> {
@@ -588,6 +694,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         });
   }
 
+  /** 時刻と期間の解釈に関する状態の遷移を処理する。 */
   private void transition(String project, String id, String from, String to) {
     transaction.executeWithoutResult(
         status -> {
@@ -600,6 +707,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         });
   }
 
+  /** 対象を処理する担当を決めるため、期限の利用権を確保する。 */
   public Optional<Entry> claimDue() {
     expireEventWaits();
     return transaction.execute(
@@ -615,6 +723,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         });
   }
 
+  /** 時刻と期間の解釈において、活動中利用権の確保に該当するか判定する。 */
   public boolean activeClaim(Entry claim) {
     return db.sql(
                 "SELECT COUNT(*) FROM agent_schedules WHERE project=? AND id=? AND run=? AND status='RUNNING'")
@@ -625,7 +734,9 @@ public class PersistentAgentScheduler implements AgentScheduler {
   }
 
   /**
-   * Explicit human reconciliation; unknown effects are never reported as successful or replayed.
+   * 現在の状態と記録を照合し、差異に応じて管理状態を整える。
+   *
+   * <p>Explicit human reconciliation; unknown effects are never reported as successful or replayed.
    */
   public Entry reconcile(String project, String id, String expectedRunId) {
     transaction.executeWithoutResult(
@@ -643,6 +754,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
     return get(project, id);
   }
 
+  /** 終了時に必要な状態を反映し、処理を完了させる。 */
   public void finish(Entry claim, String state, String detail) {
     if (!Set.of("COMPLETED", "FAILED", "CANCELLED").contains(state))
       throw new IllegalArgumentException("Invalid terminal status");
@@ -691,6 +803,7 @@ public class PersistentAgentScheduler implements AgentScheduler {
         });
   }
 
+  /** 過去の記録を、条件に従って参照できる形で返す。 */
   public List<History> history(String project, String id) {
     get(project, id);
     return db.sql("SELECT * FROM agent_schedule_history WHERE id=? ORDER BY sequence")
@@ -704,12 +817,14 @@ public class PersistentAgentScheduler implements AgentScheduler {
         .list();
   }
 
+  /** 過去の記録を、条件に従って参照できる形で返す。 */
   private void history(String id, String status, String detail) {
     db.sql("INSERT INTO agent_schedule_history(id,status,timestamp,detail) VALUES(?,?,?,?)")
         .params(id, status, clock.millis(), preview(detail))
         .update();
   }
 
+  /** 時刻と期間の解釈で用いる事前確認を返す。 */
   static String preview(String text) {
     String safe = CredentialRedactor.redact(text == null ? "" : text);
     return safe.substring(0, Math.min(512, safe.length()));

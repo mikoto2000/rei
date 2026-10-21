@@ -9,9 +9,12 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 進捗繰り返し安全性の結果と状態の契約を検証するテスト。 */
 class ProgressLoopSafetyTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code execution} の条件を再現するための補助情報を返す。 */
   RunExecutionContext execution(OutputLimitRunBudget budget) {
     return new RunExecutionContext(
         "run",
@@ -21,6 +24,7 @@ class ProgressLoopSafetyTest {
         e -> {});
   }
 
+  /** {@code iterate} の条件を再現するため、検証用の操作や状態を扱う。 */
   void iterate(RunExecutionContext e, String value) {
     e.beginIteration();
     e.recordTool(
@@ -31,6 +35,7 @@ class ProgressLoopSafetyTest {
     e.endIteration();
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownDoesNotBecomeProgressOrImmediateStagnationButEventuallyReplans() {
     var e = execution(new OutputLimitRunBudget(2, 100));
@@ -43,6 +48,7 @@ class ProgressLoopSafetyTest {
     assertThat(e.requestReplan()).isNotNull();
   }
 
+  /** 実行の停滞への対処で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void outputSplitsDoNotConsumeStagnationBudget() {
     var budget = new OutputLimitRunBudget(1, 100);
@@ -55,6 +61,7 @@ class ProgressLoopSafetyTest {
     assertThat(e.requestReplan()).isNotNull();
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void acquisitionCannotHideStalledWorkForever() {
     var e = execution(new OutputLimitRunBudget(2, 100));
@@ -63,6 +70,7 @@ class ProgressLoopSafetyTest {
     assertThat(e.requestReplan()).isNotNull();
   }
 
+  /** 実行の停滞への対処で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void unknownRunStopsWithinCommonBudgetAndCannotLoopForever() {
     var e = execution(new OutputLimitRunBudget(2, 100));
@@ -79,6 +87,7 @@ class ProgressLoopSafetyTest {
         .hasMessageContaining("LLM_CALL_BUDGET_EXCEEDED");
   }
 
+  /** 実行の停滞への対処で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void unknownRunStopsAfterDiagnosisWhenCallLimitIsDisabled() {
     var budget = new OutputLimitRunBudget(2, 1, null, 0, 5, false);
@@ -97,6 +106,7 @@ class ProgressLoopSafetyTest {
     assertThat(budget.snapshot().llmCalls()).isEqualTo(48);
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void acquiredInformationDoesNotCompletePlanAndConfirmedWorkResetsWorkStall() {
     var plan = new dev.mikoto2000.rei.core.actionplan.ActionPlan();
@@ -119,6 +129,7 @@ class ProgressLoopSafetyTest {
     assertThat(e.detector().isStagnant()).isFalse();
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void legacyWaitingContinuationWithoutLedgerDoesNotAssumeUnreadInformation() {
     var e = execution(new OutputLimitRunBudget(2, 100));

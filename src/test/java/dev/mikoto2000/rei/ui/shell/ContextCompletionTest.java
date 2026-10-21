@@ -26,10 +26,13 @@ import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.CommandSpec;
 
+/** 文脈完了の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ContextCompletionTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code command} の条件を再現するための補助情報を返す。 */
   CommandLine command() {
     return new CommandLine(CommandSpec.create())
         .addSubcommand("project", new ProjectCommand())
@@ -39,6 +42,7 @@ class ContextCompletionTest {
         .addSubcommand("activity", new dev.mikoto2000.rei.activity.ActivityCommand());
   }
 
+  /** {@code complete} の条件を再現するための補助情報を返す。 */
   List<Candidate> complete(CommandLine cmd, String line, int cursor) {
     var result = new ArrayList<Candidate>();
     new JLineCompletionAdapter(cmd, ReiLineReaderFactory.completionEngine(), () -> root)
@@ -49,10 +53,12 @@ class ContextCompletionTest {
     return result;
   }
 
+  /** {@code values} の条件を再現するための補助情報を返す。 */
   List<String> values(CommandLine cmd, String line) {
     return complete(cmd, line, line.length()).stream().map(Candidate::value).toList();
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void manuallyParsedActionsCompleteWithoutServicesOrLeakingIntoIds() {
     var commands =
@@ -102,6 +108,7 @@ class ContextCompletionTest {
     assertThat(values(cmd, "/llm capture export id ")).isEmpty();
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void documentAndOpmlArgumentsCompletePathsWithoutExecutingImports() throws Exception {
     Files.createFile(root.resolve("report.opml"));
@@ -121,6 +128,7 @@ class ContextCompletionTest {
         .containsExactly("report.opml", "reports" + java.io.File.separator);
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void rootCommandsAndPrefixComeFromLiveRegistry() {
     var cmd = command();
@@ -133,12 +141,14 @@ class ContextCompletionTest {
     assertThat(candidates).extracting(Candidate::value).containsExactly("/plugin");
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void subcommandsComeFromDefinitions() {
     assertThat(values(command(), "/history ")).contains("show", "search", "list");
     assertThat(values(command(), "/project ")).contains("add", "remove", "cd", "list");
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void activityActionsCompleteWithoutExecutingCaptureOrTimeline() {
     var cmd = command();
@@ -161,6 +171,7 @@ class ContextCompletionTest {
     assertThat(values(cmd, "/activity 2026-09-")).isEmpty();
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void behaviorActionsCompleteFromSubcommandDefinition() {
     assertThat(values(command(), "/activity behavior "))
@@ -168,6 +179,7 @@ class ContextCompletionTest {
     assertThat(values(command(), "/activity behavior ev")).containsExactly("evaluate");
   }
 
+  /** ターミナルでの対話で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void summaryDatesCompleteFromSubcommandDefinition() {
     assertThat(values(command(), "/activity summary "))
@@ -182,6 +194,7 @@ class ContextCompletionTest {
     assertThat(values(command(), "/activity context y")).containsExactly("yesterday");
   }
 
+  /** ターミナルでの対話で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void classificationActionsCompleteFromSubcommandDefinition() {
     assertThat(values(command(), "/activity classification "))
@@ -189,6 +202,7 @@ class ContextCompletionTest {
     assertThat(values(command(), "/activity classification su")).containsExactly("suggest-rules");
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void projectCdAndAddOnlyOfferDirectories() throws Exception {
     Files.createDirectory(root.resolve("docs"));
@@ -197,6 +211,7 @@ class ContextCompletionTest {
     assertThat(values(command(), "/project add ./d")).containsExactly("./docs/");
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void projectCdMergesRegisteredProjectsBeforeLocalDirectories() throws Exception {
     var projects =
@@ -215,6 +230,7 @@ class ContextCompletionTest {
     }
   }
 
+  /** 外部エージェントおよび操作について、ドメイン定義一覧を利用することを確認する。 */
   @Test
   void externalAgentAndActionUseDomainDefinitions() {
     assertThat(values(command(), "/agent ")).containsExactlyInAnyOrder("codex", "claude");
@@ -226,6 +242,7 @@ class ContextCompletionTest {
     assertThat(values(command(), "/agent unknown ")).isEmpty();
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void reviewCompletesFilesAndDirectories() throws Exception {
     Files.createFile(root.resolve("report.txt"));
@@ -238,6 +255,7 @@ class ContextCompletionTest {
         .containsExactly("./report.txt", "./reports/");
   }
 
+  /** 現在トークンなし直近トークンを利用することを確認する。 */
   @Test
   void cursorInMiddleUsesCurrentTokenNotLastToken() {
     assertThat(complete(command(), "/project c foo", 10))
@@ -245,6 +263,7 @@ class ContextCompletionTest {
         .containsExactly("cd");
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void quotedPathsAndWindowsBackslashesStayIntact() throws Exception {
     Files.createDirectories(root.resolve("My Documents"));
@@ -260,6 +279,7 @@ class ContextCompletionTest {
     assertThat(parsed.words()).containsExactly(new UserInputParser().split(line));
   }
 
+  /** ターミナルでの対話で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void jlineEscapingRoundTripsThroughExecutionParser() {
     for (String prefix : List.of("/project add ", "/project add \"", "/project add '")) {
@@ -273,6 +293,7 @@ class ContextCompletionTest {
     }
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void quoteCharactersInFilenamesAreNotLost() {
     for (String prefix : List.of("/project add ", "/project add \"", "/project add '")) {
@@ -286,6 +307,7 @@ class ContextCompletionTest {
     }
   }
 
+  /** 実行語句の分割を利用することを確認する。 */
   @Test
   void quotesInsideWordsUseExecutionTokenization() {
     String text = "/project add ./a\" b\"c";
@@ -296,6 +318,7 @@ class ContextCompletionTest {
         .containsExactly(new UserInputParser().split(text));
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void ordinaryChatRemainsQuietButExplicitPathsComplete() throws Exception {
     Files.createFile(root.resolve("report.txt"));
@@ -303,11 +326,13 @@ class ContextCompletionTest {
     assertThat(values(command(), "see ./rep")).containsExactly("./report.txt");
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownTypedArgumentDoesNotFallBackToFiles() {
     assertThat(values(command(), "/agent ./")).isEmpty();
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void optionsDoNotShiftPositionalArgumentsAndFileOptionUsesMetadata() throws Exception {
     Files.createFile(root.resolve("report.txt"));
@@ -317,6 +342,7 @@ class ContextCompletionTest {
     assertThat(values(cmd, "/history --li")).containsExactly("--limit");
   }
 
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void metadataCanRegisterCustomProviderWithoutShellChanges() {
     var spec =
@@ -327,6 +353,7 @@ class ContextCompletionTest {
                     .index("0")
                     .completionCandidates(
                         new CompletionMetadata() {
+                          /** {@code types} の条件を再現するための補助情報を返す。 */
                           public Set<String> types(CompletionContext context) {
                             return Set.of("tool");
                           }
@@ -337,10 +364,12 @@ class ContextCompletionTest {
         ReiLineReaderFactory.completionEngine()
             .register(
                 new CompletionProvider() {
+                  /** 検証用に、ターミナルでの対話において、への対応可否を返す。 */
                   public boolean supports(CompletionContext context) {
                     return context.types().contains("tool");
                   }
 
+                  /** {@code complete} の条件を再現するための補助情報を返す。 */
                   public List<CompletionCandidate> complete(CompletionContext context) {
                     return List.of(CompletionCandidate.value("my-tool", "tool"));
                   }

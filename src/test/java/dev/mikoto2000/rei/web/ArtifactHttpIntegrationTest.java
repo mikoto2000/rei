@@ -21,13 +21,17 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 import org.sqlite.SQLiteDataSource;
 
+/** 成果物HTTP通信外部連携の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ArtifactHttpIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import({WebApiIntegrationTest.Config.class, ArtifactConfiguration.class})
   static class Config {
+    /** {@code data} の条件を再現するための補助情報を返す。 */
     @Bean("memoryConsolidationDataSource")
     javax.sql.DataSource data(
         @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
@@ -37,6 +41,7 @@ class ArtifactHttpIntegrationTest {
     }
   }
 
+  /** Web APIによる操作で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void defaultOffBearerAndRestartDeliverTheSameVerifiedSnapshot() throws Exception {
     String project, id;
@@ -104,12 +109,14 @@ class ArtifactHttpIntegrationTest {
     }
   }
 
+  /** {@code application} の条件を再現するための補助情報を返す。 */
   private SpringApplication application() {
     var app = new SpringApplication(Config.class);
     WebApplication.configure(app, "integration-key");
     return app;
   }
 
+  /** {@code args} の条件を再現するための補助情報を返す。 */
   private String[] args(boolean enabled) {
     return new String[] {
       "--rei.web.port=0",
@@ -119,6 +126,7 @@ class ArtifactHttpIntegrationTest {
     };
   }
 
+  /** {@code send} の条件を再現するための補助情報を返す。 */
   private HttpResponse<String> send(HttpClient client, int port, String path, boolean auth)
       throws Exception {
     var request =

@@ -3,11 +3,16 @@ package dev.mikoto2000.rei.activity;
 import java.awt.image.BufferedImage;
 
 /**
- * Coarse RGB average differences tolerate tiny pixel changes without losing uniform-color changes.
+ * 作業状況の把握に必要な画像変更を扱う。
+ *
+ * <p>Coarse RGB average differences tolerate tiny pixel changes without losing uniform-color
+ * changes.
  */
 public final class ImageChange {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ImageChange() {}
 
+  /** 作業状況の把握で用いる要求内容の照合値を返す。 */
   public static double[] fingerprint(BufferedImage image) {
     var scaled = new BufferedImage(32, 32, BufferedImage.TYPE_INT_RGB);
     var graphics = scaled.createGraphics();
@@ -28,6 +33,7 @@ public final class ImageChange {
     return values;
   }
 
+  /** 作業状況の把握で用いる距離を返す。 */
   public static double distance(double[] a, double[] b) {
     if (a.length != b.length) return 1;
     double sum = 0;
@@ -35,6 +41,7 @@ public final class ImageChange {
     return sum / (255 * a.length);
   }
 
+  /** 作業状況の把握で用いる距離を返す。 */
   public static double distance(BufferedImage a, BufferedImage b) {
     return distance(fingerprint(a), fingerprint(b));
   }

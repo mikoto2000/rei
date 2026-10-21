@@ -9,25 +9,33 @@ import java.util.TreeMap;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
+/** 開始Alex検索を用途や設定に応じて提供する窓口。 */
 @Component
 public class OpenAlexSearchProvider implements AcademicSearchProvider {
+  /** HTTP通信。 */
   private final PaperHttpClient http;
+
+  /** 設定。 */
   private final PaperProperties config;
 
+  /** 指定された値や利用先を使って、OpenAlexSearchProviderを初期化する。 */
   public OpenAlexSearchProvider(PaperHttpClient http, PaperProperties config) {
     this.http = http;
     this.config = config;
   }
 
+  /** 論文の調査と整理で用いるencを返す。 */
   static String enc(String value) {
     return URLEncoder.encode(value, StandardCharsets.UTF_8);
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   static String text(JsonNode n, String name) {
     var v = n.path(name);
     return v.isMissingNode() || v.isNull() ? null : v.asString();
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public List<Paper> search(PaperSearchQuery q, PaperOperation op) {
     List<String> filters = new ArrayList<>();
     if (q.fromYear() != null) filters.add("from_publication_date:" + q.fromYear() + "-01-01");
@@ -102,6 +110,7 @@ public class OpenAlexSearchProvider implements AcademicSearchProvider {
     }
   }
 
+  /** 指定された条件と対象が一致するかを判定する。 */
   static boolean matches(Paper p, PaperSearchQuery q) {
     // Provider-side query filters are not evidence that every returned record meets the request.
     if ((q.fromYear() != null

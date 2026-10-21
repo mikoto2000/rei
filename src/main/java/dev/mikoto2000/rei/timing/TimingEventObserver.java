@@ -13,9 +13,14 @@ import dev.mikoto2000.rei.event.ToolStartedPayload;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 
-/** Consumes only IDs and fixed tool classifications; no event payload is retained. */
+/**
+ * 時間計測イベントの状況を観測し、記録や判断に必要な情報を提供する。
+ *
+ * <p>Consumes only IDs and fixed tool classifications; no event payload is retained.
+ */
 @Component
 public class TimingEventObserver implements AutoCloseable {
+  /** 検索。 */
   private static final Set<String> SEARCH =
       Set.of(
           "webSearch",
@@ -29,14 +34,20 @@ public class TimingEventObserver implements AutoCloseable {
           "searchWorkingSet",
           "searchHistory",
           "search");
+
+  /** 実行時間を記録する窓口。 */
   private final TimingRecorder recorder;
+
+  /** 購読。 */
   private final AgentEventBus.Subscription subscription;
 
+  /** 指定された値や利用先を使って、TimingEventObserverを初期化する。 */
   public TimingEventObserver(TimingRecorder recorder, AgentEventBus bus) {
     this.recorder = recorder;
     subscription = bus.subscribe(this::observe);
   }
 
+  /** 状況を判断する根拠を得るため、時間計測イベント観測を観測する。 */
   private void observe(AgentEvent event) {
     try {
       if (!recorder.enabled() || event.runId() == null) return;
@@ -81,6 +92,7 @@ public class TimingEventObserver implements AutoCloseable {
     }
   }
 
+  /** 実行時間の把握で利用した資源や登録を解放し、利用を終了する。 */
   @Override
   @jakarta.annotation.PreDestroy
   public void close() {

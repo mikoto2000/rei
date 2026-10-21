@@ -8,18 +8,26 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import org.springframework.stereotype.Component;
 
+/** 既定フィードHTTP通信に必要な情報を外部から取得する。 */
 @Component
 public class DefaultFeedHttpFetcher implements FeedHttpFetcher {
+  /** 認証。 */
   private final FeedAuthentication authentication;
+
+  /** 公開クライアント。 */
   private final HttpClient publicClient =
       HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NORMAL).build();
+
+  /** 認証済みクライアント。 */
   private final HttpClient authenticatedClient =
       HttpClient.newBuilder().followRedirects(HttpClient.Redirect.NEVER).build();
 
+  /** 指定された値や利用先を使って、DefaultFeedHttpFetcherを初期化する。 */
   public DefaultFeedHttpFetcher(FeedAuthentication authentication) {
     this.authentication = authentication;
   }
 
+  /** 後続の処理に必要な情報を、取得先から読み込む。 */
   @Override
   public FeedHttpResponse fetch(URI uri) {
     try {

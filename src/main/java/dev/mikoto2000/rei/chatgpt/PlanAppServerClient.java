@@ -21,53 +21,88 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
 
-/** Own OAuth lease + a fresh native process; no alternate credentials or billing fallback. */
+/**
+ * 計画アプリケーションサーバーを外部の接続先へ依頼する窓口。
+ *
+ * <p>Own OAuth lease + a fresh native process; no alternate credentials or billing fallback.
+ */
 public final class PlanAppServerClient implements PlanInference {
+  /**
+   * ChatGPTとの連携で受け渡す開始を表す。
+   *
+   * @param session 会話
+   * @param cwd 作業ディレクトリ
+   */
   public record Started(PlanAppServerRpc.Session session, String cwd) {}
 
+  /** バックエンドの利用可否を確認し、軽量CLIを起動して終了まで管理する。 */
   public interface Launcher {
+    /** 要求された処理を開始する。 */
     Started start(TokenSet ownToken, Duration timeout, BooleanSupplier stop);
 
+    /** ChatGPTとの連携で用いる接続先を返す。 */
     default String authority() {
       return "codex-0.154.0-read-snapshots";
     }
 
+    /** ChatGPTとの連携で用いる形式のバージョンを返す。 */
     default String version() {
       return "0.154.0";
     }
 
+    /** ChatGPTとの連携で用いる実行環境を返す。 */
     default String platform() {
       return "linux";
     }
   }
 
+  /** アカウント一覧。 */
   private final PlanClient accounts;
+
+  /** 起動。 */
   private final Launcher launcher;
+
+  /** 権限一覧。 */
   private final ToolPermissionGuard permissions;
+
+  /** 要求と実行を関連付ける追跡情報。 */
   private final ThreadLocal<PlanAppServerRpc.Trace> traces = new ThreadLocal<>();
 
+  /**
+   * ChatGPTとの連携で受け渡す予算を表す。
+   *
+   * @param reservation 予約
+   * @param maxCalls 最大呼び出し回数
+   */
   private record Budget(
       dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation, int maxCalls) {}
 
+  /** OSの機能予算。 */
   private final ThreadLocal<Budget> nativeBudget = new ThreadLocal<>();
+
+  /** OSの機能トークン数。 */
   private final ThreadLocal<Integer> nativeTokens = new ThreadLocal<>();
 
+  /** ChatGPTとの連携に関するOSの機能予算を処理する。 */
   public void nativeBudget(
       dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation budget, int maxCalls) {
     nativeBudget.set(new Budget(budget, maxCalls));
   }
 
+  /** ChatGPTとの連携で用いる取り出しOSの機能トークン数を返す。 */
   public int takeNativeTokens() {
     var value = nativeTokens.get();
     nativeTokens.remove();
     return value == null ? 0 : value;
   }
 
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json =
       new ObjectMapper()
           .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
           .enable(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
 
+  /** 指定された値や利用先を使って、PlanAppServerClientを初期化する。 */
   public PlanAppServerClient(
       PlanClient accounts, Launcher launcher, ToolPermissionGuard permissions) {
     this.accounts = accounts;
@@ -75,16 +110,19 @@ public final class PlanAppServerClient implements PlanInference {
     this.permissions = permissions;
   }
 
+  /** ChatGPTとの連携で用いる取り出し追跡情報を返す。 */
   public PlanAppServerRpc.Trace takeTrace() {
     var trace = traces.get();
     traces.remove();
     return trace;
   }
 
+  /** ChatGPTとの連携で用いる接続先を返す。 */
   public String authority() {
     return launcher.authority();
   }
 
+  /** ChatGPTとの連携で用いる状態の記録指示一覧を返す。 */
   private static String snapshotInstructions(String instructions) {
     return instructions
         .replace(
@@ -95,6 +133,7 @@ public final class PlanAppServerClient implements PlanInference {
             "Only rei_read_source may read each supplied snapshot once. Never execute commands, change files, use network tools or delegate.");
   }
 
+  /** ChatGPTとの連携で用いるencoded状態の記録バイト数を返す。 */
   public static int encodedSnapshotBytes(String instructions, List<PlanClient.Input> input) {
     try {
       return new ObjectMapper()
@@ -106,6 +145,7 @@ public final class PlanAppServerClient implements PlanInference {
     }
   }
 
+  /** ChatGPTとの連携で用いる推定履歴を返す。 */
   public PlanSseAssembler.Result inferHistory(
       String account,
       String model,
@@ -121,6 +161,7 @@ public final class PlanAppServerClient implements PlanInference {
     var budget = nativeBudget.get();
     nativeBudget.remove();
     var owner = AgentRunScope.current();
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (owner == null || owner.projectId() == null || input.isEmpty() || input.size() > 16)
       throw ChatGptException.of(PERMISSION_DENIED);
     long deadline = System.nanoTime() + timeout.toNanos();

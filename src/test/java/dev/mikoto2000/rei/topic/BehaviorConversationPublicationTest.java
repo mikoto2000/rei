@@ -13,11 +13,16 @@ import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 作業習慣会話公開情報の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class BehaviorConversationPublicationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock = Clock.fixed(Instant.parse("2026-09-25T12:00:00Z"), ZoneOffset.UTC);
 
+  /** 話題の管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void behaviorUsesEmissionTimeAndIdempotentAssistantHistoryInsteadOfPlainAppend() {
     var logs =

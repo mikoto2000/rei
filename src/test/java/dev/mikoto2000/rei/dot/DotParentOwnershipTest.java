@@ -17,13 +17,24 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 状態表示親所有権の結果と状態の契約を検証するテスト。 */
 class DotParentOwnershipTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うリポジトリ。 */
   DotRequestRepository repo;
+
+  /** 検証に使う受付台帳。 */
   dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions;
+
+  /** 検証に使う所有者。 */
   AgentRunContext owner;
+
+  /** 検証に使う識別子。 */
   String id;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     try (var gate = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(root)) {
@@ -57,11 +68,13 @@ class DotParentOwnershipTest {
     repo.publish(owner.projectId(), id);
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void close() {
     admissions.close();
   }
 
+  /** 利用者の状態表示の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void sameTransactionUsesCanonicalRunCancellationAndHistoricalReceiptOnly() {
     var claim = repo.claim(owner.projectId(), id, "claim");
@@ -75,6 +88,7 @@ class DotParentOwnershipTest {
     assertEquals("CLAIMED", repo.get(owner.projectId(), id).get("status"));
   }
 
+  /** 利用者の状態表示で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void wrongStoredSessionAndLostRunCannotBeClaimed() {
     new dev.mikoto2000.rei.storage.StorageDatabase(root)
@@ -93,6 +107,7 @@ class DotParentOwnershipTest {
     assertThrows(DotException.class, () -> repo.claim(owner.projectId(), id, "claim"));
   }
 
+  /** 利用者の状態表示で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void unpublishedParentAdmissionIsRecoveredAsUnknownWithoutRequeue() {
     var other =

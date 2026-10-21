@@ -19,31 +19,54 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
 /**
- * The final request projection. Never mutates the loop's raw prompt, working state or permanent
+ * モデルへ渡す文脈の管理に必要な文脈文脈の組み立てを扱う。
+ *
+ * <p>The final request projection. Never mutates the loop's raw prompt, working state or permanent
  * history.
  */
 public class ContextAssembler {
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(ContextAssembler.class);
+
+  /** この機能の動作設定。 */
   private final ContextCompressionProperties properties;
+
+  /** 概算。 */
   private final TokenEstimator estimator;
+
+  /** 要約一覧。 */
   private final ConversationSummaryRepository summaries;
+
+  /** ツール一覧。 */
   private final ToolResultCompressor tools;
+
+  /** 会話の要点を保ちながら文脈を圧縮する窓口。 */
   private final ConversationCompressor compressor;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** 通知先。 */
   private final AgentEventPublisher publisher;
+
+  /** 圧縮再試行回数。 */
   private CompressionRetryGuard compressionRetries = new CompressionRetryGuard();
 
+  /** モデルへ渡す文脈の管理で使用する圧縮再試行時刻の取得元を設定する。 */
   void setCompressionRetryClock(java.time.Clock clock) {
     compressionRetries = new CompressionRetryGuard(clock::millis);
   }
 
+  /** 必須条件レビュー対象範囲。 */
   private boolean requireReviewCoverage = true;
 
+  /** モデルへ渡す文脈の管理で使用する必須条件レビュー対象範囲を設定する。 */
   public void setRequireReviewCoverage(boolean required) {
     requireReviewCoverage = required;
   }
 
+  /** 条件を満たさない操作を拒否するため、レビュー済みの内容の前提条件を確認する。 */
   public void requireReviewed(dev.mikoto2000.rei.core.chat.AgentRunContext owner) {
     if (!requireReviewCoverage || reviewTools == null || owner == null || owner.projectId() == null)
       return;
@@ -52,16 +75,20 @@ public class ContextAssembler {
     }
   }
 
+  /** レビューツール一覧。 */
   private dev.mikoto2000.rei.review.ReviewTools reviewTools;
 
+  /** モデルへ渡す文脈の管理で使用するレビューツール一覧を設定する。 */
   public void setReviewTools(dev.mikoto2000.rei.review.ReviewTools tools) {
     reviewTools = tools;
   }
 
+  /** モデルへ渡す文脈の管理に関する確認済み配信を処理する。 */
   public void confirmedDelivery(Prompt prompt, dev.mikoto2000.rei.core.chat.AgentRunContext owner) {
     if (reviewTools != null) reviewTools.confirmedPrompt(prompt, owner);
   }
 
+  /** 終了時の状態を確定するため、レビュー実行を完了させる。 */
   public void finishReviewRun(
       dev.mikoto2000.rei.core.chat.AgentRunContext owner,
       boolean cancelled,
@@ -70,18 +97,28 @@ public class ContextAssembler {
     if (reviewTools != null) reviewTools.finishRun(owner, cancelled, failed, parent);
   }
 
+  /** 作業中集合。 */
   private java.util.function.Supplier<String> workingSet;
 
+  /** モデルへ渡す文脈の管理で使用する作業中集合を設定する。 */
   public void setWorkingSet(java.util.function.Supplier<String> workingSet) {
     this.workingSet = workingSet;
   }
 
+  /** モデルへ渡す文脈の管理に関するpreserveツールの結果一覧を処理する。 */
   public void preserveToolResults(List<Message> messages, String conversation, String run) {
     if (!messages.isEmpty()) tools.preserve(messages.getLast(), conversation, run);
   }
 
+  /**
+   * モデルへ渡す文脈の管理で受け渡す項目を表す。
+   *
+   * @param sequence 発生順序
+   * @param message メッセージ
+   */
   private record Entry(long sequence, Message message) {}
 
+  /** 指定された値や利用先を使って、ContextAssemblerを初期化する。 */
   public ContextAssembler(
       ContextCompressionProperties properties,
       TokenEstimator estimator,
@@ -99,6 +136,7 @@ public class ContextAssembler {
     this.publisher = publisher;
   }
 
+  /** モデルへ渡す文脈の管理で用いるassembleを返す。 */
   public Prompt assemble(Prompt raw, String conversation, String run, Runnable checkActive) {
     if (!properties.isEnabled()) {
       checkActive.run();
@@ -132,11 +170,13 @@ public class ContextAssembler {
         lock.unlock();
       }
     } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw new java.util.concurrent.CancellationException();
     }
   }
 
+  /** モデルへ渡す文脈の管理で用いるassemble使用中を返す。 */
   private Prompt assembleLocked(Prompt raw, String conversation, String run, Runnable check) {
     check.run();
     int hard = hardLimit(raw);
@@ -202,12 +242,21 @@ public class ContextAssembler {
     return result;
   }
 
+  /** モデルへ渡す文脈の管理に必要な区間を扱う。 */
   private static final class Segment {
+    /** 照合キー。 */
     final String key;
+
+    /** 再試行キー。 */
     final String retryKey;
+
+    /** 要約。 */
     ConversationSummary summary;
+
+    /** 項目一覧。 */
     final ArrayList<Entry> entries;
 
+    /** 指定された値や利用先を使って、Segmentを初期化する。 */
     Segment(String key, ConversationSummary summary, ArrayList<Entry> entries, String run) {
       this.key = key;
       this.summary = summary;
@@ -216,6 +265,7 @@ public class ContextAssembler {
     }
   }
 
+  /** モデルへ渡す文脈の管理に関する圧縮を処理する。 */
   private void compress(
       Segment segment, Prompt raw, Runnable check, dev.mikoto2000.rei.llm.ModelCallBudget budget) {
     int count =
@@ -407,6 +457,7 @@ public class ContextAssembler {
     }
   }
 
+  /** モデルへ渡す文脈の管理で用いる予算詳細一覧を返す。 */
   private static String budgetDetails(
       dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason reason, boolean owned) {
     String callSetting =
@@ -435,6 +486,7 @@ public class ContextAssembler {
     };
   }
 
+  /** モデルへ渡す文脈の管理で用いる停止済みを返す。 */
   private dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped(Throwable error) {
     var seen = Collections.newSetFromMap(new IdentityHashMap<Throwable, Boolean>());
     for (int depth = 0;
@@ -445,6 +497,7 @@ public class ContextAssembler {
     return null;
   }
 
+  /** モデルへ渡す文脈の管理において、削除Oldestに該当するか判定する。 */
   private boolean dropOldest(Segment segment) {
     if (segment.entries.size() <= 1) return false;
     int end = 1;
@@ -455,6 +508,7 @@ public class ContextAssembler {
     return true;
   }
 
+  /** モデルへ渡す文脈の管理で用いるプロジェクトを返す。 */
   private Prompt project(Prompt original, Segment history, Segment active) {
     var messages = new ArrayList<Message>();
     var historyBySequence = new HashMap<Long, Message>();
@@ -503,6 +557,7 @@ public class ContextAssembler {
     return new Prompt(messages, original.getOptions());
   }
 
+  /** モデルへ渡す文脈の管理で用いる発生順序開始位置を返す。 */
   private long sequenceOffset(Prompt prompt) {
     if (prompt.getOptions()
             instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
@@ -512,10 +567,12 @@ public class ContextAssembler {
     return 0;
   }
 
+  /** 利用量や必要量を判断するため、文脈文脈の組み立てを概算する。 */
   private long estimate(Prompt prompt) {
     return ContextBudgetManager.estimateMessages(prompt.getInstructions(), estimator);
   }
 
+  /** モデルへ渡す文脈の管理で用いる厳しい条件上限を返す。 */
   private int hardLimit(Prompt prompt) {
     int completion = properties.getCompletionReserve();
     if (prompt.getOptions() != null && prompt.getOptions().getMaxTokens() != null)
@@ -541,6 +598,7 @@ public class ContextAssembler {
     return Math.min(properties.getHardLimit(), budget.inputBudget());
   }
 
+  /** モデルへ渡す文脈の管理で用いる実行を返す。 */
   static dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution(Prompt prompt) {
     if (prompt.getOptions()
             instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
@@ -551,6 +609,7 @@ public class ContextAssembler {
     return null;
   }
 
+  /** モデルへ渡す文脈の管理に関する通知を処理する。 */
   private void emit(
       Prompt prompt,
       AgentEventType type,
@@ -562,6 +621,7 @@ public class ContextAssembler {
     emit(prompt, type, before, after, count, through, reason, null);
   }
 
+  /** モデルへ渡す文脈の管理に関する通知を処理する。 */
   private void emit(
       Prompt prompt,
       AgentEventType type,

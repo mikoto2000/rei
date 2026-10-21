@@ -3,20 +3,35 @@ package dev.mikoto2000.rei.cli;
 import java.io.*;
 import java.util.function.Consumer;
 
-/** Incremental, bounded SSE decoder. Sequence is advanced only after successful delivery. */
+/**
+ * イベント配信の受信データを解釈し、利用できる情報へ整える。
+ *
+ * <p>Incremental, bounded SSE decoder. Sequence is advanced only after successful delivery.
+ */
 public final class SseDecoder {
+  /**
+   * 軽量CLIでの対話で受け渡すイベントを表す。
+   *
+   * @param sequence 発生順序
+   * @param type 種別
+   * @param data データ
+   */
   public record Event(long sequence, String type, String data) {}
 
+  /** 発生順序。 */
   private long sequence;
 
+  /** 指定された値や利用先を使って、SseDecoderを初期化する。 */
   public SseDecoder(long sequence) {
     this.sequence = sequence;
   }
 
+  /** 軽量CLIでの対話で用いる発生順序を返す。 */
   public long sequence() {
     return sequence;
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   public void read(Reader input, Consumer<Event> deliver) throws IOException {
     StringBuilder line = new StringBuilder(), data = new StringBuilder();
     String type = "message";

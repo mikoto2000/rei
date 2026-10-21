@@ -15,11 +15,18 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** 永続化された補助エージェント保存と検索の窓口の結果と状態の契約を検証するテスト。 */
 class DurableSubAgentRepositoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
+
+  /** 検証に使う取得元。 */
   SQLiteDataSource source;
+
+  /** 検証に使う親。 */
   AgentRunContext parent;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     source = new SQLiteDataSource();
@@ -29,6 +36,7 @@ class DurableSubAgentRepositoryTest {
             "parent", "session", Files.createDirectory(directory.resolve("project")), "project");
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void graphAdmissionRollsBackAllPreparedChildrenWhenCapacityIsExceeded() {
     var repository = new DurableSubAgentRepository(source, Clock.systemUTC(), 2048);
@@ -56,6 +64,7 @@ class DurableSubAgentRepositoryTest {
     assertTrue(repository.list(parent, 0, 10).isEmpty());
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void completedResultAndConsumedBudgetSurviveRepositoryRestartAndRemainOwnerScoped()
       throws Exception {
@@ -79,6 +88,7 @@ class DurableSubAgentRepositoryTest {
         () -> repository.claim(parent, saved.id(), restored.revision(), "new-run"));
   }
 
+  /** 失われた所有者および待機中ツールについて、明示的な状態の照合結果を必要とすることを確認する。 */
   @Test
   void lostOwnerAndPendingToolRequireExplicitReconciliationWithoutResettingBudget()
       throws Exception {
@@ -115,6 +125,7 @@ class DurableSubAgentRepositoryTest {
     assertTrue(repository.get(parent, saved.id()).usageUnknown());
   }
 
+  /** 補助エージェントへの委譲で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void revisionsPreventDuplicateClaimsAndReadOnlyRunsCannotReconcile() {
     var repository = new DurableSubAgentRepository(source, Clock.systemUTC());
@@ -142,6 +153,7 @@ class DurableSubAgentRepositoryTest {
                 reader, saved.id(), unknown.revision(), "operation", "FAILED", "human checked"));
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void startupLossDuringAnUnreportedModelCallBlocksTokenLimitedResume() throws Exception {
     var repository = new DurableSubAgentRepository(source, Clock.systemUTC());
@@ -168,6 +180,7 @@ class DurableSubAgentRepositoryTest {
         () -> repository.claim(parent, saved.id(), restored.revision(), "retry"));
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void storageQuotaAppliesToNewTasksAndGrowingResultsWithoutLosingThePreviousCheckpoint() {
     var repository = new DurableSubAgentRepository(source, Clock.systemUTC(), 4096);
@@ -182,6 +195,7 @@ class DurableSubAgentRepositoryTest {
     assertEquals(started, repository.get(parent, saved.id()));
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void zeroUsageCannotMakeATokenLimitedReservationKnown() {
     var repository = new DurableSubAgentRepository(source, Clock.systemUTC());
@@ -193,6 +207,7 @@ class DurableSubAgentRepositoryTest {
     assertFalse(repository.reserve(saved.id(), "run"));
   }
 
+  /** 補助エージェントへの委譲で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void parallelReservationsRemainPendingUntilEveryUsageReportArrives() {
     var repository = new DurableSubAgentRepository(source, Clock.systemUTC());

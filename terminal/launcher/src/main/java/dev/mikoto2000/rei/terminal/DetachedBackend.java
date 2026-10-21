@@ -6,8 +6,13 @@ import java.io.IOException;
 import java.nio.file.*;
 import java.util.*;
 
-/** Explicit OS detachment. Never falls back to a child tied to the launcher's console/job. */
+/**
+ * 軽量CLIの起動に必要な独立起動バックエンドを扱う。
+ *
+ * <p>Explicit OS detachment. Never falls back to a child tied to the launcher's console/job.
+ */
 public final class DetachedBackend {
+  /** ランチャーの終了に巻き込まれない独立したバックエンドを起動する。 */
   public static long start(List<String> command, Path directory, Path log) throws IOException {
     Files.createDirectories(log.getParent());
     if (System.getProperty("os.name").toLowerCase(Locale.ROOT).contains("win")) {
@@ -18,6 +23,7 @@ public final class DetachedBackend {
           command.stream()
               .map(DetachedBackend::quote)
               .collect(java.util.stream.Collectors.joining(" "));
+      // バックエンドを端末や親のジョブから独立させ、ランチャーを閉じても継続できるようにする。
       boolean created =
           Kernel32.INSTANCE.CreateProcess(
               command.getFirst(),
@@ -43,6 +49,7 @@ public final class DetachedBackend {
       }
     }
     Path setsid = Path.of("/usr/bin/setsid");
+    // 独立起動の条件を満たせない環境では、親と一緒に終了する起動方法へ黙って切り替えない。
     if (!Files.isExecutable(setsid))
       throw new IOException(
           "Detached backend requires /usr/bin/setsid on this platform; use an OS service");
@@ -58,6 +65,7 @@ public final class DetachedBackend {
         .pid();
   }
 
+  /** Windowsのプロセス起動時に引数の内容が変わらないよう、引用符と末尾の区切りを保護する。 */
   static String quote(String value) {
     if (value.indexOf('\0') >= 0) throw new IllegalArgumentException("Invalid process argument");
     StringBuilder result = new StringBuilder("\"");

@@ -25,14 +25,56 @@ import org.w3c.dom.Document;
 import org.w3c.dom.Element;
 import org.w3c.dom.Node;
 
-/** Saved report observations only. Does not run tests or establish current Run/Goal success. */
+/**
+ * 検証レポート診断のユースケースを実現する。
+ *
+ * <p>Saved report observations only. Does not run tests or establish current Run/Goal success.
+ */
 public final class TestReportDiagnosisService {
+  /**
+   * 共通の実行基盤で受け渡す件数を表す。
+   *
+   * @param tests 検証一覧
+   * @param failures 失敗一覧
+   * @param errors エラー一覧
+   * @param skipped 対象外
+   */
   public record Counts(int tests, int failures, int errors, int skipped) {}
 
+  /**
+   * 共通の実行基盤で受け渡す失敗検証を表す。
+   *
+   * @param test 検証
+   * @param kind 種類
+   * @param type 種別
+   * @param message メッセージ
+   * @param detail 詳細
+   */
   public record FailedTest(String test, String kind, String type, String message, String detail) {}
 
+  /**
+   * 共通の実行基盤で受け渡す検証事例を表す。
+   *
+   * @param test 検証
+   * @param outcome 最終結果
+   */
   public record TestCase(String test, String outcome) {}
 
+  /**
+   * 共通の実行基盤で受け渡す結果を表す。
+   *
+   * @param path パス
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   * @param modifiedAt 更新日時
+   * @param observedAt 観測日時
+   * @param partial 部分的な結果
+   * @param reported 報告された内容
+   * @param observed 観測
+   * @param failedTests 失敗検証一覧
+   * @param nextActions 次操作一覧
+   * @param warnings 注意事項
+   * @param testCases 検証事例一覧
+   */
   public record Result(
       String path,
       String sha256,
@@ -45,10 +87,12 @@ public final class TestReportDiagnosisService {
       List<String> nextActions,
       List<String> warnings,
       List<TestCase> testCases) {
+    /** 受け取った情報からResultを作成する。 */
     public Result {
       testCases = testCases == null ? List.of() : List.copyOf(testCases);
     }
 
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Result(
         String path,
         String sha256,
@@ -75,6 +119,7 @@ public final class TestReportDiagnosisService {
     }
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   public Result read(Path directory, String relative) throws IOException {
     RunCancellation.propagate(null);
     if (relative == null
@@ -222,6 +267,7 @@ public final class TestReportDiagnosisService {
         List.copyOf(outcomes));
   }
 
+  /** 共通の実行基盤で用いる件数を返す。 */
   private static Counts counts(Element top, Set<String> warnings) throws IOException {
     String[] names = {"tests", "failures", "errors", "skipped"};
     int[] values = new int[4];
@@ -241,6 +287,7 @@ public final class TestReportDiagnosisService {
     return new Counts(values[0], values[1], values[2], values[3]);
   }
 
+  /** 共通の実行基盤で用いる根拠として示す抜粋を返す。 */
   private static String excerpt(String text, int limit, Set<String> warnings) {
     String safe =
         CredentialRedactor.redact(text)
@@ -252,6 +299,7 @@ public final class TestReportDiagnosisService {
     return safe;
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   private static Document parse(byte[] bytes) throws IOException {
     try {
       var factory = DocumentBuilderFactory.newInstance();
@@ -267,11 +315,13 @@ public final class TestReportDiagnosisService {
       var builder = factory.newDocumentBuilder();
       builder.setErrorHandler(
           new org.xml.sax.helpers.DefaultHandler() {
+            /** 共通の実行基盤に関するエラーを処理する。 */
             @Override
             public void error(org.xml.sax.SAXParseException error) throws org.xml.sax.SAXException {
               throw error;
             }
 
+            /** 共通の実行基盤に関する継続できないエラーを処理する。 */
             @Override
             public void fatalError(org.xml.sax.SAXParseException error)
                 throws org.xml.sax.SAXException {
@@ -286,6 +336,7 @@ public final class TestReportDiagnosisService {
     }
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(byte[] bytes) {
     try {
       return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));

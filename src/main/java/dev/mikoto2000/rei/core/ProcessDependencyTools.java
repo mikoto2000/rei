@@ -13,25 +13,41 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
-/** Managed-process adapter; waiting policy and time are kept in the domain awaiter. */
+/**
+ * プロセス依存条件をモデルから呼び出せるツールとして提供する。
+ *
+ * <p>Managed-process adapter; waiting policy and time are kept in the domain awaiter.
+ */
 @Component
 public class ProcessDependencyTools {
+  /** プロセス一覧。 */
   private final BackgroundProcessManager processes;
+
+  /** 依存条件が満たされるまでの待機を管理する窓口。 */
   private DependencyAwaiter awaiter =
       new DependencyAwaiter(
           dev.mikoto2000.rei.temporal.MonotonicTimeSource.system(), Thread::sleep);
 
+  /** 指定された値や利用先を使って、ProcessDependencyToolsを初期化する。 */
   public ProcessDependencyTools(BackgroundProcessManager processes) {
     this.processes = processes;
   }
 
+  /** 共通の実行基盤で使用する依存条件Awaiterを設定する。 */
   void setDependencyAwaiter(DependencyAwaiter awaiter) {
     this.awaiter = awaiter;
   }
 
+  /**
+   * 共通の実行基盤で受け渡すシェル依存条件結果を表す。
+   *
+   * @param dependency 依存条件
+   * @param process プロセス
+   */
   public record ShellDependencyResult(
       DependencyObservation dependency, BackgroundProcessSnapshot process) {}
 
+  /** 必要な状態が整ってから先へ進むため、対象シェルプロセスを待つ。 */
   @Tool(
       name = "waitForShellProcess",
       description =

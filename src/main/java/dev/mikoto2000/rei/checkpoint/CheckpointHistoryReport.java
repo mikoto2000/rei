@@ -1,9 +1,15 @@
 package dev.mikoto2000.rei.checkpoint;
 
-/** Shared terminal text; no execution or retention decisions are made by this renderer. */
+/**
+ * 作業の中断と再開に必要な再開用の記録履歴レポートを扱う。
+ *
+ * <p>Shared terminal text; no execution or retention decisions are made by this renderer.
+ */
 public final class CheckpointHistoryReport {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private CheckpointHistoryReport() {}
 
+  /** 作業の中断と再開で用いる使用状況を返す。 */
   public static String usage(CheckpointHistory.Usage usage) {
     return "チェックポイント保存量（全プロジェクト）\n"
         + "保存容量: "
@@ -22,6 +28,7 @@ public final class CheckpointHistoryReport {
         + "整理候補の確認: /checkpoint cleanup";
   }
 
+  /** 作業の中断と再開で用いる後片付けを返す。 */
   public static String cleanup(CheckpointHistory.Cleanup cleanup) {
     if (cleanup.force()) {
       return forcedCleanup(cleanup);
@@ -66,6 +73,7 @@ public final class CheckpointHistoryReport {
     return result.toString();
   }
 
+  /** 作業の中断と再開で用いるforced後片付けを返す。 */
   private static String forcedCleanup(CheckpointHistory.Cleanup cleanup) {
     var result =
         new StringBuilder(

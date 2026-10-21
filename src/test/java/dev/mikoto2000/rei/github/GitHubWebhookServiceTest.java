@@ -34,18 +34,26 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** Git連携先Webhook通知サービスの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class GitHubWebhookServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   static final Clock CLOCK = Clock.fixed(GitHubWebhookDecoderTest.NOW, ZoneOffset.UTC);
 
+  /** 検証条件を再現するための会話一覧。 */
   static class Sessions implements SessionRepository {
+    /** 検証に使う行一覧。 */
     final Map<String, SessionMetadata> rows = new HashMap<>();
 
+    /** 検証用に、対象を特定できるよう、別識別子を探す。 */
     public Optional<SessionMetadata> findById(String id) {
       return Optional.ofNullable(rows.get(id));
     }
 
+    /** 検証用に、対象を特定できるよう、ページを探す。 */
     public List<SessionMetadata> findPage(String project, CursorKey key, int count) {
       return rows.values().stream()
           .filter(s -> s.projectId().equals(project))
@@ -53,12 +61,14 @@ class GitHubWebhookServiceTest {
           .toList();
     }
 
+    /** {@code accept} の条件を再現するため、検証用の操作や状態を扱う。 */
     public void accept(SessionMetadata session, Runnable enqueue) {
       rows.put(session.sessionId(), session);
       enqueue.run();
     }
   }
 
+  /** 重複の有無再開の後も対象の情報が残ることを確認する。 */
   @Test
   void verifiedFailedCiSignalsOnlyTheExistingOwnedTriggerAndSurvivesDuplicateRestart()
       throws Exception {
@@ -153,6 +163,7 @@ class GitHubWebhookServiceTest {
         .doesNotContain("workflow_run");
   }
 
+  /** GitHubとの連携で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void failedInboxWriteRollsBackReceiptFactAndTriggerTogetherBeforeAnExplicitRetry()
       throws Exception {
@@ -211,6 +222,7 @@ class GitHubWebhookServiceTest {
     assertThat(inbox.list(project.id())).hasSize(1);
   }
 
+  /** 確定済み通知について、通知先失敗情報の後も対象の情報が残ることを確認する。 */
   @Test
   void committedNotificationSurvivesPublisherFailureAndRestartWithoutCreatingAnotherInboxItem()
       throws Exception {
@@ -257,6 +269,7 @@ class GitHubWebhookServiceTest {
     assertThat(inbox.list(project.id())).hasSize(1);
   }
 
+  /** GitHubとの連携で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void requiredRecheckFailsClosedAndDuplicateDoesNotRecheckOrConsumeCapacity() throws Exception {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -332,6 +345,7 @@ class GitHubWebhookServiceTest {
     assertThat(facts.pendingNotifications()).hasSize(1);
   }
 
+  /** GitHubとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void obsoleteProjectRootsNeverPublishAndDoNotStarveOtherProjects() throws Exception {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -383,6 +397,7 @@ class GitHubWebhookServiceTest {
     assertThat(facts.pendingNotifications()).isEmpty();
   }
 
+  /** {@code workflow} の条件を再現するための補助情報を返す。 */
   static byte[] workflow(String conclusion, int pr) {
     return GitHubWebhookDecoderTest.body(
         "\"action\":\"completed\",\"workflow_run\":{\"id\":42,\"head_branch\":\"main\",\"head_sha\":\""

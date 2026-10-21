@@ -17,15 +17,30 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.BooleanSupplier;
 
-/** A bounded, redirect-free transport, isolated from Spring AI request capture. */
+/**
+ * ChatGPTとの連携に必要な計画通信経路を扱う。
+ *
+ * <p>A bounded, redirect-free transport, isolated from Spring AI request capture.
+ */
 public interface PlanTransport {
+  /**
+   * ChatGPTとの連携で受け渡す応答を表す。
+   *
+   * @param status 状態
+   * @param body 本文
+   * @param requestId 要求の識別子
+   * @param contentType 内容の種類
+   * @param contentEncoding 内容文字コード
+   */
   record Response(
       int status, InputStream body, String requestId, String contentType, String contentEncoding)
       implements AutoCloseable {
+    /** ChatGPTとの連携を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Response(int status, InputStream body, String requestId, String contentType) {
       this(status, body, requestId, contentType, "identity");
     }
 
+    /** ChatGPTとの連携で利用した資源や登録を解放し、利用を終了する。 */
     public void close() {
       try {
         body.close();
@@ -33,12 +48,14 @@ public interface PlanTransport {
       }
     }
 
+    /** ChatGPTとの連携の情報を、表示や診断で確認できる文字列表現にする。 */
     @Override
     public String toString() {
       return "Response[status=" + status + "]";
     }
   }
 
+  /** ChatGPTとの連携で用いる送信を返す。 */
   Response send(
       URI uri,
       String method,
@@ -47,13 +64,16 @@ public interface PlanTransport {
       Duration timeout,
       BooleanSupplier cancelled);
 
+  /** ChatGPTとの連携に必要なHTTP通信を扱う。 */
   final class Http implements PlanTransport {
+    /** クライアント。 */
     private final HttpClient client =
         HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(15))
             .followRedirects(HttpClient.Redirect.NEVER)
             .build();
 
+    /** ChatGPTとの連携で用いる送信を返す。 */
     public Response send(
         URI uri,
         String method,
@@ -96,6 +116,7 @@ public interface PlanTransport {
             });
         throw e;
       } catch (InterruptedException e) {
+        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
         future.cancel(true);
         throw ChatGptException.of(CANCELLED);

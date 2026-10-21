@@ -10,7 +10,9 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/** 作業習慣扱いの結果と状態の契約を検証するテスト。 */
 class BehaviorDispositionTest {
+  /** 作業習慣の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void explicitDispositionOverridesCategoryAndLegacyStillWorks() {
     for (var disposition : EntertainmentDisposition.values()) {

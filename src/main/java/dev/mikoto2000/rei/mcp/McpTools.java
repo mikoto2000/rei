@@ -26,9 +26,13 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * Fixed-principal application boundary. All caller identities are validated before service access.
+ * MCPをモデルから呼び出せるツールとして提供する。
+ *
+ * <p>Fixed-principal application boundary. All caller identities are validated before service
+ * access.
  */
 public final class McpTools {
+  /** 名前一覧。 */
   public static final List<String> NAMES =
       List.of(
           "rei_projects_list",
@@ -37,18 +41,41 @@ public final class McpTools {
           "rei_task_status",
           "rei_task_result",
           "rei_task_cancel");
+
+  /** プロジェクト一覧。 */
   private final ProjectRegistry projects;
+
+  /** 許可。 */
   private final Set<String> allowed;
+
+  /** 文脈一覧。 */
   private final WorkContextService contexts;
+
+  /** 会話の実行を受け付ける窓口。 */
   private final ChatSubmitService chats;
+
+  /** 実行一覧。 */
   private final RunService runs;
+
+  /** 保存先。 */
   private final McpRequestStore store;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 並行。 */
   private final boolean concurrent;
+
+  /** 受付記録保持期間。 */
   private final Duration receiptRetention;
+
+  /** 続きの取得位置一覧。 */
   private final McpCursor cursors;
+
+  /** 承認一覧。 */
   private final dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvals;
 
+  /** 指定された値や利用先を使って、McpToolsを初期化する。 */
   public McpTools(
       ProjectRegistry projects,
       Set<String> allowed,
@@ -74,6 +101,7 @@ public final class McpTools {
     this.approvals = approvals;
   }
 
+  /** MCPによる機能の提供の要求を実行し、呼び出し元へ結果を返す。 */
   public McpSchema.CallToolResult call(String name, Map<String, Object> args) {
     String correlation = UUID.randomUUID().toString();
     Map<String, Object> output;
@@ -165,6 +193,7 @@ public final class McpTools {
     }
   }
 
+  /** MCPによる機能の提供で用いるメッセージを返す。 */
   private static String message(String code) {
     return switch (code) {
       case "REQUEST_CONFLICT" -> "同じrequest_idが異なる内容で使用されています";
@@ -174,17 +203,20 @@ public final class McpTools {
     };
   }
 
+  /** MCPによる機能の提供で用いる安全性識別子を返す。 */
   private static String safeId(Map<String, Object> a, String key) {
     return a != null && a.get(key) instanceof String s && s.matches("[A-Za-z0-9._:-]{1,200}")
         ? s
         : null;
   }
 
+  /** MCPによる機能の提供に関するプロジェクトを処理する。 */
   private void project(String id) {
     if (!allowed.contains(id) || projects.resolveById(id).isEmpty())
       throw new McpError("NOT_FOUND");
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   private static String text(Map<String, Object> a, String key, boolean required, int bytes) {
     Object raw = a.get(key);
     if (raw == null && !required) return null;
@@ -195,8 +227,10 @@ public final class McpTools {
     return s;
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   private static List<String> list(Map<String, Object> a, String key) {
     if (!a.containsKey(key)) return List.of();
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (!(a.get(key) instanceof List<?> values) || values.size() > 16)
       throw new McpError("INVALID_ARGUMENT");
     var result = new ArrayList<String>();
@@ -210,6 +244,7 @@ public final class McpTools {
     return List.copyOf(result);
   }
 
+  /** MCPによる機能の提供で用いる整数を返す。 */
   private static long integer(
       Map<String, Object> a, String key, long fallback, long min, long max) {
     if (!a.containsKey(key)) return fallback;
@@ -221,6 +256,7 @@ public final class McpTools {
     return n.longValue();
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   private static void validate(String name, Map<String, Object> args) {
     Set<String> keys =
         switch (name) {
@@ -248,6 +284,7 @@ public final class McpTools {
     }
   }
 
+  /** MCPによる機能の提供で用いるプロジェクト一覧を返す。 */
   private Map<String, Object> projects() {
     return Map.of(
         "schema_version",
@@ -269,6 +306,7 @@ public final class McpTools {
             .toList());
   }
 
+  /** MCPによる機能の提供で用いる文脈を返す。 */
   private Map<String, Object> context(Map<String, Object> a) {
     String p = text(a, "project_id", true, 200);
     project(p);
@@ -334,11 +372,13 @@ public final class McpTools {
                 .anyMatch(e -> CredentialRedactor.redact(e.text()).length() > 1000));
   }
 
+  /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   private synchronized Map<String, Object> submit(Map<String, Object> a) {
     String p = text(a, "project_id", true, 200);
     project(p);
     String instruction = text(a, "instruction", true, 16384);
     String request = text(a, "request_id", true, 512);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (request.length() > 128) throw new McpError("INVALID_ARGUMENT");
     String session = text(a, "session_id", false, 200);
     var constraints = list(a, "constraints");
@@ -379,6 +419,7 @@ public final class McpTools {
     return receipt(store.byRun(accepted.runId()).orElseThrow(), request, false);
   }
 
+  /** MCPによる機能の提供で用いる受付記録を返す。 */
   private Map<String, Object> receipt(McpRequestStore.Request r, String request, boolean replay) {
     var output =
         new LinkedHashMap<String, Object>(
@@ -401,6 +442,7 @@ public final class McpTools {
     return output;
   }
 
+  /** MCPによる機能の提供で用いる自分が所有する対象を返す。 */
   private McpRequestStore.Request owned(Map<String, Object> a, boolean requestAllowed) {
     String p = text(a, "project_id", true, 200);
     project(p);
@@ -408,6 +450,7 @@ public final class McpTools {
         request = requestAllowed ? text(a, "request_id", false, 512) : null;
     if (requestAllowed && (run == null) == (request == null))
       throw new McpError("INVALID_ARGUMENT");
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (request != null && request.length() > 128) throw new McpError("INVALID_ARGUMENT");
     var r =
         (run != null ? store.byRun(run) : store.byRequest(ConversationAdmissionStore.hash(request)))
@@ -416,6 +459,7 @@ public final class McpTools {
     return r;
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   private Map<String, Object> status(Map<String, Object> a) {
     var r = owned(a, true);
     if (a.containsKey("request_id") && !clock.instant().isBefore(r.expires()))
@@ -467,6 +511,7 @@ public final class McpTools {
     return out;
   }
 
+  /** MCPによる機能の提供で用いる結果を返す。 */
   @SuppressWarnings("unchecked")
   private Map<String, Object> result(Map<String, Object> a) {
     var r = owned(a, false);
@@ -517,10 +562,12 @@ public final class McpTools {
     }
   }
 
+  /** 対象の実行をキャンセルする。 */
   private Map<String, Object> cancel(Map<String, Object> a) {
     var r = owned(a, false);
     var s = store.status(r);
     if (s.status() == RunStatus.UNKNOWN) throw new McpError("RUN_STATE_UNKNOWN");
+    // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
     if (s.status().isTerminal())
       return Map.of(
           "run_id",
@@ -547,6 +594,7 @@ public final class McpTools {
         "NOT_GUARANTEED");
   }
 
+  /** 利用先の許容量を超えないよう、MCPツール一覧を上限内に収める。 */
   private static String clip(String value, int max) {
     return value.length() <= max ? value : value.substring(0, max);
   }

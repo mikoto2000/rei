@@ -10,10 +10,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** 永続化された実行登録台帳の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class DurableRunRegistryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 不明読み取り実行を復元することを確認する。 */
   @Test
   void independentJvmCrashThenRestartRestoresUnknownReadRun() throws Exception {
     for (String phase : java.util.List.of("crash", "recover")) {
@@ -36,7 +39,9 @@ class DurableRunRegistryTest {
     }
   }
 
+  /** 検証条件を再現するための再開利用可否の確認。 */
   public static class RestartProbe {
+    /** 検証用に、実行の受付と状態管理の起動要求を受け付け、実行を開始する。 */
     public static void main(String[] args) {
       Path root = Path.of(args[0]);
       var source = new SQLiteDataSource();
@@ -63,6 +68,7 @@ class DurableRunRegistryTest {
     }
   }
 
+  /** 再開について、所有権を復元することを確認する。 */
   @Test
   void restartRestoresOwnershipAndModeAndNeverSilentlyRestartsInflightWork() {
     var db = new SQLiteDataSource();
@@ -93,6 +99,7 @@ class DurableRunRegistryTest {
     assertThat(reopened.transition("read", RunStatus.RUNNING, null)).isFalse();
   }
 
+  /** 実行の受付と状態管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rejectedAdmissionIsForgottenDurably() {
     var db = new SQLiteDataSource();
@@ -104,6 +111,7 @@ class DurableRunRegistryTest {
         .isInstanceOf(RunNotFoundException.class);
   }
 
+  /** 実行の受付と状態管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void anotherLiveRegistryCannotTakeOverOrCancelItsExecutionOwner() {
     var db = new SQLiteDataSource();

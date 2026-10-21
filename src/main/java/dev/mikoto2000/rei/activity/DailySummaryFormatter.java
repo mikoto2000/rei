@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.activity;
 
+/** 日次要約を利用者が確認できる表示形式へ整える。 */
 public final class DailySummaryFormatter {
+  /** 受け取った情報を、表示や受け渡しに適した形式へ整える。 */
   public String format(DailySummaryAggregate a, DailySummary summary) {
     var out =
         new StringBuilder("Activity Summary — ")
@@ -48,6 +50,7 @@ public final class DailySummaryFormatter {
     return out.toString();
   }
 
+  /** 作業状況の把握で用いる継続時間を返す。 */
   private static String duration(long seconds) {
     return (seconds / 3600) + "時間" + (seconds % 3600 / 60) + "分" + (seconds % 60) + "秒";
   }

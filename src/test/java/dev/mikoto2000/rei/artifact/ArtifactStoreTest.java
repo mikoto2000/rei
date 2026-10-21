@@ -19,8 +19,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** 成果物保存先の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ArtifactStoreTest {
+  /** 有効期限および明示的な削除について、受付記録一覧を保持することを確認する。 */
   @Test
   void expiryAndExplicitDeletionRetainReceiptsAndReleaseCapacity() throws Exception {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -31,14 +33,17 @@ class ArtifactStoreTest {
         new java.util.concurrent.atomic.AtomicReference<>(Instant.parse("2026-10-07T01:00:00Z"));
     Clock clock =
         new Clock() {
+          /** 検証用に、成果物の管理で参照するタイムゾーンを返す。 */
           public ZoneId getZone() {
             return ZoneOffset.UTC;
           }
 
+          /** 検証用に、指定されたタイムゾーンを反映した情報を作成する。 */
           public Clock withZone(ZoneId zone) {
             return this;
           }
 
+          /** {@code instant} の条件を再現するための補助情報を返す。 */
           public Instant instant() {
             return now.get();
           }
@@ -65,8 +70,10 @@ class ArtifactStoreTest {
         .isEqualTo("AVAILABLE");
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 成果物の管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void immutableBytesAndOwnerScopedMetadataSurviveRestartWithoutExposingPaths() throws Exception {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -121,6 +128,7 @@ class ArtifactStoreTest {
         .isInstanceOf(ResourceNotFoundException.class);
   }
 
+  /** 成果物の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void filenameTraversalUnsupportedMediaOversizeAndTamperingFailClosed() throws Exception {
     var projects = new ProjectRegistry(root.resolve("projects.json"));

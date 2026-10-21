@@ -16,7 +16,9 @@ import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+/** 非同期ベクトル文書サービスの結果と状態の契約を検証するテスト。 */
 class AsyncVectorDocumentServiceTest {
+  /** 完了を伝えることを確認する。 */
   @Test
   void ingestionReportsCompletionAndFailureToItsOwnWriterWithoutGlobalOutput() throws Exception {
     var vectors = Mockito.mock(VectorDocumentService.class);
@@ -33,6 +35,7 @@ class AsyncVectorDocumentServiceTest {
     assertFalse(service.hasActiveEmbeddings());
   }
 
+  /** 検索対象文書の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void addAsyncPrintsCompletionMessage() throws Exception {
     VectorDocumentService vectorDocumentService = Mockito.mock(VectorDocumentService.class);
@@ -55,6 +58,7 @@ class AsyncVectorDocumentServiceTest {
     assertTrue(out.toString().contains("追加完了: doc-1"));
   }
 
+  /** 検索対象文書の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void addAsyncPrintsFailureMessage() throws Exception {
     VectorDocumentService vectorDocumentService = Mockito.mock(VectorDocumentService.class);
@@ -75,6 +79,7 @@ class AsyncVectorDocumentServiceTest {
     assertTrue(out.toString().contains("docs/spec.md"));
   }
 
+  /** 検索対象文書の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void activeEmbeddingCountTracksInFlightWork() throws Exception {
     VectorDocumentService vectorDocumentService = Mockito.mock(VectorDocumentService.class);

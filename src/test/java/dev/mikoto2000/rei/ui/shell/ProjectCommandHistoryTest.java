@@ -26,14 +26,23 @@ import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.CommandSpec;
 
+/** プロジェクトコマンド履歴の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Timeout(15)
 @Tag("integration")
 class ProjectCommandHistoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う終端。 */
   DumbTerminal terminal;
+
+  /** 検証に使う読み取り元。 */
   LineReaderImpl reader;
+
+  /** 検証に使う選択中。 */
   final AtomicReference<ProjectContext> selected = new AtomicReference<>();
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     terminal =
@@ -51,20 +60,24 @@ class ProjectCommandHistoryTest {
         new ProjectContext("00000000-0000-0000-0000-000000000001", "same-name", root.resolve("a")));
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void cleanup() throws Exception {
     terminal.close();
   }
 
+  /** 検証用に、指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   String read(String input) {
     reader.runMacro(input + "\n");
     return reader.readLine("");
   }
 
+  /** {@code file} の条件を再現するための補助情報を返す。 */
   Path file(String id) {
     return root.resolve("command-history").resolve(id + ".history");
   }
 
+  /** {@code entries} の条件を再現するための補助情報を返す。 */
   java.util.List<String> entries() {
     return reader.getHistory().iterator().hasNext()
         ? java.util.stream.StreamSupport.stream(reader.getHistory().spliterator(), false)
@@ -73,11 +86,13 @@ class ProjectCommandHistoryTest {
         : java.util.List.of();
   }
 
+  /** {@code selectB} の条件を再現するため、検証用の操作や状態を扱う。 */
   void selectB() {
     selected.set(
         new ProjectContext("00000000-0000-0000-0000-000000000002", "same-name", root.resolve("b")));
   }
 
+  /** ターミナルでの対話で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void switchesFilesAndMemoryAndRestoresArrowAndSearchHistory() throws Exception {
     try (var history = new ProjectCommandHistory(() -> reader, selected::get, root)) {
@@ -110,6 +125,7 @@ class ProjectCommandHistoryTest {
     }
   }
 
+  /** ターミナルでの対話で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void reloadsOnRestartAndKeepsLegacySharedHistoryUntouched() throws Exception {
     Files.writeString(root.resolve("history"), "old shared command\n");
@@ -130,6 +146,7 @@ class ProjectCommandHistoryTest {
     assertThat(Files.readString(root.resolve("history"))).isEqualTo("old shared command\n");
   }
 
+  /** 変更なしプロジェクトについて、履歴起動単位の識別子を保持することを確認する。 */
   @Test
   void unchangedProjectPreservesHistoryInstanceAndUnsavedEntries() throws Exception {
     try (var history = new ProjectCommandHistory(() -> reader, selected::get, root)) {
@@ -142,6 +159,7 @@ class ProjectCommandHistoryTest {
     }
   }
 
+  /** 読み込み失敗情報について、前回ファイルを維持することを確認する。 */
   @Test
   void loadFailureKeepsPreviousFileAndMemoryAndCanBeRetried() throws Exception {
     try (var history = new ProjectCommandHistory(() -> reader, selected::get, root)) {
@@ -160,6 +178,7 @@ class ProjectCommandHistoryTest {
     }
   }
 
+  /** ターミナルでの対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void saveFailureDoesNotSwitchBackingFileOrMemory() throws Exception {
     try (var history = new ProjectCommandHistory(() -> reader, selected::get, root)) {
@@ -180,6 +199,7 @@ class ProjectCommandHistoryTest {
     }
   }
 
+  /** ターミナルでの対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void followsActualCdFailedCdAndRemovalBackToStartup() throws Exception {
     Path startup = Files.createDirectory(root.resolve("startup"));

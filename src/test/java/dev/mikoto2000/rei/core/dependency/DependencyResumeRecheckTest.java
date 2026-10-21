@@ -16,9 +16,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 依存条件再開再確認の結果と状態の契約を検証するテスト。 */
 class DependencyResumeRecheckTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 外部条件の待機で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void completedFileAndPrerequisiteAreFreshlyCheckedWithoutRewritingHistory() throws Exception {
     var repo =
@@ -62,6 +65,7 @@ class DependencyResumeRecheckTest {
     assertEquals(DependencyState.COMPLETED, repo.get("p", child.id()).state());
   }
 
+  /** 外部条件の待機の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void automaticRecheckCannotUseTerminalHttpFactToBypassPermission() {
     var repo =
@@ -84,6 +88,7 @@ class DependencyResumeRecheckTest {
             new ToolPermissionPolicy(new ToolPermissionProperties(true, null, null, null)),
             e -> {});
     assertEquals("permission_required", service.recheckForResume("p", entry.id()).detail());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(probe);
   }
 }

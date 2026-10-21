@@ -11,7 +11,9 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 画面操作利用サービスの結果と状態の契約を検証するテスト。 */
 class ComputerUseServiceTest {
+  /** 画面操作の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void validationFailureReachesResultAndFinishedEventWithoutResponseContent() {
     var progress = new ArrayList<ComputerProgress>();
@@ -32,6 +34,7 @@ class ComputerUseServiceTest {
     assertTrue(progress.getLast().reason().contains(result.reason()));
   }
 
+  /** 画面操作の支援の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationFromActionStartedEventStillPreventsDispatch() {
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
@@ -53,6 +56,7 @@ class ComputerUseServiceTest {
     assertTrue(input.isEmpty());
   }
 
+  /** 画面操作の支援の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationFromCompletedEventPreventsStabilization() {
     var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
@@ -74,6 +78,7 @@ class ComputerUseServiceTest {
     assertTrue(waits.isEmpty());
   }
 
+  /** 画面操作の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidDecisionNeverDispatchesAndLowConfidenceReobserves() {
     var calls = new ArrayList<ComputerAction>();
@@ -117,6 +122,7 @@ class ComputerUseServiceTest {
     assertEquals("DONE", progress.getLast().reason());
   }
 
+  /** 画面操作の支援の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationIsCheckedAtEveryBoundary() {
     for (String boundary : List.of("before", "capture", "model", "input", "wait")) {
@@ -155,6 +161,7 @@ class ComputerUseServiceTest {
     }
   }
 
+  /** 画面操作の支援の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationAndSafetyStopBeforeDispatch() {
     var calls = new ArrayList<ComputerAction>();
@@ -193,6 +200,7 @@ class ComputerUseServiceTest {
     assertTrue(calls.isEmpty());
   }
 
+  /** 画面操作の支援で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void uncertainAndWaitReobserveWithoutInputAndHistoryIsBounded() {
     var seen = new ArrayList<ComputerObservation>();
@@ -220,6 +228,7 @@ class ComputerUseServiceTest {
     assertEquals(2, seen.getLast().recentHistory().size());
   }
 
+  /** 画面操作の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void distinguishesBoundaryFailures() {
     for (var expected :
@@ -253,6 +262,7 @@ class ComputerUseServiceTest {
     }
   }
 
+  /** 画面操作の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedDoesNotDispatch() {
     var service =
@@ -269,11 +279,13 @@ class ComputerUseServiceTest {
     assertEquals(ComputerUseResult.Status.FAILED, service.run("goal").status());
   }
 
+  /** {@code screen} の条件を再現するための補助情報を返す。 */
   static CapturedScreen screen() {
     return new CapturedScreen(
         new BufferedImage(320, 240, BufferedImage.TYPE_INT_RGB), new Rectangle(0, 0, 320, 240));
   }
 
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void observesAgainAfterEachActionAndOnlyDoneMeansSuccess() {
     var order = new ArrayList<String>();

@@ -17,20 +17,42 @@ import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/** 話題の管理に必要な話題生成表示用の状態を扱う。 */
 public final class TopicGeneratorProjection implements AgentEventListener {
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(TopicGeneratorProjection.class);
 
+  /** 状態。 */
   private TopicGenerationStatus status = TopicGenerationStatus.IDLE;
+
+  /** 話題生成識別子。 */
   private String topicGenerationId;
+
+  /** 候補一覧。 */
   private final Map<String, TopicCandidateState> candidates = new LinkedHashMap<>();
+
+  /** 選択中候補識別子。 */
   private String selectedCandidateId;
+
+  /** 対象外理由。 */
   private TopicSpeakSkipReason skipReason;
+
+  /** 開始日時。 */
   private java.time.Instant startedAt;
+
+  /** 完了日時。 */
   private java.time.Instant completedAt;
+
+  /** 直近読み上げ済み日時。 */
   private java.time.Instant lastSpokenAt;
+
+  /** 読み上げ済み。 */
   private boolean spoken;
+
+  /** 直近発生順序。 */
   private long lastSequence;
 
+  /** 通知に応じて状態や表示を更新するため、イベントを受け付ける。 */
   @Override
   public synchronized void onEvent(AgentEvent event) {
     if (event == null) return;
@@ -68,6 +90,7 @@ public final class TopicGeneratorProjection implements AgentEventListener {
     }
   }
 
+  /** 話題の管理で用いる現在状態を返す。 */
   public synchronized TopicGeneratorState currentState() {
     return new TopicGeneratorState(
         status,
@@ -82,6 +105,7 @@ public final class TopicGeneratorProjection implements AgentEventListener {
         lastSequence);
   }
 
+  /** 指定された変更を有効にするため、開始を反映する。 */
   private void applyStarted(TopicGenerationStartedPayload payload) {
     java.time.Instant previousLastSpokenAt = lastSpokenAt;
     status = TopicGenerationStatus.GENERATING;
@@ -95,6 +119,7 @@ public final class TopicGeneratorProjection implements AgentEventListener {
     spoken = false;
   }
 
+  /** 指定された変更を有効にするため、生成済みを反映する。 */
   private void applyGenerated(TopicCandidateGeneratedPayload payload) {
     status = TopicGenerationStatus.GENERATING;
     TopicType type = parseEnum(TopicType.class, payload.topicType());
@@ -112,6 +137,7 @@ public final class TopicGeneratorProjection implements AgentEventListener {
             null));
   }
 
+  /** 指定された変更を有効にするため、評価済みを反映する。 */
   private void applyScored(TopicCandidateScoredPayload payload) {
     status = TopicGenerationStatus.EVALUATING;
     TopicCandidateState current = candidate(payload.candidateId());
@@ -128,6 +154,7 @@ public final class TopicGeneratorProjection implements AgentEventListener {
             current.rejectionReason()));
   }
 
+  /** 指定された変更を有効にするため、拒否済みを反映する。 */
   private void applyRejected(TopicCandidateRejectedPayload payload) {
     TopicCandidateState current = candidate(payload.candidateId());
     TopicScoreBreakdown score = current.score();
@@ -147,6 +174,7 @@ public final class TopicGeneratorProjection implements AgentEventListener {
             payload.reason()));
   }
 
+  /** 指定された変更を有効にするため、選択中を反映する。 */
   private void applySelected(TopicSelectedPayload payload) {
     status = TopicGenerationStatus.READY;
     selectedCandidateId = payload.candidateId();
@@ -168,11 +196,13 @@ public final class TopicGeneratorProjection implements AgentEventListener {
             current.rejectionReason()));
   }
 
+  /** 指定された変更を有効にするため、対象外を反映する。 */
   private void applySkipped(TopicSpeakSkippedPayload payload) {
     status = TopicGenerationStatus.SKIPPED;
     skipReason = payload.reason();
   }
 
+  /** 指定された変更を有効にするため、読み上げ済みを反映する。 */
   private void applySpoken(TopicSpokenPayload payload) {
     status = TopicGenerationStatus.SPOKEN;
     spoken = true;
@@ -191,6 +221,7 @@ public final class TopicGeneratorProjection implements AgentEventListener {
             current.rejectionReason()));
   }
 
+  /** 指定された変更を有効にするため、完了を反映する。 */
   private void applyCompleted(TopicGenerationCompletedPayload payload) {
     status = TopicGenerationStatus.COMPLETED;
     topicGenerationId = payload.topicGenerationId();
@@ -199,12 +230,14 @@ public final class TopicGeneratorProjection implements AgentEventListener {
     spoken = payload.spoken();
   }
 
+  /** 指定された変更を有効にするため、失敗を反映する。 */
   private void applyFailed(TopicGenerationFailedPayload payload) {
     status = TopicGenerationStatus.FAILED;
     topicGenerationId = payload.topicGenerationId();
     completedAt = payload.failedAt();
   }
 
+  /** 話題の管理で用いる候補を返す。 */
   private TopicCandidateState candidate(String candidateId) {
     TopicCandidateState current = candidates.get(candidateId);
     if (current != null) return current;
@@ -212,6 +245,7 @@ public final class TopicGeneratorProjection implements AgentEventListener {
         candidateId, TopicCandidateStatus.GENERATED, null, null, null, null, null, null);
   }
 
+  /** 入力を機能内で扱えるよう、Enumを解釈する。 */
   private static <T extends Enum<T>> T parseEnum(Class<T> type, String value) {
     if (value == null || value.isBlank()) return null;
     try {

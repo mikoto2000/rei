@@ -4,7 +4,9 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.Test;
 
+/** チャット入力の結果と状態の契約を検証するテスト。 */
 class ChatInputTest {
+  /** 選択可能な設定を受け付けられることを確認する。 */
   @Test
   void acceptsOptionsAfterPromptAndEqualsSyntaxLikeShell() {
     var input =
@@ -23,6 +25,7 @@ class ChatInputTest {
                 TerminalClient.commandWords("/chat prompt --unknown value"), "EXCLUSIVE"));
   }
 
+  /** 明示的な実行を保持することを確認する。 */
   @Test
   void preservesExplicitRunAndModeWithoutTreatingOptionsAsPrompt() {
     var input =
@@ -36,6 +39,7 @@ class ChatInputTest {
             .mode());
   }
 
+  /** 未対応のを受け付けないことを確認する。 */
   @Test
   void rejectsUnsupportedOrConflictingOptionsBeforeHttp() {
     assertThrows(

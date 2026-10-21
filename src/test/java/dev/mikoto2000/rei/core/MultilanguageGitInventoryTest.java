@@ -10,10 +10,13 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** MultilanguageGit保有情報の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class MultilanguageGitInventoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code git} の条件を再現するため、検証用の操作や状態を扱う。 */
   void git(String... arguments) throws Exception {
     var command = new java.util.ArrayList<String>(java.util.List.of("git", "-C", root.toString()));
     command.addAll(java.util.List.of(arguments));
@@ -26,6 +29,7 @@ class MultilanguageGitInventoryTest {
             process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void realGitInventoryNeverExecutesConfiguredFsmonitorAndReturnsMetadataOnly() throws Exception {
     git("init", "--quiet");

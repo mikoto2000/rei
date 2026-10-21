@@ -4,16 +4,27 @@ import java.time.Duration;
 import java.time.ZoneId;
 import java.util.Set;
 
+/** 日次計画の設定値をまとめ、利用環境に応じた動作を指定できるようにする。 */
 @org.springframework.boot.context.properties.ConfigurationProperties("rei.today")
 @lombok.Getter
 @lombok.Setter
 public class DailyPlanningProperties {
+  /** 有効状態。 */
   private boolean enabled;
+
+  /** プロジェクト一覧。 */
   private Set<String> projects = Set.of();
+
+  /** タイムゾーン。 */
   private String zone = "Asia/Tokyo";
+
+  /** 最大タスク一覧ごとのプロジェクト／最大項目一覧ごとのプロジェクト／集約対象予算秒数。 */
   private int maxTasksPerProject = 1000, maxItemsPerProject = 128, collectionBudgetSeconds = 5;
+
+  /** 古い状態変更後。 */
   private Duration staleAfter = Duration.ofDays(7);
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public void validate() {
     if (projects == null
         || projects.isEmpty()

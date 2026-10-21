@@ -43,50 +43,92 @@ import java.util.function.Consumer;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Service;
 
-/** Shared Shell, Chat Tool and HTTP application service; never calls the LLM itself. */
+/**
+ * 保存される再開用の記録のユースケースを実現する。
+ *
+ * <p>Shared Shell, Chat Tool and HTTP application service; never calls the LLM itself.
+ */
 @Service
 public class PersistentCheckpointService implements AutoCloseable {
+  /** 保存と検索の窓口。 */
   private final PersistentCheckpointRepository repository;
+
+  /** 再開時の記録と現在の状態を照合する窓口。 */
   private final CheckpointReconciler reconciler;
+
+  /** 設定。 */
   private final CheckpointProperties settings;
+
+  /** 通知の連携先。 */
   private final AgentEventBus bus;
+
+  /** 入力の振り分け。 */
   private final ObjectProvider<ConversationInputRouter> router;
+
+  /** 実行一覧。 */
   private final ObjectProvider<RunRegistry> runs;
+
+  /** 受付から終了までの管理。 */
   private final ObjectProvider<RunService> lifecycle;
+
+  /** 計画一覧。 */
   private final ObjectProvider<ActionPlan> plans;
+
+  /** 作業中。 */
   private final ObjectProvider<WorkingSet> working;
+
+  /** タスク一覧。 */
   private final ObjectProvider<TaskState> tasks;
+
+  /** 旧形式。 */
   private final ObjectProvider<CheckpointStore> legacy;
+
+  /** 活動中。 */
   private final ConcurrentMap<String, PersistentCheckpoint> active = new ConcurrentHashMap<>();
+
+  /** 実行中の状態。 */
   private final Set<String> executing = ConcurrentHashMap.newKeySet();
+
+  /** 現在案内。 */
   private final ConcurrentMap<String, String> currentGuidance = new ConcurrentHashMap<>();
+
   // Guarded by this monitor. Force reset removes durable history, not a live Run's safety state.
+  /** 一時的なイベント一覧。 */
   private final Map<String, Set<String>> transientEvents = new HashMap<>();
 
+  /** 作業の中断と再開で用いる現在案内を返す。 */
   public String currentGuidance(String run) {
     return currentGuidance.getOrDefault(run, "");
   }
 
+  /** 購読／境界一覧。 */
   private final AgentEventBus.Subscription subscription, boundaries;
+
+  /** レビュー記録台帳。 */
   private dev.mikoto2000.rei.review.ReviewCoverageLedger reviewLedger;
 
+  /** 作業の中断と再開で使用するレビュー記録台帳を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setReviewLedger(dev.mikoto2000.rei.review.ReviewCoverageLedger ledger) {
     reviewLedger = ledger;
   }
 
+  /** 元の結果一覧。 */
   private dev.mikoto2000.rei.core.contextbudget.RawToolResultStore rawResults;
 
+  /** 作業の中断と再開で使用する元の結果一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setRawResults(dev.mikoto2000.rei.core.contextbudget.RawToolResultStore store) {
     rawResults = store;
   }
 
+  /** 作業の中断と再開に関するpreserve結果一覧を処理する。 */
   public void preserveResults(
       AgentRunContext owner, List<org.springframework.ai.chat.messages.Message> history) {
     preserveResults(owner, history, null);
   }
 
+  /** 作業の中断と再開で用いる進捗を返す。 */
   public dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState progress(
       AgentRunContext owner) {
     var saved = active.get(owner.runId());
@@ -98,6 +140,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     return saved.progress();
   }
 
+  /** 作業の中断と再開において、進捗履歴の有無を判定する。 */
   public boolean hasProgressHistory(AgentRunContext owner) {
     var saved = active.get(owner.runId());
     return saved != null
@@ -105,6 +148,7 @@ public class PersistentCheckpointService implements AutoCloseable {
             || Set.of("WAITING", "WAITING_APPROVAL").contains(saved.status()));
   }
 
+  /** 作業の中断と再開に関するpreserve結果一覧を処理する。 */
   public void preserveResults(
       AgentRunContext owner,
       List<org.springframework.ai.chat.messages.Message> history,
@@ -158,6 +202,7 @@ public class PersistentCheckpointService implements AutoCloseable {
         });
   }
 
+  /** 指定された値や利用先を使って、PersistentCheckpointServiceを初期化する。 */
   public PersistentCheckpointService(
       PersistentCheckpointRepository repository,
       CheckpointReconciler reconciler,
@@ -185,6 +230,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     boundaries = bus.subscribeBoundary(this::beforeBoundary);
   }
 
+  /** 要求された処理を開始する。 */
   public void start(AgentRunContext context, String request) {
     if (!settings.isEnabled() || context.projectId() == null) return;
     PersistentCheckpoint state;
@@ -256,6 +302,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     }
   }
 
+  /** 終了時に必要な状態を反映し、処理を完了させる。 */
   public void finish(AgentRunContext context, String status) {
     var state = active.get(context.runId());
     if (state == null) return;
@@ -281,6 +328,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     }
   }
 
+  /** 確定できない結果を、判定不能の情報として表す。 */
   private List<Operation> unknown(List<Operation> operations) {
     return operations.stream()
         .map(
@@ -296,6 +344,7 @@ public class PersistentCheckpointService implements AutoCloseable {
         .toList();
   }
 
+  /** 後から参照できるよう、現在を保存する。 */
   public PersistentCheckpoint saveCurrent(String project, String session) {
     if (!settings.isEnabled())
       throw new CheckpointException(
@@ -323,6 +372,7 @@ public class PersistentCheckpointService implements AutoCloseable {
         true);
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<PersistentCheckpoint> list(String project) {
     return repository.list(project).stream()
         .map(this::recoverView)
@@ -336,14 +386,17 @@ public class PersistentCheckpointService implements AutoCloseable {
         .toList();
   }
 
+  /** 作業の中断と再開で用いる履歴使用状況を返す。 */
   public CheckpointHistory.Usage historyUsage() {
     return repository.historyUsage();
   }
 
+  /** 作業の中断と再開で用いる後片付け履歴を返す。 */
   public CheckpointHistory.Cleanup cleanupHistory(boolean apply) {
     return repository.cleanupHistory(apply);
   }
 
+  /** 作業の中断と再開で用いる後片付け履歴を返す。 */
   public synchronized CheckpointHistory.Cleanup cleanupHistory(boolean apply, boolean force) {
     var result = repository.cleanupHistory(apply, force);
     if (apply && force)
@@ -352,10 +405,12 @@ public class PersistentCheckpointService implements AutoCloseable {
     return result;
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public PersistentCheckpoint get(String project, String task) {
     return recoverView(repository.get(project, task));
   }
 
+  /** 処理を継続できる状態に戻すため、表示内容を復旧する。 */
   private PersistentCheckpoint recoverView(PersistentCheckpoint state) {
     if (!"RUNNING".equals(state.status()) || repository.leased(state.projectId(), state.taskId()))
       return state;
@@ -366,6 +421,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     return repository.fields(fields);
   }
 
+  /** 対象の状態や内容を調べ、呼び出し元が確認できる情報として返す。 */
   public CheckpointReconciler.Result inspect(String project, String task) {
     var state = get(project, task);
     var result = reconciler.check(state, repository.leased(project, task));
@@ -387,6 +443,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     return result;
   }
 
+  /** 作業の中断と再開で用いるabandonを返す。 */
   public PersistentCheckpoint abandon(String project, String task) {
     String claim = "abandon:" + UUID.randomUUID();
     if (!repository.acquire(project, task, claim))
@@ -401,6 +458,15 @@ public class PersistentCheckpointService implements AutoCloseable {
     }
   }
 
+  /**
+   * 作業の中断と再開で受け渡す再開結果を表す。
+   *
+   * @param taskId タスク識別子
+   * @param runId 実行の識別子
+   * @param previousRunId 前回実行の識別子
+   * @param checkpointRevision 再開用の記録改訂番号
+   * @param reconciliation 状態の照合結果
+   */
   public record ResumeResult(
       String taskId,
       String runId,
@@ -408,17 +474,21 @@ public class PersistentCheckpointService implements AutoCloseable {
       long checkpointRevision,
       CheckpointReconciler.Result reconciliation) {}
 
+  /** 保存された状況を引き継いで、中断した作業を再開する。 */
   public ResumeResult resume(String project, String task, AgentRunContext.RequestSource source) {
     return resume(project, task, source, null);
   }
 
+  /** 保存された状況を引き継いで、中断した作業を再開する。 */
   public ResumeResult resume(
       String project, String task, AgentRunContext.RequestSource source, Long expectedRevision) {
     return resumeChecked(project, task, source, expectedRevision, null, null, null);
   }
 
   /**
-   * Narrow continuation for a manually verified Dot request; fixed scheduler Run and read-only
+   * 中断した作業を引き継ぐため、対象状態表示を再開する。
+   *
+   * <p>Narrow continuation for a manually verified Dot request; fixed scheduler Run and read-only
    * authority.
    */
   public ResumeResult resumeForDot(
@@ -438,6 +508,7 @@ public class PersistentCheckpointService implements AutoCloseable {
         untrustedSummary);
   }
 
+  /** 中断した作業を引き継ぐため、確認済みを再開する。 */
   private ResumeResult resumeChecked(
       String project,
       String task,
@@ -562,7 +633,9 @@ public class PersistentCheckpointService implements AutoCloseable {
   }
 
   /**
-   * Attach a checked continuation to an already claimed Goal Run; no second Chat or router
+   * 作業の中断と再開に関する準備目標継続入力を処理する。
+   *
+   * <p>Attach a checked continuation to an already claimed Goal Run; no second Chat or router
    * admission.
    */
   public void prepareGoalContinuation(
@@ -608,6 +681,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     }
   }
 
+  /** 作業の中断と再開に関する中止準備済み目標継続入力を処理する。 */
   public void abortPreparedGoalContinuation(String run) {
     var state = active.get(run);
     if (state != null && !executing.contains(run))
@@ -617,6 +691,7 @@ public class PersistentCheckpointService implements AutoCloseable {
           "INTERRUPTED");
   }
 
+  /** 本処理に必要な文脈や条件を整えるため、境界を準備する。 */
   private void beforeBoundary(AgentEvent event) {
     if (event.runId() == null) return;
     var state = active.get(event.runId());
@@ -632,6 +707,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     onEvent(event);
   }
 
+  /** 作業の中断と再開において、参照専用に該当するか判定する。 */
   private boolean readOnly(String tool) {
     // Explicit allowlist; guessing from substrings can mistake deleteTarget/sendReader for a read.
     return Set.of(
@@ -660,6 +736,7 @@ public class PersistentCheckpointService implements AutoCloseable {
         .contains(tool);
   }
 
+  /** 通知に応じて状態や表示を更新するため、イベントを受け付ける。 */
   private void onEvent(AgentEvent event) {
     if (event.runId() == null || !active.containsKey(event.runId())) return;
     if (event.type() == AgentEventType.AGENT_RUN_CANCELLED && !executing.contains(event.runId())) {
@@ -769,6 +846,7 @@ public class PersistentCheckpointService implements AutoCloseable {
                     PersistentCheckpointRepository.OWNER));
             fields.put("processes", processes);
           }
+          // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
           if (evidence.size() > 200)
             evidence = new ArrayList<>(evidence.subList(evidence.size() - 200, evidence.size()));
           if (operations.size() > 500)
@@ -783,11 +861,13 @@ public class PersistentCheckpointService implements AutoCloseable {
         });
   }
 
+  /** 指定された変更を、管理中の情報へ反映する。 */
   private PersistentCheckpoint update(
       String run, String event, Consumer<Map<String, Object>> mutation) {
     return update(run, event, mutation, false);
   }
 
+  /** 指定された変更を、管理中の情報へ反映する。 */
   private PersistentCheckpoint update(
       String run, String event, Consumer<Map<String, Object>> mutation, boolean requirePersistent) {
     PersistentCheckpoint next = null;
@@ -831,6 +911,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     return next;
   }
 
+  /** 後から状況を確認できるよう、保存される再開用の記録サービスを記録する。 */
   private void capture(Map<String, Object> fields, AgentRunContext context) {
     if (context.mode() != AgentRunContext.Mode.EXCLUSIVE) return;
     var plan = plans.getIfAvailable();
@@ -873,11 +954,13 @@ public class PersistentCheckpointService implements AutoCloseable {
     fields.put("git", CheckpointReconciler.git(context.projectRoot()));
   }
 
+  /** 利用先の上限を超えない量へ、指定された内容を調整する。 */
   public static String bounded(String text, int length) {
     if (text == null) return "";
     return text.length() > length ? text.substring(0, length) : text;
   }
 
+  /** 作業の中断と再開で用いる文脈を返す。 */
   public String context(String run) {
     var state = active.get(run);
     if (state == null || state.resumedFromRunId() == null) return "";
@@ -920,6 +1003,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     return bounded(text.toString(), budget);
   }
 
+  /** 作業の中断と再開で用いる付加情報の記録を返す。 */
   public PersistentCheckpoint annotate(
       String project, String task, List<String> acceptance, String next, List<String> blockers) {
     var run = AgentRunScope.current();
@@ -937,11 +1021,13 @@ public class PersistentCheckpointService implements AutoCloseable {
         });
   }
 
+  /** 指定や設定を照合し、実際に利用する対象を確定する。 */
   public PersistentCheckpoint resolve(
       String project, String task, String callId, OperationStatus outcome, String explicitRequest) {
     return resolveConfirmed(project, task, callId, outcome, explicitRequest);
   }
 
+  /** 依頼を進めるための候補や手順を組み立てる。 */
   public PersistentCheckpoint plan(List<dev.mikoto2000.rei.core.actionplan.PlanStep> steps) {
     var run = AgentRunScope.current();
     if (run == null || !active.containsKey(run.runId()))
@@ -962,6 +1048,7 @@ public class PersistentCheckpointService implements AutoCloseable {
         });
   }
 
+  /** 指定や設定に応じた対象を利用するため、確認済みを確定する。 */
   private PersistentCheckpoint resolveConfirmed(
       String project, String task, String callId, OperationStatus outcome, String explicitRequest) {
     if (outcome != OperationStatus.SUCCEEDED && outcome != OperationStatus.FAILED)
@@ -1022,6 +1109,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     }
   }
 
+  /** 状態や結果を購読先へ通知する。 */
   private void publish(PersistentCheckpoint state, AgentEventType type, String decision) {
     bus.publish(
         new AgentEvent(
@@ -1044,6 +1132,7 @@ public class PersistentCheckpointService implements AutoCloseable {
             state.projectId()));
   }
 
+  /** 作業の中断と再開で利用した資源や登録を解放し、利用を終了する。 */
   @jakarta.annotation.PreDestroy
   @Override
   public void close() {

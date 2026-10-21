@@ -12,10 +12,13 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.sqlite.SQLiteDataSource;
 
+/** プロジェクト履歴検索の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProjectHistorySearchTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** プロジェクトごとの作業環境で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void scopedSearchDoesNotFallBackToUnownedGlobalHistory() throws Exception {
     String prior = System.getProperty("rei.data-dir");

@@ -36,22 +36,49 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 音声受付済み入力の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class VoiceSubmittedInputTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock = Clock.fixed(Instant.parse("2026-10-09T08:00:00Z"), ZoneOffset.UTC);
+
+  /** 検証に使うタスク一覧。 */
   final List<Runnable> tasks = new ArrayList<>();
+
+  /** 検証に使うプロンプト一覧。 */
   final List<String> prompts = new ArrayList<>();
+
+  /** 検証に使う受付済み。 */
   final List<ConversationInput> submitted = new ArrayList<>();
+
+  /** 検証に使う表示。 */
   final ByteArrayOutputStream display = new ByteArrayOutputStream();
+
+  /** 検証に使う終端。 */
   Terminal terminal;
+
+  /** 検証に使うプロジェクト一覧。 */
   ProjectService projects;
+
+  /** 検証に使うシェル。 */
   ShellConversationService shell;
+
+  /** 検証に使う配信。 */
   VoiceDeliveryService delivery;
+
+  /** 検証に使う対象。 */
   ConversationTarget target;
+
+  /** 検証に使うクライアント。 */
   ProjectClient client;
+
+  /** 検証に使う拒否。 */
   boolean reject;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     projects = new ProjectService(root, new ProjectRegistry(root.resolve("projects.json")));
@@ -93,16 +120,19 @@ class VoiceSubmittedInputTest {
         });
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void closeTerminal() throws Exception {
     terminal.close();
   }
 
+  /** {@code input} の条件を再現するための補助情報を返す。 */
   ConversationInput input(String text) {
     return new ConversationInput(
         UUID.randomUUID(), InputSource.VOICE, target, text, clock.instant().minusSeconds(60));
   }
 
+  /** 音声による対話で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void automaticAcceptedVoicePrintsKeyboardFrameExactlyOnce() {
     var input = input("音声入力のテスト");
@@ -116,6 +146,7 @@ class VoiceSubmittedInputTest {
     assertThat(prompts).containsExactly(input.text());
   }
 
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void confirmationPrintsOnlyTheAcceptedCorrection() {
     delivery.setConfirmation(true);
@@ -141,6 +172,7 @@ class VoiceSubmittedInputTest {
     assertThat(prompts).containsExactly("訂正した文章\n2行目");
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelInvalidCorrectionAndTargetChangeDoNotPrintSubmittedInput() {
     delivery.setConfirmation(true);
@@ -162,6 +194,7 @@ class VoiceSubmittedInputTest {
     assertThat(display.toString(StandardCharsets.UTF_8)).isEmpty();
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedAdmissionIsNotPrintedAndSuccessfulRetryIsPrintedOnce() {
     delivery.setConfirmation(true);
@@ -176,6 +209,7 @@ class VoiceSubmittedInputTest {
     assertThat(submitted).extracting(ConversationInput::text).containsExactly("corrected");
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void fullQueueDoesNotPrintRejectedInput() {
     delivery.accept(input("one"));
@@ -187,6 +221,7 @@ class VoiceSubmittedInputTest {
     assertThat(display.toString(StandardCharsets.UTF_8)).doesNotContain("rejected");
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void listenerFailureAndUnsubscriptionCannotResubmitAcceptedVoice() {
     delivery.onSubmitted(

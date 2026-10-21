@@ -1,7 +1,12 @@
 package dev.mikoto2000.rei.core;
 
-/** Locate the class body delimiter in an AST-bounded declaration, respecting literals/comments. */
+/**
+ * 共通の実行基盤に必要なJava取得元HTTPヘッダーを扱う。
+ *
+ * <p>Locate the class body delimiter in an AST-bounded declaration, respecting literals/comments.
+ */
 final class JavaSourceHeaders {
+  /** 共通の実行基盤で用いる終了を返す。 */
   static int end(String source, int start, int end) {
     if (start < 0 || end < start || end > source.length()) return Math.max(0, start);
     int state = 0, paren = 0;

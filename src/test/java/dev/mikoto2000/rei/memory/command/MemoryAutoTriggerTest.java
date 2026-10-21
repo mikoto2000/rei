@@ -29,8 +29,10 @@ import org.springframework.ai.chat.prompt.Prompt;
 import picocli.CommandLine;
 import reactor.core.publisher.Flux;
 
+/** 記憶自動実行条件の結果と状態の契約を検証するテスト。 */
 class MemoryAutoTriggerTest {
 
+  /** 長期記憶の活用で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void chatRendersSuggestionThroughShellAgentEventRendererWhenAutoTriggerEnabled() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -72,6 +74,7 @@ class MemoryAutoTriggerTest {
     assertTrue(directOut.toString().isBlank());
   }
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void chatDoesNotPrintSuggestionWhenServiceMissing() {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -104,23 +107,30 @@ class MemoryAutoTriggerTest {
     assertTrue(!out.toString().contains("[memory]"));
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   private static ChatResponse response(String text) {
     return new ChatResponse(java.util.List.of(new Generation(new AssistantMessage(text))));
   }
 
+  /** 検証条件を再現するためのRecording出力。 */
   private static final class RecordingOutput implements ShellEventOutput {
+    /** 検証に使う値。 */
     private final StringBuilder value = new StringBuilder();
 
+    /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
     public void print(String text) {
       value.append(text);
     }
 
+    /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
     public void println(String text) {
       value.append(text).append('\n');
     }
 
+    /** 検証で保留している出力の確定を扱う。 */
     public void flush() {}
 
+    /** {@code text} の条件を再現するための補助情報を返す。 */
     String text() {
       return value.toString();
     }

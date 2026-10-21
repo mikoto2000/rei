@@ -3,6 +3,15 @@ package dev.mikoto2000.rei.chatgpt;
 import java.nio.file.Path;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * ChatGPTとの連携で受け渡す計画アプリケーションサーバー設定を表す。
+ *
+ * @param enabled 有効状態
+ * @param runtimeDirectory 実行環境ディレクトリ
+ * @param distribution 分布
+ * @param executable 実行可能な
+ * @param executionMode 実行動作モード
+ */
 @ConfigurationProperties("rei.chatgpt-plan.app-server")
 public record PlanAppServerProperties(
     boolean enabled,
@@ -10,12 +19,17 @@ public record PlanAppServerProperties(
     String distribution,
     String executable,
     String executionMode) {
-  /** Existing programmatic WSL construction remains explicit. Configuration defaults to Windows. */
+  /**
+   * ChatGPTとの連携を利用するため、指定を補って共通の初期化へ引き渡す。
+   *
+   * <p>Existing programmatic WSL construction remains explicit. Configuration defaults to Windows.
+   */
   public PlanAppServerProperties(
       boolean enabled, Path runtimeDirectory, String distribution, String executable) {
     this(enabled, runtimeDirectory, distribution, executable, "wsl");
   }
 
+  /** 受け取った情報からPlanAppServerPropertiesを作成する。 */
   @org.springframework.boot.context.properties.bind.ConstructorBinding
   public PlanAppServerProperties {
     if (runtimeDirectory == null)

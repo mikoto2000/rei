@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class RecentChangesConfiguration {
 
+  /** 直近の変更の把握で用いる直近変更一覧を返す。 */
   @org.springframework.context.annotation.Scope(
       value = "reiProject",
       proxyMode = org.springframework.context.annotation.ScopedProxyMode.TARGET_CLASS)

@@ -6,7 +6,9 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 実行イベント出力の結果と状態の契約を検証するテスト。 */
 class RunEventOutputTest {
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void compressionDetailsAndCooldownDoNotSplitAnswerChunks() throws Exception {
     event("message.delta", "m", "続き");
@@ -29,6 +31,7 @@ class RunEventOutputTest {
         lines);
   }
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void oldCompressionPayloadAndNullDetailsRemainReadable() throws Exception {
     output.accept(
@@ -44,6 +47,7 @@ class RunEventOutputTest {
         lines);
   }
 
+  /** 軽量CLIでの対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void nullErrorCodeDoesNotDisplayNullAsAReason() throws Exception {
     output.accept(
@@ -53,6 +57,7 @@ class RunEventOutputTest {
     assertEquals(List.of("[agent.run.failed] 原因: IOException"), lines);
   }
 
+  /** 軽量CLIでの対話で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void runCancellationDisplaysRedactedReasonAndCode() throws Exception {
     output.accept(
@@ -64,6 +69,7 @@ class RunEventOutputTest {
         lines);
   }
 
+  /** 空白のツール失敗情報引き続きについて、例外種別を伝えることを確認する。 */
   @Test
   void blankToolFailureStillReportsExceptionType() throws Exception {
     output.accept(
@@ -73,6 +79,7 @@ class RunEventOutputTest {
     assertEquals(List.of("✗ readFile: AccessDeniedException"), lines);
   }
 
+  /** 軽量CLIでの対話の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void permissionFailureShowsItsSpecificReasonWithoutJsonEscapes() throws Exception {
     output.accept(
@@ -84,6 +91,7 @@ class RunEventOutputTest {
         lines);
   }
 
+  /** 軽量CLIでの対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void delegatedFailureDisplaysItsCauseAsReadableText() throws Exception {
     output.accept(
@@ -95,16 +103,24 @@ class RunEventOutputTest {
         lines);
   }
 
+  /** 検証に使う行一覧。 */
   private final List<String> lines = new ArrayList<>();
+
+  /** 検証に使う見出し一覧。 */
   private final List<String> headings = new ArrayList<>();
+
+  /** 検証に使う出力。 */
   private final RunEventOutput output =
       new RunEventOutput(
           line -> {
             if (line.startsWith("=== ")) headings.add(line);
             else lines.add(line);
           });
+
+  /** 検証に使う記録日時。 */
   private final java.time.Instant timestamp = java.time.Instant.parse("2026-10-12T11:34:56Z");
 
+  /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
   private void event(String type, String id, String text) throws Exception {
     var payload = BackendClient.JSON.createObjectNode();
     payload.put(type.startsWith("thinking.") ? "thinkingId" : "messageId", id);
@@ -112,6 +128,7 @@ class RunEventOutputTest {
     output.accept(type, payload, timestamp);
   }
 
+  /** 見出し一覧について、シェル形式を利用することを確認する。 */
   @Test
   void headingsUseShellFormatAndEventTime() throws Exception {
     event("thinking.started", "t", "");
@@ -129,6 +146,7 @@ class RunEventOutputTest {
     assertEquals(List.of("検討", "回答"), lines);
   }
 
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void userMessagesDoNotCreateAnswerHeadings() throws Exception {
     output.accept(
@@ -144,6 +162,7 @@ class RunEventOutputTest {
     assertTrue(lines.isEmpty());
   }
 
+  /** 軽量CLIでの対話で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void answerChunksJoinAndPreserveOnlyContentNewlines() throws Exception {
     event("message.started", "m", "");
@@ -156,6 +175,7 @@ class RunEventOutputTest {
     assertEquals(List.of("いい質問", "ですね。", "最後"), lines);
   }
 
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void thinkingIsVisibleAndCompletedTextIsNotRepeated() throws Exception {
     event("thinking.started", "t", "");
@@ -166,6 +186,7 @@ class RunEventOutputTest {
     assertEquals(List.of("考え中です", "回答です"), lines);
   }
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void completedOnlyThinkingAndAnswerAreVisible() throws Exception {
     event("thinking.completed", "t", "検討結果");
@@ -173,6 +194,7 @@ class RunEventOutputTest {
     assertEquals(List.of("検討結果", "回答", "続き"), lines);
   }
 
+  /** 軽量CLIでの対話で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void otherEventsWaitUntilAnswerCompletesAndRemainVisible() throws Exception {
     event("message.delta", "m", "途中");
@@ -188,6 +210,7 @@ class RunEventOutputTest {
         lines);
   }
 
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void llmAndStagnationEventsDoNotSplitTheReportedAnswer() throws Exception {
     event("message.started", "m", "");
@@ -208,6 +231,7 @@ class RunEventOutputTest {
         lines);
   }
 
+  /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void notificationsAfterAnAnswerNewlineStillWaitForCompletion() throws Exception {
     event("message.delta", "m", "最初の行\n");
@@ -218,6 +242,7 @@ class RunEventOutputTest {
     assertEquals(List.of("最初の行", "次の行", "stagnation.updated: {}"), lines);
   }
 
+  /** 軽量CLIでの対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationFlushesPendingAnswerAndNoticesBeforeTheNextRun() throws Exception {
     event("message.delta", "m", "途中");
@@ -229,6 +254,7 @@ class RunEventOutputTest {
         lines);
   }
 
+  /** 軽量CLIでの対話の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void approvalNotificationDisplaysTheExactContinueCommandOnItsOwnLine() {
     var payload = BackendClient.JSON.createObjectNode();
@@ -245,6 +271,7 @@ class RunEventOutputTest {
             .contains("\n/approval approve ca880320-1482-4d84-8fb9-53c0b3234997 --continue\n"));
   }
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void detachFlushesAnUnfinishedLineOnce() throws Exception {
     event("message.delta", "m", "未完了");
@@ -254,6 +281,7 @@ class RunEventOutputTest {
     assertEquals(List.of("未完了", "llm.response.completed: {}"), lines);
   }
 
+  /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void toolExecutionRemainsVisibleAtAnExplicitBoundary() throws Exception {
     event("message.delta", "m", "確認します。");

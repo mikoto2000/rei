@@ -9,13 +9,20 @@ import org.springframework.core.io.Resource;
 import org.springframework.core.io.ResourceLoader;
 import org.springframework.stereotype.Service;
 
+/** システムへの指示のユースケースを実現する。 */
 @Service
 public class SystemPromptService {
 
+  /** core設定。 */
   private final CoreProperties coreProperties;
+
+  /** 補助資料読み込みの窓口。 */
   private final ResourceLoader resourceLoader;
+
+  /** 外部設定ファイルサービス。 */
   private final ExternalConfigFileService externalConfigFileService;
 
+  /** 指定された値や利用先を使って、SystemPromptServiceを初期化する。 */
   @Autowired
   public SystemPromptService(
       CoreProperties coreProperties,
@@ -26,6 +33,7 @@ public class SystemPromptService {
     this.externalConfigFileService = externalConfigFileService;
   }
 
+  /** 機能の組み立てで用いるシステムへの指示を返す。 */
   public String systemPrompt() {
     String base = readBaseSystemPrompt();
     String additional = readAdditionalSystemPrompt();
@@ -41,6 +49,7 @@ public class SystemPromptService {
         + additional.strip();
   }
 
+  /** 必要な内容を参照できるよう、基準システムへの指示を読み取る。 */
   private String readBaseSystemPrompt() {
     String configured = coreProperties.systemPrompt();
     if (configured == null || configured.isBlank()) {
@@ -57,6 +66,7 @@ public class SystemPromptService {
     }
   }
 
+  /** 必要な内容を参照できるよう、追加システムへの指示を読み取る。 */
   private String readAdditionalSystemPrompt() {
     Path file = externalConfigFileService.additionalSystemPromptFilePath();
     if (!Files.exists(file)) {

@@ -10,7 +10,9 @@ import java.time.Clock;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+/** 計画イベント境界条件の結果と状態の契約を検証するテスト。 */
 class PlanEventBoundaryTest {
+  /** ChatGPTとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void managementEventsIdentifyPlanUsageAndSafeFailureWithoutTaskBody() {
     var factory = new AgentEventFactory(Clock.systemUTC());

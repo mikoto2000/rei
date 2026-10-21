@@ -17,21 +17,30 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import reactor.core.publisher.Mono;
 
-/** Independent, tool-free judgement; probabilistic verification, never a proof of correctness. */
+/**
+ * 補助エージェントへの委譲に必要な補助エージェント意味による検証の窓口を扱う。
+ *
+ * <p>Independent, tool-free judgement; probabilistic verification, never a proof of correctness.
+ */
 final class SubAgentSemanticValidator {
+  /** 文脈の組み立て。 */
   private final dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler;
 
+  /** 補助エージェントへの委譲を利用するため、指定を補って共通の初期化へ引き渡す。 */
   SubAgentSemanticValidator() {
     this(null);
   }
 
+  /** 指定された値や利用先を使って、SubAgentSemanticValidatorを初期化する。 */
   SubAgentSemanticValidator(dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler) {
     this.assembler = assembler;
   }
 
+  /** 課題一覧。 */
   private static final Set<String> ISSUES =
       Set.of("UNSUPPORTED_CLAIM", "CONTRADICTION", "INCOMPLETE_TASK");
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   Mono<Void> validate(
       ChatModel model,
       Prompt original,
@@ -55,6 +64,7 @@ final class SubAgentSemanticValidator {
         new BoundedToolLoop.ModelRetries(0));
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   Mono<Void> validate(
       ChatModel model,
       Prompt original,
@@ -88,6 +98,7 @@ final class SubAgentSemanticValidator {
                           output,
                           "observations",
                           evidence.semanticSnapshot()));
+          // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
           if (input.length() > 131072)
             return Mono.error(invalid("Semantic input exceeds bounded limit"));
           ToolLoopSupport.requireNoRawTools(original.getOptions());
@@ -131,8 +142,10 @@ final class SubAgentSemanticValidator {
         });
   }
 
+  /** 補助エージェントへの委譲で用いる判断結果を返す。 */
   private Mono<Void> decision(String raw) {
     try {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (raw == null || raw.length() > 4096) throw invalid("Invalid semantic verdict");
       var verdict = new SubAgentResultParser().parse(raw);
       if (!verdict.isObject()
@@ -159,6 +172,7 @@ final class SubAgentSemanticValidator {
     }
   }
 
+  /** 受け付けられない指定について、入力の問題を伝える。 */
   private SubAgentValidationException invalid(String message) {
     return new SubAgentValidationException(List.of(new ValidationError("/result", message)));
   }

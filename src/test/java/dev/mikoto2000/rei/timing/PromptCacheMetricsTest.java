@@ -17,7 +17,9 @@ import org.springframework.ai.chat.metadata.DefaultUsage;
 import org.springframework.ai.chat.metadata.EmptyUsage;
 import org.springframework.ai.chat.metadata.Usage;
 
+/** プロンプトキャッシュ計測値の結果と状態の契約を検証するテスト。 */
 class PromptCacheMetricsTest {
+  /** 実行時間の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void normalizesKnownUnknownAndInvalidUsage() {
     var usage = mock(Usage.class);
@@ -35,6 +37,7 @@ class PromptCacheMetricsTest {
     assertNull(PromptCacheMetrics.usage(new EmptyUsage()).input());
   }
 
+  /** 実行時間の把握で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void aggregatesOnlyMeasuredDenominatorsAndGroupsModels() {
     var values =
@@ -66,6 +69,7 @@ class PromptCacheMetricsTest {
     assertNull(PromptCacheMetrics.aggregate(List.of(values.getLast())).hitRate());
   }
 
+  /** 不明を保持することを確認する。 */
   @Test
   void sdkAndProviderNeutralUsagePreserveUnknownAndExplicitZero() {
     assertEquals(
@@ -74,6 +78,7 @@ class PromptCacheMetricsTest {
     assertNull(PromptCacheMetrics.usage(new DefaultUsage(null, 2, 2, null, 30L, null)).hitRate());
   }
 
+  /** 上限一覧を保存することを確認する。 */
   @Test
   void storeLimitsAndDisabledObservationNeverRetainPrompt() {
     var store = new TimingStore(true, 1, 1, 1, Duration.ofHours(1), Clock.systemUTC(), () -> 0L);
@@ -95,6 +100,7 @@ class PromptCacheMetricsTest {
     assertFalse(disabled.beginRun("run", "project", "session"));
   }
 
+  /** 先行部分について、実行キー保有上限一覧を利用することを確認する。 */
   @Test
   void prefixUsesRunKeyHasLimitsAndDetectsFirstChangedRegionWithoutText() {
     var first = new PrefixDiagnostics();

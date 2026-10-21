@@ -18,24 +18,28 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/** Slackエージェントの構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(
     name = {"rei.slack.enabled", "rei.slack.agent-collaboration.enabled"},
     havingValue = "true")
 @EnableConfigurationProperties(SlackAgentProperties.class)
 public class SlackAgentConfiguration {
+  /** Slackとの連携で用いるSlackエージェント保存と検索の窓口を返す。 */
   @Bean
   SlackAgentRepository slackAgentRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, Clock clock) {
     return new SlackAgentRepository(source, clock);
   }
 
+  /** Slackとの連携で用いるSlackエージェント継続入力一覧を返す。 */
   @Bean
   SlackAgentContinuationStore slackAgentContinuations(
       @Qualifier("memoryConsolidationDataSource") DataSource source) {
     return new SlackAgentContinuationStore(source);
   }
 
+  /** Slackとの連携で用いるSlackエージェントサービスを返す。 */
   @Bean
   SlackAgentService slackAgentService(
       SlackAgentProperties p,
@@ -77,6 +81,7 @@ public class SlackAgentConfiguration {
     return service;
   }
 
+  /** Slackとの連携で用いるSlackエージェントツール一覧を返す。 */
   @Bean
   SlackAgentTools slackAgentTools(
       SlackAgentProperties p,
@@ -88,6 +93,7 @@ public class SlackAgentConfiguration {
     return tools;
   }
 
+  /** Slackとの連携で用いるSlackエージェントイベント一覧を返す。 */
   @Bean(destroyMethod = "unsubscribe")
   AgentEventBus.Subscription slackAgentEvents(SlackAgentService service, AgentEventBus bus) {
     return bus.subscribe(service::onEvent);

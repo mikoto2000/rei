@@ -16,8 +16,10 @@ import org.springframework.ai.image.ImagePrompt;
 import org.springframework.ai.image.ImageResponse;
 import org.springframework.ai.openai.OpenAiImageOptions;
 
+/** 代替手段画像モデルの結果と状態の契約を検証するテスト。 */
 class FallbackImageModelTest {
 
+  /** 共通環境向け要求選択可能な設定について、設定済み代替手段モデルを利用することを確認する。 */
   @Test
   void portableRequestOptionsUseTheConfiguredFallbackModel() {
     var primary = Mockito.mock(ImageModel.class);
@@ -45,6 +47,7 @@ class FallbackImageModelTest {
     assertThat(captor.getValue().getOptions().getResponseFormat()).isEqualTo("b64_json");
   }
 
+  /** 代替手段について、設定済みモデルを利用することを確認する。 */
   @Test
   void fallbackUsesConfiguredModelAndPreservesImageOptions() {
     var primary = Mockito.mock(ImageModel.class);
@@ -76,6 +79,7 @@ class FallbackImageModelTest {
     assertThat(prompt.getOptions().getModel()).isEqualTo("feature-model");
   }
 
+  /** 主要なを利用することを確認する。 */
   @Test
   void usesPrimaryWhenPrimarySucceeds() {
     ImageModel primary = Mockito.mock(ImageModel.class);
@@ -88,9 +92,11 @@ class FallbackImageModelTest {
         new FallbackImageModel("image-generation", primary, fallback, "feature-model");
 
     assertThat(model.call(prompt)).isSameAs(response);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(fallback);
   }
 
+  /** 主要なモデルを取り除くことを確認する。 */
   @Test
   void fallsBackAndRemovesPrimaryModel() {
     ImageModel primary = Mockito.mock(ImageModel.class);
@@ -110,6 +116,7 @@ class FallbackImageModelTest {
     assertThat(captor.getValue().getOptions().getWidth()).isEqualTo(512);
   }
 
+  /** 検証で使用するプロンプトを、指定された条件に合わせて用意する。 */
   private ImagePrompt prompt(String model) {
     return new ImagePrompt(
         "cat",
@@ -121,6 +128,7 @@ class FallbackImageModelTest {
             .build());
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   private ImageResponse response(String base64) {
     return new ImageResponse(List.of(new ImageGeneration(new Image(null, base64))));
   }

@@ -8,10 +8,13 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** プロジェクト登録台帳の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProjectRegistryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** 識別情報について、再読み込みの後も対象の情報が残ることを確認する。 */
   @Test
   void identitySurvivesReloadAndExplicitRelocation() throws Exception {
     Path a = Files.createDirectory(temp.resolve("a"));
@@ -26,6 +29,7 @@ class ProjectRegistryTest {
     assertThat(Files.readString(file)).contains("\"projects\"", first.id());
   }
 
+  /** プロジェクトごとの作業環境で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void failedWriteDoesNotPublishAnUnpersistedIdentity() throws Exception {
     var file = Files.writeString(temp.resolve("not-directory"), "block");
@@ -33,6 +37,7 @@ class ProjectRegistryTest {
     assertThatThrownBy(() -> registry.resolve(temp)).isInstanceOf(IllegalStateException.class);
   }
 
+  /** プロジェクトごとの作業環境で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void separateShellAndWebRegistriesDoNotLoseConcurrentRegistrations() throws Exception {
     var file = temp.resolve("data/projects.json");

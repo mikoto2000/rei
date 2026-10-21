@@ -19,7 +19,9 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
+/** 計画並列レビューの結果と状態の契約を検証するテスト。 */
 class PlanParallelReviewTest {
+  /** 成功を保持することを確認する。 */
   @Test
   void mixedReviewPreservesSuccessWhenExternalChildFails() {
     var runner = mock(SubAgentRunner.class);

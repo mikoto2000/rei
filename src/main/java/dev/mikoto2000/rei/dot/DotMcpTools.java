@@ -14,11 +14,14 @@ import java.util.UUID;
 import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 
+/** 状態表示MCPをモデルから呼び出せるツールとして提供する。 */
 public final class DotMcpTools {
+  /** 名前一覧。 */
   public static final List<String> NAMES =
       List.of(
           "rei_requests_list", "rei_request_get", "rei_request_claim", "rei_request_result_submit");
 
+  /** 利用者の状態表示で用いる操作権限を返す。 */
   public static dev.mikoto2000.rei.core.policy.ActionCapability capability(String name) {
     return switch (name) {
       case "rei_requests_list", "rei_request_get" ->
@@ -30,16 +33,23 @@ public final class DotMcpTools {
     };
   }
 
+  /** リポジトリ。 */
   private final DotRequestRepository repo;
+
+  /** 許可。 */
   private final Set<String> allowed;
+
+  /** 有効状態。 */
   private final boolean enabled;
 
+  /** 指定された値や利用先を使って、DotMcpToolsを初期化する。 */
   public DotMcpTools(DotRequestRepository repo, Set<String> allowed, boolean enabled) {
     this.repo = repo;
     this.allowed = Set.copyOf(allowed);
     this.enabled = enabled;
   }
 
+  /** 利用者の状態表示で用いる署名を返す。 */
   private String sign(String text) {
     try {
       var mac = Mac.getInstance("HmacSHA256");
@@ -52,6 +62,7 @@ public final class DotMcpTools {
     }
   }
 
+  /** 利用者の状態表示で用いる続きの取得位置を返す。 */
   private String cursor(String scope, String status, String id) {
     String body =
         Base64.getUrlEncoder()
@@ -60,6 +71,7 @@ public final class DotMcpTools {
     return body + "." + sign(body);
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   private String decode(String cursor, String scope, String status) {
     try {
       String[] parts = cursor.split("\\.", -1);
@@ -79,6 +91,7 @@ public final class DotMcpTools {
     }
   }
 
+  /** 利用者の状態表示の要求を実行し、呼び出し元へ結果を返す。 */
   public McpSchema.CallToolResult call(String name, Map<String, Object> a) {
     Map<String, Object> output;
     boolean error = false;
@@ -213,6 +226,7 @@ public final class DotMcpTools {
     }
   }
 
+  /** 利用者の状態表示で用いるデータ形式を返す。 */
   public static Map<String, Object> schema(String name) {
     var p = new LinkedHashMap<String, Object>();
     var required = new ArrayList<String>();

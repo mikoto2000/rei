@@ -11,21 +11,49 @@ import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
-/** Persistent outbox. A crash after claim is ambiguous and never automatically retried. */
+/**
+ * 注意配信を保存・検索するための窓口。
+ *
+ * <p>Persistent outbox. A crash after claim is ambiguous and never automatically retried.
+ */
 @Repository
 public class AttentionDeliveryRepository {
+  /** 活動中。 */
   private static final Set<String> ACTIVE = java.util.concurrent.ConcurrentHashMap.newKeySet();
 
+  /**
+   * 注意の管理で受け渡す利用権を表す。
+   *
+   * @param delivery 配信
+   * @param key 照合キー
+   */
   public record Lease(Delivery delivery, String key) implements AutoCloseable {
+    /** 注意の管理で利用した資源や登録を解放し、利用を終了する。 */
     public void close() {
       ACTIVE.remove(key);
     }
   }
 
+  /** 注意の管理で用いるプロセス開始を返す。 */
   private static String processStart() {
     return ProcessHandle.current().info().startInstant().map(Instant::toString).orElse("unknown");
   }
 
+  /**
+   * 注意の管理で受け渡す配信を表す。
+   *
+   * @param id 識別子
+   * @param projectId 所属プロジェクトの識別子
+   * @param destination 配信先
+   * @param cause 原因
+   * @param status 状態
+   * @param attempts 試行回数
+   * @param reason 理由
+   * @param updatedAt 更新日時
+   * @param provider 提供元
+   * @param providerReceipt 提供元受付記録
+   * @param retryNotBefore 再試行実行可能になる日時
+   */
   public record Delivery(
       String id,
       String projectId,
@@ -38,6 +66,7 @@ public class AttentionDeliveryRepository {
       String provider,
       String providerReceipt,
       Instant retryNotBefore) {
+    /** 注意の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Delivery(
         String id,
         String projectId,
@@ -62,11 +91,19 @@ public class AttentionDeliveryRepository {
     }
   }
 
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 利用権識別範囲。 */
   private final String leaseNamespace;
+
+  /** 一連の更新をまとめて確定するための窓口。 */
   private final org.springframework.transaction.support.TransactionTemplate tx;
 
+  /** 指定された値や利用先を使って、AttentionDeliveryRepositoryを初期化する。 */
   public AttentionDeliveryRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, Clock clock) {
     try (var connection = source.getConnection()) {
@@ -110,6 +147,7 @@ public class AttentionDeliveryRepository {
         .update();
   }
 
+  /** 行。 */
   private static final org.springframework.jdbc.core.RowMapper<Delivery> ROW =
       (rs, n) ->
           new Delivery(
@@ -125,6 +163,7 @@ public class AttentionDeliveryRepository {
               rs.getString("provider_receipt"),
               Instant.ofEpochMilli(rs.getLong("retry_not_before")));
 
+  /** 対象を特定できるよう、注意配信保存と検索の窓口を探す。 */
   public Optional<Delivery> find(String project, String id) {
     return db.sql("SELECT * FROM attention_delivery WHERE project=? AND id=?")
         .params(project, id)
@@ -132,10 +171,12 @@ public class AttentionDeliveryRepository {
         .optional();
   }
 
+  /** 実行順序を管理するため、注意配信保存と検索の窓口を実行待ちに登録する。 */
   public Delivery enqueue(AttentionRepository.Item item, String destination, String cause) {
     return enqueue(item, destination, cause, "WEBHOOK");
   }
 
+  /** 実行順序を管理するため、注意配信保存と検索の窓口を実行待ちに登録する。 */
   public Delivery enqueue(
       AttentionRepository.Item item, String destination, String cause, String provider) {
     if (!Set.of("AUTOMATIC", "MANUAL").contains(cause))
@@ -150,6 +191,7 @@ public class AttentionDeliveryRepository {
         .orElseThrow(() -> new IllegalArgumentException("Attention delivery queue is full"));
   }
 
+  /** 後続の処理で判断できるよう、未完了の対象を返す。 */
   public List<Delivery> pending() {
     return db.sql(
             "SELECT * FROM attention_delivery WHERE status='PENDING' ORDER BY updated,id LIMIT 256")
@@ -157,14 +199,17 @@ public class AttentionDeliveryRepository {
         .list();
   }
 
+  /** 対象を処理する担当を決めるため、注意配信保存と検索の窓口の利用権を確保する。 */
   public boolean claim(String project, String id) {
     return claim(project, id, 0);
   }
 
+  /** 対象を処理する担当を決めるため、注意配信保存と検索の窓口の利用権を確保する。 */
   public boolean claim(String project, String id, long intervalMillis) {
     return claim(project, id, intervalMillis, null);
   }
 
+  /** 対象を処理する担当を決めるため、活動中の利用権を確保する。 */
   public Lease claimActive(Delivery expected, long intervalMillis) {
     String key = leaseNamespace + expected.id() + ":" + (expected.attempts() + 1);
     if (!ACTIVE.add(key)) return null;
@@ -179,6 +224,7 @@ public class AttentionDeliveryRepository {
     }
   }
 
+  /** 対象を処理する担当を決めるため、注意配信保存と検索の窓口の利用権を確保する。 */
   private boolean claim(String project, String id, long intervalMillis, Delivery expected) {
     if (intervalMillis < 0 || intervalMillis > 3600000)
       throw new IllegalArgumentException("Invalid provider interval");
@@ -217,10 +263,12 @@ public class AttentionDeliveryRepository {
         });
   }
 
+  /** 終了時に必要な状態を反映し、処理を完了させる。 */
   public void finish(Delivery item, String status, String reason) {
     finish(item, new NotificationProvider.Receipt(status, reason, "", 0));
   }
 
+  /** 終了時に必要な状態を反映し、処理を完了させる。 */
   public void finish(Delivery item, NotificationProvider.Receipt receipt) {
     tx.executeWithoutResult(
         status -> {
@@ -250,6 +298,7 @@ public class AttentionDeliveryRepository {
         });
   }
 
+  /** 注意の管理に関する対象外を処理する。 */
   public void skip(Delivery item, String status, String reason) {
     if (!Set.of("BLOCKED", "SUPPRESSED").contains(status))
       throw new IllegalArgumentException("Invalid delivery gate");
@@ -259,7 +308,16 @@ public class AttentionDeliveryRepository {
         .update();
   }
 
+  /** 処理を継続できる状態に戻すため、注意配信保存と検索の窓口を復旧する。 */
   public void recover() {
+    /**
+     * 注意の管理で受け渡すClaimedを表す。
+     *
+     * @param id 識別子
+     * @param attempt 試行
+     * @param pid プロセス識別子
+     * @param start 開始
+     */
     record Claimed(String id, int attempt, long pid, String start) {}
     for (var item :
         db.sql(
@@ -294,10 +352,12 @@ public class AttentionDeliveryRepository {
     }
   }
 
+  /** 注意の管理で用いる再試行を返す。 */
   public Delivery retry(String project, String id, String destination, boolean acknowledgeRisk) {
     return retry(project, id, destination, acknowledgeRisk, "WEBHOOK");
   }
 
+  /** 注意の管理で用いる再試行を返す。 */
   public Delivery retry(
       String project, String id, String destination, boolean acknowledgeRisk, String provider) {
     if (!Set.of("WEBHOOK", "SLACK").contains(provider))

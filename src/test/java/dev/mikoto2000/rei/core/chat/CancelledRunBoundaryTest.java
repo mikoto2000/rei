@@ -45,7 +45,9 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
+/** キャンセル済み実行境界条件の結果と状態の契約を検証するテスト。 */
 class CancelledRunBoundaryTest {
+  /** 会話の実行の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationDuringTopicRefreshCannotReportRunCompleted() {
     var topic = mock(dev.mikoto2000.rei.topic.TopicOrchestrator.class);
@@ -79,6 +81,7 @@ class CancelledRunBoundaryTest {
     assertThat(events).noneMatch(e -> e.type() == AgentEventType.AGENT_RUN_COMPLETED);
   }
 
+  /** 会話の実行の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledSkillSelectionCannotPublishNormalResultOrStartChatEvenIfItReturnsLate()
       throws Exception {
@@ -104,11 +107,13 @@ class CancelledRunBoundaryTest {
             new AgentSkillPromptRenderer(),
             new AgentEventFactory(Clock.systemUTC()),
             events::add) {
+          /** 検証用に、会話の実行で参照する名前を返す。 */
           @Override
           public String getName() {
             return "ObservedSkillAdvisor";
           }
 
+          /** {@code before} の条件を再現するための補助情報を返す。 */
           @Override
           public org.springframework.ai.chat.client.ChatClientRequest before(
               org.springframework.ai.chat.client.ChatClientRequest request,
@@ -144,6 +149,7 @@ class CancelledRunBoundaryTest {
     assertThat(calls).hasValue(0);
   }
 
+  /** 会話の実行の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void inFlightCancellationDisposesRequestDiscardsGuidanceAndSkipsTopic() throws Exception {
     var subscribed = new CountDownLatch(1);
@@ -179,6 +185,7 @@ class CancelledRunBoundaryTest {
     assertThat(events).noneMatch(e -> e.type() == AgentEventType.AGENT_RUN_COMPLETED);
   }
 
+  /** 会話の実行の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledToolCannotStartNextToolOrNextLlmIteration() throws Exception {
     var entered = new CountDownLatch(1);
@@ -187,6 +194,7 @@ class CancelledRunBoundaryTest {
     var secondToolCalls = new AtomicInteger();
     ToolCallback tool =
         new ToolCallback() {
+          /** 検証用に、会話の実行で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("work")
@@ -195,6 +203,7 @@ class CancelledRunBoundaryTest {
                 .build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             if (entered.getCount() == 0) {
               secondToolCalls.incrementAndGet();
@@ -241,6 +250,7 @@ class CancelledRunBoundaryTest {
     assertThat(secondToolCalls).hasValue(0);
   }
 
+  /** 検証用に、必要な状態が整ってから先へ進むため、Ignoring中断を待つ。 */
   private static void awaitIgnoringInterrupt(CountDownLatch latch) {
     boolean done = false;
     while (!done)
@@ -251,18 +261,22 @@ class CancelledRunBoundaryTest {
       }
   }
 
+  /** 検証で使用するモデルを、指定された条件に合わせて用意する。 */
   private static ChatModel model(AtomicInteger calls, Flux<ChatResponse> result) {
     return new ChatModel() {
       // ChatClient derives the request options type from the model in Spring AI 2.
+      /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
       @Override
       public ToolCallingChatOptions getOptions() {
         return ToolCallingChatOptions.builder().build();
       }
 
+      /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
       public ChatResponse call(Prompt p) {
         throw new UnsupportedOperationException();
       }
 
+      /** {@code stream} の条件を再現するための補助情報を返す。 */
       public Flux<ChatResponse> stream(Prompt p) {
         calls.incrementAndGet();
         return result;
@@ -270,6 +284,7 @@ class CancelledRunBoundaryTest {
     };
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   private static ChatExecutionService service(
       ChatClient client, CommandCancellationService cancellation, List<AgentEvent> events) {
     var holder = mock(ModelHolderService.class);

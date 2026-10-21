@@ -5,24 +5,36 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Spec;
 import picocli.CommandLine.Unmatched;
 
-/** Thin adapter over the existing project/session queue. */
+/**
+ * 初学者視点の静的教材レビュー: beginner --root DIR --entry PAGEを行うための利用者コマンド。
+ *
+ * <p>Thin adapter over the existing project/session queue.
+ */
 @Component
 @Command(name = "material-review", description = "初学者視点の静的教材レビュー: beginner --root DIR --entry PAGE")
 public class BeginnerReviewCommand implements java.util.concurrent.Callable<Integer> {
+  /** 会話一覧。 */
   private final dev.mikoto2000.rei.application.session.ShellConversationService conversations;
+
+  /** 引数。 */
   @Unmatched String[] arguments;
+
+  /** 仕様。 */
   @Spec picocli.CommandLine.Model.CommandSpec spec;
 
+  /** 外部エージェントへの委譲を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public BeginnerReviewCommand() {
     this(null);
   }
 
+  /** 指定された値や利用先を使って、BeginnerReviewCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public BeginnerReviewCommand(
       dev.mikoto2000.rei.application.session.ShellConversationService conversations) {
     this.conversations = conversations;
   }
 
+  /** 初学者視点の静的教材レビュー: beginner --root DIR --entry PAGEを行う。 */
   public Integer call() {
     try {
       var args = arguments == null ? new String[0] : arguments;

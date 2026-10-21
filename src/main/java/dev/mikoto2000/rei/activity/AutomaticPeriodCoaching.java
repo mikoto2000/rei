@@ -12,18 +12,40 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
-/** Opt-in, at most two closed-period assessments and one publication per tick. No model calls. */
+/**
+ * 作業状況の把握に必要な自動期間助言を扱う。
+ *
+ * <p>Opt-in, at most two closed-period assessments and one publication per tick. No model calls.
+ */
 public final class AutomaticPeriodCoaching {
+  /** この機能の動作設定。 */
   private final ActivityProperties properties;
+
+  /** 助言。 */
   private final PeriodCoachingService coaching;
+
+  /** 通知先。 */
   private final AgentMessagePublisher publisher;
+
+  /** 追跡。 */
   private final AgentActivityTracker tracker;
+
+  /** 一時停止中。 */
   private final BooleanSupplier paused;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 識別子一覧。 */
   private final Supplier<String> ids;
+
+  /** 実行中。 */
   private final AtomicBoolean running = new AtomicBoolean();
+
+  /** 状態。 */
   private volatile String status = "NOT_EVALUATED";
 
+  /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public AutomaticPeriodCoaching(
       ActivityProperties properties,
       PeriodCoachingService coaching,
@@ -41,6 +63,7 @@ public final class AutomaticPeriodCoaching {
         () -> UUID.randomUUID().toString());
   }
 
+  /** 指定された値や利用先を使って、AutomaticPeriodCoachingを初期化する。 */
   public AutomaticPeriodCoaching(
       ActivityProperties properties,
       PeriodCoachingService coaching,
@@ -59,14 +82,17 @@ public final class AutomaticPeriodCoaching {
     this.ids = ids;
   }
 
+  /** この機能を利用する設定が有効かどうかを返す。 */
   public boolean enabled() {
     return properties.isEnabled() && properties.getCoaching().isAutomaticEnabled();
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   public String status() {
     return status;
   }
 
+  /** 作業状況の把握において、許可に該当するか判定する。 */
   private boolean allowed() {
     return enabled()
         && publisher != null
@@ -76,7 +102,9 @@ public final class AutomaticPeriodCoaching {
         && !Thread.currentThread().isInterrupted();
   }
 
+  /** 作業状況の把握に関する定期確認を処理する。 */
   public void tick() {
+    // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
     if (!running.compareAndSet(false, true)) return;
     try {
       if (!allowed()) {

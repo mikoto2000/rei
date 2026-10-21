@@ -26,7 +26,9 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.function.FunctionToolCallback;
 import reactor.core.publisher.Flux;
 
+/** Spring論文文章を生成するモデルの結果と状態の契約を検証するテスト。 */
 class SpringPaperLanguageModelTest {
+  /** 論文の調査と整理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void modelNameComesFromConfiguredModelOptions() {
     var provider = mock(LlmModelProvider.class);
@@ -40,6 +42,7 @@ class SpringPaperLanguageModelTest {
         "feature-model", new SpringPaperLanguageModel(provider, new PaperProperties()).model());
   }
 
+  /** 生成について、設定済み選択可能な設定を保持することを確認する。 */
   @Test
   void generatePreservesConfiguredOptionsWithoutExposingCallbacksOrChangingTheSource() {
     var provider = mock(LlmModelProvider.class);
@@ -84,6 +87,7 @@ class SpringPaperLanguageModelTest {
     assertEquals("required", configured.getToolChoice());
   }
 
+  /** 論文の調査と整理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rawToolDefinitionsAreRejectedBeforeSendingThePrompt() {
     var provider = mock(LlmModelProvider.class);

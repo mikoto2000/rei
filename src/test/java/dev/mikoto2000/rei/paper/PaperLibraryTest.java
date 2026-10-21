@@ -12,15 +12,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 論文保管資料の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class PaperLibraryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 検証で使用する保存と検索の窓口を、指定された条件に合わせて用意する。 */
   PaperRepository repository() {
     return new SqlitePaperRepository(
         new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("memory.db")));
   }
 
+  /** {@code paper} の条件を再現するための補助情報を返す。 */
   Paper paper(String title, String doi) {
     return new Paper(
         null,
@@ -39,6 +43,7 @@ class PaperLibraryTest {
         List.of("agent"));
   }
 
+  /** 論文の調査と整理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void persistsAcrossRestartAndMergesNormalizedDoi() {
     var repo = repository();
@@ -49,6 +54,7 @@ class PaperLibraryTest {
     assertEquals(1, repo.search("", 50).size());
   }
 
+  /** 論文の調査と整理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void deduplicatesUnicodeTitleButNotDifferentAuthorOrYear() {
     var repo = repository();
@@ -77,6 +83,7 @@ class PaperLibraryTest {
             .id());
   }
 
+  /** 論文の調査と整理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void searchAllFieldsAndLimitAndRemove() {
     var repo = repository();
@@ -89,6 +96,7 @@ class PaperLibraryTest {
     assertTrue(repo.find(p.id()).isEmpty());
   }
 
+  /** 論文の調査と整理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void artifactsAreAtomicValidatedAndSurviveRestart() {
     var store = new PaperArtifactStore(dir, new PaperProperties());
@@ -106,6 +114,7 @@ class PaperLibraryTest {
     assertTrue(store.read(UUID.randomUUID().toString(), "extracted", "json").isEmpty());
   }
 
+  /** 論文の調査と整理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void validatesQueryAndSessionReferences() {
     assertThrows(

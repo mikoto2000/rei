@@ -15,10 +15,22 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+/** 作業状況期間をWeb APIの操作として受け付ける。 */
 @RestController
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class ActivityPeriodController {
+  /**
+   * Web APIによる操作で受け渡すレポートを表す。
+   *
+   * @param schemaVersion データ形式形式のバージョン
+   * @param scope 対象範囲
+   * @param period 期間
+   * @param anchorDate 基準位置日付
+   * @param zone タイムゾーン
+   * @param partial 部分的な結果
+   * @param report レポート
+   */
   public record Report(
       int schemaVersion,
       String scope,
@@ -28,12 +40,15 @@ public class ActivityPeriodController {
       boolean partial,
       String report) {}
 
+  /** 時系列の記録。 */
   private final ObjectProvider<ActivityTimeline> timeline;
 
+  /** 指定された値や利用先を使って、ActivityPeriodControllerを初期化する。 */
   public ActivityPeriodController(ObjectProvider<ActivityTimeline> timeline) {
     this.timeline = timeline;
   }
 
+  /** Web APIによる操作で用いる期間を返す。 */
   @GetMapping("/api/v1/activity/period")
   public Report period(
       @RequestParam(defaultValue = "WEEK") String period,
@@ -51,6 +66,7 @@ public class ActivityPeriodController {
       String report =
           dev.mikoto2000.rei.event.CredentialRedactor.redact(
               source.formatPeriodComparison(comparison));
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (report.length() > 32768) throw new ActivityQueryLimitException();
       return new Report(
           1,

@@ -32,19 +32,53 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
 /**
- * One bounded PlantUML PNG rendering, separate from text Apply and delivered through ArtifactStore.
+ * 文書表示への変換のユースケースを実現する。
+ *
+ * <p>One bounded PlantUML PNG rendering, separate from text Apply and delivered through
+ * ArtifactStore.
  */
 @Service
 public final class DocumentRendererService {
+  /**
+   * 共通の実行基盤で受け渡す要求を表す。
+   *
+   * @param path パス
+   * @param sourceSha256 取得元内容の同一性を照合するSHA-256ハッシュ
+   */
   public record Request(String path, String sourceSha256) {}
 
+  /**
+   * 共通の実行基盤で受け渡すRenderedを表す。
+   *
+   * @param exitCode 終了コード
+   * @param parseError 入力の解釈エラー
+   * @param png PNG画像
+   * @param rendererIdentity 表示への変換識別情報
+   */
   public record Rendered(int exitCode, boolean parseError, byte[] png, String rendererIdentity) {}
 
+  /** 共通の実行基盤に必要な表示への変換を扱う。 */
   @FunctionalInterface
   public interface Renderer {
+    /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
     Rendered render(String source) throws Exception;
   }
 
+  /**
+   * 共通の実行基盤で受け渡す受付記録を表す。
+   *
+   * @param id 識別子
+   * @param status 状態
+   * @param sourceSha256 取得元内容の同一性を照合するSHA-256ハッシュ
+   * @param rendererIdentity 表示への変換識別情報
+   * @param exitCode 終了コード
+   * @param parseError 入力の解釈エラー
+   * @param size 大きさ
+   * @param outputSha256 出力内容の同一性を照合するSHA-256ハッシュ
+   * @param artifact 成果物
+   * @param createdAt 作成日時
+   * @param warnings 注意事項
+   */
   public record Receipt(
       String id,
       String status,
@@ -58,18 +92,42 @@ public final class DocumentRendererService {
       Instant createdAt,
       List<String> warnings) {}
 
+  /**
+   * 共通の実行基盤で受け渡す行を表す。
+   *
+   * @param id 識別子
+   * @param status 状態
+   * @param sourceSha 取得元SHA
+   * @param payload 通知内容
+   * @param pid プロセス識別子
+   * @param processStart プロセス開始
+   */
   private record Row(
       String id, String status, String sourceSha, String payload, long pid, String processStart) {}
 
+  /** 活動中。 */
   private static final Set<String> ACTIVE = ConcurrentHashMap.newKeySet();
+
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 有効状態。 */
   private final boolean enabled;
+
+  /** 表示への変換。 */
   private final Renderer renderer;
+
+  /** 成果物一覧。 */
   private final ArtifactStore artifacts;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final com.fasterxml.jackson.databind.ObjectMapper json =
       new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @org.springframework.beans.factory.annotation.Autowired
   public DocumentRendererService(
       @org.springframework.beans.factory.annotation.Qualifier("memoryConsolidationDataSource")
@@ -90,6 +148,7 @@ public final class DocumentRendererService {
         artifacts.getIfAvailable());
   }
 
+  /** 指定された値や利用先を使って、DocumentRendererServiceを初期化する。 */
   public DocumentRendererService(
       DataSource source, Clock clock, boolean enabled, Renderer renderer, ArtifactStore artifacts) {
     db = JdbcClient.create(source);
@@ -102,6 +161,7 @@ public final class DocumentRendererService {
         .update();
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public Receipt validate(AgentRunContext owner, Request request) throws IOException {
     owner(owner, true);
     if (!enabled) throw new IllegalStateException("Document renderer disabled");
@@ -229,6 +289,7 @@ public final class DocumentRendererService {
     }
   }
 
+  /** 対象の状態や内容を調べ、呼び出し元が確認できる情報として返す。 */
   public Receipt inspect(AgentRunContext owner, String id) throws IOException {
     owner(owner, false);
     if (id == null || !id.matches("[a-f0-9-]{36}"))
@@ -278,6 +339,7 @@ public final class DocumentRendererService {
     return json.readValue(row.payload(), Receipt.class);
   }
 
+  /** 対象を特定できるよう、文書表示への変換サービスを探す。 */
   private Optional<Row> find(AgentRunContext owner, String key) {
     return db.sql(
             "SELECT * FROM document_renderer_receipts WHERE project=? AND root=? AND session=? AND run=? AND request_key=?")
@@ -291,6 +353,7 @@ public final class DocumentRendererService {
         .optional();
   }
 
+  /** 共通の実行基盤で用いる行を返す。 */
   private static Row row(java.sql.ResultSet rs, int n) throws java.sql.SQLException {
     return new Row(
         rs.getString("id"),
@@ -301,8 +364,10 @@ public final class DocumentRendererService {
         rs.getString("process_start"));
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   private Receipt save(Receipt receipt) throws IOException {
     String payload = json.writeValueAsString(receipt);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (payload.length() > 16384
         || db.sql(
                     "UPDATE document_renderer_receipts SET status=?,payload=? WHERE id=? AND status='STARTED'")
@@ -312,10 +377,12 @@ public final class DocumentRendererService {
     return receipt;
   }
 
+  /** 要求された処理を開始する。 */
   private static String start() {
     return ProcessHandle.current().info().startInstant().map(Instant::toString).orElse("unknown");
   }
 
+  /** 共通の実行基盤において、稼働中に該当するか判定する。 */
   private static boolean alive(Row row) {
     if (row.pid() == ProcessHandle.current().pid()) return ACTIVE.contains(row.id());
     return ProcessHandle.of(row.pid())
@@ -325,6 +392,7 @@ public final class DocumentRendererService {
         .orElse(false);
   }
 
+  /** 共通の実行基盤に関する所有者を処理する。 */
   private static void owner(AgentRunContext owner, boolean write) throws IOException {
     RunCancellation.propagate(null);
     if (owner == null
@@ -336,6 +404,7 @@ public final class DocumentRendererService {
           "Captured canonical human Project and exclusive rendering required");
   }
 
+  /** 共通の実行基盤に関する安全性入力を処理する。 */
   static void safeInput(String text) {
     String normalized = text.replace("\r\n", "\n").strip();
     if (!normalized.startsWith("@startuml\n")
@@ -351,6 +420,7 @@ public final class DocumentRendererService {
     TextDocumentTransaction.text(text);
   }
 
+  /** 共通の実行基盤において、有効PNG画像に該当するか判定する。 */
   static boolean validPng(byte[] bytes) {
     if (bytes == null
         || bytes.length < 24
@@ -380,6 +450,7 @@ public final class DocumentRendererService {
     }
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(byte[] bytes) {
     try {
       return HexFormat.of()
@@ -389,10 +460,15 @@ public final class DocumentRendererService {
     }
   }
 
+  /** PlantUmlを画面やターミナルへ表示する。 */
   public static final class PlantUmlRenderer implements Renderer {
+    /** Javaの実行先。 */
     private final String java, jar;
+
+    /** タイムアウト。 */
     private final Duration timeout;
 
+    /** 指定された値や利用先を使って、PlantUmlRendererを初期化する。 */
     public PlantUmlRenderer(String java, String jar, Duration timeout) {
       this.java = java;
       this.jar = jar;
@@ -401,6 +477,7 @@ public final class DocumentRendererService {
         throw new IllegalArgumentException("Renderer timeout 1..30000ms");
     }
 
+    /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
     public Rendered render(String source) throws Exception {
       safeInput(source);
       RunCancellation.propagate(null);
@@ -476,6 +553,7 @@ public final class DocumentRendererService {
             errors.cancel(true);
           }
         } catch (InterruptedException interrupted) {
+          // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
           Thread.currentThread().interrupt();
           throw interrupted;
         } finally {
@@ -486,6 +564,7 @@ public final class DocumentRendererService {
       }
     }
 
+    /** 共通の実行基盤に関する後片付け一時的なを処理する。 */
     private static void cleanupTemporary(Path directory) throws IOException {
       if (!directory.isAbsolute()
           || !directory.getFileName().toString().startsWith("rei-renderer-")
@@ -500,6 +579,7 @@ public final class DocumentRendererService {
       }
     }
 
+    /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
     private static byte[] read(InputStream input, int limit, Process process) throws IOException {
       try (input) {
         byte[] bytes = input.readNBytes(limit + 1);
@@ -511,6 +591,7 @@ public final class DocumentRendererService {
       }
     }
 
+    /** 実行中の処理を停止する。 */
     private static void stop(Process process) {
       process
           .descendants()

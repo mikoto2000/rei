@@ -16,21 +16,46 @@ import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 
+/** 画面操作利用のユースケースを実現する。 */
 public final class ComputerUseService {
+  /** デスクトップ使用中。 */
   private static final java.util.concurrent.atomic.AtomicBoolean DESKTOP_BUSY =
       new java.util.concurrent.atomic.AtomicBoolean();
+
+  /** 取得記録。 */
   private final ScreenCapture capture;
+
+  /** モデル。 */
   private final ComputerVisionModel model;
+
+  /** 入力。 */
   private final ComputerInput input;
+
+  /** 画面の変化が落ち着いたか確認する窓口。 */
   private final UiStabilizer stabilizer;
+
+  /** 画面操作の許可条件を判断する基準。 */
   private final SafetyPolicy safety;
+
+  /** キャンセル済み。 */
   private final BooleanSupplier cancelled;
+
+  /** イベント一覧。 */
   private final Consumer<ComputerProgress> events;
+
+  /** 最大手順一覧。 */
   private final int maxSteps;
+
+  /** 履歴上限。 */
   private final int historyLimit;
+
+  /** 診断情報。 */
   private final ComputerDiagnostics diagnostics;
+
+  /** 操作対象となる前面ウィンドウの取得元。 */
   private final Supplier<String> focus;
 
+  /** 画面操作の支援を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ComputerUseService(
       ScreenCapture capture,
       ComputerVisionModel model,
@@ -54,6 +79,7 @@ public final class ComputerUseService {
         new ComputerDiagnostics(null));
   }
 
+  /** 画面操作の支援を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ComputerUseService(
       ScreenCapture capture,
       ComputerVisionModel model,
@@ -79,6 +105,7 @@ public final class ComputerUseService {
         () -> WindowsFocusProbe.UNKNOWN);
   }
 
+  /** 指定された値や利用先を使って、ComputerUseServiceを初期化する。 */
   public ComputerUseService(
       ScreenCapture capture,
       ComputerVisionModel model,
@@ -106,6 +133,7 @@ public final class ComputerUseService {
     this.focus = java.util.Objects.requireNonNull(focus);
   }
 
+  /** 画面操作の支援の操作を実行する。 */
   public ComputerUseResult run(String goal) {
     if (!DESKTOP_BUSY.compareAndSet(false, true))
       return new ComputerUseResult(BUSY, 0, "Another desktop workflow is active");
@@ -116,7 +144,9 @@ public final class ComputerUseService {
     }
   }
 
+  /** 依頼された操作を進めるため、繰り返しを実行する。 */
   private ComputerUseResult executeLoop(String goal) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (goal == null || goal.isBlank() || goal.length() > 4000)
       throw new IllegalArgumentException("Invalid goal");
     var history = new ArrayList<String>();
@@ -283,6 +313,7 @@ public final class ComputerUseService {
                 + "; dispatch only, goal not verified");
         if (history.size() > historyLimit) history.removeFirst();
       } catch (InterruptedException error) {
+        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
         return finish(CANCELLED, step, "Cancelled");
       } catch (java.util.concurrent.CancellationException error) {
@@ -302,6 +333,7 @@ public final class ComputerUseService {
     return finish(MAX_STEPS, maxSteps, "Observation limit reached");
   }
 
+  /** 終了時に必要な状態を反映し、処理を完了させる。 */
   private ComputerUseResult finish(ComputerUseResult.Status status, int step, String reason) {
     emit(
         new ComputerProgress(
@@ -316,6 +348,7 @@ public final class ComputerUseService {
     return new ComputerUseResult(status, step, reason);
   }
 
+  /** 画面操作の支援に関する通知を処理する。 */
   private void emit(ComputerProgress progress) {
     // Observability must never cause a dispatched operation to be retried.
     try {
@@ -324,6 +357,7 @@ public final class ComputerUseService {
     }
   }
 
+  /** 画面操作の支援で用いる開始診断情報を返す。 */
   private java.nio.file.Path beginDiagnostics() {
     try {
       var path = diagnostics.begin();
@@ -336,11 +370,14 @@ public final class ComputerUseService {
     }
   }
 
+  /** 画面操作の支援に必要な診断書き込みを扱う。 */
   @FunctionalInterface
   private interface DiagnosticWrite {
+    /** 指定された内容を書き込み先へ反映する。 */
     void write() throws Exception;
   }
 
+  /** 後から経緯や使用量を確認できるよう、診断情報を記録する。 */
   private void recordDiagnostics(int step, DiagnosticWrite write) {
     try {
       write.write();
@@ -349,6 +386,7 @@ public final class ComputerUseService {
     }
   }
 
+  /** 画面操作の支援に関する診断エラーを処理する。 */
   private void diagnosticError(int step, Exception error) {
     emit(
         new ComputerProgress(
@@ -362,6 +400,7 @@ public final class ComputerUseService {
             error.getClass().getSimpleName()));
   }
 
+  /** 画面操作の支援で用いる進捗を返す。 */
   static ComputerProgress progress(int step, String phase, ComputerAction action) {
     ComputerAction.Target target = null;
     Double confidence = null;
@@ -391,10 +430,12 @@ public final class ComputerUseService {
         reason);
   }
 
+  /** 画面操作の支援において、キャンセル済みかどうかを判定する。 */
   private boolean isCancelled() {
     return cancelled.getAsBoolean() || Thread.currentThread().isInterrupted();
   }
 
+  /** 後続の操作を進められるか判断するため、キャンセル済みを確認する。 */
   private void checkCancelled() {
     if (isCancelled()) throw new java.util.concurrent.CancellationException();
   }

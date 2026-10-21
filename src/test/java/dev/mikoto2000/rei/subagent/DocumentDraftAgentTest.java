@@ -14,10 +14,13 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 文書Draftエージェントの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class DocumentDraftAgentTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code definition} の条件を再現するための補助情報を返す。 */
   SubAgentDefinition definition() {
     return new SubAgentDefinitionLoader(
             new SubAgentToolPolicy(
@@ -26,6 +29,7 @@ class DocumentDraftAgentTest {
         .load(Path.of("config/subagents/document-editor.yaml"));
   }
 
+  /** {@code envelope} の条件を再現するための補助情報を返す。 */
   tools.jackson.databind.node.ObjectNode envelope(String kind, String before, String after) {
     var json = tools.jackson.databind.json.JsonMapper.builder().build().createObjectNode();
     json.put("status", "SUCCESS").put("summary", "Draft only; review required");
@@ -45,6 +49,7 @@ class DocumentDraftAgentTest {
     return json;
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void actualSampleIsReadOnlyBoundedAndValidatesSingleFileProposals() {
     var agent = definition();
@@ -68,6 +73,7 @@ class DocumentDraftAgentTest {
     assertTrue(validator.validate(agent, partial).valid());
   }
 
+  /** 補助エージェントへの委譲で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void validatedDraftPersistsWithoutWritingThenAppliesExactlyReviewedFileAndRejectsStaleSource()
       throws Exception {

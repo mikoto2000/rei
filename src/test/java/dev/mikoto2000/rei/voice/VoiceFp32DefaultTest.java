@@ -4,7 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
 
+/** 音声Fp32既定の結果と状態の契約を検証するテスト。 */
 class VoiceFp32DefaultTest {
+  /** 音声による対話の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void productionBundleUsesPinnedTurboFp32AndCannotReuseInt8Approval() {
     var manifest = VoiceModelManifest.pinned();

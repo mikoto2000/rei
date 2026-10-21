@@ -23,10 +23,13 @@ import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 前面コンソール判定期間の結果と状態の契約を検証するテスト。 */
 @EnabledOnOs(OS.WINDOWS)
 class ForegroundConsoleWindowsTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 保存を解放することを確認する。 */
   @Test
   void ctrlDAndCtrlCCloseServerAndReleaseStorageInRealWindowsConsole() throws Exception {
     for (String key : List.of("\u0004", "\u0003")) {
@@ -71,7 +74,9 @@ class ForegroundConsoleWindowsTest {
     }
   }
 
+  /** 検証条件を再現するためのサーバー。 */
   public static final class Server {
+    /** 検証用に、れいの起動の起動要求を受け付け、実行を開始する。 */
     public static void main(String[] args) throws Exception {
       var kernel = com.sun.jna.platform.win32.Kernel32.INSTANCE;
       var input = kernel.CreateFile("CONIN$", 0x80000000 | 0x40000000, 3, null, 3, 0, null);

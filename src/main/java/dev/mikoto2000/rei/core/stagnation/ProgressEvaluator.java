@@ -17,9 +17,16 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.TreeMap;
 
-/** Run-local evidence ledger. Unknown tools are conservative: success alone proves nothing. */
+/**
+ * 進捗の結果を基準に照らして評価する。
+ *
+ * <p>Run-local evidence ledger. Unknown tools are conservative: success alone proves nothing.
+ */
 public class ProgressEvaluator {
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final ObjectMapper JSON = new ObjectMapper();
+
+  /** 読み取りツール一覧。 */
   private static final Set<String> READ_TOOLS =
       Set.of(
           "readMultiFile",
@@ -37,6 +44,8 @@ public class ProgressEvaluator {
           "webSearchAndRead",
           "fetchUrlContent",
           "searchKnowledge");
+
+  /** 書き込みツール一覧。 */
   private static final Set<String> WRITE_TOOLS =
       Set.of(
           "writeMultiFile",
@@ -47,56 +56,90 @@ public class ProgressEvaluator {
           "copyFile",
           "moveFile",
           "createDirectories");
+
+  /** Webツール一覧。 */
   private static final Set<String> WEB_TOOLS =
       Set.of("webSearch", "webSearchAndRead", "fetchUrlContent", "searchKnowledge");
+
+  /** 記録台帳上限。 */
   private static final int LEDGER_LIMIT = 1024;
+
+  /** 確認の窓口。 */
   private final dev.mikoto2000.rei.goal.FileGoalVerifier verifier =
       new dev.mikoto2000.rei.goal.FileGoalVerifier();
+
+  /** 作業ルート。 */
   private final Path root;
+
+  /** 計画。 */
   private final ActionPlan plan;
+
+  /** 情報。 */
   private final InformationLedger information = new InformationLedger();
 
+  /** 実行の停滞への対処で用いる情報状態の記録を返す。 */
   public InformationLedger.State informationSnapshot() {
     return information.snapshot();
   }
 
+  /** 保存済みの状態を引き継ぐため、情報を復元する。 */
   public void restoreInformation(InformationLedger.State state) {
     information.restore(state);
   }
 
-  /** Called after the Run's plan has been initialized/restored, before any tool executes. */
+  /**
+   * 後から状況を確認できるよう、計画比較の基準を記録する。
+   *
+   * <p>Called after the Run's plan has been initialized/restored, before any tool executes.
+   */
   public synchronized void capturePlanBaseline() {
     completedSteps.clear();
     completedSteps.addAll(doneSteps());
   }
 
+  /** 改訂一覧。 */
   private final Set<String> revisions = new HashSet<>();
+
+  /** 失敗一覧。 */
   private final Set<String> failures = new HashSet<>();
+
+  /** 完了手順一覧。 */
   private final Set<String> completedSteps = new HashSet<>();
 
+  /** 実行の停滞への対処を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ProgressEvaluator(Path root) {
     this(root, null);
   }
 
+  /** 指定された値や利用先を使って、ProgressEvaluatorを初期化する。 */
   public ProgressEvaluator(Path root, ActionPlan plan) {
     this.root = root.toAbsolutePath().normalize();
     this.plan = plan;
     completedSteps.addAll(doneSteps());
   }
 
+  /**
+   * 実行の停滞への対処で受け渡す状態の記録を表す。
+   *
+   * @param files ファイル一覧
+   * @param completedSteps 完了手順一覧
+   */
   public record Snapshot(Map<Path, String> files, Set<String> completedSteps) {
+    /** 受け取った情報からSnapshotを作成する。 */
     public Snapshot {
       files = Map.copyOf(files);
       completedSteps = Set.copyOf(completedSteps);
     }
   }
 
+  /** 本処理に必要な文脈や条件を整えるため、ツールを準備する。 */
   public Snapshot beforeTool(String name, String arguments) {
     Map<Path, String> files = new LinkedHashMap<>();
     if (WRITE_TOOLS.contains(name)) collectPaths(parse(arguments), files);
     return new Snapshot(files, doneSteps());
   }
 
+  /** 実行結果を後続の処理へ渡すため、ツールを反映する。 */
   public synchronized List<ProgressEvidence> afterTool(
       String name, String arguments, String result, Snapshot before) {
     List<ProgressEvidence> evidence = new ArrayList<>();
@@ -228,19 +271,23 @@ public class ProgressEvaluator {
     return List.copyOf(evidence);
   }
 
+  /** 後から経緯や使用量を確認できるよう、失敗情報を記録する。 */
   public synchronized void recordFailure(String name, String arguments) {
     remember(failures, actionKey(name, arguments));
   }
 
+  /** 実行の停滞への対処において、失敗結果に該当するか判定する。 */
   public static boolean failedResult(String result) {
     return failed(parse(result));
   }
 
+  /** 実行の停滞への対処で用いる操作キーを返す。 */
   public static String actionKey(String name, String arguments) {
     JsonNode node = parse(arguments);
     return name + ":" + digest(node == null ? Objects.toString(arguments, "") : canonical(node));
   }
 
+  /** 実行の停滞への対処に関する収集情報を処理する。 */
   private void collectInformation(
       JsonNode node, String raw, String name, String args, List<ProgressEvidence> evidence) {
     if (node != null && node.isArray()) {
@@ -356,6 +403,7 @@ public class ProgressEvaluator {
     }
   }
 
+  /** 状況を判断する根拠を得るため、対象範囲を観測する。 */
   private void observeRange(
       String source,
       String version,
@@ -438,25 +486,30 @@ public class ProgressEvaluator {
     }
   }
 
+  /** 確定できない結果を、判定不能の情報として表す。 */
   private static void unknown(String source, String reason, List<ProgressEvidence> evidence) {
     if (evidence.stream().noneMatch(e -> e.kind() == ProgressEvent.INFORMATION_UNKNOWN))
       evidence.add(new ProgressEvidence(ProgressEvent.INFORMATION_UNKNOWN, reason, source));
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、取得元の表記をそろえる。 */
   private String normalizeSource(String source) {
     String path = root.resolve(source).normalize().toString();
     return root.getFileSystem().getSeparator().equals("\\") ? path.toLowerCase(Locale.ROOT) : path;
   }
 
+  /** 新たな対象を管理できるよう、情報を追加する。 */
   private void addInformation(String key, String source, List<ProgressEvidence> evidence) {
     addInformation(key, source, digest(key), evidence);
   }
 
+  /** 新たな対象を管理できるよう、情報を追加する。 */
   private void addInformation(
       String key, String source, String revision, List<ProgressEvidence> evidence) {
     addInformation(key, source, revision, false, evidence);
   }
 
+  /** 新たな対象を管理できるよう、情報を追加する。 */
   private void addInformation(
       String key,
       String source,
@@ -477,6 +530,7 @@ public class ProgressEvaluator {
       unknown(source, "LEDGER_CAPACITY_OR_HISTORY", evidence);
   }
 
+  /** 実行の停滞への対処で用いる完了手順一覧を返す。 */
   private Set<String> doneSteps() {
     if (plan == null) return Set.of();
     Set<String> done = new HashSet<>();
@@ -486,6 +540,7 @@ public class ProgressEvaluator {
     return done;
   }
 
+  /** 実行の停滞への対処に関する収集パス一覧を処理する。 */
   private void collectPaths(JsonNode node, Map<Path, String> files) {
     if (node == null) return;
     if (node.isArray()) {
@@ -508,6 +563,7 @@ public class ProgressEvaluator {
             });
   }
 
+  /** 実行の停滞への対処で用いる要求内容の照合値を返す。 */
   private String fingerprint(Path path) {
     if (!path.startsWith(root)) return "unavailable";
     String relative = root.relativize(path).toString();
@@ -520,11 +576,13 @@ public class ProgressEvaluator {
     return "unavailable";
   }
 
+  /** 実行の停滞への対処において、rememberに該当するか判定する。 */
   private static boolean remember(Set<String> ledger, String key) {
     // Never evict old evidence: eviction could make an old read appear new again.
     return ledger.size() < LEDGER_LIMIT && ledger.add(key);
   }
 
+  /** 状況を判断する根拠を得るため、変更集合を観測する。 */
   private void observeChangeSet(JsonNode node, List<ProgressEvidence> evidence) {
     if (node == null || !node.path("status").asText().equals("APPLIED")) return;
     String proposed = node.path("proposedSha256").asText();
@@ -545,8 +603,16 @@ public class ProgressEvaluator {
     }
   }
 
+  /**
+   * 実行の停滞への対処で受け渡す情報を表す。
+   *
+   * @param key 照合キー
+   * @param source 取得元
+   * @param revision 改訂番号
+   */
   private record Information(String key, String source, String revision) {}
 
+  /** 実行の停滞への対処で用いるWeb情報を返す。 */
   private static List<Information> webInformation(String name, JsonNode output, String raw) {
     var items = new ArrayList<Information>();
     if (name.equals("webSearch")) {
@@ -574,6 +640,7 @@ public class ProgressEvaluator {
     return items;
   }
 
+  /** 実行の停滞への対処に関する収集Discoveriesを処理する。 */
   private static void collectDiscoveries(JsonNode node, List<Information> items) {
     if (node == null) return;
     if (node.isArray()) {
@@ -589,6 +656,7 @@ public class ProgressEvaluator {
     collectDiscoveries(node.get("results"), items);
   }
 
+  /** 実行の停滞への対処に関する収集Webを処理する。 */
   private static void collectWeb(JsonNode node, List<Information> items) {
     if (node == null) return;
     if (node.isArray()) {
@@ -609,6 +677,7 @@ public class ProgressEvaluator {
       collectWeb(node.get(field), items);
   }
 
+  /** 対象の処理が失敗したことを、理由を含む結果として表す。 */
   private static boolean failed(JsonNode node) {
     if (node == null) return false;
     if (node.isArray()) {
@@ -623,6 +692,7 @@ public class ProgressEvaluator {
         || node.path("status").asText().equals("failed");
   }
 
+  /** 実行の停滞への対処において、successfulに該当するか判定する。 */
   private static boolean successful(JsonNode node) {
     return node != null
         && !failed(node)
@@ -630,6 +700,7 @@ public class ProgressEvaluator {
             || (node.hasNonNull("exitCode") && node.path("exitCode").asInt(-1) == 0));
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   private static JsonNode parse(String value) {
     try {
       return value == null ? null : JSON.readTree(value);
@@ -638,6 +709,7 @@ public class ProgressEvaluator {
     }
   }
 
+  /** 実行の停滞への対処で用いる正規を返す。 */
   private static String canonical(JsonNode node) {
     if (node.isObject()) {
       Map<String, String> sorted = new TreeMap<>();
@@ -652,6 +724,7 @@ public class ProgressEvaluator {
     return node.toString();
   }
 
+  /** 実行の停滞への対処で用いる内容の照合値を返す。 */
   private static String digest(String value) {
     try {
       return HexFormat.of()

@@ -13,7 +13,9 @@ import java.time.Clock;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 
+/** WebAPI注意イベントの結果と状態の契約を検証するテスト。 */
 class WebApiAttentionEventTest {
+  /** Web APIによる操作で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void goalProjectionIncludesStateAndBudgetsWithoutInternalReason() {
     var event =
@@ -38,6 +40,7 @@ class WebApiAttentionEventTest {
     assertFalse(dto.payload().containsKey("reason"));
   }
 
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void attentionAndVerifiedWaitingHaveExplicitPublicFields() {
     var event =

@@ -5,10 +5,13 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.Test;
 
+/** 出力上限計画の見直し入力の解釈の結果と状態の契約を検証するテスト。 */
 class OutputLimitReplanParserTest {
 
+  /** 検証に使う入力の解釈。 */
   private final OutputLimitReplanParser parser = new OutputLimitReplanParser();
 
+  /** 用途に応じたモデル利用で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void parsesPlannerJson() {
     OutputLimitReplanPlan plan =
@@ -30,6 +33,7 @@ class OutputLimitReplanParserTest {
     assertThat(plan.finalGoal()).isEqualTo("結果を統合する");
   }
 
+  /** 用途に応じたモデル利用で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void extractsJsonFromCodeFence() {
     OutputLimitReplanPlan plan =
@@ -45,6 +49,7 @@ class OutputLimitReplanParserTest {
     assertThat(plan.subgoals().get(0).goal()).isEqualTo("小さく実行する");
   }
 
+  /** 空の小さな目標を受け付けないことを確認する。 */
   @Test
   void rejectsEmptySubgoals() {
     assertThatThrownBy(() -> parser.parse("{\"subgoals\":[],\"finalGoal\":\"統合\"}", 8))
@@ -52,6 +57,7 @@ class OutputLimitReplanParserTest {
         .hasMessageContaining("subgoals");
   }
 
+  /** 用途に応じたモデル利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void trimsSubgoalsToConfiguredLimit() {
     OutputLimitReplanPlan plan =
@@ -73,6 +79,7 @@ class OutputLimitReplanParserTest {
         .containsExactly("one", "two");
   }
 
+  /** 空白の目標を受け付けないことを確認する。 */
   @Test
   void rejectsBlankGoal() {
     assertThatThrownBy(

@@ -15,7 +15,9 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.beans.factory.ObjectProvider;
 
+/** 言語モデルモデルへ対話を依頼する窓口提供元の結果と状態の契約を検証するテスト。 */
 class LlmChatClientProviderTest {
+  /** 用途に応じたモデル利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
     "false,false,false,false,delegateTask|delegateTasks",
@@ -102,6 +104,7 @@ class LlmChatClientProviderTest {
         .containsExactly(expectedNames.split("\\|"));
   }
 
+  /** 用途に応じたモデル利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"EXCLUSIVE", "READ_ONLY"})
   void toolUsingClientsReceiveCommonPolicyOnce(String mode) throws Exception {
@@ -185,6 +188,7 @@ class LlmChatClientProviderTest {
     }
   }
 
+  /** 用途に応じたモデル利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void conversationClientHasNoSharedMemoryAdvisorsOrTools() {
     var model = mock(ChatModel.class);
@@ -247,17 +251,20 @@ class LlmChatClientProviderTest {
     org.mockito.Mockito.verifyNoInteractions(memory);
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"memory", "voice-correction"})
   void memoryProcessesOnlySuppliedEvidenceWithoutToolsOrAdvisors(String feature) {
     var prompts = new java.util.ArrayList<org.springframework.ai.chat.prompt.Prompt>();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、用途に応じたモデル利用で参照する選択可能な設定を返す。 */
           @Override
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().build();
           }
 
+          /** 検証用に、用途に応じたモデル利用の要求を実行し、呼び出し元へ結果を返す。 */
           @Override
           public org.springframework.ai.chat.model.ChatResponse call(
               org.springframework.ai.chat.prompt.Prompt prompt) {
@@ -327,6 +334,7 @@ class LlmChatClientProviderTest {
     org.mockito.Mockito.verifyNoInteractions(memory, system);
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"chat", "search", "feed-summary"})
   void requestsWithoutAnApplicationRunRetainToolCalling(String feature) {
@@ -334,11 +342,13 @@ class LlmChatClientProviderTest {
     var toolCalls = new java.util.concurrent.atomic.AtomicInteger();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、用途に応じたモデル利用で参照する選択可能な設定を返す。 */
           @Override
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().model("local").build();
           }
 
+          /** 検証用に、用途に応じたモデル利用の要求を実行し、呼び出し元へ結果を返す。 */
           @Override
           public org.springframework.ai.chat.model.ChatResponse call(
               org.springframework.ai.chat.prompt.Prompt prompt) {
@@ -394,6 +404,7 @@ class LlmChatClientProviderTest {
             null);
     var callback =
         new org.springframework.ai.tool.ToolCallback() {
+          /** 検証用に、用途に応じたモデル利用で参照するツール定義を返す。 */
           @Override
           public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
             return org.springframework.ai.tool.definition.ToolDefinition.builder()
@@ -403,6 +414,7 @@ class LlmChatClientProviderTest {
                 .build();
           }
 
+          /** 検証用に、用途に応じたモデル利用の要求を実行し、呼び出し元へ結果を返す。 */
           @Override
           public String call(String input) {
             toolCalls.incrementAndGet();
@@ -418,6 +430,7 @@ class LlmChatClientProviderTest {
     assertThat(toolCalls).hasValue(1);
   }
 
+  /** 用途に応じたモデル利用で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
   void persistedSessionHistoryIsAvailableRegardlessOfCompression(
@@ -491,6 +504,7 @@ class LlmChatClientProviderTest {
         .contains("persisted-session-question", "persisted-session-answer");
   }
 
+  /** 用途に応じたモデル利用で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void chatClientExposesLastSummaryTool() throws Exception {
     var models = mock(LlmModelProvider.class);
@@ -552,6 +566,7 @@ class LlmChatClientProviderTest {
         .containsExactly("getLastSummary");
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void blueskyReplyDoesNotExposeTools() throws Exception {
     var models = mock(LlmModelProvider.class);
@@ -602,6 +617,7 @@ class LlmChatClientProviderTest {
     assertThat(callbacks.map(callback -> callback.getToolDefinition().name())).isEmpty();
   }
 
+  /** {@code optional} の条件を再現するための補助情報を返す。 */
   private static <T> ObjectProvider<T> optional(T value) {
     @SuppressWarnings("unchecked")
     ObjectProvider<T> provider = mock(ObjectProvider.class);
@@ -609,6 +625,7 @@ class LlmChatClientProviderTest {
     return provider;
   }
 
+  /** 用途に応じたモデル利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void agentSkillsAreEnabledOnlyForChatFeature() {
     assertThat(LlmChatClientProvider.supportsAgentSkills(LlmFeature.CHAT)).isTrue();

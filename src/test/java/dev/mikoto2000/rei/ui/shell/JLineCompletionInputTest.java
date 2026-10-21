@@ -21,15 +21,19 @@ import org.junit.jupiter.params.provider.ValueSource;
 import picocli.CommandLine;
 import picocli.CommandLine.Model.CommandSpec;
 
+/** J行完了入力の結果と状態の契約を検証するテスト。 */
 @Timeout(15)
 @org.junit.jupiter.api.Tag("integration")
 class JLineCompletionInputTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code tab} の条件を再現するための補助情報を返す。 */
   String tab(String input) throws Exception {
     return read(input + "\t");
   }
 
+  /** 検証用に、指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   String read(String input) throws Exception {
     var command =
         new CommandLine(CommandSpec.create())
@@ -56,11 +60,13 @@ class JLineCompletionInputTest {
     }
   }
 
+  /** ターミナルでの対話の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void tabCompletesApprovalAction() throws Exception {
     assertThat(tab("/approval ap")).isEqualTo("/approval approve ");
   }
 
+  /** ターミナルでの対話で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -75,6 +81,7 @@ class JLineCompletionInputTest {
     assertThat(read("/project cd " + path)).isEqualTo("/project cd " + path);
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   @EnabledOnOs(OS.WINDOWS)
   void tabCompletesWindowsPathAndPassesItToCd() throws Exception {
@@ -92,11 +99,13 @@ class JLineCompletionInputTest {
     org.mockito.Mockito.verify(service).cd(directory.toString() + "\\");
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void tabCompletesCommandAndAppendsSpace() throws Exception {
     assertThat(tab("/pro")).isEqualTo("/project ");
   }
 
+  /** ディレクトリ開始を維持することを確認する。 */
   @Test
   void tabQuotesSpaceAndKeepsDirectoryOpenForNextLevel() throws Exception {
     Files.createDirectory(root.resolve("My Documents"));
@@ -105,6 +114,7 @@ class JLineCompletionInputTest {
     assertThat(result).doesNotEndWith(" ");
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void tabWithinExistingQuoteRoundTrips() throws Exception {
     Files.createDirectory(root.resolve("My Documents"));
@@ -113,11 +123,13 @@ class JLineCompletionInputTest {
           .endsWith("./My Documents/");
   }
 
+  /** ターミナルでの対話で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void tabInMiddlePreservesFollowingArgument() throws Exception {
     assertThat(tab("/project c foo\u0002\u0002\u0002\u0002")).isEqualTo("/project cd foo");
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void repeatedTabDescendsThroughQuotedDirectory() throws Exception {
     Files.createDirectories(root.resolve("My Documents/child"));
@@ -125,6 +137,7 @@ class JLineCompletionInputTest {
         .endsWith("./My Documents/child/");
   }
 
+  /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void homeCandidateCanActuallyBeInsertedByJline() throws Exception {
     // An injected home keeps this test independent of the developer's real files.

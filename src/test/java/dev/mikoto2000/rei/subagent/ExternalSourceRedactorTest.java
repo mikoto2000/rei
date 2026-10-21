@@ -10,7 +10,9 @@ import java.time.Duration;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 外部取得元Redactorの結果と状態の契約を検証するテスト。 */
 class ExternalSourceRedactorTest {
+  /** {@code safeAndIdempotent} の条件を再現するため、検証用の操作や状態を扱う。 */
   private void safeAndIdempotent(String input, String expected) {
     var result = ExternalSourceRedactor.redact(input);
     assertEquals(expected, result.content());
@@ -20,6 +22,7 @@ class ExternalSourceRedactorTest {
     assertTrue(ExternalSourceRedactor.redact(result.content()).redacted());
   }
 
+  /** 補助エージェントへの委譲で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void preservesJsonPunctuationEscapesAndNeighboringValues() throws Exception {
     String input =
@@ -35,6 +38,7 @@ class ExternalSourceRedactorTest {
     assertTrue(json.path("enabled").asBoolean());
   }
 
+  /** 補助エージェントへの委譲で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void masksEscapedQuotedAssignmentsInsideJsonStringExamples() {
     String input = "{\"snippet\":\"password=\\\"synthetic\\\"; username=demo\"}";
@@ -48,6 +52,7 @@ class ExternalSourceRedactorTest {
     assertFalse(ExternalSourceRedactor.hasUnmaskedCredentials(json.path("snippet").asString()));
   }
 
+  /** 引用形式一覧を保持することを確認する。 */
   @Test
   void preservesQuoteStylesAndCrlfInYamlPropertiesAndCodeExamples() {
     String input =
@@ -60,6 +65,7 @@ class ExternalSourceRedactorTest {
     assertNotEquals(expected, dev.mikoto2000.rei.event.CredentialRedactor.redact(expected));
   }
 
+  /** 補助エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void doesNotConsumeTheNextLineOrOtherAssignments() {
     String input =
@@ -69,6 +75,7 @@ class ExternalSourceRedactorTest {
     safeAndIdempotent(input, expected);
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void masksAllRecognizedAssignmentKeysIncludingQualifiedAndCamelCaseNames() {
     var keys =
@@ -99,6 +106,7 @@ class ExternalSourceRedactorTest {
     }
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void decodesUnicodeEscapedSensitiveKeysWithoutRewritingTheKeysOrTheirJsonSyntax() {
     safeAndIdempotent(
@@ -115,6 +123,7 @@ class ExternalSourceRedactorTest {
     assertFalse(ExternalSourceRedactor.hasUnmaskedCredentials(ordinary));
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void masksStandaloneJwtApiAndSlackTokensAndAuthorizationSchemes() {
     String jwt = "eyJhbGciOiJub25lIn0.eyJzdWIiOiJkZW1vIn0.c3ludGhldGlj";
@@ -127,6 +136,7 @@ class ExternalSourceRedactorTest {
     safeAndIdempotent(input, expected);
   }
 
+  /** 補助エージェントへの委譲で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void masksPrivateKeysWhileKeepingOriginalLineEndingsAndSurroundingText() {
     String input =
@@ -138,6 +148,7 @@ class ExternalSourceRedactorTest {
     assertFalse(ExternalSourceRedactor.hasUnmaskedCredentials(incomplete.content()));
   }
 
+  /** 補助エージェントへの委譲で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void preservesYamlBlockSyntaxIndentationNewlinesAndTheNextProperty() {
     String input =
@@ -147,6 +158,7 @@ class ExternalSourceRedactorTest {
     safeAndIdempotent(input, expected);
   }
 
+  /** 補助エージェントへの委譲で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void preservesMultilineQuotedValueLineBreaksAndMasksPlaceholderExpressions() {
     safeAndIdempotent(
@@ -157,6 +169,7 @@ class ExternalSourceRedactorTest {
         "spring.datasource.password=[REDACTED]\nusername=demo");
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void existingMarkersAndOrdinaryDocumentsAreNotRemasked() {
     for (String safe :
@@ -176,6 +189,7 @@ class ExternalSourceRedactorTest {
     assertFalse(ExternalSourceRedactor.hasUnmaskedCredentials(ordinary));
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void unsupportedStructuredOrIncompletePlaceholderValuesRemainRestricted() {
     for (String unsafe :
@@ -186,6 +200,7 @@ class ExternalSourceRedactorTest {
               ExternalSourceRedactor.redact(unsafe).content()));
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void opaqueBareValuesIncludeAngleHashAndUrlPunctuationWithoutLeavingSecretSuffixes() {
     for (String secret :
@@ -202,6 +217,7 @@ class ExternalSourceRedactorTest {
         "spring.security.user.password={noop}[REDACTED]\nusername=demo");
   }
 
+  /** 補助エージェントへの委譲で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void preservesAuthorizationSchemesAndQuotedHeaderOrJsonBoundaries() {
     safeAndIdempotent(
@@ -216,6 +232,7 @@ class ExternalSourceRedactorTest {
     safeAndIdempotent("Header Bearer <PRIVATE>", "Header Bearer [REDACTED]");
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void ambiguousWhitespaceOrInternalSeparatorsFailClosedInsteadOfPartlyMasking() {
     for (String unsafe :
@@ -236,6 +253,7 @@ class ExternalSourceRedactorTest {
         "password=[REDACTED] # a comment\nusername=demo");
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void markdownListValuesWithMultipleCasesAreFullyMaskedWithoutLeavingTheirRemainder() {
     String input =
@@ -249,6 +267,7 @@ class ExternalSourceRedactorTest {
     safeAndIdempotent("- password: [REDACTED] PRIVATE", "- password: [REDACTED]");
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void boundedLongInputWithManyNearMatchesCompletesWithoutChangingOrdinaryText() {
     String content = "ordinary_api_key_name_that_is_not_an_assignment ".repeat(5000);

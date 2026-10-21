@@ -5,16 +5,27 @@ import java.sql.Connection;
 import java.time.Instant;
 import javax.sql.DataSource;
 
-/** Activity journal-wide preferences; no Project ownership is inferred from screen candidates. */
+/**
+ * SQLite期間助言の記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>Activity journal-wide preferences; no Project ownership is inferred from screen candidates.
+ */
 public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
+  /** 取得元。 */
   private final DataSource source;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper mapper = new ObjectMapper();
+
+  /** 初期化済み。 */
   private boolean initialized;
 
+  /** 指定された値や利用先を使って、SqlitePeriodCoachingStoreを初期化する。 */
   public SqlitePeriodCoachingStore(DataSource source) {
     this.source = source;
   }
 
+  /** 作業状況の把握に関する初期化を処理する。 */
   private synchronized void initialize() throws Exception {
     if (initialized) return;
     try (var c = source.getConnection();
@@ -35,6 +46,7 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
     }
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private Snapshot read(Connection c) throws Exception {
     try (var s = c.createStatement();
         var r =
@@ -46,6 +58,7 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
     }
   }
 
+  /** 保存された情報を読み込み、現在の処理で使える形にする。 */
   @Override
   public Snapshot load() {
     try {
@@ -58,10 +71,13 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
     }
   }
 
+  /** 作業状況の把握に必要な操作を扱う。 */
   private interface Operation<T> {
+    /** 指定された内容を、現在の対象へ反映する。 */
     T apply(Connection c) throws Exception;
   }
 
+  /** 作業状況の把握で用いる一連の更新を返す。 */
   private <T> T transaction(Operation<T> operation) {
     try {
       initialize();
@@ -83,6 +99,7 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
     }
   }
 
+  /** 指定された内容を書き込み先へ反映する。 */
   private Snapshot write(Connection c, PeriodCoaching.Settings settings) throws Exception {
     if (read(c).revision() == Long.MAX_VALUE)
       throw new java.util.ConcurrentModificationException("Coaching revision exhausted");
@@ -95,16 +112,19 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
     return read(c);
   }
 
+  /** 作業状況の把握で用いる設定を返す。 */
   @Override
   public Snapshot configure(PeriodCoaching.Settings settings) {
     return transaction(c -> write(c, settings));
   }
 
+  /** 作業状況の把握で使用する有効状態を設定する。 */
   @Override
   public Snapshot setEnabled(boolean enabled) {
     return transaction(c -> write(c, read(c).settings().withEnabled(enabled)));
   }
 
+  /** 作業状況の把握で用いる期待する内容を返す。 */
   private Snapshot expected(Connection c, long revision) throws Exception {
     var snapshot = read(c);
     if (revision < 0 || snapshot.revision() != revision || revision == Long.MAX_VALUE)
@@ -112,6 +132,7 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
     return snapshot;
   }
 
+  /** 作業状況の把握で用いる設定期待する内容を返す。 */
   @Override
   public Snapshot configureExpected(PeriodCoaching.Settings settings, long revision) {
     return transaction(
@@ -121,11 +142,13 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
         });
   }
 
+  /** 作業状況の把握で使用する有効状態期待する内容を設定する。 */
   @Override
   public Snapshot setEnabledExpected(boolean enabled, long revision) {
     return transaction(c -> write(c, expected(c, revision).settings().withEnabled(enabled)));
   }
 
+  /** 競合する処理と利用範囲を調整するため、SQLite期間助言保存先を確保する。 */
   @Override
   public String reserve(Snapshot expected, String key, String reason, Instant now) {
     if (key == null
@@ -168,6 +191,7 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
         });
   }
 
+  /** 処理を継続できなかった理由を、失敗情報として表す。 */
   private static RuntimeException failure(Exception e) {
     return e instanceof java.util.ConcurrentModificationException conflict
         ? conflict

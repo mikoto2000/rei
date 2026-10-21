@@ -7,6 +7,7 @@ import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 関心話題情報の抽出の結果と状態の契約を検証するテスト。 */
 class InterestTopicExtractorTest {
 
   /**

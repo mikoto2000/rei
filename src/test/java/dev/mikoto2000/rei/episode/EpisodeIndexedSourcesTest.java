@@ -18,10 +18,13 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 経験の記録Indexed取得元一覧の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class EpisodeIndexedSourcesTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void prepare() throws Exception {
     try (var migration = new StorageMigrationCoordinator(root)) {
@@ -29,6 +32,7 @@ class EpisodeIndexedSourcesTest {
     }
   }
 
+  /** 過去の経験の活用で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void rangesAndRunLookupSurviveRestartWithoutReadingEarlierRecords() {
     var store = new SqliteConversationTurnStore(root);
@@ -49,6 +53,7 @@ class EpisodeIndexedSourcesTest {
     assertTrue(restarted.findRun("chat:other", "r50").isEmpty());
   }
 
+  /** 過去の経験の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void exactEventLookupDoesNotDependOnRecentWindowAndRespectsProject() {
     String project = java.util.UUID.randomUUID().toString();

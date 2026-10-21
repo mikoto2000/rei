@@ -18,10 +18,13 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 作業状況傾向検索条件の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ActivityTrendQueryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 作業状況の把握で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void trendReadPreservesFiveFineSessionsAndPhase31GapBoundaries() {
     var ds = new org.sqlite.SQLiteDataSource();
@@ -55,6 +58,7 @@ class ActivityTrendQueryTest {
             ActivitySemanticTest.START, ActivitySemanticTest.START.plusSeconds(31 * 60)));
   }
 
+  /** 傾向表示形式への変換を利用することを確認する。 */
   @Test
   void onlySummarySlashActionUsesTrendFormatter() {
     var timeline = mock(ActivityTimeline.class);
@@ -74,6 +78,7 @@ class ActivityTrendQueryTest {
     verify(presentation).format("today", false);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void dateAndNoDataQueriesRemainSafe() {
     var store = mock(ActivityStore.class);
@@ -84,6 +89,7 @@ class ActivityTrendQueryTest {
     assertThrows(java.time.DateTimeException.class, () -> timeline.trendSummary("invalid"));
   }
 
+  /** 作業状況の把握で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void splitProjectionRetainsExactFineReferencesAndStoredRecords() {
     var ds = new org.sqlite.SQLiteDataSource();

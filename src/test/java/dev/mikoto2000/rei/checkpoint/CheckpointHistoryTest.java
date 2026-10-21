@@ -17,13 +17,22 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.sqlite.SQLiteDataSource;
 
+/** 再開用の記録履歴の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class CheckpointHistoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う取得元。 */
   SQLiteDataSource source;
+
+  /** 検証に使う設定。 */
   CheckpointProperties settings;
+
+  /** 検証に使うリポジトリ。 */
   PersistentCheckpointRepository repo;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     source = new SQLiteDataSource();
@@ -32,11 +41,13 @@ class CheckpointHistoryTest {
     repo = new PersistentCheckpointRepository(source, settings);
   }
 
+  /** {@code initial} の条件を再現するための補助情報を返す。 */
   PersistentCheckpoint initial(String task) {
     return PersistentCheckpoint.initial(
         task, "project", "session", "run-" + task, root, "request-" + task);
   }
 
+  /** 検証用に、後から参照できるよう、指定された情報を保存する。 */
   PersistentCheckpoint save(String task, int revisions, String status) {
     var state = initial(task);
     var fields = repo.fields(state);
@@ -46,6 +57,7 @@ class CheckpointHistoryTest {
     return state;
   }
 
+  /** {@code sql} の条件を再現するため、検証用の操作や状態を扱う。 */
   void sql(String query) throws Exception {
     try (var db = DriverManager.getConnection(source.getUrl());
         var statement = db.createStatement()) {
@@ -53,6 +65,7 @@ class CheckpointHistoryTest {
     }
   }
 
+  /** {@code revisionRows} の条件を再現するための補助情報を返す。 */
   long revisionRows(String task) throws Exception {
     try (var db = DriverManager.getConnection(source.getUrl());
         var query = db.prepareStatement("SELECT COUNT(*) FROM checkpoint_revisions WHERE task=?")) {
@@ -64,6 +77,7 @@ class CheckpointHistoryTest {
     }
   }
 
+  /** 作業の中断と再開で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void defaultStorageBudgetIs128MiBWhileOtherLimitsAreUnchanged() {
     assertEquals(134217728L, settings.getMaxBytes());
@@ -71,6 +85,7 @@ class CheckpointHistoryTest {
     assertEquals(262144, settings.getMaxSnapshotBytes());
   }
 
+  /** 作業の中断と再開で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void automaticallyRemovesOldestAcrossTasksOnlyUntilNewSaveFitsAndRetainsDeduplication()
       throws Exception {
@@ -93,6 +108,7 @@ class CheckpointHistoryTest {
     assertEquals(4, reopened.historyUsage().revisions());
   }
 
+  /** 作業の中断と再開で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void automaticallyMakesRoomForSnapshotBytes() throws Exception {
     var fields = repo.fields(initial("large"));
@@ -108,6 +124,7 @@ class CheckpointHistoryTest {
     assertTrue(repo.historyUsage().snapshotBytes() <= settings.getMaxBytes());
   }
 
+  /** 作業の中断と再開で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void previewAndApplyKeepOnlyHeadsAndValidFallbackEvenForLiveAndWaitingTasks() throws Exception {
     save("ordinary", 3, "FAILED");
@@ -140,6 +157,7 @@ class CheckpointHistoryTest {
     assertFalse(repo.diagnostics("project", "damaged").isEmpty());
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void acquiringLeaseAfterPreviewDoesNotPinUnneededHistoryOrReleaseOwnership() throws Exception {
     save("task", 3, "FAILED");
@@ -151,6 +169,7 @@ class CheckpointHistoryTest {
     assertEquals(3, repo.get("project", "task").revision());
   }
 
+  /** 作業の中断と再開の操作が、指定された権限・承認条件に従うことを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {"WAITING_APPROVAL", "QUEUED", "RESUMING", "DENY_QUEUED", "UNKNOWN", "EXPIRED"})
@@ -177,6 +196,7 @@ class CheckpointHistoryTest {
     assertTrue(repo.findByRun("project", "run-approval").isPresent());
   }
 
+  /** 作業の中断と再開で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void insufficientSpaceRollsBackTentativeDeletionsAndReportsRealUsage() throws Exception {
     save("old", 2, "FAILED");
@@ -200,6 +220,7 @@ class CheckpointHistoryTest {
     assertTrue(error.getMessage().contains("保護されて削除できない履歴: 3 件"));
   }
 
+  /** 作業の中断と再開で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void liveTaskMakesRoomByBytesWhileKeepingLeaseAndDedupKeys() throws Exception {
     var fields = repo.fields(initial("live"));
@@ -220,6 +241,7 @@ class CheckpointHistoryTest {
     assertEquals(40, repo.save(initial("live"), 0, "live-1").revision());
   }
 
+  /** 作業の中断と再開で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void incomingResumePinsItsDirectSourceButReleasesGrandparentOnNextResume() throws Exception {
     var state = save("task", 2, "INTERRUPTED");
@@ -239,6 +261,7 @@ class CheckpointHistoryTest {
     assertEquals(2, repo.cleanupHistory(false).protectedRevisions());
   }
 
+  /** 作業の中断と再開で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void replacementWithOneRevisionLimitIsAtomicIncludingInsertFailure() throws Exception {
     var state = save("task", 1, "RUNNING");
@@ -257,6 +280,7 @@ class CheckpointHistoryTest {
     assertEquals(2, repo.historyUsage().eventKeys());
   }
 
+  /** 作業の中断と再開の操作が、指定された権限・承認条件に従うことを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"COMPLETED", "CANCELLED", "DENIED"})
   void completedApprovalReceiptDoesNotPinOldRun(String status) throws Exception {
@@ -270,6 +294,7 @@ class CheckpointHistoryTest {
     assertEquals(1, revisionRows("approval"));
   }
 
+  /** 作業の中断と再開の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void realApprovalDocumentPinsExactRunAndOwnerIncludingPathUriSerialization() throws Exception {
     var old = save("approval", 2, "COMPLETED");
@@ -313,6 +338,7 @@ class CheckpointHistoryTest {
         store.saved(store.find("approval").orElseThrow()).pendingTools().calls().getFirst().id());
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void healthyHeadDoesNotPinAllHistoricRunsByOriginalRunIdentity() throws Exception {
     var state = save("approval", 3, "COMPLETED");
@@ -329,6 +355,7 @@ class CheckpointHistoryTest {
     assertEquals(2, revisionRows("approval"));
   }
 
+  /** 検証用に、作業の中断と再開において、改訂番号の有無を判定する。 */
   boolean hasRevision(String project, String task, long revision) throws Exception {
     try (var db = DriverManager.getConnection(source.getUrl());
         var query =
@@ -344,6 +371,7 @@ class CheckpointHistoryTest {
     }
   }
 
+  /** 作業の中断と再開で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedInsertRollsBackAutomaticCleanup() throws Exception {
     save("old", 2, "FAILED");
@@ -355,6 +383,7 @@ class CheckpointHistoryTest {
     assertEquals(2, repo.historyUsage().eventKeys());
   }
 
+  /** 古いについて、決して行わない削除するその他タスク一覧履歴を保存することを確認する。 */
   @Test
   void staleSaveNeverDeletesOtherTasksHistory() throws Exception {
     save("task", 2, "FAILED");
@@ -365,6 +394,7 @@ class CheckpointHistoryTest {
     assertEquals(4, repo.historyUsage().revisions());
   }
 
+  /** 後片付けおよび並行保存について、先頭を保持することを確認する。 */
   @Test
   void cleanupAndConcurrentSaveRetainHeadAndMonotonicRevision() throws Exception {
     save("task", 3, "INTERRUPTED");

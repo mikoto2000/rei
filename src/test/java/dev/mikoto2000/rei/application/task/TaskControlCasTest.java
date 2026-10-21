@@ -20,10 +20,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** タスク制御Casの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class TaskControlCasTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 実行中タスクの操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void staleCancellationCannotAffectNewGoalIterationOrUpdatedDependencyOrSchedule() {
     var data = new SQLiteDataSource();

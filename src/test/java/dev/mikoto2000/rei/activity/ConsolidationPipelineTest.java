@@ -38,12 +38,17 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
 
+/** 統合処理の連携の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ConsolidationPipelineTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う保存や受け渡しに用いるデータ形式の変換。 */
   static final ObjectMapper JSON =
       new ObjectMapper().registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
 
+  /** {@code fixture} の条件を再現するための補助情報を返す。 */
   static List<SummarySegment> fixture() {
     return List.of(
         segment(
@@ -61,16 +66,19 @@ class ConsolidationPipelineTest {
         sample(1120, 1800, "livevingo", "translation"));
   }
 
+  /** {@code aggregate} の条件を再現するための補助情報を返す。 */
   DailySummaryAggregate aggregate(ProjectAliasStore store) {
     var config = store.snapshot();
     return new DailySummaryAggregator(config.projects(), .5, config.groups())
         .aggregate(DailySummaryTest.DATE, RANGE, ZoneOffset.UTC, fixture());
   }
 
+  /** 検証用に、利用者が内容を確認できるよう、表示形式へ変換する。 */
   String render(DailySummaryAggregate a) {
     return new DailySummaryFormatter().format(a, DailySummary.fallback(a));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void missingConfigurationReproducesRawAliasesAndHotReloadFixesBothScopes() throws Exception {
     var file = dir.resolve("summary.yaml");
@@ -101,6 +109,7 @@ class ConsolidationPipelineTest {
             + render(after));
   }
 
+  /** 作業状況の把握で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void aliasAndGroupLookupNormalizeCaseSeparatorsAndWhitespace() throws Exception {
     var file = dir.resolve("summary.yaml");
@@ -122,6 +131,7 @@ class ConsolidationPipelineTest {
     assertThat(config.groups().groups().getFirst().projects()).contains("sensevoice-input");
   }
 
+  /** 実際のモデル境界条件および代替手段について、最終候補一覧を利用することを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"success", "invalid", "failure"})
   void actualModelBoundaryAndFallbackUseFinalCandidates(String mode) throws Exception {
@@ -168,6 +178,7 @@ class ConsolidationPipelineTest {
     assertThat(result).isEqualTo(render(a)).doesNotContain("sensevoice の", "文字起こし・音声翻訳");
   }
 
+  /** 作業状況の把握で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void explicitSingleProjectExampleProducesGroupsAtModelBoundary() throws Exception {
     var file = dir.resolve("summary.yaml");
@@ -203,6 +214,7 @@ class ConsolidationPipelineTest {
     Files.writeString(Path.of("target/pipeline-single-project-example.txt"), render(a));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void arithmeticDigitsAreNotPrivatePhoneNumbersButTextStillIs() throws Exception {
     var a = aggregate(new ProjectAliasStore(dir.resolve("missing.yaml")));
@@ -226,9 +238,11 @@ class ConsolidationPipelineTest {
         new DailySummaryAggregator(privateNames, .5)
             .aggregate(DailySummaryTest.DATE, RANGE, ZoneOffset.UTC, fixture());
     assertThatThrownBy(() -> writer.write(privateAggregate)).hasMessage("Unsafe summary input");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(model);
   }
 
+  /** 昨日コマンドについて、同一設定済み処理の連携を利用することを確認する。 */
   @Test
   void yesterdayCommandUsesSameConfiguredPipelineWithoutChangingSavedRecords() throws Exception {
     var file = dir.resolve("summary.yaml");
@@ -264,6 +278,7 @@ class ConsolidationPipelineTest {
     verify(store, never()).append(any());
   }
 
+  /** 複数の検証で共通する期待結果を確認し、要件に合わない状態を検出する。 */
   static void assertNoRawAlias(JsonNode node) {
     if (node.isTextual())
       assertThat(node.asText()).isNotEqualTo("sensevoice").doesNotContain("sensevoice の");

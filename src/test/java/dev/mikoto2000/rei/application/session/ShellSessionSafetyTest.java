@@ -31,10 +31,13 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** シェル会話安全性の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ShellSessionSafetyTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** 会話の継続管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void oldFilesAreNotReadMigratedOrModifiedByNewShellSession() throws Exception {
     var projects = new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json")));
@@ -76,6 +79,7 @@ class ShellSessionSafetyTest {
         .hasSize(1);
   }
 
+  /** 会話の継続管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedCreateOrTouchNeverDispatchesOrChangesCurrentSelection() {
     var projects = new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json")));
@@ -83,14 +87,17 @@ class ShellSessionSafetyTest {
     var fail = new AtomicBoolean(true);
     SessionRepository repo =
         new SessionRepository() {
+          /** 検証用に、対象を特定できるよう、別識別子を探す。 */
           public Optional<SessionMetadata> findById(String id) {
             return disk.findById(id);
           }
 
+          /** 検証用に、対象を特定できるよう、ページを探す。 */
           public List<SessionMetadata> findPage(String p, CursorKey c, int n) {
             return disk.findPage(p, c, n);
           }
 
+          /** {@code accept} の条件を再現するため、検証用の操作や状態を扱う。 */
           public void accept(SessionMetadata row, Runnable enqueue) {
             if (fail.get()) throw new IllegalStateException("storage unavailable");
             disk.accept(row, enqueue);
@@ -120,6 +127,7 @@ class ShellSessionSafetyTest {
     }
   }
 
+  /** 会話の継続管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rejectedEnqueueRollsBackNewAndContinuedMetadata() {
     var projects = new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json")));
@@ -146,6 +154,7 @@ class ShellSessionSafetyTest {
     }
   }
 
+  /** 会話の継続管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void concurrentShellAndWebAdmissionsMatchQueueAndPersistentTurnOrder() throws Exception {
     var registry = new ProjectRegistry(temp.resolve("projects.json"));

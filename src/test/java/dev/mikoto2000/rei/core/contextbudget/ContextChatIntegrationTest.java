@@ -35,10 +35,13 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
 
+/** 文脈チャット外部連携の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ContextChatIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 要約直近作業中集合を送信することを確認する。 */
   @Test
   void realAdvisorAndModelChainSendSummaryRecentWorkingSetAndCurrentInput() {
     var turns = new ConversationTurnStore(dir);
@@ -78,15 +81,18 @@ class ContextChatIntegrationTest {
     var sent = new AtomicReference<Prompt>();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、モデルへ渡す文脈の管理で参照する選択可能な設定を返す。 */
           @Override
           public OpenAiChatOptions getOptions() {
             return OpenAiChatOptions.builder().build();
           }
 
+          /** 検証用に、モデルへ渡す文脈の管理の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             sent.set(p);
             return Flux.just(

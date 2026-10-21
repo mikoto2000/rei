@@ -16,7 +16,9 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.security.oauth2.jwt.NimbusJwtDecoder;
 
+/** 計画識別情報確認の窓口の結果と状態の契約を検証するテスト。 */
 class PlanIdentityVerifierTest {
+  /** ChatGPTとの連携で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void signatureIssuerAudienceExpiryAndNonceAreVerified() throws Exception {
     var key = new RSAKeyGenerator(2048).generate();
@@ -52,6 +54,7 @@ class PlanIdentityVerifierTest {
     }
   }
 
+  /** {@code sign} の条件を再現するための補助情報を返す。 */
   private String sign(
       com.nimbusds.jose.jwk.RSAKey key,
       String issuer,
@@ -62,6 +65,7 @@ class PlanIdentityVerifierTest {
     return sign(key, issuer, audience, nonce, expiry, Instant.now().minusSeconds(10));
   }
 
+  /** {@code sign} の条件を再現するための補助情報を返す。 */
   private String sign(
       com.nimbusds.jose.jwk.RSAKey key,
       String issuer,

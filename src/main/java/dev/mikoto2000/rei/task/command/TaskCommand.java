@@ -11,6 +11,7 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 
+/** タスクを操作しますを行うための利用者コマンド。 */
 @Component
 @Command(
     name = "task",
@@ -23,14 +24,18 @@ import picocli.CommandLine.Parameters;
       TaskCommand.DeleteCommand.class
     })
 public class TaskCommand {
+  /** タスクの管理のうち、レポートの操作を利用者コマンドとして受け付ける。 */
   private abstract static class ReportCommand implements Runnable {
+    /** レポート出力。 */
     private java.io.PrintWriter reportOutput;
 
+    /** タスクの管理で用いる出力先を返す。 */
     java.io.PrintWriter out() {
       return reportOutput == null ? new java.io.PrintWriter(System.out, true) : reportOutput;
     }
   }
 
+  /** タスクの管理で用いるレポートを返す。 */
   private static String report(ReportCommand command) {
     var text = new java.io.StringWriter();
     command.reportOutput = new java.io.PrintWriter(text, true);
@@ -38,6 +43,7 @@ public class TaskCommand {
     return text.toString().replaceFirst("[\\r\\n]+$", "");
   }
 
+  /** タスクの管理で用いるレポート追加を返す。 */
   public static String reportAdd(TaskService service, String title, LocalDate due, int priority) {
     var command = new AddCommand(service);
     command.titleParts = new String[] {title};
@@ -46,6 +52,7 @@ public class TaskCommand {
     return report(command);
   }
 
+  /** タスクの管理で用いるレポート一覧を返す。 */
   public static String reportList(TaskService service, Integer priority, LocalDate dueBefore) {
     var command = new ListCommand(service);
     command.priority = priority;
@@ -53,29 +60,35 @@ public class TaskCommand {
     return report(command);
   }
 
+  /** タスクの管理で用いるレポート完了を返す。 */
   public static String reportDone(TaskService service, long id) {
     var command = new DoneCommand(service);
     command.id = id;
     return report(command);
   }
 
+  /** タスクの管理で用いるレポート削除を返す。 */
   public static String reportDelete(TaskService service, long id) {
     var command = new DeleteCommand(service);
     command.id = id;
     return report(command);
   }
 
+  /** タスクの管理で用いるレポート権限の確認を返す。 */
   public static String reportAuthorization(TaskService service) {
     return report(new AuthCommand(service));
   }
 
+  /** Google Tasks への OAuth 認可を実行しますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "auth", description = "Google Tasks への OAuth 認可を実行します")
   public static class AuthCommand extends ReportCommand {
 
+    /** タスクサービス。 */
     private final TaskService taskService;
 
+    /** Google Tasks への OAuth 認可を実行しますを行う。 */
     @Override
     public void run() {
       try {
@@ -87,22 +100,28 @@ public class TaskCommand {
     }
   }
 
+  /** タスクを追加しますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "add", description = "タスクを追加します")
   public static class AddCommand extends ReportCommand {
 
+    /** タスクサービス。 */
     private final TaskService taskService;
 
+    /** 期限日付。 */
     @Option(names = "--due", description = "期限。形式: yyyy-MM-dd")
     LocalDate dueDate;
 
+    /** 優先度。 */
     @Option(names = "--priority", defaultValue = "3", description = "優先度。数値が小さいほど高優先")
     int priority;
 
+    /** タイトル部分一覧。 */
     @Parameters(arity = "1..*", paramLabel = "TITLE", description = "タスク名")
     String[] titleParts;
 
+    /** タスクを追加しますを行う。 */
     @Override
     public void run() {
       try {
@@ -114,19 +133,24 @@ public class TaskCommand {
     }
   }
 
+  /** 未完了タスクを一覧しますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "list", description = "未完了タスクを一覧します")
   public static class ListCommand extends ReportCommand {
 
+    /** タスクサービス。 */
     private final TaskService taskService;
 
+    /** 優先度。 */
     @Option(names = "--priority", description = "この優先度以下で絞り込みます")
     Integer priority;
 
+    /** 期限変更前。 */
     @Option(names = "--due-before", description = "この日付以前の期限で絞り込みます。形式: yyyy-MM-dd")
     LocalDate dueBefore;
 
+    /** 未完了タスクを一覧しますを行う。 */
     @Override
     public void run() {
       List<Task> tasks = taskService.listOpen(new TaskQuery(priority, dueBefore));
@@ -142,16 +166,20 @@ public class TaskCommand {
     }
   }
 
+  /** タスクを完了にしますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "done", description = "タスクを完了にします")
   public static class DoneCommand extends ReportCommand {
 
+    /** タスクサービス。 */
     private final TaskService taskService;
 
+    /** 識別子。 */
     @Parameters(paramLabel = "ID", description = "タスク ID")
     long id;
 
+    /** タスクを完了にしますを行う。 */
     @Override
     public void run() {
       Task completed = taskService.complete(id);
@@ -159,16 +187,20 @@ public class TaskCommand {
     }
   }
 
+  /** タスクを削除しますを行うための利用者コマンド。 */
   @Component
   @RequiredArgsConstructor
   @Command(name = "delete", description = "タスクを削除します")
   public static class DeleteCommand extends ReportCommand {
 
+    /** タスクサービス。 */
     private final TaskService taskService;
 
+    /** 識別子。 */
     @Parameters(paramLabel = "ID", description = "タスク ID")
     long id;
 
+    /** タスクを削除しますを行う。 */
     @Override
     public void run() {
       taskService.delete(id);
@@ -176,6 +208,7 @@ public class TaskCommand {
     }
   }
 
+  /** タスクの管理で用いる利用者Facingメッセージを返す。 */
   private static String userFacingMessage(Throwable error, String fallback) {
     Throwable root = rootCause(error);
     String message = root.getMessage();
@@ -191,6 +224,7 @@ public class TaskCommand {
     return fallback + ": " + message;
   }
 
+  /** タスクの管理で用いる作業ルート原因を返す。 */
   private static Throwable rootCause(Throwable error) {
     Throwable current = error;
     while (current.getCause() != null) {

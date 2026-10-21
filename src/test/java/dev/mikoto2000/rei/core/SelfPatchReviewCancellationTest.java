@@ -13,9 +13,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Self変更差分レビューキャンセルの結果と状態の契約を検証するテスト。 */
 class SelfPatchReviewCancellationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void parentCancellationStopsAnActiveTestWithoutWaitingForItsTimeout() throws Exception {
     for (var args :
@@ -55,6 +58,7 @@ class SelfPatchReviewCancellationTest {
     }
   }
 
+  /** {@code git} の条件を再現するため、検証用の操作や状態を扱う。 */
   void git(List<String> args) throws Exception {
     var cmd =
         new ArrayList<String>(

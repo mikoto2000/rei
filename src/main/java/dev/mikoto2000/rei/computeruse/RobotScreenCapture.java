@@ -1,6 +1,12 @@
 package dev.mikoto2000.rei.computeruse;
 
+/**
+ * 画面操作の支援で受け渡すRobot画面取得記録を表す。
+ *
+ * @param driver 操作の実行先
+ */
 public record RobotScreenCapture(RobotDriver driver) implements ScreenCapture {
+  /** 後から状況を確認できるよう、画面を記録する。 */
   public CapturedScreen captureScreen() throws Exception {
     var geometry = currentDisplays(driver);
     var images = new java.util.ArrayList<DisplayCapture>();
@@ -11,6 +17,7 @@ public record RobotScreenCapture(RobotDriver driver) implements ScreenCapture {
     return new CapturedScreen(images);
   }
 
+  /** 画面操作の支援で用いる現在画面一覧を返す。 */
   static java.util.List<ScreenGeometry> currentDisplays(RobotDriver driver) throws Exception {
     var displays = driver.displays();
     if (displays == null || displays.isEmpty()) {

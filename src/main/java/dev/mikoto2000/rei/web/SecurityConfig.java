@@ -10,6 +10,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 
+/** Web APIによる操作に必要なSecurity設定を扱う。 */
 @Configuration(proxyBeanMethods = false)
 @org.springframework.boot.autoconfigure.condition.ConditionalOnProperty(
     name = "rei.web.enabled",
@@ -17,6 +18,7 @@ import org.springframework.security.web.authentication.UsernamePasswordAuthentic
 @EnableWebSecurity
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class SecurityConfig {
+  /** Web APIによる操作で用いるAPISecurityを返す。 */
   @Bean
   SecurityFilterChain apiSecurity(
       HttpSecurity http, ApiKeyProperties key, org.springframework.core.env.Environment environment)

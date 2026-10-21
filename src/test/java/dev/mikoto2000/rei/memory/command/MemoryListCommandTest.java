@@ -16,8 +16,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** 記憶一覧コマンドの結果と状態の契約を検証するテスト。 */
 class MemoryListCommandTest {
 
+  /** 長期記憶の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void listShowsEmptyMessageWhenNoMemory() {
     MemoryService service = Mockito.mock(MemoryService.class);
@@ -36,6 +38,7 @@ class MemoryListCommandTest {
     assertTrue(out.toString().contains("保存済みの記憶はありません"));
   }
 
+  /** 長期記憶の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void listShowsPreviewWhenMemoriesExist() {
     MemoryService service = Mockito.mock(MemoryService.class);

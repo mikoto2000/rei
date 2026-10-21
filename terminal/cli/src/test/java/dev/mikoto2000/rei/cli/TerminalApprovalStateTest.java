@@ -13,9 +13,12 @@ import org.jline.terminal.TerminalBuilder;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 終端承認状態の結果と状態の契約を検証するテスト。 */
 class TerminalApprovalStateTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 軽量CLIでの対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void snapshotsFilterDecisionsExpiryCancellationAndOtherSessionsWithoutMutations()
       throws Exception {
@@ -72,6 +75,7 @@ class TerminalApprovalStateTest {
     }
   }
 
+  /** 検証用に、新たな対象を登録し、後から利用できるようにする。 */
   private static void add(
       com.fasterxml.jackson.databind.node.ArrayNode rows,
       String id,

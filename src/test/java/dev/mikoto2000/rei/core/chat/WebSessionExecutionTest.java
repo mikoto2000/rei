@@ -34,10 +34,13 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
+/** Web会話実行の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class WebSessionExecutionTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 受付済み識別子一覧プロジェクトを維持することを確認する。 */
   @Test
   void realRunnerKeepsSubmittedIdsProjectAndSessionMemoryIndependentOfCliSelection()
       throws Exception {
@@ -49,14 +52,17 @@ class WebSessionExecutionTest {
     List<Prompt> prompts = new ArrayList<>();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             prompts.add(prompt);
             return Flux.just(

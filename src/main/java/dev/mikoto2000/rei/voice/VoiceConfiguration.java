@@ -7,9 +7,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/** 音声の構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties({VoiceProperties.class, VoiceCorrectionProperties.class})
 public class VoiceConfiguration {
+  /** 音声による対話で用いる音声補正サービスを返す。 */
   @Bean(destroyMethod = "close")
   VoiceCorrectionService voiceCorrectionService(
       VoiceCorrectionProperties properties,
@@ -29,16 +31,19 @@ public class VoiceConfiguration {
     return service;
   }
 
+  /** 音声による対話で用いる音声音声実行可否の判断を返す。 */
   @Bean
   VoiceAudioGate voiceAudioGate() {
     return new VoiceAudioGate(System::nanoTime);
   }
 
+  /** 音声による対話で用いるsapi音声出力を返す。 */
   @Bean
   SapiVoiceOutput sapiVoiceOutput() {
     return new SapiVoiceOutput();
   }
 
+  /** 音声による対話で用いる音声再生サービスを返す。 */
   @Bean(destroyMethod = "close")
   VoicePlaybackService voicePlaybackService(
       SapiVoiceOutput output,
@@ -64,6 +69,7 @@ public class VoiceConfiguration {
     return playback;
   }
 
+  /** 音声による対話で用いる音声Deviceサービスを返す。 */
   @Bean
   AudioDeviceService audioDeviceService(VoiceProperties properties, VoiceEventPublisher events) {
     var devices = new AudioDeviceService();
@@ -80,17 +86,20 @@ public class VoiceConfiguration {
     return devices;
   }
 
+  /** 音声による対話で用いる音声実行状況の通知先を返す。 */
   @Bean
   VoiceEventPublisher voiceEventPublisher() {
     return new VoiceEventPublisher();
   }
 
+  /** 音声による対話で用いるWindowsマイク排他制御を返す。 */
   @Bean
   WindowsMicrophoneMonitor windowsMicrophoneMonitor() {
     var endpoints = new WindowsAudioEndpoints();
     return new WindowsMicrophoneMonitor(endpoints::captureEndpoints);
   }
 
+  /** 音声による対話で用いる音声配信サービスを返す。 */
   @Bean
   VoiceDeliveryService voiceDeliveryService(
       ShellConversationService shell,
@@ -117,11 +126,13 @@ public class VoiceConfiguration {
     return delivery;
   }
 
+  /** 音声による対話で用いる音声素材通信経路を返す。 */
   @Bean(destroyMethod = "close")
   HttpsVoiceAssetTransport voiceAssetTransport() {
     return new HttpsVoiceAssetTransport();
   }
 
+  /** 音声による対話で用いる音声モデル管理を返す。 */
   @Bean(destroyMethod = "close")
   VoiceModelManager voiceModelManager(
       VoiceProperties properties, HttpsVoiceAssetTransport transport, VoiceEventPublisher events) {
@@ -150,6 +161,7 @@ public class VoiceConfiguration {
         });
   }
 
+  /** 音声による対話で用いるsherpaバックエンド生成元を返す。 */
   @Bean(destroyMethod = "close")
   SherpaBackendFactory sherpaBackendFactory(VoiceModelManager models, VoiceProperties properties) {
     return new SherpaBackendFactory(
@@ -163,6 +175,7 @@ public class VoiceConfiguration {
         properties::inference);
   }
 
+  /** 音声による対話で用いる独立した音声バックエンド生成元を返す。 */
   @Bean(destroyMethod = "close")
   IsolatedVoiceBackendFactory isolatedVoiceBackendFactory(
       VoiceModelManager models, VoiceProperties properties) {
@@ -177,6 +190,7 @@ public class VoiceConfiguration {
         properties::inference);
   }
 
+  /** 音声による対話で用いる音声入力からの依頼かどうか処理の調整を返す。 */
   @Bean(destroyMethod = "close")
   VoiceInputCoordinator voiceInputCoordinator(
       IsolatedVoiceBackendFactory backend,

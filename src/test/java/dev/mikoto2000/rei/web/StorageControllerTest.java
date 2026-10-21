@@ -19,9 +19,12 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 保存受付窓口の結果と状態の契約を検証するテスト。 */
 class StorageControllerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void scopedPlanCapturesRegisteredProjectWithoutChangingShellSelection() {
     var projects = new ProjectRegistry(directory.resolve("projects.json"));
@@ -43,6 +46,7 @@ class StorageControllerTest {
     verify(command, times(1)).reportPlan(any(), any(), anyInt(), anyLong());
   }
 
+  /** Web APIによる操作の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void purgeApprovalAndPurgeRemainDifferentNamedOperations() {
     var command = mock(StorageCommand.class);

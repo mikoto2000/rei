@@ -36,11 +36,17 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.stereotype.Service;
 
-/** Owns authorization, request selection, one-shot run budget and terminal event semantics. */
+/**
+ * 外部エージェント委譲のユースケースを実現する。
+ *
+ * <p>Owns authorization, request selection, one-shot run budget and terminal event semantics.
+ */
 @Service
 public class ExternalAgentDelegationService implements AutoCloseable {
+  /** 対象範囲。 */
   private dev.mikoto2000.rei.review.ReviewCoverageLedger coverage;
 
+  /** 外部エージェントへの委譲で使用する対象範囲を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setCoverage(
       org.springframework.beans.factory.ObjectProvider<
@@ -52,25 +58,56 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     coverage = enabled ? ledger.getIfAvailable() : null;
   }
 
+  /**
+   * 外部エージェントへの委譲で受け渡す並列要求を表す。
+   *
+   * @param requestId 要求の識別子
+   * @param task タスク
+   * @param target 対象
+   * @param context 文脈
+   */
   public record ParallelRequest(String requestId, String task, String target, String context) {}
 
+  /** 外部エージェントへの委譲における並列状態の選択肢。 */
   public enum ParallelStatus {
+    /** 完了。 */
     COMPLETED,
+    /** 部分的な結果。 */
     PARTIAL,
+    /** タイムアウト。 */
     TIMEOUT,
+    /** 拒否済み。 */
     REJECTED,
+    /** 使用中。 */
     BUSY
   }
 
+  /**
+   * 外部エージェントへの委譲で受け渡す並列項目を表す。
+   *
+   * @param requestId 要求の識別子
+   * @param result 結果
+   */
   public record ParallelItem(String requestId, ExternalAgentResult result) {}
 
+  /**
+   * 外部エージェントへの委譲で受け渡す並列結果を表す。
+   *
+   * @param status 状態
+   * @param items 項目一覧
+   * @param message メッセージ
+   */
   public record ParallelResult(ParallelStatus status, List<ParallelItem> items, String message) {
+    /** 受け取った情報からParallelResultを作成する。 */
     public ParallelResult {
       items = List.copyOf(items);
     }
   }
 
+  /** 並列受付。 */
   private final Semaphore parallelAdmission = new Semaphore(1);
+
+  /** 並列実行枠。 */
   private final ThreadPoolExecutor parallelPool =
       new ThreadPoolExecutor(
           2,
@@ -80,23 +117,41 @@ public class ExternalAgentDelegationService implements AutoCloseable {
           new ArrayBlockingQueue<>(2),
           Thread.ofPlatform().daemon().name("parallel-codex-", 0).factory(),
           new ThreadPoolExecutor.AbortPolicy());
+
+  /** 終了済み。 */
   private final AtomicBoolean closed = new AtomicBoolean();
+
+  /** 活動中並列。 */
   private final AtomicReference<ParallelPermit> activeParallel = new AtomicReference<>();
 
+  /** 外部エージェントへの委譲に必要な並列利用枠を扱う。 */
   private static final class ParallelPermit {
+    /** レビュー識別子一覧。 */
     final ConcurrentMap<String, String> reviewIds = new ConcurrentHashMap<>();
+
+    /** 停止済み。 */
     final AtomicReference<dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException> stopped =
         new AtomicReference<>();
+
+    /** 実行。 */
     final RunExecutionContext run;
+
+    /** キャンセル済み。 */
     final AtomicBoolean cancelled = new AtomicBoolean();
+
+    /** 待機中モデル一覧。 */
     final AtomicInteger pendingModels = new AtomicInteger();
+
+    /** 予算。 */
     final dev.mikoto2000.rei.llm.ModelCallBudget budget;
 
+    /** 指定された値や利用先を使って、ParallelPermitを初期化する。 */
     ParallelPermit(RunExecutionContext run) {
       this.run = run;
       var parent = run.modelCallBudget();
       budget =
           new dev.mikoto2000.rei.llm.ModelCallBudget() {
+            /** 外部エージェントへの委譲の操作を実行する。 */
             public void run() {
               if (cancelled.get() || Thread.currentThread().isInterrupted())
                 throw new CancellationException();
@@ -104,10 +159,12 @@ public class ExternalAgentDelegationService implements AutoCloseable {
               pendingModels.incrementAndGet();
             }
 
+            /** トークン数による実行予算の制限が有効かどうかを返す。 */
             public boolean tokenLimitEnabled() {
               return parent.tokenLimitEnabled();
             }
 
+            /** 使用したトークン数を実行予算へ記録する。 */
             public void recordTotalTokens(Integer tokens) {
               try {
                 parent.recordTotalTokens(tokens);
@@ -119,6 +176,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     }
   }
 
+  /** 外部エージェントへの委譲で利用した資源や登録を解放し、利用を終了する。 */
   @jakarta.annotation.PreDestroy
   @Override
   public void close() {
@@ -132,64 +190,92 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     try {
       parallelPool.awaitTermination(2, TimeUnit.SECONDS);
     } catch (InterruptedException interrupted) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
     }
   }
 
+  /** 実行先。 */
   private final ExternalAgentExecutor executor;
+
+  /** キャンセル。 */
   private final CommandCancellationService cancellation;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** 通知先。 */
   private final AgentEventPublisher publisher;
+
+  /** 作業中集合。 */
   private final Optional<WorkingSet> workingSet;
+
+  /** 履歴。 */
   private ExternalReviewRepository history;
+
+  /** 委譲案内。 */
   private dev.mikoto2000.rei.chatgpt.ChatGptDelegationGuidance delegationGuidance;
 
+  /** 外部エージェントへの委譲で使用する委譲案内を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setDelegationGuidance(dev.mikoto2000.rei.chatgpt.ChatGptDelegationGuidance guidance) {
     delegationGuidance = guidance;
   }
 
+  /** モデル予算設定。 */
   private CodexProperties modelBudgetProperties = new CodexProperties();
+
+  /** Claude設定。 */
   private ClaudeCodeProperties claudeProperties = new ClaudeCodeProperties();
 
+  /** 外部エージェントへの委譲に関するClaude設定を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void claudeProperties(ClaudeCodeProperties properties) {
     this.claudeProperties = properties;
   }
 
+  /** 実装要求一覧。 */
   private org.springframework.beans.factory.ObjectProvider<ImplementationRequestService>
       implementationRequests;
 
+  /** 外部エージェントへの委譲に関する実装要求一覧を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void implementationRequests(
       org.springframework.beans.factory.ObjectProvider<ImplementationRequestService> requests) {
     this.implementationRequests = requests;
   }
 
+  /** 隔離した作業環境で実装を依頼する窓口。 */
   private IsolatedImplementationService implementations;
 
+  /** 外部エージェントへの委譲に関するimplementationsを処理する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void implementations(IsolatedImplementationService service) {
     this.implementations = service;
   }
 
+  /** 外部エージェントへの委譲に関するモデル予算設定を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void modelBudgetProperties(CodexProperties properties) {
     this.modelBudgetProperties = properties;
   }
 
+  /** 変更一覧。 */
   private dev.mikoto2000.rei.core.TextChangeSetService changes;
 
+  /** 外部エージェントへの委譲に関する変更集合一覧を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void changeSets(dev.mikoto2000.rei.core.TextChangeSetService changes) {
     this.changes = changes;
   }
 
+  /** 外部エージェントへの委譲に関するレビュー履歴を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void reviewHistory(ExternalReviewRepository history) {
     this.history = history;
   }
 
+  /** 指定された値や利用先を使って、ExternalAgentDelegationServiceを初期化する。 */
   public ExternalAgentDelegationService(
       ExternalAgentExecutor executor,
       CommandCancellationService cancellation,
@@ -203,15 +289,18 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     this.workingSet = workingSet;
   }
 
+  /** 外部エージェントへの委譲で用いるレビューを返す。 */
   public ExternalAgentResult review(
       RunExecutionContext run, String task, String target, String decisions) {
     return review(run, task, target, decisions, null, false, false);
   }
 
+  /** 外部エージェントへの委譲で用いるimplementを返す。 */
   public ExternalAgentResult implement(RunExecutionContext run, String target) {
     return implement(run, ExternalAgentRequest.Agent.CODEX, target);
   }
 
+  /** 外部エージェントへの委譲で用いるimplementを返す。 */
   public ExternalAgentResult implement(
       RunExecutionContext run, ExternalAgentRequest.Agent agent, String target) {
     boolean codex = agent == ExternalAgentRequest.Agent.CODEX;
@@ -354,7 +443,11 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     }
   }
 
-  /** Only the persisted request service calls this; no model-supplied approved-request DTO. */
+  /**
+   * 依頼された操作を進めるため、仕様を実行する。
+   *
+   * <p>Only the persisted request service calls this; no model-supplied approved-request DTO.
+   */
   IsolatedImplementationService.Receipt executeSpecification(
       RunExecutionContext run,
       String requestId,
@@ -451,6 +544,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     }
   }
 
+  /** 外部エージェントへの委譲で用いる実装を返す。 */
   public IsolatedImplementationService.Receipt implementation(RunExecutionContext run, String id) {
     if (run == null || implementations == null)
       throw new IllegalArgumentException("Current Project and implementation storage required");
@@ -461,6 +555,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     }
   }
 
+  /** 関連する情報をまとめて扱えるよう、実装を統合する。 */
   public ExternalAgentResult mergeImplementation(RunExecutionContext run, String id, String hash) {
     if (run == null || implementations == null)
       return ExternalAgentResult.rejected("Current Project and implementation storage required");
@@ -475,6 +570,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     }
   }
 
+  /** 外部エージェントへの委譲で用いる実装事前確認を返す。 */
   public IsolatedImplementationService.Preview implementationPreview(
       RunExecutionContext run, String id) {
     if (run == null || implementations == null)
@@ -486,6 +582,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     }
   }
 
+  /** 外部エージェントへの委譲で用いる実装結果を返す。 */
   private ExternalAgentResult implementationResult(IsolatedImplementationService.Receipt receipt)
       throws java.io.IOException {
     boolean success = Set.of("READY_FOR_APPROVAL", "MERGED").contains(receipt.status());
@@ -505,6 +602,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
         receipt.id());
   }
 
+  /** 外部エージェントへの委譲で用いるレビューを返す。 */
   public ExternalAgentResult review(
       RunExecutionContext run,
       ExternalAgentRequest.Agent agent,
@@ -515,6 +613,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     return review(run, task, target, decisions, null, false, false, null, null, agent);
   }
 
+  /** 外部エージェントへの委譲で用いるrereviewを返す。 */
   public ExternalAgentResult rereview(
       RunExecutionContext run, String previousId, String task, String decisions) {
     if (previousId == null || previousId.isBlank())
@@ -522,6 +621,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     return review(run, task, null, decisions, previousId, false, false);
   }
 
+  /** 外部エージェントへの委譲で用いるcontinueレビューを返す。 */
   public ExternalAgentResult continueReview(
       RunExecutionContext run, String previousId, String task, String decisions) {
     if (previousId == null || previousId.isBlank())
@@ -529,6 +629,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     return review(run, task, null, decisions, previousId, true, false);
   }
 
+  /** 外部エージェントへの委譲で用いるcontinueレビューを返す。 */
   public ExternalAgentResult continueReview(
       RunExecutionContext run,
       ExternalAgentRequest.Agent agent,
@@ -544,6 +645,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     return review(run, task, null, decisions, previousId, true, false, null, null, agent);
   }
 
+  /** 後続の判断で選べる候補を用意するため、修正を提案する。 */
   public ExternalAgentResult proposeFix(
       RunExecutionContext run, String previousId, String task, String decisions) {
     if (previousId == null || previousId.isBlank())
@@ -551,6 +653,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     return review(run, task, null, decisions, previousId, false, true);
   }
 
+  /** 後続の判断で選べる候補を用意するため、修正を提案する。 */
   public ExternalAgentResult proposeFix(
       RunExecutionContext run,
       ExternalAgentRequest.Agent agent,
@@ -562,10 +665,12 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     return review(run, task, null, decisions, previousId, false, true, null, null, agent);
   }
 
+  /** 外部エージェントへの委譲で用いるレビュー並列を返す。 */
   public ParallelResult reviewParallel(RunExecutionContext run, List<ParallelRequest> requests) {
     return reviewParallel(run, ExternalAgentRequest.Agent.CODEX, requests);
   }
 
+  /** 外部エージェントへの委譲で用いるレビュー並列を返す。 */
   public ParallelResult reviewParallel(
       RunExecutionContext run, ExternalAgentRequest.Agent agent, List<ParallelRequest> requests) {
     boolean enabled =
@@ -697,6 +802,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
       return new ParallelResult(
           status, items, "Independent read-only results; findings require separate evaluation");
     } catch (InterruptedException interrupted) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       run.cancel();
       throw new CancellationException("Parallel review cancelled");
@@ -713,6 +819,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     }
   }
 
+  /** 外部エージェントへの委譲で用いる並列最終結果を返す。 */
   private ExternalAgentResult parallelOutcome(Future<ExternalAgentResult> future)
       throws InterruptedException {
     try {
@@ -734,6 +841,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     }
   }
 
+  /** 外部エージェントへの委譲で用いるレビューを返す。 */
   private ExternalAgentResult review(
       RunExecutionContext run,
       String task,
@@ -745,6 +853,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     return review(run, task, target, decisions, previousId, continuation, fixProposal, null, null);
   }
 
+  /** 外部エージェントへの委譲で用いるレビューを返す。 */
   private ExternalAgentResult review(
       RunExecutionContext run,
       String task,
@@ -768,6 +877,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
         ExternalAgentRequest.Agent.CODEX);
   }
 
+  /** 外部エージェントへの委譲で用いるレビューを返す。 */
   private ExternalAgentResult review(
       RunExecutionContext run,
       String task,
@@ -1117,6 +1227,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     }
   }
 
+  /** 外部エージェントへの委譲で用いる段階修正を返す。 */
   private ExternalAgentResult stageFix(
       dev.mikoto2000.rei.core.chat.AgentRunContext owner,
       Path root,
@@ -1159,6 +1270,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     }
   }
 
+  /** 外部エージェントへの委譲で用いるレビュー操作を返す。 */
   private ExternalAgentRequest.Action reviewAction(
       RunExecutionContext run, ExternalAgentRequest.Agent agent) {
     if (agent == ExternalAgentRequest.Agent.CODEX
@@ -1168,6 +1280,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     return ExternalAgentRequest.Action.REVIEW;
   }
 
+  /** 外部エージェントへの委譲で用いる文脈を返す。 */
   private String context(Path root, String decisions) {
     StringBuilder context =
         new StringBuilder(
@@ -1189,6 +1302,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     return bounded(context.toString(), 10000);
   }
 
+  /** 外部エージェントへの委譲において、秘密を含むに該当するか判定する。 */
   static boolean sensitive(Path path) {
     for (Path part : path)
       if (part.toString()
@@ -1197,6 +1311,7 @@ public class ExternalAgentDelegationService implements AutoCloseable {
     return false;
   }
 
+  /** 利用先の上限を超えない量へ、指定された内容を調整する。 */
   static String bounded(String text, int size) {
     String safe = CredentialRedactor.redact(text);
     return safe.length() <= size ? safe : safe.substring(0, size);

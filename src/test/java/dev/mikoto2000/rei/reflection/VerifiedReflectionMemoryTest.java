@@ -43,19 +43,40 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 確認済み振り返り記憶の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class VerifiedReflectionMemoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   Clock clock = Clock.fixed(Instant.parse("2026-10-06T14:00:00Z"), ZoneOffset.UTC);
+
+  /** 検証に使うprops。 */
   MemoryProperties props = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60, null);
+
+  /** 検証に使う取得元。 */
   DriverManagerDataSource source;
+
+  /** 検証に使う目標一覧。 */
   GoalRepository goals;
+
+  /** 検証に使う振り返り一覧。 */
   GoalReflectionRepository reflections;
+
+  /** 検証に使う収集。 */
   GoalReflectionService collect;
+
+  /** 検証に使う記憶一覧。 */
   MemoryRepository memories;
+
+  /** 検証に使う受付窓口。 */
   GoalLoopService.Gateway gateway;
+
+  /** 検証に使うサービス。 */
   VerifiedReflectionMemoryService service;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     source = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("proof.db"));
@@ -69,6 +90,7 @@ class VerifiedReflectionMemoryTest {
             goals, reflections, memories, new FileGoalVerifier(), gateway, props, clock);
   }
 
+  /** {@code completed} の条件を再現するための補助情報を返す。 */
   GoalRepository.Goal completed() throws Exception {
     Files.writeString(dir.resolve("out.txt"), "verified content");
     String digest = new FileGoalVerifier().fingerprint(dir.toRealPath(), "out.txt").sha256();
@@ -83,6 +105,7 @@ class VerifiedReflectionMemoryTest {
     return goals.verifiedWithoutRun("project", goal.id());
   }
 
+  /** 作業の振り返りで、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void independentlyVerifiedFactHasPersistentProofAndNoFabricatedConversationTurn()
       throws Exception {
@@ -113,6 +136,7 @@ class VerifiedReflectionMemoryTest {
     assertEquals(0, goals.get("project", goal.id()).attempts());
   }
 
+  /** 作業の振り返りで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void changedArtifactUnverifiedOrForeignReflectionCannotBecomeKnowledge() throws Exception {
     var goal = completed();
@@ -136,6 +160,7 @@ class VerifiedReflectionMemoryTest {
     assertTrue(memories.list("project", 10, 0).isEmpty());
   }
 
+  /** 作業の振り返りで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void repeatedPromotionKeepsHistoricalFactAndNeverResurrectsArchivedMemory() throws Exception {
     var goal = completed();
@@ -150,6 +175,7 @@ class VerifiedReflectionMemoryTest {
     assertTrue(memories.list("project", 10, 0).isEmpty());
   }
 
+  /** 作業の振り返りで、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void jsonCriteriaAndMultipleFilesAreVerifiedBeforePromotion() throws Exception {
     Files.writeString(dir.resolve("result.json"), "{\"ok\":true,\"count\":1}");
@@ -176,6 +202,7 @@ class VerifiedReflectionMemoryTest {
     assertTrue(promoted.memory().content().contains("out.txt"));
   }
 
+  /** 作業の振り返りの中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void memoryDisableOwnershipValidationAndCancellationCannotWriteFacts() throws Exception {
     var goal = completed();
@@ -202,6 +229,7 @@ class VerifiedReflectionMemoryTest {
     assertTrue(memories.list("project", 10, 0).isEmpty());
   }
 
+  /** 作業の振り返りで、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void concurrentPromotionPublishesOnlyOneMemoryAndProof() throws Exception {
     var goal = completed();
@@ -226,6 +254,7 @@ class VerifiedReflectionMemoryTest {
     assertTrue(memories.verifiedReflectionProof("project", reflection.id()).isPresent());
   }
 
+  /** 作業の振り返りで、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void insertionFailureRollsBackProofAndAllowsALaterExplicitRetry() throws Exception {
     var goal = completed();
@@ -241,6 +270,7 @@ class VerifiedReflectionMemoryTest {
     assertNotNull(service.promote("project", reflection.id()).memory());
   }
 
+  /** 作業の振り返りで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void forgedCompletionAndChangedSavedCriteriaCannotSupplyPromotionEvidence() throws Exception {
     Files.writeString(dir.resolve("out.txt"), "exists");
@@ -286,6 +316,7 @@ class VerifiedReflectionMemoryTest {
     assertTrue(memories.list("project", 10, 0).isEmpty());
   }
 
+  /** 作業の振り返りで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shellPromotesExplicitlyAndMemoryShowDistinguishesReflectionProofFromTurns()
       throws Exception {
@@ -313,6 +344,7 @@ class VerifiedReflectionMemoryTest {
     assertThrows(IllegalArgumentException.class, () -> support.show(proof.memoryId()));
   }
 
+  /** 作業の振り返りで、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void oversizedCriteriaFailWithoutTruncatingEvidenceOrSavingAPartialProof() throws Exception {
     var values = new LinkedHashMap<String, String>();

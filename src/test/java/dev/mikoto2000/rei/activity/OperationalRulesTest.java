@@ -12,9 +12,13 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Operational規則一覧の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class OperationalRulesTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う規則。 */
   static final String RULE =
       """
       classificationRules:
@@ -38,6 +42,7 @@ class OperationalRulesTest {
             confidence: 0.9
       """;
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void userOverridesBuiltInAndEntertainmentIsIndependent() throws Exception {
     var f = dir.resolve("rules.yaml");
@@ -54,6 +59,7 @@ class OperationalRulesTest {
         rules.entertainment("YouTube", "firefox", "YouTube", "", "media").disposition());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedReloadRetainsWholePreviousSnapshot() throws Exception {
     var f = dir.resolve("rules.yaml");
@@ -79,6 +85,7 @@ class OperationalRulesTest {
     assertNotSame(before, rules.snapshot());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void missingFileIsValidAndBroadProposalIsRejected() throws Exception {
     var rules = new OperationalRules(dir.resolve("absent"));
@@ -96,6 +103,7 @@ class OperationalRulesTest {
             .size());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void ruleDefinitionsAreStrictAndDangerousRegexIsRejected() {
     for (String bad :
@@ -109,6 +117,7 @@ class OperationalRulesTest {
         }) assertThrows(Exception.class, () -> OperationalRules.compile(bad, false), bad);
   }
 
+  /** 作業状況の把握で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void priorityTieIsDeterministicAndConflictingClassificationIsUnusable() throws Exception {
     var f = dir.resolve("tie.yaml");
@@ -134,6 +143,7 @@ class OperationalRulesTest {
     assertTrue(tied.reason().contains("CONFLICTING_RULES"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownCannotClaimUsableConfidence() {
     assertThrows(
@@ -144,6 +154,7 @@ class OperationalRulesTest {
                 false));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void entertainmentOverrideAndConflictsAreConservative() throws Exception {
     var f = dir.resolve("ent.yaml");

@@ -13,11 +13,29 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * Durable review outcomes and opt-in provider UUIDs, never prompts, source contents or process
+ * 外部レビューを保存・検索するための窓口。
+ *
+ * <p>Durable review outcomes and opt-in provider UUIDs, never prompts, source contents or process
  * logs.
  */
 @Repository
 public class ExternalReviewRepository {
+  /**
+   * 外部エージェントへの委譲で受け渡すレビューを表す。
+   *
+   * @param id 識別子
+   * @param projectId 所属プロジェクトの識別子
+   * @param projectRoot 作業対象のルートディレクトリ
+   * @param sessionId 会話の識別子
+   * @param runId 実行の識別子
+   * @param target 対象
+   * @param previousId 前回識別子
+   * @param status 状態
+   * @param createdAt 作成日時
+   * @param completedAt 完了日時
+   * @param result 結果
+   * @param agent エージェント
+   */
   public record Review(
       String id,
       String projectId,
@@ -32,11 +50,17 @@ public class ExternalReviewRepository {
       ExternalAgentResult result,
       String agent) {}
 
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final com.fasterxml.jackson.databind.ObjectMapper mapper =
       new com.fasterxml.jackson.databind.ObjectMapper();
 
+  /** 指定された値や利用先を使って、ExternalReviewRepositoryを初期化する。 */
   public ExternalReviewRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, Clock clock) {
     db = JdbcClient.create(source);
@@ -59,13 +83,17 @@ public class ExternalReviewRepository {
   }
 
   /**
-   * An attempted continuation consumes its parent even after failure or a crash. Never replay it.
+   * 要求された処理を利用できるよう、継続入力を開始する。
+   *
+   * <p>An attempted continuation consumes its parent even after failure or a crash. Never replay
+   * it.
    */
   public void startContinuation(
       AgentRunContext owner, String id, Path root, String target, String previous) {
     startContinuation(owner, id, root, target, previous, "codex");
   }
 
+  /** 要求された処理を利用できるよう、継続入力を開始する。 */
   public void startContinuation(
       AgentRunContext owner, String id, Path root, String target, String previous, String agent) {
     var parent = get(owner.projectId(), previous);
@@ -85,6 +113,7 @@ public class ExternalReviewRepository {
     start(owner, id, root, target, previous, agent);
   }
 
+  /** 外部エージェントへの委譲において、継続入力Attemptedに該当するか判定する。 */
   public boolean continuationAttempted(String previous) {
     return db.sql("SELECT count(*) FROM external_review_continuations WHERE previous=?")
             .param(previous)
@@ -93,10 +122,12 @@ public class ExternalReviewRepository {
         > 0;
   }
 
+  /** 要求された処理を開始する。 */
   public void start(AgentRunContext owner, String id, Path root, String target, String previous) {
     start(owner, id, root, target, previous, "codex");
   }
 
+  /** 要求された処理を開始する。 */
   public void start(
       AgentRunContext owner, String id, Path root, String target, String previous, String agent) {
     if (!Set.of("codex", "claude").contains(agent))
@@ -126,6 +157,7 @@ public class ExternalReviewRepository {
         .update();
   }
 
+  /** 終了時に必要な状態を反映し、処理を完了させる。 */
   public void finish(String project, String id, ExternalAgentResult result) {
     var safe = safe(result);
     String json;
@@ -141,6 +173,7 @@ public class ExternalReviewRepository {
         != 1) throw new IllegalArgumentException("Review is missing or already terminal");
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Review get(String project, String id) {
     return db.sql("SELECT * FROM external_reviews WHERE project=? AND id=?")
         .params(project, id)
@@ -149,6 +182,7 @@ public class ExternalReviewRepository {
         .orElseThrow(() -> new IllegalArgumentException("Review not found in this Project"));
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<Review> list(String project) {
     return db.sql(
             "SELECT * FROM external_reviews WHERE project=? ORDER BY created DESC,id LIMIT 20")
@@ -157,6 +191,7 @@ public class ExternalReviewRepository {
         .list();
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<Review> list(String project, String agent) {
     if (!Set.of("codex", "claude").contains(agent))
       throw new IllegalArgumentException("Unsupported review provider");
@@ -167,6 +202,7 @@ public class ExternalReviewRepository {
         .list();
   }
 
+  /** 外部エージェントへの委譲で用いる行を返す。 */
   private Review row(java.sql.ResultSet rs, int index) throws java.sql.SQLException {
     String json = rs.getString("result");
     ExternalAgentResult result = null;
@@ -192,6 +228,7 @@ public class ExternalReviewRepository {
         rs.getString("agent"));
   }
 
+  /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */
   static ExternalAgentResult safe(ExternalAgentResult result) {
     boolean truncated =
         result.findings().size() > 24
@@ -248,10 +285,12 @@ public class ExternalReviewRepository {
             : bounded(result.materialReviewReport(), MaterialReviewReport.MAX_REPORT_CHARS));
   }
 
+  /** 外部エージェントへの委譲で用いる長さを返す。 */
   private static int length(String text) {
     return text == null ? 0 : text.length();
   }
 
+  /** 利用先の上限を超えない量へ、指定された内容を調整する。 */
   private static String bounded(String text, int limit) {
     return ExternalAgentDelegationService.bounded(text, limit);
   }

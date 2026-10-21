@@ -28,7 +28,9 @@ import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況取得記録の結果と状態の契約を検証するテスト。 */
 class ActivityCaptureTest {
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void validationFailureLogsSanitizedDiagnostic() throws Exception {
     when(extractor.extract(any(), any()))
@@ -52,13 +54,25 @@ class ActivityCaptureTest {
     }
   }
 
+  /** 検証に使うこの機能の動作設定。 */
   ActivityProperties properties;
+
+  /** 検証に使う観測。 */
   DesktopActivityObserver observer;
+
+  /** 検証に使う情報の抽出。 */
   ActivityExtractor extractor;
+
+  /** 検証に使う保存先。 */
   ActivityStore store;
+
+  /** 検証に使う画面画像一覧。 */
   ScreenshotStore screenshots;
+
+  /** 検証に使う取得記録。 */
   ActivityCapture capture;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     properties = new ActivityProperties();
@@ -80,6 +94,7 @@ class ActivityCaptureTest {
         new ActivityCapture(properties, observer, extractor, store, screenshots, Clock.systemUTC());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledNeverCaptures() throws Exception {
     properties.setEnabled(false);
@@ -87,6 +102,7 @@ class ActivityCaptureTest {
     verify(observer, never()).capture();
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void pauseAndResume() throws Exception {
     capture.pause();
@@ -97,6 +113,7 @@ class ActivityCaptureTest {
     verify(observer).capture();
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void excludedProcessNeverCaptures() throws Exception {
     when(observer.foreground()).thenReturn(new ForegroundWindow("1password.exe", 2, "vault", "2"));
@@ -105,6 +122,7 @@ class ActivityCaptureTest {
     verify(store, never()).append(any());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void excludedTitleNeverCaptures() throws Exception {
     when(observer.foreground()).thenReturn(new ForegroundWindow("firefox", 2, "InPrivate", "2"));
@@ -112,6 +130,7 @@ class ActivityCaptureTest {
     verify(observer, never()).capture();
   }
 
+  /** 作業状況の把握で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void monitorEvidenceRetained() throws Exception {
     capture.tick();
@@ -124,6 +143,7 @@ class ActivityCaptureTest {
             .toList());
   }
 
+  /** 作業状況の把握で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicatesDoNotSaveOrExtractAgain() throws Exception {
     properties.setKeepScreenshots(true);
@@ -134,6 +154,7 @@ class ActivityCaptureTest {
     verify(store, times(2)).append(any());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void changedImageDefaultsToNoDiskWrite() throws Exception {
     capture.tick();
@@ -144,6 +165,7 @@ class ActivityCaptureTest {
     assertTrue(record.getValue().screenshotReferences().isEmpty());
   }
 
+  /** 重複の有無定期確認について、なし画像を書き込むことを確認する。 */
   @Test
   void duplicateTickWritesNoImageAndCallsNoVisionEvenWithEvidenceEnabled() throws Exception {
     properties.setKeepScreenshots(true);
@@ -154,6 +176,7 @@ class ActivityCaptureTest {
     verifyNoInteractions(extractor);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void evidenceIsSavedOnlyAfterExtractionCompletes() throws Exception {
     properties.setKeepScreenshots(true);
@@ -177,6 +200,7 @@ class ActivityCaptureTest {
     order.verify(store).append(any());
   }
 
+  /** 根拠失敗情報引き続きについて、有効な記録を保存することを確認する。 */
   @Test
   void evidenceFailureStillSavesValidRecord() throws Exception {
     properties.setKeepScreenshots(true);
@@ -188,6 +212,7 @@ class ActivityCaptureTest {
     assertTrue(record.getValue().screenshotReferences().isEmpty());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void extractionFailureDefaultsToNoEvidence() throws Exception {
     when(extractor.extract(any(), any())).thenThrow(new java.io.IOException("vision"));
@@ -196,6 +221,7 @@ class ActivityCaptureTest {
     verifyNoInteractions(store);
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void successFlagDoesNotEnableFailureEvidence() throws Exception {
     properties.setKeepScreenshots(true);
@@ -204,6 +230,7 @@ class ActivityCaptureTest {
     verify(screenshots, never()).save(anyString(), any(), any());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void extractionFailureEvidenceIsOptIn() throws Exception {
     properties.setKeepOnExtractionFailure(true);
@@ -213,6 +240,7 @@ class ActivityCaptureTest {
     verifyNoInteractions(store);
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failureFlagDoesNotSaveSuccessfulImages() throws Exception {
     properties.setKeepOnExtractionFailure(true);
@@ -221,6 +249,7 @@ class ActivityCaptureTest {
     verify(store).append(any());
   }
 
+  /** 失敗情報根拠について、失敗情報独立したを書き込むことを確認する。 */
   @Test
   void failureEvidenceWriteFailureIsIsolated() throws Exception {
     properties.setKeepOnExtractionFailure(true);
@@ -230,6 +259,7 @@ class ActivityCaptureTest {
     verifyNoInteractions(store);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void exclusionOverridesBothEvidenceFlags() throws Exception {
     properties.setKeepScreenshots(true);
@@ -237,10 +267,12 @@ class ActivityCaptureTest {
     when(observer.foreground()).thenReturn(new ForegroundWindow("1password", 2, "Password", "2"));
     capture.tick();
     verify(observer, never()).capture();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(extractor, store);
     verify(screenshots, never()).save(anyString(), any(), any());
   }
 
+  /** 作業状況の把握で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void foregroundRaceNeverSavesFailureEvidence() throws Exception {
     properties.setKeepScreenshots(true);
@@ -250,10 +282,12 @@ class ActivityCaptureTest {
             new ForegroundWindow("idea", 1, "rei", "1"),
             new ForegroundWindow("firefox", 2, "InPrivate", "2"));
     capture.tick();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(extractor, store);
     verify(screenshots, never()).save(anyString(), any(), any());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void pauseDuringFailureDiscardsEvidence() throws Exception {
     properties.setKeepOnExtractionFailure(true);
@@ -267,6 +301,7 @@ class ActivityCaptureTest {
     verify(screenshots, never()).save(anyString(), any(), any());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void captureFailureNeverBecomesExtractionEvidence() throws Exception {
     properties.setKeepOnExtractionFailure(true);
@@ -275,6 +310,7 @@ class ActivityCaptureTest {
     verify(screenshots, never()).save(anyString(), any(), any());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void zeroRetentionOverridesAllEvidenceFlags() throws Exception {
     properties.setKeepScreenshots(true);
@@ -287,6 +323,7 @@ class ActivityCaptureTest {
     verify(screenshots, never()).save(anyString(), any(), any());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failureLogsNeverIncludeProviderPayloadOrImageData() throws Exception {
     properties.setKeepOnExtractionFailure(true);
@@ -313,6 +350,7 @@ class ActivityCaptureTest {
     }
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void changedForegroundForcesNewExtraction() throws Exception {
     capture.tick();
@@ -321,6 +359,7 @@ class ActivityCaptureTest {
     verify(extractor, times(2)).extract(any(), any());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void pauseDiscardsInflightResult() throws Exception {
     when(extractor.extract(any(), any()))
@@ -335,6 +374,7 @@ class ActivityCaptureTest {
     verify(screenshots, never()).save(anyString(), any(), any());
   }
 
+  /** 作業状況の把握で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void foregroundRaceDiscardsCapture() throws Exception {
     when(observer.foreground())
@@ -346,6 +386,7 @@ class ActivityCaptureTest {
     verify(screenshots, never()).save(anyString(), any(), any());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedExtractionIsIsolatedAndRetried() throws Exception {
     when(extractor.extract(any(), any())).thenThrow(new IllegalArgumentException("bad output"));
@@ -355,12 +396,14 @@ class ActivityCaptureTest {
     verify(store, never()).append(any());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedStorageIsIsolated() throws Exception {
     doThrow(new IllegalStateException()).when(store).append(any());
     assertDoesNotThrow(capture::tick);
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedRetentionDoesNotStopCapture() throws Exception {
     doThrow(new IllegalStateException()).when(screenshots).cleanup(any());
@@ -368,6 +411,7 @@ class ActivityCaptureTest {
     verify(store).append(any());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void phaseOneDoesNotCallVision() throws Exception {
     properties.setExtractionEnabled(false);
@@ -376,6 +420,7 @@ class ActivityCaptureTest {
     verify(store).append(any());
   }
 
+  /** 再開について、会話境界条件を作成することを確認する。 */
   @Test
   void resumeCreatesSessionBoundary() throws Exception {
     capture.tick();
@@ -391,6 +436,7 @@ class ActivityCaptureTest {
             .size());
   }
 
+  /** {@code screen} の条件を再現するための補助情報を返す。 */
   static CapturedScreen screen(int gray) {
     var bounds = new Rectangle(0, 0, 32, 32);
     return new CapturedScreen(

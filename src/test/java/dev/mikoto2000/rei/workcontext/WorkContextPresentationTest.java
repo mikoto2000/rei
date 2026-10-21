@@ -14,7 +14,9 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+/** 作業文脈表示用の情報の結果と状態の契約を検証するテスト。 */
 class WorkContextPresentationTest {
+  /** 検証で使用する状態の記録を、指定された条件に合わせて用意する。 */
   WorkContext snapshot() {
     var now = Instant.parse("2026-10-01T00:00:00Z");
     var items = new ArrayList<Item>();
@@ -34,6 +36,7 @@ class WorkContextPresentationTest {
     return new WorkContext("A", 1, now, now, new GitState("A", "old", "abc", now), items, Set.of());
   }
 
+  /** 作業文脈の引き継ぎで、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void contextIsBoundedHistoricalAndBranchMismatchIsDisclosed() {
     var view = new WorkContextFormatter();
@@ -45,6 +48,7 @@ class WorkContextPresentationTest {
     assertTrue(view.summary(snapshot(), null).contains("Git未確認"));
   }
 
+  /** 作業文脈の引き継ぎで、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void promptCanSkipOversizedItemsWithoutLosingItsBudget() {
     String text = new WorkContextFormatter().context(snapshot(), null, 128);

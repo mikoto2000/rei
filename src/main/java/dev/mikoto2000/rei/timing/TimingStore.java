@@ -14,29 +14,67 @@ import java.util.function.LongSupplier;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
-/** Bounded process-local observation. Missing/late records never change execution results. */
+/**
+ * 時間計測の記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>Bounded process-local observation. Missing/late records never change execution results.
+ */
 @Service
 public class TimingStore implements TimingRecorder {
+  /** 有効状態。 */
   private final boolean enabled;
+
+  /** 最大実行一覧／最大ごとの実行／最大合計。 */
   private final int maxRuns, maxPerRun, maxTotal;
+
+  /** 有効期間ナノ秒数。 */
   private final long ttlNanos;
+
+  /** 実際の日時の取得元または記録値。 */
   private final Clock wall;
+
+  /** ナノ秒数。 */
   private final LongSupplier nanos;
+
+  /** 実行一覧。 */
   private final LinkedHashMap<String, Entry> runs = new LinkedHashMap<>();
+
+  /** 計測区間件数。 */
   private int spanCount;
+
+  /** 保持対象から除外した件数と、記録を受け付けずに破棄した件数。 */
   private long evictions, drops;
 
+  /** 実行時間の把握に必要な項目を扱う。 */
   private static final class Entry {
+    /** 識別子／プロジェクト／会話。 */
     final String id, project, session;
+
+    /** 実際の日時の取得元または記録値。 */
     final Instant wall;
+
+    /** 開始。 */
     final long start;
+
+    /** 終了。 */
     Long end;
+
+    /** 状態。 */
     Status status = Status.INCOMPLETE;
+
+    /** 未指定。 */
     boolean missing;
+
+    /** 接頭辞。 */
     final PrefixDiagnostics prefix = new PrefixDiagnostics();
+
+    /** 子の一覧。 */
     final LinkedHashMap<String, Child> children = new LinkedHashMap<>();
+
+    /** 達成の節目。 */
     final EnumMap<Metric, Long> milestones = new EnumMap<>(Metric.class);
 
+    /** 指定された値や利用先を使って、Entryを初期化する。 */
     Entry(String id, String project, String session, Instant wall, long start) {
       this.id = id;
       this.project = project;
@@ -46,17 +84,36 @@ public class TimingStore implements TimingRecorder {
     }
   }
 
+  /** 実行時間の把握に必要な子を扱う。 */
   private static final class Child {
+    /** 識別子／親／要求／試行。 */
     final String id, parent, request, attempt;
+
+    /** 分類。 */
     final Category category;
+
+    /** 実際の日時の取得元または記録値。 */
     final Instant wall;
+
+    /** 開始。 */
     final long start;
+
+    /** 終了。 */
     Long end;
+
+    /** 状態。 */
     Status status = Status.INCOMPLETE;
+
+    /** 入力／出力／生成済み／生成。 */
     Long input, output, generated, generation;
+
+    /** 言語モデル。 */
     LlmObservation llm;
+
+    /** 達成の節目。 */
     final EnumMap<Metric, Long> milestones = new EnumMap<>(Metric.class);
 
+    /** 指定された値や利用先を使って、Childを初期化する。 */
     Child(
         String id,
         String parent,
@@ -74,6 +131,7 @@ public class TimingStore implements TimingRecorder {
       this.start = start;
     }
 
+    /** 現在の状態を、後から参照できる記録として取り出す。 */
     Span snapshot() {
       return new Span(
           id,
@@ -94,6 +152,7 @@ public class TimingStore implements TimingRecorder {
     }
   }
 
+  /** 実行時間の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @org.springframework.beans.factory.annotation.Autowired
   public TimingStore(Environment environment, Clock wall) {
     this(
@@ -115,6 +174,7 @@ public class TimingStore implements TimingRecorder {
         System::nanoTime);
   }
 
+  /** 指定された値や利用先を使って、TimingStoreを初期化する。 */
   public TimingStore(
       boolean enabled,
       int maxRuns,
@@ -142,22 +202,27 @@ public class TimingStore implements TimingRecorder {
     this.nanos = Objects.requireNonNull(nanos);
   }
 
+  /** この機能を利用する設定が有効かどうかを返す。 */
   @Override
   public boolean enabled() {
     return enabled;
   }
 
+  /** 識別子。 */
   private static final java.util.regex.Pattern ID =
       java.util.regex.Pattern.compile("[A-Za-z0-9._:-]+");
 
+  /** 実行時間の把握において、識別子に該当するか判定する。 */
   private static boolean id(String value) {
     return value != null && value.length() <= 128 && ID.matcher(value).matches();
   }
 
+  /** 実行時間の把握において、任意識別子に該当するか判定する。 */
   private static boolean optionalId(String value) {
     return value == null || id(value);
   }
 
+  /** 実行時間の把握に関する保持期限を過ぎた情報の削除を処理する。 */
   private void purge(long now) {
     var iterator = runs.values().iterator();
     while (iterator.hasNext()) {
@@ -170,6 +235,7 @@ public class TimingStore implements TimingRecorder {
     }
   }
 
+  /** 実行時間の把握に関する保持対象からの除外を処理する。 */
   private void evict(String runId) {
     var removed = runs.remove(runId);
     if (removed != null) {
@@ -178,6 +244,7 @@ public class TimingStore implements TimingRecorder {
     }
   }
 
+  /** 実行時間の把握において、開始実行に該当するか判定する。 */
   @Override
   public synchronized boolean beginRun(String runId, String projectId, String sessionId) {
     if (!enabled) return false;
@@ -189,12 +256,14 @@ public class TimingStore implements TimingRecorder {
     return true;
   }
 
+  /** 実行時間の把握において、削除に該当するか判定する。 */
   private boolean drop(Entry entry) {
     drops++;
     if (entry != null) entry.missing = true;
     return false;
   }
 
+  /** 実行時間の把握において、開始計測区間に該当するか判定する。 */
   @Override
   public synchronized boolean beginSpan(
       String runId,
@@ -238,6 +307,7 @@ public class TimingStore implements TimingRecorder {
     return true;
   }
 
+  /** 実行時間の把握において、終了計測区間に該当するか判定する。 */
   @Override
   public synchronized boolean endSpan(String runId, String spanId, Status status) {
     if (!enabled) return false;
@@ -252,6 +322,7 @@ public class TimingStore implements TimingRecorder {
     return true;
   }
 
+  /** 実行時間の把握において、完了実行に該当するか判定する。 */
   @Override
   public synchronized boolean finishRun(String runId, Status status) {
     if (!enabled) return false;
@@ -265,6 +336,7 @@ public class TimingStore implements TimingRecorder {
     return true;
   }
 
+  /** 後続の判断に現在の状態を反映するため、計測区間の状態を記録する。 */
   @Override
   public synchronized void markSpan(String runId, String spanId, Metric metric) {
     if (!enabled || metric == null) return;
@@ -276,6 +348,7 @@ public class TimingStore implements TimingRecorder {
       child.milestones.putIfAbsent(metric, Math.max(0, now - entry.start - child.start));
   }
 
+  /** 後続の判断に現在の状態を反映するため、実行の状態を記録する。 */
   @Override
   public synchronized void markRun(String runId, Metric metric) {
     if (!enabled || metric == null) return;
@@ -286,10 +359,12 @@ public class TimingStore implements TimingRecorder {
       entry.milestones.putIfAbsent(metric, Math.max(0, now - entry.start));
   }
 
+  /** 実行時間の把握で用いる有効を返す。 */
   private static Long valid(Long value) {
     return value != null && value >= 0 ? value : null;
   }
 
+  /** 実行時間の把握に関する使用状況を処理する。 */
   @Override
   public synchronized void usage(
       String runId, String spanId, Long input, Long output, Long generated, Long generation) {
@@ -308,6 +383,7 @@ public class TimingStore implements TimingRecorder {
     }
   }
 
+  /** 実行時間の把握に関するプロンプトを処理する。 */
   @Override
   public synchronized void prompt(
       String runId,
@@ -328,10 +404,12 @@ public class TimingStore implements TimingRecorder {
             entry.prefix.observe(PrefixDiagnostics.sources(prompt)));
   }
 
+  /** 実行時間の把握で用いる安全性表示名を返す。 */
   private static String safeLabel(String label) {
     return label != null && label.matches("[A-Za-z0-9._:/-]{1,128}") ? label : "UNKNOWN";
   }
 
+  /** 実行時間の把握に関するキャッシュ使用状況を処理する。 */
   @Override
   public synchronized void cacheUsage(
       String runId, String spanId, String provider, String model, Long cached) {
@@ -350,6 +428,7 @@ public class TimingStore implements TimingRecorder {
             old == null ? null : old.prefix());
   }
 
+  /** 現在の状態を、後から参照できる記録として取り出す。 */
   @Override
   public synchronized Optional<Run> snapshot(String projectId, String sessionId, String runId) {
     if (!enabled) return Optional.empty();
@@ -363,6 +442,7 @@ public class TimingStore implements TimingRecorder {
         : Optional.empty();
   }
 
+  /** 実行時間の把握で用いる最新を返す。 */
   @Override
   public synchronized Optional<Run> latest(String projectId, String sessionId) {
     if (!enabled) return Optional.empty();
@@ -375,12 +455,14 @@ public class TimingStore implements TimingRecorder {
     return latest == null ? Optional.empty() : Optional.of(snapshot(latest, now));
   }
 
+  /** 実行時間の把握で用いる統計を返す。 */
   @Override
   public synchronized Statistics statistics() {
     if (enabled) purge(nanos.getAsLong());
     return new Statistics(runs.size(), spanCount, evictions, drops);
   }
 
+  /** 現在の状態を、後から参照できる記録として取り出す。 */
   private Run snapshot(Entry entry, long now) {
     long elapsed = entry.end == null ? Math.max(0, now - entry.start) : entry.end;
     var spans = entry.children.values().stream().map(Child::snapshot).toList();
@@ -401,8 +483,16 @@ public class TimingStore implements TimingRecorder {
         aggregate(spans, elapsed));
   }
 
+  /**
+   * 実行時間の把握で受け渡す境界を表す。
+   *
+   * @param at 日時
+   * @param category 分類
+   * @param delta 差分
+   */
   private record Boundary(long at, Category category, int delta) {}
 
+  /** 記録された情報を集計し、全体の傾向や結果をまとめる。 */
   private static Summary aggregate(List<Span> spans, long elapsed) {
     var boundaries = new ArrayList<Boundary>();
     long work = 0;

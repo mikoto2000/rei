@@ -10,15 +10,21 @@ import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 会話保存と検索の窓口の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SessionRepositoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-09-16T08:00:00Z");
 
+  /** 検証で使用する付随情報を、指定された条件に合わせて用意する。 */
   SessionMetadata metadata(String id) {
     return new SessionMetadata(id, "project", "first", now, now);
   }
 
+  /** 受け入れ条件永続化された変更前実行先への引き渡しおよびについて、再開の後も対象の情報が残ることを確認する。 */
   @Test
   void acceptanceIsDurableBeforeDispatchAndSurvivesRestart() {
     var file = temp.resolve("sessions.json");
@@ -30,6 +36,7 @@ class SessionRepositoryTest {
     assertThat(store.findById("missing")).isEmpty();
   }
 
+  /** 継続入力について、識別情報を保持することを確認する。 */
   @Test
   void continuationPreservesIdentityAndTimeNeverMovesBackwards() {
     var store = new FileSessionRepository(temp.resolve("sessions.json"));
@@ -43,6 +50,7 @@ class SessionRepositoryTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 前回永続化された状態を復元することを確認する。 */
   @Test
   void rejectionRestoresPreviousDurableState() {
     var file = temp.resolve("sessions.json");
@@ -68,6 +76,7 @@ class SessionRepositoryTest {
     assertThat(new FileSessionRepository(file).findById("one")).contains(metadata("one"));
   }
 
+  /** 会話の継続管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void failedPersistenceNeverDispatches() throws Exception {
     var file = Files.writeString(temp.resolve("not-directory"), "file").resolve("sessions.json");
@@ -83,6 +92,7 @@ class SessionRepositoryTest {
     assertThat(store.findById("one")).isEmpty();
   }
 
+  /** 会話の継続管理で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void concurrentAdmissionNeverLosesRowsOrRegressesUpdatedAt() throws Exception {
     var file = temp.resolve("sessions.json");

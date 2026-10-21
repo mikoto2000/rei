@@ -21,16 +21,20 @@ import org.springframework.stereotype.Component;
 @Component
 public class AgentEventFactory {
 
+  /** 形式のバージョン。 */
   private static final int VERSION = 1;
 
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** 指定された値や利用先を使って、AgentEventFactoryを初期化する。 */
   public AgentEventFactory(Clock clock) {
     this.clock = clock;
   }
 
   // ---- Agent Run ----
 
+  /** 実行状況の通知で用いる記憶を返す。 */
   public AgentEvent memory(
       AgentEventType type, String project, String session, MemoryLifecyclePayload payload) {
     if (type != AgentEventType.AUTO_SLEEP_STOPPED
@@ -54,6 +58,7 @@ public class AgentEventFactory {
         project);
   }
 
+  /** 実行状況の通知で用いるアプリケーション終了開始を返す。 */
   public AgentEvent applicationShutdownStarted(String reason) {
     // Do not inherit the run/execution scope of the thread initiating shutdown.
     return new AgentEvent(
@@ -70,6 +75,7 @@ public class AgentEventFactory {
         new ApplicationShutdownStartedPayload(reason));
   }
 
+  /** 実行状況の通知で用いる文脈圧縮を返す。 */
   public AgentEvent contextCompression(AgentEventType type, ContextCompressionPayload payload) {
     if (type != AgentEventType.CONTEXT_COMPRESSION_STARTED
         && type != AgentEventType.CONTEXT_COMPRESSION_COMPLETED
@@ -79,6 +85,7 @@ public class AgentEventFactory {
     return newEvent(type, null, null, payload);
   }
 
+  /** 実行状況の通知で用いる委譲を返す。 */
   public AgentEvent delegation(
       AgentEventType type, String runId, ExternalAgentLifecyclePayload payload) {
     if (type != AgentEventType.DELEGATION_STARTED
@@ -89,6 +96,7 @@ public class AgentEventFactory {
     return newEvent(type, runId, payload.delegationId(), payload);
   }
 
+  /** 実行状況の通知で用いる画面操作利用進捗を返す。 */
   public AgentEvent computerUseProgress(dev.mikoto2000.rei.computeruse.ComputerProgress progress) {
     return newEvent(
         AgentEventType.COMPUTER_USE_PROGRESS,
@@ -105,6 +113,7 @@ public class AgentEventFactory {
             progress.reason()));
   }
 
+  /** 実行状況の通知で用いる補助エージェント受付から終了までの管理を返す。 */
   public AgentEvent subAgentLifecycle(
       AgentEventType type,
       String parentRunId,
@@ -132,6 +141,7 @@ public class AgentEventFactory {
             bounded(failureReason, 120)));
   }
 
+  /** 実行状況の通知で用いる補助エージェント受付から終了までの管理を返す。 */
   public AgentEvent subAgentLifecycle(
       AgentEventType type,
       String parentRunId,
@@ -175,11 +185,16 @@ public class AgentEventFactory {
         base.projectId());
   }
 
-  /** Keep a bounded, redacted diagnostic identical in external child receipts and notifications. */
+  /**
+   * 実行状況の通知で用いる補助エージェント失敗情報理由を返す。
+   *
+   * <p>Keep a bounded, redacted diagnostic identical in external child receipts and notifications.
+   */
   public String subAgentFailureReason(String reason) {
     return bounded(reason, 1000);
   }
 
+  /** 実行状況の通知で用いる履歴検索完了を返す。 */
   public AgentEvent historySearchCompleted(HistorySearchCompletedPayload payload) {
     var event = newEvent(AgentEventType.HISTORY_SEARCH_COMPLETED, null, null, payload);
     return new AgentEvent(
@@ -197,11 +212,13 @@ public class AgentEventFactory {
         event.projectId() == null ? payload.preferredProjectId() : event.projectId());
   }
 
+  /** 実行状況の通知で用いる実行進捗を返す。 */
   public AgentEvent executionProgress(
       AgentEventType type, String runId, ExecutionProgressPayload payload) {
     return newEvent(type, runId, null, payload);
   }
 
+  /** 依頼された操作を進めるため、開始を実行する。 */
   public AgentEvent runStarted(String runId, String reason, String parentRunId) {
     return newEvent(
         AgentEventType.AGENT_RUN_STARTED,
@@ -210,19 +227,23 @@ public class AgentEventFactory {
         new AgentRunStartedPayload(runId, reason, parentRunId));
   }
 
+  /** 依頼された操作を進めるため、完了を実行する。 */
   public AgentEvent runCompleted(String runId, long duration) {
     return runCompleted(runId, duration, null);
   }
 
+  /** 依頼された操作を進めるため、完了を実行する。 */
   public AgentEvent runCompleted(String runId, long duration, Long completionTokens) {
     return runCompleted(runId, duration, completionTokens, null);
   }
 
+  /** 依頼された操作を進めるため、完了を実行する。 */
   public AgentEvent runCompleted(
       String runId, long duration, Long completionTokens, Double tokensPerSecond) {
     return runCompleted(runId, duration, completionTokens, null, tokensPerSecond, null);
   }
 
+  /** 依頼された操作を進めるため、完了を実行する。 */
   public AgentEvent runCompleted(
       String runId,
       long duration,
@@ -243,11 +264,13 @@ public class AgentEventFactory {
             endToEndTokensPerSecond));
   }
 
+  /** 依頼された操作を進めるため、失敗を実行する。 */
   public AgentEvent runFailed(String runId, ErrorInformation error) {
     return newEvent(
         AgentEventType.AGENT_RUN_FAILED, runId, null, new AgentRunFailedPayload(runId, error));
   }
 
+  /** 依頼された操作を進めるため、キャンセル済みを実行する。 */
   public AgentEvent runCancelled(String runId, ErrorInformation error) {
     return newEvent(
         AgentEventType.AGENT_RUN_CANCELLED, runId, null, new AgentRunFailedPayload(runId, error));
@@ -255,6 +278,7 @@ public class AgentEventFactory {
 
   // ---- LLM ----
 
+  /** 実行状況の通知で用いる言語モデル要求開始を返す。 */
   public AgentEvent llmRequestStarted(String runId, String requestId, String feature) {
     return newEvent(
         AgentEventType.LLM_REQUEST_STARTED,
@@ -263,6 +287,7 @@ public class AgentEventFactory {
         new LlmRequestStartedPayload(requestId, feature));
   }
 
+  /** 実行状況の通知で用いる言語モデル要求失敗を返す。 */
   public AgentEvent llmRequestFailed(
       String runId, String requestId, long durationMs, Throwable error) {
     return newEvent(
@@ -275,6 +300,7 @@ public class AgentEventFactory {
             dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(error)));
   }
 
+  /** 実行状況の通知で用いる言語モデル応答最初トークンを返す。 */
   public AgentEvent llmResponseFirstToken(String runId, String requestId, long durationMs) {
     return newEvent(
         AgentEventType.LLM_RESPONSE_FIRST_TOKEN,
@@ -283,6 +309,7 @@ public class AgentEventFactory {
         new LlmResponseFirstTokenPayload(requestId, durationMs));
   }
 
+  /** 実行状況の通知で用いる言語モデル応答完了を返す。 */
   public AgentEvent llmResponseCompleted(String runId, String requestId, long durationMs) {
     return newEvent(
         AgentEventType.LLM_RESPONSE_COMPLETED,
@@ -293,16 +320,19 @@ public class AgentEventFactory {
 
   // ---- Message ----
 
+  /** 実行状況の通知で用いるメッセージ開始を返す。 */
   public AgentEvent messageStarted(String messageId, String role) {
     return newEvent(
         AgentEventType.MESSAGE_STARTED, null, null, new MessageStartedPayload(messageId, role));
   }
 
+  /** 実行状況の通知で用いるメッセージ差分を返す。 */
   public AgentEvent messageDelta(String messageId, String delta) {
     return newEvent(
         AgentEventType.MESSAGE_DELTA, null, null, new MessageDeltaPayload(messageId, delta));
   }
 
+  /** 実行状況の通知で用いるメッセージ完了を返す。 */
   public AgentEvent messageCompleted(String messageId, String role, String text) {
     return newEvent(
         AgentEventType.MESSAGE_COMPLETED,
@@ -311,6 +341,7 @@ public class AgentEventFactory {
         new MessageCompletedPayload(messageId, role, text));
   }
 
+  /** 実行状況の通知で用いる記憶統合Suggestedを返す。 */
   public AgentEvent memoryConsolidationSuggested() {
     return newEvent(
         AgentEventType.MEMORY_CONSOLIDATION_SUGGESTED,
@@ -321,16 +352,19 @@ public class AgentEventFactory {
 
   // ---- Thinking ----
 
+  /** 実行状況の通知で用いる推論開始を返す。 */
   public AgentEvent thinkingStarted(String thinkingId) {
     return newEvent(
         AgentEventType.THINKING_STARTED, null, null, new ThinkingStartedPayload(thinkingId));
   }
 
+  /** 実行状況の通知で用いる推論差分を返す。 */
   public AgentEvent thinkingDelta(String thinkingId, String delta) {
     return newEvent(
         AgentEventType.THINKING_DELTA, null, null, new ThinkingDeltaPayload(thinkingId, delta));
   }
 
+  /** 実行状況の通知で用いる推論完了を返す。 */
   public AgentEvent thinkingCompleted(String thinkingId, String text) {
     return newEvent(
         AgentEventType.THINKING_COMPLETED,
@@ -341,6 +375,7 @@ public class AgentEventFactory {
 
   // ---- Tool ----
 
+  /** 実行状況の通知で用いるツール開始を返す。 */
   public AgentEvent toolStarted(String toolCallId, String toolName, String argumentsSummary) {
     return newEvent(
         AgentEventType.TOOL_STARTED,
@@ -349,6 +384,7 @@ public class AgentEventFactory {
         new ToolStartedPayload(toolCallId, toolName, argumentsSummary, null));
   }
 
+  /** 実行状況の通知で用いるツール開始を返す。 */
   public AgentEvent toolStarted(
       String toolCallId, String toolName, String argumentsSummary, String summary) {
     return newEvent(
@@ -358,6 +394,7 @@ public class AgentEventFactory {
         new ToolStartedPayload(toolCallId, toolName, argumentsSummary, summary));
   }
 
+  /** 実行状況の通知で用いるツール完了を返す。 */
   public AgentEvent toolCompleted(
       String toolCallId, String toolName, long duration, String resultSummary) {
     return newEvent(
@@ -368,6 +405,7 @@ public class AgentEventFactory {
             toolCallId, toolName, duration, resultSummary, null, null, null, null));
   }
 
+  /** 実行状況の通知で用いるツール完了を返す。 */
   public AgentEvent toolCompleted(
       String toolCallId,
       String toolName,
@@ -385,6 +423,7 @@ public class AgentEventFactory {
             toolCallId, toolName, duration, resultSummary, files, bytes, matches, items));
   }
 
+  /** 実行状況の通知で用いるツール失敗を返す。 */
   public AgentEvent toolFailed(String toolCallId, String toolName, ErrorInformation error) {
     return newEvent(
         AgentEventType.TOOL_FAILED,
@@ -395,6 +434,7 @@ public class AgentEventFactory {
 
   // ---- Skill selection ----
 
+  /** 実行状況の通知で用いるスキル選択内容開始を返す。 */
   public AgentEvent skillSelectionStarted(String selectionId) {
     return newEvent(
         AgentEventType.SKILL_SELECTION_STARTED,
@@ -403,6 +443,7 @@ public class AgentEventFactory {
         new SkillSelectionStartedPayload(selectionId));
   }
 
+  /** 実行状況の通知で用いるスキル選択内容完了を返す。 */
   public AgentEvent skillSelectionCompleted(
       String selectionId,
       java.util.List<String> explicitSkillNames,
@@ -416,6 +457,7 @@ public class AgentEventFactory {
             selectionId, explicitSkillNames, implicitSkillNames, warnings));
   }
 
+  /** 実行状況の通知で用いるスキル選択内容失敗を返す。 */
   public AgentEvent skillSelectionFailed(String selectionId, ErrorInformation error) {
     return newEvent(
         AgentEventType.SKILL_SELECTION_FAILED,
@@ -424,6 +466,7 @@ public class AgentEventFactory {
         new SkillSelectionFailedPayload(selectionId, error));
   }
 
+  /** 実行状況の通知で用いるスキル振り分け開始を返す。 */
   public AgentEvent skillRoutingStarted(
       String runId, String routingId, int candidateCount, int routingInvocation) {
     return newEvent(
@@ -433,6 +476,7 @@ public class AgentEventFactory {
         new SkillRoutingStartedPayload(candidateCount, routingInvocation));
   }
 
+  /** 実行状況の通知で用いるスキル振り分け完了を返す。 */
   public AgentEvent skillRoutingCompleted(
       String runId,
       String routingId,
@@ -463,6 +507,7 @@ public class AgentEventFactory {
             warnings));
   }
 
+  /** 実行状況の通知で用いるスキル振り分け失敗を返す。 */
   public AgentEvent skillRoutingFailed(
       String runId,
       String routingId,
@@ -477,6 +522,7 @@ public class AgentEventFactory {
         new SkillRoutingFailedPayload(durationMs, candidateCount, routingInvocation, error));
   }
 
+  /** 実行状況の通知で用いるスキル候補一覧評価済みを返す。 */
   public AgentEvent skillCandidatesEvaluated(
       String runId,
       String routingId,
@@ -506,6 +552,7 @@ public class AgentEventFactory {
 
   // ---- Task ----
 
+  /** 実行状況の通知で用いるタスク作成を返す。 */
   public AgentEvent taskCreated(String taskId, String parentTaskId, String title, String status) {
     return newEvent(
         AgentEventType.TASK_CREATED,
@@ -514,26 +561,31 @@ public class AgentEventFactory {
         new TaskCreatedPayload(taskId, parentTaskId, title, status));
   }
 
+  /** 実行状況の通知で用いるタスク開始を返す。 */
   public AgentEvent taskStarted(String taskId) {
     return newEvent(AgentEventType.TASK_STARTED, null, null, new TaskStartedPayload(taskId));
   }
 
+  /** 実行状況の通知で用いるタスク完了を返す。 */
   public AgentEvent taskCompleted(String taskId, Long duration) {
     return newEvent(
         AgentEventType.TASK_COMPLETED, null, null, new TaskCompletedPayload(taskId, duration));
   }
 
+  /** 実行状況の通知で用いるタスク失敗を返す。 */
   public AgentEvent taskFailed(String taskId, ErrorInformation error) {
     return newEvent(AgentEventType.TASK_FAILED, null, null, new TaskFailedPayload(taskId, error));
   }
 
   // ---- Working Set ----
 
+  /** 実行状況の通知で用いる作業中集合項目追加済みを返す。 */
   public AgentEvent workingSetItemAdded(
       String itemId, String kind, String identifier, String path, String reason) {
     return workingSetItemAdded(itemId, kind, identifier, path, reason, null);
   }
 
+  /** 実行状況の通知で用いる作業中集合項目追加済みを返す。 */
   public AgentEvent workingSetItemAdded(
       String itemId,
       String kind,
@@ -548,6 +600,7 @@ public class AgentEventFactory {
         new WorkingSetItemAddedPayload(itemId, kind, identifier, path, reason));
   }
 
+  /** 実行状況の通知で用いる作業中集合項目削除済みを返す。 */
   public AgentEvent workingSetItemRemoved(String itemId, String reason) {
     return newEvent(
         AgentEventType.WORKING_SET_ITEM_REMOVED,
@@ -556,6 +609,7 @@ public class AgentEventFactory {
         new WorkingSetItemRemovedPayload(itemId, reason));
   }
 
+  /** 実行状況の通知で用いる作業中集合検索開始を返す。 */
   public AgentEvent workingSetSearchStarted(
       String searchId, String query, String strategy, int workingSetSizeBefore) {
     return newEvent(
@@ -565,6 +619,7 @@ public class AgentEventFactory {
         new WorkingSetSearchStartedPayload(searchId, query, strategy, workingSetSizeBefore));
   }
 
+  /** 実行状況の通知で用いる作業中集合検索完了を返す。 */
   public AgentEvent workingSetSearchCompleted(
       String searchId,
       long durationMs,
@@ -589,6 +644,7 @@ public class AgentEventFactory {
             workingSetSizeAfter));
   }
 
+  /** 実行状況の通知で用いる作業中集合文脈追加されたを返す。 */
   public AgentEvent workingSetContextInjected(int itemCount, int contextCharacters) {
     return newEvent(
         AgentEventType.WORKING_SET_CONTEXT_INJECTED,
@@ -597,6 +653,7 @@ public class AgentEventFactory {
         new WorkingSetContextInjectedPayload(itemCount, contextCharacters));
   }
 
+  /** 実行状況の通知で用いる文脈追加されたを返す。 */
   public AgentEvent contextInjected(String source, Integer itemCount, int contextCharacters) {
     return newEvent(
         AgentEventType.CONTEXT_INJECTED,
@@ -605,6 +662,7 @@ public class AgentEventFactory {
         new ContextInjectedPayload(source, itemCount, contextCharacters));
   }
 
+  /** 実行状況の通知で用いる文脈に使える予算評価済みを返す。 */
   public AgentEvent contextBudgetEvaluated(
       int inputBudget,
       int totalTokens,
@@ -617,6 +675,7 @@ public class AgentEventFactory {
         new ContextBudgetEvaluatedPayload(inputBudget, totalTokens, included, dropped));
   }
 
+  /** 実行状況の通知で用いる文脈に使える予算余白を除いたを返す。 */
   public AgentEvent contextBudgetTrimmed(
       int inputBudget, int totalTokens, java.util.List<String> dropped) {
     return newEvent(
@@ -626,6 +685,7 @@ public class AgentEventFactory {
         new ContextBudgetTrimmedPayload(inputBudget, totalTokens, dropped));
   }
 
+  /** 実行状況の通知で用いるファイル要約保存済みを返す。 */
   public AgentEvent fileSummarySaved(String path, int summaryCharacters) {
     return newEvent(
         AgentEventType.FILE_SUMMARY_SAVED,
@@ -634,6 +694,7 @@ public class AgentEventFactory {
         new FileSummarySavedPayload(path, summaryCharacters));
   }
 
+  /** 実行状況の通知で用いるファイル要約Invalidatedを返す。 */
   public AgentEvent fileSummaryInvalidated(String path) {
     return newEvent(
         AgentEventType.FILE_SUMMARY_INVALIDATED,
@@ -642,6 +703,7 @@ public class AgentEventFactory {
         new FileSummaryInvalidatedPayload(path));
   }
 
+  /** 実行状況の通知で用いるファイル要約古い状態対象外を返す。 */
   public AgentEvent fileSummaryStaleSkipped(String path) {
     return newEvent(
         AgentEventType.FILE_SUMMARY_STALE_SKIPPED,
@@ -650,6 +712,7 @@ public class AgentEventFactory {
         new FileSummaryStaleSkippedPayload(path));
   }
 
+  /** 実行状況の通知で用いる再開用の記録保存済みを返す。 */
   public AgentEvent checkpointSaved(String taskId, String reason, int workingFileCount) {
     return newEvent(
         AgentEventType.CHECKPOINT_SAVED,
@@ -658,6 +721,7 @@ public class AgentEventFactory {
         new CheckpointSavedPayload(taskId, reason, workingFileCount));
   }
 
+  /** 実行状況の通知で用いるバックグラウンドプロセス開始を返す。 */
   public AgentEvent backgroundProcessStarted(
       String processId, long pid, String command, String workingDirectory) {
     return newEvent(
@@ -668,6 +732,7 @@ public class AgentEventFactory {
             processId, pid, bounded(command, 200), workingDirectory));
   }
 
+  /** 実行状況の通知で用いるバックグラウンドプロセス完了を返す。 */
   public AgentEvent backgroundProcessCompleted(
       String processId, long pid, Integer exitCode, double elapsedSeconds) {
     return newEvent(
@@ -677,6 +742,7 @@ public class AgentEventFactory {
         new BackgroundProcessCompletedPayload(processId, pid, exitCode, elapsedSeconds));
   }
 
+  /** 実行状況の通知で用いるバックグラウンドプロセス失敗を返す。 */
   public AgentEvent backgroundProcessFailed(String processId, String command, Throwable error) {
     return newEvent(
         AgentEventType.BACKGROUND_PROCESS_FAILED,
@@ -686,6 +752,7 @@ public class AgentEventFactory {
             processId, bounded(command, 200), ErrorInformation.from(error)));
   }
 
+  /** 実行状況の通知で用いるバックグラウンドプロセス強制終了済みを返す。 */
   public AgentEvent backgroundProcessKilled(
       String processId, long pid, Integer exitCode, double elapsedSeconds) {
     return newEvent(
@@ -697,6 +764,7 @@ public class AgentEventFactory {
 
   // ---- Topic Generator ----
 
+  /** 実行状況の通知で用いる話題生成開始を返す。 */
   public AgentEvent topicGenerationStarted(String runId, String topicGenerationId, String trigger) {
     Instant now = Instant.now(clock);
     return newEvent(
@@ -706,6 +774,7 @@ public class AgentEventFactory {
         new TopicGenerationStartedPayload(topicGenerationId, bounded(trigger, 80), now));
   }
 
+  /** 実行状況の通知で用いる話題操作がない状態実行条件評価済みを返す。 */
   public AgentEvent topicIdleTriggerEvaluated(
       IdleTriggerRejectReason reason,
       boolean accepted,
@@ -720,10 +789,12 @@ public class AgentEventFactory {
             accepted, millis(idleDuration), millis(requiredIdle), reason, now));
   }
 
+  /** 実行状況の通知で用いる話題候補一覧Refreshedを返す。 */
   public AgentEvent topicCandidatesRefreshed(int candidateCount) {
     return topicCandidatesRefreshed(candidateCount, List.of());
   }
 
+  /** 実行状況の通知で用いる話題候補一覧Refreshedを返す。 */
   public AgentEvent topicCandidatesRefreshed(int candidateCount, List<String> topics) {
     Instant now = Instant.now(clock);
     return newEvent(
@@ -733,6 +804,7 @@ public class AgentEventFactory {
         new TopicCandidatesRefreshedPayload(candidateCount, topics, now));
   }
 
+  /** 実行状況の通知で用いる話題候補生成済みを返す。 */
   public AgentEvent topicCandidateGenerated(
       String runId,
       String topicGenerationId,
@@ -764,6 +836,7 @@ public class AgentEventFactory {
             confidence));
   }
 
+  /** 実行状況の通知で用いる話題候補評価済みを返す。 */
   public AgentEvent topicCandidateScored(
       String runId, String topicGenerationId, String topicCandidateId, TopicScoreBreakdown score) {
     return newEvent(
@@ -773,6 +846,7 @@ public class AgentEventFactory {
         new TopicCandidateScoredPayload(topicGenerationId, topicCandidateId, score));
   }
 
+  /** 実行状況の通知で用いる話題候補拒否済みを返す。 */
   public AgentEvent topicCandidateRejected(
       String runId,
       String topicGenerationId,
@@ -786,6 +860,7 @@ public class AgentEventFactory {
         new TopicCandidateRejectedPayload(topicGenerationId, topicCandidateId, reason, score));
   }
 
+  /** 実行状況の通知で用いる話題選択中を返す。 */
   public AgentEvent topicSelected(
       String runId, String topicGenerationId, String topicCandidateId, Double score, Integer rank) {
     return newEvent(
@@ -795,6 +870,7 @@ public class AgentEventFactory {
         new TopicSelectedPayload(topicGenerationId, topicCandidateId, score, rank));
   }
 
+  /** 実行状況の通知で用いる話題読み上げ済みを返す。 */
   public AgentEvent topicSpoken(
       String runId,
       String topicGenerationId,
@@ -810,6 +886,7 @@ public class AgentEventFactory {
             topicGenerationId, topicCandidateId, messageId, spokenAt, bounded(message, 240)));
   }
 
+  /** 実行状況の通知で用いる話題読み上げ対象外を返す。 */
   public AgentEvent topicSpeakSkipped(
       String runId,
       String topicGenerationId,
@@ -824,6 +901,7 @@ public class AgentEventFactory {
             topicGenerationId, topicCandidateId, reason, nextSpeakAllowedAt));
   }
 
+  /** 実行状況の通知で用いる話題生成完了を返す。 */
   public AgentEvent topicGenerationCompleted(
       String runId,
       String topicGenerationId,
@@ -849,6 +927,7 @@ public class AgentEventFactory {
             now));
   }
 
+  /** 実行状況の通知で用いる話題生成失敗を返す。 */
   public AgentEvent topicGenerationFailed(
       String runId, String topicGenerationId, TopicGenerationStage stage, Throwable error) {
     Instant now = Instant.now(clock);
@@ -863,6 +942,7 @@ public class AgentEventFactory {
         new TopicGenerationFailedPayload(topicGenerationId, stage, bounded(message, 240), now));
   }
 
+  /** 実行状況の通知で用いる話題自動読み上げ抑制されたを返す。 */
   public AgentEvent topicAutoSpeakSuppressed(String reason) {
     Instant now = Instant.now(clock);
     return newEvent(
@@ -874,6 +954,7 @@ public class AgentEventFactory {
 
   // ---- Context ----
 
+  /** 実行状況の通知で用いる文脈状態の記録更新を返す。 */
   public AgentEvent contextSnapshotUpdated(Long usedTokens, Long maxTokens, Double utilization) {
     return newEvent(
         AgentEventType.CONTEXT_SNAPSHOT_UPDATED,
@@ -884,10 +965,12 @@ public class AgentEventFactory {
 
   // ---- File ----
 
+  /** 実行状況の通知で用いるファイル作成を返す。 */
   public AgentEvent fileCreated(String path) {
     return newEvent(AgentEventType.FILE_CREATED, null, null, new FileCreatedPayload(path));
   }
 
+  /** 実行状況の通知で用いるファイル更新を返す。 */
   public AgentEvent fileModified(String path, Integer addedLines, Integer removedLines) {
     return newEvent(
         AgentEventType.FILE_MODIFIED,
@@ -896,11 +979,13 @@ public class AgentEventFactory {
         new FileModifiedPayload(path, addedLines, removedLines));
   }
 
+  /** 実行状況の通知で用いるファイル削除済みを返す。 */
   public AgentEvent fileDeleted(String path) {
     return newEvent(AgentEventType.FILE_DELETED, null, null, new FileDeletedPayload(path));
   }
 
   // ---- 共通 ----
+  /** 実行状況の通知で用いるバックグラウンド実行を返す。 */
   public AgentEvent backgroundExecution(
       dev.mikoto2000.rei.core.execution.ActiveExecution execution, String status, String output) {
     var type =
@@ -911,6 +996,7 @@ public class AgentEventFactory {
           default -> AgentEventType.EXECUTION_FAILED;
         };
     String safe = CredentialRedactor.redact(output).replaceAll("[\\p{Cntrl}&&[^\\n\\t]]", "");
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (safe.length() > 20000) safe = safe.substring(0, 20000) + "... (truncated)";
     return newEvent(
             type,
@@ -921,6 +1007,7 @@ public class AgentEventFactory {
         .withExecutionOwnership(execution);
   }
 
+  /** 実行状況の通知で用いる追加入力を返す。 */
   public AgentEvent intervention(String runId, String inputId, String text, boolean applied) {
     return newEvent(
         applied
@@ -931,6 +1018,7 @@ public class AgentEventFactory {
         new UserInterventionPayload(inputId, text));
   }
 
+  /** 新たな対象を利用できるよう、イベントを作成する。 */
   private AgentEvent newEvent(
       AgentEventType type, String runId, String correlationId, AgentEventPayload payload) {
     return new AgentEvent(
@@ -949,6 +1037,7 @@ public class AgentEventFactory {
         .withExecutionOwnership(dev.mikoto2000.rei.core.execution.ExecutionScope.current());
   }
 
+  /** 利用先の上限を超えない量へ、指定された内容を調整する。 */
   private String bounded(String value, int maxLength) {
     if (value == null) return null;
     String safe =
@@ -959,6 +1048,7 @@ public class AgentEventFactory {
     return safe.length() <= maxLength ? safe : safe.substring(0, maxLength - 1) + "…";
   }
 
+  /** 実行状況の通知で用いるミリ秒数を返す。 */
   private long millis(Duration duration) {
     return duration == null ? 0L : Math.max(0L, duration.toMillis());
   }

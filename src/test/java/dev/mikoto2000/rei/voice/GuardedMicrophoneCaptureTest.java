@@ -8,7 +8,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
+/** Guardedマイク取得記録の結果と状態の契約を検証するテスト。 */
 class GuardedMicrophoneCaptureTest {
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void missingEndpointNeverOpensJavaSoundAndDisconnectedSourceFailsHealth() throws Exception {
     var device = new AudioDevice("dry", "DRY (VT-4)", "input", "vendor", "1");
@@ -20,10 +22,12 @@ class GuardedMicrophoneCaptureTest {
         d -> {
           opens.incrementAndGet();
           return new MicrophoneCaptureService.FrameSource() {
+            /** 検証用に、必要な内容を参照できるよう、音声フレームを読み取る。 */
             public float[] readFrame() {
               return new float[512];
             }
 
+            /** 検証で利用した対象の終了を扱う。 */
             public void close() {
               closes.incrementAndGet();
             }
@@ -42,6 +46,7 @@ class GuardedMicrophoneCaptureTest {
     assertThat(closes.get()).isEqualTo(1);
   }
 
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void endpointChangeWhileJavaSoundOpensClosesTheJustOpenedSource() {
     var device = new AudioDevice("dry", "DRY (VT-4)", "input", "vendor", "1");
@@ -54,10 +59,12 @@ class GuardedMicrophoneCaptureTest {
         d -> {
           endpoints.set(List.of());
           return new MicrophoneCaptureService.FrameSource() {
+            /** 検証用に、必要な内容を参照できるよう、音声フレームを読み取る。 */
             public float[] readFrame() {
               return null;
             }
 
+            /** 検証で利用した対象の終了を扱う。 */
             public void close() {
               closes.incrementAndGet();
             }

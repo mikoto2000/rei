@@ -11,9 +11,12 @@ import org.jline.terminal.TerminalBuilder;
 import org.junit.jupiter.api.*;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 再開概要クライアントの結果と状態の契約を検証するテスト。 */
 class ResumeOverviewClientTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 読み取りを利用することを確認する。 */
   @Test
   void manualOverviewUsesReadOnlyRoute() {
     var route = RemoteCommands.route(List.of("/resume", "overview"), "one", null);
@@ -21,6 +24,7 @@ class ResumeOverviewClientTest {
     assertEquals("/api/v1/projects/one/resume-overview", route.path());
   }
 
+  /** 軽量CLIでの対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void selectionHistoryReconnectAndFailureStayClientLocal() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -113,6 +117,7 @@ class ResumeOverviewClientTest {
     }
   }
 
+  /** {@code reply} の条件を再現するため、検証用の操作や状態を扱う。 */
   private static void reply(com.sun.net.httpserver.HttpExchange e, String text) throws IOException {
     var bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8);
     e.getResponseHeaders().set("Content-Type", "application/json");

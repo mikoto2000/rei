@@ -17,19 +17,24 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** 保存されるスキル位置の結果と状態の契約を検証するテスト。 */
 class PersistentSkillIndexTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code data} の条件を再現するための補助情報を返す。 */
   SQLiteDataSource data() {
     var data = new SQLiteDataSource();
     data.setUrl("jdbc:sqlite:" + root.resolve("skills.db"));
     return data;
   }
 
+  /** 検証で使用する設定を、指定された条件に合わせて用意する。 */
   SemanticSkillProperties config(String namespace) {
     return new SemanticSkillProperties(true, 64, .55, 30, true, namespace);
   }
 
+  /** {@code skill} の条件を再現するための補助情報を返す。 */
   AgentSkill skill(String description) {
     return new AgentSkill(
         "writer",
@@ -41,6 +46,7 @@ class PersistentSkillIndexTest {
         "private instructions");
   }
 
+  /** 再開済み検索再利用する限定付随情報およびについて、現在スキルを返すことを確認する。 */
   @Test
   void restartedSearchReusesOnlyMetadataAndReturnsTheCurrentSkill() throws Exception {
     var calls = new ArrayList<List<String>>();
@@ -77,6 +83,7 @@ class PersistentSkillIndexTest {
     }
   }
 
+  /** 空の利用可能な項目について、前回永続化済み付随情報を取り除くことを確認する。 */
   @Test
   void emptyCatalogRemovesPreviousPersistedMetadata() throws Exception {
     var index = new SqliteSkillEmbeddingIndex(data());
@@ -93,6 +100,7 @@ class PersistentSkillIndexTest {
     assertTrue(index.load("test-model-v1", List.of(profile)).isEmpty());
   }
 
+  /** スキルの利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void namespaceRotationReembedsAndDimensionMismatchInvalidatesBeforeRetry() throws Exception {
     var index = new SqliteSkillEmbeddingIndex(data());
@@ -127,6 +135,7 @@ class PersistentSkillIndexTest {
     assertEquals(1, index.load("new-model", List.of(profile)).size());
   }
 
+  /** なし置換有効な状態の記録を書き込むことを確認する。 */
   @Test
   void corruptRowsAreMissesAndInvalidWritesDoNotReplaceTheValidSnapshot() throws Exception {
     var index = new SqliteSkillEmbeddingIndex(data());
@@ -168,6 +177,7 @@ class PersistentSkillIndexTest {
     }
   }
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void replacementIsAtomicAndPrunesRemovedProfiles() throws Exception {
     var index = new SqliteSkillEmbeddingIndex(data());
@@ -189,6 +199,7 @@ class PersistentSkillIndexTest {
     assertEquals(Set.of("two"), index.load("model", List.of("one", "two")).keySet());
   }
 
+  /** スキルの利用で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void disabledPersistenceDoesNotTouchDatabaseAndDatabaseFailuresKeepLiveResults() {
     var data = org.mockito.Mockito.mock(javax.sql.DataSource.class);
@@ -200,14 +211,17 @@ class PersistentSkillIndexTest {
     org.mockito.Mockito.verifyNoInteractions(data);
     var broken =
         new SkillEmbeddingIndex() {
+          /** 検証用に、保存された情報を読み込み、現在の処理で使える形にする。 */
           public Map<String, float[]> load(String ns, List<String> profiles) {
             throw new IllegalStateException("private database failure");
           }
 
+          /** {@code replace} の条件を再現するため、検証用の操作や状態を扱う。 */
           public void replace(String ns, Map<String, float[]> vectors) {
             throw new IllegalStateException("private database failure");
           }
 
+          /** {@code invalidate} の条件を再現するため、検証用の操作や状態を扱う。 */
           public void invalidate(String ns) {
             throw new IllegalStateException();
           }
@@ -220,6 +234,7 @@ class PersistentSkillIndexTest {
             .contains("rrf"));
   }
 
+  /** スキルの利用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void indexCancellationPropagatesAndProviderFailureDoesNotDestroySavedMetadata() {
     var index = new SqliteSkillEmbeddingIndex(data());
@@ -244,15 +259,18 @@ class PersistentSkillIndexTest {
     for (boolean cancelRead : List.of(true, false)) {
       var cancelled =
           new SkillEmbeddingIndex() {
+            /** 検証用に、保存された情報を読み込み、現在の処理で使える形にする。 */
             public Map<String, float[]> load(String ns, List<String> profiles) {
               if (cancelRead) throw new java.util.concurrent.CancellationException();
               return Map.of();
             }
 
+            /** {@code replace} の条件を再現するため、検証用の操作や状態を扱う。 */
             public void replace(String ns, Map<String, float[]> vectors) {
               throw new java.util.concurrent.CancellationException();
             }
 
+            /** {@code invalidate} の条件を再現するため、検証用の操作や状態を扱う。 */
             public void invalidate(String ns) {}
           };
       assertThrows(
@@ -272,6 +290,7 @@ class PersistentSkillIndexTest {
     assertEquals(1, index.load("model", List.of(profile)).size());
   }
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void configurationBindsWithExplicitNamespaceAndRemainsLazyByDefault() {
     var defaults = new SemanticSkillProperties(false, 0, 0, 0);
@@ -298,19 +317,23 @@ class PersistentSkillIndexTest {
     org.mockito.Mockito.verifyNoInteractions(data);
   }
 
+  /** スキルの利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void staleDimensionsWithUnavailableInvalidationDoNotTrapFutureSearches() {
     var profile = SemanticSkillSearch.profile(skill("articles"));
     var stale =
         new SkillEmbeddingIndex() {
+          /** 検証用に、保存された情報を読み込み、現在の処理で使える形にする。 */
           public Map<String, float[]> load(String ns, List<String> profiles) {
             return Map.of(profile, new float[] {1, 0});
           }
 
+          /** {@code replace} の条件を再現するため、検証用の操作や状態を扱う。 */
           public void replace(String ns, Map<String, float[]> vectors) {
             throw new IllegalStateException("read-only index");
           }
 
+          /** {@code invalidate} の条件を再現するため、検証用の操作や状態を扱う。 */
           public void invalidate(String ns) {
             throw new IllegalStateException("read-only index");
           }

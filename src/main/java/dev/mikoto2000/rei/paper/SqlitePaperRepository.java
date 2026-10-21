@@ -14,11 +14,16 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.support.TransactionTemplate;
 
+/** SQLite論文を保存・検索するための窓口。 */
 @Repository
 public class SqlitePaperRepository implements PaperRepository {
+  /** データベースへの接続。 */
   private final JdbcTemplate jdbc;
+
+  /** 一連の更新をまとめて確定するための窓口。 */
   private final TransactionTemplate tx;
 
+  /** 指定された値や利用先を使って、SqlitePaperRepositoryを初期化する。 */
   public SqlitePaperRepository(DataSource source) {
     jdbc = new JdbcTemplate(source);
     tx = new TransactionTemplate(new DataSourceTransactionManager(source));
@@ -42,6 +47,7 @@ public class SqlitePaperRepository implements PaperRepository {
             + " paper_artifacts(paper_id,kind,cache_key,created_at)");
   }
 
+  /** 論文の調査と整理で用いるnormを返す。 */
   static String norm(String s) {
     return s == null
         ? ""
@@ -51,12 +57,14 @@ public class SqlitePaperRepository implements PaperRepository {
             .replaceAll("\\s+", " ");
   }
 
+  /** 論文の調査と整理で用いる論文のDOIを返す。 */
   static String doi(String s) {
     String d =
         norm(s).replaceFirst("^https?://(dx\\.)?doi\\.org/", "").replaceFirst("^doi:\\s*", "");
     return d.isEmpty() ? null : d;
   }
 
+  /** 論文の調査と整理で用いるarXivを返す。 */
   static String arxiv(String s) {
     if (s == null) return null;
     String a =
@@ -68,12 +76,14 @@ public class SqlitePaperRepository implements PaperRepository {
     return a.isEmpty() ? null : a;
   }
 
+  /** 論文の調査と整理で用いる要求内容の照合値を返す。 */
   static String fingerprint(Paper p) {
     return p.title() == null || p.authors().isEmpty() || p.publicationYear() == null
         ? null
         : norm(p.title()) + "|" + norm(p.authors().getFirst()) + "|" + p.publicationYear();
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   public synchronized Paper save(Paper incoming, PaperOperation op) {
     try {
       return tx.execute(
@@ -170,10 +180,12 @@ public class SqlitePaperRepository implements PaperRepository {
     }
   }
 
+  /** 後続の処理で使う値を返す。 */
   private static <T> T value(T next, T old) {
     return next == null || next instanceof String s && s.isBlank() ? old : next;
   }
 
+  /** 関連する情報をまとめて扱えるよう、SQLite論文保存と検索の窓口を統合する。 */
   private Paper merge(Paper old, Paper n, String d, String a) {
     if (old == null)
       return new Paper(
@@ -214,6 +226,7 @@ public class SqlitePaperRepository implements PaperRepository {
         n.licenses().isEmpty() ? old.licenses() : n.licenses());
   }
 
+  /** 論文の調査と整理で用いる正規識別子を返す。 */
   public String canonicalId(String id) {
     return jdbc
         .query("SELECT canonical_id FROM paper_aliases WHERE id=?", (r, n) -> r.getString(1), id)
@@ -222,6 +235,7 @@ public class SqlitePaperRepository implements PaperRepository {
         .orElse(id);
   }
 
+  /** 論文の調査と整理で用いる成果物識別子一覧を返す。 */
   public List<String> artifactIds(String id) {
     var ids = new ArrayList<String>();
     ids.add(id);
@@ -231,6 +245,7 @@ public class SqlitePaperRepository implements PaperRepository {
     return List.copyOf(ids);
   }
 
+  /** 対象を特定できるよう、SQLite論文保存と検索の窓口を探す。 */
   public Optional<Paper> find(String id) {
     try {
       return jdbc
@@ -245,6 +260,7 @@ public class SqlitePaperRepository implements PaperRepository {
     }
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public List<Paper> search(String query, int limit) {
     if (limit < 1 || limit > 100)
       throw new PaperException(PaperException.Code.INVALID_QUERY, "件数は1〜100です");
@@ -265,6 +281,7 @@ public class SqlitePaperRepository implements PaperRepository {
     }
   }
 
+  /** 指定された対象を管理から取り除く。 */
   public void remove(String id, PaperOperation op) {
     mutation(
         () -> {
@@ -274,6 +291,7 @@ public class SqlitePaperRepository implements PaperRepository {
         op);
   }
 
+  /** 論文の調査と整理に関する開始保持期限を過ぎた情報の削除を処理する。 */
   public void beginPurge(String id, PaperOperation op) {
     mutation(
         () -> {
@@ -283,6 +301,7 @@ public class SqlitePaperRepository implements PaperRepository {
         op);
   }
 
+  /** 指定された対象を削除する。 */
   public void delete(String id, PaperOperation op) {
     mutation(
         () -> {
@@ -294,6 +313,7 @@ public class SqlitePaperRepository implements PaperRepository {
         op);
   }
 
+  /** 論文の調査と整理に関するmutationを処理する。 */
   private void mutation(Runnable action, PaperOperation op) {
     try {
       tx.executeWithoutResult(
@@ -309,6 +329,7 @@ public class SqlitePaperRepository implements PaperRepository {
     }
   }
 
+  /** 論文の調査と整理で用いる成果物を返す。 */
   public Optional<String> artifact(String id, String kind, String key) {
     return jdbc
         .query(
@@ -322,6 +343,7 @@ public class SqlitePaperRepository implements PaperRepository {
         .findFirst();
   }
 
+  /** 論文の調査と整理で用いるversionsを返す。 */
   public List<Version> versions(String id) {
     return jdbc.query(
         "SELECT id,kind,cache_key,created_at FROM paper_artifacts WHERE paper_id=? ORDER BY rowid"
@@ -330,6 +352,7 @@ public class SqlitePaperRepository implements PaperRepository {
         id);
   }
 
+  /** 後から参照できるよう、成果物を保存する。 */
   public void saveArtifact(String id, String kind, String key, String content, PaperOperation op) {
     tx.executeWithoutResult(
         s -> {

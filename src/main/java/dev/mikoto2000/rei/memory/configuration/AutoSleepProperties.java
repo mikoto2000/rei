@@ -3,6 +3,22 @@ package dev.mikoto2000.rei.memory.configuration;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/**
+ * 長期記憶の準備で受け渡す自動待機設定を表す。
+ *
+ * @param enabled 有効状態
+ * @param minimumIdle 最小操作がない状態
+ * @param minimumTurns 最小やり取り一覧
+ * @param retryInterval 再試行実行間隔
+ * @param cron 定期実行条件
+ * @param zone タイムゾーン
+ * @param onSessionEnd 通知時会話終了
+ * @param onShutdown 通知時終了
+ * @param failureLimit 失敗情報上限
+ * @param maxTimeoutMultiplier 最大タイムアウトMultiplier
+ * @param maxTimeout 最大タイムアウト
+ * @param totalTimeout 合計タイムアウト
+ */
 @ConfigurationProperties("rei.memory.auto-sleep")
 public record AutoSleepProperties(
     boolean enabled,
@@ -17,6 +33,7 @@ public record AutoSleepProperties(
     int maxTimeoutMultiplier,
     Duration maxTimeout,
     Duration totalTimeout) {
+  /** 長期記憶の準備を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public AutoSleepProperties(
       boolean enabled,
       Duration minimumIdle,
@@ -41,6 +58,7 @@ public record AutoSleepProperties(
         Duration.ofMinutes(10));
   }
 
+  /** 長期記憶の準備を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public AutoSleepProperties(
       boolean enabled,
       Duration minimumIdle,
@@ -51,11 +69,13 @@ public record AutoSleepProperties(
     this(enabled, minimumIdle, minimumTurns, retryInterval, cron, zone, false, false);
   }
 
+  /** 長期記憶の準備を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public AutoSleepProperties(
       boolean enabled, Duration minimumIdle, int minimumTurns, Duration retryInterval) {
     this(enabled, minimumIdle, minimumTurns, retryInterval, null, null);
   }
 
+  /** 受け取った情報からAutoSleepPropertiesを作成する。 */
   @org.springframework.boot.context.properties.bind.ConstructorBinding
   public AutoSleepProperties {
     if (failureLimit == 0) failureLimit = 3;

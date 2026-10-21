@@ -12,10 +12,13 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 外部エージェント判断基準の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ExternalAgentPolicyTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 外部エージェントへの委譲で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void parsesOnlySupportedCommand() {
     assertNull(ExternalAgentCommandRequest.parse("/agent codex review").target());
@@ -27,6 +30,7 @@ class ExternalAgentPolicyTest {
       assertThrows(IllegalArgumentException.class, () -> ExternalAgentCommandRequest.parse(text));
   }
 
+  /** 明示的な要求を必要とすることを確認する。 */
   @Test
   void requiresAnExplicitRequestAndRejectsNegationAndMentionOnly() {
     for (String text :
@@ -50,6 +54,7 @@ class ExternalAgentPolicyTest {
         }) assertFalse(ExternalAgentAuthorization.explicitRequest(text), text);
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void canonicalTargetMustRemainInsideProject() throws Exception {
     Path file = Files.writeString(root.resolve("design.md"), "design");
@@ -72,6 +77,7 @@ class ExternalAgentPolicyTest {
     }
   }
 
+  /** 絶対ファイル一覧ディレクトリ一覧を受け付けられることを確認する。 */
   @Test
   void acceptsAbsoluteFilesDirectoriesAndProjectRoot() throws Exception {
     Path directory = Files.createDirectories(root.resolve("docs with spaces"));
@@ -87,6 +93,7 @@ class ExternalAgentPolicyTest {
     }
   }
 
+  /** 既存の絶対対象一覧範囲外プロジェクトを受け付けないことを確認する。 */
   @Test
   void rejectsExistingAbsoluteTargetsOutsideProject() throws Exception {
     Path project = Files.createDirectory(root.resolve("project"));
@@ -99,6 +106,7 @@ class ExternalAgentPolicyTest {
         () -> ExternalAgentRequest.resolveTarget(project, "../project-other"));
   }
 
+  /** 絶対対象終点プロジェクト別名を受け付けられることを確認する。 */
   @Test
   void acceptsAbsoluteTargetThroughProjectAlias() throws Exception {
     Path project = Files.createDirectory(root.resolve("project"));
@@ -110,6 +118,7 @@ class ExternalAgentPolicyTest {
             alias, alias.resolve("design.md").toAbsolutePath().toString()));
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void distinguishesMissingAndInvalidTargets() {
     assertEquals(
@@ -128,6 +137,7 @@ class ExternalAgentPolicyTest {
             .contains("invalid"));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private static Path createSymbolicLink(Path link, Path target) throws java.io.IOException {
     try {
       return Files.createSymbolicLink(link, target);
@@ -138,6 +148,7 @@ class ExternalAgentPolicyTest {
     }
   }
 
+  /** 明示的な日本語レビュー要求一覧を受け付けられることを確認する。 */
   @Test
   void acceptsExplicitJapaneseReviewRequestsWithDifferentParticlesAndWordOrder() {
     for (String text :
@@ -150,6 +161,7 @@ class ExternalAgentPolicyTest {
         }) assertTrue(ExternalAgentAuthorization.explicitRequest(text), text);
   }
 
+  /** 明示的な委譲後続の入力を受け付けられることを確認する。 */
   @Test
   void acceptsExplicitDelegationFollowUpWithoutRepeatingTheWordReview() {
     assertTrue(ExternalAgentAuthorization.explicitRequest("もう一回 Codex に依頼を出して、指摘を修正してください"));

@@ -15,7 +15,9 @@ import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** 音声推定選択可能な設定の結果と状態の契約を検証するテスト。 */
 class VoiceInferenceOptionsTest {
+  /** 音声による対話で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void cpuBudgetAndPaddingAreBounded() {
     assertThat(VoiceInferenceOptions.defaults()).isEqualTo(new VoiceInferenceOptions(4, 1000));
@@ -27,6 +29,7 @@ class VoiceInferenceOptionsTest {
           .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** {@code command} の条件を再現するための補助情報を返す。 */
   CommandLine command(VoiceInputCoordinator voice, VoiceProperties properties) {
     var cli =
         new CommandLine(
@@ -40,6 +43,7 @@ class VoiceInferenceOptionsTest {
     return cli;
   }
 
+  /** 音声による対話で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void inferenceChangesAreOffOnlyAndVadEditsPreserveThem() {
     var voice = mock(VoiceInputCoordinator.class);
@@ -56,6 +60,7 @@ class VoiceInferenceOptionsTest {
     verify(voice, never()).start(any(), any(), any());
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidInferenceCannotPartiallyChangeVadOrConfirmation() {
     var voice = mock(VoiceInputCoordinator.class);
@@ -71,6 +76,7 @@ class VoiceInferenceOptionsTest {
     assertThat(properties.isConfirmation()).isFalse();
   }
 
+  /** 選択中無音について、1500ミリ秒推論一時停止を保持することを確認する。 */
   @Test
   void selectedSilencePreservesA1500msThinkingPauseAndFinalizesOnce() {
     var assembler = new SpeechSegmentAssembler(VoiceSettings.defaults(), Clock.systemUTC());

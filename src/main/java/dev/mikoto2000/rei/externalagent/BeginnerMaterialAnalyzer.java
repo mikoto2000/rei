@@ -22,25 +22,69 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/** Static, bounded evidence extraction. Text is data; nothing in a lesson is executed. */
+/**
+ * 外部エージェントへの委譲に必要な初学者教材分析を扱う。
+ *
+ * <p>Static, bounded evidence extraction. Text is data; nothing in a lesson is executed.
+ */
 public final class BeginnerMaterialAnalyzer {
+  /** 外部エージェントへの委譲における読み取り状態の選択肢。 */
   public enum ReadState {
+    /** 読み取り。 */
     READ,
+    /** 部分的な結果。 */
     PARTIAL,
+    /** 失敗。 */
     FAILED
   }
 
+  /** 外部エージェントへの委譲における参照先状態の選択肢。 */
   public enum ReferenceState {
+    /** 存在する。 */
     PRESENT,
+    /** 未指定。 */
     MISSING,
+    /** 範囲外作業ルート。 */
     OUTSIDE_ROOT,
+    /** 対象外。 */
     EXCLUDED
   }
 
+  /**
+   * 外部エージェントへの委譲で受け渡す根拠を表す。
+   *
+   * @param value 値
+   * @param line 行
+   */
   public record Evidence(String value, int line) {}
 
+  /**
+   * 外部エージェントへの委譲で受け渡すファイル参照先を表す。
+   *
+   * @param value 値
+   * @param line 行
+   * @param state 状態
+   */
   public record FileReference(String value, int line, ReferenceState state) {}
 
+  /**
+   * 外部エージェントへの委譲で受け渡すChapterを表す。
+   *
+   * @param file ファイル
+   * @param state 状態
+   * @param lastLine 直近行
+   * @param explained 説明済みの内容
+   * @param required 必須
+   * @param implicitPrerequisites 暗黙の前提条件
+   * @param goals 目標一覧
+   * @param exercises 演習
+   * @param questions 質問
+   * @param expectedResults 期待する内容結果一覧
+   * @param files ファイル一覧
+   * @param environment 実行環境
+   * @param knowledgeBefore 知識変更前
+   * @param knowledgeAfter 知識変更後
+   */
   public record Chapter(
       String file,
       ReadState state,
@@ -57,13 +101,27 @@ public final class BeginnerMaterialAnalyzer {
       Set<String> knowledgeBefore,
       Set<String> knowledgeAfter) {}
 
+  /**
+   * 外部エージェントへの委譲で受け渡す分析を表す。
+   *
+   * @param chapters 章の構成
+   * @param unreadFiles unreadファイル一覧
+   * @param warnings 注意事項
+   * @param complete 完了
+   */
   public record Analysis(
       List<Chapter> chapters, List<String> unreadFiles, List<String> warnings, boolean complete) {}
 
+  /** 最大ファイル一覧。 */
   private static final int MAX_FILES = 512;
+
+  /** 最大ファイルバイト数。 */
   private static final int MAX_FILE_BYTES = 65536;
+
+  /** 最大合計バイト数。 */
   private static final int MAX_TOTAL_BYTES = 262144;
 
+  /** 外部エージェントへの委譲で用いる分析を返す。 */
   public Analysis analyze(
       Path directory,
       String entry,
@@ -92,6 +150,7 @@ public final class BeginnerMaterialAnalyzer {
             "No supported navigation order; only the entry page is selected. Supply an explicit order for other pages.");
       }
     }
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (order.size() > MAX_FILES) throw new IllegalArgumentException("Too many selected chapters");
     var chapters = new ArrayList<Chapter>();
     var knowledge = new LinkedHashSet<String>(prerequisites);
@@ -161,6 +220,7 @@ public final class BeginnerMaterialAnalyzer {
             && chapters.stream().allMatch(c -> c.state() == ReadState.READ));
   }
 
+  /** 受け取った内容から、後続の処理に必要な情報を取り出す。 */
   private static Chapter extract(
       Path root, Path file, String text, ReadState state, Set<String> before) {
     var groups = new HashMap<String, List<Evidence>>();
@@ -217,10 +277,12 @@ public final class BeginnerMaterialAnalyzer {
         before);
   }
 
+  /** 外部エージェントへの委譲で用いるグループを返す。 */
   private static List<Evidence> group(Map<String, List<Evidence>> groups, String key) {
     return List.copyOf(groups.getOrDefault(key, List.of()));
   }
 
+  /** 外部エージェントへの委譲で用いる分類を返す。 */
   private static String category(String heading) {
     return switch (heading.toLowerCase(Locale.ROOT)) {
       case "concepts", "概念", "用語解説" -> "explained";
@@ -236,6 +298,7 @@ public final class BeginnerMaterialAnalyzer {
     };
   }
 
+  /** 外部エージェントへの委譲で用いる参照先を返す。 */
   private static FileReference reference(Path root, Path parent, Evidence evidence) {
     String name = evidence.value().replace("`", "");
     try {
@@ -252,6 +315,7 @@ public final class BeginnerMaterialAnalyzer {
     }
   }
 
+  /** 指定や設定を照合し、実際に利用する対象を確定する。 */
   private static Path resolve(Path root, Path parent, String name) {
     if (name == null || name.isBlank()) throw new IllegalArgumentException("Chapter path required");
     try {
@@ -267,15 +331,18 @@ public final class BeginnerMaterialAnalyzer {
     }
   }
 
+  /** 外部エージェントへの委譲において、Markdownに該当するか判定する。 */
   private static boolean markdown(Path file) {
     String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
     return name.endsWith(".md") || name.endsWith(".mdx");
   }
 
+  /** 外部エージェントへの委譲で用いる相対を返す。 */
   private static String relative(Path root, Path file) {
     return root.relativize(file).toString().replace('\\', '/');
   }
 
+  /** 外部エージェントへの委譲で用いるenumerateを返す。 */
   private static List<Path> enumerate(Path root, List<String> warnings) throws IOException {
     var pages = new ArrayList<Path>();
     int[] visited = {0};
@@ -284,6 +351,7 @@ public final class BeginnerMaterialAnalyzer {
         EnumSet.noneOf(FileVisitOption.class),
         16,
         new SimpleFileVisitor<>() {
+          /** 外部エージェントへの委譲で用いるpre対象の確認ディレクトリを返す。 */
           @Override
           public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attributes)
               throws IOException {
@@ -297,6 +365,7 @@ public final class BeginnerMaterialAnalyzer {
                 : FileVisitResult.CONTINUE;
           }
 
+          /** 外部エージェントへの委譲で用いる対象の確認ファイルを返す。 */
           @Override
           public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) {
             dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);
@@ -312,6 +381,7 @@ public final class BeginnerMaterialAnalyzer {
             return FileVisitResult.CONTINUE;
           }
 
+          /** 外部エージェントへの委譲で用いる対象の確認ファイル失敗を返す。 */
           @Override
           public FileVisitResult visitFileFailed(Path file, IOException error) {
             warnings.add("Inventory entry unavailable: " + relative(root, file));
@@ -322,6 +392,7 @@ public final class BeginnerMaterialAnalyzer {
     return List.copyOf(pages);
   }
 
+  /** 外部エージェントへの委譲に関するnavigationを処理する。 */
   private static void navigation(
       Path root, Path directory, Set<Path> order, List<String> warnings, int[] count) {
     dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);

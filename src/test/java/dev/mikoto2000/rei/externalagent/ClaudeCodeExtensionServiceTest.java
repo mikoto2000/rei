@@ -20,13 +20,24 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Claudeコード拡張子サービスの結果と状態の契約を検証するテスト。 */
 class ClaudeCodeExtensionServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う履歴。 */
   ExternalReviewRepository history;
+
+  /** 検証に使う取得元。 */
   org.springframework.jdbc.datasource.DriverManagerDataSource source;
+
+  /** 検証に使うOSの機能識別子。 */
   String nativeId = UUID.randomUUID().toString();
+
+  /** 検証に使う所属プロジェクトの識別子。 */
   String projectId = UUID.randomUUID().toString();
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     Files.writeString(root.resolve("A.txt"), "before\n");
@@ -36,6 +47,7 @@ class ClaudeCodeExtensionServiceTest {
     history = new ExternalReviewRepository(source, Clock.systemUTC());
   }
 
+  /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
   RunExecutionContext run(String id, String input) {
     var run =
         new RunExecutionContext(
@@ -45,6 +57,7 @@ class ClaudeCodeExtensionServiceTest {
     return run;
   }
 
+  /** {@code parent} の条件を再現するため、検証用の操作や状態を扱う。 */
   void parent() {
     var owner = new AgentRunContext("initial", "session", root, projectId);
     history.start(owner, "parent", root, "A.txt", null, "claude");
@@ -63,6 +76,7 @@ class ClaudeCodeExtensionServiceTest {
             nativeId));
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   ExternalAgentDelegationService service(ExternalAgentExecutor executor) {
     var service =
         new ExternalAgentDelegationService(
@@ -75,22 +89,26 @@ class ClaudeCodeExtensionServiceTest {
     return service;
   }
 
+  /** 継続入力について、提供元を維持することを確認する。 */
   @Test
   void continuationKeepsProviderAndConsumesItsParentEvenAfterFailure() {
     parent();
     var calls = new AtomicInteger();
     var executor =
         new ExternalAgentExecutor() {
+          /** 検証用に、外部エージェントへの委譲において、継続入力への対応可否を返す。 */
           public boolean supportsContinuation(ExternalAgentRequest.Agent agent) {
             return agent == ExternalAgentRequest.Agent.CLAUDE;
           }
 
+          /** 検証用に、要求された処理を実行する。 */
           public ExternalAgentResult execute(
               ExternalAgentRequest r, java.util.function.BooleanSupplier c) {
             fail("Budget required");
             return null;
           }
 
+          /** 検証用に、要求された処理を実行する。 */
           public ExternalAgentResult execute(
               ExternalAgentRequest r,
               java.util.function.BooleanSupplier c,
@@ -135,17 +153,20 @@ class ClaudeCodeExtensionServiceTest {
     }
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void fixProposalSavesAChangeSetWithoutApplyingAndDoesNotAuthorizeCodex() {
     parent();
     var calls = new AtomicInteger();
     var executor =
         new ExternalAgentExecutor() {
+          /** 検証用に、要求された処理を実行する。 */
           public ExternalAgentResult execute(
               ExternalAgentRequest r, java.util.function.BooleanSupplier c) {
             throw new AssertionError();
           }
 
+          /** 検証用に、要求された処理を実行する。 */
           public ExternalAgentResult execute(
               ExternalAgentRequest r,
               java.util.function.BooleanSupplier c,
@@ -189,16 +210,19 @@ class ClaudeCodeExtensionServiceTest {
     }
   }
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void parallelClaudeUsesTheCommonBoundedBatchAndOneParentDelegation() {
     var calls = new AtomicInteger();
     var executor =
         new ExternalAgentExecutor() {
+          /** 検証用に、要求された処理を実行する。 */
           public ExternalAgentResult execute(
               ExternalAgentRequest r, java.util.function.BooleanSupplier c) {
             throw new AssertionError();
           }
 
+          /** 検証用に、要求された処理を実行する。 */
           public ExternalAgentResult execute(
               ExternalAgentRequest r,
               java.util.function.BooleanSupplier c,

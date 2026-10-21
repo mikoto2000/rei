@@ -5,25 +5,36 @@ import picocli.CommandLine.Command;
 import picocli.CommandLine.Spec;
 import picocli.CommandLine.Unmatched;
 
+/** Passive環境診断、または明示したActive診断を行うための利用者コマンド。 */
 @Component
 @Command(
     name = "doctor",
     description = "Passive環境診断、または明示したActive診断",
     mixinStandardHelpOptions = true)
 public class DoctorCommand implements java.util.concurrent.Callable<Integer> {
+  /** 環境診断。 */
   private final DoctorService doctor;
+
+  /** 会話一覧。 */
   private final dev.mikoto2000.rei.application.session.ShellConversationService conversations;
+
+  /** 引数。 */
   @Unmatched String[] arguments;
+
+  /** 仕様。 */
   @Spec picocli.CommandLine.Model.CommandSpec spec;
 
+  /** 実行環境の診断を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public DoctorCommand() {
     this(null, null);
   }
 
+  /** 実行環境の診断を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public DoctorCommand(DoctorService doctor) {
     this(doctor, null);
   }
 
+  /** 指定された値や利用先を使って、DoctorCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public DoctorCommand(
       DoctorService doctor,
@@ -32,6 +43,7 @@ public class DoctorCommand implements java.util.concurrent.Callable<Integer> {
     this.conversations = conversations;
   }
 
+  /** Passive環境診断、または明示したActive診断を行う。 */
   public Integer call() {
     String operation = "引数の検証";
     try {

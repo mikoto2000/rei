@@ -26,8 +26,10 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.VectorStore;
 
+/** 日次案内サービスの結果と状態の契約を検証するテスト。 */
 class BriefingServiceTest {
 
+  /** 404を返すことを確認する。 */
   @Test
   void briefingForContinuesWhenEmbeddingEndpointReturns404() throws Exception {
     GoogleCalendarService calendarService = org.mockito.Mockito.mock(GoogleCalendarService.class);
@@ -78,6 +80,7 @@ class BriefingServiceTest {
     assertEquals(List.of(), context.getValue().relatedDocuments());
   }
 
+  /** 日次情報の案内で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void briefingForAggregatesEventsTasksAndDocuments() throws Exception {
     GoogleCalendarService calendarService = org.mockito.Mockito.mock(GoogleCalendarService.class);
@@ -189,6 +192,7 @@ class BriefingServiceTest {
     assertEquals(List.of(overdueTask), contextCaptor.getValue().overdueTasks());
   }
 
+  /** 日次案内対象について、代替手段を利用することを確認する。 */
   @Test
   void briefingForUsesFallbackWhenNoEventsAndNoTasks() throws Exception {
     GoogleCalendarService calendarService = org.mockito.Mockito.mock(GoogleCalendarService.class);

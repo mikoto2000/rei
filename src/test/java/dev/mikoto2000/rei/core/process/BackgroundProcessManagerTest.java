@@ -20,18 +20,23 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** バックグラウンドプロセス管理の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("e2e")
 class BackgroundProcessManagerTest {
+  /** 検証に使う管理。 */
   private final BackgroundProcessManager manager =
       new BackgroundProcessManager(new SystemShellService());
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void tearDown() {
     manager.shutdown();
   }
 
+  /** 外部プロセスの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void spawnReturnsImmediatelyAndCapturesOutput() throws Exception {
     long started = System.nanoTime();
@@ -49,6 +54,7 @@ class BackgroundProcessManagerTest {
     assertTrue(actual.stderr().contains("err-ready"));
   }
 
+  /** 状態について、終了済みプロセスを伝えることを確認する。 */
   @Test
   void statusReportsExitedProcessAndExitCode() throws Exception {
     BackgroundProcessSnapshot spawned = manager.spawnCommandLine(javaCommand("exit", "7"), tempDir);
@@ -61,6 +67,7 @@ class BackgroundProcessManagerTest {
     assertTrue(actual.stderr().contains("fixture stderr"));
   }
 
+  /** 外部プロセスの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void killTerminatesManagedProcessOnly() throws Exception {
     BackgroundProcessSnapshot spawned = manager.spawnCommandLine(javaCommand("run"), tempDir);
@@ -75,6 +82,7 @@ class BackgroundProcessManagerTest {
     assertTrue(killed.message().contains("killed"));
   }
 
+  /** 強制終了について、なし見つかったを返すことを確認する。 */
   @Test
   void killReturnsNotFoundForUnknownProcess() {
     BackgroundProcessSnapshot actual = manager.kill("proc-missing");
@@ -83,6 +91,7 @@ class BackgroundProcessManagerTest {
     assertEquals(false, actual.found());
   }
 
+  /** 外部プロセスの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void managesMultipleProcessesIndependently() throws Exception {
     BackgroundProcessSnapshot first = manager.spawnCommandLine(javaCommand("run"), tempDir);
@@ -99,6 +108,7 @@ class BackgroundProcessManagerTest {
     assertEquals(BackgroundProcessStatus.RUNNING, stillRunning.status());
   }
 
+  /** 外部プロセスの管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void elapsedSecondsUsesMonotonicClockInsteadOfWallClock() throws Exception {
     ManualMonotonicTimeSource monotonic = new ManualMonotonicTimeSource(1_000_000_000L);
@@ -121,6 +131,7 @@ class BackgroundProcessManagerTest {
     }
   }
 
+  /** 外部プロセスの管理で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void timeoutBoundaryAlwaysLeavesEitherCompletedOutputOrValidManagedId() throws Exception {
     BackgroundProcessSnapshot spawned = manager.spawnCommandLine(javaCommand("exit", "0"), tempDir);
@@ -134,6 +145,7 @@ class BackgroundProcessManagerTest {
     assertTrue(manager.status(spawned.processId(), 100).found());
   }
 
+  /** 外部プロセスの管理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void processLifecyclePublishesEvents() throws Exception {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
@@ -165,11 +177,13 @@ class BackgroundProcessManagerTest {
     }
   }
 
+  /** 検証用に、必要な状態が整ってから先へ進むため、標準出力を待つ。 */
   private BackgroundProcessSnapshot awaitStdout(String processId, String expectedLine)
       throws Exception {
     return awaitStdout(processId, expectedLine, manager);
   }
 
+  /** 検証用に、必要な状態が整ってから先へ進むため、標準出力を待つ。 */
   private BackgroundProcessSnapshot awaitStdout(
       String processId, String expectedLine, BackgroundProcessManager manager) throws Exception {
     long deadline = System.currentTimeMillis() + 5000;
@@ -184,11 +198,13 @@ class BackgroundProcessManagerTest {
     return snapshot;
   }
 
+  /** 検証用に、必要な状態が整ってから先へ進むため、状態を待つ。 */
   private BackgroundProcessSnapshot awaitStatus(
       String processId, BackgroundProcessStatus expectedStatus) throws Exception {
     return awaitStatus(processId, expectedStatus, manager);
   }
 
+  /** 検証用に、必要な状態が整ってから先へ進むため、状態を待つ。 */
   private BackgroundProcessSnapshot awaitStatus(
       String processId, BackgroundProcessStatus expectedStatus, BackgroundProcessManager manager)
       throws Exception {
@@ -204,15 +220,18 @@ class BackgroundProcessManagerTest {
     return snapshot;
   }
 
+  /** {@code javaCommand} の条件を再現するための補助情報を返す。 */
   private List<String> javaCommand(String... args) {
     return dev.mikoto2000.rei.testsupport.JavaFixtureCommand.command(
         tempDir, LongRunningProcessFixture.class, args);
   }
 
+  /** 検証用に、外部プロセスの管理において、判定期間かどうかを判定する。 */
   private boolean isWindows() {
     return System.getProperty("os.name").toLowerCase().contains("win");
   }
 
+  /** 自分が所有する対象観測内容について、別のプロジェクト会話を受け付けないことを確認する。 */
   @Test
   void ownedObservationRejectsAnotherProjectSessionOrRoot() throws Exception {
     BackgroundProcessSnapshot spawned;

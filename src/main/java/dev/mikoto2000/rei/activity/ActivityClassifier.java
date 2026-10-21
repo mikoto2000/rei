@@ -9,11 +9,16 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * Foreground rules decide confidence. Visible windows and historical repetition cannot inflate it.
+ * 作業状況の情報を分類する。
+ *
+ * <p>Foreground rules decide confidence. Visible windows and historical repetition cannot inflate
+ * it.
  */
 public final class ActivityClassifier {
+  /** 規則一覧。 */
   private final WindowActivityRules rules = new WindowActivityRules();
 
+  /** 得られた情報を分類し、後続の判断で扱い分けられるようにする。 */
   public ActivityClassification classify(ActivityEvidence evidence) {
     var foreground = evidence.foreground();
     var match = rules.classify(foreground, "foreground");
@@ -114,6 +119,7 @@ public final class ActivityClassifier {
             new ActivityClassification.Secondary(
                 candidate.activity(), candidate.fields().secondary()));
     }
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (candidates.size() > 1) {
       sources.add("VISIBLE_WINDOWS");
       weights.put("VISIBLE_WINDOWS", .8);

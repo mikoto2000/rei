@@ -16,10 +16,24 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
+/** 作業状況観測内容文脈をWeb APIの操作として受け付ける。 */
 @RestController
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class ActivityObservationContextController {
+  /**
+   * Web APIによる操作で受け渡すレポートを表す。
+   *
+   * @param schemaVersion データ形式形式のバージョン
+   * @param scope 対象範囲
+   * @param projectId 所属プロジェクトの識別子
+   * @param date 日付
+   * @param zone タイムゾーン
+   * @param partial 部分的な結果
+   * @param missingContextRecords 未指定文脈記録一覧
+   * @param linkedObservations linked観測内容一覧
+   * @param report レポート
+   */
   public record Report(
       int schemaVersion,
       String scope,
@@ -31,15 +45,20 @@ public class ActivityObservationContextController {
       int linkedObservations,
       String report) {}
 
+  /** プロジェクト一覧。 */
   private final ProjectRegistry projects;
+
+  /** サービス一覧。 */
   private final ObjectProvider<ActivityWorkContextService> services;
 
+  /** 指定された値や利用先を使って、ActivityObservationContextControllerを初期化する。 */
   public ActivityObservationContextController(
       ProjectRegistry projects, ObjectProvider<ActivityWorkContextService> services) {
     this.projects = projects;
     this.services = services;
   }
 
+  /** Web APIによる操作で用いるレポートを返す。 */
   @GetMapping("/api/v1/projects/{projectId}/activity/observation-context")
   public Report report(
       @PathVariable String projectId, @RequestParam(defaultValue = "today") String date) {
@@ -52,6 +71,7 @@ public class ActivityObservationContextController {
       String report =
           dev.mikoto2000.rei.event.CredentialRedactor.redact(
               service.formatObservationBounded(links.links()));
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (report.length() > 32768) throw new ActivityQueryLimitException();
       return new Report(
           1,

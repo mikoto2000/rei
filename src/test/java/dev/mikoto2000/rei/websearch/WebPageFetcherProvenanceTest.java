@@ -12,7 +12,9 @@ import dev.mikoto2000.rei.urlfetch.UrlContentFetchService;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** Webページ情報の取得元情報の来歴の結果と状態の契約を検証するテスト。 */
 class WebPageFetcherProvenanceTest {
+  /** 両方調査パス一覧について、HTTP通信時刻一覧を保持することを確認する。 */
   @Test
   void bothResearchPathsRetainHttpTimesAndExcerptPositions() throws Exception {
     var transport = mock(UrlContentFetchService.class);
@@ -54,6 +56,7 @@ class WebPageFetcherProvenanceTest {
     }
   }
 
+  /** 転送回数について、要求されたを保持することを確認する。 */
   @Test
   void redirectsRetainRequestedAndActualCitationUrls() throws Exception {
     var transport = mock(UrlContentFetchService.class);

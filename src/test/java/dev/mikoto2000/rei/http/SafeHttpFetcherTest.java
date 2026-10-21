@@ -32,7 +32,9 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+/** 安全性HTTP通信情報の取得元の結果と状態の契約を検証するテスト。 */
 class SafeHttpFetcherTest {
+  /** 外部情報の取得で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void aggregateBudgetIncludesMultipleActualResponsesAndCompressedExpansion() throws Exception {
     var bytes = new ByteArrayOutputStream();
@@ -62,6 +64,7 @@ class SafeHttpFetcherTest {
     assertEquals(4096, budget.decodedBytes());
   }
 
+  /** 外部情報の取得の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void aggregateWireLimitCancelsAnActualStreamingConnection() throws Exception {
     var disconnected = new CountDownLatch(1);
@@ -96,6 +99,7 @@ class SafeHttpFetcherTest {
     assertTrue(budget.wireBytes() <= 1000);
   }
 
+  /** 外部情報の取得で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void repeatedCacheControlDoesNotLoseAnEarlierNoStoreDirective() {
     server.createContext(
@@ -112,6 +116,7 @@ class SafeHttpFetcherTest {
     assertTrue(control.contains("max-age=60"));
   }
 
+  /** 外部情報の取得で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void crossOriginRedirectKeepsRefreshDirectiveButDoesNotForwardValidators() {
     URI initial = URI.create("https://first.example/page"),
@@ -119,6 +124,7 @@ class SafeHttpFetcherTest {
     var forwarded = new java.util.concurrent.atomic.AtomicReference<Map<String, String>>();
     var fetcher =
         new SafeHttpFetcher() {
+          /** {@code exchange} の条件を再現するための補助情報を返す。 */
           @Override
           public Response exchange(
               URI uri,
@@ -162,6 +168,7 @@ class SafeHttpFetcherTest {
                 HttpFetchObserver.NONE));
   }
 
+  /** 外部情報の取得で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void actualPeerMustBeBothApprovedAndAllowed() throws Exception {
     var policy = HttpFetchPolicy.html(Duration.ofSeconds(1));
@@ -188,10 +195,16 @@ class SafeHttpFetcherTest {
                 policy));
   }
 
+  /** 検証に使うサーバー。 */
   HttpServer server;
+
+  /** 検証に使う実行先。 */
   ExecutorService executor;
+
+  /** 検証に使う起点。 */
   URI origin;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void start() throws Exception {
     server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
@@ -201,12 +214,14 @@ class SafeHttpFetcherTest {
     origin = URI.create("http://127.0.0.1:" + server.getAddress().getPort());
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void stop() {
     server.stop(0);
     executor.shutdownNow();
   }
 
+  /** 検証で使用する判断基準を、指定された条件に合わせて用意する。 */
   HttpFetchPolicy policy(int wire, int decoded, int redirects, long total, long read) {
     return new HttpFetchPolicy(
         wire,
@@ -220,6 +235,7 @@ class SafeHttpFetcherTest {
         false);
   }
 
+  /** 検証用に、指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   SafeHttpFetcher.Response get(String path, HttpFetchPolicy policy) {
     return new SafeHttpFetcher()
         .fetch(
@@ -230,6 +246,7 @@ class SafeHttpFetcherTest {
             HttpFetchObserver.NONE);
   }
 
+  /** 外部情報の取得で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void chunkedBodyHasNoContentLengthAndStillHonorsWireLimit() {
     server.createContext(
@@ -247,6 +264,7 @@ class SafeHttpFetcherTest {
             .code());
   }
 
+  /** 外部情報の取得で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void compressedWireAndExpandedBodyHaveSeparateLimits() throws Exception {
     var bytes = new ByteArrayOutputStream();
@@ -269,6 +287,7 @@ class SafeHttpFetcherTest {
             .code());
   }
 
+  /** 外部情報の取得で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void redirectsShareDeadlineAndCannotLeaveConfiguredOrigin() {
     server.createContext(
@@ -303,6 +322,7 @@ class SafeHttpFetcherTest {
                             policy(128, 128, 2, 2000, 1000),
                             FetchOperation.active(),
                             new HttpFetchObserver() {
+                              /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
                               public void request(boolean redirect) {
                                 requests.incrementAndGet();
                               }
@@ -311,6 +331,7 @@ class SafeHttpFetcherTest {
     assertEquals(3, requests.get());
   }
 
+  /** タイムアウトを読み取ることを確認する。 */
   @Test
   void slowResponseHasReadTimeoutAndWholeOperationTimeout() {
     server.createContext(
@@ -335,11 +356,13 @@ class SafeHttpFetcherTest {
             .code());
   }
 
+  /** 外部情報の取得の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationIsCheckedBeforeRequestAndPublicPageCannotUseTestOrigin() {
     var requests = new AtomicInteger();
     var observer =
         new HttpFetchObserver() {
+          /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
           public void request(boolean redirect) {
             requests.incrementAndGet();
           }
@@ -372,6 +395,7 @@ class SafeHttpFetcherTest {
     assertEquals(0, requests.get());
   }
 
+  /** 外部情報の取得の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellingInFlightClosesTheConnection() throws Exception {
     var started = new CountDownLatch(1);
@@ -420,6 +444,7 @@ class SafeHttpFetcherTest {
     }
   }
 
+  /** 外部情報の取得で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void conflictingContentLengthAndChunkedHeadersAreRejected() throws Exception {
     try (var socket = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"));
@@ -474,6 +499,7 @@ class SafeHttpFetcherTest {
     }
   }
 
+  /** 外部情報の取得で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void oversizedDeclaredLengthIsRejectedWithoutWaitingForTheDeclaredBody() {
     server.createContext(

@@ -36,20 +36,25 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
+/** チャット実行停滞の結果と状態の契約を検証するテスト。 */
 class ChatExecutionStagnationTest {
+  /** 会話の実行の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationAtOutputLimitDoesNotStartPlanner() {
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           @Override
           public ToolCallingChatOptions getOptions() {
             return ToolCallingChatOptions.builder().build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             var options = (org.springframework.ai.model.tool.ToolCallingChatOptions) p.getOptions();
             ((dev.mikoto2000.rei.core.stagnation.RunExecutionContext)
@@ -80,24 +85,29 @@ class ChatExecutionStagnationTest {
             Optional.empty(),
             Optional.of(planner));
     assertThat(service.execute("work").status()).isEqualTo(ChatExecutionResult.Status.CANCELLED);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(planner);
   }
 
+  /** 会話の実行で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
   void recoveredOutputLimitIsNotReportedAsTerminalFailure(boolean callBudgetEnabled) {
     AtomicInteger calls = new AtomicInteger();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           @Override
           public ToolCallingChatOptions getOptions() {
             return ToolCallingChatOptions.builder().build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             int n = calls.incrementAndGet();
             AssistantMessage output =
@@ -126,6 +136,7 @@ class ChatExecutionStagnationTest {
         };
     ToolCallback read =
         new ToolCallback() {
+          /** 検証用に、会話の実行で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("readFile")
@@ -134,6 +145,7 @@ class ChatExecutionStagnationTest {
                 .build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             return "new information";
           }
@@ -169,6 +181,7 @@ class ChatExecutionStagnationTest {
     assertThat(result.success()).isTrue();
     assertThat(result.text()).endsWith("done");
     assertThat(calls.get()).isEqualTo(3);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(planner);
     assertThat(events).noneMatch(e -> e.type() == AgentEventType.AGENT_RUN_FAILED);
     var completed =
@@ -179,21 +192,25 @@ class ChatExecutionStagnationTest {
     assertThat(((AgentRunCompletedPayload) completed.payload()).completionTokens()).isEqualTo(6L);
   }
 
+  /** 会話の実行で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {true, false})
   void actualChatClientStopsAndPublishesTypedFailureAndResetsNextRun(boolean callBudgetEnabled) {
     AtomicInteger calls = new AtomicInteger();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           @Override
           public ToolCallingChatOptions getOptions() {
             return ToolCallingChatOptions.builder().build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             int n = calls.incrementAndGet();
             if (n > 35) return Flux.error(new IllegalStateException("loop guard"));
@@ -212,6 +229,7 @@ class ChatExecutionStagnationTest {
         };
     ToolCallback read =
         new ToolCallback() {
+          /** 検証用に、会話の実行で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("readFile")
@@ -220,6 +238,7 @@ class ChatExecutionStagnationTest {
                 .build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             return "unchanged";
           }

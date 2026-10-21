@@ -31,8 +31,10 @@ import org.springframework.ai.vectorstore.filter.FilterExpressionBuilder;
 import org.sqlite.SQLiteDataSource;
 import tools.jackson.databind.json.JsonMapper;
 
+/** SQLiteベクトル保存先の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SqliteVectorStoreTest {
+  /** 報告された内容費用を維持することを確認する。 */
   @Test
   void embeddingBudgetOvershootRollsBackWholeChunkBatchButKeepsReportedCost() {
     var provider = org.mockito.Mockito.mock(EmbeddingModel.class);
@@ -72,8 +74,10 @@ class SqliteVectorStoreTest {
         .call(org.mockito.ArgumentMatchers.any(EmbeddingRequest.class));
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 追加検索およびについて、保存済み文書を削除することを確認する。 */
   @Test
   void addSearchAndDeleteDocuments() {
     SqliteVectorStore store = newStore(tempDir.resolve("vector.db"));
@@ -121,6 +125,7 @@ class SqliteVectorStoreTest {
     assertTrue(remaining.isEmpty());
   }
 
+  /** 関連文書の検索で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void similaritySearchHonorsTopKAndThreshold() {
     SqliteVectorStore store = newStore(tempDir.resolve("vector.db"));
@@ -171,6 +176,7 @@ class SqliteVectorStoreTest {
     assertEquals("doc-1#0", topOne.getFirst().getId());
   }
 
+  /** 関連文書の検索で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void similaritySearchAppliesSourceFilterBeforeTopK() {
     SqliteVectorStore store = newStore(tempDir.resolve("vector.db"));
@@ -216,6 +222,7 @@ class SqliteVectorStoreTest {
     assertEquals("/tmp/source-a.md", results.getFirst().getMetadata().get("source"));
   }
 
+  /** 関連文書の検索で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void replaceBySourceRollsBackWhenInsertFails() {
     Path dbPath = tempDir.resolve("vector.db");
@@ -271,6 +278,7 @@ class SqliteVectorStoreTest {
     assertEquals(1, goodStore.list().size());
   }
 
+  /** 関連文書の検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void deleteByDocIdCascadesToChunks() {
     Path dbPath = tempDir.resolve("vector.db");
@@ -308,12 +316,14 @@ class SqliteVectorStoreTest {
     assertTrue(store.list().isEmpty());
   }
 
+  /** 削除別取得元について、ゼロを返すことを確認する。 */
   @Test
   void deleteBySourceReturnsZeroWhenSourceDoesNotExist() {
     SqliteVectorStore store = newStore(tempDir.resolve("vector.db"));
     assertEquals(0, store.deleteBySource("/tmp/missing.md"));
   }
 
+  /** 追加について、保存済み文書を受け付けないことを確認する。 */
   @Test
   void addRejectsDocumentsWithoutDocId() {
     SqliteVectorStore store = newStore(tempDir.resolve("vector.db"));
@@ -338,6 +348,7 @@ class SqliteVectorStoreTest {
     assertTrue(error.getMessage().contains("docId"));
   }
 
+  /** 関連文書の検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void constructorReportsCorruptedDatabaseClearly() {
     IllegalStateException error =
@@ -352,13 +363,16 @@ class SqliteVectorStoreTest {
     assertTrue(error.getMessage().contains("SQLite ファイルが破損"));
   }
 
+  /** 関連文書の検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void addReportsLockedDatabaseClearly() {
     DataSource delegate = newVecDataSource(tempDir.resolve("locked.db"));
     DataSource lockedDataSource =
         new DataSource() {
+          /** 検証に使う呼び出し回数。 */
           private int calls;
 
+          /** 検証用に、関連文書の検索で参照する接続を返す。 */
           @Override
           public Connection getConnection() throws SQLException {
             calls++;
@@ -368,41 +382,49 @@ class SqliteVectorStoreTest {
             throw new SQLException("database is locked");
           }
 
+          /** 検証用に、関連文書の検索で参照する接続を返す。 */
           @Override
           public Connection getConnection(String username, String password) throws SQLException {
             return getConnection();
           }
 
+          /** {@code unwrap} の条件を再現するための補助情報を返す。 */
           @Override
           public <T> T unwrap(Class<T> iface) throws SQLException {
             return delegate.unwrap(iface);
           }
 
+          /** 検証用に、関連文書の検索において、Wrapper対象かどうかを判定する。 */
           @Override
           public boolean isWrapperFor(Class<?> iface) throws SQLException {
             return delegate.isWrapperFor(iface);
           }
 
+          /** 検証用に、関連文書の検索で参照するログ書き込み先を返す。 */
           @Override
           public java.io.PrintWriter getLogWriter() throws SQLException {
             return delegate.getLogWriter();
           }
 
+          /** 検証用に、関連文書の検索で使用するログ書き込み先を設定する。 */
           @Override
           public void setLogWriter(java.io.PrintWriter out) throws SQLException {
             delegate.setLogWriter(out);
           }
 
+          /** 検証用に、関連文書の検索で使用するログインタイムアウトを設定する。 */
           @Override
           public void setLoginTimeout(int seconds) throws SQLException {
             delegate.setLoginTimeout(seconds);
           }
 
+          /** 検証用に、関連文書の検索で参照するログインタイムアウトを返す。 */
           @Override
           public int getLoginTimeout() throws SQLException {
             return delegate.getLoginTimeout();
           }
 
+          /** 検証用に、関連文書の検索で参照する親ログの出力先を返す。 */
           @Override
           public java.util.logging.Logger getParentLogger()
               throws java.sql.SQLFeatureNotSupportedException {
@@ -434,6 +456,7 @@ class SqliteVectorStoreTest {
     assertTrue(error.getMessage().contains("SQLite がロック"));
   }
 
+  /** 類似度検索について、埋め込み表現次元数不一致を受け付けないことを確認する。 */
   @Test
   void similaritySearchRejectsEmbeddingDimensionMismatch() {
     Path dbPath = tempDir.resolve("vector.db");
@@ -471,6 +494,7 @@ class SqliteVectorStoreTest {
     assertTrue(error.getMessage().contains("embedding 次元"));
   }
 
+  /** 関連文書の検索で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void similaritySearchPrefiltersDocumentsByLexicalMatches() {
     SqliteVectorStore store =
@@ -525,6 +549,7 @@ class SqliteVectorStoreTest {
     assertEquals(List.of("doc-1#0", "doc-2#0"), results.stream().map(Document::getId).toList());
   }
 
+  /** 関連文書の検索で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void similaritySearchMixesLexicalScoreIntoRanking() {
     SqliteVectorStore store =
@@ -568,6 +593,7 @@ class SqliteVectorStoreTest {
     assertTrue(results.getFirst().getScore() > results.get(1).getScore());
   }
 
+  /** SQLiteベクトル動作モード追加検索およびについて、保存済み文書を削除することを確認する。 */
   @Test
   void sqliteVecModeAddSearchAndDeleteDocuments() {
     SqliteVectorStore store = newStore(tempDir.resolve("vec.db"));
@@ -614,6 +640,7 @@ class SqliteVectorStoreTest {
     assertTrue(remaining.isEmpty());
   }
 
+  /** 関連文書の検索で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void sqliteVecModeAppliesSourceFilterBeforeRanking() {
     SqliteVectorStore store = newStore(tempDir.resolve("vec.db"));
@@ -658,6 +685,7 @@ class SqliteVectorStoreTest {
     assertEquals("doc-1#0", results.getFirst().getId());
   }
 
+  /** 関連文書の検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void constructorDropsLegacyDocumentsTable() throws Exception {
     Path dbPath = tempDir.resolve("legacy.db");
@@ -689,11 +717,13 @@ class SqliteVectorStoreTest {
     }
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private SqliteVectorStore newStore(Path dbPath) {
     return new SqliteVectorStore(
         newVecDataSource(dbPath), new FakeEmbeddingModel(), new JsonMapper());
   }
 
+  /** 関連文書の検索で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void bm25RanksFrequencyAndLengthAndFiltersBeforeTopK() {
     var store =
@@ -730,6 +760,7 @@ class SqliteVectorStoreTest {
             .isEmpty());
   }
 
+  /** 置換取り消しを維持することを確認する。 */
   @Test
   void bm25BackfillsRestartsAndKeepsReplacementRollbackAndDeletesConsistent() {
     Path path = tempDir.resolve("bm25-restart.db");
@@ -773,6 +804,7 @@ class SqliteVectorStoreTest {
         restarted.bm25Search(SearchRequest.builder().query("spring").build()).getFirst().getId());
   }
 
+  /** {@code chunk} の条件を再現するための補助情報を返す。 */
   private Document chunk(String id, String text, String source) {
     return new Document(
         id,
@@ -781,6 +813,7 @@ class SqliteVectorStoreTest {
             "docId", id, "source", source, "chunkIndex", 0, "ingestedAt", "2026-10-06T00:00:00Z"));
   }
 
+  /** 関連文書の検索の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void bm25TreatsOperatorsAsTextAndRejectsUnsupportedFiltersLimitsAndCancellation() {
     var model = org.mockito.Mockito.spy(new ConstantEmbeddingModel());
@@ -833,10 +866,12 @@ class SqliteVectorStoreTest {
                 .bm25Search(SearchRequest.builder().query("spring").build()));
   }
 
+  /** 関連文書の検索で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void independentRetrievalRecoversLexicalMatchOutsideDenseNearestNeighbors() {
     var model =
         new FakeEmbeddingModel() {
+          /** {@code embedText} の条件を再現するための補助情報を返す。 */
           @Override
           protected float[] embedText(String text) {
             return text.equals("needle is here")
@@ -896,6 +931,7 @@ class SqliteVectorStoreTest {
         List.of("lexical"), store.lexicalSearch(filtered).stream().map(Document::getId).toList());
   }
 
+  /** 語句による候補一覧について、なし検索条件埋め込み表現を必要とすることを確認する。 */
   @Test
   void lexicalCandidatesRequireNoQueryEmbeddingAndRetainSourceBoundary() {
     var model = org.mockito.Mockito.spy(new FakeEmbeddingModel());
@@ -948,6 +984,7 @@ class SqliteVectorStoreTest {
             .getId());
   }
 
+  /** 関連文書の検索で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void adjacentLexicalEvidenceCannotCrossSourceEvenWhenDocIdWasReused() {
     var store =
@@ -991,12 +1028,14 @@ class SqliteVectorStoreTest {
     assertTrue(store.lexicalSearch(request).isEmpty());
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private SQLiteDataSource newDataSource(Path dbPath) {
     SQLiteDataSource dataSource = new SQLiteDataSource();
     dataSource.setUrl("jdbc:sqlite:" + dbPath);
     return dataSource;
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private DataSource newVecDataSource(Path dbPath) {
     SQLiteDataSource delegate = newDataSource(dbPath);
     delegate.setLoadExtension(true);
@@ -1010,10 +1049,12 @@ class SqliteVectorStoreTest {
     return new SqliteVecDataSource(delegate, loader);
   }
 
+  /** {@code vecExtensionPath} の条件を再現するための補助情報を返す。 */
   private Path vecExtensionPath() {
     return dev.mikoto2000.rei.testsupport.SqliteVecTestExtension.resolve();
   }
 
+  /** {@code countChunks} の条件を再現するための補助情報を返す。 */
   private int countChunks(Path dbPath, String docId) {
     try (Connection connection = newVecDataSource(dbPath).getConnection();
         var statement =
@@ -1028,8 +1069,10 @@ class SqliteVectorStoreTest {
     }
   }
 
+  /** 検証条件を再現するための検証用に置き換えた埋め込み表現モデル。 */
   private static class FakeEmbeddingModel implements EmbeddingModel {
 
+    /** 検証用に、関連文書の検索の要求を実行し、呼び出し元へ結果を返す。 */
     @Override
     public EmbeddingResponse call(EmbeddingRequest request) {
       List<Embedding> embeddings =
@@ -1039,16 +1082,19 @@ class SqliteVectorStoreTest {
       return new EmbeddingResponse(embeddings);
     }
 
+    /** {@code embed} の条件を再現するための補助情報を返す。 */
     @Override
     public float[] embed(Document document) {
       return embedText(document.getText());
     }
 
+    /** {@code dimensions} の条件を再現するための補助情報を返す。 */
     @Override
     public int dimensions() {
       return 4;
     }
 
+    /** {@code embedText} の条件を再現するための補助情報を返す。 */
     protected float[] embedText(String text) {
       String value = text == null ? "" : text.toLowerCase();
       return new float[] {
@@ -1056,13 +1102,16 @@ class SqliteVectorStoreTest {
       };
     }
 
+    /** {@code score} の条件を再現するための補助情報を返す。 */
     private float score(String value, String token) {
       return value.contains(token) ? 1.0f : 0.0f;
     }
   }
 
+  /** 検証条件を再現するためのFailing埋め込み表現モデル。 */
   private static final class FailingEmbeddingModel extends FakeEmbeddingModel {
 
+    /** {@code embed} の条件を再現するための補助情報を返す。 */
     @Override
     public float[] embed(Document document) {
       if (document.getText() != null && document.getText().contains("fail")) {
@@ -1072,21 +1121,30 @@ class SqliteVectorStoreTest {
     }
   }
 
+  /** 検証条件を再現するためのFailingデータ取得元。 */
   private static final class FailingDataSource implements DataSource {
 
+    /** 検証に使うメッセージ。 */
     private final String message;
+
+    /** 検証に使うfail通知時初期化。 */
     private final boolean failOnInit;
+
+    /** 検証に使う呼び出し回数。 */
     private int calls;
 
+    /** 検証条件に必要な値を受け取り、FailingDataSourceを用意する。 */
     private FailingDataSource(String message) {
       this(message, true);
     }
 
+    /** 検証条件に必要な値を受け取り、FailingDataSourceを用意する。 */
     private FailingDataSource(String message, boolean failOnInit) {
       this.message = message;
       this.failOnInit = failOnInit;
     }
 
+    /** 検証用に、関連文書の検索で参照する接続を返す。 */
     @Override
     public Connection getConnection() throws SQLException {
       calls++;
@@ -1096,56 +1154,69 @@ class SqliteVectorStoreTest {
       throw new SQLException(message);
     }
 
+    /** 検証用に、関連文書の検索で参照する接続を返す。 */
     @Override
     public Connection getConnection(String username, String password) throws SQLException {
       return getConnection();
     }
 
+    /** {@code unwrap} の条件を再現するための補助情報を返す。 */
     @Override
     public <T> T unwrap(Class<T> iface) throws SQLException {
       throw new SQLException("unwrap unsupported");
     }
 
+    /** 検証用に、関連文書の検索において、Wrapper対象かどうかを判定する。 */
     @Override
     public boolean isWrapperFor(Class<?> iface) {
       return false;
     }
 
+    /** 検証用に、関連文書の検索で参照するログ書き込み先を返す。 */
     @Override
     public java.io.PrintWriter getLogWriter() {
       return null;
     }
 
+    /** 検証用に、関連文書の検索で使用するログ書き込み先を設定する。 */
     @Override
     public void setLogWriter(java.io.PrintWriter out) {}
 
+    /** 検証用に、関連文書の検索で使用するログインタイムアウトを設定する。 */
     @Override
     public void setLoginTimeout(int seconds) {}
 
+    /** 検証用に、関連文書の検索で参照するログインタイムアウトを返す。 */
     @Override
     public int getLoginTimeout() {
       return 0;
     }
 
+    /** 検証用に、関連文書の検索で参照する親ログの出力先を返す。 */
     @Override
     public java.util.logging.Logger getParentLogger() {
       return java.util.logging.Logger.getGlobal();
     }
   }
 
+  /** 検証条件を再現するための短い埋め込み表現モデル。 */
   private static final class ShortEmbeddingModel extends FakeEmbeddingModel {
+    /** {@code embed} の条件を再現するための補助情報を返す。 */
     @Override
     public float[] embed(Document document) {
       return new float[] {1.0f, 0.0f};
     }
 
+    /** {@code dimensions} の条件を再現するための補助情報を返す。 */
     @Override
     public int dimensions() {
       return 2;
     }
   }
 
+  /** 検証条件を再現するための固定値埋め込み表現モデル。 */
   private static final class ConstantEmbeddingModel extends FakeEmbeddingModel {
+    /** {@code embed} の条件を再現するための補助情報を返す。 */
     @Override
     public float[] embed(Document document) {
       return new float[] {1.0f, 0.0f, 0.0f, 0.0f};

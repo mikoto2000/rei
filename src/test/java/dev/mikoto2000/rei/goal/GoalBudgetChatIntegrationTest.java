@@ -40,10 +40,13 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import reactor.core.publisher.Flux;
 
+/** 目標予算チャット外部連携の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class GoalBudgetChatIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void goalOnlyTokenLimitIsEnforcedAtActualChatBoundaryBeforeTools() {
     var toolCalls = new AtomicInteger();
@@ -67,6 +70,7 @@ class GoalBudgetChatIntegrationTest {
                         .build())));
     ToolCallback read =
         new ToolCallback() {
+          /** 検証用に、目標の達成管理で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("readFile")
@@ -75,6 +79,7 @@ class GoalBudgetChatIntegrationTest {
                 .build();
           }
 
+          /** 検証用に、目標の達成管理の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             toolCalls.incrementAndGet();
             return "read";
@@ -135,20 +140,24 @@ class GoalBudgetChatIntegrationTest {
     verify(model, times(1)).stream(any(Prompt.class));
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void actualChatToolLoopReservesEveryCallAndStopsAtDurableGoalLimit() {
     var modelCalls = new AtomicInteger();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、目標の達成管理で参照する選択可能な設定を返す。 */
           @Override
           public ToolCallingChatOptions getOptions() {
             return ToolCallingChatOptions.builder().build();
           }
 
+          /** 検証用に、目標の達成管理の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             int call = modelCalls.incrementAndGet();
             return Flux.just(
@@ -166,6 +175,7 @@ class GoalBudgetChatIntegrationTest {
         };
     ToolCallback read =
         new ToolCallback() {
+          /** 検証用に、目標の達成管理で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("readFile")
@@ -174,6 +184,7 @@ class GoalBudgetChatIntegrationTest {
                 .build();
           }
 
+          /** 検証用に、目標の達成管理の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             return "unchanged";
           }
@@ -213,10 +224,12 @@ class GoalBudgetChatIntegrationTest {
             (claim, run, done) -> {
               var reservation =
                   new OutputLimitRunBudget.LlmCallReservation() {
+                    /** {@code tryReserve} の条件を再現するための補助情報を返す。 */
                     public boolean tryReserve() {
                       return goals.reserveLlm(claim);
                     }
 
+                    /** {@code remaining} の条件を再現するための補助情報を返す。 */
                     public int remaining() {
                       return goals.remainingLlm(claim);
                     }

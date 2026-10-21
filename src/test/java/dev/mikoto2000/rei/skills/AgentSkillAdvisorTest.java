@@ -23,8 +23,10 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** エージェントスキル対話の補助の結果と状態の契約を検証するテスト。 */
 class AgentSkillAdvisorTest {
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void injectsSelectedSkillIntoUserMessageText() {
     AgentSkill skill = skill("sample");
@@ -44,6 +46,7 @@ class AgentSkillAdvisorTest {
     assertThat(advised.prompt().getOptions()).isSameAs(request.prompt().getOptions());
   }
 
+  /** 振り分け計測値を通知することを確認する。 */
   @Test
   void emitsRoutingMetricsWithWarningsAndSelectedSkillNames() {
     AgentSkill skill = skill("sample");
@@ -86,6 +89,7 @@ class AgentSkillAdvisorTest {
     assertThat(events.getFirst().correlationId()).isEqualTo(events.getLast().correlationId());
   }
 
+  /** 失敗イベントを通知することを確認する。 */
   @Test
   void emitsFailedEventWhenSelectionThrows() {
     AgentSkillSelectionService selectionService = Mockito.mock(AgentSkillSelectionService.class);
@@ -118,6 +122,7 @@ class AgentSkillAdvisorTest {
     assertThat(failed.candidateCount()).isEqualTo(1);
   }
 
+  /** 元の要求を返すことを確認する。 */
   @Test
   void returnsOriginalRequestWhenNoSkillIsSelected() {
     AgentSkillSelectionService selectionService = Mockito.mock(AgentSkillSelectionService.class);
@@ -132,6 +137,7 @@ class AgentSkillAdvisorTest {
     assertThat(advised).isSameAs(request);
   }
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void routingInvocationIncrementsWithinRunAndIsIndependentBetweenRuns() {
     AgentSkillSelectionService selectionService = Mockito.mock(AgentSkillSelectionService.class);
@@ -168,6 +174,7 @@ class AgentSkillAdvisorTest {
         .containsExactly("run-1", "run-1", "run-2");
   }
 
+  /** 候補一覧使用量を伝えることを確認する。 */
   @Test
   void reportsCandidatesUsedForProductionRouting() {
     AgentSkill actual = skill("actual");
@@ -229,10 +236,12 @@ class AgentSkillAdvisorTest {
     assertThat(payload.top5Hit()).isFalse();
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   private ChatClientRequest request(String text) {
     return request(text, null);
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   private ChatClientRequest request(String text, SkillRoutingRunContext routingContext) {
     Prompt prompt =
         new Prompt(
@@ -245,6 +254,7 @@ class AgentSkillAdvisorTest {
             : Map.of(AgentSkillAdvisor.ROUTING_CONTEXT_KEY, routingContext));
   }
 
+  /** {@code skill} の条件を再現するための補助情報を返す。 */
   private AgentSkill skill(String name) {
     return new AgentSkill(
         name,

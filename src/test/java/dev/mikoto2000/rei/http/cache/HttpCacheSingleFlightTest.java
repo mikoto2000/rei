@@ -32,13 +32,24 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** HTTP通信キャッシュ単一Flightの結果と状態の契約を検証するテスト。 */
 class HttpCacheSingleFlightTest {
+  /** 検証に使う情報の取得元。 */
   final SafeHttpFetcher fetcher = mock(SafeHttpFetcher.class);
+
+  /** 検証に使う参照先のURI。 */
   final URI uri = URI.create("https://example.com/page");
+
+  /** 検証に使う呼び出し回数。 */
   final AtomicInteger calls = new AtomicInteger();
+
+  /** 検証に使う開始、停止済み。 */
   final CountDownLatch started = new CountDownLatch(1), stopped = new CountDownLatch(1);
+
+  /** 検証に使う解放。 */
   final AtomicBoolean release = new AtomicBoolean();
 
+  /** {@code cache} の条件を再現するための補助情報を返す。 */
   HttpResponseCache cache(HttpCacheProperties properties) {
     return new HttpResponseCache(
         properties,
@@ -46,6 +57,7 @@ class HttpCacheSingleFlightTest {
         new SensitiveInfoDetector());
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   HttpResponseCache.Request request(URI url) {
     return new HttpResponseCache.Request(
         url,
@@ -55,6 +67,7 @@ class HttpCacheSingleFlightTest {
         false);
   }
 
+  /** 検証用に、指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   SafeHttpFetcher.Response get(HttpResponseCache cache, URI url, AtomicBoolean cancelled) {
     return cache.fetch(
         request(url),
@@ -67,6 +80,7 @@ class HttpCacheSingleFlightTest {
         fetcher);
   }
 
+  /** {@code loader} の条件を再現するため、検証用の操作や状態を扱う。 */
   void loader(boolean privateResponse, boolean failure) {
     doAnswer(
             invocation -> {
@@ -93,12 +107,14 @@ class HttpCacheSingleFlightTest {
         .fetch(any(), anyMap(), any(), any(), any());
   }
 
+  /** 検証用に、必要な状態が整ってから先へ進むため、HTTP通信キャッシュ単一Flight検証を待つ。 */
   void await(java.util.function.BooleanSupplier condition) throws Exception {
     long deadline = System.nanoTime() + Duration.ofSeconds(2).toNanos();
     while (!condition.getAsBoolean() && System.nanoTime() < deadline) Thread.sleep(5);
     assertTrue(condition.getAsBoolean());
   }
 
+  /** 取得した情報の再利用で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void identicalConcurrentRequestsPerformOneLoad() throws Exception {
     loader(false, false);
@@ -116,6 +132,7 @@ class HttpCacheSingleFlightTest {
     }
   }
 
+  /** 取得した情報の再利用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void oneCancelledWaiterCannotCancelTheOtherWaitersLoad() throws Exception {
     loader(false, false);
@@ -138,6 +155,7 @@ class HttpCacheSingleFlightTest {
     }
   }
 
+  /** 取得した情報の再利用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void allCancelledWaitersStopTheLoaderAndRemoveTheFlight() throws Exception {
     loader(false, false);
@@ -159,6 +177,7 @@ class HttpCacheSingleFlightTest {
     }
   }
 
+  /** 取得した情報の再利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void unshareableResponseIsRetriedIndividuallyForJoinedWaiter() throws Exception {
     loader(true, false);
@@ -176,6 +195,7 @@ class HttpCacheSingleFlightTest {
     }
   }
 
+  /** 取得した情報の再利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedSharedLoadIsRemovedAndNextRequestCanRetry() throws Exception {
     loader(false, true);
@@ -198,6 +218,7 @@ class HttpCacheSingleFlightTest {
     }
   }
 
+  /** 上限内に収めた実行待ちおよび終了について、作業を受け付けないことを確認する。 */
   @Test
   void boundedQueueAndShutdownRejectWorkWithoutLeavingEntries() throws Exception {
     loader(false, false);
@@ -231,6 +252,7 @@ class HttpCacheSingleFlightTest {
     }
   }
 
+  /** 取得した情報の再利用で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void firstWaitersShortDeadlineDoesNotBecomeTheSharedLoadDeadline() throws Exception {
     loader(false, false);
@@ -261,6 +283,7 @@ class HttpCacheSingleFlightTest {
     }
   }
 
+  /** 取得した情報の再利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void slowerEarlierLoadCannotOverwriteAnExplicitRefresh() throws Exception {
     loader(false, false);
@@ -287,6 +310,7 @@ class HttpCacheSingleFlightTest {
     }
   }
 
+  /** 取得した情報の再利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void ordinaryColdLoadStartingDuringRefreshCannotReplaceRefreshResult() throws Exception {
     loader(false, false);
@@ -313,6 +337,7 @@ class HttpCacheSingleFlightTest {
     }
   }
 
+  /** 取得した情報の再利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void joinedWaiterCanUseItsOwnQuotaWhenFirstOwnersQuotaIsExhausted() throws Exception {
     doAnswer(
@@ -333,6 +358,7 @@ class HttpCacheSingleFlightTest {
         .fetch(any(), anyMap(), any(), any(), any());
     var exhausted =
         new HttpFetchObserver() {
+          /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
           public void request(boolean redirect) {
             throw new HttpFetchException(HttpFetchException.Code.REQUEST_BUDGET);
           }
@@ -353,6 +379,7 @@ class HttpCacheSingleFlightTest {
     }
   }
 
+  /** 取得した情報の再利用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledOldLoadCannotRemoveANewerSuccessfulCacheEntry() throws Exception {
     var finishOld = new CountDownLatch(1);

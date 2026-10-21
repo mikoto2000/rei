@@ -9,12 +9,21 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
+/** 画面操作利用をモデルから呼び出せるツールとして提供する。 */
 public final class ComputerUseTools {
+  /** サービス。 */
   private final ComputerUseService service;
+
+  /** キャンセル。 */
   private final CommandCancellationService cancellation;
+
+  /** 生成元。 */
   private final AgentEventFactory factory;
+
+  /** 通知先。 */
   private final AgentEventPublisher publisher;
 
+  /** 指定された値や利用先を使って、ComputerUseToolsを初期化する。 */
   public ComputerUseTools(
       ComputerUseService service,
       CommandCancellationService cancellation,
@@ -26,6 +35,7 @@ public final class ComputerUseTools {
     this.publisher = publisher;
   }
 
+  /** 画面操作の支援で用いるorchestrationプロンプトを返す。 */
   public String orchestrationPrompt() {
     try {
       return new org.springframework.core.io.ClassPathResource("computer-use/orchestration.md")
@@ -35,6 +45,7 @@ public final class ComputerUseTools {
     }
   }
 
+  /** 画面操作の支援で用いる画面操作利用を返す。 */
   @Tool(
       description =
           "Visual interaction across attached Windows displays. First use existing Shell/file/API tools for programmable preparation such as opening URLs or launching applications. Pass the remaining goal and completed preparation here; observe a fresh screenshot and perform one action at a time. Returns DONE only when visually verified; safety-blocked actions require human approval. Do not retry blocked or failed workflows blindly.")
@@ -50,6 +61,7 @@ public final class ComputerUseTools {
     }
   }
 
+  /** 画面操作の支援で用いる完了時の処理を返す。 */
   public ToolCallback callback() {
     var delegate =
         MethodToolCallbackProvider.builder().toolObjects(this).build().getToolCallbacks()[0];

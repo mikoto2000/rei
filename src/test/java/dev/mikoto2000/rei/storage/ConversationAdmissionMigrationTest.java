@@ -6,7 +6,9 @@ import java.sql.DriverManager;
 import java.sql.SQLException;
 import org.junit.jupiter.api.Test;
 
+/** 会話受付移行の結果と状態の契約を検証するテスト。 */
 class ConversationAdmissionMigrationTest {
+  /** 利用権確認結果について、一意なプロジェクト会話列一覧を必要とすることを確認する。 */
   @Test
   void leaseVerificationRequiresUniqueProjectSessionColumnsAndActivePredicate() throws Exception {
     for (String index :
@@ -26,6 +28,7 @@ class ConversationAdmissionMigrationTest {
     }
   }
 
+  /** 有効な利用権について、秒活動中実行を受け付けないことを確認する。 */
   @Test
   void validLeaseRejectsSecondActiveRunButAllowsOtherSessionsAndInactiveRuns() throws Exception {
     try (var db = DriverManager.getConnection("jdbc:sqlite::memory:");

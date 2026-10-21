@@ -26,17 +26,26 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.stereotype.Component;
 
-/** Slack Web API adapter: HTTP success alone is not a delivery receipt. */
+/**
+ * Slack通知を用途や設定に応じて提供する窓口。
+ *
+ * <p>Slack Web API adapter: HTTP success alone is not a delivery receipt.
+ */
 @Component
 @ConditionalOnProperty(name = "rei.attention.slack.enabled", havingValue = "true")
 @EnableConfigurationProperties(SlackNotificationProperties.class)
 public class SlackNotificationProvider implements NotificationProvider, AutoCloseable {
+  /** この機能の動作設定。 */
   private final SlackNotificationProperties properties;
+
+  /** クライアント。 */
   private final HttpClient client =
       HttpClient.newBuilder()
           .connectTimeout(Duration.ofSeconds(2))
           .followRedirects(HttpClient.Redirect.NEVER)
           .build();
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper mapper =
       new ObjectMapper(
               JsonFactory.builder()
@@ -50,20 +59,24 @@ public class SlackNotificationProvider implements NotificationProvider, AutoClos
                   .build())
           .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
+  /** 指定された値や利用先を使って、SlackNotificationProviderを初期化する。 */
   public SlackNotificationProvider(SlackNotificationProperties properties) {
     this.properties = properties;
   }
 
+  /** 注意の管理で用いる名前を返す。 */
   @Override
   public String name() {
     return "SLACK";
   }
 
+  /** 注意の管理で用いる最小実行間隔ミリ秒数を返す。 */
   @Override
   public long minimumIntervalMillis() {
     return 1000;
   }
 
+  /** 注意の管理で用いる配信先を返す。 */
   @Override
   public String destination() {
     return digest(
@@ -76,6 +89,7 @@ public class SlackNotificationProvider implements NotificationProvider, AutoClos
             + digest(properties.botToken() == null ? "" : properties.botToken()));
   }
 
+  /** 注意の管理で用いる内容の照合値を返す。 */
   static String digest(String text) {
     try {
       return HexFormat.of()
@@ -87,12 +101,14 @@ public class SlackNotificationProvider implements NotificationProvider, AutoClos
     }
   }
 
+  /** 注意の管理で用いるdeliverを返す。 */
   @Override
   public Receipt deliver(String id, String metadata) throws Exception {
     if (Thread.currentThread().isInterrupted())
       throw new InterruptedException("Notification delivery cancelled before send");
     if (!properties.enabled()) throw new IllegalArgumentException("Slack delivery is disabled");
     UUID.fromString(id);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (metadata == null || metadata.length() > 4096)
       throw new IllegalArgumentException("Invalid notification metadata");
     JsonNode source = mapper.readTree(metadata);
@@ -190,6 +206,7 @@ public class SlackNotificationProvider implements NotificationProvider, AutoClos
           .contains(error)) return new Receipt("FAILED", "slack_rejected", "", 0);
       return unknown();
     } catch (InterruptedException error) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw error;
     } catch (ExecutionException | TimeoutException error) {
@@ -202,10 +219,12 @@ public class SlackNotificationProvider implements NotificationProvider, AutoClos
     }
   }
 
+  /** 確定できない結果を、判定不能の情報として表す。 */
   private Receipt unknown() {
     return new Receipt("UNKNOWN", "slack_outcome_unknown", "", 0);
   }
 
+  /** 注意の管理で用いる頻度制限されたを返す。 */
   private Receipt rateLimited(HttpHeaders headers) {
     int seconds = 60;
     try {
@@ -217,22 +236,33 @@ public class SlackNotificationProvider implements NotificationProvider, AutoClos
     return new Receipt("FAILED", "slack_rate_limited", "", seconds);
   }
 
+  /** 注意の管理に必要な制限された購読先を扱う。 */
   private static final class LimitedSubscriber implements HttpResponse.BodySubscriber<byte[]> {
+    /** 委譲先。 */
     private final HttpResponse.BodySubscriber<byte[]> delegate =
         HttpResponse.BodySubscribers.ofByteArray();
+
+    /** 購読。 */
     private java.util.concurrent.Flow.Subscription subscription;
+
+    /** 件数。 */
     private long count;
+
+    /** 停止済み。 */
     private boolean stopped;
 
+    /** 注意の管理で参照する本文を返す。 */
     public CompletionStage<byte[]> getBody() {
       return delegate.getBody();
     }
 
+    /** 通知に応じて状態や表示を更新するため、購読を受け付ける。 */
     public void onSubscribe(java.util.concurrent.Flow.Subscription incoming) {
       subscription = incoming;
       delegate.onSubscribe(incoming);
     }
 
+    /** 通知に応じて状態や表示を更新するため、次を受け付ける。 */
     public void onNext(List<java.nio.ByteBuffer> buffers) {
       if (stopped) return;
       for (var buffer : buffers) count += buffer.remaining();
@@ -245,6 +275,7 @@ public class SlackNotificationProvider implements NotificationProvider, AutoClos
       delegate.onNext(buffers);
     }
 
+    /** 通知に応じて状態や表示を更新するため、エラーを受け付ける。 */
     public void onError(Throwable error) {
       if (!stopped) {
         stopped = true;
@@ -252,6 +283,7 @@ public class SlackNotificationProvider implements NotificationProvider, AutoClos
       }
     }
 
+    /** 通知に応じて状態や表示を更新するため、完了を受け付ける。 */
     public void onComplete() {
       if (!stopped) {
         stopped = true;
@@ -260,6 +292,7 @@ public class SlackNotificationProvider implements NotificationProvider, AutoClos
     }
   }
 
+  /** 注意の管理で利用した資源や登録を解放し、利用を終了する。 */
   @jakarta.annotation.PreDestroy
   @Override
   public void close() {

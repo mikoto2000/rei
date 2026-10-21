@@ -13,8 +13,23 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Derived summary relation. Support identifies saved observations, never a session-wide cross
+ * 作業状況の把握で受け渡すプロジェクトテーマ関連付けを表す。
+ *
+ * <p>Derived summary relation. Support identifies saved observations, never a session-wide cross
  * product.
+ *
+ * @param canonicalProject 正規プロジェクト
+ * @param theme テーマ
+ * @param supportingObservationCount supporting観測内容件数
+ * @param supportingDuration supporting継続時間
+ * @param foregroundObservationCount 前面観測内容件数
+ * @param supportingSessionCount supporting会話件数
+ * @param longestContinuousSeconds longest継続秒数
+ * @param projectConfidence プロジェクト確信度
+ * @param themeConfidence テーマ確信度
+ * @param associationConfidence 関連付け確信度
+ * @param evidenceSources 根拠取得元一覧
+ * @param provenance 情報の来歴
  */
 public record ProjectThemeAssociation(
     String canonicalProject,
@@ -29,11 +44,28 @@ public record ProjectThemeAssociation(
     double associationConfidence,
     @JsonIgnore Set<Source> evidenceSources,
     @JsonIgnore List<Support> provenance) {
+  /** 作業状況の把握における起点の選択肢。 */
   public enum Origin {
+    /** 同一作業状況タイトル。 */
     SAME_ACTIVITY_TITLE,
+    /** 単一作業状況要約。 */
     SINGLE_ACTIVITY_SUMMARY
   }
 
+  /**
+   * 作業状況の把握で受け渡す補助を表す。
+   *
+   * @param observationId 観測内容識別子
+   * @param monitor 排他制御
+   * @param continuityId 作業の継続を識別する値
+   * @param start 開始
+   * @param end 終了
+   * @param origin 起点
+   * @param foreground 前面
+   * @param projectConfidence プロジェクト確信度
+   * @param themeConfidence テーマ確信度
+   * @param evidenceSources 根拠取得元一覧
+   */
   public record Support(
       String observationId,
       String monitor,
@@ -46,10 +78,12 @@ public record ProjectThemeAssociation(
       double themeConfidence,
       Set<Source> evidenceSources) {}
 
+  /** 作業状況の把握において、確かなに該当するか判定する。 */
   public boolean strong() {
     return associationConfidence >= .75;
   }
 
+  /** 対象の内容を、要点が分かる形にまとめる。 */
   static ProjectThemeAssociation summarize(
       String project, String theme, Collection<Support> input) {
     var supports =

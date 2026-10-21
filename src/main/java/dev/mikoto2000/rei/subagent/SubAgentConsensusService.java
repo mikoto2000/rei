@@ -12,12 +12,43 @@ import java.util.Objects;
 import java.util.TreeMap;
 import tools.jackson.databind.JsonNode;
 
-/** Describes observed agreement; neither repeated answers nor a judge establish truth. */
+/**
+ * 補助エージェント評価の合意のユースケースを実現する。
+ *
+ * <p>Describes observed agreement; neither repeated answers nor a judge establish truth.
+ */
 public final class SubAgentConsensusService {
+  /**
+   * 補助エージェントへの委譲で受け渡す参照先を表す。
+   *
+   * @param childId 子の識別子
+   * @param resultHash 結果ハッシュ値
+   */
   public record Reference(String childId, String resultHash) {}
 
+  /**
+   * 補助エージェントへの委譲で受け渡す根拠を表す。
+   *
+   * @param evidenceId 根拠識別子
+   * @param tool ツール
+   * @param outputSha256 出力内容の同一性を照合するSHA-256ハッシュ
+   * @param quote 引用
+   */
   public record Evidence(String evidenceId, String tool, String outputSha256, String quote) {}
 
+  /**
+   * 補助エージェントへの委譲で受け渡す取得元を表す。
+   *
+   * @param childId 子の識別子
+   * @param runId 実行の識別子
+   * @param agent エージェント
+   * @param resultHash 結果ハッシュ値
+   * @param taskHash タスクハッシュ値
+   * @param answer 回答
+   * @param evidence 根拠
+   * @param evidenceValidated 根拠検証済み
+   * @param observedAt 観測日時
+   */
   public record Source(
       String childId,
       String runId,
@@ -28,11 +59,23 @@ public final class SubAgentConsensusService {
       List<Evidence> evidence,
       boolean evidenceValidated,
       Instant observedAt) {
+    /** 受け取った情報からSourceを作成する。 */
     public Source {
       evidence = List.copyOf(evidence);
     }
   }
 
+  /**
+   * 補助エージェントへの委譲で受け渡す比較結果を表す。
+   *
+   * @param status 状態
+   * @param unresolved 未確定
+   * @param truthVerified 確定情報確認済み
+   * @param sources 取得元一覧
+   * @param answers 回答一覧
+   * @param sharedEvidenceHashes 共有根拠Hashes
+   * @param warnings 注意事項
+   */
   public record Comparison(
       String status,
       boolean unresolved,
@@ -41,6 +84,7 @@ public final class SubAgentConsensusService {
       List<String> answers,
       List<String> sharedEvidenceHashes,
       List<String> warnings) {
+    /** 受け取った情報からComparisonを作成する。 */
     public Comparison {
       sources = List.copyOf(sources);
       answers = List.copyOf(answers);
@@ -49,13 +93,27 @@ public final class SubAgentConsensusService {
     }
   }
 
+  /**
+   * 補助エージェントへの委譲で受け渡すJudgedを表す。
+   *
+   * @param comparison 比較結果
+   * @param judge 評価の判断
+   */
   public record Judged(Comparison comparison, SubAgentResult judge) {}
 
+  /** この機能の動作設定。 */
   private final SubAgentProperties properties;
+
+  /** 保存と検索の窓口。 */
   private final DurableSubAgentRepository repository;
+
+  /** 実行の担当。 */
   private final SubAgentRunner runner;
+
+  /** 登録台帳。 */
   private final SubAgentRegistry registry;
 
+  /** 指定された値や利用先を使って、SubAgentConsensusServiceを初期化する。 */
   public SubAgentConsensusService(
       SubAgentProperties properties,
       DurableSubAgentRepository repository,
@@ -67,12 +125,14 @@ public final class SubAgentConsensusService {
     this.registry = registry;
   }
 
+  /** 補助エージェントへの委譲で用いる比較を返す。 */
   public Comparison compare(AgentRunContext owner, List<Reference> references) {
     if (!properties.isDurableEnabled()
         || !properties.isConsensusEnabled()
         || owner == null
         || owner.conversationId().startsWith("subagent:"))
       throw new IllegalArgumentException("Opt-in consensus and human Project ownership required");
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (references == null || references.size() < 2 || references.size() > 8)
       throw new IllegalArgumentException("Expected 2 to 8 independent child references");
     var ids = new HashSet<String>();
@@ -180,6 +240,7 @@ public final class SubAgentConsensusService {
         status, answers.size() > 1 || insufficient, false, sources, answers, shared, warnings);
   }
 
+  /** 補助エージェントへの委譲で用いる評価の判断を返す。 */
   public Judged judge(RunExecutionContext run, List<Reference> references, String agent) {
     if (!properties.isConsensusJudgeEnabled()
         || run == null
@@ -201,6 +262,7 @@ public final class SubAgentConsensusService {
             + tools.jackson.databind.json.JsonMapper.builder()
                 .build()
                 .writeValueAsString(comparison);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (context.length() > 32768)
       throw new IllegalArgumentException("Judge context exceeds bounded limit");
     try (var scope = AgentRunScope.open(run.runContext())) {
@@ -214,6 +276,7 @@ public final class SubAgentConsensusService {
     }
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   private boolean text(JsonNode node, String key, int maximum) {
     var value = node.path(key);
     return value.isString() && !value.asString().isBlank() && value.asString().length() <= maximum;

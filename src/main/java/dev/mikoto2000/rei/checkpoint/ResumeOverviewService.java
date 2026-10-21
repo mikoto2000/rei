@@ -11,19 +11,30 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Read-only checkpoint projection. Deliberately has no Resume, reconciliation, Git or LLM
+ * 再開概要のユースケースを実現する。
+ *
+ * <p>Read-only checkpoint projection. Deliberately has no Resume, reconciliation, Git or LLM
  * dependency.
  */
 @org.springframework.stereotype.Service
 public class ResumeOverviewService {
+  /** preferredタイムゾーン。 */
   @org.springframework.beans.factory.annotation.Value("${rei.activity.zone:}")
   private String preferredZone = "";
 
+  /** 保存と検索の窓口。 */
   private final PersistentCheckpointRepository repository;
+
+  /** プロジェクト一覧。 */
   private final ProjectService projects;
+
+  /** この機能の動作設定。 */
   private final ResumeOverviewProperties properties;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** 指定された値や利用先を使って、ResumeOverviewServiceを初期化する。 */
   public ResumeOverviewService(
       PersistentCheckpointRepository repository,
       ProjectService projects,
@@ -35,18 +46,22 @@ public class ResumeOverviewService {
     this.clock = clock;
   }
 
+  /** この機能を利用する設定が有効かどうかを返す。 */
   public boolean enabled() {
     return properties.isEnabled();
   }
 
+  /** 作業の中断と再開で用いるpreferredタイムゾーンを返す。 */
   public String preferredZone() {
     return preferredZone;
   }
 
+  /** 作業の中断と再開で用いるタイムゾーンを返す。 */
   public ZoneId zone(ZoneId clientZone) {
     return preferredZone == null || preferredZone.isBlank() ? clientZone : ZoneId.of(preferredZone);
   }
 
+  /** 作業の中断と再開で用いる概要を返す。 */
   public ResumeOverview overview(String projectId) {
     var project =
         projects.registeredProjects().stream()
@@ -76,6 +91,7 @@ public class ResumeOverviewService {
     }
   }
 
+  /** 作業の中断と再開で用いる件数を返す。 */
   public List<ResumeOverview.ProjectCount> counts() {
     var result = new ArrayList<ResumeOverview.ProjectCount>();
     for (var project : projects.registeredProjects()) {
@@ -88,6 +104,7 @@ public class ResumeOverviewService {
     return List.copyOf(result);
   }
 
+  /** 作業の中断と再開で用いる起動時要約を返す。 */
   public String startupSummary() {
     return ResumeOverview.summary(counts());
   }

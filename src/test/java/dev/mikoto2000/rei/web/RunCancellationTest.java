@@ -10,7 +10,9 @@ import java.time.Clock;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** 実行キャンセルの結果と状態の契約を検証するテスト。 */
 class RunCancellationTest {
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelBeforeBeginSurvivesAndStopsResourcesForOnlyThatRun() {
     var service = new CommandCancellationService();
@@ -35,6 +37,7 @@ class RunCancellationTest {
     }
   }
 
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationFactoryKeepsRunOwnershipAndTurnIdentity() {
     var event =

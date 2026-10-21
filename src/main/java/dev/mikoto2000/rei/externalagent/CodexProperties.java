@@ -4,26 +4,47 @@ import java.time.Duration;
 import lombok.Data;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
+/** Codexの設定値をまとめ、利用環境に応じた動作を指定できるようにする。 */
 @Data
 @ConfigurationProperties("rei.external-agents.codex")
 public class CodexProperties {
+  /** 有効状態。 */
   private boolean enabled = true;
+
+  /** 実装有効状態。 */
   private boolean implementationEnabled = false;
 
-  /** Trusted administrator-selected recipe, never supplied by external model output. */
+  /**
+   * 実装検証コマンド。
+   *
+   * <p>Trusted administrator-selected recipe, never supplied by external model output.
+   */
   private String implementationTestCommand = "";
 
+  /** 実装検証タイムアウトの秒数。 */
   private int implementationTestTimeoutSeconds = 30;
 
-  /** Opt-in: the native CLI retains its own session files; Rei stores only the opaque UUID. */
+  /**
+   * 永続化会話一覧。
+   *
+   * <p>Opt-in: the native CLI retains its own session files; Rei stores only the opaque UUID.
+   */
   private boolean persistSessions = false;
 
-  /** Opt-in accounting of native CLI turn usage in the parent Run/Goal budget. */
+  /**
+   * inherit実行モデル予算。
+   *
+   * <p>Opt-in accounting of native CLI turn usage in the parent Run/Goal budget.
+   */
   private boolean inheritRunModelBudget = false;
 
+  /** 並列レビュー有効状態。 */
   private boolean parallelReviewEnabled = false;
+
+  /** 並列レビュータイムアウト。 */
   private Duration parallelReviewTimeout = Duration.ofSeconds(120);
 
+  /** 外部エージェントへの委譲で使用する並列レビュータイムアウトを設定する。 */
   public void setParallelReviewTimeout(Duration value) {
     if (value == null
         || value.compareTo(Duration.ofMillis(100)) < 0
@@ -32,8 +53,15 @@ public class CodexProperties {
     parallelReviewTimeout = value;
   }
 
+  /** コマンド。 */
   private String command = "codex";
+
+  /** 合計タイムアウト。 */
   private Duration totalTimeout = Duration.ofMinutes(20);
+
+  /** inactivityタイムアウト。 */
   private Duration inactivityTimeout = Duration.ofMinutes(5);
+
+  /** 最大出力バイト数。 */
   private int maxOutputBytes = 4194304;
 }

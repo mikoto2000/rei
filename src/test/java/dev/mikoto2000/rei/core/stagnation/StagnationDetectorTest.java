@@ -6,8 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+/** 停滞検出の窓口の結果と状態の契約を検証するテスト。 */
 class StagnationDetectorTest {
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void initialStagnationCountIsZero() {
     StagnationDetector detector = new StagnationDetector();
@@ -15,6 +17,7 @@ class StagnationDetectorTest {
     assertFalse(detector.isStagnant());
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void noProgressIncrementsCount() {
     StagnationDetector detector = new StagnationDetector(4);
@@ -22,6 +25,7 @@ class StagnationDetectorTest {
     assertEquals(1, detector.stagnationCount());
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void progressResetsCount() {
     StagnationDetector detector = new StagnationDetector(4);
@@ -31,6 +35,7 @@ class StagnationDetectorTest {
     assertEquals(0, detector.stagnationCount());
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void stepCompletedIsProgress() {
     StagnationDetector detector = new StagnationDetector(4);
@@ -39,6 +44,7 @@ class StagnationDetectorTest {
     assertEquals(0, detector.stagnationCount());
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void fileChangedIsProgress() {
     StagnationDetector detector = new StagnationDetector(4);
@@ -47,6 +53,7 @@ class StagnationDetectorTest {
     assertEquals(0, detector.stagnationCount());
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void taskCompletedItemAddedIsProgress() {
     StagnationDetector detector = new StagnationDetector(4);
@@ -55,6 +62,7 @@ class StagnationDetectorTest {
     assertEquals(0, detector.stagnationCount());
   }
 
+  /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void belowThresholdIsNotStagnant() {
     StagnationDetector detector = new StagnationDetector(4);
@@ -64,6 +72,7 @@ class StagnationDetectorTest {
     assertFalse(detector.isStagnant());
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void thresholdReachedRequestsReplan() {
     StagnationDetector detector = new StagnationDetector(4);
@@ -75,6 +84,7 @@ class StagnationDetectorTest {
     assertTrue(detector.isReplanRequested());
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void progressClearsReplanRequested() {
     StagnationDetector detector = new StagnationDetector(4);
@@ -88,6 +98,7 @@ class StagnationDetectorTest {
     assertEquals(0, detector.stagnationCount());
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void replanCountIsTracked() {
     StagnationDetector detector = new StagnationDetector(4, 2);
@@ -95,6 +106,7 @@ class StagnationDetectorTest {
     assertEquals(1, detector.replanCount());
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void maxReplanExceededBlocks() {
     StagnationDetector detector = new StagnationDetector(4, 2);
@@ -104,6 +116,7 @@ class StagnationDetectorTest {
     assertTrue(detector.isMaxReplanReached());
   }
 
+  /** 実行の停滞への対処で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void repeatedToolCallFingerprintIsDetected() {
     StagnationDetector detector = new StagnationDetector(4);
@@ -112,6 +125,7 @@ class StagnationDetectorTest {
     assertTrue(detector.hasRepeatedToolCall());
   }
 
+  /** 実行の停滞への対処で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void repeatedFailureFingerprintIsDetected() {
     StagnationDetector detector = new StagnationDetector(4);

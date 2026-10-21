@@ -20,23 +20,39 @@ import org.springframework.ai.vectorstore.SearchRequest;
 import org.springframework.ai.vectorstore.VectorStore;
 import org.springframework.stereotype.Service;
 
+/** 日次案内のユースケースを実現する。 */
 @Service
 @RequiredArgsConstructor
 @Slf4j
 public class BriefingService {
 
+  /** Google予定表サービス。 */
   private final GoogleCalendarService googleCalendarService;
+
+  /** タスクサービス。 */
   private final TaskService taskService;
+
+  /** ベクトル保存先。 */
   private final VectorStore vectorStore;
+
+  /** 日次案内読み上げの案内。 */
   private final BriefingNarrator briefingNarrator;
+
+  /** 関心更新サービス。 */
   private final InterestUpdateService interestUpdateService;
+
+  /** フィードサービス。 */
   private final FeedService feedService;
+
+  /** フィード設定。 */
   private final FeedProperties feedProperties;
 
+  /** 日次情報の案内で用いる今日を返す。 */
   public DailyBriefing today() throws Exception {
     return briefingFor(LocalDate.now(googleCalendarService.zoneId()));
   }
 
+  /** 日次情報の案内で用いる日次案内対象を返す。 */
   public DailyBriefing briefingFor(LocalDate date) throws Exception {
     List<GoogleCalendarEventSummary> events = googleCalendarService.listEventsForDate(date);
     List<Task> openTasks = taskService.listOpen();
@@ -80,6 +96,7 @@ public class BriefingService {
         narration.nextActions());
   }
 
+  /** 日次情報の案内で用いる代替手段日次案内を返す。 */
   private DailyBriefing fallbackBriefing(
       LocalDate date,
       List<String> relatedDocuments,
@@ -98,6 +115,7 @@ public class BriefingService {
         List.of("新しく着手するタスクや確認事項を整理する。"));
   }
 
+  /** 対象を特定できるよう、関連保存済み文書を探す。 */
   private List<String> findRelatedDocuments(
       List<GoogleCalendarEventSummary> events, List<Task> openTasks) {
     String query = buildDocumentQuery(events, openTasks);
@@ -126,6 +144,7 @@ public class BriefingService {
         .toList();
   }
 
+  /** 利用先に渡せるよう、文書検索条件を組み立てる。 */
   private String buildDocumentQuery(List<GoogleCalendarEventSummary> events, List<Task> openTasks) {
     return java.util.stream.Stream.concat(
             events.stream().map(GoogleCalendarEventSummary::summary),
@@ -134,6 +153,7 @@ public class BriefingService {
         .collect(Collectors.joining(" "));
   }
 
+  /** 内容を表示・参照しやすくするため、文書を整形する。 */
   private String formatDocument(Document document) {
     Object source = document.getMetadata().get("source");
     String sourceLabel = source == null ? "" : source.toString();

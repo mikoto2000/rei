@@ -5,9 +5,11 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/** システムシェルのユースケースを実現する。 */
 @Component
 public class SystemShellService {
 
+  /** 指定や設定に応じた対象を利用するため、シェルを確定する。 */
   public String resolveShell(Map<String, String> environment, String osName) {
     String shell = environment == null ? null : environment.get("SHELL");
     if (shell != null && !shell.isBlank()) {
@@ -20,6 +22,7 @@ public class SystemShellService {
     return "bash";
   }
 
+  /** 対話から使う共通操作で用いるシェルコマンド行を返す。 */
   public List<String> shellCommandLine(String shell, String command) {
     String shellName = shellName(shell);
     if (shellName.equals("powershell")
@@ -34,6 +37,7 @@ public class SystemShellService {
     return List.of(shell, "-lc", command);
   }
 
+  /** 対話から使う共通操作で用いる対話シェルコマンド行を返す。 */
   public List<String> interactiveShellCommandLine(String shell) {
     String shellName = shellName(shell);
     if (shellName.equals("powershell")
@@ -45,6 +49,7 @@ public class SystemShellService {
     return List.of(shell);
   }
 
+  /** 対話から使う共通操作で用いるシェル名前を返す。 */
   private String shellName(String shell) {
     return Paths.get(shell).getFileName().toString().toLowerCase();
   }

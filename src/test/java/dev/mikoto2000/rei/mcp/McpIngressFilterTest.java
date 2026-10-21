@@ -10,7 +10,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
 
+/** MCPIngress絞り込み条件の結果と状態の契約を検証するテスト。 */
 class McpIngressFilterTest {
+  /** MCPによる機能の提供で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void tunnelClientCertificateIsDiscardedWithoutEstablishingIdentity() throws Exception {
     var request = localRequest();
@@ -34,6 +36,7 @@ class McpIngressFilterTest {
     assertEquals(200, response.getStatus());
   }
 
+  /** MCPによる機能の提供で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void routingHeadersRemainRejectedEvenWithTunnelCertificate() throws Exception {
     for (String name :
@@ -54,6 +57,7 @@ class McpIngressFilterTest {
     }
   }
 
+  /** {@code localRequest} の条件を再現するための補助情報を返す。 */
   private MockHttpServletRequest localRequest() {
     var request = new MockHttpServletRequest("POST", "/mcp");
     request.setLocalAddr("127.0.0.1");
@@ -63,6 +67,7 @@ class McpIngressFilterTest {
     return request;
   }
 
+  /** MCPによる機能の提供で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void tunnelCertificateCannotBypassSocketHostOrOriginChecks() throws Exception {
     for (String invalid : java.util.List.of("remote", "local", "port", "host", "origin")) {
@@ -85,6 +90,7 @@ class McpIngressFilterTest {
     }
   }
 
+  /** MCPによる機能の提供で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void primaryConnectorCannotReachMcpEvenWithForwardedLoopbackHeaders() throws Exception {
     var request = new MockHttpServletRequest("POST", "/mcp");
@@ -98,6 +104,7 @@ class McpIngressFilterTest {
     assertEquals(403, response.getStatus());
   }
 
+  /** MCPによる機能の提供で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void dedicatedConnectorCannotExposeWebApi() throws Exception {
     var request = new MockHttpServletRequest("GET", "/api/v1/projects");
@@ -107,6 +114,7 @@ class McpIngressFilterTest {
     assertEquals(404, response.getStatus());
   }
 
+  /** MCPによる機能の提供で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void servletDecodedPathCannotBypassPrimaryConnectorBoundary() throws Exception {
     var request = new MockHttpServletRequest("POST", "/%6dcp");
@@ -118,6 +126,7 @@ class McpIngressFilterTest {
     assertEquals(403, response.getStatus());
   }
 
+  /** MCPによる機能の提供で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void oversizedBodyIsRejectedBeforeSdkDispatch() throws Exception {
     var request = new MockHttpServletRequest("POST", "/mcp");

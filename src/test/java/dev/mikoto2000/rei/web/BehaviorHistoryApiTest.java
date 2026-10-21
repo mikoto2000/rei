@@ -18,10 +18,13 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+/** 作業習慣履歴APIの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class BehaviorHistoryApiTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 復元済み通知について、互換アシスタントを利用することを確認する。 */
   @Test
   void restoredNotificationUsesCompatibleAssistantOnlyTurnWithSourceMetadata() {
     var at = Instant.parse("2026-09-25T12:00:00Z");

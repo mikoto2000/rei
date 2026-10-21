@@ -19,19 +19,49 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Service;
 
 /**
- * Multi-file extension of the same text proposal repository and exclusive Project editing boundary.
+ * テキスト文書変更集合のユースケースを実現する。
+ *
+ * <p>Multi-file extension of the same text proposal repository and exclusive Project editing
+ * boundary.
  */
 @Service
 public final class TextDocumentChangeSetService {
+  /**
+   * 共通の実行基盤で受け渡す操作を表す。
+   *
+   * @param kind 種類
+   * @param path パス
+   * @param target 対象
+   * @param expectedText 期待する内容テキスト
+   * @param replacement 置換
+   */
   public record Operation(
       String kind, String path, String target, String expectedText, String replacement) {}
 
+  /**
+   * 共通の実行基盤で受け渡す要求を表す。
+   *
+   * @param operations 操作一覧
+   */
   public record Request(List<Operation> operations) {
+    /** 受け取った情報からRequestを作成する。 */
     public Request {
       operations = operations == null ? List.of() : List.copyOf(operations);
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡すファイル表示内容を表す。
+   *
+   * @param path パス
+   * @param baselineSha256 比較の基準内容の同一性を照合するSHA-256ハッシュ
+   * @param proposedSha256 提案内容内容の同一性を照合するSHA-256ハッシュ
+   * @param currentSha256 現在内容の同一性を照合するSHA-256ハッシュ
+   * @param baselineExists 比較の基準存在
+   * @param proposedExists 提案内容存在
+   * @param currentAvailable 現在利用可能
+   * @param currentExists 現在存在
+   */
   public record FileView(
       String path,
       String baselineSha256,
@@ -42,6 +72,16 @@ public final class TextDocumentChangeSetService {
       boolean currentAvailable,
       boolean currentExists) {}
 
+  /**
+   * 共通の実行基盤で受け渡す反映前の準備領域表示内容を表す。
+   *
+   * @param target 対象
+   * @param temporary 一時的な
+   * @param expectedSha256 期待する内容内容の同一性を照合するSHA-256ハッシュ
+   * @param currentSha256 現在内容の同一性を照合するSHA-256ハッシュ
+   * @param available 利用可能
+   * @param exists 存在
+   */
   public record StagingView(
       String target,
       String temporary,
@@ -50,6 +90,21 @@ public final class TextDocumentChangeSetService {
       boolean available,
       boolean exists) {}
 
+  /**
+   * 共通の実行基盤で受け渡す表示内容を表す。
+   *
+   * @param id 識別子
+   * @param status 状態
+   * @param proposalSha256 提案内容の同一性を照合するSHA-256ハッシュ
+   * @param files ファイル一覧
+   * @param diff 差分
+   * @param createdAt 作成日時
+   * @param warnings 注意事項
+   * @param phase 段階
+   * @param stagingFiles 反映前の準備領域ファイル一覧
+   * @param staging 反映前の準備領域
+   * @param currentMatches 現在一致結果
+   */
   public record View(
       String id,
       String status,
@@ -63,6 +118,17 @@ public final class TextDocumentChangeSetService {
       List<StagingView> staging,
       boolean currentMatches) {}
 
+  /**
+   * 共通の実行基盤で受け渡す保存済みを表す。
+   *
+   * @param id 識別子
+   * @param project プロジェクト
+   * @param root 作業ルート
+   * @param session 会話
+   * @param createdAt 作成日時
+   * @param operations 操作一覧
+   * @param changes 変更一覧
+   */
   private record Saved(
       String id,
       String project,
@@ -72,6 +138,18 @@ public final class TextDocumentChangeSetService {
       List<Operation> operations,
       List<TextDocumentTransaction.Change> changes) {}
 
+  /**
+   * 共通の実行基盤で受け渡す行を表す。
+   *
+   * @param saved 保存済み
+   * @param sha 内容照合用のハッシュ
+   * @param status 状態
+   * @param phase 段階
+   * @param stages 段階一覧
+   * @param warnings 注意事項
+   * @param pid プロセス識別子
+   * @param processStart プロセス開始
+   */
   private record Row(
       Saved saved,
       String sha,
@@ -82,10 +160,19 @@ public final class TextDocumentChangeSetService {
       long pid,
       String processStart) {}
 
+  /** 活動中。 */
   private static final Set<String> ACTIVE = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** moveに関する値。 */
   private final TextDocumentTransaction.Move move;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final com.fasterxml.jackson.databind.ObjectMapper json =
       new com.fasterxml.jackson.databind.ObjectMapper(
               com.fasterxml.jackson.core.JsonFactory.builder()
@@ -100,11 +187,13 @@ public final class TextDocumentChangeSetService {
           .findAndRegisterModules()
           .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @org.springframework.beans.factory.annotation.Autowired
   public TextDocumentChangeSetService(TextChangeSetRepository repository, Clock clock) {
     this(repository, clock, TextDocumentTransaction::replace);
   }
 
+  /** 指定された値や利用先を使って、TextDocumentChangeSetServiceを初期化する。 */
   public TextDocumentChangeSetService(
       TextChangeSetRepository repository, Clock clock, TextDocumentTransaction.Move move) {
     db = repository.documentsDb();
@@ -112,8 +201,10 @@ public final class TextDocumentChangeSetService {
     this.move = move;
   }
 
+  /** 後続の判断で選べる候補を用意するため、テキスト文書変更集合サービスを提案する。 */
   public View propose(AgentRunContext owner, Request request) throws IOException {
     Path root = owner(owner, true);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (request == null || request.operations().isEmpty() || request.operations().size() > 32)
       throw new IllegalArgumentException("1..32 text operations required");
     var changes = new ArrayList<TextDocumentTransaction.Change>();
@@ -196,12 +287,14 @@ public final class TextDocumentChangeSetService {
     return inspect(owner, id);
   }
 
+  /** 対象の状態や内容を調べ、呼び出し元が確認できる情報として返す。 */
   public View inspect(AgentRunContext owner, String id) throws IOException {
     var row = owned(owner, id);
     reconcile(row);
     return view(owned(owner, id));
   }
 
+  /** 共通の実行基盤で用いる破棄を返す。 */
   public View discard(AgentRunContext owner, String id, String sha) throws IOException {
     owner(owner, true);
     var row = owned(owner, id);
@@ -213,10 +306,12 @@ public final class TextDocumentChangeSetService {
     return inspect(owner, id);
   }
 
+  /** 指定された内容を、現在の対象へ反映する。 */
   public View apply(AgentRunContext owner, String id, String sha) throws IOException {
     return apply(owner, id, sha, changes -> {});
   }
 
+  /** 指定された内容を、現在の対象へ反映する。 */
   public View apply(
       AgentRunContext owner,
       String id,
@@ -275,6 +370,7 @@ public final class TextDocumentChangeSetService {
     }
   }
 
+  /** 共通の実行基盤で用いる取り消しを返す。 */
   public View rollback(AgentRunContext owner, String id, String sha, String actualUserRequest)
       throws IOException {
     owner(owner, true);
@@ -316,6 +412,7 @@ public final class TextDocumentChangeSetService {
     }
   }
 
+  /** 共通の実行基盤で用いる後片付けを返す。 */
   public View cleanup(AgentRunContext owner, String id, String sha, String actualUserRequest)
       throws IOException {
     owner(owner, true);
@@ -329,6 +426,7 @@ public final class TextDocumentChangeSetService {
     return inspect(owner, id);
   }
 
+  /** 共通の実行基盤に関する後片付け終端を処理する。 */
   private void cleanupTerminal(Row row) throws IOException {
     var stages =
         ownedRow(row.saved().project(), row.saved().root(), row.saved().session(), row.saved().id())
@@ -347,6 +445,7 @@ public final class TextDocumentChangeSetService {
     }
   }
 
+  /** 現在の状態と記録を照合し、差異に応じて管理状態を整える。 */
   private void reconcile(Row row) {
     if (row.pid() == ProcessHandle.current().pid()
         && Objects.equals(row.processStart(), processStart())
@@ -366,6 +465,7 @@ public final class TextDocumentChangeSetService {
           .update();
   }
 
+  /** 共通の実行基盤において、稼働中に該当するか判定する。 */
   private static boolean alive(long pid, String start) {
     try {
       return ProcessHandle.of(pid)
@@ -378,10 +478,12 @@ public final class TextDocumentChangeSetService {
     }
   }
 
+  /** 共通の実行基盤で用いるプロセス開始を返す。 */
   private static String processStart() {
     return ProcessHandle.current().info().startInstant().map(Instant::toString).orElse("unknown");
   }
 
+  /** 共通の実行基盤に関するjournalを処理する。 */
   private void journal(String id, String phase, List<TextDocumentTransaction.Stage> stages)
       throws IOException {
     if (db.sql(
@@ -391,6 +493,7 @@ public final class TextDocumentChangeSetService {
         != 1) throw new IOException("Document journal unavailable");
   }
 
+  /** 終了時に必要な状態を反映し、処理を完了させる。 */
   private void finish(Row row, String expected, String status, List<String> warnings)
       throws IOException {
     if (db.sql(
@@ -406,6 +509,7 @@ public final class TextDocumentChangeSetService {
         != 1) throw new IOException("Document terminal receipt unavailable");
   }
 
+  /** 共通の実行基盤で用いる自分が所有する対象を返す。 */
   private Row owned(AgentRunContext owner, String id) throws IOException {
     Path root = owner(owner, false);
     if (id == null || !id.matches("[a-f0-9-]{36}"))
@@ -413,6 +517,7 @@ public final class TextDocumentChangeSetService {
     return ownedRow(owner.projectId(), root.toString(), owner.conversationId(), id);
   }
 
+  /** 共通の実行基盤で用いる自分が所有する対象行を返す。 */
   private Row ownedRow(String project, String root, String session, String id) {
     return db.sql(
             "SELECT * FROM text_document_change_sets WHERE id=? AND project=? AND root=? AND session=?")
@@ -445,6 +550,7 @@ public final class TextDocumentChangeSetService {
                     "Document set not found in this Project/root/session"));
   }
 
+  /** 共通の実行基盤で用いる表示内容を返す。 */
   private View view(Row row) throws IOException {
     var files = new ArrayList<FileView>();
     var diff = new StringBuilder();
@@ -504,17 +610,20 @@ public final class TextDocumentChangeSetService {
         matching);
   }
 
+  /** 既存の記録へ経緯を残すため、テキスト文書変更集合サービスを追記する。 */
   private static void append(StringBuilder out, String text, char prefix) {
     if (text == null) return;
     for (String line : text.split("\n", -1)) out.append(prefix).append(line).append('\n');
     if (!text.endsWith("\n")) out.append("\\ No newline at end of file\n");
   }
 
+  /** 共通の実行基盤に関する完全一致を処理する。 */
   private static void exact(Row row, String sha) {
     if (sha == null || !sha.equals(row.sha()))
       throw new IllegalArgumentException("Exact reviewed whole Change Set SHA required");
   }
 
+  /** 共通の実行基盤に関する選択中を処理する。 */
   private static void selected(Path root, String name, Set<String> paths) throws IOException {
     TextDocumentTransaction.path(root, name);
     if (name.substring(name.lastIndexOf('/') + 1).startsWith(".rei-document-")
@@ -522,6 +631,7 @@ public final class TextDocumentChangeSetService {
       throw new IllegalArgumentException("Unique nonreserved target paths required");
   }
 
+  /** 共通の実行基盤で用いる所有者を返す。 */
   private static Path owner(AgentRunContext owner, boolean write) throws IOException {
     RunCancellation.propagate(null);
     if (owner == null
@@ -536,6 +646,7 @@ public final class TextDocumentChangeSetService {
     return root;
   }
 
+  /** 受け渡し先が扱える形式へ、指定された内容を変換する。 */
   private String encode(Object value) {
     try {
       String payload = json.writeValueAsString(value);
@@ -547,6 +658,7 @@ public final class TextDocumentChangeSetService {
     }
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   private <T> T decode(String value, Class<T> type) {
     try {
       if (value == null || value.getBytes(StandardCharsets.UTF_8).length > 1048576)

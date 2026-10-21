@@ -7,7 +7,9 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
+/** 計画プロセス期限の結果と状態の契約を検証するテスト。 */
 class PlanProcessDeadlineTest {
+  /** ChatGPTとの連携で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void thirtyMinuteLifetimeIncludesStartupAndCleanupDoesNotResetItsDeadline() {
     var clock = new AtomicLong(100);
@@ -23,6 +25,7 @@ class PlanProcessDeadlineTest {
         assertThrows(ChatGptException.class, deadline::remaining).code());
   }
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void watchdogRoundsUpOnlyItsSubsecondCleanupWindow() {
     var deadline = new PlanProcessDeadline(Duration.ofMillis(1), () -> 0L);
@@ -30,6 +33,7 @@ class PlanProcessDeadlineTest {
     assertEquals("6s", deadline.wslWatchdogDuration());
   }
 
+  /** ChatGPTとの連携で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void invalidTimeoutNeverCreatesAnUnboundedProcess() {
     assertThrows(IllegalArgumentException.class, () -> new PlanProcessDeadline(null));
@@ -41,6 +45,7 @@ class PlanProcessDeadlineTest {
         () -> new PlanProcessDeadline(Duration.ofMinutes(30).plusNanos(1)));
   }
 
+  /** ChatGPTとの連携で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void probeWaitConsumesOnlyTheRemainingStartupBudget() {
     var clock = new AtomicLong();

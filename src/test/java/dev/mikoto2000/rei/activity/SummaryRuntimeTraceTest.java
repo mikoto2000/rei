@@ -27,12 +27,22 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
 
+/** 要約実行環境追跡情報の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SummaryRuntimeTraceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /**
+   * 検証条件の再現に使うHarnessの情報。
+   *
+   * @param command 検証に使うコマンド
+   * @param output 検証に使う出力
+   * @param store 検証に使う保存先
+   */
   record Harness(picocli.CommandLine command, java.io.StringWriter output, ActivityStore store) {}
 
+  /** {@code harness} の条件を再現するための補助情報を返す。 */
   Harness harness(DailySummaryService service, String date) {
     var store = mock(ActivityStore.class);
     when(store.findRecordsBetween(any(), any()))
@@ -66,6 +76,7 @@ class SummaryRuntimeTraceTest {
     return new Harness(root, output, store);
   }
 
+  /** 検証用に、要求された処理を実行する。 */
   void execute(Harness h, String date) {
     var input =
         new dev.mikoto2000.rei.core.command.UserInputService(
@@ -76,6 +87,7 @@ class SummaryRuntimeTraceTest {
     assertThat(h.command().execute(input.arguments())).isZero();
   }
 
+  /** 日次サービスを利用することを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"", "today", "yesterday", "2026-09-24"})
   void slashDateFormsUseDailyServiceAndMissingConfigExplainsUnchangedOutput(String date)
@@ -105,6 +117,7 @@ class SummaryRuntimeTraceTest {
     verify(h.store(), never()).append(any());
   }
 
+  /** 作業状況の把握で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"success", "invalid", "failure"})
   void commandThroughRealWriterTracesInputModeAndFormatter(String mode) throws Exception {

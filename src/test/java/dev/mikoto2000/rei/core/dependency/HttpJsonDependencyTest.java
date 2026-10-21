@@ -12,10 +12,13 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
+/** HTTP通信JSON変換依存条件の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class HttpJsonDependencyTest {
+  /** 検証に使う作業ルート。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path root;
 
+  /** 外部条件の待機で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void waitsForTypedScalarAtPointerAndDoesNotExposeResponse() throws Exception {
     var body =
@@ -46,6 +49,7 @@ class HttpJsonDependencyTest {
     }
   }
 
+  /** 外部条件の待機で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void validatesExplicitConditionAndOldPortCannotClaimVerification() {
     String expected = "{\"status\":200,\"pointer\":\"/ready\",\"value\":true}";
@@ -73,6 +77,7 @@ class HttpJsonDependencyTest {
     assertEquals(DependencyState.BLOCKED, old.probeJson("id", spec.target(), expected).state());
   }
 
+  /** 小数精度未指定のを保持することを確認する。 */
   @Test
   void scalarComparisonPreservesDecimalPrecisionNullAndPointerEscapes() throws Exception {
     var number = HttpJsonCondition.parse("{\"status\":200,\"pointer\":\"/value\",\"value\":0.1}");
@@ -85,6 +90,7 @@ class HttpJsonDependencyTest {
     assertFalse(nil.matches("{\"a/b\":{}}".getBytes(StandardCharsets.UTF_8)));
   }
 
+  /** 外部条件の待機で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void malformedDuplicateDeepOversizedBodiesAndWrongStatusNeverComplete() throws Exception {
     var body = new AtomicReference<>("{\"ready\":true,\"ready\":false}");
@@ -167,6 +173,7 @@ class HttpJsonDependencyTest {
       assertThrows(IllegalArgumentException.class, () -> HttpJsonCondition.parse(invalid));
   }
 
+  /** 外部条件の待機の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void persistsConditionAndHonorsNetworkToolsAndAutomaticPermission() throws Exception {
     var requests = new java.util.concurrent.atomic.AtomicInteger();
@@ -253,6 +260,7 @@ class HttpJsonDependencyTest {
     }
   }
 
+  /** 外部条件の待機の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void interruptedJsonRequestPropagatesCancellation() throws Exception {
     var entered = new java.util.concurrent.CountDownLatch(1);

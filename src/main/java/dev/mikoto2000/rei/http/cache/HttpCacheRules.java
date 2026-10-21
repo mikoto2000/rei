@@ -20,11 +20,17 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.TreeMap;
 
-/** Conservative application cache: complete public direct responses only. */
+/**
+ * 取得した情報の再利用に必要なHTTP通信キャッシュ規則一覧を扱う。
+ *
+ * <p>Conservative application cache: complete public direct responses only.
+ */
 final class HttpCacheRules {
+  /** HTTPヘッダー。 */
   private static final Set<String> HEADERS =
       Set.of("accept", "accept-encoding", "user-agent", "cache-control");
 
+  /** 取得した情報の再利用において、要求対象の条件に該当するか判定する。 */
   static boolean requestEligible(
       HttpResponseCache.Request request, SensitiveInfoDetector sensitive) {
     if (request.policy().allowPrivateOrigin()
@@ -43,6 +49,7 @@ final class HttpCacheRules {
     }
   }
 
+  /** 取得した情報の再利用において、共有できるかどうかに該当するか判定する。 */
   static boolean shareable(
       HttpResponseCache.Request request,
       SafeHttpFetcher.Response response,
@@ -61,12 +68,14 @@ final class HttpCacheRules {
     return !sensitive.containsSensitiveInfo(new String(response.body(), StandardCharsets.UTF_8));
   }
 
+  /** 取得した情報の再利用において、restrictedに該当するか判定する。 */
   static boolean restricted(String control) {
     return directive(control, "no-store")
         || directive(control, "private")
         || directive(control, "must-understand");
   }
 
+  /** 取得した情報の再利用において、directiveに該当するか判定する。 */
   static boolean directive(String value, String name) {
     if (value == null) return false;
     return Arrays.stream(value.split(","))
@@ -74,6 +83,7 @@ final class HttpCacheRules {
         .anyMatch(part -> part.equalsIgnoreCase(name));
   }
 
+  /** 取得した情報の再利用で用いる秒数を返す。 */
   static Long seconds(String value, String name) {
     if (value == null) return null;
     Long minimum = null;
@@ -93,6 +103,7 @@ final class HttpCacheRules {
     return minimum;
   }
 
+  /** 取得した情報の再利用で用いる日付を返す。 */
   static Instant date(String value) {
     try {
       return value == null
@@ -103,6 +114,7 @@ final class HttpCacheRules {
     }
   }
 
+  /** 取得した情報の再利用で用いる有効なキャッシュ有効期間を返す。 */
   static Duration freshTtl(
       HttpResponseCache.Request request,
       SafeHttpFetcher.Response response,
@@ -155,6 +167,7 @@ final class HttpCacheRules {
     return ttl.isNegative() ? Duration.ZERO : ttl;
   }
 
+  /** 取得した情報の再利用で用いる条件一覧を返す。 */
   static Map<String, String> conditions(
       HttpResponseCache.Request request, SafeHttpFetcher.Response old, boolean force) {
     var headers = new TreeMap<>(request.headers());
@@ -170,6 +183,7 @@ final class HttpCacheRules {
     return Map.copyOf(headers);
   }
 
+  /** 取得した情報の再利用で用いる検証済みを返す。 */
   static SafeHttpFetcher.Response validated(
       SafeHttpFetcher.Response old,
       SafeHttpFetcher.Response response,

@@ -10,7 +10,9 @@ import java.net.URI;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+/** 公開ネットワーク判断基準の結果と状態の契約を検証するテスト。 */
 class PublicNetworkPolicyTest {
+  /** 以外公開接続先一覧を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -46,12 +48,14 @@ class PublicNetworkPolicyTest {
     assertFalse(PublicNetworkPolicy.isPublic(InetAddress.getByName(address)), address);
   }
 
+  /** 公開接続先一覧を受け付けられることを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"8.8.8.8", "1.1.1.1", "2001:4860:4860::8888", "2606:4700:4700::1111"})
   void acceptsPublicAddresses(String address) throws Exception {
     assertTrue(PublicNetworkPolicy.isPublic(InetAddress.getByName(address)));
   }
 
+  /** 許可できないURI一覧を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -72,6 +76,7 @@ class PublicNetworkPolicyTest {
     assertThrows(HttpFetchException.class, () -> PublicNetworkPolicy.validate(URI.create(value)));
   }
 
+  /** 外部情報の取得で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {

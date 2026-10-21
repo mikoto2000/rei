@@ -7,10 +7,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+/** 音通知通知をモデルから呼び出せるツールとして提供する。 */
 @Component
 @RequiredArgsConstructor
 public class SoundNotificationTools {
 
+  /** 音通知通知サービス。 */
   private final SoundNotificationService soundNotificationService;
 
   /**

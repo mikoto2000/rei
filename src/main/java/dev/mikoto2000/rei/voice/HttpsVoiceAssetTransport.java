@@ -14,14 +14,20 @@ import java.time.Duration;
 import java.util.concurrent.ExecutionException;
 import java.util.function.LongConsumer;
 
-/** JVM-default certificate validation, bounded HTTPS redirects and exact-size/hash streaming. */
+/**
+ * 音声による対話に必要なHTTPS音声素材通信経路を扱う。
+ *
+ * <p>JVM-default certificate validation, bounded HTTPS redirects and exact-size/hash streaming.
+ */
 public final class HttpsVoiceAssetTransport implements VoiceAssetTransport, AutoCloseable {
+  /** クライアント。 */
   private final HttpClient client =
       HttpClient.newBuilder()
           .connectTimeout(Duration.ofSeconds(15))
           .followRedirects(HttpClient.Redirect.NEVER)
           .build();
 
+  /** 音声による対話に関する取得を処理する。 */
   public void download(
       VoiceModelManifest.Asset asset, Path target, Cancellation token, LongConsumer progress)
       throws IOException {
@@ -42,6 +48,7 @@ public final class HttpsVoiceAssetTransport implements VoiceAssetTransport, Auto
         response = pending.get();
       } catch (InterruptedException e) {
         pending.cancel(true);
+        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
         throw new InterruptedIOException("Voice request interrupted");
       } catch (ExecutionException e) {
@@ -75,6 +82,7 @@ public final class HttpsVoiceAssetTransport implements VoiceAssetTransport, Auto
     throw new IOException("Voice redirect limit exceeded");
   }
 
+  /** 指定された内容を保存先へ反映するため、本文を書き込む。 */
   static void writeBody(
       VoiceModelManifest.Asset asset,
       InputStream input,
@@ -106,6 +114,7 @@ public final class HttpsVoiceAssetTransport implements VoiceAssetTransport, Auto
     VoiceModelManifest.verifyAsset(asset, target);
   }
 
+  /** 音声による対話で利用した資源や登録を解放し、利用を終了する。 */
   public void close() {
     client.shutdownNow();
   }

@@ -10,11 +10,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** フィード更新サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class FeedUpdateServiceTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 更新について、フィード付随情報を保存することを確認する。 */
   @Test
   void updateStoresFeedMetadataAndItems() {
     FeedService feedService = newService();
@@ -52,6 +55,7 @@ class FeedUpdateServiceTest {
     assertEquals("First Post", feedService.listItemsForFeed(feed.id()).getFirst().title());
   }
 
+  /** フィードの購読と収集で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void updateDeduplicatesItemsByUrl() {
     FeedService feedService = newService();
@@ -83,6 +87,7 @@ class FeedUpdateServiceTest {
     assertEquals(1, feedService.listItemsForFeed(feed.id()).size());
   }
 
+  /** フィードの購読と収集で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void updateAllSkipsDisabledFeedsAndRecordsFailures() {
     FeedService feedService = newService();
@@ -124,6 +129,7 @@ class FeedUpdateServiceTest {
     assertEquals(503, feedService.listFailures(failingFeed.id()).getFirst().httpStatus());
   }
 
+  /** フィードの購読と収集で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void listRecentItemsReturnsItemsSinceYesterdayStartSortedDescending() {
     FeedService feedService = newService();
@@ -156,6 +162,7 @@ class FeedUpdateServiceTest {
         List.of("Today", "Yesterday"), items.stream().map(FeedBriefingItem::title).toList());
   }
 
+  /** フィードの購読と収集で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void listRecentItemsLimitsResultsPerFeed() {
     FeedService feedService = newService();
@@ -206,6 +213,7 @@ class FeedUpdateServiceTest {
         List.of("A-3", "A-2", "B-3", "B-2"), items.stream().map(FeedBriefingItem::title).toList());
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private FeedService newService() {
     return new FeedService(
         new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feed-update.db")));

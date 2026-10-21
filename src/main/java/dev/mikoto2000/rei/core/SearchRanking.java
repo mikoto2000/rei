@@ -11,10 +11,23 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-/** Fixed, explainable rules. AST enrichment is a deterministic top-32 candidate refinement. */
+/**
+ * 共通の実行基盤に必要な検索順位付けを扱う。
+ *
+ * <p>Fixed, explainable rules. AST enrichment is a deterministic top-32 candidate refinement.
+ */
 final class SearchRanking {
+  /**
+   * 共通の実行基盤で受け渡す順位を付けたを表す。
+   *
+   * @param path パス
+   * @param matches 一致結果
+   * @param score 評価値
+   * @param matchedBy 一致した別
+   */
   record Ranked(String path, List<Tools.SearchMatch> matches, int score, List<String> matchedBy) {}
 
+  /** 共通の実行基盤で用いる順位を返す。 */
   static List<Ranked> rank(
       Map<String, List<Tools.SearchMatch>> files,
       List<Tools.GrepQuery> queries,
@@ -69,10 +82,12 @@ final class SearchRanking {
     return List.copyOf(result);
   }
 
+  /** 共通の実行基盤で用いる順序を返す。 */
   private static Comparator<Ranked> order() {
     return Comparator.comparingInt(Ranked::score).reversed().thenComparing(Ranked::path);
   }
 
+  /** 共通の実行基盤で用いる評価値を返す。 */
   private static Ranked score(
       String path,
       List<Tools.SearchMatch> matches,
@@ -125,6 +140,7 @@ final class SearchRanking {
       points += 10;
       reasons.add("body");
     }
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (matches.size() > 1) {
       points += Math.min(16, matches.size()) * 3;
       reasons.add("multiple-hits");

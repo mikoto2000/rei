@@ -7,17 +7,30 @@ import java.time.Instant;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+/** 要約をモデルから呼び出せるツールとして提供する。 */
 @Component
 public class SummaryTools {
+  /** 状態一覧。 */
   private final ProjectRunStateStore states;
 
+  /** 指定された値や利用先を使って、SummaryToolsを初期化する。 */
   public SummaryTools(ProjectRunStateStore states) {
     this.states = states;
   }
 
+  /**
+   * 情報の要約で受け渡す最新要約を表す。
+   *
+   * @param found 見つかった
+   * @param message メッセージ
+   * @param url 参照先のURL
+   * @param summary 要約
+   * @param completedAt 完了日時
+   */
   public record LatestSummary(
       boolean found, String message, String url, String summary, Instant completedAt) {}
 
+  /** 情報の要約で参照する直近要約を返す。 */
   @Tool(
       name = "getLastSummary",
       description =

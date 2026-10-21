@@ -12,10 +12,13 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 論文提供元Workflowの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class PaperProviderWorkflowTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code openAlex} の条件を再現するための補助情報を返す。 */
   String openAlex(String title, Integer year, Boolean open, String doi) {
     return "{\"title\":\""
         + title
@@ -28,6 +31,7 @@ class PaperProviderWorkflowTest {
         + "},\"abstract_inverted_index\":{\"source\":[0]}}";
   }
 
+  /** {@code query} の条件を再現するための補助情報を返す。 */
   PaperSearchQuery query(int limit, boolean open) {
     return new PaperSearchQuery(
         "GUI agent & RAG",
@@ -40,6 +44,7 @@ class PaperProviderWorkflowTest {
         limit);
   }
 
+  /** 論文の調査と整理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void providerFiltersUntrustedResponseBeforePersistenceThenLibraryAndSummarySurviveRestart() {
     var config = new PaperProperties();
@@ -97,10 +102,12 @@ class PaperProviderWorkflowTest {
     var modelCalls = new java.util.concurrent.atomic.AtomicInteger();
     var model =
         new PaperLanguageModel() {
+          /** 検証で使用するモデルを、指定された条件に合わせて用意する。 */
           public String model() {
             return "fixture-model";
           }
 
+          /** {@code generate} の条件を再現するための補助情報を返す。 */
           public String generate(String system, String input, PaperOperation operation) {
             operation.check();
             modelCalls.incrementAndGet();
@@ -130,6 +137,7 @@ class PaperProviderWorkflowTest {
                 .get("1", PaperOperation.local("other")));
   }
 
+  /** 論文の調査と整理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void fallbackEnforcesYearAndCountAndDoesNotInventOpenAccess() {
     var config = new PaperProperties();

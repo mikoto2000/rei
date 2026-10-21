@@ -45,14 +45,25 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 
-/** Explicit diagnostics in the captured Run, never autonomous repair or authentication. */
+/**
+ * 環境診断活動中のユースケースを実現する。
+ *
+ * <p>Explicit diagnostics in the captured Run, never autonomous repair or authentication.
+ */
 @Service
 public class DoctorActiveService {
+  /**
+   * 実行環境の診断で受け渡すレポートを表す。
+   *
+   * @param results 結果一覧
+   */
   public record Report(List<DoctorResult> results) {
+    /** 受け取った情報からReportを作成する。 */
     public Report {
       results = List.copyOf(results);
     }
 
+    /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
     public String render() {
       var text =
           new StringBuilder(
@@ -76,18 +87,40 @@ public class DoctorActiveService {
     }
   }
 
+  /** 外部操作を行わず環境を診断する窓口。 */
   private final DoctorService passive;
+
+  /** 実行環境。 */
   private final Environment environment;
+
+  /** モデル一覧。 */
   private final LlmModelProvider models;
+
+  /** 選択中モデル。 */
   private final ModelHolderService selectedModel;
+
+  /** HTTP通信。 */
   private final JavaHttpDependencyProbe http;
+
+  /** Codexの設定または実行の窓口。 */
   private final CodexProperties codex;
+
+  /** Claudeの設定または実行の窓口。 */
   private final ClaudeCodeProperties claude;
+
+  /** 音声。 */
   private final VoiceProperties voice;
+
+  /** マイク。 */
   private final DoctorMicrophoneProbe microphone;
+
+  /** プロセス一覧。 */
   private final ExternalAgentProcessRunner processes;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** 実行環境の診断を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @org.springframework.beans.factory.annotation.Autowired
   public DoctorActiveService(
       DoctorService passive,
@@ -113,6 +146,7 @@ public class DoctorActiveService {
         Clock.systemUTC());
   }
 
+  /** 指定された値や利用先を使って、DoctorActiveServiceを初期化する。 */
   public DoctorActiveService(
       DoctorService passive,
       Environment environment,
@@ -138,6 +172,17 @@ public class DoctorActiveService {
     this.clock = clock;
   }
 
+  /**
+   * 実行環境の診断で受け渡すPlannedを表す。
+   *
+   * @param check 確認
+   * @param tool ツール
+   * @param input 入力
+   * @param call 呼び出し
+   * @param target 対象
+   * @param enabled 有効状態
+   * @param inferenceOptions 推定選択可能な設定
+   */
   private record Planned(
       DoctorRequest.Check check,
       String tool,
@@ -147,6 +192,7 @@ public class DoctorActiveService {
       boolean enabled,
       OpenAiChatOptions inferenceOptions) {}
 
+  /** 実行環境の診断で用いる活動中を返す。 */
   public Report active(RunExecutionContext run, DoctorRequest request) {
     run.checkActive();
     if (!environment.getProperty("rei.doctor.enabled", Boolean.class, true))
@@ -277,6 +323,7 @@ public class DoctorActiveService {
     return new Report(results);
   }
 
+  /** 実行環境の診断で用いるタイムアウトを返す。 */
   private Duration timeout() {
     Duration value =
         org.springframework.boot.convert.DurationStyle.detectAndParse(
@@ -286,6 +333,7 @@ public class DoctorActiveService {
     return value;
   }
 
+  /** 実行環境の診断で用いるconnectivityを返す。 */
   private DoctorResult connectivity(RunExecutionContext run, String endpoint, Duration timeout) {
     if (endpoint == null || endpoint.isBlank())
       return result(
@@ -348,6 +396,7 @@ public class DoctorActiveService {
     };
   }
 
+  /** 実行環境の診断で用いる推定を返す。 */
   private DoctorResult inference(
       RunExecutionContext run, OpenAiChatOptions captured, Duration timeout) {
     var model = models.subAgentChatModel();
@@ -416,6 +465,7 @@ public class DoctorActiveService {
         "Inspect existing model configuration if needed");
   }
 
+  /** 実行環境の診断で用いる形式のバージョンを返す。 */
   private DoctorResult version(RunExecutionContext run, Planned plan, Duration timeout) {
     String id = "external." + plan.check().name().toLowerCase(Locale.ROOT);
     if (!plan.enabled())
@@ -461,6 +511,7 @@ public class DoctorActiveService {
         "Check local CLI installation/configuration; authentication is a separate operation");
   }
 
+  /** 実行環境の診断で用いるマイクを返す。 */
   private DoctorResult microphone(RunExecutionContext run, String deviceId, Duration timeout) {
     var observed = microphone.check(deviceId, timeout, run::checkActive);
     var status =
@@ -479,6 +530,7 @@ public class DoctorActiveService {
         "Select a device explicitly; on timeout cleanup is requested and further acquisition waits for the driver to return");
   }
 
+  /** 実行環境の診断で用いる結果を返す。 */
   private DoctorResult result(
       String id,
       DoctorResult.Status status,
@@ -489,6 +541,7 @@ public class DoctorActiveService {
     return new DoctorResult(id, status, clock.instant(), method, evidence, causes, next);
   }
 
+  /** 要求された処理を実行する。 */
   public String execute(String text, RunExecutionContext run) {
     var request = DoctorRequest.parseText(text);
     if (request.checks().isEmpty()) return DoctorService.render(passive.passive(request.details()));

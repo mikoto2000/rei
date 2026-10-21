@@ -60,10 +60,13 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import reactor.core.publisher.Flux;
 
+/** 記憶外部連携の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class MemoryIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** チャット圧縮について、記憶を保持することを確認する。 */
   @Test
   void chatCompressionRetainsMemoryWithoutWritingItToHistoryOrSummary() {
     var properties = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60, null);
@@ -178,6 +181,7 @@ class MemoryIntegrationTest {
     assertEquals(1, turns.read("project:00000000-0000-0000-0000-000000000001:chat").size());
   }
 
+  /** 言語モデルについて、記憶機能を利用することを確認する。 */
   @Test
   void llmUsesMemoryFeatureWithoutToolsAndValidatesStructuredResult() {
     var models = mock(LlmModelProvider.class);
@@ -204,6 +208,7 @@ class MemoryIntegrationTest {
     assertEquals(1, processor.extract(List.of()).size());
   }
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void eventContainsCountsAndOwnershipWithoutMemoryText() {
     var observed = new ArrayList<AgentEvent>();
@@ -225,6 +230,7 @@ class MemoryIntegrationTest {
     assertTrue(external.toString().contains("processedTurns=2"));
   }
 
+  /** 長期記憶の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void optionalMemoryCannotExhaustTheFinalContextBudget() {
     var props = new ContextCompressionProperties();

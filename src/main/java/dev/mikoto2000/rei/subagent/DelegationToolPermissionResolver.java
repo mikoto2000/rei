@@ -12,30 +12,45 @@ import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Resolve host-controlled child definitions, never capabilities claimed in model arguments. */
+/**
+ * 委譲ツール権限の指定を解決し、利用する対象を確定する。
+ *
+ * <p>Resolve host-controlled child definitions, never capabilities claimed in model arguments.
+ */
 @Component
 public final class DelegationToolPermissionResolver {
+  /** 登録台帳。 */
   private final ObjectProvider<SubAgentRegistry> registry;
+
+  /** 子判断基準。 */
   private final ObjectProvider<SubAgentToolPolicy> childPolicy;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final JsonMapper json = JsonMapper.builder().build();
+
+  /** 自動。 */
   private dev.mikoto2000.rei.chatgpt.PlanDelegationProperties automatic;
 
+  /** 補助エージェントへの委譲で使用する自動を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setAutomatic(dev.mikoto2000.rei.chatgpt.PlanDelegationProperties automatic) {
     this.automatic = automatic;
   }
 
+  /** 指定された値や利用先を使って、DelegationToolPermissionResolverを初期化する。 */
   public DelegationToolPermissionResolver(
       ObjectProvider<SubAgentRegistry> registry, ObjectProvider<SubAgentToolPolicy> childPolicy) {
     this.registry = registry;
     this.childPolicy = childPolicy;
   }
 
+  /** 補助エージェントへの委譲において、委譲ツール権限対象の解決への対応可否を返す。 */
   public static boolean supports(String tool) {
     return Set.of("delegateTask", "delegateTasks", "delegateTaskGraph", "judgeSubAgentAnswers")
         .contains(tool);
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public void validate(String tool, String input) {
     if (!Set.of("delegateTask", "delegateTasks").contains(tool)) return;
     var issues = new ArrayList<>(DelegationArguments.problems(tool, input));
@@ -155,6 +170,7 @@ public final class DelegationToolPermissionResolver {
       }
   }
 
+  /** 指定や設定を照合し、実際に利用する対象を確定する。 */
   public Set<ActionCapability> resolve(
       String tool, String input, Function<String, Set<ActionCapability>> capabilities) {
     try {
@@ -163,6 +179,7 @@ public final class DelegationToolPermissionResolver {
       var required = EnumSet.of(ActionCapability.READ);
       if ("delegateTasks".equals(tool)) {
         var requests = root.path("requests");
+        // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (!requests.isArray() || requests.isEmpty() || requests.size() > 8) return all();
         for (var request : requests) required.addAll(child(request, capabilities));
       } else if ("delegateTaskGraph".equals(tool)) {
@@ -185,6 +202,7 @@ public final class DelegationToolPermissionResolver {
     }
   }
 
+  /** 補助エージェントへの委譲で用いる子を返す。 */
   private Set<ActionCapability> child(
       JsonNode request, Function<String, Set<ActionCapability>> capabilities) {
     if (!request.isObject() || !request.path("agent").isString()) return all();
@@ -220,6 +238,7 @@ public final class DelegationToolPermissionResolver {
     return required;
   }
 
+  /** 補助エージェントへの委譲で用いる全対象を返す。 */
   private static Set<ActionCapability> all() {
     return Set.copyOf(EnumSet.allOf(ActionCapability.class));
   }

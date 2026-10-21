@@ -24,11 +24,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
-/** Paired adversarial gate evaluation; deliberately incomplete tasks, no live-model claim. */
+/**
+ * 目標実行可否の判断Independent比較結果の結果と状態の契約を検証するテスト。
+ *
+ * <p>Paired adversarial gate evaluation; deliberately incomplete tasks, no live-model claim.
+ */
 @Tag("integration")
 class GoalGateIndependentComparisonTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temporary;
 
+  /** 成果の評価で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void extraMandatoryConditionsPreventHostFalseCompletion() throws Exception {
     var payload = new LinkedHashMap<String, Object>();

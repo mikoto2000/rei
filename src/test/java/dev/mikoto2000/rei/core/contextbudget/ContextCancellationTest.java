@@ -32,10 +32,13 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.ObjectProvider;
 import reactor.core.publisher.Flux;
 
+/** 文脈キャンセルの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ContextCancellationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** モデルへ渡す文脈の管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void disposingParentCancelsInFlightSummaryHttpStream() throws Exception {
     var started = new CountDownLatch(1);

@@ -11,10 +11,16 @@ import org.springframework.ai.tool.ToolCallbackProvider;
  */
 public class ToolEventCallbackProvider implements ToolCallbackProvider {
 
+  /** 委譲先。 */
   private final ToolCallbackProvider delegate;
+
+  /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
+
+  /** 実行状況の通知先。 */
   private final AgentEventPublisher eventPublisher;
 
+  /** 指定された値や利用先を使って、ToolEventCallbackProviderを初期化する。 */
   public ToolEventCallbackProvider(
       ToolCallbackProvider delegate,
       AgentEventFactory eventFactory,
@@ -24,6 +30,7 @@ public class ToolEventCallbackProvider implements ToolCallbackProvider {
     this.eventPublisher = eventPublisher;
   }
 
+  /** 実行状況の通知で参照するツール完了時の処理一覧を返す。 */
   @Override
   public ToolCallback[] getToolCallbacks() {
     ToolCallback[] callbacks = delegate.getToolCallbacks();

@@ -20,7 +20,9 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** Googleコマンド伝えるの結果と状態の契約を検証するテスト。 */
 class GoogleCommandReportsTest {
+  /** Web APIによる操作で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void calendarDateTakesPrecedenceAndPreservesShellFormatting() throws Exception {
     var service = mock(GoogleCalendarService.class);
@@ -37,6 +39,7 @@ class GoogleCommandReportsTest {
     verify(service, never()).parseDateTime(anyString());
   }
 
+  /** Web APIによる操作で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void taskReportsKeepDefaultsFilteringAndMessages() {
     var service = mock(TaskService.class);

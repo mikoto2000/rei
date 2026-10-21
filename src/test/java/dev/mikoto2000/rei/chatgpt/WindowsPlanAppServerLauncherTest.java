@@ -13,14 +13,18 @@ import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 判定期間計画アプリケーションサーバー起動の結果と状態の契約を検証するテスト。 */
 @EnabledOnOs(OS.WINDOWS)
 class WindowsPlanAppServerLauncherTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path home;
 
+  /** 検証条件を再現するための関連付け。 */
   @org.springframework.boot.context.properties.EnableConfigurationProperties(
       PlanAppServerProperties.class)
   static class Binding {}
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void configurationBindingSelectsNativeWindowsByDefault() {
     new org.springframework.boot.test.context.runner.ApplicationContextRunner()
@@ -36,6 +40,7 @@ class WindowsPlanAppServerLauncherTest {
             });
   }
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void windowsIsDefaultAndRequiresNativeExe() {
     var p = new PlanAppServerProperties(true, home, null, "C:/Program Files/Codex/codex.exe", null);
@@ -51,6 +56,7 @@ class WindowsPlanAppServerLauncherTest {
         () -> new PlanAppServerProperties(true, home, null, "C:/codex.exe", "auto"));
   }
 
+  /** ChatGPTとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void directProcessHasOwnHomeNoTokenArgumentsAndOnlyPlatformEnvironment() {
     var p =

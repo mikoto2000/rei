@@ -15,10 +15,13 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 取得記録受付の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class CaptureAdmissionTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** モデル応答の記録の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void queuedCancellationEndsCaptureAndAnewReservationCanBeCreated() {
     var tasks = new ArrayList<Runnable>();
@@ -47,6 +50,7 @@ class CaptureAdmissionTest {
     }
   }
 
+  /** モデル応答の記録で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void deferredExecutorRejectionEndsTheAcceptedCapture() {
     var tasks = new ArrayList<Runnable>();

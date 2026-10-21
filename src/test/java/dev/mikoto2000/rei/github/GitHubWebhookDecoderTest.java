@@ -12,27 +12,35 @@ import javax.crypto.Mac;
 import javax.crypto.spec.SecretKeySpec;
 import org.junit.jupiter.api.Test;
 
+/** Git連携先Webhook通知受信形式の解釈の結果と状態の契約を検証するテスト。 */
 class GitHubWebhookDecoderTest {
+  /** 検証に使う秘密情報。 */
   static final String SECRET = "fixture-webhook-secret-at-least-32-characters";
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   static final Instant NOW = Instant.parse("2026-10-07T04:00:00Z");
 
+  /** {@code body} の条件を再現するための補助情報を返す。 */
   static byte[] body(String fields) {
     return ("{\"repository\":{\"full_name\":\"owner/repo\"}," + fields + "}")
         .getBytes(StandardCharsets.UTF_8);
   }
 
+  /** {@code signature} の条件を再現するための補助情報を返す。 */
   static String signature(byte[] bytes) throws Exception {
     var mac = Mac.getInstance("HmacSHA256");
     mac.init(new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
     return "sha256=" + HexFormat.of().formatHex(mac.doFinal(bytes));
   }
 
+  /** {@code decoder} の条件を再現するための補助情報を返す。 */
   static GitHubWebhookDecoder decoder() {
     var props = new GitHubWebhookProperties();
     props.setSecret(SECRET);
     return new GitHubWebhookDecoder(props, Clock.fixed(NOW, ZoneOffset.UTC));
   }
 
+  /** GitHubとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void verifiesTheExactRawBodyAndExtractsFactsWithoutPassingCommentText() throws Exception {
     var bytes =
@@ -63,6 +71,7 @@ class GitHubWebhookDecoderTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 以前の完了待ち重複の有無を受け付けないことを確認する。 */
   @Test
   void distinguishesCiFailureFromSuccessAndRejectsOldFutureDuplicateAndDeepJson() throws Exception {
     var failed =

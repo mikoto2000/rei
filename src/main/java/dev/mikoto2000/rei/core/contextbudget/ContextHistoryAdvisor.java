@@ -19,21 +19,34 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
 /**
- * Reads complete conversation logs (legacy turns as fallback), preserving bounded compatibility
+ * モデルへ渡す文脈の管理に必要な文脈履歴対話の補助を扱う。
+ *
+ * <p>Reads complete conversation logs (legacy turns as fallback), preserving bounded compatibility
  * memory.
  */
 public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
+  /** 発生順序。 */
   public static final String SEQUENCE = "rei.historySequence";
+
+  /** やり取り一覧。 */
   private final ConversationTurnStore turns;
+
+  /** 記憶。 */
   private final ChatMemory memory;
+
+  /** 要約一覧。 */
   private final ConversationSummaryRepository summaries;
+
+  /** ログ一覧。 */
   private final dev.mikoto2000.rei.conversation.ConversationLogStore logs;
 
+  /** モデルへ渡す文脈の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ContextHistoryAdvisor(
       ConversationTurnStore turns, ChatMemory memory, ConversationSummaryRepository summaries) {
     this(turns, memory, summaries, null);
   }
 
+  /** 指定された値や利用先を使って、ContextHistoryAdvisorを初期化する。 */
   public ContextHistoryAdvisor(
       ConversationTurnStore turns,
       ChatMemory memory,
@@ -45,11 +58,13 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
     this.logs = logs;
   }
 
+  /** 他の補助処理と組み合わせる際の適用順序を返す。 */
   @Override
   public int getOrder() {
     return -1000;
   }
 
+  /** モデルへ渡す文脈の管理の本処理へ渡す文脈を準備する。 */
   @Override
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     String id =
@@ -173,6 +188,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         .build();
   }
 
+  /** モデルへ渡す文脈の管理の実行結果を受け取り、後続の処理へ反映する。 */
   @Override
   public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
     if (response.chatResponse() != null && response.chatResponse().getResult() != null)
@@ -182,6 +198,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
     return response;
   }
 
+  /** モデルへ渡す文脈の管理で用いるhistoricalを返す。 */
   public static Message historical(Message message, long sequence) {
     Map<String, Object> metadata = new HashMap<>(message.getMetadata());
     metadata.put(SEQUENCE, sequence);
@@ -189,6 +206,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
     return AssistantMessage.builder().content(message.getText()).properties(metadata).build();
   }
 
+  /** モデルへ渡す文脈の管理で用いる発生順序を返す。 */
   static long sequence(Message message) {
     return message.getMetadata().get(SEQUENCE) instanceof Number n ? n.longValue() : 0;
   }

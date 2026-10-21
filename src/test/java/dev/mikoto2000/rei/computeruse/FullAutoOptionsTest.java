@@ -8,7 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.DefaultApplicationArguments;
 
+/** 自動実行の指定選択可能な設定の結果と状態の契約を検証するテスト。 */
 class FullAutoOptionsTest {
+  /** 画面操作の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void explicitFlagSelectsPolicyAndInvalidValuesFailStartup() {
     for (String[] args : java.util.List.of(new String[] {}, new String[] {"--fullauto=false"})) {
@@ -33,6 +35,7 @@ class FullAutoOptionsTest {
         () -> new FullAutoOptions(new DefaultApplicationArguments("--fullauto=maybe")));
   }
 
+  /** 画面操作の支援の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void serviceDispatchesConfirmationOnlyInFullAutoAndNeverProhibited() {
     for (boolean enabled : java.util.List.of(false, true))
@@ -64,6 +67,7 @@ class FullAutoOptionsTest {
       }
   }
 
+  /** {@code action} の条件を再現するための補助情報を返す。 */
   private ComputerAction action(ComputerAction.Risk risk) {
     return new ComputerAction.PressKey("ENTER", risk);
   }

@@ -19,8 +19,10 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 補助エージェントツール一覧の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentToolsTest {
+  /** 自動委譲データ形式について、旧形式を保持することを確認する。 */
   @Test
   void automaticDelegationSchemaPreservesLegacyAndAddsExplicitDestination() {
     var registry =
@@ -45,6 +47,7 @@ class SubAgentToolsTest {
             "expectedOutput");
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void consensusCallbacksExposeHashReferencesAndDefaultDisabled() {
     var registry =
@@ -59,6 +62,7 @@ class SubAgentToolsTest {
         .isInstanceOf(IllegalStateException.class);
   }
 
+  /** 依存関係完了時の処理一覧外部への公開上限内に収めた計画およびについて、設定済みサービスを必要とすることを確認する。 */
   @Test
   void dagCallbacksExposeBoundedPlanAndRequireConfiguredService() {
     var registry =
@@ -75,6 +79,7 @@ class SubAgentToolsTest {
         .isInstanceOf(IllegalStateException.class);
   }
 
+  /** 永続化された完了時の処理一覧について、実際の実行識別情報要求を利用することを確認する。 */
   @Test
   void durableCallbacksUseActualRunIdentityRequestAndSharedBudget() throws Exception {
     var registry =
@@ -116,8 +121,10 @@ class SubAgentToolsTest {
     verify(runner).durableChildren(owner, 0, 10);
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 明示的な実行を呼び出し元へ引き継ぐことを確認する。 */
   @Test
   void mixedParallelToolPropagatesExplicitRunAcrossSchedulerBoundary() {
     var registry =
@@ -161,6 +168,7 @@ class SubAgentToolsTest {
         context);
   }
 
+  /** 外部完了時の処理について、実際の実行を利用することを確認する。 */
   @Test
   void externalCallbackUsesActualRunAndExplicitMaterialsOnly() {
     var registry =
@@ -201,6 +209,7 @@ class SubAgentToolsTest {
         .isInstanceOf(RuntimeException.class);
   }
 
+  /** 補助エージェントへの委譲で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void parallelCallbackMapsRequestsAndSerializesOrderedIndividualResults() {
     var registry =
@@ -237,6 +246,7 @@ class SubAgentToolsTest {
     verify(parallel).delegate(java.util.List.of(request));
   }
 
+  /** 補助エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void delegateReturnsTypedStatusesAndDynamicCatalogWithoutPrompts() throws Exception {
     var loader =
@@ -262,6 +272,7 @@ class SubAgentToolsTest {
     verify(runner, times(SubAgentResult.Status.values().length)).run("reviewer", "task", null);
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void callbackSerializesValidatedEnvelopeAndStructuredErrors() {
     var registry =

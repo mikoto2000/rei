@@ -4,10 +4,16 @@ import java.util.List;
 import tools.jackson.databind.json.JsonMapper;
 import tools.jackson.databind.node.ObjectNode;
 
-/** Advertise current ChatGPT choices without narrowing local or Codex backend arguments. */
+/**
+ * ChatGPTとの連携に必要なチャットGPT委譲データ形式を扱う。
+ *
+ * <p>Advertise current ChatGPT choices without narrowing local or Codex backend arguments.
+ */
 public final class ChatGptDelegationSchema {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ChatGptDelegationSchema() {}
 
+  /** ChatGPTとの連携で用いるconstrainを返す。 */
   public static String constrain(
       String toolName, String inputSchema, PlanDelegationProperties automatic) {
     if (!List.of("delegateTask", "delegateTasks").contains(toolName)) return inputSchema;

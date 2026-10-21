@@ -16,58 +16,97 @@ import java.util.concurrent.Executor;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
-/** Owns input mailboxes and active views; ProjectRunQueue owns all AGENT scheduling. */
+/**
+ * 会話への入力を実行状況に応じて振り分け、新規実行や追加入力として受け付ける。
+ *
+ * <p>Owns input mailboxes and active views; ProjectRunQueue owns all AGENT scheduling.
+ */
 public final class ConversationInputRouter {
+  /** 会話の実行における扱いの選択肢。 */
   public enum Disposition {
+    /** 開始。 */
     STARTED,
+    /** 待機中。 */
     QUEUED
   }
 
+  /** 会話の実行に必要な実行の担当を扱う。 */
   @FunctionalInterface
   public interface Runner {
+    /** 要求された処理を実行する。 */
     void execute(AgentRunContext context, String prompt, UserInterventionQueue queue);
   }
 
+  /** 会話の実行に必要な購読を扱う。 */
   @FunctionalInterface
   public interface Subscription extends AutoCloseable {
+    /** 会話の実行で利用した資源や登録を解放し、利用を終了する。 */
     void close();
   }
 
+  /** 要求取得記録一覧。 */
   private dev.mikoto2000.rei.llm.capture.CaptureStore requestCaptures;
+
+  /** 受付台帳。 */
   private dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions;
 
+  /** 会話の実行で使用する受付台帳を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setAdmissions(dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions) {
     this.admissions = admissions;
   }
 
+  /** 会話の実行で使用する要求取得記録一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setRequestCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore captures) {
     requestCaptures = captures;
   }
 
+  /** 後片付け観測先一覧。 */
   private final java.util.List<Consumer<AgentRunContext>> cleanupObservers =
       new java.util.concurrent.CopyOnWriteArrayList<>();
 
+  /** 通知に応じて状態や表示を更新するため、後片付けを受け付ける。 */
   public void onCleanup(Consumer<AgentRunContext> observer) {
     cleanupObservers.add(Objects.requireNonNull(observer));
   }
 
+  /** 実行先。 */
   private final Executor executor;
+
+  /** 実行の担当。 */
   private final Runner runner;
+
+  /** プロジェクト実行待ち。 */
   private final ProjectRunQueue projectQueue;
+
+  /** 受信。 */
   private final BiConsumer<AgentRunContext, UserInterventionQueue.Entry> received;
+
+  /** 会話ごとの追加入力の受け取り先。 */
   private final Map<String, Slot> mailboxes = new HashMap<>();
+
+  /** エージェントSlots。 */
   private final Map<String, Slot> agentSlots = new java.util.concurrent.ConcurrentHashMap<>();
+
+  /** 活動中。 */
   private final Map<String, ActiveRun> active = new java.util.concurrent.ConcurrentHashMap<>();
+
+  /** バックグラウンド。 */
   private final Map<String, ActiveExecution> background =
       new java.util.concurrent.ConcurrentHashMap<>();
+
+  /** 通知の受け取り先一覧。 */
   private final List<Runnable> listeners = new java.util.concurrent.CopyOnWriteArrayList<>();
+
+  /** 変更前実行。 */
   private final Map<String, Runnable> beforeExecution =
       new java.util.concurrent.ConcurrentHashMap<>();
 
   /**
-   * Scoped presentation observer, captured before enqueue and run before lifecycle output. The
+   * 本処理に必要な文脈や条件を整えるため、実行を準備する。
+   *
+   * <p>Scoped presentation observer, captured before enqueue and run before lifecycle output. The
    * observer must not reenter admission/selection APIs.
    */
   public Subscription beforeExecution(String runId, Runnable observer) {
@@ -76,12 +115,21 @@ public final class ConversationInputRouter {
     return () -> beforeExecution.remove(runId, observer);
   }
 
+  /**
+   * 会話の実行で受け渡すSlotを表す。
+   *
+   * @param context 文脈
+   * @param prompt プロンプト
+   * @param queue 実行待ち
+   */
   private record Slot(AgentRunContext context, String prompt, UserInterventionQueue queue) {}
 
+  /** 会話の実行を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ConversationInputRouter(Executor executor, Runner runner) {
     this(executor, runner, (c, e) -> {});
   }
 
+  /** 指定された値や利用先を使って、ConversationInputRouterを初期化する。 */
   public ConversationInputRouter(
       Executor executor,
       Runner runner,
@@ -92,17 +140,20 @@ public final class ConversationInputRouter {
     this.projectQueue = new ProjectRunQueue(executor);
   }
 
+  /** 通知に応じて状態や表示を更新するため、変更を受け付ける。 */
   public Subscription onChange(Runnable listener) {
     listeners.add(listener);
     return () -> listeners.remove(listener);
   }
 
+  /** 会話の実行で用いる活動中実行一覧を返す。 */
   public List<ActiveRun> activeRuns() {
     return active.values().stream()
         .sorted(Comparator.comparing(ActiveRun::startedAt).thenComparing(ActiveRun::runId))
         .toList();
   }
 
+  /** 会話の実行で用いる活動中実行一覧を返す。 */
   public List<ActiveExecution> activeExecutions() {
     var result = new ArrayList<>(background.values());
     active.values().forEach(run -> result.add(ActiveExecution.fromAgent(run)));
@@ -111,15 +162,18 @@ public final class ConversationInputRouter {
         .toList();
   }
 
+  /** 依頼された操作を進めるため、Auxiliaryを実行する。 */
   public void executeAuxiliary(Runnable work) {
     executor.execute(work);
   }
 
+  /** 依頼を実行経路へ渡すため、バックグラウンドを受け付ける。 */
   public ActiveExecution submitBackground(
       ProjectContext project, ExecutionType type, String summary, Consumer<ActiveExecution> work) {
     return submitBackground(project, type, summary, e -> {}, work);
   }
 
+  /** 依頼を実行経路へ渡すため、バックグラウンドを受け付ける。 */
   public ActiveExecution submitBackground(
       ProjectContext project,
       ExecutionType type,
@@ -162,6 +216,7 @@ public final class ConversationInputRouter {
     return execution;
   }
 
+  /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   public Disposition submit(Path root, String conversation, String prompt) {
     Slot created;
     synchronized (mailboxes) {
@@ -174,27 +229,34 @@ public final class ConversationInputRouter {
     return Disposition.STARTED;
   }
 
+  /** 依頼を実行経路へ渡すため、新規実行を受け付ける。 */
   public Disposition submitNewRun(Path root, String conversation, String prompt) {
     return submit(cliContext(root, conversation), prompt);
   }
 
+  /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   public Disposition submit(AgentRunContext context, String prompt) {
     return submit(context, prompt, Runnable::run);
   }
 
   /**
-   * Application lifecycle wraps the runner without reassigning its identity or enqueueing twice.
+   * 依頼を受け付け、実行を担当する処理へ引き渡す。
+   *
+   * <p>Application lifecycle wraps the runner without reassigning its identity or enqueueing twice.
    */
   public Disposition submit(AgentRunContext context, String prompt, Consumer<Runnable> lifecycle) {
     return enqueue(slot(context, prompt), lifecycle);
   }
 
+  /** 会話の実行で判断に用いる含有実行の条件を確認する。 */
   public boolean containsRun(String projectId, String runId) {
     return projectQueue.containsRun(projectId, runId);
   }
 
+  /** 会話の実行において、受付追加入力に該当するか判定する。 */
   public boolean offerIntervention(
       String projectId, String sessionId, String runId, String message) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (message == null || message.isBlank() || message.length() > 16384)
       throw new IllegalArgumentException("Invalid guidance");
     var slot = agentSlots.get(runId);
@@ -204,10 +266,12 @@ public final class ConversationInputRouter {
         && slot.queue().offer(message);
   }
 
+  /** 会話の実行において、待機中かどうかを判定する。 */
   public boolean isQueued(String projectId, String runId) {
     return projectQueue.isQueued(projectId, runId);
   }
 
+  /** 利用者が不要とした実行を止めるため、待機中をキャンセルする。 */
   public boolean cancelQueued(String runId) {
     boolean removed = projectQueue.cancelQueued(runId);
     if (removed) {
@@ -219,7 +283,9 @@ public final class ConversationInputRouter {
   }
 
   /**
-   * Explicit application work shares the agent FIFO without entering the chat runner or mailbox.
+   * 依頼を実行経路へ渡すため、操作を受け付ける。
+   *
+   * <p>Explicit application work shares the agent FIFO without entering the chat runner or mailbox.
    */
   public void submitOperation(
       AgentRunContext context, Runnable operation, Consumer<Runnable> lifecycle) {
@@ -270,6 +336,7 @@ public final class ConversationInputRouter {
     }
   }
 
+  /** 会話の実行で用いる軽量CLI文脈を返す。 */
   private AgentRunContext cliContext(Path root, String conversation) {
     return new AgentRunContext(
         UUID.randomUUID().toString(),
@@ -278,11 +345,13 @@ public final class ConversationInputRouter {
         dev.mikoto2000.rei.core.project.ProjectStorage.projectId(conversation));
   }
 
+  /** 会話の実行で用いるslotを返す。 */
   private Slot slot(AgentRunContext context, String prompt) {
     return new Slot(
         context, prompt, new UserInterventionQueue(entry -> received.accept(context, entry)));
   }
 
+  /** 実行順序を管理するため、会話入力入力の振り分けを実行待ちに登録する。 */
   private Disposition enqueue(Slot slot, Consumer<Runnable> lifecycle) {
     var context = slot.context();
     if (admissions != null) admissions.reserveKnownSession(context);
@@ -343,6 +412,7 @@ public final class ConversationInputRouter {
     }
   }
 
+  /** 会話の実行に関する記憶の削除を処理する。 */
   private void forget(Slot slot) {
     if (admissions != null) admissions.release(slot.context().runId());
     active.remove(slot.context().runId());
@@ -359,6 +429,7 @@ public final class ConversationInputRouter {
     changed();
   }
 
+  /** 会話の実行に関する変更済みを処理する。 */
   private void changed() {
     for (var listener : listeners)
       try {

@@ -1,8 +1,18 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
 /**
- * Parses only application-registered RAW_RESULT_PAGE responses, including legacy JSON-string
+ * モデルへ渡す文脈の管理で受け渡す元の結果ページを表す。
+ *
+ * <p>Parses only application-registered RAW_RESULT_PAGE responses, including legacy JSON-string
  * wrapping.
+ *
+ * @param text テキスト
+ * @param rawResultRef 元の結果参照先
+ * @param offset 開始位置
+ * @param nextOffset 次開始位置
+ * @param totalCharacters 合計文字数
+ * @param hasMore 保有More
+ * @param content 内容
  */
 public record RawResultPage(
     String text,
@@ -12,10 +22,12 @@ public record RawResultPage(
     int totalCharacters,
     boolean hasMore,
     String content) {
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final com.fasterxml.jackson.databind.ObjectMapper JSON =
       new com.fasterxml.jackson.databind.ObjectMapper()
           .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   public static RawResultPage parse(String response) {
     try {
       String text = response;

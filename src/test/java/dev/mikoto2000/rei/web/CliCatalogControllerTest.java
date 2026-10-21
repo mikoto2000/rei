@@ -6,7 +6,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+/** 軽量CLI利用可能な項目受付窓口の結果と状態の契約を検証するテスト。 */
 class CliCatalogControllerTest {
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void declaredHelpMatchesPicocliForEveryDirectShellGrammar() {
     var catalog = new CliCatalogController().catalog();
@@ -15,6 +17,7 @@ class CliCatalogControllerTest {
             picocli.CommandLine.Command.class);
     var factory =
         new picocli.CommandLine.IFactory() {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           public <K> K create(Class<K> type) {
             return org.mockito.Mockito.mock(type);
           }
@@ -37,6 +40,7 @@ class CliCatalogControllerTest {
     assertEquals(java.util.List.of(), failures);
   }
 
+  /** {@code compareHelp} の条件を再現するため、検証用の操作や状態を扱う。 */
   private static void compareHelp(
       picocli.CommandLine expected,
       picocli.CommandLine actual,
@@ -54,6 +58,7 @@ class CliCatalogControllerTest {
         compareHelp(child, actual.getSubcommands().get(child.getCommandName()), failures, true);
   }
 
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void everyDeclaredCommandCanRenderHelpWithoutAnExecutor() {
     var catalog = new CliCatalogController().catalog();
@@ -74,6 +79,7 @@ class CliCatalogControllerTest {
             .getUsageMessage());
   }
 
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void exposesOnlyDeclaredShellGrammarWithoutInstantiatingOrRunningCommands() {
     var catalog = new CliCatalogController().catalog();

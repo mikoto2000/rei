@@ -19,10 +19,13 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** チャット受付サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ChatSubmitServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void captureIsConsumedBeforeDispatchOnlyByItsClientAndSession() throws Exception {
     var projects = new ProjectRegistry(directory.resolve("projects.json"));
@@ -68,6 +71,7 @@ class ChatSubmitServiceTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** プロジェクトを維持することを確認する。 */
   @Test
   void newAndContinuedSessionsKeepProjectAndIdsWithoutWaitingForRunner() throws Exception {
     var projects = new ProjectRegistry(directory.resolve("projects.json"));
@@ -106,6 +110,7 @@ class ChatSubmitServiceTest {
     assertThat(submitted).hasSize(3);
   }
 
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sessionLifetimeIsIndependentOfRunPurgeAndRefreshesOnValidContinuation() {
     var clock = new RunRegistryTest.MutableClock();

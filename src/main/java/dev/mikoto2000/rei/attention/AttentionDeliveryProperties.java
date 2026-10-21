@@ -4,7 +4,18 @@ import java.net.URI;
 import java.util.Set;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/** The administrator chooses the destination and projects; model text cannot configure delivery. */
+/**
+ * 注意の管理で受け渡す注意配信設定を表す。
+ *
+ * <p>The administrator chooses the destination and projects; model text cannot configure delivery.
+ *
+ * @param enabled 有効状態
+ * @param automatic 自動
+ * @param endpoint 接続先
+ * @param bearerToken bearerトークン
+ * @param projects プロジェクト一覧
+ * @param provider 提供元
+ */
 @ConfigurationProperties("rei.attention.delivery")
 public record AttentionDeliveryProperties(
     boolean enabled,
@@ -13,6 +24,7 @@ public record AttentionDeliveryProperties(
     String bearerToken,
     Set<String> projects,
     String provider) {
+  /** 注意の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public AttentionDeliveryProperties(
       boolean enabled,
       boolean automatic,
@@ -22,6 +34,7 @@ public record AttentionDeliveryProperties(
     this(enabled, automatic, endpoint, bearerToken, projects, "WEBHOOK");
   }
 
+  /** 受け取った情報からAttentionDeliveryPropertiesを作成する。 */
   @org.springframework.boot.context.properties.bind.ConstructorBinding
   public AttentionDeliveryProperties {
     provider =
@@ -65,6 +78,7 @@ public record AttentionDeliveryProperties(
     }
   }
 
+  /** 注意の管理の情報を、表示や診断で確認できる文字列表現にする。 */
   @Override
   public String toString() {
     return "AttentionDeliveryProperties[enabled="

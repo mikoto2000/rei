@@ -7,9 +7,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
+/** チャット実行サービス依存条件の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ChatExecutionServiceDependencyTest {
 
+  /** 会話の実行で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void chatExecutionServiceDoesNotDependOnShellUiOrSoundPresentationComponents()
       throws IOException {

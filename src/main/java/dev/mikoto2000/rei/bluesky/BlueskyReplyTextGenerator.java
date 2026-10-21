@@ -22,24 +22,37 @@ import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+/** Bluesky返信テキストの内容を生成する。 */
 @Component
 public class BlueskyReplyTextGenerator {
 
+  /** THINK終了。 */
   private static final Pattern THINK_END =
       Pattern.compile("</think\\s*>", Pattern.CASE_INSENSITIVE);
+
+  /** THINK目印。 */
   private static final Pattern THINK_MARKER =
       Pattern.compile("<\\s*/?\\s*think\\b", Pattern.CASE_INSENSITIVE);
 
   // Match the whole final answer, not function/JSON examples inside natural-language prose.
   // Deliberately accept JSON-like arguments too: malformed commands must not become replies.
+  /** ツールINVOCATIONテキスト。 */
   private static final Pattern TOOL_INVOCATION_TEXT =
       Pattern.compile("[A-Za-z_$][A-Za-z0-9_.$-]*\\s*\\(\\s*\\{.*}\\s*\\)\\s*;?", Pattern.DOTALL);
 
+  /** モデルへ対話を依頼する窓口提供元。 */
   private final LlmChatClientProvider chatClientProvider;
+
+  /** モデル保持先サービス。 */
   private final ModelHolderService modelHolderService;
+
+  /** モデル提供元。 */
   private final LlmModelProvider modelProvider;
+
+  /** この機能の動作設定。 */
   private final BlueskyProperties properties;
 
+  /** Blueskyとの連携を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public BlueskyReplyTextGenerator(
       ObjectProvider<ChatClient> chatClientProvider, ModelHolderService modelHolderService) {
     this(
@@ -49,6 +62,7 @@ public class BlueskyReplyTextGenerator {
         new BlueskyProperties());
   }
 
+  /** 指定された値や利用先を使って、BlueskyReplyTextGeneratorを初期化する。 */
   @Autowired
   public BlueskyReplyTextGenerator(
       LlmChatClientProvider chatClientProvider,
@@ -61,6 +75,7 @@ public class BlueskyReplyTextGenerator {
     this.properties = properties;
   }
 
+  /** 指定された条件に従って、依頼された内容を生成する。 */
   public String generate(
       String handle,
       String postText,
@@ -100,10 +115,12 @@ public class BlueskyReplyTextGenerator {
     return content.strip();
   }
 
+  /** 依頼された内容を提供するため、対象Manual返信を生成する。 */
   public String generateForManualReply(String postText) {
     return generateForManualReply(postText, String.valueOf(postText.hashCode()));
   }
 
+  /** 依頼された内容を提供するため、対象Manual返信を生成する。 */
   public String generateForManualReply(String postText, String handle, String identifier) {
     String conversationId =
         handle != null && !handle.isBlank()
@@ -136,6 +153,7 @@ public class BlueskyReplyTextGenerator {
     return content.strip();
   }
 
+  /** 依頼された内容を提供するため、対象Manual返信を生成する。 */
   public String generateForManualReply(String postText, String identifier) {
     String conversationId = ConversationIds.blueskyManual(identifier);
     if (postText == null || postText.isBlank()) {
@@ -165,6 +183,7 @@ public class BlueskyReplyTextGenerator {
     return content.strip();
   }
 
+  /** Blueskyとの連携で用いる返信選択可能な設定を返す。 */
   private OpenAiChatOptions replyOptions() {
     var options =
         modelProvider
@@ -177,6 +196,7 @@ public class BlueskyReplyTextGenerator {
     return options;
   }
 
+  /** 依頼された内容を提供するため、内容を生成する。 */
   private String generateContent(Prompt prompt, String conversationId) {
     return chatClientProvider
         .chatClient(LlmFeature.BLUESKY_REPLY)
@@ -193,6 +213,7 @@ public class BlueskyReplyTextGenerator {
         .block(generationTimeout());
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、最終回答を検証する。 */
   private String validateFinalAnswer(String content) {
     if (TOOL_INVOCATION_TEXT.matcher(content).matches()) {
       throw new IllegalStateException(
@@ -201,6 +222,7 @@ public class BlueskyReplyTextGenerator {
     return content;
   }
 
+  /** 対象を管理から外すため、推論を取り除く。 */
   private String removeThinking(String content) {
     // Some providers omit <think>, leaving reasoning (and draft answers) before </think>.
     // Inspect the complete response so even tags split across stream chunks are handled.
@@ -217,6 +239,7 @@ public class BlueskyReplyTextGenerator {
     return answer;
   }
 
+  /** Blueskyとの連携で用いる生成タイムアウトを返す。 */
   Duration generationTimeout() {
     BlueskyProperties.BlueskyReplyProperties replyProperties = properties.getReply();
     int timeoutSeconds =
@@ -224,6 +247,7 @@ public class BlueskyReplyTextGenerator {
     return Duration.ofSeconds(Math.max(1, timeoutSeconds));
   }
 
+  /** Blueskyとの連携で用いる回答テキストを返す。 */
   private String answerText(ChatResponse response) {
     if (response.hasToolCalls()) {
       throw new IllegalStateException("Bluesky reply text generation returned a tool call");

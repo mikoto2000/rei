@@ -48,27 +48,34 @@ import reactor.core.publisher.Mono;
 import reactor.core.scheduler.Schedulers;
 
 /**
- * Per-invocation state only. Inherited values are explicit task/context, model, project location
+ * 補助エージェントへの委譲に必要な補助エージェント実行の担当を扱う。
+ *
+ * <p>Per-invocation state only. Inherited values are explicit task/context, model, project location
  * and an optional shared call reservation.
  */
 public final class SubAgentRunner {
+  /** 計画バックエンド。 */
   private org.springframework.beans.factory.ObjectProvider<ChatGptSubAgentBackend> planBackend;
 
+  /** 補助エージェントへの委譲に関する設定計画バックエンドを処理する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void configurePlanBackend(
       org.springframework.beans.factory.ObjectProvider<ChatGptSubAgentBackend> backend) {
     this.planBackend = backend;
   }
 
+  /** アプリケーションサーバーバックエンド。 */
   private org.springframework.beans.factory.ObjectProvider<CodexAppServerSubAgentBackend>
       appServerBackend;
 
+  /** 補助エージェントへの委譲に関する設定アプリケーションサーバーバックエンドを処理する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void configureAppServerBackend(
       org.springframework.beans.factory.ObjectProvider<CodexAppServerSubAgentBackend> backend) {
     this.appServerBackend = backend;
   }
 
+  /** 依頼された操作を進めるため、自動バックエンドを実行する。 */
   public ChatGptSubAgentBackend.Receipt runAutomaticBackend(
       ChatGptSubAgentBackend.Request request,
       AgentRunContext owner,
@@ -84,7 +91,11 @@ public final class SubAgentRunner {
     return backend.runAutomatic(request, owner, reservation);
   }
 
-  /** Manual dispatch only. Existing delegateTask stays on the existing backend. */
+  /**
+   * 依頼された操作を進めるため、Manualバックエンドを実行する。
+   *
+   * <p>Manual dispatch only. Existing delegateTask stays on the existing backend.
+   */
   public ChatGptSubAgentBackend.Receipt runManualBackend(
       ChatGptSubAgentBackend.Request request,
       AgentRunContext owner,
@@ -113,14 +124,19 @@ public final class SubAgentRunner {
             : reservation);
   }
 
+  /** 永続化された。 */
   private DurableSubAgentRepository durable;
+
+  /** 永続化された子の一覧。 */
   private final ConcurrentMap<String, String> durableChildren = new ConcurrentHashMap<>();
 
+  /** 補助エージェントへの委譲に関する設定永続化されたを処理する。 */
   public void configureDurable(SubAgentProperties settings, DurableSubAgentRepository repository) {
     durable = settings.isDurableEnabled() ? repository : null;
     standaloneBudgetProperties = settings;
   }
 
+  /** 補助エージェントへの委譲に関する設定永続化されたを処理する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void configureDurable(
       SubAgentProperties settings,
@@ -128,17 +144,20 @@ public final class SubAgentRunner {
     configureDurable(settings, repository.getIfAvailable());
   }
 
+  /** 補助エージェントへの委譲で用いる永続化された子の一覧を返す。 */
   public List<DurableSubAgentRepository.Checkpoint> durableChildren(
       AgentRunContext owner, int offset, int limit) {
     if (durable == null) throw new IllegalArgumentException("Durable SubAgents disabled");
     return durable.list(owner, offset, limit);
   }
 
+  /** 補助エージェントへの委譲で用いる永続化された子を返す。 */
   public DurableSubAgentRepository.Checkpoint durableChild(AgentRunContext owner, String id) {
     if (durable == null) throw new IllegalArgumentException("Durable SubAgents disabled");
     return durable.get(owner, id);
   }
 
+  /** 現在の状態と保存された記録の整合を取るため、永続化されたを照合する。 */
   public DurableSubAgentRepository.Checkpoint reconcileDurable(
       AgentRunContext owner,
       String id,
@@ -154,6 +173,7 @@ public final class SubAgentRunner {
     return durable.reconcile(owner, id, revision, operation, status, note);
   }
 
+  /** 中断した作業を引き継ぐため、永続化されたを再開する。 */
   public SubAgentResult resumeDurable(
       AgentRunContext owner,
       String id,
@@ -179,6 +199,7 @@ public final class SubAgentRunner {
       throw new IllegalArgumentException(
           "Child revision or agent/Git baseline changed; inspect before creating a new child");
     String observations = saved.operations().toString();
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (observations.length() > 16384)
       observations = observations.substring(0, 16384) + " [truncated; inspect saved checkpoint]";
     String context =
@@ -189,11 +210,13 @@ public final class SubAgentRunner {
     return runInternal(saved.agent(), saved.task(), context, reservation, saved, owner);
   }
 
+  /** 補助エージェントへの委譲において、明示的なに該当するか判定する。 */
   private static boolean explicit(String command, String actual) {
     return actual != null
         && Set.of("subagent " + command, "/subagent " + command).contains(actual.strip());
   }
 
+  /** 補助エージェントへの委譲で用いる永続化された比較の基準を返す。 */
   String durableBaseline(SubAgentDefinition definition, AgentRunContext parent) {
     return DurableSubAgentRepository.hash(
         definition.systemPrompt()
@@ -220,6 +243,7 @@ public final class SubAgentRunner {
                 dev.mikoto2000.rei.checkpoint.CheckpointReconciler.git(parent.projectRoot())));
   }
 
+  /** 依頼された操作を進めるため、関連図子を実行する。 */
   SubAgentResult runGraphChild(
       AgentRunContext owner,
       String graphId,
@@ -242,13 +266,21 @@ public final class SubAgentRunner {
     return runInternal(saved.agent(), saved.task(), context, reservation, saved, owner);
   }
 
+  /** タスク実行一覧。 */
   private dev.mikoto2000.rei.application.run.RunRegistry taskRuns;
+
+  /** タスク受付から終了までの管理。 */
   private dev.mikoto2000.rei.application.run.RunService taskLifecycle;
+
+  /** タスク実行一覧提供元。 */
   private java.util.function.Supplier<dev.mikoto2000.rei.application.run.RunRegistry>
       taskRunsProvider;
+
+  /** タスク受付から終了までの管理提供元。 */
   private java.util.function.Supplier<dev.mikoto2000.rei.application.run.RunService>
       taskLifecycleProvider;
 
+  /** 補助エージェントへの委譲で使用するタスクTrackingを設定する。 */
   public void setTaskTracking(
       boolean enabled,
       dev.mikoto2000.rei.application.run.RunRegistry runs,
@@ -257,6 +289,7 @@ public final class SubAgentRunner {
     taskLifecycle = enabled ? lifecycle : null;
   }
 
+  /** 補助エージェントへの委譲に関する設定タスクTrackingを処理する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void configureTaskTracking(
       @org.springframework.beans.factory.annotation.Value("${rei.task-manager.enabled:false}")
@@ -271,43 +304,75 @@ public final class SubAgentRunner {
     taskLifecycleProvider = enabled ? lifecycle::getIfAvailable : null;
   }
 
+  /** 独立した予算設定。 */
   private SubAgentProperties standaloneBudgetProperties = new SubAgentProperties();
 
+  /** 補助エージェントへの委譲で使用する独立した予算設定を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setStandaloneBudgetProperties(SubAgentProperties properties) {
     standaloneBudgetProperties = properties;
   }
 
+  /** 配信文脈の組み立て。 */
   private dev.mikoto2000.rei.core.contextbudget.ContextAssembler deliveryAssembler;
 
+  /** 補助エージェントへの委譲で使用する配信文脈の組み立てを設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   void setDeliveryAssembler(dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler) {
     deliveryAssembler = assembler;
   }
 
+  /** 権限一覧。 */
   private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
 
+  /** 補助エージェントへの委譲で使用するツール権限利用条件の確認を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setToolPermissionGuard(
       dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {
     this.permissions = permissions;
   }
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(SubAgentRunner.class);
+
+  /** 入力の解釈。 */
   private final SubAgentResultParser parser = new SubAgentResultParser();
+
+  /** 検証の窓口。 */
   private final SubAgentResultValidator validator = new SubAgentResultValidator();
+
+  /** 登録台帳。 */
   private final SubAgentRegistry registry;
+
+  /** 判断基準。 */
   private final SubAgentToolPolicy policy;
+
+  /** モデル一覧。 */
   private final Function<String, ChatModel> models;
+
+  /** 選択可能な設定。 */
   private final Function<String, ToolCallingChatOptions> options;
+
+  /** ツール生成元。 */
   private final Supplier<List<ToolCallback>> toolFactory;
+
+  /** キャンセル。 */
   private final CommandCancellationService cancellation;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** 通知先。 */
   private final AgentEventPublisher publisher;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 活動中。 */
   private final ConcurrentMap<String, Runnable> active = new ConcurrentHashMap<>();
 
+  /** 指定された値や利用先を使って、SubAgentRunnerを初期化する。 */
   public SubAgentRunner(
       SubAgentRegistry registry,
       SubAgentToolPolicy policy,
@@ -329,6 +394,7 @@ public final class SubAgentRunner {
     this.clock = clock;
   }
 
+  /** 対象の実行をキャンセルする。 */
   public boolean cancel(String runId) {
     var operation = active.get(runId);
     if (operation == null) return false;
@@ -336,10 +402,12 @@ public final class SubAgentRunner {
     return true;
   }
 
+  /** 補助エージェントへの委譲の操作を実行する。 */
   public SubAgentResult run(String agent, String task, String context) {
     return run(agent, task, context, null);
   }
 
+  /** 補助エージェントへの委譲の操作を実行する。 */
   public SubAgentResult run(
       String agent,
       String task,
@@ -368,6 +436,7 @@ public final class SubAgentRunner {
     return runInternal(agent, task, context, reservation, checkpoint, parent);
   }
 
+  /** 依頼された操作を進めるため、内部を実行する。 */
   private SubAgentResult runInternal(
       String agent,
       String task,
@@ -389,20 +458,24 @@ public final class SubAgentRunner {
                 ? StandaloneSubAgentBudget.create(standaloneBudgetProperties)
                 : reservation)
             : new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation() {
+              /** 補助エージェントへの委譲で判断に用いる試行予約の条件を確認する。 */
               public boolean tryReserve() {
                 return durable.reserve(claimed.id(), runId) && reservation.tryReserve();
               }
 
+              /** 補助エージェントへの委譲で用いる残量を返す。 */
               public int remaining() {
                 var current = durable.get(parent, claimed.id());
                 return Math.min(
                     reservation.remaining(), current.maxCalls() - current.consumedCalls());
               }
 
+              /** トークン数による実行予算の制限が有効かどうかを返す。 */
               public boolean tokenLimitEnabled() {
                 return claimed.maxTokens() > 0 || reservation.tokenLimitEnabled();
               }
 
+              /** 補助エージェントへの委譲において、トークン残量なしに該当するか判定する。 */
               public boolean tokenExhausted() {
                 var current = durable.get(parent, claimed.id());
                 return current.maxTokens() > 0
@@ -411,11 +484,13 @@ public final class SubAgentRunner {
                     || reservation.tokenExhausted();
               }
 
+              /** 補助エージェントへの委譲において、使用状況不明に該当するか判定する。 */
               public boolean usageUnknown() {
                 return durable.get(parent, claimed.id()).usageUnknown()
                     || reservation.usageUnknown();
               }
 
+              /** 使用したトークン数を実行予算へ記録する。 */
               public void recordTotalTokens(Integer tokens) {
                 durable.tokens(claimed.id(), runId, tokens);
                 reservation.recordTotalTokens(tokens);
@@ -445,6 +520,7 @@ public final class SubAgentRunner {
     List<List<ValidationError>> validationHistory = new CopyOnWriteArrayList<>();
     Consumer<SubAgentResult> complete =
         result -> {
+          // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
           if (stopped.compareAndSet(false, true)) {
             subscriptions.dispose();
             if (deliveryAssembler != null)
@@ -644,6 +720,7 @@ public final class SubAgentRunner {
         result = completion.get();
       } catch (InterruptedException error) {
         cancel.run();
+        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
         Thread.currentThread().interrupt();
         result = completion.join();
       } catch (ExecutionException error) {
@@ -717,8 +794,15 @@ public final class SubAgentRunner {
     }
   }
 
+  /**
+   * 補助エージェントへの委譲で受け渡す検証済みを表す。
+   *
+   * @param raw 元の
+   * @param structured 項目に整理した内容
+   */
   private record Validated(String raw, SubAgentOutput structured) {}
 
+  /** 補助エージェントへの委譲で用いる検証済み実行を返す。 */
   private Mono<Validated> validatedRun(
       ChatModel model,
       Prompt prompt,
@@ -812,24 +896,29 @@ public final class SubAgentRunner {
                         }));
   }
 
+  /** 補助エージェントへの委譲で用いるauxiliary予算を返す。 */
   private dev.mikoto2000.rei.llm.ModelCallBudget auxiliaryBudget(
       dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation reservation) {
     if (reservation == null) return dev.mikoto2000.rei.llm.ModelCallBudgetScope.current();
     return new dev.mikoto2000.rei.llm.ModelCallBudget() {
+      /** 補助エージェントへの委譲の操作を実行する。 */
       public void run() {
         if (!reservation.tryReserve()) throw new BoundedToolLoop.SharedBudgetExceeded();
       }
 
+      /** トークン数による実行予算の制限が有効かどうかを返す。 */
       public boolean tokenLimitEnabled() {
         return reservation.tokenLimitEnabled();
       }
 
+      /** 使用したトークン数を実行予算へ記録する。 */
       public void recordTotalTokens(Integer tokens) {
         reservation.recordTotalTokens(tokens);
       }
     };
   }
 
+  /** 補助エージェントへの委譲で用いるguardedを返す。 */
   private ToolCallback guarded(
       ToolCallback callback,
       AgentRunContext owner,
@@ -843,18 +932,22 @@ public final class SubAgentRunner {
     return dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.preservePolicy(
         callback,
         new ToolCallback() {
+          /** 補助エージェントへの委譲で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return callback.getToolDefinition();
           }
 
+          /** 補助エージェントへの委譲で参照するツール付随情報を返す。 */
           public ToolMetadata getToolMetadata() {
             return callback.getToolMetadata();
           }
 
+          /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             return call(input, new ToolContext(Map.of()));
           }
 
+          /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input, ToolContext context) {
             try (var scope = AgentRunScope.open(owner);
                 var budgetScope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(modelBudget)) {

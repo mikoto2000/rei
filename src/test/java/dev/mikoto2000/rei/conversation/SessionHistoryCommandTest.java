@@ -21,18 +21,37 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
+/** 会話履歴コマンドの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SessionHistoryCommandTest extends ProjectClientTestSupport {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-09-16T08:00:00Z");
+
+  /** 検証に使う保存と検索の窓口。 */
   FileSessionRepository repository;
+
+  /** 検証に使うやり取り一覧。 */
   ConversationTurnStore turns;
+
+  /** 検証に使うプロジェクト。 */
   ProjectContext project;
+
+  /** 検証に使う登録台帳。 */
   ProjectRegistry registry;
+
+  /** 検証に使うプロジェクト一覧。 */
   ProjectService projects;
+
+  /** 検証に使うコマンド。 */
   CommandLine command;
+
+  /** 検証に使う出力。 */
   StringWriter output;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     registry = new ProjectRegistry(temp.resolve("projects.json"));
@@ -51,16 +70,19 @@ class SessionHistoryCommandTest extends ProjectClientTestSupport {
     command.setErr(new PrintWriter(output));
   }
 
+  /** 検証用に、会話履歴と受付記録の管理の操作を実行する。 */
   String run(String... args) {
     output.getBuffer().setLength(0);
     assertThat(command.execute(args)).isZero();
     return output.toString();
   }
 
+  /** 検証用に、新たな対象を登録し、後から利用できるようにする。 */
   void add(String id, String title, Instant updated) {
     repository.accept(new SessionMetadata(id, project.id(), title, now, updated), () -> {});
   }
 
+  /** 既定表示について、最新更新会話を利用することを確認する。 */
   @Test
   void defaultShowUsesLatestUpdatedSessionInSelectedProjectWithoutResumingIt() throws Exception {
     var other = registry.resolve(Files.createDirectory(temp.resolve("other")));
@@ -87,6 +109,7 @@ class SessionHistoryCommandTest extends ProjectClientTestSupport {
     assertThat(command.execute("show", "--cursor", "bad")).isNotZero();
   }
 
+  /** 会話履歴と受付記録の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void bareHistoryListsBoundedSessionsInUpdatedOrderWithProjectAndFullId() {
     assertThat(run()).contains("No sessions");
@@ -100,6 +123,7 @@ class SessionHistoryCommandTest extends ProjectClientTestSupport {
     assertThat(run("--project-id", "unknown")).contains("No sessions");
   }
 
+  /** 会話履歴と受付記録の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void showDisplaysMetadataAndChronologicalTurnsWithNextPage() {
     add("session", "title", now);
@@ -124,6 +148,7 @@ class SessionHistoryCommandTest extends ProjectClientTestSupport {
         .doesNotContain("question b");
   }
 
+  /** 会話履歴と受付記録の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidOptionsAndUnknownSessionAreReportedAndMessagesAreSafeForTerminal() {
     for (String[] args :

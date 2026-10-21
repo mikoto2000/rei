@@ -13,9 +13,12 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 音声情報の来歴状態の保存の結果と状態の契約を検証するテスト。 */
 class VoiceProvenancePersistenceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 永続化された実行について、音声安全性を復元することを確認する。 */
   @Test
   void durableRunRestoresVoiceSafetyAfterRegistryRestart() {
     var source = new org.sqlite.SQLiteDataSource();
@@ -30,6 +33,7 @@ class VoiceProvenancePersistenceTest {
     }
   }
 
+  /** 音声を保持することを確認する。 */
   @Test
   void checkpointCopiesAndResumesPreserveVoiceButLegacyDefaultsToText() {
     var original =

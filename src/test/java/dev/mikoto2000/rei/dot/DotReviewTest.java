@@ -14,12 +14,21 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 状態表示レビューの結果と状態の契約を検証するテスト。 */
 class DotReviewTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うリポジトリ。 */
   DotRequestRepository repo;
+
+  /** 検証に使う識別子。 */
   String id;
+
+  /** 検証に使うプロジェクト。 */
   String project = "p";
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     try (var gate = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(root)) {
@@ -51,6 +60,7 @@ class DotReviewTest {
         "hash");
   }
 
+  /** 利用者の状態表示で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void receiptRemainsPendingReviewAfterHumanVerificationAndRestart() {
     assertEquals("RESULT_RECEIVED", repo.get(project, id).get("status"));
@@ -65,6 +75,7 @@ class DotReviewTest {
         repo.submit(project, id, "claim", "submit", Map.of(), "hash").get("validation_status"));
   }
 
+  /** 利用者の状態表示で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void manualIntentIsUniqueAndCrashNeverCreatesAnotherRun() {
     assertThrows(DotException.class, () -> repo.requestResume(project, id, 1));
@@ -79,6 +90,7 @@ class DotReviewTest {
     assertEquals("run-one", repo.intent(project, id).get("run"));
   }
 
+  /** 利用者の状態表示の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void rejectedOrCancelledResultCannotBeAdopted() {
     repo.cancel(project, id);

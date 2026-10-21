@@ -8,8 +8,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.image.ImageModel;
 
+/** 画像モデル提供元の結果と状態の契約を検証するテスト。 */
 class ImageModelProviderTest {
 
+  /** なし上書きについて、設定済み画像モデルを利用することを確認する。 */
   @Test
   void noOverrideUsesConfiguredImageModelRatherThanSdkDefault() {
     var defaultModel = Mockito.mock(org.springframework.ai.openai.OpenAiImageModel.class);
@@ -29,6 +31,7 @@ class ImageModelProviderTest {
     assertThat(prompt.getOptions().getResponseFormat()).isEqualTo("b64_json");
   }
 
+  /** 既定画像モデルを返すことを確認する。 */
   @Test
   void returnsDefaultImageModelWhenFeatureServerIsNotConfigured() {
     ImageModel defaultModel = Mockito.mock(ImageModel.class);
@@ -39,6 +42,7 @@ class ImageModelProviderTest {
     assertThat(provider.model(null)).isNull();
   }
 
+  /** 代替手段画像モデルを作成することを確認する。 */
   @Test
   void createsFallbackImageModelWhenFeatureServerIsConfigured() {
     ImageModel defaultModel = Mockito.mock(ImageModel.class);

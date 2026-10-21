@@ -17,11 +17,22 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
 
-/** All CLI/version-specific behavior lives here. Unsupported security capabilities fail closed. */
+/**
+ * 外部エージェントへの委譲に必要なCodex外部エージェント実行先を扱う。
+ *
+ * <p>All CLI/version-specific behavior lives here. Unsupported security capabilities fail closed.
+ */
 public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
+  /** この機能の動作設定。 */
   private final CodexProperties properties;
+
+  /** 実行の担当。 */
   private final ExternalAgentProcessRunner runner;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper mapper = new ObjectMapper();
+
+  /** 実装JSON変換。 */
   private static final ObjectMapper IMPLEMENTATION_JSON =
       new ObjectMapper(
               com.fasterxml.jackson.core.JsonFactory.builder()
@@ -35,21 +46,25 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
                   .build())
           .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
+  /** 指定された値や利用先を使って、CodexExternalAgentExecutorを初期化する。 */
   public CodexExternalAgentExecutor(CodexProperties properties, ExternalAgentProcessRunner runner) {
     this.properties = properties;
     this.runner = runner;
   }
 
+  /** 外部エージェントへの委譲において、継続入力への対応可否を返す。 */
   @Override
   public boolean supportsContinuation() {
     return properties.isEnabled() && properties.isPersistSessions();
   }
 
+  /** 要求された処理を実行する。 */
   @Override
   public ExternalAgentResult execute(ExternalAgentRequest request, BooleanSupplier cancelled) {
     return execute(request, cancelled, null);
   }
 
+  /** 要求された処理を実行する。 */
   @Override
   public ExternalAgentResult execute(
       ExternalAgentRequest request,
@@ -222,6 +237,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     }
   }
 
+  /** 外部エージェントへの委譲で用いる実行可能なを返す。 */
   private String executable() {
     List<Path> directories = new ArrayList<>();
     for (String entry :
@@ -235,7 +251,11 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     return resolveCommand(properties.getCommand(), System.getProperty("os.name", ""), directories);
   }
 
-  /** Windows CreateProcess cannot execute npm shell shims. Resolve only native binaries. */
+  /**
+   * 指定や設定に応じた対象を利用するため、コマンドを確定する。
+   *
+   * <p>Windows CreateProcess cannot execute npm shell shims. Resolve only native binaries.
+   */
   static String resolveCommand(String configured, String osName, List<Path> directories) {
     if (!"codex".equals(configured) || !osName.startsWith("Windows")) return configured;
     for (Path directory : directories) {
@@ -260,6 +280,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     return "codex.exe";
   }
 
+  /** 外部エージェントへの委譲で用いるコマンドを返す。 */
   List<String> command(ExternalAgentRequest request, Path schema) {
     String project = request.projectRoot().toString().replace('\\', '/').replace("\"", "\\\"");
     List<String> command =
@@ -332,6 +353,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     return List.copyOf(command);
   }
 
+  /** 外部エージェントへの委譲で用いる失敗情報診断を返す。 */
   private String failureDiagnostic(ExternalAgentProcessRunner.Output output) {
     String diagnostic = output.stderr();
     for (String line : output.stdout().split("\\R")) {
@@ -351,10 +373,12 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
         dev.mikoto2000.rei.event.CredentialRedactor.redact(diagnostic), 800);
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   ExternalAgentResult parse(ExternalAgentProcessRunner.Output output) {
     return parse(output, false);
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   private ExternalAgentResult parse(ExternalAgentProcessRunner.Output output, boolean fixProposal) {
     List<String> warnings = new ArrayList<>();
     if (output.truncated())
@@ -485,6 +509,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     }
   }
 
+  /** 外部エージェントへの委譲で用いる提案テキストを返す。 */
   private String proposalText(JsonNode node, String key, int limit) {
     if (!node.path(key).isTextual()) throw new IllegalArgumentException("Missing proposal text");
     String value = node.path(key).asText();
@@ -493,6 +518,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     return value; // Never redact or truncate the exact baseline or replacement.
   }
 
+  /** 入力を機能内で扱えるよう、教材レビューを解釈する。 */
   private ExternalAgentResult parseMaterialReview(ExternalAgentProcessRunner.Output output) {
     if (output.status() != Status.SUCCESS) return parse(output);
     try {
@@ -539,6 +565,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     }
   }
 
+  /** 入力を機能内で扱えるよう、実装を解釈する。 */
   private ExternalAgentResult parseImplementation(ExternalAgentProcessRunner.Output output) {
     if (output.status() != Status.SUCCESS) return parse(output);
     if (output.truncated() || CodexTokenUsage.total(output) == null)
@@ -595,11 +622,13 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
     }
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   private String text(JsonNode node, String key, int limit) {
     if (!node.path(key).isTextual()) throw new IllegalArgumentException("Missing review field");
     return ExternalAgentDelegationService.bounded(node.path(key).asText(), limit);
   }
 
+  /** 外部エージェントへの委譲で用いる最小を返す。 */
   private static Duration min(Duration a, Duration b) {
     return a.compareTo(b) <= 0 ? a : b;
   }

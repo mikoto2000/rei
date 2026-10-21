@@ -3,7 +3,9 @@ package dev.mikoto2000.rei.terminal;
 import java.nio.file.*;
 import java.util.*;
 
+/** 検証条件を再現するための独立起動実行の担当。 */
 public final class DetachedWorker {
+  /** 検証用に、軽量CLIの起動の起動要求を受け付け、実行を開始する。 */
   public static void main(String[] args) throws Exception {
     if (args[0].equals("child")) {
       for (int i = 0; i < 300; i++) {

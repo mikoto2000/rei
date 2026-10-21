@@ -16,40 +16,75 @@ import java.util.Map;
 import java.util.UUID;
 
 /**
- * Runs before ordinary Spring beans. The instance holds a process lease until application shutdown.
+ * 保存移行の複数の処理を調整する。
+ *
+ * <p>Runs before ordinary Spring beans. The instance holds a process lease until application
+ * shutdown.
  */
 public final class StorageMigrationCoordinator implements AutoCloseable {
+  /** データ形式形式のバージョン。 */
   public static final int SCHEMA_VERSION = 10;
 
+  /** データ保存の共通処理における段階の選択肢。 */
   public enum Stage {
+    /** 内容を複製中の段階。 */
     COPYING,
+    /** 複製済み。 */
     COPIED,
+    /** 確認済み。 */
     VERIFIED,
+    /** 変更を反映中の段階。 */
     APPLYING,
+    /** データ形式WRITTEN。 */
     SCHEMA_WRITTEN,
+    /** 行一覧取り込んだ内容。 */
     ROWS_IMPORTED,
+    /** 完了。 */
     COMPLETE
   }
 
+  /** データ保存の共通処理に必要な再開用の記録を扱う。 */
   @FunctionalInterface
   interface Checkpoint {
+    /** データ保存の共通処理に関するreachedを処理する。 */
     void reached(Stage stage, Path backup) throws Exception;
   }
 
+  /**
+   * データ保存の共通処理で受け渡す結果を表す。
+   *
+   * @param schemaVersion データ形式形式のバージョン
+   * @param backup 退避先
+   */
   public record Result(int schemaVersion, Path backup) {}
 
+  /** 作業ルート。 */
   private final Path root;
+
+  /** チャネル。 */
   private final FileChannel channel;
+
+  /** 利用権。 */
   private final FileLock lease;
+
+  /** 再開用の記録。 */
   private final Checkpoint checkpoint;
+
+  /** 準備済み。 */
   private Result prepared;
+
+  /** 終了済み。 */
   private boolean closed;
+
+  /** 取得元形式のバージョン。 */
   private int sourceVersion;
 
+  /** データ保存の共通処理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public StorageMigrationCoordinator(Path root) throws IOException {
     this(root, (stage, backup) -> {});
   }
 
+  /** 指定された値や利用先を使って、StorageMigrationCoordinatorを初期化する。 */
   StorageMigrationCoordinator(Path supplied, Checkpoint checkpoint) throws IOException {
     root = supplied.toAbsolutePath().normalize();
     this.checkpoint = checkpoint;
@@ -73,6 +108,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
     lease = acquired;
   }
 
+  /** データ保存の共通処理で用いる準備を返す。 */
   public synchronized Result prepare() throws IOException {
     if (closed) throw new IOException("Storage migration lease is closed");
     if (prepared != null) return prepared;
@@ -135,6 +171,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
     }
   }
 
+  /** データ保存の共通処理で用いる形式のバージョンを返す。 */
   private int version() throws IOException {
     Path database = root.resolve("storage.db");
     StorageBackup.requireSafePath(database);
@@ -162,7 +199,9 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
   }
 
   /**
-   * RW recovery is limited to our interrupted target; legacy databases are never opened RW here.
+   * 処理を継続できる状態に戻すため、自分が所有する対象Journalを復旧する。
+   *
+   * <p>RW recovery is limited to our interrupted target; legacy databases are never opened RW here.
    */
   private void recoverOwnedJournal(Path database) throws IOException {
     StorageBackup.requireSafePath(Path.of(database + "-journal"));
@@ -243,10 +282,12 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
     }
   }
 
+  /** 要求された条件を満たすか判断するため、準備完了を確認する。 */
   private void verifyReady() throws IOException {
     verifyReady(SCHEMA_VERSION);
   }
 
+  /** 要求された条件を満たすか判断するため、準備完了を確認する。 */
   private void verifyReady(int version) throws IOException {
     try (var db = StorageBackup.readOnly(root.resolve("storage.db"));
         var query = db.prepareStatement("SELECT status FROM storage_migrations WHERE version=?")) {
@@ -287,6 +328,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
     }
   }
 
+  /** 要求された条件を満たすか判断するため、現在準備完了形式のバージョンを確認する。 */
   synchronized void verifyCurrentReadyVersion() throws IOException {
     if (closed) throw new IOException("Storage migration lease is closed");
     int current = version();
@@ -297,6 +339,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
     verifyReady();
   }
 
+  /** データ保存の共通処理に関する初期化を処理する。 */
   private void initialize(Path backup) throws Exception {
     try (var db = DriverManager.getConnection("jdbc:sqlite:" + root.resolve("storage.db"));
         var statement = db.createStatement()) {
@@ -363,6 +406,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
     }
   }
 
+  /** データ保存の共通処理に関するjournalを処理する。 */
   private void journal(Stage stage, Path backup) throws IOException {
     StorageBackup.writeAtomic(
         root.resolve(".storage/migration-state.json"),
@@ -383,6 +427,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
                     Instant.now().toString())));
   }
 
+  /** データ保存の共通処理で利用した資源や登録を解放し、利用を終了する。 */
   @Override
   public synchronized void close() throws IOException {
     if (!closed) {

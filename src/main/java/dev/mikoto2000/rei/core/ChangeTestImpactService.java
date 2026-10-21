@@ -17,14 +17,43 @@ import java.util.Set;
 import java.util.TreeSet;
 import org.springframework.stereotype.Component;
 
-/** Conservative structural candidates, never a coverage guarantee or permission to skip tests. */
+/**
+ * 変更検証影響のユースケースを実現する。
+ *
+ * <p>Conservative structural candidates, never a coverage guarantee or permission to skip tests.
+ */
 @Component
 public final class ChangeTestImpactService {
+  /**
+   * 共通の実行基盤で受け渡す候補を表す。
+   *
+   * @param path パス
+   * @param testCandidate 検証候補
+   * @param distance 距離
+   * @param reason 理由
+   * @param via 経由先
+   */
   public record Candidate(
       String path, boolean testCandidate, int distance, String reason, String via) {}
 
+  /**
+   * 共通の実行基盤で受け渡す外部連携候補を表す。
+   *
+   * @param path パス
+   * @param module 機能単位
+   * @param reason 理由
+   */
   public record IntegrationCandidate(String path, String module, String reason) {}
 
+  /**
+   * 共通の実行基盤で受け渡すRegression評価を表す。
+   *
+   * @param scope 対象範囲
+   * @param reasons 理由一覧
+   * @param affectedModules affected機能単位一覧
+   * @param integrationCandidates 外部連携候補一覧
+   * @param partial 部分的な結果
+   */
   public record RegressionAssessment(
       String scope,
       List<String> reasons,
@@ -32,6 +61,20 @@ public final class ChangeTestImpactService {
       List<IntegrationCandidate> integrationCandidates,
       boolean partial) {}
 
+  /**
+   * 共通の実行基盤で受け渡す結果を表す。
+   *
+   * @param root 作業ルート
+   * @param version 形式のバージョン
+   * @param scannedAt scanned日時
+   * @param partial 部分的な結果
+   * @param warnings 注意事項
+   * @param changedFiles 変更済みファイル一覧
+   * @param unindexedChanges unindexed変更一覧
+   * @param candidates 候補一覧
+   * @param regressionAssessment regression評価
+   * @param coverage 対象範囲
+   */
   public record Result(
       String root,
       String version,
@@ -43,6 +86,7 @@ public final class ChangeTestImpactService {
       List<Candidate> candidates,
       RegressionAssessment regressionAssessment,
       CoverageImpactService.Result coverage) {
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Result(
         String root,
         String version,
@@ -67,12 +111,15 @@ public final class ChangeTestImpactService {
     }
   }
 
+  /** 対応表一覧。 */
   private final RepositoryMapService maps;
 
+  /** 指定された値や利用先を使って、ChangeTestImpactServiceを初期化する。 */
   public ChangeTestImpactService(RepositoryMapService maps) {
     this.maps = maps;
   }
 
+  /** 共通の実行基盤で用いる分析Gitを返す。 */
   public Result analyzeGit(Path root, int limit) throws IOException {
     if (limit < 1 || limit > 100) throw new IllegalArgumentException("Limit must be 1 to 100");
     Path actual = root.toRealPath();
@@ -97,6 +144,7 @@ public final class ChangeTestImpactService {
         result.regressionAssessment());
   }
 
+  /** 共通の実行基盤で用いる分析Gitを返す。 */
   public Result analyzeGit(Path root, int limit, List<String> reports) throws IOException {
     if (limit < 1 || limit > 100) throw new IllegalArgumentException("Limit must be 1 to 100");
     Path actual = root.toRealPath();
@@ -123,6 +171,7 @@ public final class ChangeTestImpactService {
         result.coverage());
   }
 
+  /** 共通の実行基盤で用いる分析を返す。 */
   public Result analyze(Path root, List<String> changedFiles, int limit) throws IOException {
     RunCancellation.propagate(null);
     if (changedFiles == null
@@ -134,6 +183,7 @@ public final class ChangeTestImpactService {
     return analyzePaths(root, changedFiles, limit, false);
   }
 
+  /** 共通の実行基盤で用いる分析パス一覧を返す。 */
   private Result analyzePaths(
       Path root, List<String> changedFiles, int limit, boolean incompleteInventory)
       throws IOException {
@@ -141,6 +191,7 @@ public final class ChangeTestImpactService {
         root, changedFiles, limit, incompleteInventory, List.of(), List.of(), false);
   }
 
+  /** 共通の実行基盤で用いる分析を返す。 */
   public Result analyze(
       Path root,
       List<String> changedFiles,
@@ -157,6 +208,7 @@ public final class ChangeTestImpactService {
     return analyzePaths(root, changedFiles, limit, false, ranges, reports, true);
   }
 
+  /** 共通の実行基盤で用いる分析パス一覧を返す。 */
   private Result analyzePaths(
       Path root,
       List<String> changedFiles,
@@ -168,6 +220,7 @@ public final class ChangeTestImpactService {
       throws IOException {
     var changes = new LinkedHashSet<String>();
     for (String name : changedFiles) {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (name == null || name.isBlank() || name.length() > 1024)
         throw new IllegalArgumentException("Invalid changed path");
       Path path = Path.of(name.replace('\\', '/')).normalize();
@@ -254,6 +307,7 @@ public final class ChangeTestImpactService {
         coverage);
   }
 
+  /** 共通の実行基盤で用いる評価を返す。 */
   private static RegressionAssessment assess(
       RepositoryMapService.View snapshot,
       Set<String> changes,
@@ -317,6 +371,7 @@ public final class ChangeTestImpactService {
         partial || truncated);
   }
 
+  /** 共通の実行基盤において、構築機能の構成に該当するか判定する。 */
   private static boolean buildConfiguration(String path) {
     String name = Path.of(path).getFileName().toString();
     return Set.of(
@@ -333,6 +388,7 @@ public final class ChangeTestImpactService {
         || path.startsWith(".github/workflows/");
   }
 
+  /** 共通の実行基盤において、検証かどうかを判定する。 */
   private static boolean isTest(String path) {
     return HeuristicSourceIndex.test(path);
   }

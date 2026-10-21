@@ -20,7 +20,9 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 前面作業状況画像認識の結果と状態の契約を検証するテスト。 */
 class ForegroundActivityVisionTest {
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void logsReportedReasoningTokensWithoutReasoningText() throws Exception {
     var usage =
@@ -70,11 +72,13 @@ class ForegroundActivityVisionTest {
     }
   }
 
+  /** 検証に使う有効な。 */
   static final String VALID =
       """
       {"category":"research","application":"Firefox","service":"ChatGPT","projectCandidate":null,"contentCandidate":null,"summary":"調査に関する画面","confidence":0.9}
       """;
 
+  /** 前面について、単一小さな分類を利用することを確認する。 */
   @Test
   void foregroundUsesOneSmallClassificationWithoutModelGeneratedObservationsOrMonitorIds()
       throws Exception {
@@ -115,6 +119,7 @@ class ForegroundActivityVisionTest {
     assertTrue(options.getToolCallbacks().isEmpty());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void tokenFixtureFailsAt1024AndSucceedsAt2048WithoutRepeatingTruncatedRequest() throws Exception {
     var model = mock(ChatModel.class);
@@ -161,6 +166,7 @@ class ForegroundActivityVisionTest {
     }
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void lightweightValidationRejectsExtraFieldsTrailingJsonAndInvalidCategories() {
     var parser = new ForegroundActivityParser();
@@ -173,6 +179,7 @@ class ForegroundActivityVisionTest {
       assertThrows(ActivityOutputParser.InvalidOutput.class, () -> parser.parse(json, "m1"));
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   private static ChatResponse response(String content, String finish) {
     return new ChatResponse(
         List.of(

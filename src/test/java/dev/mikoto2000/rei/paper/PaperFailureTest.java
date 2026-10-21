@@ -21,8 +21,10 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 論文失敗情報の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class PaperFailureTest {
+  /** 言語モデルについて、付随情報を受け付けられることを確認する。 */
   @Test
   void llmAcceptsMetadataOnlyStreamChunksWithoutToolsOrMemory() {
     var provider = mock(dev.mikoto2000.rei.llm.LlmModelProvider.class);
@@ -47,6 +49,7 @@ class PaperFailureTest {
             .generate("system", "source", PaperOperation.local("s")));
   }
 
+  /** 論文の調査と整理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void terminologyMustAppearInTranslation() {
     assertThrows(
@@ -63,8 +66,10 @@ class PaperFailureTest {
                 "OSWorld grounding", "OSWorld のグラウンディング", Map.of("grounding", "グラウンディング")));
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 論文の調査と整理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void databaseDeleteFailureRollsBackVersionRemovalAndRemainsRetryable() {
     var ds = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("db"));
@@ -94,6 +99,7 @@ class PaperFailureTest {
     assertTrue(repo.artifact(p.id(), "summary", "key").isEmpty());
   }
 
+  /** 論文の調査と整理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedInitialPurgeTransactionDoesNotTouchFiles() {
     var ds = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("db"));
@@ -121,6 +127,7 @@ class PaperFailureTest {
     assertTrue(repo.find(p.id()).isPresent());
   }
 
+  /** シェル実行先への引き渡しについて、引数を保持することを確認する。 */
   @Test
   void shellDispatchPreservesArguments() {
     var conversations = mock(dev.mikoto2000.rei.application.session.ShellConversationService.class);
@@ -129,6 +136,7 @@ class PaperFailureTest {
     verify(conversations).submit("/paper search \"GUI agent\" --since 2025 --limit 10");
   }
 
+  /** 論文の調査と整理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void differentDoiPreventsTitleCollision() {
     var repo =
@@ -169,6 +177,7 @@ class PaperFailureTest {
     assertNotEquals(repo.save(a, op).id(), repo.save(b, op).id());
   }
 
+  /** 入力の解釈について、不明選択可能な設定形式ドメインエラーを受け付けないことを確認する。 */
   @Test
   void parserRejectsUnknownOptionsAsDomainError() {
     assertThrows(

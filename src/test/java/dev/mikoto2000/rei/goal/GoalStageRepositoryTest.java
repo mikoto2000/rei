@@ -15,18 +15,23 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 目標段階保存と検索の窓口の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class GoalStageRepositoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 検証で使用する取得元を、指定された条件に合わせて用意する。 */
   DriverManagerDataSource source() {
     return new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("goals.db"));
   }
 
+  /** {@code goals} の条件を再現するための補助情報を返す。 */
   GoalRepository goals() {
     return new GoalRepository(source(), Clock.systemUTC());
   }
 
+  /** {@code stage} の条件を再現するための補助情報を返す。 */
   GoalStageDefinition stage(String id, String... dependencies) {
     return new GoalStageDefinition(
         id,
@@ -38,6 +43,7 @@ class GoalStageRepositoryTest {
         null);
   }
 
+  /** {@code goal} の条件を再現するための補助情報を返す。 */
   GoalRepository.Goal goal(GoalRepository goals) {
     return goals.create(
         new AgentRunContext("human", "session", dir, "project"),
@@ -47,6 +53,7 @@ class GoalStageRepositoryTest {
         20);
   }
 
+  /** 目標の達成管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rejectsCyclesMissingReferencesAndConditionWeakening() {
     var goals = goals();
@@ -64,6 +71,7 @@ class GoalStageRepositoryTest {
     assertEquals(2, stages.list(goal).size());
   }
 
+  /** 重複の有無を受け付けないことを確認する。 */
   @Test
   void persistsIndependentEvidenceAndRejectsDuplicateOrOutdatedCompletion() throws Exception {
     var goals = goals();
@@ -92,6 +100,7 @@ class GoalStageRepositoryTest {
         verifier.verify(goal, reopened.list(goal).getFirst(), reopened.list(goal)).result());
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void largeBoundedVerificationContractsRemainReadableAfterEvidenceCommit() throws Exception {
     var goals = goals();
@@ -159,6 +168,7 @@ class GoalStageRepositoryTest {
     assertEquals(1, reopened.evidence(goal).size());
   }
 
+  /** 確認済み目標確定について、未確認段階計画を受け付けないことを確認する。 */
   @Test
   void verifiedGoalCommitRejectsAnUnverifiedStagePlan() throws Exception {
     var goals = goals();
@@ -172,6 +182,7 @@ class GoalStageRepositoryTest {
     assertEquals("READY", goals.get("project", goal.id()).status());
   }
 
+  /** 完了について、解放する利用権の確保形式実行を妨げる条件ありを停止することを確認する。 */
   @Test
   void completionStopReleasesClaimAsBlockedWhenStagesAreNotVerified() throws Exception {
     var goals = goals();
@@ -186,6 +197,7 @@ class GoalStageRepositoryTest {
     assertFalse(goals.active(claim));
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void fileRevalidationDoesNotBlockAnotherGoalsBudgetReservation() throws Exception {
     var data = source();
@@ -213,6 +225,7 @@ class GoalStageRepositoryTest {
     var release = new java.util.concurrent.CountDownLatch(1);
     var slowFiles =
         new FileGoalVerifier() {
+          /** 検証用に、要求された条件を満たすことを確認する。 */
           @Override
           public Verification verify(Path root, GoalRepository.FileCriterion criterion) {
             entered.countDown();

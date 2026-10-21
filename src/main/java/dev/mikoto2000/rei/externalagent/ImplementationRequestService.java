@@ -19,13 +19,31 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Service;
 
 /**
- * Specifications and permission are separate: only persisted server data may reach the common
+ * 実装要求のユースケースを実現する。
+ *
+ * <p>Specifications and permission are separate: only persisted server data may reach the common
  * engine.
  */
 @Service
 public class ImplementationRequestService {
+  /** ツール。 */
   static final String TOOL = "requestCodexImplementation";
 
+  /**
+   * 外部エージェントへの委譲で受け渡す準備済みを表す。
+   *
+   * @param requestId 要求の識別子
+   * @param specificationVersion 仕様形式のバージョン
+   * @param specificationSha256 仕様内容の同一性を照合するSHA-256ハッシュ
+   * @param status 状態
+   * @param summary 要約
+   * @param target 対象
+   * @param allowedPaths 許可パス一覧
+   * @param unresolvedRequirements 未確定要件一覧
+   * @param approvalRequired 承認必須
+   * @param warnings 注意事項
+   * @param nextAction 次操作
+   */
   public record Prepared(
       String requestId,
       int specificationVersion,
@@ -39,6 +57,25 @@ public class ImplementationRequestService {
       List<String> warnings,
       String nextAction) {}
 
+  /**
+   * 外部エージェントへの委譲で受け渡す最終結果を表す。
+   *
+   * @param requestId 要求の識別子
+   * @param status 状態
+   * @param receiptId 受付記録識別子
+   * @param specificationSha256 仕様内容の同一性を照合するSHA-256ハッシュ
+   * @param baseCommit 基準確定
+   * @param implementationCommit 実装確定
+   * @param changedFiles 変更済みファイル一覧
+   * @param patchSha256 変更差分内容の同一性を照合するSHA-256ハッシュ
+   * @param testResult 検証結果
+   * @param staticReview staticレビュー
+   * @param acceptanceResults 受け入れ条件結果一覧
+   * @param warnings 注意事項
+   * @param unmetRequirements 未達成の条件要件一覧
+   * @param mergePerformed 統合Performed
+   * @param pushPerformed 送信Performed
+   */
   public record Outcome(
       String requestId,
       String status,
@@ -56,16 +93,34 @@ public class ImplementationRequestService {
       boolean mergePerformed,
       boolean pushPerformed) {}
 
+  /** 要求一覧。 */
   private final ImplementationRequestRepository requests;
+
+  /** 承認一覧。 */
   private final ToolApprovalRepository approvals;
+
+  /** 判断基準。 */
   private final ToolPermissionPolicy policy;
+
+  /** この機能の動作設定。 */
   private final CodexProperties properties;
+
+  /** 委譲。 */
   private final ExternalAgentDelegationService delegation;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper().findAndRegisterModules();
+
+  /** 起動単位の識別子。 */
   private final String instance = UUID.randomUUID().toString();
+
+  /** 活動中。 */
   private final Set<String> active = ConcurrentHashMap.newKeySet();
 
+  /** 指定された値や利用先を使って、ImplementationRequestServiceを初期化する。 */
   public ImplementationRequestService(
       ImplementationRequestRepository requests,
       ToolApprovalRepository approvals,
@@ -81,6 +136,7 @@ public class ImplementationRequestService {
     this.clock = clock;
   }
 
+  /** 外部エージェントへの委譲で用いる準備を返す。 */
   public Prepared prepare(
       RunExecutionContext run,
       ImplementationSpecification specification,
@@ -88,6 +144,7 @@ public class ImplementationRequestService {
     return prepare(run, specification, previousRequestId, null);
   }
 
+  /** 外部エージェントへの委譲で用いる準備を返す。 */
   public Prepared prepare(
       RunExecutionContext run,
       ImplementationSpecification specification,
@@ -226,6 +283,7 @@ public class ImplementationRequestService {
     }
     String id = UUID.randomUUID().toString();
     String approvalInput = approvalInput(id, validated.canonical(), envelope);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (approvalInput.length() > 16384)
       throw new IllegalArgumentException(
           "Complete approval specification exceeds existing 16384 character limit; reduce scope, never truncate");
@@ -262,6 +320,7 @@ public class ImplementationRequestService {
     return prepared(requests.get(id));
   }
 
+  /** 要求された処理を実行する。 */
   public Outcome execute(RunExecutionContext run, String id, int version, String hash) {
     var owner = owner(run);
     run.checkActive();
@@ -358,6 +417,7 @@ public class ImplementationRequestService {
     }
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Outcome get(RunExecutionContext run, String id) {
     var saved = owned(owner(run), id);
     run.checkActive();
@@ -376,6 +436,7 @@ public class ImplementationRequestService {
         "Saved state only; use getExternalImplementation for the linked receipt. Never automatically retry UNKNOWN");
   }
 
+  /** 現在の状態と記録を照合し、差異に応じて管理状態を整える。 */
   private Outcome reconcile(
       RunExecutionContext run, ImplementationRequestRepository.Request saved) {
     if (saved.receiptId() == null) return null;
@@ -395,6 +456,7 @@ public class ImplementationRequestService {
         saved, read(saved.canonicalSpecification(), ImplementationSpecification.class), terminal);
   }
 
+  /** 処理の完了を記録し、後続の処理へ結果を引き渡す。 */
   private Outcome complete(
       ImplementationRequestRepository.Request saved,
       ImplementationSpecification specification,
@@ -438,7 +500,10 @@ public class ImplementationRequestService {
   }
 
   /**
-   * Semantic assessment is explicitly labelled PARENT_LLM, separate from objective server checks.
+   * 対象を判断基準に照らして評価する。
+   *
+   * <p>Semantic assessment is explicitly labelled PARENT_LLM, separate from objective server
+   * checks.
    */
   public Outcome evaluate(
       RunExecutionContext run, String id, String patch, List<AcceptanceEvaluation> input) {
@@ -467,6 +532,7 @@ public class ImplementationRequestService {
     return withEvaluations(result, values);
   }
 
+  /** 外部エージェントへの委譲で用いる評価済みを返す。 */
   private Outcome evaluated(Outcome result) {
     return requests
         .evaluations(
@@ -478,6 +544,7 @@ public class ImplementationRequestService {
         .orElse(result);
   }
 
+  /** 指定された評価一覧を反映した情報を作成する。 */
   private Outcome withEvaluations(Outcome result, List<AcceptanceEvaluation> values) {
     return new Outcome(
         result.requestId(),
@@ -500,6 +567,7 @@ public class ImplementationRequestService {
         false);
   }
 
+  /** 外部エージェントへの委譲で用いる判断結果を返す。 */
   private PermissionDecision decision() {
     var result = policy.evaluate(TOOL);
     return result == PermissionDecision.AUTO_APPROVE && !policy.enforced()
@@ -507,6 +575,7 @@ public class ImplementationRequestService {
         : result;
   }
 
+  /** この機能を利用する設定が有効かどうかを返す。 */
   private boolean enabled() {
     return properties.isEnabled()
         && properties.isImplementationEnabled()
@@ -517,6 +586,7 @@ public class ImplementationRequestService {
         && properties.getImplementationTestTimeoutSeconds() <= 60;
   }
 
+  /** 外部エージェントへの委譲で用いる所有者を返す。 */
   private AgentRunContext owner(RunExecutionContext run) {
     if (run == null || run.runContext() == null)
       throw new IllegalArgumentException("Current Run required");
@@ -528,8 +598,10 @@ public class ImplementationRequestService {
     return owner;
   }
 
+  /** 外部エージェントへの委譲で用いる自分が所有する対象を返す。 */
   private ImplementationRequestRepository.Request owned(AgentRunContext owner, String id) {
     var saved = requests.get(id);
+    // 別のプロジェクトの情報を、この作業の対象として扱わせない。
     if (!saved.projectId().equals(owner.projectId())
         || !saved.sessionId().equals(owner.conversationId())
         || !saved.projectRoot().equals(realRoot(owner)))
@@ -538,6 +610,7 @@ public class ImplementationRequestService {
     return saved;
   }
 
+  /** 外部エージェントへの委譲で用いるreal作業ルートを返す。 */
   private String realRoot(AgentRunContext owner) {
     try {
       return owner.projectRoot().toRealPath().toString();
@@ -546,6 +619,7 @@ public class ImplementationRequestService {
     }
   }
 
+  /** 外部エージェントへの委譲で用いる共通の通知属性を返す。 */
   private String envelope(
       AgentRunContext owner, String base, ImplementationSpecification specification) {
     return ImplementationSpecificationValidator.serialize(
@@ -568,6 +642,7 @@ public class ImplementationRequestService {
             properties.getImplementationTestTimeoutSeconds()));
   }
 
+  /** 外部エージェントへの委譲で用いる基準を返す。 */
   private String base(Path root) {
     try {
       var output =
@@ -596,6 +671,7 @@ public class ImplementationRequestService {
     }
   }
 
+  /** 外部エージェントへの委譲で用いる承認入力を返す。 */
   private String approvalInput(String id, String canonical, String envelope) {
     return "Implementation request "
         + id
@@ -607,6 +683,7 @@ public class ImplementationRequestService {
         + envelope;
   }
 
+  /** 外部エージェントへの委譲で用いる準備済みを返す。 */
   private Prepared prepared(ImplementationRequestRepository.Request saved) {
     var spec = read(saved.canonicalSpecification(), ImplementationSpecification.class);
     return new Prepared(
@@ -625,6 +702,7 @@ public class ImplementationRequestService {
             : "Execute only this saved requestId/version/hash");
   }
 
+  /** 外部エージェントへの委譲で用いるrefusedを返す。 */
   private Prepared refused(String reason) {
     return new Prepared(
         null,
@@ -640,6 +718,7 @@ public class ImplementationRequestService {
         "Do not execute");
   }
 
+  /** 後続の処理で判断できるよう、未完了の対象を返す。 */
   private Outcome pending(
       ImplementationRequestRepository.Request saved, String status, String warning) {
     return new Outcome(
@@ -660,6 +739,7 @@ public class ImplementationRequestService {
         false);
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private <T> T read(String value, Class<T> type) {
     try {
       return json.readValue(value, type);
@@ -668,10 +748,12 @@ public class ImplementationRequestService {
     }
   }
 
+  /** 外部エージェントへの委譲において、負の実装意図に該当するか判定する。 */
   private static boolean negativeImplementationIntent(String text) {
     return text.matches("(?s).*(実装\\s*(?:を|は)?\\s*(?:しない|しなく|不要|禁止|しては|するな)|いいえ|確定しない|確定しません).*");
   }
 
+  /** 外部エージェントへの委譲において、利用者Clarificationに該当するか判定する。 */
   private static boolean humanClarification(String input) {
     if (input == null) return false;
     String text =
@@ -687,6 +769,7 @@ public class ImplementationRequestService {
         "(?s).*(対象|指示|条件|目的|制約|要件|確定|はい|\\byes\\b|\\bconfirm\\b|\\btarget\\b|\\bcriteria\\b).*");
   }
 
+  /** 外部エージェントへの委譲において、利用者実装要求に該当するか判定する。 */
   static boolean humanImplementationRequest(String input) {
     if (input == null) return false;
     if (input.strip().startsWith("/agent ")) {

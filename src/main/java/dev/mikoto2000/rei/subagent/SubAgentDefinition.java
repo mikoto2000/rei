@@ -4,7 +4,27 @@ import java.nio.file.Path;
 import java.time.Duration;
 import java.util.List;
 
-/** Provider-independent, immutable configuration for an ephemeral execution. */
+/**
+ * 補助エージェントへの委譲で受け渡す補助エージェント定義を表す。
+ *
+ * <p>Provider-independent, immutable configuration for an ephemeral execution.
+ *
+ * @param id 識別子
+ * @param name 名前
+ * @param description 説明
+ * @param systemPrompt システムへの指示
+ * @param requestedTools 要求されたツール一覧
+ * @param model モデル
+ * @param maxSteps 最大手順一覧
+ * @param timeout タイムアウト
+ * @param source 取得元
+ * @param resultSchema 結果データ形式
+ * @param evidenceTools 根拠ツール一覧
+ * @param maxRepairs 最大修復一覧
+ * @param requiredToolCalls 必須ツール呼び出し一覧
+ * @param semanticValidation 意味による検証
+ * @param inheritApprovals inherit承認一覧
+ */
 public record SubAgentDefinition(
     String id,
     String name,
@@ -21,6 +41,7 @@ public record SubAgentDefinition(
     List<SubAgentRequiredCall> requiredToolCalls,
     boolean semanticValidation,
     boolean inheritApprovals) {
+  /** 補助エージェントへの委譲を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SubAgentDefinition(
       String id,
       String name,
@@ -54,6 +75,7 @@ public record SubAgentDefinition(
         false);
   }
 
+  /** 補助エージェントへの委譲を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SubAgentDefinition(
       String id,
       String name,
@@ -85,6 +107,7 @@ public record SubAgentDefinition(
         false);
   }
 
+  /** 補助エージェントへの委譲を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SubAgentDefinition(
       String id,
       String name,
@@ -114,6 +137,7 @@ public record SubAgentDefinition(
         List.of());
   }
 
+  /** 補助エージェントへの委譲を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SubAgentDefinition(
       String id,
       String name,
@@ -141,6 +165,7 @@ public record SubAgentDefinition(
         0);
   }
 
+  /** 補助エージェントへの委譲を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SubAgentDefinition(
       String id,
       String name,
@@ -166,6 +191,7 @@ public record SubAgentDefinition(
         List.of());
   }
 
+  /** 補助エージェントへの委譲を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SubAgentDefinition(
       String id,
       String name,
@@ -189,6 +215,7 @@ public record SubAgentDefinition(
         null);
   }
 
+  /** 受け取った情報からSubAgentDefinitionを作成する。 */
   public SubAgentDefinition {
     if (maxRepairs < 0 || maxRepairs > 3)
       throw new IllegalArgumentException("maxRepairs: expected integer from 0 to 3");

@@ -11,10 +11,13 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** プロジェクト実行状態保存先の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProjectRunStateStoreTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** プロジェクトごとの作業環境の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationIsNotRestoredAsFailure() {
     var project = new ProjectContext(UUID.randomUUID().toString(), "a", temp);
@@ -27,6 +30,7 @@ class ProjectRunStateStoreTest {
     assertThat(store.read(project.id()).orElseThrow().status()).isEqualTo("CANCELLED");
   }
 
+  /** 並行結果一覧について、最新完了ごとのプロジェクトを維持することを確認する。 */
   @Test
   void concurrentResultsKeepLatestCompletionPerProjectAcrossRestart() throws Exception {
     var store = new ProjectRunStateStore(temp);
@@ -69,6 +73,7 @@ class ProjectRunStateStoreTest {
         .isEmpty();
   }
 
+  /** プロジェクトごとの作業環境で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void lastRunStateRestoresWithoutAnEventStore() {
     var project = new ProjectContext(UUID.randomUUID().toString(), "a", temp);

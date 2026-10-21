@@ -17,33 +17,71 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/** 待機をWeb APIの操作として受け付ける。 */
 @RestController
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @RequestMapping("/api/v1/projects/{projectId}/memory")
 public final class SleepController {
+  /** 実行一覧。 */
   private final MemoryRunSubmitService runs;
+
+  /** 補助。 */
   private final MemoryCommandSupport support;
+
+  /** プロジェクト一覧。 */
   private final ProjectRegistry projects;
+
+  /** 会話一覧。 */
   private final SessionLifecycle sessions;
 
+  /**
+   * Web APIによる操作で受け渡すテキストを表す。
+   *
+   * @param text テキスト
+   */
   public record Text(String text) {}
 
+  /**
+   * Web APIによる操作で受け渡す待機要求を表す。
+   *
+   * @param sessionId 会話の識別子
+   * @param preview 事前確認
+   */
   public record SleepRequest(String sessionId, boolean preview) implements StrictApiRequest {}
 
+  /**
+   * Web APIによる操作で受け渡すキャンセルを表す。
+   *
+   * @param revision 改訂番号
+   */
   public record Cancellation(Long revision) implements StrictApiRequest {}
 
+  /**
+   * Web APIによる操作で受け渡す保守を表す。
+   *
+   * @param sessionId 会話の識別子
+   * @param approve 承認
+   */
   public record Maintenance(String sessionId, boolean approve) implements StrictApiRequest {}
 
+  /**
+   * Web APIによる操作で受け渡す書き出しを表す。
+   *
+   * @param directory ディレクトリ
+   */
   public record Export(String directory) implements StrictApiRequest {}
 
+  /** 保存情報を書き出すコマンドの窓口。 */
   private dev.mikoto2000.rei.memory.command.MemoryCommand.ExportCommand exporter;
 
+  /** Web APIによる操作で使用するExporterを設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setExporter(dev.mikoto2000.rei.memory.command.MemoryCommand.ExportCommand exporter) {
     this.exporter = exporter;
   }
 
+  /** 指定された値や利用先を使って、SleepControllerを初期化する。 */
   public SleepController(
       MemoryRunSubmitService runs,
       MemoryCommandSupport support,
@@ -55,6 +93,7 @@ public final class SleepController {
     this.sessions = sessions;
   }
 
+  /** Web APIによる操作で用いる待機を返す。 */
   @PostMapping("/sleep")
   public ResponseEntity<ChatResponse> sleep(
       @PathVariable String projectId,
@@ -67,6 +106,7 @@ public final class SleepController {
         .body(new ChatResponse(run.runId(), run.conversationId(), run.runId()));
   }
 
+  /** 対象の内容を、要点が分かる形にまとめる。 */
   @PostMapping("/summarize")
   public ResponseEntity<ChatResponse> summarize(
       @PathVariable String projectId,
@@ -76,6 +116,7 @@ public final class SleepController {
     return accepted(runs.summarize(projectId, request.sessionId(), request.approve(), key));
   }
 
+  /** Web APIによる操作で用いるconsolidateを返す。 */
   @PostMapping("/consolidate")
   public ResponseEntity<ChatResponse> consolidate(
       @PathVariable String projectId,
@@ -85,6 +126,7 @@ public final class SleepController {
     return accepted(runs.consolidate(projectId, request.sessionId(), request.approve(), key));
   }
 
+  /** Web APIによる操作で用いる書き出しを返す。 */
   @PostMapping("/export")
   public Text export(@PathVariable String projectId, @RequestBody Export request) {
     project(projectId);
@@ -99,12 +141,14 @@ public final class SleepController {
     return new Text(exporter.render(directory));
   }
 
+  /** Web APIによる操作で用いる受付済みを返す。 */
   private ResponseEntity<ChatResponse> accepted(dev.mikoto2000.rei.core.chat.AgentRunContext run) {
     return ResponseEntity.accepted()
         .location(URI.create("/api/v1/runs/" + run.runId()))
         .body(new ChatResponse(run.runId(), run.conversationId(), run.runId()));
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   @GetMapping("/sleep/status")
   public Text status(
       @PathVariable String projectId, @RequestParam(required = false) String sessionId) {
@@ -113,18 +157,21 @@ public final class SleepController {
     return new Text(support.statusForProject(projectId, sessionId));
   }
 
+  /** 過去の記録を、条件に従って参照できる形で返す。 */
   @GetMapping("/sleep/history")
   public Text history(@PathVariable String projectId) {
     project(projectId);
     return new Text(support.historyForProject(projectId));
   }
 
+  /** Web APIによる操作で用いる要求一覧を返す。 */
   @GetMapping("/sleep/requests")
   public Text requests(@PathVariable String projectId) {
     project(projectId);
     return new Text(support.autoSleepRequestsForProject(projectId));
   }
 
+  /** 対象の実行をキャンセルする。 */
   @PostMapping("/sleep/requests/{sessionId}/cancel")
   public Text cancel(
       @PathVariable String projectId,
@@ -138,6 +185,7 @@ public final class SleepController {
         support.cancelAutoSleepRequestForProject(projectId, sessionId, request.revision()));
   }
 
+  /** Web APIによる操作に関するプロジェクトを処理する。 */
   private void project(String id) {
     projects
         .resolveById(id)

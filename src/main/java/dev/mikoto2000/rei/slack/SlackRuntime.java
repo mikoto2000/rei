@@ -16,24 +16,49 @@ import java.time.Clock;
 import java.util.HashSet;
 import java.util.Objects;
 
-/** Channel adapter over the existing Session, Run, Tool and Planning Loop. */
+/**
+ * Slackとの連携に必要なSlack実行環境を扱う。
+ *
+ * <p>Channel adapter over the existing Session, Run, Tool and Planning Loop.
+ */
 public final class SlackRuntime {
+  /** この機能の動作設定。 */
   private final SlackProperties p;
+
+  /** 保存先。 */
   private final SlackStore store;
+
+  /** 自分自身の識別情報。 */
   private final String self;
+
+  /** プロジェクト一覧。 */
   private final ProjectRegistry projects;
+
+  /** 会話一覧。 */
   private final SessionLifecycle sessions;
+
+  /** 登録台帳。 */
   private final RunRegistry registry;
+
+  /** 実行一覧。 */
   private final RunService runs;
+
+  /** 入力の振り分け。 */
   private final ConversationInputRouter router;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 完了回答。 */
   private java.util.function.BiFunction<String, String, String> completedAnswer =
       (session, run) -> null;
 
+  /** 通知に応じて状態や表示を更新するため、完了回答を受け付ける。 */
   public void onCompletedAnswer(java.util.function.BiFunction<String, String, String> answer) {
     completedAnswer = Objects.requireNonNull(answer);
   }
 
+  /** 指定された値や利用先を使って、SlackRuntimeを初期化する。 */
   public SlackRuntime(
       SlackProperties p,
       SlackStore store,
@@ -55,7 +80,11 @@ public final class SlackRuntime {
     this.clock = clock;
   }
 
-  /** Called before ACK. No LLM, send or queue execution runs on this thread. */
+  /**
+   * 要求を後続の処理へ引き渡すため、Slack実行環境を受け付ける。
+   *
+   * <p>Called before ACK. No LLM, send or queue execution runs on this thread.
+   */
   public boolean accept(SlackMessage m) {
     if (!SlackAdmission.accept(p, self, m, store.knownThread(m))) return false;
     var safe =
@@ -74,6 +103,7 @@ public final class SlackRuntime {
     return store.accept(safe);
   }
 
+  /** Slackとの連携に関する定期確認を処理する。 */
   public void tick() {
     for (var receipt : store.pending()) {
       var m = receipt.message();
@@ -94,6 +124,7 @@ public final class SlackRuntime {
         var run = runs.get(receipt.run());
         boolean occupied = router.containsRun(receipt.project(), receipt.run());
         if (occupied) continue;
+        // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
         if (!run.status().isTerminal()) {
           if (run.status() == RunStatus.WAITING)
             reply(
@@ -137,6 +168,7 @@ public final class SlackRuntime {
     }
   }
 
+  /** Slackとの連携に関する実行先への引き渡しを処理する。 */
   private void dispatch(SlackMessage m) {
     String text = m.text().replace("<@" + self + ">", "").strip();
     String command =
@@ -202,6 +234,7 @@ public final class SlackRuntime {
     store.activateRun(accepted.runId());
   }
 
+  /** Slackとの連携に関する制御を処理する。 */
   private void control(SlackMessage m, String text) {
     // Claim the command before a cancellation side effect, including across restarts.
     if (!store.transition(m, "ACCEPTED", "CONTROL")) return;
@@ -223,6 +256,7 @@ public final class SlackRuntime {
       reply(m.key() + ":control", m, "Run: " + receipt.run() + "\n状態: " + status);
       return;
     }
+    // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
     if (run.status().isTerminal()) {
       reply(m.key() + ":control", m, "Run は終了済みです。");
       return;
@@ -235,6 +269,7 @@ public final class SlackRuntime {
         result.accepted() ? "キャンセルを受け付けました。停止を確認しています。" : "キャンセル対象は終了済みです。");
   }
 
+  /** 通知に応じて状態や表示を更新するため、イベントを受け付ける。 */
   public void onEvent(AgentEvent event) {
     if (event.runId() == null || event.projectId() == null || event.sessionId() == null) return;
     var receipt = store.byRun(event.runId());
@@ -281,11 +316,16 @@ public final class SlackRuntime {
     }
   }
 
+  /** Slackとの連携に関する返信を処理する。 */
   private void reply(String id, SlackMessage m, String text) {
     store.replyParts(id, m, SlackReplies.parts(text));
   }
 
-  /** One attempt per channel per tick; rate-limited attempts wait in the durable outbox. */
+  /**
+   * Slackとの連携に関する送信を処理する。
+   *
+   * <p>One attempt per channel per tick; rate-limited attempts wait in the durable outbox.
+   */
   public void send(SlackTransport transport) {
     var attempted = new HashSet<String>();
     for (var row : store.outbox(clock.millis())) {

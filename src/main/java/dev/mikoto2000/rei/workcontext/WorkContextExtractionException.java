@@ -2,33 +2,53 @@ package dev.mikoto2000.rei.workcontext;
 
 import dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics;
 
-/** Controlled extraction diagnostics contain no supplied evidence or model output. */
+/**
+ * 作業文脈の引き継ぎを継続できない作業文脈Extractionの状況を伝える例外。
+ *
+ * <p>Controlled extraction diagnostics contain no supplied evidence or model output.
+ */
 public final class WorkContextExtractionException extends IllegalArgumentException {
+  /** 作業文脈の引き継ぎにおける理由の選択肢。 */
   public enum Reason {
+    /** 入力TOOLARGE。 */
     INPUT_TOO_LARGE,
+    /** 出力省略の有無。 */
     OUTPUT_TRUNCATED,
+    /** 出力TOOLARGE。 */
     OUTPUT_TOO_LARGE,
+    /** 空出力。 */
     EMPTY_OUTPUT,
+    /** 不正JSON変換。 */
     INVALID_JSON,
+    /** 不正データ形式。 */
     INVALID_SCHEMA
   }
 
+  /** 理由。 */
   private final Reason reason;
+
+  /** 計測した。 */
   private final int measured;
+
+  /** 上限。 */
   private final int limit;
 
+  /** 作業文脈の引き継ぎを利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WorkContextExtractionException(Reason reason) {
     this(reason, 0, 0, null);
   }
 
+  /** 作業文脈の引き継ぎを利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WorkContextExtractionException(Reason reason, Throwable cause) {
     this(reason, 0, 0, cause);
   }
 
+  /** 作業文脈の引き継ぎを利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WorkContextExtractionException(Reason reason, int measured, int limit) {
     this(reason, measured, limit, null);
   }
 
+  /** 指定された値や利用先を使って、WorkContextExtractionExceptionを初期化する。 */
   private WorkContextExtractionException(Reason reason, int measured, int limit, Throwable cause) {
     super(reason.name(), cause);
     this.reason = reason;
@@ -36,10 +56,12 @@ public final class WorkContextExtractionException extends IllegalArgumentExcepti
     this.limit = Math.max(0, limit);
   }
 
+  /** 作業文脈の引き継ぎで用いる理由を返す。 */
   public Reason reason() {
     return reason;
   }
 
+  /** 作業文脈の引き継ぎで用いる診断を返す。 */
   public FailureDiagnostics.Diagnostic diagnostic() {
     String code = "work_context_" + reason.name().toLowerCase(java.util.Locale.ROOT);
     String guidance =

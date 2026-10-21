@@ -30,22 +30,49 @@ import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import org.sqlite.SQLiteDataSource;
 import reactor.core.publisher.Flux;
 
+/** 補助エージェント依存関係サービスの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SubAgentDagServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temporary;
+
+  /** 検証に使う保存と検索の窓口。 */
   DurableSubAgentRepository repository;
+
+  /** 検証に使う実行の担当。 */
   SubAgentRunner runner;
+
+  /** 検証に使う登録台帳。 */
   SubAgentRegistry registry;
+
+  /** 検証に使うこの機能の動作設定。 */
   SubAgentProperties properties;
+
+  /** 検証に使う並列。 */
   ParallelSubAgentDelegator parallel;
+
+  /** 検証に使うサービス。 */
   SubAgentDagService service;
+
+  /** 検証に使う実行。 */
   RunExecutionContext run;
+
+  /** 検証に使う親。 */
   AgentRunContext parent;
+
+  /** 検証に使うプロンプト一覧。 */
   final List<String> prompts = new CopyOnWriteArrayList<>();
+
+  /** 検証に使う保持の指定。 */
   volatile boolean hold;
+
+  /** 検証に使うキャンセル通知時応答。 */
   volatile boolean cancelOnResponse;
+
+  /** 検証に使う取得元。 */
   SQLiteDataSource source;
 
+  /** 検証ごとに状態を分離し、対象を操作できる環境を用意する。 */
   void setup(boolean failA) throws Exception {
     Path root = Files.createDirectory(temporary.resolve("project")),
         config = Files.createDirectory(temporary.resolve("config"));
@@ -63,10 +90,12 @@ class SubAgentDagServiceTest {
     assertTrue(registry.reload().isEmpty());
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new AssertionError("stream required");
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             String input = prompt.getUserMessage().getText();
             prompts.add(input);
@@ -107,6 +136,7 @@ class SubAgentDagServiceTest {
     run.setUserRequest("delegate a bounded child graph");
   }
 
+  /** {@code spec} の条件を再現するための補助情報を返す。 */
   SubAgentDagSpec spec(SubAgentDagSpec.FailurePolicy policy) {
     return new SubAgentDagSpec(
         List.of(
@@ -118,11 +148,13 @@ class SubAgentDagServiceTest {
         2);
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void close() {
     if (parallel != null) parallel.close();
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void dependencyResultsReachFanInWithHashesAndSharedDurableBudget() throws Exception {
     setup(false);
@@ -150,6 +182,7 @@ class SubAgentDagServiceTest {
     assertEquals(3, prompts.size());
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void partialContinuationRunsIndependentBranchAndBlocksDependentFanIn() throws Exception {
     setup(true);
@@ -167,6 +200,7 @@ class SubAgentDagServiceTest {
     assertEquals(2, repository.get(parent, outcome.graphId()).consumedCalls());
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void timeoutCanResumeRemainingChildrenWithoutResettingOriginalBudget() throws Exception {
     setup(false);
@@ -196,6 +230,7 @@ class SubAgentDagServiceTest {
         IllegalArgumentException.class, () -> service.resume(run, saved.id(), saved.revision()));
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void ownershipAndExactCurrentHumanResumeAreRequired() throws Exception {
     setup(true);
@@ -212,6 +247,7 @@ class SubAgentDagServiceTest {
     assertEquals(2, prompts.size());
   }
 
+  /** 補助エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void anotherGraphsPlanCannotSubstituteItsChildren() throws Exception {
     setup(false);
@@ -224,6 +260,7 @@ class SubAgentDagServiceTest {
     assertThrows(IllegalArgumentException.class, () -> service.get(parent, first.graphId()));
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledParentLeavesInspectableGraphWithoutDispatchingRemainingWaves() throws Exception {
     setup(false);
@@ -246,6 +283,7 @@ class SubAgentDagServiceTest {
     }
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationBetweenWavesReturnsDurableUnknownReceipt() throws Exception {
     setup(false);

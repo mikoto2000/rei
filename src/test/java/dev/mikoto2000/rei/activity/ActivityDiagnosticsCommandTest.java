@@ -19,7 +19,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+/** 作業状況診断情報コマンドの結果と状態の契約を検証するテスト。 */
 class ActivityDiagnosticsCommandTest {
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"", "today", "yesterday", "2026-09-23"})
   void verboseWorksWithEveryDateAndDoesNotRunCapture(String day) {
@@ -53,9 +55,11 @@ class ActivityDiagnosticsCommandTest {
         0, day.isEmpty() ? command.execute("--verbose") : command.execute(day, "--verbose"));
     assertTrue(out.toString().contains("evidence:"));
     assertTrue(out.toString().contains("confidence:"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(capture);
   }
 
+  /** 作業状況の把握で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void verboseBeforeDateIsAcceptedAndSummaryStillUsesOnlyTrendPath() {
     var timeline = mock(ActivityTimeline.class);
@@ -72,6 +76,7 @@ class ActivityDiagnosticsCommandTest {
     clearInvocations(presentation);
     assertEquals(0, command.execute("summary", "yesterday"));
     verify(timeline).trendSummary("yesterday");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(presentation);
     assertTrue(command.getUsageMessage().contains("--verbose"));
   }

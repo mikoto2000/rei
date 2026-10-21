@@ -24,21 +24,47 @@ import java.util.Objects;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 
-/** Human review and a durable intent feed the existing scheduler/checkpoint router. */
+/**
+ * 状態表示再開のユースケースを実現する。
+ *
+ * <p>Human review and a durable intent feed the existing scheduler/checkpoint router.
+ */
 @Service
 public final class DotResumeService {
+  /** 依存条件一覧。 */
   private final dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository dependencies;
+
+  /** リポジトリ。 */
   private final DotRequestRepository repo;
+
+  /** 委譲。 */
   private final DotDelegationService delegation;
+
+  /** 再開用の記録一覧。 */
   private final PersistentCheckpointRepository checkpoints;
+
+  /** 再開用の記録サービス。 */
   private final PersistentCheckpointService checkpointService;
+
+  /** 予約されたエージェント実行を管理する窓口。 */
   private final PersistentAgentScheduler schedules;
+
+  /** 実行一覧。 */
   private final org.springframework.beans.factory.ObjectProvider<RunRegistry> runs;
+
+  /** 会話一覧。 */
   private final SessionRepository sessions;
+
+  /** 実行予定の管理設定。 */
   private final AgentSchedulerProperties schedulerSettings;
+
+  /** 権限一覧。 */
   private final dev.mikoto2000.rei.core.policy.ToolPermissionProperties permissions;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** 指定された値や利用先を使って、DotResumeServiceを初期化する。 */
   public DotResumeService(
       dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository dependencies,
       DotRequestRepository repo,
@@ -64,6 +90,7 @@ public final class DotResumeService {
     this.clock = clock;
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   public Map<String, Object> verify(String project, String id, Map<String, Object> input) {
     delegation.project(project);
     DotPayload.keys(input, Set.of("confirmed", "status", "note", "satisfied"));
@@ -100,11 +127,13 @@ public final class DotResumeService {
     return result;
   }
 
+  /** 利用者の状態表示に関する確認済みを処理する。 */
   private static void confirmed(Map<String, Object> input) {
     if (!Boolean.TRUE.equals(input.get("confirmed")))
       throw new DotException("HUMAN_CONFIRMATION_REQUIRED");
   }
 
+  /** 利用者の状態表示で用いる自分が所有する対象依存条件を返す。 */
   private dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository.Entry ownedDependency(
       DotRequestRepository.Owner owner) {
     var dependency = dependencies.get(owner.project(), owner.dependency());
@@ -118,6 +147,7 @@ public final class DotResumeService {
     return dependency;
   }
 
+  /** 利用者の状態表示で用いる確認済みを返す。 */
   private PersistentCheckpoint checked(DotRequestRepository.Owner owner) {
     var project = delegation.project(owner.project());
     if (!project.root().toString().equals(owner.root()) || !Files.isDirectory(project.root()))
@@ -164,6 +194,7 @@ public final class DotResumeService {
     return state;
   }
 
+  /** 保存された状況を引き継いで、中断した作業を再開する。 */
   public Map<String, Object> resume(String project, String id, Map<String, Object> input) {
     delegation.project(project);
     DotPayload.keys(input, Set.of("confirmed"));
@@ -190,10 +221,12 @@ public final class DotResumeService {
     return status(project, id);
   }
 
+  /** 利用者の状態表示において、操作対象一覧に該当するか判定する。 */
   public boolean handles(PersistentAgentScheduler.Entry entry) {
     return entry.task().action().startsWith("dot-resume:");
   }
 
+  /** 利用者の状態表示で用いる実行先への引き渡しを返す。 */
   public ChatExecutionResult dispatch(PersistentAgentScheduler.Entry entry) {
     try {
       return dispatchChecked(entry);
@@ -208,6 +241,7 @@ public final class DotResumeService {
     }
   }
 
+  /** 利用者の状態表示で用いる実行先への引き渡し確認済みを返す。 */
   private ChatExecutionResult dispatchChecked(PersistentAgentScheduler.Entry entry) {
     String id = entry.task().action().substring("dot-resume:".length());
     var owner = repo.owner(entry.projectId(), id);
@@ -244,6 +278,7 @@ public final class DotResumeService {
     }
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   public Map<String, Object> status(String project, String id) {
     var out = new LinkedHashMap<String, Object>(delegation.get(project, id));
     try {
@@ -262,6 +297,7 @@ public final class DotResumeService {
     return out;
   }
 
+  /** 処理を継続できる状態に戻すため、状態表示再開サービスを復旧する。 */
   @jakarta.annotation.PostConstruct
   void recover() {
     repo.recoverResumeIntents();

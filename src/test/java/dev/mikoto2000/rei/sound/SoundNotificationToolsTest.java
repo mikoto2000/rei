@@ -7,8 +7,10 @@ import static org.mockito.Mockito.verify;
 import dev.mikoto2000.rei.ui.shell.sound.SoundNotificationService;
 import org.junit.jupiter.api.Test;
 
+/** 音通知通知ツール一覧の結果と状態の契約を検証するテスト。 */
 class SoundNotificationToolsTest {
 
+  /** 音による案内で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void webRequestCannotTriggerSoundTool() {
     var service = mock(SoundNotificationService.class);
@@ -26,6 +28,7 @@ class SoundNotificationToolsTest {
     org.mockito.Mockito.verifyNoInteractions(service);
   }
 
+  /** 音による案内で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shellRequestCanTriggerSoundTool() {
     var service = mock(SoundNotificationService.class);
@@ -39,6 +42,7 @@ class SoundNotificationToolsTest {
     verify(service).notify("shell answer");
   }
 
+  /** 音による案内で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void notifyDelegatesToService() {
     SoundNotificationService service = mock(SoundNotificationService.class);
@@ -49,6 +53,7 @@ class SoundNotificationToolsTest {
     verify(service).notify("テストメッセージ");
   }
 
+  /** 通知について、以外未指定の文字列表現を返すことを確認する。 */
   @Test
   void notifyReturnsNonNullString() {
     SoundNotificationService service = mock(SoundNotificationService.class);

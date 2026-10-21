@@ -10,20 +10,31 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
+/** 依存条件をモデルから呼び出せるツールとして提供する。 */
 @Component
 public class DependencyTools {
+  /** リポジトリ。 */
   private final PersistentDependencyRepository repo;
+
+  /** サービス。 */
   private final DependencyObservationService service;
+
+  /** 取得元。 */
   private final DependencySourceProbe source;
+
+  /** HTTP通信Awaiter。 */
   private final DependencyAwaiter httpAwaiter =
       new DependencyAwaiter(
           dev.mikoto2000.rei.temporal.MonotonicTimeSource.system(),
           Thread::sleep,
           Duration.ofSeconds(1));
+
+  /** 依存条件が満たされるまでの待機を管理する窓口。 */
   private final DependencyAwaiter awaiter =
       new DependencyAwaiter(
           dev.mikoto2000.rei.temporal.MonotonicTimeSource.system(), Thread::sleep);
 
+  /** 指定された値や利用先を使って、DependencyToolsを初期化する。 */
   public DependencyTools(
       PersistentDependencyRepository repo,
       DependencyObservationService service,
@@ -33,6 +44,7 @@ public class DependencyTools {
     this.source = source;
   }
 
+  /** 後から対象を参照できるよう、依存条件を登録する。 */
   @Tool(
       name = "registerDependency",
       description =
@@ -66,6 +78,7 @@ public class DependencyTools {
     return entry;
   }
 
+  /** 外部条件の待機で用いる自分が所有する対象を返す。 */
   private PersistentDependencyRepository.Entry owned(String id) {
     var owner = AgentRunScope.current();
     if (owner == null || owner.projectId() == null)
@@ -77,6 +90,7 @@ public class DependencyTools {
     return entry;
   }
 
+  /** 外部条件の待機で用いる依存条件状態を返す。 */
   @Tool(
       name = "dependencyStatus",
       description =
@@ -85,6 +99,7 @@ public class DependencyTools {
     return owned(dependencyId);
   }
 
+  /** 外部条件の待機で用いる依存条件履歴を返す。 */
   @Tool(
       name = "dependencyHistory",
       description =
@@ -94,6 +109,7 @@ public class DependencyTools {
     return repo.history(entry.projectId(), entry.id());
   }
 
+  /** 後続の操作を進められるか判断するため、依存条件を確認する。 */
   @Tool(
       name = "checkDependency",
       description =
@@ -103,6 +119,7 @@ public class DependencyTools {
     return service.inspect(entry.projectId(), entry.id(), false);
   }
 
+  /** 後続の操作を進められるか判断するため、HTTP通信依存条件を確認する。 */
   @Tool(
       name = "checkHttpDependency",
       description =
@@ -113,6 +130,7 @@ public class DependencyTools {
     return service.inspect(entry.projectId(), entry.id(), true);
   }
 
+  /** 必要な状態が整ってから先へ進むため、対象依存条件を待つ。 */
   @Tool(
       name = "waitForDependency",
       description =
@@ -124,6 +142,7 @@ public class DependencyTools {
     return waitFor(dependencyId, timeoutSeconds, toolContext, false);
   }
 
+  /** 必要な状態が整ってから先へ進むため、対象HTTP通信依存条件を待つ。 */
   @Tool(
       name = "waitForHttpDependency",
       description =
@@ -135,6 +154,7 @@ public class DependencyTools {
     return waitFor(dependencyId, timeoutSeconds, toolContext, true);
   }
 
+  /** 必要な状態が整ってから先へ進むため、対象を待つ。 */
   private DependencyObservation waitFor(
       String id, Integer seconds, ToolContext context, boolean network) {
     var entry = owned(id);
@@ -162,6 +182,7 @@ public class DependencyTools {
     return observation;
   }
 
+  /** 利用者が不要とした実行を止めるため、依存条件をキャンセルする。 */
   @Tool(
       name = "cancelDependency",
       description =

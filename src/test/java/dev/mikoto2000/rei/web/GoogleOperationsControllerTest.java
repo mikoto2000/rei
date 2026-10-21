@@ -16,7 +16,9 @@ import dev.mikoto2000.rei.task.TaskStatus;
 import java.time.OffsetDateTime;
 import org.junit.jupiter.api.Test;
 
+/** Google操作一覧受付窓口の結果と状態の契約を検証するテスト。 */
 class GoogleOperationsControllerTest {
+  /** タスク一覧について、既存のサービスを利用することを確認する。 */
   @Test
   void tasksUseTheExistingServiceAndDefaultPriority() {
     var calendar = mock(GoogleCalendarService.class);
@@ -29,12 +31,14 @@ class GoogleOperationsControllerTest {
         "追加: 7 | Review",
         api.addTask(new GoogleOperationsController.Task("Review", null, null)).text());
     verify(tasks).add("Review", null, 3);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(calendar, runs);
     assertThrows(
         IllegalArgumentException.class,
         () -> api.addTask(new GoogleOperationsController.Task("", null, null)));
   }
 
+  /** Web APIによる操作で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void authorizationPassesCapturedOwnershipAndReceiptToTheQueue() {
     var calendar = mock(GoogleCalendarService.class);
@@ -53,6 +57,7 @@ class GoogleOperationsControllerTest {
         api.authorizeCalendar(new GoogleOperationsController.Scope("project", "session"), "key");
     assertEquals(202, accepted.getStatusCode().value());
     assertEquals("run", accepted.getBody().runId());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(calendar, tasks);
   }
 }

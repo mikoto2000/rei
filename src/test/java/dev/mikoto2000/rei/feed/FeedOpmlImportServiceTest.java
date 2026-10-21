@@ -19,10 +19,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** フィードOPML取り込みサービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class FeedOpmlImportServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** フィードの購読と収集で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void registersAllFeedsThroughExistingServiceWithoutFetching() throws Exception {
     FeedService feeds = spy(newService());
@@ -44,6 +47,7 @@ class FeedOpmlImportServiceTest {
     assertThrows(UnsupportedOperationException.class, () -> result.imported().clear());
   }
 
+  /** フィードの購読と収集で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void continuesAfterInvalidUrlsDuplicatesAndRegistrationErrors() throws Exception {
     FeedService feeds = spy(newService());
@@ -71,6 +75,7 @@ class FeedOpmlImportServiceTest {
     assertEquals(3, feeds.list().size());
   }
 
+  /** フィードの購読と収集で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateUsesTypedExistingRegistrationError() {
     FeedService feeds = newService();
@@ -78,6 +83,7 @@ class FeedOpmlImportServiceTest {
     assertThrows(DuplicateFeedException.class, () -> feeds.add("https://example.com", "Again"));
   }
 
+  /** フィードの購読と収集で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void malformedDocumentRegistersNothing() throws Exception {
     FeedService feeds = mock(FeedService.class);
@@ -87,6 +93,7 @@ class FeedOpmlImportServiceTest {
     verifyNoInteractions(feeds);
   }
 
+  /** 未指定ファイルディレクトリを受け付けないことを確認する。 */
   @Test
   void rejectsMissingFileDirectoryAndOversizeFile() throws Exception {
     var importer = importer(mock(FeedService.class));
@@ -107,6 +114,7 @@ class FeedOpmlImportServiceTest {
             .contains("10 MiB"));
   }
 
+  /** 読み取りアクセス拒否されたを伝えることを確認する。 */
   @Test
   void reportsReadAccessDenied() {
     Path path = tempDir.resolve("denied.opml");
@@ -124,6 +132,7 @@ class FeedOpmlImportServiceTest {
     }
   }
 
+  /** フィードの購読と収集で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void boundsActualReadEvenWhenFileGrowsAfterSizeCheck() {
     Path path = tempDir.resolve("growing.opml");
@@ -140,10 +149,12 @@ class FeedOpmlImportServiceTest {
           assertThrows(OpmlImportException.class, () -> importer(feeds).importFile(path))
               .getMessage()
               .contains("10 MiB"));
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(feeds);
     }
   }
 
+  /** フィードの購読と収集で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void rejectsAndRedactsCredentialUrlsInImportResults() throws Exception {
     FeedService feeds = newService();
@@ -157,16 +168,19 @@ class FeedOpmlImportServiceTest {
     assertFalse(result.toString().contains("secret"));
   }
 
+  /** {@code file} の条件を再現するための補助情報を返す。 */
   private Path file(String outlines) throws Exception {
     Path path = tempDir.resolve("feeds.opml");
     return Files.writeString(path, "<opml version='2.0'><body>" + outlines + "</body></opml>");
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private FeedService newService() {
     return new FeedService(
         new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("feeds.db")));
   }
 
+  /** {@code importer} の条件を再現するための補助情報を返す。 */
   private FeedOpmlImportService importer(FeedService feeds) {
     return new FeedOpmlImportService(new OpmlParser(), feeds);
   }

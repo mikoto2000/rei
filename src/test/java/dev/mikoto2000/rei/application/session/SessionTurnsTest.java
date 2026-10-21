@@ -13,11 +13,16 @@ import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 会話やり取り一覧の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SessionTurnsTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-09-16T08:00:00Z");
 
+  /** 実行識別情報を保持することを確認する。 */
   @Test
   void persistedTurnsUseChronologicalStablePagesAndPreserveRunIdentity() {
     var repo = new FileSessionRepository(temp.resolve("sessions.json"));
@@ -43,6 +48,7 @@ class SessionTurnsTest {
     assertThat(page.nextCursor()).isNull();
   }
 
+  /** 会話の継続管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unknownSessionAndInvalidPaginationAreRejected() {
     var repo = new FileSessionRepository(temp.resolve("sessions.json"));
@@ -60,6 +66,7 @@ class SessionTurnsTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 会話の継続管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void runningTurnHasNoFabricatedAssistantAndLegacyTimestampIsNotInvented() throws Exception {
     var repo = new FileSessionRepository(temp.resolve("sessions.json"));
@@ -82,6 +89,7 @@ class SessionTurnsTest {
     assertThat(new SessionQueryService(repo, legacy).listTurns("one", 50, null).items()).isEmpty();
   }
 
+  /** 既定最大および追記期間ページ一覧について、既存のやり取り一覧を維持することを確認する。 */
   @Test
   void defaultMaximumAndAppendBetweenPagesKeepExistingTurns() {
     var repo = new FileSessionRepository(temp.resolve("sessions.json"));

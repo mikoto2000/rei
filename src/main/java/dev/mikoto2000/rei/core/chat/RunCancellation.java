@@ -2,10 +2,16 @@ package dev.mikoto2000.rei.core.chat;
 
 import java.util.concurrent.CancellationException;
 
-/** Cancellation is control flow, including interruption wrapped by an HTTP client. */
+/**
+ * 会話の実行に必要な実行キャンセルを扱う。
+ *
+ * <p>Cancellation is control flow, including interruption wrapped by an HTTP client.
+ */
 public final class RunCancellation {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private RunCancellation() {}
 
+  /** 後続の操作を進められるか判断するため、活動中を確認する。 */
   public static void checkActive(org.springframework.ai.chat.prompt.Prompt prompt) {
     if (prompt.getOptions()
             instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
@@ -15,6 +21,7 @@ public final class RunCancellation {
       execution.checkActive();
   }
 
+  /** 会話の実行において、キャンセルかどうかを判定する。 */
   public static boolean isCancellation(Throwable error) {
     for (Throwable cause : causes(error)) {
       if (cause instanceof InterruptedException
@@ -24,6 +31,7 @@ public final class RunCancellation {
     return false;
   }
 
+  /** 会話の実行に関するpropagateを処理する。 */
   public static void propagate(Throwable error) {
     if (!isCancellation(error) && !Thread.currentThread().isInterrupted()) return;
     for (Throwable cause : causes(error)) {
@@ -34,6 +42,7 @@ public final class RunCancellation {
     throw cancelled;
   }
 
+  /** 会話の実行で用いる原因一覧を返す。 */
   private static java.util.List<Throwable> causes(Throwable error) {
     var causes = new java.util.ArrayList<Throwable>();
     var seen =

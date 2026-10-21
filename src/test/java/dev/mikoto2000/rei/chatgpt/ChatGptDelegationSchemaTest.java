@@ -10,16 +10,23 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import tools.jackson.databind.json.JsonMapper;
 
+/** チャットGPT委譲データ形式の結果と状態の契約を検証するテスト。 */
 class ChatGptDelegationSchemaTest {
+  /** 検証に使う要求。 */
   private static final String REQUEST =
       """
       {"type":"object","properties":{"agent":{"type":"string"},"task":{"type":"string"},
       "backendId":{"type":"string"},"modelId":{"type":"string"}},"required":["agent","task"]}
       """;
+
+  /** 検証に使う自動。 */
   private static final PlanDelegationProperties AUTOMATIC =
       new PlanDelegationProperties(true, Set.of("default"), Set.of("gpt-6.1-sol", "gpt-6-astra"));
+
+  /** 検証に使う保存や受け渡しに用いるデータ形式の変換。 */
   private static final JsonMapper JSON = JsonMapper.builder().build();
 
+  /** {@code valid} の条件を再現するための補助情報を返す。 */
   private boolean valid(String schema, String arguments) {
     return SchemaRegistry.withDefaultDialect(SpecificationVersion.DRAFT_2020_12)
         .getSchema(JSON.readTree(schema))
@@ -27,6 +34,7 @@ class ChatGptDelegationSchemaTest {
         .isEmpty();
   }
 
+  /** ChatGPTとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void conditionalChoicesRejectWrongOrMissingChatGptModelsAndPreserveOtherBackends() {
     String schema = ChatGptDelegationSchema.constrain("delegateTask", REQUEST, AUTOMATIC);
@@ -63,6 +71,7 @@ class ChatGptDelegationSchemaTest {
                     .isEqualTo(ChatGptException.PermissionReason.MODEL_NOT_ALLOWED));
   }
 
+  /** ChatGPTとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void referencedBatchItemsApplyTheConditionIndependentlyWithoutChangingTheirReference() {
     String baseline =
@@ -84,6 +93,7 @@ class ChatGptDelegationSchemaTest {
         .isFalse();
   }
 
+  /** ChatGPTとの連携で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void unrelatedDisabledEmptyAndUnusableSchemasStayUnchanged() {
     assertThat(ChatGptDelegationSchema.constrain("runCommand", REQUEST, AUTOMATIC))
@@ -105,6 +115,7 @@ class ChatGptDelegationSchemaTest {
         .isEqualTo("{broken");
   }
 
+  /** ChatGPTとの連携で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void oversizedOrUnsafeConfiguredModelsSkipEnumWithoutExcludingAnActuallyAllowedModel() {
     var many =

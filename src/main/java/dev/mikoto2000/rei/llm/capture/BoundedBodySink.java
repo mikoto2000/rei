@@ -11,13 +11,22 @@ import okio.BufferedSink;
 import okio.ByteString;
 import okio.Timeout;
 
-/** Buffering itself is bounded, including a producer's single oversized write. */
+/**
+ * モデル応答の記録に必要な上限内に収めた本文出力先を扱う。
+ *
+ * <p>Buffering itself is bounded, including a producer's single oversized write.
+ */
 final class BoundedBodySink implements InvocationHandler {
+  /** モデル応答の記録に必要なTooLargeを扱う。 */
   static final class TooLarge extends IOException {}
 
+  /** 一時保持領域。 */
   private final Buffer buffer = new Buffer();
+
+  /** 通信の中継先。 */
   private BufferedSink proxy;
 
+  /** 既定の状態でBoundedBodySinkを初期化する。 */
   BoundedBodySink() {
     proxy =
         (BufferedSink)
@@ -25,31 +34,38 @@ final class BoundedBodySink implements InvocationHandler {
                 BufferedSink.class.getClassLoader(), new Class<?>[] {BufferedSink.class}, this);
   }
 
+  /** モデル応答の記録で用いる出力先を返す。 */
   BufferedSink sink() {
     return proxy;
   }
 
+  /** モデル応答の記録で用いるバイト数を返す。 */
   byte[] bytes() {
     return buffer.readByteArray();
   }
 
+  /** 保持している情報を初期状態へ戻すため、上限内に収めた本文出力先を消去する。 */
   void clear() {
     buffer.clear();
   }
 
+  /** モデル応答の記録に関する許容件数を処理する。 */
   private void capacity(long count) throws IOException {
     if (count < 0 || count > CaptureStore.BODY_LIMIT - buffer.size()) throw new TooLarge();
   }
 
+  /** モデル応答の記録で用いる呼び出しを返す。 */
   public Object invoke(Object ignored, Method method, Object[] args) throws Throwable {
     String name = method.getName();
     if (name.equals("outputStream"))
       return new OutputStream() {
+        /** 指定された内容を書き込み先へ反映する。 */
         public void write(int value) throws IOException {
           capacity(1);
           buffer.writeByte(value);
         }
 
+        /** 指定された内容を書き込み先へ反映する。 */
         public void write(byte[] bytes, int offset, int length) throws IOException {
           capacity(length);
           buffer.write(bytes, offset, length);

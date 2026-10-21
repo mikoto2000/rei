@@ -9,11 +9,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 
+/** 期待する内容出力条件一覧の結果と状態の契約を検証するテスト。 */
 class ExpectedOutputConditionsTest {
+  /** 検証に使うreviewer。 */
   final SubAgentResultSchema reviewer =
       SubAgentResultSchema.load(
           Path.of("."), "classpath:/subagents/schemas/reviewer-result.schema.json");
 
+  /** 部分的な結果そのままの値条件一覧を受け付けられることを確認する。 */
   @Test
   void acceptsPartialLiteralConditionsWithoutDemandingAllRequiredFields() {
     assertDoesNotThrow(() -> ExpectedOutputConditions.validate("{\"unverified\":[]}", reviewer));
@@ -24,6 +27,7 @@ class ExpectedOutputConditionsTest {
                 reviewer));
   }
 
+  /** データ形式雛形一覧不明項目一覧を受け付けないことを確認する。 */
   @Test
   void rejectsSchemaTemplatesUnknownFieldsAndInvalidEnums() {
     for (String value :
@@ -40,6 +44,7 @@ class ExpectedOutputConditionsTest {
           IllegalArgumentException.class, () -> ExpectedOutputConditions.validate(value, reviewer));
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failureSummaryIncludesCodeAndSafeValidationLocations() {
     String result =
@@ -58,6 +63,7 @@ class ExpectedOutputConditionsTest {
             .contains("分割"));
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void cliEventProjectionIncludesChildIdentityAndFailureReason() {
     var factory = new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC());

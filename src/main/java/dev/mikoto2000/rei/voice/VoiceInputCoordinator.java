@@ -16,44 +16,104 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
-/** Capture and recognition have separate workers. JNI is released only after both really exit. */
+/**
+ * 音声入力からの依頼かどうかの複数の処理を調整する。
+ *
+ * <p>Capture and recognition have separate workers. JNI is released only after both really exit.
+ */
 public final class VoiceInputCoordinator implements AutoCloseable {
+  /** 音声による対話における状態の選択肢。 */
   public enum State {
+    /** 無効。 */
     OFF,
+    /** 起動を開始している状態。 */
     STARTING,
+    /** 発話を待ち受けている状態。 */
     LISTENING,
+    /** 停止中。 */
     STOPPING,
+    /** 失敗。 */
     FAILED,
+    /** 終了済み。 */
     CLOSED
   }
 
+  /** 利用条件の確認。 */
   private final Object guard = new Object();
+
+  /** 取得記録。 */
   private final MicrophoneCaptureService capture;
+
+  /** 音声処理の実行先を生成する窓口。 */
   private final VoiceBackendFactory backends;
+
+  /** 受付。 */
   private final Consumer<ConversationInput> submit;
+
+  /** イベント一覧。 */
   private final VoiceEventPublisher events;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 音声実行可否の判断。 */
   private final VoiceAudioGate audioGate;
+
+  /** 音声処理の詳細設定。 */
   private final java.util.function.Supplier<VoiceAdvancedOptions> advanced;
+
+  /** 選択中。 */
   private final java.util.function.Predicate<ConversationTarget> selected;
+
+  /** 経過時間を測る時刻の取得元。 */
   private final java.util.function.LongSupplier ticks;
 
+  /**
+   * 音声による対話で受け渡す観測単位Stampを表す。
+   *
+   * @param nanos ナノ秒数
+   * @param at 日時
+   */
   private record FrameStamp(long nanos, java.time.Instant at) {}
 
+  /**
+   * 音声による対話で受け渡す完了を表す。
+   *
+   * @param input 入力
+   * @param decision 判断結果
+   * @param audioEpoch 音声基準時刻
+   */
   private record Completed(
       ConversationInput input, VoiceCorrectionValidator.Decision decision, long audioEpoch) {}
 
+  /** 音声処理の監督を行う実行先。 */
   private final ExecutorService supervisor =
       Executors.newSingleThreadExecutor(r -> daemon(r, "voice-supervisor"));
+
+  /** 時刻による実行。 */
   private final ScheduledExecutorService timer =
       Executors.newSingleThreadScheduledExecutor(r -> daemon(r, "voice-deadline"));
+
+  /** 状態。 */
   private volatile State state = State.OFF;
+
+  /** 活動中。 */
   private Run active;
+
+  /** 終了済み。 */
   private boolean closed;
+
+  /** 補正。 */
   private VoiceCorrectionService correction;
+
+  /** 補正レビュー。 */
   private Consumer<ConversationInput> correctionReview;
 
-  /** Configure once before starting; constructors preserve the original OFF behavior. */
+  /**
+   * 音声による対話に関する設定補正を処理する。
+   *
+   * <p>Configure once before starting; constructors preserve the original OFF behavior.
+   */
   public void configureCorrection(
       VoiceCorrectionService service, Consumer<ConversationInput> review) {
     synchronized (guard) {
@@ -63,29 +123,70 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     }
   }
 
+  /** 音声による対話に必要な実行を扱う。 */
   private static final class Run {
+    /** 対象。 */
     final ConversationTarget target;
+
+    /** 利用中の音声機器。 */
     final AudioDevice device;
+
+    /** 設定。 */
     final VoiceSettings settings;
+
+    /** 診断。 */
     final boolean diagnostic;
+
+    /** 直近観測単位。 */
     volatile FrameStamp lastFrame;
+
+    /** 期限。 */
     volatile ScheduledFuture<?> deadline;
+
+    /** 区間一覧。 */
     final VoiceInputQueue segments = new VoiceInputQueue();
+
+    /** 対象ごとの世代番号。 */
     final ConcurrentMap<java.util.UUID, Long> epochs = new ConcurrentHashMap<>();
+
+    /** 完了。 */
     final java.util.TreeMap<Long, Completed> completed = new java.util.TreeMap<>();
+
+    /** 待機中。 */
     final java.util.LinkedHashMap<java.util.UUID, ConversationInput> pending =
         new java.util.LinkedHashMap<>();
+
+    /** キャンセル済み。 */
     final java.util.Set<java.util.UUID> cancelled = new java.util.HashSet<>();
+
+    /** 発生順序／次配信。 */
     long sequence, nextDelivery;
+
+    /** 終了済み。 */
     final CountDownLatch exited = new CountDownLatch(2);
+
+    /** 取得記録終了済み。 */
     final AtomicBoolean captureClosed = new AtomicBoolean();
+
+    /** 取得記録解放済み。 */
     final CountDownLatch captureReleased = new CountDownLatch(1);
+
+    /** 停止。 */
     volatile boolean stop;
+
+    /** 失敗。 */
     volatile boolean failed;
+
+    /** バックエンド。 */
     volatile VoiceBackend backend;
+
+    /** 取得元。 */
     volatile MicrophoneCaptureService.FrameSource source;
+
+    /** 取得記録スレッド／認識スレッド／起動時スレッド。 */
     volatile Thread captureThread, recognitionThread, startupThread;
 
+    /** 指定された値や利用先を使って、Runを初期化する。 */
     Run(ConversationTarget target, AudioDevice device, VoiceSettings settings, boolean diagnostic) {
       this.target = target;
       this.device = device;
@@ -94,6 +195,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     }
   }
 
+  /** 音声による対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public VoiceInputCoordinator(
       MicrophoneCaptureService capture,
       VoiceBackendFactory backends,
@@ -103,6 +205,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     this(capture, backends, submit, events, clock, target -> true, System::nanoTime);
   }
 
+  /** 音声による対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public VoiceInputCoordinator(
       MicrophoneCaptureService capture,
       VoiceBackendFactory backends,
@@ -114,6 +217,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     this(capture, backends, submit, events, clock, selected, ticks, new VoiceAudioGate(ticks));
   }
 
+  /** 音声による対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public VoiceInputCoordinator(
       MicrophoneCaptureService capture,
       VoiceBackendFactory backends,
@@ -135,6 +239,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
         VoiceAdvancedOptions::defaults);
   }
 
+  /** 指定された値や利用先を使って、VoiceInputCoordinatorを初期化する。 */
   public VoiceInputCoordinator(
       MicrophoneCaptureService capture,
       VoiceBackendFactory backends,
@@ -156,21 +261,29 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     this.clock = Objects.requireNonNull(clock);
   }
 
+  /** 音声による対話で用いる常駐を返す。 */
   private static Thread daemon(Runnable work, String name) {
     var thread = new Thread(work, name);
     thread.setDaemon(true);
     return thread;
   }
 
+  /** 音声による対話で用いる状態を返す。 */
   public State state() {
     return state;
   }
 
-  /** A waiter can only cancel the Run it started, even after an OFF/ON replacement. */
+  /**
+   * 音声による対話に必要な起動時を扱う。
+   *
+   * <p>A waiter can only cancel the Run it started, even after an OFF/ON replacement.
+   */
   public interface Startup {
+    /** 必要な状態が整ってから先へ進むため、起動時を待つ。 */
     State await(java.time.Duration timeout);
   }
 
+  /** 必要な状態が整ってから先へ進むため、起動時を待つ。 */
   public State awaitStartup(java.time.Duration timeout) {
     Run starting;
     synchronized (guard) {
@@ -179,6 +292,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     return awaitStartup(starting, timeout);
   }
 
+  /** 必要な状態が整ってから先へ進むため、起動時を待つ。 */
   private State awaitStartup(Run starting, java.time.Duration timeout) {
     long deadline = System.nanoTime() + timeout.toNanos();
     try {
@@ -193,6 +307,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
       }
     } catch (InterruptedException e) {
       off(starting);
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw new IllegalStateException("Voice initialization interrupted");
     }
@@ -200,12 +315,14 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     throw new IllegalStateException("Voice initialization timed out; waiting for native cleanup");
   }
 
+  /** 音声による対話で用いる待機中区間一覧を返す。 */
   public int queuedSegments() {
     synchronized (guard) {
       return active == null ? 0 : active.segments.size();
     }
   }
 
+  /** 音声による対話で用いる待機中補正入力一覧を返す。 */
   public java.util.List<ConversationInput> pendingCorrectionInputs() {
     synchronized (guard) {
       if (active == null || active.stop || !selected(active)) return java.util.List.of();
@@ -215,6 +332,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     }
   }
 
+  /** 利用者が不要とした実行を止めるため、待機中補正をキャンセルする。 */
   public boolean cancelPendingCorrection(java.util.UUID id) {
     synchronized (guard) {
       var run = active;
@@ -226,6 +344,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     }
   }
 
+  /** 音声による対話に関する変更を処理する。 */
   private void change(State next) {
     if (state == next) return;
     state = next;
@@ -233,15 +352,18 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     events.publish(VoiceEventPublisher.Type.STATE_CHANGED, next.name());
   }
 
+  /** 要求された処理を開始する。 */
   public Startup start(ConversationTarget target, AudioDevice device, VoiceSettings settings) {
     return start(target, device, settings, false);
   }
 
+  /** 要求された処理を利用できるよう、診断を開始する。 */
   public Startup startDiagnostic(
       ConversationTarget target, AudioDevice device, VoiceSettings settings) {
     return start(target, device, settings, true);
   }
 
+  /** 要求された処理を開始する。 */
   private Startup start(
       ConversationTarget target, AudioDevice device, VoiceSettings settings, boolean diagnostic) {
     if (target == null || device == null || settings == null)
@@ -257,10 +379,12 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     }
   }
 
+  /** 音声による対話に関する無効を処理する。 */
   public void off() {
     off(null);
   }
 
+  /** 音声による対話に関する無効を処理する。 */
   private void off(Run expected) {
     Run run;
     synchronized (guard) {
@@ -280,6 +404,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     stopWorkers(run);
   }
 
+  /** 処理の継続を終えるため、実行の担当一覧を停止する。 */
   private void stopWorkers(Run run) {
     synchronized (guard) {
       if (run.startupThread != null && run.startupThread != Thread.currentThread())
@@ -287,6 +412,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     }
     if (run.captureThread != null) run.captureThread.interrupt();
     if (run.recognitionThread != null) run.recognitionThread.interrupt();
+    // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
     if (run.source != null && run.captureClosed.compareAndSet(false, true)) {
       // A broken audio driver must not hold the Shell caller. Only one Run can remain
       // active, and backend cleanup still waits for both workers and this real release.
@@ -306,10 +432,12 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     }
   }
 
+  /** 音声による対話に関するfailを処理する。 */
   private void fail(Run run, VoiceEventPublisher.Type code) {
     stop(run, code, true);
   }
 
+  /** 実行中の処理を停止する。 */
   private void stop(Run run, VoiceEventPublisher.Type code, boolean failed) {
     synchronized (guard) {
       if (run.stop) return;
@@ -323,6 +451,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     stopWorkers(run);
   }
 
+  /** 音声による対話において、選択中に該当するか判定する。 */
   private boolean selected(Run run) {
     try {
       return selected.test(run.target);
@@ -331,6 +460,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     }
   }
 
+  /** 音声による対話において、古い状態に該当するか判定する。 */
   private boolean stale(Run run) {
     var stamp = run.lastFrame;
     if (stamp == null) return false;
@@ -341,8 +471,10 @@ public final class VoiceInputCoordinator implements AutoCloseable {
   }
 
   /**
-   * Preserve ASR order even when timeout/queue fallback completes before an earlier LLM. Raw stop
-   * remains immediate.
+   * 音声による対話に関するdeliverを処理する。
+   *
+   * <p>Preserve ASR order even when timeout/queue fallback completes before an earlier LLM. Raw
+   * stop remains immediate.
    */
   private void deliver(Run run, Completed completed) {
     run.pending.remove(completed.input().inputId());
@@ -374,6 +506,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     }
   }
 
+  /** 音声による対話に関するsuperviseを処理する。 */
   private void supervise(Run run) {
     boolean captureStarted = false, recognitionStarted = false;
     try {
@@ -435,6 +568,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
         }
       }
     } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       fail(run, VoiceEventPublisher.Type.BACKEND_FAILED);
     } catch (Exception | LinkageError e) {
@@ -486,6 +620,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     }
   }
 
+  /** 後から状況を確認できるよう、繰り返しを記録する。 */
   private void captureLoop(Run run) {
     var assembler = new SpeechSegmentAssembler(run.settings, clock);
     long previousEpoch = audioGate.epoch();
@@ -546,6 +681,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
       }
     } catch (InterruptedException e) {
       if (!run.stop) fail(run, VoiceEventPublisher.Type.CAPTURE_FAILED);
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
     } catch (Exception | LinkageError e) {
       fail(run, VoiceEventPublisher.Type.CAPTURE_FAILED);
@@ -555,6 +691,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     }
   }
 
+  /** 音声による対話に関するrecognize繰り返しを処理する。 */
   private void recognizeLoop(Run run) {
     var wakeGate = new VoiceWakeGate(clock);
     try {
@@ -625,6 +762,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
           java.util.function.Consumer<VoiceCorrectionValidator.Decision> complete =
               decision -> {
                 synchronized (guard) {
+                  // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
                   if (!once.compareAndSet(false, true) || run.stop || active != run) return;
                   var item = new Completed(input, decision, epoch);
                   if (immediateStop) {
@@ -650,6 +788,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
       }
     } catch (InterruptedException e) {
       if (!run.stop) fail(run, VoiceEventPublisher.Type.RECOGNITION_FAILED);
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
     } catch (Exception | LinkageError e) {
       fail(run, VoiceEventPublisher.Type.RECOGNITION_FAILED);
@@ -658,6 +797,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     }
   }
 
+  /** 処理の継続を終えるため、診断を停止する。 */
   private void stopDiagnostic(Run run) {
     synchronized (guard) {
       if (active != run || run.stop) return;
@@ -669,6 +809,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     stopWorkers(run);
   }
 
+  /** 音声による対話で利用した資源や登録を解放し、利用を終了する。 */
   public void close() {
     synchronized (guard) {
       if (closed) return;
@@ -681,6 +822,7 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     try {
       supervisor.awaitTermination(15, TimeUnit.SECONDS);
     } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
     }
     synchronized (guard) {

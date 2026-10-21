@@ -5,15 +5,21 @@ import com.slack.api.methods.SlackApiException;
 import com.slack.api.methods.request.chat.ChatPostMessageRequest;
 import java.util.Set;
 
+/** Slackとの連携に必要なSdkSlack通信経路を扱う。 */
 final class SdkSlackTransport implements SlackTransport {
+  /** メソッド一覧。 */
   private final MethodsClient methods;
+
+  /** チーム。 */
   private final String team;
 
+  /** 指定された値や利用先を使って、SdkSlackTransportを初期化する。 */
   SdkSlackTransport(MethodsClient methods, String team) {
     this.methods = methods;
     this.team = team;
   }
 
+  /** Slackとの連携で用いる送信を返す。 */
   @Override
   public Delivery send(SlackStore.Outgoing row) {
     if (!team.equals(row.team())) return Delivery.failed();
@@ -71,6 +77,7 @@ final class SdkSlackTransport implements SlackTransport {
     }
   }
 
+  /** Slackとの連携で用いる秒数を返す。 */
   private static int seconds(String raw) {
     try {
       return Math.max(1, Integer.parseInt(raw));

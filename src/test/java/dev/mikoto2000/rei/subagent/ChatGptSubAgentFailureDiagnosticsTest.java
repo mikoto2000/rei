@@ -45,18 +45,39 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+/** チャットGPT補助エージェント失敗情報診断情報の結果と状態の契約を検証するテスト。 */
 class ChatGptSubAgentFailureDiagnosticsTest {
+  /** 検証に使う非公開パス。 */
   private static final String PRIVATE_PATH = "PRIVATE_SOURCE_PATH";
+
+  /** 検証に使う非公開内容。 */
   private static final String PRIVATE_CONTENT = "PRIVATE_PASSWORD_VALUE";
+
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うクライアント。 */
   PlanClient client;
+
+  /** 検証に使う権限一覧。 */
   ToolPermissionGuard permissions;
+
+  /** 検証に使う実行一覧。 */
   RunRegistry runs;
+
+  /** 通知された出来事と順序を検証するための記録。 */
   List<AgentEvent> events;
+
+  /** 検証に使うバックエンド。 */
   ChatGptSubAgentBackend backend;
+
+  /** 検証に使う所有者。 */
   AgentRunContext owner;
+
+  /** 検証に使う予算。 */
   LlmCallReservation budget;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     Files.writeString(
@@ -97,6 +118,7 @@ class ChatGptSubAgentFailureDiagnosticsTest {
     when(budget.tryReserve()).thenReturn(true);
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   ChatGptSubAgentBackend.Request request(List<String> sources) {
     return new ChatGptSubAgentBackend.Request(
         "design-review",
@@ -108,6 +130,7 @@ class ChatGptSubAgentFailureDiagnosticsTest {
         "{\"decision\":\"accept\"}");
   }
 
+  /** 複数の検証で共通する期待結果を確認し、要件に合わない状態を検出する。 */
   void assertSafeFailure(ChatGptSubAgentBackend.Receipt receipt, String... expected) {
     assertThat(receipt.state()).isEqualTo(ChatGptSubAgentBackend.State.FAILED);
     assertThat(receipt.result().status()).isEqualTo(SubAgentResult.Status.FAILED);
@@ -128,6 +151,7 @@ class ChatGptSubAgentFailureDiagnosticsTest {
         .doesNotContain(PRIVATE_PATH, PRIVATE_CONTENT, "PRIVATE_EXCEPTION_VALUE");
   }
 
+  /** 未指定ファイルについて、取得元位置を伝えることを確認する。 */
   @Test
   void missingFileReportsItsSourcePositionWithoutPretendingItWasDeniedByPolicy() {
     var receipt = backend.run(request(List.of(PRIVATE_PATH + ".md")), owner, false, budget);
@@ -136,15 +160,18 @@ class ChatGptSubAgentFailureDiagnosticsTest {
     verifyNoInteractions(client);
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidUtf8IsReportedAsUnreadableSourceBeforeInference() throws Exception {
     Files.write(root.resolve(PRIVATE_PATH + ".md"), new byte[] {(byte) 0xC3, (byte) 0x28});
     var receipt = backend.run(request(List.of(PRIVATE_PATH + ".md")), owner, false, budget);
     assertThat(receipt.error()).isEqualTo(ChatGptException.Code.SOURCE_UNAVAILABLE);
     assertSafeFailure(receipt, "INVALID_UTF8", "sourceRefs[0]");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(client);
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void examplePasswordIsMaskedBeforeDispatchAndUncitedResponseStillFailsValidation()
       throws Exception {
@@ -196,6 +223,7 @@ class ChatGptSubAgentFailureDiagnosticsTest {
     assertThat(Files.readString(root.resolve("example.md"))).isEqualTo(original);
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void escapingSourcePathRemainsBlockedWithAPositionOnlyDiagnostic() {
     var receipt = backend.run(request(List.of("../" + PRIVATE_PATH + ".md")), owner, false, budget);
@@ -204,6 +232,7 @@ class ChatGptSubAgentFailureDiagnosticsTest {
     verifyNoInteractions(client);
   }
 
+  /** 上限診断を送信することを確認する。 */
   @Test
   void oversizedSourceHasItsOwnSendLimitDiagnostic() throws Exception {
     Files.writeString(root.resolve(PRIVATE_PATH + ".md"), "x".repeat(262145));
@@ -213,6 +242,7 @@ class ChatGptSubAgentFailureDiagnosticsTest {
     verifyNoInteractions(client);
   }
 
+  /** 補助エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @ParameterizedTest
   @EnumSource(
       value = PermissionDecision.class,
@@ -234,10 +264,12 @@ class ChatGptSubAgentFailureDiagnosticsTest {
     assertSafeFailure(
         receipt,
         decision == PermissionDecision.DENY ? "TOOL_PERMISSION_DENIED" : "TOOL_APPROVAL_REQUIRED");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(client);
     verify(budget, never()).tryReserve();
   }
 
+  /** 残量なし共有予算について、予算原因を伝えることを確認する。 */
   @Test
   void exhaustedSharedBudgetReportsTheBudgetCauseBeforeAnyExternalCall() {
     when(budget.tryReserve()).thenReturn(false);
@@ -247,11 +279,13 @@ class ChatGptSubAgentFailureDiagnosticsTest {
     verifyNoInteractions(client);
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void exhaustedTokensAndUnknownUsageAreDifferentPredispatchFailures() {
     when(budget.tokenExhausted()).thenReturn(true);
     var receipt = backend.run(request(List.of()), owner, false, budget);
     assertSafeFailure(receipt, "SHARED_TOKEN_BUDGET_EXHAUSTED");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(client);
     events.clear();
     when(budget.tokenExhausted()).thenReturn(false);
@@ -263,6 +297,7 @@ class ChatGptSubAgentFailureDiagnosticsTest {
     verify(budget, never()).tryReserve();
   }
 
+  /** 補助エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void sourceReadPermissionIsNotMisclassifiedAsAnUnreadableFile() throws Exception {
     Files.writeString(root.resolve(PRIVATE_PATH + ".md"), "Public source");
@@ -272,9 +307,11 @@ class ChatGptSubAgentFailureDiagnosticsTest {
     var receipt = backend.run(request(List.of(PRIVATE_PATH + ".md")), owner, false, budget);
     assertSafeFailure(receipt, "SOURCE_READ", "TOOL_PERMISSION_DENIED");
     assertThat(receipt.result().output()).doesNotContain("READ_FAILED");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(client);
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void explicitSanitizedCopyCanBeReviewedWithoutSilentlyRedactingOriginalDocuments()
       throws Exception {
@@ -327,6 +364,7 @@ class ChatGptSubAgentFailureDiagnosticsTest {
             any());
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void credentialLiteralInExpectedConditionsIsStillRejectedBeforeAnyChildOrInference() {
     var request =
@@ -347,11 +385,13 @@ class ChatGptSubAgentFailureDiagnosticsTest {
                   .contains("REQUEST_CONTENT_RESTRICTED")
                   .doesNotContain(PRIVATE_CONTENT);
             });
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(client);
     assertThat(events).isEmpty();
     assertThat(runs.runIds()).containsExactly("parent");
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void unicodeEscapedCredentialKeysAndValuesInExpectedConditionsAreRejectedAfterParsing() {
     for (String expected :
@@ -371,11 +411,13 @@ class ChatGptSubAgentFailureDiagnosticsTest {
                     .doesNotContain(PRIVATE_CONTENT);
               });
     }
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(client);
     assertThat(events).isEmpty();
     assertThat(runs.runIds()).containsExactly("parent");
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void credentialAssignmentInTheCanonicalSourcePathIsNotSentEvenWithPublicFileContents()
       throws Exception {
@@ -383,10 +425,12 @@ class ChatGptSubAgentFailureDiagnosticsTest {
     Files.writeString(root.resolve(name), "Public document");
     var receipt = backend.run(request(List.of(name)), owner, false, budget);
     assertSafeFailure(receipt, "PATH_NOT_ALLOWED", "sourceRefs[0]");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(client);
     verify(permissions, never()).check(eq("readFile"), anyString(), eq(owner));
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void terminalAccountingFailureDoesNotReplaceThePrimaryAuthenticationCause() {
     doThrow(ChatGptException.of(ChatGptException.Code.AUTH_INVALID))
@@ -420,6 +464,7 @@ class ChatGptSubAgentFailureDiagnosticsTest {
             any());
   }
 
+  /** 補助エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void controlledPermissionAndAuthenticationDiagnosticsAreKeptWithoutRetrying() {
     doThrow(ChatGptException.permission(ChatGptException.PermissionReason.MODEL_NOT_ALLOWED))
@@ -478,6 +523,7 @@ class ChatGptSubAgentFailureDiagnosticsTest {
             any());
   }
 
+  /** 補助エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void arbitraryPreparationFailureDoesNotBecomePermissionDeniedOrExposeItsMessage() {
     doThrow(new IllegalStateException("PRIVATE_EXCEPTION_VALUE at " + root.resolve(PRIVATE_PATH)))
@@ -487,9 +533,11 @@ class ChatGptSubAgentFailureDiagnosticsTest {
     assertThat(receipt.error()).isEqualTo(ChatGptException.Code.PREPARATION_FAILED);
     assertSafeFailure(receipt, "PREPARATION_FAILED");
     assertThat(receipt.result().output()).doesNotContain("PERMISSION_DENIED");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(client);
   }
 
+  /** 補助エージェントへの委譲で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @ParameterizedTest
   @EnumSource(ChatGptException.SourceFailure.class)
   void sourceFactoriesContainOnlyControlledClassificationAndSourcePosition(
@@ -507,6 +555,7 @@ class ChatGptSubAgentFailureDiagnosticsTest {
         .contains(reason.name(), "sourceRefs[3]");
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void externalFailureReasonsAreRedactedBeforeClippingAndNormalizedConsistently() {
     var factory = new AgentEventFactory(Clock.systemUTC());

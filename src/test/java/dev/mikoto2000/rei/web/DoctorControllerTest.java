@@ -15,7 +15,9 @@ import dev.mikoto2000.rei.doctor.DoctorService;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 環境診断受付窓口の結果と状態の契約を検証するテスト。 */
 class DoctorControllerTest {
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void passiveDiagnosisNeverSubmitsARunAndActiveDiagnosisHasOnlyNamedChecks() {
     var passive = mock(DoctorService.class);
@@ -25,6 +27,7 @@ class DoctorControllerTest {
     var controller = new DoctorController(passive, active, chat);
     assertNotNull(controller.passive(true).text());
     verify(passive).passive(true);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(chat, active);
     var run =
         new AgentRunContext(

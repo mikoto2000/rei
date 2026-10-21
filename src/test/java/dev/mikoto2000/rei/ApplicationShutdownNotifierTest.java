@@ -13,8 +13,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.context.SmartLifecycle;
 import org.springframework.context.support.GenericApplicationContext;
 
+/** アプリケーション終了Notifierの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ApplicationShutdownNotifierTest {
+  /** れいの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void contextCloseAnnouncesBeforeLifecycleStop() {
     var bus = new InMemoryAgentEventBus();
@@ -38,17 +40,21 @@ class ApplicationShutdownNotifierTest {
         SmartLifecycle.class,
         () ->
             new SmartLifecycle() {
+              /** 検証に使う実行中。 */
               private boolean running;
 
+              /** 検証用に、要求された処理を開始する。 */
               public void start() {
                 running = true;
               }
 
+              /** 検証用に、実行中の処理を停止する。 */
               public void stop() {
                 order.add("stop");
                 running = false;
               }
 
+              /** 検証用に、れいの起動において、実行中かどうかを判定する。 */
               public boolean isRunning() {
                 return running;
               }
@@ -58,6 +64,7 @@ class ApplicationShutdownNotifierTest {
     assertThat(order).containsExactly("event", "stop");
   }
 
+  /** れいの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shellExitAndContextClosePublishOnlyOnce() {
     var bus = new InMemoryAgentEventBus();

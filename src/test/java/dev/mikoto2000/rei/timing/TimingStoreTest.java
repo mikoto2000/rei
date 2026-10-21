@@ -21,9 +21,12 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
+/** 時間計測保存先の結果と状態の契約を検証するテスト。 */
 class TimingStoreTest {
+  /** 検証に使うナノ秒数。 */
   final AtomicLong nanos = new AtomicLong();
 
+  /** 検証で使用する保存先を、指定された条件に合わせて用意する。 */
   TimingStore store(boolean enabled, int runs, int perRun, int total) {
     return new TimingStore(
         enabled,
@@ -35,22 +38,27 @@ class TimingStoreTest {
         nanos::get);
   }
 
+  /** 検証で使用する保存先を、指定された条件に合わせて用意する。 */
   TimingStore store() {
     return store(true, 100, 2000, 10000);
   }
 
+  /** 検証で使用する状態の記録を、指定された条件に合わせて用意する。 */
   Run snapshot(TimingStore store, String id) {
     return store.snapshot("project", "session", id).orElseThrow();
   }
 
+  /** 検証用に、要求された処理を開始する。 */
   void start(TimingStore store) {
     assertTrue(store.beginRun("run", "project", "session"));
   }
 
+  /** {@code span} の条件を再現するため、検証用の操作や状態を扱う。 */
   void span(TimingStore store, String id, String parent, Category category) {
     assertTrue(store.beginSpan("run", id, parent, "request", "attempt", category));
   }
 
+  /** 実行時間の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void serialIntervalsSeparateOccupancyWorkAndUnmeasuredTime() {
     var store = store();
@@ -72,6 +80,7 @@ class TimingStoreTest {
     assertEquals(0, run.summary().overlapNanos());
   }
 
+  /** 実行時間の把握で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void parallelAndThreeWayOverlapUseUnionRatherThanAddingBreakdown() {
     var store = store();
@@ -99,6 +108,7 @@ class TimingStoreTest {
     assertEquals(2, summary.unmeasuredNanos());
   }
 
+  /** 実行時間の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void nestedAndSameCategorySpansDoNotDoubleCountOccupancy() {
     var store = store();
@@ -120,6 +130,7 @@ class TimingStoreTest {
     assertEquals(0, run.summary().crossCategoryOverlapNanos());
   }
 
+  /** 実行時間の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void missingTerminalIsIncompleteAndNeverInferredSuccessful() {
     var store = store();
@@ -137,6 +148,7 @@ class TimingStoreTest {
     assertEquals(9, snapshot(store, "run").elapsedNanos());
   }
 
+  /** 実行時間の把握の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void failuresCancellationTimeoutAndDisconnectionRetainObservedStatus() {
     for (var status :
@@ -152,6 +164,7 @@ class TimingStoreTest {
     }
   }
 
+  /** 実行時間の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void retryRequestAttemptsAndParentsRemainInOriginalRun() {
     var store = store();
@@ -175,6 +188,7 @@ class TimingStoreTest {
     assertEquals(1, store.statistics().runs());
   }
 
+  /** 実行時間の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void runAndTotalCapsEvictOldestAndLateEventsDoNotResurrectThem() {
     var store = store(true, 2, 2, 3);
@@ -192,6 +206,7 @@ class TimingStoreTest {
     assertTrue(store.statistics().evictedRuns() > 0);
   }
 
+  /** 実行時間の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void perRunLimitDropsRecordWithoutFailingTheRun() {
     var store = store(true, 2, 1, 2);
@@ -206,6 +221,7 @@ class TimingStoreTest {
     assertTrue(store.statistics().droppedSpans() > 0);
   }
 
+  /** 実行時間の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void totalSpanLimitEvictsAnOlderRunWithoutExceedingMemoryCap() {
     var store = store(true, 5, 2, 2);
@@ -218,6 +234,7 @@ class TimingStoreTest {
     assertTrue(store.statistics().spans() <= 2);
   }
 
+  /** 有効期間および無効状態集約対象について、なし上限のない状態を保持することを確認する。 */
   @Test
   void ttlAndDisabledCollectionRetainNoUnboundedState() {
     var store = store();
@@ -231,6 +248,7 @@ class TimingStoreTest {
     assertEquals(0, disabled.statistics().spans());
   }
 
+  /** 実行時間の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void metadataHasNoFreeFormContentAndUsageDoesNotInventUnknownMetrics() {
     var store = store();
@@ -264,6 +282,7 @@ class TimingStoreTest {
                         .contains(c.getName())));
   }
 
+  /** 実行時間の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void tpsRequiresRealCountAndMatchingGenerationDuration() {
     var store = store();
@@ -276,6 +295,7 @@ class TimingStoreTest {
     assertEquals(3, snapshot(store, "run").spans().getFirst().generationTps());
   }
 
+  /** 実行時間の把握で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void sessionAndProjectHistoryAreIsolatedAndDuplicateTerminalsDoNotChangeDurations() {
     var store = store();
@@ -293,20 +313,24 @@ class TimingStoreTest {
     assertEquals("run", store.latest("project", "session").orElseThrow().id());
   }
 
+  /** 実行時間の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void wallClockChangesDoNotChangeMonotonicDurations() {
     var wall =
         new java.util.concurrent.atomic.AtomicReference<>(Instant.parse("2026-10-10T00:00:00Z"));
     var clock =
         new Clock() {
+          /** 検証用に、実行時間の把握で参照するタイムゾーンを返す。 */
           public ZoneId getZone() {
             return ZoneOffset.UTC;
           }
 
+          /** 検証用に、指定されたタイムゾーンを反映した情報を作成する。 */
           public Clock withZone(ZoneId zone) {
             return this;
           }
 
+          /** {@code instant} の条件を再現するための補助情報を返す。 */
           public Instant instant() {
             return wall.get();
           }

@@ -16,7 +16,9 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** 音声コマンドの結果と状態の契約を検証するテスト。 */
 class VoiceCommandTest {
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void advancedFeaturesAreExplicitOffOnlyAndInvalidUpdatesAreAtomic() {
     var voice = mock(VoiceInputCoordinator.class);
@@ -40,6 +42,7 @@ class VoiceCommandTest {
     assertThat(command.execute("features")).isZero();
   }
 
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void selectionIsExplicitAndConfigurationValidatesBeforeChangingSettings() {
     var devices =
@@ -54,6 +57,7 @@ class VoiceCommandTest {
     command.setOut(new PrintWriter(output, true));
     command.setErr(new PrintWriter(output, true));
     assertThat(command.execute("on")).isEqualTo(2);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(shell);
     assertThat(command.execute("devices")).isZero();
     assertThat(output.toString()).contains("DRY (VT-4)", "dry");
@@ -64,6 +68,7 @@ class VoiceCommandTest {
     assertThat(properties.settings().maxSpeechMs()).isEqualTo(25000);
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void microphoneSelectionAndConfigCannotChangeDuringCapture() {
     var devices =
@@ -82,6 +87,7 @@ class VoiceCommandTest {
     verify(voice).off();
   }
 
+  /** 成功済みのについて、待機するを開始することを確認する。 */
   @Test
   void successfulStartWaitsForInitializationBeforeReturningToPrompt() {
     var devices =

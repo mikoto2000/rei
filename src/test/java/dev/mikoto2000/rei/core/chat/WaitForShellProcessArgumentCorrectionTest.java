@@ -55,7 +55,9 @@ import reactor.core.publisher.Flux;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+/** 待機対象シェルプロセス引数補正の結果と状態の契約を検証するテスト。 */
 class WaitForShellProcessArgumentCorrectionTest {
+  /** 不正な待機について、案内を返すことを確認する。 */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void invalidWaitReturnsGuidanceBeforeExecutionAndTheModelCanCorrectIt(boolean guarded) {
@@ -73,6 +75,7 @@ class WaitForShellProcessArgumentCorrectionTest {
                 return waitCall("invalid-wait", 120);
               }
               if (invocation == 2) {
+                // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
                 verifyNoInteractions(processes);
                 var correction = JsonMapper.builder().build().readTree(latestToolResponse(prompt));
                 assertThat(correction.path("error").asText()).isEqualTo("INVALID_TOOL_ARGUMENTS");
@@ -100,6 +103,7 @@ class WaitForShellProcessArgumentCorrectionTest {
         .isEmpty();
   }
 
+  /** 会話の実行で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void repeatedInvalidWaitsStopAtTheExistingArgumentCorrectionLimit(boolean guarded) {
@@ -133,9 +137,11 @@ class WaitForShellProcessArgumentCorrectionTest {
     assertThat(calls).hasValue(3);
     assertThat(remaining).containsExactly(1, 0);
     assertThat(invalidArgumentEvents(fixture.events())).hasSize(2);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(processes, fixture.approvals());
   }
 
+  /** 会話の実行で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @MethodSource("runtimeFailures")
   void genuineProcessFailureIsNotTreatedAsAnArgumentCorrection(
@@ -161,9 +167,11 @@ class WaitForShellProcessArgumentCorrectionTest {
     assertThat(calls).hasValue(1);
     assertThat(invalidArgumentEvents(fixture.events())).isEmpty();
     verify(processes, times(1)).status("existing-process", null);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(fixture.approvals());
   }
 
+  /** {@code runtimeFailures} の条件を再現するための補助情報を返す。 */
   private static Stream<Arguments> runtimeFailures() {
     return Stream.of(
         Arguments.of(
@@ -184,6 +192,7 @@ class WaitForShellProcessArgumentCorrectionTest {
             "invalid_arguments"));
   }
 
+  /** {@code fixture} の条件を再現するための補助情報を返す。 */
   private Fixture fixture(
       BackgroundProcessManager processes,
       boolean guarded,
@@ -192,16 +201,19 @@ class WaitForShellProcessArgumentCorrectionTest {
       BiFunction<Prompt, Integer, ChatResponse> responses) {
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           @Override
           public ToolCallingChatOptions getOptions() {
             return ToolCallingChatOptions.builder().build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           @Override
           public ChatResponse call(Prompt prompt) {
             throw new AssertionError("Only the streaming model path is expected");
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           @Override
           public Flux<ChatResponse> stream(Prompt prompt) {
             return Flux.just(responses.apply(prompt, calls.incrementAndGet()));
@@ -252,6 +264,7 @@ class WaitForShellProcessArgumentCorrectionTest {
     return new Fixture(service, approvals, events);
   }
 
+  /** 検証用に、必要な状態が整ってから先へ進むため、呼び出しを待つ。 */
   private static ChatResponse waitCall(String callId, int seconds) {
     String input = "{\"processId\":\"existing-process\",\"timeoutSeconds\":" + seconds + "}";
     var call = new AssistantMessage.ToolCall(callId, "function", "waitForShellProcess", input);
@@ -261,10 +274,12 @@ class WaitForShellProcessArgumentCorrectionTest {
                 AssistantMessage.builder().content("").toolCalls(List.of(call)).build())));
   }
 
+  /** {@code answer} の条件を再現するための補助情報を返す。 */
   private static ChatResponse answer(String text) {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
   }
 
+  /** {@code latestToolResponse} の条件を再現するための補助情報を返す。 */
   private static String latestToolResponse(Prompt prompt) {
     return prompt.getInstructions().stream()
         .filter(ToolResponseMessage.class::isInstance)
@@ -276,6 +291,7 @@ class WaitForShellProcessArgumentCorrectionTest {
         .responseData();
   }
 
+  /** {@code invalidArgumentEvents} の条件を再現するための補助情報を返す。 */
   private static List<ToolFailedPayload> invalidArgumentEvents(List<AgentEvent> events) {
     return events.stream()
         .map(AgentEvent::payload)
@@ -285,6 +301,7 @@ class WaitForShellProcessArgumentCorrectionTest {
         .toList();
   }
 
+  /** {@code completedProcess} の条件を再現するための補助情報を返す。 */
   private static BackgroundProcessSnapshot completedProcess() {
     return new BackgroundProcessSnapshot(
         "existing-process",
@@ -300,8 +317,16 @@ class WaitForShellProcessArgumentCorrectionTest {
         "");
   }
 
+  /**
+   * 検証条件の再現に使う検証条件の情報。
+   *
+   * @param service 検証に使うサービス
+   * @param approvals 検証に使う承認一覧
+   * @param events 検証に使うイベント一覧
+   */
   private record Fixture(
       ChatExecutionService service, ToolApprovalRepository approvals, List<AgentEvent> events) {
+    /** 検証用に、要求された処理を実行する。 */
     ChatExecutionResult execute() {
       var context = new AgentRunContext("run", "session", Path.of("."), "project");
       return service.execute(context, "ビルド済みプロセスの終了を確認してください。", new UserInterventionQueue());

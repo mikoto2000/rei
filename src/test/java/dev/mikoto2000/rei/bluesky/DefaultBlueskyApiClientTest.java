@@ -8,8 +8,10 @@ import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 既定BlueskyAPIクライアントの結果と状態の契約を検証するテスト。 */
 class DefaultBlueskyApiClientTest {
 
+  /** 付随情報を保持することを確認する。 */
   @Test
   void masksBothSessionTokensAndPreservesMetadata() throws Exception {
     String response =
@@ -29,12 +31,14 @@ class DefaultBlueskyApiClientTest {
     assertTrue(response.contains("access.secret.token"));
   }
 
+  /** 会話エラー応答を保持することを確認する。 */
   @Test
   void preservesSessionErrorResponseWithoutTokens() {
     String response = "{\"error\":\"AuthenticationRequired\",\"message\":\"Invalid credentials\"}";
     assertEquals(response, new DefaultBlueskyApiClient().maskSessionResponse(response));
   }
 
+  /** Blueskyとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void hidesMalformedSessionResponse() {
     var client = new DefaultBlueskyApiClient();
@@ -44,6 +48,7 @@ class DefaultBlueskyApiClientTest {
     assertEquals("[REDACTED]", client.maskSessionResponse(""));
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void extractLinkFacetsReturnsUtf8ByteIndexes() {
     String text = "日本語 https://example.com/abc test";
@@ -61,6 +66,7 @@ class DefaultBlueskyApiClientTest {
         facet.byteEnd());
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void createRecordRequestBodyIncludesFacetsWhenUrlExists() {
     String body =
@@ -74,6 +80,7 @@ class DefaultBlueskyApiClientTest {
     assertTrue(body.contains("\"uri\":\"https://example.com/page\""));
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void extractTagFacetsReturnsUtf8ByteIndexes() {
     String text = "日本語 #ハッシュタグ test";
@@ -89,6 +96,7 @@ class DefaultBlueskyApiClientTest {
         facet.byteEnd());
   }
 
+  /** Blueskyとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void extractTagFacetsRecognizesHashtagAfterMultibyteTextWithoutSpace() {
     String text = "メッセージ送信可能。#MicrosoftTeams";
@@ -99,6 +107,7 @@ class DefaultBlueskyApiClientTest {
     assertEquals("MicrosoftTeams", facet.tag());
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void createRecordRequestBodyIncludesTagFacetWhenHashtagExists() {
     String body =
@@ -112,6 +121,7 @@ class DefaultBlueskyApiClientTest {
     assertTrue(body.contains("\"tag\":\"Rei\""));
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void extractMentionFacetsReturnsUtf8ByteIndexesWhenHandleCanBeResolved() {
     String text = "日本語 @alice.bsky.social hello";
@@ -130,6 +140,7 @@ class DefaultBlueskyApiClientTest {
         facet.byteEnd());
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void createRecordRequestBodyIncludesMentionFacetWhenMentionHandleCanBeResolved() {
     String body =
@@ -145,6 +156,7 @@ class DefaultBlueskyApiClientTest {
     assertTrue(body.contains("\"did\":\"did:plc:alice\""));
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void createRecordRequestBodyOmitsFacetsWhenNoUrl() {
     String body =

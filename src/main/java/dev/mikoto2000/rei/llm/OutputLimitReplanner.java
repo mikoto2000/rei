@@ -8,16 +8,26 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+/** 用途に応じたモデル利用に必要な出力上限Replannerを扱う。 */
 @Component
 public class OutputLimitReplanner {
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(OutputLimitReplanner.class);
 
+  /** モデル提供元。 */
   private final LlmModelProvider modelProvider;
+
+  /** モデル保持先サービス。 */
   private final ModelHolderService modelHolderService;
+
+  /** この機能の動作設定。 */
   private final LlmProperties properties;
+
+  /** 入力の解釈。 */
   private final OutputLimitReplanParser parser;
 
+  /** 用途に応じたモデル利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @Autowired
   public OutputLimitReplanner(
       LlmModelProvider modelProvider,
@@ -26,6 +36,7 @@ public class OutputLimitReplanner {
     this(modelProvider, modelHolderService, properties, new OutputLimitReplanParser());
   }
 
+  /** 指定された値や利用先を使って、OutputLimitReplannerを初期化する。 */
   OutputLimitReplanner(
       LlmModelProvider modelProvider,
       ModelHolderService modelHolderService,
@@ -37,10 +48,12 @@ public class OutputLimitReplanner {
     this.parser = parser;
   }
 
+  /** 用途に応じたモデル利用で用いる計画の見直しを返す。 */
   public OutputLimitReplanPlan replan(OutputLimitReplanRequest request) {
     return replan(request, null);
   }
 
+  /** 用途に応じたモデル利用で用いる計画の見直しを返す。 */
   public OutputLimitReplanPlan replan(
       OutputLimitReplanRequest request, java.util.function.Consumer<Integer> usageRecorder) {
     log.info(
@@ -73,6 +86,7 @@ public class OutputLimitReplanner {
     return plan;
   }
 
+  /** 利用先に渡せるよう、プロンプトを組み立てる。 */
   private String buildPrompt(OutputLimitReplanRequest request) {
     return """
         You are a planner for an AI agent.
@@ -120,6 +134,7 @@ public class OutputLimitReplanner {
             properties.getOutputLimit().getMaxSubgoalsPerReplan());
   }
 
+  /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */
   private String safe(String value) {
     return value == null || value.isBlank() ? "(none)" : value;
   }

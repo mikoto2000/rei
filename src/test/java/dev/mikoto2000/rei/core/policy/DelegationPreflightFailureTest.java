@@ -48,7 +48,9 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import reactor.core.publisher.Flux;
 
+/** 委譲Preflight失敗情報の結果と状態の契約を検証するテスト。 */
 class DelegationPreflightFailureTest {
+  /** 判断基準失敗情報を伝えることを確認する。 */
   @Test
   void argumentRepairFollowedByForbiddenAccountReportsPolicyFailureWithoutAnotherRepair() {
     var owner = new AgentRunContext("run", "session", Path.of("."), "project");
@@ -83,10 +85,12 @@ class DelegationPreflightFailureTest {
     var refusalBoundaries = new AtomicInteger();
     var publisher =
         new AgentEventPublisher() {
+          /** 検証用に、状態や結果を購読先へ通知する。 */
           public void publish(AgentEvent event) {
             recorded.add(event);
           }
 
+          /** 検証用に、実行状況を利用先で把握できるよう、境界条件を通知する。 */
           public void publishBoundary(AgentEvent event) {
             if (event.payload() instanceof ToolFailedPayload failed
                 && "chatgpt_permission_denied".equals(failed.error().code()))
@@ -106,6 +110,7 @@ class DelegationPreflightFailureTest {
     var effects = new AtomicInteger();
     var tool =
         new ToolCallback() {
+          /** 検証用に、ツール利用の権限制御で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("delegateTask")
@@ -114,6 +119,7 @@ class DelegationPreflightFailureTest {
                 .build();
           }
 
+          /** 検証用に、ツール利用の権限制御の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             effects.incrementAndGet();
             throw new AssertionError("A forbidden account must never be executed or substituted");
@@ -126,10 +132,12 @@ class DelegationPreflightFailureTest {
     var calls = new AtomicInteger();
     var model =
         new ChatModel() {
+          /** 検証用に、ツール利用の権限制御の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new AssertionError();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             int number = calls.incrementAndGet();
             if (number == 2) {
@@ -174,6 +182,7 @@ class DelegationPreflightFailureTest {
     assertEquals(2, calls.get());
     assertEquals(1, budget.snapshot().argumentCorrections());
     assertEquals(0, effects.get());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(approvals);
     assertEquals(Set.of("allowed-model"), automatic.allowedModels());
     var failures =

@@ -14,8 +14,10 @@ import java.io.PrintStream;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** Bskyコマンドの結果と状態の契約を検証するテスト。 */
 class BskyCommandTest {
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void replyCommandDelegatesToService() {
     BlueskyPostService service = mock(BlueskyPostService.class);
@@ -45,6 +47,7 @@ class BskyCommandTest {
     assertTrue(output.contains("postUri: at://did:plc:me/app.bsky.feed.post/r1"));
   }
 
+  /** 返信コマンドについて、自動生成を利用することを確認する。 */
   @Test
   void replyCommandUsesAutoGenerationWhenTextOmitted() {
     BlueskyPostService service = mock(BlueskyPostService.class);
@@ -62,6 +65,7 @@ class BskyCommandTest {
     verify(service).reply("at://did:plc:x/app.bsky.feed.post/abc");
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void historyUsersCommandPrintsHandles() {
     BlueskyPostService service = mock(BlueskyPostService.class);
@@ -82,6 +86,7 @@ class BskyCommandTest {
     assertTrue(out.toString().contains("bob.bsky.social"));
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void historyCommandPrintsConversation() {
     BlueskyPostService service = mock(BlueskyPostService.class);
@@ -110,15 +115,18 @@ class BskyCommandTest {
     assertTrue(out.toString().contains("assistant | hi"));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private CommandLine newCommand(BlueskyPostService service) {
     return newCommand(service, mock(BlueskyReplyConversationRepository.class));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private CommandLine newCommand(
       BlueskyPostService service, BlueskyReplyConversationRepository repository) {
     return new CommandLine(
         new BskyCommand(),
         new CommandLine.IFactory() {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           public <K> K create(Class<K> cls) throws Exception {
             if (cls == BskyCommand.ReplyCommand.class) {

@@ -3,7 +3,9 @@ package dev.mikoto2000.rei.storage;
 import java.sql.Connection;
 import java.sql.SQLException;
 
+/** データ保存の共通処理に必要な状態表示保存移行を扱う。 */
 final class DotStorageMigration {
+  /** 指定された内容を、現在の対象へ反映する。 */
   static void apply(Connection db) throws SQLException {
     try (var s = db.createStatement()) {
       s.execute(
@@ -27,6 +29,7 @@ final class DotStorageMigration {
     }
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   static void verify(Connection db) throws SQLException {
     try (var s = db.createStatement()) {
       s.executeQuery(

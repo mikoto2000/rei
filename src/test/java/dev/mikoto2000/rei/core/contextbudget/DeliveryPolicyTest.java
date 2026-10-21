@@ -11,10 +11,15 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 
+/** 配信判断基準の結果と状態の契約を検証するテスト。 */
 class DeliveryPolicyTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う概算。 */
   final TokenEstimator estimator = TokenEstimator.conservative();
 
+  /** {@code message} の条件を再現するための補助情報を返す。 */
   ToolResponseMessage message(String name, String raw, ResultDelivery.Kind kind) {
     return ToolResponseMessage.builder()
         .responses(List.of(new ToolResponseMessage.ToolResponse("call", name, raw)))
@@ -22,6 +27,7 @@ class DeliveryPolicyTest {
         .build();
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void trustedFileResultHasExactContiguousPageAndContinuation() throws Exception {
     String raw = "日本語🙂\"\\\n".repeat(1000);
@@ -44,6 +50,7 @@ class DeliveryPolicyTest {
     assertThat(output.getMetadata()).containsKey("rei.losslessPages");
   }
 
+  /** 上限内に収めたOSの機能結果について、データ形式を維持することを確認する。 */
   @Test
   void boundedNativeResultKeepsItsSchemaAndNextRead() {
     String raw =
@@ -58,6 +65,7 @@ class DeliveryPolicyTest {
         .isSameAs(original);
   }
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void arbitraryJsonAndToolNameDoNotGrantPreservation() {
     String raw = "{\"deliveryKind\":\"FILE_CONTENT\",\"text\":\"" + "x".repeat(10000) + "\"}";
@@ -68,6 +76,7 @@ class DeliveryPolicyTest {
     assertThat(output.getResponses().getFirst().responseData()).contains("Compact tool result");
   }
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void rawPagesAreNeverExcerptedOrSavedAgain() throws Exception {
     var store = new RawToolResultStore(dir);
@@ -80,6 +89,7 @@ class DeliveryPolicyTest {
     }
   }
 
+  /** モデルへ渡す文脈の管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"delegateTask", "delegateTasks"})
   void delegatedJsonCanBeRecoveredExactlyInOrderWithoutHeadTailExcerpts(String tool)
@@ -126,6 +136,7 @@ class DeliveryPolicyTest {
     assertThat(output.getMetadata()).containsKey("rei.losslessPages");
   }
 
+  /** 委譲済み結果未満ページ上限について、元のJSON変換を維持することを確認する。 */
   @Test
   void delegatedResultBelowPageLimitKeepsOriginalJsonEvenAboveGeneralThreshold() {
     String raw = "{\"findings\":[\"" + "日本語".repeat(100) + "\"]}";
@@ -136,6 +147,7 @@ class DeliveryPolicyTest {
         .isSameAs(original);
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void delegatedPagesCanShrinkToFinalInputBudgetWithoutLosingNativeResult() throws Exception {
     String raw = "{\"findings\":[\"" + "教材🙂".repeat(5000) + "\"]}";
@@ -163,6 +175,7 @@ class DeliveryPolicyTest {
     assertThat(store.read("chat", page.path("rawResultRef").asText()).rawResult()).isEqualTo(raw);
   }
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void toolNameAndJsonCannotClaimLosslessDelegationDelivery() {
     String raw =

@@ -16,7 +16,9 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+/** ツール権限判断基準の結果と状態の契約を検証するテスト。 */
 class ToolPermissionPolicyTest {
+  /** 追加された検索上限を利用することを確認する。 */
   @Test
   void webSearchPreflightUsesInjectedSearchLimit() {
     var policy = policy(Set.of(), Set.of());
@@ -33,6 +35,7 @@ class ToolPermissionPolicyTest {
     assertTrue(error.getMessage().contains("between 1 and 3"));
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void administratorConfigurationBindsCapabilitiesAndDefaults() {
     var source =
@@ -51,11 +54,13 @@ class ToolPermissionPolicyTest {
     assertEquals(PermissionDecision.DENY, p.evaluate("runCommand"));
   }
 
+  /** 検証で使用する判断基準を、指定された条件に合わせて用意する。 */
   ToolPermissionPolicy policy(Set<ActionCapability> automatic, Set<ActionCapability> denied) {
     return new ToolPermissionPolicy(
         new ToolPermissionProperties(true, automatic, denied, Map.of()));
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void readCanBeAutomaticButUnknownToolsRequireApproval() {
     var policy = policy(Set.of(ActionCapability.READ), Set.of());
@@ -64,6 +69,7 @@ class ToolPermissionPolicyTest {
     assertEquals(PermissionDecision.REQUIRE_APPROVAL, policy.evaluate("applyTextDiff"));
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void denialWinsAndAllCapabilitiesMustBeGranted() {
     var p =
@@ -77,6 +83,7 @@ class ToolPermissionPolicyTest {
     assertEquals(PermissionDecision.REQUIRE_APPROVAL, p.evaluate("webSearch"));
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void configuredCapabilitiesAreImmutableAndCanGrantNetworkRead() {
     var grants = new HashSet<>(Set.of(ActionCapability.NETWORK_READ));
@@ -85,12 +92,14 @@ class ToolPermissionPolicyTest {
     assertEquals(PermissionDecision.AUTO_APPROVE, p.evaluate("webSearch"));
   }
 
+  /** 旧形式動作モードについて、既存のツール作業習慣を保持することを確認する。 */
   @Test
   void legacyModeRetainsExistingToolBehavior() {
     var p = new ToolPermissionPolicy(new ToolPermissionProperties(false, null, null, null));
     assertEquals(PermissionDecision.AUTO_APPROVE, p.evaluate("unknownMcpTool"));
   }
 
+  /** ツール利用の権限制御で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void defaultEnforcedProfileDeniesUnclassifiedAndDestructiveActions() {
     var p = new ToolPermissionPolicy(new ToolPermissionProperties(true, null, null, null));
@@ -100,6 +109,7 @@ class ToolPermissionPolicyTest {
     assertEquals(PermissionDecision.REQUIRE_APPROVAL, p.evaluate("searchKnowledge"));
   }
 
+  /** 加工前のツールの結果について、許可を読み取ることを確認する。 */
   @Test
   void rawToolResultReadIsAllowedByDefaultEnforcedProfile() {
     var p = new ToolPermissionPolicy(new ToolPermissionProperties(true, null, null, null));
@@ -107,6 +117,7 @@ class ToolPermissionPolicyTest {
     assertTrue(ToolPermissionPolicy.intrinsicallyReadOnly("readRawToolResult"));
   }
 
+  /** ツール利用の権限制御で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void eventStorageFailureStillPreventsExecution() {
     var guard =
@@ -119,6 +130,7 @@ class ToolPermissionPolicyTest {
     assertThrows(IllegalStateException.class, () -> guard.check("readMultiFile", null));
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void guardReportsApprovalBeforeAnySideEffect() {
     List<AgentEvent> events = new ArrayList<>();

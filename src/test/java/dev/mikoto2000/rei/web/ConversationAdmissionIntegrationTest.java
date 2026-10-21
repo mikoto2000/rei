@@ -41,12 +41,17 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/** 会話受付外部連携の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ConversationAdmissionIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う保存や受け渡しに用いるデータ形式の変換。 */
   static final com.fasterxml.jackson.databind.ObjectMapper JSON =
       new com.fasterxml.jackson.databind.ObjectMapper();
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import({
     BackendInstanceConfiguration.class,
@@ -68,42 +73,50 @@ class ConversationAdmissionIntegrationTest {
     org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration.class
   })
   static class Config {
+    /** {@code captures} の条件を再現するための補助情報を返す。 */
     @Bean
     dev.mikoto2000.rei.llm.capture.CaptureStore captures() {
       return new dev.mikoto2000.rei.llm.capture.CaptureStore();
     }
 
+    /** {@code clock} の条件を再現するための補助情報を返す。 */
     @Bean
     Clock clock() {
       return Clock.systemUTC();
     }
 
+    /** {@code memoryEvents} の条件を再現するための補助情報を返す。 */
     @Bean
     dev.mikoto2000.rei.memory.service.MemoryEvents memoryEvents() {
       return org.mockito.Mockito.mock(dev.mikoto2000.rei.memory.service.MemoryEvents.class);
     }
 
+    /** {@code projects} の条件を再現するための補助情報を返す。 */
     @Bean
     ProjectRegistry projects(
         @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String root) {
       return new ProjectRegistry(Path.of(root, "projects.json"));
     }
 
+    /** {@code bus} の条件を再現するための補助情報を返す。 */
     @Bean
     AgentEventBus bus() {
       return new InMemoryAgentEventBus();
     }
 
+    /** {@code events} の条件を再現するための補助情報を返す。 */
     @Bean
     AgentEventFactory events(Clock clock) {
       return new AgentEventFactory(clock);
     }
 
+    /** {@code pending} の条件を再現するための補助情報を返す。 */
     @Bean
     Queue<Runnable> pending() {
       return new java.util.concurrent.ConcurrentLinkedQueue<>();
     }
 
+    /** {@code router} の条件を再現するための補助情報を返す。 */
     @Bean
     ConversationInputRouter router(
         Queue<Runnable> pending, AgentEventBus bus, AgentEventFactory events) {
@@ -113,21 +126,25 @@ class ConversationAdmissionIntegrationTest {
               bus.publish(events.runCompleted(context.runId(), 0).withOwnership(context)));
     }
 
+    /** {@code runs} の条件を再現するための補助情報を返す。 */
     @Bean
     RunRegistry runs(Clock clock) {
       return new RunRegistry(clock);
     }
 
+    /** {@code sessions} の条件を再現するための補助情報を返す。 */
     @Bean
     SessionRegistry sessions(Clock clock) {
       return new SessionRegistry(clock);
     }
 
+    /** {@code cancellation} の条件を再現するための補助情報を返す。 */
     @Bean
     dev.mikoto2000.rei.core.service.CommandCancellationService cancellation() {
       return new dev.mikoto2000.rei.core.service.CommandCancellationService();
     }
 
+    /** 検証用に、依頼された操作を進めるため、サービスを実行する。 */
     @Bean
     RunService runService(
         RunRegistry runs,
@@ -138,6 +155,7 @@ class ConversationAdmissionIntegrationTest {
       return new RunService(runs, bus, events, cancellation, router::cancelQueued);
     }
 
+    /** {@code chat} の条件を再現するための補助情報を返す。 */
     @Bean
     ChatSubmitService chat(
         ProjectRegistry projects,
@@ -156,6 +174,7 @@ class ConversationAdmissionIntegrationTest {
           true);
     }
 
+    /** {@code sleep} の条件を再現するための補助情報を返す。 */
     @Bean
     dev.mikoto2000.rei.memory.service.SleepService sleep() {
       var service = org.mockito.Mockito.mock(dev.mikoto2000.rei.memory.service.SleepService.class);
@@ -190,6 +209,7 @@ class ConversationAdmissionIntegrationTest {
       return service;
     }
 
+    /** {@code memorySupport} の条件を再現するための補助情報を返す。 */
     @Bean
     dev.mikoto2000.rei.memory.command.MemoryCommandSupport memorySupport() {
       var support =
@@ -200,6 +220,7 @@ class ConversationAdmissionIntegrationTest {
     }
   }
 
+  /** Web APIによる操作で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void receiptReplayCannotConsumeAnotherClientsCaptureReservation() throws Exception {
     try (var context = start();
@@ -245,6 +266,7 @@ class ConversationAdmissionIntegrationTest {
     }
   }
 
+  /** 検証用に、要求された処理を開始する。 */
   private org.springframework.context.ConfigurableApplicationContext start() {
     var application = new SpringApplication(Config.class);
     WebApplication.configure(application, "fixture-secret");
@@ -255,6 +277,7 @@ class ConversationAdmissionIntegrationTest {
         "--logging.config=classpath:web-test-logback.xml");
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   private HttpRequest request(BackendEndpoint endpoint, String path) {
     return HttpRequest.newBuilder(endpoint.uri().resolve(path))
         .header("Authorization", "Bearer fixture-secret")
@@ -262,6 +285,7 @@ class ConversationAdmissionIntegrationTest {
         .build();
   }
 
+  /** {@code post} の条件を再現するための補助情報を返す。 */
   private HttpRequest post(BackendEndpoint endpoint, String path, String body, String key) {
     var builder =
         HttpRequest.newBuilder(endpoint.uri().resolve(path))
@@ -272,6 +296,7 @@ class ConversationAdmissionIntegrationTest {
     return builder.build();
   }
 
+  /** 会話境界操作について、会話利用権終了日時実行後片付けを保持することを確認する。 */
   @Test
   void sessionBoundOperationRetainsTheConversationLeaseUntilExecutionCleanup() throws Exception {
     try (var context = start()) {
@@ -324,6 +349,7 @@ class ConversationAdmissionIntegrationTest {
     }
   }
 
+  /** Web APIによる操作で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void memoryHttpReceiptReplaysWithoutAnotherOperationOrConversationTurn() throws Exception {
     try (var context = start();
@@ -392,6 +418,7 @@ class ConversationAdmissionIntegrationTest {
     }
   }
 
+  /** Web APIによる操作で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void realHttpConcurrentKeysBusySessionsAndRestartNeverDoubleDispatch() throws Exception {
     String run, session, project;
@@ -476,6 +503,7 @@ class ConversationAdmissionIntegrationTest {
     }
   }
 
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void identityMismatchCannotStopBackendAndAcknowledgedStopReleasesLease() throws Exception {
     try (var context = start();

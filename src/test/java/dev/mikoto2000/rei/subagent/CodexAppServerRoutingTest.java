@@ -15,7 +15,9 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.ObjectProvider;
 
+/** Codexアプリケーションサーバー振り分けの結果と状態の契約を検証するテスト。 */
 class CodexAppServerRoutingTest {
+  /** 所有者予算を保持することを確認する。 */
   @Test
   void explicitBackendRoutesBothEntrypointsAndRetainsOwnerBudget() {
     var runner = mock(SubAgentRunner.class, CALLS_REAL_METHODS);
@@ -34,6 +36,7 @@ class CodexAppServerRoutingTest {
     verify(external).runAutomatic(request, owner, budget);
   }
 
+  /** 補助エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unavailableAppServerNeverFallsBackToCliOrHttpPlan() {
     var runner = mock(SubAgentRunner.class, CALLS_REAL_METHODS);
@@ -46,9 +49,11 @@ class CodexAppServerRoutingTest {
         IllegalArgumentException.class, () -> runner.runManualBackend(request, null, true, null));
     assertThrows(
         IllegalArgumentException.class, () -> runner.runAutomaticBackend(request, null, null));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(plan);
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void parentToolAdvertisesAppServerDestination() {
     var tools = new SubAgentTools(mock(SubAgentRunner.class), mock(SubAgentRegistry.class));

@@ -23,16 +23,31 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 実行振り返りサービスの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class RunReflectionServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   Clock clock = Clock.fixed(Instant.EPOCH, ZoneOffset.UTC);
+
+  /** 検証に使うリポジトリ。 */
   RunReflectionRepository repo;
+
+  /** 検証に使うサービス。 */
   RunReflectionService service;
+
+  /** 検証に使う通知の連携先。 */
   InMemoryAgentEventBus bus;
+
+  /** 通知された出来事と順序を検証するための記録。 */
   AgentEventFactory events;
+
+  /** 検証に使う所有者。 */
   AgentRunContext owner = new AgentRunContext("run", "session", Path.of("."), "project");
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     repo =
@@ -44,11 +59,13 @@ class RunReflectionServiceTest {
     service.start();
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void close() {
     service.close();
   }
 
+  /** 作業の振り返りで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void completedRunRecordsActualToolFactsAndDoesNotInventTaskVerification() {
     var tool =
@@ -68,6 +85,7 @@ class RunReflectionServiceTest {
     assertEquals("INSPECT_RESULT_AND_VERIFY_CRITERIA", item.nextAction());
   }
 
+  /** 作業の振り返りで、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void failuresAreStructuredRedactedDurableAndDeduplicated() {
     bus.publish(
@@ -96,6 +114,7 @@ class RunReflectionServiceTest {
     assertThrows(IllegalArgumentException.class, () -> restored.get("other", item.id()));
   }
 
+  /** 作業の振り返りで、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void taskCompletionAndFailureAreIndependentFromParentRun() {
     bus.publish(events.taskCreated("task", null, "Expected task", "OPEN").withOwnership(owner));
@@ -117,6 +136,7 @@ class RunReflectionServiceTest {
     assertEquals("TASK_COMPLETION_REPORTED", item.gap());
   }
 
+  /** 作業の振り返りで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unownedOrMismatchedRunEventsCannotCreateReflections() {
     bus.publish(events.runCompleted("run", 1));
@@ -138,6 +158,7 @@ class RunReflectionServiceTest {
     assertTrue(repo.list("project").isEmpty());
   }
 
+  /** 作業の振り返りで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shellExposesRunFactsWithinCurrentProject() {
     bus.publish(events.runCompleted("run", 1).withOwnership(owner));
@@ -158,6 +179,7 @@ class RunReflectionServiceTest {
     assertEquals(2, cli.execute("run", item.id()));
   }
 
+  /** 作業の振り返りで、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void actionFactsSurviveRestartAndOverflowIsExplicit() {
     for (int i = 0; i < 258; i++)
@@ -178,6 +200,7 @@ class RunReflectionServiceTest {
     assertTrue(item.knowledgeCandidates().stream().anyMatch(k -> k.contains("256")));
   }
 
+  /** 作業の振り返りで、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void missedTerminalCanBeCollectedFromPersistedOwnedEventsWithoutExecution() {
     String project = UUID.randomUUID().toString();

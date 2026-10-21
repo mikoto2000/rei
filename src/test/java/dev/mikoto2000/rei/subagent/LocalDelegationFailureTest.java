@@ -7,7 +7,9 @@ import dev.mikoto2000.rei.core.policy.PermissionDecision;
 import dev.mikoto2000.rei.core.policy.ToolPermissionException;
 import org.junit.jupiter.api.Test;
 
+/** ローカル委譲失敗情報の結果と状態の契約を検証するテスト。 */
 class LocalDelegationFailureTest {
+  /** 補助エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void wrappedPermissionAndTransportFailuresAreClassifiedWithoutPrivateMessages() {
     String permission =
@@ -26,6 +28,7 @@ class LocalDelegationFailureTest {
             .contains("secret"));
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void timeoutCancellationAndRateLimitsHaveDistinctCategories() {
     assertTrue(

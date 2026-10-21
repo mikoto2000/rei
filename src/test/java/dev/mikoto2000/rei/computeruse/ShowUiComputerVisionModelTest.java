@@ -27,16 +27,20 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 表示表示画面操作画像認識モデルの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ShowUiComputerVisionModelTest {
+  /** 検証に使う診断情報。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path diagnostics;
 
+  /** 検証用に、指定された診断情報を反映した情報を作成する。 */
   private ComputerObservation withDiagnostics(java.nio.file.Path path) {
     var o = observation();
     return new ComputerObservation(
         o.goal(), o.screenshot(), o.recentHistory(), o.step(), o.maxSteps(), path);
   }
 
+  /** 診断情報について、送信バイト数を保持することを確認する。 */
   @Test
   void diagnosticsPreserveSentBytesAndInvalidResponse() throws Exception {
     var grounding = mock(ChatModel.class);
@@ -68,6 +72,7 @@ class ShowUiComputerVisionModelTest {
             .asText());
   }
 
+  /** 画面操作の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void recordsTransportExceptionAndDiagnosticFailureDoesNotPreventInference() throws Exception {
     var grounding = mock(ChatModel.class);
@@ -88,6 +93,7 @@ class ShowUiComputerVisionModelTest {
     assertInstanceOf(ComputerAction.Click.class, model.decide(withDiagnostics(blocked)));
   }
 
+  /** {@code observation} の条件を再現するための補助情報を返す。 */
   private ComputerObservation observation() {
     var virtual = new Rectangle(-3840, 0, 7680, 2160);
     return new ComputerObservation(
@@ -107,11 +113,13 @@ class ShowUiComputerVisionModelTest {
         20);
   }
 
+  /** {@code click} の条件を再現するための補助情報を返す。 */
   private ComputerAction click() {
     return new ComputerAction.Click(
         new ComputerAction.Target("left", 10, 10, "Post button"), .9, ComputerAction.Risk.LOW);
   }
 
+  /** 画面操作の支援で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void sendsOnlySelectedBoundedImageAndMapsNormalizedPointToOriginalDisplay() throws Exception {
     var grounding = mock(ChatModel.class);
@@ -156,6 +164,7 @@ class ShowUiComputerVisionModelTest {
     assertTrue(options.getToolCallbacks().isEmpty());
   }
 
+  /** 画面操作の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidGroundingFailsTaskWithoutExecutingPlannerCoordinates() {
     var grounding = mock(ChatModel.class);
@@ -179,6 +188,7 @@ class ShowUiComputerVisionModelTest {
     verify(grounding).call(any(Prompt.class));
   }
 
+  /** 画面操作の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void nonClickDoesNotCallGrounding() throws Exception {
     var grounding = mock(ChatModel.class);
@@ -192,6 +202,7 @@ class ShowUiComputerVisionModelTest {
     verify(grounding, never()).call(any(Prompt.class));
   }
 
+  /** 画面操作の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void transportFailurePropagatesWithoutRetry() {
     var grounding = mock(ChatModel.class);
@@ -204,6 +215,7 @@ class ShowUiComputerVisionModelTest {
     verify(grounding).call(any(Prompt.class));
   }
 
+  /** 画面操作の支援の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationAfterPlanningPreventsGrounding() {
     var grounding = mock(ChatModel.class);
@@ -222,6 +234,7 @@ class ShowUiComputerVisionModelTest {
     verify(grounding, never()).call(any(Prompt.class));
   }
 
+  /** 形式が不正なを受け付けないことを確認する。 */
   @Test
   void rejectsMalformedAndOutOfRangeCoordinates() {
     for (String text :

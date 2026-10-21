@@ -7,13 +7,23 @@ import java.util.Optional;
 import java.util.Set;
 import org.springframework.stereotype.Component;
 
-/** Seen state belongs to each UI client, not a global project or the persisted data. */
+/**
+ * 作業文脈の引き継ぎに必要な作業文脈Presenterを扱う。
+ *
+ * <p>Seen state belongs to each UI client, not a global project or the persisted data.
+ */
 @Component
 public class WorkContextPresenter {
+  /** サービス。 */
   private final WorkContextService service;
+
+  /** この機能の動作設定。 */
   private final WorkContextProperties properties;
+
+  /** Gitの情報。 */
   private final WorkContextGit git;
 
+  /** 指定された値や利用先を使って、WorkContextPresenterを初期化する。 */
   public WorkContextPresenter(
       WorkContextService service, WorkContextProperties properties, WorkContextGit git) {
     this.service = service;
@@ -21,15 +31,21 @@ public class WorkContextPresenter {
     this.git = git;
   }
 
+  /** 作業文脈の引き継ぎで用いる存在するを返す。 */
   public Optional<String> present(ProjectContext project, String session, Set<String> seen) {
     return present(project, session, seen, true);
   }
 
-  /** Automatic Shell presentation uses saved background only, without a Git probe. */
+  /**
+   * 作業文脈の引き継ぎで用いる存在する保存済みを返す。
+   *
+   * <p>Automatic Shell presentation uses saved background only, without a Git probe.
+   */
   public Optional<String> presentSaved(ProjectContext project, String session, Set<String> seen) {
     return present(project, session, seen, false);
   }
 
+  /** 作業文脈の引き継ぎで用いる存在するを返す。 */
   private Optional<String> present(
       ProjectContext project, String session, Set<String> seen, boolean inspectGit) {
     if (!properties.autoPresent()) return Optional.empty();

@@ -7,8 +7,10 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** フィード情報の取得元の結果と状態の契約を検証するテスト。 */
 class FeedFetcherTest {
 
+  /** フィードの購読と収集で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void fetchParsesRssFeed() {
     FeedFetcher fetcher =
@@ -53,6 +55,7 @@ class FeedFetcherTest {
     assertNull(fetched.items().get(1).publishedAt());
   }
 
+  /** フィードの購読と収集で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void fetchParsesAtomFeed() {
     FeedFetcher fetcher =
@@ -92,6 +95,7 @@ class FeedFetcherTest {
         fetched.items());
   }
 
+  /** フィードの購読と収集で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void fetchParsesAtomFeedWithLargeEscapedContent() {
     String largeContent = "&quot;".repeat(20050);
@@ -123,6 +127,7 @@ class FeedFetcherTest {
     assertEquals(20050, fetched.items().getFirst().content().length());
   }
 
+  /** フィードの購読と収集で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void fetchParsesRssFeedWithLargeEscapedDescription() {
     String largeDescription = "&quot;".repeat(20050);
@@ -156,6 +161,7 @@ class FeedFetcherTest {
     assertEquals(20050, fetched.items().getFirst().description().length());
   }
 
+  /** フィードの購読と収集で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void fetchRaisesStatusErrorForNonSuccessResponse() {
     FeedFetcher fetcher = new FeedFetcher(uri -> new FeedHttpResponse(502, "bad gateway"));

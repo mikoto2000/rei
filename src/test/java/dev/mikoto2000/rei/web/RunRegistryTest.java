@@ -18,27 +18,35 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
+/** 実行登録台帳の結果と状態の契約を検証するテスト。 */
 class RunRegistryTest {
+  /** 検証条件を再現するための変更可能な時刻の取得元。 */
   static class MutableClock extends Clock {
+    /** 日時や期限の条件を再現するために使う検証時刻。 */
     Instant now = Instant.parse("2026-09-15T00:00:00Z");
 
+    /** 検証用に、web APIによる操作で参照するタイムゾーンを返す。 */
     public ZoneId getZone() {
       return ZoneOffset.UTC;
     }
 
+    /** 検証用に、指定されたタイムゾーンを反映した情報を作成する。 */
     public Clock withZone(ZoneId zone) {
       return this;
     }
 
+    /** {@code instant} の条件を再現するための補助情報を返す。 */
     public Instant instant() {
       return now;
     }
   }
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   static AgentRunContext context(String id) {
     return new AgentRunContext(id, "session", Path.of("."), "project");
   }
 
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void lifecycleHasImmutableTerminalStateAndMetadata() {
     var clock = new MutableClock();
@@ -60,6 +68,7 @@ class RunRegistryTest {
     assertThatThrownBy(() -> registry.get("unknown")).isInstanceOf(RunNotFoundException.class);
   }
 
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelAndCompleteRaceHasExactlyOneWinner() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -85,6 +94,7 @@ class RunRegistryTest {
     assertThat(registry.get("run").status().isTerminal()).isTrue();
   }
 
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void retentionStartsAtTerminalAndDoesNotExtendOnReads() {
     var clock = new MutableClock();

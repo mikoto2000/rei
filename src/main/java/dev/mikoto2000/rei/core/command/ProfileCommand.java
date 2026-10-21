@@ -14,6 +14,7 @@ import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 
+/** Agent Event のプロファイルログを表示しますを行うための利用者コマンド。 */
 @Component
 @Command(
     name = "profile",
@@ -26,18 +27,24 @@ import picocli.CommandLine.Option;
     })
 public class ProfileCommand implements Runnable {
 
+  /** ログ保存先。 */
   private final ProfileEventLogStore logStore;
+
+  /** 書き込み先。 */
   private final java.io.PrintWriter writer;
 
+  /** 共通の実行基盤で用いる出力先を返す。 */
   private java.io.PrintWriter out() {
     return writer == null ? new java.io.PrintWriter(System.out, true) : writer;
   }
 
+  /** 指定された値や利用先を使って、ProfileCommandを初期化する。 */
   private ProfileCommand(ProfileEventLogStore store, java.io.PrintWriter writer) {
     this.logStore = store;
     this.writer = writer;
   }
 
+  /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
   private String render(java.util.function.Consumer<ProfileCommand> report) {
     var text = new java.io.StringWriter();
     var output = new java.io.PrintWriter(text, true);
@@ -46,41 +53,50 @@ public class ProfileCommand implements Runnable {
     return text.toString();
   }
 
+  /** 利用者が内容を確認できるよう、要約を表示する。 */
   public String renderSummary() {
     return render(ProfileCommand::printSummary);
   }
 
+  /** 利用者が内容を確認できるよう、パスを表示する。 */
   public String renderPath() {
     return render(ProfileCommand::printPath);
   }
 
+  /** 利用者が内容を確認できるよう、Chartを表示する。 */
   public String renderChart(long seconds, int width) {
     return render(command -> command.printChart(Math.max(1L, seconds), Math.max(1, width)));
   }
 
+  /** 利用者が内容を確認できるよう、Mermaidを表示する。 */
   public String renderMermaid(int limit) {
     return render(command -> command.printMermaid(Math.max(1, limit)));
   }
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ProfileCommand() {
     this(new ProfileEventLogStore());
   }
 
+  /** 指定された値や利用先を使って、ProfileCommandを初期化する。 */
   @Autowired
   public ProfileCommand(ProfileEventLogStore logStore) {
     this.logStore = logStore;
     this.writer = null;
   }
 
+  /** Agent Event のプロファイルログを表示しますを行う。 */
   @Override
   public void run() {
     printSummary();
   }
 
+  /** 利用者に結果を伝えるため、パスを出力する。 */
   void printPath() {
     out().println(logStore.file());
   }
 
+  /** 利用者に結果を伝えるため、要約を出力する。 */
   void printSummary() {
     ProfileSummary summary =
         new dev.mikoto2000.rei.application.read.ProfileQueryService(logStore).summary();
@@ -108,6 +124,7 @@ public class ProfileCommand implements Runnable {
     }
   }
 
+  /** 利用者に結果を伝えるため、Chartを出力する。 */
   void printChart(long bucketSeconds, int width) {
     List<ProfileBucket> buckets = logStore.buckets(Duration.ofSeconds(bucketSeconds));
     if (buckets.isEmpty()) {
@@ -126,6 +143,7 @@ public class ProfileCommand implements Runnable {
     }
   }
 
+  /** 利用者に結果を伝えるため、Mermaidを出力する。 */
   void printMermaid(int limit) {
     ProfileSummary summary =
         new dev.mikoto2000.rei.application.read.ProfileQueryService(logStore).summary();
@@ -159,6 +177,7 @@ public class ProfileCommand implements Runnable {
     out().println("```");
   }
 
+  /** 利用者に結果を伝えるため、継続時間を出力する。 */
   private void printDuration(String type, DurationStats stats) {
     out()
         .printf(
@@ -171,73 +190,93 @@ public class ProfileCommand implements Runnable {
             stats.totalMillis());
   }
 
+  /** 共通の実行基盤で用いる引用を返す。 */
   private String quote(String value) {
     return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
   }
 
+  /** プロファイルログのパスを表示しますを行うための利用者コマンド。 */
   @Component
   @Command(name = "path", description = "プロファイルログのパスを表示します")
   public static class PathCommand implements Runnable {
+    /** 親。 */
     private final ProfileCommand parent;
 
+    /** 指定された値や利用先を使って、PathCommandを初期化する。 */
     public PathCommand(ProfileCommand parent) {
       this.parent = parent;
     }
 
+    /** プロファイルログのパスを表示しますを行う。 */
     @Override
     public void run() {
       parent.printPath();
     }
   }
 
+  /** プロファイルログの集計を表示しますを行うための利用者コマンド。 */
   @Component
   @Command(name = "summary", description = "プロファイルログの集計を表示します")
   public static class SummaryCommand implements Runnable {
+    /** 親。 */
     private final ProfileCommand parent;
 
+    /** 指定された値や利用先を使って、SummaryCommandを初期化する。 */
     public SummaryCommand(ProfileCommand parent) {
       this.parent = parent;
     }
 
+    /** プロファイルログの集計を表示しますを行う。 */
     @Override
     public void run() {
       parent.printSummary();
     }
   }
 
+  /** イベント数の ASCII グラフを表示しますを行うための利用者コマンド。 */
   @Component
   @Command(name = "chart", description = "イベント数の ASCII グラフを表示します")
   public static class ChartCommand implements Runnable {
+    /** 親。 */
     private final ProfileCommand parent;
 
+    /** 集計区分秒数。 */
     @Option(names = "--bucket-seconds", description = "集計間隔の秒数")
     long bucketSeconds = 60L;
 
+    /** 幅。 */
     @Option(names = "--width", description = "棒グラフの最大幅")
     int width = 40;
 
+    /** 指定された値や利用先を使って、ChartCommandを初期化する。 */
     public ChartCommand(ProfileCommand parent) {
       this.parent = parent;
     }
 
+    /** イベント数の ASCII グラフを表示しますを行う。 */
     @Override
     public void run() {
       parent.printChart(Math.max(1L, bucketSeconds), Math.max(1, width));
     }
   }
 
+  /** イベント数の Mermaid グラフを表示しますを行うための利用者コマンド。 */
   @Component
   @Command(name = "mermaid", description = "イベント数の Mermaid グラフを表示します")
   public static class MermaidCommand implements Runnable {
+    /** 親。 */
     private final ProfileCommand parent;
 
+    /** 上限。 */
     @Option(names = "--limit", description = "表示するイベント種別数")
     int limit = 12;
 
+    /** 指定された値や利用先を使って、MermaidCommandを初期化する。 */
     public MermaidCommand(ProfileCommand parent) {
       this.parent = parent;
     }
 
+    /** イベント数の Mermaid グラフを表示しますを行う。 */
     @Override
     public void run() {
       parent.printMermaid(Math.max(1, limit));

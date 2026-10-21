@@ -25,10 +25,15 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
 
+/** 自動待機モデル待機の結果と状態の契約を検証するテスト。 */
 class AutoSleepModelWaitTest {
+  /** 検証に使う提供元。 */
   final LlmModelProvider provider = mock(LlmModelProvider.class);
+
+  /** 検証に使うモデル。 */
   final ChatModel model = mock(ChatModel.class);
 
+  /** {@code processor} の条件を再現するための補助情報を返す。 */
   LlmMemoryProcessor processor() {
     when(provider.memoryChatModel()).thenReturn(model);
     when(provider.chatOptions(LlmFeature.MEMORY, null))
@@ -37,6 +42,7 @@ class AutoSleepModelWaitTest {
         provider, new MemoryProperties(true, 20, 80, 10, 3, 2000, 60, null));
   }
 
+  /** 長期記憶の活用で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void ownCompletionTimeoutAndOverallDeadlineUseDistinctCodes() {
     when(model.stream(any(Prompt.class))).thenReturn(Flux.never());
@@ -63,6 +69,7 @@ class AutoSleepModelWaitTest {
             .code);
   }
 
+  /** 長期記憶の活用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void providerFailureIsNotInferredFromExceptionMessage() {
     when(model.stream(any(Prompt.class)))
@@ -80,6 +87,7 @@ class AutoSleepModelWaitTest {
             .code);
   }
 
+  /** 長期記憶の活用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void interruptDuringExtendedWaitCancelsSubscription() throws Exception {
     var subscribed = new CountDownLatch(1);
@@ -112,6 +120,7 @@ class AutoSleepModelWaitTest {
     assertTrue(dev.mikoto2000.rei.core.chat.RunCancellation.isCancellation(error.get()));
   }
 
+  /** 予算を停止することを確認する。 */
   @Test
   void timeoutRemainsFailureWhenUnknownUsageAlsoStopsBudget() {
     when(model.stream(any(Prompt.class))).thenReturn(Flux.never());

@@ -21,7 +21,9 @@ import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 import tools.jackson.databind.json.JsonMapper;
 
+/** プロセス待機引数の結果と状態の契約を検証するテスト。 */
 class ProcessWaitArgumentsTest {
+  /** 整数許容範囲を受け付けられることを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -38,6 +40,7 @@ class ProcessWaitArgumentsTest {
     assertDoesNotThrow(() -> ProcessWaitArguments.validate("waitForShellProcess", input));
   }
 
+  /** 不正なタイムアウトを受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -74,6 +77,7 @@ class ProcessWaitArgumentsTest {
     assertFalse(error.getMessage().contains("private-value"));
   }
 
+  /** ツール利用の権限制御で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -97,6 +101,7 @@ class ProcessWaitArgumentsTest {
     assertTrue(error.getMessage().contains("0〜60"));
   }
 
+  /** ツール利用の権限制御で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void parsingIsBoundedAndUnsupportedToolsAreUnaffected() {
     for (String input :
@@ -116,6 +121,7 @@ class ProcessWaitArgumentsTest {
     assertDoesNotThrow(() -> ProcessWaitArguments.validate(null, null));
   }
 
+  /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void invalidTimeoutIsRejectedBeforeApprovalIsRequestedOrConsumed() {
     var approvals = mock(ToolApprovalRepository.class);
@@ -132,9 +138,11 @@ class ProcessWaitArgumentsTest {
             guard.check(
                 "waitForShellProcess", "{\"processId\":\"p\",\"timeoutSeconds\":120}", owner));
 
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(approvals);
   }
 
+  /** ツール利用の権限制御で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void toolSchemaDescribesOptionalIntegerTimeoutAndItsBounds() {
     var processes = mock(BackgroundProcessManager.class);
@@ -150,6 +158,7 @@ class ProcessWaitArgumentsTest {
     assertTrue(timeout.path("description").asString().contains("default 10 seconds"));
     assertFalse(schema.path("required").toString().contains("timeoutSeconds"));
     assertFalse(schema.path("properties").has("toolContext"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(processes);
   }
 }

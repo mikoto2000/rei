@@ -16,7 +16,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import tools.jackson.databind.json.JsonMapper;
 
+/** 加工前のツールの結果引数の結果と状態の契約を検証するテスト。 */
 class RawToolResultArgumentsTest {
+  /** 必須整数引数を受け付けられることを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -28,6 +30,7 @@ class RawToolResultArgumentsTest {
     assertDoesNotThrow(() -> RawToolResultArguments.validate("readRawToolResult", input));
   }
 
+  /** ツール利用の権限制御で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void mistakenNextOffsetAndAllMissingOrInvalidFieldsAreReportedTogether() {
     var error =
@@ -44,6 +47,7 @@ class RawToolResultArgumentsTest {
     assertTrue(error.getMessage().contains("実行していません"));
   }
 
+  /** ツール利用の権限制御で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -70,6 +74,7 @@ class RawToolResultArgumentsTest {
     assertFalse(error.getMessage().contains("private-ref"));
   }
 
+  /** ツール利用の権限制御で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {"null", "0", "-1", "16001", "4294967297", "1.5", "\"16000\"", "false", "[]", "{}"})
@@ -84,6 +89,7 @@ class RawToolResultArgumentsTest {
     assertTrue(error.getMessage().contains("limit: required integer from 1 to 16000"));
   }
 
+  /** ツール利用の権限制御で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -100,6 +106,7 @@ class RawToolResultArgumentsTest {
         () -> RawToolResultArguments.validate("readRawToolResult", input));
   }
 
+  /** ツール利用の権限制御で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void malformedAndBoundedJsonErrorsAreSafeToReturnToTheModel() {
     for (String input :
@@ -124,6 +131,7 @@ class RawToolResultArgumentsTest {
     assertDoesNotThrow(() -> RawToolResultArguments.validate("readMultiFile", "not json"));
   }
 
+  /** データ形式について、開始位置を必要とすることを確認する。 */
   @Test
   void schemaRequiresOffsetAndExplainsMappingFromTheOutputCursor() {
     var store = mock(RawToolResultStore.class);
@@ -142,6 +150,7 @@ class RawToolResultArgumentsTest {
             .asString()
             .contains("nextOffset"));
     assertTrue(definition.description().contains("output field, not an input argument"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(store);
   }
 }

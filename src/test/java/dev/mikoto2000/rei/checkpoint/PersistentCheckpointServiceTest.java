@@ -32,18 +32,37 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.sqlite.SQLiteDataSource;
 
+/** 保存される再開用の記録サービスの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class PersistentCheckpointServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う保存と検索の窓口。 */
   PersistentCheckpointRepository repository;
+
+  /** 検証に使う通知の連携先。 */
   InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+
+  /** 検証に使う実行待ち。 */
   List<Runnable> queue = new ArrayList<>();
+
+  /** 検証に使う開始。 */
   List<String> started = new ArrayList<>();
+
+  /** 検証に使うサービス。 */
   PersistentCheckpointService service;
+
+  /** 検証に使う生成元。 */
   org.springframework.beans.factory.support.StaticListableBeanFactory factory;
+
+  /** 検証に使う設定。 */
   CheckpointProperties settings;
+
+  /** 検証に使う所有者。 */
   AgentRunContext owner;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     var source = new SQLiteDataSource();
@@ -72,6 +91,7 @@ class PersistentCheckpointServiceTest {
     service.start(owner, "original request");
   }
 
+  /** 作業の中断と再開で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void reviewJobReferencesAndVerifiedCoverageSurviveResume() throws Exception {
     Path data = root.resolve("review-data");
@@ -120,6 +140,7 @@ class PersistentCheckpointServiceTest {
     assertEquals(range, restored.ranges().getFirst().range());
   }
 
+  /** 進捗について、再開用の記録再開の後も対象の情報が残ることを確認する。 */
   @Test
   void progressSurvivesCheckpointResumeAndStaysIsolated() {
     var ledger = new dev.mikoto2000.rei.core.stagnation.InformationLedger();
@@ -145,6 +166,7 @@ class PersistentCheckpointServiceTest {
         e.observeRange("docs/A", "v1", 1, 10001).status());
   }
 
+  /** 進捗を保持することを確認する。 */
   @Test
   void manualHistoryCleanupRetainsProgressAndResumeEvidence() {
     var ledger = new dev.mikoto2000.rei.core.stagnation.InformationLedger();
@@ -177,6 +199,7 @@ class PersistentCheckpointServiceTest {
     assertEquals(before.revision(), resumed.checkpointRevision());
   }
 
+  /** 未指定進捗入力先以前の再開用の記録読み取り可能なおよびについて、形式不明を復元することを確認する。 */
   @Test
   void missingProgressInOldCheckpointIsReadableAndRestoresAsUnknown() {
     var old = repository.fields(state());
@@ -192,6 +215,7 @@ class PersistentCheckpointServiceTest {
         e.observeRange("A", "v1", 1, 2).status());
   }
 
+  /** 作業の中断と再開で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedProgressSaveRetainsPreviouslyCommittedProgress() {
     var ledger = new dev.mikoto2000.rei.core.stagnation.InformationLedger();
@@ -213,11 +237,13 @@ class PersistentCheckpointServiceTest {
     assertEquals(saved, repository.get("A", state().taskId()).progress());
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void close() {
     service.close();
   }
 
+  /** 動作モードを保持することを確認する。 */
   @Test
   void restrictedRunPreservesModeAcrossResumeWithoutResettingActiveTask() {
     var plan = new dev.mikoto2000.rei.core.actionplan.ActionPlan();
@@ -252,10 +278,12 @@ class PersistentCheckpointServiceTest {
             .mode());
   }
 
+  /** {@code state} の条件を再現するための補助情報を返す。 */
   PersistentCheckpoint state() {
     return repository.list("A").getFirst();
   }
 
+  /** 作業の中断と再開で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void forcePreviewDoesNotDisableActiveRunPersistence() {
     var before = repository.historyUsage();
@@ -270,6 +298,7 @@ class PersistentCheckpointServiceTest {
     assertTrue(repository.historyUsage().revisions() > before.revisions());
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void forceDeleteKeepsLiveProgressWithoutRecreatingHistoryOrClaimingSaves() {
     var ledger = new dev.mikoto2000.rei.core.stagnation.InformationLedger();
@@ -315,6 +344,7 @@ class PersistentCheckpointServiceTest {
     }
   }
 
+  /** 強制について、保持する不明操作の影響実行可否の判断を削除することを確認する。 */
   @Test
   void forceDeletePreservesUnknownSideEffectGateForAnExecutingResumedRun() {
     var events = new AgentEventFactory(java.time.Clock.systemUTC());
@@ -327,6 +357,7 @@ class PersistentCheckpointServiceTest {
     var effectCalls = new java.util.concurrent.atomic.AtomicInteger();
     var callback =
         new org.springframework.ai.tool.ToolCallback() {
+          /** 検証用に、作業の中断と再開で参照するツール定義を返す。 */
           public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
             return org.springframework.ai.tool.definition.ToolDefinition.builder()
                 .name("deploy")
@@ -335,6 +366,7 @@ class PersistentCheckpointServiceTest {
                 .build();
           }
 
+          /** 検証用に、作業の中断と再開の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             effectCalls.incrementAndGet();
             return "deployed";
@@ -358,6 +390,7 @@ class PersistentCheckpointServiceTest {
     assertEquals(0, repository.historyUsage().revisions());
   }
 
+  /** 失敗強制について、なし無効化活動中実行状態の保存を削除することを確認する。 */
   @Test
   void failedForceDeleteDoesNotDisableActiveRunPersistence() throws Exception {
     var before = repository.historyUsage();
@@ -376,6 +409,7 @@ class PersistentCheckpointServiceTest {
     assertTrue(repository.historyUsage().revisions() > before.revisions());
   }
 
+  /** 作業の中断と再開で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void concurrentForceDeleteAndToolBoundaryDoNotRecreateOldCheckpoints() throws Exception {
     var barrier = new java.util.concurrent.CyclicBarrier(2);
@@ -404,6 +438,7 @@ class PersistentCheckpointServiceTest {
     assertEquals(0, repository.historyUsage().revisions());
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void staleTaskProjectionRevisionCannotResumeOrConsumeAnExecutionLease() {
     service.finish(owner, "CANCELLED");
@@ -418,6 +453,7 @@ class PersistentCheckpointServiceTest {
     assertFalse(repository.leased("A", saved.taskId()));
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void inspectionNeverExecutesAndResumeCreatesNewRunWithLineageAndLease() {
     service.finish(owner, "CANCELLED");
@@ -438,6 +474,7 @@ class PersistentCheckpointServiceTest {
     assertFalse(repository.leased("A", task));
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sideEffectWithoutSavedResultRemainsUnknownAndCannotAutomaticallyRepeat() {
     var event =
@@ -465,6 +502,7 @@ class PersistentCheckpointServiceTest {
         service.context(resumed.runId()).contains("Unknown operations MUST NOT be replayed"));
   }
 
+  /** 重複の有無イベント一覧および結果変更前計画更新について、確認済み根拠を保持することを確認する。 */
   @Test
   void duplicateEventsAndResultBeforePlanUpdatePreserveConfirmedEvidence() {
     var factory = new AgentEventFactory(java.time.Clock.systemUTC());
@@ -482,6 +520,7 @@ class PersistentCheckpointServiceTest {
     assertEquals("FAILED", state().status());
   }
 
+  /** 作業の中断と再開の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void queuedResumeCancellationReleasesExecutionRightWithoutRunning() {
     service.finish(owner, "CANCELLED");
@@ -498,6 +537,7 @@ class PersistentCheckpointServiceTest {
     assertTrue(started.isEmpty());
   }
 
+  /** 最小予算について、不明操作一覧を維持することを確認する。 */
   @Test
   void minimumBudgetKeepsUnknownOperationsAndNextActionBeforeLargeEvidence() {
     settings.setContextCharacters(1024);
@@ -512,6 +552,7 @@ class PersistentCheckpointServiceTest {
     assertTrue(service.context(resumed.runId()).length() <= 1024);
   }
 
+  /** 実際のモデルツール呼び出し参照先を保持することを確認する。 */
   @Test
   void rawResultsStayOutsideSnapshotAndPreserveActualModelToolCallReference() {
     var raw = new dev.mikoto2000.rei.core.contextbudget.RawToolResultStore(root);
@@ -532,6 +573,7 @@ class PersistentCheckpointServiceTest {
     assertFalse(repository.encode(state()).contains("large output"));
   }
 
+  /** 取得元参照先を保持することを確認する。 */
   @Test
   void
       rawPagesFromRealCallbacksAndLegacyQuotedPagesPreserveSourceReferenceWithoutSavingAnotherBody()
@@ -584,21 +626,25 @@ class PersistentCheckpointServiceTest {
     assertNotNull(resumed.runId());
   }
 
+  /** 作業の中断と再開の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void resumedLlmCancellationSavesProgressReleasesLeaseAndInjectsReferenceSeparately() {
     service.finish(owner, "CANCELLED");
     var prompts = new ArrayList<org.springframework.ai.chat.prompt.Prompt>();
     var model =
         new org.springframework.ai.chat.model.ChatModel() {
+          /** 検証用に、作業の中断と再開で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build();
           }
 
+          /** 検証用に、作業の中断と再開の要求を実行し、呼び出し元へ結果を返す。 */
           public org.springframework.ai.chat.model.ChatResponse call(
               org.springframework.ai.chat.prompt.Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public reactor.core.publisher.Flux<org.springframework.ai.chat.model.ChatResponse> stream(
               org.springframework.ai.chat.prompt.Prompt prompt) {
             prompts.add(prompt);
@@ -635,11 +681,13 @@ class PersistentCheckpointServiceTest {
     assertNotEquals("run", resumed.runId());
   }
 
+  /** 作業の中断と再開で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void crashAfterSideEffectBeforeResultPersistenceCannotRepeat() throws Exception {
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     var callback =
         new org.springframework.ai.tool.ToolCallback() {
+          /** 検証用に、作業の中断と再開で参照するツール定義を返す。 */
           public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
             return org.springframework.ai.tool.definition.ToolDefinition.builder()
                 .name("deploy")
@@ -648,6 +696,7 @@ class PersistentCheckpointServiceTest {
                 .build();
           }
 
+          /** 検証用に、作業の中断と再開の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             calls.incrementAndGet();
             return "published";
@@ -673,6 +722,7 @@ class PersistentCheckpointServiceTest {
         PersistentCheckpoint.OperationStatus.STARTED, state().operations().getFirst().status());
   }
 
+  /** 作業の中断と再開の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationAtDurablePreToolBoundaryMustNotStartTheSideEffect() {
     var calls = new java.util.concurrent.atomic.AtomicInteger();
@@ -692,6 +742,7 @@ class PersistentCheckpointServiceTest {
             });
     var callback =
         new org.springframework.ai.tool.ToolCallback() {
+          /** 検証用に、作業の中断と再開で参照するツール定義を返す。 */
           public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
             return org.springframework.ai.tool.definition.ToolDefinition.builder()
                 .name("deploy")
@@ -700,6 +751,7 @@ class PersistentCheckpointServiceTest {
                 .build();
           }
 
+          /** 検証用に、作業の中断と再開の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             calls.incrementAndGet();
             return "published";

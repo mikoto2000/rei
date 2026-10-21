@@ -19,21 +19,28 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 保存参照先保護の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class StorageReferenceProtectionTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-10-01T00:00:00Z");
 
+  /** {@code prepare} の条件を再現するため、検証用の操作や状態を扱う。 */
   void prepare() throws Exception {
     try (var migration = new StorageMigrationCoordinator(root)) {
       migration.prepare();
     }
   }
 
+  /** {@code registry} の条件を再現するための補助情報を返す。 */
   StorageObjectRegistry registry() {
     return new StorageObjectRegistry(root, Clock.fixed(now, ZoneOffset.UTC));
   }
 
+  /** データ保存の共通処理で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void legacyRawBytesAndUnknownOwnershipAreRetainedAndProtected() throws Exception {
     String ref = new RawToolResultStore(root).save("chat", "old-run", "tool", "call", "旧結果");
@@ -49,6 +56,7 @@ class StorageReferenceProtectionTest {
     assertThat(root.resolve(object.relativePath())).exists();
   }
 
+  /** データ保存の共通処理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void newRawResultsAreRegisteredAndActiveRunsAndCheckpointReferencesProtectThem()
       throws Exception {
@@ -70,6 +78,7 @@ class StorageReferenceProtectionTest {
         .isEqualTo("結果");
   }
 
+  /** {@code produced} の条件を再現するための補助情報を返す。 */
   StorageObjectRegistry.StoredObject produced(
       StorageObjectRegistry registry, String name, int bytes) throws Exception {
     Path directory = Files.createDirectories(root.resolve("logs/activity-archives"));
@@ -79,6 +88,7 @@ class StorageReferenceProtectionTest {
         file, "ACTIVITY_RAW", null, null, now.minus(Duration.ofDays(100)), true, List.of());
   }
 
+  /** データ保存の共通処理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void dryRunIsBoundedAndApprovalIsBoundToExactSnapshotAndNeverMovesFiles() throws Exception {
     prepare();
@@ -99,6 +109,7 @@ class StorageReferenceProtectionTest {
     assertThat(root.resolve(".storage/quarantine")).doesNotExist();
   }
 
+  /** データ保存の共通処理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void newlyAddedReferencePinHoldOrChangedFilePreventsStaleApproval() throws Exception {
     prepare();
@@ -113,6 +124,7 @@ class StorageReferenceProtectionTest {
     assertThat(planner.plan("activity-raw", null, 2, 150).candidates()).isEmpty();
   }
 
+  /** データ保存の共通処理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void policyChangeInvalidatesApprovalAndAutomaticRetentionDefaultsOff() throws Exception {
     prepare();
@@ -127,6 +139,7 @@ class StorageReferenceProtectionTest {
     assertThat(planner.policy("voice-models").automatic()).isFalse();
   }
 
+  /** データ保存の共通処理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void checksumChangeAndPinOrHoldIndividuallyInvalidateApproval() throws Exception {
     prepare();
@@ -145,6 +158,7 @@ class StorageReferenceProtectionTest {
         .containsKey("legal-hold");
   }
 
+  /** データ保存の共通処理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void quotaCanSelectOldestUnreferencedBodyWithoutExpiringIt() throws Exception {
     prepare();
@@ -156,6 +170,7 @@ class StorageReferenceProtectionTest {
     assertThat(planner.plan("activity-raw", null, 10, 1000).candidates()).hasSize(1);
   }
 
+  /** データ保存の共通処理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void checkpointSaveRegistersReferenceBeforeItIsPublishedAndLegacyMigrationImportsIt()
       throws Exception {
@@ -212,6 +227,7 @@ class StorageReferenceProtectionTest {
     assertThat(repository.get("project", "task").revision()).isEqualTo(2);
   }
 
+  /** データ保存の共通処理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void committedCheckpointCleanupReleasesOnlyDeletedRevisionReferences() throws Exception {
     prepare();
@@ -245,6 +261,7 @@ class StorageReferenceProtectionTest {
     assertThat(repository.get(project, "task").revision()).isEqualTo(2);
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void producerCannotAdoptAnExistingUnknownFileOrRegisterOutsideManagedPaths() throws Exception {
     String ref = new RawToolResultStore(root).save("chat", "run", "tool", "call", "旧結果");
@@ -260,6 +277,7 @@ class StorageReferenceProtectionTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void versionTwoUpgradeDoesNotReimportChangedLegacySessionJsonAndKeepsRollbackAtomic()
       throws Exception {
@@ -320,6 +338,7 @@ class StorageReferenceProtectionTest {
     }
   }
 
+  /** データ保存の共通処理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void approvalPersistsAcrossRestartAndStatusDoesNotCreatePlanOrHashBodies() throws Exception {
     prepare();
@@ -339,6 +358,7 @@ class StorageReferenceProtectionTest {
     assertThatThrownBy(() -> reopened.approve(plan.id())).isInstanceOf(IllegalStateException.class);
   }
 
+  /** 形式が不正な再開用の記録取得元について、移行を停止することを確認する。 */
   @Test
   void malformedCheckpointSourceStopsMigrationAndPreservesOriginalDatabaseBytes() throws Exception {
     var source = new org.sqlite.SQLiteDataSource();
@@ -361,6 +381,7 @@ class StorageReferenceProtectionTest {
     assertThat(StorageMigrationCoordinatorTest.version(root.resolve("storage.db"))).isZero();
   }
 
+  /** データ保存の共通処理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void checkpointFileAndEventReferencesProtectTheActualOwnerEvenForUnprefixedSessions()
       throws Exception {
@@ -391,6 +412,7 @@ class StorageReferenceProtectionTest {
         .contains("CHECKPOINT");
   }
 
+  /** データ保存の共通処理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void relativeCheckpointFilePathsAreUnknownAndProtectObjectsInsteadOfGuessingACwd()
       throws Exception {
@@ -412,6 +434,7 @@ class StorageReferenceProtectionTest {
         .containsKey("unresolved-checkpoint-path");
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void aPreviouslyReadObjectCannotHideANewPinFromProtectionQueries() throws Exception {
     prepare();

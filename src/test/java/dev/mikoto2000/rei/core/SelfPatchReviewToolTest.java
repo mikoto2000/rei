@@ -9,7 +9,9 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+/** Self変更差分レビューツールの結果と状態の契約を検証するテスト。 */
 class SelfPatchReviewToolTest {
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void savedRepairToolRetainsArbitraryCommandPolicyAndDoesNotGrantChildAgentAccess() {
     var callback =
@@ -35,6 +37,7 @@ class SelfPatchReviewToolTest {
                 .validate(List.of("selfRepairPatch")));
   }
 
+  /** 共通の実行基盤の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void toolIsExplicitAndDoesNotGainReadOnlyOrChildAgentPermissions() {
     var callback =

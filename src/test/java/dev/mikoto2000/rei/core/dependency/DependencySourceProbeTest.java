@@ -28,21 +28,28 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 依存条件取得元利用可否の確認の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class DependencySourceProbeTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock = Clock.fixed(Instant.EPOCH, ZoneOffset.UTC);
 
+  /** {@code repo} の条件を再現するための補助情報を返す。 */
   PersistentDependencyRepository repo() {
     return new PersistentDependencyRepository(
         new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("deps.db")), clock);
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   PersistentDependencyRepository.Entry create(DependencySpec spec) {
     return repo()
         .create(new AgentRunContext("r", "s", dir, "p"), spec, Duration.ofHours(1), List.of());
   }
 
+  /** ファイル回答およびGit事実一覧について、実際の取得元一覧を利用することを確認する。 */
   @Test
   void fileAnswerAndGitFactsUseTheirActualSources() throws Exception {
     var git = mock(WorkContextGit.class);
@@ -72,9 +79,11 @@ class DependencySourceProbeTest {
     when(git.capture(eq(dir), any()))
         .thenReturn(new WorkContext.GitState(dir.toString(), null, null, Instant.EPOCH));
     assertEquals(DependencyState.BLOCKED, probe.probe(state).state());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(processes, http);
   }
 
+  /** プロセス終了について、自分が所有する対象実際の状態を必要とすることを確認する。 */
   @Test
   void processExitRequiresOwnedActualStatusAndPreservesSixStates() {
     var processes = mock(BackgroundProcessManager.class);
@@ -133,6 +142,7 @@ class DependencySourceProbeTest {
     assertEquals(DependencyState.BLOCKED, probe.probe(entry).state());
   }
 
+  /** 外部条件の待機で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void realGitBranchTransitionIsObservedWithoutCommandsFromTheModel() throws Exception {
     gitCommand("init");
@@ -166,6 +176,7 @@ class DependencySourceProbeTest {
     assertEquals(DependencyState.COMPLETED, probe.probe(entry).state());
   }
 
+  /** {@code gitCommand} の条件を再現するため、検証用の操作や状態を扱う。 */
   void gitCommand(String... args) throws Exception {
     var command = new ArrayList<String>(List.of("git", "-C", dir.toString()));
     command.addAll(List.of(args));
@@ -178,6 +189,7 @@ class DependencySourceProbeTest {
             process.getInputStream().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
   }
 
+  /** 外部条件の待機で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void fileChangeIncludesContentCreationAndDeletionWithoutExposingContents() throws Exception {
     var probe =

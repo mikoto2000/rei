@@ -14,21 +14,33 @@ import org.slf4j.LoggerFactory;
  */
 public class ContextBudgetManager {
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(ContextBudgetManager.class);
 
   /** トークン概算のための文字数係数。 */
   static final int CHARS_PER_TOKEN = 4;
 
+  /** モデルが受け付ける文脈のトークン数上限。 */
   private final int modelContextLimit;
+
+  /** 回答を生成するために入力から差し引いて確保するトークン数。 */
   private final int outputReserve;
+
+  /** トークン数の概算誤差に備えて確保する余裕。 */
   private final int safetyMargin;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** 実行状況の通知先。 */
   private final AgentEventPublisher eventPublisher;
 
+  /** モデルへ渡す文脈の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ContextBudgetManager(int modelContextLimit, int outputReserve, int safetyMargin) {
     this(modelContextLimit, outputReserve, safetyMargin, null, null);
   }
 
+  /** 指定された値や利用先を使って、ContextBudgetManagerを初期化する。 */
   public ContextBudgetManager(
       int modelContextLimit,
       int outputReserve,
@@ -47,6 +59,7 @@ public class ContextBudgetManager {
     return modelContextLimit - outputReserve - safetyMargin;
   }
 
+  /** 利用量や必要量を判断するため、メッセージ一覧を概算する。 */
   public static long estimateMessages(
       java.util.List<org.springframework.ai.chat.messages.Message> messages,
       TokenEstimator estimator) {
@@ -61,6 +74,7 @@ public class ContextBudgetManager {
   /** 優先順位に基づいてセクションを割り当てる。 */
   public AllocationResult allocate(List<ContextSection> sections) {
     List<ContextSection> sorted = new ArrayList<>(sections);
+    // 予算が不足しても現在の依頼に必要な情報を残せるよう、重要な文脈から採用する。
     sorted.sort((a, b) -> Integer.compare(priority(a.name()), priority(b.name())));
 
     List<String> included = new ArrayList<>();
@@ -69,11 +83,13 @@ public class ContextBudgetManager {
     int budget = inputBudget();
     for (ContextSection section : sorted) {
       int tokens = estimateTokens(section);
+      // システム指示と今回の依頼は、ほかの資料を省略する場合でも残す。
       if (isProtected(section.name())) {
         included.add(section.name());
         total += tokens;
         continue;
       }
+      // 残りの資料は入力予算内で採用し、渡せなかった情報を後で確認できるよう記録する。
       if (total + tokens <= budget) {
         included.add(section.name());
         total += tokens;
@@ -88,6 +104,7 @@ public class ContextBudgetManager {
     return new AllocationResult(List.copyOf(included), List.copyOf(dropped), total);
   }
 
+  /** 文脈の採用・除外の結果を通知し、どの情報がモデルへ渡ったか確認できるようにする。 */
   private void publishAllocation(
       int budget, int total, List<String> included, List<String> dropped) {
     if (events == null || eventPublisher == null) {

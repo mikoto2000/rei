@@ -12,15 +12,21 @@ import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 利用者情報イベントログ保存先の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProfileEventLogStoreTest {
 
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   private final Clock clock =
       Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));
+
+  /** 通知された出来事と順序を検証するための記録。 */
   private final AgentEventFactory events = new AgentEventFactory(clock);
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 追記について、JSON変換行一覧を書き込むことを確認する。 */
   @Test
   void appendWritesJsonLines() throws Exception {
     Path file = tempDir.resolve(".rei").resolve("profile.log");
@@ -36,6 +42,7 @@ class ProfileEventLogStoreTest {
         .isEqualTo(123L);
   }
 
+  /** 実行状況の通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void textPayloadIsStoredAsLength() {
     Path file = tempDir.resolve(".rei").resolve("profile.log");
@@ -48,6 +55,7 @@ class ProfileEventLogStoreTest {
     assertThat(entry.payload()).doesNotContainKey("text");
   }
 
+  /** 実行状況の通知で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void bucketsCountsEventsByTimeWindow() {
     Path file = tempDir.resolve(".rei").resolve("profile.log");
@@ -62,10 +70,12 @@ class ProfileEventLogStoreTest {
         .containsExactly(2L, 1L);
   }
 
+  /** 検証で使用する保存先を、指定された条件に合わせて用意する。 */
   private ProfileEventLogStore store(Path file) {
     return new ProfileEventLogStore(file, new ObjectMapper().registerModule(new JavaTimeModule()));
   }
 
+  /** {@code eventAt} の条件を再現するための補助情報を返す。 */
   private AgentEvent eventAt(String id, Instant timestamp) {
     return new AgentEvent(
         id,

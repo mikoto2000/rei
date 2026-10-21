@@ -15,13 +15,35 @@ import org.jsoup.nodes.Document;
 import org.jsoup.nodes.Element;
 
 /**
- * Small in-memory BM25 over bounded section windows, plus headings and literal version/API
+ * Web節に必要な情報を入力から取り出す。
+ *
+ * <p>Small in-memory BM25 over bounded section windows, plus headings and literal version/API
  * evidence.
  */
 final class WebSectionExtractor {
+  /**
+   * Web上の情報の調査で受け渡す選択内容を表す。
+   *
+   * @param content 内容
+   * @param excerpts 根拠として示す抜粋
+   * @param truncated 省略の有無
+   * @param omissions 省略した内容
+   */
   record Selection(
       String content, List<WebExcerpt> excerpts, boolean truncated, List<String> omissions) {}
 
+  /**
+   * Web上の情報の調査で受け渡すまとまりを表す。
+   *
+   * @param text テキスト
+   * @param kind 種類
+   * @param headings 見出し一覧
+   * @param position 位置
+   * @param start 開始
+   * @param end 終了
+   * @param anchor 基準位置
+   * @param partial 部分的な結果
+   */
   private record Block(
       String text,
       String kind,
@@ -32,10 +54,18 @@ final class WebSectionExtractor {
       String anchor,
       boolean partial) {}
 
+  /**
+   * Web上の情報の調査で受け渡す順位を付けたを表す。
+   *
+   * @param block まとまり
+   * @param score 評価値
+   */
   private record Ranked(Block block, double score) {}
 
+  /** 最大節一覧／範囲。 */
   private static final int MAX_SECTIONS = 512, WINDOW = 800;
 
+  /** 指定された条件に応じて、利用する対象を選ぶ。 */
   static Selection select(Document document, String query, int maxCharacters, int maxTokens) {
     var terms = WebQueryTerms.of(query);
     var blocks = new ArrayList<Block>();
@@ -238,10 +268,12 @@ final class WebSectionExtractor {
         limited ? List.of("section_limit") : List.of());
   }
 
+  /** Web上の情報の調査で用いる語句一覧を返す。 */
   private static int words(String text) {
     return Math.max(1, text.split("[^\\p{IsAlphabetic}\\p{IsDigit}]+").length);
   }
 
+  /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
   private static String render(Block block) {
     if (block.kind().equals("code"))
       return (block.headings().isEmpty()
@@ -253,20 +285,24 @@ final class WebSectionExtractor {
     return block.text();
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、表記や形式をそろえる。 */
   static String normalize(String text) {
     return Objects.toString(text, "").replaceAll("\\s+", " ").strip();
   }
 
+  /** 利用先の許容量を超えないよう、Web節情報の抽出を上限内に収める。 */
   static String clip(String value, int length) {
     return value.substring(0, safeEnd(value, Math.min(value.length(), Math.max(0, length))));
   }
 
+  /** Web上の情報の調査で用いる安全性開始を返す。 */
   private static int safeStart(String value, int offset) {
     return offset > 0 && offset < value.length() && Character.isLowSurrogate(value.charAt(offset))
         ? offset - 1
         : offset;
   }
 
+  /** Web上の情報の調査で用いる安全性終了を返す。 */
   private static int safeEnd(String value, int offset) {
     return offset > 0 && offset < value.length() && Character.isLowSurrogate(value.charAt(offset))
         ? offset - 1

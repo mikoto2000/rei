@@ -7,11 +7,16 @@ import dev.mikoto2000.rei.event.ErrorInformation;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
-/** Reports a refusal through existing durable Tool events before invoking the callback. */
+/**
+ * ツール利用の権限制御に必要なツール権限利用条件の確認を扱う。
+ *
+ * <p>Reports a refusal through existing durable Tool events before invoking the callback.
+ */
 @Component
 public class ToolPermissionGuard {
   // MCP has project-scoped snapshot reads only, not personal memory, raw process logs or arbitrary
   // PDF paths.
+  /** MCP読み取りツール一覧。 */
   private static final java.util.Set<String> MCP_READ_TOOLS =
       java.util.Set.of(
           "readMultiFile",
@@ -24,17 +29,26 @@ public class ToolPermissionGuard {
           "now",
           "webSearch",
           "webSearchAndRead");
+
+  /** 承認一覧。 */
   private ToolApprovalRepository approvals;
 
+  /** ツール利用の権限制御で使用する承認一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setApprovals(ToolApprovalRepository approvals) {
     this.approvals = approvals;
   }
 
+  /** 判断基準。 */
   private final ToolPermissionPolicy policy;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** 通知先。 */
   private final AgentEventPublisher publisher;
 
+  /** 指定された値や利用先を使って、ToolPermissionGuardを初期化する。 */
   public ToolPermissionGuard(
       ToolPermissionPolicy policy, AgentEventFactory events, AgentEventPublisher publisher) {
     this.policy = policy;
@@ -42,14 +56,17 @@ public class ToolPermissionGuard {
     this.publisher = publisher;
   }
 
+  /** 後続の処理を進められるか、現在の条件を確認する。 */
   public void check(String tool, AgentRunContext owner) {
     check(tool, "", owner);
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、引数を検証する。 */
   public void validateArguments(String tool, String input) {
     policy.validateArguments(tool, input);
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、引数を検証する。 */
   public void validateArguments(String tool, String input, AgentRunContext owner) {
     try {
       policy.validateArguments(tool, input);
@@ -63,13 +80,18 @@ public class ToolPermissionGuard {
     }
   }
 
-  /** A one-use approval is never a reusable grant for background read retries. */
+  /**
+   * ツール利用の権限制御において、automatically承認済み読み取りに該当するか判定する。
+   *
+   * <p>A one-use approval is never a reusable grant for background read retries.
+   */
   public boolean automaticallyApprovedRead(String tool) {
     return policy.evaluate(tool) == PermissionDecision.AUTO_APPROVE
         && policy.capabilities(tool).stream()
             .allMatch(c -> c == ActionCapability.READ || c == ActionCapability.NETWORK_READ);
   }
 
+  /** 後続の処理を進められるか、現在の条件を確認する。 */
   public void check(String tool, String input, AgentRunContext owner) {
     check(
         tool,
@@ -79,7 +101,9 @@ public class ToolPermissionGuard {
   }
 
   /**
-   * Recheck an already approved exact plan between its sequential sends; never consume another
+   * 後続の操作を進められるか判断するため、許可済み計画判断基準を確認する。
+   *
+   * <p>Recheck an already approved exact plan between its sequential sends; never consume another
    * grant.
    */
   public void checkAuthorizedPlanPolicy(String tool, String input, AgentRunContext owner) {
@@ -88,7 +112,11 @@ public class ToolPermissionGuard {
     policy.validateArguments(tool, input);
   }
 
-  /** Only the runner passes its captured parent; no model-supplied identity or wildcard grant. */
+  /**
+   * 後続の操作を進められるか判断するため、委譲済みを確認する。
+   *
+   * <p>Only the runner passes its captured parent; no model-supplied identity or wildcard grant.
+   */
   public void checkDelegated(
       String tool, String input, AgentRunContext child, AgentRunContext parent) {
     boolean matching =
@@ -109,6 +137,7 @@ public class ToolPermissionGuard {
     check(tool, input, child, matching ? parent : null);
   }
 
+  /** ツール利用の権限制御において、restrictedに該当するか判定する。 */
   private boolean restricted(String tool, String input, AgentRunContext owner) {
     boolean restricted =
         owner != null
@@ -125,6 +154,7 @@ public class ToolPermissionGuard {
     return restricted;
   }
 
+  /** 後続の処理を進められるか、現在の条件を確認する。 */
   private void check(
       String tool, String input, AgentRunContext owner, AgentRunContext approvalOwner) {
     var decision =

@@ -15,11 +15,18 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 状態表示状態の保存同時実行数の結果と状態の契約を検証するテスト。 */
 class DotPersistenceConcurrencyTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   DotRequestRepositoryTest.Time clock = new DotRequestRepositoryTest.Time();
+
+  /** 検証に使うリポジトリ。 */
   DotRequestRepository repo;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void start() throws Exception {
     try (var gate = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(root)) {
@@ -28,6 +35,7 @@ class DotPersistenceConcurrencyTest {
     repo = new DotRequestRepository(root, clock);
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   String create() {
     return (String)
         repo.create(
@@ -40,6 +48,7 @@ class DotPersistenceConcurrencyTest {
             .get("request_id");
   }
 
+  /** 利用者の状態表示で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void simultaneousClaimHasOneWinner() throws Exception {
     String id = create();
@@ -75,6 +84,7 @@ class DotPersistenceConcurrencyTest {
     }
   }
 
+  /** 利用者の状態表示の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelAndResultCannotAdoptCancelledWork() throws Exception {
     String id = create();
@@ -104,6 +114,7 @@ class DotPersistenceConcurrencyTest {
     }
   }
 
+  /** 利用者の状態表示で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void resultsExpireButSubmissionTombstoneSurvives() throws Exception {
     String id = create();

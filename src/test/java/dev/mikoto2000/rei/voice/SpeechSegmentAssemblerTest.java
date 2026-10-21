@@ -9,19 +9,24 @@ import java.time.ZoneOffset;
 import java.util.Arrays;
 import org.junit.jupiter.api.Test;
 
+/** 発話区間文脈の組み立ての結果と状態の契約を検証するテスト。 */
 class SpeechSegmentAssemblerTest {
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock = Clock.fixed(Instant.parse("2026-10-09T00:00:00Z"), ZoneOffset.UTC);
 
+  /** {@code frame} の条件を再現するための補助情報を返す。 */
   float[] frame(float amplitude) {
     var frame = new float[160];
     Arrays.fill(frame, amplitude);
     return frame;
   }
 
+  /** {@code assembler} の条件を再現するための補助情報を返す。 */
   SpeechSegmentAssembler assembler() {
     return new SpeechSegmentAssembler(new VoiceSettings(.5f, 300, 400, 1200, 25000, 200), clock);
   }
 
+  /** 音声による対話で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void silenceIsFinalizedOnceAfter1200msAndRetainsPrerollAnd200msTail() {
     var assembler = assembler();
@@ -39,6 +44,7 @@ class SpeechSegmentAssemblerTest {
     for (int i = 0; i < 200; i++) assertThat(assembler.accept(frame(0), 0).segment()).isNull();
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void shortNoiseNeverProducesASegment() {
     var assembler = assembler();
@@ -49,6 +55,7 @@ class SpeechSegmentAssemblerTest {
     assertThat(last.segment()).isNull();
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unfinished25SecondSpeechIsDroppedAndCannotSendItsContinuation() {
     var assembler = assembler();
@@ -63,6 +70,7 @@ class SpeechSegmentAssemblerTest {
     assertThat(last.reason()).isEqualTo(SpeechSegmentAssembler.Reason.COMPLETED);
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void briefPauseDoesNotEndOrCreateAnotherUtterance() {
     var assembler = assembler();
@@ -74,6 +82,7 @@ class SpeechSegmentAssemblerTest {
     assertThat(last.segment().samples()).hasSize((500 + 1000 + 500 + 200) * 16);
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void stopDiscardsUnfinishedAudioWithoutFlushingToAsr() {
     var assembler = assembler();
@@ -82,6 +91,7 @@ class SpeechSegmentAssemblerTest {
     for (int i = 0; i < 200; i++) assertThat(assembler.accept(frame(0), 0).segment()).isNull();
   }
 
+  /** 文脈の組み立てについて、不正な観測単位一覧を受け付けないことを確認する。 */
   @Test
   void assemblerRejectsInvalidFramesAndProbability() {
     var assembler = assembler();
@@ -93,6 +103,7 @@ class SpeechSegmentAssemblerTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void segmentsOwnTheirSamplesAndDistinctIds() {
     var first = assembler();

@@ -23,20 +23,37 @@ import org.slf4j.LoggerFactory;
  */
 public class WorkingSet {
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(WorkingSet.class);
+
+  /** 秘密情報ASSIGNMENT。 */
   private static final Pattern SECRET_ASSIGNMENT =
       Pattern.compile(
           "(?i)((?:api[_-]?key|access[_-]?token|token|password|secret)\\s*[:=]\\s*)(?:\\\"[^\\\"]*\\\"|'[^']*'|\\S+)");
 
+  /** 既定最大ファイル一覧。 */
   static final int DEFAULT_MAX_FILES = 50;
 
+  /** 最大ファイル一覧。 */
   private final int maxFiles;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** 実行状況を共有する通知先。 */
   private final AgentEventBus eventBus;
+
+  /** ファイル一覧。 */
   private final Map<String, FileReference> files =
       java.util.Collections.synchronizedMap(new LinkedHashMap<>());
+
+  /** 保存パス。 */
   private Path storagePath;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final com.fasterxml.jackson.databind.ObjectMapper mapper =
       new com.fasterxml.jackson.databind.ObjectMapper()
           .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule())
@@ -45,6 +62,7 @@ public class WorkingSet {
               com.fasterxml.jackson.databind.DeserializationFeature
                   .ADJUST_DATES_TO_CONTEXT_TIME_ZONE);
 
+  /** 作業中の情報管理に関する有効化Persistenceを処理する。 */
   public void enablePersistence(Path path) {
     this.storagePath = path;
     if (java.nio.file.Files.exists(path)) {
@@ -58,6 +76,7 @@ public class WorkingSet {
     }
   }
 
+  /** 後の処理へ引き継げるよう、作業中集合を永続化する。 */
   private synchronized void persist() {
     if (storagePath == null) return;
     try {
@@ -79,16 +98,20 @@ public class WorkingSet {
     }
   }
 
+  /** 活動中検索識別子。 */
   private final ThreadLocal<String> activeSearchId = new ThreadLocal<>();
 
+  /** 作業中の情報管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WorkingSet() {
     this(DEFAULT_MAX_FILES, Clock.systemDefaultZone());
   }
 
+  /** 作業中の情報管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WorkingSet(int maxFiles, Clock clock) {
     this(maxFiles, clock, null, null);
   }
 
+  /** 指定された値や利用先を使って、WorkingSetを初期化する。 */
   public WorkingSet(int maxFiles, Clock clock, AgentEventFactory events, AgentEventBus eventBus) {
     this.maxFiles = Math.max(1, maxFiles);
     this.clock = clock;
@@ -158,6 +181,7 @@ public class WorkingSet {
     return maxFiles;
   }
 
+  /** 新たな対象を管理できるよう、または最終利用日時の更新を追加する。 */
   private void addOrTouch(String normalized, FileReference reference) {
     FileReference existing = files.get(normalized);
     if (existing != null) {
@@ -177,6 +201,7 @@ public class WorkingSet {
     persist();
   }
 
+  /** 作業中の情報管理に関する保持対象からの除外条件付きNeededを処理する。 */
   private void evictIfNeeded() {
     while (files.size() > maxFiles) {
       String oldest =
@@ -192,10 +217,12 @@ public class WorkingSet {
     }
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、表記や形式をそろえる。 */
   private String normalize(Path path) {
     return path.toAbsolutePath().normalize().toString();
   }
 
+  /** 作業中の情報管理で用いる現在日時を返す。 */
   private OffsetDateTime now() {
     return OffsetDateTime.now(clock);
   }
@@ -233,6 +260,7 @@ public class WorkingSet {
     }
   }
 
+  /** 指定された対象を管理から取り除く。 */
   private void remove(String normalized, String reason) {
     FileReference removed = files.remove(normalized);
     persist();
@@ -245,6 +273,7 @@ public class WorkingSet {
     }
   }
 
+  /** 実行状況を利用先で把握できるよう、追加済みを通知する。 */
   private void publishAdded(FileReference reference) {
     if (events != null && eventBus != null) {
       eventBus.publish(
@@ -258,7 +287,11 @@ public class WorkingSet {
     }
   }
 
-  /** Begins the observable lifecycle around the existing search-and-select path. */
+  /**
+   * 作業中の情報管理で用いる開始検索を返す。
+   *
+   * <p>Begins the observable lifecycle around the existing search-and-select path.
+   */
   public SearchObservation beginSearch(String query, String strategy) {
     String searchId = "ws-search-" + UUID.randomUUID();
     SearchObservation observation =
@@ -271,7 +304,11 @@ public class WorkingSet {
     return observation;
   }
 
-  /** Completes a search using aggregate values already produced by the search algorithm. */
+  /**
+   * 実行結果を後続の処理へ引き渡すため、検索を完了させる。
+   *
+   * <p>Completes a search using aggregate values already produced by the search algorithm.
+   */
   public void completeSearch(
       SearchObservation observation,
       int hitCount,
@@ -294,11 +331,16 @@ public class WorkingSet {
     activeSearchId.remove();
   }
 
-  /** Clears correlation state if the underlying search aborts before producing metrics. */
+  /**
+   * 作業中の情報管理に関するabandon検索を処理する。
+   *
+   * <p>Clears correlation state if the underlying search aborts before producing metrics.
+   */
   public void abandonSearch(SearchObservation observation) {
     activeSearchId.remove();
   }
 
+  /** 利用先の上限を超えない量へ、指定された内容を調整する。 */
   private String bounded(String value, int maxLength) {
     if (value == null) return "";
     String redacted = SECRET_ASSIGNMENT.matcher(value).replaceAll("$1[REDACTED]");
@@ -306,5 +348,12 @@ public class WorkingSet {
     return safe.length() <= maxLength ? safe : safe.substring(0, maxLength - 1) + "…";
   }
 
+  /**
+   * 作業中の情報管理で受け渡す検索観測内容を表す。
+   *
+   * @param searchId 検索識別子
+   * @param startedAtNanos 開始日時ナノ秒数
+   * @param workingSetSizeBefore 作業中集合大きさ変更前
+   */
   public record SearchObservation(String searchId, long startedAtNanos, int workingSetSizeBefore) {}
 }

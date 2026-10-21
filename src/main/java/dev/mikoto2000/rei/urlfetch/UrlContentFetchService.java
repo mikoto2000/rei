@@ -17,24 +17,41 @@ import org.jsoup.nodes.Element;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
+/** URL内容取得のユースケースを実現する。 */
 @Service
 public class UrlContentFetchService {
 
+  /** 既定タイムアウトの秒数。 */
   private static final int DEFAULT_TIMEOUT_SECONDS = 30;
+
+  /** 文字コード調査バイト数。 */
   private static final int CHARSET_SCAN_BYTES = 4096;
+
+  /** 内容の種類文字コード。 */
   private static final Pattern CONTENT_TYPE_CHARSET =
       Pattern.compile("(?i)(?:^|;)\\s*charset\\s*=\\s*\"?([^;\\s\"]+)");
 
+  /** URL検証の窓口。 */
   private final UrlValidator urlValidator;
+
+  /** 外部情報を取得するHTTP通信の窓口。 */
   private final HttpClient httpClient;
+
+  /** 安全性情報の取得元。 */
   private final dev.mikoto2000.rei.http.SafeHttpFetcher safeFetcher;
+
+  /** この機能の動作設定。 */
   private final UrlFetchProperties properties;
+
+  /** キャッシュ。 */
   private final dev.mikoto2000.rei.http.cache.HttpResponseCache cache;
 
+  /** URLの内容の参照を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public UrlContentFetchService(UrlValidator urlValidator) {
     this(urlValidator, new UrlFetchProperties(), new dev.mikoto2000.rei.http.SafeHttpFetcher());
   }
 
+  /** URLの内容の参照を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public UrlContentFetchService(
       UrlValidator validator,
       UrlFetchProperties properties,
@@ -43,6 +60,7 @@ public class UrlContentFetchService {
         validator, properties, fetcher, dev.mikoto2000.rei.http.cache.HttpResponseCache.disabled());
   }
 
+  /** 指定された値や利用先を使って、UrlContentFetchServiceを初期化する。 */
   @Autowired
   public UrlContentFetchService(
       UrlValidator validator,
@@ -56,6 +74,7 @@ public class UrlContentFetchService {
     this.cache = cache;
   }
 
+  /** 指定された値や利用先を使って、UrlContentFetchServiceを初期化する。 */
   UrlContentFetchService(UrlValidator urlValidator, HttpClient httpClient) {
     this.urlValidator = urlValidator;
     this.httpClient = httpClient;
@@ -64,10 +83,12 @@ public class UrlContentFetchService {
     this.cache = dev.mikoto2000.rei.http.cache.HttpResponseCache.disabled();
   }
 
+  /** 後続の処理に必要な情報を、取得先から読み込む。 */
   public UrlContentFetchResult fetch(String url) {
     return fetch(url, properties.fetchPolicy());
   }
 
+  /** 後続の処理に必要な情報を、取得先から読み込む。 */
   public UrlContentFetchResult fetch(String url, dev.mikoto2000.rei.http.HttpFetchPolicy policy) {
     long started = System.nanoTime();
     try {
@@ -81,6 +102,7 @@ public class UrlContentFetchService {
     }
   }
 
+  /** 外部の情報を利用できるよう、観測を取得する。 */
   private UrlContentFetchResult fetchObserved(
       String url, dev.mikoto2000.rei.http.HttpFetchPolicy policy) {
     UrlContentFetchResult validation = urlValidator.validate(url);
@@ -151,6 +173,7 @@ public class UrlContentFetchService {
       return UrlContentFetchResult.failure("NETWORK_ERROR", "Network error");
     } catch (InterruptedException e) {
       dev.mikoto2000.rei.websearch.WebSearchMetrics.OBSERVED.add("cancellations", 1);
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw new java.util.concurrent.CancellationException();
     } catch (RuntimeException e) {
@@ -161,6 +184,7 @@ public class UrlContentFetchService {
     }
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、内容の種類の表記をそろえる。 */
   private String normalizeContentType(String rawContentType) {
     if (rawContentType == null || rawContentType.isBlank()) {
       return null;
@@ -168,12 +192,14 @@ public class UrlContentFetchService {
     return rawContentType.split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
   }
 
+  /** URLの内容の参照で用いる文字コードを返す。 */
   private Charset charset(String rawContentType, byte[] body) {
     return charsetFromContentType(rawContentType)
         .or(() -> charsetFromHtml(body))
         .orElse(StandardCharsets.UTF_8);
   }
 
+  /** URLの内容の参照で用いる文字コード起点内容の種類を返す。 */
   private Optional<Charset> charsetFromContentType(String rawContentType) {
     if (rawContentType == null || rawContentType.isBlank()) {
       return Optional.empty();
@@ -185,6 +211,7 @@ public class UrlContentFetchService {
     return charsetByName(matcher.group(1));
   }
 
+  /** URLの内容の参照で用いる文字コード起点HTMLを返す。 */
   private Optional<Charset> charsetFromHtml(byte[] body) {
     if (body == null || body.length == 0) {
       return Optional.empty();
@@ -204,6 +231,7 @@ public class UrlContentFetchService {
     return Optional.empty();
   }
 
+  /** URLの内容の参照で用いる文字コード別名前を返す。 */
   private Optional<Charset> charsetByName(String name) {
     if (name == null || name.isBlank()) {
       return Optional.empty();

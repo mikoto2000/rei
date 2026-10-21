@@ -10,8 +10,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.tool.annotation.Tool;
 
+/** フィードツール一覧の結果と状態の契約を検証するテスト。 */
 class FeedToolsTest {
 
+  /** フィードの購読と収集で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void feedToolsDelegateToServices() {
     FeedService feedService = Mockito.mock(FeedService.class);
@@ -50,6 +52,7 @@ class FeedToolsTest {
     verify(feedService).delete(1L);
   }
 
+  /** フィードの購読と収集で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rejectedFeedUrlIsNotPrintedByTool() {
     FeedService feeds = Mockito.mock(FeedService.class);
@@ -68,6 +71,7 @@ class FeedToolsTest {
     assertTrue(!output.toString().contains("must-not-print"));
   }
 
+  /** フィードの購読と収集で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void summaryToolDescriptionsExplainArticleFetchAndFallback() throws Exception {
     Tool item =

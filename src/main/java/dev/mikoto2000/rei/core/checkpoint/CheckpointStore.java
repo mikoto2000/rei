@@ -13,19 +13,29 @@ import java.util.Optional;
  */
 public class CheckpointStore {
 
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** 実行状況の通知先。 */
   private final AgentEventPublisher eventPublisher;
+
+  /** 最新。 */
   private TurnCheckpoint latest;
 
+  /** 実行状態の引き継ぎを利用するため、指定を補って共通の初期化へ引き渡す。 */
   public CheckpointStore() {
     this(Clock.systemDefaultZone());
   }
 
+  /** 実行状態の引き継ぎを利用するため、指定を補って共通の初期化へ引き渡す。 */
   public CheckpointStore(Clock clock) {
     this(clock, null, null);
   }
 
+  /** 指定された値や利用先を使って、CheckpointStoreを初期化する。 */
   public CheckpointStore(
       Clock clock, AgentEventFactory events, AgentEventPublisher eventPublisher) {
     this.clock = clock;
@@ -62,6 +72,7 @@ public class CheckpointStore {
     return latest.renderForPrompt();
   }
 
+  /** 実行状態の引き継ぎで用いる現在日時を返す。 */
   private OffsetDateTime now() {
     return OffsetDateTime.now(clock);
   }

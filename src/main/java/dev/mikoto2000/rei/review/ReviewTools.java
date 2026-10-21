@@ -24,8 +24,22 @@ import java.util.List;
 import java.util.Map;
 import org.springframework.ai.tool.annotation.Tool;
 
-/** Explicit review protocol. Reading never means delivery, and delivery never means reviewed. */
+/**
+ * レビューをモデルから呼び出せるツールとして提供する。
+ *
+ * <p>Explicit review protocol. Reading never means delivery, and delivery never means reviewed.
+ */
 public final class ReviewTools {
+  /**
+   * 変更内容のレビューで受け渡すページを表す。
+   *
+   * @param reviewJobId レビュー実行する作業識別子
+   * @param range 対象範囲
+   * @param offset 開始位置
+   * @param nextOffset 次開始位置
+   * @param truncated 省略の有無
+   * @param content 内容
+   */
   public record Page(
       String reviewJobId,
       Range range,
@@ -34,18 +48,34 @@ public final class ReviewTools {
       boolean truncated,
       String content) {}
 
+  /**
+   * 変更内容のレビューで受け渡す受付記録を表す。
+   *
+   * @param job 実行する作業
+   * @param range 対象範囲
+   * @param serializedHash serializedハッシュ値
+   */
   public record Receipt(String job, Range range, String serializedHash) {}
 
+  /** 記録台帳。 */
   private final ReviewCoverageLedger ledger;
+
+  /** 元の。 */
   private final RawToolResultStore raw;
+
+  /** ファイル一覧。 */
   private final java.util.function.Supplier<Tools> files;
+
+  /** 概算。 */
   private final TokenEstimator estimator;
 
+  /** 変更内容のレビューを利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ReviewTools(
       ReviewCoverageLedger ledger, RawToolResultStore raw, Tools files, TokenEstimator estimator) {
     this(ledger, raw, () -> files, estimator);
   }
 
+  /** 指定された値や利用先を使って、ReviewToolsを初期化する。 */
   public ReviewTools(
       ReviewCoverageLedger ledger,
       RawToolResultStore raw,
@@ -57,12 +87,14 @@ public final class ReviewTools {
     this.estimator = estimator;
   }
 
+  /** 変更内容のレビューで用いる対象範囲を返す。 */
   public static Scope scope(AgentRunContext owner) {
     if (owner == null || owner.projectId() == null)
       throw new IllegalStateException("A Project run is required");
     return new Scope(owner.projectId(), owner.conversationId(), owner.runId());
   }
 
+  /** 変更内容のレビューで用いる開始レビューを返す。 */
   @Tool(
       description =
           "Begin a coverage-verified review of explicit Project text/PDF files. Criteria and criteriaVersion are required. Read pages with readReviewFile, then submit one structured result for each delivered range. Reading alone never completes a review.")
@@ -70,6 +102,7 @@ public final class ReviewTools {
       throws java.io.IOException {
     var owner = AgentRunScope.current();
     var scope = scope(owner);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (paths == null || paths.isEmpty() || paths.size() > 64)
       throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
     var targets = new ArrayList<Target>();
@@ -90,6 +123,7 @@ public final class ReviewTools {
     return ledger.create(scope, criteria, criteriaVersion, targets);
   }
 
+  /** 変更内容のレビューで用いる再開レビューを返す。 */
   @Tool(
       description =
           "Rebuild a STALE_VERSION review job from the current versions of its original files. Preserves historical findings, marks old-version ranges stale and starts the changed files again; never reuses old-version reviews.")
@@ -110,6 +144,7 @@ public final class ReviewTools {
     return ledger.rebuild(reviewJobId, scope, targets);
   }
 
+  /** 必要な内容を参照できるよう、レビューファイルを読み取る。 */
   @ResultDelivery(ResultDelivery.Kind.FILE_CONTENT)
   @Tool(
       description =
@@ -160,6 +195,7 @@ public final class ReviewTools {
     return page;
   }
 
+  /** 依頼を実行経路へ渡すため、レビュー結果を受け付ける。 */
   @Tool(
       description =
           "Submit a structured review for exactly one delivered range returned by readReviewFile. Provide assessment even if there are no findings. Findings must cite exact source evidence inside the range. Undelivered, changed-version, malformed or invented ranges are rejected.")
@@ -203,6 +239,7 @@ public final class ReviewTools {
     return ledger.reviewed(reviewJobId, scope, range, assessment, findings);
   }
 
+  /** 変更内容のレビューで用いるレビュー状態を返す。 */
   @Tool(
       description =
           "Inspect persisted review coverage and findings. Revalidates each current source version. COMPLETE only means verified range coverage; semantic review quality requires human judgment. Unreviewed/stale/failed ranges remain visible.")
@@ -223,7 +260,11 @@ public final class ReviewTools {
     return job;
   }
 
-  /** Called only after a model request containing these exact pages has successfully completed. */
+  /**
+   * 変更内容のレビューに関する確認済みを処理する。
+   *
+   * <p>Called only after a model request containing these exact pages has successfully completed.
+   */
   public void confirmed(AgentRunContext owner, List<Page> pages) {
     var grouped = new LinkedHashMap<String, List<Range>>();
     for (var page : pages) {
@@ -234,6 +275,7 @@ public final class ReviewTools {
     grouped.forEach((job, ranges) -> ledger.delivered(job, scope(owner), ranges));
   }
 
+  /** 受信した内容を利用できるよう、ページを復元する。 */
   private static Page decodePage(String result) throws java.io.IOException {
     var tree = StorageDatabase.JSON.readTree(result);
     if (tree.has("output")) {
@@ -252,6 +294,7 @@ public final class ReviewTools {
     return page;
   }
 
+  /** 変更内容のレビューで用いる受付記録を返す。 */
   public static Receipt receipt(String result) {
     try {
       var page = decodePage(result);
@@ -261,6 +304,17 @@ public final class ReviewTools {
     }
   }
 
+  /**
+   * 変更内容のレビューで受け渡す待機中を表す。
+   *
+   * @param path パス
+   * @param version 形式のバージョン
+   * @param start 開始
+   * @param end 終了
+   * @param startLine 開始行
+   * @param startOffset 開始開始位置
+   * @param state 状態
+   */
   public record Pending(
       String path,
       String version,
@@ -270,6 +324,7 @@ public final class ReviewTools {
       int startOffset,
       String state) {}
 
+  /** 変更内容のレビューで用いるレビュー待機中を返す。 */
   @Tool(
       description =
           "Return missing review spans with exact source version and next character offset. Stale, undelivered and unreviewed spans remain pending. Use reviewStatus for preserved findings and restartReview for changed sources.")
@@ -304,6 +359,7 @@ public final class ReviewTools {
     return List.copyOf(pending);
   }
 
+  /** 後続の処理で判断できるよう、未完了の対象を返す。 */
   private Pending pending(Target target, int start, int end, String state)
       throws java.io.IOException {
     int[] position = {1, 0};
@@ -317,6 +373,7 @@ public final class ReviewTools {
         target.path(), target.version(), start, end, position[0], position[1], state);
   }
 
+  /** 変更内容のレビューに関する確認済みプロンプトを処理する。 */
   public void confirmedPrompt(
       org.springframework.ai.chat.prompt.Prompt prompt, AgentRunContext owner) {
     var pages = new ArrayList<Page>();
@@ -336,6 +393,7 @@ public final class ReviewTools {
     if (!pages.isEmpty()) confirmed(owner, pages);
   }
 
+  /** 変更内容のレビューで用いるページを返す。 */
   private Page page(String job, Target target, String source, int start, int end) {
     int[] from = position(source, start), to = position(source, end);
     String body = source.substring(start, end);
@@ -352,6 +410,7 @@ public final class ReviewTools {
         body);
   }
 
+  /** 利用量や必要量を判断するため、レビューツール一覧を概算する。 */
   private int estimate(Page page) {
     try {
       String wire = StorageDatabase.JSON.writeValueAsString(page);
@@ -378,6 +437,7 @@ public final class ReviewTools {
     }
   }
 
+  /** 変更内容のレビューにおいて、境界に該当するか判定する。 */
   private static boolean boundary(String source, int offset) {
     return offset >= 0
         && offset <= source.length()
@@ -387,6 +447,7 @@ public final class ReviewTools {
             || !Character.isLowSurrogate(source.charAt(offset)));
   }
 
+  /** 変更内容のレビューで用いる位置を返す。 */
   private static int[] position(String source, int offset) {
     int line = 1, beginning = 0;
     for (int i = 0; i < offset; i++)
@@ -397,6 +458,7 @@ public final class ReviewTools {
     return new int[] {line, offset - beginning};
   }
 
+  /** 条件を満たさない操作を拒否するため、完了の前提条件を確認する。 */
   public void requireComplete(AgentRunContext owner) {
     for (var id : ledger.jobs(scope(owner)))
       try {
@@ -409,6 +471,7 @@ public final class ReviewTools {
       }
   }
 
+  /** 終了時の状態を確定するため、実行を完了させる。 */
   public void finishRun(
       AgentRunContext owner, boolean cancelled, boolean failed, AgentRunContext parent) {
     if (owner == null || owner.projectId() == null) return;
@@ -425,6 +488,7 @@ public final class ReviewTools {
     raw.clearRun(owner.runId());
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   public static String hash(String content) {
     try {
       return HexFormat.of()

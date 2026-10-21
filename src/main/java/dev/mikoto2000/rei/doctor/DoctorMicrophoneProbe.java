@@ -15,39 +15,61 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.springframework.stereotype.Component;
 
-/** One bounded outstanding acquisition; timeout never starts another blocked native driver. */
+/**
+ * 実行環境の診断に必要な環境診断マイク利用可否の確認を扱う。
+ *
+ * <p>One bounded outstanding acquisition; timeout never starts another blocked native driver.
+ */
 @Component
 public class DoctorMicrophoneProbe implements AutoCloseable {
+  /** 実行環境の診断における結果の選択肢。 */
   public enum Result {
+    /** 利用可能。 */
     AVAILABLE,
+    /** 否定設定済み。 */
     NOT_CONFIGURED,
+    /** 利用不可。 */
     UNAVAILABLE,
+    /** タイムアウト。 */
     TIMEOUT,
+    /** 使用中。 */
     BUSY
   }
 
+  /** 実行環境の診断に必要な情報の取得を扱う。 */
   @FunctionalInterface
   public interface Acquisition {
+    /** 実行環境の診断に関する確保を処理する。 */
     void acquire(AudioDevice device) throws Exception;
   }
 
+  /** 利用可能な音声機器を管理する窓口。 */
   private final AudioDeviceService devices;
+
+  /** 情報の取得。 */
   private final Acquisition acquisition;
+
+  /** 利用可能。 */
   private final Semaphore available = new Semaphore(1);
+
+  /** 実行の担当。 */
   private final ExecutorService worker =
       Executors.newSingleThreadExecutor(
           Thread.ofPlatform().daemon().name("doctor-microphone").factory());
 
+  /** 実行環境の診断を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @org.springframework.beans.factory.annotation.Autowired
   public DoctorMicrophoneProbe(AudioDeviceService devices) {
     this(devices, new JavaSoundMicrophoneCapture()::acquireWithoutRecording);
   }
 
+  /** 指定された値や利用先を使って、DoctorMicrophoneProbeを初期化する。 */
   public DoctorMicrophoneProbe(AudioDeviceService devices, Acquisition acquisition) {
     this.devices = devices;
     this.acquisition = acquisition;
   }
 
+  /** 後続の処理を進められるか、現在の条件を確認する。 */
   public Result check(String deviceId, Duration timeout, Runnable checkActive) {
     checkActive.run();
     if (timeout == null
@@ -61,6 +83,7 @@ public class DoctorMicrophoneProbe implements AutoCloseable {
     var stop = new AtomicBoolean();
     Runnable release =
         () -> {
+          // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
           if (released.compareAndSet(false, true)) available.release();
         };
     Future<Result> pending;
@@ -103,6 +126,7 @@ public class DoctorMicrophoneProbe implements AutoCloseable {
         }
       }
     } catch (InterruptedException interrupted) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw new CancellationException("Microphone diagnosis cancelled");
     } catch (ExecutionException unavailable) {
@@ -114,6 +138,7 @@ public class DoctorMicrophoneProbe implements AutoCloseable {
     }
   }
 
+  /** 実行環境の診断で利用した資源や登録を解放し、利用を終了する。 */
   @Override
   @jakarta.annotation.PreDestroy
   public void close() {

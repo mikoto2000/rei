@@ -19,10 +19,13 @@ import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+/** 記憶最初保存の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class MemoryFirstStorageTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 作業状況の把握で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void recordSessionSummaryAndRetentionWorkWithOptionalEvidence(boolean keep) throws Exception {
@@ -89,6 +92,7 @@ class MemoryFirstStorageTest {
     assertTrue(timeline.summary("today").contains("X・YouTube"));
   }
 
+  /** 同一保持期間を利用することを確認する。 */
   @Test
   void failedExtractionEvidenceUsesTheSameRetention() throws Exception {
     var p = new ActivityProperties();
@@ -119,6 +123,7 @@ class MemoryFirstStorageTest {
     try (var files = Files.list(directory.resolve("screenshots"))) {
       assertEquals(0, files.count());
     }
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(store);
   }
 }

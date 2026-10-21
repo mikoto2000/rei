@@ -9,7 +9,9 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** デスクトップ文脈評価の結果と状態の契約を検証するテスト。 */
 class DesktopContextEvaluationTest {
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void comparesSameObservationsWithoutAddingBackgroundTimeOrClaimingAccuracy() {
     var a = TemporalActivityInferenceTest.record("a", TemporalActivityInferenceTest.AT, "テスト修正");
@@ -26,6 +28,7 @@ class DesktopContextEvaluationTest {
     assertTrue(report.rows().getLast().temporalInference().contains("可能性"));
   }
 
+  /** 作業状況の把握で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @org.junit.jupiter.api.TestFactory
   java.util.stream.Stream<org.junit.jupiter.api.DynamicTest> replayEightFixedScenarios()
       throws Exception {
@@ -173,6 +176,7 @@ class DesktopContextEvaluationTest {
     return tests.stream();
   }
 
+  /** OS対象範囲を維持することを確認する。 */
   @Test
   void syntheticSteadyWorkKeepsOsCoverageAndBoundsDesktopCalls() throws Exception {
     var f = new DesktopContextQueueTest.Fixture();
@@ -198,11 +202,13 @@ class DesktopContextEvaluationTest {
         "Desktop synthetic comparison: observations=21 foreground_calls=2 desktop_calls=2 total_calls=4 max_parallel=1 pending_slots=2 screenshot_writes=0");
   }
 
+  /** 検証用に、要求された条件を満たすか判断するため、対象範囲を確認する。 */
   private static void verifyCoverage(DesktopContextQueueTest.Fixture f) throws Exception {
     org.mockito.Mockito.verify(f.store, org.mockito.Mockito.times(21))
         .append(org.mockito.ArgumentMatchers.any());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void reusedHistoryIsNotCountedAsAnotherVisionCall() {
     var a = TemporalActivityInferenceTest.record("a", TemporalActivityInferenceTest.AT, "code");

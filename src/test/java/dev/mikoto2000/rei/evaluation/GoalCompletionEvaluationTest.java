@@ -9,9 +9,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 目標完了評価の結果と状態の契約を検証するテスト。 */
 class GoalCompletionEvaluationTest {
+  /** 検証に使う評価の判断。 */
   GoalCompletionEvaluation evaluator = new GoalCompletionEvaluation();
 
+  /** {@code observation} の条件を再現するための補助情報を返す。 */
   GoalCompletionEvaluation.Observation observation(
       boolean claim, boolean exited, int repairs, int successes) {
     return new GoalCompletionEvaluation.Observation(
@@ -28,6 +31,7 @@ class GoalCompletionEvaluationTest {
         GoalCompletionEvaluation.Measurement.unavailable("No model provider in offline fixture"));
   }
 
+  /** 成果の評価で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void completionClaimWithoutIndependentEvidenceIsFalseCompletion() {
     var result =
@@ -42,6 +46,7 @@ class GoalCompletionEvaluationTest {
     assertEquals(List.of("file"), result.unmet());
   }
 
+  /** 成果の評価で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void optionalFailureDoesNotBlockVerifiedCompletionAndRepairUsesAttemptDenominator() {
     var result =
@@ -60,6 +65,7 @@ class GoalCompletionEvaluationTest {
     assertFalse(report.tokens().reason().isBlank());
   }
 
+  /** 成果の評価で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void waitingDoesNotCountAsEndedWithUnmetAndNoRepairRateIsUnavailable() {
     var result =
@@ -72,6 +78,7 @@ class GoalCompletionEvaluationTest {
     assertNull(evaluator.aggregate(List.of(result)).repairSuccessRate().value());
   }
 
+  /** 成果の評価で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void satisfiedChecksDoNotCompleteAnUnfinishedRun() {
     var result =
@@ -82,6 +89,7 @@ class GoalCompletionEvaluationTest {
     assertFalse(result.verifiedCompletion());
   }
 
+  /** 成果の評価で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void invalidOrEmptyEvidenceAndDuplicateCasesAreRejected() {
     assertThrows(
@@ -99,6 +107,7 @@ class GoalCompletionEvaluationTest {
         IllegalArgumentException.class, () -> GoalCompletionEvaluation.Measurement.known(-1));
   }
 
+  /** 成果の評価で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unavailableMeasurementsAreNotSilentlySummedAsZero() {
     var result =

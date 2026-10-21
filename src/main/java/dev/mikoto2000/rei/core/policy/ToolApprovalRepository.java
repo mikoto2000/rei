@@ -15,17 +15,22 @@ import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
 
 /**
- * Exact, expiring grants. Atomic SQL consumption happens before the side effect, never after it.
+ * ツール承認を保存・検索するための窓口。
+ *
+ * <p>Exact, expiring grants. Atomic SQL consumption happens before the side effect, never after it.
  */
 @Repository
 public class ToolApprovalRepository {
+  /** 時間計測。 */
   private dev.mikoto2000.rei.timing.TimingRecorder timing;
 
+  /** ツール利用の権限制御で使用する時間計測を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setTiming(dev.mikoto2000.rei.timing.TimingRecorder timing) {
     this.timing = timing;
   }
 
+  /** 状況を判断する根拠を得るため、ツール承認保存と検索の窓口を観測する。 */
   private void observe(Request request, boolean begin, boolean approved) {
     try {
       if (timing == null || !timing.enabled()) return;
@@ -49,6 +54,18 @@ public class ToolApprovalRepository {
     }
   }
 
+  /**
+   * ツール利用の権限制御で受け渡す要求を表す。
+   *
+   * @param id 識別子
+   * @param projectId 所属プロジェクトの識別子
+   * @param sessionId 会話の識別子
+   * @param runId 実行の識別子
+   * @param tool ツール
+   * @param argumentsPreview 引数事前確認
+   * @param status 状態
+   * @param expiresAt 有効期限
+   */
   public record Request(
       String id,
       String projectId,
@@ -59,9 +76,13 @@ public class ToolApprovalRepository {
       String status,
       Instant expiresAt) {}
 
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** 指定された値や利用先を使って、ToolApprovalRepositoryを初期化する。 */
   public ToolApprovalRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, Clock clock) {
     this.db = JdbcClient.create(source);
@@ -74,6 +95,7 @@ public class ToolApprovalRepository {
         .update();
   }
 
+  /** 行。 */
   private static final org.springframework.jdbc.core.RowMapper<Request> ROW =
       (rs, n) ->
           new Request(
@@ -86,10 +108,12 @@ public class ToolApprovalRepository {
               rs.getString("status"),
               Instant.ofEpochMilli(rs.getLong("expires")));
 
+  /** ツール利用の権限制御で用いる要求を返す。 */
   public Request request(String tool, String input, AgentRunContext owner) {
     validate(owner);
     Objects.requireNonNull(tool);
     Objects.requireNonNull(input);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (input.length() > 16384)
       throw new IllegalArgumentException(
           "Approval arguments exceed 16384 characters; split the action before requesting approval");
@@ -117,6 +141,7 @@ public class ToolApprovalRepository {
     return request;
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<Request> list(String project) {
     return db.sql(
             "SELECT * FROM tool_approvals WHERE project=? AND status IN ('PENDING','APPROVED') AND expires>? ORDER BY expires,id LIMIT 256")
@@ -125,6 +150,7 @@ public class ToolApprovalRepository {
         .list();
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Request get(String project, String id) {
     return db.sql("SELECT * FROM tool_approvals WHERE project=? AND id=?")
         .params(project, id)
@@ -134,7 +160,11 @@ public class ToolApprovalRepository {
             () -> new IllegalArgumentException("Approval request not found in this project"));
   }
 
-  /** Only human-facing Shell/HTTP entry points call this method; it is not a model Tool. */
+  /**
+   * ツール利用の権限制御で用いる判断を返す。
+   *
+   * <p>Only human-facing Shell/HTTP entry points call this method; it is not a model Tool.
+   */
   public Request decide(String project, String id, boolean approved) {
     get(project, id);
     int changed =
@@ -148,6 +178,7 @@ public class ToolApprovalRepository {
     return request;
   }
 
+  /** ツール利用の権限制御において、consumeに該当するか判定する。 */
   public boolean consume(String tool, String input, AgentRunContext owner) {
     validate(owner);
     // One SQL writer operation serializes concurrent clients and processes. Never reuse on callback
@@ -165,7 +196,9 @@ public class ToolApprovalRepository {
   }
 
   /**
-   * A completed/uncertain continuation must not leave a reusable grant after a policy became
+   * ツール利用の権限制御に関するretire継続入力許可を処理する。
+   *
+   * <p>A completed/uncertain continuation must not leave a reusable grant after a policy became
    * automatic.
    */
   public void retireContinuationGrant(String project, String id) {
@@ -175,6 +208,7 @@ public class ToolApprovalRepository {
         .update();
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   private static void validate(AgentRunContext owner) {
     if (owner == null
         || owner.projectId() == null
@@ -183,6 +217,7 @@ public class ToolApprovalRepository {
       throw new IllegalArgumentException("Approval requires an owning project and session");
   }
 
+  /** ツール利用の権限制御で用いる内容の照合値を返す。 */
   private static String digest(String input) {
     try {
       return HexFormat.of()
@@ -194,6 +229,7 @@ public class ToolApprovalRepository {
     }
   }
 
+  /** ツール利用の権限制御で用いる操作内容の照合値を返す。 */
   private static String actionDigest(String input, AgentRunContext owner) {
     return digest(owner.projectRoot() + "\u0000" + input);
   }

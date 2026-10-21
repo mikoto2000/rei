@@ -5,8 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 
 import org.junit.jupiter.api.Test;
 
+/** Webページ内容情報の抽出の結果と状態の契約を検証するテスト。 */
 class WebPageContentExtractorTest {
 
+  /** 情報の要約で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void extractsArticleTextWithoutChromeContent() {
     WebPageContentExtractor extractor = new JsoupWebPageContentExtractor();

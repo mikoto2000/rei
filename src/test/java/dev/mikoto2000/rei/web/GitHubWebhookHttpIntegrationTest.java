@@ -33,30 +33,39 @@ import org.springframework.context.annotation.Import;
 import org.springframework.context.annotation.Primary;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** Git連携先Webhook通知HTTP通信外部連携の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class GitHubWebhookHttpIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う秘密情報。 */
   static final String SECRET = "fixture-webhook-secret-at-least-32-characters";
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import({WebApiIntegrationTest.Config.class, GitHubWebhookConfiguration.class})
   static class Config {
+    /** {@code data} の条件を再現するための補助情報を返す。 */
     @Bean("memoryConsolidationDataSource")
     javax.sql.DataSource data(
         @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
       return new DriverManagerDataSource("jdbc:sqlite:" + Path.of(directory).resolve("state.db"));
     }
 
+    /** {@code scheduler} の条件を再現するための補助情報を返す。 */
     @Bean
     PersistentAgentScheduler scheduler(javax.sql.DataSource source, Clock clock) {
       return new PersistentAgentScheduler(source, clock);
     }
 
+    /** {@code inbox} の条件を再現するための補助情報を返す。 */
     @Bean
     AttentionRepository inbox(javax.sql.DataSource source, Clock clock) {
       return new AttentionRepository(source, clock);
     }
 
+    /** {@code githubFixturePublisher} の条件を再現するための補助情報を返す。 */
     @Bean
     @Primary
     dev.mikoto2000.rei.event.AgentEventPublisher githubFixturePublisher(
@@ -65,6 +74,7 @@ class GitHubWebhookHttpIntegrationTest {
     }
   }
 
+  /** Web APIによる操作で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void hmacIsTheOnlyPublicPostAndOwnerScopedReceiptsSurviveRestartWithoutRepeatingNotification()
       throws Exception {
@@ -147,12 +157,14 @@ class GitHubWebhookHttpIntegrationTest {
     }
   }
 
+  /** {@code application} の条件を再現するための補助情報を返す。 */
   private SpringApplication application() {
     var app = new SpringApplication(Config.class);
     WebApplication.configure(app, "integration-key");
     return app;
   }
 
+  /** {@code args} の条件を再現するための補助情報を返す。 */
   private String[] args(boolean enabled, String project, String session) {
     return new String[] {
       "--rei.web.port=0",
@@ -169,12 +181,14 @@ class GitHubWebhookHttpIntegrationTest {
     };
   }
 
+  /** {@code signature} の条件を再現するための補助情報を返す。 */
   private static String signature(String body) throws Exception {
     var mac = Mac.getInstance("HmacSHA256");
     mac.init(new SecretKeySpec(SECRET.getBytes(StandardCharsets.UTF_8), "HmacSHA256"));
     return "sha256=" + HexFormat.of().formatHex(mac.doFinal(body.getBytes(StandardCharsets.UTF_8)));
   }
 
+  /** {@code post} の条件を再現するための補助情報を返す。 */
   private static HttpResponse<String> post(
       HttpClient client, int port, String delivery, String body, String signature, boolean bearer)
       throws Exception {
@@ -190,6 +204,7 @@ class GitHubWebhookHttpIntegrationTest {
     return client.send(request.build(), HttpResponse.BodyHandlers.ofString());
   }
 
+  /** 検証用に、指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   private static HttpResponse<String> get(HttpClient client, int port, String path, boolean bearer)
       throws Exception {
     var request =

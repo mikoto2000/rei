@@ -7,9 +7,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/** 意味によるスキルの構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(SemanticSkillProperties.class)
 public class SemanticSkillConfiguration {
+  /** スキルの利用で用いるスキル埋め込み表現クライアントを返す。 */
   @Bean(destroyMethod = "close")
   SkillEmbeddingClient skillEmbeddingClient(ObjectProvider<EmbeddingModel> embedding) {
     return new SkillEmbeddingClient(
@@ -20,6 +22,7 @@ public class SemanticSkillConfiguration {
         java.time.Duration.ofSeconds(15));
   }
 
+  /** スキルの利用で用いるスキル埋め込み表現位置を返す。 */
   @Bean
   SkillEmbeddingIndex skillEmbeddingIndex(
       @org.springframework.beans.factory.annotation.Qualifier("dataSource")
@@ -27,6 +30,7 @@ public class SemanticSkillConfiguration {
     return new SqliteSkillEmbeddingIndex(data);
   }
 
+  /** スキルの利用で用いる意味によるスキル検索を返す。 */
   @Bean
   SemanticSkillSearch semanticSkillSearch(
       SemanticSkillProperties settings,

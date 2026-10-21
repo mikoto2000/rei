@@ -12,6 +12,7 @@ import java.util.List;
  */
 public class RecentChanges {
 
+  /** 既定最大項目一覧。 */
   static final int DEFAULT_MAX_ENTRIES = 20;
 
   /** ファイルを作成した。 */
@@ -23,14 +24,21 @@ public class RecentChanges {
   /** ファイルを削除した。 */
   public static final String OP_DELETE = "DELETE";
 
+  /** 最大項目一覧。 */
   private final int maxEntries;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 項目一覧。 */
   private final List<RecentChange> entries = new ArrayList<>();
 
+  /** 直近の変更の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public RecentChanges() {
     this(DEFAULT_MAX_ENTRIES, Clock.systemDefaultZone());
   }
 
+  /** 指定された値や利用先を使って、RecentChangesを初期化する。 */
   public RecentChanges(int maxEntries, Clock clock) {
     this.maxEntries = Math.max(1, maxEntries);
     this.clock = clock;
@@ -58,6 +66,7 @@ public class RecentChanges {
     evictIfNeeded();
   }
 
+  /** 直近の変更の把握に関する保持対象からの除外条件付きNeededを処理する。 */
   private void evictIfNeeded() {
     while (entries.size() > maxEntries) {
       entries.remove(0);
@@ -88,6 +97,7 @@ public class RecentChanges {
     return sb.toString();
   }
 
+  /** 直近の変更の把握で用いる現在日時を返す。 */
   private OffsetDateTime now() {
     return OffsetDateTime.now(clock);
   }

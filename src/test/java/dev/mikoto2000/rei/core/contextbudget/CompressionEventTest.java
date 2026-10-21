@@ -11,7 +11,9 @@ import java.time.Clock;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 圧縮イベントの結果と状態の契約を検証するテスト。 */
 class CompressionEventTest {
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void hardLimitRemainsExplicitAtWebBoundaryWithoutExposingInternalText() {
     var factory = new AgentEventFactory(Clock.systemUTC());
@@ -28,6 +30,7 @@ class CompressionEventTest {
         .doesNotContain("internal text");
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void exposesCompressionMetricsThroughExistingWebBoundary() {
     var factory = new AgentEventFactory(Clock.systemUTC());
@@ -52,6 +55,7 @@ class CompressionEventTest {
     }
   }
 
+  /** モデルへ渡す文脈の管理で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void typedCompressionDetailsAreExposedAndRedacted() {
     var factory = new AgentEventFactory(Clock.systemUTC());

@@ -21,8 +21,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** れいアプリケーションMultiline入力の結果と状態の契約を検証するテスト。 */
 class ReiApplicationMultilineInputTest {
 
+  /** 単一行形式を返すことを確認する。 */
   @Test
   void readPossiblyMultilineInput_returnsSingleLineAsIs() {
     ReiApplication app = newApp();
@@ -31,6 +33,7 @@ class ReiApplicationMultilineInputTest {
     assertEquals("hello", app.readPossiblyMultilineInput("hello", reader));
   }
 
+  /** れいの起動で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void readPossiblyMultilineInput_preservesTrailingCommandPathSeparator() {
     ReiApplication app = newApp();
@@ -46,6 +49,7 @@ class ReiApplicationMultilineInputTest {
     Mockito.verifyNoInteractions(reader);
   }
 
+  /** れいの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void readPossiblyMultilineInput_joinsContinuationLines() {
     ReiApplication app = newApp();
@@ -57,6 +61,7 @@ class ReiApplicationMultilineInputTest {
         app.readPossiblyMultilineInput("hello\\", reader));
   }
 
+  /** れいの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void readPossiblyMultilineInput_supportsMultipleContinuationLines() {
     ReiApplication app = newApp();
@@ -68,6 +73,7 @@ class ReiApplicationMultilineInputTest {
         app.readPossiblyMultilineInput("line1\\", reader));
   }
 
+  /** れいの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void splitCommandLineSupportsQuotedArguments() {
     ReiApplication app = newApp();
@@ -77,6 +83,7 @@ class ReiApplicationMultilineInputTest {
         java.util.List.of(app.splitCommandLine("project add \"C:\\path with space\"")));
   }
 
+  /** れいの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void configureCommandOutputSetsPicocliWriters() {
     CommandLine commandLine = new CommandLine(new RootCommand());
@@ -89,6 +96,7 @@ class ReiApplicationMultilineInputTest {
     assertNotNull(commandLine.getErr());
   }
 
+  /** 実行一覧について、終端文字コードを維持することを確認する。 */
   @Test
   void runsKeepsTerminalEncodingWhenCommandSpecIsRebound() {
     var display = Mockito.mock(dev.mikoto2000.rei.ui.shell.ActiveRunDisplay.class);
@@ -112,6 +120,7 @@ class ReiApplicationMultilineInputTest {
     assertEquals("", wrongOutput.toString());
   }
 
+  /** れいの起動の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void historyControlsBypassAgentExecutorAndCancellationMonitor() throws Exception {
     var app = newApp();
@@ -129,6 +138,7 @@ class ReiApplicationMultilineInputTest {
     Mockito.verifyNoInteractions(terminal, executor);
   }
 
+  /** れいの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void detectsInteractiveShellCommand() {
     ReiApplication app = newApp();
@@ -138,6 +148,7 @@ class ReiApplicationMultilineInputTest {
     assertEquals(false, app.isInteractiveShellCommand("chat"));
   }
 
+  /** れいの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void clearPendingInputAfterInteractiveShellClearsBufferAndDrainsTerminalReader()
       throws Exception {
@@ -156,6 +167,7 @@ class ReiApplicationMultilineInputTest {
     verify(terminalReader, Mockito.times(2)).read(10);
   }
 
+  /** れいの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void executeInteractiveShellCommandPausesAndResumesTerminal() throws Exception {
     ReiApplication app = newApp();
@@ -176,6 +188,7 @@ class ReiApplicationMultilineInputTest {
     verify(buffer).clear();
   }
 
+  /** れいの起動で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void executeInteractiveShellCommandRunsWhenPauseResumeIsUnsupported() throws Exception {
     ReiApplication app = newApp();
@@ -196,12 +209,15 @@ class ReiApplicationMultilineInputTest {
     verify(buffer).clear();
   }
 
+  /** 検証条件を再現するためのNoopコマンド。 */
   @CommandLine.Command(name = "noop")
   static class NoopCommand implements Runnable {
+    /** 検証用に、れいの起動の操作を実行する。 */
     @Override
     public void run() {}
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private ReiApplication newApp() {
     AsyncVectorDocumentService asyncVectorDocumentService =
         Mockito.mock(AsyncVectorDocumentService.class);

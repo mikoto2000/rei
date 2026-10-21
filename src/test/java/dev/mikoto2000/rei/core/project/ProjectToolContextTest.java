@@ -18,7 +18,9 @@ import org.springframework.ai.chat.model.ToolContext;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 
+/** プロジェクトツール呼び出し時の文脈の結果と状態の契約を検証するテスト。 */
 class ProjectToolContextTest {
+  /** プロジェクトごとの作業環境で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void toolContextCarriesOwnershipAcrossThreadBoundary() {
     var run =
@@ -28,6 +30,7 @@ class ProjectToolContextTest {
             "chat:main");
     var delegate =
         new ToolCallback() {
+          /** 検証用に、プロジェクトごとの作業環境で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("test")
@@ -36,11 +39,13 @@ class ProjectToolContextTest {
                 .build();
           }
 
+          /** 検証用に、プロジェクトごとの作業環境の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             assertThat(AgentRunScope.current()).isEqualTo(run);
             return "ok";
           }
 
+          /** 検証用に、プロジェクトごとの作業環境の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input, ToolContext context) {
             return call(input);
           }

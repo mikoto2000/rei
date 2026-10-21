@@ -18,18 +18,37 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** Bluesky返信Deduplicationの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class BlueskyReplyDeduplicationTest {
+  /** 検証に使う対象。 */
   private static final String TARGET = "at://did:plc:alice/app.bsky.feed.post/target";
+
+  /** 検証に使う参照先のURL。 */
   private static final String URL = "https://bsky.app/profile/alice.bsky.social/post/target";
+
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
+
+  /** 検証に使う保存と検索の窓口。 */
   private BlueskyReplyStateRepository repository;
+
+  /** 検証に使う会話。 */
   private BlueskyReplyConversationRepository conversation;
+
+  /** 検証に使う生成。 */
   private BlueskyReplyTextGenerator generator;
+
+  /** 検証に使うAPI。 */
   private BlueskyApiClient api;
+
+  /** 検証に使うこの機能の動作設定。 */
   private BlueskyProperties properties;
+
+  /** 検証に使うmanual。 */
   private BlueskyPostService manual;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setUp() {
     repository =
@@ -52,6 +71,7 @@ class BlueskyReplyDeduplicationTest {
     manual = new BlueskyPostService(properties, api, generator, conversation, repository);
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void repeatedManualReplyUsingUrlAndUriSendsOnlyOnce() {
     assertThat(manual.reply(URL, "first").success()).isTrue();
@@ -59,6 +79,7 @@ class BlueskyReplyDeduplicationTest {
     verify(api, times(1)).createReply(any(), any(), any(), any(), any(), any(), any());
   }
 
+  /** Blueskyとの連携で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void manualReplyDuringScheduledGenerationPreventsSecondSend() {
     var reply = properties.getReply();
@@ -98,6 +119,7 @@ class BlueskyReplyDeduplicationTest {
     verify(api, times(1)).createReply(any(), any(), any(), any(), any(), any(), any());
   }
 
+  /** 不確実なについて、なし繰り返されたを送信することを確認する。 */
   @Test
   void uncertainSendIsNotRepeatedAfterRepositoryReopens() {
     when(api.createReply(any(), any(), any(), any(), any(), any(), any()))
@@ -112,6 +134,7 @@ class BlueskyReplyDeduplicationTest {
     verify(api, times(1)).createReply(any(), any(), any(), any(), any(), any(), any());
   }
 
+  /** 明示的な失敗情報について、再試行を許可することを確認する。 */
   @Test
   void explicitFailureAllowsRetry() {
     when(api.createReply(any(), any(), any(), any(), any(), any(), any()))
@@ -122,6 +145,7 @@ class BlueskyReplyDeduplicationTest {
     verify(api, times(2)).createReply(any(), any(), any(), any(), any(), any(), any());
   }
 
+  /** 履歴失敗情報変更後について、なし原因別の送信を送信することを確認する。 */
   @Test
   void historyFailureAfterSendDoesNotCauseAnotherSend() {
     doThrow(new IllegalStateException("history unavailable"))

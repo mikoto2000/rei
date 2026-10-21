@@ -32,25 +32,39 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
+/** チャット実行再開用の記録許容件数の結果と状態の契約を検証するテスト。 */
 class ChatExecutionCheckpointCapacityTest {
+  /** 検証に使う所有者。 */
   private final AgentRunContext owner =
       new AgentRunContext("run", "session", Path.of("."), "project");
+
+  /** 通知された出来事と順序を検証するための記録。 */
   private final List<AgentEvent> events = new ArrayList<>();
+
+  /** 検証に使うモデル呼び出し回数。 */
   private final AtomicInteger modelCalls = new AtomicInteger();
+
+  /** 検証に使う再開用の記録一覧。 */
   private final PersistentCheckpointService checkpoints = mock(PersistentCheckpointService.class);
+
+  /** 検証に使うやり取り一覧。 */
   private final ConversationTurnStore turns = ConversationTurnStore.inMemory();
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   private ChatExecutionService service(Flux<ChatResponse> stream) {
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             modelCalls.incrementAndGet();
             return stream;
@@ -71,10 +85,12 @@ class ChatExecutionCheckpointCapacityTest {
     return service;
   }
 
+  /** {@code full} の条件を再現するための補助情報を返す。 */
   private CheckpointException full() {
     return CheckpointException.storageCapacity(8, 10, 1000, 25, 1024);
   }
 
+  /** {@code terminals} の条件を再現するための補助情報を返す。 */
   private List<AgentEvent> terminals() {
     return events.stream()
         .filter(
@@ -84,6 +100,7 @@ class ChatExecutionCheckpointCapacityTest {
         .toList();
   }
 
+  /** 失敗終端保存の後も対象の情報が残ることを確認する。 */
   @Test
   void wrappedStreamingCapacityFailureSurvivesFailedTerminalSaveAndIsEmittedOnce() {
     var first = full();
@@ -104,6 +121,7 @@ class ChatExecutionCheckpointCapacityTest {
     verify(checkpoints).finish(owner, "FAILED");
   }
 
+  /** 初期について、許容件数失敗情報なし呼び出しモデルを保存することを確認する。 */
   @Test
   void initialSaveCapacityFailureDoesNotCallModelAndProvidesActionableTerminalEvent() {
     var first = full();
@@ -117,6 +135,7 @@ class ChatExecutionCheckpointCapacityTest {
     verify(checkpoints).finish(owner, "FAILED");
   }
 
+  /** 失敗完了について、報告された内容を保存することを確認する。 */
   @Test
   void failedCompletionSaveIsReportedBeforeAnyCompletedEvent() {
     doThrow(full()).when(checkpoints).finish(owner, "COMPLETED");
@@ -132,6 +151,7 @@ class ChatExecutionCheckpointCapacityTest {
     verify(checkpoints, never()).finish(owner, "FAILED");
   }
 
+  /** 会話の実行で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void arbitraryFailureMessagesAndNonFactoryCheckpointMessagesRemainPrivate() {
     var service = service(Flux.error(new IllegalStateException("PRIVATE MODEL MESSAGE")));

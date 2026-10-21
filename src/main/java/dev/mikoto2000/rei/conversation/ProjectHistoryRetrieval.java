@@ -24,22 +24,38 @@ import java.util.PriorityQueue;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
-/** Two-stage, bounded read-only retrieval over project stores. No repository paths are resolved. */
+/**
+ * 会話履歴と受付記録の管理に必要なプロジェクト履歴関連情報の取得を扱う。
+ *
+ * <p>Two-stage, bounded read-only retrieval over project stores. No repository paths are resolved.
+ */
 final class ProjectHistoryRetrieval {
+  /**
+   * 会話履歴と受付記録の管理で受け渡す最終結果を表す。
+   *
+   * @param results 結果一覧
+   * @param searchedProjectCount searchedプロジェクト件数
+   */
   record Outcome(List<ConversationSearchResult> results, int searchedProjectCount) {}
 
+  /** ログ一覧。 */
   private final ConversationLogStore logs;
+
+  /** 登録台帳。 */
   private final ProjectRegistry registry;
 
+  /** 指定された値や利用先を使って、ProjectHistoryRetrievalを初期化する。 */
   ProjectHistoryRetrieval(ConversationLogStore logs, ProjectRegistry registry) {
     this.logs = logs;
     this.registry = registry;
   }
 
+  /** 会話履歴と受付記録の管理で用いるプロジェクト一覧を返す。 */
   List<ProjectContext> projects() {
     return registry.list();
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   Outcome search(HistorySearchRequest request, Predicate<ConversationLogEntry> filter, int limit) {
     // Snapshot once; neither a Shell switch nor a Registry change can reorder an in-flight search.
     List<ProjectContext> projects = projects();
@@ -88,12 +104,14 @@ final class ProjectHistoryRetrieval {
     return new Outcome(bounded(candidates, preferred, limit), searched.size());
   }
 
+  /** 順位。 */
   private static final Comparator<ConversationSearchResult> RANK =
       Comparator.comparingDouble(ConversationSearchResult::relevanceScore)
           .reversed()
           .thenComparing(r -> java.time.Instant.parse(r.timestamp()), Comparator.reverseOrder())
           .thenComparing(ConversationSearchResult::conversationId);
 
+  /** 会話履歴と受付記録の管理で用いる調査を返す。 */
   private List<ConversationSearchResult> scan(
       ProjectContext project,
       String preferred,
@@ -130,6 +148,7 @@ final class ProjectHistoryRetrieval {
     return found;
   }
 
+  /** 利用先の上限を超えない量へ、指定された内容を調整する。 */
   private List<ConversationSearchResult> bounded(
       List<ConversationSearchResult> candidates, String preferred, int limit) {
     List<ConversationSearchResult> results = new ArrayList<>();
@@ -148,6 +167,7 @@ final class ProjectHistoryRetrieval {
     return List.copyOf(results);
   }
 
+  /** 指定や設定に応じた対象を利用するため、参照先を確定する。 */
   private ProjectContext resolveReference(
       String reference, String query, List<ProjectContext> projects) {
     if (reference != null && !reference.isBlank()) {
@@ -168,11 +188,13 @@ final class ProjectHistoryRetrieval {
     return mentions.size() == 1 ? mentions.getFirst() : null;
   }
 
+  /** 会話履歴と受付記録の管理で用いる宛先の指定照合規則を返す。 */
   private Pattern mentionPattern(String name) {
     // ASCII boundaries avoid matching 'rei' inside 'freight'; Japanese particles may follow a name.
     return Pattern.compile("(?<![a-z0-9_])" + Pattern.quote(normalized(name)) + "(?![a-z0-9_])");
   }
 
+  /** 会話履歴と受付記録の管理で用いる表記を統一したを返す。 */
   private static String normalized(String value) {
     return Normalizer.normalize(value, Normalizer.Form.NFKC)
         .toLowerCase(Locale.ROOT)
@@ -180,6 +202,7 @@ final class ProjectHistoryRetrieval {
         .replaceAll("\\s+", " ");
   }
 
+  /** 会話履歴と受付記録の管理で用いる根拠として示す抜粋を返す。 */
   private String excerpt(String content, List<String> terms) {
     if (content.length() <= CONTENT_MAX_CHARS) return content;
     String lower = content.toLowerCase(Locale.ROOT);

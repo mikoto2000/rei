@@ -19,8 +19,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** れいアプリケーション終了確認の結果と状態の契約を検証するテスト。 */
 class ReiApplicationExitConfirmationTest {
 
+  /** 有効を返すことを確認する。 */
   @Test
   void confirmExitIfNeededReturnsTrueWhenNoEmbedIsRunning() {
     ReiApplication app = newApp(false);
@@ -32,6 +34,7 @@ class ReiApplicationExitConfirmationTest {
             }));
   }
 
+  /** れいの起動の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void confirmExitIfNeededCancelsExitWhenUserDeclines() {
     ReiApplication app = newApp(true);
@@ -47,6 +50,7 @@ class ReiApplicationExitConfirmationTest {
     assertTrue(out.toString().contains("終了をキャンセルしました"));
   }
 
+  /** 有効を返すことを確認する。 */
   @Test
   void confirmExitIfNeededReturnsTrueWhenUserConfirms() {
     ReiApplication app = newApp(true);
@@ -54,6 +58,7 @@ class ReiApplicationExitConfirmationTest {
     assertTrue(app.confirmExitIfNeeded(prompt -> "y"));
   }
 
+  /** れいの起動の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void confirmExitIfNeededCancelsExitWhenConfirmationIsInterrupted() {
     ReiApplication app = newApp(true);
@@ -65,6 +70,7 @@ class ReiApplicationExitConfirmationTest {
             }));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private ReiApplication newApp(boolean activeEmbeddings) {
     AsyncVectorDocumentService asyncVectorDocumentService =
         Mockito.mock(AsyncVectorDocumentService.class);

@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.storage;
 
+/** 検証条件を再現するための保持期間Crash実行の担当。 */
 public final class RetentionCrashWorker {
+  /** 検証用に、データ保存の共通処理の起動要求を受け付け、実行を開始する。 */
   public static void main(String[] args) throws Exception {
     var root = java.nio.file.Path.of(args[0]);
     try (var gate = new StorageMigrationCoordinator(root)) {

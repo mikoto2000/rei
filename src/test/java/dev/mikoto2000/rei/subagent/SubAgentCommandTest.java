@@ -11,10 +11,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import picocli.CommandLine;
 
+/** 補助エージェントコマンドの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentCommandTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void listShowReloadValidateAndInit() throws Exception {
     Files.writeString(
@@ -53,6 +56,7 @@ class SubAgentCommandTest {
     assertThat(command.execute("show", "missing")).isNotZero();
   }
 
+  /** 補助エージェントへの委譲で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void initializeReviewerWithThirtyMinuteTotalDeadline() throws Exception {
     var policy = new SubAgentToolPolicy(Set.of());

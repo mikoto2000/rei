@@ -14,7 +14,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
+/** 意味によるスキル検索の結果と状態の契約を検証するテスト。 */
 class SemanticSkillSearchTest {
+  /** {@code skill} の条件を再現するための補助情報を返す。 */
   AgentSkill skill(String name, String description, boolean enabled) {
     return new AgentSkill(
         name,
@@ -26,10 +28,12 @@ class SemanticSkillSearchTest {
         "private instructions must never be embedded");
   }
 
+  /** 検証で使用する設定を、指定された条件に合わせて用意する。 */
   SemanticSkillProperties config() {
     return new SemanticSkillProperties(true, 64, .55, 30);
   }
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void paraphraseFindsSkillAndDisabledSkillsAndInstructionsAreExcluded() {
     var texts = new ArrayList<String>();
@@ -60,6 +64,7 @@ class SemanticSkillSearchTest {
     assertTrue(texts.stream().noneMatch(t -> t.contains("private") || t.contains("disabled")));
   }
 
+  /** 現在スキル対象データを返すことを確認する。 */
   @Test
   void metadataCacheRefreshesAndAlwaysReturnsCurrentSkillObject() {
     var calls = new AtomicInteger();
@@ -91,6 +96,7 @@ class SemanticSkillSearchTest {
     assertEquals(5, calls.get());
   }
 
+  /** スキルの利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void disabledOverLimitAndInvalidVectorsFallBackWithoutRepeatedModelCalls() {
     var calls = new AtomicInteger();
@@ -125,6 +131,7 @@ class SemanticSkillSearchTest {
     assertEquals(2, calls.get());
   }
 
+  /** スキルの利用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationIsPropagatedRatherThanConvertedToKeywordFallback() {
     SkillMetadataEmbedding model =
@@ -139,6 +146,7 @@ class SemanticSkillSearchTest {
         () -> selector.selectCandidates("writer", List.of(skill("writer", "articles", true)), 5));
   }
 
+  /** 形式が不正なベクトル一覧について、検索語句候補一覧を保持することを確認する。 */
   @Test
   void malformedVectorsPreserveKeywordCandidates() {
     for (var vector : List.of(new float[] {Float.NaN}, new float[0])) {
@@ -156,11 +164,13 @@ class SemanticSkillSearchTest {
     }
   }
 
+  /** スキルの利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void rerankingRunsBeforeLimitAndRejectsForeignIdentities() {
     SkillMetadataEmbedding model = input -> input.stream().map(s -> new float[] {1, 0}).toList();
     var ranker =
         new dev.mikoto2000.rei.vectordocument.CandidateReranker() {
+          /** {@code rerank} の条件を再現するための補助情報を返す。 */
           public <T> List<T> rerank(
               String query, List<T> candidates, java.util.function.Function<T, String> text) {
             assertEquals(2, candidates.size());
@@ -186,6 +196,7 @@ class SemanticSkillSearchTest {
             .name());
     var invalid =
         new dev.mikoto2000.rei.vectordocument.CandidateReranker() {
+          /** {@code rerank} の条件を再現するための補助情報を返す。 */
           public <T> List<T> rerank(
               String query, List<T> candidates, java.util.function.Function<T, String> text) {
             return List.of();

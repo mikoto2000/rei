@@ -15,27 +15,56 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.LongAdder;
 
-/** Persist metadata first. Bounded image workers only enrich already-persisted observations. */
+/**
+ * 作業状況の把握に必要な作業状況根拠処理の連携を扱う。
+ *
+ * <p>Persist metadata first. Bounded image workers only enrich already-persisted observations.
+ */
 final class ActivityEvidencePipeline {
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(ActivityEvidencePipeline.class);
+
+  /** この機能の動作設定。 */
   private final ActivityProperties p;
+
+  /** 観測内容。 */
   InputAwareObservation observation;
+
+  /** 観測。 */
   private final DesktopActivityObserver observer;
+
+  /** 情報の抽出。 */
   private final ActivityExtractor extractor;
+
+  /** 保存先。 */
   private final ActivityStore store;
+
+  /** 画面画像一覧。 */
   private final ScreenshotStore screenshots;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 前面実行先。 */
   private final Executor foregroundExecutor;
+
+  /** 集計。 */
   private final ActivityEvidenceAggregator aggregator;
+
+  /** 分類。 */
   private java.util.function.Function<ActivityEvidence, ActivityClassification> classify =
       new ActivityClassifier()::classify;
 
+  /** 作業状況の把握に関する利用補助操作を処理する。 */
   void useToolkit(ClassificationToolkit toolkit) {
     classify = toolkit::classify;
   }
 
+  /** 観測中かどうか。 */
   private final AtomicBoolean observing = new AtomicBoolean();
+
+  /** 観測内容一覧／根拠限定／fallbacks／対象外／前面呼び出し回数／バックグラウンド呼び出し回数／成功／失敗情報／タイムアウト。 */
   private final LongAdder observations = new LongAdder(),
       evidenceOnly = new LongAdder(),
       fallbacks = new LongAdder(),
@@ -45,36 +74,79 @@ final class ActivityEvidencePipeline {
       success = new LongAdder(),
       failure = new LongAdder(),
       timeout = new LongAdder();
+
+  /** 出力上限一覧／検証失敗一覧／不明件数／部分的な結果件数／利用可能件数。 */
   private final LongAdder outputLimits = new LongAdder(),
       validationFailures = new LongAdder(),
       unknownCount = new LongAdder(),
       partialCount = new LongAdder(),
       usableCount = new LongAdder();
+
+  /** 一時停止中／終了済み／前面使用中。 */
   private boolean paused, closed, foregroundBusy;
+
+  /** 生成。 */
   private long generation;
+
+  /** 継続性。 */
   private String continuity = UUID.randomUUID().toString();
+
+  /** 前回。 */
   private ActivityRecord previous;
+
+  /** 待機中／デスクトップ待機中。 */
   private Work pending, desktopPending;
+
+  /** デスクトップ判断基準。 */
   private final DesktopAnalysisPolicy desktopPolicy;
 
+  /** 作業状況の把握で用いるデスクトップ待機中を返す。 */
   synchronized int desktopPending() {
     return desktopPending == null ? 0 : 1;
   }
 
+  /** 前面開始／直近成功日時。 */
   private Instant foregroundStarted, lastSucceededAt;
+
+  /** 直近成功キー。 */
   private CandidateKey lastSucceededKey;
+
+  /** 直近成功結果。 */
   private ActivityExtractor.Result lastSucceededResult;
+
+  /** 直近成功時間計測。 */
   private VisionDiagnostics.Timing lastSucceededTiming;
+
+  /** 生成済み／完了／失敗／置換済み／重複の有無対象外／後で扱う対象。 */
   private final LongAdder generated = new LongAdder(),
       completed = new LongAdder(),
       failed = new LongAdder(),
       replaced = new LongAdder(),
       duplicateSkipped = new LongAdder(),
       deferred = new LongAdder();
+
+  /** 実行待ち待機ミリ秒数／実行ミリ秒数／終了終点終了ミリ秒数。 */
   private final LongAdder queueWaitMillis = new LongAdder(),
       executionMillis = new LongAdder(),
       endToEndMillis = new LongAdder();
 
+  /**
+   * 作業状況の把握で受け渡す実行待ち計測値を表す。
+   *
+   * @param generated 生成済み
+   * @param started 開始
+   * @param completed 完了
+   * @param failed 失敗
+   * @param replaced 置換済み
+   * @param duplicateSkipped 重複の有無対象外
+   * @param deferred 後で扱う対象
+   * @param apiCalls API呼び出し回数
+   * @param queueWaitMillis 実行待ち待機ミリ秒数
+   * @param executionMillis 実行ミリ秒数
+   * @param endToEndMillis 終了終点終了ミリ秒数
+   * @param pending 待機中
+   * @param running 実行中
+   */
   record QueueMetrics(
       long generated,
       long started,
@@ -90,6 +162,7 @@ final class ActivityEvidencePipeline {
       int pending,
       boolean running) {}
 
+  /** 作業状況の把握で用いる実行待ち計測値を返す。 */
   synchronized QueueMetrics queueMetrics() {
     return new QueueMetrics(
         generated.sum(),
@@ -107,6 +180,16 @@ final class ActivityEvidencePipeline {
         foregroundBusy);
   }
 
+  /**
+   * 作業状況の把握で受け渡す候補キーを表す。
+   *
+   * @param foreground 前面
+   * @param projectId 所属プロジェクトの識別子
+   * @param projectName プロジェクト名前
+   * @param branch ブランチ
+   * @param commit 確定
+   * @param revision 改訂番号
+   */
   private record CandidateKey(
       ForegroundWindow foreground,
       String projectId,
@@ -114,10 +197,12 @@ final class ActivityEvidencePipeline {
       String branch,
       String commit,
       long revision) {
+    /** 作業状況の把握で受け渡す情報を、指定された内容から作成する。 */
     static CandidateKey of(ActivityRecord record) {
       return of(record.detection().evidence());
     }
 
+    /** 作業状況の把握で受け渡す情報を、指定された内容から作成する。 */
     static CandidateKey of(ActivityEvidence e) {
       var w = e.workContext();
       var git = w == null ? null : w.git();
@@ -131,14 +216,27 @@ final class ActivityEvidencePipeline {
     }
   }
 
+  /** 作業状況の把握に必要な作業を扱う。 */
   private static final class Work {
+    /** 生成。 */
     final long generation;
+
+    /** 画面。 */
     final CapturedScreen screen;
+
+    /** 画像観測日時。 */
     final Instant imageCapturedAt;
+
+    /** 照合キー。 */
     final CandidateKey key;
+
+    /** デスクトップ。 */
     CapturedScreen desktop;
+
+    /** 記録。 */
     ActivityRecord record;
 
+    /** 指定された値や利用先を使って、Workを初期化する。 */
     Work(long generation, CapturedScreen screen, ActivityRecord record, Instant imageCapturedAt) {
       this.generation = generation;
       this.screen = screen;
@@ -148,6 +246,7 @@ final class ActivityEvidencePipeline {
     }
   }
 
+  /** 指定された値や利用先を使って、ActivityEvidencePipelineを初期化する。 */
   ActivityEvidencePipeline(
       ActivityProperties p,
       DesktopActivityObserver observer,
@@ -169,21 +268,25 @@ final class ActivityEvidencePipeline {
     aggregator = new ActivityEvidenceAggregator(p, sources);
   }
 
+  /** 作業状況の把握に関する一時停止を処理する。 */
   synchronized void pause() {
     paused = true;
     invalidate();
   }
 
+  /** 保存された状況を引き継いで、中断した作業を再開する。 */
   synchronized void resume() {
     paused = false;
     invalidate();
   }
 
+  /** 作業状況の把握で利用した資源や登録を解放し、利用を終了する。 */
   synchronized void close() {
     closed = true;
     pause();
   }
 
+  /** 作業状況の把握に関するキャッシュの無効化を処理する。 */
   private synchronized void invalidate() {
     generation++;
     pending = null;
@@ -197,11 +300,14 @@ final class ActivityEvidencePipeline {
     continuity = UUID.randomUUID().toString();
   }
 
+  /** 作業状況の把握において、許可に該当するか判定する。 */
   private synchronized boolean allowed(long token) {
     return p.isEnabled() && !paused && !closed && generation == token;
   }
 
+  /** 作業状況の把握に関する定期確認を処理する。 */
   void tick() {
+    // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
     if (!observing.compareAndSet(false, true)) return;
     long started = System.nanoTime();
     try {
@@ -476,6 +582,7 @@ final class ActivityEvidencePipeline {
     }
   }
 
+  /** 作業状況の把握に関する状態確認前面を処理する。 */
   void pollForeground() {
     synchronized (this) {
       if (foregroundBusy || (pending == null && desktopPending == null)) return;
@@ -497,6 +604,7 @@ final class ActivityEvidencePipeline {
     }
   }
 
+  /** 作業状況の把握に関する残っている対象の処理を処理する。 */
   private void drain() {
     while (true) {
       Work work;
@@ -535,6 +643,7 @@ final class ActivityEvidencePipeline {
     }
   }
 
+  /** 要求された処理を利用できるよう、期限を開始する。 */
   private boolean startDue() {
     return !p.getVisionQueue().isEnabled()
         || foregroundStarted == null
@@ -544,6 +653,7 @@ final class ActivityEvidencePipeline {
                 foregroundStarted.plusSeconds(p.getVisionQueue().getMinimumStartIntervalSeconds()));
   }
 
+  /** 作業状況の把握において、重複の有無に該当するか判定する。 */
   private boolean duplicate(CandidateKey key, Instant at) {
     return p.getVisionQueue().isEnabled()
         && Objects.equals(key, lastSucceededKey)
@@ -553,6 +663,7 @@ final class ActivityEvidencePipeline {
             < p.getVisionQueue().getMaxRefreshIntervalSeconds();
   }
 
+  /** 終了時の状態を確定するため、対象外を完了させる。 */
   private ActivityRecord finishSkipped(ActivityRecord record) {
     var d = record.detection();
     var detection =
@@ -585,6 +696,7 @@ final class ActivityEvidencePipeline {
     }
   }
 
+  /** 作業状況の把握で用いるhistorical推定を返す。 */
   private ActivityRecord historicalInference(ActivityRecord record) {
     // Results completed after this OS observation are never propagated to it.
     if (lastSucceededResult == null
@@ -623,6 +735,7 @@ final class ActivityEvidencePipeline {
         inferred.screenshotReferences());
   }
 
+  /** 作業状況の把握に関するenrichを処理する。 */
   private void enrich(Work work, boolean background) {
     long started = System.nanoTime();
     Instant apiStarted = null, apiCompleted = null;
@@ -836,6 +949,7 @@ final class ActivityEvidencePipeline {
     }
   }
 
+  /** 確定できない結果を、判定不能の情報として表す。 */
   private ActivityClassification unknown(ForegroundWindow fg) {
     return new ActivityClassification(
         new ActivityRecord.Inference(
@@ -851,6 +965,7 @@ final class ActivityEvidencePipeline {
         List.of());
   }
 
+  /** 後から経緯や使用量を確認できるよう、試行を記録する。 */
   private synchronized void recordAttempt(Work work, boolean background, Instant startedAt) {
     if (!allowed(work.generation)) return;
     var r = work.record;
@@ -882,6 +997,7 @@ final class ActivityEvidencePipeline {
     }
   }
 
+  /** 作業状況の把握で用いる複製を返す。 */
   private static ActivityRecord copy(
       ActivityRecord r,
       ActivityRecord.Inference inference,
@@ -903,6 +1019,7 @@ final class ActivityEvidencePipeline {
         detection);
   }
 
+  /** 作業状況の把握に関する計測値を処理する。 */
   private void metrics() {
     var q = queueMetrics();
     log.info(
@@ -948,6 +1065,7 @@ final class ActivityEvidencePipeline {
         rate(usableCount.sum(), count));
   }
 
+  /** 作業状況の把握に関する分類件数を処理する。 */
   private void classificationCounts(ActivityRecord record, int delta) {
     if (record.inference().activities().isEmpty()
         || ActivityVocabulary.category(record.inference().activities().getFirst().type())
@@ -957,18 +1075,22 @@ final class ActivityEvidencePipeline {
       usableCount.add(delta);
   }
 
+  /** 作業状況の把握で用いる頻度を返す。 */
   private static double rate(long count, long total) {
     return total == 0 ? 0 : (double) count / total;
   }
 
+  /** 作業状況の把握で用いる経過時間を返す。 */
   private static long elapsed(Instant start, Instant end) {
     return Math.max(0, Duration.between(start, end).toMillis());
   }
 
+  /** 作業状況の把握で用いるミリ秒数を返す。 */
   private static long millis(long start) {
     return java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - start);
   }
 
+  /** 作業状況の把握に関するwarnを処理する。 */
   private static void warn(String stage, Exception e) {
     log.warn("Activity evidence {} failed ({})", stage, e.getClass().getSimpleName());
   }

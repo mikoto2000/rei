@@ -6,8 +6,10 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** エージェントスキルプロンプト表示への変換の結果と状態の契約を検証するテスト。 */
 class AgentSkillPromptRendererTest {
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void injectsSelectedSkillInstructionsIntoPrompt() {
     AgentSkillPromptRenderer renderer = new AgentSkillPromptRenderer();
@@ -32,6 +34,7 @@ class AgentSkillPromptRendererTest {
     assertThat(rendered).endsWith("hello");
   }
 
+  /** 元のプロンプトを返すことを確認する。 */
   @Test
   void returnsOriginalPromptWhenNoSkillSelected() {
     AgentSkillPromptRenderer renderer = new AgentSkillPromptRenderer();
@@ -39,6 +42,7 @@ class AgentSkillPromptRendererTest {
     assertThat(renderer.render("hello", List.of())).isEqualTo("hello");
   }
 
+  /** スキルの利用で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void keepsSeparateDirectoriesAndReferenceInstructionsForMultipleSkills() {
     var first =

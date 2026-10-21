@@ -13,12 +13,29 @@ import java.util.List;
 import java.util.Set;
 import java.util.TreeSet;
 
-/** Bounded, read-only path inventory. Never reads diff bodies or invokes diff helpers. */
+/**
+ * 共通の実行基盤に必要なGit変更済みファイル一覧を扱う。
+ *
+ * <p>Bounded, read-only path inventory. Never reads diff bodies or invokes diff helpers.
+ */
 final class GitChangedFiles {
+  /**
+   * 共通の実行基盤で受け渡す観測内容を表す。
+   *
+   * @param paths パス一覧
+   * @param excluded 対象外
+   */
   record Observation(List<String> paths, boolean excluded) {}
 
+  /**
+   * 共通の実行基盤で受け渡す行一覧を表す。
+   *
+   * @param ranges 対象範囲一覧
+   * @param warnings 注意事項
+   */
   record Lines(List<CoverageImpactService.Range> ranges, List<String> warnings) {}
 
+  /** 共通の実行基盤で用いる変更済み行一覧を返す。 */
   Lines changedLines(Path root, Set<String> selected) throws IOException {
     if (selected.isEmpty())
       return new Lines(
@@ -92,12 +109,15 @@ final class GitChangedFiles {
     return new Lines(List.copyOf(ranges), List.copyOf(warnings));
   }
 
+  /** プロセス一覧。 */
   private final ExternalAgentProcessRunner processes;
 
+  /** 指定された値や利用先を使って、GitChangedFilesを初期化する。 */
   GitChangedFiles(ExternalAgentProcessRunner processes) {
     this.processes = processes;
   }
 
+  /** 判断に必要な情報を集め、後続の処理へ渡す。 */
   Observation collect(Path root) throws IOException {
     long deadline = System.nanoTime() + Duration.ofSeconds(15).toNanos();
     var identity =
@@ -136,12 +156,14 @@ final class GitChangedFiles {
             "-z",
             "--"));
     add(paths, git(root, deadline, 1048576, "ls-files", "--others", "--exclude-standard", "-z"));
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (paths.size() > 64)
       throw new IOException("Git changes exceed 64 paths; supply an explicit bounded selection");
     boolean excluded = paths.removeIf(name -> RepositoryMapService.sensitive(Path.of(name)));
     return new Observation(List.copyOf(paths), excluded);
   }
 
+  /** 新たな対象を登録し、後から利用できるようにする。 */
   private static void add(Set<String> paths, String output) throws IOException {
     if (!output.isEmpty() && !output.endsWith("\u0000"))
       throw new IOException("Incomplete Git path inventory");
@@ -149,6 +171,7 @@ final class GitChangedFiles {
       if (name.isEmpty()) continue;
       try {
         Path path = Path.of(name);
+        // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (name.length() > 1024
             || name.codePoints().anyMatch(Character::isISOControl)
             || path.isAbsolute()
@@ -161,6 +184,7 @@ final class GitChangedFiles {
     }
   }
 
+  /** 共通の実行基盤で用いるGitの情報を返す。 */
   private String git(Path root, long deadline, int maxBytes, String... args) throws IOException {
     RunCancellation.propagate(null);
     long remaining = deadline - System.nanoTime();

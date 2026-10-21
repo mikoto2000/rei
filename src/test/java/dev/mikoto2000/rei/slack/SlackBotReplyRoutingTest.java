@@ -40,21 +40,47 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
-/** Exercises the real envelope -> admission/outbox and external reply ledger boundary. */
+/**
+ * Slack応答担当返信振り分けの結果と状態の契約を検証するテスト。
+ *
+ * <p>Exercises the real envelope -> admission/outbox and external reply ledger boundary.
+ */
 @Tag("integration")
 class SlackBotReplyRoutingTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使うinbox。 */
   SlackStore inbox;
+
+  /** 検証に使う実行環境。 */
   SlackRuntime runtime;
+
+  /** 検証に使う要求一覧。 */
   SlackAgentRepository requests;
+
+  /** 検証に使うエージェント一覧。 */
   SlackAgentService agents;
+
+  /** 検証に使う設定。 */
   SlackAgentProperties settings;
+
+  /** 検証に使うreceiver。 */
   SlackEnvelopeReceiver receiver;
+
+  /** 検証に使う登録台帳。 */
   RunRegistry registry;
+
+  /** 検証に使う入力の振り分け。 */
   ConversationInputRouter router;
+
+  /** 検証に使う所有者。 */
   AgentRunContext owner;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   Clock clock = Clock.systemUTC();
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     inbox = new SlackStore(dir);
@@ -110,6 +136,7 @@ class SlackBotReplyRoutingTest {
     registry.transition("parent", RunStatus.WAITING, null);
   }
 
+  /** {@code waiting} の条件を再現するための補助情報を返す。 */
   SlackAgentRepository.Request waiting() {
     var q = requests.create(owner, "call", "tenten", "question", "", 300, null, settings);
     assertTrue(requests.claimSend(q.id()));
@@ -117,6 +144,7 @@ class SlackBotReplyRoutingTest {
     return q;
   }
 
+  /** {@code envelope} の条件を再現するための補助情報を返す。 */
   String envelope(
       String id,
       String team,
@@ -148,11 +176,13 @@ class SlackBotReplyRoutingTest {
                 Map.of("type", "event_callback", "event_id", id, "team_id", team, "event", event)));
   }
 
+  /** {@code receive} の条件を再現するため、検証用の操作や状態を扱う。 */
   void receive(String id, String user, String bot, String subtype, String text) throws Exception {
     assertEquals(id, receiver.receive(envelope(id, "T1", "C1", "100.1", user, bot, subtype, text)));
     runtime.tick();
   }
 
+  /** {@code noHumanAdmission} の条件を再現するため、検証用の操作や状態を扱う。 */
   void noHumanAdmission() {
     assertTrue(inbox.pending().isEmpty());
     assertTrue(inbox.replies().isEmpty());
@@ -161,6 +191,7 @@ class SlackBotReplyRoutingTest {
     assertEquals(RunStatus.WAITING, registry.get("parent").status());
   }
 
+  /** Slackとの連携で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void humanRequestStillPostsAcceptanceEvenWhenBodyLooksLikeBotReceipt() throws Exception {
     // Mock repository admission invokes the existing SessionLifecycle acceptance callback.
@@ -215,6 +246,7 @@ class SlackBotReplyRoutingTest {
     verify(router).submit(any(AgentRunContext.class), anyString(), any());
   }
 
+  /** Slackとの連携で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void tentenReplyIsSavedWithoutReceiptOrNewRun() throws Exception {
     var q = waiting();
@@ -224,6 +256,7 @@ class SlackBotReplyRoutingTest {
     noHumanAdmission();
   }
 
+  /** Slackとの連携で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void multipleRepliesAndDuplicateEventsNeverCreateAnotherRequestOrRun() throws Exception {
     var q = waiting();
@@ -235,6 +268,7 @@ class SlackBotReplyRoutingTest {
     noHumanAdmission();
   }
 
+  /** Slackとの連携の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void unauthorizedBotIsIgnored() throws Exception {
     var q = waiting();
@@ -243,6 +277,7 @@ class SlackBotReplyRoutingTest {
     noHumanAdmission();
   }
 
+  /** Slackとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void ownBotPostIsIgnored() throws Exception {
     var q = waiting();
@@ -253,6 +288,7 @@ class SlackBotReplyRoutingTest {
     noHumanAdmission();
   }
 
+  /** Slackとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void configuredBotUserWithoutBotIdCannotFallBackToHumanAdmission() throws Exception {
     var q = waiting();
@@ -261,6 +297,7 @@ class SlackBotReplyRoutingTest {
     noHumanAdmission();
   }
 
+  /** Slackとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void botSubtypeWithoutBotIdCannotFallBackToHumanAdmission() throws Exception {
     waiting();
@@ -268,6 +305,7 @@ class SlackBotReplyRoutingTest {
     noHumanAdmission();
   }
 
+  /** Slackとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void configuredBotWithoutActiveRequestOrAfterDisconnectNeverFallsBack() throws Exception {
     receive("101", "U2", null, null, "<@UREI> hello");
@@ -277,6 +315,7 @@ class SlackBotReplyRoutingTest {
     noHumanAdmission();
   }
 
+  /** Slackとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void mismatchedIdentityWorkspaceChannelThreadAndFinishedRequestsAreIgnored() throws Exception {
     var q = waiting();

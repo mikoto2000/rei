@@ -2,8 +2,10 @@ package dev.mikoto2000.rei.interest;
 
 import java.util.List;
 
+/** 関心話題に必要な情報を入力から取り出す。 */
 public interface InterestTopicExtractor {
 
+  /** 受け取った内容から、後続の処理に必要な情報を取り出す。 */
   List<InterestTopicCandidate> extract(List<ConversationSnippet> snippets, int maxTopics);
 
   /**

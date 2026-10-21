@@ -13,16 +13,29 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
-/** Windows-installed SAPI voice; no speech service, SSML, or audio file output. */
+/**
+ * 音声による対話に必要なSapi音声出力を扱う。
+ *
+ * <p>Windows-installed SAPI voice; no speech service, SSML, or audio file output.
+ */
 public final class SapiVoiceOutput implements VoiceSpeechOutput {
+  /** バックエンドの利用可否を確認し、軽量CLIを起動して終了まで管理する。 */
   @FunctionalInterface
   interface Launcher {
+    /** 要求された処理を開始する。 */
     Process start(List<String> command) throws IOException;
   }
 
+  /** 起動。 */
   private final Launcher launcher;
+
+  /** タイムアウト。 */
   private final java.time.Duration timeout;
+
+  /** 活動中。 */
   private final AtomicReference<Process> active = new AtomicReference<>();
+
+  /** スクリプト。 */
   private static final String SCRIPT =
       """
       $ErrorActionPreference='Stop'
@@ -41,6 +54,7 @@ public final class SapiVoiceOutput implements VoiceSpeechOutput {
       } finally { [void][Runtime.InteropServices.Marshal]::FinalReleaseComObject($speaker) }
       """;
 
+  /** 音声による対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SapiVoiceOutput() {
     this(
         args -> {
@@ -53,10 +67,12 @@ public final class SapiVoiceOutput implements VoiceSpeechOutput {
         });
   }
 
+  /** 音声による対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   SapiVoiceOutput(Launcher launcher) {
     this(launcher, java.time.Duration.ofMinutes(3));
   }
 
+  /** 指定された値や利用先を使って、SapiVoiceOutputを初期化する。 */
   SapiVoiceOutput(Launcher launcher, java.time.Duration timeout) {
     this.launcher = Objects.requireNonNull(launcher);
     this.timeout = Objects.requireNonNull(timeout);
@@ -66,6 +82,7 @@ public final class SapiVoiceOutput implements VoiceSpeechOutput {
       throw new IllegalArgumentException("Invalid local speech timeout");
   }
 
+  /** 音声による対話に関する読み上げを処理する。 */
   @Override
   public void speak(String voice, String text, BooleanSupplier current) throws Exception {
     if (voice == null
@@ -121,6 +138,7 @@ public final class SapiVoiceOutput implements VoiceSpeechOutput {
     }
   }
 
+  /** 音声による対話に関する終了を処理する。 */
   private static void terminate(Process process) {
     if (!process.isAlive()) return;
     process.destroyForcibly();
@@ -128,10 +146,12 @@ public final class SapiVoiceOutput implements VoiceSpeechOutput {
       if (!process.waitFor(3000, TimeUnit.MILLISECONDS))
         throw new IllegalStateException("Local playback did not terminate");
     } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
     }
   }
 
+  /** 実行中の処理を停止する。 */
   @Override
   public void stop() {
     var process = active.get();

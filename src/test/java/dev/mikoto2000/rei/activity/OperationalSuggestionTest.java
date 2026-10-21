@@ -19,10 +19,13 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Operational提案の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class OperationalSuggestionTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void validatedProposalIsYamlAndNeverChangesRules() throws Exception {
     var ds = new org.sqlite.SQLiteDataSource();
@@ -65,6 +68,7 @@ class OperationalSuggestionTest {
         () -> proposer.validate(proposal("Hugging Face", "bogus"), false));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void insufficientSamplesNeverCallModel() {
     var ds = new org.sqlite.SQLiteDataSource();
@@ -85,6 +89,7 @@ class OperationalSuggestionTest {
     assertTrue(proposer.suggest(true).contains("候補なし"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void entertainmentProposalNeedsContextAndDoesNotApply() throws Exception {
     var toolkit = toolkit("ent.db");
@@ -134,6 +139,7 @@ class OperationalSuggestionTest {
         () -> proposer.validate(output.replace("JVM compilation", ".*"), true));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void mixedEvidenceAndExistingCoverageSuppressCalls() throws Exception {
     var toolkit = toolkit("mixed.db");
@@ -162,6 +168,7 @@ class OperationalSuggestionTest {
     assertTrue(proposer.suggest(true).contains("候補なし"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void modelRequestIsStructuredAndHasNoTools() throws Exception {
     var model = org.mockito.Mockito.mock(org.springframework.ai.chat.model.ChatModel.class);
@@ -188,6 +195,7 @@ class OperationalSuggestionTest {
     assertEquals(8192, options.getMaxCompletionTokens());
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void configuredOutputBudgetIsBoundAndSentToModel() {
     var source =
@@ -249,6 +257,7 @@ class OperationalSuggestionTest {
         proposer.propose("sample", ClassificationRuleSuggestions.SCHEMA));
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void outputBudgetMustBePositive() {
     var properties = new ActivityProperties();
@@ -262,6 +271,7 @@ class OperationalSuggestionTest {
     }
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void classificationSchemaRejectsFieldsThatCompilerCannotAccept() throws Exception {
     var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -302,6 +312,7 @@ class OperationalSuggestionTest {
             .isEmpty());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void compilerFailureExplainsExactConstraint() {
     var proposer =
@@ -333,6 +344,7 @@ class OperationalSuggestionTest {
     }
   }
 
+  /** {@code toolkit} の条件を再現するための補助情報を返す。 */
   private ClassificationToolkit toolkit(String name) {
     var ds = new org.sqlite.SQLiteDataSource();
     ds.setUrl("jdbc:sqlite:" + dir.resolve(name));
@@ -343,6 +355,7 @@ class OperationalSuggestionTest {
         Clock.fixed(ActivityEvidenceClassifierTest.NOW, ZoneOffset.UTC));
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failuresIdentifyStageAndReasonWithoutApplyingRules() throws Exception {
     var toolkit = toolkit("diagnostics.db");
@@ -413,6 +426,7 @@ class OperationalSuggestionTest {
     assertFalse(Files.exists(toolkit.rules().path()));
   }
 
+  /** 作業状況の把握で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateMatchHasDistinctDiagnostic() throws Exception {
     var toolkit = toolkit("duplicate.db");
@@ -434,6 +448,7 @@ class OperationalSuggestionTest {
             .contains("EXISTING_RULE_MATCH"));
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void behaviorSchemaFailureIdentifiesFieldWithoutEchoingValue() throws Exception {
     var toolkit = toolkit("behavior-diagnostics.db");
@@ -449,6 +464,7 @@ class OperationalSuggestionTest {
     assertFalse(result.contains("private-category"));
   }
 
+  /** モデルについて、出力上限を伝えることを確認する。 */
   @Test
   void modelReportsOutputLimitAndMissingResponse() {
     var model = org.mockito.Mockito.mock(org.springframework.ai.chat.model.ChatModel.class);
@@ -482,6 +498,7 @@ class OperationalSuggestionTest {
             .contains("OUTPUT_LIMIT"));
   }
 
+  /** {@code video} の条件を再現するための補助情報を返す。 */
   static ActivityRecord video(String id, String title, String category) {
     var r = OperationalTelemetryTest.record(id, "firefox", title, category, false);
     return new ActivityRecord(
@@ -503,6 +520,7 @@ class OperationalSuggestionTest {
         r.detection());
   }
 
+  /** {@code proposal} の条件を再現するための補助情報を返す。 */
   static String proposal(String regex, String category) {
     return """
     {"ruleType":"CLASSIFICATION","id":"huggingface-user","priority":200,

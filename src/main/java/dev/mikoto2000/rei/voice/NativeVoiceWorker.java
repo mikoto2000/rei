@@ -12,9 +12,13 @@ import java.time.Instant;
 import java.util.UUID;
 
 /**
- * Dedicated inference entry point: no Spring, scheduler, Agent, microphone, network or audio file.
+ * 音声による対話に必要なOSの機能音声実行の担当を扱う。
+ *
+ * <p>Dedicated inference entry point: no Spring, scheduler, Agent, microphone, network or audio
+ * file.
  */
 public final class NativeVoiceWorker {
+  /** 音声による対話の起動要求を受け付け、実行を開始する。 */
   public static void main(String[] args) {
     try {
       run(args);
@@ -24,6 +28,7 @@ public final class NativeVoiceWorker {
     }
   }
 
+  /** 音声による対話の操作を実行する。 */
   private static void run(String[] args) throws Exception {
     if ((args.length != 8 && args.length != 10)
         || (!args[0].equals("vad") && !args[0].equals("asr")))

@@ -6,7 +6,9 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.model.ChatModel;
 
+/** 言語モデルモデル提供元の結果と状態の契約を検証するテスト。 */
 class LlmModelProviderTest {
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void correctionInheritsChatEndpointAndCanOverrideOnlyItsModelWithoutCaptureOrFallback() {
     var fallback = Mockito.mock(ChatModel.class);
@@ -36,6 +38,7 @@ class LlmModelProviderTest {
         .isEqualTo("https://correction.invalid/v1");
   }
 
+  /** 機能出力予算について、正確に単一設定済みトークン引数を維持することを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void featureOutputBudgetKeepsExactlyOneConfiguredTokenParameterOnTheWire(
@@ -100,6 +103,7 @@ class LlmModelProviderTest {
     assertThat(defaultModel.getOptions().getMaxTokens()).isEqualTo(completionTokens ? null : 4096);
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void optionsWithoutAnExplicitModelKeepConfiguredModelAndProviderDefaults() {
     var defaultModel = Mockito.mock(ChatModel.class);
@@ -121,6 +125,7 @@ class LlmModelProviderTest {
     assertThat(options.getStreamOptions().includeUsage()).isTrue();
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void customServerWithoutModelKeepsConfiguredDefaultModel() {
     var defaultModel = Mockito.mock(ChatModel.class);
@@ -141,6 +146,7 @@ class LlmModelProviderTest {
         .isEqualTo("configured-local-model");
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void activityDoesNotSendScreenshotsToFallbackServer() {
     var properties = new LlmProperties();
@@ -152,6 +158,7 @@ class LlmModelProviderTest {
         .isInstanceOf(org.springframework.ai.openai.OpenAiChatModel.class);
   }
 
+  /** 画面操作について、出力予算なし変更チャット予算を利用することを確認する。 */
   @Test
   void computerUseOutputBudgetDoesNotChangeChatBudget() {
     LlmProperties properties = new LlmProperties();
@@ -167,6 +174,7 @@ class LlmModelProviderTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 画面操作について、利用者指定サーバーなし共通形式への調整モデルを利用することを確認する。 */
   @Test
   void computerUseCustomServerDoesNotWrapModelWithFallback() {
     ChatModel defaultModel = Mockito.mock(ChatModel.class);
@@ -184,6 +192,7 @@ class LlmModelProviderTest {
         .call(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class));
   }
 
+  /** 機能接続一覧について、OS名前解決結果を利用することを確認する。 */
   @Test
   void featureConnectionsUseOsNameResolutionForLocalHosts() {
     var client =
@@ -195,6 +204,7 @@ class LlmModelProviderTest {
     }
   }
 
+  /** 既定応答生成に使うモデルを返すことを確認する。 */
   @Test
   void returnsDefaultChatModelWhenFeatureServerIsNotConfigured() {
     ChatModel defaultModel = Mockito.mock(ChatModel.class);
@@ -206,6 +216,7 @@ class LlmModelProviderTest {
         .isEqualTo(8192);
   }
 
+  /** 開始AI互換応答生成に使うモデルを作成することを確認する。 */
   @Test
   void createsOpenAiCompatibleChatModelWhenFeatureServerIsConfigured() {
     ChatModel defaultModel = Mockito.mock(ChatModel.class);
@@ -226,6 +237,7 @@ class LlmModelProviderTest {
         .isEqualTo(8192);
   }
 
+  /** 用途に応じたモデル利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void appliesConfiguredMaxOutputTokensToChatOptions() {
     ChatModel defaultModel = Mockito.mock(ChatModel.class);
@@ -237,6 +249,7 @@ class LlmModelProviderTest {
         .isEqualTo(2048);
   }
 
+  /** 用途に応じたモデル利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void fallsBackToDefaultMaxOutputTokensWhenConfiguredValueIsInvalid() {
     ChatModel defaultModel = Mockito.mock(ChatModel.class);

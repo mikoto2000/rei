@@ -12,18 +12,34 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Anonymous evaluation of existing projections. Never promotes an inference into an observed fact.
+ * 作業状況の把握に必要な作業状況品質評価を扱う。
+ *
+ * <p>Anonymous evaluation of existing projections. Never promotes an inference into an observed
+ * fact.
  */
 public final class ActivityQualityEvaluation {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ActivityQualityEvaluation() {}
 
+  /** 作業状況の把握における起点の選択肢。 */
   public enum Origin {
+    /** 観測。 */
     OBSERVED,
+    /** 推定した。 */
     INFERRED,
+    /** 利用者確認済み。 */
     USER_CONFIRMED
   }
 
+  /**
+   * 作業状況の把握で受け渡す確認済み事実を表す。
+   *
+   * @param key 照合キー
+   * @param value 値
+   * @param confirmationId 確認識別子
+   */
   public record ConfirmedFact(String key, String value, String confirmationId) {
+    /** 受け取った情報からConfirmedFactを作成する。 */
     public ConfirmedFact {
       bounded(key, 128);
       bounded(value, 1024);
@@ -31,8 +47,32 @@ public final class ActivityQualityEvaluation {
     }
   }
 
+  /**
+   * 作業状況の把握で受け渡す事実を表す。
+   *
+   * @param key 照合キー
+   * @param value 値
+   * @param origin 起点
+   * @param evidenceId 根拠識別子
+   */
   public record Fact(String key, String value, Origin origin, String evidenceId) {}
 
+  /**
+   * 作業状況の把握で受け渡す事例を表す。
+   *
+   * @param id 識別子
+   * @param quality 品質
+   * @param process プロセス
+   * @param title タイトル
+   * @param confidence 確信度
+   * @param observedSeconds 観測秒数
+   * @param candidates 候補一覧
+   * @param expectedProject 期待する内容プロジェクト
+   * @param expectedTheme 期待する内容テーマ
+   * @param expectedAdvice 期待する内容助言
+   * @param expectedReason 期待する内容理由
+   * @param confirmedFacts 確認済み事実一覧
+   */
   public record Case(
       String id,
       String quality,
@@ -46,6 +86,7 @@ public final class ActivityQualityEvaluation {
       boolean expectedAdvice,
       String expectedReason,
       List<ConfirmedFact> confirmedFacts) {
+    /** 受け取った情報からCaseを作成する。 */
     public Case {
       bounded(id, 128);
       bounded(quality, 128);
@@ -80,6 +121,23 @@ public final class ActivityQualityEvaluation {
     }
   }
 
+  /**
+   * 作業状況の把握で受け渡す行を表す。
+   *
+   * @param id 識別子
+   * @param quality 品質
+   * @param project プロジェクト
+   * @param theme テーマ
+   * @param projectMatches プロジェクト一致結果
+   * @param themeMatches テーマ一致結果
+   * @param observedSeconds 観測秒数
+   * @param unobservedSeconds 未観測秒数
+   * @param coverage 対象範囲
+   * @param advice 助言
+   * @param reason 理由
+   * @param facts 事実一覧
+   * @param violations 満たしていない条件
+   */
   public record Row(
       String id,
       String quality,
@@ -95,6 +153,16 @@ public final class ActivityQualityEvaluation {
       List<Fact> facts,
       List<String> violations) {}
 
+  /**
+   * 作業状況の把握で受け渡すレポートを表す。
+   *
+   * @param provider 提供元
+   * @param rows 行一覧
+   * @param projectAccuracy プロジェクト正確さ
+   * @param themeAccuracy テーマ正確さ
+   * @param structuralFailures structural失敗一覧
+   * @param truthVerified 確定情報確認済み
+   */
   public record Report(
       String provider,
       List<Row> rows,
@@ -103,6 +171,7 @@ public final class ActivityQualityEvaluation {
       int structuralFailures,
       boolean truthVerified) {}
 
+  /** 対象を判断基準に照らして評価する。 */
   public static Report evaluate(List<Case> fixtures) {
     fixtures = List.copyOf(fixtures);
     if (fixtures.isEmpty()
@@ -213,6 +282,19 @@ public final class ActivityQualityEvaluation {
         false);
   }
 
+  /**
+   * 作業状況の把握で受け渡すデスクトップ行を表す。
+   *
+   * @param mode 動作モード
+   * @param observedSeconds 観測秒数
+   * @param contextCandidates 文脈候補一覧
+   * @param primaryChanges 主要な変更一覧
+   * @param visionCalls 画像認識呼び出し回数
+   * @param queueWaitMillis 実行待ち待機ミリ秒数
+   * @param processingMillis processingミリ秒数
+   * @param freshnessMillis 情報の鮮度ミリ秒数
+   * @param temporalInference 時系列推定
+   */
   public record DesktopRow(
       String mode,
       long observedSeconds,
@@ -224,9 +306,20 @@ public final class ActivityQualityEvaluation {
       long freshnessMillis,
       String temporalInference) {}
 
+  /**
+   * 作業状況の把握で受け渡すデスクトップレポートを表す。
+   *
+   * @param rows 行一覧
+   * @param truthVerified 確定情報確認済み
+   * @param limitation 制約
+   */
   public record DesktopReport(List<DesktopRow> rows, boolean truthVerified, String limitation) {}
 
-  /** Replay already-analyzed observations, without calls to Vision or disk writes. */
+  /**
+   * 作業状況の把握で用いる比較デスクトップを返す。
+   *
+   * <p>Replay already-analyzed observations, without calls to Vision or disk writes.
+   */
   public static DesktopReport compareDesktop(List<ActivityRecord> records) {
     if (records.isEmpty()
         || records.size() > 120
@@ -328,6 +421,7 @@ public final class ActivityQualityEvaluation {
         "Replay is structural evaluation. Accuracy requires independent manual labels; CPU/RSS/SSD I/O are not measured.");
   }
 
+  /** 利用先の上限を超えない量へ、指定された内容を調整する。 */
   private static void bounded(String value, int max) {
     if (value == null || value.isBlank() || value.length() > max)
       throw new IllegalArgumentException("Bounded nonblank fixture value required");

@@ -16,24 +16,30 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** ファイル操作一覧Optimizationの結果と状態の契約を検証するテスト。 */
 class FileOperationsOptimizationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code tools} の条件を再現するための補助情報を返す。 */
   Tools tools() {
     return new Tools();
   }
 
+  /** 検索条件一覧および節一覧について、各対象ファイル一度だけを読み取ることを確認する。 */
   @Test
   void queriesAndSectionsReadEachFileOnce() throws Exception {
     Files.writeString(root.resolve("a.txt"), "first\nsecond\n");
     var reads = new java.util.concurrent.atomic.AtomicInteger();
     var tools =
         new Tools() {
+          /** {@code listFile} の条件を再現するための補助情報を返す。 */
           @Override
           List<String> listFile(String base, Path directory) {
             return List.of("a.txt");
           }
 
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           FileSnapshots newSnapshots() {
             return new FileSnapshots(
@@ -51,6 +57,7 @@ class FileOperationsOptimizationTest {
     assertNotNull(result.getFirst().version());
   }
 
+  /** 変更済み形式のバージョンを受け付けないことを確認する。 */
   @Test
   void enormousUtf8LineHasSafeContinuationAndRejectsChangedVersion() throws Exception {
     String value = "日本語😀".repeat(20000);
@@ -82,6 +89,7 @@ class FileOperationsOptimizationTest {
             .contains("version mismatch"));
   }
 
+  /** 状態の記録一覧について、状態の変更許容件数削除バイナリを受け付けないことを確認する。 */
   @Test
   void snapshotsRejectMutationCapacityDeletionBinaryAndTraversal() throws Exception {
     var file = root.resolve("a.txt");
@@ -108,12 +116,14 @@ class FileOperationsOptimizationTest {
             .error());
   }
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void repeatedRangesShareSnapshotAndCancellationPropagates() throws Exception {
     Files.writeString(root.resolve("a.txt"), "a\r\nb\r\n");
     var reads = new java.util.concurrent.atomic.AtomicInteger();
     var tools =
         new Tools() {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           FileSnapshots newSnapshots() {
             return new FileSnapshots(
@@ -140,6 +150,7 @@ class FileOperationsOptimizationTest {
     }
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void byteBudgetIsSharedAcrossLargeFilesAndAllNativeContinuationsRecoverExactSource()
       throws Exception {
@@ -177,6 +188,7 @@ class FileOperationsOptimizationTest {
     recovered.values().forEach(value -> assertEquals(source, value.toString()));
   }
 
+  /** 継続入力原因を伝えることを確認する。 */
   @Test
   void totalLineBudgetLeavesAUsefulPageForEveryFileAndReportsItsContinuationCause()
       throws Exception {
@@ -207,6 +219,7 @@ class FileOperationsOptimizationTest {
     assertNull(empty.continuationInstruction());
   }
 
+  /** 共通の実行基盤で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void tokenAndSourcePaginationTogetherRecoverEveryBatchedFileWithoutGaps() throws Exception {
     String source = "日本語😀\\\"".repeat(1000);
@@ -238,6 +251,7 @@ class FileOperationsOptimizationTest {
     recovered.values().forEach(value -> assertEquals(source, value.toString()));
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void cacheCapacityIsBoundedAndParallelReadsAreCoalesced() throws Exception {
     var reads = new java.util.concurrent.atomic.AtomicInteger();
@@ -265,11 +279,13 @@ class FileOperationsOptimizationTest {
     assertEquals(8, reads.get());
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void searchGiantLineAndExplicitCharsetStayBounded() throws Exception {
     Files.writeString(root.resolve("a.txt"), "hit" + "日本語".repeat(20000));
     var tools =
         new Tools() {
+          /** {@code listFile} の条件を再現するための補助情報を返す。 */
           @Override
           List<String> listFile(String base, Path directory) {
             return List.of("a.txt");
@@ -297,6 +313,7 @@ class FileOperationsOptimizationTest {
         "日本語", tools.grepMultiQuery(List.of(q), root).getFirst().matches().getFirst().content());
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void largeResultsAndFileErrorsStayWithinWireLimitAndExposeOmissions() throws Exception {
     Files.writeString(root.resolve("a.txt"), "hit\t\"\\\n".repeat(1000));
@@ -305,6 +322,7 @@ class FileOperationsOptimizationTest {
     for (int i = 0; i < 1000; i++) paths.add("missing" + i);
     var tools =
         new Tools() {
+          /** {@code listFile} の条件を再現するための補助情報を返す。 */
           @Override
           List<String> listFile(String base, Path directory) {
             return paths;
@@ -324,6 +342,7 @@ class FileOperationsOptimizationTest {
     assertTrue(errors.truncated());
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void tooManyCandidatesFailExplicitlyAndEmptyFileStillHasVersion() throws Exception {
     Files.writeString(root.resolve("a.txt"), "");
@@ -334,6 +353,7 @@ class FileOperationsOptimizationTest {
             .version());
     var tools =
         new Tools() {
+          /** {@code listFile} の条件を再現するための補助情報を返す。 */
           @Override
           List<String> listFile(String base, Path directory) {
             return java.util.stream.IntStream.range(0, 1025).mapToObj(i -> "file" + i).toList();
@@ -350,6 +370,7 @@ class FileOperationsOptimizationTest {
     assertTrue(result.getFirst().error().contains("narrow baseDir/globs"));
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void globsNarrowInventoryBeforeLimitAndQueriesKeepSeparateInventories() throws Exception {
     Files.writeString(root.resolve("a.txt"), "hit");
@@ -360,6 +381,7 @@ class FileOperationsOptimizationTest {
     for (int i = 0; i < 1024; i++) paths.add("other" + i + ".log");
     var tools =
         new Tools() {
+          /** {@code listFile} の条件を再現するための補助情報を返す。 */
           @Override
           List<String> listFile(String base, Path directory) {
             return paths;
@@ -382,6 +404,7 @@ class FileOperationsOptimizationTest {
     assertTrue(search.stream().allMatch(r -> r.error() == null));
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void grepAndSearchGlobsAreRelativeToBaseDirAndIncludeDirectChildren() throws Exception {
     Files.createDirectories(root.resolve("src/foo/deep"));
@@ -389,6 +412,7 @@ class FileOperationsOptimizationTest {
     for (String path : paths) Files.writeString(root.resolve(path), "hit");
     var tools =
         new Tools() {
+          /** {@code listFile} の条件を再現するための補助情報を返す。 */
           @Override
           List<String> listFile(String base, Path directory) {
             return paths;
@@ -420,11 +444,13 @@ class FileOperationsOptimizationTest {
     }
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidGlobFailsOnlyItsQuery() throws Exception {
     Files.writeString(root.resolve("a.java"), "hit");
     var tools =
         new Tools() {
+          /** {@code listFile} の条件を再現するための補助情報を返す。 */
           @Override
           List<String> listFile(String base, Path directory) {
             return List.of("a.java");
@@ -438,11 +464,13 @@ class FileOperationsOptimizationTest {
     assertEquals(1, results.get(1).matches().size());
   }
 
+  /** {@code globQuery} の条件を再現するための補助情報を返す。 */
   private static Tools.GrepQuery globQuery(String base, String include, String exclude) {
     return new Tools.GrepQuery(
         "hit", base, false, true, false, false, 0, 0, null, true, include, exclude);
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void directoryLinksCannotAliasTheReadingBoundary() throws Exception {
     var directory = Files.createDirectory(root.resolve("real"));
@@ -467,6 +495,7 @@ class FileOperationsOptimizationTest {
     }
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void totalSearchLineLimitCutsActualBody() throws Exception {
     var paths = new ArrayList<String>();
@@ -478,6 +507,7 @@ class FileOperationsOptimizationTest {
     }
     var tools =
         new Tools() {
+          /** {@code listFile} の条件を再現するための補助情報を返す。 */
           @Override
           List<String> listFile(String base, Path directory) {
             return paths;
@@ -489,6 +519,7 @@ class FileOperationsOptimizationTest {
     assertTrue(result.stream().anyMatch(Tools.SearchAndReadResult::truncated));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void externalSameLengthChangeCannotReuseStaleSearch() throws Exception {
     var path = root.resolve("a.txt");
@@ -496,6 +527,7 @@ class FileOperationsOptimizationTest {
     var stamp = Files.getLastModifiedTime(path);
     var tools =
         new Tools() {
+          /** {@code listFile} の条件を再現するための補助情報を返す。 */
           @Override
           List<String> listFile(String base, Path directory) {
             return List.of("a.txt");
@@ -507,6 +539,7 @@ class FileOperationsOptimizationTest {
     assertTrue(tools.grepMultiQuery(List.of(query("hit")), root).getFirst().matches().isEmpty());
   }
 
+  /** {@code query} の条件を再現するための補助情報を返す。 */
   static Tools.GrepQuery query(String pattern) {
     return new Tools.GrepQuery(
         pattern, ".", false, true, false, false, 0, 0, null, true, null, null);

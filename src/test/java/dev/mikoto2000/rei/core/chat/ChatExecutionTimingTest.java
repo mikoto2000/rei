@@ -26,7 +26,9 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
+/** チャット実行時間計測の結果と状態の契約を検証するテスト。 */
 class ChatExecutionTimingTest {
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   ChatExecutionService service(Flux<ChatResponse> stream) {
     var client = mock(ChatClient.class);
     var request = mock(ChatClient.ChatClientRequestSpec.class, RETURNS_DEEP_STUBS);
@@ -39,9 +41,11 @@ class ChatExecutionTimingTest {
         client, models, new CommandCancellationService(), Optional.empty());
   }
 
+  /** 検証に使う所有者。 */
   final AgentRunContext owner =
       new AgentRunContext("run", "session", java.nio.file.Path.of("."), "project");
 
+  /** 会話の実行で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void realChatBoundaryRecordsTerminalStateWithCaptureAbsent() {
     var store =
@@ -59,6 +63,7 @@ class ChatExecutionTimingTest {
     assertFalse(recorded.toString().contains("question"));
   }
 
+  /** 会話の実行で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void recorderFailureDoesNotChangeRealChatFailureOrSuccess() {
     var recorder = mock(TimingRecorder.class);

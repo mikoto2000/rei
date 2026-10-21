@@ -22,15 +22,30 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-/** Shared bounded planning. Candidate sufficiency is not a verified answer. */
+/**
+ * Web上の情報の調査に必要なWeb検索選択内容を扱う。
+ *
+ * <p>Shared bounded planning. Candidate sufficiency is not a verified answer.
+ */
 public final class WebSearchSelection {
+  /**
+   * Web上の情報の調査で受け渡す候補を表す。
+   *
+   * @param result 結果
+   * @param aliases 別名一覧
+   * @param rank 順位
+   */
   public record Candidate(WebSearchResult result, List<WebSourceAlias> aliases, int rank) {
+    /** 受け取った情報からCandidateを作成する。 */
     public Candidate {
       aliases = List.copyOf(aliases);
     }
   }
 
+  /** 検索語句一覧。 */
   private static final Pattern TERMS = Pattern.compile("[\\p{L}\\p{N}][\\p{L}\\p{N}._-]*");
+
+  /** 停止。 */
   private static final Set<String> STOP =
       Set.of(
           "the",
@@ -52,6 +67,8 @@ public final class WebSearchSelection {
           "compare",
           "sources",
           "vs");
+
+  /** 一次情報として扱う公式サイトの対応表。 */
   private static final Map<String, List<String>> OFFICIAL =
       Map.ofEntries(
           Map.entry("oracle.com", List.of("java", "jdk", "oracle")),
@@ -70,8 +87,10 @@ public final class WebSearchSelection {
           Map.entry("openai.com", List.of("openai", "chatgpt", "codex")),
           Map.entry("rfc-editor.org", List.of("http", "rfc", "ietf")));
 
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private WebSearchSelection() {}
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public static List<Candidate> search(
       WebSearchService service,
       WebSearchQueryPlanner planner,
@@ -79,6 +98,7 @@ public final class WebSearchSelection {
       int limit,
       WebSearchProperties properties)
       throws IOException, InterruptedException {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (query == null || query.isBlank() || query.length() > 2048)
       throw new IllegalArgumentException("query must contain 1..2048 characters");
     properties.validateSelection();
@@ -135,6 +155,7 @@ public final class WebSearchSelection {
     return choose(query, new ArrayList<>(unique.values()), limit);
   }
 
+  /** 条件に合う対象を利用するため、Web検索選択内容を選択する。 */
   public static List<Candidate> choose(String query, List<Candidate> candidates, int limit) {
     var ordered = new ArrayList<>(candidates);
     ordered.sort(
@@ -154,6 +175,7 @@ public final class WebSearchSelection {
     return List.copyOf(selected);
   }
 
+  /** Web上の情報の調査で用いる優先度を返す。 */
   static double priority(String query, WebSearchResult result) {
     return relevance(query, result) * 4
         + (official(query, result.url()) ? 2 : 0)
@@ -161,6 +183,7 @@ public final class WebSearchSelection {
         + (needsFreshness(query) && fresh(result.publishedAt()) ? 1 : 0);
   }
 
+  /** Web上の情報の調査において、sufficientに該当するか判定する。 */
   public static boolean sufficient(String query, List<WebSearchResult> candidates, int limit) {
     var unique = new LinkedHashMap<String, WebSearchResult>();
     for (var result : candidates) {
@@ -184,12 +207,14 @@ public final class WebSearchSelection {
     return true;
   }
 
+  /** Web上の情報の調査において、必要性情報の鮮度に該当するか判定する。 */
   public static boolean needsFreshness(String query) {
     return query
         .toLowerCase(Locale.ROOT)
         .matches("(?s).*(latest|current|recent|today|最新|直近|今日|今年).*");
   }
 
+  /** Web上の情報の調査において、有効なキャッシュに該当するか判定する。 */
   private static boolean fresh(String value) {
     if (value == null) return false;
     try {
@@ -201,6 +226,7 @@ public final class WebSearchSelection {
     }
   }
 
+  /** 条件に合う対象を選ぶため、形式のバージョンとの一致を判定する。 */
   static boolean matchesVersion(String query, WebSearchResult result) {
     var matcher =
         Pattern.compile(
@@ -215,6 +241,7 @@ public final class WebSearchSelection {
     return true;
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   private static String text(WebSearchResult result) {
     return (Objects.toString(result.title(), "")
             + " "
@@ -224,6 +251,7 @@ public final class WebSearchSelection {
         .toLowerCase(Locale.ROOT);
   }
 
+  /** Web上の情報の調査で用いる関連度を返す。 */
   public static double relevance(String query, WebSearchResult result) {
     var matcher = TERMS.matcher(query.toLowerCase(Locale.ROOT));
     Set<String> terms = new LinkedHashSet<>();
@@ -233,6 +261,7 @@ public final class WebSearchSelection {
     return terms.stream().filter(evidence::contains).count() / (double) terms.size();
   }
 
+  /** Web上の情報の調査において、既知Officialに該当するか判定する。 */
   public static boolean knownOfficial(String url) {
     String host = host(url);
     return OFFICIAL.keySet().stream()
@@ -241,6 +270,7 @@ public final class WebSearchSelection {
         || host.endsWith(".edu");
   }
 
+  /** Web上の情報の調査において、officialに該当するか判定する。 */
   public static boolean official(String query, String url) {
     String host = host(url), lower = query.toLowerCase(Locale.ROOT);
     return OFFICIAL.entrySet().stream()
@@ -258,6 +288,7 @@ public final class WebSearchSelection {
         || host.endsWith(".edu");
   }
 
+  /** Web上の情報の調査で用いるホストを返す。 */
   private static String host(String url) {
     try {
       return Objects.toString(URI.create(url).getHost(), "").toLowerCase(Locale.ROOT);
@@ -266,12 +297,14 @@ public final class WebSearchSelection {
     }
   }
 
+  /** Web上の情報の調査で用いるドメインを返す。 */
   static String domain(String url) {
     String host = host(url);
     String[] labels = host.split("\\.");
     return labels.length < 2 ? host : labels[labels.length - 2] + "." + labels[labels.length - 1];
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、参照先のURLの表記をそろえる。 */
   public static String normalizeUrl(String value) {
     try {
       URI uri = URI.create(value).normalize();

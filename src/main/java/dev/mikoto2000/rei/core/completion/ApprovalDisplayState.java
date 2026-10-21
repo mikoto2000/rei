@@ -5,10 +5,16 @@ import org.jline.terminal.Terminal;
 import org.jline.terminal.spi.SystemStream;
 import org.jline.terminal.spi.TerminalExt;
 
-/** Presentation eligibility only; does not decide or change approval state. */
+/**
+ * 入力候補の提示に必要な承認表示状態を扱う。
+ *
+ * <p>Presentation eligibility only; does not decide or change approval state.
+ */
 public final class ApprovalDisplayState {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ApprovalDisplayState() {}
 
+  /** 後続の処理で判断できるよう、未完了の対象を返す。 */
   public static boolean pending(String status, Instant expires, String continuation, Instant now) {
     return "PENDING".equals(status)
         && expires != null
@@ -16,6 +22,7 @@ public final class ApprovalDisplayState {
         && ("WAITING_APPROVAL".equals(continuation) || "UNAVAILABLE".equals(continuation));
   }
 
+  /** 入力候補の提示において、対話に該当するか判定する。 */
   public static boolean interactive(Terminal terminal) {
     if (terminal == null
         || Terminal.TYPE_DUMB.equals(terminal.getType())

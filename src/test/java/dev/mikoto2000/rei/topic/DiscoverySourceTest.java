@@ -18,8 +18,10 @@ import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 利用先の検出取得元の結果と状態の契約を検証するテスト。 */
 class DiscoverySourceTest {
 
+  /** Web取得元について、利用先の検出項目一覧を返すことを確認する。 */
   @Test
   void webSourceReturnsDiscoveryItems() throws Exception {
     WebSearchAndReadService service = org.mockito.Mockito.mock(WebSearchAndReadService.class);
@@ -48,6 +50,7 @@ class DiscoverySourceTest {
     assertTrue(items.getFirst().relevance() >= 0.7);
   }
 
+  /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void feedSourceReturnsOnlySeedRelatedItems() {
     FeedService service = org.mockito.Mockito.mock(FeedService.class);
@@ -78,11 +81,13 @@ class DiscoverySourceTest {
     assertEquals(TopicSource.FEED, items.getFirst().source());
   }
 
+  /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void githubSourceIsSafeWhenNoConnectorIsAvailable() {
     assertTrue(new GitHubDiscoverySource().discover(context("repo")).isEmpty());
   }
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   private DiscoveryContext context(String seed) {
     return new DiscoveryContext(List.of(seed), Instant.parse("2026-09-02T00:00:00Z"));
   }

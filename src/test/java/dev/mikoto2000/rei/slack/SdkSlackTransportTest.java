@@ -14,7 +14,9 @@ import com.slack.api.methods.request.chat.ChatPostMessageRequest;
 import com.slack.api.methods.response.chat.ChatPostMessageResponse;
 import org.junit.jupiter.api.Test;
 
+/** SdkSlack通信経路の結果と状態の契約を検証するテスト。 */
 class SdkSlackTransportTest {
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   private ChatPostMessageResponse response(boolean ok, String error) {
     var r = new ChatPostMessageResponse();
     r.setOk(ok);
@@ -24,6 +26,7 @@ class SdkSlackTransportTest {
     return r;
   }
 
+  /** Slackとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sendsOnlyOnePostToTheOriginalThread() throws Exception {
     var methods = mock(MethodsClient.class);
@@ -45,6 +48,7 @@ class SdkSlackTransportTest {
     verifyNoMoreInteractions(methods);
   }
 
+  /** Slackとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void uncertainFailureIsNotAutomaticallyRetried() throws Exception {
     var methods = mock(MethodsClient.class);
@@ -58,6 +62,7 @@ class SdkSlackTransportTest {
     verify(methods, times(1)).chatPostMessage(any(ChatPostMessageRequest.class));
   }
 
+  /** Slackとの連携で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void explicitRateLimitIsRetryableButServerUncertaintyIsNot() throws Exception {
     var methods = mock(MethodsClient.class);
@@ -69,6 +74,7 @@ class SdkSlackTransportTest {
     assertEquals("UNKNOWN", transport.send(row).state());
   }
 
+  /** Slackとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void http429HonorsRetryAfter() throws Exception {
     var methods = mock(MethodsClient.class);

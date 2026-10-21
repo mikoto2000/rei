@@ -9,7 +9,9 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/** Slack受付から終了までの管理の結果と状態の契約を検証するテスト。 */
 class SlackLifecycleTest {
+  /** Slackとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void enabledSlackConnectsInShellMode() {
     var p = new SlackProperties();
@@ -21,8 +23,10 @@ class SlackLifecycleTest {
             Map.of("SLACK_BOT_TOKEN", "dummy", "SLACK_APP_TOKEN", "dummy"),
             () ->
                 new SlackSocketLifecycle.Connection() {
+                  /** {@code pump} の条件を再現するため、検証用の操作や状態を扱う。 */
                   public void pump() {}
 
+                  /** 検証で利用した対象の終了を扱う。 */
                   public void close() {
                     count.incrementAndGet();
                   }
@@ -33,6 +37,7 @@ class SlackLifecycleTest {
     assertEquals(1, count.get());
   }
 
+  /** Slackとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledConfigurationNeverConnects() {
     var p = new SlackProperties();
@@ -51,6 +56,7 @@ class SlackLifecycleTest {
     }
   }
 
+  /** Slackとの連携の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void missingTokensOrFailedConnectionNeverAbortBackend() {
     var p = new SlackProperties();
@@ -76,6 +82,7 @@ class SlackLifecycleTest {
     }
   }
 
+  /** Slackとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shutdownClosesConnectionOnce() {
     var p = new SlackProperties();
@@ -87,8 +94,10 @@ class SlackLifecycleTest {
             Map.of("SLACK_BOT_TOKEN", "dummy", "SLACK_APP_TOKEN", "dummy"),
             () ->
                 new SlackSocketLifecycle.Connection() {
+                  /** {@code pump} の条件を再現するため、検証用の操作や状態を扱う。 */
                   public void pump() {}
 
+                  /** 検証で利用した対象の終了を扱う。 */
                   public void close() {
                     count.incrementAndGet();
                   }
@@ -100,6 +109,7 @@ class SlackLifecycleTest {
     assertEquals(1, count.get());
   }
 
+  /** Slackとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void backendStartupFlagIsExplicit() {
     assertTrue(
@@ -123,6 +133,7 @@ class SlackLifecycleTest {
             .backend());
   }
 
+  /** なし待機を停止することを確認する。 */
   @Test
   void stopDoesNotWaitForSlowInitializationAndClosesLateConnection() throws Exception {
     var p = new SlackProperties();
@@ -142,8 +153,10 @@ class SlackLifecycleTest {
                 Thread.currentThread().interrupt();
               }
               return new SlackSocketLifecycle.Connection() {
+                /** {@code pump} の条件を再現するため、検証用の操作や状態を扱う。 */
                 public void pump() {}
 
+                /** 検証で利用した対象の終了を扱う。 */
                 public void close() {
                   closed.incrementAndGet();
                 }

@@ -15,9 +15,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 目標再開所有権の結果と状態の契約を検証するテスト。 */
 class GoalResumeOwnershipTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 目標の達成管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void oldAttemptCallbackCannotFailOrCompleteNextAttempt() throws Exception {
     var repo =
@@ -56,6 +59,7 @@ class GoalResumeOwnershipTest {
     assertEquals("RUNNING", repo.attempts("p", goal.id()).getLast().status());
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void oldRunReservationCannotChargeNewAttemptUnderSameGoalClaim() {
     var repo =

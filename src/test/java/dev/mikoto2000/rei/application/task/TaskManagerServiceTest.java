@@ -16,10 +16,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** タスク管理サービスの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class TaskManagerServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 実行一覧を再利用することを確認する。 */
   @Test
   void crossProjectSessionFilteringAndStablePaginationReuseRuns() throws Exception {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -48,6 +51,7 @@ class TaskManagerServiceTest {
     assertThat(tasks.get(a.id(), "session-a", "run:a").status()).isEqualTo("COMPLETED");
   }
 
+  /** 再開について、永続化された付随情報を読み取ることを確認する。 */
   @Test
   void restartReadsDurableMetadataWithoutDispatchAndOmitsUnregisteredRoots() {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -79,6 +83,7 @@ class TaskManagerServiceTest {
         .isInstanceOf(ResourceNotFoundException.class);
   }
 
+  /** 実行中タスクの操作で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void limitsAndMalformedCursorFailClosed() {
     var tasks =
@@ -98,6 +103,7 @@ class TaskManagerServiceTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 子の実行実行について、親会話を利用することを確認する。 */
   @Test
   void childExecutionUsesParentSessionAndRetainsItsRelationshipAfterRestart() {
     var projects = new ProjectRegistry(root.resolve("projects.json"));

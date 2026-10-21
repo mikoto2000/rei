@@ -37,15 +37,21 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** Slackエージェントサービスの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SlackAgentServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock = Clock.fixed(Instant.parse("2026-10-11T00:00:00Z"), ZoneOffset.UTC);
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("run", "session", dir, "project");
   }
 
+  /** 検証で使用する設定を、指定された条件に合わせて用意する。 */
   SlackAgentProperties settings() {
     var p = new SlackAgentProperties();
     p.setEnabled(true);
@@ -56,6 +62,15 @@ class SlackAgentServiceTest {
     return p;
   }
 
+  /**
+   * 検証条件の再現に使う検証条件の情報。
+   *
+   * @param repo 検証に使うリポジトリ
+   * @param saved 検証に使う保存済み
+   * @param registry 検証に使う登録台帳
+   * @param service 検証に使うサービス
+   * @param source 検証に使う取得元
+   */
   record Fixture(
       SlackAgentRepository repo,
       SlackAgentContinuationStore saved,
@@ -63,6 +78,7 @@ class SlackAgentServiceTest {
       SlackAgentService service,
       DriverManagerDataSource source) {}
 
+  /** {@code fixture} の条件を再現するための補助情報を返す。 */
   Fixture fixture() {
     var source = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("storage.db"));
     var repo = new SlackAgentRepository(source, clock);
@@ -83,6 +99,7 @@ class SlackAgentServiceTest {
     return new Fixture(repo, saved, registry, service, source);
   }
 
+  /** {@code pause} の条件を再現するため、検証用の操作や状態を扱う。 */
   void pause(Fixture f) {
     var e =
         new RunExecutionContext(
@@ -113,6 +130,7 @@ class SlackAgentServiceTest {
     assertEquals(RunStatus.WAITING, f.registry().get("run").status());
   }
 
+  /** Slackとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void replyResumesSameParentOnceWithUntrustedToolResult() {
     var f = fixture();
@@ -174,6 +192,7 @@ class SlackAgentServiceTest {
     assertEquals(RunStatus.COMPLETED, f.registry().get("run").status());
   }
 
+  /** Slackとの連携の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelAfterSendingNeverResumesOnLateReply() {
     var f = fixture();
@@ -207,6 +226,7 @@ class SlackAgentServiceTest {
     assertEquals("CANCELLED", f.saved().state("run"));
   }
 
+  /** 不明について、報告された内容を送信することを確認する。 */
   @Test
   void unknownSendIsReportedWithoutReposting() {
     var f = fixture();
@@ -238,6 +258,7 @@ class SlackAgentServiceTest {
     assertEquals("UNKNOWN", f.repo().get(q.id()).state());
   }
 
+  /** 返信変更前について、応答永続化されたを送信することを確認する。 */
   @Test
   void replyBeforeSendResponseIsDurableAndMatchedAfterTimestampIsKnown() {
     var f = fixture();
@@ -280,6 +301,7 @@ class SlackAgentServiceTest {
     assertEquals(1, f.repo().responses(q.id()).size());
   }
 
+  /** Slackとの連携で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void rateLimitBackoffAppliesToEntireChannelAfterRestart() {
     var f = fixture();
@@ -299,6 +321,7 @@ class SlackAgentServiceTest {
     f.service().pump();
   }
 
+  /** Slackとの連携の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationDuringSendKeepsCancelledStateAndKnownTimestamp() {
     var f = fixture();
@@ -317,6 +340,7 @@ class SlackAgentServiceTest {
     assertEquals("100.1", f.repo().get(q.id()).thread());
   }
 
+  /** Slackとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void verifiesConfiguredBotIdAgainstBotUserAndRejectsSelf() {
     var f = fixture();
@@ -332,6 +356,7 @@ class SlackAgentServiceTest {
         () -> f.service().verifyIdentities("U1", "T2", user -> "B2"));
   }
 
+  /** タイムアウトについて、部分的な結果確認記録を返すことを確認する。 */
   @Test
   void timeoutReturnsPartialAcknowledgementAndUncertaintyInsteadOfCompletion() {
     var f = fixture();
@@ -373,6 +398,7 @@ class SlackAgentServiceTest {
     assertEquals(RunStatus.COMPLETED, f.registry().get("run").status());
   }
 
+  /** Slackとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void earlyReplyForDifferentThreadNeverCompletesThePendingRequest() {
     var f = fixture();
@@ -405,6 +431,7 @@ class SlackAgentServiceTest {
     assertTrue(f.repo().responses(q.id()).isEmpty());
   }
 
+  /** Slackとの連携で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void restartResumesHumanWaitingRunOnceWithoutResendingTheSlackRequest() {
     var f = fixture();
@@ -461,6 +488,7 @@ class SlackAgentServiceTest {
     assertEquals(1, f.repo().responses(q.id()).size());
   }
 
+  /** Slackとの連携で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void restoredManagedParentIsStoppedBeforeAnyUnsentExternalRequest() {
     var f = fixture();
@@ -483,6 +511,7 @@ class SlackAgentServiceTest {
     assertEquals(RunStatus.UNKNOWN, f.registry().get("run").status());
   }
 
+  /** Slackとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void relocatedProjectIsRevalidatedBeforeAnyNetworkSend() {
     var f = fixture();
@@ -506,6 +535,7 @@ class SlackAgentServiceTest {
     assertEquals(RunStatus.UNKNOWN, f.registry().get("run").status());
   }
 
+  /** 利用できない通信の接続接続について、ツール受付記録を受け付けないことを確認する。 */
   @Test
   void unavailableSocketConnectionRejectsToolReceiptWithoutCreatingAnUnboundedWait() {
     var f = fixture();
@@ -538,6 +568,7 @@ class SlackAgentServiceTest {
     assertEquals(RunStatus.RUNNING, f.registry().get("run").status());
   }
 
+  /** Slackとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void preparedConnectionRetainsOldRepliesButCannotAdmitUntilSocketOpenSucceeds() {
     var f = fixture();
@@ -599,6 +630,7 @@ class SlackAgentServiceTest {
     assertEquals(2, f.repo().forRun("run").size());
   }
 
+  /** Slackとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void requestAndExistingDependencyCommitTogetherThenPublishTheObservedTerminalState() {
     var f = fixture();
@@ -671,6 +703,7 @@ class SlackAgentServiceTest {
     assertEquals(1, dependencies.list("project").size());
   }
 
+  /** Slackとの連携で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void orphanedManagedParentCannotResumeWithoutOriginalGoalBudgetAfterRestart() {
     var f = fixture();

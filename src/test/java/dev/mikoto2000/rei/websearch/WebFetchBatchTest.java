@@ -20,7 +20,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** Web取得まとめた処理の結果と状態の契約を検証するテスト。 */
 class WebFetchBatchTest {
+  /** {@code candidates} の条件を再現するための補助情報を返す。 */
   List<WebSearchSelection.Candidate> candidates(String... hosts) {
     var result = new ArrayList<WebSearchSelection.Candidate>();
     for (int i = 0; i < hosts.length; i++)
@@ -32,6 +34,7 @@ class WebFetchBatchTest {
     return result;
   }
 
+  /** 順位を保持することを確認する。 */
   @Test
   void threeDelayedFetchesOverlapAndResultsRetainRankRatherThanCompletionOrder() throws Exception {
     try (var batch = new WebFetchBatch(3, 2, 32);
@@ -61,6 +64,7 @@ class WebFetchBatchTest {
     }
   }
 
+  /** Web上の情報の調査で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void globalAndHostLimitsApplyAcrossConcurrentBatches() throws Exception {
     try (var batch = new WebFetchBatch(3, 1, 32);
@@ -106,6 +110,7 @@ class WebFetchBatchTest {
     }
   }
 
+  /** Web上の情報の調査で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedPageDoesNotDiscardSuccessfulPage() {
     try (var batch = new WebFetchBatch(2, 2, 32)) {
@@ -123,6 +128,7 @@ class WebFetchBatchTest {
     }
   }
 
+  /** 実行中を停止することを確認する。 */
   @Test
   void deadlineKeepsLaterCompletedSuccessAndStopsRunningAndQueuedTasks() throws Exception {
     try (var batch = new WebFetchBatch(2, 1, 32)) {
@@ -153,6 +159,7 @@ class WebFetchBatchTest {
     }
   }
 
+  /** Web上の情報の調査の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void callerCancellationStopsQueuedWorkAndReleasesExecutorAdmission() throws Exception {
     try (var batch = new WebFetchBatch(1, 1, 32);
@@ -197,6 +204,7 @@ class WebFetchBatchTest {
     }
   }
 
+  /** 全対象作業を解放することを確認する。 */
   @Test
   void saturatedQueueRejectsExplicitlyAndCloseReleasesAllWork() throws Exception {
     var batch = new WebFetchBatch(1, 1, 1);
@@ -234,6 +242,7 @@ class WebFetchBatchTest {
     }
   }
 
+  /** Web上の情報の調査で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void invalidConcurrencyAndDeadlineAreRejected() {
     assertThrows(IllegalArgumentException.class, () -> new WebFetchBatch(4, 2, 32));
@@ -246,6 +255,7 @@ class WebFetchBatchTest {
     }
   }
 
+  /** Web上の情報の調査で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void invalidConfigurationCannotSilentlyCreateAnUnboundedPool() {
     var properties = new WebSearchProperties();
@@ -260,6 +270,7 @@ class WebFetchBatchTest {
     assertThrows(IllegalArgumentException.class, properties::validateSelection);
   }
 
+  /** Web上の情報の調査で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void inheritedDeadlineProducesPartialResultsRatherThanLosingSuccess() {
     try (var batch = new WebFetchBatch(2, 2, 32);
@@ -280,6 +291,7 @@ class WebFetchBatchTest {
     }
   }
 
+  /** Web上の情報の調査で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void delayedFixtureReducesWallTimeWithEquivalentValues() {
     var input = candidates("a.example", "b.example", "c.example");
@@ -307,6 +319,7 @@ class WebFetchBatchTest {
     }
   }
 
+  /** Web上の情報の調査で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void runStopRaisedInAWorkerStopsTheWholeBatchPromptly() {
     try (var batch = new WebFetchBatch(2, 2, 32)) {
@@ -333,6 +346,7 @@ class WebFetchBatchTest {
     }
   }
 
+  /** Web上の情報の調査の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void repeatedCancelAndStartRacesLeaveNoHostReservations() throws Exception {
     try (var batch = new WebFetchBatch(3, 1, 32)) {

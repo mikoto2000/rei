@@ -5,8 +5,23 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-/** User-defined category-share comparison, not a productivity or entertainment classifier. */
+/**
+ * 作業状況の把握に必要な期間助言を扱う。
+ *
+ * <p>User-defined category-share comparison, not a productivity or entertainment classifier.
+ */
 public final class PeriodCoaching {
+  /**
+   * 作業状況の把握で受け渡す設定を表す。
+   *
+   * @param enabled 有効状態
+   * @param categories 分類一覧
+   * @param targetShare 対象共有
+   * @param minimumObservedMinutes 最小観測分数
+   * @param minimumCoverage 最小対象範囲
+   * @param maximumUnknownShare 最大不明共有
+   * @param cooldownDays 通知を控える期間日数
+   */
   public record Settings(
       boolean enabled,
       Set<String> categories,
@@ -15,6 +30,7 @@ public final class PeriodCoaching {
       double minimumCoverage,
       double maximumUnknownShare,
       int cooldownDays) {
+    /** 受け取った情報からSettingsを作成する。 */
     public Settings {
       if (categories == null
           || categories.isEmpty()
@@ -36,11 +52,13 @@ public final class PeriodCoaching {
       categories = Set.copyOf(categories);
     }
 
+    /** 作業状況の把握で用いる既定値を返す。 */
     public static Settings defaults() {
       return new Settings(
           false, Set.of("development", "research", "documentation"), .6, 120, .1, .25, 7);
     }
 
+    /** 指定された有効状態を反映した情報を作成する。 */
     public Settings withEnabled(boolean enabled) {
       return new Settings(
           enabled,
@@ -53,9 +71,19 @@ public final class PeriodCoaching {
     }
   }
 
+  /**
+   * 作業状況の把握で受け渡す評価を表す。
+   *
+   * @param advice 助言
+   * @param reason 理由
+   * @param currentShare 現在共有
+   * @param previousShare 前回共有
+   * @param message メッセージ
+   */
   public record Assessment(
       boolean advice, String reason, double currentShare, double previousShare, String message) {}
 
+  /** 対象を判断基準に照らして評価する。 */
   public Assessment evaluate(
       Settings settings,
       ActivityPeriodAnalysis.Aggregate current,
@@ -89,11 +117,13 @@ public final class PeriodCoaching {
     return new Assessment(true, reason, share, before, message);
   }
 
+  /** 確定できない結果を、判定不能の情報として表す。 */
   private static long unknown(ActivityPeriodAnalysis.Aggregate a) {
     return a.categorySeconds().getOrDefault("unknown", 0L)
         + a.categorySeconds().getOrDefault("other", 0L);
   }
 
+  /** 作業状況の把握で用いる共有を返す。 */
   private static double share(Settings settings, ActivityPeriodAnalysis.Aggregate a) {
     return settings.categories().stream()
             .mapToLong(c -> a.categorySeconds().getOrDefault(c, 0L))
@@ -101,6 +131,7 @@ public final class PeriodCoaching {
         / (double) (a.observedSeconds() - unknown(a));
   }
 
+  /** 作業状況の把握で用いる抑制されたを返す。 */
   private static Assessment suppressed(String reason) {
     return new Assessment(false, reason, 0, 0, "助言を抑制しました: " + reason);
   }

@@ -13,10 +13,13 @@ import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
+/** 再開用の記録対話の補助の結果と状態の契約を検証するテスト。 */
 class CheckpointAdvisorTest {
 
+  /** 検証に使うタイムゾーン。 */
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
 
+  /** 実行状態の引き継ぎで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void checkpointIsInjectedIntoUserMessage() {
     CheckpointStore store =
@@ -49,6 +52,7 @@ class CheckpointAdvisorTest {
     assertTrue(text.contains("続けて"));
   }
 
+  /** 実行状態の引き継ぎで、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void emptyCheckpointLeavesMessageUnchanged() {
     CheckpointStore store =
@@ -63,7 +67,9 @@ class CheckpointAdvisorTest {
     assertEquals("hello", result.prompt().getUserMessage().getText());
   }
 
+  /** 検証条件を再現するためのNoop対話の補助Chain。 */
   private static final class NoopAdvisorChain implements AdvisorChain {
+    /** 検証用に、実行状態の引き継ぎで参照する観測内容登録台帳を返す。 */
     @Override
     public io.micrometer.observation.ObservationRegistry getObservationRegistry() {
       return io.micrometer.observation.ObservationRegistry.NOOP;

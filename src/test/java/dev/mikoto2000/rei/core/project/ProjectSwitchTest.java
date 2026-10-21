@@ -8,10 +8,13 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** プロジェクトSwitchの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ProjectSwitchTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** 失敗会話照会について、選択内容を保持することを確認する。 */
   @Test
   void failedSessionLookupPreservesSelectionAndOtherClients() throws Exception {
     var sessions =
@@ -38,6 +41,7 @@ class ProjectSwitchTest extends dev.mikoto2000.rei.core.project.ProjectClientTes
     assertThat(service.currentSessionId()).isEqualTo("original");
   }
 
+  /** 識別情報を復元することを確認する。 */
   @Test
   void switchRestoresIdentityAndCapturedRunRemainsOwnedByA() throws Exception {
     Path a = Files.createDirectory(temp.resolve("a"));

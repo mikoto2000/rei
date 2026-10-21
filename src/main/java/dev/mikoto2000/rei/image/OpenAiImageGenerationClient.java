@@ -9,16 +9,22 @@ import org.springframework.ai.image.ImageResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+/** 開始AI画像生成を外部の接続先へ依頼する窓口。 */
 @Component
 public class OpenAiImageGenerationClient implements ImageGenerationClient {
 
+  /** 画像モデル提供元。 */
   private final ImageModelProvider imageModelProvider;
+
+  /** この機能の動作設定。 */
   private final ImageProperties properties;
 
+  /** 画像の生成を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public OpenAiImageGenerationClient(ImageModelProvider imageModelProvider) {
     this(imageModelProvider, new ImageProperties());
   }
 
+  /** 指定された値や利用先を使って、OpenAiImageGenerationClientを初期化する。 */
   @Autowired
   public OpenAiImageGenerationClient(
       ImageModelProvider imageModelProvider, ImageProperties properties) {
@@ -26,6 +32,7 @@ public class OpenAiImageGenerationClient implements ImageGenerationClient {
     this.properties = properties;
   }
 
+  /** 指定された条件に従って、依頼された内容を生成する。 */
   @Override
   public String generate(ImageGenerationRequest request) {
     ImageModel imageModel = imageModelProvider.imageModel();
@@ -42,6 +49,7 @@ public class OpenAiImageGenerationClient implements ImageGenerationClient {
     return image.getB64Json();
   }
 
+  /** 利用先に渡せるよう、プロンプトを組み立てる。 */
   ImagePrompt buildPrompt(ImageGenerationRequest request) {
     ImageOptionsBuilder options =
         ImageOptionsBuilder.builder()
@@ -60,6 +68,7 @@ public class OpenAiImageGenerationClient implements ImageGenerationClient {
     return new ImagePrompt(request.prompt(), options.build());
   }
 
+  /** 画像の生成において、送信応答形式の実施条件を判定する。 */
   private boolean shouldSendResponseFormat(String model) {
     String responseFormat = properties.getResponseFormat();
     if (responseFormat == null
@@ -76,6 +85,7 @@ public class OpenAiImageGenerationClient implements ImageGenerationClient {
     throw new IllegalArgumentException("Unsupported rei.image.response-format: " + responseFormat);
   }
 
+  /** 画像の生成において、GPT画像モデルかどうかを判定する。 */
   private boolean isGptImageModel(String model) {
     return model.toLowerCase(java.util.Locale.ROOT).startsWith("gpt-image-");
   }

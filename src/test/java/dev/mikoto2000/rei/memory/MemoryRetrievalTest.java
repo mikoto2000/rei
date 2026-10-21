@@ -19,18 +19,26 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 記憶関連情報の取得の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class MemoryRetrievalTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う保存と検索の窓口。 */
   MemoryRepository repository;
+
+  /** 検証に使うこの機能の動作設定。 */
   MemoryProperties properties = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60, null);
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     var ds = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("m.db"));
     repository = new MemoryRepository(ds, new MemoryService(ds, properties));
   }
 
+  /** 長期記憶の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void selectsGlobalAndCurrentActiveOnlyWithinBudget() {
     var global =
@@ -54,6 +62,7 @@ class MemoryRetrievalTest {
     assertNotNull(repository.find(global.id()).orElseThrow().lastAccessedAt());
   }
 
+  /** 長期記憶の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void respectsCountAndTinyTokenBudget() {
     for (int i = 0; i < 8; i++)
@@ -71,12 +80,14 @@ class MemoryRetrievalTest {
         1, new MemoryRetriever(repository, single).retrieve("Vision", "p").memories().size());
   }
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledNeverQueriesRepository() {
     var disabled = new MemoryProperties(false, 20, 80, 10, 3, 2000, 60, null);
     assertEquals("", new MemoryRetriever(null, disabled).retrieve("Vision", "p").context());
   }
 
+  /** 長期記憶の活用で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void japaneseSummaryAndTagsAreSearchableAndPunctuationIsSafe() {
     repository.insert(

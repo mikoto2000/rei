@@ -20,8 +20,10 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況段階34の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ActivityPhase34Test {
+  /** {@code sample} の条件を再現するための補助情報を返す。 */
   private static ActivityRecord sample(int minute, String category, String project) {
     String app = Set.of("social", "media", "shopping").contains(category) ? "Firefox" : "Terminal";
     String service = app.equals("Firefox") ? "X" : "";
@@ -33,6 +35,7 @@ class ActivityPhase34Test {
         activity("other", "Firefox", "GitHub", ""));
   }
 
+  /** {@code block} の条件を再現するための補助情報を返す。 */
   private static List<ActivityRecord> block(
       int start, int minutes, String category, String project) {
     return java.util.stream.IntStream.range(start, start + minutes)
@@ -40,20 +43,24 @@ class ActivityPhase34Test {
         .toList();
   }
 
+  /** {@code summarize} の条件を再現するための補助情報を返す。 */
   private static List<TrendSummarySegment> summarize(List<ActivityRecord> records) {
     return trends(records.toArray(ActivityRecord[]::new));
   }
 
+  /** {@code concat} の条件を再現するための補助情報を返す。 */
   private static List<ActivityRecord> concat(List<ActivityRecord> a, List<ActivityRecord> b) {
     var result = new ArrayList<>(a);
     result.addAll(b);
     return result;
   }
 
+  /** {@code text} の条件を再現するための補助情報を返す。 */
   private static String text(List<TrendSummarySegment> segments) {
     return new TrendSummaryFormatter(ZoneOffset.UTC).format(segments);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void terminalAliasesIncludeCaseWhitespaceAndPunctuation() {
     for (String value :
@@ -68,6 +75,7 @@ class ActivityPhase34Test {
             " terminal ")) assertEquals("ターミナル", ActivityDisplayLabels.label(value), value);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void editorAndLogAliasesAreReadable() {
     for (String value :
@@ -77,6 +85,7 @@ class ActivityPhase34Test {
     assertEquals("ローカルログ", ActivityDisplayLabels.label("log file"));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void twitterAliasesAreOneService() {
     for (String value :
@@ -84,6 +93,7 @@ class ActivityPhase34Test {
       assertEquals("X", ActivityDisplayLabels.label(value));
   }
 
+  /** 作業状況の把握で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateLabelsDoNotConsumeDisplaySlotsAndRawValuesSurvive() {
     var r =
@@ -102,6 +112,7 @@ class ActivityPhase34Test {
     assertTrue(text(List.of(s)).contains("ローカルログ"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void serviceActivityApplicationAndTopicAreNotProjects() {
     for (String candidate :
@@ -130,6 +141,7 @@ class ActivityPhase34Test {
     }
   }
 
+  /** 作業状況の把握で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void validProjectIdentifiersArePreserved() {
     for (String project : List.of("rei", "yagisan-reports", "another_project")) {
@@ -139,6 +151,7 @@ class ActivityPhase34Test {
     }
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void stableFiftyFiveMinuteThemeIsNotCutAtFortyFiveMinutes() {
     var records = block(0, 55, "development", "rei");
@@ -148,6 +161,7 @@ class ActivityPhase34Test {
     assertEquals(records, result.getFirst().evidence());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sustainedThemeSwitchSplitsFiftyMinuteWindow() {
     var records = concat(block(0, 30, "social", ""), block(30, 20, "development", "rei"));
@@ -158,6 +172,7 @@ class ActivityPhase34Test {
     assertEquals(records, result.stream().flatMap(s -> s.evidence().stream()).toList());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void projectSwitchSplitsEvenShortWindow() {
     var result =
@@ -170,6 +185,7 @@ class ActivityPhase34Test {
     assertEquals(List.of("yagisan-reports"), result.getLast().projects());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sustainedWorkToLeisureSplitsButBriefDetourDoesNot() {
     assertEquals(
@@ -181,12 +197,14 @@ class ActivityPhase34Test {
     assertEquals(1, summarize(detour).size());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sameLeisureFamilyCanStayTogether() {
     assertEquals(
         1, summarize(concat(block(0, 15, "social", ""), block(15, 15, "media", ""))).size());
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void softLimitTriggersCategoryBoundarySearchWithoutFixedTimeCut() {
     var records = concat(block(0, 30, "development", "rei"), block(30, 25, "documentation", "rei"));
@@ -205,6 +223,7 @@ class ActivityPhase34Test {
             .size());
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void longGapCanSplitSoftLimitWithoutCountingMissingTimeAsObserved() {
     var records = concat(block(0, 20, "development", "rei"), block(30, 20, "development", "rei"));
@@ -214,6 +233,7 @@ class ActivityPhase34Test {
     assertEquals(records, result.stream().flatMap(s -> s.evidence().stream()).toList());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownBetweenStableThemesDoesNotHideSwitchOrLoseEvidence() {
     var records =
@@ -226,6 +246,7 @@ class ActivityPhase34Test {
     assertEquals(60, result.stream().mapToLong(TrendSummarySegment::unknownSeconds).sum());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void evidenceBasedExamplesAreExportable() throws Exception {
     var continuous = summarize(block(0, 38, "development", "rei"));
@@ -247,6 +268,7 @@ class ActivityPhase34Test {
     java.nio.file.Files.writeString(java.nio.file.Path.of("target/activity34-example.txt"), output);
   }
 
+  /** 作業状況の把握で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void splitInspectsEvidenceInsideExistingSummaryProjection() {
     var records = concat(block(0, 25, "social", ""), block(25, 25, "development", "rei"));
@@ -262,6 +284,7 @@ class ActivityPhase34Test {
     assertEquals(3000, result.stream().mapToLong(TrendSummarySegment::observedSeconds).sum());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void continuousStrongEvidenceUsesNaturalActivityWording() {
     String result = text(summarize(block(0, 38, "development", "rei")));
@@ -272,6 +295,7 @@ class ActivityPhase34Test {
     assertFalse(result.contains("集中して"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sparseObservationsKeepIntermittentWordingWithoutRepeatedQualification() {
     String result = text(trends(sample(0, "development", "rei"), sample(15, "development", "rei")));
@@ -280,6 +304,7 @@ class ActivityPhase34Test {
     assertTrue(result.startsWith("画面の観測に基づく振り返りです。"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void weakPrimaryConfidenceDoesNotGetStrongContinuousWording() {
     var r = sample(0, "development", "rei");
@@ -302,6 +327,7 @@ class ActivityPhase34Test {
     assertTrue(result.contains("関連の画面が断続的に表示されていました。"));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void mixedAndUnknownWordingStayCautious() {
     String mixed =

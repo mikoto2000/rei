@@ -13,8 +13,13 @@ import org.yaml.snakeyaml.Yaml;
 import org.yaml.snakeyaml.constructor.SafeConstructor;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Safe scalar/map YAML only. Diagnostics never echo arbitrary YAML or prompts. */
+/**
+ * 補助エージェントへの委譲に必要な補助エージェント定義読み込みの窓口を扱う。
+ *
+ * <p>Safe scalar/map YAML only. Diagnostics never echo arbitrary YAML or prompts.
+ */
 public final class SubAgentDefinitionLoader {
+  /** 項目一覧。 */
   private static final Set<String> FIELDS =
       Set.of(
           "id",
@@ -31,14 +36,20 @@ public final class SubAgentDefinitionLoader {
           "requiredToolCalls",
           "semanticValidation",
           "inheritApprovals");
+
+  /** 判断基準。 */
   private final SubAgentToolPolicy policy;
+
+  /** モデル対象の解決。 */
   private final Predicate<String> modelResolver;
 
+  /** 指定された値や利用先を使って、SubAgentDefinitionLoaderを初期化する。 */
   public SubAgentDefinitionLoader(SubAgentToolPolicy policy, Predicate<String> modelResolver) {
     this.policy = policy;
     this.modelResolver = modelResolver;
   }
 
+  /** 保存された情報を読み込み、現在の処理で使える形にする。 */
   public SubAgentDefinition load(Path file) {
     Map<?, ?> values;
     try {
@@ -88,6 +99,7 @@ public final class SubAgentDefinitionLoader {
       }
       var requiredCalls = new ArrayList<SubAgentRequiredCall>();
       if (values.containsKey("requiredToolCalls")) {
+        // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (!(values.get("requiredToolCalls") instanceof List<?> calls) || calls.size() > 16)
           throw new IllegalArgumentException(
               "requiredToolCalls: expected list of at most 16 calls");
@@ -171,6 +183,7 @@ public final class SubAgentDefinitionLoader {
     }
   }
 
+  /** 補助エージェントへの委譲において、JSON変換値に該当するか判定する。 */
   private static boolean jsonValue(Object value, int depth) {
     if (depth > 8) return false;
     if (value == null || value instanceof String || value instanceof Boolean) return true;
@@ -184,12 +197,14 @@ public final class SubAgentDefinitionLoader {
     return false;
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   private String text(Map<?, ?> values, String key) {
     if (!(values.get(key) instanceof String value) || value.isBlank())
       throw new IllegalArgumentException(key + ": required nonblank string");
     return value;
   }
 
+  /** 受け付けられない指定について、入力の問題を伝える。 */
   private IllegalArgumentException invalid(Path file, String reason) {
     return new IllegalArgumentException(file.toAbsolutePath().normalize() + ": " + reason);
   }

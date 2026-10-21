@@ -28,12 +28,19 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.sqlite.SQLiteDataSource;
 
+/** 再開用の記録強制後片付けの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class CheckpointForceCleanupTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う取得元。 */
   private SQLiteDataSource source;
+
+  /** 検証に使うリポジトリ。 */
   private PersistentCheckpointRepository repo;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     source = new SQLiteDataSource();
@@ -41,6 +48,7 @@ class CheckpointForceCleanupTest {
     repo = new PersistentCheckpointRepository(source, new CheckpointProperties());
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void forcePreviewIncludesProtectedDamagedAndOrphanHistoryWithoutMutation() throws Exception {
     createMixedHistory();
@@ -66,9 +74,11 @@ class CheckpointForceCleanupTest {
     assertEquals(heads, count("checkpoint_heads"));
     assertTrue(repo.leased("project", "live"));
     assertEquals(2, repo.get("project", "resumed").resumedFromRevision());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(registry);
   }
 
+  /** 作業の中断と再開の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void forceApplyDeletesAllCheckpointStateButRetainsExactApprovalReceiptAndOtherTables()
       throws Exception {
@@ -120,6 +130,7 @@ class CheckpointForceCleanupTest {
     assertEquals(before.eventKeys(), repo.historyUsage().eventKeys());
   }
 
+  /** 保存参照先一覧解放済み限定変更後全対象再開用の記録について、確定を削除することを確認する。 */
   @Test
   void storageReferencesAreReleasedOnlyAfterAllCheckpointDeletesCommit() throws Exception {
     save("first", 2, "RUNNING");
@@ -143,6 +154,7 @@ class CheckpointForceCleanupTest {
     verify(registry).releaseCheckpointHistory(anyList());
   }
 
+  /** 作業の中断と再開で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failureDeletingHeadsRollsBackSnapshotsHeadsAndStorageReferences() throws Exception {
     createMixedHistory();
@@ -160,9 +172,11 @@ class CheckpointForceCleanupTest {
     assertEquals(heads, count("checkpoint_heads"));
     assertEquals(3, repo.get("project", "resumed").revision());
     assertTrue(repo.leased("project", "live"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(registry);
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void lateSaveCannotResurrectDeletedTaskButNewTaskCanStart() throws Exception {
     var stale = save("old", 2, "RUNNING");
@@ -180,6 +194,7 @@ class CheckpointForceCleanupTest {
     assertEquals(fresh, repo.get("project", "new"));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private void createMixedHistory() throws Exception {
     save("ordinary", 2, "FAILED");
     save("live", 2, "RUNNING");
@@ -196,11 +211,13 @@ class CheckpointForceCleanupTest {
     execute("INSERT INTO checkpoint_heads(project,task,revision) VALUES('project','empty-head',0)");
   }
 
+  /** {@code initial} の条件を再現するための補助情報を返す。 */
   private PersistentCheckpoint initial(String task) {
     return PersistentCheckpoint.initial(
         task, "project", "session", "run-" + task, root, "request-" + task);
   }
 
+  /** 検証用に、後から参照できるよう、指定された情報を保存する。 */
   private PersistentCheckpoint save(String task, int revisions, String status) {
     var fields = repo.fields(initial(task));
     fields.put("status", status);
@@ -211,6 +228,7 @@ class CheckpointForceCleanupTest {
     return state;
   }
 
+  /** 検証用に、要求された処理を実行する。 */
   private void execute(String sql) throws Exception {
     try (var connection = DriverManager.getConnection(source.getUrl());
         var statement = connection.createStatement()) {
@@ -218,6 +236,7 @@ class CheckpointForceCleanupTest {
     }
   }
 
+  /** {@code count} の条件を再現するための補助情報を返す。 */
   private long count(String table) throws Exception {
     try (var connection = DriverManager.getConnection(source.getUrl());
         var statement = connection.createStatement();

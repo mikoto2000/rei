@@ -12,11 +12,14 @@ import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 会話ログ保存先の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ConversationLogStoreTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 文脈発生順序について、再開の後も対象の情報が残ることを確認する。 */
   @Test
   void contextSequenceSurvivesRestartAndClockRollback() {
     var mapper = new ObjectMapper().registerModule(new JavaTimeModule());
@@ -36,6 +39,7 @@ class ConversationLogStoreTest {
         .containsExactly(1L, 2L);
   }
 
+  /** 旧形式ログ一覧音量の補正について、続きの取得位置一覧を読み取ることを確認する。 */
   @Test
   void legacyLogsGainReadCursorsWithoutRewritingTheirContents() throws Exception {
     String raw =
@@ -58,6 +62,7 @@ class ConversationLogStoreTest {
     assertThat(Files.readString(original)).isEqualTo(raw);
   }
 
+  /** 会話履歴と受付記録の管理で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void appendsJsonLinesToDailyFileAndReadsThemBack() throws Exception {
     Clock clock = Clock.fixed(Instant.parse("2026-08-29T03:00:00Z"), ZoneId.of("Asia/Tokyo"));
@@ -76,6 +81,7 @@ class ConversationLogStoreTest {
         .containsExactly("こんにちは", "どうも");
   }
 
+  /** 会話履歴と受付記録の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void rotatesToAnotherFileWhenTheLocalDateChanges() {
     ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());

@@ -36,18 +36,25 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
-/** Explicit opt-in only. Default/full profiles exclude this entire class. */
+/**
+ * Live実行環境E2Eの結果と状態の契約を検証するテスト。
+ *
+ * <p>Explicit opt-in only. Default/full profiles exclude this entire class.
+ */
 @Tag("live")
 @Timeout(value = 180, unit = java.util.concurrent.TimeUnit.SECONDS)
 class LiveEnvironmentE2ETest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temporary;
 
+  /** {@code fixture} の条件を再現するための補助情報を返す。 */
   Path fixture() throws Exception {
     var root = Files.createDirectory(temporary.resolve("project"));
     Files.writeString(root.resolve("A.txt"), "before\n");
     return root;
   }
 
+  /** {@code executor} の条件を再現するための補助情報を返す。 */
   ExternalAgentExecutor executor(ExternalAgentRequest.Agent agent, boolean persisted) {
     if (agent == ExternalAgentRequest.Agent.CODEX) {
       var config = new CodexProperties();
@@ -67,22 +74,28 @@ class LiveEnvironmentE2ETest {
     return new ClaudeCodeExternalAgentExecutor(config, new ClaudeCodeProcessRunner());
   }
 
+  /** {@code budget} の条件を再現するための補助情報を返す。 */
   dev.mikoto2000.rei.llm.ModelCallBudget budget() {
     return new dev.mikoto2000.rei.llm.ModelCallBudget() {
+      /** 検証に使う呼び出し回数。 */
       int calls;
 
+      /** {@code tokenLimitEnabled} の条件を再現するための補助情報を返す。 */
       public boolean tokenLimitEnabled() {
         return false;
       }
 
+      /** 検証用に、使用したトークン数を実行予算へ記録する。 */
       public void recordTotalTokens(Integer tokens) {}
 
+      /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
       public void run() {
         if (++calls > 2) throw new IllegalStateException("Live fixture call budget exceeded");
       }
     };
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   ExternalAgentRequest request(
       ExternalAgentRequest.Agent agent,
       ExternalAgentRequest.Action action,
@@ -101,6 +114,7 @@ class LiveEnvironmentE2ETest {
         session);
   }
 
+  /** {@code review} の条件を再現するため、検証用の操作や状態を扱う。 */
   void review(ExternalAgentRequest.Agent agent, boolean resume) throws Exception {
     LiveE2EPolicy.account(agent.name());
     var root = fixture();
@@ -137,26 +151,31 @@ class LiveEnvironmentE2ETest {
     }
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void codexReview() throws Exception {
     review(ExternalAgentRequest.Agent.CODEX, false);
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void codexResume() throws Exception {
     review(ExternalAgentRequest.Agent.CODEX, true);
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void claudeReview() throws Exception {
     review(ExternalAgentRequest.Agent.CLAUDE, false);
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void claudeResume() throws Exception {
     review(ExternalAgentRequest.Agent.CLAUDE, true);
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void codexImplementationDelegation() throws Exception {
     LiveE2EPolicy.account("CODEX");
@@ -217,6 +236,7 @@ class LiveEnvironmentE2ETest {
     assertEquals("after\n", Files.readString(root.resolve("A.txt")));
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void codexRequirementDrivenImplementation() throws Exception {
     LiveE2EPolicy.account("CODEX");
@@ -306,6 +326,7 @@ class LiveEnvironmentE2ETest {
     }
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void claudeChangeSet() throws Exception {
     LiveE2EPolicy.account("CLAUDE");
@@ -345,6 +366,7 @@ class LiveEnvironmentE2ETest {
     assertEquals("after\n", Files.readString(root.resolve("A.txt")));
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void paperLiveProvider() {
     LiveE2EPolicy.require("REI_E2E_PAPER");
@@ -369,6 +391,7 @@ class LiveEnvironmentE2ETest {
         papers.stream().allMatch(paper -> paper.title() != null && !paper.title().isBlank()));
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void notificationProvider() throws Exception {
     LiveE2EPolicy.require("REI_E2E_NOTIFICATION");
@@ -433,6 +456,7 @@ class LiveEnvironmentE2ETest {
     assertFalse(receipt.providerReceipt().isBlank());
   }
 
+  /** {@code git} の条件を再現するため、検証用の操作や状態を扱う。 */
   void git(Path root, String... args) throws Exception {
     var command = new ArrayList<String>(List.of("git", "-c", "core.hooksPath="));
     command.addAll(List.of(args));

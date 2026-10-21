@@ -26,27 +26,59 @@ import java.util.Map;
 import java.util.UUID;
 import org.sqlite.SQLiteConnection;
 
-/** Offline migration snapshots: streamed files and SQLite Online Backup, never a DB-only copy. */
+/**
+ * データ保存の共通処理に必要な保存退避先を扱う。
+ *
+ * <p>Offline migration snapshots: streamed files and SQLite Online Backup, never a DB-only copy.
+ */
 public final class StorageBackup {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private StorageBackup() {}
 
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final ObjectMapper JSON = new ObjectMapper();
+
+  /** 最大項目一覧。 */
   private static final int MAX_ENTRIES = 1_000_000;
 
+  /**
+   * データ保存の共通処理で受け渡す項目を表す。
+   *
+   * @param path パス
+   * @param kind 種類
+   * @param size 大きさ
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   */
   private record Entry(String path, String kind, long size, String sha256) {}
 
+  /**
+   * データ保存の共通処理で受け渡す状態の記録を表す。
+   *
+   * @param entries 項目一覧
+   * @param sourceBytes 取得元バイト数
+   * @param fingerprint 要求内容の照合値
+   */
   private record Snapshot(long entries, long sourceBytes, String fingerprint) {}
 
+  /** データ保存の共通処理に必要なVisitorを扱う。 */
   @FunctionalInterface
   private interface Visitor {
+    /** 要求を後続の処理へ引き渡すため、Visitorを受け付ける。 */
     void accept(Path file, String kind, String sourceHash) throws IOException;
   }
 
+  /** データ保存の共通処理に必要なAccumulatorを扱う。 */
   private static final class Accumulator {
+    /** 合計。 */
     final byte[] sum = new byte[32];
+
+    /** 項目一覧。 */
     long entries;
+
+    /** バイト数。 */
     long bytes;
 
+    /** 新たな対象を登録し、後から利用できるようにする。 */
     void add(String path, String kind, String hash, long size) throws IOException {
       if (++entries > MAX_ENTRIES) throw new IOException("Migration source entry limit exceeded");
       byte[] item =
@@ -58,15 +90,18 @@ public final class StorageBackup {
       bytes = Math.addExact(bytes, size);
     }
 
+    /** 現在の状態を、後から参照できる記録として取り出す。 */
     Snapshot snapshot() {
       return new Snapshot(entries, bytes, HexFormat.of().formatHex(sum));
     }
   }
 
+  /** データ保存の共通処理において、取得元一覧の有無を判定する。 */
   static boolean hasSources(Path root) throws IOException {
     return scan(root, (file, kind, hash) -> {}).entries() != 0;
   }
 
+  /** データ保存の共通処理に関する複製を処理する。 */
   static void copy(Path root, Path backup) throws IOException {
     requireSafePath(root);
     requireSafePath(backup);
@@ -103,6 +138,7 @@ public final class StorageBackup {
     force(manifest);
   }
 
+  /** 要求された条件を満たすか判断するため、複製済みを確認する。 */
   static void verifyCopied(Path backup) throws IOException {
     requireSafePath(backup);
     Snapshot snapshot = JSON.readValue(metadata(backup.resolve("snapshot.json")), Snapshot.class);
@@ -124,12 +160,14 @@ public final class StorageBackup {
     if (count[0] != snapshot.entries()) throw new IOException("Backup manifest count mismatch");
   }
 
+  /** 要求された条件を満たすか判断するため、取得元一覧を確認する。 */
   static void verifySources(Path root, Path backup) throws IOException {
     Snapshot expected = JSON.readValue(metadata(backup.resolve("snapshot.json")), Snapshot.class);
     if (!expected.equals(scan(root, (file, kind, hash) -> {})))
       throw new IOException("Migration sources changed; stop other writers and retry");
   }
 
+  /** 要求された条件を満たすか判断するため、旧形式取得元一覧を確認する。 */
   static void verifyLegacySources(Path root, Path backup) throws IOException {
     Snapshot expected =
         JSON.readValue(metadata(backup.resolve("legacy-snapshot.json")), Snapshot.class);
@@ -137,6 +175,7 @@ public final class StorageBackup {
       throw new IOException("Legacy sources changed during schema import; source retained");
   }
 
+  /** 後続の判断に現在の状態を反映するため、確認済みの状態を記録する。 */
   static void markVerified(Path backup) throws IOException {
     writeAtomic(
         backup.resolve("verified.json"),
@@ -150,6 +189,7 @@ public final class StorageBackup {
                 hash(backup.resolve("legacy-snapshot.json")))));
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   public static void verify(Path backup) throws IOException {
     requireSafePath(backup);
     var marker = JSON.readTree(metadata(backup.resolve("verified.json")));
@@ -163,7 +203,11 @@ public final class StorageBackup {
     verifyCopied(backup);
   }
 
-  /** Restore only to an empty directory: never overwrite data created after a storage switch. */
+  /**
+   * 保存済みの状態を引き継ぐため、終点空ディレクトリを復元する。
+   *
+   * <p>Restore only to an empty directory: never overwrite data created after a storage switch.
+   */
   public static void restoreToEmptyDirectory(Path backup, Path target) throws IOException {
     verify(backup);
     target = target.toAbsolutePath().normalize();
@@ -190,10 +234,12 @@ public final class StorageBackup {
         });
   }
 
+  /** データ保存の共通処理で用いる調査を返す。 */
   private static Snapshot scan(Path root, Visitor visitor) throws IOException {
     return scan(root, visitor, true);
   }
 
+  /** データ保存の共通処理で用いる調査を返す。 */
   private static Snapshot scan(Path root, Visitor visitor, boolean includeTarget)
       throws IOException {
     requireSafePath(root);
@@ -238,6 +284,7 @@ public final class StorageBackup {
     return total.snapshot();
   }
 
+  /** データ保存の共通処理に関する調査パスを処理する。 */
   private static void scanPath(Path root, Path source, Visitor visitor, Accumulator total)
       throws IOException {
     requireSafePath(source);
@@ -253,6 +300,7 @@ public final class StorageBackup {
         EnumSet.noneOf(FileVisitOption.class),
         64,
         new SimpleFileVisitor<>() {
+          /** データ保存の共通処理で用いるpre対象の確認ディレクトリを返す。 */
           @Override
           public FileVisitResult preVisitDirectory(Path path, BasicFileAttributes attrs)
               throws IOException {
@@ -262,6 +310,7 @@ public final class StorageBackup {
             return FileVisitResult.CONTINUE;
           }
 
+          /** データ保存の共通処理で用いる対象の確認ファイルを返す。 */
           @Override
           public FileVisitResult visitFile(Path path, BasicFileAttributes attrs)
               throws IOException {
@@ -293,6 +342,7 @@ public final class StorageBackup {
         });
   }
 
+  /** データ保存の共通処理において、SQLiteかどうかを判定する。 */
   private static boolean isSqlite(Path file) throws IOException {
     requireSafePath(file);
     String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
@@ -304,11 +354,13 @@ public final class StorageBackup {
     }
   }
 
+  /** 必要な内容を参照できるよう、限定を読み取る。 */
   static Connection readOnly(Path database) throws SQLException {
     return DriverManager.getConnection(
         "jdbc:sqlite:" + database.toUri().toASCIIString() + "?mode=ro");
   }
 
+  /** データ保存の共通処理に関する接続中退避先を処理する。 */
   private static void onlineBackup(Path source, Path target) throws IOException {
     try (var connection = readOnly(source)) {
       int result =
@@ -322,6 +374,7 @@ public final class StorageBackup {
     }
   }
 
+  /** データ保存の共通処理に関する整合性を処理する。 */
   static void integrity(Path database) throws IOException {
     try (var connection = readOnly(database);
         var statement = connection.createStatement();
@@ -333,11 +386,14 @@ public final class StorageBackup {
     }
   }
 
+  /** データ保存の共通処理に必要な項目Visitorを扱う。 */
   @FunctionalInterface
   private interface EntryVisitor {
+    /** 要求を後続の処理へ引き渡すため、項目Visitorを受け付ける。 */
     void accept(Entry entry) throws IOException;
   }
 
+  /** データ保存の共通処理に関する項目一覧を処理する。 */
   private static void entries(Path backup, EntryVisitor visitor) throws IOException {
     requireSafePath(backup.resolve("manifest.jsonl"));
     try (var reader = Files.newBufferedReader(backup.resolve("manifest.jsonl"))) {
@@ -356,6 +412,7 @@ public final class StorageBackup {
     }
   }
 
+  /** 条件を満たさない操作を拒否するため、安全性パスの前提条件を確認する。 */
   static void requireSafePath(Path supplied) throws IOException {
     Path path = supplied.toAbsolutePath().normalize();
     for (Path current = path; current != null; current = current.getParent()) {
@@ -367,6 +424,7 @@ public final class StorageBackup {
     }
   }
 
+  /** データ保存の共通処理で用いる範囲内を返す。 */
   private static Path inside(Path root, String relative) throws IOException {
     Path path = Path.of(relative), resolved = root.resolve(path).normalize();
     if (path.isAbsolute()
@@ -376,10 +434,12 @@ public final class StorageBackup {
     return resolved;
   }
 
+  /** データ保存の共通処理で用いる相対を返す。 */
   private static String relative(Path root, Path path) {
     return root.relativize(path).toString().replace('\\', '/');
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   static String hash(Path file) throws IOException {
     requireSafePath(file);
     var digest = digest();
@@ -395,6 +455,7 @@ public final class StorageBackup {
     return HexFormat.of().formatHex(digest.digest());
   }
 
+  /** データ保存の共通処理で用いる内容の照合値を返す。 */
   private static MessageDigest digest() {
     try {
       return MessageDigest.getInstance("SHA-256");
@@ -403,6 +464,7 @@ public final class StorageBackup {
     }
   }
 
+  /** データ保存の共通処理で用いる付随情報を返す。 */
   static byte[] metadata(Path path) throws IOException {
     requireSafePath(path);
     try (var input = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS)) {
@@ -413,6 +475,7 @@ public final class StorageBackup {
     }
   }
 
+  /** データ保存の共通処理に関する強制を処理する。 */
   static void force(Path path) throws IOException {
     try (var channel = FileChannel.open(path, StandardOpenOption.WRITE)) {
       channel.force(true);
@@ -420,6 +483,7 @@ public final class StorageBackup {
     }
   }
 
+  /** 指定された内容を保存先へ反映するため、一括反映を書き込む。 */
   static void writeAtomic(Path target, byte[] bytes) throws IOException {
     requireSafePath(target);
     var parent = target.getParent();

@@ -20,7 +20,9 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
+/** Web上限内に収めたツール出力の結果と状態の契約を検証するテスト。 */
 class WebBoundedToolOutputTest {
+  /** 以前の引数を受け付けられることを確認する。 */
   @Test
   void allFourActualCallbacksAcceptOldArgumentsAndBoundConvertedOutput() throws Exception {
     var search = mock(WebSearchService.class);

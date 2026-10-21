@@ -13,22 +13,35 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-/** Human answers are saved facts, never permission grants or execution requests. */
+/**
+ * 依存条件をWeb APIの操作として受け付ける。
+ *
+ * <p>Human answers are saved facts, never permission grants or execution requests.
+ */
 @RestController
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @RequestMapping("/api/v1/projects/{projectId}/dependencies")
 public class DependencyController {
+  /** 保存と検索の窓口。 */
   private final PersistentDependencyRepository repository;
+
+  /** 観測内容一覧。 */
   private final DependencyObservationService observations;
+
+  /** プロジェクト一覧。 */
   private final dev.mikoto2000.rei.core.project.ProjectRegistry projects;
+
+  /** 利用条件の確認。 */
   private final dev.mikoto2000.rei.core.policy.ToolPermissionGuard guard;
 
+  /** Web APIによる操作を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public DependencyController(
       PersistentDependencyRepository repository, DependencyObservationService observations) {
     this(repository, observations, null, null);
   }
 
+  /** 指定された値や利用先を使って、DependencyControllerを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public DependencyController(
       PersistentDependencyRepository repository,
@@ -41,27 +54,42 @@ public class DependencyController {
     this.guard = guard;
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   @GetMapping
   public List<PersistentDependencyRepository.Entry> list(@PathVariable String projectId) {
     return repository.list(projectId);
   }
 
+  /** 利用者が対象の情報を確認できるように表示する。 */
   @GetMapping("/{id}")
   public PersistentDependencyRepository.Entry show(
       @PathVariable String projectId, @PathVariable String id) {
     return repository.get(projectId, id);
   }
 
+  /** 過去の記録を、条件に従って参照できる形で返す。 */
   @GetMapping("/{id}/history")
   public List<PersistentDependencyRepository.Fact> history(
       @PathVariable String projectId, @PathVariable String id) {
     return repository.history(projectId, id);
   }
 
+  /**
+   * Web APIによる操作で受け渡す回答要求を表す。
+   *
+   * @param expectedVersion 期待する内容形式のバージョン
+   * @param answer 回答
+   */
   public record AnswerRequest(Long expectedVersion, String answer) {}
 
+  /**
+   * Web APIによる操作で受け渡す利用者回答を表す。
+   *
+   * @param value 値
+   */
   public record HumanAnswer(String value) implements StrictApiRequest {}
 
+  /** 後続の処理を進められるか、現在の条件を確認する。 */
   @PostMapping("/{id}/check")
   public PersistentDependencyRepository.Entry check(
       @PathVariable String projectId, @PathVariable String id) {
@@ -86,6 +114,7 @@ public class DependencyController {
     }
   }
 
+  /** 対象の実行をキャンセルする。 */
   @PostMapping("/{id}/cancel")
   public PersistentDependencyRepository.Entry cancel(
       @PathVariable String projectId, @PathVariable String id) {
@@ -96,6 +125,7 @@ public class DependencyController {
     return result;
   }
 
+  /** Web APIによる操作で用いる利用者回答を返す。 */
   @PostMapping("/{id}/human-answer")
   public PersistentDependencyRepository.Entry humanAnswer(
       @PathVariable String projectId, @PathVariable String id, @RequestBody HumanAnswer request) {
@@ -108,6 +138,7 @@ public class DependencyController {
     return result;
   }
 
+  /** Web APIによる操作で用いるプロジェクトを返す。 */
   private dev.mikoto2000.rei.core.project.ProjectContext project(String id) {
     if (projects == null || guard == null)
       throw new IllegalStateException("Dependency controls unavailable");
@@ -116,6 +147,7 @@ public class DependencyController {
         .orElseThrow(() -> new IllegalArgumentException("Unknown registered Project"));
   }
 
+  /** Web APIによる操作で用いる回答を返す。 */
   @PostMapping("/{id}/answer")
   public PersistentDependencyRepository.Entry answer(
       @PathVariable String projectId, @PathVariable String id, @RequestBody AnswerRequest request) {

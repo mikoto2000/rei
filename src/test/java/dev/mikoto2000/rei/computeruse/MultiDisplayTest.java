@@ -18,7 +18,9 @@ import java.awt.image.BufferedImage;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 複数表示の結果と状態の契約を検証するテスト。 */
 class MultiDisplayTest {
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void mapsFractionalDpiAndNegativeVerticalOrigins() {
     var frame =
@@ -36,16 +38,19 @@ class MultiDisplayTest {
         frame.desktopPoint(new ComputerAction.Target("above", 300, 150, "target")));
   }
 
+  /** {@code left} の条件を再現するための補助情報を返す。 */
   static ScreenGeometry left() {
     return new ScreenGeometry(
         "left", new Rectangle(-800, 0, 800, 600), new Rectangle(-800, 0, 1600, 600), false, 2, 2);
   }
 
+  /** 検証用に、画面操作の支援の起動要求を受け付け、実行を開始する。 */
   static ScreenGeometry main() {
     return new ScreenGeometry(
         "main", new Rectangle(0, 0, 800, 600), new Rectangle(-800, 0, 1600, 600), true, 1, 1);
   }
 
+  /** {@code desktop} の条件を再現するための補助情報を返す。 */
   static CapturedScreen desktop() {
     return new CapturedScreen(
         List.of(
@@ -53,6 +58,7 @@ class MultiDisplayTest {
             new DisplayCapture(left(), new BufferedImage(1600, 1200, BufferedImage.TYPE_INT_RGB))));
   }
 
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void routesImageCoordinatesToSelectedMonitorWithMixedScaling() throws Exception {
     var driver = mock(RobotDriver.class);
@@ -69,6 +75,7 @@ class MultiDisplayTest {
     order.verify(driver).move(-600, 100);
   }
 
+  /** 画面操作の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rejectsAmbiguousTargetsAndChangedDpiBeforeInput() throws Exception {
     assertThrows(
@@ -100,6 +107,7 @@ class MultiDisplayTest {
     verify(driver, never()).move(anyInt(), anyInt());
   }
 
+  /** 画面操作の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void capturesEachDisplayAndRejectsTopologyChangesDuringCapture() throws Exception {
     var driver = mock(RobotDriver.class);
@@ -111,6 +119,7 @@ class MultiDisplayTest {
     assertThrows(IllegalStateException.class, () -> new RobotScreenCapture(driver).captureScreen());
   }
 
+  /** 入力の解釈について、選択中画像許容範囲を利用することを確認する。 */
   @Test
   void parserUsesSelectedImageBoundsAndRejectsUnknownDisplay() {
     String json =
@@ -126,6 +135,7 @@ class MultiDisplayTest {
         () -> new ActionParser().parse(json.replace("left", "unknown"), desktop()));
   }
 
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void visionReceivesAllImagesWithUnambiguousLabels() throws Exception {
     var model = mock(org.springframework.ai.chat.model.ChatModel.class);

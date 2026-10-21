@@ -13,9 +13,12 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** バックエンド接続先の結果と状態の契約を検証するテスト。 */
 class BackendEndpointTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code endpoint} の条件を再現するための補助情報を返す。 */
   private BackendEndpoint endpoint(String instance) {
     return new BackendEndpoint(
         1,
@@ -27,6 +30,7 @@ class BackendEndpointTest {
         "READY");
   }
 
+  /** 起動環境の準備で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void acceptsOnlyLiteralLoopbackEndpoints() {
     var value = endpoint(UUID.randomUUID().toString());
@@ -47,6 +51,7 @@ class BackendEndpointTest {
     }
   }
 
+  /** 識別情報を必要とすることを確認する。 */
   @Test
   void requiresIdentityAndSupportedSchema() {
     var value = endpoint(UUID.randomUUID().toString());
@@ -68,6 +73,7 @@ class BackendEndpointTest {
                 1, "not-a-uuid", value.storageId(), value.pid(), value.baseUrl(), 1, "READY"));
   }
 
+  /** 起動環境の準備で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void identityIsPersistentButInstanceChangesAndOldOwnerCannotDelete() throws Exception {
     var store = new BackendEndpointStore(root);
@@ -100,6 +106,7 @@ class BackendEndpointTest {
     assertTrue(store.read().isEmpty());
   }
 
+  /** 起動環境の準備で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void doesNotRepairCorruptIdentityOrAcceptOversizeEndpoint() throws Exception {
     var store = new BackendEndpointStore(root);
@@ -110,6 +117,7 @@ class BackendEndpointTest {
     assertThrows(java.io.IOException.class, store::read);
   }
 
+  /** 起動環境の準備で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void lockFileExistenceDoesNotProveAnOwner() throws Exception {
     Files.createDirectories(root.resolve(".storage"));
@@ -123,6 +131,7 @@ class BackendEndpointTest {
     assertFalse(BackendOwnership.isOwned(root));
   }
 
+  /** {@code workerCommand} の条件を再現するための補助情報を返す。 */
   private java.util.List<String> workerCommand() throws Exception {
     String javaExecutable = Path.of(System.getProperty("java.home"), "bin", "java.exe").toString();
     if (!Files.exists(Path.of(javaExecutable)))
@@ -142,6 +151,7 @@ class BackendEndpointTest {
     return java.util.List.of(javaExecutable, "@" + arguments);
   }
 
+  /** 起動環境の準備で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void actualSecondJvmCannotOwnOrMigrateSameStorageAndCrashReleasesLock() throws Exception {
     var command = workerCommand();
@@ -178,6 +188,7 @@ class BackendEndpointTest {
     }
   }
 
+  /** 起動環境の準備で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void simultaneousJvmCandidatesLeaveExactlyOneOwner() throws Exception {
     var command = workerCommand();

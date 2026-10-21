@@ -12,7 +12,9 @@ import java.time.OffsetDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** フィード伝えるの結果と状態の契約を検証するテスト。 */
 class FeedReportsTest {
+  /** Web APIによる操作で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void listAndItemRangeUseShellFormattingAndExistingServices() {
     var service = mock(FeedService.class);
@@ -25,6 +27,7 @@ class FeedReportsTest {
     verify(service).listBriefingItems(from, to, 10);
   }
 
+  /** Web APIによる操作で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void itemSummarizeDoesNotNarrateOrDuplicateExecution() {
     var summary = mock(FeedSummaryService.class);

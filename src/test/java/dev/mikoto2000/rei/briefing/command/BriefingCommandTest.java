@@ -19,8 +19,10 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** 日次案内コマンドの結果と状態の契約を検証するテスト。 */
 class BriefingCommandTest {
 
+  /** 日次情報の案内で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void todayCommandPrintsDailyBriefing() throws Exception {
     BriefingService service = org.mockito.Mockito.mock(BriefingService.class);
@@ -79,10 +81,12 @@ class BriefingCommandTest {
     assertTrue(output.contains("会議前に提案資料を確認してください。"));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private CommandLine newCommand(BriefingService service) {
     return new CommandLine(
         new BriefingCommand(),
         new CommandLine.IFactory() {
+          /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           public <K> K create(Class<K> cls) throws Exception {
             if (cls == BriefingCommand.TodayCommand.class) {

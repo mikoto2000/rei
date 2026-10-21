@@ -53,7 +53,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** チャットGPT補助エージェントバックエンドの結果と状態の契約を検証するテスト。 */
 class ChatGptSubAgentBackendTest {
+  /** 上限失敗情報公開を送信することを確認する。 */
   @Test
   void sendLimitFailureIsPublishedToTheParentRunWithItsCause() throws Exception {
     Files.writeString(root.resolve("a.txt"), "a".repeat(262145));
@@ -77,25 +79,48 @@ class ChatGptSubAgentBackendTest {
     assertEquals(owner.runId(), failure.runId());
     assertTrue(
         ((SubAgentLifecyclePayload) failure.payload()).failureReason().contains("SEND_LIMIT"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(client);
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うクライアント。 */
   PlanClient client;
+
+  /** 検証に使う権限一覧。 */
   ToolPermissionGuard permissions;
+
+  /** 検証に使う登録台帳。 */
   SubAgentRegistry registry;
+
+  /** 検証に使う実行一覧。 */
   RunRegistry runs;
+
+  /** 検証に使う通知先。 */
   AgentEventPublisher publisher;
+
+  /** 検証に使うキャンセル。 */
   CommandCancellationService cancellation;
+
+  /** 検証に使うバックエンド。 */
   ChatGptSubAgentBackend backend;
+
+  /** 検証に使う所有者。 */
   AgentRunContext owner;
+
+  /** 検証に使う共通の通知属性。 */
   static final String ENVELOPE =
       "{\"status\":\"SUCCESS\",\"summary\":\"reviewed\",\"warnings\":[],\"result\":{\"decision\":\"accept\",\"conclusion\":\"ok\",\"findings\":[],\"proposals\":[],\"unverified\":[],\"references\":[]}}";
+
+  /** 検証に使う有効な。 */
   static final String VALID =
       "{\"subagent\":"
           + ENVELOPE
           + ",\"conclusion\":\"reviewed\",\"findings\":[],\"proposals\":[],\"unverified\":[],\"scope\":[],\"references\":[]}";
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     Files.writeString(
@@ -146,11 +171,13 @@ class ChatGptSubAgentBackendTest {
             });
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   ChatGptSubAgentBackend.Request request(List<String> sources, String expected) {
     return new ChatGptSubAgentBackend.Request(
         "design-review", "chatgpt-plan", "model", "default", "Review", sources, expected);
   }
 
+  /** 補助エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void appServerSharesExistingVerifierRunBudgetAndDistinctPermission() {
     when(client.authority()).thenReturn("test-configuration");
@@ -189,6 +216,7 @@ class ChatGptSubAgentBackendTest {
     assertNotNull(receipt.result().structuredOutput());
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void automaticDelegationIsOptInAndDestinationsAreAdministratorOwned() {
     var request = request(List.of(), "{\"decision\":\"accept\"}");
@@ -200,9 +228,11 @@ class ChatGptSubAgentBackendTest {
     backend.configureAutomatic(
         new PlanDelegationProperties(true, Set.of("default"), Set.of("other")));
     assertThrows(ChatGptException.class, () -> backend.runAutomatic(request, owner, budget));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(client, permissions);
   }
 
+  /** 明示的な履歴を保持することを確認する。 */
   @Test
   void advancedRepairSharesBudgetAndRetainsExplicitHistory() throws Exception {
     Files.writeString(
@@ -249,6 +279,7 @@ class ChatGptSubAgentBackendTest {
     assertFalse(receipt.semantic().truthVerified());
   }
 
+  /** {@code advanced} の条件を再現するため、検証用の操作や状態を扱う。 */
   void advanced() throws Exception {
     Files.writeString(
         root.resolve("review.yaml"),
@@ -259,6 +290,7 @@ class ChatGptSubAgentBackendTest {
         new PlanExecutionProperties(true, null, null, null, null, null, null, false));
   }
 
+  /** 補助エージェントへの委譲で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void validAnswerCanBeExplicitlyRefinedWithinSameRunAndDeadline() throws Exception {
     advanced();
@@ -289,6 +321,7 @@ class ChatGptSubAgentBackendTest {
     assertEquals(34, receipt.totalTokens());
   }
 
+  /** 補助エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void advancedNeverRetriesAuthQuotaPermissionOrUnknownDispatch() throws Exception {
     advanced();
@@ -337,6 +370,7 @@ class ChatGptSubAgentBackendTest {
     }
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void repairLimitAndSharedBudgetNeverReset() throws Exception {
     advanced();
@@ -383,6 +417,7 @@ class ChatGptSubAgentBackendTest {
             any());
   }
 
+  /** 補助エージェントへの委譲で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void repairDoesNotExtendTotalDeadlineOrReplayKnownCompletedRequest() throws Exception {
     advanced();
@@ -424,6 +459,7 @@ class ChatGptSubAgentBackendTest {
             any());
   }
 
+  /** 補助エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void automaticDelegationReusesParentBudgetPermissionsAndValidation() {
     runs.register(owner);
@@ -443,6 +479,7 @@ class ChatGptSubAgentBackendTest {
     assertEquals(ChatGptException.Code.VALIDATION_FAILED, failed.error());
   }
 
+  /** 既存の共通の通知属性を利用することを確認する。 */
   @Test
   void validManualDelegationUsesExistingEnvelopeAndRun() {
     var receipt = backend.run(request(List.of(), "{\"decision\":\"accept\"}"), owner, true, null);
@@ -455,6 +492,7 @@ class ChatGptSubAgentBackendTest {
     verify(permissions).check(eq("requestChatGptPlanSubAgent"), anyString(), eq(owner));
   }
 
+  /** 補助エージェントへの委譲で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void terminalPersistenceFailureDoesNotLeakAdmissionPermit() {
     doAnswer(
@@ -476,6 +514,7 @@ class ChatGptSubAgentBackendTest {
         backend.run(request(List.of(), "{\"decision\":\"accept\"}"), owner, true, null).state());
   }
 
+  /** 補助エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void externalApprovalIsBoundToRoleInstructionsAsWellAsMaterials() throws Exception {
     var request = request(List.of(), "{\"decision\":\"accept\"}");
@@ -495,6 +534,7 @@ class ChatGptSubAgentBackendTest {
     assertNotEquals(approvedInput.getAllValues().get(0), approvedInput.getAllValues().get(1));
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void parentRunAndBudgetAreRetained() {
     runs.register(owner);
@@ -509,6 +549,7 @@ class ChatGptSubAgentBackendTest {
     verify(budget).recordTotalTokens(17);
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void budgetExhaustionPreventsInference() {
     runs.register(owner);
@@ -518,9 +559,11 @@ class ChatGptSubAgentBackendTest {
     var receipt =
         backend.run(request(List.of(), "{\"decision\":\"accept\"}"), owner, false, budget);
     assertEquals(ChatGptSubAgentBackend.State.FAILED, receipt.state());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(client);
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void recursiveAndReadOnlyOwnersAreRejected() {
     for (var bad :
@@ -541,9 +584,11 @@ class ChatGptSubAgentBackendTest {
                   bad,
                   false,
                   mock(LlmCallReservation.class)));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(client);
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unknownRoleAndUnapprovedBackendAreRejected() {
     var bad =
@@ -555,9 +600,11 @@ class ChatGptSubAgentBackendTest {
             "design-review", "other", "model", "default", "Review", List.of(), "{}");
     var finalBad = other;
     assertThrows(ChatGptException.class, () -> backend.run(finalBad, owner, true, null));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(client);
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void malformedModelIdIsRejectedBeforeEventsOrTransport() {
     for (String model : List.of("../other", "model with spaces", "x".repeat(129)))
@@ -576,9 +623,11 @@ class ChatGptSubAgentBackendTest {
                   owner,
                   true,
                   null));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(client, publisher);
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void requiredResultConditionIsChecked() {
     var receipt = backend.run(request(List.of(), "{\"decision\":\"reject\"}"), owner, true, null);
@@ -586,6 +635,7 @@ class ChatGptSubAgentBackendTest {
     assertEquals(RunStatus.FAILED, runs.get(receipt.requestId()).status());
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidJsonAndRequiredFieldsNeverRetry() {
     for (String raw :
@@ -619,6 +669,7 @@ class ChatGptSubAgentBackendTest {
             any());
   }
 
+  /** 補助エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void crossProjectAndHiddenFilesNeverLeaveProcess() throws Exception {
     for (String path : List.of("../foreign.txt", root.resolve("review.yaml").toString(), ".env")) {
@@ -629,6 +680,7 @@ class ChatGptSubAgentBackendTest {
     verifyNoInteractions(client);
   }
 
+  /** 補助エージェントへの委譲で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void denialPreventsExternalTransmission() {
     doThrow(new ToolPermissionException("requestChatGptPlanSubAgent", PermissionDecision.DENY))
@@ -637,9 +689,11 @@ class ChatGptSubAgentBackendTest {
     assertEquals(
         ChatGptSubAgentBackend.State.FAILED,
         backend.run(request(List.of(), "{\"decision\":\"accept\"}"), owner, true, null).state());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(client);
   }
 
+  /** 補助エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void missingSourceReferencesAreValidationFailure() throws Exception {
     Files.writeString(root.resolve("source.txt"), "reference text");
@@ -650,6 +704,7 @@ class ChatGptSubAgentBackendTest {
             .error());
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void incompleteAndInterruptedStreamsHaveDifferentStates() {
     for (var state :
@@ -675,6 +730,7 @@ class ChatGptSubAgentBackendTest {
     }
   }
 
+  /** 補助エージェントへの委譲で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void timeoutAfterDispatchIsUnknown() {
     when(client.infer(
@@ -697,6 +753,7 @@ class ChatGptSubAgentBackendTest {
     assertEquals(RunStatus.UNKNOWN, runs.get(receipt.requestId()).status());
   }
 
+  /** 補助エージェントへの委譲で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void suppliedSourceReceiptsAreCheckedAgainstSnapshot() throws Exception {
     Files.writeString(root.resolve("source.txt"), "source observation");
@@ -736,6 +793,7 @@ class ChatGptSubAgentBackendTest {
     }
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void preDispatchCancellationIsConfirmedAndPostDispatchCancellationIsUnknown() {
     for (boolean dispatched : List.of(false, true)) {
@@ -764,6 +822,7 @@ class ChatGptSubAgentBackendTest {
     }
   }
 
+  /** 補助エージェントへの委譲で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void existingReviewerRoleAndStrictSchemaAreReusable() throws Exception {
     Files.copy(Path.of("config/subagents/reviewer.yaml"), root.resolve("reviewer.yaml"));

@@ -24,7 +24,9 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
+/** プロセス依存条件ツール一覧の結果と状態の契約を検証するテスト。 */
 class ProcessDependencyToolsTest {
+  /** 完了時の処理について、実行文脈出力先所属データ形式を維持することを確認する。 */
   @Test
   void callbackKeepsExecutionContextOutOfSchemaAndReportsVerifiedWaiting() {
     var manager = mock(BackgroundProcessManager.class);
@@ -57,11 +59,13 @@ class ProcessDependencyToolsTest {
     assertEquals(0, context.detector().stagnationCount());
   }
 
+  /** 検証で使用する状態の記録を、指定された条件に合わせて用意する。 */
   BackgroundProcessSnapshot snapshot(BackgroundProcessStatus status, Integer code, boolean found) {
     return new BackgroundProcessSnapshot(
         "p", 42, status, code, Instant.EPOCH, null, 1, List.of("log"), List.of(), found, "");
   }
 
+  /** {@code tools} の条件を再現するための補助情報を返す。 */
   ProcessDependencyTools tools(BackgroundProcessManager manager) {
     var tools = new ProcessDependencyTools(manager);
     var time = new AtomicLong();
@@ -69,6 +73,7 @@ class ProcessDependencyToolsTest {
     return tools;
   }
 
+  /** 共通の実行基盤で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void processCompletionAndTimeoutAreDifferentAndNeverLaunchOrKill() {
     var manager = mock(BackgroundProcessManager.class);
@@ -88,6 +93,7 @@ class ProcessDependencyToolsTest {
     verify(manager, never()).kill(anyString());
   }
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void failuresCancellationAndUnknownProcessHaveExplicitStates() {
     var manager = mock(BackgroundProcessManager.class);

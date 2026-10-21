@@ -10,6 +10,16 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
+/**
+ * 作業状況の把握で受け渡す作業状況時系列の記録を表す。
+ *
+ * @param store 保存先
+ * @param clock 判定や記録に使う時刻の取得元
+ * @param summaryPolicy 要約判断基準
+ * @param dailySummaries 日次要約一覧
+ * @param scoreCriteria 評価値判断基準一覧
+ * @param workInferences 作業推定一覧
+ */
 public record ActivityTimeline(
     ActivityStore store,
     Clock clock,
@@ -17,6 +27,7 @@ public record ActivityTimeline(
     DailySummaryService dailySummaries,
     PeriodCoachingStore scoreCriteria,
     WorkActivityInferenceStore workInferences) {
+  /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ActivityTimeline(
       ActivityStore store,
       Clock clock,
@@ -26,6 +37,7 @@ public record ActivityTimeline(
     this(store, clock, policy, summaries, criteria, null);
   }
 
+  /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ActivityTimeline(
       ActivityStore store,
       Clock clock,
@@ -34,10 +46,12 @@ public record ActivityTimeline(
     this(store, clock, summaryPolicy, dailySummaries, null);
   }
 
+  /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ActivityTimeline(ActivityStore store, Clock clock, SemanticSessionPolicy summaryPolicy) {
     this(store, clock, summaryPolicy, DailySummaryService.local());
   }
 
+  /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ActivityTimeline(ActivityStore store, Clock clock) {
     this(
         store,
@@ -50,26 +64,31 @@ public record ActivityTimeline(
             clock.getZone()));
   }
 
+  /** 対象を特定できるよう、別日付を探す。 */
   public List<ActivitySession> findByDate(LocalDate date) {
     return store.findBetween(
         date.atStartOfDay(clock.getZone()).toInstant(),
         date.plusDays(1).atStartOfDay(clock.getZone()).toInstant());
   }
 
+  /** 対象を特定できるよう、期間を探す。 */
   public List<ActivitySession> findBetween(Instant start, Instant end) {
     validateRange(start, end);
     return store.findBetween(start, end);
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、対象範囲を検証する。 */
   private static void validateRange(Instant start, Instant end) {
     if (!start.isBefore(end) || Duration.between(start, end).compareTo(Duration.ofDays(31)) > 0)
       throw new IllegalArgumentException("Specify an increasing range of at most 31 days");
   }
 
+  /** 作業状況の把握で用いる検索条件を返す。 */
   public List<ActivitySession> query(String day) {
     return findByDate(date(day));
   }
 
+  /** 作業状況の把握で用いる日付を返す。 */
   LocalDate date(String day) {
     return switch (day) {
       case "today", "summary" -> LocalDate.now(clock);
@@ -79,7 +98,9 @@ public record ActivityTimeline(
   }
 
   /**
-   * Listing projection needs evidence, not persisted fine-session references: one bulk record
+   * 作業状況の把握で用いる時系列の記録区間一覧を返す。
+   *
+   * <p>Listing projection needs evidence, not persisted fine-session references: one bulk record
    * query.
    */
   public List<SummarySegment> timelineSegments(LocalDate date) {
@@ -89,6 +110,7 @@ public record ActivityTimeline(
         .aggregate(summaryPolicy.aggregate(store.findRecordsBetween(start, end), start, end));
   }
 
+  /** 作業状況の把握で用いる要約区間一覧を返す。 */
   public List<SummarySegment> summarySegments(String day) {
     var date = date(day);
     return summaryBetween(
@@ -96,12 +118,14 @@ public record ActivityTimeline(
         date.plusDays(1).atStartOfDay(clock.getZone()).toInstant());
   }
 
+  /** 作業状況の把握で用いる要約期間を返す。 */
   public List<SummarySegment> summaryBetween(Instant start, Instant end) {
     validateRange(start, end);
     var fine = store.findBetween(start, end);
     return summaryBetween(start, end, fine);
   }
 
+  /** 作業状況の把握で用いる要約期間を返す。 */
   private List<SummarySegment> summaryBetween(
       Instant start, Instant end, List<ActivitySession> fine) {
     var records = store.findRecordsBetween(start, end);
@@ -130,7 +154,10 @@ public record ActivityTimeline(
   }
 
   /**
-   * Display-only semantic projection; raw records and persisted fine sessions are never rewritten.
+   * 作業状況の把握で用いる要約を返す。
+   *
+   * <p>Display-only semantic projection; raw records and persisted fine sessions are never
+   * rewritten.
    */
   public String summary(String day) {
     var date = date(day);
@@ -140,6 +167,7 @@ public record ActivityTimeline(
             date.plusDays(1).atStartOfDay(clock.getZone()).toInstant());
   }
 
+  /** 作業状況の把握で用いる傾向区間一覧を返す。 */
   public List<TrendSummarySegment> trendSegments(String day) {
     var date = date(day);
     var start = date.atStartOfDay(clock.getZone()).toInstant();
@@ -147,6 +175,7 @@ public record ActivityTimeline(
     return trendBetween(start, end);
   }
 
+  /** 作業状況の把握で用いる傾向期間を返す。 */
   private List<TrendSummarySegment> trendBetween(Instant start, Instant end) {
     if (start.equals(end)) return List.of();
     var fine = store.findBetween(start, end);
@@ -156,6 +185,7 @@ public record ActivityTimeline(
             .toList();
   }
 
+  /** 作業状況の把握で用いる傾向要約を返す。 */
   public String trendSummary(String day) {
     // Freeze once so date resolution and range building cannot straddle midnight.
     var snapshot = Clock.fixed(clock.instant(), clock.getZone());
@@ -170,11 +200,13 @@ public record ActivityTimeline(
         + inferenceSupplement(range.fromInclusive(), range.toExclusive());
   }
 
+  /** 作業状況の把握で用いる期間分析を返す。 */
   public String periodAnalysis(ActivityPeriodAnalysis.Period period, String day) {
     var comparison = periodComparison(period, day);
     return formatPeriodComparison(comparison);
   }
 
+  /** 内容を表示・参照しやすくするため、期間比較結果を整形する。 */
   public String formatPeriodComparison(PeriodComparison comparison) {
     var range = comparison.current().range();
     return new ActivityPeriodAnalysis(
@@ -183,21 +215,34 @@ public record ActivityTimeline(
         + inferenceSupplement(range.fromInclusive(), range.toExclusive());
   }
 
+  /**
+   * 作業状況の把握で受け渡す期間比較結果を表す。
+   *
+   * @param current 現在
+   * @param previous 前回
+   * @param zone タイムゾーン
+   */
   public record PeriodComparison(
       ActivityPeriodAnalysis.Aggregate current,
       ActivityPeriodAnalysis.Aggregate previous,
       ZoneId zone) {}
 
-  /** Null date selects the most recent completed calendar period for manual coaching. */
+  /**
+   * 作業状況の把握で用いる期間比較結果を返す。
+   *
+   * <p>Null date selects the most recent completed calendar period for manual coaching.
+   */
   public PeriodComparison periodComparison(ActivityPeriodAnalysis.Period period, String day) {
     return periodComparison(period, day, false);
   }
 
+  /** 作業状況の把握で用いる期間比較結果上限内に収めたを返す。 */
   public PeriodComparison periodComparisonBounded(
       ActivityPeriodAnalysis.Period period, String day) {
     return periodComparison(period, day, true);
   }
 
+  /** 作業状況の把握で用いる期間比較結果を返す。 */
   private PeriodComparison periodComparison(
       ActivityPeriodAnalysis.Period period, String day, boolean bounded) {
     var snapshot = Clock.fixed(clock.instant(), clock.getZone());
@@ -227,12 +272,14 @@ public record ActivityTimeline(
         snapshot.getZone());
   }
 
+  /** 作業状況の把握で用いる期間記録一覧を返す。 */
   private List<ActivityRecord> periodRecords(ActivityPeriodAnalysis.Range range, boolean bounded) {
     return bounded
         ? store.findRecordsBetweenBounded(range.fromInclusive(), range.toExclusive(), 50000)
         : store.findRecordsBetween(range.fromInclusive(), range.toExclusive());
   }
 
+  /** 作業状況の把握で用いる作業推定一覧を返す。 */
   public List<WorkActivityInference> workInferences(String day, String projectId) {
     var date = date(day);
     var rows =
@@ -245,6 +292,7 @@ public record ActivityTimeline(
         .toList();
   }
 
+  /** 必要な内容を参照できるよう、推定一覧を読み取る。 */
   private List<WorkActivityInference> readInferences(Instant start, Instant end, int limit) {
     if (workInferences == null || !start.isBefore(end)) return List.of();
     try {
@@ -258,6 +306,7 @@ public record ActivityTimeline(
     }
   }
 
+  /** 作業状況の把握で用いる推定Supplementを返す。 */
   private String inferenceSupplement(Instant start, Instant end) {
     var rows = readInferences(start, end, 8);
     if (rows.isEmpty()) return "";

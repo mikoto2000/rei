@@ -18,6 +18,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/** 日次計画の構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnProperty(
     name = {"rei.web.enabled", "rei.today.enabled"},
@@ -26,6 +27,7 @@ import org.springframework.context.annotation.Import;
 @EnableConfigurationProperties(DailyPlanningProperties.class)
 @Import(dev.mikoto2000.rei.web.DailyPlanningController.class)
 public class DailyPlanningConfiguration {
+  /** 日々の計画の支援で用いる日次計画サービスを返す。 */
   @Bean
   DailyPlanningService dailyPlanningService(
       DailyPlanningProperties properties,

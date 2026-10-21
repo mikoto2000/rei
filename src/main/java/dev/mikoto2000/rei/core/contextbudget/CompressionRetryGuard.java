@@ -3,30 +3,57 @@ package dev.mikoto2000.rei.core.contextbudget;
 import java.util.LinkedHashMap;
 import java.util.function.LongSupplier;
 
-/** Bounded local failure state. It contains settings and limits, never conversation text. */
+/**
+ * モデルへ渡す文脈の管理に必要な圧縮再試行利用条件の確認を扱う。
+ *
+ * <p>Bounded local failure state. It contains settings and limits, never conversation text.
+ */
 final class CompressionRetryGuard {
+  /**
+   * モデルへ渡す文脈の管理で受け渡す判断結果を表す。
+   *
+   * @param allowed 許可
+   * @param announce 利用者への案内
+   * @param waitSeconds 待機秒数
+   * @param lastReason 直近理由
+   */
   record Decision(boolean allowed, boolean announce, long waitSeconds, String lastReason) {}
 
+  /** 許容件数。 */
   private static final int CAPACITY = 256;
 
+  /** モデルへ渡す文脈の管理に必要な失敗情報を扱う。 */
   private static final class Failure {
+    /** 機能の構成／理由。 */
     String configuration, reason;
+
+    /** 失敗一覧。 */
     int failures;
+
+    /** 再試行日時／入力上限。 */
     long retryAt, inputLimit = Long.MAX_VALUE;
+
+    /** 終了の案内を通知済みかどうか。 */
     boolean announced;
   }
 
+  /** 失敗一覧。 */
   private final LinkedHashMap<String, Failure> failures = new LinkedHashMap<>(16, .75f, true);
+
+  /** ミリ秒数。 */
   private final LongSupplier milliseconds;
 
+  /** モデルへ渡す文脈の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   CompressionRetryGuard() {
     this(() -> System.nanoTime() / 1_000_000);
   }
 
+  /** 指定された値や利用先を使って、CompressionRetryGuardを初期化する。 */
   CompressionRetryGuard(LongSupplier milliseconds) {
     this.milliseconds = milliseconds;
   }
 
+  /** モデルへ渡す文脈の管理で用いる状態を返す。 */
   private Failure state(String key, String configuration) {
     var failure = failures.get(key);
     if (failure != null && !failure.configuration.equals(configuration)) {
@@ -36,11 +63,13 @@ final class CompressionRetryGuard {
     return failure;
   }
 
+  /** モデルへ渡す文脈の管理で用いる入力上限を返す。 */
   synchronized long inputLimit(String key, String configuration, long standard) {
     var failure = state(key, configuration);
     return failure == null ? standard : Math.min(standard, failure.inputLimit);
   }
 
+  /** モデルへ渡す文脈の管理で用いる判断結果を返す。 */
   synchronized Decision decision(String key, String configuration) {
     var failure = state(key, configuration);
     if (failure == null || milliseconds.getAsLong() >= failure.retryAt)
@@ -54,6 +83,7 @@ final class CompressionRetryGuard {
         failure.reason);
   }
 
+  /** 対象の処理が失敗したことを、理由を含む結果として表す。 */
   synchronized long failed(
       String key,
       String configuration,
@@ -79,6 +109,7 @@ final class CompressionRetryGuard {
     return wait;
   }
 
+  /** モデルへ渡す文脈の管理に関する成功を処理する。 */
   synchronized void succeeded(String key) {
     failures.remove(key);
   }

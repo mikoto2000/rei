@@ -19,10 +19,13 @@ import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 補助エージェントイベントの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SubAgentEventTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 親表示用の状態を保持することを確認する。 */
   @Test
   void shellShowsChildEventsAndPreservesParentProjection() {
     var factory = new AgentEventFactory(Clock.systemUTC());
@@ -30,14 +33,17 @@ class SubAgentEventTest {
     var renderer =
         new ShellAgentEventRenderer(
             new ShellEventOutput() {
+              /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
               public void print(String value) {
                 output.append(value);
               }
 
+              /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
               public void println(String value) {
                 output.append(value).append('\n');
               }
 
+              /** 検証で保留している出力の確定を扱う。 */
               public void flush() {}
             });
     var projection = new DefaultAgentUiProjection();
@@ -82,11 +88,13 @@ class SubAgentEventTest {
     assertThat(projection.currentState().tools()).isEmpty();
   }
 
+  /** 補助エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void failedToolEventRedactsCredentials() {
     var events = new java.util.ArrayList<AgentEvent>();
     var callback =
         new org.springframework.ai.tool.ToolCallback() {
+          /** 検証用に、補助エージェントへの委譲で参照するツール定義を返す。 */
           public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
             return org.springframework.ai.tool.definition.ToolDefinition.builder()
                 .name("test")
@@ -95,6 +103,7 @@ class SubAgentEventTest {
                 .build();
           }
 
+          /** 検証用に、補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             throw new IllegalStateException("password=hidden " + "x".repeat(1000));
           }
@@ -107,6 +116,7 @@ class SubAgentEventTest {
     assertThat(events.toString()).doesNotContain("hidden").doesNotContain("x".repeat(121));
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void shellSeparatesInterleavedRunsAndResumesParentAnswer() {
     var startedAt = java.time.Instant.parse("2026-08-23T00:00:00Z");
@@ -115,14 +125,17 @@ class SubAgentEventTest {
     var renderer =
         new ShellAgentEventRenderer(
             new ShellEventOutput() {
+              /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
               public void print(String value) {
                 output.append(value);
               }
 
+              /** 検証で受け取った案内や結果を、表示の確認先へ出力する。 */
               public void println(String value) {
                 output.append(value).append('\n');
               }
 
+              /** 検証で保留している出力の確定を扱う。 */
               public void flush() {}
             });
     renderer.onEvent(factory.messageStarted("parent-message", "assistant"));
@@ -190,6 +203,7 @@ class SubAgentEventTest {
         .doesNotContain("child-answer");
   }
 
+  /** 補助エージェントへの委譲で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void lifecycleRoundTripsThroughExistingProjectEventStore() {
     var factory = new AgentEventFactory(Clock.systemUTC());

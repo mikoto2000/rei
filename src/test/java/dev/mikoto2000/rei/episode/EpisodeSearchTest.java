@@ -7,7 +7,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 経験の記録検索の結果と状態の契約を検証するテスト。 */
 class EpisodeSearchTest {
+  /** 過去の経験の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void deletedSourcesDoNotResurrectSavedSummaryOrClaims() {
     var repository = org.mockito.Mockito.mock(EpisodeRepository.class);
@@ -37,6 +39,7 @@ class EpisodeSearchTest {
     assertEquals("", service.sources("e", "p").getFirst().get("text"));
   }
 
+  /** 過去の経験の活用で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void fusedResultsAreBoundedAndDeduplicated() {
     var item = new EpisodeSearchService.Hit("episode", "e", "p", "CLI", "UNVERIFIED", 0);
@@ -46,6 +49,7 @@ class EpisodeSearchTest {
     assertTrue(result.getFirst().score() > 0);
   }
 
+  /** 過去の経験の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void totalTextBudgetIsEnforced() {
     var item =
@@ -53,6 +57,7 @@ class EpisodeSearchTest {
     assertTrue(EpisodeSearchService.fuse(List.of(List.of(item)), 5, 20).isEmpty());
   }
 
+  /** 状態を返すことを確認する。 */
   @Test
   void inaccessibleSourceReturnsStatusInsteadOfSavedText() {
     var repository = org.mockito.Mockito.mock(EpisodeRepository.class);

@@ -21,7 +21,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** 外部レビュー履歴の結果と状態の契約を検証するテスト。 */
 class ExternalReviewHistoryTest {
+  /** 教材について、残る委譲状態の保存を伝えることを確認する。 */
   @Test
   void materialReportSurvivesDelegationPersistenceAndEvaluationBeyondSummaryLimit()
       throws Exception {
@@ -67,18 +69,22 @@ class ExternalReviewHistoryTest {
     }
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証で使用する保存と検索の窓口を、指定された条件に合わせて用意する。 */
   ExternalReviewRepository repository() {
     var source = new SQLiteDataSource();
     source.setUrl("jdbc:sqlite:" + root.resolve("reviews.db"));
     return new ExternalReviewRepository(source, Clock.systemUTC());
   }
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("run", "session", root, "project");
   }
 
+  /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
   dev.mikoto2000.rei.core.stagnation.RunExecutionContext run(String prompt, String project) {
     String id = UUID.randomUUID().toString();
     var run =
@@ -93,6 +99,7 @@ class ExternalReviewHistoryTest {
     return run;
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   ExternalAgentDelegationService service(
       ExternalAgentExecutor executor, ExternalReviewRepository repository) {
     var service =
@@ -106,6 +113,7 @@ class ExternalReviewHistoryTest {
     return service;
   }
 
+  /** 外部エージェントへの委譲で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void persistsBoundedRedactedResultWithoutRawPromptOrLogsAndKeepsOwnership() throws Exception {
     var repository = repository();
@@ -143,6 +151,7 @@ class ExternalReviewHistoryTest {
             .contains("private raw logs"));
   }
 
+  /** 開始記録について、再開の後も対象の情報が残ることを確認する。 */
   @Test
   void startedRecordSurvivesRestartAndCannotBeUsedAsCompletedParent() throws Exception {
     var repository = repository();
@@ -153,6 +162,7 @@ class ExternalReviewHistoryTest {
         () -> repository.start(owner(), "next", root.toRealPath(), null, "pending"));
   }
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void explicitReReviewLinksPreviousResultRechecksTargetAndSharesOneRunBudget() throws Exception {
     Files.writeString(root.resolve("note.txt"), "before");
@@ -197,6 +207,7 @@ class ExternalReviewHistoryTest {
     assertFalse(other.externalDelegationUsed());
   }
 
+  /** 外部エージェントへの委譲で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void persistenceFailureLeavesUnknownStartedOutcomeAndCannotTriggerAutomaticRetry()
       throws Exception {
@@ -228,6 +239,7 @@ class ExternalReviewHistoryTest {
     assertEquals(1, calls.get());
   }
 
+  /** 外部エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledResultIsSavedBeforeCancellationAndHistoryToolsEnforceProject() throws Exception {
     var repository = repository();
@@ -260,6 +272,7 @@ class ExternalReviewHistoryTest {
     assertThrows(IllegalArgumentException.class, () -> tools.getCodexReview(stored.id(), context));
   }
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void missingOrRelocatedTargetRejectsReReviewBeforeConsumingBudget() throws Exception {
     Files.writeString(root.resolve("note.txt"), "note");
@@ -291,6 +304,7 @@ class ExternalReviewHistoryTest {
     assertEquals(1, calls.get());
   }
 
+  /** 外部エージェントへの委譲で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void unavailablePersistencePreventsExternalExecution() {
     var repository = org.mockito.Mockito.mock(ExternalReviewRepository.class);
@@ -314,6 +328,7 @@ class ExternalReviewHistoryTest {
     assertFalse(result.summary().contains("private database"));
   }
 
+  /** 履歴ツール順序を守る保存済みレビューおよびについて、加工前のログ一覧出力先を維持することを確認する。 */
   @Test
   void historyToolSerializesSavedReviewAndKeepsRawLogsOut() throws Exception {
     var repository = repository();

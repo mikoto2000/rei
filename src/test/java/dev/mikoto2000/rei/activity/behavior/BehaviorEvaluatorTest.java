@@ -18,8 +18,10 @@ import java.util.Map;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
 
+/** 作業習慣評価の判断の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class BehaviorEvaluatorTest {
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void successfulObservationIncludesExcludedCategoriesButNotMissingTime() {
     var a =
@@ -37,6 +39,7 @@ class BehaviorEvaluatorTest {
     assertEquals(BehaviorSeverity.NONE, a.severity());
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void successfulObservationIsClippedToWindowAndDoesNotDoubleCountOverlap() {
     var a = assess(7200, record(0, 5400, "unknown"), record(3600, 3600, "social"));
@@ -44,8 +47,10 @@ class BehaviorEvaluatorTest {
     assertEquals(7200, a.windows().getLast().observedSeconds());
   }
 
+  /** 検証に使う開始。 */
   static final Instant START = Instant.parse("2026-09-23T09:00:00Z");
 
+  /** 検証用に、後から経緯を確認できるよう、指定された内容を記録する。 */
   static ActivityRecord record(int startSeconds, int seconds, String category) {
     String service =
         switch (category) {
@@ -69,16 +74,19 @@ class BehaviorEvaluatorTest {
         "run");
   }
 
+  /** {@code sessions} の条件を再現するための補助情報を返す。 */
   static List<ActivitySession> sessions(List<ActivityRecord> records) {
     return new SessionMergePolicy(Duration.ofSeconds(90), ZoneOffset.UTC).aggregate(records);
   }
 
+  /** {@code assess} の条件を再現するための補助情報を返す。 */
   static BehaviorAssessment assess(int now, ActivityRecord... records) {
     var list = List.of(records);
     return new BehaviorEvaluator(new BehaviorProperties(), .5)
         .evaluate(sessions(list), list, START.plusSeconds(now));
   }
 
+  /** 継続判定の境界値について、観測時刻を利用することを確認する。 */
   @Test
   void continuousThresholdsUseObservedTime() {
     for (var entry :
@@ -97,6 +105,7 @@ class BehaviorEvaluatorTest {
           assess(entry.getKey() * 60, record(0, entry.getKey() * 60, "social")).severity());
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void entertainmentSwitchesDoNotReset() {
     var a =
@@ -110,6 +119,7 @@ class BehaviorEvaluatorTest {
     assertTrue(a.dominantCategories().contains("gaming"));
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void nonWorkIsNotAutomaticallyEntertainment() {
     for (String c :
@@ -129,6 +139,7 @@ class BehaviorEvaluatorTest {
     }
   }
 
+  /** 作業習慣の支援で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void sustainedWorkResetsContinuousAndMarksRecovery() {
     var a =
@@ -141,6 +152,7 @@ class BehaviorEvaluatorTest {
     assertEquals(START.plusSeconds(2400), a.recoveredAt());
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void shortUnknownAndMonitoringAreNoiseNotEntertainment() {
     for (String noise : List.of("unknown", "monitoring")) {
@@ -154,6 +166,7 @@ class BehaviorEvaluatorTest {
     }
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void largeUnobservedGapBreaksContinuityAndDoesNotDiluteRatio() {
     var a = assess(3600, record(0, 600, "social"), record(3000, 600, "social"));
@@ -163,6 +176,7 @@ class BehaviorEvaluatorTest {
     assertEquals(BehaviorSeverity.NONE, a.severity());
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownOtherIdleExcludedFromDenominatorAndMinimumObservationProtectsRatio() {
     for (String c : List.of("unknown", "other", "idle")) {
@@ -172,6 +186,7 @@ class BehaviorEvaluatorTest {
     }
   }
 
+  /** 短い範囲について、対象の条件割合を利用することを確認する。 */
   @Test
   void shortWindowUsesEligibleRatio() {
     var a = assess(2400, record(0, 1200, "development"), record(1200, 1200, "social"));
@@ -180,6 +195,7 @@ class BehaviorEvaluatorTest {
     assertEquals(BehaviorAssessment.Reason.ENTERTAINMENT_RATIO_HIGH, a.reason());
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void longWindowWinsOverContinuousNotice() {
     var a =
@@ -192,11 +208,13 @@ class BehaviorEvaluatorTest {
     assertEquals(BehaviorSeverity.WARNING, a.severity());
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void insufficientObservationDoesNotTriggerRatio() {
     assertEquals(BehaviorSeverity.NONE, assess(600, record(0, 600, "media")).severity());
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void windowClipsIntervalsAndOverlappingSamplesAreNotDoubleCounted() {
     var a = assess(7200, record(0, 5400, "social"), record(3600, 3600, "development"));
@@ -205,6 +223,7 @@ class BehaviorEvaluatorTest {
     assertEquals(7200, a.windows().getLast().eligibleObservedSeconds());
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void secondaryVideoIsNotPrimaryEntertainment() {
     var r = record(0, 3600, "development");
@@ -227,6 +246,7 @@ class BehaviorEvaluatorTest {
     assertEquals(BehaviorSeverity.NONE, assess(3600, r).severity());
   }
 
+  /** 作業習慣の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void fineSessionMembershipIsRequiredAndEvidenceIsUntouched() {
     var r = record(0, 3600, "social");
@@ -237,6 +257,7 @@ class BehaviorEvaluatorTest {
     assertEquals(r, record(0, 3600, "social"));
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void continuityGenerationAndStaleDataCannotLookCurrentlyContinuous() {
     var a = record(0, 1800, "social");
@@ -258,6 +279,7 @@ class BehaviorEvaluatorTest {
     assertFalse(assess(4000, a, b).activeEntertainment());
   }
 
+  /** 作業習慣の支援で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void recoveryDoesNotLetOldWindowImmediatelyTriggerNewEpisode() {
     var a =
@@ -270,6 +292,7 @@ class BehaviorEvaluatorTest {
     assertFalse(a.episodeQualified());
   }
 
+  /** 作業習慣の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void defaultsAndInvalidConfig() {
     var p = new BehaviorProperties();
@@ -280,6 +303,7 @@ class BehaviorEvaluatorTest {
     assertThrows(IllegalArgumentException.class, p::validate);
   }
 
+  /** 作業習慣の支援で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void fineObservedBudgetIsAnUpperBoundEvenWithIncompleteEvidence() {
     var r = record(0, 3600, "social");
@@ -301,6 +325,7 @@ class BehaviorEvaluatorTest {
     assertEquals(BehaviorSeverity.NONE, a.severity());
   }
 
+  /** 作業習慣の支援で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void workAfterLongUnknownStillRecovers() {
     var a =
@@ -313,6 +338,7 @@ class BehaviorEvaluatorTest {
     assertEquals(0, a.continuousEntertainmentSeconds());
   }
 
+  /** 作業習慣の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void strongWorkConfidenceDoesNotInflateWeakEntertainmentConfidence() {
     var social = record(1200, 1800, "social");
@@ -332,6 +358,7 @@ class BehaviorEvaluatorTest {
     assertTrue(assess(3000, record(0, 1200, "development"), social).confidence() < .7);
   }
 
+  /** 不明間隔を保持することを確認する。 */
   @Test
   void mixedTimelineFixturePreservesUnknownGapAndWorkBoundary() throws Exception {
     var records =

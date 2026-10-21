@@ -15,10 +15,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 目標トークン予算の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class GoalTokenBudgetTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 検証で使用する保存と検索の窓口を、指定された条件に合わせて用意する。 */
   GoalRepository repository(long limit) {
     var properties = new LlmProperties();
     properties.getOutputLimit().setMaxTotalTokensPerGoal(limit);
@@ -28,6 +31,7 @@ class GoalTokenBudgetTest {
         properties);
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void reportsSurviveRestartAndResumeWithoutReplenishingLimit() {
     var goals = repository(10);
@@ -59,6 +63,7 @@ class GoalTokenBudgetTest {
     assertThrows(IllegalStateException.class, () -> reopened.claim("project", goal.id()));
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownOrUnreconciledUsageCannotBeResetByResume() {
     for (boolean reconcile : new boolean[] {false, true}) {
@@ -87,6 +92,7 @@ class GoalTokenBudgetTest {
     }
   }
 
+  /** 並行について、一括反映を伝えることを確認する。 */
   @Test
   void concurrentReportsAreAtomicAndCannotBeReplayedWithoutPendingReservation() throws Exception {
     var goals = repository(100);
@@ -117,6 +123,7 @@ class GoalTokenBudgetTest {
     assertEquals(100, goals.get("project", goal.id()).totalTokens());
   }
 
+  /** 移行について、旧形式目標を保持することを確認する。 */
   @Test
   void migrationPreservesLegacyGoalAndDoesNotRetroactivelyEnableLimit() throws Exception {
     var source = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("goals.db"));
@@ -140,6 +147,7 @@ class GoalTokenBudgetTest {
     assertFalse(goals.get("project", "legacy").tokenUsageUnknown());
   }
 
+  /** 目標の達成管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledPendingUsageIsRetainedAndNegativeConfigIsRejected() {
     var goals = repository(10);
@@ -162,6 +170,7 @@ class GoalTokenBudgetTest {
         () -> new LlmProperties().getOutputLimit().setMaxTotalTokensPerGoal(-1));
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unfinishedPrepaidReservationStopsBeforeAnotherAttempt() {
     var goals = repository(10);
@@ -197,6 +206,7 @@ class GoalTokenBudgetTest {
     assertThrows(IllegalStateException.class, () -> loop.run("project", goal.id()));
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void childReportsReachPersistentGoalOnceEvenWithIndependentRunLimit() {
     var goals = repository(5);

@@ -14,15 +14,24 @@ import java.util.Set;
 import java.util.UUID;
 import javax.imageio.ImageIO;
 
-/** Opt-in local artifacts. Filenames never derive from model text or OS display identifiers. */
+/**
+ * 画面操作の支援に必要な画面操作診断情報を扱う。
+ *
+ * <p>Opt-in local artifacts. Filenames never derive from model text or OS display identifiers.
+ */
 public final class ComputerDiagnostics {
+  /** 作業ルート。 */
   private final Path root;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper();
 
+  /** 指定された値や利用先を使って、ComputerDiagnosticsを初期化する。 */
   public ComputerDiagnostics(Path root) {
     this.root = root == null ? null : root.toAbsolutePath().normalize();
   }
 
+  /** 画面操作の支援で用いる開始を返す。 */
   public Path begin() throws IOException {
     if (root == null) return null;
     return Files.createDirectories(
@@ -30,10 +39,12 @@ public final class ComputerDiagnostics {
             java.time.Instant.now().toString().replace(':', '-') + "-" + UUID.randomUUID()));
   }
 
+  /** 画面操作の支援で用いる手順を返す。 */
   private Path step(Path run, int step) throws IOException {
     return Files.createDirectories(run.resolve("step-%03d".formatted(step)));
   }
 
+  /** 画面操作の支援に関する観測を処理する。 */
   public void observed(Path run, int number, CapturedScreen screen) throws IOException {
     if (run == null) return;
     var directory = step(run, number);
@@ -50,6 +61,7 @@ public final class ComputerDiagnostics {
         .writeValue(directory.resolve("displays.json").toFile(), metadata);
   }
 
+  /** 画面操作の支援で用いる画面上の位置と大きさを返す。 */
   private Map<String, Object> geometry(DisplayCapture display) {
     var g = display.geometry();
     var b = g.bounds();
@@ -64,6 +76,7 @@ public final class ComputerDiagnostics {
     return item;
   }
 
+  /** 画面操作の支援に関する操作を処理する。 */
   public void action(
       Path run, int number, CapturedScreen screen, ComputerAction action, String phase)
       throws IOException {

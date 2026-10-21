@@ -50,15 +50,22 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Component;
 
+/** 共通の実行基盤に必要なツール一覧を扱う。 */
 @Component
 public class Tools {
+  /** ファイル結果JSON変換。 */
   private static final com.fasterxml.jackson.databind.ObjectMapper FILE_RESULT_JSON =
       new com.fasterxml.jackson.databind.ObjectMapper();
+
+  /** 配信概算。 */
   private dev.mikoto2000.rei.core.contextbudget.TokenEstimator deliveryEstimator =
       dev.mikoto2000.rei.core.contextbudget.TokenEstimator.tokenizerAware();
+
+  /** 配信設定。 */
   private dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties deliveryProperties =
       new dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties();
 
+  /** 共通の実行基盤に関する設定配信を処理する。 */
   @Autowired
   public void configureDelivery(
       dev.mikoto2000.rei.core.contextbudget.TokenEstimator estimator,
@@ -67,13 +74,16 @@ public class Tools {
     deliveryProperties = properties;
   }
 
+  /** 文書表示への変換。 */
   private DocumentRendererService documentRenderer;
 
+  /** 共通の実行基盤で使用する文書表示への変換を設定する。 */
   @Autowired(required = false)
   void setDocumentRenderer(DocumentRendererService service) {
     documentRenderer = service;
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、文書表示を検証する。 */
   @Tool(
       description =
           "既定OFFの管理者指定PlantUML rendererで現在の.puml/.plantumlと正確なsourceSha256をPNG検証します。directive/function/resource link禁止、SANDBOX、20秒/4MiB/4096px、exit/parse/画像/size/hashを記録。file Applyはせず、Artifact有効時だけ既存deliveryへ公開。モデルの説明は描画証拠ではありません。")
@@ -83,6 +93,7 @@ public class Tools {
     return documentRenderer.validate(diagnosedOwner(), request);
   }
 
+  /** 共通の実行基盤で用いる状態確認文書表示を返す。 */
   @Tool(
       description =
           "現在Project/root/sessionの保存renderer receiptを読みます。履歴の描画結果で現在sourceの成功保証ではありません。STARTED/UNKNOWNは自動再実行せず、不足環境は成功扱いにしません。")
@@ -91,14 +102,19 @@ public class Tools {
     return documentRenderer.inspect(diagnosedOwner(), id);
   }
 
+  /** 目標完了を判定する窓口。 */
   private dev.mikoto2000.rei.goal.GoalCompletionGate goalCompletionGate;
+
+  /** 目標段階一覧。 */
   private dev.mikoto2000.rei.goal.GoalStageService goalStages;
 
+  /** 共通の実行基盤に関する設定目標段階一覧を処理する。 */
   @Autowired(required = false)
   void configureGoalStages(dev.mikoto2000.rei.goal.GoalStageService stages) {
     goalStages = stages;
   }
 
+  /** 共通の実行基盤に関する関連付け目標段階根拠を処理する。 */
   @Tool(
       description =
           "現在のGoal Stageへ保存Review/Artifact IDとSHAのproofを添付します。捕捉Run/root/sessionを照合し、現在patch/report/Artifact/条件はホストが独立検証します。条件や状態を変更する権限はありません。")
@@ -108,6 +124,7 @@ public class Tools {
     goalStages.attachRunning(diagnosedOwner(), goalId, proof);
   }
 
+  /** 後続の判断で選べる候補を用意するため、目標段階分割を提案する。 */
   @Tool(
       description =
           "独立検証で失敗した現在のGoal Stageの子工程案を保存します。expectedPlanVersionとchildren（id,parentStageId,objective,criteria,dependsOnStageIds,requirementIds,completion）を指定。親とGoal条件は不変。ホストが循環/深さ/数/予算/所有者を検証し、試行が未達の場合だけ採用します。Stageを完了にする権限はありません。")
@@ -119,11 +136,13 @@ public class Tools {
     goalStages.proposeSplit(diagnosedOwner(), goalId, expectedPlanVersion, children);
   }
 
+  /** 共通の実行基盤で使用する目標完了を判定する窓口を設定する。 */
   @Autowired(required = false)
   void setGoalCompletionGate(dev.mikoto2000.rei.goal.GoalCompletionGate gate) {
     goalCompletionGate = gate;
   }
 
+  /** 共通の実行基盤で参照する目標完了条件定義を返す。 */
   @Tool(
       description =
           "現在Project/root/sessionのGoal completion definitionと保存proofを読みます。READのみ。モデルの完了宣言は証拠ではなく、定義変更やRun起動は行いません。")
@@ -133,6 +152,7 @@ public class Tools {
     return goalCompletionGate.inspect(diagnosedOwner(), goalId);
   }
 
+  /** 共通の実行基盤で用いる関連付け目標完了条件根拠を返す。 */
   @Tool(
       description =
           "現在の実行中Goal Runへ確認したReview/ArtifactのIDとSHAを添付します。proof={review:{id,sha256},artifacts:[{id,sha256}]}。定義を変更せずcommandも実行しません。現在の捕捉Run/root/session以外は拒否し、完了は独立gateがcurrent patch/report/artifact/predicateを再検証します。")
@@ -142,13 +162,16 @@ public class Tools {
     return goalCompletionGate.attach(diagnosedOwner(), goalId, proof, false);
   }
 
+  /** 変更差分レビュー一覧。 */
   private SemanticPatchReviewService patchReviews;
 
+  /** 共通の実行基盤で使用する変更差分レビュー一覧を設定する。 */
   @Autowired(required = false)
   void setPatchReviews(SemanticPatchReviewService service) {
     patchReviews = service;
   }
 
+  /** 共通の実行基盤で用いるレビュー変更差分要件一覧を返す。 */
   @Tool(
       description =
           "明示testCommandを実行して要件・変更file・必須JUnit testcase・静的hygieneを検証し、任意の意味Reviewを共有Run予算内で行います。request={testCommand,timeoutSeconds,requirements:[{id,statement,files,tests}],allowedFiles,testReports,semantic}。意味Reviewは既定OFF、確率的評価で正しさの保証ではありません。追加変更・欠落test・skipped・不完全な証拠はFIX_REQUIRED。任意command実行の全能力Policyが必要です。保存receiptのid/sha256を保持してください。")
@@ -167,6 +190,7 @@ public class Tools {
     return patchReviews().review(run == null ? diagnosedOwner() : run.runContext(), request, run);
   }
 
+  /** 共通の実行基盤で参照する変更差分要件レビューを返す。 */
   @Tool(
       description =
           "現在Project/root/sessionの要件Review receiptを正確なid/sha256で読みます。読み取りのみ。保存判定はその時点のpatchについての観測で、現在の変更や意味的正しさを保証しません。STARTED/UNKNOWNを自動再実行しません。")
@@ -175,6 +199,7 @@ public class Tools {
     return patchReviews().get(diagnosedOwner(), id, sha256);
   }
 
+  /** 共通の実行基盤で用いる状態確認変更差分要件レビューを返す。 */
   @Tool(
       description =
           "現在Project/root/sessionのReview実行状態をidだけで検査します。失われたSTARTEDはUNKNOWN、再実行せず成功proofを生成しません。読み取りinspectionです。")
@@ -183,6 +208,7 @@ public class Tools {
     return patchReviews().inspect(diagnosedOwner(), id);
   }
 
+  /** 利用可能な対象を確認できるよう、変更差分要件レビュー一覧を一覧にする。 */
   @Tool(
       description =
           "現在Project/root/sessionの保存Review状態を最大128件一覧します。STARTED/UNKNOWNのinspection用でcommandを再実行しません。")
@@ -191,19 +217,23 @@ public class Tools {
     return patchReviews().list(diagnosedOwner());
   }
 
+  /** 共通の実行基盤で用いる変更差分レビュー一覧を返す。 */
   private SemanticPatchReviewService patchReviews() {
     if (patchReviews == null)
       throw new IllegalStateException("Patch requirement review unavailable");
     return patchReviews;
   }
 
+  /** 診断済み修復一覧。 */
   private DiagnosedRepairService diagnosedRepairs;
 
+  /** 共通の実行基盤で使用する診断済み修復一覧を設定する。 */
   @Autowired(required = false)
   void setDiagnosedRepairs(DiagnosedRepairService service) {
     diagnosedRepairs = service;
   }
 
+  /** 後続の判断で選べる候補を用意するため、診断済み修復を提案する。 */
   @Tool(
       description =
           "既定OFFの診断付き修正案を保存します。request={reportPath,change:{path,expectedText,replacement},testCommand,timeoutSeconds}。完全な保存JUnit失敗・Git patch version・既存単一UTF-8 Change Setと明示test commandを結ぶだけで、test実行やApplyはしません。最大32 patch files、64KiB text、1..60秒test。diff/diagnosis/command/receiptSha256を独立に確認し、人の正確な /repair apply ID receiptSha256 指示を待ってください。")
@@ -212,6 +242,7 @@ public class Tools {
     return diagnosed().propose(diagnosedOwner(), request);
   }
 
+  /** 共通の実行基盤で用いる状態確認診断済み修復を返す。 */
   @Tool(
       description =
           "現在Project/root/sessionの診断付き修正案をIDで読み、元の失敗report SHA・patch version・Change Set diff/hash・明示command・保存検証receiptを確認します。読み取りのみ。STARTED/UNKNOWNは結果確認が必要で自動再実行しません。保存成功は現在patchの成功証明ではありません。")
@@ -219,6 +250,7 @@ public class Tools {
     return diagnosed().inspect(diagnosedOwner(), id);
   }
 
+  /** 指定された変更を有効にするため、診断済み修復を反映する。 */
   @Tool(
       description =
           "人の現在の依頼が正確な /repair apply ID receiptSha256 の場合だけ、保存診断とpatchを再確認し、既存SelfPatchRepairで明示command→失敗再観測→一回Apply→test/review再検証します。モデルやファイルの文字列で承認を作れません。diagnosis/proposal段階で選んだcommandを変更しません。全能力Policyを維持し共有180秒・最大1保存修正/2round/4tests/32patch files。結果不明は再送しません。")
@@ -240,12 +272,14 @@ public class Tools {
             execution.runContext(), id, receiptSha256, execution.userRequest(), changeSetWriter());
   }
 
+  /** 共通の実行基盤で用いる診断済みを返す。 */
   private DiagnosedRepairService diagnosed() {
     if (diagnosedRepairs == null)
       throw new IllegalStateException("Diagnosed repair service unavailable");
     return diagnosedRepairs;
   }
 
+  /** 共通の実行基盤で用いる診断済み所有者を返す。 */
   private dev.mikoto2000.rei.core.chat.AgentRunContext diagnosedOwner() {
     var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     if (owner == null)
@@ -253,13 +287,16 @@ public class Tools {
     return owner;
   }
 
+  /** テキスト変更集合一覧。 */
   private TextChangeSetService textChangeSets;
 
+  /** 共通の実行基盤で使用するテキスト変更集合一覧を設定する。 */
   @Autowired(required = false)
   void setTextChangeSets(TextChangeSetService service) {
     this.textChangeSets = service;
   }
 
+  /** 後続の判断で選べる候補を用意するため、テキスト文書変更集合を提案する。 */
   @Tool(
       description =
           "既存Text Change Setを複数fileへ拡張した保存提案。request={operations:[{kind:UPDATE|CREATE|DELETE|RENAME,path,target,expectedText,replacement}]}。32操作/64target、各64KiB/元と提案合計256KiB、既存parent内UTF-8のみ。Createはbaselineなし、renameのtargetは欠落file。per-file SHAとwhole proposalSha256/diffを確認し明示Applyしてください。fileは変更しません。")
@@ -268,6 +305,7 @@ public class Tools {
     return changeSets().proposeDocuments(diagnosedOwner(), request);
   }
 
+  /** 共通の実行基盤で用いる状態確認テキスト文書変更集合を返す。 */
   @Tool(
       description =
           "捕捉Project/root/sessionの複数file案、保存状態、各元/提案/現在SHA、現在一致currentMatches、staging journalを読みます。READのみ。APPLIEDは歴史receipt、UNKNOWNは自動再送不可。別sessionを拒否します。")
@@ -275,12 +313,14 @@ public class Tools {
     return changeSets().inspectDocuments(diagnosedOwner(), id);
   }
 
+  /** 共通の実行基盤で用いる破棄テキスト文書変更集合を返す。 */
   @Tool(description = "保存した未適用の複数file提案を、正確な全体SHAで破棄します。対象fileを変更せず、実行中やUNKNOWNの復旧記録は破棄できません。")
   TextDocumentChangeSetService.View discardTextDocumentChangeSet(String id, String proposalSha256)
       throws IOException {
     return changeSets().discardDocuments(diagnosedOwner(), id, proposalSha256);
   }
 
+  /** 指定された変更を有効にするため、テキスト文書変更集合を反映する。 */
   @Tool(
       description =
           "保存複数file案の正確なid/proposalSha256と全baseline一致を確認し、一回だけlogical transactionでApplyします。全fileの再検証後だけAPPLIED。通常失敗はrollback、外部編集/結果不明はUNKNOWNを保持し自動再送しません。EXCLUSIVE/LOCAL_WRITE/DESTRUCTIVEが必要です。現在一致currentMatchesとstagingを確認してください。")
@@ -313,6 +353,7 @@ public class Tools {
             });
   }
 
+  /** 共通の実行基盤で用いる取り消しテキスト文書変更集合を返す。 */
   @Tool(
       description =
           "人の正確な /document rollback ID proposalSha256 指示の場合だけ、保存UNKNOWNの元file群をbest effortで復元します。両保存版と違う外部編集は上書きせずUNKNOWN。最大3回の明示復旧、再送Applyなし。実行中processを勝手に復旧しません。")
@@ -323,6 +364,7 @@ public class Tools {
     return changeSets().rollbackDocuments(run.runContext(), id, proposalSha256, run.userRequest());
   }
 
+  /** 共通の実行基盤で用いる変更なしテキスト文書反映前の準備領域を返す。 */
   @Tool(
       description =
           "人の正確な /document clean ID proposalSha256 指示で、terminal案の保存journalと一致する自分のstaging fileだけを削除します。変更されたstagingは保存し、target fileを変更しません。")
@@ -334,6 +376,7 @@ public class Tools {
         .cleanDocumentStaging(run.runContext(), id, proposalSha256, run.userRequest());
   }
 
+  /** 共通の実行基盤で用いる文書復旧実行を返す。 */
   private dev.mikoto2000.rei.core.stagnation.RunExecutionContext documentRecoveryRun(
       org.springframework.ai.chat.model.ToolContext context) {
     var run =
@@ -349,6 +392,7 @@ public class Tools {
     return run;
   }
 
+  /** 必要な内容を参照できるよう、テキスト変更集合基準を読み取る。 */
   @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(
       dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
   @Tool(
@@ -361,6 +405,7 @@ public class Tools {
     return baseline;
   }
 
+  /** 後続の判断で選べる候補を用意するため、テキスト変更集合を提案する。 */
   @Tool(
       description =
           "単一UTF-8ファイルのChange Setを提案・保存します。全文方式は{path,expectedText,replacement}。部分編集は{path,baseVersion,edits:[{oldText,newText}]}で最大64 hunk、入力合計64KiB、全oldTextを元版に一意に照合し重複範囲・古いSHAを拒否。baseVersionは読み取りのSHA-256。提案は対象fileを変更しません。diff/proposalSha256を確認し、既存の明示Apply/Discardフローを使います。")
@@ -369,6 +414,7 @@ public class Tools {
     return changeSets().propose(changeSetProject(), request);
   }
 
+  /** 共通の実行基盤で用いる状態確認テキスト変更集合を返す。 */
   @Tool(
       description =
           "現在Projectに保存したChange SetをIDで読み、差分・状態・元/提案/現在のSHA-256を確認します。ファイルを変更せず、APPLYING/FAILED_UNCERTAINは自動再実行しません。")
@@ -376,6 +422,7 @@ public class Tools {
     return changeSets().inspect(changeSetProject(), id);
   }
 
+  /** 現在の状態と保存された記録の整合を取るため、テキスト変更集合を照合する。 */
   @Tool(
       description =
           "人の正確な /document reconcile-single ID proposalSha256 指示でのみ、失われた単一file Applyの現在SHAが保存元/提案版に一致することを照合しRECONCILEDへ移します。file変更・Apply再送なし、APPLIEDやtest成功のproofではありません。不一致はUNKNOWNのまま。")
@@ -386,6 +433,7 @@ public class Tools {
     return changeSets().reconcile(run.runContext(), id, proposalSha256, run.userRequest());
   }
 
+  /** 共通の実行基盤で用いる破棄テキスト変更集合を返す。 */
   @Tool(
       description =
           "保存Change Setの正確なID/proposalSha256を確認して、未claimの提案だけを破棄します。ファイルは変更せず、適用中や結果不明の操作を破棄・再実行しません。")
@@ -394,6 +442,7 @@ public class Tools {
     return changeSets().discard(changeSetProject(), id, proposalSha256);
   }
 
+  /** 指定された変更を有効にするため、テキスト変更集合を反映する。 */
   @Tool(
       description =
           "確認したChange Set IDと正確なproposalSha256を指定し、元ファイルhashが一致する保存提案だけを一回適用します。古い内容はSTALE、結果不明は再送拒否。APPLIEDは保存receiptで現在hashも確認してください。LOCAL_WRITE権限を必要とします。")
@@ -402,6 +451,7 @@ public class Tools {
     return changeSets().apply(changeSetProject(), id, proposalSha256, changeSetWriter());
   }
 
+  /** 共通の実行基盤で用いる変更集合書き込み先を返す。 */
   private TextChangeSetService.Writer changeSetWriter() {
     return (path, oldText, newText) -> {
       TextDocumentTransaction.writeSingle(path, oldText, newText);
@@ -409,11 +459,13 @@ public class Tools {
     };
   }
 
+  /** 共通の実行基盤で用いる変更集合一覧を返す。 */
   private TextChangeSetService changeSets() {
     if (textChangeSets == null) throw new IllegalStateException("Change Set service unavailable");
     return textChangeSets;
   }
 
+  /** 共通の実行基盤で用いる変更集合プロジェクトを返す。 */
   private dev.mikoto2000.rei.core.project.ProjectContext changeSetProject() {
     var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     if (owner != null)
@@ -424,6 +476,7 @@ public class Tools {
     return project;
   }
 
+  /** 共通の実行基盤で用いるselfレビュー変更差分を返す。 */
   @Tool(
       description =
           "明示されたtestCommandを最大2回実行し、初回test→Git作業ツリーの静的diffチェック→最終testを検証します。request={testCommand,timeoutSeconds}、timeoutは各1〜60秒（既定30）、全体180秒予算。VERIFIED_CHECKSは同じpatchと成功exit・静的チェックの確認であり、意味的正しさの保証ではありません。FIX_REQUIREDなら既存Toolで修正して全サイクルを再実行してください。任意commandを実行するためrunCommandと同等の権限が必要です。")
@@ -433,6 +486,7 @@ public class Tools {
         .verify(currentWorkingDirectory(), request);
   }
 
+  /** 共通の実行基盤で用いるself修復変更差分を返す。 */
   @Tool(
       description =
           "test→静的diff review→保存済み修正案Apply→全サイクル再検証を、明示された1〜3件のChange Setで行います。request={testCommand,timeoutSeconds,repairs:[{id,proposalSha256}]}。各test1〜60秒/共有180秒、最大3修正・8回test。元の失敗・全round・receiptを保持し、patch変更/不完全/timeout/結果不明/進展なしは停止します。追加LLMなし。任意commandと編集を含むためselfReviewPatchと同等の全能力Policyを維持し、意味的正しさは保証しません。")
@@ -461,8 +515,10 @@ public class Tools {
         .verify(project.root(), request);
   }
 
+  /** 保存と検索の窓口対応表一覧。 */
   private RepositoryMapService repositoryMaps = new RepositoryMapService();
 
+  /** 共通の実行基盤で用いる診断検証レポートを返す。 */
   @Tool(
       description =
           "Project相対pathの保存済みJUnit XMLを読み、実testcaseの失敗/error/skippedと報告count・SHA・更新時刻を返します。pathは単一XML、1MiB/1024case/24診断上限。test実行や現在Run/Goalの成功判定は行いません。partial/warningsとレポートの鮮度を確認してください。")
@@ -470,6 +526,7 @@ public class Tools {
     return new TestReportDiagnosisService().read(currentWorkingDirectory(), path);
   }
 
+  /** 共通の実行基盤で用いる診断検証レポート一覧を返す。 */
   @Tool(
       description =
           "保存済みJUnit XMLをProject内で上限付き発見・複数診断するREAD Tool。directory省略時はMaven target/surefire-reports・failsafe-reportsとGradle build/test-resultsをmodule深さ6まで探します。明示directoryは直下のTEST*.xmlのみ。探索256folder/4096entry/32file、各1MiB/全体10秒、失敗証拠合計24件。各fileのSHA/時刻/報告count/観測countとpartialを返し、合計は解析済みfileのみ（重複実行を除去しません）。test実行や現在Run/Goal成功の判定は行いません。")
@@ -479,6 +536,7 @@ public class Tools {
     return new TestReportCollectionDiagnosisService().read(currentWorkingDirectory(), directory);
   }
 
+  /** 共通の実行基盤で用いる変更検証影響を返す。 */
   @Tool(
       description =
           "変更pathからJavaの逆import、TS/JS/Rust/Go/Pythonのheuristic local importとテスト命名候補を探索します。changedFiles省略時はProjectのGitステージ済み・未ステージ・未追跡変更を読み取り取得します（HEAD必須、最大64path）。明示時はProject相対pathを1〜64件、limitは1〜100（既定20）。coverageReportsでJaCoCo/Cobertura XML・LCOVの保存reportを最大8件指定できます。changedLinesはpath/first/last（包括）で最大64range/256line。両変更指定省略時はGit HEAD-to-worktree hunks。coverageは独立したpartialな行観測で現source revisionやtest成功の証明ではありません。未計測/stale/証拠なしを区別し、広い回帰も実施してください。")
@@ -508,16 +566,19 @@ public class Tools {
         : service.analyze(currentWorkingDirectory(), changedFiles, bounded);
   }
 
+  /** 共通の実行基盤で用いる変更検証影響を返す。 */
   ChangeTestImpactService.Result changeTestImpact(List<String> changedFiles, Integer limit)
       throws IOException {
     return changeTestImpact(changedFiles, limit, null, null);
   }
 
+  /** 共通の実行基盤で使用する保存と検索の窓口対応表一覧を設定する。 */
   @Autowired
   void setRepositoryMaps(RepositoryMapService service) {
     this.repositoryMaps = service;
   }
 
+  /** 共通の実行基盤で用いる保存と検索の窓口対応表を返す。 */
   @Tool(
       description =
           "Git管理下の構造索引を取得します。Java ASTとTS/JS/Rust/Go/Pythonのbounded heuristic宣言・local import・テスト候補。sourceやbuildを実行しません。language/analysisModeで解析方式を区別し、heuristicは常にpartialでsemantic resolverではありません。summaryは絞り込み前の走査範囲です。queryで表示を絞り込み、limitは1〜100、既定20。partial/warningsを確認してください。")
@@ -528,29 +589,59 @@ public class Tools {
     return repositoryMaps.map(currentWorkingDirectory(), query, limit == null ? 20 : limit);
   }
 
+  /** 既定シェルタイムアウトの秒数。 */
   private static final int DEFAULT_SHELL_TIMEOUT_SECONDS = 30;
+
+  /** 最大シェルタイムアウトの秒数。 */
   private static final int MAX_SHELL_TIMEOUT_SECONDS = 600;
+
+  /** CP932に関する値。 */
   private static final Charset CP932 = Charset.forName("windows-31j");
+
+  /** プロジェクトサービス。 */
   private final ProjectService projectService;
+
+  /** システムシェルサービス。 */
   private final SystemShellService systemShellService;
+
+  /** バックグラウンドプロセス管理。 */
   private final BackgroundProcessManager backgroundProcessManager;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 作業中集合。 */
   private final WorkingSet workingSet;
+
+  /** 直近変更一覧。 */
   private final RecentChanges recentChanges;
+
+  /** ファイル要約キャッシュ。 */
   private final FileSummaryCache fileSummaryCache;
+
+  /** 検索結果キャッシュ。 */
   private final SearchResultCache searchResultCache;
+
+  /** 関連ファイル関連図。 */
   private final RelatedFileGraph relatedFileGraph;
+
+  /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
+
+  /** 実行状況の通知先。 */
   private final AgentEventPublisher eventPublisher;
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public Tools() {
     this(null, new SystemShellService());
   }
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public Tools(ProjectService projectService) {
     this(projectService, new SystemShellService());
   }
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public Tools(ProjectService projectService, SystemShellService systemShellService) {
     this(
         projectService,
@@ -559,6 +650,7 @@ public class Tools {
         Clock.systemDefaultZone());
   }
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public Tools(
       ProjectService projectService,
       SystemShellService systemShellService,
@@ -566,6 +658,7 @@ public class Tools {
     this(projectService, systemShellService, backgroundProcessManager, Clock.systemDefaultZone());
   }
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public Tools(
       ProjectService projectService,
       SystemShellService systemShellService,
@@ -574,6 +667,7 @@ public class Tools {
     this(projectService, systemShellService, backgroundProcessManager, clock, new WorkingSet());
   }
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @Autowired
   public Tools(
       ProjectService projectService,
@@ -597,6 +691,7 @@ public class Tools {
         eventPublisher);
   }
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public Tools(
       ProjectService projectService,
       SystemShellService systemShellService,
@@ -612,6 +707,7 @@ public class Tools {
         new RecentChanges());
   }
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public Tools(
       ProjectService projectService,
       SystemShellService systemShellService,
@@ -629,6 +725,7 @@ public class Tools {
         new FileSummaryCache());
   }
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public Tools(
       ProjectService projectService,
       SystemShellService systemShellService,
@@ -648,6 +745,7 @@ public class Tools {
         new SearchResultCache());
   }
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public Tools(
       ProjectService projectService,
       SystemShellService systemShellService,
@@ -669,6 +767,7 @@ public class Tools {
         new RelatedFileGraph());
   }
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public Tools(
       ProjectService projectService,
       SystemShellService systemShellService,
@@ -693,6 +792,7 @@ public class Tools {
         null);
   }
 
+  /** 指定された値や利用先を使って、Toolsを初期化する。 */
   public Tools(
       ProjectService projectService,
       SystemShellService systemShellService,
@@ -768,11 +868,13 @@ public class Tools {
     return output;
   }
 
+  /** 依頼された操作を進めるため、シェルコマンドを実行する。 */
   ShellCommandResult executeShellCommand(String command, Integer timeoutSeconds)
       throws IOException, InterruptedException {
     return executeShellCommand(command, timeoutSeconds, currentWorkingDirectory());
   }
 
+  /** 依頼された操作を進めるため、シェルコマンドを実行する。 */
   ShellCommandResult executeShellCommand(
       String command, Integer timeoutSeconds, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
@@ -805,14 +907,17 @@ public class Tools {
     return new ShellCommandResult(exitCode, stdoutText, stderrText, !completed);
   }
 
+  /** 指定や設定に応じた対象を利用するため、シェルを確定する。 */
   String resolveShell(Map<String, String> environment, String osName) {
     return systemShellService.resolveShell(environment, osName);
   }
 
+  /** 共通の実行基盤で用いるシェルコマンド行を返す。 */
   List<String> shellCommandLine(String shell, String command) {
     return systemShellService.shellCommandLine(shell, command);
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、シェルタイムアウトの表記をそろえる。 */
   int normalizeShellTimeout(Integer timeoutSeconds) {
     if (timeoutSeconds == null) {
       return DEFAULT_SHELL_TIMEOUT_SECONDS;
@@ -823,6 +928,7 @@ public class Tools {
     return Math.min(timeoutSeconds, MAX_SHELL_TIMEOUT_SECONDS);
   }
 
+  /** 必要な内容を参照できるよう、逐次データ非同期を読み取る。 */
   private CompletableFuture<String> readStreamAsync(java.io.InputStream stream) {
     return CompletableFuture.supplyAsync(
         () -> {
@@ -835,8 +941,17 @@ public class Tools {
         });
   }
 
+  /**
+   * 共通の実行基盤で受け渡すシェルコマンド結果を表す。
+   *
+   * @param exitCode 終了コード
+   * @param stdout 標準出力
+   * @param stderr 標準エラー出力
+   * @param timedOut timed出力先
+   */
   public record ShellCommandResult(int exitCode, String stdout, String stderr, boolean timedOut) {}
 
+  /** 依頼された操作を進めるため、コマンドを実行する。 */
   @Tool(
       name = "runCommand",
       description =
@@ -858,6 +973,7 @@ public class Tools {
     return runCommand(request, currentWorkingDirectory(), Duration.ofSeconds(3));
   }
 
+  /** 依頼された操作を進めるため、コマンドを実行する。 */
   RunCommandResult runCommand(
       RunCommandRequest request, java.nio.file.Path workingDirectory, Duration autoWait)
       throws IOException, InterruptedException {
@@ -870,6 +986,7 @@ public class Tools {
     };
   }
 
+  /** 共通の実行基盤で用いる前面結果を返す。 */
   private RunCommandResult foregroundResult(
       RunCommandRequest request, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
@@ -889,6 +1006,7 @@ public class Tools {
         result.timedOut() ? "command timed out" : null);
   }
 
+  /** 共通の実行基盤で用いるバックグラウンド結果を返す。 */
   private RunCommandResult backgroundResult(
       RunCommandRequest request, java.nio.file.Path workingDirectory) {
     BackgroundProcessSnapshot snapshot =
@@ -919,6 +1037,7 @@ public class Tools {
         null);
   }
 
+  /** 共通の実行基盤で用いる自動結果を返す。 */
   private RunCommandResult autoResult(
       RunCommandRequest request, java.nio.file.Path workingDirectory, Duration autoWait)
       throws InterruptedException {
@@ -967,14 +1086,17 @@ public class Tools {
         exitCode == 0 ? null : "command exited with code " + exitCode);
   }
 
+  /** 共通の実行基盤で用いる統合行一覧を返す。 */
   private String joinLines(List<String> lines) {
     return lines == null ? "" : String.join(System.lineSeparator(), lines);
   }
 
+  /** 共通の実行基盤で用いるspawnシェルコマンドを返す。 */
   BackgroundProcessSnapshot spawnShellCommand(String command) {
     return backgroundProcessManager.spawnShell(command, currentWorkingDirectory());
   }
 
+  /** 共通の実行基盤で参照するシェルプロセス状態を返す。 */
   @Tool(
       name = "getShellProcessStatus",
       description =
@@ -988,6 +1110,7 @@ public class Tools {
     return backgroundProcessManager.status(processId, tailLines);
   }
 
+  /** 共通の実行基盤で用いる強制終了シェルプロセスを返す。 */
   @Tool(
       name = "killShellProcess",
       description =
@@ -1001,23 +1124,27 @@ public class Tools {
     return backgroundProcessManager.kill(processId);
   }
 
+  /** 共通の実行基盤で用いるrollDiceを返す。 */
   int rollDice(int x) {
     IO.println(String.format("%d 面サイコロをひとつ振るよ", x));
     return (int) (Math.random() * x) + 1;
   }
 
+  /** 共通の実行基盤で用いる今日を返す。 */
   @Tool(name = "today", description = "今日の日付を yyyy-MM-dd 形式で取得します")
   String today() {
     IO.println("今日の日付を取得するよ");
     return LocalDate.now(clock).toString();
   }
 
+  /** 共通の実行基盤で用いる現在日時を返す。 */
   @Tool(name = "now", description = "現在時刻を ISO-8601 形式で取得します")
   String now() {
     IO.println("現在時刻を取得するよ");
     return OffsetDateTime.now(clock).toString();
   }
 
+  /** 対象を特定できるよう、ファイルを探す。 */
   @Tool(
       name = "findFile",
       description =
@@ -1029,6 +1156,7 @@ public class Tools {
     return findFile(request, currentWorkingDirectory());
   }
 
+  /** 対象を特定できるよう、ファイルを探す。 */
   List<String> findFile(FindFileRequest request, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
     if (request == null) {
@@ -1062,10 +1190,12 @@ public class Tools {
         .toList();
   }
 
+  /** 対象を特定できるよう、ファイルを探す。 */
   List<String> findFile(String fileName) throws IOException, InterruptedException {
     return findFile(fileName, currentWorkingDirectory());
   }
 
+  /** 対象を特定できるよう、ファイルを探す。 */
   List<String> findFile(String fileName, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
     IO.println(String.format("%s のファイルを探すよ（.gitignore を尊重）", fileName));
@@ -1085,19 +1215,28 @@ public class Tools {
     return gitListedFiles.stream().filter(s -> s.endsWith(fileName)).collect(Collectors.toList());
   }
 
+  /** 共通の実行基盤で用いるmatching検索語句件数を返す。 */
   private int matchingKeywordCount(String path, List<String> keywords) {
     String fileName =
         java.nio.file.Path.of(path).getFileName().toString().toLowerCase(java.util.Locale.ROOT);
     return (int) keywords.stream().filter(fileName::contains).count();
   }
 
+  /**
+   * 共通の実行基盤で受け渡すファイル名一致を表す。
+   *
+   * @param path パス
+   * @param matchCount 一致件数
+   */
   private record FileNameMatch(String path, int matchCount) {}
 
+  /** 利用可能な対象を確認できるよう、ファイルを一覧にする。 */
   @Tool(name = "listFile", description = "ファイル一覧を取得します（.gitignore を尊重）")
   List<String> listFile(String baseDir) throws IOException, InterruptedException {
     return listFile(baseDir, currentWorkingDirectory());
   }
 
+  /** 利用可能な対象を確認できるよう、ファイルを一覧にする。 */
   List<String> listFile(String baseDir, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
     var validatedBase =
@@ -1135,6 +1274,7 @@ public class Tools {
     return gitListedFiles;
   }
 
+  /** 共通の実行基盤で用いる内容検索を返す。 */
   List<String> grep(
       String pattern,
       String baseDir,
@@ -1165,10 +1305,12 @@ public class Tools {
         currentWorkingDirectory());
   }
 
+  /** 共通の実行基盤で用いる内容検索を返す。 */
   List<String> grep(String pattern, String baseDir) throws IOException, InterruptedException {
     return grep(pattern, baseDir, currentWorkingDirectory());
   }
 
+  /** 共通の実行基盤で用いる内容検索を返す。 */
   List<String> grep(String pattern, String baseDir, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
     return grep(
@@ -1187,6 +1329,7 @@ public class Tools {
         workingDirectory);
   }
 
+  /** 共通の実行基盤で用いる内容検索を返す。 */
   List<String> grep(
       String pattern,
       String baseDir,
@@ -1216,6 +1359,7 @@ public class Tools {
         workingDirectory);
   }
 
+  /** 共通の実行基盤で用いる内容検索を返す。 */
   List<String> grep(
       String pattern,
       String baseDir,
@@ -1298,17 +1442,20 @@ public class Tools {
     return grepMultiQuery(queries, currentWorkingDirectory());
   }
 
+  /** 共通の実行基盤で用いる内容検索複数検索条件を返す。 */
   List<GrepQueryResult> grepMultiQuery(List<GrepQuery> queries, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
     return boundedFileResult(grepMultiQuery(queries, workingDirectory, newSnapshots()));
   }
 
+  /** 共通の実行基盤で用いる内容検索複数検索条件を返す。 */
   private List<GrepQueryResult> grepMultiQuery(
       List<GrepQuery> queries, java.nio.file.Path workingDirectory, FileSnapshots snapshots)
       throws IOException, InterruptedException {
     return grepMultiQuery(queries, workingDirectory, snapshots, false);
   }
 
+  /** 共通の実行基盤で用いる内容検索複数検索条件を返す。 */
   private List<GrepQueryResult> grepMultiQuery(
       List<GrepQuery> queries,
       java.nio.file.Path workingDirectory,
@@ -1318,6 +1465,7 @@ public class Tools {
     if (queries == null || queries.isEmpty()) {
       throw new IllegalArgumentException("queries must not be empty");
     }
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (queries.size() > MAX_GREP_QUERIES) {
       throw new IllegalArgumentException(
           "too many queries: " + queries.size() + " (max " + MAX_GREP_QUERIES + ")");
@@ -1469,17 +1617,20 @@ public class Tools {
     return scanGrepMatches(query, workingDirectory).matches();
   }
 
+  /** 共通の実行基盤で用いる調査内容検索一致結果を返す。 */
   private GrepScanResult scanGrepMatches(GrepQuery query, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
     return scanGrepMatches(query, workingDirectory, new FileSnapshots());
   }
 
+  /** 共通の実行基盤で用いる調査内容検索一致結果を返す。 */
   private GrepScanResult scanGrepMatches(
       GrepQuery query, java.nio.file.Path workingDirectory, FileSnapshots snapshots)
       throws IOException, InterruptedException {
     return scanGrepMatches(query, workingDirectory, snapshots, false);
   }
 
+  /** 共通の実行基盤で用いる調査内容検索一致結果を返す。 */
   private GrepScanResult scanGrepMatches(
       GrepQuery query,
       java.nio.file.Path workingDirectory,
@@ -1492,6 +1643,7 @@ public class Tools {
     if (query.baseDir() == null || query.baseDir().isBlank()) {
       throw new IllegalArgumentException("baseDir must not be blank");
     }
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (query.pattern().length() > 1024 || query.baseDir().length() > 1024)
       throw new IllegalArgumentException("pattern/baseDir limit is 1024 characters");
     boolean effectiveIgnoreCase = Boolean.TRUE.equals(query.ignoreCase());
@@ -1612,7 +1764,23 @@ public class Tools {
     return new GrepScanResult(matches, fileErrors, searchTruncated);
   }
 
-  /** 1 つの grep 検索条件。grep ツールのパラメータと 1:1 対応する。 */
+  /**
+   * 1 つの grep 検索条件。grep ツールのパラメータと 1:1 対応する。
+   *
+   * @param pattern 照合規則
+   * @param baseDir 基準Dir
+   * @param ignoreCase 無視する対象事例
+   * @param fixedString 固定文字列表現
+   * @param invertMatch invert一致
+   * @param fileNamesOnly ファイル名前一覧限定
+   * @param beforeContext 変更前文脈
+   * @param afterContext 変更後文脈
+   * @param maxMatches 最大一致結果
+   * @param includeLineNumber 含める対象行数値
+   * @param includeGlob 含める対象パスの照合規則
+   * @param excludeGlob 除外する対象パスの照合規則
+   * @param charset 文字コード
+   */
   public record GrepQuery(
       String pattern,
       String baseDir,
@@ -1627,6 +1795,7 @@ public class Tools {
       String includeGlob,
       String excludeGlob,
       String charset) {
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public GrepQuery(
         String pattern,
         String baseDir,
@@ -1657,23 +1826,57 @@ public class Tools {
     }
   }
 
-  /** 1 行の grep 検索結果。 */
+  /**
+   * 1 行の grep 検索結果。
+   *
+   * @param path パス
+   * @param line 行
+   * @param content 内容
+   * @param matched 一致した
+   * @param version 形式のバージョン
+   */
   public record GrepMatch(String path, int line, String content, boolean matched, String version) {
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public GrepMatch(String path, int line, String content, boolean matched) {
       this(path, line, content, matched, null);
     }
   }
 
-  /** 1 query の検索結果。queryIndex は入力順と対応する。 */
+  /**
+   * 1 query の検索結果。queryIndex は入力順と対応する。
+   *
+   * @param path パス
+   * @param message メッセージ
+   */
   public record GrepFileError(String path, String message) {}
 
+  /**
+   * 共通の実行基盤で受け渡す内容検索調査結果を表す。
+   *
+   * @param matches 一致結果
+   * @param fileErrors ファイルエラー一覧
+   * @param truncated 省略の有無
+   */
   private record GrepScanResult(
       List<GrepMatch> matches, List<GrepFileError> fileErrors, boolean truncated) {
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     GrepScanResult(List<GrepMatch> matches, List<GrepFileError> fileErrors) {
       this(matches, fileErrors, false);
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡す内容検索検索条件結果を表す。
+   *
+   * @param queryIndex 検索条件位置
+   * @param pattern 照合規則
+   * @param matches 一致結果
+   * @param error エラー
+   * @param fileErrors ファイルエラー一覧
+   * @param truncated 省略の有無
+   * @param nextRead 次読み取り
+   * @param omittedErrors omittedエラー一覧
+   */
   public record GrepQueryResult(
       int queryIndex,
       String pattern,
@@ -1683,6 +1886,7 @@ public class Tools {
       boolean truncated,
       ReadFileRequest nextRead,
       int omittedErrors) {
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public GrepQueryResult(
         int queryIndex,
         String pattern,
@@ -1692,6 +1896,7 @@ public class Tools {
       this(queryIndex, pattern, matches, error, fileErrors, false, null, 0);
     }
 
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public GrepQueryResult(int queryIndex, String pattern, List<GrepMatch> matches, String error) {
       this(queryIndex, pattern, matches, error, List.of());
     }
@@ -1739,6 +1944,7 @@ public class Tools {
     return searchAndRead(request, currentWorkingDirectory());
   }
 
+  /** 依頼に関連する情報を得るため、および読み取りを検索する。 */
   List<SearchAndReadResult> searchAndRead(
       SearchAndReadRequest request, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
@@ -1748,6 +1954,7 @@ public class Tools {
     if (request.queries() == null || request.queries().isEmpty()) {
       throw new IllegalArgumentException("queries must not be empty");
     }
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (request.queries().size() > MAX_GREP_QUERIES) {
       throw new IllegalArgumentException(
           "too many queries: " + request.queries().size() + " (max " + MAX_GREP_QUERIES + ")");
@@ -2014,13 +2221,23 @@ public class Tools {
         nextRead);
   }
 
+  /** 新たな対象を利用できるよう、状態の記録一覧を作成する。 */
   FileSnapshots newSnapshots() {
     return new FileSnapshots();
   }
 
-  /** Exact decoded source for coverage reviews; uses the existing Project/MCP path boundary. */
+  /**
+   * 共通の実行基盤で受け渡すレビュー状態の記録を表す。
+   *
+   * <p>Exact decoded source for coverage reviews; uses the existing Project/MCP path boundary.
+   *
+   * @param path パス
+   * @param version 形式のバージョン
+   * @param text テキスト
+   */
   public record ReviewSnapshot(String path, String version, String text) {}
 
+  /** 共通の実行基盤で用いるレビュー状態の記録を返す。 */
   public ReviewSnapshot reviewSnapshot(String requested) throws IOException {
     var root = currentWorkingDirectory();
     var snapshot = newSnapshots().get(root, resolveProjectPath(requested, root));
@@ -2039,6 +2256,7 @@ public class Tools {
           stripper.setStartPage(page);
           stripper.setEndPage(page);
           var part = stripper.getText(pdf);
+          // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
           if (part.length() > 8 * 1024 * 1024
               || parts.stream().mapToLong(String::length).sum() + part.length() > 8 * 1024 * 1024)
             throw new IOException("PDF extracted text capacity exceeded");
@@ -2068,6 +2286,7 @@ public class Tools {
         text);
   }
 
+  /** 共通の実行基盤で用いる状態の記録行一覧を返す。 */
   private List<String> snapshotLines(FileSnapshots.Snapshot snapshot, String charset)
       throws IOException {
     byte[] bytes = snapshot.bytes();
@@ -2092,7 +2311,17 @@ public class Tools {
     return decoded.content().lines().toList();
   }
 
-  /** 1 リクエストの検索と読み込み要求。 */
+  /**
+   * 1 リクエストの検索と読み込み要求。
+   *
+   * @param queries 検索条件一覧
+   * @param contextLines 文脈行一覧
+   * @param maxFiles 最大ファイル一覧
+   * @param maxBytes バイト数の上限
+   * @param maxTokens トークン数の上限
+   * @param maxLines 最大行一覧
+   * @param preferredPaths preferredパス一覧
+   */
   public record SearchAndReadRequest(
       List<GrepQuery> queries,
       Integer contextLines,
@@ -2102,18 +2331,46 @@ public class Tools {
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer maxLines,
       @org.springframework.ai.tool.annotation.ToolParam(required = false)
           List<String> preferredPaths) {
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public SearchAndReadRequest(List<GrepQuery> queries, Integer contextLines, Integer maxFiles) {
       this(queries, contextLines, maxFiles, null, null, null, null);
     }
   }
 
-  /** 1 ファイルの検索ヒット。 */
+  /**
+   * 1 ファイルの検索ヒット。
+   *
+   * @param queryIndex 検索条件位置
+   * @param line 行
+   * @param content 内容
+   */
   public record SearchMatch(int queryIndex, int line, String content) {}
 
-  /** 読み込んだ 1 セクション。 */
+  /**
+   * 読み込んだ 1 セクション。
+   *
+   * @param startLine 開始行
+   * @param endLine 終了行
+   * @param content 内容
+   * @param truncated 省略の有無
+   */
   public record ReadSection(int startLine, int endLine, List<String> content, boolean truncated) {}
 
-  /** 1 ファイルの検索と読み込み結果。 */
+  /**
+   * 1 ファイルの検索と読み込み結果。
+   *
+   * @param path パス
+   * @param matches 一致結果
+   * @param sections 節一覧
+   * @param error エラー
+   * @param truncated 省略の有無
+   * @param filesTruncated ファイル一覧省略の有無
+   * @param version 形式のバージョン
+   * @param nextRead 次読み取り
+   * @param score 評価値
+   * @param matchedBy 一致した別
+   * @param omittedMatches omitted一致結果
+   */
   public record SearchAndReadResult(
       String path,
       List<SearchMatch> matches,
@@ -2126,6 +2383,7 @@ public class Tools {
       int score,
       List<String> matchedBy,
       int omittedMatches) {
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public SearchAndReadResult(
         String path,
         List<SearchMatch> matches,
@@ -2136,6 +2394,7 @@ public class Tools {
       this(path, matches, sections, error, truncated, filesTruncated, null, null, 0, List.of(), 0);
     }
 
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public SearchAndReadResult(
         String path,
         List<SearchMatch> matches,
@@ -2159,10 +2418,12 @@ public class Tools {
           0);
     }
 
+    /** 共通の実行基盤で用いる合計行一覧を返す。 */
     int totalLines() {
       return sections == null ? 0 : sections.stream().mapToInt(s -> s.content().size()).sum();
     }
 
+    /** 指定された省略の有無を反映した情報を作成する。 */
     SearchAndReadResult withTruncated(boolean value) {
       return new SearchAndReadResult(
           path,
@@ -2178,6 +2439,7 @@ public class Tools {
           omittedMatches);
     }
 
+    /** 指定された順位付けを反映した情報を作成する。 */
     SearchAndReadResult withRanking(int value, List<String> reasons) {
       return new SearchAndReadResult(
           path,
@@ -2233,9 +2495,13 @@ public class Tools {
     return readMultiFile(files, currentWorkingDirectory());
   }
 
+  /** スキル保存と検索の窓口。 */
   private dev.mikoto2000.rei.skills.AgentSkillRepository skillRepository;
+
+  /** スキル設定。 */
   private dev.mikoto2000.rei.skills.AgentSkillsProperties skillProperties;
 
+  /** 共通の実行基盤で使用するスキル補助資料一覧を設定する。 */
   @Autowired
   void setSkillResources(
       dev.mikoto2000.rei.skills.AgentSkillRepository repository,
@@ -2244,6 +2510,7 @@ public class Tools {
     skillProperties = properties;
   }
 
+  /** 必要な内容を参照できるよう、スキル補助資料を読み取る。 */
   @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(
       dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
   @Tool(
@@ -2268,6 +2535,7 @@ public class Tools {
             .findByName(skillName)
             .filter(dev.mikoto2000.rei.skills.AgentSkill::enabled)
             .orElseThrow(() -> new IllegalArgumentException("Unknown or disabled skill"));
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (files == null || files.isEmpty() || files.size() > MAX_READ_FILES) {
       throw new IllegalArgumentException("files must contain 1 to " + MAX_READ_FILES + " entries");
     }
@@ -2284,6 +2552,7 @@ public class Tools {
     return readMultiFile(files, skill.directory());
   }
 
+  /** 対象の規模を判断するため、ファイル行一覧を数える。 */
   @Tool(
       name = "countFileLines",
       description =
@@ -2292,7 +2561,9 @@ public class Tools {
     return countFileLines(paths, currentWorkingDirectory());
   }
 
+  /** 対象の規模を判断するため、ファイル行一覧を数える。 */
   FileLineCounts countFileLines(List<String> paths, java.nio.file.Path workingDirectory) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (paths == null || paths.isEmpty() || paths.size() > 64)
       throw new IllegalArgumentException("paths must contain 1 to 64 files");
     for (String path : paths)
@@ -2324,15 +2595,30 @@ public class Tools {
     return new FileLineCounts(List.copyOf(results), total);
   }
 
+  /**
+   * 共通の実行基盤で受け渡すファイル行件数を表す。
+   *
+   * @param path パス
+   * @param lineCount 行件数
+   * @param error エラー
+   */
   public record FileLineCount(String path, Long lineCount, String error) {}
 
+  /**
+   * 共通の実行基盤で受け渡すファイル行件数を表す。
+   *
+   * @param files ファイル一覧
+   * @param totalLines 合計行一覧
+   */
   public record FileLineCounts(List<FileLineCount> files, long totalLines) {}
 
+  /** 必要な内容を参照できるよう、複数ファイルを読み取る。 */
   List<ReadFileResult> readMultiFile(
       List<ReadFileRequest> files, java.nio.file.Path workingDirectory) throws IOException {
     if (files == null || files.isEmpty()) {
       throw new IllegalArgumentException("files must not be empty");
     }
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (files.size() > MAX_READ_FILES) {
       throw new IllegalArgumentException(
           "too many files: " + files.size() + " (max " + MAX_READ_FILES + ")");
@@ -2405,6 +2691,7 @@ public class Tools {
     return result;
   }
 
+  /** 必要な内容を参照できるよう、単一ファイルを読み取る。 */
   private ReadFileResult readSingleFile(
       ReadFileRequest request,
       java.nio.file.Path workingDirectory,
@@ -2473,7 +2760,22 @@ public class Tools {
         reason);
   }
 
-  /** 1 ファイルの読み込み要求。startLine / endLine は任意。 */
+  /**
+   * 1 ファイルの読み込み要求。startLine / endLine は任意。
+   *
+   * @param path パス
+   * @param startLine 開始行
+   * @param endLine 終了行
+   * @param expectedVersion 期待する内容形式のバージョン
+   * @param offset 開始位置
+   * @param charset 文字コード
+   * @param symbol シンボル
+   * @param includeBody 含める対象本文
+   * @param includeJavadoc 含める対象APIの説明
+   * @param contextLines 文脈行一覧
+   * @param includeOwnerOverview 含める対象所有者概要
+   * @param symbolOffset シンボル開始位置
+   */
   public record ReadFileRequest(
       @org.springframework.ai.tool.annotation.ToolParam(required = false) String path,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer startLine,
@@ -2488,6 +2790,7 @@ public class Tools {
       @org.springframework.ai.tool.annotation.ToolParam(required = false)
           Boolean includeOwnerOverview,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer symbolOffset) {
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public ReadFileRequest(
         String path,
         Integer startLine,
@@ -2510,12 +2813,29 @@ public class Tools {
           null);
     }
 
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public ReadFileRequest(String path, Integer startLine, Integer endLine) {
       this(path, startLine, endLine, null, null, null);
     }
   }
 
-  /** 1 ファイルの読み込み結果。 */
+  /**
+   * 1 ファイルの読み込み結果。
+   *
+   * @param path パス
+   * @param startLine 開始行
+   * @param endLine 終了行
+   * @param content 内容
+   * @param truncated 省略の有無
+   * @param error エラー
+   * @param version 形式のバージョン
+   * @param nextRead 次読み取り
+   * @param returnedBytes returnedバイト数
+   * @param symbol シンボル
+   * @param candidates 候補一覧
+   * @param ownerOverview 所有者概要
+   * @param truncationReason truncation理由
+   */
   public record ReadFileResult(
       String path,
       Integer startLine,
@@ -2530,6 +2850,7 @@ public class Tools {
       List<JavaSymbolReads.Candidate> candidates,
       List<String> ownerOverview,
       String truncationReason) {
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public ReadFileResult(
         String path,
         Integer startLine,
@@ -2559,6 +2880,7 @@ public class Tools {
           null);
     }
 
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public ReadFileResult(
         String path,
         Integer startLine,
@@ -2584,6 +2906,7 @@ public class Tools {
           List.of());
     }
 
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public ReadFileResult(
         String path,
         Integer startLine,
@@ -2594,6 +2917,7 @@ public class Tools {
       this(path, startLine, endLine, content, truncated, error, null, null, 0);
     }
 
+    /** 共通の実行基盤で用いる継続入力指示を返す。 */
     @com.fasterxml.jackson.annotation.JsonProperty(
         value = "continuationInstruction",
         access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
@@ -2638,11 +2962,13 @@ public class Tools {
     return writeMultiFile(files, currentWorkingDirectory());
   }
 
+  /** 指定された内容を保存先へ反映するため、複数ファイルを書き込む。 */
   List<WriteFileResult> writeMultiFile(
       List<WriteFileRequest> files, java.nio.file.Path workingDirectory) throws IOException {
     if (files == null || files.isEmpty()) {
       throw new IllegalArgumentException("files must not be empty");
     }
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (files.size() > MAX_WRITE_FILES) {
       throw new IllegalArgumentException(
           "too many files: " + files.size() + " (max " + MAX_WRITE_FILES + ")");
@@ -2687,6 +3013,7 @@ public class Tools {
     if (request.content() == null) {
       return "content must not be null";
     }
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (request.content().length() > MAX_WRITE_CHARS_PER_FILE) {
       return "content size exceeds per-file limit";
     }
@@ -2726,12 +3053,26 @@ public class Tools {
     searchResultCache.clear();
   }
 
-  /** 1 ファイルの書き込み要求。 */
+  /**
+   * 1 ファイルの書き込み要求。
+   *
+   * @param path パス
+   * @param content 内容
+   * @param append 追記
+   * @param charset 文字コード
+   */
   public record WriteFileRequest(String path, String content, Boolean append, String charset) {}
 
-  /** 1 ファイルの書き込み結果。 */
+  /**
+   * 1 ファイルの書き込み結果。
+   *
+   * @param path パス
+   * @param success 成功
+   * @param error エラー
+   */
   public record WriteFileResult(String path, boolean success, String error) {}
 
+  /** 条件に合う対象を選ぶため、パスの照合規則との一致を判定する。 */
   private boolean matchesGlob(
       String relativePath,
       SearchGlob includeMatcher,
@@ -2747,6 +3088,7 @@ public class Tools {
     return excludeMatcher == null || !excludeMatcher.matches(path);
   }
 
+  /** 共通の実行基盤で用いるコンパイル内容検索照合規則を返す。 */
   private Pattern compileGrepPattern(String pattern, boolean ignoreCase, boolean fixedString) {
     int flags = ignoreCase ? Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE : 0;
     String effectivePattern = fixedString ? Pattern.quote(pattern) : pattern;
@@ -2757,11 +3099,13 @@ public class Tools {
     }
   }
 
+  /** 共通の実行基盤において、一致した行かどうかを判定する。 */
   private boolean isMatchedLine(Pattern pattern, String line, boolean invertMatch) {
     boolean matched = pattern.matcher(line).find();
     return invertMatch ? !matched : matched;
   }
 
+  /** 内容を表示・参照しやすくするため、内容検索行を整形する。 */
   private String formatGrepLine(
       String path, int lineNumber, String line, String separator, boolean includeLineNumber) {
     if (includeLineNumber) {
@@ -2770,6 +3114,7 @@ public class Tools {
     return path + separator + line;
   }
 
+  /** 共通の実行基盤で用いるGitLsファイル一覧を返す。 */
   List<String> gitLsFiles(List<String> pathSpecs, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
     List<String> commandLine =
@@ -2809,6 +3154,7 @@ public class Tools {
     return Arrays.stream(output.split("\0")).filter(s -> !s.isEmpty()).toList();
   }
 
+  /** 必要な内容を参照できるよう、テキストファイルを読み取る。 */
   List<String> readTextFile(String pathStr) throws IOException {
     IO.println(String.format("%s のテキストファイルを読むよ", pathStr));
     java.nio.file.Path path = resolveProjectPath(pathStr);
@@ -2817,6 +3163,7 @@ public class Tools {
     return lines;
   }
 
+  /** 必要な内容を参照できるよう、テキストファイル対象範囲を読み取る。 */
   List<String> readTextFileRange(String pathStr, int startLine, int endLine) throws IOException {
     if (startLine < 1) {
       throw new IllegalArgumentException("startLine は 1 以上である必要があります");
@@ -2837,6 +3184,19 @@ public class Tools {
     return lines.subList(fromIndex, toIndex);
   }
 
+  /**
+   * 共通の実行基盤で受け渡すPDFページを表す。
+   *
+   * @param path パス
+   * @param version 形式のバージョン
+   * @param page ページ
+   * @param totalPages 合計ページ一覧
+   * @param offset 開始位置
+   * @param nextOffset 次開始位置
+   * @param nextPage 次ページ
+   * @param truncated 省略の有無
+   * @param content 内容
+   */
   public record PdfPage(
       String path,
       String version,
@@ -2848,6 +3208,7 @@ public class Tools {
       boolean truncated,
       String content) {}
 
+  /** 必要な内容を参照できるよう、PDFページを読み取る。 */
   @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(
       dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
   @Tool(
@@ -2880,6 +3241,7 @@ public class Tools {
       stripper.setStartPage(number);
       stripper.setEndPage(number);
       String text = stripper.getText(document);
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (text.length() > 8 * 1024 * 1024)
         throw new IOException("PDF extracted text capacity exceeded");
       if (start > text.length()
@@ -2921,6 +3283,7 @@ public class Tools {
     }
   }
 
+  /** 共通の実行基盤で用いるPDFページを返す。 */
   private PdfPage pdfPage(
       String path, String version, int page, int count, int start, int end, String text) {
     boolean more = end < text.length();
@@ -2936,6 +3299,7 @@ public class Tools {
         text.substring(start, end));
   }
 
+  /** 必要な内容を参照できるよう、PDFファイルを読み取る。 */
   String readPdfFile(String pathStr) throws IOException {
     IO.println(String.format("%s の PDF ファイルを読むよ", pathStr));
     java.nio.file.Path path = resolveProjectPath(pathStr);
@@ -2994,6 +3358,7 @@ public class Tools {
     searchResultCache.clear();
   }
 
+  /** 指定された変更を有効にするため、テキスト差分を反映する。 */
   @Tool(
       name = "applyTextDiff",
       description =
@@ -3043,6 +3408,7 @@ public class Tools {
     return new TextDiffApplyResult(true, true, "差分を適用しました");
   }
 
+  /** 後から経緯や使用量を確認できるよう、テキスト編集を記録する。 */
   private void recordTextEdit(java.nio.file.Path path) {
     workingSet.recordEdit(path);
     recentChanges.record(path.toString(), RecentChanges.OP_EDIT, "edited");
@@ -3052,8 +3418,16 @@ public class Tools {
     searchResultCache.clear();
   }
 
+  /**
+   * 共通の実行基盤で受け渡すテキスト差分反映結果を表す。
+   *
+   * @param success 成功
+   * @param changed 変更済み
+   * @param message メッセージ
+   */
   public record TextDiffApplyResult(boolean success, boolean changed, String message) {}
 
+  /** 必要な内容を参照できるよう、バイナリファイルを読み取る。 */
   @Tool(
       name = "readBinaryFile",
       description = "バイナリファイルをすべて読み込む。ファイルが存在しない場合は findFile を利用してファイルを探す。")
@@ -3065,6 +3439,7 @@ public class Tools {
     return bytes;
   }
 
+  /** 新たな対象を利用できるよう、ディレクトリ一覧を作成する。 */
   @Tool(name = "createDirectories", description = "指定したパスまでのディレクトリをすべて作成します。既に存在するディレクトリは成功扱いです。")
   String createDirectories(String pathStr) throws IOException {
     if (pathStr == null || pathStr.isBlank()) {
@@ -3075,6 +3450,7 @@ public class Tools {
     return createdPath.toAbsolutePath().normalize().toString();
   }
 
+  /** 指定された内容を保存先へ反映するため、バイナリファイルを書き込む。 */
   @Tool(name = "writeBinaryFile", description = "バイナリファイルに書き込みます。ファイルが存在しない場合は作成します。")
   void writeBinaryFile(String pathStr, byte[] contents, boolean append) throws IOException {
     IO.println(String.format("%s のバイナリファイルに %s を書き込むよ", pathStr, contents));
@@ -3107,6 +3483,7 @@ public class Tools {
     searchResultCache.clear();
   }
 
+  /** 対象を管理から外すため、ファイルを削除する。 */
   @Tool(name = "deleteFile", description = "ファイルを削除します。ファイルが存在しない場合はエラーになります。")
   void deleteFile(String pathStr) throws IOException {
     IO.println(String.format("%s を削除するよ", pathStr));
@@ -3120,6 +3497,7 @@ public class Tools {
     publishFileDeleted(path);
   }
 
+  /** 共通の実行基盤に関する複製ファイルを処理する。 */
   @Tool(name = "copyFile", description = "ファイルをコピーします。上書きする場合は false を指定します。ファイルが存在しない場合はエラーになります。")
   void copyFile(String sourcePath, String destPath, boolean overwrite) throws IOException {
     IO.println(String.format("%s を %s にコピーするよ。上書き：%s", sourcePath, destPath, overwrite));
@@ -3146,6 +3524,7 @@ public class Tools {
     publishFileCreatedOrModified(resolvedDestPath, exists);
   }
 
+  /** 共通の実行基盤に関するmoveファイルを処理する。 */
   @Tool(name = "moveFile", description = "ファイルを移動します。上書きする場合は false を指定します。ファイルが存在しない場合はエラーになります。")
   void moveFile(String sourcePath, String destPath, boolean overwrite) throws IOException {
     IO.println(String.format("%s を %s に移動するよ。上書き：%s", sourcePath, destPath, overwrite));
@@ -3173,26 +3552,32 @@ public class Tools {
     publishFileCreatedOrModified(resolvedDestPath, exists);
   }
 
+  /** 共通の実行基盤で用いる作業中集合を返す。 */
   WorkingSet workingSet() {
     return workingSet;
   }
 
+  /** 共通の実行基盤で用いる直近変更一覧を返す。 */
   RecentChanges recentChanges() {
     return recentChanges;
   }
 
+  /** 共通の実行基盤で用いるファイル要約キャッシュを返す。 */
   FileSummaryCache fileSummaryCache() {
     return fileSummaryCache;
   }
 
+  /** 依頼に関連する情報を得るため、結果キャッシュを検索する。 */
   SearchResultCache searchResultCache() {
     return searchResultCache;
   }
 
+  /** 共通の実行基盤で用いる関連ファイル関連図を返す。 */
   RelatedFileGraph relatedFileGraph() {
     return relatedFileGraph;
   }
 
+  /** 共通の実行基盤で用いる現在作業ディレクトリを返す。 */
   private java.nio.file.Path currentWorkingDirectory() {
     var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     if (run != null) return run.projectRoot();
@@ -3202,10 +3587,12 @@ public class Tools {
     return projectService.currentProject();
   }
 
+  /** 指定や設定に応じた対象を利用するため、プロジェクトパスを確定する。 */
   private java.nio.file.Path resolveProjectPath(String pathStr) {
     return resolveProjectPath(pathStr, currentWorkingDirectory());
   }
 
+  /** 指定や設定に応じた対象を利用するため、プロジェクトパスを確定する。 */
   private java.nio.file.Path resolveProjectPath(
       String pathStr, java.nio.file.Path workingDirectory) {
     java.nio.file.Path path = Paths.get(pathStr);
@@ -3215,6 +3602,7 @@ public class Tools {
     return workingDirectory.resolve(path).normalize();
   }
 
+  /** 指定や設定に応じた対象を利用するため、文字コードを確定する。 */
   private Charset resolveCharset(String charset) {
     if (charset == null || charset.isBlank()) {
       return StandardCharsets.UTF_8;
@@ -3226,6 +3614,7 @@ public class Tools {
     }
   }
 
+  /** 必要な内容を参照できるよう、テキストファイル内容を読み取る。 */
   private ResolvedTextFile readTextFileContent(java.nio.file.Path path, String charset)
       throws IOException {
     if (charset != null && !charset.isBlank()) {
@@ -3246,6 +3635,7 @@ public class Tools {
     }
   }
 
+  /** 必要な内容を参照できるよう、テキストファイル行一覧を読み取る。 */
   private List<String> readTextFileLines(
       java.nio.file.Path path, String displayPath, String charset) throws IOException {
     ResolvedTextFile resolved = readTextFileContent(path, charset);
@@ -3255,10 +3645,12 @@ public class Tools {
     return resolved.content().lines().toList();
   }
 
+  /** 必要な内容を参照できるよう、文字列表現厳格なを読み取る。 */
   private String readStringStrict(java.nio.file.Path path, Charset charset) throws IOException {
     return decodeStrict(Files.readAllBytes(path), charset);
   }
 
+  /** 受信した内容を利用できるよう、厳格なを復元する。 */
   private String decodeStrict(byte[] bytes, Charset charset) throws CharacterCodingException {
     return charset
         .newDecoder()
@@ -3268,6 +3660,7 @@ public class Tools {
         .toString();
   }
 
+  /** 受信した内容を利用できるよう、文字コードの識別情報を復元する。 */
   private ResolvedTextFile decodeBom(byte[] bytes) throws CharacterCodingException {
     if (startsWith(bytes, 0x00, 0x00, 0xfe, 0xff)) {
       return decodeAfterBom(bytes, 4, Charset.forName("UTF-32BE"));
@@ -3287,12 +3680,14 @@ public class Tools {
     return null;
   }
 
+  /** 受信した内容を利用できるよう、変更後文字コードの識別情報を復元する。 */
   private ResolvedTextFile decodeAfterBom(byte[] bytes, int bomLength, Charset charset)
       throws CharacterCodingException {
     byte[] content = Arrays.copyOfRange(bytes, bomLength, bytes.length);
     return new ResolvedTextFile(decodeStrict(content, charset), charset);
   }
 
+  /** 共通の実行基盤で判断に用いる開始付きの条件を確認する。 */
   private boolean startsWith(byte[] bytes, int... prefix) {
     if (bytes.length < prefix.length) {
       return false;
@@ -3305,10 +3700,12 @@ public class Tools {
     return true;
   }
 
+  /** 共通の実行基盤で用いるstrip文字コードの識別情報を返す。 */
   private String stripBom(String content) {
     return content.startsWith("\ufeff") ? content.substring(1) : content;
   }
 
+  /** 実行状況を利用先で把握できるよう、ファイル作成または更新を通知する。 */
   private void publishFileCreatedOrModified(java.nio.file.Path path, boolean existed) {
     if (existed) {
       publishFileModified(path, null, null);
@@ -3317,6 +3714,7 @@ public class Tools {
     }
   }
 
+  /** 実行状況を利用先で把握できるよう、ファイル作成を通知する。 */
   private void publishFileCreated(java.nio.file.Path path) {
     if (eventFactory != null && eventPublisher != null) {
       eventPublisher.publish(
@@ -3324,6 +3722,7 @@ public class Tools {
     }
   }
 
+  /** 実行状況を利用先で把握できるよう、ファイル更新を通知する。 */
   private void publishFileModified(
       java.nio.file.Path path, Integer addedLines, Integer removedLines) {
     if (eventFactory != null && eventPublisher != null) {
@@ -3333,6 +3732,7 @@ public class Tools {
     }
   }
 
+  /** 実行状況を利用先で把握できるよう、ファイル削除済みを通知する。 */
   private void publishFileDeleted(java.nio.file.Path path) {
     if (eventFactory != null && eventPublisher != null) {
       eventPublisher.publish(
@@ -3340,5 +3740,11 @@ public class Tools {
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡す確定したテキストファイルを表す。
+   *
+   * @param content 内容
+   * @param charset 文字コード
+   */
   private record ResolvedTextFile(String content, Charset charset) {}
 }

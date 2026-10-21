@@ -14,16 +14,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** 保存される再開用の記録保存と検索の窓口の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class PersistentCheckpointRepositoryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** {@code open} の条件を再現するための補助情報を返す。 */
   PersistentCheckpointRepository open() {
     var source = new SQLiteDataSource();
     source.setUrl("jdbc:sqlite:" + directory.resolve("checkpoint.db"));
     return new PersistentCheckpointRepository(source, new CheckpointProperties());
   }
 
+  /** 作業の中断と再開で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void restartDeduplicationAndOptimisticUpdates() {
     var repo = open();
@@ -36,6 +40,7 @@ class PersistentCheckpointRepositoryTest {
     assertEquals(1, repo.get("A", "task").revision());
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void onlyOneOwnerCanAcquireAndReleaseDoesNotEraseHistory() {
     var repo = open();
@@ -52,6 +57,7 @@ class PersistentCheckpointRepositoryTest {
     assertEquals(1, repo.get("A", "task").revision());
   }
 
+  /** 失敗について、保持する前回改訂番号を書き込むことを確認する。 */
   @Test
   void failedWritePreservesPreviousRevision() throws Exception {
     var repo = open();
@@ -68,6 +74,7 @@ class PersistentCheckpointRepositoryTest {
     assertEquals(1, open().get("A", "task").revision());
   }
 
+  /** 作業の中断と再開で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void deadOwnerAndReusedPidCannotBlockRecovery() throws Exception {
     var repo = open();
@@ -87,6 +94,7 @@ class PersistentCheckpointRepositoryTest {
     assertTrue(open().acquire("A", "task", "recovered"));
   }
 
+  /** 単一改訂番号上限について、一括反映置換を許可することを確認する。 */
   @Test
   void singleRevisionLimitAllowsAtomicReplacementAndCorruptionKeepsLatestValidRevision()
       throws Exception {
@@ -110,6 +118,7 @@ class PersistentCheckpointRepositoryTest {
     assertEquals(List.of("Corrupt checkpoint"), repo.diagnostics("A", "task"));
   }
 
+  /** 作業の中断と再開で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void concurrentWritersHaveExactlyOneWinner() throws Exception {
     var repo = open();
@@ -141,6 +150,7 @@ class PersistentCheckpointRepositoryTest {
     assertEquals(2, open().get("A", "task").revision());
   }
 
+  /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void pruningDoesNotAllowAnOldEventToBeSavedAgainOrDiscardLatestValidState() throws Exception {
     var repo = open();

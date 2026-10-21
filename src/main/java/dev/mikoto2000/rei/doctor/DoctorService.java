@@ -29,24 +29,44 @@ import org.springframework.core.env.PropertySource;
 import org.springframework.stereotype.Service;
 
 /**
- * Metadata only: no model, network client, process executor, recorder or model manager dependency.
+ * 環境診断のユースケースを実現する。
+ *
+ * <p>Metadata only: no model, network client, process executor, recorder or model manager
+ * dependency.
  */
 @Service
 public class DoctorService {
+  /** 実行環境。 */
   private final Environment environment;
+
+  /** 音声。 */
   private final VoiceProperties voice;
+
+  /** Codexの設定または実行の窓口。 */
   private final CodexProperties codex;
+
+  /** Claudeの設定または実行の窓口。 */
   private final ClaudeCodeProperties claude;
+
+  /** 言語モデル。 */
   private final LlmProperties llm;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 音声モデルの構成と入手先の情報。 */
   private final VoiceModelManifest manifest;
+
+  /** 現在モデル。 */
   private dev.mikoto2000.rei.core.service.ModelHolderService currentModel;
 
+  /** 実行環境の診断で使用する現在モデルを設定する。 */
   @Autowired
   public void setCurrentModel(dev.mikoto2000.rei.core.service.ModelHolderService holder) {
     currentModel = holder;
   }
 
+  /** 実行環境の診断を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @Autowired
   public DoctorService(
       Environment environment,
@@ -57,6 +77,7 @@ public class DoctorService {
     this(environment, voice, codex, claude, llm, Clock.systemUTC(), VoiceModelManifest.pinned());
   }
 
+  /** 指定された値や利用先を使って、DoctorServiceを初期化する。 */
   public DoctorService(
       Environment environment,
       VoiceProperties voice,
@@ -74,6 +95,7 @@ public class DoctorService {
     this.manifest = manifest;
   }
 
+  /** 実行環境の診断で用いるpassiveを返す。 */
   public List<DoctorResult> passive(boolean details) {
     var results = new ArrayList<DoctorResult>();
     if (!environment.getProperty("rei.doctor.enabled", Boolean.class, true))
@@ -324,6 +346,7 @@ public class DoctorService {
     return List.copyOf(results);
   }
 
+  /** 実行環境の診断で用いるまとまりを返す。 */
   private DoctorResult bundle(boolean details) throws Exception {
     if (!present(voice.getBundleDirectory()))
       return configured(
@@ -370,6 +393,7 @@ public class DoctorService {
         "Use /voice models info and explicit installation; doctor does not download or repair");
   }
 
+  /** 実行環境の診断で用いる外部を返す。 */
   private DoctorResult external(
       String id, boolean enabled, String command, boolean details, String property) {
     return configured(
@@ -383,6 +407,7 @@ public class DoctorService {
         "Use an explicit CLI active check when authorized");
   }
 
+  /** 実行環境の診断で用いる接続先を返す。 */
   public String endpoint() {
     var custom = llm.feature("chat");
     return custom != null && present(custom.getBaseUrl())
@@ -390,12 +415,14 @@ public class DoctorService {
         : environment.getProperty("spring.ai.openai.base-url");
   }
 
+  /** 実行環境の診断で用いる接続先キーを返す。 */
   private String endpointKey() {
     return llm.feature("chat") != null && present(llm.feature("chat").getBaseUrl())
         ? "rei.llm.features.chat.base-url"
         : "spring.ai.openai.base-url";
   }
 
+  /** 実行環境の診断で用いる設定済みを返す。 */
   private DoctorResult configured(
       String id,
       DoctorResult.Status status,
@@ -412,6 +439,7 @@ public class DoctorService {
         next);
   }
 
+  /** 実行環境の診断で用いる取得元を返す。 */
   private String source(String key) {
     if (environment instanceof ConfigurableEnvironment configurable) {
       int index = 0;
@@ -435,6 +463,7 @@ public class DoctorService {
     return "runtime configuration/default; no explicit property source";
   }
 
+  /** 実行環境の診断で用いるOSFamilyを返す。 */
   private static String osFamily() {
     String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
     return os.contains("win")
@@ -442,14 +471,17 @@ public class DoctorService {
         : os.contains("mac") ? "macOS" : os.contains("linux") ? "Linux" : "other OS";
   }
 
+  /** 実行環境の診断において、外部パスに該当するか判定する。 */
   private static boolean remotePath(String value) {
     return value.startsWith("//") || value.startsWith("\\\\");
   }
 
+  /** 実行環境の診断において、存在するに該当するか判定する。 */
   private static boolean present(String value) {
     return value != null && !value.isBlank();
   }
 
+  /** 実行環境の診断で用いる結果を返す。 */
   private DoctorResult result(
       String id,
       DoctorResult.Status status,
@@ -460,6 +492,7 @@ public class DoctorService {
     return new DoctorResult(id, status, clock.instant(), method, evidence, causes, next);
   }
 
+  /** 状況を判断する根拠を得るため、環境診断サービスを観測する。 */
   private void observe(
       List<DoctorResult> results, String id, String method, DoctorDiagnostic probe) {
     try {
@@ -477,6 +510,7 @@ public class DoctorService {
     }
   }
 
+  /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
   public static String render(List<DoctorResult> results) {
     var out =
         new StringBuilder(

@@ -36,10 +36,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/** 再開用の記録HTTP通信Smokeの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class CheckpointHttpSmokeTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import({
     WebApiConfiguration.class,
@@ -61,36 +64,43 @@ class CheckpointHttpSmokeTest {
     org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration.class
   })
   static class Config {
+    /** {@code clock} の条件を再現するための補助情報を返す。 */
     @Bean
     Clock clock() {
       return Clock.systemUTC();
     }
 
+    /** {@code events} の条件を再現するための補助情報を返す。 */
     @Bean
     AgentEventFactory events(Clock clock) {
       return new AgentEventFactory(clock);
     }
 
+    /** {@code bus} の条件を再現するための補助情報を返す。 */
     @Bean
     InMemoryAgentEventBus bus() {
       return new InMemoryAgentEventBus();
     }
 
+    /** {@code cancellation} の条件を再現するための補助情報を返す。 */
     @Bean
     CommandCancellationService cancellation() {
       return new CommandCancellationService();
     }
 
+    /** {@code executor} の条件を再現するための補助情報を返す。 */
     @Bean(destroyMethod = "shutdownNow")
     ExecutorService executor() {
       return Executors.newVirtualThreadPerTaskExecutor();
     }
 
+    /** {@code terminal} の条件を再現するための補助情報を返す。 */
     @Bean
     CompletableFuture<String> terminal() {
       return new CompletableFuture<>();
     }
 
+    /** 検証で使用する取得元を、指定された条件に合わせて用意する。 */
     @Bean(name = "memoryConsolidationDataSource")
     javax.sql.DataSource source(@Value("${rei.data-dir}") String directory) {
       var source = new org.sqlite.SQLiteDataSource();
@@ -98,16 +108,19 @@ class CheckpointHttpSmokeTest {
       return source;
     }
 
+    /** {@code reconciler} の条件を再現するための補助情報を返す。 */
     @Bean
     CheckpointReconciler reconciler() {
       return new CheckpointReconciler(null);
     }
 
+    /** {@code working} の条件を再現するための補助情報を返す。 */
     @Bean
     dev.mikoto2000.rei.core.working.WorkingSet working() {
       return new dev.mikoto2000.rei.core.working.WorkingSet();
     }
 
+    /** {@code router} の条件を再現するための補助情報を返す。 */
     @Bean
     ConversationInputRouter router(
         ExecutorService executor,
@@ -161,6 +174,7 @@ class CheckpointHttpSmokeTest {
     }
   }
 
+  /** Web APIによる操作で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void httpAppRestartStateChangeInspectResumeAndAuthentication() throws Exception {
     String project = null, task = null, previousRun = null;
@@ -248,6 +262,7 @@ class CheckpointHttpSmokeTest {
     }
   }
 
+  /** 検証で使用する要求を、指定された条件に合わせて用意する。 */
   private HttpResponse<String> request(
       HttpClient client, int port, String path, String body, boolean authenticated)
       throws Exception {

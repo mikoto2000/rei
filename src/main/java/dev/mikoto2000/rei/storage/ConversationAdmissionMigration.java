@@ -3,8 +3,13 @@ package dev.mikoto2000.rei.storage;
 import java.sql.Connection;
 import java.sql.SQLException;
 
-/** Canonical conversation admission, execution leases and durable request receipts. */
+/**
+ * データ保存の共通処理に必要な会話受付移行を扱う。
+ *
+ * <p>Canonical conversation admission, execution leases and durable request receipts.
+ */
 final class ConversationAdmissionMigration {
+  /** 指定された内容を、現在の対象へ反映する。 */
   static void apply(Connection db) throws SQLException {
     try (var sql = db.createStatement()) {
       sql.execute(
@@ -16,6 +21,7 @@ final class ConversationAdmissionMigration {
     }
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   static void verify(Connection db) throws SQLException {
     try (var sql = db.createStatement()) {
       sql.executeQuery(

@@ -19,8 +19,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+/** 日次要約外部連携の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class DailySummaryIntegrationTest {
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"", "today", "yesterday", "2026-09-24"})
   void existingSummarySyntaxCallsDailyWriterButTimelineDoesNot(String date) {
@@ -67,6 +69,7 @@ class DailySummaryIntegrationTest {
     verify(store, never()).append(any());
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void fixtureComparisonProducesBoundedReportAndDoesNotMutateSource() throws Exception {
     var source = DailySummaryTest.largeDay();

@@ -20,7 +20,9 @@ import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import org.junit.jupiter.api.Test;
 
+/** Robot連携の窓口一覧の結果と状態の契約を検証するテスト。 */
 class RobotAdaptersTest {
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void convertsResizedPixelsToLogicalCoordinatesIncludingNegativeOrigins() throws Exception {
     var driver = mock(RobotDriver.class);
@@ -43,6 +45,7 @@ class RobotAdaptersTest {
     order.verify(driver).mouseRelease(InputEvent.BUTTON1_DOWN_MASK);
   }
 
+  /** 全対象入力操作一覧実行先への引き渡しおよびについて、キー一覧を解放することを確認する。 */
   @Test
   void allInputActionsDispatchAndReleaseKeys() throws Exception {
     var driver = mock(RobotDriver.class);
@@ -76,9 +79,11 @@ class RobotAdaptersTest {
             new ComputerAction.Failed("no"),
             new ComputerAction.Wait(1)))
       assertThrows(IllegalArgumentException.class, () -> input.execute(action, screen));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(driver);
   }
 
+  /** 以外主要なを受け付けないことを確認する。 */
   @Test
   void rejectsNonPrimaryAndChangedBoundsBeforeInput() throws Exception {
     var driver = mock(RobotDriver.class);
@@ -101,6 +106,7 @@ class RobotAdaptersTest {
     verify(driver, never()).move(anyInt(), anyInt());
   }
 
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void capturesOnlyPrimaryAndUsesAbstraction() throws Exception {
     var driver = mock(RobotDriver.class);
@@ -113,6 +119,7 @@ class RobotAdaptersTest {
         IllegalArgumentException.class, () -> new RobotScreenCapture(driver).captureScreen());
   }
 
+  /** 追加された待機の実行先を利用することを確認する。 */
   @Test
   void stabilizationUsesInjectedSleeper() throws Exception {
     var waits = new ArrayList<Long>();

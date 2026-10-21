@@ -13,14 +13,18 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況意味によるの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ActivitySemanticTest {
+  /** 検証に使う開始。 */
   static final Instant START = Instant.parse("2026-09-23T09:08:00Z");
 
+  /** {@code activity} の条件を再現するための補助情報を返す。 */
   static ActivityRecord.Activity activity(String type, String app, String service, String project) {
     return new ActivityRecord.Activity("m1", type, app, service, "", project);
   }
 
+  /** 検証用に、後から経緯を確認できるよう、指定された内容を記録する。 */
   static ActivityRecord record(
       int minute, String app, String title, ActivityRecord.Activity... activities) {
     return new ActivityRecord(
@@ -37,6 +41,7 @@ class ActivitySemanticTest {
         "run1");
   }
 
+  /** {@code dev} の条件を再現するための補助情報を返す。 */
   static ActivityRecord dev(int minute, String app, String service) {
     return record(
         minute,
@@ -48,11 +53,13 @@ class ActivitySemanticTest {
         activity("monitoring", "btop", "", ""));
   }
 
+  /** {@code segments} の条件を再現するための補助情報を返す。 */
   static List<SummarySegment> segments(ActivityRecord... records) {
     return new SemanticSessionPolicy(Duration.ofMinutes(3), Duration.ofMinutes(2), ZoneOffset.UTC)
         .aggregate(List.of(records));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void developmentToolsAndSecondaryChangesMerge() {
     var result =
@@ -63,6 +70,7 @@ class ActivitySemanticTest {
     assertEquals(180, result.getFirst().observedSeconds());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sustainedForegroundMediaSplits() {
     var youtube = activity("media", "Firefox", "YouTube", "");
@@ -76,6 +84,7 @@ class ActivitySemanticTest {
             .size());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void monitorIsBackgroundUnlessForeground() {
     var roles = new ActivityRolePolicy().classify(dev(0, "Terminal", "X"));
@@ -87,6 +96,7 @@ class ActivitySemanticTest {
         new ActivityRolePolicy().classify(record(1, "btop", "system monitor", monitor)).primary());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void ambiguousBrowserDoesNotInventPrimary() {
     var roles =
@@ -102,6 +112,7 @@ class ActivitySemanticTest {
     assertEquals(2, roles.secondary().size());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void shortMissingObservationMergesWithoutCountingGapAsObserved() {
     var result = segments(dev(0, "Terminal", "X"), dev(4, "GVIM", "X"));
@@ -110,6 +121,7 @@ class ActivitySemanticTest {
     assertEquals(180, result.getFirst().unobservedSeconds());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void longGapAndDifferentProjectsSplit() {
     assertEquals(2, segments(dev(0, "Terminal", "X"), dev(5, "GVIM", "X")).size());
@@ -121,6 +133,7 @@ class ActivitySemanticTest {
             .size());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void shortDetourReturnsToDevelopmentWithoutLosingEvidence() {
     var result =
@@ -135,6 +148,7 @@ class ActivitySemanticTest {
             .anyMatch(a -> a.service().equals("youtube")));
   }
 
+  /** 作業状況の把握で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void twentyFineSessionsBecomeOneSummaryBlock() {
     var records =
@@ -158,6 +172,7 @@ class ActivitySemanticTest {
     assertTrue(text.length() < 400);
   }
 
+  /** 主要な範囲内統合済み文脈について、観測継続時間を利用することを確認する。 */
   @Test
   void primaryWithinMergedContextUsesObservedDuration() {
     var social = activity("social", "Firefox", "X", "");
@@ -176,6 +191,7 @@ class ActivitySemanticTest {
     assertTrue(s.roles().secondary().contains(ActivityVocabulary.canonical(social)));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sustainedChangeRemainsSeparateEvenAfterReturn() {
     var video = activity("media", "Firefox", "YouTube", "");
@@ -190,6 +206,7 @@ class ActivitySemanticTest {
             .size());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownProjectCannotBridgeConflictingProjects() {
     var blank = record(1, "Terminal", "", activity("coding", "Terminal", "", ""));
@@ -197,6 +214,7 @@ class ActivitySemanticTest {
     assertEquals(2, segments(dev(0, "Terminal", "X"), blank, other).size());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void pauseContinuityBoundaryIsNeverSmoothed() {
     var a = dev(0, "Terminal", "X");
@@ -217,6 +235,7 @@ class ActivitySemanticTest {
     assertEquals(2, segments(a, b).size());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void midnightAndOverlappingEstimatesDoNotInflateTime() {
     var a = dev(0, "Terminal", "X");
@@ -268,6 +287,7 @@ class ActivitySemanticTest {
         70, segments(overlapping, b).stream().mapToLong(SummarySegment::observedSeconds).sum());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void confidenceStaysUncertainAndUnknownIsNotIdle() {
     var known = new ActivityRolePolicy().classify(dev(0, "Terminal", "X"));
@@ -278,6 +298,7 @@ class ActivitySemanticTest {
     assertFalse(summary.contains("離席"));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void suppliedMorningExampleCompressesFiveSessionsToOneBlock() throws Exception {
     int[] starts = {0, 2, 13, 31, 33};
@@ -315,6 +336,7 @@ class ActivitySemanticTest {
         "Synthetic fixture: 5 fine sessions -> 1 summary segment\n" + text);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void thresholdsAreConfigurableAndValidated() {
     var p = new ActivityProperties();

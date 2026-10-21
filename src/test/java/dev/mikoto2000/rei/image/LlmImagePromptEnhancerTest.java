@@ -19,8 +19,10 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 言語モデル画像プロンプト内容の補強の結果と状態の契約を検証するテスト。 */
 class LlmImagePromptEnhancerTest {
 
+  /** 画像の生成で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void generatesImagePromptWithImagePromptFeature() {
     ChatModel chatModel = mock(ChatModel.class);

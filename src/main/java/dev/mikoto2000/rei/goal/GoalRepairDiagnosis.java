@@ -1,21 +1,42 @@
 package dev.mikoto2000.rei.goal;
 
-/** Conservative classification of host-observed reasons. Unknown results never authorize replay. */
+/**
+ * 目標の達成管理で受け渡す目標修復診断を表す。
+ *
+ * <p>Conservative classification of host-observed reasons. Unknown results never authorize replay.
+ *
+ * @param kind 種類
+ * @param repairable 修復できるかどうか
+ * @param humanRequired 利用者必須
+ * @param reason 理由
+ */
 public record GoalRepairDiagnosis(
     Kind kind, boolean repairable, boolean humanRequired, String reason) {
+  /** 目標の達成管理における種類の選択肢。 */
   public enum Kind {
+    /** 該当なし。 */
     NONE,
+    /** 検証失敗情報。 */
     TEST_FAILURE,
+    /** 実装INCONSISTENCY。 */
     IMPLEMENTATION_INCONSISTENCY,
+    /** 要件未達成の条件。 */
     REQUIREMENT_UNMET,
+    /** 一時的な外部。 */
     TRANSIENT_EXTERNAL,
+    /** 承認待機。 */
     APPROVAL_WAIT,
+    /** 不明結果。 */
     UNKNOWN_RESULT,
+    /** 修復の対象にできない状態。 */
     UNREPAIRABLE,
+    /** 予算INSUFFICIENT。 */
     BUDGET_INSUFFICIENT,
+    /** キャンセル済み。 */
     CANCELLED
   }
 
+  /** 目標の達成管理で受け渡す情報を、指定された内容から作成する。 */
   public static GoalRepairDiagnosis of(String reason) {
     String value = reason == null ? "" : reason;
     return switch (value) {

@@ -25,7 +25,9 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 
+/** スキル選択内容トークン数の上限の結果と状態の契約を検証するテスト。 */
 class SkillSelectionTokenLimitTest {
+  /** トークン制限された選択内容について、提供元選択可能な設定を利用することを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void tokenLimitedSelectionUsesProviderOptionsAndDisablesToolsOnTheWire(boolean completionTokens) {
@@ -104,6 +106,7 @@ class SkillSelectionTokenLimitTest {
     assertThat(model.getOptions().getModel()).isEqualTo("default-model");
   }
 
+  /** スキルの利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void usageBearingSkillResponseSharesRunLimitAndCannotFallbackOnExhaustion() {
     var model = mock(ChatModel.class);
@@ -132,6 +135,7 @@ class SkillSelectionTokenLimitTest {
     verify(model, never()).call(anyString());
   }
 
+  /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void missingSkillUsageStopsInsteadOfReturningEmptySelection() {
     var model = mock(ChatModel.class);

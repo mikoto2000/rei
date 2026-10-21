@@ -25,7 +25,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** 音声補正サービスの結果と状態の契約を検証するテスト。 */
 class VoiceCorrectionServiceTest {
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void pendingUtteranceCanBeCancelledIndividuallyBeforeLlmReturns() throws Exception {
     var entered = new CountDownLatch(1);
@@ -54,14 +56,17 @@ class VoiceCorrectionServiceTest {
     }
   }
 
+  /** 検証に使う対象。 */
   final ConversationTarget target =
       new ConversationTarget(
           new ProjectContext(UUID.randomUUID().toString(), "test", Path.of(".")), "session");
 
+  /** {@code input} の条件を再現するための補助情報を返す。 */
   ConversationInput input(String text) {
     return new ConversationInput(UUID.randomUUID(), InputSource.VOICE, target, text, Instant.now());
   }
 
+  /** {@code properties} の条件を再現するための補助情報を返す。 */
   VoiceCorrectionProperties properties() {
     var p = new VoiceCorrectionProperties();
     p.setEnabled(true);
@@ -69,11 +74,13 @@ class VoiceCorrectionServiceTest {
     return p;
   }
 
+  /** 検証で使用する状態の記録を、指定された条件に合わせて用意する。 */
   VoiceCorrectionContext.Snapshot snapshot(ConversationInput i) {
     return new VoiceCorrectionContext.Snapshot(
         i.target().project().id(), "test", List.of("微分の話"), List.of());
   }
 
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void adoptsValidCandidateAndBypassesWhenOffOrRawControl() throws Exception {
     var p = properties();
@@ -104,6 +111,7 @@ class VoiceCorrectionServiceTest {
     }
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void deadlineWinsOnceEvenIfTransportIgnoresInterruption() throws Exception {
     var timer = mock(ScheduledExecutorService.class);
@@ -153,6 +161,7 @@ class VoiceCorrectionServiceTest {
     }
   }
 
+  /** 音声による対話で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void queueIsBoundedAndSnapshotsAreTakenBeforeQueueing() throws Exception {
     var p = properties();
@@ -193,6 +202,7 @@ class VoiceCorrectionServiceTest {
     }
   }
 
+  /** 音声による対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationAndSelectionChangeInvalidateLateCandidate() throws Exception {
     var entered = new CountDownLatch(1);
@@ -218,6 +228,7 @@ class VoiceCorrectionServiceTest {
     }
   }
 
+  /** 音声による対話で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void failuresAndSecretsNeverEnterDiagnosticsAndCriticalRawRequiresReview() throws Exception {
     var events = new CopyOnWriteArrayList<VoiceEventPublisher.Event>();

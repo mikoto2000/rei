@@ -37,10 +37,13 @@ import org.springframework.ai.embedding.EmbeddingResponseMetadata;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import tools.jackson.databind.json.JsonMapper;
 
+/** 経験の記録ベクトルによるSQLiteの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class EpisodeDenseSqliteTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** {@code vectors} の条件を再現するための補助情報を返す。 */
   LazySqliteVectorStore vectors(EmbeddingModel model) {
     var source = new org.sqlite.SQLiteDataSource();
     source.setUrl("jdbc:sqlite:" + dir.resolve("episode-vectors.db"));
@@ -57,6 +60,7 @@ class EpisodeDenseSqliteTest {
         new JsonMapper());
   }
 
+  /** 過去の経験の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void realVectorsSurviveRestartAndChargeTheSharedBudgetBeforePublication() {
     var repo =
@@ -99,6 +103,7 @@ class EpisodeDenseSqliteTest {
     verify(budget, times(2)).run();
   }
 
+  /** 過去の経験の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unavailableSourcesNeverReachTheEmbeddingProvider() {
     var repo =
@@ -108,10 +113,12 @@ class EpisodeDenseSqliteTest {
     var index = new EpisodeDenseIndex(repo, store);
     index.setSourceAvailable(e -> false);
     index.indexPending("s", null);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(store);
     assertEquals(1, repo.pendingDense("s", 50).size());
   }
 
+  /** 過去の経験の活用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void tokenBudgetFailureRollsBackVectorsAndLeavesTheEpisodePending() {
     var repo =

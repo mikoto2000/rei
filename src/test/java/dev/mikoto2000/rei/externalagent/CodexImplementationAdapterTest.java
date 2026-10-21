@@ -13,9 +13,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Codex実装連携の窓口の結果と状態の契約を検証するテスト。 */
 class CodexImplementationAdapterTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 参照専用項目に整理した内容実装について、共有予算を利用することを確認する。 */
   @Test
   void readonlyStructuredImplementationUsesSharedBudgetAndNeverAcceptsMalformedOutput()
       throws Exception {
@@ -26,6 +29,7 @@ class CodexImplementationAdapterTest {
         ImplementationProposal.sha256("before".getBytes(java.nio.charset.StandardCharsets.UTF_8));
     var runner =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           @Override
           public Output run(
               List<String> command,
@@ -76,14 +80,17 @@ class CodexImplementationAdapterTest {
         };
     var budget =
         new dev.mikoto2000.rei.llm.ModelCallBudget() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           public void run() {
             calls.incrementAndGet();
           }
 
+          /** {@code tokenLimitEnabled} の条件を再現するための補助情報を返す。 */
           public boolean tokenLimitEnabled() {
             return true;
           }
 
+          /** 検証用に、使用したトークン数を実行予算へ記録する。 */
           public void recordTotalTokens(Integer count) {
             tokens.set(count);
           }
@@ -110,6 +117,7 @@ class CodexImplementationAdapterTest {
     assertNull(result.forEvaluation().implementation());
     var malformed =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           @Override
           public Output run(
               List<String> c,

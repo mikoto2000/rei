@@ -26,8 +26,10 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
+/** 作業状況外部連携の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ActivityIntegrationTest {
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void truncatedVisionResponseHasActionableDiagnostic() throws Exception {
     var model = mock(ChatModel.class);
@@ -48,6 +50,7 @@ class ActivityIntegrationTest {
     assertEquals("/:output_limit", error.diagnostic());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void emptyVisionResponseIsDistinctFromInvalidJson() throws Exception {
     var model = mock(ChatModel.class);
@@ -64,6 +67,7 @@ class ActivityIntegrationTest {
     assertEquals("/:empty_response", error.diagnostic());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void evidenceSettingsDefaultOffAndBindIndependently() {
     var defaults = new ActivityProperties();
@@ -82,6 +86,7 @@ class ActivityIntegrationTest {
     assertTrue(configured.isKeepOnExtractionFailure());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void configurationIsLazyAndDisabled() {
     var provider = mock(dev.mikoto2000.rei.llm.LlmModelProvider.class);
@@ -97,10 +102,12 @@ class ActivityIntegrationTest {
             context -> {
               assertNull(context.getStartupFailure());
               assertFalse(context.getBean(ActivityProperties.class).isEnabled());
+              // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
               verifyNoInteractions(ds, provider);
             });
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void visionRequestHasPerMonitorImagesAndNoTools() throws Exception {
     var model = mock(ChatModel.class);
@@ -128,6 +135,7 @@ class ActivityIntegrationTest {
     assertTrue(prompt.getValue().getSystemMessage().getText().contains(schema));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void slashCommandsAndDateDispatch() {
     var timeline = mock(ActivityTimeline.class);
@@ -152,6 +160,7 @@ class ActivityIntegrationTest {
     assertFalse(properties.isEnabled());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void naturalLanguageToolsAreRegistered() {
     var callbacks =
@@ -166,6 +175,7 @@ class ActivityIntegrationTest {
             .collect(java.util.stream.Collectors.toSet()));
   }
 
+  /** 要約ツールについて、圧縮済み表示用の状態を利用することを確認する。 */
   @Test
   void summaryToolUsesCompressedProjection() {
     var timeline = mock(ActivityTimeline.class);

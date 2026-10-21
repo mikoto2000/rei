@@ -11,7 +11,9 @@ import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import org.junit.jupiter.api.Test;
 
+/** 計画イベント配信文脈の組み立ての結果と状態の契約を検証するテスト。 */
 class PlanSseAssemblerTest {
+  /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
   static String event(String type, String response) {
     return "event: "
         + type
@@ -22,13 +24,16 @@ class PlanSseAssemblerTest {
         + "}\n\n";
   }
 
+  /** {@code stream} の条件を再現するための補助情報を返す。 */
   static InputStream stream(String text) {
     return new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8));
   }
 
+  /** 検証に使う完了済みの。 */
   static final String COMPLETED =
       "{\"id\":\"resp_1\",\"status\":\"completed\",\"output\":[{\"type\":\"message\",\"content\":[{\"type\":\"output_text\",\"text\":\"hello\"}]}],\"usage\":{\"total_tokens\":17}}";
 
+  /** 完了済みのについて、終端出力を利用することを確認する。 */
   @Test
   void completedUsesTerminalOutputAndUsage() {
     var result =
@@ -38,6 +43,7 @@ class PlanSseAssemblerTest {
     assertEquals(17, result.totalTokens());
   }
 
+  /** ChatGPTとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void ambiguousJsonAndMalformedUtf8AreRejected() {
     String duplicate =
@@ -61,6 +67,7 @@ class PlanSseAssemblerTest {
             .code());
   }
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void fragmentedCrLfAndCommentsAreAssembled() {
     var data =
@@ -68,6 +75,7 @@ class PlanSseAssemblerTest {
             .getBytes(StandardCharsets.UTF_8);
     var input =
         new ByteArrayInputStream(data) {
+          /** 検証用に、指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
           public synchronized int read(byte[] b, int o, int n) {
             return super.read(b, o, Math.min(n, 1));
           }
@@ -75,6 +83,7 @@ class PlanSseAssemblerTest {
     assertEquals("hello", new PlanSseAssembler().read(input, 1048576).text());
   }
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void partialOutputAndMissingTerminalAreUnknown() {
     var result =
@@ -88,6 +97,7 @@ class PlanSseAssemblerTest {
     assertEquals("", result.text());
   }
 
+  /** ChatGPTとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unfinishedFrameIsNotSuccess() {
     assertEquals(
@@ -97,6 +107,7 @@ class PlanSseAssemblerTest {
             .state());
   }
 
+  /** ChatGPTとの連携で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void failedUsageLimitAndUnavailableAreDifferent() {
     for (var code :
@@ -117,6 +128,7 @@ class PlanSseAssemblerTest {
     }
   }
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void incompleteIsDistinct() {
     assertEquals(
@@ -124,6 +136,7 @@ class PlanSseAssemblerTest {
         new PlanSseAssembler().read(stream(event("response.incomplete", "{}")), 10000).state());
   }
 
+  /** ChatGPTとの連携で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void receiveLimitAndMalformedJsonAreRejected() {
     assertThrows(
@@ -134,6 +147,7 @@ class PlanSseAssemblerTest {
         () -> new PlanSseAssembler().read(stream("data: garbage\n\n"), 10000));
   }
 
+  /** ChatGPTとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void toolOutputNeverRunsAndIsRejected() {
     assertThrows(
@@ -148,13 +162,16 @@ class PlanSseAssemblerTest {
                     10000));
   }
 
+  /** {@code frame} の条件を再現するための補助情報を返す。 */
   static String frame(String json) {
     return "data: " + json + "\n\n";
   }
 
+  /** 検証に使う空の完了済みの。 */
   static final String EMPTY_COMPLETED =
       "{\"status\":\"completed\",\"output\":[],\"usage\":{\"total_tokens\":34}}";
 
+  /** {@code delta} の条件を再現するための補助情報を返す。 */
   static String delta(String text) {
     return frame(
         "{\"type\":\"response.output_text.delta\",\"output_index\":0,\"content_index\":0,\"delta\":\""
@@ -162,6 +179,7 @@ class PlanSseAssemblerTest {
             + "\"}");
   }
 
+  /** ChatGPTとの連携で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void streamedTextIsReturnedOnlyAfterCompletedEvenWhenTerminalOutputIsEmpty() {
     var input = delta("Hello, ") + delta("world!") + event("response.completed", EMPTY_COMPLETED);
@@ -179,6 +197,7 @@ class PlanSseAssemblerTest {
     }
   }
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void finalizedTextReplacesDeltasAndTerminalTextRemainsAuthoritative() {
     String done =
@@ -197,6 +216,7 @@ class PlanSseAssemblerTest {
             .text());
   }
 
+  /** ChatGPTとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void safeDiagnosticsDescribeEmptyTerminalAndNeverContainTextIdsOrUnknownTypes() {
     String secret = "private-response-access-token";
@@ -218,6 +238,7 @@ class PlanSseAssemblerTest {
     assertFalse(normal.toString().contains("hello"));
   }
 
+  /** ChatGPTとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void streamedToolItemCannotHideBehindEmptyCompletedOutput() {
     String tool =
@@ -238,6 +259,7 @@ class PlanSseAssemblerTest {
             .code());
   }
 
+  /** 確定済み項目一覧および部分一覧について、位置順序を利用することを確認する。 */
   @Test
   void finalizedItemsAndPartsUseIndexOrderWithoutDuplicateText() {
     String item =
@@ -275,6 +297,7 @@ class PlanSseAssemblerTest {
     assertTrue(empty.diagnostic().contains("textSource=none"));
   }
 
+  /** ChatGPTとの連携で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void streamedTextRemainsBoundedAndMalformedFieldsCannotBecomeResults() {
     String input = delta("Hello, world!") + event("response.completed", EMPTY_COMPLETED);

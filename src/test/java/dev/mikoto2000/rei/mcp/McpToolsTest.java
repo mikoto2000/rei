@@ -45,18 +45,39 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** MCPツール一覧の結果と状態の契約を検証するテスト。 */
 class McpToolsTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う実行可否の判断。 */
   StorageMigrationCoordinator gate;
+
+  /** 検証に使う受付台帳。 */
   ConversationAdmissionStore admissions;
+
+  /** 検証に使う保存先。 */
   McpRequestStore store;
+
+  /** 検証に使うツール一覧。 */
   McpTools tools;
+
+  /** 検証に使うプロジェクト一覧。 */
   ProjectRegistry projects;
+
+  /** 検証に使うプロジェクト、その他。 */
   ProjectContext project, other;
+
+  /** 検証に使うやり取り一覧。 */
   ConversationTurnStore turns;
+
+  /** 検証に使うchats。 */
   ChatSubmitService chats;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock = Clock.fixed(Instant.parse("2026-10-12T00:00:00Z"), ZoneOffset.UTC);
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     gate = new StorageMigrationCoordinator(root);
@@ -100,26 +121,31 @@ class McpToolsTest {
             approvals);
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void close() throws Exception {
     admissions.close();
     gate.close();
   }
 
+  /** {@code data} の条件を再現するための補助情報を返す。 */
   @SuppressWarnings("unchecked")
   Map<String, Object> data(McpSchema.CallToolResult result) {
     return (Map<String, Object>) result.structuredContent();
   }
 
+  /** {@code input} の条件を再現するための補助情報を返す。 */
   Map<String, Object> input(String key) {
     return Map.of("project_id", project.id(), "instruction", "Review only", "request_id", key);
   }
 
+  /** {@code error} の条件を再現するため、検証用の操作や状態を扱う。 */
   void error(String code, McpSchema.CallToolResult result) {
     assertTrue(result.isError());
     assertEquals(code, ((Map<?, ?>) data(result).get("error")).get("code"));
   }
 
+  /** MCPによる機能の提供で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void onlyAllowlistedProjectNamesAreExposed() {
     var result = tools.call("rei_projects_list", Map.of());
@@ -128,6 +154,7 @@ class McpToolsTest {
     assertFalse(data(result).toString().contains(root.toString()));
   }
 
+  /** MCPによる機能の提供で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateIsReplayedAndChangedPayloadConflicts() {
     var first = tools.call("rei_task_submit", input("key"));
@@ -142,6 +169,7 @@ class McpToolsTest {
             Map.of("project_id", project.id(), "instruction", "different", "request_id", "key")));
   }
 
+  /** MCPによる機能の提供で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void foreignRunAndShellSessionAreHidden() {
     var first = tools.call("rei_task_submit", input("key"));
@@ -167,6 +195,7 @@ class McpToolsTest {
                 "shell-session")));
   }
 
+  /** MCPによる機能の提供の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void exactlyOneLookupKeyAndNoAuthorityEscalation() {
     error(
@@ -190,6 +219,7 @@ class McpToolsTest {
                 "key")));
   }
 
+  /** MCPによる機能の提供で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void statusAndImmutableResultSurviveLostEvents() {
     var first = data(tools.call("rei_task_submit", input("key")));
@@ -232,6 +262,7 @@ class McpToolsTest {
     assertEquals("COMPLETED", store.byRun(run).orElseThrow().state());
   }
 
+  /** MCPによる機能の提供で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void restartDoesNotRedispatchAndKeepsReceipt() {
     String run = (String) data(tools.call("rei_task_submit", input("key"))).get("run_id");
@@ -242,6 +273,7 @@ class McpToolsTest {
     }
   }
 
+  /** MCPによる機能の提供で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void expiredRequestCannotBeReused() {
     tools.call("rei_task_submit", input("key"));
@@ -256,6 +288,7 @@ class McpToolsTest {
     error("REQUEST_EXPIRED", tools.call("rei_task_submit", input("key")));
   }
 
+  /** MCPによる機能の提供で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void cursorBindsProjectRunAndSnapshot() {
     var codec = new McpCursor(store.cursorKey());
@@ -266,6 +299,7 @@ class McpToolsTest {
     assertThrows(McpError.class, () -> codec.decode(cursor, "p", "r", "changed"));
   }
 
+  /** MCPによる機能の提供で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void concurrentDuplicateSubmissionsAdmitOneRun() throws Exception {
     try (var executor = java.util.concurrent.Executors.newFixedThreadPool(6)) {
@@ -284,6 +318,7 @@ class McpToolsTest {
     }
   }
 
+  /** MCPによる機能の提供で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void allPersistedLifecycleStatesAreReturnedWithoutInventedProgress() {
     for (var state : RunStatus.values()) {
@@ -297,6 +332,7 @@ class McpToolsTest {
     }
   }
 
+  /** MCPによる機能の提供で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void resultExpiresButKeyTombstoneRemains() {
     String run = (String) data(tools.call("rei_task_submit", input("expire-result"))).get("run_id");
@@ -321,6 +357,7 @@ class McpToolsTest {
     assertTrue(store.byRequest(ConversationAdmissionStore.hash("expire-result")).isPresent());
   }
 
+  /** MCPによる機能の提供で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void failedAdmissionReplaysSameCapacityErrorInsteadOfAcceptedReceipt() {
     var lifecycle = new SessionLifecycle(new SqliteSessionRepository(root), clock);
@@ -357,6 +394,7 @@ class McpToolsTest {
             .status());
   }
 
+  /** MCPによる機能の提供の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void approvalDoesNotRewriteFailedRunAsWaitingOrAutomaticallyResume() {
     String run = (String) data(tools.call("rei_task_submit", input("approval"))).get("run_id");
@@ -396,6 +434,7 @@ class McpToolsTest {
         true, ((Map<?, ?>) ((List<?>) status.get("approval")).getFirst()).get("resume_required"));
   }
 
+  /** MCPによる機能の提供で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void disabledParallelFeatureNeverFallsBackToExclusive() {
     var local =
@@ -415,6 +454,7 @@ class McpToolsTest {
     assertTrue(store.byRequest(ConversationAdmissionStore.hash("disabled")).isEmpty());
   }
 
+  /** MCPによる機能の提供で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void expiredTerminalTombstoneDoesNotRetainAcceptanceText() {
     var args = new HashMap<>(input("minimal-tombstone"));
@@ -440,6 +480,7 @@ class McpToolsTest {
     error("REQUEST_EXPIRED", tools.call("rei_task_submit", args));
   }
 
+  /** MCPによる機能の提供の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void twoAllowedProjectsStillCannotShareSessionRunOrCancellation() {
     String run = (String) data(tools.call("rei_task_submit", input("cross-allowed"))).get("run_id");
@@ -474,6 +515,7 @@ class McpToolsTest {
                 r.session())));
   }
 
+  /** MCPによる機能の提供で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void replayReturnsExistingLogicalCheckpointTaskSeparatelyFromRunAndSession() {
     String run =

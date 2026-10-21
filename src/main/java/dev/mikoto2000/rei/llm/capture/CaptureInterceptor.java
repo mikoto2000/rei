@@ -4,16 +4,25 @@ import java.io.IOException;
 import okhttp3.Interceptor;
 import okhttp3.Response;
 
-/** Runs after known rewrites. Captures repeatable, known-size bodies with a hard bounded sink. */
+/**
+ * モデル応答の記録に必要な取得記録Interceptorを扱う。
+ *
+ * <p>Runs after known rewrites. Captures repeatable, known-size bodies with a hard bounded sink.
+ */
 public final class CaptureInterceptor implements Interceptor {
+  /** 保存先。 */
   private final CaptureStore store;
+
+  /** 関連するモデル呼び出しの記録。 */
   private final CaptureStore.LogicalCall logical;
 
+  /** 指定された値や利用先を使って、CaptureInterceptorを初期化する。 */
   public CaptureInterceptor(CaptureStore store, CaptureStore.LogicalCall logical) {
     this.store = store;
     this.logical = logical;
   }
 
+  /** モデル応答の記録で用いるinterceptを返す。 */
   @Override
   public Response intercept(Chain chain) throws IOException {
     var request = chain.request();
@@ -72,6 +81,7 @@ public final class CaptureInterceptor implements Interceptor {
     }
   }
 
+  /** 指定された変更を、管理中の情報へ反映する。 */
   private void update(String id, String state, Integer status) {
     try {
       store.outcome(id, state, status);

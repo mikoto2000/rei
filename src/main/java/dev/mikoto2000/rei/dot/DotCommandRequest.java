@@ -8,9 +8,19 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-/** Pure shared grammar; never executes commands or accepts arbitrary routes. */
+/**
+ * 利用者の状態表示で受け渡す状態表示コマンド要求を表す。
+ *
+ * <p>Pure shared grammar; never executes commands or accepts arbitrary routes.
+ *
+ * @param action 操作
+ * @param requestId 要求の識別子
+ * @param projectId 所属プロジェクトの識別子
+ * @param payload 通知内容
+ */
 public record DotCommandRequest(
     String action, String requestId, String projectId, Map<String, Object> payload) {
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   public static DotCommandRequest parse(List<String> words) {
     if (words == null || words.isEmpty())
       return new DotCommandRequest("requests", null, null, Map.of());

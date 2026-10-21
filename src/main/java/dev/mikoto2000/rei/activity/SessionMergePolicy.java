@@ -8,8 +8,16 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 
-/** Deterministic session projection. Midnight is a boundary in the configured journal timezone. */
+/**
+ * 作業状況の把握で受け渡す会話統合判断基準を表す。
+ *
+ * <p>Deterministic session projection. Midnight is a boundary in the configured journal timezone.
+ *
+ * @param maximumGap 最大間隔
+ * @param zone タイムゾーン
+ */
 public record SessionMergePolicy(Duration maximumGap, ZoneId zone) {
+  /** 記録された情報を集計し、全体の傾向や結果をまとめる。 */
   public List<ActivitySession> aggregate(List<ActivityRecord> records) {
     var sessions = new ArrayList<ActivitySession>();
     ActivityRecord previous = null;
@@ -86,6 +94,7 @@ public record SessionMergePolicy(Duration maximumGap, ZoneId zone) {
     return List.copyOf(sessions);
   }
 
+  /** 作業状況の把握において、similarに該当するか判定する。 */
   private static boolean similar(ActivityRecord.Inference a, ActivityRecord.Inference b) {
     if (a.activities().isEmpty() || b.activities().isEmpty()) return a.equals(b);
     return new HashSet<>(a.activities()).equals(new HashSet<>(b.activities()));

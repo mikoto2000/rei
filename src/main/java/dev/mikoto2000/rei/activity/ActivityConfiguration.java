@@ -10,9 +10,11 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+/** 作業状況の構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(ActivityProperties.class)
 public class ActivityConfiguration {
+  /** 作業状況の把握で用いる分類補助操作を返す。 */
   @Bean
   ClassificationToolkit classificationToolkit(javax.sql.DataSource ds, ActivityProperties p) {
     p.validate();
@@ -25,6 +27,7 @@ public class ActivityConfiguration {
         Clock.systemUTC());
   }
 
+  /** 作業状況の把握で用いる作業状況保存先を返す。 */
   @Bean
   ActivityStore activityStore(
       javax.sql.DataSource ds, ActivityProperties p, ClassificationToolkit toolkit) {
@@ -36,6 +39,7 @@ public class ActivityConfiguration {
                 Duration.ofSeconds(p.getSessionGapSeconds()), ZoneId.of(p.getZone()))));
   }
 
+  /** 作業状況の把握で用いる作業状況画面画像一覧を返す。 */
   @Bean
   ScreenshotStore activityScreenshots() {
     return new FileScreenshotStore(
@@ -43,11 +47,13 @@ public class ActivityConfiguration {
             .resolve("activity/screenshots"));
   }
 
+  /** 作業状況の把握で用いる作業状況観測を返す。 */
   @Bean
   DesktopActivityObserver activityObserver(ActivityProperties p) {
     return new WindowsDesktopActivityObserver(p);
   }
 
+  /** 作業状況の把握で用いる作業状況情報の抽出を返す。 */
   @Bean
   ActivityExtractor activityExtractor(
       dev.mikoto2000.rei.llm.LlmModelProvider provider,
@@ -60,6 +66,7 @@ public class ActivityConfiguration {
         properties.getDetection().getMaxOutputTokens());
   }
 
+  /** 作業状況の把握で用いる作業状況エージェント根拠を返す。 */
   @Bean
   ActivityAgentEvidenceSource activityAgentEvidence(
       org.springframework.beans.factory.ObjectProvider<dev.mikoto2000.rei.event.AgentEventBus> bus,
@@ -68,6 +75,7 @@ public class ActivityConfiguration {
         bus.getIfAvailable(), () -> p.isEnabled() && p.getTemporal().isEnabled());
   }
 
+  /** 作業状況の把握で用いる作業状況プロジェクト根拠を返す。 */
   @Bean
   ActivityEvidenceSource activityProjectEvidence(
       org.springframework.beans.factory.ObjectProvider<
@@ -96,6 +104,7 @@ public class ActivityConfiguration {
         });
   }
 
+  /** 作業状況の把握で用いる作業状況取得記録を返す。 */
   @Bean
   ActivityCapture activityCapture(
       ActivityProperties p,
@@ -122,6 +131,7 @@ public class ActivityConfiguration {
     return capture;
   }
 
+  /** 作業状況の把握で用いる日次要約サービスを返す。 */
   @Bean
   DailySummaryService dailySummaryService(
       ActivityProperties p,
@@ -142,6 +152,7 @@ public class ActivityConfiguration {
     return new DailySummaryService(aliases, writer);
   }
 
+  /** 作業状況の把握で用いる作業状況時系列の記録を返す。 */
   @Bean
   ActivityTimeline activityTimeline(
       ActivityStore store,
@@ -164,11 +175,13 @@ public class ActivityConfiguration {
         p.getTemporal().isEnabled() ? inferences : null);
   }
 
+  /** 作業状況の把握で用いる作業作業状況推定保存先を返す。 */
   @Bean
   WorkActivityInferenceStore workActivityInferenceStore(javax.sql.DataSource ds) {
     return new WorkActivityInferenceStore(ds);
   }
 
+  /** 作業状況の把握で用いる時系列作業状況推定を返す。 */
   @Bean
   TemporalActivityInferenceService temporalActivityInference(
       ActivityProperties p,
@@ -196,11 +209,13 @@ public class ActivityConfiguration {
         capture::isPaused);
   }
 
+  /** 作業状況の把握で用いる作業状況時系列実行先を返す。 */
   @Bean
   ThreadPoolTaskExecutor activityTemporalExecutor() {
     return worker("rei-activity-temporal-");
   }
 
+  /** 作業状況の把握で用いる時系列作業状況実行する作業を返す。 */
   @Bean
   TemporalActivityJob temporalActivityJob(
       TemporalActivityInferenceService service,
@@ -208,8 +223,15 @@ public class ActivityConfiguration {
     return new TemporalActivityJob(service, executor);
   }
 
+  /**
+   * 作業状況の把握で受け渡す時系列作業状況実行する作業を表す。
+   *
+   * @param service サービス
+   * @param executor 実行先
+   */
   public record TemporalActivityJob(
       TemporalActivityInferenceService service, ThreadPoolTaskExecutor executor) {
+    /** 作業状況の把握に関する状態確認を処理する。 */
     @Scheduled(
         fixedDelayString = "#{${rei.activity.temporal.interval-seconds:60} * 1000}",
         initialDelayString = "#{${rei.activity.temporal.interval-seconds:60} * 1000}")
@@ -222,22 +244,26 @@ public class ActivityConfiguration {
     }
   }
 
+  /** 作業状況の把握で用いる作業状況ツール一覧を返す。 */
   @Bean
   ActivityTools activityTools(ActivityTimeline timeline) {
     return new ActivityTools(timeline);
   }
 
+  /** 作業状況の把握で用いる期間助言保存先を返す。 */
   @Bean
   PeriodCoachingStore periodCoachingStore(javax.sql.DataSource ds) {
     return new SqlitePeriodCoachingStore(ds);
   }
 
+  /** 作業状況の把握で用いる期間助言サービスを返す。 */
   @Bean
   PeriodCoachingService periodCoachingService(
       ActivityTimeline timeline, PeriodCoachingStore store) {
     return new PeriodCoachingService(timeline, store, Clock.systemUTC());
   }
 
+  /** 作業状況の把握で用いる自動期間助言を返す。 */
   @Bean
   AutomaticPeriodCoaching automaticPeriodCoaching(
       ActivityProperties properties,
@@ -258,11 +284,13 @@ public class ActivityConfiguration {
         Clock.systemUTC());
   }
 
+  /** 作業状況の把握で用いる期間助言実行先を返す。 */
   @Bean
   ThreadPoolTaskExecutor periodCoachingExecutor() {
     return worker("rei-period-coaching-");
   }
 
+  /** 作業状況の把握で用いる期間助言実行する作業を返す。 */
   @Bean
   PeriodCoachingJob periodCoachingJob(
       AutomaticPeriodCoaching service,
@@ -270,8 +298,15 @@ public class ActivityConfiguration {
     return new PeriodCoachingJob(service, executor);
   }
 
+  /**
+   * 作業状況の把握で受け渡す期間助言実行する作業を表す。
+   *
+   * @param service サービス
+   * @param executor 実行先
+   */
   public record PeriodCoachingJob(
       AutomaticPeriodCoaching service, ThreadPoolTaskExecutor executor) {
+    /** 作業状況の把握に関する状態確認を処理する。 */
     @Scheduled(
         fixedDelayString = "#{${rei.activity.coaching.check-interval-seconds:3600} * 1000}",
         initialDelayString = "#{${rei.activity.coaching.check-interval-seconds:3600} * 1000}")
@@ -285,6 +320,7 @@ public class ActivityConfiguration {
     }
   }
 
+  /** 作業状況の把握で用いる作業状況作業文脈サービスを返す。 */
   @Bean
   ActivityWorkContextService activityWorkContextService(
       ActivityStore store,
@@ -301,6 +337,7 @@ public class ActivityConfiguration {
         Clock.system(ZoneId.of(properties.getZone())));
   }
 
+  /** 作業状況の把握で用いる作業状況時系列の記録Presentationを返す。 */
   @Bean
   ActivityTimelinePresentationService activityTimelinePresentation(
       ActivityTimeline timeline,
@@ -310,6 +347,7 @@ public class ActivityConfiguration {
     return new ActivityTimelinePresentationService(timeline, behavior.getIfAvailable());
   }
 
+  /** 作業状況の把握で用いる分類規則提案一覧を返す。 */
   @Bean
   ClassificationRuleSuggestions classificationRuleSuggestions(
       ClassificationToolkit toolkit,
@@ -323,11 +361,13 @@ public class ActivityConfiguration {
             toolkit.properties().getClassification().getRuleSuggestion().getMaxOutputTokens()));
   }
 
+  /** 作業状況の把握で用いる作業状況実行先を返す。 */
   @Bean
   ThreadPoolTaskExecutor activityExecutor() {
     return worker("rei-activity-observe-");
   }
 
+  /** 作業状況の把握で用いる作業状況分析実行先を返す。 */
   @Bean
   ThreadPoolTaskExecutor activityAnalysisExecutor() {
     var executor = worker("rei-activity-analyze-");
@@ -337,6 +377,7 @@ public class ActivityConfiguration {
     return executor;
   }
 
+  /** 作業状況の把握で用いる作業状況バックグラウンド実行先を返す。 */
   @Bean
   ThreadPoolTaskExecutor activityBackgroundExecutor() {
     var executor = worker("rei-activity-background-");
@@ -344,6 +385,7 @@ public class ActivityConfiguration {
     return executor;
   }
 
+  /** 作業状況の把握で用いる実行の担当を返す。 */
   private static ThreadPoolTaskExecutor worker(String name) {
     var executor = new ThreadPoolTaskExecutor();
     executor.setCorePoolSize(1);
@@ -356,12 +398,14 @@ public class ActivityConfiguration {
     return executor;
   }
 
+  /** 作業状況の把握で用いる作業状況実行する作業を返す。 */
   @Bean
   ActivityJob activityJob(
       ActivityCapture capture, @Qualifier("activityExecutor") ThreadPoolTaskExecutor executor) {
     return new ActivityJob(capture, executor);
   }
 
+  /** 作業状況の把握で用いる作業状況観測内容通知一覧を返す。 */
   @Bean(destroyMethod = "close")
   AutoCloseable activityObservationSignals(
       ActivityCapture capture,
@@ -396,25 +440,40 @@ public class ActivityConfiguration {
     };
   }
 
+  /** 作業状況の把握で用いる分類再読み込み実行する作業を返す。 */
   @Bean
   ClassificationReloadJob classificationReloadJob(ClassificationToolkit toolkit) {
     return new ClassificationReloadJob(toolkit);
   }
 
+  /**
+   * 作業状況の把握で受け渡す分類再読み込み実行する作業を表す。
+   *
+   * @param toolkit 補助操作
+   */
   public record ClassificationReloadJob(ClassificationToolkit toolkit) {
+    /** 作業状況の把握に関する状態確認を処理する。 */
     @Scheduled(fixedDelay = 3000, initialDelay = 3000)
     public void poll() {
       toolkit.poll();
     }
   }
 
+  /**
+   * 作業状況の把握で受け渡す作業状況実行する作業を表す。
+   *
+   * @param capture 取得記録
+   * @param executor 実行先
+   */
   public record ActivityJob(ActivityCapture capture, ThreadPoolTaskExecutor executor)
       implements AutoCloseable {
+    /** 作業状況の把握で利用した資源や登録を解放し、利用を終了する。 */
     @Override
     public void close() {
       capture.close();
     }
 
+    /** 作業状況の把握に関する状態確認を処理する。 */
     @Scheduled(
         fixedDelayString =
             "#{${rei.activity.observation.input-aware-enabled:true} ? ${rei.activity.observation.interval-seconds:15} * 1000 : ${rei.activity.capture-interval-seconds:60} * 1000}",

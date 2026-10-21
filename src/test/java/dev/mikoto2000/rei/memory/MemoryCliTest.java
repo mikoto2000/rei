@@ -30,10 +30,13 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import picocli.CommandLine;
 
+/** 記憶軽量CLIの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class MemoryCliTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 長期記憶の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void manualSleepAndMemoryCommandsAreReachable() {
     var props = new MemoryProperties(true, 20, 80, 10, 3, 2000, 60, null);
@@ -76,6 +79,7 @@ class MemoryCliTest {
           new CommandLine(
               root,
               new CommandLine.IFactory() {
+                /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
                 public <K> K create(Class<K> cls) throws Exception {
                   Object command;
                   if (cls == MemoryCommand.ListCommand.class) {

@@ -13,7 +13,9 @@ import dev.mikoto2000.rei.reminder.command.ReminderCommand;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 補助伝えるの結果と状態の契約を検証するテスト。 */
 class UtilityReportsTest {
+  /** Web APIによる操作で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void emptyRemindersAndBriefingHaveShellTextInsteadOfJson() throws Exception {
     var reminders = mock(ReminderService.class);

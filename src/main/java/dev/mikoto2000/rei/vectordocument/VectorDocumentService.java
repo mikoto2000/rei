@@ -21,29 +21,44 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.core.io.FileSystemResource;
 import org.springframework.stereotype.Service;
 
+/** ベクトル文書のユースケースを実現する。 */
 @Service
 @org.springframework.boot.context.properties.EnableConfigurationProperties(
     dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties.class)
 public class VectorDocumentService {
 
+  /** ベクトル保存先。 */
   private final VectorStore vectorStore;
+
+  /** ベクトル文書保存と検索の窓口。 */
   private final VectorDocumentRepository vectorDocumentRepository;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** この機能の動作設定。 */
   private final VectorDocumentProperties properties;
+
+  /** 再評価サービス。 */
   private CandidateReranker rerankService;
+
+  /** 関連情報の取得。 */
   private dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties retrieval =
       new dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties(false, 40, 60);
 
+  /** 検索対象文書の管理で使用する関連情報の取得を設定する。 */
   @Autowired
   void setRetrieval(dev.mikoto2000.rei.vectorstore.HybridRetrievalProperties retrieval) {
     this.retrieval = retrieval;
   }
 
+  /** 検索対象文書の管理で使用する再評価サービスを設定する。 */
   @Autowired
   void setRerankService(CandidateReranker rerankService) {
     this.rerankService = rerankService;
   }
 
+  /** 検索対象文書の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @Autowired
   public VectorDocumentService(
       VectorStore vectorStore,
@@ -52,6 +67,7 @@ public class VectorDocumentService {
     this(vectorStore, vectorDocumentRepository, Clock.systemUTC(), properties);
   }
 
+  /** 指定された値や利用先を使って、VectorDocumentServiceを初期化する。 */
   VectorDocumentService(
       VectorStore vectorStore,
       VectorDocumentRepository vectorDocumentRepository,
@@ -63,6 +79,7 @@ public class VectorDocumentService {
     this.properties = properties;
   }
 
+  /** 新たな対象を登録し、後から利用できるようにする。 */
   public List<VectorDocumentEntry> add(List<String> documents) throws IOException {
     List<VectorDocumentEntry> added = new java.util.ArrayList<>();
 
@@ -91,10 +108,12 @@ public class VectorDocumentService {
     return added;
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<VectorDocumentEntry> list() {
     return vectorDocumentRepository.list();
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public List<VectorDocumentSearchResult> search(
       String query, Integer topK, Double similarityThreshold, String source) {
     int requestedTopK = topK == null ? 5 : topK;
@@ -142,14 +161,17 @@ public class VectorDocumentService {
     return candidates.stream().limit(requestedTopK).map(this::toSearchResult).toList();
   }
 
+  /** 対象を管理から外すため、別文書の識別子を削除する。 */
   public boolean deleteByDocId(String docId) {
     return vectorDocumentRepository.deleteByDocId(docId);
   }
 
+  /** 対象を管理から外すため、別取得元を削除する。 */
   public int deleteBySource(String source) {
     return vectorDocumentRepository.deleteBySource(normalizeSource(source));
   }
 
+  /** 必要な内容を参照できるよう、および分割を読み取る。 */
   private List<Document> readAndSplit(String documentPath) {
     Path path = Path.of(documentPath);
     String fileType = fileType(path);
@@ -168,6 +190,7 @@ public class VectorDocumentService {
             .toList());
   }
 
+  /** 利用先へ渡せるよう、検索結果の形式に変換する。 */
   private VectorDocumentSearchResult toSearchResult(AggregatedSearchResult result) {
     return new VectorDocumentSearchResult(
         result.docId(),
@@ -177,10 +200,12 @@ public class VectorDocumentService {
         snippet(result.query(), result.mergedText()));
   }
 
+  /** 検索対象文書の管理で用いるexpanded上位件数を返す。 */
   private int expandedTopK(int requestedTopK) {
     return Math.max(requestedTopK, requestedTopK * 4);
   }
 
+  /** 全体の傾向や結果を把握できるよう、結果を集計する。 */
   private AggregatedSearchResult aggregateResult(String query, List<Document> documents) {
     List<Document> sortedByChunkIndex =
         documents.stream().sorted(Comparator.comparingInt(this::chunkIndex)).toList();
@@ -200,6 +225,7 @@ public class VectorDocumentService {
         mergeAdjacentChunks(sortedByChunkIndex, chunkIndex(best)));
   }
 
+  /** 検索対象文書の管理で用いる抜粋を返す。 */
   private String snippet(String query, String text) {
     String normalized = text == null ? "" : text.replaceAll("\\s+", " ").trim();
     if (normalized.isEmpty()) {
@@ -222,6 +248,7 @@ public class VectorDocumentService {
     return prefix + normalized.substring(start, end).trim() + suffix;
   }
 
+  /** 検索対象文書の管理で用いるbestMatching文を返す。 */
   private String bestMatchingSentence(String query, String normalizedText) {
     List<String> sentences = splitSentences(normalizedText);
     if (sentences.isEmpty()) {
@@ -234,6 +261,7 @@ public class VectorDocumentService {
         .orElse(normalizedText);
   }
 
+  /** 検索対象文書の管理で用いる抜粋開始を返す。 */
   private int snippetStart(String query, String normalizedText, int maxLength) {
     String normalizedQuery =
         query == null ? "" : query.replaceAll("\\s+", " ").trim().toLowerCase();
@@ -257,6 +285,7 @@ public class VectorDocumentService {
     return 0;
   }
 
+  /** 検索対象文書の管理で用いる分割文一覧を返す。 */
   private List<String> splitSentences(String text) {
     return java.util.Arrays.stream(text.split("(?<=[。.!?])\\s+"))
         .map(String::trim)
@@ -264,6 +293,7 @@ public class VectorDocumentService {
         .toList();
   }
 
+  /** 検索対象文書の管理で用いる文語句による評価値を返す。 */
   private double sentenceLexicalScore(String query, String sentence) {
     String normalizedQuery =
         query == null ? "" : query.replaceAll("\\s+", " ").trim().toLowerCase();
@@ -283,6 +313,7 @@ public class VectorDocumentService {
     return score;
   }
 
+  /** 検索対象文書の管理で用いる余白の除去抜粋Around検索条件を返す。 */
   private String trimSnippetAroundQuery(String query, String text, int maxLength) {
     String normalized = text == null ? "" : text.replaceAll("\\s+", " ").trim();
     if (normalized.length() <= maxLength) {
@@ -295,6 +326,7 @@ public class VectorDocumentService {
     return prefix + normalized.substring(start, end).trim() + suffix;
   }
 
+  /** 検索対象文書の管理で用いるcomposite評価値を返す。 */
   private double compositeScore(String query, List<Document> documents) {
     List<Double> topScores =
         documents.stream()
@@ -309,6 +341,7 @@ public class VectorDocumentService {
     return best + second + (lexicalCoverage * 0.1d);
   }
 
+  /** 検索対象文書の管理で用いる語句による対象範囲を返す。 */
   private double lexicalCoverage(String query, String text) {
     String normalizedQuery =
         query == null ? "" : query.replaceAll("\\s+", " ").trim().toLowerCase();
@@ -328,6 +361,7 @@ public class VectorDocumentService {
     return (double) matches / (double) tokens.size();
   }
 
+  /** 関連する情報をまとめて扱えるよう、Adjacent文書の分割一覧を統合する。 */
   private String mergeAdjacentChunks(List<Document> documents, int centerChunkIndex) {
     List<String> parts = new ArrayList<>();
     for (Document document : documents) {
@@ -339,23 +373,28 @@ public class VectorDocumentService {
     return String.join(" ", parts).replaceAll("\\s+", " ").trim();
   }
 
+  /** 検索対象文書の管理で用いる文書の分割単位位置を返す。 */
   private int chunkIndex(Document document) {
     Object chunkIndex = document.getMetadata().get("chunkIndex");
     return chunkIndex instanceof Number number ? number.intValue() : -1;
   }
 
+  /** 検索対象文書の管理で用いる文書評価値を返す。 */
   private double documentScore(Document document) {
     return document.getScore() == null ? Double.NEGATIVE_INFINITY : document.getScore();
   }
 
+  /** 後続の処理が参照できるよう、文字列表現として扱う。 */
   private String asString(Object value) {
     return value == null ? "" : value.toString();
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、取得元の表記をそろえる。 */
   private String normalizeSource(String source) {
     return Path.of(source).toAbsolutePath().normalize().toString();
   }
 
+  /** 検索対象文書の管理で用いるsplitter対象を返す。 */
   private TextSplitter splitterFor(String fileType) {
     int chunkSize = properties.chunkSize();
     int chunkOverlap = properties.chunkOverlap();
@@ -371,6 +410,7 @@ public class VectorDocumentService {
     return new OverlappingTokenTextSplitter(chunkSize, chunkOverlap);
   }
 
+  /** 検索対象文書の管理で用いるMarkdown節一覧を返す。 */
   private List<Document> markdownSections(Path path, String title, String fileType) {
     try {
       List<Document> sections = new ArrayList<>();
@@ -378,6 +418,7 @@ public class VectorDocumentService {
       StringBuilder body = new StringBuilder();
       for (String line : Files.readAllLines(path)) {
         if (line.stripLeading().startsWith("#")) {
+          // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
           if (body.length() > 0) {
             sections.add(
                 new Document(
@@ -414,6 +455,7 @@ public class VectorDocumentService {
     }
   }
 
+  /** 検索対象文書の管理で用いるenrich付随情報を返す。 */
   private Document enrichMetadata(
       Document document, String title, String fileType, String sectionHeading) {
     Map<String, Object> metadata = new LinkedHashMap<>(document.getMetadata());
@@ -425,10 +467,12 @@ public class VectorDocumentService {
     return new Document(document.getId(), document.getText(), metadata);
   }
 
+  /** 検索対象文書の管理において、Markdownかどうかを判定する。 */
   private boolean isMarkdown(String fileType) {
     return "md".equals(fileType) || "markdown".equals(fileType);
   }
 
+  /** 検索対象文書の管理で用いるファイル種別を返す。 */
   private String fileType(Path path) {
     String fileName = path.getFileName().toString();
     int dot = fileName.lastIndexOf('.');
@@ -438,12 +482,23 @@ public class VectorDocumentService {
     return fileName.substring(dot + 1).toLowerCase();
   }
 
+  /** 検索対象文書の管理で用いるタイトルを返す。 */
   private String title(Path path) {
     String fileName = path.getFileName().toString();
     int dot = fileName.lastIndexOf('.');
     return dot > 0 ? fileName.substring(0, dot) : fileName;
   }
 
+  /**
+   * 検索対象文書の管理で受け渡す集計済み検索結果を表す。
+   *
+   * @param query 検索条件
+   * @param docId 文書の識別子
+   * @param source 取得元
+   * @param chunkIndex 文書の分割単位位置
+   * @param score 評価値
+   * @param mergedText 統合済みテキスト
+   */
   private record AggregatedSearchResult(
       String query, String docId, String source, int chunkIndex, double score, String mergedText) {}
 }

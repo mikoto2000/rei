@@ -11,22 +11,30 @@ import java.util.Base64;
 import java.util.HashSet;
 
 /**
- * Preserves byte-level BPE fragments across sherpa 1.13.8's per-token UTF-8 cleanup. Token IDs and
- * model weights are unchanged; only the derived display vocabulary is encoded. Remove together with
- * decode when adopting an upstream runtime that joins bytes before cleanup.
+ * 音声による対話に必要な音声認識バイト語彙を扱う。
+ *
+ * <p>Preserves byte-level BPE fragments across sherpa 1.13.8's per-token UTF-8 cleanup. Token IDs
+ * and model weights are unchanged; only the derived display vocabulary is encoded. Remove together
+ * with decode when adopting an upstream runtime that joins bytes before cleanup.
  */
 final class WhisperByteVocabulary implements AutoCloseable {
+  /** バイト数の上限。 */
   private static final int MAX_BYTES = 2 * 1024 * 1024;
+
+  /** パス。 */
   private final Path path;
 
+  /** 指定された値や利用先を使って、WhisperByteVocabularyを初期化する。 */
   private WhisperByteVocabulary(Path path) {
     this.path = path;
   }
 
+  /** 音声による対話で用いるパスを返す。 */
   Path path() {
     return path;
   }
 
+  /** 指定された内容から新しい対象を作成する。 */
   static WhisperByteVocabulary create(Path source) throws IOException {
     byte[] input;
     try (var stream = Files.newInputStream(source)) {
@@ -76,12 +84,14 @@ final class WhisperByteVocabulary implements AutoCloseable {
     return new WhisperByteVocabulary(derived);
   }
 
+  /** 受け渡し先が扱える形式へ、指定された内容を変換する。 */
   static String encode(byte[] bytes) {
     var encoded = new StringBuilder(bytes.length);
     for (byte value : bytes) encoded.append((char) (0xe000 + (value & 255)));
     return encoded.toString();
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   static String decode(String encoded) throws CharacterCodingException {
     byte[] bytes = new byte[encoded.length()];
     for (int i = 0; i < bytes.length; i++) {
@@ -98,6 +108,7 @@ final class WhisperByteVocabulary implements AutoCloseable {
         .toString();
   }
 
+  /** 音声による対話で利用した資源や登録を解放し、利用を終了する。 */
   public void close() throws IOException {
     Files.deleteIfExists(path);
   }

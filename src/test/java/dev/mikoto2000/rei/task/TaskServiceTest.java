@@ -8,8 +8,10 @@ import dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties;
 import java.time.LocalDate;
 import org.junit.jupiter.api.Test;
 
+/** タスクサービスの結果と状態の契約を検証するテスト。 */
 class TaskServiceTest {
 
+  /** 追加について、Googleタスク一覧を利用することを確認する。 */
   @Test
   void addUsesGoogleTasksEvenWhenGoogleCalendarIsDisabled() {
     TaskService service = new TaskService(disabledCalendarProps());
@@ -23,6 +25,7 @@ class TaskServiceTest {
         ex.getCause().getMessage().startsWith("Google OAuth credentials file was not found:"));
   }
 
+  /** タスクの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void addThrowsWhenGoogleTasksIsDisabled() {
     TaskService service = new TaskService(disabledTaskProps());
@@ -35,6 +38,7 @@ class TaskServiceTest {
     assertEquals("Google Task integration is disabled", ex.getCause().getMessage());
   }
 
+  /** タスクの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void listOpenThrowsWhenGoogleCalendarIsDisabled() {
     TaskService service = new TaskService(disabledCalendarProps());
@@ -46,6 +50,7 @@ class TaskServiceTest {
         ex.getCause().getMessage().startsWith("Google OAuth credentials file was not found:"));
   }
 
+  /** タスクの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void completeThrowsWhenGoogleCalendarIsDisabled() {
     TaskService service = new TaskService(disabledCalendarProps());
@@ -58,6 +63,7 @@ class TaskServiceTest {
         ex.getCause().getMessage().startsWith("Google OAuth credentials file was not found:"));
   }
 
+  /** タスクの管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void deleteThrowsWhenGoogleCalendarIsDisabled() {
     TaskService service = new TaskService(disabledCalendarProps());
@@ -69,6 +75,7 @@ class TaskServiceTest {
         ex.getCause().getMessage().startsWith("Google OAuth credentials file was not found:"));
   }
 
+  /** {@code disabledCalendarProps} の条件を再現するための補助情報を返す。 */
   private GoogleCalendarProperties disabledCalendarProps() {
     return new GoogleCalendarProperties(
         "Rei",
@@ -78,6 +85,7 @@ class TaskServiceTest {
         new GoogleCalendarProperties.TaskProperties(true));
   }
 
+  /** {@code disabledTaskProps} の条件を再現するための補助情報を返す。 */
   private GoogleCalendarProperties disabledTaskProps() {
     return new GoogleCalendarProperties(
         "Rei",

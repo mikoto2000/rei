@@ -13,16 +13,46 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Read-only identifier join. Co-occurrence with an agent event is not evidence of user engagement.
+ * 作業状況作業文脈のユースケースを実現する。
+ *
+ * <p>Read-only identifier join. Co-occurrence with an agent event is not evidence of user
+ * engagement.
  */
 public final class ActivityWorkContextService {
+  /** 作業状況の把握に必要な保存済み文脈一覧を扱う。 */
   @FunctionalInterface
   public interface SavedContexts {
+    /** 過去の記録を、条件に従って参照できる形で返す。 */
     List<WorkContext> history(String project);
   }
 
+  /**
+   * 作業状況の把握で受け渡すGit参照先を表す。
+   *
+   * @param branch ブランチ
+   * @param commit 確定
+   * @param capturedAt 観測日時
+   */
   public record GitReference(String branch, String commit, Instant capturedAt) {}
 
+  /**
+   * 作業状況の把握で受け渡すリンクを表す。
+   *
+   * @param recordId 記録識別子
+   * @param capturedAt 観測日時
+   * @param eventId イベントの識別子
+   * @param eventAt イベント日時
+   * @param kind 種類
+   * @param sessionId 会話の識別子
+   * @param turnId やり取りの識別子
+   * @param runId 実行の識別子
+   * @param revision 改訂番号
+   * @param itemIds 項目識別子一覧
+   * @param basis 判断の根拠
+   * @param git Gitの情報
+   * @param foregroundApplication 前面アプリケーション
+   * @param observationContext 観測内容文脈
+   */
   public record Link(
       String recordId,
       Instant capturedAt,
@@ -38,10 +68,12 @@ public final class ActivityWorkContextService {
       GitReference git,
       String foregroundApplication,
       ActivityEvidence.WorkReference observationContext) {
+    /** 受け取った情報からLinkを作成する。 */
     public Link {
       itemIds = List.copyOf(itemIds);
     }
 
+    /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Link(
         String recordId,
         Instant capturedAt,
@@ -73,24 +105,44 @@ public final class ActivityWorkContextService {
     }
   }
 
+  /** 保存先。 */
   private final ActivityStore store;
+
+  /** 文脈一覧。 */
   private final SavedContexts contexts;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** 指定された値や利用先を使って、ActivityWorkContextServiceを初期化する。 */
   public ActivityWorkContextService(ActivityStore store, SavedContexts contexts, Clock clock) {
     this.store = store;
     this.contexts = contexts;
     this.clock = clock;
   }
 
+  /**
+   * 作業状況の把握で受け渡す観測内容リンク一覧を表す。
+   *
+   * @param date 日付
+   * @param zone タイムゾーン
+   * @param links リンク一覧
+   * @param partial 部分的な結果
+   * @param missingContextRecords 未指定文脈記録一覧
+   */
   public record ObservationLinks(
       LocalDate date, String zone, List<Link> links, boolean partial, int missingContextRecords) {
+    /** 受け取った情報からObservationLinksを作成する。 */
     public ObservationLinks {
       links = List.copyOf(links);
     }
   }
 
-  /** Immutable observation-time references only; no present-day/history reconstruction. */
+  /**
+   * 作業状況の把握で用いる観測内容リンク一覧上限内に収めたを返す。
+   *
+   * <p>Immutable observation-time references only; no present-day/history reconstruction.
+   */
   public ObservationLinks observationLinksBounded(String project, String day) {
     if (project == null || project.isBlank())
       throw new IllegalArgumentException("Select a project");
@@ -127,6 +179,7 @@ public final class ActivityWorkContextService {
         missing++;
         continue;
       }
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (saved.items().size() > 20
           || saved.items().stream().anyMatch(item -> item.sources().size() > 8))
         throw new ActivityQueryLimitException();
@@ -188,10 +241,12 @@ public final class ActivityWorkContextService {
     return new ObservationLinks(date, snapshot.getZone().toString(), links, partial, missing);
   }
 
+  /** 作業状況の把握において、省略の有無表示に該当するか判定する。 */
   private static boolean truncatedDisplay(String... values) {
     return Arrays.stream(values).anyMatch(value -> value != null && value.length() > 240);
   }
 
+  /** 作業状況の把握で用いるリンク一覧を返す。 */
   public List<Link> links(String project, String day) {
     if (project == null || project.isBlank())
       throw new IllegalArgumentException("Select a project");
@@ -292,15 +347,18 @@ public final class ActivityWorkContextService {
     return List.copyOf(result);
   }
 
+  /** 受け取った情報を、表示や受け渡しに適した形式へ整える。 */
   public String format(List<Link> links) {
     return format(links, false);
   }
 
+  /** 内容を表示・参照しやすくするため、観測内容上限内に収めたを整形する。 */
   public String formatObservationBounded(List<Link> links) {
     if (links.size() > 128) throw new ActivityQueryLimitException();
     return format(links, true);
   }
 
+  /** 受け取った情報を、表示や受け渡しに適した形式へ整える。 */
   private String format(List<Link> links, boolean bounded) {
     var out =
         new StringBuilder(
@@ -361,6 +419,7 @@ public final class ActivityWorkContextService {
                 .append(" file=")
                 .append(clean(source.file()))
                 .append('\n');
+            // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
             if (bounded && out.length() > 32768) throw new ActivityQueryLimitException();
           }
         }
@@ -404,6 +463,7 @@ public final class ActivityWorkContextService {
     return out.toString();
   }
 
+  /** 作業状況の把握で用いる変更なしを返す。 */
   private static String clean(String text) {
     return ActivityEvidenceDisplayFormatter.clean(text);
   }

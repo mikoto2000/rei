@@ -18,22 +18,35 @@ import java.util.Optional;
  */
 public class FileSummaryCache {
 
+  /** 既定最大項目一覧。 */
   static final int DEFAULT_MAX_ENTRIES = 100;
 
+  /** 最大項目一覧。 */
   private final int maxEntries;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** 実行状況の通知先。 */
   private final AgentEventPublisher eventPublisher;
+
+  /** 項目一覧。 */
   private final Map<String, FileSummary> entries = new LinkedHashMap<>();
 
+  /** ファイル内容の要約を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public FileSummaryCache() {
     this(DEFAULT_MAX_ENTRIES, Clock.systemDefaultZone());
   }
 
+  /** ファイル内容の要約を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public FileSummaryCache(int maxEntries, Clock clock) {
     this(maxEntries, clock, null, null);
   }
 
+  /** 指定された値や利用先を使って、FileSummaryCacheを初期化する。 */
   public FileSummaryCache(
       int maxEntries, Clock clock, AgentEventFactory events, AgentEventPublisher eventPublisher) {
     this.maxEntries = Math.max(1, maxEntries);
@@ -104,6 +117,7 @@ public class FileSummaryCache {
     return sb.toString();
   }
 
+  /** ファイル内容の要約に関する保持対象からの除外条件付きNeededを処理する。 */
   private void evictIfNeeded() {
     while (entries.size() > maxEntries) {
       String oldest =
@@ -118,10 +132,12 @@ public class FileSummaryCache {
     }
   }
 
+  /** ファイル内容の要約で用いる現在日時を返す。 */
   private OffsetDateTime now() {
     return OffsetDateTime.now(clock);
   }
 
+  /** 状態や結果を購読先へ通知する。 */
   private void publish(dev.mikoto2000.rei.event.AgentEvent event) {
     if (eventPublisher != null && event != null) {
       eventPublisher.publish(event);

@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class RelatedFileGraphConfiguration {
 
+  /** 関連情報の探索で用いる関連ファイル関連図を返す。 */
   @org.springframework.context.annotation.Scope(
       value = "reiProject",
       proxyMode = org.springframework.context.annotation.ScopedProxyMode.TARGET_CLASS)

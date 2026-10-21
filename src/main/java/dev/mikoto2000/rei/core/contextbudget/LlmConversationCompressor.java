@@ -19,23 +19,32 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.beans.factory.ObjectProvider;
 
 /**
- * Uses the existing model infrastructure without memory advisors, tools or recursive compression.
+ * モデルへ渡す文脈の管理に必要な言語モデル会話Compressorを扱う。
+ *
+ * <p>Uses the existing model infrastructure without memory advisors, tools or recursive
+ * compression.
  */
 public class LlmConversationCompressor implements ConversationCompressor {
+  /** モデル一覧。 */
   private final ObjectProvider<LlmModelProvider> models;
+
+  /** この機能の動作設定。 */
   private final ContextCompressionProperties properties;
 
+  /** 指定された値や利用先を使って、LlmConversationCompressorを初期化する。 */
   public LlmConversationCompressor(
       ObjectProvider<LlmModelProvider> models, ContextCompressionProperties properties) {
     this.models = models;
     this.properties = properties;
   }
 
+  /** 対象の内容を、要点が分かる形にまとめる。 */
   @Override
   public String summarize(String previous, List<Message> messages, int maxTokens, Prompt owner) {
     return summarize(previous, messages, maxTokens, owner, null);
   }
 
+  /** 対象の内容を、要点が分かる形にまとめる。 */
   @Override
   public String summarize(
       String previous,
@@ -46,12 +55,14 @@ public class LlmConversationCompressor implements ConversationCompressor {
     return summarizeResult(previous, messages, maxTokens, owner, supplied).text();
   }
 
+  /** 利用者が要点を把握できるよう、結果を要約する。 */
   @Override
   public Summary summarizeResult(
       String previous, List<Message> messages, int maxTokens, Prompt owner) {
     return summarizeResult(previous, messages, maxTokens, owner, null);
   }
 
+  /** 利用者が要点を把握できるよう、結果を要約する。 */
   @Override
   public Summary summarizeResult(
       String previous,
@@ -185,6 +196,7 @@ public class LlmConversationCompressor implements ConversationCompressor {
     }
   }
 
+  /** モデルへ渡す文脈の管理で用いる出力トークン数を返す。 */
   private static Integer outputTokens(org.springframework.ai.chat.metadata.Usage usage) {
     // EmptyUsage reports zero even when the provider supplied no usage. Zero for nonempty text is
     // unknown.
@@ -194,6 +206,7 @@ public class LlmConversationCompressor implements ConversationCompressor {
     return output == null || output <= 0 ? null : output;
   }
 
+  /** モデルへ渡す文脈の管理で用いる実行停止済みを返す。 */
   private static dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException executionStopped(
       Throwable error) {
     var seen = Collections.newSetFromMap(new IdentityHashMap<Throwable, Boolean>());

@@ -24,8 +24,10 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** Grounding確認結果の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class GroundingVerificationTest {
+  /** 選択中表示を利用することを確認する。 */
   @Test
   void pointEvidenceUsesSelectedDisplayAndIsPassedOnlyToVisualIdentification() throws Exception {
     var chat = mock(ChatModel.class);
@@ -75,6 +77,7 @@ class GroundingVerificationTest {
     assertEquals("left", saved.get("displayId").asText());
   }
 
+  /** 画面操作の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unavailablePointEvidenceCannotBypassVisualRejection() {
     var chat = mock(ChatModel.class);
@@ -99,6 +102,7 @@ class GroundingVerificationTest {
     verify(chat).call(any(Prompt.class));
   }
 
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @ParameterizedTest
   @EnumSource(GroundingProtocol.class)
   void confirmationRequiredClicksAreGroundedAndVerifiedButStillBlocked(GroundingProtocol protocol)
@@ -153,6 +157,7 @@ class GroundingVerificationTest {
     }
   }
 
+  /** 画面操作の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @ParameterizedTest
   @EnumSource(GroundingProtocol.class)
   void confirmationRequiredClickCannotBypassEitherVerificationGate(GroundingProtocol protocol) {
@@ -186,6 +191,7 @@ class GroundingVerificationTest {
     }
   }
 
+  /** 比較結果出力上限について、段階を伝えることを確認する。 */
   @Test
   void comparisonOutputLimitReportsStageAndDoesNotRetry() {
     var chat = mock(ChatModel.class);
@@ -215,8 +221,10 @@ class GroundingVerificationTest {
     verify(chat, times(2)).call(any(Prompt.class));
   }
 
+  /** 検証に使う診断情報。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path diagnostics;
 
+  /** 画面操作の支援の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void verdictMustBeExplicitStrictApproval() {
     PlannerGroundingVerifier.requireApproval("{\"approved\":true,\"reason\":\"visible\"}", "test");
@@ -232,6 +240,7 @@ class GroundingVerificationTest {
           () -> PlannerGroundingVerifier.requireApproval(text, "test"));
   }
 
+  /** 画面操作の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @EnumSource(GroundingProtocol.class)
   void rejectionAtEitherGatePreventsDispatch(GroundingProtocol protocol) {
@@ -273,6 +282,7 @@ class GroundingVerificationTest {
     }
   }
 
+  /** 確認の窓口について、概要を送信することを確認する。 */
   @Test
   void verifierSendsOverviewAndDetailAndRecordsVerdicts() throws Exception {
     var chat = mock(ChatModel.class);
@@ -313,6 +323,7 @@ class GroundingVerificationTest {
     verify(chat, times(3)).call(any(Prompt.class));
   }
 
+  /** 画面操作の支援の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void blindDescriptionDoesNotReceiveTargetAndTypeMismatchRejectsEvenApproval() throws Exception {
     var chat = mock(ChatModel.class);
@@ -348,6 +359,7 @@ class GroundingVerificationTest {
     assertTrue(comparison.getMedia().isEmpty());
   }
 
+  /** 詳細について、OSの機能画素数を利用することを確認する。 */
   @Test
   void detailUsesNativePixelsAndKeepsPointCorrectAtScreenEdges() {
     var image =
@@ -393,6 +405,7 @@ class GroundingVerificationTest {
         () -> PlannerGroundingVerifier.detail(image, new double[] {Double.NaN, .5}));
   }
 
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void uncertainObservationStopsBeforeComparison() {
     var chat = mock(ChatModel.class);
@@ -413,6 +426,7 @@ class GroundingVerificationTest {
     verify(chat).call(any(Prompt.class));
   }
 
+  /** 形式が不正な根拠を受け付けないことを確認する。 */
   @Test
   void descriptionsAndComparisonsRejectMalformedEvidence() {
     for (String bad :
@@ -435,6 +449,7 @@ class GroundingVerificationTest {
                 "button"));
   }
 
+  /** 画面操作の支援の操作が、指定された権限・承認条件に従うことを確認する。 */
   @ParameterizedTest
   @EnumSource(GroundingProtocol.class)
   void bothApprovalsPrecedeReturnedClick(GroundingProtocol protocol) throws Exception {

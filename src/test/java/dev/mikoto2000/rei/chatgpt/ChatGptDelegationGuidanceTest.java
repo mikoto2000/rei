@@ -19,10 +19,15 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
+/** チャットGPT委譲案内の結果と状態の契約を検証するテスト。 */
 class ChatGptDelegationGuidanceTest {
+  /** 検証に使う機能の構成要素一覧。 */
   private final StaticListableBeanFactory beans = new StaticListableBeanFactory();
+
+  /** 検証に使うOAuth認証。 */
   private final PlanOAuth oauth = mock(PlanOAuth.class);
 
+  /** {@code guidance} の条件を再現するための補助情報を返す。 */
   private ChatGptDelegationGuidance guidance(boolean automatic) {
     beans.addBean(
         "plan",
@@ -55,6 +60,7 @@ class ChatGptDelegationGuidanceTest {
         beans.getBeanProvider(SubAgentRegistry.class));
   }
 
+  /** ChatGPTとの連携で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void configuredAuthorizedRouteNamesExactToolAndDestinationsWithoutCredentials() {
     when(oauth.authorizedAccounts()).thenReturn(Set.of("default", "unallowed"));
@@ -102,6 +108,7 @@ class ChatGptDelegationGuidanceTest {
     verifyNoMoreInteractions(oauth);
   }
 
+  /** ChatGPTとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void loginDoesNotImplyAutomaticDelegation() {
     String prompt = guidance(false).prompt();
@@ -109,6 +116,7 @@ class ChatGptDelegationGuidanceTest {
     verifyNoInteractions(oauth);
   }
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void missingAuthenticationIsReportedAsASeparateCondition() {
     when(oauth.authorizedAccounts()).thenReturn(Set.of());
@@ -118,6 +126,7 @@ class ChatGptDelegationGuidanceTest {
             .contains("no allowed account has saved ChatGPT plan authorization"));
   }
 
+  /** 失敗情報終点について、認証決して行わない漏えいエラーテキストを読み取ることを確認する。 */
   @Test
   void failureToReadAuthenticationNeverLeaksTheErrorText() {
     when(oauth.authorizedAccounts()).thenThrow(new IllegalStateException("private token"));
@@ -126,6 +135,7 @@ class ChatGptDelegationGuidanceTest {
     assertFalse(prompt.contains("private token"));
   }
 
+  /** ChatGPTとの連携で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void disabledBackendIsDistinguishedFromCodexAndDoesNotLoadCredentials() {
     var guidance =
@@ -135,9 +145,11 @@ class ChatGptDelegationGuidanceTest {
             beans.getBeanProvider(PlanOAuth.class),
             beans.getBeanProvider(SubAgentRegistry.class));
     assertTrue(guidance.prompt().contains("chatgpt-plan.enabled is disabled"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(oauth);
   }
 
+  /** 利用者チャットGPT要求を必要とすることを確認する。 */
   @Test
   void wrongProviderHintRequiresAHumanChatGptRequest() {
     when(oauth.authorizedAccounts()).thenReturn(Set.of("default"));

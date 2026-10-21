@@ -11,9 +11,12 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 状態表示Creation要求やイベントの再送の結果と状態の契約を検証するテスト。 */
 class DotCreationReplayTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 失われた応答の後も対象の情報が残ることを確認する。 */
   @Test
   void sameCreationIdSurvivesLostResponseAndRejectsChangedOwnerOrContent() throws Exception {
     try (var gate = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(root)) {

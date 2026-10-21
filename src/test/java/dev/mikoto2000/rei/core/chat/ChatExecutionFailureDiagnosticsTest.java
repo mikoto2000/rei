@@ -26,23 +26,33 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
+/** チャット実行失敗情報診断情報の結果と状態の契約を検証するテスト。 */
 class ChatExecutionFailureDiagnosticsTest {
+  /** 検証に使う所有者。 */
   private final AgentRunContext owner =
       new AgentRunContext("run", "session", Path.of("."), "project");
+
+  /** 通知された出来事と順序を検証するための記録。 */
   private final List<AgentEvent> events = new ArrayList<>();
+
+  /** 検証に使うモデル呼び出し回数。 */
   private final AtomicInteger modelCalls = new AtomicInteger();
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   private ChatExecutionService service(Throwable failure) {
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             modelCalls.incrementAndGet();
             return Flux.error(failure);
@@ -59,6 +69,7 @@ class ChatExecutionFailureDiagnosticsTest {
         events::add);
   }
 
+  /** {@code terminals} の条件を再現するための補助情報を返す。 */
   private List<AgentEvent> terminals() {
     return events.stream()
         .filter(
@@ -68,6 +79,7 @@ class ChatExecutionFailureDiagnosticsTest {
         .toList();
   }
 
+  /** 会話の実行で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @CsvSource({
     "401,authentication_failed",
@@ -103,6 +115,7 @@ class ChatExecutionFailureDiagnosticsTest {
     assertThat(events.toString()).doesNotContain("PRIVATE");
   }
 
+  /** 会話の実行で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void providerFailureLogsOnlyFixedClassifiedDetailsWithoutBodiesOrStackTraces() {
     var logger =
@@ -137,6 +150,7 @@ class ChatExecutionFailureDiagnosticsTest {
     }
   }
 
+  /** 安全性コードを利用することを確認する。 */
   @Test
   void wrappedSdkContextFailureUsesItsSafeCodeAndTimeoutKeepsOutcomeVerificationGuidance() {
     var sdk =
@@ -171,6 +185,7 @@ class ChatExecutionFailureDiagnosticsTest {
     assertThat(terminals()).hasSize(1);
   }
 
+  /** 会話の実行で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void cyclicGenericCauseTerminatesAndNeverEchoesItsMessages() {
     var outer = new RuntimeException("PRIVATE_OUTER");
@@ -183,6 +198,7 @@ class ChatExecutionFailureDiagnosticsTest {
     assertThat(terminals()).hasSize(1);
   }
 
+  /** 会話の実行の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void budgetsAndPartialReviewRemainControlStopsAndCancellationRemainsCancelled() {
     var budget =

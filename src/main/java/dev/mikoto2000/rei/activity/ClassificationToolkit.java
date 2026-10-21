@@ -13,19 +13,37 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.concurrent.atomic.LongAdder;
 
-/** Failure-isolated operational view; never writes rules or screenshots. */
+/**
+ * 作業状況の把握に必要な分類補助操作を扱う。
+ *
+ * <p>Failure-isolated operational view; never writes rules or screenshots.
+ */
 public final class ClassificationToolkit {
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(ClassificationToolkit.class);
+
+  /** この機能の動作設定。 */
   private final ActivityProperties p;
+
+  /** 規則一覧。 */
   private final OperationalRules rules;
+
+  /** 保存と検索の窓口。 */
   private final ClassificationTelemetryRepository repository;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 秘密を含む。 */
   private final dev.mikoto2000.rei.memory.util.SensitiveInfoDetector sensitive =
       new dev.mikoto2000.rei.memory.util.SensitiveInfoDetector();
+
+  /** 分類提案一覧／娯楽提案一覧。 */
   private final LongAdder classificationSuggestions = new LongAdder(),
       entertainmentSuggestions = new LongAdder();
 
+  /** 指定された値や利用先を使って、ClassificationToolkitを初期化する。 */
   public ClassificationToolkit(
       ActivityProperties p,
       OperationalRules rules,
@@ -37,22 +55,27 @@ public final class ClassificationToolkit {
     this.clock = clock;
   }
 
+  /** 作業状況の把握で用いる規則一覧を返す。 */
   public OperationalRules rules() {
     return rules;
   }
 
+  /** 作業状況の把握で用いるこの機能の動作設定を返す。 */
   public ActivityProperties properties() {
     return p;
   }
 
+  /** 得られた情報を分類し、後続の判断で扱い分けられるようにする。 */
   public ActivityClassification classify(ActivityEvidence e) {
     return rules.classify(e);
   }
 
+  /** 作業状況の把握に関する状態確認を処理する。 */
   public void poll() {
     if (p.getClassification().isHotReload()) rules.poll();
   }
 
+  /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */
   private boolean safe(ActivityRecord r) {
     if (new CapturePolicy(p).excluded(r.foreground())) return false;
     var a = r.inference().activities();
@@ -61,6 +84,7 @@ public final class ClassificationToolkit {
         && !text.matches("(?is).*(?:sk-proj-|Bearer\\s+|https?://\\S*[?&](?:key|token|code)=).*");
   }
 
+  /** 作業状況の把握で用いるdecorateを返す。 */
   public ActivityRecord decorate(ActivityRecord r) {
     try {
       if (!safe(r) || r.inference().activities().isEmpty()) return r;
@@ -178,6 +202,7 @@ public final class ClassificationToolkit {
     }
   }
 
+  /** 状況を判断する根拠を得るため、分類補助操作を観測する。 */
   public void observe(ActivityRecord r) {
     try {
       if (!safe(r) || r.detection() == null || r.detection().diagnostics() == null) return;
@@ -207,6 +232,7 @@ public final class ClassificationToolkit {
     }
   }
 
+  /** 作業状況の把握で用いる候補一覧を返す。 */
   public List<ClassificationTelemetryRepository.Candidate> candidates(String kind) {
     var retention =
         kind.equals("unknown")
@@ -230,6 +256,7 @@ public final class ClassificationToolkit {
     }
   }
 
+  /** 作業状況の把握で用いる計測値を返す。 */
   public Map<String, Long> metrics() {
     var m = new TreeMap<String, Long>();
     for (String name :
@@ -293,10 +320,12 @@ public final class ClassificationToolkit {
     return m;
   }
 
+  /** 作業状況の把握に関するsuggestedを処理する。 */
   public void suggested(boolean entertainment, int count) {
     (entertainment ? entertainmentSuggestions : classificationSuggestions).add(count);
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   public String status() {
     var text =
         new StringBuilder(
@@ -334,6 +363,7 @@ public final class ClassificationToolkit {
     return text.toString();
   }
 
+  /** 利用可能な対象を確認できるよう、規則一覧を一覧にする。 */
   public String listRules() {
     var m = metrics();
     return rules.snapshot().rules().stream()
@@ -353,6 +383,7 @@ public final class ClassificationToolkit {
         .collect(java.util.stream.Collectors.joining("\n"));
   }
 
+  /** 利用可能な対象を確認できるよう、候補一覧を一覧にする。 */
   public String listCandidates(String kind, int top) {
     return candidates(kind).stream()
         .limit(Math.max(1, Math.min(100, top)))
@@ -386,42 +417,51 @@ public final class ClassificationToolkit {
         .collect(java.util.stream.Collectors.joining("\n"));
   }
 
+  /** 利用先の許容量を超えないよう、分類補助操作を上限内に収める。 */
   private static String clip(String s) {
     return s == null
         ? ""
         : s.substring(0, Math.min(384, s.length())).replaceAll("[\\p{Cntrl}]", " ");
   }
 
+  /** 作業状況の把握に関するincを処理する。 */
   private static void inc(Map<String, Long> m, String key) {
     m.merge(key, 1L, Long::sum);
   }
 
+  /** 作業状況の把握で用いる共通形式への調整を返す。 */
   public ActivityStore wrap(ActivityStore delegate) {
     return new ActivityStore() {
+      /** 既存の記録へ経緯を残すため、を追記する。 */
       public void append(ActivityRecord r) {
         var updated = decorate(r);
         delegate.append(updated);
         observe(updated);
       }
 
+      /** 指定された内容へ切り替えるため、を置き換える。 */
       public void replace(ActivityRecord r) {
         var updated = decorate(r);
         delegate.replace(updated);
         observe(updated);
       }
 
+      /** 対象を特定できるよう、期間を探す。 */
       public List<ActivitySession> findBetween(Instant a, Instant b) {
         return delegate.findBetween(a, b);
       }
 
+      /** 対象を特定できるよう、記録一覧期間を探す。 */
       public List<ActivityRecord> findRecordsBetween(Instant a, Instant b) {
         return delegate.findRecordsBetween(a, b);
       }
 
+      /** 対象を特定できるよう、記録一覧期間上限内に収めたを探す。 */
       public List<ActivityRecord> findRecordsBetweenBounded(Instant a, Instant b, int max) {
         return delegate.findRecordsBetweenBounded(a, b, max);
       }
 
+      /** 対象を特定できるよう、観測内容一覧期間上限内に収めたを探す。 */
       public List<ActivityRecord> findObservationsBetweenBounded(Instant a, Instant b, int max) {
         return delegate.findObservationsBetweenBounded(a, b, max);
       }

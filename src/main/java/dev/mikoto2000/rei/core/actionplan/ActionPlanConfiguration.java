@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class ActionPlanConfiguration {
 
+  /** 行動計画の管理で用いる操作計画を返す。 */
   @org.springframework.context.annotation.Scope(
       value = "reiProject",
       proxyMode = org.springframework.context.annotation.ScopedProxyMode.TARGET_CLASS)

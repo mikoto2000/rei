@@ -7,7 +7,9 @@ import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/** 受け入れ条件評価の結果と状態の契約を検証するテスト。 */
 class AcceptanceEvaluationTest {
+  /** 検証に使う仕様。 */
   ImplementationSpecification specification =
       new ImplementationSpecification(
           1,
@@ -19,6 +21,8 @@ class AcceptanceEvaluationTest {
           List.of(new ImplementationSpecification.AcceptanceCriterion("greeting", "Says after")),
           List.of(),
           "REPLACE_EXISTING_TEXT");
+
+  /** 検証に使う受付記録。 */
   IsolatedImplementationService.Receipt receipt =
       new IsolatedImplementationService.Receipt(
           "receipt",
@@ -36,6 +40,7 @@ class AcceptanceEvaluationTest {
           null,
           "Tests passed");
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void readinessAndSuccessfulTestsDoNotEstablishBusinessAcceptance() {
     var result = AcceptanceEvaluation.unverified(specification, receipt);
@@ -43,6 +48,7 @@ class AcceptanceEvaluationTest {
     assertEquals(receipt.patchHash(), result.getFirst().evaluatedPatchSha256());
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unsupportedModelClaimsRemainUnverifiedButEvidenceBackedParentFailureIsDistinct() {
     var claim =
@@ -69,6 +75,7 @@ class AcceptanceEvaluationTest {
         AcceptanceEvaluation.parent(specification, receipt, List.of(failure)).getFirst().status());
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void cannotReuseEvaluationForAnotherPatchOrPretendItIsAnObjectiveTest() {
     var wrong =

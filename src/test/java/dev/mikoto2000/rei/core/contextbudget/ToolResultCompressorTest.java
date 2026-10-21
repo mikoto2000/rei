@@ -10,17 +10,23 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 
+/** ツールの結果Compressorの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ToolResultCompressorTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使うトークン数。 */
   final TokenEstimator tokens = TokenEstimator.conservative();
 
+  /** 検証で使用する結果を、指定された条件に合わせて用意する。 */
   Message result(String text) {
     return ToolResponseMessage.builder()
         .responses(List.of(new ToolResponseMessage.ToolResponse("call", "runCommand", text)))
         .build();
   }
 
+  /** モデルへ渡す文脈の管理で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void smallResultsStayUnchanged() {
     var message = result("exitCode: 0");
@@ -30,6 +36,7 @@ class ToolResultCompressorTest {
         .isSameAs(message);
   }
 
+  /** コマンドJSON変換について、項目に整理した内容診断を維持することを確認する。 */
   @Test
   void commandJsonKeepsStructuredDiagnosisBeforeVerboseProgressLogs() {
     var command =
@@ -55,6 +62,7 @@ class ToolResultCompressorTest {
         .contains("TEST_FAILURE", "demo.AppTest.fail");
   }
 
+  /** 大きな結果一覧について、診断情報を維持することを確認する。 */
   @Test
   void largeResultsKeepDiagnosticsAndRetrievableRawBody() {
     String raw =

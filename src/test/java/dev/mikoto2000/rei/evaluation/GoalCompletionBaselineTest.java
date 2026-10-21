@@ -33,12 +33,17 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /**
- * Deterministic executor fixtures; network/model/job boundaries are doubles, SQLite/files are real.
+ * 目標完了比較の基準の結果と状態の契約を検証するテスト。
+ *
+ * <p>Deterministic executor fixtures; network/model/job boundaries are doubles, SQLite/files are
+ * real.
  */
 @Tag("integration")
 class GoalCompletionBaselineTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temporary;
 
+  /** 成果の評価で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void executesTenScenariosAgainstExistingLoopAndSavesIndependentBaseline() throws Exception {
     var results = new ArrayList<GoalCompletionEvaluation.Result>();
@@ -229,11 +234,13 @@ class GoalCompletionBaselineTest {
         StandardCharsets.UTF_8);
   }
 
+  /** 検証用に、指定された内容を書き込み先へ反映する。 */
   private static void write(Path root, boolean passed) throws Exception {
     Files.writeString(root.resolve("output.txt"), "correct");
     Files.writeString(root.resolve("checks.json"), "{\"passed\":" + passed + "}");
   }
 
+  /** {@code sha} の条件を再現するための補助情報を返す。 */
   private static String sha(String value) throws Exception {
     return HexFormat.of()
         .formatHex(

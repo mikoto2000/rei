@@ -12,38 +12,54 @@ import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
 
+/** Web ページを要約しますを行うための利用者コマンド。 */
 @Command(name = "summarize", description = "Web ページを要約します")
 @Component
 public class SummarizeCommand implements java.util.concurrent.Callable<Integer> {
 
+  /** 使用状況。 */
   private static final String USAGE = "Usage: /summarize <URL>";
 
+  /** summarizerサービス。 */
   private WebPageSummarizerService summarizerService;
+
+  /** チャット応答読み上げの案内。 */
   private ChatResponseNarrator chatResponseNarrator;
+
+  /** バックグラウンド。 */
   private dev.mikoto2000.rei.core.execution.BackgroundCommands background;
+
+  /** ターミナルへの表示先。 */
   private java.io.PrintWriter shellOutput;
 
+  /** 情報の要約で使用するバックグラウンドコマンド一覧を設定する。 */
   @Autowired(required = false)
   public void setBackgroundCommands(
       dev.mikoto2000.rei.core.execution.BackgroundCommands background) {
     this.background = background;
   }
 
+  /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
     shellOutput = output;
   }
 
+  /** 参照先のURL。 */
   @Parameters(index = "0", arity = "0..1", paramLabel = "URL", description = "要約する URL")
   private String url;
 
+  /** 仕様。 */
   @Spec private CommandSpec spec;
 
+  /** 既定の状態でSummarizeCommandを初期化する。 */
   public SummarizeCommand() {}
 
+  /** 情報の要約を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SummarizeCommand(WebPageSummarizerService summarizerService) {
     this(summarizerService, null);
   }
 
+  /** 指定された値や利用先を使って、SummarizeCommandを初期化する。 */
   @Autowired
   public SummarizeCommand(
       WebPageSummarizerService summarizerService, ChatResponseNarrator chatResponseNarrator) {
@@ -51,6 +67,7 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
     this.chatResponseNarrator = chatResponseNarrator;
   }
 
+  /** Web ページを要約しますを行う。 */
   @Override
   public Integer call() {
     if (background != null) {
@@ -98,6 +115,7 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
     }
   }
 
+  /** 入力を機能内で扱えるよう、参照先のURLを解釈する。 */
   private URI parseUrl() {
     if (url == null || url.isBlank()) {
       spec.commandLine().getErr().println(USAGE);
@@ -118,6 +136,7 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
     return uri;
   }
 
+  /** 情報の要約で用いるエラーメッセージを返す。 */
   private String errorMessage(SummarizationException e) {
     String message = e.getMessage();
     return message == null || message.isBlank()

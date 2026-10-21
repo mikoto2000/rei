@@ -15,18 +15,32 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/** 履歴レポートをWeb APIの操作として受け付ける。 */
 @RestController
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @RequestMapping("/api/v1/history")
 public final class HistoryReportController {
+  /** レポート。 */
   private final HistoryCommand report;
+
+  /** 会話一覧。 */
   private final SessionQueryService sessions;
+
+  /** 選択内容。 */
   private final ProjectService selection;
+
+  /** プロジェクト一覧。 */
   private final ProjectRegistry projects;
 
+  /**
+   * Web APIによる操作で受け渡すテキストを表す。
+   *
+   * @param text テキスト
+   */
   public record Text(String text) {}
 
+  /** 指定された値や利用先を使って、HistoryReportControllerを初期化する。 */
   public HistoryReportController(
       HistoryShellService history,
       SessionQueryService sessions,
@@ -38,7 +52,9 @@ public final class HistoryReportController {
     this.projects = projects;
   }
 
+  /** Web APIによる操作で用いる選択中を返す。 */
   private Text selected(String projectId, String sessionId, Supplier<String> action) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (projectId == null || projectId.isBlank() || projectId.length() > 128)
       throw new IllegalArgumentException("Project ID required");
     var project =
@@ -52,6 +68,7 @@ public final class HistoryReportController {
     }
   }
 
+  /** Web APIによる操作で用いる会話一覧を返す。 */
   @GetMapping("/report")
   public Text sessions(
       @RequestParam(required = false) String projectId,
@@ -60,6 +77,7 @@ public final class HistoryReportController {
     return new Text(report.reportSessions(projectId, limit, cursor));
   }
 
+  /** 利用者が対象の情報を確認できるように表示する。 */
   @GetMapping("/show")
   public Text show(
       @RequestParam String selectedProjectId,
@@ -72,6 +90,7 @@ public final class HistoryReportController {
         selectedProjectId, null, () -> report.reportSession(conversation, limit, cursor));
   }
 
+  /** Web APIによる操作で用いる会話一覧を返す。 */
   @GetMapping("/conversations")
   public Text conversations(
       @RequestParam String selectedProjectId,
@@ -82,6 +101,7 @@ public final class HistoryReportController {
         selectedProjectId, null, () -> report.reportConversations(project, limit, offset));
   }
 
+  /** Web APIによる操作で用いる会話を返す。 */
   @GetMapping("/conversation")
   public Text conversation(
       @RequestParam String selectedProjectId,
@@ -96,6 +116,7 @@ public final class HistoryReportController {
         () -> report.reportConversation(project, conversation, last, all));
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   @GetMapping("/search")
   public Text search(
       @RequestParam String selectedProjectId,

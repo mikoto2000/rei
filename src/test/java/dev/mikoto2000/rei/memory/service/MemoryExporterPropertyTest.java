@@ -13,10 +13,12 @@ import net.jqwik.api.ForAll;
 import net.jqwik.api.Property;
 import net.jqwik.api.constraints.IntRange;
 
+/** 記憶ExporterPropertyの結果と状態の契約を検証するテスト。 */
 @net.jqwik.api.Tag("integration")
 class MemoryExporterPropertyTest {
 
   // Feature: ai-memory-consolidation, Property 15: エクスポート件数の一貫性
+  /** 長期記憶の保存と検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Property(tries = 30)
   void exportCountMatchesActiveMemoryCount(@ForAll @IntRange(min = 0, max = 20) int count)
       throws Exception {

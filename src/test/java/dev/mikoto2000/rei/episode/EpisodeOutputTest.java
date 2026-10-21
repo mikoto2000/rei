@@ -6,12 +6,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 経験の記録出力の結果と状態の契約を検証するテスト。 */
 class EpisodeOutputTest {
+  /** 過去の経験の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void emptySmallTalkResponse() {
     assertTrue(new EpisodeOutput().parse("{\"episodes\":[]}", "s", "p", List.of()).isEmpty());
   }
 
+  /** 過去の経験の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void refusesUnknownContinuation() {
     assertThrows(

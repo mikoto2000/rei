@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 語句による検索語句一覧の結果と状態の契約を検証するテスト。 */
 class LexicalTermsTest {
+  /** モデルへ渡す文脈の管理で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void sharedTermsPreserveExistingSqliteLexicalSemantics() {
     assertEquals(

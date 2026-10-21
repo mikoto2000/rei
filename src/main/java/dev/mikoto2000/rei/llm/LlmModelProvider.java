@@ -11,23 +11,34 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
+/** 言語モデルモデルを用途や設定に応じて提供する窓口。 */
 @Component
 public class LlmModelProvider {
+  /** 時間計測。 */
   private dev.mikoto2000.rei.timing.TimingExecution timing;
 
+  /** 用途に応じたモデル利用で使用する時間計測を設定する。 */
   @Autowired(required = false)
   void setTiming(dev.mikoto2000.rei.timing.TimingExecution timing) {
     this.timing = timing;
   }
 
+  /** 取得記録保存先。 */
   private dev.mikoto2000.rei.llm.capture.CaptureStore captureStore;
+
+  /** 取得記録Customizers。 */
   private java.util.List<
           org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>
       captureCustomizers = java.util.List.of();
+
+  /** 取得記録観測内容一覧。 */
   private io.micrometer.observation.ObservationRegistry captureObservations =
       ObservationRegistry.NOOP;
+
+  /** 取得記録Meters。 */
   private io.micrometer.core.instrument.MeterRegistry captureMeters;
 
+  /** 用途に応じたモデル利用に関する設定取得記録を処理する。 */
   @Autowired(required = false)
   void configureCapture(
       dev.mikoto2000.rei.llm.capture.CaptureStore store,
@@ -45,6 +56,7 @@ public class LlmModelProvider {
     captureMeters = meters.getIfAvailable();
   }
 
+  /** 後から状況を確認できるよう、モデルを記録する。 */
   private ChatModel captureModel(ChatModel model, boolean custom) {
     if (captureStore == null || !(model instanceof OpenAiChatModel openAi)) return model;
     var configured =
@@ -64,16 +76,27 @@ public class LlmModelProvider {
         custom ? null : captureMeters);
   }
 
+  /** 既定応答生成に使うモデル。 */
   private final ChatModel defaultChatModel;
+
+  /** この機能の動作設定。 */
   private final LlmProperties properties;
+
+  /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
+
+  /** 実行状況の通知先。 */
   private final AgentEventPublisher eventPublisher;
+
+  /** キャッシュ。 */
   private final Map<String, ChatModel> cache = new ConcurrentHashMap<>();
 
+  /** 用途に応じたモデル利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public LlmModelProvider(ChatModel defaultChatModel, LlmProperties properties) {
     this(defaultChatModel, properties, null, null);
   }
 
+  /** 指定された値や利用先を使って、LlmModelProviderを初期化する。 */
   @Autowired
   public LlmModelProvider(
       ChatModel defaultChatModel,
@@ -86,12 +109,16 @@ public class LlmModelProvider {
     this.eventPublisher = eventPublisher;
   }
 
+  /** 用途に応じたモデル利用で用いる応答生成に使うモデルを返す。 */
   public ChatModel chatModel(String feature) {
     return cache.computeIfAbsent(feature, this::createFeatureModel);
   }
 
   /**
-   * Same server/model infrastructure; both primary and fallback must have no ambient tool defaults.
+   * 用途に応じたモデル利用で用いる補助エージェント応答生成に使うモデルを返す。
+   *
+   * <p>Same server/model infrastructure; both primary and fallback must have no ambient tool
+   * defaults.
    */
   public ChatModel subAgentChatModel() {
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(defaultChatModel);
@@ -100,7 +127,11 @@ public class LlmModelProvider {
     return model;
   }
 
-  /** Memory extraction has no tools, including fallback model defaults. */
+  /**
+   * 用途に応じたモデル利用で用いる記憶応答生成に使うモデルを返す。
+   *
+   * <p>Memory extraction has no tools, including fallback model defaults.
+   */
   public ChatModel memoryChatModel() {
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(defaultChatModel);
     var model = chatModel(LlmFeature.MEMORY);
@@ -108,6 +139,7 @@ public class LlmModelProvider {
     return model;
   }
 
+  /** 新たな対象を利用できるよう、機能モデルを作成する。 */
   private ChatModel createFeatureModel(String feature) {
     if (LlmFeature.VOICE_CORRECTION.equals(feature)) {
       // An explicitly selected correction endpoint must never fall back to a different remote
@@ -147,6 +179,7 @@ public class LlmModelProvider {
         : new AgentEventChatModel(feature, model, eventFactory, eventPublisher, timing);
   }
 
+  /** 用途に応じたモデル利用で用いるモデルを返す。 */
   public String model(String feature, String defaultModel) {
     LlmProperties.Server server = properties.feature(feature);
     if (server == null || server.getModel() == null || server.getModel().isBlank()) {
@@ -157,22 +190,26 @@ public class LlmModelProvider {
     return server.getModel();
   }
 
+  /** 用途に応じたモデル利用で用いる音声補正応答生成に使うモデルを返す。 */
   public ChatModel voiceCorrectionChatModel() {
     var model = chatModel(LlmFeature.VOICE_CORRECTION);
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
     return model;
   }
 
+  /** 用途に応じたモデル利用で用いる画面操作利用応答生成に使うモデルを返す。 */
   public ChatModel computerUseChatModel() {
     var model = chatModel(LlmFeature.COMPUTER_USE);
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
     return model;
   }
 
+  /** 用途に応じたモデル利用で用いるチャット選択可能な設定を返す。 */
   public OpenAiChatOptions chatOptions(String feature, String defaultModel) {
     return chatOptions(feature, defaultModel, false);
   }
 
+  /** 用途に応じたモデル利用で用いるチャット選択可能な設定を返す。 */
   public OpenAiChatOptions chatOptions(String feature, String defaultModel, boolean streamUsage) {
     OpenAiChatOptions.Builder options = chatOptionsBuilder(feature, defaultModel);
     if (streamUsage) {
@@ -181,6 +218,7 @@ public class LlmModelProvider {
     return options.build();
   }
 
+  /** 新たな対象を利用できるよう、開始AI互換応答生成に使うモデルを作成する。 */
   private ChatModel createOpenAiCompatibleChatModel(LlmProperties.Server server) {
     OpenAiChatOptions options =
         chatOptionsBuilder(server, modelForServer(server))
@@ -201,18 +239,21 @@ public class LlmModelProvider {
         .build();
   }
 
+  /** 用途に応じたモデル利用で用いる設定済み既定モデルを返す。 */
   private String configuredDefaultModel() {
     return defaultChatModel == null || defaultChatModel.getOptions() == null
         ? null
         : defaultChatModel.getOptions().getModel();
   }
 
+  /** 用途に応じたモデル利用で用いるモデル対象サーバーを返す。 */
   private String modelForServer(LlmProperties.Server server) {
     return server.getModel() == null || server.getModel().isBlank()
         ? configuredDefaultModel()
         : server.getModel();
   }
 
+  /** 用途に応じたモデル利用で用いるチャット選択可能な設定組み立てを返す。 */
   private OpenAiChatOptions.Builder chatOptionsBuilder(String feature, String defaultModel) {
     if (LlmFeature.VOICE_CORRECTION.equals(feature)) {
       var correction = properties.feature(feature);
@@ -255,12 +296,14 @@ public class LlmModelProvider {
     return options;
   }
 
+  /** 用途に応じたモデル利用で用いる最大出力トークン数を返す。 */
   private Integer maxOutputTokens(LlmProperties.Server server) {
     return server != null && server.getMaxOutputTokens() != null
         ? server.getMaxOutputTokens()
         : properties.getMaxOutputTokens();
   }
 
+  /** 用途に応じたモデル利用で用いるチャット選択可能な設定組み立てを返す。 */
   private OpenAiChatOptions.Builder chatOptionsBuilder(LlmProperties.Server server, String model) {
     OpenAiChatOptions.Builder options =
         OpenAiChatOptions.builder().maxTokens(maxOutputTokens(server));

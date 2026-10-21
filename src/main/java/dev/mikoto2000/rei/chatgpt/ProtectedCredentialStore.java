@@ -18,25 +18,39 @@ import java.util.UUID;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Function;
 
-/** JVM lock + OS file lock cover the entire refresh/read/atomic replace transaction. */
+/**
+ * 保護された認証情報の記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>JVM lock + OS file lock cover the entire refresh/read/atomic replace transaction.
+ */
 public final class ProtectedCredentialStore {
+  /** 排他制御一覧。 */
   private static final Map<Path, ReentrantLock> LOCKS =
       new java.util.concurrent.ConcurrentHashMap<>();
+
+  /** ディレクトリ。 */
   private final Path directory;
+
+  /** 秘密情報を保護する窓口。 */
   private final SecretProtector protector;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper();
 
+  /** 指定された値や利用先を使って、ProtectedCredentialStoreを初期化する。 */
   public ProtectedCredentialStore(Path directory, SecretProtector protector) {
     this.directory = directory.toAbsolutePath().normalize();
     this.protector = protector;
   }
 
+  /** ChatGPTとの連携で用いる使用中を返す。 */
   public <T> T locked(Function<Transaction, T> action) {
     var mutex = LOCKS.computeIfAbsent(directory, p -> new ReentrantLock());
     try {
       if (!mutex.tryLock(20, java.util.concurrent.TimeUnit.SECONDS))
         throw ChatGptException.of(STORE_UNAVAILABLE);
     } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw ChatGptException.of(CANCELLED);
     }
@@ -63,7 +77,9 @@ public final class ProtectedCredentialStore {
     }
   }
 
+  /** ChatGPTとの連携に必要な一連の更新を扱う。 */
   public final class Transaction {
+    /** 保存された情報を読み込み、現在の処理で使える形にする。 */
     public TokenSet load(String account) {
       validate(account);
       try {
@@ -75,6 +91,7 @@ public final class ProtectedCredentialStore {
       }
     }
 
+    /** ChatGPTとの連携で用いるアカウント一覧を返す。 */
     public Set<String> accounts() {
       try {
         var all = read();
@@ -86,6 +103,7 @@ public final class ProtectedCredentialStore {
       }
     }
 
+    /** 後から参照できるよう、指定された情報を保存する。 */
     public void save(String account, TokenSet value) {
       validate(account);
       byte[] plain = null, encrypted = null;
@@ -119,6 +137,7 @@ public final class ProtectedCredentialStore {
       }
     }
 
+    /** ChatGPTとの連携で用いるホスト識別子を返す。 */
     public String hostId() {
       try {
         var file = directory.resolve("host-id");
@@ -133,6 +152,7 @@ public final class ProtectedCredentialStore {
       }
     }
 
+    /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
     private com.fasterxml.jackson.databind.node.ObjectNode read() throws Exception {
       var file = directory.resolve("credentials.bin");
       if (!Files.exists(file)) return json.createObjectNode();
@@ -150,6 +170,7 @@ public final class ProtectedCredentialStore {
     }
   }
 
+  /** ChatGPTとの連携で用いる確保を返す。 */
   private static java.nio.channels.FileLock acquire(FileChannel channel) throws Exception {
     long deadline = System.nanoTime() + java.time.Duration.ofSeconds(20).toNanos();
     while (System.nanoTime() < deadline) {
@@ -160,6 +181,7 @@ public final class ProtectedCredentialStore {
     throw ChatGptException.of(STORE_UNAVAILABLE);
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   private static void validate(String account) {
     if (account == null || !account.matches("[a-zA-Z0-9_-]{1,64}"))
       throw ChatGptException.of(AUTH_INVALID);

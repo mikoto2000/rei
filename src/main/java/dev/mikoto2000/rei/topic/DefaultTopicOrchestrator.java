@@ -10,23 +10,49 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/** 話題の管理に必要な既定話題Orchestratorを扱う。 */
 public class DefaultTopicOrchestrator implements TopicOrchestrator {
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(DefaultTopicOrchestrator.class);
 
+  /** 話題生成サービス。 */
   private final TopicGeneratorService topicGeneratorService;
+
+  /** 候補保存先。 */
   private final TopicCandidateStore candidateStore;
+
+  /** 文脈提供元。 */
   private final TopicGenerationContextProvider contextProvider;
+
+  /** 作業状況追跡。 */
   private final AgentActivityTracker activityTracker;
+
+  /** メッセージ通知先。 */
   private final AgentMessagePublisher messagePublisher;
+
+  /** この機能の動作設定。 */
   private final TopicGeneratorProperties properties;
+
+  /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
+
+  /** 実行状況の通知先。 */
   private final AgentEventPublisher eventPublisher;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 実行中。 */
   private final AtomicBoolean running = new AtomicBoolean(false);
+
+  /** 再確認実行先。 */
   private final java.util.concurrent.Executor refreshExecutor;
+
+  /** 再確認形式のバージョン。 */
   private final java.util.concurrent.atomic.AtomicLong refreshVersion =
       new java.util.concurrent.atomic.AtomicLong();
 
+  /** 話題の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public DefaultTopicOrchestrator(
       TopicGeneratorService topicGeneratorService,
       TopicCandidateStore candidateStore,
@@ -50,6 +76,7 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
         Runnable::run);
   }
 
+  /** 指定された値や利用先を使って、DefaultTopicOrchestratorを初期化する。 */
   public DefaultTopicOrchestrator(
       TopicGeneratorService topicGeneratorService,
       TopicCandidateStore candidateStore,
@@ -73,6 +100,7 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
     this.refreshExecutor = refreshExecutor;
   }
 
+  /** 通知に応じて状態や表示を更新するため、チャット完了を受け付ける。 */
   @Override
   public void onChatCompleted() {
     if (!properties.isEnabled()) return;
@@ -98,8 +126,10 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
     }
   }
 
+  /** 通知に応じて状態や表示を更新するため、利用者操作がない状態を受け付ける。 */
   @Override
   public TopicGeneratorService.TopicRunResult onUserIdle() {
+    // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
     if (!running.compareAndSet(false, true))
       return TopicGeneratorService.TopicRunResult.skipped("running");
     long activityVersion = activityTracker.activityVersion();

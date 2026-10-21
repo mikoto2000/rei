@@ -27,19 +27,35 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 目標完了実行可否の判断の結果と状態の契約を検証するテスト。 */
 class GoalCompletionGateTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う目標一覧。 */
   GoalRepository goals;
+
+  /** 検証に使う確認の窓口。 */
   FileGoalVerifier verifier;
+
+  /** 検証に使う実行可否の判断。 */
   GoalCompletionGate gate;
+
+  /** 検証に使う形式のバージョン。 */
   String version = "a".repeat(64);
+
+  /** 検証に使うレビュー。 */
   SemanticPatchReviewService.Receipt review;
+
+  /** 検証に使う成果物。 */
   Artifact artifact;
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("source", "session", root, "project");
   }
 
+  /** {@code sha} の条件を再現するための補助情報を返す。 */
   String sha(String text) throws Exception {
     return HexFormat.of()
         .formatHex(
@@ -47,11 +63,13 @@ class GoalCompletionGateTest {
                 .digest(text.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
   }
 
+  /** {@code goal} の条件を再現するための補助情報を返す。 */
   GoalRepository.Goal goal() throws Exception {
     Files.writeString(root.resolve("out.txt"), "correct");
     return goals.create(owner(), "produce exact result", "out.txt", sha("correct"), 2, 5);
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void conversationalReplyStyleCannotReplaceRequiredCompletionEvidence() throws Exception {
     var styled =
@@ -73,6 +91,7 @@ class GoalCompletionGateTest {
     assertEquals(AgentRunContext.Mode.EXCLUSIVE, styled.mode());
   }
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     goals =
@@ -83,6 +102,7 @@ class GoalCompletionGateTest {
     configure(false);
   }
 
+  /** {@code configure} の条件を再現するため、検証用の操作や状態を扱う。 */
   void configure(boolean force) {
     gate =
         new GoalCompletionGate(
@@ -110,6 +130,7 @@ class GoalCompletionGateTest {
     verifier.setCompletionGate(gate);
   }
 
+  /** {@code definition} の条件を再現するための補助情報を返す。 */
   GoalCompletionGate.Definition definition(boolean semantic) throws Exception {
     return new GoalCompletionGate.Definition(
         List.of(new GoalRepository.FileCriterion("out.txt", sha("correct"))),
@@ -123,6 +144,7 @@ class GoalCompletionGateTest {
                     "R1", "produce exact result", List.of("out.txt"), List.of("Fixture#value")))));
   }
 
+  /** {@code receipt} の条件を再現するため、検証用の操作や状態を扱う。 */
   void receipt(String status) throws Exception {
     String report =
         "<testsuite tests=\"1\" failures=\"0\" errors=\"0\" skipped=\"0\"><testcase classname=\"Fixture\" name=\"value\"/></testsuite>";
@@ -171,11 +193,13 @@ class GoalCompletionGateTest {
                 List.of()));
   }
 
+  /** {@code proof} の条件を再現するための補助情報を返す。 */
   GoalCompletionGate.Proof proof() {
     return new GoalCompletionGate.Proof(
         new GoalCompletionGate.Reference(review.id(), review.sha256()), List.of());
   }
 
+  /** 強制全対象について、旧形式目標を受け付けないことを確認する。 */
   @Test
   void forceAllRejectsLegacyGoalButDefaultPreservesItsExistingFilePredicate() throws Exception {
     var goal = goal();
@@ -184,6 +208,7 @@ class GoalCompletionGateTest {
     assertEquals("completion_definition_missing", verifier.verify(goal).reason());
   }
 
+  /** 目標の達成管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void missingReviewCannotCompleteAndPersistedProofMustMatchCurrentPatchReportsAndCommand()
       throws Exception {
@@ -208,6 +233,7 @@ class GoalCompletionGateTest {
         "completion_review_stale", verifier.verify(goals.get("project", goal.id())).reason());
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void semanticGateDoesNotAcceptDeterministicOnlyAndCannotBeRedefinedByRunningModel()
       throws Exception {
@@ -232,6 +258,7 @@ class GoalCompletionGateTest {
                 new AgentRunContext(run, "foreign", root, "project"), goal.id(), proof(), false));
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void artifactsAndPredicatesAreVerifiedAndUnavailableEvidenceCannotPass() throws Exception {
     var goal = goal();
@@ -276,6 +303,7 @@ class GoalCompletionGateTest {
     assertFalse(verifier.verify(goals.get("project", goal.id())).satisfied());
   }
 
+  /** 既存の繰り返し確認および投稿チャット完了両方について、実行可否の判断を利用することを確認する。 */
   @Test
   void existingLoopVerifyAndPostChatCompletionBothUseGate() throws Exception {
     var goal = goal();
@@ -298,6 +326,7 @@ class GoalCompletionGateTest {
     assertEquals("completion_gate_verified", goals.get("project", goal.id()).reason());
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void currentGoalRunCanAttachEvidenceAndCompletionObservesItWithoutAnotherModelRun()
       throws Exception {
@@ -329,6 +358,7 @@ class GoalCompletionGateTest {
     assertEquals(1, goals.get("project", goal.id()).attempts());
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void commandMismatchAndUntrustedCompletionJsonCannotWeakenDefinition() throws Exception {
     var goal = goal();
@@ -364,6 +394,7 @@ class GoalCompletionGateTest {
         GoalRepository.parseCompletion(commandJson).requiredTests().commandSha256());
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void definitionChangeBetweenReadAndCompletionCannotCompleteUsingOldEvidence() throws Exception {
     var goal = goal();
@@ -382,6 +413,7 @@ class GoalCompletionGateTest {
     assertEquals("READY", goals.get("project", goal.id()).status());
   }
 
+  /** シェルについて、目標を作成することを確認する。 */
   @Test
   void shellCreatesGoalAndCompletionAtomicallyAndRejectsMalformedDefinitionWithoutSaving()
       throws Exception {
@@ -434,6 +466,7 @@ class GoalCompletionGateTest {
     assertEquals(1, goals.list(context.id()).size());
   }
 
+  /** 目標の達成管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedSavedTestIsClassifiedAndRepairedThroughExistingLoop() throws Exception {
     var goal = goal();

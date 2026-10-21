@@ -16,7 +16,9 @@ import dev.mikoto2000.rei.temporal.AgentScheduleDispatcher;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
 import org.junit.jupiter.api.Test;
 
+/** 実行予定受付窓口の結果と状態の契約を検証するテスト。 */
 class ScheduleControllerTest {
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void readsNeverActivateAndReconciliationRequiresAcknowledgedExactRun() {
     var repo = mock(PersistentAgentScheduler.class);
@@ -25,6 +27,7 @@ class ScheduleControllerTest {
     api.list("p");
     api.show("p", "timer");
     api.history("p", "timer");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(dispatcher);
     assertThrows(
         IllegalArgumentException.class,
@@ -40,6 +43,7 @@ class ScheduleControllerTest {
     verify(repo, never()).claimDue();
   }
 
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void mutationsUseExistingStateGuardsAndDoNotRetryConflicts() {
     var repo = mock(PersistentAgentScheduler.class);

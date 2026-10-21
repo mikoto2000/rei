@@ -26,25 +26,47 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.BooleanSupplier;
 
-/** Dedicated OAuth inference adapter: explicit request whitelist, no Tools, repair or retries. */
+/**
+ * 計画を外部の接続先へ依頼する窓口。
+ *
+ * <p>Dedicated OAuth inference adapter: explicit request whitelist, no Tools, repair or retries.
+ */
 public final class PlanClient implements PlanInference {
+  /** モデル利用可能な項目上限バイト数。 */
   static final int MODEL_CATALOG_LIMIT_BYTES = 2 * 1024 * 1024;
+
+  /** HTTP通信エラー上限バイト数。 */
   static final int HTTP_ERROR_LIMIT_BYTES = 65536;
 
+  /**
+   * ChatGPTとの連携で受け渡すモデルを表す。
+   *
+   * @param id 識別子
+   * @param name 名前
+   */
   public record Model(String id, String name) {}
 
+  /**
+   * ChatGPTとの連携で受け渡す入力を表す。
+   *
+   * @param role 役割
+   * @param content 内容
+   */
   public record Input(String role, String content) {
+    /** 受け取った情報からInputを作成する。 */
     public Input {
       if (role == null || !Set.of("user", "assistant").contains(role) || content == null)
         throw new IllegalArgumentException("Explicit user/assistant text required");
     }
 
+    /** ChatGPTとの連携の情報を、表示や診断で確認できる文字列表現にする。 */
     @Override
     public String toString() {
       return "Input[" + role + ", protected text]";
     }
   }
 
+  /** 受け渡し先の形式に合わせて、要求を変換する。 */
   private static byte[] encodeRequest(String model, String instructions, List<Input> input) {
     try {
       return new ObjectMapper()
@@ -65,27 +87,49 @@ public final class PlanClient implements PlanInference {
     }
   }
 
+  /** ChatGPTとの連携で用いるencoded要求バイト数を返す。 */
   public static int encodedRequestBytes(String model, String instructions, List<Input> input) {
     return encodeRequest(model, instructions, input).length;
   }
 
+  /**
+   * ChatGPTとの連携で受け渡す利用可能な項目を表す。
+   *
+   * @param clientId クライアントの識別子
+   * @param subject 対象
+   * @param expires 有効期限
+   * @param models モデル一覧
+   */
   private record Catalog(String clientId, String subject, Instant expires, List<Model> models) {}
 
+  /** OAuth認証。 */
   private final PlanOAuth oauth;
+
+  /** 通信経路。 */
   private final PlanTransport transport;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 対象ごとの世代番号。 */
   private final Map<String, java.util.concurrent.atomic.AtomicInteger> generations =
       new ConcurrentHashMap<>();
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json =
       new ObjectMapper().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
+
+  /** 利用可能な項目。 */
   private final Map<String, Catalog> catalog = new ConcurrentHashMap<>();
 
+  /** 指定された値や利用先を使って、PlanClientを初期化する。 */
   public PlanClient(PlanOAuth oauth, PlanTransport transport, Clock clock) {
     this.oauth = oauth;
     this.transport = transport;
     this.clock = clock;
   }
 
+  /** ChatGPTとの連携で用いるモデル一覧を返す。 */
   public List<Model> models(String account, boolean refresh) {
     var tokens = oauth.access(account);
     var saved = catalog.get(account);
@@ -150,24 +194,35 @@ public final class PlanClient implements PlanInference {
     }
   }
 
+  /** ChatGPTとの連携に関するキャッシュの無効化を処理する。 */
   public void invalidate() {
     catalog.clear();
   }
 
+  /** 実行中の処理を停止する。 */
   public void stop(String account) {
     generations
         .computeIfAbsent(account, a -> new java.util.concurrent.atomic.AtomicInteger())
         .incrementAndGet();
   }
 
-  /** Own SIWC credentials only; a logout/stop invalidates an in-flight external process. */
+  /**
+   * ChatGPTとの連携で受け渡す利用権を表す。
+   *
+   * <p>Own SIWC credentials only; a logout/stop invalidates an in-flight external process.
+   *
+   * @param tokens トークン数
+   * @param valid 有効
+   */
   public record Lease(TokenSet tokens, BooleanSupplier valid) {
+    /** ChatGPTとの連携の情報を、表示や診断で確認できる文字列表現にする。 */
     @Override
     public String toString() {
       return "Lease[protected]";
     }
   }
 
+  /** ChatGPTとの連携で用いる利用権を返す。 */
   public Lease lease(String account, String model) {
     var generation =
         generations.computeIfAbsent(account, a -> new java.util.concurrent.atomic.AtomicInteger());
@@ -181,6 +236,7 @@ public final class PlanClient implements PlanInference {
     return new Lease(tokens, valid);
   }
 
+  /** ChatGPTとの連携で用いる推定を返す。 */
   public PlanSseAssembler.Result infer(
       String account,
       String model,
@@ -194,6 +250,7 @@ public final class PlanClient implements PlanInference {
         account, model, instructions, task, timeout, sendLimit, receiveLimit, cancelled, () -> {});
   }
 
+  /** ChatGPTとの連携で用いる推定を返す。 */
   public PlanSseAssembler.Result infer(
       String account,
       String model,
@@ -216,6 +273,7 @@ public final class PlanClient implements PlanInference {
         onDispatch);
   }
 
+  /** ChatGPTとの連携で用いる推定履歴を返す。 */
   public PlanSseAssembler.Result inferHistory(
       String account,
       String model,
@@ -227,6 +285,7 @@ public final class PlanClient implements PlanInference {
       BooleanSupplier cancelled,
       Runnable onDispatch) {
     input = List.copyOf(input);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (input.isEmpty() || input.size() > 16) throw ChatGptException.of(SEND_LIMIT);
     long deadline = System.nanoTime() + timeout.toNanos();
     var generation =
@@ -281,18 +340,21 @@ public final class PlanClient implements PlanInference {
     }
   }
 
+  /** ChatGPTとの連携で用いるメディア種別を返す。 */
   private static String mediaType(PlanTransport.Response response) {
     return response.contentType() == null
         ? ""
         : response.contentType().split(";", 2)[0].trim().toLowerCase(Locale.ROOT);
   }
 
+  /** ChatGPTとの連携において、識別情報文字コードに該当するか判定する。 */
   private static boolean identityEncoding(PlanTransport.Response response) {
     return response.contentEncoding() == null
         || response.contentEncoding().isBlank()
         || response.contentEncoding().equalsIgnoreCase("identity");
   }
 
+  /** 処理を継続できなかった理由を、失敗情報として表す。 */
   private static ChatGptException failure(
       ChatGptException.Code code,
       PlanTransport.Response response,
@@ -303,6 +365,7 @@ public final class PlanClient implements PlanInference {
         code, operation, response.status(), mediaType(response), received, limit, "");
   }
 
+  /** ChatGPTとの連携で用いるHTTP通信エラーを返す。 */
   private ChatGptException httpError(
       PlanTransport.Response response, String operation, Duration timeout, BooleanSupplier stop) {
     byte[] bytes =

@@ -3,14 +3,23 @@ package dev.mikoto2000.rei.activity;
 import java.util.EnumSet;
 import java.util.Set;
 
-/** Display saved diagnostics only. No image, prompt, response, or window-title rendering. */
+/**
+ * 作業状況根拠表示を利用者が確認できる表示形式へ整える。
+ *
+ * <p>Display saved diagnostics only. No image, prompt, response, or window-title rendering.
+ */
 public final class ActivityEvidenceDisplayFormatter {
+  /** 作業状況の把握における取得元の選択肢。 */
   public enum Source {
+    /** 範囲付随情報。 */
     WINDOW_METADATA,
+    /** 前面画像認識。 */
     FOREGROUND_VISION,
+    /** バックグラウンド画像認識。 */
     BACKGROUND_VISION
   }
 
+  /** 作業状況の把握で用いる取得元一覧を返す。 */
   public Set<Source> sources(ActivityRecord r) {
     var result = EnumSet.noneOf(Source.class);
     var d = r.detection();
@@ -28,6 +37,7 @@ public final class ActivityEvidenceDisplayFormatter {
     return result;
   }
 
+  /** 作業状況の把握で用いる根拠を返す。 */
   public String evidence(ActivityRecord r) {
     var sources = sources(r);
     var label =
@@ -54,6 +64,7 @@ public final class ActivityEvidenceDisplayFormatter {
     return label;
   }
 
+  /** 作業状況の把握で用いる詳細な形式を返す。 */
   public String verbose(ActivityRecord r) {
     var out = new StringBuilder("    confidence: " + r.confidence() + "\n");
     var d = r.detection();
@@ -139,10 +150,12 @@ public final class ActivityEvidenceDisplayFormatter {
     return out.toString();
   }
 
+  /** 作業状況の把握で用いるコードを返す。 */
   private static String code(String value) {
     return "`" + TemporalActivityEvidence.clean(value).replace("`", "'") + "`";
   }
 
+  /** 作業状況の把握に関する画像認識を処理する。 */
   private static void vision(StringBuilder out, String label, VisionDiagnostics.Result result) {
     out.append("    ")
         .append(label)
@@ -153,6 +166,7 @@ public final class ActivityEvidenceDisplayFormatter {
     out.append('\n');
   }
 
+  /** 作業状況の把握で用いる変更なしを返す。 */
   static String clean(String value) {
     if (value == null) return "Unknown";
     var text = value.replaceAll("[\\p{Cntrl}\\p{Cf}\\s]+", " ").strip();

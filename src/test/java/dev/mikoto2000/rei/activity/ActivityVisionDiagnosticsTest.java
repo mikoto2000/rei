@@ -12,7 +12,9 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況画像認識の診断情報の結果と状態の契約を検証するテスト。 */
 class ActivityVisionDiagnosticsTest {
+  /** 検証用に、作業状況の把握の操作を実行する。 */
   ActivityRecord run(boolean background, ActivityExtractor.Result result, Exception failure)
       throws Exception {
     var p = new ActivityProperties();
@@ -52,6 +54,7 @@ class ActivityVisionDiagnosticsTest {
     return records.getValue();
   }
 
+  /** 失敗前面について、範囲を維持することを確認する。 */
   @Test
   void failedForegroundKeepsWindowAndStoresFailureTaxonomy() throws Exception {
     var r = run(false, null, new java.net.SocketTimeoutException("private response"));
@@ -64,6 +67,7 @@ class ActivityVisionDiagnosticsTest {
     assertFalse(new ActivityEvidenceDisplayFormatter().verbose(r).contains("private response"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void foregroundUsedAndSuccessWithoutContributionAreDifferent() throws Exception {
     var used =
@@ -92,6 +96,7 @@ class ActivityVisionDiagnosticsTest {
     assertEquals("Window", new ActivityEvidenceDisplayFormatter().evidence(unused));
   }
 
+  /** バックグラウンドについて、受付済み候補を必要とすることを確認する。 */
   @Test
   void backgroundRequiresAcceptedCandidate() throws Exception {
     var inference =

@@ -9,19 +9,33 @@ import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
-/** Publishes lifecycle events for text LLM invocations except background activity detection. */
+/**
+ * 用途に応じたモデル利用に必要なエージェントイベント応答生成に使うモデルを扱う。
+ *
+ * <p>Publishes lifecycle events for text LLM invocations except background activity detection.
+ */
 final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.TimingAwareModel {
+  /** 用途に応じたモデル利用で用いる時間計測を返す。 */
   public dev.mikoto2000.rei.timing.TimingExecution timing() {
     return timing;
   }
 
+  /** 機能。 */
   private final String feature;
+
+  /** 委譲先。 */
   private final ChatModel delegate;
+
+  /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
+
+  /** 実行状況の通知先。 */
   private final AgentEventPublisher eventPublisher;
 
+  /** 時間計測。 */
   private final dev.mikoto2000.rei.timing.TimingExecution timing;
 
+  /** 用途に応じたモデル利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   AgentEventChatModel(
       String feature,
       ChatModel delegate,
@@ -30,6 +44,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     this(feature, delegate, eventFactory, eventPublisher, null);
   }
 
+  /** 指定された値や利用先を使って、AgentEventChatModelを初期化する。 */
   AgentEventChatModel(
       String feature,
       ChatModel delegate,
@@ -43,6 +58,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     this.eventPublisher = eventPublisher;
   }
 
+  /** 用途に応じたモデル利用の要求を実行し、呼び出し元へ結果を返す。 */
   @Override
   public ChatResponse call(Prompt prompt) {
     // Activity polling must not produce Shell or Web API notifications.
@@ -70,6 +86,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     }
   }
 
+  /** 用途に応じたモデル利用で用いる逐次データを返す。 */
   @Override
   public Flux<ChatResponse> stream(Prompt prompt) {
     if (LlmFeature.ACTIVITY.equals(feature)) return Flux.defer(() -> delegate.stream(prompt));
@@ -88,6 +105,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
               .doOnNext(
                   response -> {
                     observeChunk(prompt, measured, response);
+                    // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
                     if (firstTokenPublished.compareAndSet(false, true)) {
                       publisher(prompt)
                           .publish(
@@ -124,11 +142,13 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
         });
   }
 
+  /** 用途に応じたモデル利用で参照する選択可能な設定を返す。 */
   @Override
   public ChatOptions getOptions() {
     return delegate.getOptions();
   }
 
+  /** 用途に応じたモデル利用で用いる所有者を返す。 */
   private dev.mikoto2000.rei.core.chat.AgentRunContext owner(Prompt prompt) {
     if (prompt.getOptions()
             instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
@@ -143,6 +163,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     return dev.mikoto2000.rei.core.chat.AgentRunScope.current();
   }
 
+  /** 用途に応じたモデル利用で判断に用いるキャンセル済みの条件を確認する。 */
   private boolean cancelled(Prompt prompt) {
     return Thread.currentThread().isInterrupted()
         || prompt.getOptions()
@@ -155,6 +176,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
             && run.isCancelled();
   }
 
+  /** 用途に応じたモデル利用で用いる計測値を返す。 */
   private dev.mikoto2000.rei.timing.TimingExecution.SpanLease measurement(
       Prompt prompt, String request) {
     if (timing == null || !timing.enabled()) return null;
@@ -163,6 +185,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     return measurement(prompt, request, null);
   }
 
+  /** 用途に応じたモデル利用で用いる計測値を返す。 */
   private dev.mikoto2000.rei.timing.TimingExecution.SpanLease measurement(
       Prompt prompt, String request, dev.mikoto2000.rei.timing.TimingAttempt trace) {
     if (timing == null || !timing.enabled()) return null;
@@ -181,6 +204,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     return span;
   }
 
+  /** 用途に応じたモデル利用で用いる観測機能を返す。 */
   private String observedFeature(Prompt prompt) {
     if (LlmFeature.CHAT.equals(feature)
         && prompt.getOptions()
@@ -191,6 +215,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     return feature;
   }
 
+  /** 状況を判断する根拠を得るため、文書の分割単位を観測する。 */
   private void observeChunk(
       Prompt prompt,
       dev.mikoto2000.rei.timing.TimingExecution.SpanLease measured,
@@ -218,6 +243,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
         });
   }
 
+  /** 状況を判断する根拠を得るため、使用状況を観測する。 */
   private void observeUsage(
       dev.mikoto2000.rei.timing.TimingExecution.SpanLease measured, ChatResponse response) {
     if (measured == null) return;
@@ -246,6 +272,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
         });
   }
 
+  /** 用途に応じたモデル利用で用いる通知先を返す。 */
   private AgentEventPublisher publisher(Prompt prompt) {
     dev.mikoto2000.rei.core.chat.AgentRunContext owner = null;
     if (prompt.getOptions()
@@ -268,6 +295,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     return event -> eventPublisher.publish(event.withOwnership(captured));
   }
 
+  /** 用途に応じたモデル利用で用いる経過時間ミリ秒数を返す。 */
   private long elapsedMillis(long startedAtNanos) {
     return (System.nanoTime() - startedAtNanos) / 1_000_000L;
   }

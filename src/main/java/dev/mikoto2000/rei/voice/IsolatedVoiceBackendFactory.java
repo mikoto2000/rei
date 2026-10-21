@@ -10,25 +10,37 @@ import java.util.Set;
 import java.util.function.Supplier;
 
 /**
- * Separate VAD/ASR workers keep recognition out of capture's path and native failure out of the
+ * 独立した音声バックエンドの情報を共通の形式で生成する。
+ *
+ * <p>Separate VAD/ASR workers keep recognition out of capture's path and native failure out of the
  * CLI.
  */
 public final class IsolatedVoiceBackendFactory implements VoiceBackendFactory, AutoCloseable {
+  /** ディレクトリ。 */
   private final Supplier<Path> directory;
+
+  /** 推定。 */
   private final Supplier<VoiceInferenceOptions> inference;
+
+  /** 実行の担当一覧。 */
   private final Set<VoiceWorkerProcess> workers = new HashSet<>();
+
+  /** 終了済み。 */
   private boolean closed;
 
+  /** 音声による対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public IsolatedVoiceBackendFactory(Supplier<Path> directory) {
     this(directory, VoiceInferenceOptions::defaults);
   }
 
+  /** 指定された値や利用先を使って、IsolatedVoiceBackendFactoryを初期化する。 */
   public IsolatedVoiceBackendFactory(
       Supplier<Path> directory, Supplier<VoiceInferenceOptions> inference) {
     this.directory = Objects.requireNonNull(directory);
     this.inference = Objects.requireNonNull(inference);
   }
 
+  /** 要求された処理を開始する。 */
   private VoiceWorkerProcess start(
       String role, Path root, VoiceSettings settings, VoiceInferenceOptions options)
       throws Exception {
@@ -75,6 +87,7 @@ public final class IsolatedVoiceBackendFactory implements VoiceBackendFactory, A
     return worker;
   }
 
+  /** 後続の処理が利用できるよう、独立した音声バックエンド生成元を解放する。 */
   private void release(VoiceWorkerProcess worker) {
     try {
       worker.close();
@@ -86,6 +99,7 @@ public final class IsolatedVoiceBackendFactory implements VoiceBackendFactory, A
     }
   }
 
+  /** 必要な対象を利用できるよう、独立した音声バックエンド生成元の利用を開始する。 */
   public VoiceBackend open(VoiceSettings settings) throws Exception {
     synchronized (this) {
       if (closed) throw new IOException("Voice worker factory closed");
@@ -99,19 +113,23 @@ public final class IsolatedVoiceBackendFactory implements VoiceBackendFactory, A
       var decoder = recognizer;
       return new VoiceBackend(
           new VoiceActivityDetector() {
+            /** 音声による対話で用いるprobabilityを返す。 */
             public float probability(float[] frame) throws Exception {
               return vad.probability(frame);
             }
 
+            /** 音声による対話で利用した資源や登録を解放し、利用を終了する。 */
             public void close() {
               release(vad);
             }
           },
           new SpeechRecognizer() {
+            /** 音声による対話で用いるrecognizeを返す。 */
             public String recognize(SpeechSegment segment) throws Exception {
               return decoder.recognize(segment.samples());
             }
 
+            /** 音声による対話で利用した資源や登録を解放し、利用を終了する。 */
             public void close() {
               release(decoder);
             }
@@ -123,10 +141,12 @@ public final class IsolatedVoiceBackendFactory implements VoiceBackendFactory, A
     }
   }
 
+  /** 音声による対話で用いるlive実行の担当一覧を返す。 */
   public synchronized long liveWorkers() {
     return workers.stream().filter(VoiceWorkerProcess::isAlive).count();
   }
 
+  /** 音声による対話で利用した資源や登録を解放し、利用を終了する。 */
   public void close() {
     List<VoiceWorkerProcess> owned;
     synchronized (this) {

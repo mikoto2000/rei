@@ -15,17 +15,36 @@ import java.util.Optional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
-/** Independent last-run snapshot, never reconstructed by replaying the event audit log. */
+/**
+ * プロジェクト実行状態の記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>Independent last-run snapshot, never reconstructed by replaying the event audit log.
+ */
 @Component
 public class ProjectRunStateStore implements AgentEventListener {
+  /**
+   * プロジェクトごとの作業環境で受け渡す状態を表す。
+   *
+   * @param runId 実行の識別子
+   * @param status 状態
+   * @param updatedAt 更新日時
+   */
   public record State(String runId, String status, Instant updatedAt) {}
 
+  /** 基準。 */
   private final Path base;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
+
+  /** 購読。 */
   private AgentEventBus.Subscription subscription;
+
+  /** 結果排他制御一覧。 */
   private final java.util.concurrent.ConcurrentMap<String, Object> resultLocks =
       new java.util.concurrent.ConcurrentHashMap<>();
 
+  /** 後から参照できるよう、完了を保存する。 */
   public void saveCompleted(dev.mikoto2000.rei.core.execution.CompletedExecution result) {
     synchronized (
         resultLocks.computeIfAbsent(
@@ -57,6 +76,7 @@ public class ProjectRunStateStore implements AgentEventListener {
     }
   }
 
+  /** プロジェクトごとの作業環境で用いる最新完了を返す。 */
   public Optional<dev.mikoto2000.rei.core.execution.CompletedExecution> latestCompleted(
       String projectId, dev.mikoto2000.rei.core.execution.ExecutionType type) {
     Path file = resultFile(projectId, type);
@@ -70,6 +90,7 @@ public class ProjectRunStateStore implements AgentEventListener {
     }
   }
 
+  /** プロジェクトごとの作業環境で用いる結果ファイルを返す。 */
   private Path resultFile(String projectId, dev.mikoto2000.rei.core.execution.ExecutionType type) {
     java.util.UUID.fromString(projectId);
     return base.resolve("projects")
@@ -77,21 +98,25 @@ public class ProjectRunStateStore implements AgentEventListener {
         .resolve("state/latest-" + type.name().toLowerCase(java.util.Locale.ROOT) + ".json");
   }
 
+  /** プロジェクトごとの作業環境を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @Autowired
   public ProjectRunStateStore(AgentEventBus bus) {
     this(dev.mikoto2000.rei.core.datasource.ReiDataDirectory.current());
     subscription = bus.subscribe(this);
   }
 
+  /** 指定された値や利用先を使って、ProjectRunStateStoreを初期化する。 */
   public ProjectRunStateStore(Path base) {
     this.base = base;
   }
 
+  /** プロジェクトごとの作業環境で利用した資源や登録を解放し、利用を終了する。 */
   @jakarta.annotation.PreDestroy
   public void close() {
     if (subscription != null) subscription.unsubscribe();
   }
 
+  /** 通知に応じて状態や表示を更新するため、イベントを受け付ける。 */
   public synchronized void onEvent(AgentEvent event) {
     if (event.projectId() == null) return;
     String status =
@@ -125,6 +150,7 @@ public class ProjectRunStateStore implements AgentEventListener {
     }
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   public synchronized Optional<State> read(String projectId) {
     Path file = file(projectId);
     if (!Files.exists(file)) return Optional.empty();
@@ -136,6 +162,7 @@ public class ProjectRunStateStore implements AgentEventListener {
     }
   }
 
+  /** プロジェクトごとの作業環境で用いるファイルを返す。 */
   private Path file(String id) {
     java.util.UUID.fromString(id);
     return base.resolve("projects").resolve(id).resolve("state/last-run.json");

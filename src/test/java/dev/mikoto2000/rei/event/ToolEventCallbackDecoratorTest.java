@@ -22,14 +22,23 @@ import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
+/** ツールイベント完了時の処理Decoratorの結果と状態の契約を検証するテスト。 */
 class ToolEventCallbackDecoratorTest {
 
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   private final Clock clock =
       Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));
+
+  /** 検証に使う生成元。 */
   private final AgentEventFactory factory = new AgentEventFactory(clock);
+
+  /** 検証に使う通知の連携先。 */
   private final InMemoryAgentEventBus bus = new InMemoryAgentEventBus();
+
+  /** 検証に使う受信。 */
   private final List<AgentEvent> received = new ArrayList<>();
 
+  /** {@code delegate} の条件を再現するための補助情報を返す。 */
   private ToolCallback delegate(String toolName, String result) {
     ToolDefinition definition = mock(ToolDefinition.class);
     when(definition.name()).thenReturn(toolName);
@@ -39,6 +48,7 @@ class ToolEventCallbackDecoratorTest {
     return callback;
   }
 
+  /** 実行状況の通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void callEmitsStartedThenCompleted() {
     bus.subscribe(received::add);
@@ -57,6 +67,7 @@ class ToolEventCallbackDecoratorTest {
     assertEquals(received.get(0).correlationId(), received.get(1).correlationId());
   }
 
+  /** 呼び出しについて、失敗を通知することを確認する。 */
   @Test
   void callEmitsFailedWhenDelegateThrows() {
     bus.subscribe(received::add);
@@ -82,6 +93,7 @@ class ToolEventCallbackDecoratorTest {
     assertEquals(received.get(0).correlationId(), received.get(1).correlationId());
   }
 
+  /** 未指定ファイルについて、失敗情報を返すことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {"readBinaryFile", "readPdfFile", "copyFile"})
@@ -103,6 +115,7 @@ class ToolEventCallbackDecoratorTest {
     assertEquals(received.get(0).correlationId(), received.get(1).correlationId());
   }
 
+  /** 未指定ファイル付き文脈について、失敗情報を返すことを確認する。 */
   @Test
   void missingFileWithContextReturnsFailure() {
     bus.subscribe(received::add);
@@ -120,6 +133,7 @@ class ToolEventCallbackDecoratorTest {
     assertEquals(AgentEventType.TOOL_FAILED, received.get(1).type());
   }
 
+  /** 実行状況の通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void internalMissingResourceStillPropagates() {
     var callback = delegate("updateTaskState", "unused");
@@ -132,6 +146,7 @@ class ToolEventCallbackDecoratorTest {
             () -> new ToolEventCallbackDecorator(callback, factory, bus).call("input")));
   }
 
+  /** 実行状況の通知で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unrelatedFailuresStillPropagate() {
     var callback = delegate("readBinaryFile", "unused");
@@ -150,6 +165,7 @@ class ToolEventCallbackDecoratorTest {
     }
   }
 
+  /** 実行状況の通知の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationDuringMissingFileReadStillPropagates() {
     var callback = delegate("readBinaryFile", "unused");
@@ -172,6 +188,7 @@ class ToolEventCallbackDecoratorTest {
     }
   }
 
+  /** 実行状況の通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void delegatesToolDefinition() {
     ToolCallback delegate = delegate("readMultiFile", "2 files");
@@ -180,6 +197,7 @@ class ToolEventCallbackDecoratorTest {
     assertSame(delegate.getToolDefinition(), decorated.getToolDefinition());
   }
 
+  /** 実行状況の通知で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void completedDoesNotContainFullResult() {
     bus.subscribe(received::add);
@@ -193,6 +211,7 @@ class ToolEventCallbackDecoratorTest {
     assertTrue(received.get(1).payload().toString().length() < 200);
   }
 
+  /** 実行状況の通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void providerWrapsAllCallbacks() {
     bus.subscribe(received::add);
@@ -212,6 +231,7 @@ class ToolEventCallbackDecoratorTest {
     assertEquals("toolB", ((ToolStartedPayload) received.get(2).payload()).toolName());
   }
 
+  /** 呼び出し付きツール呼び出し時の文脈について、イベント一覧を通知することを確認する。 */
   @Test
   void callWithToolContextEmitsEvents() {
     bus.subscribe(received::add);
@@ -230,6 +250,7 @@ class ToolEventCallbackDecoratorTest {
     assertEquals(AgentEventType.TOOL_COMPLETED, received.get(1).type());
   }
 
+  /** 実行状況の通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void suppliedToolCallIdIsUsedForStartedAndCompleted() {
     bus.subscribe(received::add);
@@ -242,6 +263,7 @@ class ToolEventCallbackDecoratorTest {
     assertEquals("call-from-model", received.get(1).correlationId());
   }
 
+  /** 実行状況の通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void methodToolProviderCallbacksAreObserved() {
     bus.subscribe(received::add);
@@ -256,6 +278,7 @@ class ToolEventCallbackDecoratorTest {
     assertEquals("hello", ((ToolStartedPayload) received.get(0).payload()).toolName());
   }
 
+  /** 実行状況の通知で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void argumentsSummaryRedactsObviousCredentials() {
     bus.subscribe(received::add);
@@ -269,7 +292,9 @@ class ToolEventCallbackDecoratorTest {
     assertTrue(!summary.contains("super-secret-value"));
   }
 
+  /** 検証条件を再現するためのサンプルメソッドツール一覧。 */
   public static class SampleMethodTools {
+    /** {@code hello} の条件を再現するための補助情報を返す。 */
     @Tool(name = "hello", description = "returns a greeting")
     public String hello(String name) {
       return "hello " + name;

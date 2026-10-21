@@ -6,8 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** Web検索集計の結果と状態の契約を検証するテスト。 */
 class WebSearchAggregatorTest {
 
+  /** Web上の情報の調査で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void aggregatePromotesOfficialAndDetailedPagesToPrimary() {
     WebSearchAggregator aggregator = new WebSearchAggregator();
@@ -33,6 +35,7 @@ class WebSearchAggregatorTest {
         context.secondaryResults().stream().map(WebSearchPage::url).toList());
   }
 
+  /** 集計結果について、上位順位を付けたページ一覧範囲内上限を維持することを確認する。 */
   @Test
   void aggregateKeepsTopRankedPagesWithinLimit() {
     WebSearchAggregator aggregator = new WebSearchAggregator();

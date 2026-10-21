@@ -7,35 +7,56 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
 
+/** ツールの一回限りの実行承認を確認・判断しますを行うための利用者コマンド。 */
 @Component
 @Command(name = "approval", description = "ツールの一回限りの実行承認を確認・判断します")
 public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
+  /** 保存と検索の窓口。 */
   private final ToolApprovalRepository repository;
+
+  /** プロジェクト一覧。 */
   private final ProjectService projects;
+
+  /** 継続入力一覧。 */
   private ApprovalContinuationService continuations;
 
+  /** ツール利用の権限制御で使用する継続入力一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setContinuations(ApprovalContinuationService service) {
     continuations = service;
   }
 
+  /** continue実行。 */
   @Option(names = "--continue", description = "承認した正確な呼び出しから続行します")
   boolean continueRun;
 
+  /**
+   * ツール利用の権限制御で受け渡す別名を表す。
+   *
+   * @param project プロジェクト
+   * @param session 会話
+   * @param id 識別子
+   */
   private record Alias(String project, String session, String id) {}
 
+  /** 別名一覧。 */
   private final java.util.Map<Object, java.util.Map<String, Alias>> aliases =
       new java.util.WeakHashMap<>();
+
+  /** 再開用の記録一覧。 */
   private dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints;
 
+  /** ツール利用の権限制御で使用する再開用の記録一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setCheckpoints(
       dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository checkpoints) {
     this.checkpoints = checkpoints;
   }
 
+  /** 仕様。 */
   @Spec picocli.CommandLine.Model.CommandSpec spec;
 
+  /** 操作。 */
   @Parameters(
       index = "0",
       arity = "0..1",
@@ -44,25 +65,31 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
       completionCandidates = ActionCandidates.class)
   String action;
 
+  /** 識別子。 */
   @Parameters(index = "1", arity = "0..1", paramLabel = "approvalId")
   String id;
 
+  /** 出力。 */
   private java.io.PrintWriter output;
 
+  /** ツール利用の権限制御を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ApprovalCommand() {
     this(null, null);
   }
 
+  /** 指定された値や利用先を使って、ApprovalCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public ApprovalCommand(ToolApprovalRepository repository, ProjectService projects) {
     this.repository = repository;
     this.projects = projects;
   }
 
+  /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
     this.output = output;
   }
 
+  /** ツールの一回限りの実行承認を確認・判断しますを行う。 */
   @Override
   public Integer call() {
     var writer = output == null ? spec.commandLine().getOut() : output;
@@ -110,16 +137,19 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
     }
   }
 
+  /** ツール利用の権限制御で用いる必須継続入力一覧を返す。 */
   private ApprovalContinuationService requiredContinuations() {
     if (continuations == null) throw new IllegalStateException("Approval continuation unavailable");
     return continuations;
   }
 
+  /** ツール利用の権限制御で用いるクライアントキーを返す。 */
   private Object clientKey() {
     var key = dev.mikoto2000.rei.core.project.ProjectClientScope.identity();
     return key == null ? this : key;
   }
 
+  /** ツール利用の権限制御で用いる数値を返す。 */
   private String number(ToolApprovalRepository.Request request) {
     synchronized (aliases) {
       var rows = aliases.computeIfAbsent(clientKey(), ignored -> new java.util.LinkedHashMap<>());
@@ -138,6 +168,7 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
     }
   }
 
+  /** 利用者に結果を伝えるため、要求を出力する。 */
   private void printRequest(
       java.io.PrintWriter writer, ToolApprovalRepository.Request request, boolean numbered) {
     String reference = numbered ? number(request) : request.id();
@@ -160,6 +191,7 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
       writer.println("詳細: /approval show " + reference + "　拒否: /approval deny " + reference);
   }
 
+  /** 利用者に結果を伝えるため、再開を出力する。 */
   private void printResume(java.io.PrintWriter writer, ToolApprovalRepository.Request request) {
     try {
       var task =
@@ -199,6 +231,7 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
     }
   }
 
+  /** ツール利用の権限制御で用いる必須識別子を返す。 */
   private String requiredId() {
     if (id == null || id.isBlank()) throw new IllegalArgumentException("approvalId is required");
     if (!id.matches("[0-9]+")) return id;
@@ -213,8 +246,10 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
     }
   }
 
+  /** 操作で利用できる入力候補を提供する。 */
   public static final class ActionCandidates
       extends dev.mikoto2000.rei.core.completion.FirstArgumentCandidates {
+    /** 既定の状態でActionCandidatesを初期化する。 */
     public ActionCandidates() {
       super("list", "show", "approve", "deny");
     }

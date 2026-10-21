@@ -10,12 +10,17 @@ import java.time.Instant;
 import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
 
+/** エージェント実行状況の通知を生成する窓口の結果と状態の契約を検証するテスト。 */
 class AgentEventFactoryTest {
 
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   private final Clock clock =
       Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));
+
+  /** 検証に使う生成元。 */
   private final AgentEventFactory factory = new AgentEventFactory(clock);
 
+  /** 実行開始イベントを作成することを確認する。 */
   @Test
   void createsRunStartedEvent() {
     AgentEvent event = factory.runStarted("run-1", "user-request", null);
@@ -31,6 +36,7 @@ class AgentEventFactoryTest {
     assertEquals("user-request", payload.reason());
   }
 
+  /** 実行完了済みのイベントを作成することを確認する。 */
   @Test
   void createsRunCompletedEvent() {
     AgentEvent event = factory.runCompleted("run-1", 1234L, 567L, 210.5d, 12.34d, 9.87d);
@@ -45,6 +51,7 @@ class AgentEventFactoryTest {
     assertEquals(9.87d, payload.endToEndTokensPerSecond());
   }
 
+  /** メッセージ差分イベントを作成することを確認する。 */
   @Test
   void createsMessageDeltaEvent() {
     AgentEvent event = factory.messageDelta("msg-1", "hello");
@@ -55,6 +62,7 @@ class AgentEventFactoryTest {
     assertEquals("hello", payload.delta());
   }
 
+  /** 推論差分イベントを作成することを確認する。 */
   @Test
   void createsThinkingDeltaEvent() {
     AgentEvent event = factory.thinkingDelta("thinking-1", "hello");
@@ -65,6 +73,7 @@ class AgentEventFactoryTest {
     assertEquals("hello", payload.delta());
   }
 
+  /** ツール開始イベントを作成することを確認する。 */
   @Test
   void createsToolStartedEvent() {
     AgentEvent event = factory.toolStarted("call-1", "readMultiFile", "files=[a.txt]");
@@ -76,6 +85,7 @@ class AgentEventFactoryTest {
     assertEquals("files=[a.txt]", payload.argumentsSummary());
   }
 
+  /** ツール完了済みのイベントを作成することを確認する。 */
   @Test
   void createsToolCompletedEvent() {
     AgentEvent event = factory.toolCompleted("call-1", "readMultiFile", 500L, "2 files");
@@ -88,6 +98,7 @@ class AgentEventFactoryTest {
     assertEquals("2 files", payload.resultSummary());
   }
 
+  /** ツール失敗イベントを作成することを確認する。 */
   @Test
   void createsToolFailedEvent() {
     AgentEvent event =
@@ -101,6 +112,7 @@ class AgentEventFactoryTest {
     assertEquals("IOException", payload.error().errorType());
   }
 
+  /** スキル振り分け受付から終了までの管理イベント一覧を作成することを確認する。 */
   @Test
   void createsSkillRoutingLifecycleEventsWithTypedMetrics() {
     AgentEvent started = factory.skillRoutingStarted("run-1", "routing-1", 27, 1);
@@ -136,12 +148,14 @@ class AgentEventFactoryTest {
     assertEquals(java.util.List.of("warning"), payload.warnings());
   }
 
+  /** 実行状況の通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void correlationIdIsOptional() {
     AgentEvent event = factory.runStarted("run-1", "user-request", null);
     assertNull(event.correlationId());
   }
 
+  /** 実行状況の通知で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sessionTurnRunIdsArePropagated() {
     AgentEvent event =

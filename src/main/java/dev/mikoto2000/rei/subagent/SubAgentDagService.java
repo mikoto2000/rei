@@ -18,34 +18,77 @@ import java.util.TreeMap;
 import java.util.UUID;
 
 /**
- * Executes dependency-ready child waves through the existing bounded parallel worker and durable
+ * 補助エージェント依存関係のユースケースを実現する。
+ *
+ * <p>Executes dependency-ready child waves through the existing bounded parallel worker and durable
  * runner.
  */
 public final class SubAgentDagService {
+  /**
+   * 補助エージェントへの委譲で受け渡す要素結果を表す。
+   *
+   * @param id 識別子
+   * @param childId 子の識別子
+   * @param status 状態
+   * @param runId 実行の識別子
+   * @param resultHash 結果ハッシュ値
+   */
   public record NodeResult(
       String id, String childId, String status, String runId, String resultHash) {}
 
+  /**
+   * 補助エージェントへの委譲で受け渡す最終結果を表す。
+   *
+   * @param graphId 関連図識別子
+   * @param status 状態
+   * @param nodes 要素一覧
+   * @param revision 改訂番号
+   */
   public record Outcome(String graphId, String status, List<NodeResult> nodes, long revision) {
+    /** 受け取った情報からOutcomeを作成する。 */
     public Outcome {
       nodes = List.copyOf(nodes);
     }
   }
 
+  /**
+   * 補助エージェントへの委譲で受け渡す保存済み計画を表す。
+   *
+   * @param version 形式のバージョン
+   * @param graphId 関連図識別子
+   * @param spec 仕様
+   * @param children 子の一覧
+   */
   private record SavedPlan(
       int version, String graphId, SubAgentDagSpec spec, Map<String, String> children) {
+    /** 受け取った情報からSavedPlanを作成する。 */
     public SavedPlan {
       children = Map.copyOf(children);
     }
   }
 
+  /** この機能の動作設定。 */
   private final SubAgentProperties properties;
+
+  /** 保存と検索の窓口。 */
   private final DurableSubAgentRepository repository;
+
+  /** 実行の担当。 */
   private final SubAgentRunner runner;
+
+  /** 登録台帳。 */
   private final SubAgentRegistry registry;
+
+  /** 並列。 */
   private final ParallelSubAgentDelegator parallel;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper();
 
+  /** 指定された値や利用先を使って、SubAgentDagServiceを初期化する。 */
   public SubAgentDagService(
       SubAgentProperties properties,
       DurableSubAgentRepository repository,
@@ -61,6 +104,7 @@ public final class SubAgentDagService {
     this.clock = clock;
   }
 
+  /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   public Outcome submit(RunExecutionContext run, SubAgentDagSpec spec) {
     var owner = owner(run);
     if (spec == null) throw new IllegalArgumentException("Child DAG required");
@@ -118,6 +162,7 @@ public final class SubAgentDagService {
     return execute(run, graph, plan, false);
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Outcome get(AgentRunContext owner, String id) {
     var graph = repository.get(owner, id);
     var manifest = plan(graph);
@@ -144,6 +189,7 @@ public final class SubAgentDagService {
     }
   }
 
+  /** 保存された状況を引き継いで、中断した作業を再開する。 */
   public Outcome resume(RunExecutionContext run, String id, long revision) {
     var owner = owner(run);
     if (!("subagent graph resume " + id + " " + revision).equals(run.userRequest().strip()))
@@ -155,6 +201,7 @@ public final class SubAgentDagService {
     return execute(run, graph, plan, true);
   }
 
+  /** 要求された処理を実行する。 */
   private Outcome execute(
       RunExecutionContext run,
       DurableSubAgentRepository.Checkpoint saved,
@@ -166,19 +213,23 @@ public final class SubAgentDagService {
     var parent = run.sharedLlmReservation();
     var budget =
         new LlmCallReservation() {
+          /** 補助エージェントへの委譲で判断に用いる試行予約の条件を確認する。 */
           public boolean tryReserve() {
             return repository.reserve(saved.id(), execution) && parent.tryReserve();
           }
 
+          /** 補助エージェントへの委譲で用いる残量を返す。 */
           public int remaining() {
             var state = repository.get(owner, saved.id());
             return Math.min(parent.remaining(), state.maxCalls() - state.consumedCalls());
           }
 
+          /** トークン数による実行予算の制限が有効かどうかを返す。 */
           public boolean tokenLimitEnabled() {
             return saved.maxTokens() > 0 || parent.tokenLimitEnabled();
           }
 
+          /** 補助エージェントへの委譲において、トークン残量なしに該当するか判定する。 */
           public boolean tokenExhausted() {
             var state = repository.get(owner, saved.id());
             return state.maxTokens() > 0
@@ -186,10 +237,12 @@ public final class SubAgentDagService {
                 || parent.tokenExhausted();
           }
 
+          /** 補助エージェントへの委譲において、使用状況不明に該当するか判定する。 */
           public boolean usageUnknown() {
             return repository.get(owner, saved.id()).usageUnknown() || parent.usageUnknown();
           }
 
+          /** 使用したトークン数を実行予算へ記録する。 */
           public void recordTotalTokens(Integer tokens) {
             repository.tokens(saved.id(), execution, tokens);
             parent.recordTotalTokens(tokens);
@@ -298,6 +351,7 @@ public final class SubAgentDagService {
     }
   }
 
+  /** 補助エージェントへの委譲で用いる結果一覧を返す。 */
   private List<NodeResult> results(AgentRunContext owner, SavedPlan plan, boolean finalView) {
     var rows = new ArrayList<NodeResult>();
     for (var node : plan.spec().nodes()) {
@@ -325,11 +379,13 @@ public final class SubAgentDagService {
     return List.copyOf(rows);
   }
 
+  /** 補助エージェントへの委譲で用いる文脈を返す。 */
   private String context(AgentRunContext owner, SubAgentDagSpec.Node node, SavedPlan plan) {
     var evidence = new ArrayList<Map<String, Object>>();
     for (String dependency : node.dependencies()) {
       var child = repository.get(owner, plan.children().get(dependency));
       String output = Objects.toString(child.result(), "");
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (output.length() > 2048) output = output.substring(0, 2048) + " [truncated]";
       evidence.add(
           Map.of(
@@ -352,6 +408,7 @@ public final class SubAgentDagService {
         + "\nValidate cited evidence and disclose missing or truncated context.";
   }
 
+  /** 依頼を進めるための候補や手順を組み立てる。 */
   private SavedPlan plan(DurableSubAgentRepository.Checkpoint graph) {
     if (!graph.kind().equals("GRAPH"))
       throw new IllegalArgumentException("DAG checkpoint required");
@@ -373,6 +430,7 @@ public final class SubAgentDagService {
     }
   }
 
+  /** 補助エージェントへの委譲で用いる比較の基準を返す。 */
   private String baseline(AgentRunContext owner, SubAgentDagSpec spec) {
     var values = new TreeMap<String, String>();
     for (var node : spec.nodes()) {
@@ -385,6 +443,7 @@ public final class SubAgentDagService {
     return DurableSubAgentRepository.hash(encode(spec) + encode(values));
   }
 
+  /** 補助エージェントへの委譲で用いる所有者を返す。 */
   private AgentRunContext owner(RunExecutionContext run) {
     if (!properties.isDurableEnabled()
         || !properties.isDagEnabled()
@@ -398,6 +457,7 @@ public final class SubAgentDagService {
     return run.runContext();
   }
 
+  /** 受け渡し先が扱える形式へ、指定された内容を変換する。 */
   private String encode(Object value) {
     try {
       return json.writeValueAsString(value);

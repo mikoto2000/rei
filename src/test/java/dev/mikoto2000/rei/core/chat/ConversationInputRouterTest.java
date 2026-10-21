@@ -9,7 +9,9 @@ import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
+/** 会話入力入力の振り分けの結果と状態の契約を検証するテスト。 */
 class ConversationInputRouterTest {
+  /** 会話の実行で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void explicitGuidanceIsDeliveredOnlyToTheNamedRunAndOwner() {
     var scheduled = new ArrayList<Runnable>();
@@ -38,6 +40,7 @@ class ConversationInputRouterTest {
     assertThat(router.offerIntervention("A", "session", "first", "late")).isFalse();
   }
 
+  /** 会話の実行で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void persistentProjectIdentityOwnsMailboxEvenIfLocationChanges() {
     List<Runnable> tasks = new ArrayList<>();
@@ -49,6 +52,7 @@ class ConversationInputRouterTest {
     assertThat(tasks).hasSize(1);
   }
 
+  /** 会話の実行で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void idleStartsAndRunningInputQueuesWithoutAnotherTask() {
     List<Runnable> tasks = new ArrayList<>();
@@ -72,6 +76,7 @@ class ConversationInputRouterTest {
         .isEqualTo(ConversationInputRouter.Disposition.STARTED);
   }
 
+  /** 会話の実行で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void inputAfterMailboxClosesStartsSuccessorWithoutLoss() {
     List<Runnable> tasks = new ArrayList<>();

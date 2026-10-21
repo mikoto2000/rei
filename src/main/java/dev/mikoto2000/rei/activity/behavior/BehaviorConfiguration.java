@@ -15,14 +15,17 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 
+/** 作業習慣の構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(BehaviorProperties.class)
 public class BehaviorConfiguration {
+  /** 作業習慣の支援で用いる作業習慣状態保存先を返す。 */
   @Bean
   BehaviorStateStore behaviorStateStore(javax.sql.DataSource ds) {
     return new SqliteBehaviorStateStore(ds);
   }
 
+  /** 作業習慣の支援で用いる作業習慣メッセージ生成を返す。 */
   @Bean
   BehaviorMessageGenerator behaviorMessageGenerator(
       LlmModelProvider provider,
@@ -34,6 +37,7 @@ public class BehaviorConfiguration {
         system::systemPrompt);
   }
 
+  /** 作業習慣の支援で用いる作業習慣サービスを返す。 */
   @Bean
   BehaviorService behaviorService(
       BehaviorProperties config,
@@ -48,6 +52,7 @@ public class BehaviorConfiguration {
         config, activity, capture, store, state, generator, publisher, tracker, Clock.systemUTC());
   }
 
+  /** 作業習慣の支援で用いる作業習慣実行先を返す。 */
   @Bean
   ThreadPoolTaskExecutor behaviorExecutor() {
     var executor = new ThreadPoolTaskExecutor();
@@ -61,13 +66,21 @@ public class BehaviorConfiguration {
     return executor;
   }
 
+  /** 作業習慣の支援で用いる作業習慣実行する作業を返す。 */
   @Bean
   BehaviorJob behaviorJob(
       BehaviorService service, @Qualifier("behaviorExecutor") ThreadPoolTaskExecutor executor) {
     return new BehaviorJob(service, executor);
   }
 
+  /**
+   * 作業習慣の支援で受け渡す作業習慣実行する作業を表す。
+   *
+   * @param service サービス
+   * @param executor 実行先
+   */
   public record BehaviorJob(BehaviorService service, ThreadPoolTaskExecutor executor) {
+    /** 作業習慣の支援に関する状態確認を処理する。 */
     @Scheduled(
         fixedDelayString = "#{${rei.activity.behavior.check-interval-seconds:60} * 1000}",
         initialDelayString = "#{${rei.activity.behavior.check-interval-seconds:60} * 1000}")

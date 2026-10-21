@@ -17,10 +17,13 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 外部修正提案の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ExternalFixProposalTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code success} の条件を再現するための補助情報を返す。 */
   ExternalAgentResult success(TextChangeSetService.Request draft) {
     return new ExternalAgentResult(
         ExternalAgentResult.Status.SUCCESS,
@@ -36,12 +39,14 @@ class ExternalFixProposalTest {
         null);
   }
 
+  /** {@code changes} の条件を再現するための補助情報を返す。 */
   TextChangeSetService changes() {
     var source = new org.sqlite.SQLiteDataSource();
     source.setUrl("jdbc:sqlite:" + root.resolve("changes.db"));
     return new TextChangeSetService(new dev.mikoto2000.rei.core.TextChangeSetRepository(source));
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void reviewedFixIsSavedWithoutWritingAndExplicitApplyCanBeReReviewedInANewRun() throws Exception {
     var fixture = new ExternalReviewHistoryTest();
@@ -109,6 +114,7 @@ class ExternalFixProposalTest {
     assertEquals(3, requests.size());
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void outOfTargetAndStaleProposalsNeverWriteOrBecomeSuccessfulChangeSets() throws Exception {
     var fixture = new ExternalReviewHistoryTest();
@@ -148,6 +154,7 @@ class ExternalFixProposalTest {
     assertEquals("other", Files.readString(root.resolve("other.txt")));
   }
 
+  /** 外部エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void fakeSuccessfulOutputAfterRunCancellationCannotStageAProposal() throws Exception {
     var fixture = new ExternalReviewHistoryTest();
@@ -184,6 +191,7 @@ class ExternalFixProposalTest {
             .changeSetId());
   }
 
+  /** 提案実行可否の判断について、引用済み負のを受け付けないことを確認する。 */
   @Test
   void proposalGateRejectsQuotedNegativeAndToolOnlyRequestsAndPolicyDoesNotGrantReadAccess() {
     for (String text :
@@ -215,6 +223,7 @@ class ExternalFixProposalTest {
                 .validate(List.of("requestCodexFixProposal")));
   }
 
+  /** 軽量CLI修正提案について、読み取りを利用することを確認する。 */
   @Test
   void cliFixProposalUsesReadOnlySchemaAndInvalidOutputFailsClosed() throws Exception {
     var properties = new CodexProperties();
@@ -233,6 +242,7 @@ class ExternalFixProposalTest {
     var output = new java.util.concurrent.atomic.AtomicReference<>(draft.toString());
     var runner =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           @Override
           public Output run(
               List<String> command,

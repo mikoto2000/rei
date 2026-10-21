@@ -6,9 +6,12 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
 
+/** 音声補正検証の窓口の結果と状態の契約を検証するテスト。 */
 class VoiceCorrectionValidatorTest {
+  /** 検証に使う検証の窓口。 */
   final VoiceCorrectionValidator validator = new VoiceCorrectionValidator();
 
+  /** {@code corrected} の条件を再現するための補助情報を返す。 */
   static String corrected(String raw, String text) {
     try {
       return new com.fasterxml.jackson.databind.ObjectMapper()
@@ -36,6 +39,7 @@ class VoiceCorrectionValidatorTest {
     }
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @ParameterizedTest
   @CsvSource({
     "機械学習の交配,機械学習の勾配",
@@ -48,12 +52,14 @@ class VoiceCorrectionValidatorTest {
     assertThat(validator.validate(raw, corrected(raw, text), 500).text()).isEqualTo(text);
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
   @CsvSource({"数量は10,数量は11", "削除しない,削除する", "実行を定止,実行を停止", "違います,はい", "対象を削除,別物を削除", "明日は二日,明日は三日"})
   void dangerousChangesAreRejected(String raw, String text) {
     assertThat(validator.validate(raw, corrected(raw, text), 500).text()).isEqualTo(raw);
   }
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidSchemaAndEmptyOutputFallBack() {
     for (String json :
@@ -66,6 +72,7 @@ class VoiceCorrectionValidatorTest {
         }) assertThat(validator.validate("こんにちは", json, 500).text()).isEqualTo("こんにちは");
   }
 
+  /** 変更なしおよび不確実なについて、元のを保持することを確認する。 */
   @Test
   void unchangedAndUncertainMustPreserveOriginal() {
     for (String status : new String[] {"unchanged", "uncertain"}) {
@@ -77,6 +84,7 @@ class VoiceCorrectionValidatorTest {
     }
   }
 
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void positionsAndUndeclaredFieldsAreValidated() {
     String json = corrected("😀交配", "😀勾配");
@@ -90,6 +98,7 @@ class VoiceCorrectionValidatorTest {
         .isEqualTo("invalid_output");
   }
 
+  /** 音声による対話の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void pathsCommandsUrlsAndPromptInjectionCannotAuthorizeNewActions() {
     for (String[] pair :
@@ -104,6 +113,7 @@ class VoiceCorrectionValidatorTest {
           .isEqualTo(pair[0]);
   }
 
+  /** 音声による対話で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateFieldsTrailingJsonAndExcessiveRewriteAreRejected() {
     String json = corrected("交配の話", "勾配の話");
@@ -120,6 +130,7 @@ class VoiceCorrectionValidatorTest {
         .isEqualTo("交配の話");
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void absoluteAndRelativePathRootsAndPlainShellCommandsCannotChange() {
     for (String[] pair :
@@ -130,6 +141,7 @@ class VoiceCorrectionValidatorTest {
           .isEqualTo(pair[0]);
   }
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void colloquialMutationRequestsCannotChangeTheirTargets() {
     for (String[] pair :

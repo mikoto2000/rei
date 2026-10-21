@@ -8,14 +8,24 @@ import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+/** 利用先の検出話題候補の内容を生成する。 */
 public class DiscoveryTopicCandidateGenerator implements TopicCandidateGenerator {
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(DiscoveryTopicCandidateGenerator.class);
 
+  /** 生成の初期値生成。 */
   private final DiscoverySeedGenerator seedGenerator;
+
+  /** 取得元一覧。 */
   private final List<DiscoverySource> sources;
+
+  /** 確認済み保存と検索の窓口。 */
   private final DiscoverySeenRepository seenRepository;
+
+  /** この機能の動作設定。 */
   private final TopicGeneratorProperties properties;
 
+  /** 指定された値や利用先を使って、DiscoveryTopicCandidateGeneratorを初期化する。 */
   public DiscoveryTopicCandidateGenerator(
       DiscoverySeedGenerator seedGenerator,
       List<DiscoverySource> sources,
@@ -27,6 +37,7 @@ public class DiscoveryTopicCandidateGenerator implements TopicCandidateGenerator
     this.properties = properties;
   }
 
+  /** 指定された条件に従って、依頼された内容を生成する。 */
   @Override
   public List<TopicCandidate> generate(TopicGenerationContext context) {
     if (!properties.isEnabled() || !properties.getDiscovery().isEnabled()) return List.of();
@@ -50,6 +61,7 @@ public class DiscoveryTopicCandidateGenerator implements TopicCandidateGenerator
     return candidates;
   }
 
+  /** 利用先へ渡せるよう、候補の形式に変換する。 */
   private TopicCandidate toCandidate(DiscoveryItem item, Instant now) {
     return new TopicCandidate(
         UUID.randomUUID().toString(),
@@ -65,6 +77,7 @@ public class DiscoveryTopicCandidateGenerator implements TopicCandidateGenerator
         now);
   }
 
+  /** 話題の管理で用いる情報の鮮度を返す。 */
   double freshness(Instant publishedAt, Instant now) {
     if (publishedAt == null) return 0.5d;
     long days = Math.max(0L, Duration.between(publishedAt, now).toDays());

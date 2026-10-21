@@ -8,7 +8,9 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.jupiter.api.Test;
 
+/** 依存条件Awaiterの結果と状態の契約を検証するテスト。 */
 class DependencyAwaiterTest {
+  /** タイムアウトについて、待機中を返すことを確認する。 */
   @Test
   void timeoutReturnsWaitingWithoutClaimingCompletion() {
     var time = new AtomicLong();
@@ -27,6 +29,7 @@ class DependencyAwaiterTest {
     assertTrue(polls.get() <= 6);
   }
 
+  /** 外部条件の待機で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void terminalResultEndsWaitingImmediately() {
     var time = new AtomicLong();
@@ -42,6 +45,7 @@ class DependencyAwaiterTest {
     assertEquals(200_000_000L, time.get());
   }
 
+  /** 外部条件の待機の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationIsCheckedBeforeEveryProbeAndSleep() {
     var time = new AtomicLong();
@@ -63,6 +67,7 @@ class DependencyAwaiterTest {
         () -> awaiter.await(() -> null, Duration.ofSeconds(61), () -> {}));
   }
 
+  /** 外部条件の待機の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void interruptionDuringProbeCannotClaimCompletion() {
     var awaiter = new DependencyAwaiter(() -> 0, d -> {});
@@ -82,6 +87,7 @@ class DependencyAwaiterTest {
     }
   }
 
+  /** 外部条件の待機で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void explicitPollIntervalBoundsNetworkRequestCadence() {
     var time = new AtomicLong();

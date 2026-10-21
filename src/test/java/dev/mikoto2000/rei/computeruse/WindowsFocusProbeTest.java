@@ -16,14 +16,17 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 判定期間Focus利用可否の確認の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class WindowsFocusProbeTest {
+  /** 検証に使うFOCUS。 */
   static final String FOCUS =
       """
       {"status":"ok","name":"Compose","controlType":"ControlType.Edit","hasKeyboardFocus":true,
        "enabled":true,"password":false,"editable":true,"bounds":{"x":-3000,"y":100,"width":400,"height":100}}
       """;
 
+  /** 画面操作の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownIsNotEditableAndNegativeDisplayBoundsAreValid() throws Exception {
     assertTrue(WindowsFocusProbe.validate("{}").contains("invalid_snapshot"));
@@ -34,6 +37,7 @@ class WindowsFocusProbeTest {
             .contains("\"editable\":null"));
   }
 
+  /** 失敗一覧を保持することを確認する。 */
   @Test
   void preservesFailuresAndDoesNotTreatProbeWindowAsTarget() throws Exception {
     String failure =
@@ -52,6 +56,7 @@ class WindowsFocusProbeTest {
     assertTrue(node.get("editable").isNull());
   }
 
+  /** 表示表示概要の後も対象の情報が残ることを確認する。 */
   @Test
   void focusSurvivesShowUiOverviewAndReachesPlannerWithoutGroundingOnTyping() throws Exception {
     var chat = mock(ChatModel.class);
@@ -76,6 +81,7 @@ class WindowsFocusProbeTest {
     verify(grounding, never()).call(any(Prompt.class));
   }
 
+  /** 診断情報を保存することを確認する。 */
   @Test
   void eachStepRefreshesFocusAfterDispatchAndSavesDiagnostics(
       @org.junit.jupiter.api.io.TempDir java.nio.file.Path dir) {

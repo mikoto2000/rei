@@ -19,14 +19,29 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 
-/** Bounded untrusted text replacements; only parent-selected snapshot files can be changed. */
+/**
+ * 外部エージェントへの委譲で受け渡す実装提案を表す。
+ *
+ * <p>Bounded untrusted text replacements; only parent-selected snapshot files can be changed.
+ *
+ * @param edits 編集一覧
+ */
 public record ImplementationProposal(List<Edit> edits) {
+  /**
+   * 外部エージェントへの委譲で受け渡す編集を表す。
+   *
+   * @param path パス
+   * @param expectedSha256 期待する内容内容の同一性を照合するSHA-256ハッシュ
+   * @param replacement 置換
+   */
   public record Edit(String path, String expectedSha256, String replacement) {}
 
+  /** 受け取った情報からImplementationProposalを作成する。 */
   public ImplementationProposal {
     edits = List.copyOf(edits);
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   public static ImplementationProposal parse(JsonNode node) {
     if (node == null
         || !node.isObject()
@@ -52,10 +67,12 @@ public record ImplementationProposal(List<Edit> edits) {
     return new ImplementationProposal(edits);
   }
 
+  /** 指定された内容を、現在の対象へ反映する。 */
   public List<String> apply(Path directory, Map<String, String> manifest) throws IOException {
     return apply(directory, manifest, dev.mikoto2000.rei.core.TextDocumentTransaction::replace);
   }
 
+  /** 指定された内容を、現在の対象へ反映する。 */
   public List<String> apply(
       Path directory,
       Map<String, String> manifest,
@@ -64,6 +81,7 @@ public record ImplementationProposal(List<Edit> edits) {
     Path root = directory.toRealPath();
     var paths = new LinkedHashMap<Path, byte[]>();
     int total = 0;
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (edits.isEmpty() || edits.size() > 32)
       throw new IllegalArgumentException("Require 1 to 32 edits");
     for (var edit : edits) {
@@ -142,6 +160,7 @@ public record ImplementationProposal(List<Edit> edits) {
     return edits.stream().map(Edit::path).toList();
   }
 
+  /** 外部エージェントへの委譲で用いる内容の同一性を照合するSHA-256ハッシュを返す。 */
   public static String sha256(byte[] content) {
     try {
       return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(content));

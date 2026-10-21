@@ -49,29 +49,61 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 目標チャット受付窓口の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class GoalChatGatewayTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使うプロジェクト。 */
   String project = "00000000-0000-0000-0000-000000000001";
+
+  /** 検証に使う目標一覧。 */
   GoalRepository goals;
+
+  /** 検証に使うプロジェクト一覧。 */
   ProjectService projects;
+
+  /** 検証に使うチャット。 */
   ChatExecutionService chat;
+
+  /** 検証に使う実行する作業一覧。 */
   ArrayDeque<Runnable> jobs;
+
+  /** 検証に使う繰り返し。 */
   GoalLoopService loop;
+
+  /** 通知された出来事と順序を検証するための記録。 */
   List<AgentEvent> events;
+
+  /** 検証に使う目標。 */
   GoalRepository.Goal goal;
+
+  /** 検証に使う受付窓口。 */
   GoalChatGateway gateway;
+
+  /** 検証に使う確認の窓口。 */
   FileGoalVerifier verifier;
+
+  /** 検証に使う入力の振り分け。 */
   ConversationInputRouter router;
+
+  /** 検証に使う通知の連携先。 */
   AgentEventBus bus;
+
+  /** 検証に使うtracking。 */
   dev.mikoto2000.rei.application.run.RunService tracking;
+
+  /** 検証に使う登録台帳。 */
   dev.mikoto2000.rei.application.run.RunRegistry registry;
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void closeTracking() {
     if (tracking != null) tracking.close();
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void queuedGoalNeverAttachesExternalParentBeforeActualChatStarts() {
     trackRuns();
@@ -83,10 +115,12 @@ class GoalChatGatewayTest {
     verify(continuation, never()).attachParent(any(), any(), any());
     assertTrue(tracking.cancel(running.currentRunId()).accepted());
     jobs.remove().run();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(chat);
     assertEquals("PAUSED", goals.get(project, goal.id()).status());
   }
 
+  /** 待機中について、目標利用権の確保を保持することを確認する。 */
   @Test
   void waitingRetainsGoalClaimAndOriginalReservationUntilContinuationCompletes() throws Exception {
     trackRuns();
@@ -128,6 +162,7 @@ class GoalChatGatewayTest {
     verify(chat, times(1)).execute(any(), anyString(), any(), any());
   }
 
+  /** 目標の達成管理で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void jsonCompletionConditionsReachExistingChatPlanningPrompt() throws Exception {
     var structured =
@@ -152,6 +187,7 @@ class GoalChatGatewayTest {
     verify(chat).execute(any(), anyString(), any(), any());
   }
 
+  /** 目標の達成管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void timingIncludesIndependentFinalVerificationAfterChatReturns() throws Exception {
     var tick = new java.util.concurrent.atomic.AtomicLong();
@@ -185,6 +221,7 @@ class GoalChatGatewayTest {
     assertEquals("COMPLETED", goals.get(project, goal.id()).status());
   }
 
+  /** {@code trackRuns} の条件を再現するため、検証用の操作や状態を扱う。 */
   void trackRuns() {
     bus = new InMemoryAgentEventBus();
     registry = new dev.mikoto2000.rei.application.run.RunRegistry(Clock.systemUTC());
@@ -198,6 +235,7 @@ class GoalChatGatewayTest {
     gateway.configureRunTracking(registry, tracking);
   }
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     goals =
@@ -255,6 +293,7 @@ class GoalChatGatewayTest {
             4);
   }
 
+  /** 目標の達成管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void actualGatewayPassesCapturedOwnerAndPersistentReservationThroughFifo() throws Exception {
     when(chat.execute(any(), anyString(), any(), any()))
@@ -272,6 +311,7 @@ class GoalChatGatewayTest {
               return ChatExecutionResult.success("Done", false);
             });
     assertEquals("RUNNING", loop.run(project, goal.id()).status());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(chat);
     assertEquals(1, jobs.size());
     jobs.remove().run();
@@ -286,6 +326,7 @@ class GoalChatGatewayTest {
                         && project.equals(e.projectId())));
   }
 
+  /** 登録済み目標について、会話を保持することを確認する。 */
   @Test
   void trackedGoalRetainsSessionAndReachesTerminalRunWithoutDuplicateExecution() throws Exception {
     trackRuns();
@@ -312,6 +353,7 @@ class GoalChatGatewayTest {
     verify(chat, times(1)).execute(any(), anyString(), any(), any());
   }
 
+  /** 目標の達成管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void normalRunCancellationPausesQueuedGoalWithoutExecutingChat() {
     trackRuns();
@@ -323,10 +365,12 @@ class GoalChatGatewayTest {
     assertEquals("PAUSED", goals.get(project, goal.id()).status());
     assertEquals("CANCELLED", goals.attempts(project, goal.id()).getFirst().status());
     jobs.remove().run();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(chat);
     assertTrue(jobs.isEmpty());
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void queuedIndependentVerificationPublishesTerminalWithoutCallingChat() throws Exception {
     trackRuns();
@@ -337,9 +381,11 @@ class GoalChatGatewayTest {
     assertEquals(
         dev.mikoto2000.rei.application.run.RunStatus.COMPLETED,
         tracking.get(running.currentRunId()).status());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(chat);
   }
 
+  /** 目標の達成管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void restoredGoalWithNoLiveRunCanStillBeCancelled() {
     trackRuns();
@@ -349,6 +395,7 @@ class GoalChatGatewayTest {
     verifyNoInteractions(chat);
   }
 
+  /** 目標の達成管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void queuedGoalIsCancelledWithoutExecutingOrLeavingAnAttemptRunning() {
     loop.run(project, goal.id());
@@ -359,6 +406,7 @@ class GoalChatGatewayTest {
     assertEquals("CANCELLED", goals.attempts(project, goal.id()).getFirst().status());
   }
 
+  /** 目標の達成管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void relocatedProjectIsRecheckedBeforeQueuedExecution() {
     loop.run(project, goal.id());
@@ -369,6 +417,7 @@ class GoalChatGatewayTest {
     assertEquals("FAILED", goals.get(project, goal.id()).status());
   }
 
+  /** 目標の達成管理の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void actualPermissionFailureStopsAndShellCannotChangeGoalFromAnotherProject() {
     when(chat.execute(any(), anyString(), any(), any()))
@@ -390,6 +439,7 @@ class GoalChatGatewayTest {
     assertEquals("WAITING_APPROVAL", goals.get(project, goal.id()).status());
   }
 
+  /** シェルについて、複数判断基準一覧を作成することを確認する。 */
   @Test
   void shellCreatesMultipleCriteriaAndGatewayRequiresAllBeforeCompletion() throws Exception {
     String hash = goal.sha256();
@@ -437,6 +487,7 @@ class GoalChatGatewayTest {
         goals.attempts(project, multi.id()).stream().map(GoalRepository.Attempt::status).toList());
   }
 
+  /** 目標の達成管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void shellRejectsMixedMalformedAndTrailingCriteriaWithoutCreatingGoal() {
     String[] values = {
@@ -469,6 +520,7 @@ class GoalChatGatewayTest {
     assertEquals(1, goals.list(project).size());
   }
 
+  /** 目標の達成管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void reconciliationCannotReleaseQueuedOrExecutingGoalRun() {
     loop.run(project, goal.id());
@@ -486,6 +538,7 @@ class GoalChatGatewayTest {
     assertEquals("FAILED", goals.get(project, goal.id()).status());
   }
 
+  /** シェルについて、確認記録を必要とすることを確認する。 */
   @Test
   void shellRequiresAcknowledgementAndResumesUncertainGoalOnlyExplicitly() {
     var claim = goals.claim(project, goal.id());
@@ -504,6 +557,7 @@ class GoalChatGatewayTest {
         cli.execute(
             "reconcile", goal.id(), "--run-id", run, "--acknowledge-uncertain-side-effects"));
     assertEquals("PAUSED", goals.get(project, goal.id()).status());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(chat);
     assertTrue(jobs.isEmpty());
     when(chat.execute(any(), anyString(), any(), any()))
@@ -518,6 +572,7 @@ class GoalChatGatewayTest {
     assertEquals(1, goals.get(project, goal.id()).llmCallsUsed());
   }
 
+  /** 目標の達成管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void explicitGateReservesRepairCallsAndPassesCurrentUnmetConditionsToPlanner() throws Exception {
     verifier.setCompletionGate(

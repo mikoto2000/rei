@@ -22,15 +22,21 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
 /**
- * One tool-free judgement through Rei's existing bounded loop and the parent Run/Goal reservation.
+ * 共通の実行基盤に必要な変更差分意味によるReviewerを扱う。
+ *
+ * <p>One tool-free judgement through Rei's existing bounded loop and the parent Run/Goal
+ * reservation.
  */
 final class PatchSemanticReviewer {
+  /** モデル一覧。 */
   private final Supplier<ChatModel> models;
 
+  /** 指定された値や利用先を使って、PatchSemanticReviewerを初期化する。 */
   PatchSemanticReviewer(Supplier<ChatModel> models) {
     this.models = models;
   }
 
+  /** 共通の実行基盤で用いる評価の判断を返す。 */
   SemanticPatchReviewService.Verdict judge(
       SemanticPatchReviewService.Input input, RunExecutionContext run, long deadline)
       throws IOException {
@@ -96,6 +102,7 @@ final class PatchSemanticReviewer {
               .map(BoundedToolLoop.Outcome::output)
               .block();
       run.checkActive();
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (output == null || output.length() > 4096) return unknown;
       var factory =
           com.fasterxml.jackson.core.JsonFactory.builder()

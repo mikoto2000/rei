@@ -9,7 +9,9 @@ import java.time.Duration;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 
+/** 論文HTTP通信判断基準の結果と状態の契約を検証するテスト。 */
 class PaperHttpPolicyTest {
+  /** 論文の調査と整理で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void retriesAndRedirectsDoNotResetWholeDeadline() {
     var p = config();
@@ -17,6 +19,7 @@ class PaperHttpPolicyTest {
     var calls = new AtomicInteger();
     var client =
         new SafePaperHttpClient(p) {
+          /** {@code exchange} の条件を再現するための補助情報を返す。 */
           protected Response exchange(URI uri, String type, int maximum, PaperOperation operation) {
             calls.incrementAndGet();
             try {
@@ -41,11 +44,13 @@ class PaperHttpPolicyTest {
     assertEquals(1, calls.get());
   }
 
+  /** 論文の調査と整理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void wrappedConnectionFailureRetries() {
     var calls = new AtomicInteger();
     var client =
         new SafePaperHttpClient(config()) {
+          /** {@code exchange} の条件を再現するための補助情報を返す。 */
           @Override
           protected Response exchange(URI u, String t, int max, PaperOperation op) {
             if (calls.incrementAndGet() == 1)
@@ -63,17 +68,20 @@ class PaperHttpPolicyTest {
     assertEquals(2, calls.get());
   }
 
+  /** 検証で使用する設定を、指定された条件に合わせて用意する。 */
   PaperProperties config() {
     var p = new PaperProperties();
     p.setBackoff(Duration.ZERO);
     return p;
   }
 
+  /** 論文の調査と整理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void retriesRateLimitBoundedly() {
     var calls = new AtomicInteger();
     var client =
         new SafePaperHttpClient(config()) {
+          /** {@code exchange} の条件を再現するための補助情報を返す。 */
           @Override
           protected Response exchange(URI u, String t, int max, PaperOperation op) {
             calls.incrementAndGet();
@@ -93,11 +101,13 @@ class PaperHttpPolicyTest {
     assertEquals(3, calls.get());
   }
 
+  /** 論文の調査と整理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void recoversFromServerError() {
     var calls = new AtomicInteger();
     var client =
         new SafePaperHttpClient(config()) {
+          /** {@code exchange} の条件を再現するための補助情報を返す。 */
           @Override
           protected Response exchange(URI u, String t, int max, PaperOperation op) {
             return calls.incrementAndGet() == 1
@@ -112,11 +122,13 @@ class PaperHttpPolicyTest {
     assertEquals(2, calls.get());
   }
 
+  /** 論文の調査と整理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void redirectTargetIsRevalidated() {
     var calls = new AtomicInteger();
     var client =
         new SafePaperHttpClient(config()) {
+          /** {@code exchange} の条件を再現するための補助情報を返す。 */
           @Override
           protected Response exchange(URI u, String t, int max, PaperOperation op) {
             calls.incrementAndGet();
@@ -134,11 +146,13 @@ class PaperHttpPolicyTest {
     assertEquals(1, calls.get());
   }
 
+  /** 論文の調査と整理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void redirectLoopsAreBounded() {
     var calls = new AtomicInteger();
     var client =
         new SafePaperHttpClient(config()) {
+          /** {@code exchange} の条件を再現するための補助情報を返す。 */
           @Override
           protected Response exchange(URI u, String t, int max, PaperOperation op) {
             calls.incrementAndGet();
@@ -156,11 +170,13 @@ class PaperHttpPolicyTest {
     assertEquals(6, calls.get());
   }
 
+  /** 論文の調査と整理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void notFoundDoesNotRetry() {
     var calls = new AtomicInteger();
     var client =
         new SafePaperHttpClient(config()) {
+          /** {@code exchange} の条件を再現するための補助情報を返す。 */
           @Override
           protected Response exchange(URI u, String t, int max, PaperOperation op) {
             calls.incrementAndGet();

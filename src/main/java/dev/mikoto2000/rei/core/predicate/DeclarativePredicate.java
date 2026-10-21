@@ -15,17 +15,35 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 
-/** Fixed, typed observations only. Missing data remains UNKNOWN through NOT and NE. */
+/**
+ * 条件式の評価に必要なDeclarative判定条件を扱う。
+ *
+ * <p>Fixed, typed observations only. Missing data remains UNKNOWN through NOT and NE.
+ */
 public final class DeclarativePredicate {
+  /** 条件式の評価における結果の選択肢。 */
   public enum Result {
+    /** 条件を満たしたかどうか。 */
     SATISFIED,
+    /** 条件を満たしていない結果。 */
     UNSATISFIED,
+    /** 不明。 */
     UNKNOWN
   }
 
+  /**
+   * 条件式の評価で受け渡す要素を表す。
+   *
+   * @param op 操作の種別
+   * @param pointer 参照位置
+   * @param value 値
+   * @param args 引数
+   * @param pattern 照合規則
+   */
   private record Node(
       String op, String pointer, JsonNode value, List<Node> args, Pattern pattern) {}
 
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final ObjectMapper JSON =
       com.fasterxml.jackson.databind.json.JsonMapper.builder(
               JsonFactory.builder()
@@ -41,20 +59,28 @@ public final class DeclarativePredicate {
               DeserializationFeature.FAIL_ON_TRAILING_TOKENS,
               DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
           .build();
+
+  /** 作業ルート。 */
   private final Node root;
+
+  /** 正規。 */
   private final String canonical;
 
+  /** 指定された値や利用先を使って、DeclarativePredicateを初期化する。 */
   private DeclarativePredicate(Node root, String canonical) {
     this.root = root;
     this.canonical = canonical;
   }
 
+  /** 条件式の評価で用いる保存・受け渡しに使うJSON変換を返す。 */
   public String json() {
     return canonical;
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   public static DeclarativePredicate parse(String text) {
     try {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (text == null || text.length() > 4096) throw invalid();
       var document = JSON.readTree(text);
       if (document == null
@@ -71,6 +97,7 @@ public final class DeclarativePredicate {
     }
   }
 
+  /** 条件式の評価で用いる要素を返す。 */
   private static Node node(JsonNode json, int depth, int[] count) {
     if (depth > 8
         || ++count[0] > 32
@@ -102,6 +129,7 @@ public final class DeclarativePredicate {
     String pointer = json.path("pointer").textValue();
     var value = json.get("value");
     validatePointer(pointer);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (!value.isValueNode() || value.toString().length() > 1024) throw invalid();
     if (Set.of("GT", "GTE", "LT", "LTE").contains(op) && !value.isNumber() && !value.isTextual())
       throw invalid();
@@ -117,10 +145,12 @@ public final class DeclarativePredicate {
     return new Node(op, pointer, value, List.of(), pattern);
   }
 
+  /** 対象を判断基準に照らして評価する。 */
   public Result evaluate(byte[] body) {
     return evaluate(body, System.nanoTime() + 250_000_000L);
   }
 
+  /** 対象を判断基準に照らして評価する。 */
   public Result evaluate(byte[] body, long deadline) {
     if (body == null || body.length > 65536 || expired(deadline)) return Result.UNKNOWN;
     try {
@@ -140,6 +170,7 @@ public final class DeclarativePredicate {
     }
   }
 
+  /** 対象を判断基準に照らして評価する。 */
   private Result evaluate(Node node, JsonNode document, long deadline) {
     if (expired(deadline)) return Result.UNKNOWN;
     if (node.op().equals("NOT")) {
@@ -165,6 +196,7 @@ public final class DeclarativePredicate {
     if (node.op().equals("EXISTS")) return truth(!actual.isMissingNode());
     var expected = node.value();
     if (actual.isMissingNode() || !actual.isValueNode()) return Result.UNKNOWN;
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (actual.isTextual() && actual.textValue().length() > 4096) return Result.UNKNOWN;
     if (node.op().equals("MATCH"))
       return actual.isTextual()
@@ -190,11 +222,14 @@ public final class DeclarativePredicate {
         });
   }
 
+  /** 条件式の評価において、期限切れに該当するか判定する。 */
   private static boolean expired(long deadline) {
     return Thread.currentThread().isInterrupted() || System.nanoTime() - deadline >= 0;
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、参照位置を検証する。 */
   private static void validatePointer(String pointer) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (pointer.length() > 256
         || !pointer.startsWith("/")
         || pointer.chars().filter(c -> c == '/').count() > 16
@@ -203,10 +238,12 @@ public final class DeclarativePredicate {
     JsonPointer.compile(pointer);
   }
 
+  /** 条件式の評価で用いる確定情報を返す。 */
   private static Result truth(boolean value) {
     return value ? Result.SATISFIED : Result.UNSATISFIED;
   }
 
+  /** 受け付けられない指定について、入力の問題を伝える。 */
   private static IllegalArgumentException invalid() {
     return new IllegalArgumentException("Invalid bounded version 1 declarative predicate");
   }

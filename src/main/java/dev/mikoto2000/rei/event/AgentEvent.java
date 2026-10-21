@@ -18,6 +18,7 @@ import java.time.Instant;
  * @param correlationId 一連のイベントを関連付ける ID
  * @param parentEventId 親イベントの ID（任意）
  * @param payload イベント種別ごとのデータ
+ * @param projectId 所属プロジェクトの識別子
  */
 public record AgentEvent(
     String id,
@@ -33,6 +34,7 @@ public record AgentEvent(
     AgentEventPayload payload,
     String projectId) {
 
+  /** 実行状況の通知を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public AgentEvent(
       String id,
       long sequence,
@@ -60,6 +62,7 @@ public record AgentEvent(
         null);
   }
 
+  /** 指定された所有権を反映した情報を作成する。 */
   public AgentEvent withOwnership(dev.mikoto2000.rei.core.chat.AgentRunContext context) {
     if (context == null) return this;
     boolean conversation = !context.conversationId().isEmpty();
@@ -78,6 +81,7 @@ public record AgentEvent(
         context.projectId());
   }
 
+  /** 指定された実行所有権を反映した情報を作成する。 */
   public AgentEvent withExecutionOwnership(
       dev.mikoto2000.rei.core.execution.ActiveExecution execution) {
     if (execution == null) return this;
@@ -96,6 +100,7 @@ public record AgentEvent(
         execution.projectId());
   }
 
+  /** 受け取った情報からAgentEventを作成する。 */
   public AgentEvent {
     if (id == null || id.isBlank()) {
       throw new IllegalArgumentException("id must not be blank");

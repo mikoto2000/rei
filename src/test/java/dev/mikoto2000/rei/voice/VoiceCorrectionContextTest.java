@@ -20,9 +20,12 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 音声補正文脈の結果と状態の契約を検証するテスト。 */
 class VoiceCorrectionContextTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void projectTermsOverrideCommonReadingsAndMalformedFilesDoNotStopVoice() throws Exception {
     var common = root.resolve("common.json");
@@ -37,6 +40,7 @@ class VoiceCorrectionContextTest {
     assertThat(VoiceCorrectionContext.dictionaries(common, project, 1)).hasSize(1);
   }
 
+  /** 音声による対話で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void onlyCapturedSessionHistoryIsUsedWithCharacterBudgetAndRedaction() {
     var logs = mock(ConversationLogStore.class);

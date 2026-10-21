@@ -32,13 +32,22 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
+/** 独立した補助エージェント予算の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class StandaloneSubAgentBudgetTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
+
+  /** 検証に使う判断基準。 */
   final SubAgentToolPolicy policy = new SubAgentToolPolicy(Set.of("readMultiFile"));
+
+  /** 検証に使うキャンセル。 */
   final CommandCancellationService cancellation = new CommandCancellationService();
+
+  /** 検証に使う登録台帳。 */
   SubAgentRegistry registry;
 
+  /** 検証で使用する実行の担当を、指定された条件に合わせて用意する。 */
   SubAgentRunner runner(
       java.util.function.Function<Prompt, Flux<ChatResponse>> responses, String extra)
       throws Exception {
@@ -48,16 +57,19 @@ class StandaloneSubAgentBudgetTest {
     registry.reload();
     var model =
         new ChatModel() {
+          /** 検証用に、補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new AssertionError("streaming required");
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             return responses.apply(prompt);
           }
         };
     var tool =
         new ToolCallback() {
+          /** 検証用に、補助エージェントへの委譲で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("readMultiFile")
@@ -66,6 +78,7 @@ class StandaloneSubAgentBudgetTest {
                 .build();
           }
 
+          /** 検証用に、補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             return "observed";
           }
@@ -82,6 +95,7 @@ class StandaloneSubAgentBudgetTest {
         Clock.systemUTC());
   }
 
+  /** {@code answer} の条件を再現するための補助情報を返す。 */
   ChatResponse answer(String content, Integer tokens) {
     var metadata =
         tokens == null
@@ -90,6 +104,7 @@ class StandaloneSubAgentBudgetTest {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(content))), metadata);
   }
 
+  /** {@code limits} の条件を再現するための補助情報を返す。 */
   SubAgentProperties limits(int calls, long tokens) {
     var properties = new SubAgentProperties();
     properties.setStandaloneMaxLlmCalls(calls);
@@ -97,12 +112,14 @@ class StandaloneSubAgentBudgetTest {
     return properties;
   }
 
+  /** {@code requests} の条件を再現するための補助情報を返す。 */
   List<ParallelSubAgentDelegator.Request> requests(int count) {
     return java.util.stream.IntStream.range(0, count)
         .mapToObj(i -> new ParallelSubAgentDelegator.Request("item-" + i, "reviewer", "task", null))
         .toList();
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void directUnknownUsageCannotCompleteButEachInvocationHasItsOwnBudget() throws Exception {
     var calls = new AtomicInteger();
@@ -122,6 +139,7 @@ class StandaloneSubAgentBudgetTest {
     assertEquals(2, calls.get());
   }
 
+  /** 補助エージェントへの委譲で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void parallelBatchSharesOneCallAllowanceAcrossAllChildren() throws Exception {
     var calls = new AtomicInteger();
@@ -153,6 +171,7 @@ class StandaloneSubAgentBudgetTest {
     }
   }
 
+  /** 補助エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void partiallySettledTokenWaveCannotAdmitAnotherChild() {
     var budget = StandaloneSubAgentBudget.create(limits(10, 5));
@@ -166,6 +185,7 @@ class StandaloneSubAgentBudgetTest {
     assertEquals(0, budget.remaining());
   }
 
+  /** 補助エージェントへの委譲で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void parallelInFlightUsageIsChargedAndLaterChildrenCannotBypassOvershoot() throws Exception {
     var calls = new AtomicInteger();
@@ -202,6 +222,7 @@ class StandaloneSubAgentBudgetTest {
     }
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void repairAndIndependentSemanticJudgeShareTheSameStandaloneReservation() throws Exception {
     var calls = new AtomicInteger();
@@ -236,6 +257,7 @@ class StandaloneSubAgentBudgetTest {
     assertEquals(1, calls.get());
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void overshootStopsBeforeValidationAndExplicitParentReservationTakesPriority() throws Exception {
     var calls = new AtomicInteger();
@@ -253,12 +275,15 @@ class StandaloneSubAgentBudgetTest {
     assertTrue(failed.output().contains("TOKEN_BUDGET_EXCEEDED"));
     var parent =
         new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation() {
+          /** 検証に使う残量。 */
           final AtomicInteger remaining = new AtomicInteger(1);
 
+          /** {@code tryReserve} の条件を再現するための補助情報を返す。 */
           public boolean tryReserve() {
             return remaining.getAndDecrement() > 0;
           }
 
+          /** {@code remaining} の条件を再現するための補助情報を返す。 */
           public int remaining() {
             return remaining.get();
           }
@@ -268,6 +293,7 @@ class StandaloneSubAgentBudgetTest {
     assertEquals(2, calls.get());
   }
 
+  /** 提供元失敗情報および不明使用状況について、共有まとめた処理終了済みを維持することを確認する。 */
   @Test
   void providerFailureAndUnknownUsageKeepSharedBatchClosed() throws Exception {
     for (boolean failed : List.of(false, true)) {
@@ -297,6 +323,7 @@ class StandaloneSubAgentBudgetTest {
     }
   }
 
+  /** 旧形式作業習慣を保持することを確認する。 */
   @Test
   void disabledSettingsAndInvalidPreflightPreserveLegacyBehavior() throws Exception {
     var calls = new AtomicInteger();
@@ -319,6 +346,7 @@ class StandaloneSubAgentBudgetTest {
     assertEquals(1, calls.get());
   }
 
+  /** 不正な上限一覧を受け付けないことを確認する。 */
   @Test
   void settingBindingAndAtomicReservationsRejectInvalidLimits() throws Exception {
     var source =
@@ -355,6 +383,7 @@ class StandaloneSubAgentBudgetTest {
     assertTrue(budget.tokenExhausted());
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void timedOutProviderLeavesSharedUsageUnknownBeforeNextReservation() throws Exception {
     var fixture = new SubAgentRunnerTest();

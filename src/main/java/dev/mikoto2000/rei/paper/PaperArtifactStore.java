@@ -11,11 +11,16 @@ import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 
+/** 論文成果物の記録を保持し、後続の処理で参照できるようにする。 */
 @Component
 public class PaperArtifactStore {
+  /** 作業ルート。 */
   private final Path root;
+
+  /** この機能の動作設定。 */
   private final PaperProperties properties;
 
+  /** 論文の調査と整理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @org.springframework.beans.factory.annotation.Autowired
   public PaperArtifactStore(PaperProperties properties) {
     this(
@@ -23,11 +28,13 @@ public class PaperArtifactStore {
         properties);
   }
 
+  /** 指定された値や利用先を使って、PaperArtifactStoreを初期化する。 */
   public PaperArtifactStore(Path root, PaperProperties properties) {
     this.root = root.toAbsolutePath().normalize();
     this.properties = properties;
   }
 
+  /** 論文の調査と整理で用いるパスを返す。 */
   private Path path(String id, String kind, String extension) {
     try {
       if (!UUID.fromString(id).toString().equals(id)
@@ -42,6 +49,7 @@ public class PaperArtifactStore {
     }
   }
 
+  /** 指定された内容を書き込み先へ反映する。 */
   public void write(String id, String kind, String ext, byte[] bytes, PaperOperation op) {
     op.check();
     if (bytes.length
@@ -65,6 +73,7 @@ public class PaperArtifactStore {
     }
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   public Optional<byte[]> read(String id, String kind, String ext) {
     return readBounded(
         id,
@@ -73,6 +82,7 @@ public class PaperArtifactStore {
         Math.max(properties.getMaxPdfBytes(), properties.getMaxExtractedChars() * 8L));
   }
 
+  /** 必要な内容を参照できるよう、上限内に収めたを読み取る。 */
   public Optional<byte[]> readBounded(String id, String kind, String ext, long maximum) {
     Path target = path(id, kind, ext);
     try {
@@ -91,10 +101,12 @@ public class PaperArtifactStore {
     }
   }
 
+  /** 論文の調査と整理において、存在に該当するか判定する。 */
   public boolean exists(String id, String kind, String ext) {
     return Files.isRegularFile(path(id, kind, ext), LinkOption.NOFOLLOW_LINKS);
   }
 
+  /** 指定された対象を削除する。 */
   public void delete(String id, String kind, String ext) {
     try {
       Files.deleteIfExists(path(id, kind, ext));
@@ -104,6 +116,7 @@ public class PaperArtifactStore {
   }
 
   // Files are removed first; metadata remains retryable if any deletion or the DB commit fails.
+  /** 論文の調査と整理に関する保持期限を過ぎた情報の削除を処理する。 */
   public void purge(String id, PaperOperation op) {
     path(id, "originals", "pdf");
     try {

@@ -8,8 +8,10 @@ import java.time.ZoneId;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
+/** エージェント実行状況の通知を生成する窓口の結果と状態の契約を検証するテスト。 */
 class AgentEventFactoryTest {
 
+  /** イベントを作成することを確認する。 */
   @Test
   void createsEventWithTimestampFromClock() {
     Clock fixed = Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));

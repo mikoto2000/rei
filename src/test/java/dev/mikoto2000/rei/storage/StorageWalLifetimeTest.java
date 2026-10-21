@@ -25,10 +25,13 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.context.annotation.AnnotationConfigApplicationContext;
 import org.springframework.core.env.MapPropertySource;
 
+/** 保存WalLifetimeの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class StorageWalLifetimeTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   AnnotationConfigApplicationContext context() {
     var context = new AnnotationConfigApplicationContext();
     context
@@ -40,6 +43,7 @@ class StorageWalLifetimeTest {
     return context;
   }
 
+  /** 検証用に、指定された内容を書き込み先へ反映する。 */
   void write(String id) {
     new StorageDatabase(root)
         .transaction(
@@ -52,6 +56,7 @@ class StorageWalLifetimeTest {
             });
   }
 
+  /** データ保存の共通処理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void writerConnectionIsReusedWhileEveryWriteCommitsIndependently() {
     try (var context = context()) {
@@ -87,6 +92,7 @@ class StorageWalLifetimeTest {
     }
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void contextKeepsWalAliveWithoutDeferringCommitsOrChangingPragmas() throws Exception {
     try (var context = context()) {
@@ -119,6 +125,7 @@ class StorageWalLifetimeTest {
     }
   }
 
+  /** データ保存の共通処理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void sharedContextsReleaseOnlyAfterLastOwnerAndCloseIsIdempotent() {
     var first = context();
@@ -136,6 +143,7 @@ class StorageWalLifetimeTest {
     assertThat(Files.exists(root.resolve("storage.db-wal"))).isFalse();
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void rollbackStillAtomicAndIdleConnectionDoesNotBlockMaintenance() {
     try (var context = context()) {
@@ -167,6 +175,7 @@ class StorageWalLifetimeTest {
     }
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void nestedWriteCannotCommitOuterPartialData() {
     try (var context = context()) {
@@ -195,6 +204,7 @@ class StorageWalLifetimeTest {
     }
   }
 
+  /** データ保存の共通処理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unusableWriterIsReleasedAndReopenedAfterRollbackFailure() {
     try (var context = context()) {
@@ -223,6 +233,7 @@ class StorageWalLifetimeTest {
     assertThat(Files.exists(root.resolve("storage.db-wal"))).isFalse();
   }
 
+  /** 失敗文脈初期化について、両方利用権一覧を解放することを確認する。 */
   @Test
   void failedContextInitializationReleasesBothLeases() throws Exception {
     var context = new AnnotationConfigApplicationContext();
@@ -249,6 +260,7 @@ class StorageWalLifetimeTest {
     }
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void automaticCheckpointStillWritesBackWithoutExplicitMaintenance() throws Exception {
     try (var context = context()) {
@@ -287,6 +299,7 @@ class StorageWalLifetimeTest {
     }
   }
 
+  /** データ保存の共通処理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void committedWalSurvivesAbnormalProcessExitAndRestart() throws Exception {
     try (var prepared = context()) {
@@ -343,10 +356,12 @@ class StorageWalLifetimeTest {
     }
   }
 
+  /** {@code quote} の条件を再現するための補助情報を返す。 */
   private static String quote(String value) {
     return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
   }
 
+  /** データ保存の共通処理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(
       value = AgentEventType.class,

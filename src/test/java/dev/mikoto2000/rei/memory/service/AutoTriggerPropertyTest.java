@@ -17,9 +17,11 @@ import net.jqwik.api.Property;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** 自動実行条件Propertyの結果と状態の契約を検証するテスト。 */
 class AutoTriggerPropertyTest {
 
   // Feature: ai-memory-consolidation, Property 14: 自動トリガー時の非保存
+  /** 長期記憶の保存と検索で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Property(tries = 20)
   void consolidateWithoutApproveNeverSaves(@ForAll boolean ignored) {
     MemoryConsolidatorService consolidator = Mockito.mock(MemoryConsolidatorService.class);

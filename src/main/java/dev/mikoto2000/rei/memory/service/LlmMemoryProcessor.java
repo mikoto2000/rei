@@ -19,26 +19,39 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.stereotype.Service;
 
 /**
- * No tools, chat history advisors, or automatic triggers. Uses the existing MEMORY feature model.
+ * 長期記憶の保存と検索に必要な言語モデル記憶Processorを扱う。
+ *
+ * <p>No tools, chat history advisors, or automatic triggers. Uses the existing MEMORY feature
+ * model.
  */
 @Service
 public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResolutionModel {
+  /** モデル一覧。 */
   private final LlmModelProvider models;
+
+  /** この機能の動作設定。 */
   private final MemoryProperties properties;
+
+  /** 出力。 */
   private final MemoryOutput output = new MemoryOutput();
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final tools.jackson.databind.json.JsonMapper json =
       tools.jackson.databind.json.JsonMapper.builder().build();
 
+  /** 指定された値や利用先を使って、LlmMemoryProcessorを初期化する。 */
   public LlmMemoryProcessor(LlmModelProvider models, MemoryProperties properties) {
     this.models = models;
     this.properties = properties;
   }
 
+  /** 受け取った内容から、後続の処理に必要な情報を取り出す。 */
   @Override
   public List<MemoryCandidate> extract(List<Turn> turns) {
     return extract(turns, null);
   }
 
+  /** 受け取った内容から、後続の処理に必要な情報を取り出す。 */
   @Override
   public List<MemoryCandidate> extract(List<Turn> turns, ModelCallBudget budget) {
     var data =
@@ -73,11 +86,13 @@ public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResol
             budget));
   }
 
+  /** 指定や設定を照合し、実際に利用する対象を確定する。 */
   @Override
   public MemoryResolution resolve(MemoryCandidate candidate, List<LongTermMemory> existing) {
     return resolve(candidate, existing, null);
   }
 
+  /** 指定や設定を照合し、実際に利用する対象を確定する。 */
   @Override
   public MemoryResolution resolve(
       MemoryCandidate candidate, List<LongTermMemory> existing, ModelCallBudget budget) {
@@ -121,7 +136,9 @@ public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResol
   }
 
   /**
-   * Shared tool-free MEMORY call path, including input/output limits and model usage accounting.
+   * 長期記憶の保存と検索の要求を実行し、呼び出し元へ結果を返す。
+   *
+   * <p>Shared tool-free MEMORY call path, including input/output limits and model usage accounting.
    */
   public String call(String system, String data, ModelCallBudget budget) {
     var model = models.memoryChatModel();

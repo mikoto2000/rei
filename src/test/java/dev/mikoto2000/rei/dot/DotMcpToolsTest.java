@@ -16,12 +16,21 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 状態表示MCPツール一覧の結果と状態の契約を検証するテスト。 */
 class DotMcpToolsTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うリポジトリ。 */
   DotRequestRepository repo;
+
+  /** 検証に使うツール一覧。 */
   DotMcpTools tools;
+
+  /** 検証に使う識別子。 */
   String id;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void start() throws Exception {
     try (var gate = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(root)) {
@@ -47,11 +56,13 @@ class DotMcpToolsTest {
                 .get("request_id");
   }
 
+  /** {@code data} の条件を再現するための補助情報を返す。 */
   @SuppressWarnings("unchecked")
   Map<String, Object> data(io.modelcontextprotocol.spec.McpSchema.CallToolResult r) {
     return (Map<String, Object>) r.structuredContent();
   }
 
+  /** 利用者の状態表示で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void mcpRoundTripPersistsOnlyPendingReview() {
     assertEquals(
@@ -78,6 +89,7 @@ class DotMcpToolsTest {
     assertEquals(data(first), data(tools.call("rei_request_result_submit", input)));
   }
 
+  /** 利用者の状態表示の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void unauthorizedAndInvalidRequestsAreSafeErrors() {
     var denied = new DotMcpTools(repo, Set.of(), true);
@@ -92,6 +104,7 @@ class DotMcpToolsTest {
             .isError());
   }
 
+  /** 利用者の状態表示で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void malformedEvidenceAndOversizeResultsAreRejected() {
     String claim = UUID.randomUUID().toString();

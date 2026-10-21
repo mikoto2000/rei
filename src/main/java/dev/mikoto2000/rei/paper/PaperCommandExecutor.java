@@ -3,20 +3,27 @@ package dev.mikoto2000.rei.paper;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
+/** 論文の調査と整理に必要な論文コマンド実行先を扱う。 */
 @Component
 public class PaperCommandExecutor {
+  /** サービス。 */
   private final PaperResearchService service;
+
+  /** 設定。 */
   private final PaperProperties config;
 
+  /** 指定された値や利用先を使って、PaperCommandExecutorを初期化する。 */
   public PaperCommandExecutor(PaperResearchService service, PaperProperties config) {
     this.service = service;
     this.config = config;
   }
 
+  /** 論文の調査と整理で判断に用いるacceptsの条件を確認する。 */
   public static boolean accepts(String text) {
     return text != null && (text.equals("/paper") || text.startsWith("/paper "));
   }
 
+  /** 要求された処理を実行する。 */
   public String execute(String text, PaperOperation op) {
     try {
       service.library.enabled();
@@ -110,6 +117,7 @@ public class PaperCommandExecutor {
     }
   }
 
+  /** 論文の調査と整理で用いる保管資料を返す。 */
   private Object library(PaperCommandRequest r, PaperOperation op) {
     if (r.args.isEmpty())
       return PaperViews.listing(

@@ -17,7 +17,9 @@ import java.io.PrintStream;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** れいアプリケーションターミナルへの表示先判断基準の結果と状態の契約を検証するテスト。 */
 class ReiApplicationShellOutputPolicyTest {
+  /** れいの起動で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void suppressesLegacyChatStdoutButKeepsSlashCommandOutput() {
     ReiApplication app =
@@ -45,18 +47,23 @@ class ReiApplicationShellOutputPolicyTest {
     assertEquals("slash-output" + System.lineSeparator(), bytes.toString());
   }
 
+  /** 検証条件を再現するための作業ルート。 */
   @CommandLine.Command(subcommands = {Chat.class, Status.class})
   static class Root {}
 
+  /** 検証条件を再現するためのチャット。 */
   @CommandLine.Command(name = "chat")
   static class Chat implements Runnable {
+    /** 検証用に、れいの起動の操作を実行する。 */
     public void run() {
       System.out.println("legacy-chat-output");
     }
   }
 
+  /** 検証条件を再現するための状態。 */
   @CommandLine.Command(name = "status")
   static class Status implements Runnable {
+    /** 検証用に、れいの起動の操作を実行する。 */
     public void run() {
       System.out.println("slash-output");
     }

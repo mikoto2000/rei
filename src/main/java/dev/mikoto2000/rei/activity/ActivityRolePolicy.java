@@ -9,21 +9,28 @@ import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
- * Foreground corroboration outranks visible-only candidates. Ties across contexts remain unknown.
+ * 作業状況役割の判断基準をまとめる。
+ *
+ * <p>Foreground corroboration outranks visible-only candidates. Ties across contexts remain
+ * unknown.
  */
 public final class ActivityRolePolicy {
+  /** 最小確信度。 */
   private final double minimumConfidence;
 
+  /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ActivityRolePolicy() {
     this(.5);
   }
 
+  /** 指定された値や利用先を使って、ActivityRolePolicyを初期化する。 */
   public ActivityRolePolicy(double minimumConfidence) {
     if (!Double.isFinite(minimumConfidence) || minimumConfidence < 0 || minimumConfidence > 1)
       throw new IllegalArgumentException("Invalid primary confidence threshold");
     this.minimumConfidence = minimumConfidence;
   }
 
+  /** 得られた情報を分類し、後続の判断で扱い分けられるようにする。 */
   public ActivityRoles classify(ActivityRecord record) {
     var candidates =
         record.inference().activities().stream()
@@ -65,6 +72,7 @@ public final class ActivityRolePolicy {
             : List.of("foreground_process:8", "evidence_score:" + best));
   }
 
+  /** 作業状況の把握で用いる前面評価値を返す。 */
   private int foregroundScore(Activity a, ForegroundWindow foreground) {
     if (foreground == null) return 0;
     String title = normalize(foreground.windowTitle());
@@ -79,6 +87,7 @@ public final class ActivityRolePolicy {
     return score;
   }
 
+  /** 作業状況の把握において、mentionsに該当するか判定する。 */
   private static boolean mentions(String title, String value, int minimum) {
     String token = normalize(value);
     return token.length() >= minimum
@@ -87,6 +96,7 @@ public final class ActivityRolePolicy {
             .find();
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、表記や形式をそろえる。 */
   static String normalize(String value) {
     return value == null
         ? ""
@@ -96,6 +106,7 @@ public final class ActivityRolePolicy {
             .replaceAll("\\s+", " ");
   }
 
+  /** 作業状況の把握で用いるアプリケーションを返す。 */
   static String application(String value) {
     String app = normalize(value).replaceFirst("\\.exe$", "");
     return switch (app) {
@@ -117,10 +128,12 @@ public final class ActivityRolePolicy {
     };
   }
 
+  /** 作業状況の把握で用いる分類を返す。 */
   static String category(Activity a) {
     return ActivityVocabulary.category(a.type());
   }
 
+  /** 作業状況の把握において、同一文脈に該当するか判定する。 */
   static boolean sameContext(Activity a, Activity b) {
     if (a == null || b == null || !category(a).equals(category(b))) return false;
     String p = normalize(a.projectCandidate()), q = normalize(b.projectCandidate());
@@ -133,16 +146,19 @@ public final class ActivityRolePolicy {
             && application(a.application()).equals(application(b.application())));
   }
 
+  /** 作業状況の把握において、同一役割に該当するか判定する。 */
   static boolean sameRole(Activity a, Activity b) {
     return sameContext(a, b);
   }
 
+  /** 作業状況の把握において、同一文脈対象前面に該当するか判定する。 */
   private static boolean sameContextForForeground(Activity a, Activity b) {
     return sameContext(a, b)
         && normalize(a.service()).equals(normalize(b.service()))
         && normalize(a.contentTitle()).equals(normalize(b.contentTitle()));
   }
 
+  /** 作業状況の把握において、バックグラウンド候補に該当するか判定する。 */
   static boolean backgroundCandidate(Activity a) {
     String text = normalize(a.application() + " " + a.service() + " " + a.contentTitle());
     return Set.of("monitoring", "dashboard", "system_monitor").contains(normalize(a.type()))

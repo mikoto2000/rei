@@ -15,14 +15,28 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
-/** Bounded stdio and owned-process cleanup shared by both launchers. */
+/**
+ * ChatGPTとの連携に必要なアプリケーションサーバープロセス会話を扱う。
+ *
+ * <p>Bounded stdio and owned-process cleanup shared by both launchers.
+ */
 final class AppServerProcessSession implements PlanAppServerRpc.Session {
+  /** 受信データの終わりを示す値。 */
   private static final Object EOF = new Object();
+
+  /** 行一覧。 */
   private final BlockingQueue<Object> lines = new ArrayBlockingQueue<>(64);
+
+  /** プロセス。 */
   private final Process process;
+
+  /** 終了／強制終了／後片付け。 */
   private final Runnable terminate, kill, cleanup;
+
+  /** 書き込み先。 */
   private final BufferedWriter writer;
 
+  /** 指定された値や利用先を使って、AppServerProcessSessionを初期化する。 */
   AppServerProcessSession(Process process, Runnable terminate, Runnable kill, Runnable cleanup) {
     this.process = process;
     this.terminate = terminate;
@@ -72,6 +86,7 @@ final class AppServerProcessSession implements PlanAppServerRpc.Session {
             });
   }
 
+  /** ChatGPTとの連携に関する送信を処理する。 */
   public void send(String json) {
     try {
       writer.write(json);
@@ -82,20 +97,24 @@ final class AppServerProcessSession implements PlanAppServerRpc.Session {
     }
   }
 
+  /** ChatGPTとの連携で用いるプロセス識別子を返す。 */
   long pid() {
     return process.pid();
   }
 
+  /** ChatGPTとの連携で用いる状態確認を返す。 */
   public String poll(Duration timeout) {
     try {
       Object line = lines.poll(timeout.toNanos(), TimeUnit.NANOSECONDS);
       return line == null ? "" : line == EOF ? null : (String) line;
     } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw ChatGptException.of(CANCELLED);
     }
   }
 
+  /** ChatGPTとの連携で利用した資源や登録を解放し、利用を終了する。 */
   public void close() {
     boolean interrupted = Thread.interrupted();
     // Retain ownership before stdin shutdown can orphan a native helper.

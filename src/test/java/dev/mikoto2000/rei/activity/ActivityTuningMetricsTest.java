@@ -8,7 +8,9 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況Tuning計測値の結果と状態の契約を検証するテスト。 */
 class ActivityTuningMetricsTest {
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void metricsDistinguishUnknownPartialAndOutputLimitWithoutLeakingEvidence() throws Exception {
     var p = new ActivityProperties();

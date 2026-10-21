@@ -11,18 +11,23 @@ import java.time.ZoneId;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 関連ファイル関連図の結果と状態の契約を検証するテスト。 */
 class RelatedFileGraphTest {
 
+  /** 検証に使うタイムゾーン。 */
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
 
+  /** {@code graph} の条件を再現するための補助情報を返す。 */
   private RelatedFileGraph graph(int maxRelations, Instant start) {
     return new RelatedFileGraph(maxRelations, Clock.fixed(start, ZONE));
   }
 
+  /** {@code at} の条件を再現するための補助情報を返す。 */
   private OffsetDateTime at(Instant instant) {
     return instant.atZone(ZONE).toOffsetDateTime();
   }
 
+  /** 関連情報の探索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void relationCanBeAdded() {
     RelatedFileGraph graph = graph(100, Instant.parse("2026-08-17T00:00:00Z"));
@@ -31,6 +36,7 @@ class RelatedFileGraphTest {
     assertEquals(1, graph.size());
   }
 
+  /** 関連情報の探索で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void relatedFilesCanBeRetrievedByPath() {
     RelatedFileGraph graph = graph(100, Instant.parse("2026-08-17T00:00:00Z"));
@@ -43,6 +49,7 @@ class RelatedFileGraphTest {
     assertTrue(related.stream().anyMatch(r -> r.sourcePath().equals("src/UserServiceTest.java")));
   }
 
+  /** 関連情報の探索で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void sameRelationIsNotDuplicated() {
     RelatedFileGraph graph = graph(100, Instant.parse("2026-08-17T00:00:00Z"));
@@ -51,6 +58,7 @@ class RelatedFileGraphTest {
     assertEquals(1, graph.size());
   }
 
+  /** 関連情報の探索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void differentTypeIsDifferentRelation() {
     RelatedFileGraph graph = graph(100, Instant.parse("2026-08-17T00:00:00Z"));
@@ -59,6 +67,7 @@ class RelatedFileGraphTest {
     assertEquals(2, graph.size());
   }
 
+  /** 取得元ファイル変更について、関連一覧を取り除くことを確認する。 */
   @Test
   void sourceFileChangeRemovesRelations() {
     RelatedFileGraph graph = graph(100, Instant.parse("2026-08-17T00:00:00Z"));
@@ -67,6 +76,7 @@ class RelatedFileGraphTest {
     assertTrue(graph.isEmpty());
   }
 
+  /** 対象ファイル変更について、関連一覧を取り除くことを確認する。 */
   @Test
   void targetFileChangeRemovesRelations() {
     RelatedFileGraph graph = graph(100, Instant.parse("2026-08-17T00:00:00Z"));
@@ -75,6 +85,7 @@ class RelatedFileGraphTest {
     assertTrue(graph.isEmpty());
   }
 
+  /** 取り除く全対象関連一覧を削除することを確認する。 */
   @Test
   void deleteRemovesAllRelationsForFile() {
     RelatedFileGraph graph = graph(100, Instant.parse("2026-08-17T00:00:00Z"));
@@ -84,6 +95,7 @@ class RelatedFileGraphTest {
     assertTrue(graph.isEmpty());
   }
 
+  /** 関連情報の探索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void maxRelationsEvictsOldest() {
     Instant start = Instant.parse("2026-08-17T00:00:00Z");
@@ -97,6 +109,7 @@ class RelatedFileGraphTest {
     assertTrue(graph.getRelated("e").size() == 1);
   }
 
+  /** 関連情報の探索で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void promptRendersOnlyRelationsForWorkingSetFiles() {
     RelatedFileGraph graph = graph(100, Instant.parse("2026-08-17T00:00:00Z"));
@@ -109,12 +122,14 @@ class RelatedFileGraphTest {
     assertFalse(prompt.contains("src/Other.java"));
   }
 
+  /** 関連情報の探索で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void emptyGraphRendersBlank() {
     RelatedFileGraph graph = graph(100, Instant.parse("2026-08-17T00:00:00Z"));
     assertEquals("", graph.renderForPrompt(java.util.Set.of("src/UserController.java")));
   }
 
+  /** 関連情報の探索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void lastConfirmedAtIsUpdatedOnReconfirmation() {
     Instant start = Instant.parse("2026-08-17T00:00:00Z");

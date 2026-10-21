@@ -13,12 +13,32 @@ import java.util.Arrays;
 import java.util.HexFormat;
 import java.util.List;
 
-/** Curated complete runtime/model set. No arbitrary ONNX file or URL is accepted by the CLI. */
+/**
+ * 音声による対話で受け渡す音声モデルManifestを表す。
+ *
+ * <p>Curated complete runtime/model set. No arbitrary ONNX file or URL is accepted by the CLI.
+ *
+ * @param id 識別子
+ * @param assets 素材一覧
+ */
 public record VoiceModelManifest(String id, List<Asset> assets) {
+  /** 最大素材バイト数。 */
   public static final long MAX_ASSET_BYTES = 3L * 1024 * 1024 * 1024;
+
+  /** 最大まとまりバイト数。 */
   public static final long MAX_BUNDLE_BYTES = 4L * 1024 * 1024 * 1024;
 
+  /**
+   * 音声による対話で受け渡す素材を表す。
+   *
+   * @param path パス
+   * @param url 参照先のURL
+   * @param bytes バイト数
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   * @param license ライセンス情報
+   */
   public record Asset(String path, URI url, long bytes, String sha256, String license) {
+    /** 受け取った情報からAssetを作成する。 */
     public Asset {
       if (path == null
           || !path.matches("[A-Za-z0-9._/-]+")
@@ -37,6 +57,7 @@ public record VoiceModelManifest(String id, List<Asset> assets) {
     }
   }
 
+  /** 受け取った情報からVoiceModelManifestを作成する。 */
   public VoiceModelManifest {
     if (id == null
         || !id.matches("[A-Za-z0-9_-]{1,120}")
@@ -50,6 +71,7 @@ public record VoiceModelManifest(String id, List<Asset> assets) {
       throw new IllegalArgumentException("Duplicate voice asset");
   }
 
+  /** 条件を満たさない操作を拒否するため、HTTPSの前提条件を確認する。 */
   public static void requireHttps(URI url) {
     if (url == null
         || !"https".equalsIgnoreCase(url.getScheme())
@@ -59,10 +81,12 @@ public record VoiceModelManifest(String id, List<Asset> assets) {
       throw new IllegalArgumentException("Voice downloads require HTTPS without credentials");
   }
 
+  /** 音声による対話で用いる合計バイト数を返す。 */
   public long totalBytes() {
     return assets.stream().mapToLong(Asset::bytes).sum();
   }
 
+  /** 音声による対話で用いる素材パスを返す。 */
   public static Path assetPath(Path root, String relative) throws IOException {
     Path base = root.toAbsolutePath().normalize();
     Path path = base.resolve(relative).normalize();
@@ -73,10 +97,12 @@ public record VoiceModelManifest(String id, List<Asset> assets) {
     return path;
   }
 
+  /** 要求された条件を満たすことを確認する。 */
   public void verify(Path root) throws IOException {
     for (var asset : assets) verifyAsset(asset, assetPath(root, asset.path()));
   }
 
+  /** 要求された条件を満たすか判断するため、素材を確認する。 */
   public static void verifyAsset(Asset asset, Path path) throws IOException {
     checkInterrupted();
     if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS) || Files.size(path) != asset.bytes())
@@ -97,11 +123,13 @@ public record VoiceModelManifest(String id, List<Asset> assets) {
     }
   }
 
+  /** 後続の操作を進められるか判断するため、中断されたを確認する。 */
   private static void checkInterrupted() throws InterruptedIOException {
     if (Thread.currentThread().isInterrupted())
       throw new InterruptedIOException("Voice integrity verification interrupted");
   }
 
+  /** 音声による対話で用いる固定した対象を返す。 */
   public static VoiceModelManifest pinned() {
     String revision = "2ca6ff69fc878651b770880507669577ac41c2ff";
     var assets = new ArrayList<Asset>();

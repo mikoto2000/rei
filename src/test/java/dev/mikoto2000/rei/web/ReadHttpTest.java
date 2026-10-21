@@ -29,11 +29,14 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/** 読み取りHTTP通信の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ReadHttpTest {
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import({WebApiIntegrationTest.Config.class, ReadController.class})
   static class Config {
+    /** 検証用に、必要な内容を参照できるよう、検索条件一覧を読み取る。 */
     @Bean
     ReadQueryService readQueries() throws Exception {
       var feeds = mock(FeedService.class);
@@ -68,8 +71,10 @@ class ReadHttpTest {
     }
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** Web APIによる操作で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void realHttpContractsAndSecurityStayClosed() throws Exception {
     var app = new SpringApplication(Config.class);
@@ -115,6 +120,7 @@ class ReadHttpTest {
     }
   }
 
+  /** {@code send} の条件を再現するための補助情報を返す。 */
   static HttpResponse<String> send(
       HttpClient client, int port, String path, String method, String body, boolean auth)
       throws Exception {

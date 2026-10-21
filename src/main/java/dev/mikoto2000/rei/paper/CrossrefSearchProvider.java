@@ -6,16 +6,22 @@ import java.util.List;
 import org.springframework.stereotype.Component;
 import tools.jackson.databind.JsonNode;
 
+/** Crossref検索を用途や設定に応じて提供する窓口。 */
 @Component
 public class CrossrefSearchProvider implements AcademicSearchProvider {
+  /** HTTP通信。 */
   private final PaperHttpClient http;
+
+  /** 設定。 */
   private final PaperProperties config;
 
+  /** 指定された値や利用先を使って、CrossrefSearchProviderを初期化する。 */
   public CrossrefSearchProvider(PaperHttpClient http, PaperProperties config) {
     this.http = http;
     this.config = config;
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public List<Paper> search(PaperSearchQuery q, PaperOperation op) {
     String url =
         "https://api.crossref.org/works?query="
@@ -44,12 +50,14 @@ public class CrossrefSearchProvider implements AcademicSearchProvider {
     return result;
   }
 
+  /** 論文の調査と整理で用いる付随情報を返す。 */
   public Paper metadata(String doi, PaperOperation op) {
     return normalize(
         fetch("https://api.crossref.org/works/" + OpenAlexSearchProvider.enc(doi), op)
             .path("message"));
   }
 
+  /** 後続の処理に必要な情報を、取得先から読み込む。 */
   private JsonNode fetch(String url, PaperOperation op) {
     try {
       return PaperJson.MAPPER.readTree(
@@ -61,6 +69,7 @@ public class CrossrefSearchProvider implements AcademicSearchProvider {
     }
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、表記や形式をそろえる。 */
   private Paper normalize(JsonNode n) {
     List<String> authors = new ArrayList<>();
     for (var a : n.path("author")) {

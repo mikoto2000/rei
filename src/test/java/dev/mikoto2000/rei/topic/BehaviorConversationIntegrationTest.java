@@ -56,25 +56,54 @@ import org.springframework.ai.chat.messages.MessageType;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
+/** 作業習慣会話外部連携の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class BehaviorConversationIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock = Clock.fixed(Instant.parse("2026-09-25T12:00:00Z"), ZoneOffset.UTC);
+
+  /** 検証に使う保存や受け渡しに用いるデータ形式の変換。 */
   final com.fasterxml.jackson.databind.ObjectMapper mapper =
       new com.fasterxml.jackson.databind.ObjectMapper()
           .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule());
+
+  /** 検証に使うログ一覧。 */
   ConversationLogStore logs;
+
+  /** 検証に使うやり取り一覧。 */
   ConversationTurnStore turns;
+
+  /** 検証に使う会話一覧。 */
   FileSessionRepository sessions;
+
+  /** 検証に使うプロジェクト一覧。 */
   ProjectService projects;
+
+  /** 検証に使うクライアント。 */
   ProjectClient client;
+
+  /** 検証に使うプロジェクト。 */
   ProjectContext project;
+
+  /** 通知された出来事と順序を検証するための記録。 */
   final List<AgentEvent> events = new ArrayList<>();
+
+  /** 検証に使う追跡。 */
   DefaultAgentActivityTracker tracker;
+
+  /** 検証に使う読み上げの案内。 */
   dev.mikoto2000.rei.ui.shell.sound.AgentMessageNarrator narrator;
+
+  /** 検証に使う通知先。 */
   EventAgentMessagePublisher publisher;
+
+  /** 検証に使う以前のデータ。 */
   String oldData;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     oldData = System.getProperty("rei.data-dir");
@@ -90,12 +119,14 @@ class BehaviorConversationIntegrationTest {
     publisher = publisher(logs, turns, sessions);
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void cleanup() {
     if (oldData == null) System.clearProperty("rei.data-dir");
     else System.setProperty("rei.data-dir", oldData);
   }
 
+  /** {@code publisher} の条件を再現するための補助情報を返す。 */
   EventAgentMessagePublisher publisher(
       ConversationLogStore store, ConversationTurnStore turnStore, SessionRepository repo) {
     var bus = new InMemoryAgentEventBus();
@@ -107,6 +138,7 @@ class BehaviorConversationIntegrationTest {
     return result;
   }
 
+  /** {@code notice} の条件を再現するための補助情報を返す。 */
   AgentMessage notice(String id) {
     return new AgentMessage(
         id,
@@ -123,6 +155,7 @@ class BehaviorConversationIntegrationTest {
             "PRIVATE"));
   }
 
+  /** 実行予約実行の担当について、活動中シェル会話を利用することを確認する。 */
   @Test
   void scheduledWorkerUsesActiveShellSessionAndRestartReplayKeepsOriginalProject()
       throws Exception {
@@ -183,6 +216,7 @@ class BehaviorConversationIntegrationTest {
     }
   }
 
+  /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void noActiveSessionUsesOrdinaryDefaultAndNextUserContinuesIt() {
     try (var scope = client.open();
@@ -201,6 +235,7 @@ class BehaviorConversationIntegrationTest {
     }
   }
 
+  /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void headlessUsesMostRecentlyAdmittedConversationOrStartupDefault() {
     var lifecycle = new SessionLifecycle(sessions, clock);
@@ -218,17 +253,20 @@ class BehaviorConversationIntegrationTest {
     assertThat(logs.readConversation(accepted.conversationId())).hasSize(1);
   }
 
+  /** 話題の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void partialProjectionIsRepairedWithoutRedisplayOrRegeneration() {
     var id = project.conversationId("chat:main");
     logs.appendNotification(id, "repair", notice("repair").content(), clock.instant(), Map.of());
     publisher.publish(notice("repair"));
     assertThat(events).isEmpty();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(narrator);
     assertThat(turns.findTurns(id, null, 10)).hasSize(1);
     assertThat(sessions.findById(id)).isPresent();
   }
 
+  /** 話題の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedHistoryDoesNotStopNotificationOrNarration() {
     var broken = mock(ConversationLogStore.class);
@@ -240,6 +278,7 @@ class BehaviorConversationIntegrationTest {
     verify(narrator).onPublished(notice("fail"));
   }
 
+  /** 話題の管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void restartedContextHasConsecutiveAssistantMessagesAndCompressionPreservesOriginals() {
     var id = project.conversationId("chat:main");
@@ -291,6 +330,7 @@ class BehaviorConversationIntegrationTest {
     assertThat(summaries.read(id + "/log").throughSequence()).isGreaterThan(0);
   }
 
+  /** 話題の管理で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void capturedDestinationSurvivesSwitchBeforeAppend() throws Exception {
     try (var scope = client.open()) {
@@ -303,6 +343,7 @@ class BehaviorConversationIntegrationTest {
     }
   }
 
+  /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"NOTICE", "WARNING", "STRONG_WARNING"})
   void everyEmittedSeverityIsAnAssistantMessage(String severity) {
@@ -324,6 +365,7 @@ class BehaviorConversationIntegrationTest {
             });
   }
 
+  /** 話題の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void legacyJsonWithoutMetadataStillReads() throws Exception {
     var entry =

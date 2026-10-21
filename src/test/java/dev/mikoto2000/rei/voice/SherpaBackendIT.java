@@ -10,8 +10,13 @@ import java.util.Arrays;
 import javax.sound.sampled.AudioSystem;
 import org.junit.jupiter.api.Test;
 
-/** Explicit opt-in local integration test; no model downloads or microphone recording. */
+/**
+ * 検証条件を再現するためのSherpaバックエンドIT。
+ *
+ * <p>Explicit opt-in local integration test; no model downloads or microphone recording.
+ */
 class SherpaBackendIT {
+  /** 音声による対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void actualTurboFp32JapaneseWavAndNativeResourceRelease() throws Exception {
     String configured = System.getProperty("rei.voice.test.bundle");

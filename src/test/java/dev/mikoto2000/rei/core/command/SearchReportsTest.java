@@ -17,7 +17,9 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.prompt.Prompt;
 
+/** 検索伝えるの結果と状態の契約を検証するテスト。 */
 class SearchReportsTest {
+  /** 逐次データ一覧回答を伝えることを確認する。 */
   @Test
   void reportStreamsAnswerAndSourcesThroughAnIndependentWriter() throws Exception {
     var client = mock(ChatClient.class);

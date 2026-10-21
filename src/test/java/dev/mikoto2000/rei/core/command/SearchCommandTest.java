@@ -28,8 +28,10 @@ import org.springframework.ai.chat.prompt.Prompt;
 import picocli.CommandLine;
 import reactor.core.publisher.Flux;
 
+/** 検索コマンドの結果と状態の契約を検証するテスト。 */
 class SearchCommandTest {
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchCommandCombinesVectorStoreAndWebResults() throws Exception {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -111,6 +113,7 @@ class SearchCommandTest {
     assertTrue(output.contains("https://example.com/blog"));
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchCommandFallsBackToVectorStoreWhenWebSearchIsDisabled() throws Exception {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -163,6 +166,7 @@ class SearchCommandTest {
     assertTrue(output.contains("[web search skipped]"));
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void searchCommandFallsBackToVectorStoreWhenWebSearchApiKeyIsInvalid() throws Exception {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -213,6 +217,7 @@ class SearchCommandTest {
     assertTrue(output.contains("[web search skipped] Web search failed with status 401"));
   }
 
+  /** 検索コマンドについて、待機中を停止することを確認する。 */
   @Test
   void searchCommandStopsWaitingWhenStreamDoesNotTerminate() throws Exception {
     ChatClient chatClient = Mockito.mock(ChatClient.class);
@@ -245,6 +250,7 @@ class SearchCommandTest {
       SearchCommand command =
           new SearchCommand(
               chatClient, modelHolderService, searchKnowledgeService, cancellationService) {
+            /** {@code streamTimeoutMillis} の条件を再現するための補助情報を返す。 */
             @Override
             long streamTimeoutMillis() {
               return 1L;
@@ -261,6 +267,7 @@ class SearchCommandTest {
     assertTrue(disposed.get());
   }
 
+  /** 共通の実行基盤で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void rootCommandIncludesSearchSubcommand() {
     CommandLine commandLine = new CommandLine(new RootCommand());

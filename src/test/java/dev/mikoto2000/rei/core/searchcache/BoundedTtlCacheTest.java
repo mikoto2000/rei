@@ -12,13 +12,17 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import org.junit.jupiter.api.Test;
 
+/** 上限内に収めた有効期間キャッシュの結果と状態の契約を検証するテスト。 */
 class BoundedTtlCacheTest {
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   AdjustableClock clock = new AdjustableClock(Instant.parse("2026-01-01T00:00:00Z"));
 
+  /** {@code cache} の条件を再現するための補助情報を返す。 */
   BoundedTtlCache<String, String> cache(int entries, long bytes) {
     return new BoundedTtlCache<>(Duration.ofSeconds(60), entries, bytes, clock, String::length);
   }
 
+  /** 検索結果の再利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void ttlExpiresAtTheBoundaryOnTheSameCacheInstance() {
     var cache = cache(10, 100);
@@ -31,6 +35,7 @@ class BoundedTtlCacheTest {
     assertEquals(0, cache.bytes());
   }
 
+  /** 大きすぎる値一覧を受け付けないことを確認する。 */
   @Test
   void entryAndByteCapsEvictOldestAndRejectOversizedValues() {
     var cache = cache(2, 6);
@@ -50,6 +55,7 @@ class BoundedTtlCacheTest {
     assertEquals(0, cache.bytes());
   }
 
+  /** 検索結果の再利用で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void concurrentUpdatesStayWithinBothCaps() throws Exception {
     var cache = cache(10, 40);
@@ -75,6 +81,7 @@ class BoundedTtlCacheTest {
     assertTrue(cache.bytes() <= 40);
   }
 
+  /** 検索結果の再利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void byteArithmeticCannotOverflow() {
     var cache =
@@ -86,6 +93,7 @@ class BoundedTtlCacheTest {
     assertEquals(1, cache.bytes());
   }
 
+  /** 検索結果の再利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void invalidLimitsAndWeightsAreRejected() {
     assertThrows(IllegalArgumentException.class, () -> cache(0, 100));

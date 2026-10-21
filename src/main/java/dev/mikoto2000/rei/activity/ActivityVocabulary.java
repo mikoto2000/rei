@@ -4,11 +4,16 @@ import dev.mikoto2000.rei.activity.ActivityRecord.Activity;
 import java.util.Set;
 
 /**
- * Canonical values belong to the semantic projection; original Vision candidates remain evidence.
+ * 作業状況の把握に必要な作業状況語彙を扱う。
+ *
+ * <p>Canonical values belong to the semantic projection; original Vision candidates remain
+ * evidence.
  */
 public final class ActivityVocabulary {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ActivityVocabulary() {}
 
+  /** 分類一覧。 */
   public static final Set<String> CATEGORIES =
       Set.of(
           "development",
@@ -25,6 +30,7 @@ public final class ActivityVocabulary {
           "other",
           "unknown");
 
+  /** 作業状況の把握で用いる分類を返す。 */
   public static String category(String value) {
     String normalized = ActivityRolePolicy.normalize(value);
     return switch (normalized) {
@@ -36,6 +42,7 @@ public final class ActivityVocabulary {
     };
   }
 
+  /** 作業状況の把握で用いるサービスを返す。 */
   public static String service(String value) {
     return switch (ActivityRolePolicy.normalize(value)) {
       case "twitter", "x (twitter)", "x(twitter)", "x" -> "x";
@@ -54,6 +61,7 @@ public final class ActivityVocabulary {
     };
   }
 
+  /** 作業状況の把握で用いる正規を返す。 */
   public static Activity canonical(Activity a) {
     String category = category(a.type());
     if (ActivityRolePolicy.backgroundCandidate(a)) category = "monitoring";
@@ -66,6 +74,7 @@ public final class ActivityVocabulary {
         ActivityRolePolicy.normalize(a.projectCandidate()));
   }
 
+  /** 作業状況の把握で用いるサービス表示名を返す。 */
   public static String serviceLabel(String value) {
     return switch (service(value)) {
       case "x" -> "X";
@@ -79,6 +88,7 @@ public final class ActivityVocabulary {
     };
   }
 
+  /** 作業状況の把握で用いるアプリケーション表示名を返す。 */
   public static String applicationLabel(String value) {
     return switch (ActivityRolePolicy.application(value)) {
       case "terminal" -> "ターミナル";

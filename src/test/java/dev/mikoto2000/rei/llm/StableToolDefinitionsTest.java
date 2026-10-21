@@ -13,7 +13,9 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 
+/** 変わらないツール定義一覧の結果と状態の契約を検証するテスト。 */
 class StableToolDefinitionsTest {
+  /** {@code tool} の条件を再現するための補助情報を返す。 */
   ToolCallback tool(String name, String schema) {
     var callback = mock(ToolCallback.class);
     when(callback.getToolDefinition())
@@ -22,6 +24,7 @@ class StableToolDefinitionsTest {
     return callback;
   }
 
+  /** 用途に応じたモデル利用で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void sortsOnlySuppliedToolsAndCanonicalizesObjectKeysPreservingArraysAndExecution() {
     var z =
@@ -47,6 +50,7 @@ class StableToolDefinitionsTest {
     assertEquals("auto", ((OpenAiChatOptions) stable.getOptions()).getToolChoice());
   }
 
+  /** 完全一致の小数データ形式制約一覧を保持することを確認する。 */
   @Test
   void preservesExactDecimalSchemaConstraints() {
     var schema = "{\"type\":\"number\",\"minimum\":0.12345678901234567890123456789}";
@@ -58,6 +62,7 @@ class StableToolDefinitionsTest {
             .contains("0.12345678901234567890123456789"));
   }
 
+  /** 元のを維持することを確認する。 */
   @Test
   void malformedSchemaSafelyKeepsOriginalAndDoesNotIntroduceTools() {
     var tool = tool("a", "invalid");

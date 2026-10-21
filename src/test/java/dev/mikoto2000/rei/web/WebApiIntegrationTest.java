@@ -25,8 +25,10 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/** WebAPI外部連携の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class WebApiIntegrationTest {
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import({
     WebApiConfiguration.class,
@@ -56,31 +58,37 @@ class WebApiIntegrationTest {
         .HealthContributorRegistryAutoConfiguration.class
   })
   static class Config {
+    /** {@code clock} の条件を再現するための補助情報を返す。 */
     @Bean
     Clock clock() {
       return Clock.systemUTC();
     }
 
+    /** {@code events} の条件を再現するための補助情報を返す。 */
     @Bean
     AgentEventFactory events(Clock clock) {
       return new AgentEventFactory(clock);
     }
 
+    /** {@code bus} の条件を再現するための補助情報を返す。 */
     @Bean
     AgentEventBus bus() {
       return new InMemoryAgentEventBus();
     }
 
+    /** {@code cancellation} の条件を再現するための補助情報を返す。 */
     @Bean
     CommandCancellationService cancellation() {
       return new CommandCancellationService();
     }
 
+    /** {@code executor} の条件を再現するための補助情報を返す。 */
     @Bean(destroyMethod = "shutdownNow")
     ExecutorService executor() {
       return Executors.newVirtualThreadPerTaskExecutor();
     }
 
+    /** {@code router} の条件を再現するための補助情報を返す。 */
     @Bean
     ConversationInputRouter router(
         ExecutorService executor,
@@ -103,6 +111,7 @@ class WebApiIntegrationTest {
     }
   }
 
+  /** 再開の後も対象の情報が残ることを確認する。 */
   @Test
   void realHttpHistorySurvivesRestartAndListedIdContinuesTheSameSession() throws Exception {
     String sessionId = null, projectId = null, originalRun = null;
@@ -187,8 +196,10 @@ class WebApiIntegrationTest {
     }
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** Web APIによる操作で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void actualServerAuthenticatesChatStreamsReplayAndExposesOnlyHealth() throws Exception {
     var application = new SpringApplication(Config.class);
@@ -243,6 +254,7 @@ class WebApiIntegrationTest {
     }
   }
 
+  /** {@code send} の条件を再現するための補助情報を返す。 */
   private HttpResponse<String> send(
       HttpClient client, int port, String path, String body, boolean authenticated)
       throws Exception {

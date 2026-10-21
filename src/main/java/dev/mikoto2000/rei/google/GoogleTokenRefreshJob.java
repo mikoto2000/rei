@@ -8,6 +8,7 @@ import org.springframework.boot.convert.DurationStyle;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
+/** Googleサービスの認証に必要なGoogleトークン再確認実行する作業を扱う。 */
 @Component
 @Slf4j
 @ConditionalOnProperty(
@@ -16,9 +17,13 @@ import org.springframework.stereotype.Component;
     havingValue = "true",
     matchIfMissing = true)
 public class GoogleTokenRefreshJob {
+  /** サービス。 */
   private final GoogleOAuthService service;
+
+  /** 次の確認までに進める時間。 */
   private final Duration advance;
 
+  /** 指定された値や利用先を使って、GoogleTokenRefreshJobを初期化する。 */
   public GoogleTokenRefreshJob(
       GoogleOAuthService service, @Value("${rei.google.token-refresh.advance:5m}") String advance) {
     this.advance = DurationStyle.detectAndParse(advance);
@@ -28,6 +33,7 @@ public class GoogleTokenRefreshJob {
     this.service = service;
   }
 
+  /** Googleサービスの認証の操作を実行する。 */
   @Scheduled(fixedDelayString = "${rei.google.token-refresh.check-interval:5m}")
   public void run() {
     try {

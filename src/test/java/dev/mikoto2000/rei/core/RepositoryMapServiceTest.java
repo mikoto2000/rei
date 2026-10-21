@@ -16,15 +16,19 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 保存と検索の窓口対応表サービスの結果と状態の契約を検証するテスト。 */
 class RepositoryMapServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証用に、指定された内容を書き込み先へ反映する。 */
   void write(String path, String content) throws Exception {
     var target = root.resolve(path);
     Files.createDirectories(target.getParent());
     Files.writeString(target, content);
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void mapsAstSymbolsImportsEntrypointAndExplicitTestCandidatesWithoutCommentFalsePositives()
       throws Exception {
@@ -60,6 +64,7 @@ class RepositoryMapServiceTest {
                 r -> r.kind().equals("TEST_NAME_CANDIDATE") && r.target().endsWith("App.java")));
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void changesDeletionAndProjectSwitchRefreshTheIndex() throws Exception {
     write("App.java", "class App {}");
@@ -78,6 +83,7 @@ class RepositoryMapServiceTest {
     assertTrue(service.map(other, "", 10).items().isEmpty());
   }
 
+  /** 共通の実行基盤で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void summaryCoversTheScannedRepositoryEvenWhenDisplayedFilesAreFiltered() throws Exception {
     write(
@@ -116,6 +122,7 @@ class RepositoryMapServiceTest {
     assertEquals(summary, service.map(root, "does-not-match", 1).summary());
   }
 
+  /** 共通の実行基盤で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void summaryRefreshesAndMarksUnavailableJavaInformationPartial() throws Exception {
     write("App.java", "class App { public static void main(String[] args) {} }");
@@ -133,6 +140,7 @@ class RepositoryMapServiceTest {
     assertEquals(0, service.map(root, "", 1).summary().files());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void summaryBoundsModuleOutputWithoutMisreportingTheScannedFileCount() throws Exception {
     var paths = new ArrayList<String>();
@@ -149,6 +157,7 @@ class RepositoryMapServiceTest {
     assertEquals(101, summary.inventoryOnlyFiles());
   }
 
+  /** 共通の実行基盤で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void rejectsEscapesSecretsAndOversizedSourceAndDoesNotInventSymbolsOnSyntaxError()
       throws Exception {
@@ -171,6 +180,7 @@ class RepositoryMapServiceTest {
     assertThrows(IllegalArgumentException.class, () -> service.map(root, "", 101));
   }
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationPropagates() throws Exception {
     var service = new RepositoryMapService(path -> List.of());
@@ -183,6 +193,7 @@ class RepositoryMapServiceTest {
     }
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void gitInventoryRespectsIgnoreAndDoesNotReturnSourceBodies() throws Exception {
     var process = new ProcessBuilder("git", "init", "--quiet", root.toString()).start();
@@ -198,6 +209,7 @@ class RepositoryMapServiceTest {
     assertTrue(new RepositoryMapService().map(root, "Ignored", 5).items().isEmpty());
   }
 
+  /** 共通の実行基盤の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void toolIsRegisteredWithOptionalArgumentsAndReadCapability() {
     var callbacks =

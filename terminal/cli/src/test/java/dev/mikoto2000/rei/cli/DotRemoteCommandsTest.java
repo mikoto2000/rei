@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.*;
 import org.junit.jupiter.api.Test;
 
+/** 状態表示外部コマンド一覧の結果と状態の契約を検証するテスト。 */
 class DotRemoteCommandsTest {
+  /** 状態表示コマンド一覧について、固定したドメインAPIを利用することを確認する。 */
   @Test
   void dotCommandsUseFixedDomainApiWithoutShellForwarding() {
     var request =

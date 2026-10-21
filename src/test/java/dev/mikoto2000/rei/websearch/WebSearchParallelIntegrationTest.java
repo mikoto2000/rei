@@ -15,7 +15,9 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
+/** Web検索並列外部連携の結果と状態の契約を検証するテスト。 */
 class WebSearchParallelIntegrationTest {
+  /** {@code sources} の条件を再現するための補助情報を返す。 */
   List<WebSearchResult> sources() {
     return List.of(
         new WebSearchResult("topic first", "https://z.example/first", "fallback", null),
@@ -23,6 +25,7 @@ class WebSearchParallelIntegrationTest {
         new WebSearchResult("topic third", "https://b.example/third", "snippet", null));
   }
 
+  /** 選択中順位を維持することを確認する。 */
   @Test
   void orchestratorKeepsSelectedRankAndMarksFailedSnippetExplicitly() throws Exception {
     var properties = new WebSearchProperties();
@@ -52,6 +55,7 @@ class WebSearchParallelIntegrationTest {
     }
   }
 
+  /** およびについて、利用する並列実行枠を読み取ることを確認する。 */
   @Test
   void andReadUsesParallelPoolAndKeepsSearchRank() throws Exception {
     var properties = new WebSearchProperties();

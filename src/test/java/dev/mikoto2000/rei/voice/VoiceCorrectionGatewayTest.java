@@ -32,10 +32,13 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 音声補正受付窓口の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class VoiceCorrectionGatewayTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 音声による対話の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void asrCorrectionGatewayUserFrameHistoryAndFinalToolApprovalShareAcceptedVoiceInput()
       throws Exception {
@@ -95,17 +98,21 @@ class VoiceCorrectionGatewayTest {
                 s ->
                     new VoiceBackend(
                         new VoiceActivityDetector() {
+                          /** {@code probability} の条件を再現するための補助情報を返す。 */
                           public float probability(float[] frame) {
                             return frame[0] > .2f ? 1 : 0;
                           }
 
+                          /** 検証で利用した対象の終了を扱う。 */
                           public void close() {}
                         },
                         new SpeechRecognizer() {
+                          /** {@code recognize} の条件を再現するための補助情報を返す。 */
                           public String recognize(SpeechSegment segment) {
                             return "交配の話";
                           }
 
+                          /** 検証で利用した対象の終了を扱う。 */
                           public void close() {}
                         }),
                 delivery::accept,

@@ -16,8 +16,13 @@ import java.util.concurrent.TimeoutException;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
-/** Covers body reads too: HttpRequest.timeout alone does not bound an InputStream body. */
+/**
+ * ChatGPTとの連携に必要な計画IOを扱う。
+ *
+ * <p>Covers body reads too: HttpRequest.timeout alone does not bound an InputStream body.
+ */
 final class PlanIO {
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   static <T> T read(
       InputStream input, Duration timeout, BooleanSupplier cancelled, Supplier<T> parse) {
     var task = new FutureTask<T>(parse::get);
@@ -35,6 +40,7 @@ final class PlanIO {
     } catch (ChatGptException e) {
       throw e;
     } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw ChatGptException.of(CANCELLED);
     } catch (ExecutionException e) {
@@ -49,6 +55,7 @@ final class PlanIO {
     }
   }
 
+  /** ChatGPTとの連携で用いる接頭辞を返す。 */
   static byte[] prefix(InputStream input, int limit) {
     try {
       return input.readNBytes(limit + 1);
@@ -57,6 +64,7 @@ final class PlanIO {
     }
   }
 
+  /** ChatGPTとの連携で用いるバイト数を返す。 */
   static byte[] bytes(InputStream input, int limit) {
     try {
       var bytes = prefix(input, limit);

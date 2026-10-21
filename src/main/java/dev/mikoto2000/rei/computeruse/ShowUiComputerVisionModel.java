@@ -17,18 +17,38 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.core.io.ByteArrayResource;
 import org.springframework.util.MimeTypeUtils;
 
-/** Shared grounding workflow; model-specific wire formats are selected explicitly. */
+/**
+ * 画面操作の支援に必要な表示表示画面操作画像認識モデルを扱う。
+ *
+ * <p>Shared grounding workflow; model-specific wire formats are selected explicitly.
+ */
 public final class ShowUiComputerVisionModel implements ComputerVisionModel {
+  /** 最大画素数。 */
   static final int MAX_PIXELS = 1344 * 28 * 28;
+
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final org.slf4j.Logger log =
       org.slf4j.LoggerFactory.getLogger(ShowUiComputerVisionModel.class);
+
+  /** 計画の作成。 */
   private final ComputerVisionModel planner;
+
+  /** 操作対象の画面位置を判断するモデル。 */
   private final ChatModel grounding;
+
+  /** 選択可能な設定。 */
   private final Supplier<OpenAiChatOptions.Builder> options;
+
+  /** キャンセル済み。 */
   private final BooleanSupplier cancelled;
+
+  /** 通信規約。 */
   private final GroundingProtocol protocol;
+
+  /** 確認の窓口。 */
   private final GroundingVerifier verifier;
 
+  /** 画面操作の支援を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ShowUiComputerVisionModel(
       ComputerVisionModel planner,
       ChatModel grounding,
@@ -37,6 +57,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
     this(planner, grounding, options, cancelled, GroundingProtocol.SHOWUI);
   }
 
+  /** 画面操作の支援を利用するため、指定を補って共通の初期化へ引き渡す。 */
   ShowUiComputerVisionModel(
       ComputerVisionModel planner,
       ChatModel grounding,
@@ -54,6 +75,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
         });
   }
 
+  /** 指定された値や利用先を使って、ShowUiComputerVisionModelを初期化する。 */
   ShowUiComputerVisionModel(
       ComputerVisionModel planner,
       ChatModel grounding,
@@ -70,6 +92,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
     this.verifier = java.util.Objects.requireNonNull(verifier);
   }
 
+  /** 画面操作の支援で用いる判断を返す。 */
   @Override
   public ComputerAction decide(ComputerObservation observation) throws Exception {
     checkCancelled();
@@ -146,6 +169,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
     return result;
   }
 
+  /** 画面操作の支援で用いる場所の特定を返す。 */
   private double[] locate(
       ComputerObservation observation,
       DisplayCapture original,
@@ -249,8 +273,10 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
     return protocol.parse(response.getResult().getOutput().getText());
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   static double[] parse(String text) {
     try {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (text == null || text.length() > 1000) throw new IllegalArgumentException();
       var node =
           new ObjectMapper().enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(text);
@@ -269,11 +295,14 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
     }
   }
 
+  /** 画面操作の支援に必要な診断書き込みを扱う。 */
   @FunctionalInterface
   private interface DiagnosticWrite {
+    /** 指定された内容を書き込み先へ反映する。 */
     void write(java.nio.file.Path directory) throws Exception;
   }
 
+  /** 後から参照できるよう、診断情報を保存する。 */
   private static void saveDiagnostics(ComputerObservation observation, DiagnosticWrite write) {
     if (observation.diagnosticRun() == null) return;
     try {
@@ -286,6 +315,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
     }
   }
 
+  /** 画面操作の支援で用いるresizeを返す。 */
   static BufferedImage resize(BufferedImage image) {
     if ((long) image.getWidth() * image.getHeight() <= MAX_PIXELS) return image;
     double scale = Math.sqrt((double) MAX_PIXELS / ((long) image.getWidth() * image.getHeight()));
@@ -305,6 +335,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
     return result;
   }
 
+  /** 後続の操作を進められるか判断するため、キャンセル済みを確認する。 */
   private void checkCancelled() {
     if (cancelled.getAsBoolean() || Thread.currentThread().isInterrupted())
       throw new java.util.concurrent.CancellationException();

@@ -15,16 +15,22 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 実行予定復旧の結果と状態の契約を検証するテスト。 */
 class ScheduleRecoveryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-10-04T03:00:00Z");
 
+  /** {@code scheduler} の条件を再現するための補助情報を返す。 */
   PersistentAgentScheduler scheduler() {
     return new PersistentAgentScheduler(
         new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("timers.db")),
         Clock.fixed(now, ZoneOffset.UTC));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   String create(PersistentAgentScheduler scheduler) {
     try (var scope = AgentRunScope.open(new AgentRunContext("source", "session", dir, "project"))) {
       var task = scheduler.scheduleAfter(Duration.ZERO, "inspect", "session");
@@ -33,6 +39,7 @@ class ScheduleRecoveryTest {
     }
   }
 
+  /** 時刻と期間の解釈で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void restartReconciliationEndsUncertainClaimWithoutReplayingAndUnblocksOtherSchedule() {
     var original = scheduler();
@@ -51,6 +58,7 @@ class ScheduleRecoveryTest {
     assertEquals("FAILED", restarted.history("project", first).getLast().status());
   }
 
+  /** 時刻と期間の解釈で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void wrongProjectStaleRunAndTerminalStateAreRejected() {
     var scheduler = scheduler();

@@ -17,11 +17,14 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+/** Bluesky返信実行予定の管理の結果と状態の契約を検証するテスト。 */
 @ExtendWith(MockitoExtension.class)
 class BlueskyReplySchedulerTest {
 
+  /** 検証に使うサービス。 */
   @Mock private BlueskyReplyService service;
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void delegatesToService() {
     BlueskyReplyScheduler scheduler = new BlueskyReplyScheduler(service);
@@ -31,6 +34,7 @@ class BlueskyReplySchedulerTest {
     verify(service).runOnce();
   }
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void skipsWhenPreviousExecutionIsStillRunning() throws Exception {
     CountDownLatch entered = new CountDownLatch(1);
@@ -61,6 +65,7 @@ class BlueskyReplySchedulerTest {
     }
   }
 
+  /** ログ一覧およびについて、実行予定の管理失敗情報を停止することを確認する。 */
   @Test
   void logsAndStopsSchedulerFailure() {
     doThrow(new IllegalStateException("boom")).when(service).runOnce();

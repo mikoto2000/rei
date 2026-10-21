@@ -13,8 +13,10 @@ import org.jline.reader.impl.DefaultParser;
 import org.junit.jupiter.api.Test;
 import picocli.CommandLine;
 
+/** れい行読み取り元生成元の結果と状態の契約を検証するテスト。 */
 class ReiLineReaderFactoryTest {
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void canonicalCompleterIncludesShellBuiltinsAndRootCommands() {
     CommandLine command = new CommandLine(new RootCommand(), CommandLine.defaultFactory());

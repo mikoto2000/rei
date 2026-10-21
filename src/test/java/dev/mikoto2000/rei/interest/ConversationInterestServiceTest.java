@@ -12,8 +12,10 @@ import java.time.ZoneOffset;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 会話関心サービスの結果と状態の契約を検証するテスト。 */
 class ConversationInterestServiceTest {
 
+  /** 関心の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void discoverCandidatesWithPastQueriesPassesPastQueriesToExtractor() {
     ConversationHistoryService historyService = mock(ConversationHistoryService.class);
@@ -37,6 +39,7 @@ class ConversationInterestServiceTest {
     verify(extractor).extract(eq(snippets), anyInt(), eq(pastQueries));
   }
 
+  /** 関心の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void discoverFallbackCandidatesBroadensMaxTopicsAndThreshold() {
     ConversationHistoryService historyService = mock(ConversationHistoryService.class);

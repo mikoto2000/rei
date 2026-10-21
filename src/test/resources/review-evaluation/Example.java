@@ -1,4 +1,4 @@
-class Example {
+/** ソースレビューの検出精度を評価するための検証用コード。 */ class Example {
   // surrounding verified code
   // surrounding verified code
   // surrounding verified code
@@ -89,7 +89,7 @@ class Example {
   // surrounding verified code
   // surrounding verified code
   // surrounding verified code
-  boolean broken(String a,String b){return a == b;}
+  /** レビュー対象の文字列比較を行い、比較結果を返す。 */ boolean broken(String a,String b){/* レビューで評価する判定結果を作る。 */return a == b;}
   // review surrounding implementation
   // review surrounding implementation
   // review surrounding implementation

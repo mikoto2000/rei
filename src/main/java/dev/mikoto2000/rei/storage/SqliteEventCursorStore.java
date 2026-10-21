@@ -5,24 +5,39 @@ import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.UUID;
 
-/** Cursor units are project sequences after startup conversion, never byte offsets. */
+/**
+ * SQLiteイベント続きの取得位置の記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>Cursor units are project sequences after startup conversion, never byte offsets.
+ */
 public final class SqliteEventCursorStore {
+  /**
+   * データ保存の共通処理で受け渡す続きの取得位置を表す。
+   *
+   * @param sequence 発生順序
+   * @param generation 生成
+   */
   public record Cursor(long sequence, long generation) {}
 
+  /** データベース。 */
   private final StorageDatabase database;
 
+  /** 指定された値や利用先を使って、SqliteEventCursorStoreを初期化する。 */
   public SqliteEventCursorStore(Path root) {
     database = new StorageDatabase(root);
   }
 
+  /** データ保存の共通処理で用いる対象範囲を返す。 */
   private static String scope(String project) {
     return UUID.fromString(project).toString();
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Cursor get(String project) {
     return database.read(db -> get(db, scope(project)));
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   private static Cursor get(Connection db, String project) throws SQLException {
     try (var query =
         db.prepareStatement(
@@ -34,6 +49,7 @@ public final class SqliteEventCursorStore {
     }
   }
 
+  /** 新たな処理を開始できるよう、SQLiteイベント続きの取得位置保存先を初期状態へ戻す。 */
   public void reset(String project) {
     String scope = scope(project);
     database.transaction(
@@ -57,6 +73,7 @@ public final class SqliteEventCursorStore {
         });
   }
 
+  /** データ保存の共通処理において、比較および集合に該当するか判定する。 */
   public boolean compareAndSet(String project, Cursor expected, long next) {
     if (next < expected.sequence() || next < 0)
       throw new IllegalArgumentException("Cursor cannot move backwards without a new generation");

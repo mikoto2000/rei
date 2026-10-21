@@ -7,8 +7,10 @@ import static org.mockito.Mockito.when;
 
 import org.junit.jupiter.api.Test;
 
+/** Bluesky投稿ツール一覧の結果と状態の契約を検証するテスト。 */
 class BlueskyPostToolsTest {
 
+  /** Blueskyとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void postDelegatesToService() {
     BlueskyPostService service = mock(BlueskyPostService.class);
@@ -23,6 +25,7 @@ class BlueskyPostToolsTest {
     verify(service).post("hello");
   }
 
+  /** 投稿について、メッセージを返すことを確認する。 */
   @Test
   void postReturnsMessageOnError() {
     BlueskyPostService service = mock(BlueskyPostService.class);
@@ -35,6 +38,7 @@ class BlueskyPostToolsTest {
     assertTrue(result.contains("Bluesky post failed"));
   }
 
+  /** 投稿について、参照先のURIを返すことを確認する。 */
   @Test
   void postReturnsUriAndUrlOnSuccess() {
     BlueskyPostService service = mock(BlueskyPostService.class);

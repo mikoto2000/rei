@@ -20,7 +20,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+/** 作業文脈受付窓口の結果と状態の契約を検証するテスト。 */
 class WorkContextControllerTest {
+  /** 現在を読み取ることを確認する。 */
   @Test
   void readsCurrentAndHistoryAndUpdatesBySessionRatherThanUiSelection() throws Exception {
     var service = mock(WorkContextService.class);

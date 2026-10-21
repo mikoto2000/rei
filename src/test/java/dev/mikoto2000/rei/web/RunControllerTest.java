@@ -13,7 +13,9 @@ import java.time.Clock;
 import org.junit.jupiter.api.Test;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+/** 実行受付窓口の結果と状態の契約を検証するテスト。 */
 class RunControllerTest {
+  /** 案内について、完全一致の所有者を必要とすることを確認する。 */
   @Test
   void guidanceRequiresExactOwnerAndActiveRunAndDoesNotCreateAnotherRun() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -54,6 +56,7 @@ class RunControllerTest {
         .andExpect(status().isConflict());
   }
 
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationReturnsCurrentStateAndIsIdempotent() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());
@@ -80,6 +83,7 @@ class RunControllerTest {
     mvc.perform(post("/api/v1/cancel")).andExpect(status().isNotFound());
   }
 
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void exposesStableMetadataAndUnknownRunIs404() throws Exception {
     var registry = new RunRegistry(Clock.systemUTC());

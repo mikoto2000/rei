@@ -21,38 +21,71 @@ import java.util.Objects;
 import java.util.Optional;
 import org.springframework.stereotype.Service;
 
+/** 経験の記録検索のユースケースを実現する。 */
 @Service
 public class EpisodeSearchService {
+  /**
+   * 過去の経験の活用で受け渡す検索結果を表す。
+   *
+   * @param kind 種類
+   * @param id 識別子
+   * @param projectId 所属プロジェクトの識別子
+   * @param summary 要約
+   * @param evidence 根拠
+   * @param score 評価値
+   */
   public record Hit(
       String kind, String id, String projectId, String summary, String evidence, double score) {}
 
+  /** 経験の記録一覧。 */
   private final EpisodeRepository episodes;
+
+  /** 記憶一覧。 */
   private final MemoryRepository memories;
+
+  /** 履歴。 */
   private final ConversationHistorySearchService history;
+
+  /** やり取り一覧。 */
   private final ConversationTurnStore turns;
+
+  /** 作業。 */
   private final WorkContextService work;
+
+  /** プロジェクト一覧。 */
   private dev.mikoto2000.rei.core.project.ProjectService projects;
+
+  /** トークン数の上限。 */
   private int maxTokens = 1500;
+
+  /** 記憶有効状態。 */
   private boolean memoryEnabled = true;
+
+  /** ベクトルによる。 */
   private EpisodeDenseIndex dense;
 
+  /** 過去の経験の活用で使用するベクトルによるを設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setDense(EpisodeDenseIndex dense) {
     this.dense = dense;
   }
 
+  /** イベント一覧。 */
   private dev.mikoto2000.rei.event.ProjectAgentEventStore events;
 
+  /** 過去の経験の活用で使用するイベント一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setEvents(dev.mikoto2000.rei.event.ProjectAgentEventStore events) {
     this.events = events;
   }
 
+  /** 過去の経験の活用で使用するプロジェクト一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setProjects(dev.mikoto2000.rei.core.project.ProjectService projects) {
     this.projects = projects;
   }
 
+  /** 過去の経験の活用で使用する記憶設定を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void setMemoryProperties(
       dev.mikoto2000.rei.memory.configuration.MemoryProperties properties) {
@@ -60,6 +93,7 @@ public class EpisodeSearchService {
     memoryEnabled = properties.enabled();
   }
 
+  /** 指定された値や利用先を使って、EpisodeSearchServiceを初期化する。 */
   public EpisodeSearchService(
       EpisodeRepository episodes,
       MemoryRepository memories,
@@ -73,6 +107,7 @@ public class EpisodeSearchService {
     this.work = work;
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public List<Hit> search(HistorySearchRequest request, String context) {
     var range = EpisodeTimeRange.of(request.since(), request.until());
     String query = request.query();
@@ -256,11 +291,13 @@ public class EpisodeSearchService {
     return List.copyOf(bounded);
   }
 
+  /** 過去の経験の活用において、検索条件一致結果に該当するか判定する。 */
   private static boolean queryMatches(String query, String text) {
     return Arrays.stream(query.toLowerCase(Locale.ROOT).split("\\s+"))
         .anyMatch(text.toLowerCase(Locale.ROOT)::contains);
   }
 
+  /** 過去の経験の活用で用いる登録済みプロジェクトを返す。 */
   public String registeredProject(String project) {
     if (projects == null
         || projects.registeredProjects().stream().noneMatch(p -> p.id().equals(project)))
@@ -268,6 +305,7 @@ public class EpisodeSearchService {
     return project;
   }
 
+  /** 過去の経験の活用において、利用可能に該当するか判定する。 */
   public boolean available(Episode e) {
     return e.claims().stream()
             .map(Episode.Claim::runId)
@@ -278,10 +316,12 @@ public class EpisodeSearchService {
             .allMatch(c -> toolSource(e, c).isPresent());
   }
 
+  /** 依頼された操作を進めるため、取得元を実行する。 */
   private Optional<ConversationTurnStore.Turn> runSource(String session, String run) {
     return accessible(() -> turns.findRun(session, run));
   }
 
+  /** 過去の経験の活用で用いる利用可能なを返す。 */
   private static <T> Optional<T> accessible(java.util.function.Supplier<Optional<T>> source) {
     try {
       return source.get();
@@ -291,6 +331,7 @@ public class EpisodeSearchService {
     }
   }
 
+  /** 過去の経験の活用で用いるツール取得元を返す。 */
   private Optional<dev.mikoto2000.rei.event.ToolCompletedPayload> toolSource(
       Episode e, Episode.Claim c) {
     return events == null
@@ -303,6 +344,7 @@ public class EpisodeSearchService {
             .map(p -> (dev.mikoto2000.rei.event.ToolCompletedPayload) p);
   }
 
+  /** 過去の経験の活用で用いる詳細を返す。 */
   public Map<String, Object> detail(String id, String project) {
     if (!memoryEnabled) throw new IllegalStateException("Memory is disabled");
     var revisions = episodes.revisions(id, project);
@@ -357,6 +399,7 @@ public class EpisodeSearchService {
             .toList());
   }
 
+  /** 過去の経験の活用で用いる取得元一覧を返す。 */
   public List<Map<String, String>> sources(String id, String project) {
     if (!memoryEnabled) throw new IllegalStateException("Memory is disabled");
     var result = new ArrayList<Map<String, String>>();
@@ -392,6 +435,7 @@ public class EpisodeSearchService {
     return List.copyOf(result);
   }
 
+  /** 過去の経験の活用で用いる詳細ページを返す。 */
   public Map<String, Object> detailPage(String id, String project, String beforeRevision) {
     if (!memoryEnabled) throw new IllegalStateException("Memory is disabled");
     boolean foreign = foreign(project);
@@ -447,6 +491,7 @@ public class EpisodeSearchService {
     return result;
   }
 
+  /** 過去の経験の活用で用いる取得元一覧ページを返す。 */
   public Map<String, Object> sourcesPage(String id, String project, String revision, int offset) {
     if (!memoryEnabled) throw new IllegalStateException("Memory is disabled");
     if (offset < 0 || offset > 32) throw new IllegalArgumentException("Invalid source offset");
@@ -493,6 +538,7 @@ public class EpisodeSearchService {
     return result;
   }
 
+  /** 過去の経験の活用で用いるfuseを返す。 */
   public static List<Hit> fuse(List<List<Hit>> streams, int limit, int maxChars) {
     int chars = 0;
     var result = new ArrayList<Hit>();
@@ -507,11 +553,13 @@ public class EpisodeSearchService {
     return List.copyOf(result);
   }
 
+  /** 利用先の許容量を超えないよう、経験の記録検索サービスを上限内に収める。 */
   private static String clip(String text, int size) {
     String safe = dev.mikoto2000.rei.event.CredentialRedactor.redact(Objects.toString(text, ""));
     return safe.substring(0, Math.min(size, safe.length()));
   }
 
+  /** 過去の経験の活用において、foreignに該当するか判定する。 */
   private static boolean foreign(String project) {
     var current = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
     return current != null && !current.id().equals(project);

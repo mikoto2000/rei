@@ -18,18 +18,43 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * Bounded lexical candidates. This deliberately does not implement a language/compiler resolver.
+ * 共通の実行基盤に必要な推定による取得元位置を扱う。
+ *
+ * <p>Bounded lexical candidates. This deliberately does not implement a language/compiler resolver.
  */
 final class HeuristicSourceIndex {
+  /**
+   * 共通の実行基盤で受け渡す解釈済みを表す。
+   *
+   * @param packageName パッケージ名前
+   * @param status 状態
+   * @param symbols シンボル一覧
+   * @param imports 読み込む宣言
+   */
   record Parsed(
       String packageName,
       String status,
       List<RepositoryMapService.Symbol> symbols,
       List<String> imports) {}
 
+  /**
+   * 共通の実行基盤で受け渡す境界を表す。
+   *
+   * @param root 作業ルート
+   * @param name 名前
+   * @param kind 種類
+   */
   record Boundary(String root, String name, String kind) {}
 
+  /**
+   * 共通の実行基盤で受け渡す境界一覧を表す。
+   *
+   * @param values 値一覧
+   * @param bytes バイト数
+   * @param warnings 注意事項
+   */
   record Boundaries(List<Boundary> values, int bytes, List<String> warnings) {
+    /** 共通の実行基盤で用いる対象パスを返す。 */
     Boundary forPath(String path) {
       return values.stream()
           .filter(value -> value.root().equals(".") || path.startsWith(value.root() + "/"))
@@ -38,40 +63,78 @@ final class HeuristicSourceIndex {
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡すトークンを表す。
+   *
+   * @param value 値
+   * @param literal そのままの値
+   * @param line 行
+   */
   record Token(String value, boolean literal, int line) {}
 
+  /**
+   * 共通の実行基盤で受け渡すLexedを表す。
+   *
+   * @param masked 非公開化した内容
+   * @param tokens トークン数
+   * @param valid 有効
+   * @param comments コメント一覧
+   */
   record Lexed(String masked, List<Token> tokens, boolean valid, String comments) {
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     Lexed(String masked, List<Token> tokens, boolean valid) {
       this(masked, tokens, valid, "");
     }
   }
 
+  /** 識別子。 */
   private static final String ID = "([\\p{L}_$][\\p{L}\\p{N}_$]*)";
+
+  /** 記録時刻種別。 */
   private static final Pattern TS_TYPE =
       Pattern.compile(
           "^(?:export\\s+)?(?:default\\s+)?(?:declare\\s+)?(?:abstract\\s+)?(class|interface|enum|type)\\s+"
               + ID);
+
+  /** 記録時刻FN。 */
   private static final Pattern TS_FN =
       Pattern.compile("^(?:export\\s+)?(?:default\\s+)?(?:async\\s+)?function\\s+" + ID);
+
+  /** 記録時刻ARROW。 */
   private static final Pattern TS_ARROW =
       Pattern.compile("^(?:export\\s+)?(?:const|let|var)\\s+" + ID + "\\b[^;]*=>");
+
+  /** 記録時刻メソッド。 */
   private static final Pattern TS_METHOD =
       Pattern.compile(
           "^(?:(?:public|private|protected|static|async|readonly|override|get|set)\\s+)*"
               + ID
               + "\\s*\\(");
+
+  /** Rustの宣言を見つける照合規則。 */
   private static final Pattern RUST =
       Pattern.compile(
           "^(?:pub(?:\\s*\\([^)]{0,64}\\))?\\s+)?(?:async\\s+)?(?:unsafe\\s+)?(struct|enum|trait|type|fn|mod)\\s+"
               + ID);
+
+  /** Rustの宣言を見つける照合規則実装の宣言。 */
   private static final Pattern RUST_IMPL =
       Pattern.compile("^impl(?:\\s*<[^>]{0,256}>)?\\s+" + ID + "(?:\\s+for\\s+" + ID + ")?");
+
+  /** GO種別。 */
   private static final Pattern GO_TYPE = Pattern.compile("^type\\s+" + ID);
+
+  /** Go言語関数の宣言を見つける規則。 */
   private static final Pattern GO_FN =
       Pattern.compile("^func\\s+(?:\\(([^)]{1,128})\\)\\s*)?" + ID + "\\s*\\(");
+
+  /** PYクラス。 */
   private static final Pattern PY_CLASS = Pattern.compile("^class\\s+" + ID);
+
+  /** Python関数の宣言を見つける規則。 */
   private static final Pattern PY_FN = Pattern.compile("^(?:async\\s+)?def\\s+" + ID + "\\s*\\(");
 
+  /** 共通の実行基盤で用いる言語を返す。 */
   static String language(String path) {
     String name = path.toLowerCase(Locale.ROOT);
     if (name.endsWith(".java")) return "JAVA";
@@ -83,15 +146,18 @@ final class HeuristicSourceIndex {
     return "OTHER";
   }
 
+  /** 共通の実行基盤において、取得元に該当するか判定する。 */
   static boolean source(String path) {
     return !language(path).equals("OTHER");
   }
 
+  /** 共通の実行基盤で用いる代替手段機能単位を返す。 */
   static String fallbackModule(String path) {
     int marker = path.indexOf("/src/");
     return marker < 0 ? "." : path.substring(0, marker);
   }
 
+  /** 共通の実行基盤において、検証に該当するか判定する。 */
   static boolean test(String path) {
     String name = Path.of(path).getFileName().toString();
     return path.contains("/test/")
@@ -106,6 +172,7 @@ final class HeuristicSourceIndex {
         || name.startsWith("test_") && name.endsWith(".py");
   }
 
+  /** 共通の実行基盤で用いる境界一覧を返す。 */
   static Boundaries boundaries(Path root, List<String> paths, long deadline)
       throws java.io.IOException {
     var result = new ArrayList<Boundary>();
@@ -172,6 +239,7 @@ final class HeuristicSourceIndex {
     return new Boundaries(List.copyOf(result), bytes, List.copyOf(warnings));
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   static Parsed parse(String path, String text, Boundary boundary) {
     String language = language(path);
     var lexical = lex(text, language);
@@ -294,16 +362,19 @@ final class HeuristicSourceIndex {
         imports.stream().limit(128).toList());
   }
 
+  /** 新たな対象を登録し、後から利用できるようにする。 */
   private static void add(
       List<RepositoryMapService.Symbol> result, String name, String kind, int line, boolean entry) {
     if (result.size() < 64 && name.length() <= 2048)
       result.add(new RepositoryMapService.Symbol(name, kind, line, entry));
   }
 
+  /** 共通の実行基盤で用いる相対を返す。 */
   private static String relative(String path, String module) {
     return module.equals(".") ? path : path.substring(module.length() + 1);
   }
 
+  /** 共通の実行基盤で用いる読み込む宣言を返す。 */
   private static List<String> imports(List<Token> tokens, String language) {
     var result = new LinkedHashSet<String>();
     for (int i = 0; i < tokens.size() && result.size() < 129; i++) {
@@ -369,6 +440,7 @@ final class HeuristicSourceIndex {
         .toList();
   }
 
+  /** 共通の実行基盤で用いる安全性取り込みを返す。 */
   private static String safeImport(String value) {
     if (value.codePoints().anyMatch(Character::isISOControl)) return "IMPORT_METADATA_REDACTED";
     String safe = dev.mikoto2000.rei.event.CredentialRedactor.redact(value);
@@ -382,6 +454,7 @@ final class HeuristicSourceIndex {
     return safe;
   }
 
+  /** 共通の実行基盤に関する展開利用を処理する。 */
   private static void expandUse(
       List<Token> tokens, int start, int end, String prefix, Set<String> result, int depth) {
     if (depth > 16 || result.size() >= 129) return;
@@ -414,6 +487,7 @@ final class HeuristicSourceIndex {
     if (path.length() > prefix.length()) result.add(path.toString());
   }
 
+  /** 共通の実行基盤で用いるlexを返す。 */
   static Lexed lex(String text, String language) {
     char[] masked = text.toCharArray();
     char[] comments = new char[text.length()];
@@ -422,6 +496,7 @@ final class HeuristicSourceIndex {
     int line = 1;
     for (int i = 0; i < text.length(); ) {
       if ((i & 511) == 0) RunCancellation.propagate(null);
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (tokens.size() > 32768) return new Lexed("", List.of(), false);
       char ch = text.charAt(i);
       if (Character.isWhitespace(ch)) {
@@ -529,6 +604,7 @@ final class HeuristicSourceIndex {
     return new Lexed(new String(masked), List.copyOf(tokens), true, new String(comments));
   }
 
+  /** 共通の実行基盤で用いる関連一覧を返す。 */
   static List<RepositoryMapService.Relation> relations(
       List<RepositoryMapService.File> files, Boundaries boundaries) {
     var result = new LinkedHashSet<RepositoryMapService.Relation>();
@@ -620,6 +696,7 @@ final class HeuristicSourceIndex {
     return List.copyOf(result);
   }
 
+  /** 共通の実行基盤に関するrust対象一覧を処理する。 */
   private static void rustTargets(
       RepositoryMapService.File file,
       String imported,
@@ -672,6 +749,7 @@ final class HeuristicSourceIndex {
     }
   }
 
+  /** 共通の実行基盤に関する一意なを処理する。 */
   private static void unique(
       Set<String> options, Map<String, RepositoryMapService.File> files, Set<String> result) {
     var matches =
@@ -682,6 +760,7 @@ final class HeuristicSourceIndex {
     if (matches.size() == 1) result.add(matches.getFirst());
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、表記や形式をそろえる。 */
   private static String normalize(Path parent, String imported) {
     if (parent == null) parent = Path.of("");
     try {
@@ -693,11 +772,13 @@ final class HeuristicSourceIndex {
     }
   }
 
+  /** 共通の実行基盤で用いる親を返す。 */
   private static String parent(String path) {
     Path parent = Path.of(path).getParent();
     return parent == null ? "." : parent.toString().replace('\\', '/');
   }
 
+  /** 共通の実行基盤で用いる統合を返す。 */
   private static String join(String base, String suffix) {
     if (base == null || base.isEmpty() || base.equals(".")) return suffix.isEmpty() ? "." : suffix;
     if (suffix.isEmpty() || suffix.equals(".")) return base;

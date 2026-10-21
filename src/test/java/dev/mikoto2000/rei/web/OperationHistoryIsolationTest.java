@@ -12,7 +12,9 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.memory.ChatMemory;
 
+/** 操作履歴作業の分離の結果と状態の契約を検証するテスト。 */
 class OperationHistoryIsolationTest {
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void nonConversationalWebSummaryDoesNotWriteSharedChatHistory() {
     var memory = mock(ChatMemory.class);
@@ -25,6 +27,7 @@ class OperationHistoryIsolationTest {
       appender.appendUserMessage("url");
       appender.appendAssistantMessage("summary");
     }
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(memory, log);
   }
 }

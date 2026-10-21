@@ -5,14 +5,20 @@ import java.time.Instant;
 import java.util.concurrent.TimeUnit;
 import org.springframework.stereotype.Component;
 
-/** Optional read-only work-time metadata. Git failure never prevents reading a handoff. */
+/**
+ * 作業文脈の引き継ぎに必要な作業文脈Gitを扱う。
+ *
+ * <p>Optional read-only work-time metadata. Git failure never prevents reading a handoff.
+ */
 @Component
 public class WorkContextGit {
+  /** 後から状況を確認できるよう、作業文脈Gitを記録する。 */
   public WorkContext.GitState capture(Path root, Instant now) {
     return new WorkContext.GitState(
         root.toString(), read(root, "--abbrev-ref", "HEAD"), read(root, "HEAD"), now);
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private String read(Path root, String... args) {
     Process process = null;
     try {
@@ -29,6 +35,7 @@ public class WorkContextGit {
               .strip();
       return value.isBlank() ? null : value;
     } catch (InterruptedException error) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw new java.util.concurrent.CancellationException();
     } catch (java.io.IOException error) {

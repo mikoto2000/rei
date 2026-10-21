@@ -8,18 +8,29 @@ import picocli.CommandLine.Option;
 import picocli.CommandLine.Parameters;
 import picocli.CommandLine.Spec;
 
+/** Sign in with ChatGPT の認証と ChatGPT 利用枠を管理しますを行うための利用者コマンド。 */
 @Component
 @Command(
     name = "chatgpt",
     description = "Sign in with ChatGPT の認証と ChatGPT 利用枠を管理します",
     mixinStandardHelpOptions = true)
 public final class ChatGptCommand {
+  /** OAuth認証。 */
   private final ObjectProvider<PlanOAuth> oauth;
+
+  /** クライアント。 */
   private final ObjectProvider<PlanClient> client;
+
+  /** ログイン。 */
   private final ObjectProvider<PlanLogin> login;
+
+  /** プロジェクト一覧。 */
   private dev.mikoto2000.rei.core.project.ProjectService projects;
+
+  /** 権限一覧。 */
   private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
 
+  /** ChatGPTとの連携に関する設定利用可否の確認を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public void configureProbe(
       dev.mikoto2000.rei.core.project.ProjectService projects,
@@ -28,6 +39,7 @@ public final class ChatGptCommand {
     this.permissions = permissions;
   }
 
+  /** ChatGPTとの連携に関する権限の確認利用可否の確認を処理する。 */
   private void authorizeProbe(String account, String model, String task) {
     if (projects == null
         || permissions == null
@@ -48,22 +60,28 @@ public final class ChatGptCommand {
     }
   }
 
+  /** ターミナルへの表示先。 */
   private java.io.PrintWriter shellOutput;
 
+  /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
     shellOutput = output;
   }
 
+  /** ChatGPTとの連携で用いる出力を返す。 */
   private java.io.PrintWriter output() {
     return shellOutput == null ? spec.commandLine().getOut() : shellOutput;
   }
 
+  /** 仕様。 */
   @Spec CommandSpec spec;
 
+  /** ChatGPTとの連携を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ChatGptCommand() {
     this(null, null, null);
   }
 
+  /** 指定された値や利用先を使って、ChatGptCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public ChatGptCommand(
       ObjectProvider<PlanOAuth> o, ObjectProvider<PlanClient> c, ObjectProvider<PlanLogin> l) {
@@ -72,6 +90,7 @@ public final class ChatGptCommand {
     login = l;
   }
 
+  /** ChatGPTとの連携で用いるログインを返す。 */
   @Command(name = "login", description = "本人がブラウザで ChatGPT にログインします")
   public int login(@Option(names = "--account", defaultValue = "default") String account) {
     return execute(
@@ -83,17 +102,20 @@ public final class ChatGptCommand {
         });
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   @Command(name = "status")
   public int status() {
     return execute(() -> require(oauth).status().forEach(this::out));
   }
 
+  /** ChatGPTとの連携で用いるモデル一覧を返す。 */
   @Command(name = "models")
   public int models(@Option(names = "--account", defaultValue = "default") String account) {
     return execute(
         () -> require(client).models(account, true).forEach(m -> out(m.id() + " | " + m.name())));
   }
 
+  /** ChatGPTとの連携で用いるログアウトを返す。 */
   @Command(name = "logout")
   public int logout(@Option(names = "--account", defaultValue = "default") String account) {
     return execute(
@@ -110,6 +132,7 @@ public final class ChatGptCommand {
         });
   }
 
+  /** ChatGPTとの連携で用いる推定を返す。 */
   @Command(name = "infer", description = "Phase 0 の単発テキスト推論を実行します（ChatGPT 利用枠を消費）")
   public int infer(
       @Option(names = "--account", defaultValue = "default") String account,
@@ -146,6 +169,7 @@ public final class ChatGptCommand {
         });
   }
 
+  /** 条件を満たさない操作を拒否するため、チャットGPTコマンドの前提条件を確認する。 */
   private <T> T require(ObjectProvider<T> provider) {
     var value = provider == null ? null : provider.getIfAvailable();
     if (value == null)
@@ -153,10 +177,12 @@ public final class ChatGptCommand {
     return value;
   }
 
+  /** ChatGPTとの連携に関する出力先を処理する。 */
   private void out(String text) {
     output().println(text);
   }
 
+  /** 要求された処理を実行する。 */
   private int execute(Runnable operation) {
     try {
       operation.run();

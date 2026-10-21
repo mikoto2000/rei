@@ -22,8 +22,10 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 
+/** AI日次案内読み上げの案内の結果と状態の契約を検証するテスト。 */
 class AiBriefingNarratorTest {
 
+  /** 日次情報の案内で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void narrateBuildsPromptAndParsesSections() {
     ChatModel chatModel = org.mockito.Mockito.mock(ChatModel.class);

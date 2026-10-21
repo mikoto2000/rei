@@ -25,16 +25,28 @@ import java.util.TreeSet;
 import java.util.regex.Pattern;
 
 /**
- * Git worktree facts only. Does not alter the index, invoke diff helpers, or retain source bodies.
+ * 共通の実行基盤に必要なGit変更差分Inspectorを扱う。
+ *
+ * <p>Git worktree facts only. Does not alter the index, invoke diff helpers, or retain source
+ * bodies.
  */
 public final class GitPatchInspector {
+  /**
+   * 共通の実行基盤で受け渡す教材を表す。
+   *
+   * @param diff 差分
+   * @param sources 取得元一覧
+   */
   public record Material(String diff, Map<String, String> sources) {
+    /** 受け取った情報からMaterialを作成する。 */
     public Material {
       sources = Map.copyOf(sources);
     }
   }
 
+  /** 共通の実行基盤で用いる教材を返す。 */
   public Material material(Path root, Snapshot snapshot, long deadline) throws IOException {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (!snapshot.complete() || snapshot.changedFiles().size() > 32)
       throw new IOException("Complete patch of at most 32 files required");
     var sources = new TreeMap<String, String>();
@@ -95,20 +107,28 @@ public final class GitPatchInspector {
     return new Material(diff.toString(), sources);
   }
 
+  /** プロセス一覧。 */
   private final ExternalAgentProcessRunner processes;
+
+  /** キャンセル済み。 */
   private final java.util.function.BooleanSupplier cancelled;
+
+  /** 確認。 */
   private static final Pattern CHECK = Pattern.compile("^(.*):(\\d+): (.*)$");
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public GitPatchInspector(ExternalAgentProcessRunner processes) {
     this(processes, () -> false);
   }
 
+  /** 指定された値や利用先を使って、GitPatchInspectorを初期化する。 */
   public GitPatchInspector(
       ExternalAgentProcessRunner processes, java.util.function.BooleanSupplier cancelled) {
     this.processes = processes;
     this.cancelled = cancelled;
   }
 
+  /** 後から状況を確認できるよう、Git変更差分Inspectorを記録する。 */
   public Snapshot capture(Path root, long deadline) throws IOException {
     var identity =
         git(root, deadline, 4096, "rev-parse", "--show-toplevel", "HEAD").stdout().lines().toList();
@@ -137,6 +157,7 @@ public final class GitPatchInspector {
                 .stdout());
     var changes = new TreeSet<String>(tracked);
     changes.addAll(untracked);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (changes.size() > 128)
       return new Snapshot(
           "",
@@ -229,6 +250,7 @@ public final class GitPatchInspector {
         List.of());
   }
 
+  /** 共通の実行基盤で用いるレビューを返す。 */
   public Review review(Path root, Snapshot snapshot, long deadline) throws IOException {
     var output =
         runGit(
@@ -267,6 +289,7 @@ public final class GitPatchInspector {
         }
         recognized = true;
         findings.add(new Finding(match.group(1), Long.parseLong(match.group(2)), kind));
+        // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
         if (findings.size() > 24) {
           complete = false;
           break;
@@ -301,6 +324,7 @@ public final class GitPatchInspector {
     return new Review(complete, findings.stream().limit(24).toList(), List.copyOf(warnings));
   }
 
+  /** 共通の実行基盤で用いる種類を返す。 */
   private static String kind(String diagnostic) {
     if (diagnostic.contains("leftover conflict marker")) return "CONFLICT_MARKER";
     if (diagnostic.contains("whitespace")
@@ -309,8 +333,10 @@ public final class GitPatchInspector {
     return null;
   }
 
+  /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */
   private static boolean safe(Path root, String name) throws IOException {
     Path path = Path.of(name);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (name.length() > 1024
         || name.codePoints().anyMatch(Character::isISOControl)
         || path.isAbsolute()
@@ -322,6 +348,7 @@ public final class GitPatchInspector {
         && target.toRealPath().startsWith(root);
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private static byte[] read(Path root, String name) throws IOException {
     if (!safe(root, name)) throw new IOException("Patch path unavailable");
     try (var stream = Files.newInputStream(root.resolve(name), LinkOption.NOFOLLOW_LINKS)) {
@@ -331,6 +358,7 @@ public final class GitPatchInspector {
     }
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   private static boolean text(byte[] bytes) {
     for (byte value : bytes) if (value == 0) return false;
     try {
@@ -341,6 +369,7 @@ public final class GitPatchInspector {
     }
   }
 
+  /** 共通の実行基盤で用いる名前一覧を返す。 */
   private static List<String> names(String output) {
     return Arrays.stream(output.split(String.valueOf((char) 0)))
         .filter(s -> !s.isEmpty())
@@ -349,6 +378,7 @@ public final class GitPatchInspector {
         .toList();
   }
 
+  /** 共通の実行基盤で用いる内容の照合値を返す。 */
   private static MessageDigest digest() {
     try {
       return MessageDigest.getInstance("SHA-256");
@@ -357,11 +387,13 @@ public final class GitPatchInspector {
     }
   }
 
+  /** 指定された変更を、管理中の情報へ反映する。 */
   private static void update(MessageDigest digest, byte[] bytes) {
     digest.update(ByteBuffer.allocate(4).putInt(bytes.length).array());
     digest.update(bytes);
   }
 
+  /** 共通の実行基盤で用いるGitの情報を返す。 */
   private ExternalAgentProcessRunner.Output git(Path root, long deadline, int bytes, String... args)
       throws IOException {
     var output = runGit(root, deadline, bytes, args);
@@ -370,6 +402,7 @@ public final class GitPatchInspector {
     return output;
   }
 
+  /** 依頼された操作を進めるため、Gitの情報を実行する。 */
   private ExternalAgentProcessRunner.Output runGit(
       Path root, long deadline, int bytes, String... args) throws IOException {
     var command =

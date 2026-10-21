@@ -26,8 +26,10 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
+/** GoogleタスクHTTP通信契約の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class GoogleTaskHttpContractTest {
+  /** 旧形式タグ一覧を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"[]", "null", "[\"research\"]"})
   void directTaskCreationRejectsLegacyTags(String tags) throws Exception {
@@ -44,9 +46,11 @@ class GoogleTaskHttpContractTest {
                 .contentType("application/json")
                 .content("{\"title\":\"Review\",\"tags\":" + tags + "}"))
         .andExpect(status().isBadRequest());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(tasks, calendar, runs);
   }
 
+  /** 旧形式タグ一覧を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"[]", "null", "[\"research\"]"})
   void queuedTaskCreationRejectsLegacyTags(String tags) throws Exception {
@@ -64,9 +68,11 @@ class GoogleTaskHttpContractTest {
                         + tags
                         + "}"))
         .andExpect(status().isBadRequest());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(runs);
   }
 
+  /** 待機中タスク一覧について、旧形式タグを受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"null", "\"research\""})
   void queuedTaskListRejectsLegacyTag(String tag) throws Exception {
@@ -81,9 +87,11 @@ class GoogleTaskHttpContractTest {
                 .contentType("application/json")
                 .content("{\"projectId\":\"project\",\"tag\":" + tag + "}"))
         .andExpect(status().isBadRequest());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(runs);
   }
 
+  /** 残量項目一覧を保持することを確認する。 */
   @Test
   void directTaglessTaskCreateAndListPreserveRemainingFieldsAndFourColumns() throws Exception {
     var tasks = mock(TaskService.class);
@@ -109,9 +117,11 @@ class GoogleTaskHttpContractTest {
         .andExpect(jsonPath("$.text").value("7 | 2 | 2026-10-20 | Review"));
     verify(tasks).add("Review", due, 2);
     verify(tasks).listOpen(new TaskQuery(2, due));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(calendar, runs);
   }
 
+  /** 所有権日付一覧を保持することを確認する。 */
   @Test
   void queuedTaglessTaskCreateAndListPreserveOwnershipDatesAndDefaults() throws Exception {
     var runs = mock(IntegrationRunSubmitService.class);
@@ -144,6 +154,7 @@ class GoogleTaskHttpContractTest {
     verify(runs).listGoogleTasks("project", "session", 2, due);
   }
 
+  /** Web APIによる操作で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unrelatedUnknownWriteFieldsRemainRejected() throws Exception {
     var runs = mock(IntegrationRunSubmitService.class);
@@ -157,6 +168,7 @@ class GoogleTaskHttpContractTest {
                 .contentType("application/json")
                 .content("{\"projectId\":\"project\",\"title\":\"Review\",\"root\":\"C:/other\"}"))
         .andExpect(status().isBadRequest());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(runs);
   }
 }

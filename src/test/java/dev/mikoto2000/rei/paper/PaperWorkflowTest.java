@@ -19,8 +19,10 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 論文Workflowの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class PaperWorkflowTest {
+  /** 論文の調査と整理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void glossaryIsReusedAcrossTranslationRequests() {
     var first =
@@ -33,10 +35,12 @@ class PaperWorkflowTest {
     first.translate(paper, PaperTranslation.Mode.TECHNICAL, null, false, op);
     var secondModel =
         new PaperLanguageModel() {
+          /** 検証で使用するモデルを、指定された条件に合わせて用意する。 */
           public String model() {
             return "other-model";
           }
 
+          /** {@code generate} の条件を再現するための補助情報を返す。 */
           public String generate(String system, String input, PaperOperation operation) {
             assertTrue(system.contains("novel term"));
             assertTrue(system.contains("専門用語"));
@@ -49,6 +53,7 @@ class PaperWorkflowTest {
     assertEquals("専門用語", result.glossary().get("novel term"));
   }
 
+  /** 論文の調査と整理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sourceRevisionChangesCacheIdentityWithoutDeletingOldVersion() {
     summaries().summarize(paper, PaperSummary.Mode.STANDARD, false, op);
@@ -59,15 +64,31 @@ class PaperWorkflowTest {
         2, repo.versions(paper.id()).stream().filter(v -> v.kind().equals("summary")).count());
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う設定。 */
   PaperProperties config;
+
+  /** 検証に使うリポジトリ。 */
   PaperRepository repo;
+
+  /** 検証に使う保存先。 */
   PaperArtifactStore store;
+
+  /** 検証に使う内容。 */
   PaperContentService content;
+
+  /** 検証に使う論文。 */
   Paper paper;
+
+  /** 検証に使う操作の種別。 */
   PaperOperation op = PaperOperation.local("session");
+
+  /** 検証に使う呼び出し回数。 */
   AtomicInteger calls;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     config = new PaperProperties();
@@ -103,12 +124,15 @@ class PaperWorkflowTest {
     calls = new AtomicInteger();
   }
 
+  /** 検証で使用するモデルを、指定された条件に合わせて用意する。 */
   PaperLanguageModel model(String result) {
     return new PaperLanguageModel() {
+      /** 検証で使用するモデルを、指定された条件に合わせて用意する。 */
       public String model() {
         return "test-model";
       }
 
+      /** {@code generate} の条件を再現するための補助情報を返す。 */
       public String generate(String system, String input, PaperOperation operation) {
         calls.incrementAndGet();
         operation.check();
@@ -117,22 +141,26 @@ class PaperWorkflowTest {
     };
   }
 
+  /** {@code summary} の条件を再現するための補助情報を返す。 */
   String summary() {
     return """
     {"content":{"problem":"課題","background":"背景","contributions":["貢献"],"method":"手法","datasets":[],"evaluation":"不明","results":["結果"],"limitations":["不明"],"futureWork":[]},"evidence":[{"claim":"結果","section":"Abstract","page":0,"text":"source"}]}
     """;
   }
 
+  /** {@code summaries} の条件を再現するための補助情報を返す。 */
   PaperSummaryService summaries() {
     return new PaperSummaryService(
         repo, content, model(summary()), new PaperSummaryValidator(), config);
   }
 
+  /** {@code translations} の条件を再現するための補助情報を返す。 */
   PaperTranslationService translations() {
     return new PaperTranslationService(
         repo, store, content, model("{\"content\":\"原文\",\"glossary\":{}}"), config);
   }
 
+  /** 論文の調査と整理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @ParameterizedTest
   @EnumSource(PaperSummary.Mode.class)
   void summaryModesPersistAndReuse(PaperSummary.Mode mode) {
@@ -145,6 +173,7 @@ class PaperWorkflowTest {
     assertEquals(1, calls.get());
   }
 
+  /** 論文の調査と整理で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void summaryRefreshAndPromptVersion() {
     summaries().summarize(paper, PaperSummary.Mode.STANDARD, false, op);
@@ -154,15 +183,18 @@ class PaperWorkflowTest {
     assertEquals(3, calls.get());
   }
 
+  /** 論文の調査と整理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void modelVersionDoesNotReuseCache() {
     summaries().summarize(paper, PaperSummary.Mode.STANDARD, false, op);
     var other =
         new PaperLanguageModel() {
+          /** 検証で使用するモデルを、指定された条件に合わせて用意する。 */
           public String model() {
             return "other";
           }
 
+          /** {@code generate} の条件を再現するための補助情報を返す。 */
           public String generate(String s, String i, PaperOperation o) {
             calls.incrementAndGet();
             return summary();
@@ -173,6 +205,7 @@ class PaperWorkflowTest {
     assertEquals(2, calls.get());
   }
 
+  /** 論文の調査と整理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void rejectsFabricatedEvidence() {
     var invalid = model(summary().replace("\"text\":\"source\"", "\"text\":\"fiction\""));
@@ -184,6 +217,7 @@ class PaperWorkflowTest {
     assertTrue(repo.versions(paper.id()).stream().noneMatch(v -> v.kind().equals("summary")));
   }
 
+  /** 論文の調査と整理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @ParameterizedTest
   @EnumSource(PaperTranslation.Mode.class)
   void translationsPersistAndReuse(PaperTranslation.Mode mode) {
@@ -193,6 +227,7 @@ class PaperWorkflowTest {
     assertEquals("グラウンディング", result.glossary().get("grounding"));
   }
 
+  /** 論文の調査と整理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void translationRefreshVersionAndChunks() {
     config.setTranslationChunkSize(2);
@@ -205,6 +240,7 @@ class PaperWorkflowTest {
     assertEquals(9, calls.get());
   }
 
+  /** 論文の調査と整理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void glossaryCannotChangeAcrossChunks() {
     var bad = model("{\"content\":\"x\",\"glossary\":{\"grounding\":\"別訳\"}}");
@@ -215,15 +251,18 @@ class PaperWorkflowTest {
                 .translate(paper, PaperTranslation.Mode.TECHNICAL, null, false, op));
   }
 
+  /** 論文の調査と整理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void partialTranslationNeverBecomesCache() {
     config.setTranslationChunkSize(3);
     var bad =
         new PaperLanguageModel() {
+          /** 検証で使用するモデルを、指定された条件に合わせて用意する。 */
           public String model() {
             return "m";
           }
 
+          /** {@code generate} の条件を再現するための補助情報を返す。 */
           public String generate(String s, String i, PaperOperation o) {
             if (calls.incrementAndGet() == 2) throw new IllegalStateException();
             return "{\"content\":\"訳\",\"glossary\":{}}";
@@ -237,6 +276,7 @@ class PaperWorkflowTest {
     assertTrue(repo.versions(paper.id()).stream().noneMatch(v -> v.kind().equals("translation")));
   }
 
+  /** 論文の調査と整理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void metadataOnlyIsNotSummarized() {
     var p =
@@ -251,6 +291,7 @@ class PaperWorkflowTest {
     assertEquals(0, calls.get());
   }
 
+  /** 論文の調査と整理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledWriteAndTranslationDoNotPersist() {
     Thread.currentThread().interrupt();
@@ -266,6 +307,7 @@ class PaperWorkflowTest {
     assertEquals(0, calls.get());
   }
 
+  /** 論文の調査と整理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void waitingCancellationCancelsUnderlyingFuture() {
     var future = new CompletableFuture<String>();
@@ -279,6 +321,7 @@ class PaperWorkflowTest {
     }
   }
 
+  /** 保持期限を過ぎた情報の削除変更後について、削除する成果物一覧を取り除くことを確認する。 */
   @Test
   void purgeAfterRemoveDeletesArtifacts() {
     store.write(paper.id(), "originals", "pdf", new byte[] {1}, op);
@@ -291,10 +334,12 @@ class PaperWorkflowTest {
     assertThrows(PaperException.class, () -> library.remove(paper.id(), true, op));
   }
 
+  /** 論文の調査と整理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void artifactDeleteFailureHidesPendingPurgeAndCanRetry() {
     var failing =
         new PaperArtifactStore(dir, config) {
+          /** {@code purge} の条件を再現するため、検証用の操作や状態を扱う。 */
           @Override
           public void purge(String id, PaperOperation op) {
             throw new PaperException(PaperException.Code.LIBRARY_DELETE_FAILED, "test");
@@ -311,6 +356,7 @@ class PaperWorkflowTest {
         .remove(paper.id(), true, op);
   }
 
+  /** 論文の調査と整理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void corruptExtractedArtifactFallsBack() {
     store.write(paper.id(), "extracted", "json", "not json".getBytes(), op);
@@ -319,6 +365,7 @@ class PaperWorkflowTest {
     assertEquals(2, result.warnings().size());
   }
 
+  /** 付随情報を保存することを確認する。 */
   @Test
   void searchFallsBackAndSavesMetadata() {
     var primary =
@@ -342,6 +389,7 @@ class PaperWorkflowTest {
     assertTrue(repo.find(result.papers().getFirst().id()).isPresent());
   }
 
+  /** 論文の調査と整理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void bridgingIdentifiersMergesTwoRecordsWithoutBreakingOldIds() {
     var first =
@@ -385,6 +433,7 @@ class PaperWorkflowTest {
     assertEquals(1, repo.search("", 50).size());
   }
 
+  /** 不正なコマンド一覧を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -401,6 +450,7 @@ class PaperWorkflowTest {
     assertThrows(PaperException.class, () -> PaperCommandRequest.parse(input.split(" ")));
   }
 
+  /** コマンド一覧を受け付けられることを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {

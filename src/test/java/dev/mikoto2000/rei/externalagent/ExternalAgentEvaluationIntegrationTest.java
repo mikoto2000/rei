@@ -36,25 +36,31 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
 
+/** 外部エージェント評価外部連携の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ExternalAgentEvaluationIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 外部エージェントへの委譲で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void naturalLanguageReturnsToReiAndDoesNotPersistRawLogs() {
     evaluate(false, false);
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void slashDirectlyDelegatesAndReturnsToRei() {
     evaluate(true, false);
   }
 
+  /** 外部エージェントへの委譲で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void externalFailureStillGeneratesReiAnswer() {
     evaluate(true, true);
   }
 
+  /** {@code evaluate} の条件を再現するため、検証用の操作や状態を扱う。 */
   void evaluate(boolean slash, boolean failed) {
     String user = slash ? "/agent codex review" : "Codex にこの設計をレビューさせて";
     String expected = failed ? "Codex CLI unavailable" : "Evidence to evaluate";
@@ -96,14 +102,17 @@ class ExternalAgentEvaluationIntegrationTest {
     var calls = new AtomicInteger();
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、外部エージェントへの委譲で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build();
           }
 
+          /** 検証用に、外部エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             if (!slash && calls.getAndIncrement() == 0) {
               var call =

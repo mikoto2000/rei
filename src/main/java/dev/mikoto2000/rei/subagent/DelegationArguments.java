@@ -7,14 +7,21 @@ import java.util.Set;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
-/** Pure preflight: no approval creation, child dispatch or argument regeneration. */
+/**
+ * 補助エージェントへの委譲に必要な委譲引数を扱う。
+ *
+ * <p>Pure preflight: no approval creation, child dispatch or argument regeneration.
+ */
 public final class DelegationArguments {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private DelegationArguments() {}
 
+  /** 補助エージェントへの委譲で用いる任意を返す。 */
   public static String optional(String value) {
     return value == null || value.isBlank() ? null : value;
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public static void validate(String tool, String input) {
     var problems = problems(tool, input);
     if (!problems.isEmpty())
@@ -23,6 +30,7 @@ public final class DelegationArguments {
               + String.join("\n", problems));
   }
 
+  /** 補助エージェントへの委譲で用いる問題一覧を返す。 */
   public static List<String> problems(String tool, String input) {
     if (!Set.of("delegateTask", "delegateTasks").contains(tool)) return List.of();
     JsonNode root;
@@ -38,6 +46,7 @@ public final class DelegationArguments {
       return List.copyOf(errors);
     }
     var requests = root.path("requests");
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (!requests.isArray() || requests.isEmpty() || requests.size() > 8)
       return List.of("requests: must contain 1 to 8 items");
     var ids = new HashSet<String>();
@@ -46,6 +55,7 @@ public final class DelegationArguments {
     return List.copyOf(errors);
   }
 
+  /** 補助エージェントへの委譲に関する要求を処理する。 */
   private static void request(
       JsonNode request, boolean batch, Set<String> ids, List<String> errors, String prefix) {
     if (!request.isObject()) {
@@ -65,6 +75,7 @@ public final class DelegationArguments {
     if (agent == null) errors.add(prefix + ".agent: required");
     if (task == null) errors.add(prefix + ".task: required");
     else if (task.length() > 16384) errors.add(prefix + ".task: exceeds 16384 characters");
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (context != null && context.length() > 32768)
       errors.add(prefix + ".context: exceeds 32768 characters");
     String backend = text(request, "backendId", errors, prefix);
@@ -117,6 +128,7 @@ public final class DelegationArguments {
     }
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   private static String text(JsonNode request, String field, List<String> errors, String prefix) {
     try {
       return text(request, field);
@@ -126,6 +138,7 @@ public final class DelegationArguments {
     }
   }
 
+  /** 補助エージェントへの委譲において、arrayに該当するか判定する。 */
   private static boolean array(
       JsonNode request, String field, int max, int length, List<String> errors, String prefix) {
     try {
@@ -144,6 +157,7 @@ public final class DelegationArguments {
     }
   }
 
+  /** 表示や受け渡しに用いるテキストを返す。 */
   private static String text(JsonNode request, String field) {
     var value = request.path(field);
     if (value.isMissingNode() || value.isNull()) return null;
@@ -153,9 +167,11 @@ public final class DelegationArguments {
     return optional(value.asString());
   }
 
+  /** 補助エージェントへの委譲において、arrayに該当するか判定する。 */
   private static boolean array(JsonNode request, String field, int max, int length) {
     var value = request.path(field);
     if (value.isMissingNode() || value.isNull()) return false;
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (!value.isArray() || value.size() > max)
       throw new IllegalArgumentException(
           "Invalid delegation arguments: " + field + " must be a bounded array");

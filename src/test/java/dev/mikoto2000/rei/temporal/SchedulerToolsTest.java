@@ -7,7 +7,9 @@ import java.time.Instant;
 import java.time.ZoneId;
 import org.junit.jupiter.api.Test;
 
+/** 実行予定の管理ツール一覧の結果と状態の契約を検証するテスト。 */
 class SchedulerToolsTest {
+  /** 時刻と期間の解釈の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationIsExposedAsToolAndRemovesOnlyTheSelectedTimer() throws Exception {
     var tools = new SchedulerTools(new InMemoryAgentScheduler(Clock.systemUTC()));
@@ -29,6 +31,7 @@ class SchedulerToolsTest {
             "cancelScheduledAction"));
   }
 
+  /** 時刻と期間の解釈で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void scheduleAfterParsesHumanDurationWithoutSleeping() {
     Clock fixed = Clock.fixed(Instant.parse("2026-08-16T16:35:00Z"), ZoneId.of("Asia/Tokyo"));
@@ -40,6 +43,7 @@ class SchedulerToolsTest {
     assertEquals("check_server_status", actual.action());
   }
 
+  /** 時刻と期間の解釈で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void scheduleAtParsesOffsetDateTime() {
     Clock fixed = Clock.fixed(Instant.parse("2026-08-16T16:35:00Z"), ZoneId.of("Asia/Tokyo"));

@@ -23,20 +23,27 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
 
+/** 時間計測Overhead利用可否の確認の結果と状態の契約を検証するテスト。 */
 class TimingOverheadProbeTest {
+  /** 検証に使う回答。 */
   final ChatResponse answer =
       new ChatResponse(List.of(new Generation(new AssistantMessage("fixed"))));
+
+  /** 検証に使う委譲先。 */
   final ChatModel delegate =
       new ChatModel() {
+        /** 検証用に、用途に応じたモデル利用の要求を実行し、呼び出し元へ結果を返す。 */
         public ChatResponse call(Prompt prompt) {
           return answer;
         }
 
+        /** {@code stream} の条件を再現するための補助情報を返す。 */
         public Flux<ChatResponse> stream(Prompt prompt) {
           return Flux.just(answer);
         }
       };
 
+  /** {@code batch} の条件を再現するための補助情報を返す。 */
   long batch(boolean enabled, int batch) {
     var recorder =
         new TimingStore(
@@ -68,6 +75,7 @@ class TimingOverheadProbeTest {
     return elapsed;
   }
 
+  /** 有効状態および無効状態パス一覧について、出力を保持することを確認する。 */
   @Test
   void enabledAndDisabledPathsPreserveOutputAndEventCountAndReportMeasuredOverhead() {
     for (int i = 0; i < 3; i++) {

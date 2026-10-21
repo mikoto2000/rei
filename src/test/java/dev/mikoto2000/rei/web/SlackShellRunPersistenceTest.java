@@ -12,10 +12,13 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.support.DefaultListableBeanFactory;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** Slackシェル実行状態の保存の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SlackShellRunPersistenceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** Slack限定シェル実行について、登録台帳再開の後も対象の情報が残ることを確認する。 */
   @Test
   void slackOnlyShellRunSurvivesRegistryRestartWithWebEnabled() {
     var clock = Clock.systemUTC();

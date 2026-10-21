@@ -13,7 +13,9 @@ import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ToolContext;
 
+/** 実装ツール一覧の結果と状態の契約を検証するテスト。 */
 class ImplementationToolsTest {
+  /** 公開ツール一覧について、取得済み実行を利用することを確認する。 */
   @Test
   void publicToolsUseCapturedRunAndPersistedRequestIdentity() {
     var delegation = mock(ExternalAgentDelegationService.class);
@@ -50,6 +52,7 @@ class ImplementationToolsTest {
     assertFalse(execution.getToolDefinition().inputSchema().contains("toolContext"));
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void targetOnlySlashEntryAsksForRequirementsWithoutLaunchingCodex() {
     var executor =

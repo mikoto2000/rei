@@ -25,8 +25,22 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
 
-/** A single owned process tree; streams are drained concurrently with a shared byte budget. */
+/**
+ * 外部エージェントへの委譲に必要な外部エージェントプロセス実行の担当を扱う。
+ *
+ * <p>A single owned process tree; streams are drained concurrently with a shared byte budget.
+ */
 public class ExternalAgentProcessRunner {
+  /**
+   * 外部エージェントへの委譲で受け渡す出力を表す。
+   *
+   * @param status 状態
+   * @param stdout 標準出力
+   * @param stderr 標準エラー出力
+   * @param exitCode 終了コード
+   * @param duration 継続時間
+   * @param truncated 省略の有無
+   */
   public record Output(
       Status status,
       String stdout,
@@ -35,6 +49,7 @@ public class ExternalAgentProcessRunner {
       long duration,
       boolean truncated) {}
 
+  /** 外部エージェントへの委譲の操作を実行する。 */
   public Output run(
       List<String> command,
       Path root,
@@ -140,9 +155,14 @@ public class ExternalAgentProcessRunner {
         capture.truncated);
   }
 
-  /** Per-adapter child environment only; never changes the host process or saved credentials. */
+  /**
+   * 外部エージェントへの委譲に関する設定実行環境を処理する。
+   *
+   * <p>Per-adapter child environment only; never changes the host process or saved credentials.
+   */
   protected void configureEnvironment(Map<String, String> environment) {}
 
+  /** 外部エージェントへの委譲で用いるOSの機能引数を返す。 */
   private static List<String> nativeArguments(List<String> command) {
     // JDK Windows legacy mode preserves shell-style quotes verbatim in the command line;
     // the native argv parser then consumes them. Encode literal quotes for the native parser.
@@ -169,6 +189,7 @@ public class ExternalAgentProcessRunner {
     return encoded;
   }
 
+  /** 外部エージェントへの委譲に関する残っている対象の処理を処理する。 */
   private static void drain(
       InputStream stream, Capture capture, boolean stderr, AtomicLong activity) {
     try (stream) {
@@ -183,6 +204,7 @@ public class ExternalAgentProcessRunner {
     }
   }
 
+  /** 外部エージェントへの委譲に関する後片付けを処理する。 */
   private static void cleanup(Process process, Set<ProcessHandle> known) {
     rememberDescendants(process, known);
     // Kill children while their parent can still reap them; retain handles across parent exit.
@@ -205,10 +227,12 @@ public class ExternalAgentProcessRunner {
     try {
       process.waitFor(1, TimeUnit.SECONDS);
     } catch (InterruptedException error) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
     }
   }
 
+  /** 外部エージェントへの委譲で用いる保護されたプロセス識別子一覧を返す。 */
   private static Set<Long> protectedProcessIds() {
     if (com.sun.jna.Platform.isWindows()) {
       var kernel = com.sun.jna.platform.win32.Kernel32.INSTANCE;
@@ -245,15 +269,18 @@ public class ExternalAgentProcessRunner {
     return ids;
   }
 
+  /** 外部エージェントへの委譲で用いるancestor識別子一覧を返す。 */
   static Set<Long> ancestorIds(Map<Long, Long> parents, long current) {
     var ids = new HashSet<Long>();
     while (current != 0 && ids.add(current)) {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (ids.size() > 64) throw new IllegalStateException("Process ancestry limit");
       current = parents.getOrDefault(current, 0L);
     }
     return Set.copyOf(ids);
   }
 
+  /** 外部エージェントへの委譲に関するrememberDescendantsを処理する。 */
   private static void rememberDescendants(Process process, Set<ProcessHandle> known) {
     // Windows can retain a stale parent PID after exit. Never infer ownership from
     // an exited root, an older process, or a snapshot taken across root exit.
@@ -276,17 +303,27 @@ public class ExternalAgentProcessRunner {
     }
   }
 
+  /** 外部エージェントへの委譲に必要な取得記録を扱う。 */
   private static final class Capture {
+    /** 標準出力。 */
     private final ByteArrayOutputStream stdout = new ByteArrayOutputStream();
+
+    /** 標準エラー出力。 */
     private final ByteArrayOutputStream stderr = new ByteArrayOutputStream();
+
+    /** 残量。 */
     private int remaining;
+
+    /** 省略の有無。 */
     private boolean truncated;
 
+    /** 指定された値や利用先を使って、Captureを初期化する。 */
     Capture(int bytes) {
       if (bytes < 1) throw new IllegalArgumentException("Output limit must be positive");
       remaining = bytes;
     }
 
+    /** 新たな対象を登録し、後から利用できるようにする。 */
     synchronized void add(byte[] bytes, int size, boolean err) {
       int keep = Math.min(size, remaining);
       (err ? stderr : stdout).write(bytes, 0, keep);
@@ -294,6 +331,7 @@ public class ExternalAgentProcessRunner {
       truncated |= keep < size;
     }
 
+    /** 表示や受け渡しに用いるテキストを返す。 */
     synchronized String text(boolean err) {
       return (err ? stderr : stdout).toString(StandardCharsets.UTF_8);
     }

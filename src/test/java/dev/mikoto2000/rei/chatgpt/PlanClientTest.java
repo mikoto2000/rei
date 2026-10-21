@@ -17,7 +17,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 計画クライアントの結果と状態の契約を検証するテスト。 */
 class PlanClientTest {
+  /** 利用できないモデル一覧を受け付けないことを確認する。 */
   @Test
   void ownAccountLeaseIsInvalidatedByLogoutGenerationAndRejectsUnavailableModels() {
     PlanTransport transport = (u, m, h, b, t, c) -> PlanOAuthTest.reply(200, MODELS);
@@ -33,6 +35,7 @@ class PlanClientTest {
         assertThrows(ChatGptException.class, () -> client.lease("default", "unknown")).code());
   }
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void explicitHistoryUsesOnlySupportedInputAndNoServerContinuation() {
     PlanTransport transport =
@@ -76,8 +79,10 @@ class PlanClientTest {
         () -> new PlanClient.Input("system", "injected instructions"));
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** {@code oauth} の条件を再現するための補助情報を返す。 */
   PlanOAuth oauth(PlanTransport transport) {
     var store = new ProtectedCredentialStore(root, ProtectedCredentialStoreTest.TEST_PROTECTION);
     store.locked(
@@ -88,6 +93,7 @@ class PlanClientTest {
     return new PlanOAuth(store, transport, (i, c, n) -> null, Clock.systemUTC());
   }
 
+  /** 検証用に、受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   static com.fasterxml.jackson.databind.JsonNode parse(byte[] bytes) {
     try {
       return new com.fasterxml.jackson.databind.ObjectMapper().readTree(bytes);
@@ -96,9 +102,11 @@ class PlanClientTest {
     }
   }
 
+  /** 検証に使うモデル一覧。 */
   static final String MODELS =
       "{\"models\":[{\"slug\":\"hidden\",\"display_name\":\"Hidden\",\"visibility\":\"hidden\"},{\"slug\":\"allowed\",\"display_name\":\"Allowed\",\"visibility\":\"list\"}]}";
 
+  /** 利用可能な項目について、表示対象モデル一覧を保持することを確認する。 */
   @Test
   void catalogPreservesVisibleModelsAndRefreshes() {
     var calls = new AtomicInteger();
@@ -117,6 +125,7 @@ class PlanClientTest {
     assertEquals(2, calls.get());
   }
 
+  /** ChatGPTとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownModelNeverSendsInference() {
     AtomicInteger calls = new AtomicInteger();
@@ -144,6 +153,7 @@ class PlanClientTest {
     assertEquals(1, calls.get());
   }
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void responsesBodyContainsOnlyAllowedParameters() {
     PlanTransport transport =
@@ -178,6 +188,7 @@ class PlanClientTest {
             .text());
   }
 
+  /** ChatGPTとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void admissionErrorsAreSanitizedAndClassified() {
     for (int status : new int[] {401, 403, 429, 503}) {
@@ -200,6 +211,7 @@ class PlanClientTest {
     }
   }
 
+  /** ChatGPTとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void emptyCatalogIsValidAndMalformedCatalogFails() {
     PlanTransport empty = (u, m, h, b, t, c) -> PlanOAuthTest.reply(200, "{\"models\":[]}");
@@ -211,6 +223,7 @@ class PlanClientTest {
         () -> new PlanClient(oauth(bad), bad, Clock.systemUTC()).models("default", true));
   }
 
+  /** 上限確認済みを送信することを確認する。 */
   @Test
   void sendLimitIsCheckedBeforeInference() {
     AtomicInteger calls = new AtomicInteger();
@@ -238,6 +251,7 @@ class PlanClientTest {
     assertEquals(1, calls.get());
   }
 
+  /** ChatGPTとの連携の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancelledProbeDoesNotStart() {
     PlanTransport transport =
@@ -262,6 +276,7 @@ class PlanClientTest {
             .code());
   }
 
+  /** 大きすぎるHTTP通信エラー一覧について、状態を維持することを確認する。 */
   @Test
   void oversizedHttpErrorsKeepStatusInsteadOfReceiveLimit() {
     for (int status : new int[] {401, 403, 429, 500, 503}) {
@@ -282,6 +297,7 @@ class PlanClientTest {
     }
   }
 
+  /** ChatGPTとの連携で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void incorrectContentTypeIsProtocolEvenForOversizedBody() {
     PlanTransport transport =
@@ -301,6 +317,7 @@ class PlanClientTest {
             .code());
   }
 
+  /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void catalogBoundariesCountUtf8BytesAndExposeOnlyObservedMetadata() {
     String base = MODELS.replace("Allowed", "日本語");
@@ -332,6 +349,7 @@ class PlanClientTest {
     }
   }
 
+  /** API分類を維持することを確認する。 */
   @Test
   void responseAdmissionHasSeparateBoundedErrorReadAndKeepsApiClassification() {
     for (String errorBody :
@@ -374,6 +392,7 @@ class PlanClientTest {
     }
   }
 
+  /** ChatGPTとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void malformedJsonAndEncodedOrMissingMediaTypeFailSafely() {
     for (String body : new String[] {"{", MODELS + " {}"}) {
@@ -420,6 +439,7 @@ class PlanClientTest {
             .code());
   }
 
+  /** ChatGPTとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void statusMasksRegistrationAndSubjectWithoutNetwork() {
     PlanTransport transport =
@@ -436,6 +456,7 @@ class PlanClientTest {
     assertEquals(java.util.Set.of("default"), oauth.authorizedAccounts());
   }
 
+  /** ChatGPTとの連携で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void receiveLimitBeforeModelsIdentifiesOAuthRefreshWithoutClearingCredentials() {
     var store = new ProtectedCredentialStore(root, ProtectedCredentialStoreTest.TEST_PROTECTION);
@@ -471,6 +492,7 @@ class PlanClientTest {
     assertEquals("refresh-secret", store.locked(s -> s.load("default")).refreshToken());
   }
 
+  /** ChatGPTとの連携で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void twoMiBCatalogLimitDoesNotRelaxHttpErrorOrSseLimits() {
     String apiError = "{\"error\":{\"code\":\"subscription_sharing_usage_unavailable\"}}";
@@ -535,6 +557,7 @@ class PlanClientTest {
     }
   }
 
+  /** 未指定応答一覧メディア種別引き続きについて、検証済み終端イベント配信を必要とすることを確認する。 */
   @Test
   void missingResponsesMediaTypeStillRequiresValidatedTerminalSse() {
     for (String header : new String[] {"", "   "}) {
@@ -567,6 +590,7 @@ class PlanClientTest {
     }
   }
 
+  /** ChatGPTとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void missingMediaTypeDoesNotConvertFailedOrPartialStreamToSuccess() {
     for (String type :
@@ -602,6 +626,7 @@ class PlanClientTest {
     }
   }
 
+  /** 未指定メディア種別について、以外イベント配信を受け付けないことを確認する。 */
   @Test
   void missingMediaTypeRejectsNonSseWithoutLeakingBodyAndReportsObservedBytes() {
     for (String body :
@@ -642,6 +667,7 @@ class PlanClientTest {
     }
   }
 
+  /** ChatGPTとの連携で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void explicitWrongMediaTypeAndEncodedMissingTypeStayRejectedBeforeBodyRead() {
     for (String type :

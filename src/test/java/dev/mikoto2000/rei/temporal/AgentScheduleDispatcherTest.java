@@ -42,12 +42,19 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** エージェント実行予定実行先の振り分けの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class AgentScheduleDispatcherTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使うschedules。 */
   PersistentAgentScheduler schedules;
+
+  /** 検証に使う識別子。 */
   String id;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     schedules =
@@ -62,6 +69,7 @@ class AgentScheduleDispatcherTest {
     schedules.activate("00000000-0000-0000-0000-000000000001", id);
   }
 
+  /** {@code dispatcher} の条件を再現するための補助情報を返す。 */
   AgentScheduleDispatcher dispatcher(
       boolean enabled, boolean permission, AgentScheduleDispatcher.Gateway gateway) {
     return new AgentScheduleDispatcher(
@@ -71,6 +79,7 @@ class AgentScheduleDispatcherTest {
         gateway);
   }
 
+  /** 時刻と期間の解釈で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void neitherDefaultDisabledNorDisabledPolicyCanDispatch() {
     var calls = new AtomicInteger();
@@ -82,6 +91,7 @@ class AgentScheduleDispatcherTest {
     assertEquals("SCHEDULED", schedules.get("00000000-0000-0000-0000-000000000001", id).status());
   }
 
+  /** 時刻と期間の解釈で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void dispatchIsBoundedAndRecordsActualCompletionWithoutRepeating() {
     var calls = new AtomicInteger();
@@ -105,6 +115,7 @@ class AgentScheduleDispatcherTest {
     assertEquals("Done", schedules.get("00000000-0000-0000-0000-000000000001", id).outcome());
   }
 
+  /** 時刻と期間の解釈の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void dispatchFailureAndCancellationRemainTerminal() {
     var failed =
@@ -127,6 +138,7 @@ class AgentScheduleDispatcherTest {
     assertEquals("CANCELLED", schedules.get("00000000-0000-0000-0000-000000000001", id).status());
   }
 
+  /** 時刻と期間の解釈で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void shellControlsAreProjectScopedAndNeverDispatchDirectly() {
     var projects = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.project.ProjectService.class);
@@ -145,6 +157,7 @@ class AgentScheduleDispatcherTest {
     assertEquals(2, cli.execute("activate", id));
   }
 
+  /** 実際の受付窓口について、取得済み所有者を利用することを確認する。 */
   @Test
   void actualGatewayUsesCapturedOwnerAndExistingProjectFifo() {
     String project = schedules.get("00000000-0000-0000-0000-000000000001", id).projectId();
@@ -199,6 +212,15 @@ class AgentScheduleDispatcherTest {
     assertEquals("COMPLETED", schedules.get(project, id).status());
   }
 
+  /**
+   * 検証条件の再現に使うHarnessの情報。
+   *
+   * @param projects 検証に使うプロジェクト一覧
+   * @param chat 検証に使うチャット
+   * @param router 検証に使う入力の振り分け
+   * @param jobs 検証に使う実行する作業一覧
+   * @param dispatcher 検証に使う実行先の振り分け
+   */
   record Harness(
       dev.mikoto2000.rei.core.project.ProjectService projects,
       ChatExecutionService chat,
@@ -206,6 +228,7 @@ class AgentScheduleDispatcherTest {
       ArrayDeque<Runnable> jobs,
       AgentScheduleDispatcher dispatcher) {}
 
+  /** 時刻と期間の解釈で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void waitingScheduleKeepsItsClaimUntilSavedContinuationCompletes() {
     var h = harness();
@@ -230,6 +253,7 @@ class AgentScheduleDispatcherTest {
     assertEquals("COMPLETED", schedules.get("00000000-0000-0000-0000-000000000001", id).status());
   }
 
+  /** {@code harness} の条件を再現するための補助情報を返す。 */
   Harness harness() {
     String project = "00000000-0000-0000-0000-000000000001";
     var projects = mock(dev.mikoto2000.rei.core.project.ProjectService.class);
@@ -260,6 +284,7 @@ class AgentScheduleDispatcherTest {
             chat));
   }
 
+  /** 登録済み実行予定について、実際の実行受付から終了までの管理を利用することを確認する。 */
   @Test
   void trackedScheduleUsesActualRunLifecycleAndSavedSession() {
     var h = harness();
@@ -297,6 +322,7 @@ class AgentScheduleDispatcherTest {
     }
   }
 
+  /** 時刻と期間の解釈の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void normalRunCancellationReleasesQueuedScheduleWithoutExecutingChat() {
     var h = harness();
@@ -320,6 +346,7 @@ class AgentScheduleDispatcherTest {
       assertFalse(lifecycle.cancel(run).accepted());
       assertEquals("CANCELLED", schedules.get(project, id).status());
       h.jobs().remove().run();
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(h.chat());
       assertTrue(h.jobs().isEmpty());
       String next;
@@ -332,6 +359,7 @@ class AgentScheduleDispatcherTest {
     }
   }
 
+  /** 時刻と期間の解釈の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationBeforeWorkerStartsSkipsChatAndFinishesSavedSchedule() {
     var h = harness();
@@ -351,12 +379,14 @@ class AgentScheduleDispatcherTest {
       assertTrue(lifecycle.cancel(run).accepted());
       h.jobs().remove().run();
       assertEquals("CANCELLED", schedules.get(project, id).status());
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(h.chat());
       assertEquals(
           dev.mikoto2000.rei.application.run.RunStatus.CANCELLED, lifecycle.get(run).status());
     }
   }
 
+  /** 時刻と期間の解釈で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedTrackedChatHasOneTerminalEventAndNoSuccessfulSchedule() {
     var h = harness();
@@ -395,6 +425,7 @@ class AgentScheduleDispatcherTest {
     }
   }
 
+  /** 時刻と期間の解釈で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void currentQueuedAndExecutingSchedulesCannotBeReconciled() {
     var h = harness();
@@ -413,6 +444,7 @@ class AgentScheduleDispatcherTest {
     assertEquals("COMPLETED", schedules.get(project, id).status());
   }
 
+  /** 実行先の振り分けを解放することを確認する。 */
   @Test
   void shellReconciliationAfterQueueRemovalReleasesDispatcherWithoutReplayingOldJob() {
     var h = harness();
@@ -430,6 +462,7 @@ class AgentScheduleDispatcherTest {
         new picocli.CommandLine(command)
             .execute("reconcile", id, "--run-id", run, "--acknowledge-uncertain-side-effects"));
     assertEquals("FAILED", schedules.get(project, id).status());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(h.chat());
     String next;
     try (var scope = AgentRunScope.open(new AgentRunContext("source", "s", dir, project))) {
@@ -445,6 +478,7 @@ class AgentScheduleDispatcherTest {
     assertEquals("COMPLETED", schedules.get(project, next).status());
   }
 
+  /** 時刻と期間の解釈で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void staleCompletionCannotReleaseNewDispatcherClaim() {
     String project = "00000000-0000-0000-0000-000000000001";

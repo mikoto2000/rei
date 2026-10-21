@@ -15,35 +15,65 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.stereotype.Service;
 
-/** Named memory maintenance over durable Session admission; it writes no conversation turns. */
+/**
+ * 記憶実行受付のユースケースを実現する。
+ *
+ * <p>Named memory maintenance over durable Session admission; it writes no conversation turns.
+ */
 @Service
 @ConditionalOnProperty(name = "rei.web.enabled", havingValue = "true")
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public final class MemoryRunSubmitService {
+  /** プロジェクト一覧。 */
   private final ProjectRegistry projects;
+
+  /** 受付から終了までの管理。 */
   private final SessionLifecycle lifecycle;
+
+  /** 登録台帳。 */
   private final RunRegistry registry;
+
+  /** 実行一覧。 */
   private final RunService runs;
+
+  /** 入力の振り分け。 */
   private final ConversationInputRouter router;
+
+  /** キャンセル。 */
   private final CommandCancellationService cancellation;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** 通知の連携先。 */
   private final AgentEventBus bus;
+
+  /** 待機。 */
   private final SleepService sleep;
+
+  /** 補助。 */
   private final MemoryCommandSupport support;
+
+  /** 要約。 */
   private dev.mikoto2000.rei.memory.command.MemoryCommand.SummarizeCommand summary;
+
+  /** 統合。 */
   private dev.mikoto2000.rei.memory.command.MemoryCommand.ConsolidateCommand consolidation;
 
+  /** 実行の受付と状態管理で使用する要約を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setSummary(dev.mikoto2000.rei.memory.command.MemoryCommand.SummarizeCommand summary) {
     this.summary = summary;
   }
 
+  /** 実行の受付と状態管理で使用する統合を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setConsolidation(
       dev.mikoto2000.rei.memory.command.MemoryCommand.ConsolidateCommand consolidation) {
     this.consolidation = consolidation;
   }
 
+  /** 指定された値や利用先を使って、MemoryRunSubmitServiceを初期化する。 */
   public MemoryRunSubmitService(
       ProjectRegistry projects,
       SessionLifecycle lifecycle,
@@ -67,6 +97,7 @@ public final class MemoryRunSubmitService {
     this.support = support;
   }
 
+  /** 実行の受付と状態管理で用いる待機を返す。 */
   public AgentRunContext sleep(String projectId, String sessionId, boolean preview, String key) {
     return submit(
         projectId,
@@ -78,6 +109,7 @@ public final class MemoryRunSubmitService {
         context -> executeSleep(context, preview));
   }
 
+  /** 対象の内容を、要点が分かる形にまとめる。 */
   public AgentRunContext summarize(
       String projectId, String sessionId, boolean approve, String key) {
     return submit(
@@ -98,6 +130,7 @@ public final class MemoryRunSubmitService {
                 }));
   }
 
+  /** 実行の受付と状態管理で用いるconsolidateを返す。 */
   public AgentRunContext consolidate(
       String projectId, String sessionId, boolean approve, String key) {
     return submit(
@@ -118,6 +151,7 @@ public final class MemoryRunSubmitService {
                 }));
   }
 
+  /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
   private AgentRunContext submit(
       String projectId,
       String sessionId,
@@ -164,6 +198,7 @@ public final class MemoryRunSubmitService {
         });
   }
 
+  /** 依頼された操作を進めるため、レポートを実行する。 */
   private void executeReport(
       AgentRunContext context, String operation, java.util.function.Supplier<String> report) {
     try (var scope = AgentRunScope.open(context)) {
@@ -187,6 +222,7 @@ public final class MemoryRunSubmitService {
     }
   }
 
+  /** 依頼された操作を進めるため、待機を実行する。 */
   private void executeSleep(AgentRunContext context, boolean preview) {
     try (var scope = AgentRunScope.open(context)) {
       cancellation.begin(Thread.currentThread());

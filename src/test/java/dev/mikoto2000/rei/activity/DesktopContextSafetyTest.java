@@ -11,7 +11,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** デスクトップ文脈安全性の結果と状態の契約を検証するテスト。 */
 class DesktopContextSafetyTest {
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void supplementalCandidatesNeverBecomePrimaryOrChangeTime() {
     var record =
@@ -29,6 +31,7 @@ class DesktopContextSafetyTest {
         merged.detection().visionDiagnostics().background().context().observedAt());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void masksExcludedBackgroundAndSelectedAreasWithoutMutatingOriginal() {
     var p = new ActivityProperties();
@@ -54,6 +57,7 @@ class DesktopContextSafetyTest {
     assertNull(ActivityImages.privateDesktop(screen, metadata, p));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void backgroundPolicyHasCooldownHourlyCapAndIdleSuppression() {
     var p = new ActivityProperties();
@@ -74,6 +78,7 @@ class DesktopContextSafetyTest {
     assertTrue(gate.due(at.plusSeconds(3600), false, "another"));
   }
 
+  /** 排他制御識別情報を維持することを確認する。 */
   @Test
   void masksPhysicalPixelsOnNegativeOriginAndKeepsMonitorIdentity() {
     var bounds = new java.awt.Rectangle(-40, 0, 20, 20);
@@ -102,6 +107,7 @@ class DesktopContextSafetyTest {
     assertEquals(0xffffff, image.getRGB(1, 1) & 0xffffff);
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unknownExcludedBoundsFailClosedAndInvalidSettingsAreRejected() {
     var p = new ActivityProperties();
@@ -117,6 +123,7 @@ class DesktopContextSafetyTest {
     assertThrows(IllegalArgumentException.class, p::validate);
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void actualDesktopStartsRespectRollingLimitDespiteQueueDelays() {
     var p = new ActivityProperties();

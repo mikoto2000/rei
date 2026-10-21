@@ -6,14 +6,21 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+/** タスクをモデルから呼び出せるツールとして提供する。 */
 @Component
 @RequiredArgsConstructor
 public class TaskTools {
 
+  /** タスクサービス。 */
   private final TaskService taskService;
+
+  /** 通知先。 */
   private dev.mikoto2000.rei.event.AgentEventPublisher publisher;
+
+  /** イベント一覧。 */
   private dev.mikoto2000.rei.event.AgentEventFactory events;
 
+  /** タスクの管理で使用するイベント一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setEvents(
       dev.mikoto2000.rei.event.AgentEventPublisher publisher,
@@ -22,6 +29,7 @@ public class TaskTools {
     this.events = events;
   }
 
+  /** 状態や結果を購読先へ通知する。 */
   private void publish(java.util.function.Supplier<dev.mikoto2000.rei.event.AgentEvent> event) {
     if (publisher != null && events != null)
       try {
@@ -32,12 +40,14 @@ public class TaskTools {
       }
   }
 
+  /** タスクの管理で用いるタスク一覧を返す。 */
   @Tool(name = "taskList", description = "未完了タスクを一覧します")
   List<Task> taskList() {
     IO.println("未完了タスクを一覧するよ");
     return taskService.listOpen();
   }
 
+  /** タスクの管理で用いるタスク作成を返す。 */
   @Tool(name = "taskCreate", description = "タスクを作成します。dueDate は yyyy-MM-dd 形式です。")
   Task taskCreate(String title, String dueDate, int priority) {
     IO.println(String.format("タスク %s を作成するよ。期限=%s、優先度=%d", title, dueDate, priority));
@@ -58,6 +68,7 @@ public class TaskTools {
     }
   }
 
+  /** タスクの管理で用いるタスク更新を返す。 */
   @Tool(
       name = "taskUpdate",
       description =
@@ -73,6 +84,7 @@ public class TaskTools {
         priority);
   }
 
+  /** タスクの管理で用いるタスク完了を返す。 */
   @Tool(name = "taskComplete", description = "タスクを完了にします")
   Task taskComplete(long id) {
     IO.println(String.format("タスク %d を完了にするよ", id));
@@ -96,6 +108,7 @@ public class TaskTools {
     }
   }
 
+  /** タスクの管理で用いるタスク更新期限を返す。 */
   @Tool(
       name = "taskUpdateDeadline",
       description = "タスクの期限を更新します。dueDate は yyyy-MM-dd 形式です。null または空文字で期限をクリアします。")
@@ -105,12 +118,14 @@ public class TaskTools {
         id, dueDate == null || dueDate.isBlank() ? null : LocalDate.parse(dueDate));
   }
 
+  /** タスクの管理に関するタスク削除を処理する。 */
   @Tool(name = "taskDelete", description = "タスクを削除します")
   void taskDelete(long id) {
     IO.println(String.format("タスク %d を削除するよ", id));
     taskService.delete(id);
   }
 
+  /** タスクの管理で用いる利用者Facingメッセージを返す。 */
   private String userFacingMessage(Throwable error, String fallback) {
     Throwable root = rootCause(error);
     String message = root.getMessage();
@@ -126,6 +141,7 @@ public class TaskTools {
     return fallback + ": " + message;
   }
 
+  /** タスクの管理で用いる作業ルート原因を返す。 */
   private Throwable rootCause(Throwable error) {
     Throwable current = error;
     while (current.getCause() != null) {

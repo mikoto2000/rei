@@ -9,9 +9,11 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 記憶サービス外部連携の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class MemoryServiceIntegrationTest {
 
+  /** 初期化データ形式について、必須保存テーブル一覧を作成することを確認する。 */
   @Test
   void initializeSchemaCreatesRequiredTables() throws Exception {
     var tempDir = Files.createTempDirectory("rei-memory-it-");

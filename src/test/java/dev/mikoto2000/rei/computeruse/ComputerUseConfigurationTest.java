@@ -13,8 +13,10 @@ import org.junit.jupiter.api.Test;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 
+/** 画面操作利用機能の構成の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ComputerUseConfigurationTest {
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void selectsShowUiOnlyWhenConfigured() {
     runner
@@ -32,8 +34,10 @@ class ComputerUseConfigurationTest {
         .run(context -> assertThat(context).hasFailed());
   }
 
+  /** 検証に使う診断情報ディレクトリ。 */
   @org.junit.jupiter.api.io.TempDir java.nio.file.Path diagnosticsDirectory;
 
+  /** 設定済みディレクトリを利用することを確認する。 */
   @Test
   void diagnosticsAreOptInAndUseConfiguredDirectory() {
     runner
@@ -50,6 +54,7 @@ class ComputerUseConfigurationTest {
                     .isEqualTo(diagnosticsDirectory));
   }
 
+  /** 検証に使う実行の担当。 */
   private final ApplicationContextRunner runner =
       new ApplicationContextRunner()
           .withUserConfiguration(ComputerUseConfiguration.class)
@@ -65,6 +70,7 @@ class ComputerUseConfigurationTest {
               AgentEventFactory.class, () -> new AgentEventFactory(java.time.Clock.systemUTC()))
           .withBean(AgentEventPublisher.class, () -> event -> {});
 
+  /** 無効状態別既定およびについて、必要時に取得するデスクトップ連携の窓口一覧を作成することを確認する。 */
   @Test
   void disabledByDefaultAndCreatesLazyDesktopAdaptersWhenEnabled() {
     runner.run(context -> assertThat(context).doesNotHaveBean(ComputerUseTools.class));
@@ -82,6 +88,7 @@ class ComputerUseConfigurationTest {
             });
   }
 
+  /** 上限のない設定を受け付けないことを確認する。 */
   @Test
   void rejectsUnboundedSettings() {
     runner

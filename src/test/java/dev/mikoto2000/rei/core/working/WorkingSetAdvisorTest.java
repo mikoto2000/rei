@@ -20,10 +20,13 @@ import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
+/** 作業中集合対話の補助の結果と状態の契約を検証するテスト。 */
 class WorkingSetAdvisorTest {
 
+  /** 検証に使うタイムゾーン。 */
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
 
+  /** 作業中の情報管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void workingSetIsInjectedIntoUserMessage() {
     Clock clock = Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE);
@@ -53,6 +56,7 @@ class WorkingSetAdvisorTest {
     assertTrue(payload.contextCharacters() > 0);
   }
 
+  /** 作業中の情報管理で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void emptyWorkingSetLeavesMessageUnchanged() {
     WorkingSet ws = new WorkingSet(20, Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE));
@@ -66,6 +70,7 @@ class WorkingSetAdvisorTest {
     assertEquals("hello", result.prompt().getUserMessage().getText());
   }
 
+  /** 作業中の情報管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void emptyWorkingSetDoesNotPublishContextInjectedEvent() {
     Clock clock = Clock.fixed(Instant.parse("2026-08-17T00:00:00Z"), ZONE);
@@ -83,7 +88,9 @@ class WorkingSetAdvisorTest {
     assertTrue(received.isEmpty());
   }
 
+  /** 検証条件を再現するためのNoop対話の補助Chain。 */
   private static final class NoopAdvisorChain implements AdvisorChain {
+    /** 検証用に、作業中の情報管理で参照する観測内容登録台帳を返す。 */
     @Override
     public io.micrometer.observation.ObservationRegistry getObservationRegistry() {
       return io.micrometer.observation.ObservationRegistry.NOOP;

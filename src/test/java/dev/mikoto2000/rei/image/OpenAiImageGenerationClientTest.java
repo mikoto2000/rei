@@ -13,8 +13,10 @@ import org.springframework.ai.image.ImageModel;
 import org.springframework.ai.image.ImagePrompt;
 import org.springframework.ai.image.ImageResponse;
 
+/** 開始AI画像生成クライアントの結果と状態の契約を検証するテスト。 */
 class OpenAiImageGenerationClientTest {
 
+  /** 画像の生成で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void requestOverridesDoNotReplaceConfiguredSdkTimeout() {
     var timeout = new java.util.concurrent.atomic.AtomicInteger();
@@ -56,6 +58,7 @@ class OpenAiImageGenerationClientTest {
     assertThat(timeout).hasValue(117000);
   }
 
+  /** 画像の生成で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void buildsImagePromptWithOnlyRequestedOverrides() {
     ImageModel imageModel = Mockito.mock(ImageModel.class);
@@ -77,6 +80,7 @@ class OpenAiImageGenerationClientTest {
     assertThat(prompt.getOptions().getResponseFormat()).isEqualTo("b64_json");
   }
 
+  /** 画像の生成で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void omitsResponseFormatForGptImageModelInAutoMode() {
     ImageModel imageModel = Mockito.mock(ImageModel.class);
@@ -93,6 +97,7 @@ class OpenAiImageGenerationClientTest {
     assertThat(prompt.getOptions().getResponseFormat()).isNull();
   }
 
+  /** 画像の生成で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void omitsResponseFormatWhenConfiguredAsNone() {
     ImageModelProvider provider = Mockito.mock(ImageModelProvider.class);
@@ -108,6 +113,7 @@ class OpenAiImageGenerationClientTest {
     assertThat(prompt.getOptions().getResponseFormat()).isNull();
   }
 
+  /** 応答形式を送信することを確認する。 */
   @Test
   void sendsResponseFormatWhenConfiguredAsBase64Json() {
     ImageModelProvider provider = Mockito.mock(ImageModelProvider.class);
@@ -123,6 +129,7 @@ class OpenAiImageGenerationClientTest {
     assertThat(prompt.getOptions().getResponseFormat()).isEqualTo("b64_json");
   }
 
+  /** 基準64画像データを返すことを確認する。 */
   @Test
   void returnsBase64ImageDataFromImageModel() {
     ImageModel imageModel = Mockito.mock(ImageModel.class);
@@ -136,6 +143,7 @@ class OpenAiImageGenerationClientTest {
         .isEqualTo("abc");
   }
 
+  /** 未指定画像データを受け付けないことを確認する。 */
   @Test
   void rejectsMissingImageData() {
     ImageModel imageModel = Mockito.mock(ImageModel.class);
@@ -151,6 +159,7 @@ class OpenAiImageGenerationClientTest {
         .hasMessageContaining("画像データ");
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   private ImageResponse response(String base64) {
     return new ImageResponse(List.of(new ImageGeneration(new Image(null, base64))));
   }

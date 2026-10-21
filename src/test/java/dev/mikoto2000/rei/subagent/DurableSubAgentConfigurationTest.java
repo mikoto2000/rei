@@ -10,7 +10,9 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.test.context.runner.ApplicationContextRunner;
 import org.sqlite.SQLiteDataSource;
 
+/** 永続化された補助エージェント機能の構成の結果と状態の契約を検証するテスト。 */
 class DurableSubAgentConfigurationTest {
+  /** 評価の合意について、両方永続化されたを必要とすることを確認する。 */
   @Test
   void consensusRequiresBothDurableAndConsensusOptIn() {
     var source = new SQLiteDataSource();
@@ -46,8 +48,10 @@ class DurableSubAgentConfigurationTest {
         .run(app -> assertThat(app).hasSingleBean(SubAgentConsensusService.class));
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void disabledByDefaultAndEnabledOnlyByExplicitConfiguration() {
     var source = new SQLiteDataSource();

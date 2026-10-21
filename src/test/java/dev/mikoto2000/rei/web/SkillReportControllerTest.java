@@ -13,7 +13,9 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
+/** スキルレポート受付窓口の結果と状態の契約を検証するテスト。 */
 class SkillReportControllerTest {
+  /** 含有同一項目一覧を伝えることを確認する。 */
   @Test
   void reportContainsTheSameFieldsAndMissingNameMessageAsShell() {
     var repo = mock(AgentSkillRepository.class);

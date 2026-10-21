@@ -8,7 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況品質評価の結果と状態の契約を検証するテスト。 */
 class ActivityQualityEvaluationTest {
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void groundedAdviceAndIncorrectLabelsAreEvaluatedStructurally() {
     var research =
@@ -51,6 +53,7 @@ class ActivityQualityEvaluationTest {
     assertFalse(mismatch.rows().getFirst().advice());
   }
 
+  /** 作業状況の把握で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void anonymousCasesPreserveUnknownGapsAndFactOrigins() throws Exception {
     var mapper = tools.jackson.databind.json.JsonMapper.builder().build();
@@ -89,6 +92,7 @@ class ActivityQualityEvaluationTest {
         java.nio.file.Path.of("target/evaluation/activity-coaching-quality.json").toFile(), report);
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void fabricatedConfirmationAndUnboundedFixturesAreRejected() {
     assertThrows(

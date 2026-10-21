@@ -14,7 +14,9 @@ import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Test;
 
+/** プロジェクト実行実行待ちの結果と状態の契約を検証するテスト。 */
 class ProjectRunQueueTest {
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void readersShareAProjectButWriterWaitsUntilEveryReaderFinishes() {
     var work = new ArrayList<Runnable>();
@@ -35,6 +37,7 @@ class ProjectRunQueueTest {
     assertThat(queue.containsRun("p", "late-read")).isFalse();
   }
 
+  /** Web APIによる操作で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void toolFreeConversationCanProceedWhileAnExclusiveRunOwnsTheProject() {
     var work = new ArrayList<Runnable>();
@@ -53,6 +56,7 @@ class ProjectRunQueueTest {
     assertThat(results).containsExactly("question", "task", "next-task");
   }
 
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void parallelDispatchRemainsBoundedAndCancelledReaderNeverExecutes() {
     var work = new ArrayList<Runnable>();
@@ -70,6 +74,7 @@ class ProjectRunQueueTest {
     assertThat(queue.containsRun("p", "c")).isFalse();
   }
 
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void boundedAdmissionCountsExecutingAndQueuedJobsAndReleasesCancelledSlots() {
     var tasks = new ArrayList<Runnable>();
@@ -90,6 +95,7 @@ class ProjectRunQueueTest {
     assertThat(queue.containsRun("first", "five")).isTrue();
   }
 
+  /** Web APIによる操作で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void admissionLimitsMustBePositiveAndProjectLimitCannotExceedTotal() {
     assertThatThrownBy(() -> new ProjectRunQueue(Runnable::run, 0, 3))
@@ -100,6 +106,7 @@ class ProjectRunQueueTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** Web APIによる操作で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void executorRejectionDoesNotKeepAnAdmissionSlot() {
     var reject = new java.util.concurrent.atomic.AtomicBoolean(true);
@@ -121,6 +128,7 @@ class ProjectRunQueueTest {
     assertThat(executed).isTrue();
   }
 
+  /** Web APIによる操作で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void concurrentAdmissionsNeverExceedGlobalCapacity() throws Exception {
     var accepted = new java.util.concurrent.atomic.AtomicInteger();
@@ -150,6 +158,7 @@ class ProjectRunQueueTest {
     assertThat(dispatched).hasValue(3);
   }
 
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationDuringDispatchDiscardsLateScheduledView() throws Exception {
     var scheduling = new CountDownLatch(1);
@@ -188,6 +197,7 @@ class ProjectRunQueueTest {
     }
   }
 
+  /** 順序を守る同一プロジェクトおよびについて、待機中実行を取り除くことを確認する。 */
   @Test
   void serializesSameProjectAndRemovesQueuedRunById() {
     List<Runnable> tasks = new ArrayList<>();
@@ -204,6 +214,7 @@ class ProjectRunQueueTest {
     assertThat(queue.cancelQueued("unknown")).isFalse();
   }
 
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void differentProjectsProceedAndSuccessorWaitsForFinally() throws Exception {
     var entered = new CountDownLatch(1);
@@ -237,6 +248,7 @@ class ProjectRunQueueTest {
     }
   }
 
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void presenceTracksQueuedAndRunningOperationsUntilSlotRelease() {
     var tasks = new ArrayList<Runnable>();
@@ -260,6 +272,7 @@ class ProjectRunQueueTest {
     assertThat(queue.containsRun("project", "second")).isFalse();
   }
 
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void successfulCancellationSurvivesSuccessorExecutorRejection() {
     var tasks = new ArrayList<Runnable>();

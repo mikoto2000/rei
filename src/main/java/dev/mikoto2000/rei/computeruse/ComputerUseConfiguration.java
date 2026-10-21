@@ -11,15 +11,18 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/** 画面操作利用の構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(ComputerUseProperties.class)
 @ConditionalOnProperty(name = "rei.computer-use.enabled", havingValue = "true")
 public class ComputerUseConfiguration {
+  /** 画面操作の支援で用いる画面操作Robot操作の実行先を返す。 */
   @Bean
   RobotDriver computerRobotDriver() {
     return new AwtRobotDriver();
   }
 
+  /** 画面操作の支援で用いる画面操作診断情報を返す。 */
   @Bean
   ComputerDiagnostics computerDiagnostics(
       @org.springframework.beans.factory.annotation.Value(
@@ -37,16 +40,19 @@ public class ComputerUseConfiguration {
                 : java.nio.file.Path.of(directory));
   }
 
+  /** 画面操作の支援で用いる画面操作待機の実行先を返す。 */
   @Bean
   Sleeper computerSleeper() {
     return Thread::sleep;
   }
 
+  /** 画面操作の支援で用いる画面操作画面取得記録を返す。 */
   @Bean
   ScreenCapture computerScreenCapture(RobotDriver driver) {
     return new RobotScreenCapture(driver);
   }
 
+  /** 画面操作の支援で用いる画面操作入力を返す。 */
   @Bean
   ComputerInput computerInput(
       RobotDriver driver, Sleeper sleeper, ComputerUseProperties properties) {
@@ -59,16 +65,19 @@ public class ComputerUseConfiguration {
         sleeper);
   }
 
+  /** 画面操作の支援で用いる画面操作表示Stabilizerを返す。 */
   @Bean
   UiStabilizer computerUiStabilizer(Sleeper sleeper, ComputerUseProperties properties) {
     return new FixedUiStabilizer(sleeper, properties.stabilizationMillis());
   }
 
+  /** 画面操作の支援で用いる画面操作Safety判断基準を返す。 */
   @Bean
   SafetyPolicy computerSafetyPolicy(FullAutoOptions options) {
     return options.enabled() ? SafetyPolicy.fullAuto() : SafetyPolicy.lowRiskOnly();
   }
 
+  /** 画面操作の支援で用いる画面操作画像認識モデルを返す。 */
   @Bean
   ComputerVisionModel computerVisionModel(
       LlmModelProvider provider,
@@ -104,6 +113,7 @@ public class ComputerUseConfiguration {
         properties.repairs());
   }
 
+  /** 画面操作の支援で用いる画面操作利用サービスを返す。 */
   @Bean
   ComputerUseService computerUseService(
       ScreenCapture capture,
@@ -130,6 +140,7 @@ public class ComputerUseConfiguration {
         new WindowsFocusProbe(cancellation::isCancellationRequested));
   }
 
+  /** 画面操作の支援で用いる画面操作利用ツール一覧を返す。 */
   @Bean
   ComputerUseTools computerUseTools(
       ComputerUseService service,

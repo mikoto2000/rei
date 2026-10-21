@@ -14,12 +14,15 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** スキル補助資料読み取りの結果と状態の契約を検証するテスト。 */
 class SkillResourceReadTest {
+  /** 検証用に、必要な内容を参照できるよう、単一を読み取る。 */
   private static Tools.ReadFileResult readOne(
       Tools tools, String skillName, Tools.ReadFileRequest file) throws Exception {
     return tools.readSkillResource(skillName, List.of(file)).getFirst();
   }
 
+  /** 複数補助資料一覧を読み取ることを確認する。 */
   @Test
   void readsMultipleResourcesWithIndependentRangesAndErrors() throws Exception {
     Tools tools = tools();
@@ -42,6 +45,7 @@ class SkillResourceReadTest {
     assertThat(results.get(3).error()).contains("Excluded");
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void validatesBatchSizeAndEveryPathBeforeReading() throws Exception {
     Tools tools = tools();
@@ -67,6 +71,7 @@ class SkillResourceReadTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void continuesMultipleLongResourcesInOneBatch() throws Exception {
     Tools tools = tools();
@@ -101,11 +106,16 @@ class SkillResourceReadTest {
             });
   }
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temporary;
 
+  /** 検証に使うこの機能の動作設定。 */
   private AgentSkillsProperties properties;
+
+  /** 検証に使う保存と検索の窓口。 */
   private FileSystemAgentSkillRepository repository;
 
+  /** {@code tools} の条件を再現するための補助情報を返す。 */
   private Tools tools() throws Exception {
     Path skill = temporary.resolve("skills/review");
     Files.createDirectories(skill.resolve("references"));
@@ -127,6 +137,7 @@ class SkillResourceReadTest {
     return tools;
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void loadsReferencedResourceOutsideProjectWithoutRelaxingProjectReads() throws Exception {
     Tools tools = tools();
@@ -150,6 +161,7 @@ class SkillResourceReadTest {
         .anyMatch(line -> line.contains("third"));
   }
 
+  /** 共通の実行基盤で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void rejectsEscapesAbsolutePathsSensitiveFilesAndUnknownSkills() throws Exception {
     Tools tools = tools();
@@ -177,6 +189,7 @@ class SkillResourceReadTest {
         .isNotNull();
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void honorsDisabledSkillAndGlobalSetting() throws Exception {
     Tools tools = tools();
@@ -204,6 +217,7 @@ class SkillResourceReadTest {
         .isInstanceOf(IllegalStateException.class);
   }
 
+  /** 継続入力を返すことを確認する。 */
   @Test
   void returnsContinuationForLongReferences() throws Exception {
     Tools tools = tools();
@@ -220,12 +234,14 @@ class SkillResourceReadTest {
     assertThat(continuation.startLine()).isGreaterThan(result.startLine());
   }
 
+  /** 形式読み取りを読み取ることを確認する。 */
   @Test
   void classifiesReferenceReadAsReadOnly() {
     assertThat(ToolPermissionPolicy.intrinsicCapabilities("readSkillResource"))
         .containsExactly(ActionCapability.READ);
   }
 
+  /** 共通の実行基盤で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void exposesSkillResourceToolSchema() throws Exception {
     var callbacks =
@@ -251,6 +267,7 @@ class SkillResourceReadTest {
     assertThat(response).contains("first", "third").doesNotContain("second");
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void doesNotAllowMcpToReadPersonalSkillResourcesOutsideItsProject() throws Exception {
     Tools tools = tools();

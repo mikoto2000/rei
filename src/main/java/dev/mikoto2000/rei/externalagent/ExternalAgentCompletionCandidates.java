@@ -9,12 +9,18 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Set;
 
-/** Metadata for the existing variadic /agent grammar, limited to its supported domain actions. */
+/**
+ * 外部エージェント入力補完で利用できる入力候補を提供する。
+ *
+ * <p>Metadata for the existing variadic /agent grammar, limited to its supported domain actions.
+ */
 public final class ExternalAgentCompletionCandidates implements CompletionMetadata {
+  /** コマンド操作一覧。 */
   private static final ExternalAgentRequest.Action[] COMMAND_ACTIONS = {
     ExternalAgentRequest.Action.REVIEW, ExternalAgentRequest.Action.IMPLEMENT
   };
 
+  /** 外部エージェントへの委譲で用いる種別一覧を返す。 */
   @Override
   public Set<String> types(CompletionContext context) {
     return context.argumentIndex() >= 2
@@ -24,6 +30,7 @@ public final class ExternalAgentCompletionCandidates implements CompletionMetada
         : Set.of("choices");
   }
 
+  /** 外部エージェントへの委譲で用いる選択肢を返す。 */
   @Override
   public List<CompletionCandidate> choices(CompletionContext context) {
     if (context.argumentIndex() == 0)
@@ -39,12 +46,14 @@ public final class ExternalAgentCompletionCandidates implements CompletionMetada
     return List.of();
   }
 
+  /** 外部エージェントへの委譲において、教材レビューに該当するか判定する。 */
   private boolean materialReview(CompletionContext context) {
     return context.tokens().size() > 2
         && context.tokens().get(1).equals("codex")
         && context.tokens().get(2).equals("material-review");
   }
 
+  /** 外部エージェントへの委譲において、有効に該当するか判定する。 */
   private boolean valid(CompletionContext context, int index, Enum<?>[] values) {
     return context.tokens().size() > index
         && Arrays.stream(values)
@@ -52,6 +61,7 @@ public final class ExternalAgentCompletionCandidates implements CompletionMetada
                 value -> value.name().toLowerCase(Locale.ROOT).equals(context.tokens().get(index)));
   }
 
+  /** 外部エージェントへの委譲で用いる候補一覧を返す。 */
   private List<CompletionCandidate> candidates(Enum<?>[] values, String kind) {
     return Arrays.stream(values)
         .map(value -> CompletionCandidate.value(value.name().toLowerCase(Locale.ROOT), kind))

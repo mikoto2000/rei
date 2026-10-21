@@ -16,11 +16,17 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
-/** Deterministic retrieval-only comparison. It does not pretend to measure answer correctness. */
+/**
+ * 経験の記録評価の結果と状態の契約を検証するテスト。
+ *
+ * <p>Deterministic retrieval-only comparison. It does not pretend to measure answer correctness.
+ */
 @Tag("integration")
 class EpisodeEvaluationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 過去の経験の活用で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void recordsLegacyBaselineAndEpisodeRetrievalForSevenQuestions() throws Exception {
     var ds = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("memory.db"));

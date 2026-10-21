@@ -26,18 +26,26 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** イベント実行条件の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class EventTriggerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使うプロジェクト。 */
   final String project = UUID.randomUUID().toString();
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-10-04T00:00:00Z");
 
+  /** {@code scheduler} の条件を再現するための補助情報を返す。 */
   PersistentAgentScheduler scheduler(Instant time) {
     return new PersistentAgentScheduler(
         new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("events.db")),
         Clock.fixed(time, ZoneOffset.UTC));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   String create(PersistentAgentScheduler scheduler) {
     try (var scope = AgentRunScope.open(new AgentRunContext("parent", "session", dir, project))) {
       return new SchedulerTools(scheduler)
@@ -46,6 +54,7 @@ class EventTriggerTest {
     }
   }
 
+  /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
   AgentEvent event(String project, String session, String run, Instant time, AgentEventType type) {
     return new AgentEvent(
         UUID.randomUUID().toString(),
@@ -62,11 +71,13 @@ class EventTriggerTest {
         project);
   }
 
+  /** {@code completed} の条件を再現するための補助情報を返す。 */
   AgentEvent completed() {
     return event(
         project, "session", "source", now.plusSeconds(1), AgentEventType.AGENT_RUN_COMPLETED);
   }
 
+  /** 時刻と期間の解釈で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void explicitActivationExactOwnershipAndDuplicateSuppression() {
     var scheduler = scheduler(now.plusSeconds(2));
@@ -98,6 +109,7 @@ class EventTriggerTest {
         1, later.history(project, id).stream().filter(h -> h.status().equals("SCHEDULED")).count());
   }
 
+  /** 時刻と期間の解釈の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void expiryAndCancellationNeverDispatchByTimeAlone() {
     var scheduler = scheduler(now);
@@ -113,6 +125,7 @@ class EventTriggerTest {
     assertThrows(IllegalArgumentException.class, () -> scheduler.eventTrigger("other", cancelled));
   }
 
+  /** 時刻と期間の解釈で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void restartReplaysPersistedEventAndNeverReplaysAnUncertainClaim() {
     var first = scheduler(now);
@@ -136,6 +149,7 @@ class EventTriggerTest {
     }
   }
 
+  /** 時刻と期間の解釈で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void liveBusSubscriptionIsClosedAndIgnoresUnrelatedEvents() {
     var first = scheduler(now);
@@ -158,6 +172,7 @@ class EventTriggerTest {
     assertEquals("WAITING_EVENT", later.get(project, second).status());
   }
 
+  /** 時刻と期間の解釈で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidConfigurationIsRejectedWithoutPartialRows() {
     var scheduler = scheduler(now);
@@ -186,6 +201,7 @@ class EventTriggerTest {
     assertTrue(scheduler.list(project).isEmpty());
   }
 
+  /** 時刻と期間の解釈で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void persistedReplayCursorContinuesAcrossMultiplePagesAndRestarts() {
     var first = scheduler(now);
@@ -218,6 +234,7 @@ class EventTriggerTest {
     }
   }
 
+  /** 時刻と期間の解釈で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void concurrentDuplicateSignalsHaveOneTransitionAndOneClaim() throws Exception {
     var first = scheduler(now);
@@ -239,6 +256,7 @@ class EventTriggerTest {
         1, one.history(project, id).stream().filter(h -> h.status().equals("SCHEDULED")).count());
   }
 
+  /** イベント実行先への引き渡しについて、取得済み所有者を利用することを確認する。 */
   @Test
   void eventDispatchUsesCapturedOwnerAndExistingFifoOnlyWhenEnabled() {
     var first = scheduler(now);
@@ -308,6 +326,7 @@ class EventTriggerTest {
     assertTrue(jobs.isEmpty());
   }
 
+  /** 時刻と期間の解釈で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void cursorFromBeforeNewActivationCannotSkipItsReplay() {
     var first = scheduler(now);
@@ -320,6 +339,7 @@ class EventTriggerTest {
     assertEquals(0, first.replayCursor(project).offset());
   }
 
+  /** 時刻と期間の解釈で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void replayNeverImportsEventOwnershipFromAnotherProjectFile() throws Exception {
     var first = scheduler(now);
@@ -359,6 +379,7 @@ class EventTriggerTest {
     }
   }
 
+  /** 時刻と期間の解釈で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void dependencyEventMustHaveMatchingTypedTerminalStateWithoutPretendingToBeARun() {
     var scheduler = scheduler(now.plusSeconds(2));

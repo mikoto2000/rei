@@ -5,8 +5,13 @@ import java.awt.Font;
 import java.awt.image.BufferedImage;
 import java.util.Locale;
 
-/** Same-size visual ruler; never changes the origin or scale of a crop. */
+/**
+ * 画面操作の支援に必要な調整Gridを扱う。
+ *
+ * <p>Same-size visual ruler; never changes the origin or scale of a crop.
+ */
 final class CoordinateGrid {
+  /** 画面操作の支援で用いる付加情報の記録を返す。 */
   static BufferedImage annotate(BufferedImage source) {
     int width = source.getWidth(), height = source.getHeight();
     var result = new BufferedImage(width, height, BufferedImage.TYPE_INT_RGB);

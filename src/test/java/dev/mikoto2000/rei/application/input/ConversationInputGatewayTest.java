@@ -26,17 +26,36 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 会話入力受付窓口の結果と状態の契約を検証するテスト。 */
 class ConversationInputGatewayTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock = Clock.fixed(Instant.parse("2026-10-09T00:00:00Z"), ZoneOffset.UTC);
+
+  /** 検証に使うプロジェクト一覧。 */
   ProjectService projects;
+
+  /** 検証に使う受付から終了までの管理。 */
   SessionLifecycle lifecycle;
+
+  /** 検証に使うシェル。 */
   ShellConversationService shell;
+
+  /** 検証に使う入力の振り分け。 */
   ConversationInputRouter router;
+
+  /** 検証に使うタスク一覧。 */
   final List<Runnable> tasks = new ArrayList<>();
+
+  /** 検証に使うexecuted。 */
   final List<String> executed = new ArrayList<>();
+
+  /** 検証に使う所有者一覧。 */
   final List<AgentRunContext> owners = new ArrayList<>();
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     projects = new ProjectService(temp, new ProjectRegistry(temp.resolve("projects.json")));
@@ -52,11 +71,13 @@ class ConversationInputGatewayTest {
     shell = new ShellConversationService(projects, lifecycle, router::submit, false, router, clock);
   }
 
+  /** {@code voice} の条件を再現するための補助情報を返す。 */
   ConversationInput voice(ConversationTarget target, String text) {
     return new ConversationInput(
         UUID.randomUUID(), InputSource.VOICE, target, text, clock.instant());
   }
 
+  /** 会話入力の受付の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void keyboardAndMockVoiceUseSameSessionRunnerAndShellAuthority() {
     ConversationTarget target;
@@ -81,6 +102,7 @@ class ConversationInputGatewayTest {
     assertThat(owners).extracting(AgentRunContext::voiceInput).containsExactly(false, true);
   }
 
+  /** 会話入力の受付で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void capturedSessionDoesNotFollowLaterSelectionOrWorkerThreadLocal() {
     ConversationTarget old;
@@ -94,6 +116,7 @@ class ConversationInputGatewayTest {
     tasks.removeFirst().run();
   }
 
+  /** 会話入力の受付で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void voiceCannotExecuteSlashCommandsEvenWithLeadingWhitespace() {
     ConversationTarget target;
@@ -105,6 +128,7 @@ class ConversationInputGatewayTest {
     assertThat(tasks).isEmpty();
   }
 
+  /** 会話入力の受付の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void voicePendingIsBoundedAndCancellationReleasesCapacity() {
     ConversationTarget target;
@@ -134,6 +158,7 @@ class ConversationInputGatewayTest {
     assertThat(tasks).isEmpty();
   }
 
+  /** 会話入力の受付の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationCannotCrossSessionBoundary() {
     ConversationTarget first, second;
@@ -149,6 +174,7 @@ class ConversationInputGatewayTest {
     assertThat(shell.pending(first)).containsExactly(input);
   }
 
+  /** 会話入力の受付で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void reusedIdWithChangedPayloadIsRejected() {
     ConversationTarget target;
@@ -165,6 +191,7 @@ class ConversationInputGatewayTest {
         .isInstanceOf(IllegalArgumentException.class);
   }
 
+  /** 会話入力の受付で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void admissionFailureCanBeRetriedWithoutPoisoningId() {
     var tries = new java.util.concurrent.atomic.AtomicInteger();
@@ -189,6 +216,7 @@ class ConversationInputGatewayTest {
     assertThat(tasks).hasSize(1);
   }
 
+  /** 会話入力の受付で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void foreignProjectSessionIsRejectedBeforeDispatch() {
     ConversationTarget target;
@@ -203,6 +231,7 @@ class ConversationInputGatewayTest {
     assertThat(tasks).isEmpty();
   }
 
+  /** 会話入力の受付で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void ledgerIsBoundedAndNeverEvictsActiveInputsEvenAfterRetention() {
     var mutableClock = org.mockito.Mockito.mock(Clock.class);
@@ -232,6 +261,7 @@ class ConversationInputGatewayTest {
     assertThat(tasks).hasSize(1);
   }
 
+  /** 会話入力の受付で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void concurrentDuplicateEventsHaveOnlyOneAdmission() throws Exception {
     ConversationTarget target;
@@ -248,6 +278,7 @@ class ConversationInputGatewayTest {
     assertThat(tasks).hasSize(1);
   }
 
+  /** 会話入力の受付の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void mockVoiceAndKeyboardKeepToolApprovalRequired() {
     ConversationTarget target;
@@ -271,6 +302,7 @@ class ConversationInputGatewayTest {
     assertThat(voiceOwner.requestSource()).isEqualTo(owners.getFirst().requestSource());
   }
 
+  /** 会話入力の受付で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void voiceIsRejectedWhenExistingRunQueueIsUnavailable() {
     ConversationTarget target;
@@ -282,6 +314,7 @@ class ConversationInputGatewayTest {
         .isInstanceOf(IllegalStateException.class);
   }
 
+  /** 会話入力の受付の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void voiceCancellationKeepsExistingRunRegistryConsistent() {
     var registry = new dev.mikoto2000.rei.application.run.RunRegistry(clock);
@@ -321,6 +354,7 @@ class ConversationInputGatewayTest {
     }
   }
 
+  /** 会話入力の受付で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void expiredCompletedInputCannotBeReplayedAfterLedgerPruning() {
     var mutableClock = org.mockito.Mockito.mock(Clock.class);
@@ -341,6 +375,7 @@ class ConversationInputGatewayTest {
     assertThat(tasks).isEmpty();
   }
 
+  /** 会話入力の受付の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void keyboardInputCanAlsoCancelThroughCommonGateway() {
     ConversationTarget target;
@@ -356,6 +391,7 @@ class ConversationInputGatewayTest {
     assertThat(executed).isEmpty();
   }
 
+  /** 会話入力の受付で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void acceptanceDisplayPrecedesEvenAnInlineRunner() {
     var order = new ArrayList<String>();
@@ -373,6 +409,7 @@ class ConversationInputGatewayTest {
     assertThat(order).containsExactly("user", "answer");
   }
 
+  /** 会話入力の受付で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void acceptanceDisplayPrecedesAnAsyncRunnerThatStartsBeforeDispatchReturns() throws Exception {
     var order = new java.util.concurrent.CopyOnWriteArrayList<String>();
@@ -399,6 +436,7 @@ class ConversationInputGatewayTest {
     }
   }
 
+  /** 会話入力の受付で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   @Timeout(10)
   void runnerWaitsWhenTheSubmittingThreadIsStillDisplayingAcceptance() throws Exception {

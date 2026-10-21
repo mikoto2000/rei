@@ -15,10 +15,13 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 並行チャット受付の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ConcurrentChatAdmissionTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 実行の受付と状態管理で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void explicitConversationSharesSessionButStartsAnIndependentRunDuringExclusiveTask() {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -49,6 +52,7 @@ class ConcurrentChatAdmissionTest {
     assertThat(registry.runIds()).containsExactlyInAnyOrder(task.runId(), question.runId());
   }
 
+  /** 実行の受付と状態管理で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void parallelModesRequireAdministratorOptIn() {
     var projects = new ProjectRegistry(root.resolve("projects.json"));

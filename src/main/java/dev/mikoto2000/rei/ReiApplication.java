@@ -44,65 +44,116 @@ import org.springframework.core.env.Environment;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import picocli.CommandLine;
 
+/** 外部設定を準備してアプリケーションを起動し、ターミナルでの対話を受け付ける。 */
 @EnableScheduling
 @SpringBootApplication(exclude = UserDetailsServiceAutoConfiguration.class)
 public class ReiApplication {
+  /** 承認要求一覧。 */
   @Autowired(required = false)
   private dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvalRequests;
 
+  /** 承認継続入力一覧。 */
   @Autowired(required = false)
   private dev.mikoto2000.rei.core.policy.ApprovalContinuationService approvalContinuations;
 
+  /** 承認実行一覧。 */
   @Autowired(required = false)
   private dev.mikoto2000.rei.application.run.RunRegistry approvalRuns;
 
+  /** 完了条件Engine。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   private dev.mikoto2000.rei.core.completion.CompletionEngine completionEngine =
       ReiLineReaderFactory.completionEngine();
 
+  /** 音声入力からの依頼かどうか。 */
   @Autowired(required = false)
   private dev.mikoto2000.rei.voice.VoiceInputCoordinator voiceInput;
 
+  /** 音声イベント一覧。 */
   @Autowired(required = false)
   private dev.mikoto2000.rei.voice.VoiceEventPublisher voiceEvents;
 
+  /** 音声配信。 */
   @Autowired(required = false)
   private dev.mikoto2000.rei.voice.VoiceDeliveryService voiceDelivery;
 
+  /** 作業ルートコマンド。 */
   private final RootCommand rootCommand;
+
+  /** 生成元。 */
   private final CommandLine.IFactory factory;
+
+  /** 現在モデル保持先。 */
   private final ModelHolderService currentModelHolder;
+
+  /** escキャンセル排他制御。 */
   private final EscCancellationMonitor escCancellationMonitor;
+
+  /** コマンドキャンセルサービス。 */
   private final CommandCancellationService commandCancellationService;
+
+  /** コマンド完了条件通知判断基準。 */
   private final CommandCompletionNotificationPolicy commandCompletionNotificationPolicy;
+
+  /** コマンド利用者入力表示判断基準。 */
   private final CommandUserInputDisplayPolicy commandUserInputDisplayPolicy;
+
+  /** 非同期ベクトル文書サービス。 */
   private final AsyncVectorDocumentService asyncVectorDocumentService;
+
+  /** 音通知通知サービス。 */
   private final SoundNotificationService soundNotificationService;
+
+  /** チャット応答読み上げの案内。 */
   private final ChatResponseNarrator chatResponseNarrator;
+
+  /** エージェント実行状況を共有する通知先。 */
   private final AgentEventBus agentEventBus;
+
+  /** エージェント作業状況追跡。 */
   private final AgentActivityTracker agentActivityTracker;
+
+  /** 実行環境。 */
   private final Environment environment;
 
+  /** プロジェクトシェル作業状況。 */
   @Autowired(required = false)
   private dev.mikoto2000.rei.ui.shell.ProjectShellActivity projectShellActivity;
 
+  /** 活動中実行一覧。 */
   @Autowired(required = false)
   private dev.mikoto2000.rei.core.chat.ConversationInputRouter activeRuns;
 
+  /** 活動中実行表示。 */
   @Autowired(required = false)
   private dev.mikoto2000.rei.ui.shell.ActiveRunDisplay activeRunDisplay;
 
+  /** プロジェクト一覧。 */
   @Autowired private ProjectService projects;
+
+  /** 終了Notifier。 */
   @Autowired private ApplicationShutdownNotifier shutdownNotifier;
 
+  /** コマンド完了条件メッセージ。 */
   private static final String COMMAND_COMPLETION_MESSAGE = "コマンド実行が完了しました";
+
+  /** MULTILINE継続入力。 */
   private static final String MULTILINE_CONTINUATION = "\\";
+
+  /** MULTILINEプロンプト。 */
   private static final String MULTILINE_PROMPT = "...> ";
+
+  /** PASTE終了トークン。 */
   private static final String PASTE_END_TOKEN = ".";
+
+  /** PASTEプロンプト。 */
   private static final String PASTE_PROMPT = "paste> ";
+
+  /** プロンプト時刻表示形式への変換。 */
   private static final DateTimeFormatter PROMPT_TIME_FORMATTER =
       DateTimeFormatter.ofPattern("HH:mm");
 
+  /** 指定された値や利用先を使って、ReiApplicationを初期化する。 */
   @Autowired
   public ReiApplication(
       RootCommand rootCommand,
@@ -133,6 +184,7 @@ public class ReiApplication {
     this.environment = environment;
   }
 
+  /** れいの起動を利用するため、指定を補って共通の初期化へ引き渡す。 */
   ReiApplication(
       RootCommand rootCommand,
       CommandLine.IFactory factory,
@@ -162,6 +214,7 @@ public class ReiApplication {
         null);
   }
 
+  /** れいの起動の起動要求を受け付け、実行を開始する。 */
   public static void main(String[] args) throws IOException {
     dev.mikoto2000.rei.launcher.BackendMode mode;
     try {
@@ -221,6 +274,7 @@ public class ReiApplication {
         try {
           stopped.await();
         } catch (InterruptedException interrupted) {
+          // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
           Thread.currentThread().interrupt();
         }
       } else launch(app, args);
@@ -230,10 +284,12 @@ public class ReiApplication {
     System.exit(exitCode);
   }
 
+  /** れいの起動に関する起動を処理する。 */
   static void launch(ReiApplication app, String[] args) throws IOException {
     app.run(args);
   }
 
+  /** れいの起動の操作を実行する。 */
   void run(String[] args) throws IOException {
     var options = StartupOptions.parse(args, projects.startupDirectory());
     if (options.printHelpIfRequested()) return;
@@ -245,6 +301,7 @@ public class ReiApplication {
     }
   }
 
+  /** 依頼された操作を進めるため、シェルを実行する。 */
   void runShell(String[] args, dev.mikoto2000.rei.core.project.ProjectClient client)
       throws IOException {
     var cmd = new picocli.CommandLine(rootCommand, factory);
@@ -427,6 +484,7 @@ public class ReiApplication {
     }
   }
 
+  /** 要求された処理を利用できるよう、音声Automaticallyを開始する。 */
   static void startVoiceAutomatically(
       CommandLine cmd, Terminal terminal, java.util.function.Consumer<String> output) {
     var command = cmd.getSubcommands().get("voice");
@@ -435,6 +493,7 @@ public class ReiApplication {
       voice.autoStart(isInteractiveTerminal(terminal), output);
   }
 
+  /** れいの起動において、承認実行活動中に該当するか判定する。 */
   private boolean approvalRunActive(String runId) {
     if (approvalRuns == null) return true;
     try {
@@ -444,6 +503,7 @@ public class ReiApplication {
     }
   }
 
+  /** れいの起動において、対話終端かどうかを判定する。 */
   static boolean isInteractiveTerminal(Terminal terminal) {
     if (terminal == null
         || terminal.getType() == null
@@ -460,6 +520,7 @@ public class ReiApplication {
     }
   }
 
+  /** れいの起動で用いる終端組み立てを返す。 */
   static TerminalBuilder terminalBuilder(PrintStream output) {
     var builder = TerminalBuilder.builder().system(true);
     // JLine defaults to UTF-8, including its dumb-terminal fallback. On Windows
@@ -472,6 +533,7 @@ public class ReiApplication {
     return builder;
   }
 
+  /** れいの起動に関する設定コマンド出力を処理する。 */
   static void configureCommandOutput(CommandLine cmd, Terminal terminal) {
     // RunLast extends picocli's legacy AbstractHandler, which captures System.out/err.
     // After AgentConsoleSession replaces those streams, execute() would treat the
@@ -560,6 +622,7 @@ public class ReiApplication {
     }
   }
 
+  /** 依頼された操作を進めるため、Interruptiblyを実行する。 */
   protected void executeInterruptibly(
       CommandLine cmd, Terminal terminal, ExecutorService commandExecutor, String... args)
       throws IOException {
@@ -615,6 +678,7 @@ public class ReiApplication {
     }
   }
 
+  /** 依頼された操作を進めるため、付き出力判断基準を実行する。 */
   int executeWithOutputPolicy(CommandLine command, String... args) {
     if (args == null || args.length == 0 || !"chat".equals(args[0])) {
       return command.execute(args);
@@ -631,16 +695,19 @@ public class ReiApplication {
     }
   }
 
+  /** れいの起動において、対話シェルコマンドかどうかを判定する。 */
   boolean isInteractiveShellCommand(String... args) {
     return args != null && args.length > 0 && "sh".equals(args[0]);
   }
 
+  /** 依頼された操作を進めるため、対話シェルコマンドを実行する。 */
   void executeInteractiveShellCommand(
       CommandLine cmd, LineReader reader, Terminal terminal, String... args) {
     executeInteractiveShellCommand(
         cmd, reader, terminal, ReiLineReaderFactory.completer(cmd, completionEngine), args);
   }
 
+  /** 依頼された操作を進めるため、対話シェルコマンドを実行する。 */
   void executeInteractiveShellCommand(
       CommandLine cmd, LineReader reader, Terminal terminal, Completer completer, String... args) {
     boolean paused = false;
@@ -651,6 +718,7 @@ public class ReiApplication {
       }
       cmd.execute(args);
     } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       throw new IllegalStateException("システムシェルの起動待機が中断されました", e);
     } finally {
@@ -661,6 +729,7 @@ public class ReiApplication {
     }
   }
 
+  /** 保持している情報を初期状態へ戻すため、待機中入力変更後対話シェルを消去する。 */
   void clearPendingInputAfterInteractiveShell(LineReader reader, Terminal terminal) {
     reader.getBuffer().clear();
     try {
@@ -675,10 +744,12 @@ public class ReiApplication {
     }
   }
 
+  /** れいの起動で用いる分割コマンド行を返す。 */
   String[] splitCommandLine(String line) {
     return new UserInputParser().split(line);
   }
 
+  /** 利用先に渡せるよう、プロンプトを組み立てる。 */
   String buildPrompt() {
     return (activeRunDisplay == null ? "" : activeRunDisplay.promptStatus() + "\n")
         + now().format(PROMPT_TIME_FORMATTER)
@@ -687,10 +758,12 @@ public class ReiApplication {
         + "> ";
   }
 
+  /** れいの起動で用いる現在日時を返す。 */
   LocalTime now() {
     return LocalTime.now();
   }
 
+  /** 必要な内容を参照できるよう、PossiblyMultiline入力を読み取る。 */
   String readPossiblyMultilineInput(String firstLine, LineReader reader) {
     // Slash-command arguments use literal backslashes, including the trailing
     // separator inserted by directory completion. Continuation is for chat input.
@@ -712,6 +785,7 @@ public class ReiApplication {
     return builder.toString();
   }
 
+  /** 必要な内容を参照できるよう、Pasteまとまりを読み取る。 */
   String readPasteBlock(LineReader reader) {
     StringBuilder builder = new StringBuilder();
     while (true) {
@@ -727,6 +801,7 @@ public class ReiApplication {
     return builder.toString();
   }
 
+  /** れいの起動に関する設定Multilineキー関連付けを処理する。 */
   void configureMultilineKeyBinding(LineReader reader) {
     reader
         .getWidgets()
@@ -748,25 +823,30 @@ public class ReiApplication {
     }
   }
 
+  /** 利用者に結果を伝えるため、利用者入力を出力する。 */
   void printUserInput(String input) {
     System.out.print(formatUserInput(input));
   }
 
+  /** 利用者に結果を伝えるため、利用者入力を出力する。 */
   void printUserInput(String input, Terminal terminal) {
     terminal.writer().print(UserInputFrame.format(input, now()).toAnsi(terminal));
     terminal.writer().flush();
   }
 
+  /** 利用者に結果を伝えるため、利用者入力条件付きNeededを出力する。 */
   void printUserInputIfNeeded(String input, Terminal terminal, String... commandArgs) {
     if (commandUserInputDisplayPolicy.shouldDisplay(commandArgs)) {
       printUserInput(input, terminal);
     }
   }
 
+  /** 内容を表示・参照しやすくするため、利用者入力を整形する。 */
   String formatUserInput(String input) {
     return UserInputFrame.format(input, now()).toString();
   }
 
+  /** れいの起動において、confirm終了条件付きNeededに該当するか判定する。 */
   boolean confirmExitIfNeeded(ConfirmationReader confirmationReader) {
     if (!asyncVectorDocumentService.hasActiveEmbeddings()) {
       return true;
@@ -787,8 +867,10 @@ public class ReiApplication {
     return false;
   }
 
+  /** れいの起動に必要な確認読み取り元を扱う。 */
   @FunctionalInterface
   interface ConfirmationReader {
+    /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
     String read(String prompt) throws UserInterruptException, EndOfFileException;
   }
 }

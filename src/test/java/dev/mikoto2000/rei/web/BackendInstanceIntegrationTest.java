@@ -19,10 +19,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/** バックエンド起動単位の識別子外部連携の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class BackendInstanceIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import({BackendInstanceConfiguration.class, InstanceController.class, SecurityConfig.class})
   @ImportAutoConfiguration({
@@ -33,6 +36,7 @@ class BackendInstanceIntegrationTest {
     org.springframework.boot.jackson.autoconfigure.JacksonAutoConfiguration.class
   })
   static class Config {
+    /** {@code storageStartupGate} の条件を再現するための補助情報を返す。 */
     @Bean
     static dev.mikoto2000.rei.storage.StorageMigrationConfiguration.StartupGate
         storageStartupGate() {
@@ -40,6 +44,7 @@ class BackendInstanceIntegrationTest {
     }
   }
 
+  /** 実際のHTTP通信準備完了識別情報について、再開の後も対象の情報が残ることを確認する。 */
   @Test
   void actualHttpReadyIdentitySurvivesRestartAndLeaseAndEndpointCloseTogether() throws Exception {
     var store = new BackendEndpointStore(root);

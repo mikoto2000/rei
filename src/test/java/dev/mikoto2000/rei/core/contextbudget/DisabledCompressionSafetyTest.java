@@ -10,9 +10,12 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
+/** 無効状態圧縮安全性の結果と状態の契約を検証するテスト。 */
 class DisabledCompressionSafetyTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 無効状態圧縮引き続きについて、大きすぎる最終入力を受け付けないことを確認する。 */
   @Test
   void disabledCompressionStillRejectsOversizedFinalInput() {
     var config = new ContextCompressionProperties();
@@ -37,6 +40,7 @@ class DisabledCompressionSafetyTest {
         .hasMessageContaining("CONTEXT_HARD_LIMIT");
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void delegatedResultsAreLosslessEvenWhenConversationCompressionIsDisabled() throws Exception {
     var config = new ContextCompressionProperties();

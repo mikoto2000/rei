@@ -19,13 +19,29 @@ import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-/** Deterministic read-only arithmetic over saved observation estimates, with no model calls. */
+/**
+ * 作業状況の把握に必要な作業状況期間分析を扱う。
+ *
+ * <p>Deterministic read-only arithmetic over saved observation estimates, with no model calls.
+ */
 public final class ActivityPeriodAnalysis {
+  /** 作業状況の把握における期間の選択肢。 */
   public enum Period {
+    /** 週。 */
     WEEK,
+    /** 月。 */
     MONTH
   }
 
+  /**
+   * 作業状況の把握で受け渡す対象範囲を表す。
+   *
+   * @param period 期間
+   * @param firstDate 最初日付
+   * @param fromInclusive 起点Inclusive
+   * @param toExclusive 終点排他
+   * @param partial 部分的な結果
+   */
   public record Range(
       Period period,
       LocalDate firstDate,
@@ -33,6 +49,19 @@ public final class ActivityPeriodAnalysis {
       Instant toExclusive,
       boolean partial) {}
 
+  /**
+   * 作業状況の把握で受け渡す計測値を表す。
+   *
+   * @param criteria 判断基準一覧
+   * @param score 評価値
+   * @param dayScores 日評価値一覧
+   * @param classifiedSeconds 分類済み秒数
+   * @param scoredSeconds 評価済み秒数
+   * @param focusCandidates focus候補一覧
+   * @param focusSeconds focus秒数
+   * @param longestStableSeconds longest安定した秒数
+   * @param interruptionCandidates 中断候補一覧
+   */
   public record Metrics(
       Set<String> criteria,
       Double score,
@@ -43,16 +72,31 @@ public final class ActivityPeriodAnalysis {
       long focusSeconds,
       long longestStableSeconds,
       int interruptionCandidates) {
+    /** 受け取った情報からMetricsを作成する。 */
     public Metrics {
       criteria = Set.copyOf(criteria);
       dayScores = Map.copyOf(dayScores);
     }
 
+    /** 対象がない場合の結果を表す。 */
     static Metrics empty() {
       return new Metrics(Set.of(), null, Map.of(), 0, 0, 0, 0, 0, 0);
     }
   }
 
+  /**
+   * 作業状況の把握で受け渡す集計結果を表す。
+   *
+   * @param range 対象範囲
+   * @param observedSeconds 観測秒数
+   * @param unobservedSeconds 未観測秒数
+   * @param categorySeconds 分類秒数
+   * @param projectCandidateSeconds プロジェクト候補秒数
+   * @param hourSeconds 時秒数
+   * @param daySeconds 日秒数
+   * @param observedProjectTransitions 観測プロジェクト状態の遷移一覧
+   * @param metrics 計測値
+   */
   public record Aggregate(
       Range range,
       long observedSeconds,
@@ -63,6 +107,7 @@ public final class ActivityPeriodAnalysis {
       Map<LocalDate, Long> daySeconds,
       int observedProjectTransitions,
       Metrics metrics) {
+    /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Aggregate(
         Range range,
         long observedSeconds,
@@ -84,6 +129,7 @@ public final class ActivityPeriodAnalysis {
           Metrics.empty());
     }
 
+    /** 受け取った情報からAggregateを作成する。 */
     public Aggregate {
       categorySeconds = Map.copyOf(categorySeconds);
       projectCandidateSeconds = Map.copyOf(projectCandidateSeconds);
@@ -92,20 +138,30 @@ public final class ActivityPeriodAnalysis {
     }
   }
 
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 役割一覧。 */
   private final ActivityRolePolicy roles;
+
+  /** 名前一覧。 */
   private final ProjectNameNormalizer names;
+
+  /** 判断基準一覧。 */
   private final Set<String> criteria;
 
+  /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ActivityPeriodAnalysis(Clock clock, double minimumConfidence) {
     this(clock, minimumConfidence, new ProjectNameNormalizer(Map.of()));
   }
 
+  /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ActivityPeriodAnalysis(
       Clock clock, double minimumConfidence, ProjectNameNormalizer names) {
     this(clock, minimumConfidence, names, Set.of());
   }
 
+  /** 指定された値や利用先を使って、ActivityPeriodAnalysisを初期化する。 */
   public ActivityPeriodAnalysis(
       Clock clock, double minimumConfidence, ProjectNameNormalizer names, Set<String> criteria) {
     if (criteria == null
@@ -118,6 +174,7 @@ public final class ActivityPeriodAnalysis {
     this.names = Objects.requireNonNull(names);
   }
 
+  /** 作業状況の把握で用いる対象範囲を返す。 */
   public Range range(Period period, LocalDate anchor) {
     if (anchor.isAfter(LocalDate.now(clock))) throw new DateTimeException("未来の日付は指定できません。");
     var first =
@@ -133,6 +190,7 @@ public final class ActivityPeriodAnalysis {
     return new Range(period, first, start, partial ? clock.instant() : end, partial);
   }
 
+  /** 作業状況の把握で用いる前回を返す。 */
   public Range previous(Range range) {
     var first =
         range.period() == Period.WEEK
@@ -141,6 +199,7 @@ public final class ActivityPeriodAnalysis {
     return range(range.period(), first);
   }
 
+  /** 記録された情報を集計し、全体の傾向や結果をまとめる。 */
   public Aggregate aggregate(Range range, List<ActivityRecord> input) {
     var unique = new LinkedHashMap<String, ActivityRecord>();
     input.stream()
@@ -276,6 +335,7 @@ public final class ActivityPeriodAnalysis {
         metrics);
   }
 
+  /** 受け取った情報を、表示や受け渡しに適した形式へ整える。 */
   public String format(Aggregate current, Aggregate previous) {
     var out = new StringBuilder();
     out.append(current.range().period() == Period.WEEK ? "週次" : "月次")
@@ -332,6 +392,7 @@ public final class ActivityPeriodAnalysis {
     return out.toString();
   }
 
+  /** 既存の記録へ経緯を残すため、計測値を追記する。 */
   private static void appendMetrics(StringBuilder out, Aggregate current, Aggregate previous) {
     var now = current.metrics();
     var before = previous.metrics();
@@ -369,6 +430,7 @@ public final class ActivityPeriodAnalysis {
     out.append("連続候補は標本間の空白を時間に加えず、120秒を超える空白・観測系列変更・不明分類で区切ります。未知分類は指数の分母から除外し、未観測は採点しません。\n");
   }
 
+  /** 既存の記録へ経緯を残すため、対象範囲を追記する。 */
   private static void appendRange(StringBuilder out, String label, Aggregate a) {
     out.append(label)
         .append(": [")
@@ -385,10 +447,12 @@ public final class ActivityPeriodAnalysis {
             a.observedSeconds() == 0 ? "（観測なし）" : ""));
   }
 
+  /** 作業状況の把握で用いる最小を返す。 */
   private static Instant min(Instant a, Instant b) {
     return a.isBefore(b) ? a : b;
   }
 
+  /** 作業状況の把握で用いる最大を返す。 */
   private static Instant max(Instant a, Instant b) {
     return a.isAfter(b) ? a : b;
   }

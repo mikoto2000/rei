@@ -8,10 +8,16 @@ import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 
-/** Read-only decision probe. Never claims a lease to hand to a new Backend. */
+/**
+ * 起動環境の準備に必要なバックエンド所有権を扱う。
+ *
+ * <p>Read-only decision probe. Never claims a lease to hand to a new Backend.
+ */
 public final class BackendOwnership {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private BackendOwnership() {}
 
+  /** 起動環境の準備において、自分が所有する対象かどうかを判定する。 */
   public static boolean isOwned(Path root) throws IOException {
     Path file = root.resolve(".storage/instance.lock");
     if (Files.notExists(file, LinkOption.NOFOLLOW_LINKS)) return false;

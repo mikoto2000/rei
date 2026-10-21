@@ -13,10 +13,15 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Multilanguage保存と検索の窓口対応表の結果と状態の契約を検証するテスト。 */
 class MultilanguageRepositoryMapTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うパス一覧。 */
   List<String> paths = new ArrayList<>();
 
+  /** {@code file} の条件を再現するため、検証用の操作や状態を扱う。 */
   void file(String path, String source) throws Exception {
     Path target = root.resolve(path);
     Files.createDirectories(target.getParent());
@@ -24,10 +29,12 @@ class MultilanguageRepositoryMapTest {
     paths.add(path);
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   RepositoryMapService service() {
     return new RepositoryMapService(directory -> List.copyOf(paths));
   }
 
+  /** {@code item} の条件を再現するための補助情報を返す。 */
   RepositoryMapService.File item(RepositoryMapService.View view, String path) {
     return view.items().stream()
         .filter(value -> value.path().equals(path))
@@ -35,6 +42,7 @@ class MultilanguageRepositoryMapTest {
         .orElseThrow();
   }
 
+  /** {@code edge} の条件を再現するため、検証用の操作や状態を扱う。 */
   void edge(RepositoryMapService.View view, String source, String target) {
     assertTrue(
         view.relations().stream()
@@ -46,6 +54,7 @@ class MultilanguageRepositoryMapTest {
         () -> view.relations().toString());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void typescriptAndJavascriptDeclarationsAndRelativeImportsAreExplicitlyHeuristic()
       throws Exception {
@@ -88,6 +97,7 @@ class MultilanguageRepositoryMapTest {
     assertEquals(0, view.summary().parsedJavaFiles());
   }
 
+  /** グループ一覧機能単位一覧種別一覧を利用することを確認する。 */
   @Test
   void rustUseGroupsModulesTypesAndMethodsProduceLocalStructuralCandidates() throws Exception {
     file("crate/Cargo.toml", "[package]\nname = \"example\"\nversion = \"0.1.0\"\n");
@@ -107,6 +117,7 @@ class MultilanguageRepositoryMapTest {
     edge(view, "crate/tests/worker.rs", "crate/src/worker.rs");
   }
 
+  /** 共通の実行基盤で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @Test
   void goModulePackageGroupedImportsTypesAndReceiverMethodsStayWithinBuildBoundary()
       throws Exception {
@@ -133,6 +144,7 @@ class MultilanguageRepositoryMapTest {
     edge(view, "svc/model/model_test.go", "svc/model/model.go");
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void pythonClassesMethodsFunctionsAndRelativeImportsHaveScopedCandidates() throws Exception {
     file("lib/pyproject.toml", "[project]\nname = \"example\"\n");
@@ -157,6 +169,7 @@ class MultilanguageRepositoryMapTest {
     edge(view, "lib/tests/test_model.py", "lib/pkg/model.py");
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void impactUsesExistingReverseGraphAndLanguageTestConventionsWithoutCoverageClaims()
       throws Exception {
@@ -178,6 +191,7 @@ class MultilanguageRepositoryMapTest {
     assertTrue(result.warnings().stream().anyMatch(value -> value.contains("coverage")));
   }
 
+  /** 共通の実行基盤で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void invalidLexicalSourceLimitsAndSecretsDoNotProduceInventedSymbols() throws Exception {
     file("bad.ts", "/* unterminated comment\nexport class Invented {}\n");
@@ -195,6 +209,7 @@ class MultilanguageRepositoryMapTest {
     assertNotEquals(before, service().map(root, "", 100).version());
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void manifestChangeInvalidatesCachedNamespaceEvenWithoutSourceEdit() throws Exception {
     file("workspace/pkg/app.ts", "export function run() {}\n");
@@ -206,6 +221,7 @@ class MultilanguageRepositoryMapTest {
     assertEquals("pkg.app.run", changed.symbols().getFirst().name());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void ambiguousLocalImportDoesNotChooseAFileOrCrossAnotherBuildRoot() throws Exception {
     file("one/package.json", "{}");
@@ -222,6 +238,7 @@ class MultilanguageRepositoryMapTest {
     assertTrue(view.partial());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void goModuleIdentityChangesRelationsAndVersionWithoutSourceEdits() throws Exception {
     file("go.mod", "module example.test/app\n");
@@ -236,6 +253,7 @@ class MultilanguageRepositoryMapTest {
     assertNotEquals(before.version(), after.version());
   }
 
+  /** 共通の実行基盤で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void heuristicSourcesWorkWithoutJdkCompilerAndJavaMetadataStillPersistsInMixedProjects()
       throws Exception {
@@ -254,6 +272,7 @@ class MultilanguageRepositoryMapTest {
     assertEquals(Set.of("App.java"), metadata.load(root).keySet());
   }
 
+  /** 共通の実行基盤で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void credentialBearingModuleSpecifiersDoNotExposeSourceSecrets() throws Exception {
     file(
@@ -264,6 +283,7 @@ class MultilanguageRepositoryMapTest {
     assertFalse(result.contains("PRIVATE_BASIC_SECRET"));
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void pythonRelativeImportsCannotClimbOutsideTheirBuildRoot() throws Exception {
     file("one/pyproject.toml", "[project]\nname='one'\n");

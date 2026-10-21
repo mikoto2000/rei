@@ -16,9 +16,12 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** レビュー根拠検証の結果と状態の契約を検証するテスト。 */
 class ReviewEvidenceValidationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** 変更内容のレビューで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void fabricatedLineCoordinatesCannotBecomeVerifiedFindings() throws Exception {
     Files.writeString(dir.resolve("source.md"), "first\nwrong fact\n");
@@ -53,6 +56,7 @@ class ReviewEvidenceValidationTest {
     }
   }
 
+  /** 変更内容のレビューで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   @org.junit.jupiter.api.condition.EnabledOnOs(org.junit.jupiter.api.condition.OS.WINDOWS)
   void windowsCaseAliasesCannotCreateTwoTargetsForOneFile() throws Exception {
@@ -73,6 +77,7 @@ class ReviewEvidenceValidationTest {
     }
   }
 
+  /** 変更内容のレビューで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void findingsCannotSplitASurrogatePair() throws Exception {
     Files.writeString(dir.resolve("source.md"), "abc🙂def");
@@ -107,6 +112,7 @@ class ReviewEvidenceValidationTest {
     }
   }
 
+  /** 完全一致の復元済み文字数を維持することを確認する。 */
   @Test
   void utf16BomAndCp932SourcesKeepExactDecodedCharacters() throws Exception {
     var files = new Tools();

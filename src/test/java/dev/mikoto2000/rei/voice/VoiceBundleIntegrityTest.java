@@ -8,9 +8,12 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 音声まとまり整合性の結果と状態の契約を検証するテスト。 */
 class VoiceBundleIntegrityTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 音声による対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void incompleteAndCorruptBundleCannotInitializeNativeRuntime() throws Exception {
     try (var factory = new SherpaBackendFactory(() -> directory)) {
@@ -24,6 +27,7 @@ class VoiceBundleIntegrityTest {
     }
   }
 
+  /** 音声による対話で、音声の取得・認識・入力の受け渡しが、検証条件に従うことを確認する。 */
   @Test
   void vadSkipsLargeAsrHashesButAsrIncludesItsExternalWeights() {
     assertThat(
@@ -44,6 +48,7 @@ class VoiceBundleIntegrityTest {
         .isEqualTo(VoiceModelManifest.pinned().assets());
   }
 
+  /** 音声による対話で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void commandDeadlineEncompassesSequentialWorkersWithBoundedRecognition() {
     assertThat(VoiceRuntimeLimits.COMMAND_STARTUP)

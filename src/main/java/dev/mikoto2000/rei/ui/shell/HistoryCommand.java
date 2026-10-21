@@ -20,6 +20,7 @@ import picocli.CommandLine.Parameters;
 import picocli.CommandLine.ParentCommand;
 import picocli.CommandLine.Spec;
 
+/** 会話履歴の表示・検索ための利用者コマンド。 */
 @Component
 @Command(
     name = "history",
@@ -31,29 +32,44 @@ import picocli.CommandLine.Spec;
       HistoryCommand.SearchCommand.class
     })
 public class HistoryCommand implements Callable<Integer> {
+  /** サービス。 */
   private final HistoryShellService service;
+
+  /** 会話一覧。 */
   private final SessionQueryService sessions;
+
+  /** プロジェクト一覧。 */
   private final ProjectService projects;
+
+  /** 形式。 */
   private final HistoryFormatter format = new HistoryFormatter();
 
+  /** 上限。 */
   @Option(names = "--limit", description = "セッションの1ページあたりの表示件数（1〜100）")
   Integer limit;
 
+  /** 続きの取得位置。 */
   @Option(names = "--cursor")
   String cursor;
 
+  /** 所属プロジェクトの識別子。 */
   @Option(names = "--project-id")
   String projectId;
 
+  /** ターミナルへの表示先。 */
   private PrintWriter shellOutput;
+
+  /** 仕様。 */
   @Spec private CommandSpec spec;
 
+  /** 既定の状態でHistoryCommandを初期化する。 */
   public HistoryCommand() {
     service = null;
     sessions = null;
     projects = null;
   }
 
+  /** 指定された値や利用先を使って、HistoryCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public HistoryCommand(
       HistoryShellService service, SessionQueryService sessions, ProjectService projects) {
@@ -62,10 +78,12 @@ public class HistoryCommand implements Callable<Integer> {
     this.projects = projects;
   }
 
+  /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(PrintWriter output) {
     shellOutput = output;
   }
 
+  /** ターミナルでの対話で用いるレポートを返す。 */
   private String report(java.util.function.Consumer<HistoryCommand> action) {
     var text = new java.io.StringWriter();
     var command = new HistoryCommand(service, sessions, projects);
@@ -74,6 +92,7 @@ public class HistoryCommand implements Callable<Integer> {
     return text.toString();
   }
 
+  /** ターミナルでの対話で用いるレポート会話一覧を返す。 */
   public String reportSessions(String project, Integer limit, String cursor) {
     return report(
         command -> {
@@ -84,26 +103,32 @@ public class HistoryCommand implements Callable<Integer> {
         });
   }
 
+  /** ターミナルでの対話で用いるレポート会話を返す。 */
   public String reportSession(String id, Integer limit, String cursor) {
     return report(command -> command.showSession(id, limit, cursor));
   }
 
+  /** ターミナルでの対話で用いるレポート会話一覧を返す。 */
   public String reportConversations(String reference, int limit, int offset) {
     return report(command -> command.execute(out -> service.list(reference, limit, offset, out)));
   }
 
+  /** ターミナルでの対話で用いるレポート会話を返す。 */
   public String reportConversation(String reference, String conversation, int last, boolean all) {
     return report(command -> command.show(reference, conversation, last, all));
   }
 
+  /** ターミナルでの対話で用いるレポート検索を返す。 */
   public String reportSearch(String query, HistorySearchScope scope, int limit) {
     return report(command -> command.execute(out -> service.search(query, scope, limit, out)));
   }
 
+  /** ターミナルでの対話で用いる出力を返す。 */
   private PrintWriter output() {
     return shellOutput == null ? spec.commandLine().getOut() : shellOutput;
   }
 
+  /** 要求された処理を実行する。 */
   private int execute(Consumer<Consumer<String>> action) {
     var out = output();
     try {
@@ -128,10 +153,12 @@ public class HistoryCommand implements Callable<Integer> {
     }
   }
 
+  /** 利用者が対象の情報を確認できるように表示する。 */
   private int show(String project, String conversation, int last, boolean all) {
     return execute(out -> service.show(project, conversation, last, all, out));
   }
 
+  /** 会話履歴の表示・検索。 */
   @Override
   public Integer call() {
     return execute(
@@ -161,6 +188,7 @@ public class HistoryCommand implements Callable<Integer> {
         });
   }
 
+  /** ターミナルでの対話で用いるプロジェクト表示名を返す。 */
   private String projectLabel(String id) {
     return projects.registeredProjects().stream()
         .filter(p -> p.id().equals(id))
@@ -169,6 +197,7 @@ public class HistoryCommand implements Callable<Integer> {
         .orElse(format.label(id));
   }
 
+  /** 利用者が内容を確認できるよう、会話を表示する。 */
   private int showSession(String requestedId, Integer limit, String cursor) {
     return execute(
         out -> {
@@ -236,31 +265,40 @@ public class HistoryCommand implements Callable<Integer> {
         });
   }
 
+  /** Conversation一覧を行うための利用者コマンド。 */
   @Command(name = "list", description = "Conversation一覧", mixinStandardHelpOptions = true)
   public static class ListCommand implements Callable<Integer> {
+    /** 親。 */
     @ParentCommand HistoryCommand parent;
 
+    /** プロジェクト。 */
     @Option(names = "--project", paramLabel = "PROJECT")
     String project;
 
+    /** 上限。 */
     @Option(names = "--limit")
     int limit = HistoryShellService.DEFAULT_LIST_LIMIT;
 
+    /** 開始位置。 */
     @Option(names = "--offset")
     int offset;
 
+    /** Conversation一覧を行う。 */
     public Integer call() {
       return parent.execute(out -> parent.service.list(project, limit, offset, out));
     }
   }
 
+  /** 会話履歴（ID省略時は現在のプロジェクトの最新Session）を行うための利用者コマンド。 */
   @Command(
       name = "show",
       description = "会話履歴（ID省略時は現在のプロジェクトの最新Session）",
       mixinStandardHelpOptions = true)
   public static class ShowCommand implements Callable<Integer> {
+    /** 親。 */
     @ParentCommand HistoryCommand parent;
 
+    /** 会話。 */
     @Parameters(
         index = "0",
         arity = "0..1",
@@ -268,26 +306,34 @@ public class HistoryCommand implements Callable<Integer> {
         completionCandidates = SessionCompletionCandidates.class)
     String conversation;
 
+    /** プロジェクト。 */
     @Option(names = "--project", paramLabel = "PROJECT")
     String project;
 
+    /** 対象範囲。 */
     @ArgGroup(exclusive = true)
     Range range;
 
+    /** 上限。 */
     @Option(names = "--limit")
     Integer limit;
 
+    /** 続きの取得位置。 */
     @Option(names = "--cursor")
     String cursor;
 
+    /** ターミナルでの対話に必要な対象範囲を扱う。 */
     static class Range {
+      /** 直近。 */
       @Option(names = "--last", required = true)
       Integer last;
 
+      /** 全対象。 */
       @Option(names = "--all", required = true)
       boolean all;
     }
 
+    /** 会話履歴（ID省略時は現在のプロジェクトの最新Session）を行う。 */
     public Integer call() {
       if (project == null && range == null) {
         if (conversation == null && cursor != null)
@@ -311,27 +357,36 @@ public class HistoryCommand implements Callable<Integer> {
     }
   }
 
+  /** 過去会話を検索ための利用者コマンド。 */
   @Command(name = "search", description = "過去会話を検索", mixinStandardHelpOptions = true)
   public static class SearchCommand implements Callable<Integer> {
+    /** 親。 */
     @ParentCommand HistoryCommand parent;
 
+    /** 検索条件。 */
     @Parameters(arity = "1..*", paramLabel = "QUERY")
     String[] query;
 
+    /** 上限。 */
     @Option(names = "--limit")
     int limit = HistoryShellService.DEFAULT_SEARCH_LIMIT;
 
+    /** 対象範囲。 */
     @ArgGroup(exclusive = true)
     Scope scope;
 
+    /** ターミナルでの対話に必要な対象範囲を扱う。 */
     static class Scope {
+      /** 現在。 */
       @Option(names = "--current", required = true)
       boolean current;
 
+      /** 全対象。 */
       @Option(names = "--all", required = true)
       boolean all;
     }
 
+    /** 過去会話を検索。 */
     public Integer call() {
       var selected =
           scope == null

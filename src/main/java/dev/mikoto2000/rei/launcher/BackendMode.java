@@ -1,10 +1,17 @@
 package dev.mikoto2000.rei.launcher;
 
-/** Transitional Backend modes, parsed without Spring, persistence or scheduling. */
+/**
+ * 起動環境の準備におけるバックエンド動作モードの選択肢。
+ *
+ * <p>Transitional Backend modes, parsed without Spring, persistence or scheduling.
+ */
 public enum BackendMode {
+  /** サーバー。 */
   SERVER,
+  /** 旧形式シェル。 */
   LEGACY_SHELL;
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   public static BackendMode parse(String[] args) {
     String mode = null;
     for (int i = 0; i < args.length; i++) {

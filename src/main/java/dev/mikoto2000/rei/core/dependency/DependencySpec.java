@@ -5,29 +5,52 @@ import java.nio.file.Path;
 import java.util.Locale;
 import java.util.Set;
 
+/**
+ * 外部条件の待機で受け渡す依存条件仕様を表す。
+ *
+ * @param kind 種類
+ * @param target 対象
+ * @param expected 期待する内容
+ */
 public record DependencySpec(Kind kind, String target, String expected) {
+  /** 外部条件の待機における種類の選択肢。 */
   public enum Kind {
+    /** ファイル存在。 */
     FILE_EXISTS,
+    /** ファイル内容の同一性を照合するSHA-256ハッシュ。 */
     FILE_SHA256,
+    /** ファイル変更済み。 */
     FILE_CHANGED,
+    /** ファイルJSON変換判定条件。 */
     FILE_JSON_PREDICATE,
+    /** Git状態変更済み。 */
     GIT_STATE_CHANGED,
+    /** プロセス終了。 */
     PROCESS_EXIT,
+    /** HTTP通信状態。 */
     HTTP_STATUS,
+    /** HTTP通信本文内容の同一性を照合するSHA-256ハッシュ。 */
     HTTP_BODY_SHA256,
+    /** HTTP通信JSON変換値。 */
     HTTP_JSON_VALUE,
+    /** 利用者回答。 */
     USER_ANSWER,
+    /** GITHUBPR統合済み。 */
     GITHUB_PR_MERGED,
+    /** 外部エージェント。 */
     EXTERNAL_AGENT,
+    /** 状態表示要求。 */
     DOT_REQUEST
   }
 
+  /** 外部条件の待機において、ネットワークに該当するか判定する。 */
   public boolean network() {
     return kind == Kind.HTTP_STATUS
         || kind == Kind.HTTP_BODY_SHA256
         || kind == Kind.HTTP_JSON_VALUE;
   }
 
+  /** 受け取った情報からDependencySpecを作成する。 */
   public DependencySpec {
     if (kind == null
         || target == null

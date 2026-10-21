@@ -28,16 +28,21 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 文書表示への変換プロセスの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class DocumentRendererProcessTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証条件を再現するためのSleeping表示への変換。 */
   public static class SleepingRenderer {
+    /** 検証用に、共通の実行基盤の起動要求を受け付け、実行を開始する。 */
     public static void main(String[] args) throws Exception {
       Thread.sleep(60000);
     }
   }
 
+  /** {@code sleeper} の条件を再現するための補助情報を返す。 */
   Path sleeper() throws Exception {
     Path jar = root.resolve("sleeper.jar");
     var manifest = new Manifest();
@@ -54,6 +59,7 @@ class DocumentRendererProcessTest {
     return jar;
   }
 
+  /** 範囲内境界を返すことを確認する。 */
   @Test
   void actualChildJvmDeadlineKillsProcessAndReturnsWithinBound() throws Exception {
     var renderer =
@@ -64,6 +70,7 @@ class DocumentRendererProcessTest {
     assertTrue(System.nanoTime() - start < Duration.ofSeconds(6).toNanos());
   }
 
+  /** 共通の実行基盤の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellingActualChildJvmFinishesOwnedWorker() throws Exception {
     var renderer =
@@ -88,6 +95,7 @@ class DocumentRendererProcessTest {
     }
   }
 
+  /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void realPlantUmlErrorAndPngAreVerifiedAndDeliveredThroughExistingStore() throws Exception {
     String jar = System.getProperty("rei.test.plantuml.jar", "");

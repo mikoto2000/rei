@@ -35,27 +35,33 @@ import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.FluxSink;
 
+/** 並行エージェント実行一覧外部連携の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ConcurrentAgentRunsIntegrationTest
     extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  /** 会話の実行で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void timeoutAndProviderFailureLeaveNoActiveRun() {
     for (var error :
         List.of(new TimeoutException("timeout"), new IllegalStateException("provider failed"))) {
       ChatModel model =
           new ChatModel() {
+            /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
             public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
               return org.springframework.ai.openai.OpenAiChatOptions.builder()
                   .model("test")
                   .build();
             }
 
+            /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
             public ChatResponse call(Prompt p) {
               throw new UnsupportedOperationException();
             }
 
+            /** {@code stream} の条件を再現するための補助情報を返す。 */
             public Flux<ChatResponse> stream(Prompt p) {
               return Flux.error(error);
             }
@@ -82,6 +88,7 @@ class ConcurrentAgentRunsIntegrationTest
     }
   }
 
+  /** 会話の実行の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void realExecutionCancelsBWhileAContinuesThenRemovesBoth() throws Exception {
     var projects =
@@ -96,14 +103,17 @@ class ConcurrentAgentRunsIntegrationTest
     var entered = new CountDownLatch(2);
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             return Flux.create(
                 sink -> {

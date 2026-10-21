@@ -1,7 +1,12 @@
 package dev.mikoto2000.rei.storage;
 
-/** Bounded-heap migration fixture; never reads the entire Event history. */
+/**
+ * 検証条件を再現するための保存イベント取り込み実行の担当。
+ *
+ * <p>Bounded-heap migration fixture; never reads the entire Event history.
+ */
 public final class StorageEventImportWorker {
+  /** 検証用に、データ保存の共通処理の起動要求を受け付け、実行を開始する。 */
   public static void main(String[] arguments) throws Exception {
     var root = java.nio.file.Path.of(arguments[0]);
     try (var migration = new StorageMigrationCoordinator(root)) {

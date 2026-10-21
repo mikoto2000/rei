@@ -17,14 +17,17 @@ import org.jline.terminal.impl.DumbTerminal;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+/** 音声Typing保護の結果と状態の契約を検証するテスト。 */
 @Timeout(15)
 class VoiceTypingProtectionTest {
+  /** 検証用に、必要な状態が整ってから先へ進むため、音声Typing保護検証を待つ。 */
   static void await(BooleanSupplier condition) throws Exception {
     long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
     while (!condition.getAsBoolean() && System.nanoTime() < deadline) Thread.sleep(5);
     assertThat(condition.getAsBoolean()).isTrue();
   }
 
+  /** 音声による対話で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void actualJLineKeepsPartiallyTypedJapaneseDuringVoiceEventsAndStreamingOutput()
       throws Exception {

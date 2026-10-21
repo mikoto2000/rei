@@ -10,11 +10,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** SQLite情報への関心実行待ちの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class SqliteCuriosityQueueTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 話題の管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void persistsCuriosityItemsAcrossQueueInstances() {
     Path dbPath = tempDir.resolve(".rei").resolve("curiosity.db");
@@ -29,6 +32,7 @@ class SqliteCuriosityQueueTest {
         second.findCandidates(new CuriosityQuery(now(), 10)).getFirst().question());
   }
 
+  /** 話題の管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateQuestionIsSuppressedByNormalizedUniqueKey() {
     SqliteCuriosityQueue queue =
@@ -39,6 +43,7 @@ class SqliteCuriosityQueueTest {
     assertEquals(1, queue.findCandidates(new CuriosityQuery(now(), 10)).size());
   }
 
+  /** 項目一覧を取り除くことを確認する。 */
   @Test
   void statusUpdatesRemoveItemsFromPendingCandidates() {
     SqliteCuriosityQueue queue =
@@ -52,6 +57,7 @@ class SqliteCuriosityQueueTest {
     assertTrue(queue.findCandidates(new CuriosityQuery(now(), 10)).isEmpty());
   }
 
+  /** 話題の管理で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void expiredItemsAreMarkedAndNotReturned() {
     SqliteCuriosityQueue queue =
@@ -61,6 +67,7 @@ class SqliteCuriosityQueueTest {
     assertTrue(queue.findCandidates(new CuriosityQuery(now(), 10)).isEmpty());
   }
 
+  /** 話題の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void candidatesAreOrderedByPriorityAndLimited() {
     SqliteCuriosityQueue queue =
@@ -74,6 +81,7 @@ class SqliteCuriosityQueueTest {
     assertEquals("high", candidates.getFirst().id());
   }
 
+  /** {@code dataSource} の条件を再現するための補助情報を返す。 */
   private DataSource dataSource(Path path) {
     try {
       java.nio.file.Files.createDirectories(path.toAbsolutePath().getParent());
@@ -85,6 +93,7 @@ class SqliteCuriosityQueueTest {
     return dataSource;
   }
 
+  /** {@code item} の条件を再現するための補助情報を返す。 */
   private CuriosityItem item(String id, String question, double priority, Instant expiresAt) {
     return new CuriosityItem(
         id,
@@ -97,6 +106,7 @@ class SqliteCuriosityQueueTest {
         CuriosityStatus.PENDING);
   }
 
+  /** {@code now} の条件を再現するための補助情報を返す。 */
   private Instant now() {
     return Instant.parse("2026-09-02T00:00:00Z");
   }

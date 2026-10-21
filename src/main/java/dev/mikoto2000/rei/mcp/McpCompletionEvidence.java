@@ -10,12 +10,22 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
-/** Project only saved Goal verification facts; never reverify files or trust assistant claims. */
+/**
+ * MCPによる機能の提供に必要なMCP入力補完根拠を扱う。
+ *
+ * <p>Project only saved Goal verification facts; never reverify files or trust assistant claims.
+ */
 public final class McpCompletionEvidence {
+  /** 目標一覧。 */
   private final GoalRepository goals;
+
+  /** 振り返り一覧。 */
   private final GoalReflectionRepository reflections;
+
+  /** 成果物一覧。 */
   private final ArtifactStore artifacts;
 
+  /** 指定された値や利用先を使って、McpCompletionEvidenceを初期化する。 */
   public McpCompletionEvidence(
       GoalRepository goals, GoalReflectionRepository reflections, ArtifactStore artifacts) {
     this.goals = goals;
@@ -23,6 +33,7 @@ public final class McpCompletionEvidence {
     this.artifacts = artifacts;
   }
 
+  /** MCPによる機能の提供で用いる入力補完を返す。 */
   public Map<String, Object> completion(McpRequestStore.Request request, boolean succeeded) {
     var verified = new HashSet<String>();
     boolean failed = false;
@@ -55,6 +66,7 @@ public final class McpCompletionEvidence {
     return project(succeeded, request.criteria(), verified, failed);
   }
 
+  /** MCPによる機能の提供で用いるプロジェクトを返す。 */
   static Map<String, Object> project(
       boolean succeeded, List<String> criteria, Set<String> verified, boolean failed) {
     long count = criteria.stream().filter(verified::contains).count();
@@ -77,6 +89,7 @@ public final class McpCompletionEvidence {
         criteria.size());
   }
 
+  /** MCPによる機能の提供で用いる成果物一覧を返す。 */
   public List<Map<String, Object>> artifacts(McpRequestStore.Request request) {
     if (artifacts == null) return List.of();
     return artifacts

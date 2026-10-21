@@ -21,19 +21,44 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 /**
- * Same Goal requirements/budgets with real SQLite and scripted model/external-effect boundaries.
+ * 目標段階評価の結果と状態の契約を検証するテスト。
+ *
+ * <p>Same Goal requirements/budgets with real SQLite and scripted model/external-effect boundaries.
  */
 @Tag("integration")
 class GoalStageEvaluationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temporary;
 
+  /** 検証条件で扱う動作モードの選択肢。 */
   enum Mode {
+    /** 検証に使う旧形式。 */
     LEGACY,
+    /** 検証に使う段階一覧。 */
     STAGES,
+    /** 検証に使う修復。 */
     REPAIR,
+    /** 検証に使う分割。 */
     SPLIT
   }
 
+  /**
+   * 検証条件の再現に使う計測値の情報。
+   *
+   * @param scenario 検証に使うscenario
+   * @param mode 検証に使う動作モード
+   * @param status 検証に使う状態
+   * @param independentlyVerified 検証に使うindependently確認済み
+   * @param falseCompletion 検証に使う無効完了
+   * @param resumeSucceeded 検証に使う再開成功
+   * @param duplicateOperations 検証に使う重複の有無操作一覧
+   * @param humanInterventions 検証に使う利用者追加入力一覧
+   * @param elapsedNanos 検証に使う経過時間ナノ秒数
+   * @param runs 検証に使う実行一覧
+   * @param llmReservations 検証に使う言語モデル予約一覧
+   * @param tokens 検証に使うトークン数
+   * @param tokenLimitation 検証に使うトークン制約
+   */
   record Measurement(
       String scenario,
       Mode mode,
@@ -49,6 +74,7 @@ class GoalStageEvaluationTest {
       Long tokens,
       String tokenLimitation) {}
 
+  /** 目標の達成管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void comparesFourModesAcrossTenSafetyCasesAndTwoRecoveryCases() throws Exception {
     var results = new ArrayList<Measurement>();
@@ -151,22 +177,51 @@ class GoalStageEvaluationTest {
         .writeValue(output.toFile(), report);
   }
 
+  /** 検証条件を再現するための検証条件。 */
   static final class Fixture {
+    /** 検証に使う作業ルート。 */
     final Path root;
+
+    /** 検証に使う動作モード。 */
     final Mode mode;
+
+    /** 検証に使うscenario。 */
     final String scenario;
+
+    /** 検証に使うデータ。 */
     final DriverManagerDataSource data;
+
+    /** 検証に使う目標一覧。 */
     GoalRepository goals;
+
+    /** 検証に使う段階一覧。 */
     GoalStageRepository stages;
+
+    /** 検証に使うサービス。 */
     GoalStageService service;
+
+    /** 検証に使う目標。 */
     GoalRepository.Goal goal;
+
+    /** 検証に使うファイル一覧。 */
     final FileGoalVerifier files = new FileGoalVerifier();
+
+    /** 検証に使う待機中。 */
     Consumer<GoalLoopService.Outcome> pending;
+
+    /** 検証に使う確認済み影響。 */
     final Map<String, Integer> confirmedEffects = new LinkedHashMap<>();
+
+    /** 検証に使うcrashed。 */
     boolean crashed;
+
+    /** 検証に使うdispatches。 */
     int dispatches;
+
+    /** 検証に使う追加入力一覧。 */
     int interventions;
 
+    /** 検証条件に必要な値を受け取り、Fixtureを用意する。 */
     Fixture(Path root, Mode mode, String scenario) {
       this.root = root;
       this.mode = mode;
@@ -189,6 +244,7 @@ class GoalStageEvaluationTest {
       }
     }
 
+    /** {@code reopen} の条件を再現するため、検証用の操作や状態を扱う。 */
     void reopen() {
       goals = new GoalRepository(data, Clock.systemUTC());
       stages = new GoalStageRepository(Clock.systemUTC(), goals);
@@ -197,31 +253,37 @@ class GoalStageEvaluationTest {
       service.configureSplit(mode == Mode.SPLIT);
     }
 
+    /** {@code criterion} の条件を再現するための補助情報を返す。 */
     GoalRepository.FileCriterion criterion(String id) {
       return new GoalRepository.FileCriterion(id + ".json", "", "/ok", "true");
     }
 
+    /** {@code definition} の条件を再現するための補助情報を返す。 */
     GoalStageDefinition definition(String id, String parent, List<String> dependencies) {
       return new GoalStageDefinition(
           id, parent, "Produce " + id, List.of(criterion(id)), dependencies, List.of(), null);
     }
 
+    /** 検証用に、指定された内容を書き込み先へ反映する。 */
     void write(String id, boolean value, boolean effect) throws Exception {
       Files.writeString(
           root.resolve(id + ".json"), "{\"ok\":" + value + ",\"iteration\":" + dispatches + "}");
       if (effect) confirmedEffects.merge(id, 1, Integer::sum);
     }
 
+    /** {@code success} の条件を再現するための補助情報を返す。 */
     GoalLoopService.Outcome success() {
       return new GoalLoopService.Outcome(ChatExecutionResult.success("DONE", false));
     }
 
+    /** {@code loop} の条件を再現するための補助情報を返す。 */
     GoalLoopService loop() {
       var loop =
           new GoalLoopService(
               goals,
               files,
               new GoalLoopService.Gateway() {
+                /** {@code dispatch} の条件を再現するため、検証用の操作や状態を扱う。 */
                 public void dispatch(
                     GoalRepository.Claim claim,
                     String run,
@@ -330,6 +392,7 @@ class GoalStageEvaluationTest {
                   }
                 }
 
+                /** 検証用に、目標の達成管理において、入力先Flightかどうかを判定する。 */
                 public boolean isInFlight(GoalRepository.Goal ignored) {
                   return false;
                 }
@@ -340,6 +403,7 @@ class GoalStageEvaluationTest {
       return loop;
     }
 
+    /** 検証用に、要求された処理を実行する。 */
     Measurement execute() {
       long start = System.nanoTime();
       var loop = loop();

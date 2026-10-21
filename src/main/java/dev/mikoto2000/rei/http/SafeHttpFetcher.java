@@ -14,9 +14,23 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.stereotype.Component;
 import reactor.core.publisher.Mono;
 
-/** Bounded transfer, pinned DNS answers and a single operation deadline. */
+/**
+ * 安全性HTTP通信に必要な情報を外部から取得する。
+ *
+ * <p>Bounded transfer, pinned DNS answers and a single operation deadline.
+ */
 @Component
 public class SafeHttpFetcher {
+  /**
+   * 外部情報の取得で受け渡す応答を表す。
+   *
+   * @param status 状態
+   * @param headers HTTPヘッダー
+   * @param body 本文
+   * @param finalUri 最終URI
+   * @param retrievedAt retrieved日時
+   * @param validatedAt 検証済み日時
+   */
   public record Response(
       int status,
       Map<String, String> headers,
@@ -24,15 +38,18 @@ public class SafeHttpFetcher {
       URI finalUri,
       java.time.Instant retrievedAt,
       java.time.Instant validatedAt) {
+    /** 外部情報の取得を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Response(int status, Map<String, String> headers, byte[] body, URI finalUri) {
       this(status, headers, body, finalUri, java.time.Instant.now(), java.time.Instant.now());
     }
 
+    /** 外部情報の取得で用いるヘッダーを返す。 */
     public String header(String name) {
       return headers.get(name.toLowerCase(Locale.ROOT));
     }
   }
 
+  /** 後続の処理に必要な情報を、取得先から読み込む。 */
   public Response fetch(
       URI initial,
       Map<String, String> headers,
@@ -85,12 +102,14 @@ public class SafeHttpFetcher {
     }
   }
 
+  /** 外部情報の取得で用いる実際に使うポートを返す。 */
   private static int effectivePort(URI uri) {
     return uri.getPort() >= 0
         ? uri.getPort()
         : "https".equalsIgnoreCase(uri.getScheme()) ? 443 : 80;
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、Peerを検証する。 */
   static void validatePeer(
       java.net.SocketAddress peer, Set<InetAddress> approved, HttpFetchPolicy policy) {
     if (!(peer instanceof InetSocketAddress socket)
@@ -100,6 +119,7 @@ public class SafeHttpFetcher {
       throw new HttpFetchException(HttpFetchException.Code.URL_NOT_ALLOWED);
   }
 
+  /** 外部情報の取得で用いるexchangeを返す。 */
   public Response exchange(
       URI uri,
       Map<String, String> headers,

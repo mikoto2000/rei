@@ -10,8 +10,10 @@ import org.mockito.Mockito;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
+/** Web検索ツール一覧の結果と状態の契約を検証するテスト。 */
 class WebSearchToolsTest {
 
+  /** Web上の情報の調査で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void webSearchDelegatesToService() throws Exception {
     WebSearchService service = Mockito.mock(WebSearchService.class);
@@ -26,6 +28,7 @@ class WebSearchToolsTest {
     verify(service).search("spring ai", 3);
   }
 
+  /** Web上の情報の調査で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void webSearchAndReadDelegatesToCompositeService() throws Exception {
     WebSearchService searchService = Mockito.mock(WebSearchService.class);
@@ -39,6 +42,7 @@ class WebSearchToolsTest {
     verify(compositeService).searchAndRead(request);
   }
 
+  /** Web上の情報の調査で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void toolDescriptionExplainsWhenToUseCompositeAndPrimitiveTools() throws Exception {
     Tool composite =
@@ -71,6 +75,7 @@ class WebSearchToolsTest {
         primitive.description().contains("webSearchAndRead"));
   }
 
+  /** Web上の情報の調査で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void methodToolProviderRegistersCompositeToolWithRequestSchema() {
     WebSearchTools tools =

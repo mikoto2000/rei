@@ -10,28 +10,43 @@ import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 
 /**
- * Serializes Rei clipboard transactions; restores only while our unique marker is still present.
+ * 画面操作の支援に必要なクリップボードPasteを扱う。
+ *
+ * <p>Serializes Rei clipboard transactions; restores only while our unique marker is still present.
  */
 public final class ClipboardPaste {
+  /** 画面操作の支援に必要なPasteGestureを扱う。 */
   @FunctionalInterface
   public interface PasteGesture {
+    /** 画面操作の支援の操作を実行する。 */
     void run() throws Exception;
   }
 
+  /** 排他制御。 */
   private static final ReentrantLock LOCK = new ReentrantLock();
+
+  /** 目印。 */
   private static final DataFlavor MARKER =
       new DataFlavor(
           "application/x-rei-clipboard-token;class=java.lang.String", "Rei clipboard token");
+
+  /** クリップボード。 */
   private final Supplier<Clipboard> clipboard;
+
+  /** 待機の実行先。 */
   private final Sleeper sleeper;
+
+  /** consume遅延時間。 */
   private final long consumeDelay;
 
+  /** 指定された値や利用先を使って、ClipboardPasteを初期化する。 */
   public ClipboardPaste(Supplier<Clipboard> clipboard, Sleeper sleeper, long consumeDelay) {
     this.clipboard = clipboard;
     this.sleeper = sleeper;
     this.consumeDelay = consumeDelay;
   }
 
+  /** 画面操作の支援に関するpasteを処理する。 */
   public void paste(String text, PasteGesture gesture) throws Exception {
     LOCK.lockInterruptibly();
     try {
@@ -40,14 +55,17 @@ public final class ClipboardPaste {
       String token = UUID.randomUUID().toString();
       Transferable inserted =
           new Transferable() {
+            /** 画面操作の支援で参照する引き継ぎデータFlavorsを返す。 */
             public DataFlavor[] getTransferDataFlavors() {
               return new DataFlavor[] {DataFlavor.stringFlavor, MARKER};
             }
 
+            /** 画面操作の支援において、データFlavor対応済みかどうかを判定する。 */
             public boolean isDataFlavorSupported(DataFlavor flavor) {
               return flavor.equals(DataFlavor.stringFlavor) || flavor.equals(MARKER);
             }
 
+            /** 画面操作の支援で参照する引き継ぎデータを返す。 */
             public Object getTransferData(DataFlavor flavor) throws UnsupportedFlavorException {
               if (flavor.equals(MARKER)) return token;
               if (flavor.equals(DataFlavor.stringFlavor)) return text;
@@ -78,6 +96,7 @@ public final class ClipboardPaste {
     }
   }
 
+  /** 画面操作の支援において、ownsに該当するか判定する。 */
   private static boolean owns(Clipboard board, String token) throws Exception {
     var current = board.getContents(null);
     return current != null
@@ -85,7 +104,11 @@ public final class ClipboardPaste {
         && token.equals(current.getTransferData(MARKER));
   }
 
-  /** System Transferables may read lazily from native storage: materialize before replacing it. */
+  /**
+   * 現在の状態を、後から参照できる記録として取り出す。
+   *
+   * <p>System Transferables may read lazily from native storage: materialize before replacing it.
+   */
   private static Transferable snapshot(Transferable original) throws Exception {
     if (original == null) return null;
     var values = new java.util.LinkedHashMap<DataFlavor, Supplier<Object>>();
@@ -106,6 +129,7 @@ public final class ClipboardPaste {
           int count;
           while ((count = reader.read(buffer)) != -1) {
             text.append(buffer, 0, count);
+            // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
             if (text.length() > 4 * 1024 * 1024)
               throw new IllegalStateException("Clipboard reader too large to preserve");
           }
@@ -117,14 +141,17 @@ public final class ClipboardPaste {
       }
     }
     return new Transferable() {
+      /** 画面操作の支援で参照する引き継ぎデータFlavorsを返す。 */
       public DataFlavor[] getTransferDataFlavors() {
         return values.keySet().toArray(DataFlavor[]::new);
       }
 
+      /** 画面操作の支援において、データFlavor対応済みかどうかを判定する。 */
       public boolean isDataFlavorSupported(DataFlavor flavor) {
         return values.containsKey(flavor);
       }
 
+      /** 画面操作の支援で参照する引き継ぎデータを返す。 */
       public Object getTransferData(DataFlavor flavor) throws UnsupportedFlavorException {
         if (!values.containsKey(flavor)) throw new UnsupportedFlavorException(flavor);
         return values.get(flavor).get();

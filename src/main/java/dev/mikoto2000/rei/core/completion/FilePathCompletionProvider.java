@@ -7,20 +7,36 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 
+/** ファイルパス入力補完を用途や設定に応じて提供する窓口。 */
 public final class FilePathCompletionProvider implements CompletionProvider {
+  /** ファイル／ディレクトリ／BOTH。 */
   public static final String FILE = "file", DIRECTORY = "directory", BOTH = "file-or-directory";
 
+  /**
+   * 入力候補の提示で受け渡す項目を表す。
+   *
+   * @param name 名前
+   * @param directory ディレクトリ
+   */
   public record Entry(String name, boolean directory) {}
 
+  /** 入力候補の提示に必要なディレクトリListerを扱う。 */
   @FunctionalInterface
   public interface DirectoryLister {
+    /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
     List<Entry> list(Path parent) throws IOException;
   }
 
+  /** ディレクトリ一覧。 */
   private final DirectoryLister directories;
+
+  /** 利用者のホームディレクトリ。 */
   private final Path home;
+
+  /** 対象環境または判定期間の設定。 */
   private final boolean windows;
 
+  /** 入力候補の提示を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public FilePathCompletionProvider() {
     this(
         FilePathCompletionProvider::listDirectory,
@@ -28,12 +44,14 @@ public final class FilePathCompletionProvider implements CompletionProvider {
         java.io.File.separatorChar == '\\');
   }
 
+  /** 指定された値や利用先を使って、FilePathCompletionProviderを初期化する。 */
   public FilePathCompletionProvider(DirectoryLister directories, Path home, boolean windows) {
     this.directories = directories;
     this.home = home;
     this.windows = windows;
   }
 
+  /** 利用可能な対象を確認できるよう、ディレクトリを一覧にする。 */
   public static List<Entry> listDirectory(Path parent) throws IOException {
     try (var children = Files.list(parent)) {
       return children
@@ -42,11 +60,13 @@ public final class FilePathCompletionProvider implements CompletionProvider {
     }
   }
 
+  /** 入力候補の提示において、ファイルパス入力補完提供元への対応可否を返す。 */
   @Override
   public boolean supports(CompletionContext context) {
     return context.types().stream().anyMatch(type -> Set.of(FILE, DIRECTORY, BOTH).contains(type));
   }
 
+  /** 処理の完了を記録し、後続の処理へ結果を引き渡す。 */
   @Override
   public List<CompletionCandidate> complete(CompletionContext context) {
     try {
@@ -78,6 +98,7 @@ public final class FilePathCompletionProvider implements CompletionProvider {
     }
   }
 
+  /** 入力候補の提示で判断に用いる開始付きの条件を確認する。 */
   private boolean startsWith(String value, String prefix) {
     return windows
         ? value.regionMatches(true, 0, prefix, 0, prefix.length())

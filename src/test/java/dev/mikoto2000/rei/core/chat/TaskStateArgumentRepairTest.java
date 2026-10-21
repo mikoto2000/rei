@@ -45,13 +45,24 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
+/** タスク状態引数修復の結果と状態の契約を検証するテスト。 */
 class TaskStateArgumentRepairTest {
+  /** 検証に使う所有者。 */
   final AgentRunContext owner = new AgentRunContext("run", "session", Path.of("."), "project");
+
+  /** 検証に使う承認一覧。 */
   final ToolApprovalRepository approvals = mock(ToolApprovalRepository.class);
+
+  /** 検証に使う不正な。 */
   final String invalid = "{\"status\":\"IN_PROGRESS\",\"pending\":\"review,verify\"}";
+
+  /** 検証に使う有効な。 */
   final String valid = "{\"status\":\"IN_PROGRESS\",\"pending\":[\"review\",\"verify\"]}";
+
+  /** 検証に使う影響。 */
   final AtomicInteger effects = new AtomicInteger();
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   RunExecutionContext context(OutputLimitRunBudget budget, boolean permissions) {
     var context =
         new RunExecutionContext(
@@ -85,18 +96,22 @@ class TaskStateArgumentRepairTest {
     return context;
   }
 
+  /** {@code callback} の条件を再現するための補助情報を返す。 */
   ToolCallback callback(String name, java.util.function.Function<String, String> effect) {
     return new ToolCallback() {
+      /** 検証用に、会話の実行で参照するツール定義を返す。 */
       public ToolDefinition getToolDefinition() {
         return ToolDefinition.builder().name(name).description(name).inputSchema("{}").build();
       }
 
+      /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
       public String call(String input) {
         return effect.apply(input);
       }
     };
   }
 
+  /** 検証用に、指定された変更を、管理中の情報へ反映する。 */
   ToolCallback update() {
     return callback(
         "updateTaskState",
@@ -106,6 +121,7 @@ class TaskStateArgumentRepairTest {
         });
   }
 
+  /** 検証で使用するプロンプトを、指定された条件に合わせて用意する。 */
   Prompt prompt(RunExecutionContext context, ToolCallback... callbacks) {
     return new Prompt(
         List.of(new UserMessage("review")),
@@ -115,10 +131,12 @@ class TaskStateArgumentRepairTest {
             .build());
   }
 
+  /** {@code toolCall} の条件を再現するための補助情報を返す。 */
   AssistantMessage.ToolCall toolCall(String id, String name, String input) {
     return new AssistantMessage.ToolCall(id, "function", name, input);
   }
 
+  /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
   ChatResponse call(String id, String input) {
     return new ChatResponse(
         List.of(
@@ -128,16 +146,19 @@ class TaskStateArgumentRepairTest {
                     .build())));
   }
 
+  /** 会話の実行の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void modelReceivesArrayGuidanceAndCorrectedCallRequiresNormalApproval() {
     var context = context(new OutputLimitRunBudget(2, 20), true);
     var modelCalls = new AtomicInteger();
     var model =
         new ChatModel() {
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new AssertionError();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             if (modelCalls.incrementAndGet() == 1)
               return Flux.just(TaskStateArgumentRepairTest.this.call("invalid", invalid));
@@ -151,6 +172,7 @@ class TaskStateArgumentRepairTest {
             assertTrue(feedback.responseData().contains("INVALID_TOOL_ARGUMENTS"));
             assertTrue(feedback.responseData().contains("pending: must be a JSON array"));
             assertEquals(0, effects.get());
+            // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
             verifyNoInteractions(approvals);
             return Flux.just(TaskStateArgumentRepairTest.this.call("corrected", valid));
           }
@@ -163,6 +185,7 @@ class TaskStateArgumentRepairTest {
     verify(approvals).request("updateTaskState", valid, owner);
   }
 
+  /** 会話の実行の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void validationAndDurableRepairLimitWorkWithoutPermissionGuard() {
     var budget = new OutputLimitRunBudget(2, 20, null, 0, 2);
@@ -179,9 +202,11 @@ class TaskStateArgumentRepairTest {
             () -> loop.executeResumable(prompt(next, update()), call("third", invalid), next));
     assertEquals(ExecutionStoppedException.Reason.TOOL_ARGUMENT_REPAIR_EXHAUSTED, stopped.reason());
     assertEquals(0, effects.get());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(approvals);
   }
 
+  /** 会話の実行で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void successfulSiblingIsPreservedAndNotRepeatedForARepairedCall() {
     var context = context(new OutputLimitRunBudget(2, 20), false);
@@ -214,6 +239,7 @@ class TaskStateArgumentRepairTest {
     assertEquals(1, effects.get());
   }
 
+  /** 会話の実行で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void postExecutionArgumentExceptionIsNeverAutomaticallyRepaired() {
     var context = context(new OutputLimitRunBudget(2, 20), false);
@@ -236,6 +262,7 @@ class TaskStateArgumentRepairTest {
     assertEquals(0, context.budgetSnapshot().argumentCorrections());
   }
 
+  /** 会話の実行で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void validCallWithPolicyDenialIsNotAnArgumentRepair() {
     var context = context(new OutputLimitRunBudget(2, 20), false);
@@ -249,10 +276,12 @@ class TaskStateArgumentRepairTest {
     var modelCalls = new AtomicInteger();
     var model =
         new ChatModel() {
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new AssertionError();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             modelCalls.incrementAndGet();
             return Flux.just(TaskStateArgumentRepairTest.this.call("denied", valid));

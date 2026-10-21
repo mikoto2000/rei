@@ -6,15 +6,29 @@ import dev.mikoto2000.rei.llm.ConversationIds;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
 
-/** Read-only Shell boundary: never resolves ownership from AgentRunScope. */
+/**
+ * 履歴シェルのユースケースを実現する。
+ *
+ * <p>Read-only Shell boundary: never resolves ownership from AgentRunScope.
+ */
 @Service
 public class HistoryShellService {
+  /** 既定直近／既定一覧上限／既定検索上限。 */
   public static final int DEFAULT_LAST = 50, DEFAULT_LIST_LIMIT = 50, DEFAULT_SEARCH_LIMIT = 10;
+
+  /** プロジェクト一覧。 */
   private final ProjectService projects;
+
+  /** 保存先。 */
   private final ConversationLogStore store;
+
+  /** 検索。 */
   private final ConversationHistorySearchService search;
+
+  /** 形式。 */
   private final HistoryFormatter format = new HistoryFormatter();
 
+  /** 指定された値や利用先を使って、HistoryShellServiceを初期化する。 */
   public HistoryShellService(
       ProjectService projects,
       ConversationLogStore store,
@@ -24,6 +38,7 @@ public class HistoryShellService {
     this.search = search;
   }
 
+  /** 会話履歴と受付記録の管理で用いるプロジェクトを返す。 */
   private ProjectContext project(String reference) {
     var selected = projects.currentProject();
     var all = projects.registeredProjects();
@@ -37,12 +52,14 @@ public class HistoryShellService {
     var byId = all.stream().filter(p -> p.id().equals(reference)).findFirst();
     if (byId.isPresent()) return byId.get();
     var matches = all.stream().filter(p -> p.name().equals(reference)).toList();
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (matches.size() > 1)
       throw new IllegalArgumentException("Ambiguous project: " + reference + " (use ProjectId)");
     if (matches.isEmpty()) throw new IllegalArgumentException("Project not found: " + reference);
     return matches.getFirst();
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public void list(String reference, int limit, int offset, Consumer<String> out) {
     positive(limit, 1000, "--limit");
     if (offset < 0) throw new IllegalArgumentException("--offset must be non-negative");
@@ -72,6 +89,7 @@ public class HistoryShellService {
               + ((long) offset + limit));
   }
 
+  /** 利用者が対象の情報を確認できるように表示する。 */
   public void show(
       String reference, String conversation, int last, boolean all, Consumer<String> out) {
     positive(last, 10000, "--last");
@@ -100,6 +118,7 @@ public class HistoryShellService {
     else recent.forEach(entry -> out.accept(format.message(entry)));
   }
 
+  /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public void search(String query, HistorySearchScope scope, int limit, Consumer<String> out) {
     positive(limit, 50, "--limit");
     var current = project(null);
@@ -127,6 +146,7 @@ public class HistoryShellService {
     }
   }
 
+  /** 会話履歴と受付記録の管理に関する正のを処理する。 */
   private void positive(int value, int max, String option) {
     if (value < 1 || value > max)
       throw new IllegalArgumentException(option + " must be between 1 and " + max);

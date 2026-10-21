@@ -17,10 +17,13 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * Deterministic evidence fixture: exact source recall and evidence coverage are separate
+ * Web検索品質Regressionの結果と状態の契約を検証するテスト。
+ *
+ * <p>Deterministic evidence fixture: exact source recall and evidence coverage are separate
  * assertions.
  */
 class WebSearchQualityRegressionTest {
+  /** Web上の情報の調査で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void finalImplementationReplaysTheUnchangedPhaseZeroUnverifiedFixture() throws Exception {
     var search = mock(WebSearchService.class);
@@ -47,6 +50,7 @@ class WebSearchQualityRegressionTest {
         "PHASE0_IDENTICAL_FIXTURE finalSearchServiceCalls=3 finalPageFetchCalls=2 exactUrlRecall=1 evidenceRetained=1 assessment=unknown");
   }
 
+  /** Web上の情報の調査で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void improvesFrozenLegacyBaselineWithoutLosingEvidence() throws Exception {
     var registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
@@ -93,6 +97,7 @@ class WebSearchQualityRegressionTest {
     }
   }
 
+  /** 期待する内容取得元を保持することを確認する。 */
   @ParameterizedTest
   @ValueSource(
       strings = {
@@ -130,6 +135,7 @@ class WebSearchQualityRegressionTest {
     assertTrue(context.allResults().getFirst().content().contains("required evidence"));
   }
 
+  /** Web上の情報の調査で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void providerOutageRemainsExplicit() throws Exception {
     var search = mock(WebSearchService.class);
@@ -144,6 +150,7 @@ class WebSearchQualityRegressionTest {
                 .search("outage", 3));
   }
 
+  /** 取得元を保持することを確認する。 */
   @Test
   void unreadablePageRetainsSourceAndSnippet() throws Exception {
     var search = mock(WebSearchService.class);

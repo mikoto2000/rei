@@ -9,7 +9,9 @@ import org.springframework.core.env.MapPropertySource;
 import org.springframework.core.env.StandardEnvironment;
 import org.springframework.core.io.ClassPathResource;
 
+/** Web設定の結果と状態の契約を検証するテスト。 */
 class WebSettingsTest {
+  /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void serverSettingsFollowCanonicalWebProperties() throws Exception {
     var env = new StandardEnvironment();

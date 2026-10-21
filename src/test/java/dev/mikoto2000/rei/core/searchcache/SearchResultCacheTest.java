@@ -12,14 +12,18 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
+/** 検索結果キャッシュの結果と状態の契約を検証するテスト。 */
 class SearchResultCacheTest {
 
+  /** 検証に使うタイムゾーン。 */
   private static final ZoneId ZONE = ZoneId.of("Asia/Tokyo");
 
+  /** {@code cache} の条件を再現するための補助情報を返す。 */
   private SearchResultCache cache(Instant start) {
     return new SearchResultCache(Duration.ofSeconds(60), 100, Clock.fixed(start, ZONE));
   }
 
+  /** 検索結果の再利用で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchResultCanBeSaved() {
     SearchResultCache cache = cache(Instant.parse("2026-08-17T00:00:00Z"));
@@ -32,6 +36,7 @@ class SearchResultCacheTest {
     assertEquals(1, cache.size());
   }
 
+  /** 検索結果の再利用で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void resultCanBeRetrievedBySameKey() {
     SearchResultCache cache = cache(Instant.parse("2026-08-17T00:00:00Z"));
@@ -45,6 +50,7 @@ class SearchResultCacheTest {
     assertEquals(result, found.get());
   }
 
+  /** 検索結果の再利用で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void differentQueryIsDifferentKey() {
     SearchResultCache cache = cache(Instant.parse("2026-08-17T00:00:00Z"));
@@ -55,6 +61,7 @@ class SearchResultCacheTest {
     assertFalse(cache.get(keyB).isPresent());
   }
 
+  /** 検索結果の再利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void differentPathIsDifferentKey() {
     SearchResultCache cache = cache(Instant.parse("2026-08-17T00:00:00Z"));
@@ -65,6 +72,7 @@ class SearchResultCacheTest {
     assertFalse(cache.get(keyB).isPresent());
   }
 
+  /** 検索結果の再利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void hitWithinTtl() {
     SearchResultCache cache = cache(Instant.parse("2026-08-17T00:00:00Z"));
@@ -74,6 +82,7 @@ class SearchResultCacheTest {
     assertTrue(cache.get(key).isPresent());
   }
 
+  /** 検索結果の再利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void missAfterTtlExpires() {
     var clock =
@@ -85,6 +94,7 @@ class SearchResultCacheTest {
     assertFalse(cache.get(key).isPresent());
   }
 
+  /** 検索結果の再利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failedResultIsNotCached() {
     SearchResultCache cache = cache(Instant.parse("2026-08-17T00:00:00Z"));
@@ -94,6 +104,7 @@ class SearchResultCacheTest {
     assertFalse(cache.get(key).isPresent());
   }
 
+  /** 保持内容の消去について、全対象項目一覧を取り除くことを確認する。 */
   @Test
   void clearRemovesAllEntries() {
     SearchResultCache cache = cache(Instant.parse("2026-08-17T00:00:00Z"));
@@ -106,6 +117,7 @@ class SearchResultCacheTest {
     assertEquals(0, cache.size());
   }
 
+  /** 検索結果の再利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void maxEntriesEvictsOldest() {
     SearchResultCache cache =

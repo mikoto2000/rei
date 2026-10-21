@@ -8,7 +8,9 @@ import dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import org.junit.jupiter.api.Test;
 
+/** 共有実行トークン数の上限の結果と状態の契約を検証するテスト。 */
 class SharedRunTokenLimitTest {
+  /** 並行伝えるについて、各対象報告された内容トークンを保持することを確認する。 */
   @Test
   void concurrentReportsPreserveEveryReportedToken() throws Exception {
     var budget = new OutputLimitRunBudget(0, 10, null, 80000);
@@ -27,6 +29,7 @@ class SharedRunTokenLimitTest {
     assertThat(budget.tryConsumeLlmCall()).isFalse();
   }
 
+  /** 用途に応じたモデル利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void parentAndChildrenShareReportedTokensAndStopBeforeNextCall() {
     var budget = new OutputLimitRunBudget(0, 10, null, 10);
@@ -42,6 +45,7 @@ class SharedRunTokenLimitTest {
     assertThat(budget.totalTokens()).isEqualTo(10);
   }
 
+  /** 用途に応じたモデル利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unknownUsageAndOvershootFailClosedOnlyWhenEnabled() {
     for (Integer usage : new Integer[] {null, 0, -1, 11}) {

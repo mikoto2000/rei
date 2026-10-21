@@ -17,14 +17,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 期間助言の結果と状態の契約を検証するテスト。 */
 class PeriodCoachingTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock = Clock.fixed(Instant.parse("2026-10-04T12:00:00Z"), ZoneOffset.UTC);
 
+  /** 検証で使用する設定を、指定された条件に合わせて用意する。 */
   PeriodCoaching.Settings settings() {
     return new PeriodCoaching.Settings(true, Set.of("development"), .6, 60, .001, .25, 7);
   }
 
+  /** {@code aggregate} の条件を再現するための補助情報を返す。 */
   ActivityPeriodAnalysis.Aggregate aggregate(
       LocalDate first, long target, long other, boolean partial) {
     var start = first.atStartOfDay(ZoneOffset.UTC).toInstant();
@@ -43,6 +49,7 @@ class PeriodCoachingTest {
         0);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void userCriteriaAndPriorShareChooseConservativeAdvice() {
     var result =
@@ -64,6 +71,7 @@ class PeriodCoachingTest {
             .advice());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledPartialAndInsufficientEvidenceNeverAdvise() {
     var policy = new PeriodCoaching();
@@ -86,6 +94,7 @@ class PeriodCoachingTest {
     assertEquals("UNCERTAIN_CLASSIFICATION", policy.evaluate(settings(), unknown, good).reason());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidCriteriaAreRejected() {
     assertThrows(
@@ -96,6 +105,7 @@ class PeriodCoachingTest {
         () -> new PeriodCoaching.Settings(true, Set.of("development"), Double.NaN, 60, .1, .25, 7));
   }
 
+  /** 作業状況の把握で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void reservationsSurviveRestartRespectCooldownAndStaleSettings() {
     var source = new DriverManagerDataSource("jdbc:sqlite:" + directory.resolve("coaching.db"));
@@ -142,6 +152,7 @@ class PeriodCoachingTest {
             clock.instant().plusSeconds(1209600)));
   }
 
+  /** 作業状況の把握で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void twoRepositoryInstancesCannotReserveTwoConcurrentAdvices() throws Exception {
     var source = new DriverManagerDataSource("jdbc:sqlite:" + directory.resolve("concurrent.db"));
@@ -170,6 +181,7 @@ class PeriodCoachingTest {
     }
   }
 
+  /** シェル機能の構成検証済み永続化済みおよびについて、明示的な有効化を必要とすることを確認する。 */
   @Test
   void shellConfigurationIsValidatedPersistedAndRequiresExplicitEnable() {
     var activity = org.mockito.Mockito.mock(ActivityStore.class);
@@ -209,6 +221,7 @@ class PeriodCoachingTest {
     assertFalse(repository.load().settings().enabled());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void realSavedObservationsFeedAdviceAndSecondCallIsSuppressed() {
     var activity = org.mockito.Mockito.mock(ActivityStore.class);

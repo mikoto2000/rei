@@ -18,10 +18,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 複数ファイル目標の結果と状態の契約を検証するテスト。 */
 class MultiFileGoalTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う保存と検索の窓口。 */
   GoalRepository repository;
 
+  /** {@code hash} の条件を再現するための補助情報を返す。 */
   String hash(String value) throws Exception {
     return HexFormat.of()
         .formatHex(
@@ -29,10 +34,12 @@ class MultiFileGoalTest {
                 .digest(value.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
   }
 
+  /** {@code owner} の条件を再現するための補助情報を返す。 */
   AgentRunContext owner() {
     return new AgentRunContext("run", "session", root, "project");
   }
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     repository =
@@ -41,6 +48,7 @@ class MultiFileGoalTest {
             Clock.systemUTC());
   }
 
+  /** 各対象ファイルを必要とすることを確認する。 */
   @Test
   void persistsAllCriteriaAndRequiresEveryFileAfterRestart() throws Exception {
     var criteria =
@@ -62,6 +70,7 @@ class MultiFileGoalTest {
     assertFalse(new FileGoalVerifier().verify(saved).satisfied());
   }
 
+  /** 目標の達成管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void invalidDuplicateOrUnboundedCriteriaLeaveNoGoal() throws Exception {
     var valid = new GoalRepository.FileCriterion("A.txt", hash("a"));
@@ -91,6 +100,7 @@ class MultiFileGoalTest {
     assertTrue(repository.list("project").isEmpty());
   }
 
+  /** 目標の達成管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void legacySingleFileCriteriaAndBudgetBehaviorRemainCompatible() throws Exception {
     var goal = repository.create(owner(), "x", "A.txt", hash("a"), 3, 1);
@@ -100,6 +110,7 @@ class MultiFileGoalTest {
     assertFalse(repository.reserveLlm(claim));
   }
 
+  /** 振り返りについて、各対象期待する内容ファイルを保持することを確認する。 */
   @Test
   void reflectionPreservesEveryExpectedFileAndVerificationFacts() throws Exception {
     var criteria =

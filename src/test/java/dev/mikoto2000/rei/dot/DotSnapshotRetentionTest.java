@@ -15,14 +15,27 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 状態表示状態の記録保持期間の結果と状態の契約を検証するテスト。 */
 class DotSnapshotRetentionTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   DotRequestRepositoryTest.Time clock = new DotRequestRepositoryTest.Time();
+
+  /** 検証に使うリポジトリ。 */
   DotRequestRepository repo;
+
+  /** 検証に使う識別子。 */
   String id;
+
+  /** 検証に使う利用権の確保。 */
   String claim = UUID.randomUUID().toString();
+
+  /** 検証に使うsubmission。 */
   String submission = UUID.randomUUID().toString();
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     try (var gate = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(root)) {
@@ -48,11 +61,13 @@ class DotSnapshotRetentionTest {
     repo.claim("p", id, claim);
   }
 
+  /** {@code elapsed} の条件を再現するため、検証用の操作や状態を扱う。 */
   void elapsed() {
     clock.now = clock.now.plus(Duration.ofDays(2));
     repo.maintain();
   }
 
+  /** 利用者の状態表示の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void unknownPayloadExpiresButItsIdentityRemainsCancellable() throws Exception {
     elapsed();
@@ -68,6 +83,7 @@ class DotSnapshotRetentionTest {
     assertTrue(repo.open("p").isEmpty());
   }
 
+  /** 利用者の状態表示で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void savedReceiptReplaysEvenAfterSnapshotExpiryWithoutRevalidationOrNewResume() {
     var tools = new DotMcpTools(repo, Set.of("p"), true);
@@ -101,6 +117,7 @@ class DotSnapshotRetentionTest {
     assertEquals("NOT_REQUESTED", repo.intent("p", id).get("status"));
   }
 
+  /** 利用者の状態表示で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void resultNotReadyAndMissingRequestHaveDomainErrors() {
     assertEquals(

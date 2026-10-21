@@ -31,10 +31,13 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 import reactor.core.publisher.Flux;
 
+/** ツール承認実行の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ToolApprovalExecutionTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** ツール利用の権限制御で、指定した条件に対する結果と状態の変化を確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void resumedChatExecutesExactApprovedCallbackOnce(boolean voice) {
@@ -54,10 +57,12 @@ class ToolApprovalExecutionTest {
     var effects = new AtomicInteger();
     var delegate =
         new ChatModel() {
+          /** 検証用に、ツール利用の権限制御の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt p) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt p) {
             var message =
                 modelCalls.getAndIncrement() == 0
@@ -74,6 +79,7 @@ class ToolApprovalExecutionTest {
         };
     ToolCallback callback =
         new ToolCallback() {
+          /** 検証用に、ツール利用の権限制御で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("writeMultiFile")
@@ -82,6 +88,7 @@ class ToolApprovalExecutionTest {
                 .build();
           }
 
+          /** 検証用に、ツール利用の権限制御の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             effects.incrementAndGet();
             return "saved";

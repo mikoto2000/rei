@@ -63,15 +63,24 @@ import reactor.core.publisher.Flux;
 import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
+/** 加工前のツールの結果引数修復の結果と状態の契約を検証するテスト。 */
 class RawToolResultArgumentRepairTest {
+  /** 検証に使う参照先。 */
   private static final String REF = "73cb1803-2daf-3eaf-aaab-45f2b64a66c9";
+
+  /** 検証に使う不正な。 */
   private static final String INVALID =
       "{\"rawResultRef\":\"" + REF + "\",\"nextOffset\":\"3433\",\"limit\":16000}";
+
+  /** 検証に使う有効な。 */
   private static final String VALID =
       "{\"rawResultRef\":\"" + REF + "\",\"offset\":3433,\"limit\":16000}";
+
+  /** 検証に使う所有者。 */
   private static final AgentRunContext OWNER =
       new AgentRunContext("run", "session", Path.of("."), "project");
 
+  /** 案内を返すことを確認する。 */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void incorrectNextOffsetReturnsGuidanceAndTheModelCorrectsItBeforeReading(boolean guarded) {
@@ -93,6 +102,7 @@ class RawToolResultArgumentRepairTest {
               }
               var message = latestToolMessage(prompt);
               if (invocation == 2) {
+                // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
                 verifyNoInteractions(store);
                 var correction = correction(message);
                 assertThat(correction.path("error").asText()).isEqualTo("INVALID_TOOL_ARGUMENTS");
@@ -123,6 +133,7 @@ class RawToolResultArgumentRepairTest {
         .isEmpty();
   }
 
+  /** 会話の実行で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void repeatedIncorrectCursorsStopAtTheExistingCorrectionLimit(boolean guarded) {
@@ -155,9 +166,11 @@ class RawToolResultArgumentRepairTest {
     assertThat(calls).hasValue(3);
     assertThat(remaining).containsExactly(1, 0);
     assertThat(invalidArgumentEvents(fixture.events())).hasSize(2);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(store, fixture.approvals());
   }
 
+  /** 失敗情報を読み取ることを確認する。 */
   @ParameterizedTest
   @MethodSource("runtimeFailures")
   void readFailureAfterPreflightIsNotAutomaticallyRetried(
@@ -183,9 +196,11 @@ class RawToolResultArgumentRepairTest {
     assertThat(calls).hasValue(1);
     assertThat(invalidArgumentEvents(fixture.events())).isEmpty();
     verify(store, times(1)).read("session", REF);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(fixture.approvals());
   }
 
+  /** 会話の実行の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void permissionDenialIsNotAutomaticallyRetriedAsAnArgumentError() {
     var store = mock(RawToolResultStore.class);
@@ -206,9 +221,11 @@ class RawToolResultArgumentRepairTest {
     assertThat(result.status()).isEqualTo(ChatExecutionResult.Status.FAILED);
     assertThat(calls).hasValue(1);
     assertThat(invalidArgumentEvents(fixture.events())).isEmpty();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(store, fixture.approvals());
   }
 
+  /** 会話の実行で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void successfulSiblingIsPreservedAndNeverReexecutedForTheCorrection(boolean guarded) {
@@ -240,6 +257,7 @@ class RawToolResultArgumentRepairTest {
     assertThat(siblings).hasValue(1);
   }
 
+  /** 会話の実行で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void savedPendingToolIsRevalidatedBeforeReplay(boolean guarded) {
@@ -258,6 +276,7 @@ class RawToolResultArgumentRepairTest {
     assertThat(reads).hasValue(0);
   }
 
+  /** 会話の実行で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void correctionLimitRemainsConsumedAfterBudgetRestoration() {
     var budget = new OutputLimitRunBudget(2, 20, null, 0, 2);
@@ -289,6 +308,7 @@ class RawToolResultArgumentRepairTest {
     assertThat(reads).hasValue(0);
   }
 
+  /** {@code runtimeFailures} の条件を再現するための補助情報を返す。 */
   private static Stream<Arguments> runtimeFailures() {
     return Stream.of(
         Arguments.of(true, new IllegalStateException("RAW_RESULT_NOT_FOUND"), "invalid_state"),
@@ -297,6 +317,7 @@ class RawToolResultArgumentRepairTest {
         Arguments.of(false, new IllegalArgumentException("INVALID_CURSOR"), "invalid_arguments"));
   }
 
+  /** {@code fixture} の条件を再現するための補助情報を返す。 */
   private static Fixture fixture(
       RawToolResultStore store,
       boolean guarded,
@@ -305,16 +326,19 @@ class RawToolResultArgumentRepairTest {
       BiFunction<Prompt, Integer, ChatResponse> responses) {
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           @Override
           public ToolCallingChatOptions getOptions() {
             return ToolCallingChatOptions.builder().build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           @Override
           public ChatResponse call(Prompt prompt) {
             throw new AssertionError("Only the streaming model path is expected");
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           @Override
           public Flux<ChatResponse> stream(Prompt prompt) {
             return Flux.just(responses.apply(prompt, calls.incrementAndGet()));
@@ -367,6 +391,7 @@ class RawToolResultArgumentRepairTest {
     return new Fixture(service, approvals, events);
   }
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   private static RunExecutionContext context(OutputLimitRunBudget budget, boolean guarded) {
     var factory = new AgentEventFactory(Clock.systemUTC());
     var context =
@@ -385,13 +410,16 @@ class RawToolResultArgumentRepairTest {
     return context;
   }
 
+  /** {@code callback} の条件を再現するための補助情報を返す。 */
   private static ToolCallback callback(String name, Function<String, String> effect) {
     return new ToolCallback() {
+      /** 検証用に、会話の実行で参照するツール定義を返す。 */
       @Override
       public ToolDefinition getToolDefinition() {
         return ToolDefinition.builder().name(name).description(name).inputSchema("{}").build();
       }
 
+      /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
       @Override
       public String call(String input) {
         return effect.apply(input);
@@ -399,6 +427,7 @@ class RawToolResultArgumentRepairTest {
     };
   }
 
+  /** 検証で使用するプロンプトを、指定された条件に合わせて用意する。 */
   private static Prompt prompt(RunExecutionContext context, ToolCallback... callbacks) {
     return new Prompt(
         List.of(new UserMessage("checkstyle の指摘の続きを確認してください。")),
@@ -408,10 +437,12 @@ class RawToolResultArgumentRepairTest {
             .build());
   }
 
+  /** {@code toolCall} の条件を再現するための補助情報を返す。 */
   private static AssistantMessage.ToolCall toolCall(String id, String name, String input) {
     return new AssistantMessage.ToolCall(id, "function", name, input);
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   private static ChatResponse response(AssistantMessage.ToolCall... calls) {
     return new ChatResponse(
         List.of(
@@ -419,6 +450,7 @@ class RawToolResultArgumentRepairTest {
                 AssistantMessage.builder().content("").toolCalls(List.of(calls)).build())));
   }
 
+  /** {@code latestToolMessage} の条件を再現するための補助情報を返す。 */
   private static ToolResponseMessage latestToolMessage(Prompt prompt) {
     return prompt.getInstructions().stream()
         .filter(ToolResponseMessage.class::isInstance)
@@ -427,10 +459,12 @@ class RawToolResultArgumentRepairTest {
         .orElseThrow();
   }
 
+  /** {@code correction} の条件を再現するための補助情報を返す。 */
   private static JsonNode correction(ToolResponseMessage message) {
     return JsonMapper.builder().build().readTree(message.getResponses().getLast().responseData());
   }
 
+  /** 複数の検証で共通する期待結果を確認し、要件に合わない状態を検出する。 */
   private static void assertDelivery(
       ToolResponseMessage message, String callId, ResultDelivery.Kind kind) {
     assertThat(message.getMetadata().get("rei.deliveryPolicies")).isInstanceOf(Map.class);
@@ -438,6 +472,7 @@ class RawToolResultArgumentRepairTest {
     assertThat(policies.get(callId)).isEqualTo(kind);
   }
 
+  /** {@code invalidArgumentEvents} の条件を再現するための補助情報を返す。 */
   private static List<ToolFailedPayload> invalidArgumentEvents(List<AgentEvent> events) {
     return events.stream()
         .map(AgentEvent::payload)
@@ -447,8 +482,16 @@ class RawToolResultArgumentRepairTest {
         .toList();
   }
 
+  /**
+   * 検証条件の再現に使う検証条件の情報。
+   *
+   * @param service 検証に使うサービス
+   * @param approvals 検証に使う承認一覧
+   * @param events 検証に使うイベント一覧
+   */
   private record Fixture(
       ChatExecutionService service, ToolApprovalRepository approvals, List<AgentEvent> events) {
+    /** 検証用に、要求された処理を実行する。 */
     ChatExecutionResult execute() {
       return service.execute(OWNER, "checkstyle の指摘の続きを確認してください。", new UserInterventionQueue());
     }

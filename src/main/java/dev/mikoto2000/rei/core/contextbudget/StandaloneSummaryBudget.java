@@ -9,16 +9,23 @@ import dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 
-/** Shared by the history and active-log summaries of one ownerless context projection. */
+/**
+ * 独立した要約の使用量と上限を管理する。
+ *
+ * <p>Shared by the history and active-log summaries of one ownerless context projection.
+ */
 final class StandaloneSummaryBudget implements ModelCallBudget {
+  /** 指定された内容から新しい対象を作成する。 */
   static ModelCallBudget create(ContextCompressionProperties properties) {
     if (properties.getStandaloneSummaryMaxLlmCalls() == 0
         && properties.getStandaloneSummaryMaxTotalTokens() == 0) return null;
     return new StandaloneSummaryBudget(properties);
   }
 
+  /** 予算。 */
   private final OutputLimitRunBudget budget;
 
+  /** 指定された値や利用先を使って、StandaloneSummaryBudgetを初期化する。 */
   private StandaloneSummaryBudget(ContextCompressionProperties properties) {
     budget =
         new OutputLimitRunBudget(
@@ -30,6 +37,7 @@ final class StandaloneSummaryBudget implements ModelCallBudget {
             properties.getStandaloneSummaryMaxTotalTokens());
   }
 
+  /** モデルへ渡す文脈の管理の操作を実行する。 */
   public void run() {
     RunCancellation.propagate(null);
     if (budget.tokenExhausted())
@@ -38,10 +46,12 @@ final class StandaloneSummaryBudget implements ModelCallBudget {
     if (!budget.tryConsumeLlmCall()) throw new ExecutionStoppedException(LLM_CALL_BUDGET_EXCEEDED);
   }
 
+  /** トークン数による実行予算の制限が有効かどうかを返す。 */
   public boolean tokenLimitEnabled() {
     return budget.tokenLimitEnabled();
   }
 
+  /** 使用したトークン数を実行予算へ記録する。 */
   public void recordTotalTokens(Integer tokens) {
     budget.recordTotalTokens(tokens);
     RunCancellation.propagate(null);

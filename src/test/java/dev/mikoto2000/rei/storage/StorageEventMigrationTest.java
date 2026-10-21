@@ -29,18 +29,26 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 保存イベント移行の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class StorageEventMigrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使うプロジェクト。 */
   final String project = UUID.randomUUID().toString();
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Instant now = Instant.parse("2026-10-01T00:00:00.123456789Z");
 
+  /** {@code prepare} の条件を再現するため、検証用の操作や状態を扱う。 */
   void prepare() throws Exception {
     try (var migration = new StorageMigrationCoordinator(root)) {
       migration.prepare();
     }
   }
 
+  /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
   AgentEvent event(String id, String run) {
     return new AgentEvent(
         id,
@@ -57,10 +65,12 @@ class StorageEventMigrationTest {
         project);
   }
 
+  /** 検証で使用する取得元を、指定された条件に合わせて用意する。 */
   Path source() {
     return root.resolve("projects").resolve(project).resolve("events/events.jsonl");
   }
 
+  /** {@code legacyCursor} の条件を再現するため、検証用の操作や状態を扱う。 */
   void legacyCursor(long offset, boolean discard, long generation) throws Exception {
     try (var db =
             DriverManager.getConnection("jdbc:sqlite:" + root.resolve("memory-consolidation.db"));
@@ -78,6 +88,7 @@ class StorageEventMigrationTest {
     }
   }
 
+  /** 利用を書き込むことを確認する。 */
   @Test
   void importPreservesTypedFactsIdsSequenceTimestampAndOriginalBytesAndNewWritesUseOnlySqlite()
       throws Exception {
@@ -99,6 +110,7 @@ class StorageEventMigrationTest {
         .containsEntry("missing", "not-found");
   }
 
+  /** データ保存の共通処理で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void byteCursorAtUnicodeBoundaryMapsToSequenceAndKeepsGenerationCas() throws Exception {
     var legacy = new ProjectAgentEventStore(root);
@@ -129,6 +141,7 @@ class StorageEventMigrationTest {
     }
   }
 
+  /** 未完了の壊れたおよび重複の有無取得元一覧について、起動時を停止することを確認する。 */
   @Test
   void incompleteCorruptAndDuplicateSourcesStopStartupWithoutLosingBytes() throws Exception {
     var legacy = new ProjectAgentEventStore(root);
@@ -147,6 +160,7 @@ class StorageEventMigrationTest {
     assertThat(new SqliteProjectAgentEventStore(root).recent(project, 10)).hasSize(1);
   }
 
+  /** データ保存の共通処理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void oversizedLegacyFactIsPreservedInHistoryButDoesNotBecomeANewSchedulerReplay()
       throws Exception {
@@ -176,6 +190,7 @@ class StorageEventMigrationTest {
     assertThat(store.readPage(project, cursor.sequence(), false).events()).containsExactly(two);
   }
 
+  /** 複数について、起動単位一覧保存形式への変換プロジェクト発生順序予算の配分を保存することを確認する。 */
   @Test
   void multipleStoreInstancesSerializeProjectSequenceAllocation() throws Exception {
     prepare();
@@ -197,6 +212,7 @@ class StorageEventMigrationTest {
     assertThat(source()).doesNotExist();
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void globalInventoryIncludesProjectEventRowsWithoutPlanningAcrossScopes() throws Exception {
     prepare();
@@ -209,6 +225,7 @@ class StorageEventMigrationTest {
     assertThat(planner.root()).isEqualTo(root.toAbsolutePath().normalize());
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
       strings = {
@@ -241,6 +258,7 @@ class StorageEventMigrationTest {
     assertThat(StorageMigrationCoordinatorTest.version(root.resolve("storage.db"))).isZero();
   }
 
+  /** 実行予定の管理重複の有無通知の抑制を維持することを確認する。 */
   @Test
   void productionBeansReplayOnlyTheUnprocessedSuffixAndKeepSchedulerDuplicateSuppression()
       throws Exception {
@@ -321,6 +339,7 @@ class StorageEventMigrationTest {
     }
   }
 
+  /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void hundredThousandEventsMigrateInSixtyFourMiBWithoutChangingSource() throws Exception {
     Files.createDirectories(source().getParent());
@@ -361,6 +380,7 @@ class StorageEventMigrationTest {
     assertThat(StorageBackup.hash(source())).isEqualTo(hash);
   }
 
+  /** {@code worker} の条件を再現するための補助情報を返す。 */
   private Process worker(Class<?> type, String argument, String heap) throws Exception {
     String classpath =
         System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
@@ -389,10 +409,12 @@ class StorageEventMigrationTest {
         .start();
   }
 
+  /** {@code javaArgument} の条件を再現するための補助情報を返す。 */
   private static String javaArgument(String value) {
     return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
   }
 
+  /** データ保存の共通処理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void killedSchemaThreeUpgradeRetriesEventsAndCursorExactlyOnce() throws Exception {
     prepare();
@@ -456,17 +478,20 @@ class StorageEventMigrationTest {
     assertThat(StorageBackup.hash(source())).isEqualTo(hash);
   }
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @org.springframework.context.annotation.Configuration
   @org.springframework.context.annotation.Import({
     StorageMigrationConfiguration.class,
     dev.mikoto2000.rei.event.EventStorageConfiguration.class
   })
   static class Config {
+    /** {@code clock} の条件を再現するための補助情報を返す。 */
     @org.springframework.context.annotation.Bean
     Clock clock() {
       return Clock.fixed(Instant.parse("2026-10-01T00:00:02Z"), ZoneOffset.UTC);
     }
 
+    /** {@code memoryConsolidationDataSource} の条件を再現するための補助情報を返す。 */
     @org.springframework.context.annotation.Bean
     javax.sql.DataSource memoryConsolidationDataSource(
         @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String root) {
@@ -474,6 +499,7 @@ class StorageEventMigrationTest {
           "jdbc:sqlite:" + Path.of(root).resolve("memory-consolidation.db"));
     }
 
+    /** {@code scheduler} の条件を再現するための補助情報を返す。 */
     @org.springframework.context.annotation.Bean
     dev.mikoto2000.rei.temporal.PersistentAgentScheduler scheduler(
         javax.sql.DataSource source, Clock clock) {

@@ -9,16 +9,27 @@ import java.util.List;
 import java.util.Optional;
 import javax.sql.DataSource;
 
-/** Additive indexed supplement table. Does not rebuild sessions or mutate raw evidence. */
+/**
+ * 作業作業状況推定の記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>Additive indexed supplement table. Does not rebuild sessions or mutate raw evidence.
+ */
 public class WorkActivityInferenceStore {
+  /** データベースへの接続元。 */
   private final DataSource ds;
+
+  /** 初期化済み。 */
   private boolean initialized;
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule());
 
+  /** 指定された値や利用先を使って、WorkActivityInferenceStoreを初期化する。 */
   public WorkActivityInferenceStore(DataSource ds) {
     this.ds = ds;
   }
 
+  /** 作業状況の把握に関する初期化を処理する。 */
   private synchronized void initialize() throws Exception {
     if (initialized) return;
     try (var c = ds.getConnection();
@@ -31,10 +42,12 @@ public class WorkActivityInferenceStore {
     initialized = true;
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   public synchronized void save(WorkActivityInference inference) {
     try {
       initialize();
       String payload = json.writeValueAsString(inference);
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (payload.length() > 65536)
         throw new IllegalArgumentException("Inference payload too large");
       try (var c = ds.getConnection();
@@ -51,6 +64,7 @@ public class WorkActivityInferenceStore {
     }
   }
 
+  /** 作業状況の把握で用いる最新を返す。 */
   public synchronized Optional<WorkActivityInference> latest() {
     try {
       initialize();
@@ -67,8 +81,10 @@ public class WorkActivityInferenceStore {
   }
 
   /**
-   * Each rolling inference belongs to its windowEnd instant, so midnight overlap never duplicates
-   * it.
+   * 対象を特定できるよう、期間を探す。
+   *
+   * <p>Each rolling inference belongs to its windowEnd instant, so midnight overlap never
+   * duplicates it.
    */
   public synchronized List<WorkActivityInference> findBetween(
       Instant start, Instant end, int limit) {
@@ -95,6 +111,7 @@ public class WorkActivityInferenceStore {
     }
   }
 
+  /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   private WorkActivityInference decode(String value) throws Exception {
     if (value == null || value.length() > 65536)
       throw new IllegalArgumentException("Inference payload too large");

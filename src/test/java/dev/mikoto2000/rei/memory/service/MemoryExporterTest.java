@@ -16,11 +16,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 記憶Exporterの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class MemoryExporterTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 書き出しについて、Markdownを作成することを確認する。 */
   @Test
   void exportCreatesMarkdownAndJsonlFiles() {
     MemoryService service = newService();
@@ -46,6 +49,7 @@ class MemoryExporterTest {
     assertTrue(Files.exists(result.datedJsonl()));
   }
 
+  /** 長期記憶の保存と検索で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void exportHandlesNoActiveMemory() {
     MemoryService service = newService();
@@ -55,6 +59,7 @@ class MemoryExporterTest {
     assertEquals(0, result.count());
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private MemoryService newService() {
     var ds = new DriverManagerDataSource("jdbc:sqlite:" + tempDir.resolve("memory-exporter.db"));
     var props =

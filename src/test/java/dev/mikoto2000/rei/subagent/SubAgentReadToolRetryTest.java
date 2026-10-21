@@ -30,16 +30,20 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import org.springframework.dao.TransientDataAccessResourceException;
 import reactor.core.publisher.Flux;
 
+/** 補助エージェント読み取りツール再試行の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class SubAgentReadToolRetryTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
+  /** {@code fixture} の条件を再現するための補助情報を返す。 */
   SubAgentRunnerTest fixture() {
     var f = new SubAgentRunnerTest();
     f.directory = dir;
     return f;
   }
 
+  /** {@code tool} の条件を再現するための補助情報を返す。 */
   ChatResponse tool() {
     return new ChatResponse(
         List.of(
@@ -53,8 +57,10 @@ class SubAgentReadToolRetryTest {
                     .build())));
   }
 
+  /** {@code callback} の条件を再現するための補助情報を返す。 */
   ToolCallback callback(java.util.function.Supplier<String> action) {
     return new ToolCallback() {
+      /** 検証用に、補助エージェントへの委譲で参照するツール定義を返す。 */
       public ToolDefinition getToolDefinition() {
         return ToolDefinition.builder()
             .name("readMultiFile")
@@ -63,12 +69,14 @@ class SubAgentReadToolRetryTest {
             .build();
       }
 
+      /** 検証用に、補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
       public String call(String input) {
         return action.get();
       }
     };
   }
 
+  /** {@code configure} の条件を再現するため、検証用の操作や状態を扱う。 */
   void configure(
       SubAgentRunner runner,
       SubAgentRunnerTest fixture,
@@ -89,6 +97,7 @@ class SubAgentReadToolRetryTest {
             policy, new AgentEventFactory(Clock.systemUTC()), fixture.events::add));
   }
 
+  /** 再試行回数を読み取ることを確認する。 */
   @Test
   void optedInAutomaticallyApprovedReadRetriesOnlyTheToolAndKeepsFailureFacts() throws Exception {
     var f = fixture();
@@ -121,6 +130,7 @@ class SubAgentReadToolRetryTest {
     assertEquals(1, f.events.stream().filter(e -> e.type() == AgentEventType.TOOL_FAILED).count());
   }
 
+  /** 既定値について、分類を書き込むことを確認する。 */
   @Test
   void defaultsWriteClassificationAndPermanentErrorsCannotRetry() throws Exception {
     for (int mode = 0; mode < 3; mode++) {
@@ -155,6 +165,7 @@ class SubAgentReadToolRetryTest {
     }
   }
 
+  /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void retryLimitIsInvocationWideAndASecondToolFailureCannotResetIt() throws Exception {
     var f = fixture();
@@ -185,6 +196,7 @@ class SubAgentReadToolRetryTest {
     assertEquals(2, result.toolRetryHistory().size());
   }
 
+  /** 補助エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void inheritedOneUseApprovalCannotBeReplayedAfterTransientFailure() throws Exception {
     var repository =
@@ -229,6 +241,7 @@ class SubAgentReadToolRetryTest {
     assertEquals("CONSUMED", repository.get("project", request.id()).status());
   }
 
+  /** 補助エージェントへの委譲で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void onlyTypedNetworkTimeoutsRetryAndReturnedErrorsAreNotExceptions() {
     for (var failure :
@@ -268,6 +281,7 @@ class SubAgentReadToolRetryTest {
     assertEquals(0, retries.attempts());
   }
 
+  /** 補助エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void policyAndCancellationAreRecheckedBeforeRetryCallbackStarts() {
     var retries = new SubAgentReadToolRetries(3);
@@ -304,6 +318,7 @@ class SubAgentReadToolRetryTest {
     assertEquals(0, next.attempts());
   }
 
+  /** 補助エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void configurationBoundsAndLegacyResultRemainCompatible() {
     var props = new SubAgentProperties();
@@ -323,6 +338,7 @@ class SubAgentReadToolRetryTest {
     assertThrows(UnsupportedOperationException.class, () -> result.toolRetryHistory().add("x"));
   }
 
+  /** 補助エージェントへの委譲で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void retriedReadEmbeddingSharesDurableGoalCallAllowance() throws Exception {
     var source =

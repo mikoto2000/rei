@@ -6,13 +6,17 @@ import org.slf4j.LoggerFactory;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.stereotype.Component;
 
+/** Bluesky投稿をモデルから呼び出せるツールとして提供する。 */
 @Component
 @RequiredArgsConstructor
 public class BlueskyPostTools {
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(BlueskyPostTools.class);
 
+  /** Bluesky投稿サービス。 */
   private final BlueskyPostService blueskyPostService;
 
+  /** Blueskyとの連携で用いる投稿を返す。 */
   @Tool(
       name = "blueskyPost",
       description =

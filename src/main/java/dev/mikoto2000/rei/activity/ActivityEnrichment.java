@@ -5,11 +5,16 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Merge independent fields without losing a known service or mixing conflicting service contexts.
+ * 作業状況の把握に必要な作業状況Enrichmentを扱う。
+ *
+ * <p>Merge independent fields without losing a known service or mixing conflicting service
+ * contexts.
  */
 final class ActivityEnrichment {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private ActivityEnrichment() {}
 
+  /** 関連する情報をまとめて扱えるよう、作業状況Enrichmentを統合する。 */
   static ActivityRecord merge(ActivityRecord base, ActivityExtractor.Result result) {
     if (base.inference().activities().isEmpty() || result.inference().activities().isEmpty())
       return base;
@@ -113,6 +118,7 @@ final class ActivityEnrichment {
         merged.detection());
   }
 
+  /** 作業状況の把握で用いる項目一覧を返す。 */
   static ActivityFieldConfidence fields(ActivityRecord record) {
     if (record.detection() != null && record.detection().fieldConfidence() != null)
       return record.detection().fieldConfidence();

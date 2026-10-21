@@ -33,11 +33,14 @@ import org.springframework.ai.embedding.EmbeddingRequest;
 import org.springframework.ai.embedding.EmbeddingResponse;
 import org.sqlite.SQLiteDataSource;
 
+/** ベクトル文書サービスの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class VectorDocumentServiceTest {
 
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path tempDir;
 
+  /** 追加一覧検索およびについて、保存済み文書を削除することを確認する。 */
   @Test
   void addListSearchAndDeleteDocuments() throws IOException {
     Path springDoc =
@@ -75,6 +78,7 @@ class VectorDocumentServiceTest {
     assertTrue(service.search("spring ai", 3, null, null).isEmpty());
   }
 
+  /** 検索対象文書の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void addReplacesExistingDocumentWithSameSource() throws IOException {
     Path springDoc = tempDir.resolve("spring-ai.txt");
@@ -93,6 +97,7 @@ class VectorDocumentServiceTest {
     assertEquals(second.docId(), results.getFirst().docId());
   }
 
+  /** 検索対象文書の管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchCanFilterBySource() throws IOException {
     Path springDoc =
@@ -111,6 +116,7 @@ class VectorDocumentServiceTest {
     assertTrue(results.getFirst().source().endsWith("spring-ai.txt"));
   }
 
+  /** 検索対象文書の管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchReturnsDistinctDocumentsEvenWhenTopChunksAreFromSameDocument() {
     TestFixture fixture = newFixture();
@@ -162,6 +168,7 @@ class VectorDocumentServiceTest {
     assertEquals("doc-2", results.get(1).docId());
   }
 
+  /** 検索対象文書の管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchRanksDocumentHigherWhenEvidenceIsDistributedAcrossChunks() {
     TestFixture fixture = newFixture();
@@ -225,6 +232,7 @@ class VectorDocumentServiceTest {
     assertTrue(results.getFirst().score() > results.get(1).score());
   }
 
+  /** 検索対象文書の管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchBuildsSnippetAroundQueryInsteadOfDocumentPrefix() {
     TestFixture fixture = newFixture();
@@ -253,6 +261,7 @@ class VectorDocumentServiceTest {
     assertFalse(results.getFirst().snippet().startsWith("Preface text"));
   }
 
+  /** 検索対象文書の管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchBuildsSnippetFromBestMatchingSentence() {
     TestFixture fixture = newFixture();
@@ -280,6 +289,7 @@ class VectorDocumentServiceTest {
     assertEquals("Spring AI tools help build assistants.", results.getFirst().snippet());
   }
 
+  /** 検索対象文書の管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void searchMergesAdjacentChunksBeforeBuildingSnippet() {
     TestFixture fixture = newFixture();
@@ -320,6 +330,7 @@ class VectorDocumentServiceTest {
         results.getFirst().snippet().contains("Spring AI tools help build assistants effectively"));
   }
 
+  /** 削除別取得元について、一致する文書を取り除くことを確認する。 */
   @Test
   void deleteBySourceRemovesMatchingDocument() throws IOException {
     Path springDoc =
@@ -339,6 +350,7 @@ class VectorDocumentServiceTest {
     assertTrue(service.list().getFirst().source().endsWith("spring-ai.txt"));
   }
 
+  /** 追加について、設定済み文書の分割単位大きさを利用することを確認する。 */
   @Test
   void addUsesConfiguredChunkSize() throws IOException {
     Path document = tempDir.resolve("long.txt");
@@ -351,6 +363,7 @@ class VectorDocumentServiceTest {
     assertTrue(added.chunkCount() > 1);
   }
 
+  /** 追加について、設定済み文書の分割単位重なりを利用することを確認する。 */
   @Test
   void addUsesConfiguredChunkOverlap() throws IOException {
     Path document = tempDir.resolve("long.txt");
@@ -364,6 +377,7 @@ class VectorDocumentServiceTest {
     assertTrue(withOverlap.chunkCount() > withoutOverlap.chunkCount());
   }
 
+  /** 追加について、付随情報を保存することを確認する。 */
   @Test
   void addStoresMetadataForTitleFileTypeAndMarkdownHeading() throws IOException {
     Path markdown = tempDir.resolve("architecture-notes.md");
@@ -394,6 +408,7 @@ class VectorDocumentServiceTest {
     assertEquals("Architecture", stored.getMetadata().get("sectionHeading"));
   }
 
+  /** 検索対象文書の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void addUsesDifferentChunkingStrategiesPerFileType() throws IOException {
     String repeated = "spring tools ai weather ".repeat(120);
@@ -418,26 +433,32 @@ class VectorDocumentServiceTest {
     assertTrue(pdfChunks < textChunks);
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private VectorDocumentService newService() {
     return newFixture().service();
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private VectorDocumentService newServiceWithChunkSize(int chunkSize) {
     return newFixture(chunkSize, 0).service();
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private VectorDocumentService newServiceWithChunkSettings(int chunkSize, int chunkOverlap) {
     return newFixture(chunkSize, chunkOverlap).service();
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private TestFixture newFixture() {
     return newFixture(512, 0);
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private TestFixture newFixture(int chunkSize) {
     return newFixture(chunkSize, 0);
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private TestFixture newFixture(int chunkSize, int chunkOverlap) {
     SQLiteDataSource dataSource = new SQLiteDataSource();
     dataSource.setUrl("jdbc:sqlite:" + tempDir.resolve("memory.db"));
@@ -465,12 +486,20 @@ class VectorDocumentServiceTest {
     return new TestFixture(service, vectorStore);
   }
 
+  /**
+   * 検証条件の再現に使う検証検証条件の情報。
+   *
+   * @param service 検証に使うサービス
+   * @param vectorStore 検証に使うベクトル保存先
+   */
   private record TestFixture(VectorDocumentService service, SqliteVectorStore vectorStore) {}
 
+  /** {@code vecExtensionPath} の条件を再現するための補助情報を返す。 */
   private Path vecExtensionPath() {
     return dev.mikoto2000.rei.testsupport.SqliteVecTestExtension.resolve();
   }
 
+  /** 検証用に、対象を特定できるよう、項目を探す。 */
   private VectorDocumentEntry findEntry(List<VectorDocumentEntry> entries, String suffix) {
     return entries.stream()
         .filter(entry -> entry.source().endsWith(suffix))
@@ -478,6 +507,7 @@ class VectorDocumentServiceTest {
         .orElseThrow();
   }
 
+  /** 検証用に、指定された内容を保存先へ反映するため、PDFを書き込む。 */
   private void writePdf(Path pdf, String text) throws IOException {
     try (PDDocument document = new PDDocument()) {
       PDPage page = new PDPage();
@@ -495,8 +525,10 @@ class VectorDocumentServiceTest {
     }
   }
 
+  /** 検証条件を再現するための検証用に置き換えた埋め込み表現モデル。 */
   private static final class FakeEmbeddingModel implements EmbeddingModel {
 
+    /** 検証用に、検索対象文書の管理の要求を実行し、呼び出し元へ結果を返す。 */
     @Override
     public EmbeddingResponse call(EmbeddingRequest request) {
       List<Embedding> embeddings =
@@ -506,16 +538,19 @@ class VectorDocumentServiceTest {
       return new EmbeddingResponse(embeddings);
     }
 
+    /** {@code embed} の条件を再現するための補助情報を返す。 */
     @Override
     public float[] embed(Document document) {
       return embedText(document.getText());
     }
 
+    /** {@code dimensions} の条件を再現するための補助情報を返す。 */
     @Override
     public int dimensions() {
       return 4;
     }
 
+    /** {@code embedText} の条件を再現するための補助情報を返す。 */
     private float[] embedText(String text) {
       String value = text == null ? "" : text.toLowerCase();
       return new float[] {
@@ -523,6 +558,7 @@ class VectorDocumentServiceTest {
       };
     }
 
+    /** {@code score} の条件を再現するための補助情報を返す。 */
     private float score(String value, String token) {
       return value.contains(token) ? 1.0f : 0.0f;
     }

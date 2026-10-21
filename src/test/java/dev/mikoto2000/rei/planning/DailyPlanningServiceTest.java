@@ -27,11 +27,16 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 日次計画サービスの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class DailyPlanningServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   static final Clock CLOCK = Clock.fixed(Instant.parse("2026-10-07T03:00:00Z"), ZoneOffset.UTC);
 
+  /** 不確実性を保持することを確認する。 */
   @Test
   void onlyExplicitProjectsContributeAndSavedNextActionsRetainTheirUncertainty() throws Exception {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -122,6 +127,7 @@ class DailyPlanningServiceTest {
     assertThat(capped.projects().getFirst().warnings()).contains("item_limit_reached");
   }
 
+  /** 日々の計画の支援で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void scheduledItemsUseRealDueTimesAndPaginationIsExplicitlyPartialAtTheConfiguredLimit()
       throws Exception {
@@ -192,6 +198,7 @@ class DailyPlanningServiceTest {
     assertThat(schedules.get(project.id(), tomorrow).status()).isEqualTo("PENDING");
   }
 
+  /** 日々の計画の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void waitingOverdueBlockedResumedAndStaleAreSavedFactsAndNeverAdvanceExecution() {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -262,6 +269,7 @@ class DailyPlanningServiceTest {
     assertThat(checkpoints.get(project.id(), "child-task").revision()).isEqualTo(2);
   }
 
+  /** 日々の計画の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void observedActivityIsOnlyAReferenceAndRelocatedRootsFailClosed() throws Exception {
     var projects = new ProjectRegistry(root.resolve("projects.json"));
@@ -310,6 +318,7 @@ class DailyPlanningServiceTest {
     assertThatThrownBy(() -> service.today(null)).isInstanceOf(ResourceNotFoundException.class);
   }
 
+  /** 日々の計画の支援で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void calendarUsesDstDayBoundariesRatherThanTwentyFourHoursAndInvalidConfigurationIsRejected() {
     var projects = new ProjectRegistry(root.resolve("projects.json"));

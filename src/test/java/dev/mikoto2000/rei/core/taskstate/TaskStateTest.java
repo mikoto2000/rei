@@ -7,8 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** タスク状態の結果と状態の契約を検証するテスト。 */
 class TaskStateTest {
 
+  /** 作業状態の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void newTaskStateIsEmpty() {
     TaskState state = new TaskState();
@@ -19,6 +21,7 @@ class TaskStateTest {
     assertTrue(state.pending().isEmpty());
   }
 
+  /** 作業状態の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void goalCanBeSet() {
     TaskState state = new TaskState();
@@ -28,6 +31,7 @@ class TaskStateTest {
     assertFalse(state.isEmpty());
   }
 
+  /** 作業状態の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void statusCanBeChanged() {
     TaskState state = new TaskState();
@@ -36,6 +40,7 @@ class TaskStateTest {
     assertEquals(TaskState.STATUS_BLOCKED, state.status());
   }
 
+  /** 作業状態の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void completedCanBeAdded() {
     TaskState state = new TaskState();
@@ -44,6 +49,7 @@ class TaskStateTest {
     assertEquals(List.of("再現テストを追加した"), state.completed());
   }
 
+  /** 作業状態の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void pendingCanBeAdded() {
     TaskState state = new TaskState();
@@ -52,6 +58,7 @@ class TaskStateTest {
     assertEquals(List.of("実装修正"), state.pending());
   }
 
+  /** 作業状態の記録で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicateCompletedIsNotAddedTwice() {
     TaskState state = new TaskState();
@@ -61,6 +68,7 @@ class TaskStateTest {
     assertEquals(1, state.completed().size());
   }
 
+  /** 作業状態の記録で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicatePendingIsNotAddedTwice() {
     TaskState state = new TaskState();
@@ -70,6 +78,7 @@ class TaskStateTest {
     assertEquals(1, state.pending().size());
   }
 
+  /** 作業状態の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void completeClearsPendingAndSetsCompleted() {
     TaskState state = new TaskState();
@@ -80,6 +89,7 @@ class TaskStateTest {
     assertTrue(state.pending().isEmpty());
   }
 
+  /** 作業状態の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void blockSetsBlockedStatus() {
     TaskState state = new TaskState();
@@ -88,6 +98,7 @@ class TaskStateTest {
     assertEquals(TaskState.STATUS_BLOCKED, state.status());
   }
 
+  /** 初期状態への復帰について、新規タスクを開始することを確認する。 */
   @Test
   void resetStartsNewTask() {
     TaskState state = new TaskState();
@@ -101,6 +112,7 @@ class TaskStateTest {
     assertTrue(state.pending().isEmpty());
   }
 
+  /** 作業状態の記録で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void renderForPromptContainsGoalAndStatus() {
     TaskState state = new TaskState();
@@ -115,12 +127,14 @@ class TaskStateTest {
     assertTrue(prompt.contains("実装修正"));
   }
 
+  /** 作業状態の記録で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void emptyTaskStateRendersBlank() {
     TaskState state = new TaskState();
     assertEquals("", state.renderForPrompt());
   }
 
+  /** 作業状態の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void evictsOldestWhenMaxExceeded() {
     TaskState state = new TaskState(3);

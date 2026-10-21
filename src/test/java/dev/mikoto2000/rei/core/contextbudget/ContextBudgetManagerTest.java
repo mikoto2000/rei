@@ -12,8 +12,10 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 文脈に使える予算管理の結果と状態の契約を検証するテスト。 */
 class ContextBudgetManagerTest {
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void contextSectionCanBeRepresented() {
     ContextSection section = new ContextSection("TASK_STATE", "goal: fix bug");
@@ -21,6 +23,7 @@ class ContextBudgetManagerTest {
     assertEquals("goal: fix bug", section.content());
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sizeCanBeEstimated() {
     ContextBudgetManager manager = new ContextBudgetManager(128000, 8000, 2000);
@@ -28,18 +31,21 @@ class ContextBudgetManagerTest {
     assertTrue(manager.estimateTokens(section) > 0);
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void inputBudgetIsCalculated() {
     ContextBudgetManager manager = new ContextBudgetManager(128000, 8000, 2000);
     assertEquals(118000, manager.inputBudget());
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void outputReserveIsSubtracted() {
     ContextBudgetManager manager = new ContextBudgetManager(128000, 8000, 2000);
     assertEquals(118000, manager.inputBudget());
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void highPrioritySectionsAreIncludedFirst() {
     ContextBudgetManager manager = new ContextBudgetManager(128000, 8000, 2000);
@@ -54,6 +60,7 @@ class ContextBudgetManagerTest {
     assertTrue(result.included().contains("TASK_STATE"));
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void allSectionsKeptWithinBudget() {
     ContextBudgetManager manager = new ContextBudgetManager(128000, 8000, 2000);
@@ -65,6 +72,7 @@ class ContextBudgetManagerTest {
     assertEquals(3, result.included().size());
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void overflowDropsLowPrioritySections() {
     ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
@@ -80,6 +88,7 @@ class ContextBudgetManagerTest {
     assertTrue(result.dropped().contains("OLD_HISTORY"));
   }
 
+  /** モデルへ渡す文脈の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void systemAndCurrentUserAreNeverDropped() {
     ContextBudgetManager manager = new ContextBudgetManager(100, 100, 100);
@@ -92,6 +101,7 @@ class ContextBudgetManagerTest {
     assertTrue(result.included().contains("CURRENT_USER"));
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void actionPlanOldDoneStepsAreTrimmed() {
     ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
@@ -104,6 +114,7 @@ class ContextBudgetManagerTest {
     assertTrue(result.included().contains("ACTION_PLAN"));
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void currentStepIsKept() {
     ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
@@ -113,6 +124,7 @@ class ContextBudgetManagerTest {
     assertTrue(result.included().contains("ACTION_PLAN"));
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void workingSetLimitedToTopN() {
     ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
@@ -122,6 +134,7 @@ class ContextBudgetManagerTest {
     assertTrue(result.included().contains("WORKING_SET"));
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void fileSummariesLimitedToWorkingSetRelated() {
     ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
@@ -131,6 +144,7 @@ class ContextBudgetManagerTest {
     assertTrue(result.included().contains("FILE_SUMMARIES"));
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void relatedFilesLimitedToOneHop() {
     ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
@@ -140,6 +154,7 @@ class ContextBudgetManagerTest {
     assertTrue(result.included().contains("RELATED_FILES"));
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void recentChangesLimitedToLatestN() {
     ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
@@ -149,6 +164,7 @@ class ContextBudgetManagerTest {
     assertTrue(result.included().contains("RECENT_CHANGES"));
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void conversationHistoryTrimmedFromOldest() {
     ContextBudgetManager manager = new ContextBudgetManager(1000, 100, 100);
@@ -159,6 +175,7 @@ class ContextBudgetManagerTest {
     assertTrue(result.dropped().contains("CONVERSATION_HISTORY"));
   }
 
+  /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void debugAllocationResultIsAvailable() {
     ContextBudgetManager manager = new ContextBudgetManager(128000, 8000, 2000);
@@ -167,6 +184,7 @@ class ContextBudgetManagerTest {
     assertTrue(result.totalTokens() > 0);
   }
 
+  /** モデルへ渡す文脈の管理で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void allocationPublishesBudgetEvents() {
     InMemoryAgentEventBus bus = new InMemoryAgentEventBus();

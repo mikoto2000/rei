@@ -13,30 +13,41 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Repository;
 
+/** ファイルシステムエージェントスキルを保存・検索するための窓口。 */
 @Repository
 public class FileSystemAgentSkillRepository implements AgentSkillRepository {
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(FileSystemAgentSkillRepository.class);
+
+  /** スキルファイル名。 */
   private static final String SKILL_FILE_NAME = "SKILL.md";
 
+  /** この機能の動作設定。 */
   private final AgentSkillsProperties properties;
+
+  /** キャッシュ。 */
   private volatile List<AgentSkill> cache;
 
+  /** 指定された値や利用先を使って、FileSystemAgentSkillRepositoryを初期化する。 */
   public FileSystemAgentSkillRepository(AgentSkillsProperties properties) {
     this.properties = properties;
     this.cache = loadSkills();
   }
 
+  /** 対象を特定できるよう、全対象を探す。 */
   @Override
   public List<AgentSkill> findAll() {
     return cache;
   }
 
+  /** 対象を特定できるよう、有効状態を探す。 */
   @Override
   public List<AgentSkill> findEnabled() {
     return cache.stream().filter(AgentSkill::enabled).toList();
   }
 
+  /** 対象を特定できるよう、別名前を探す。 */
   @Override
   public Optional<AgentSkill> findByName(String name) {
     if (name == null || name.isBlank()) {
@@ -45,11 +56,13 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
     return cache.stream().filter(skill -> skill.name().equals(name)).findFirst();
   }
 
+  /** 変更された設定や記録を反映するため、ファイルシステムエージェントスキル保存と検索の窓口を読み直す。 */
   @Override
   public void reload() {
     this.cache = loadSkills();
   }
 
+  /** 保存された情報を利用できるよう、スキル一覧を読み込む。 */
   private List<AgentSkill> loadSkills() {
     Map<String, AgentSkill> skills = new LinkedHashMap<>();
     for (String directory : properties.getDirectories()) {
@@ -73,6 +86,7 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
     return List.copyOf(skills.values());
   }
 
+  /** 保存された情報を利用できるよう、スキルを読み込む。 */
   private Optional<AgentSkill> loadSkill(Path skillFile) {
     try {
       String content = Files.readString(skillFile);
@@ -98,6 +112,7 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
     }
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   private ParsedSkill parse(String content) {
     String normalized = content == null ? "" : content.replace("\r\n", "\n").replace('\r', '\n');
     if (!normalized.startsWith("---\n")) {
@@ -113,6 +128,7 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
     return new ParsedSkill(metadata.values(), metadata.keywords(), instructions);
   }
 
+  /** 入力を機能内で扱えるよう、FrontMatterを解釈する。 */
   private ParsedMetadata parseFrontMatter(String frontMatter) {
     Map<String, String> metadata = new LinkedHashMap<>();
     List<String> keywords = new ArrayList<>();
@@ -163,10 +179,12 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
     return new ParsedMetadata(metadata, List.copyOf(keywords));
   }
 
+  /** スキルの利用において、Indentedかどうかを判定する。 */
   private boolean isIndented(String line) {
     return line.startsWith(" ") || line.startsWith("\t");
   }
 
+  /** 既存の記録へ経緯を残すため、まとまり行を追記する。 */
   private void appendBlockLine(StringBuilder blockValue, String blockStyle, String line) {
     if ("|".equals(blockStyle)) {
       if (!blockValue.isEmpty()) {
@@ -181,6 +199,7 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
     blockValue.append(line);
   }
 
+  /** スキルの利用で用いる引用の解除を返す。 */
   private String unquote(String value) {
     if ((value.startsWith("\"") && value.endsWith("\""))
         || (value.startsWith("'") && value.endsWith("'"))) {
@@ -189,12 +208,14 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
     return value;
   }
 
+  /** 指定や設定に応じた対象を利用するため、ディレクトリを確定する。 */
   private Path resolveDirectory(String directory) {
     String resolved =
         directory == null ? "" : directory.replace("${user.dir}", System.getProperty("user.dir"));
     return Path.of(resolved).toAbsolutePath().normalize();
   }
 
+  /** スキルの利用において、Kiroパスかどうかを判定する。 */
   private boolean isKiroPath(Path path) {
     List<String> names = new ArrayList<>();
     for (Path part : path) {
@@ -203,8 +224,21 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
     return names.contains(".kiro");
   }
 
+  /**
+   * スキルの利用で受け渡す解釈済み付随情報を表す。
+   *
+   * @param values 値一覧
+   * @param keywords 検索語句一覧
+   */
   private record ParsedMetadata(Map<String, String> values, List<String> keywords) {}
 
+  /**
+   * スキルの利用で受け渡す解釈済みスキルを表す。
+   *
+   * @param metadata 付随情報
+   * @param keywords 検索語句一覧
+   * @param instructions 指示一覧
+   */
   private record ParsedSkill(
       Map<String, String> metadata, List<String> keywords, String instructions) {}
 }

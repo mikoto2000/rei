@@ -19,36 +19,81 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Durable goal identity, claims and pre-call reservations. Resume never replenishes a budget. */
+/**
+ * 目標を保存・検索するための窓口。
+ *
+ * <p>Durable goal identity, claims and pre-call reservations. Resume never replenishes a budget.
+ */
 @Repository
 public class GoalRepository {
-  /** Shared bounded criteria parser for Shell and named human APIs. */
+  /**
+   * 入力を機能内で扱えるよう、判断基準一覧を解釈する。
+   *
+   * <p>Shared bounded criteria parser for Shell and named human APIs.
+   */
   public static List<FileCriterion> parseCriteria(String json) {
     if (json == null || json.length() > 32768)
       throw new IllegalArgumentException("Bounded criteria JSON required");
     return JsonFileGoalCondition.parseCriteria(json);
   }
 
+  /**
+   * 目標の達成管理で受け渡すファイル判断基準を表す。
+   *
+   * @param relativeFile 相対ファイル
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   * @param jsonPointer JSON変換参照位置
+   * @param expectedJson 期待する内容JSON変換
+   * @param predicateJson 判定条件JSON変換
+   */
   public record FileCriterion(
       String relativeFile,
       String sha256,
       String jsonPointer,
       String expectedJson,
       String predicateJson) {
+    /** 目標の達成管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public FileCriterion(
         String relativeFile, String sha256, String jsonPointer, String expectedJson) {
       this(relativeFile, sha256, jsonPointer, expectedJson, null);
     }
 
+    /** 目標の達成管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public FileCriterion(String relativeFile, String sha256) {
       this(relativeFile, sha256, null, null);
     }
 
+    /** 目標の達成管理において、JSON変換判断基準に該当するか判定する。 */
     public boolean jsonCriterion() {
       return jsonPointer != null || expectedJson != null || predicateJson != null;
     }
   }
 
+  /**
+   * 目標の達成管理で受け渡す目標を表す。
+   *
+   * @param id 識別子
+   * @param projectId 所属プロジェクトの識別子
+   * @param projectRoot 作業対象のルートディレクトリ
+   * @param sessionId 会話の識別子
+   * @param objective 目的
+   * @param relativeFile 相対ファイル
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   * @param maxRuns 最大実行一覧
+   * @param maxLlmCalls 最大言語モデル呼び出し回数
+   * @param attempts 試行回数
+   * @param llmCallsUsed 言語モデル呼び出し回数使用量
+   * @param status 状態
+   * @param currentRunId 現在実行の識別子
+   * @param reason 理由
+   * @param criteria 判断基準一覧
+   * @param maxTotalTokens 最大使用トークン数の合計
+   * @param totalTokens 使用トークン数の合計
+   * @param tokenUsageUnknown トークン使用状況不明
+   * @param pendingLlmCalls 待機中言語モデル呼び出し回数
+   * @param completion 完了条件
+   * @param completionProof 完了条件確認の根拠
+   */
   public record Goal(
       String id,
       String projectId,
@@ -71,10 +116,12 @@ public class GoalRepository {
       int pendingLlmCalls,
       GoalCompletionGate.Definition completion,
       GoalCompletionGate.Proof completionProof) {
+    /** 受け取った情報からGoalを作成する。 */
     public Goal {
       criteria = List.copyOf(criteria);
     }
 
+    /** 目標の達成管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Goal(
         String id,
         String projectId,
@@ -119,6 +166,7 @@ public class GoalRepository {
           null);
     }
 
+    /** 目標の達成管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Goal(
         String id,
         String projectId,
@@ -157,6 +205,7 @@ public class GoalRepository {
           0);
     }
 
+    /** 目標の達成管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Goal(
         String id,
         String projectId,
@@ -191,30 +240,61 @@ public class GoalRepository {
     }
   }
 
+  /**
+   * 目標の達成管理で受け渡す利用権の確保を表す。
+   *
+   * @param goal 目標
+   * @param token トークン
+   */
   public record Claim(Goal goal, String token) {}
 
+  /**
+   * 目標の達成管理で受け渡す判断基準キーを表す。
+   *
+   * @param file ファイル
+   * @param predicate 判定条件
+   */
   private record CriterionKey(Path file, String predicate) {}
 
+  /**
+   * 目標の達成管理で受け渡す試行を表す。
+   *
+   * @param runId 実行の識別子
+   * @param number 数値
+   * @param status 状態
+   * @param reason 理由
+   */
   public record Attempt(String runId, int number, String status, String reason) {}
 
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 一連の更新。 */
   private final TransactionTemplate transaction;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** この機能の動作設定。 */
   private final dev.mikoto2000.rei.llm.LlmProperties properties;
 
+  /** 目標の達成管理で用いる一括反映を返す。 */
   <T> T atomic(java.util.function.Supplier<T> action) {
     return transaction.execute(status -> action.get());
   }
 
+  /** 目標の達成管理で用いるデータベースへの接続を返す。 */
   JdbcClient jdbc() {
     return db;
   }
 
+  /** 目標の達成管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public GoalRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, Clock clock) {
     this(source, clock, new dev.mikoto2000.rei.llm.LlmProperties());
   }
 
+  /** 指定された値や利用先を使って、GoalRepositoryを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public GoalRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source,
@@ -265,6 +345,7 @@ public class GoalRepository {
         .update();
   }
 
+  /** 行。 */
   private final RowMapper<Goal> ROW =
       (rs, n) ->
           new Goal(
@@ -292,6 +373,7 @@ public class GoalRepository {
               completionDecode(
                   rs.getString("completion_proof_json"), GoalCompletionGate.Proof.class));
 
+  /** 完了条件JSON変換。 */
   private static final com.fasterxml.jackson.databind.ObjectMapper COMPLETION_JSON =
       new com.fasterxml.jackson.databind.ObjectMapper(
               com.fasterxml.jackson.core.JsonFactory.builder()
@@ -305,18 +387,21 @@ public class GoalRepository {
                   .build())
           .enable(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
+  /** 入力を機能内で扱えるよう、完了条件を解釈する。 */
   public static GoalCompletionGate.Definition parseCompletion(String json) {
     var value = completionDecode(json, GoalCompletionGate.Definition.class);
     GoalCompletionGate.validateDefinition(value);
     return value;
   }
 
+  /** 入力を機能内で扱えるよう、完了条件確認の根拠を解釈する。 */
   public static GoalCompletionGate.Proof parseCompletionProof(String json) {
     var value = completionDecode(json, GoalCompletionGate.Proof.class);
     GoalCompletionGate.validateProof(value);
     return value;
   }
 
+  /** 目標の達成管理で用いる完了条件受信形式の解釈を返す。 */
   private static <T> T completionDecode(String json, Class<T> type) {
     if (json == null) return null;
     try {
@@ -328,6 +413,7 @@ public class GoalRepository {
     }
   }
 
+  /** 目標の達成管理で用いる完了条件送信形式への変換を返す。 */
   private static String completionEncode(Object value) {
     try {
       String result = COMPLETION_JSON.writeValueAsString(value);
@@ -340,7 +426,9 @@ public class GoalRepository {
   }
 
   /**
-   * Human definition changes are rejected while a Run can observe them or after terminal
+   * 目標の達成管理で用いる定義完了条件を返す。
+   *
+   * <p>Human definition changes are rejected while a Run can observe them or after terminal
    * completion.
    */
   public Goal defineCompletion(
@@ -360,6 +448,7 @@ public class GoalRepository {
     return get(owner.projectId(), id);
   }
 
+  /** 後から参照できるよう、完了条件確認の根拠を保存する。 */
   Goal saveCompletionProof(
       AgentRunContext owner, String id, GoalCompletionGate.Proof proof, boolean human) {
     GoalCompletionGate.validateProof(proof);
@@ -380,6 +469,7 @@ public class GoalRepository {
     return get(owner.projectId(), id);
   }
 
+  /** 目標の達成管理に関する完了条件所有者を処理する。 */
   private static void completionOwner(AgentRunContext owner, Goal goal) {
     if (owner == null
         || owner.mode() != AgentRunContext.Mode.EXCLUSIVE
@@ -388,6 +478,7 @@ public class GoalRepository {
       throw new IllegalArgumentException("Owning exclusive Project/root/session required");
   }
 
+  /** 指定された内容から新しい対象を作成する。 */
   public Goal create(
       AgentRunContext owner,
       String objective,
@@ -401,6 +492,7 @@ public class GoalRepository {
         owner, objective, relativeFile, sha256.toLowerCase(Locale.ROOT), maxRuns, maxLlmCalls);
   }
 
+  /** 新たな対象を利用できるよう、基準を作成する。 */
   private Goal createBase(
       AgentRunContext owner,
       String objective,
@@ -413,6 +505,7 @@ public class GoalRepository {
         || owner.projectId().isBlank()
         || owner.conversationId().isBlank())
       throw new IllegalArgumentException("Goal requires an owning Project and Session");
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (objective == null || objective.isBlank() || objective.length() > 4096)
       throw new IllegalArgumentException("Objective must contain 1..4096 characters");
     validateFile(relativeFile);
@@ -444,6 +537,7 @@ public class GoalRepository {
     return get(owner.projectId(), id);
   }
 
+  /** 目標の達成管理で用いる判断基準一覧を返す。 */
   private List<FileCriterion> criteria(String id, String file, String digest) {
     var items =
         db.sql(
@@ -461,12 +555,14 @@ public class GoalRepository {
     return items.isEmpty() ? List.of(new FileCriterion(file, digest)) : items;
   }
 
+  /** 指定された内容から新しい対象を作成する。 */
   public Goal create(
       AgentRunContext owner,
       String objective,
       List<FileCriterion> criteria,
       int maxRuns,
       int maxLlmCalls) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (criteria == null || criteria.isEmpty() || criteria.size() > 16)
       throw new IllegalArgumentException("Goal requires 1..16 file criteria");
     var normalized = new ArrayList<FileCriterion>();
@@ -528,6 +624,7 @@ public class GoalRepository {
         });
   }
 
+  /** 指定された内容から新しい対象を作成する。 */
   public Goal create(
       AgentRunContext owner,
       String objective,
@@ -543,7 +640,9 @@ public class GoalRepository {
         });
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、ファイルを検証する。 */
   static void validateFile(String file) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (file == null || file.isBlank() || file.length() > 1024)
       throw new IllegalArgumentException("Relative file is required (up to 1024 characters)");
     var path = Path.of(file);
@@ -557,6 +656,7 @@ public class GoalRepository {
         throw new IllegalArgumentException("Parent traversal is not permitted");
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Goal get(String project, String id) {
     return transaction.execute(
         status ->
@@ -567,6 +667,7 @@ public class GoalRepository {
                 .orElseThrow(() -> new IllegalArgumentException("Goal not found in this Project")));
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<Goal> list(String project) {
     return transaction.execute(
         status ->
@@ -576,6 +677,7 @@ public class GoalRepository {
                 .list());
   }
 
+  /** 目標の達成管理で用いるタスクページを返す。 */
   public List<Goal> taskPage(String project, String root, String session, String after, int limit) {
     if (limit < 1 || limit > 101)
       throw new IllegalArgumentException("Invalid projection page limit");
@@ -590,6 +692,7 @@ public class GoalRepository {
         .list();
   }
 
+  /** 目標の達成管理で用いるタスク起点を返す。 */
   public Optional<Goal> taskOrigin(String project, String root, String session, String run) {
     return db.sql(
             "SELECT * FROM agent_goals WHERE project=:project AND root=:root AND session=:session AND (run=:run OR id IN (SELECT goal FROM agent_goal_attempts WHERE run=:run)) ORDER BY id LIMIT 1")
@@ -601,6 +704,7 @@ public class GoalRepository {
         .optional();
   }
 
+  /** 対象を処理する担当を決めるため、目標保存と検索の窓口の利用権を確保する。 */
   public Claim claim(String project, String id) {
     return transaction.execute(
         status -> {
@@ -621,6 +725,7 @@ public class GoalRepository {
         });
   }
 
+  /** 対象を処理する担当を決めるため、目標保存と検索の窓口の利用権を確保する。 */
   Claim claim(Goal expected, GoalWaitRepository.Wait wait) {
     return transaction.execute(
         status -> {
@@ -639,6 +744,7 @@ public class GoalRepository {
         });
   }
 
+  /** 目標の達成管理で用いる開始試行を返す。 */
   public String beginAttempt(Claim claim) {
     return transaction.execute(
         status -> {
@@ -658,7 +764,11 @@ public class GoalRepository {
         });
   }
 
-  /** Charged before an LLM invocation; failed or uncertain calls never restore the reservation. */
+  /**
+   * 目標の達成管理において、予約言語モデルに該当するか判定する。
+   *
+   * <p>Charged before an LLM invocation; failed or uncertain calls never restore the reservation.
+   */
   public boolean reserveLlm(Claim claim) {
     return db.sql(
                 "UPDATE agent_goals SET used=used+1,tokens_pending=tokens_pending+CASE WHEN max_tokens>0 THEN 1 ELSE 0 END WHERE id=? AND project=? AND token=? AND status='RUNNING' AND used<max_calls AND (max_tokens=0 OR (tokens_unknown=0 AND tokens_used<max_tokens))")
@@ -667,6 +777,7 @@ public class GoalRepository {
         == 1;
   }
 
+  /** 目標の達成管理で用いる残量言語モデルを返す。 */
   public int remainingLlm(Claim claim) {
     return db.sql(
             "SELECT max_calls-used FROM agent_goals WHERE id=? AND project=? AND token=? AND status='RUNNING' AND (max_tokens=0 OR (tokens_unknown=0 AND tokens_used<max_tokens))")
@@ -676,7 +787,11 @@ public class GoalRepository {
         .orElse(0);
   }
 
-  /** One report for each reserved invocation; unknown usage is a durable, irreversible stop. */
+  /**
+   * 使用したトークン数を実行予算へ記録する。
+   *
+   * <p>One report for each reserved invocation; unknown usage is a durable, irreversible stop.
+   */
   public void recordTotalTokens(Claim claim, String run, Integer tokens) {
     if (claim.goal().maxTotalTokens() == 0) return;
     boolean known = tokens != null && tokens > 0;
@@ -710,42 +825,51 @@ public class GoalRepository {
               .TOKEN_BUDGET_EXCEEDED);
   }
 
+  /** 目標の達成管理において、トークン残量なしに該当するか判定する。 */
   public boolean tokenExhausted(Claim claim) {
     var goal = get(claim.goal().projectId(), claim.goal().id());
     return goal.maxTotalTokens() > 0
         && (goal.tokenUsageUnknown() || goal.totalTokens() >= goal.maxTotalTokens());
   }
 
+  /** 目標の達成管理で用いるモデル予算を返す。 */
   public dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation modelBudget(
       Claim claim, String run) {
     return new dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation() {
+      /** 目標の達成管理で判断に用いる試行予約の条件を確認する。 */
       public boolean tryReserve() {
         return reserveLlm(claim, run);
       }
 
+      /** 目標の達成管理で用いる残量を返す。 */
       public int remaining() {
         return active(claim, run) ? remainingLlm(claim) : 0;
       }
 
+      /** トークン数による実行予算の制限が有効かどうかを返す。 */
       public boolean tokenLimitEnabled() {
         return claim.goal().maxTotalTokens() > 0;
       }
 
+      /** 目標の達成管理において、トークン残量なしに該当するか判定する。 */
       public boolean tokenExhausted() {
         return tokenLimitEnabled() && GoalRepository.this.tokenExhausted(claim);
       }
 
+      /** 目標の達成管理において、使用状況不明に該当するか判定する。 */
       public boolean usageUnknown() {
         return tokenLimitEnabled()
             && get(claim.goal().projectId(), claim.goal().id()).tokenUsageUnknown();
       }
 
+      /** 使用したトークン数を実行予算へ記録する。 */
       public void recordTotalTokens(Integer tokens) {
         GoalRepository.this.recordTotalTokens(claim, run, tokens);
       }
     };
   }
 
+  /** 目標の達成管理において、予約言語モデルに該当するか判定する。 */
   public boolean reserveLlm(Claim claim, String run) {
     return db.sql(
                 "UPDATE agent_goals SET used=used+1,tokens_pending=tokens_pending+CASE WHEN max_tokens>0 THEN 1 ELSE 0 END WHERE id=? AND project=? AND token=? AND run=? AND status='RUNNING' AND used<max_calls AND (max_tokens=0 OR (tokens_unknown=0 AND tokens_used<max_tokens)) AND EXISTS(SELECT 1 FROM agent_goal_attempts WHERE goal=agent_goals.id AND run=? AND status='RUNNING')")
@@ -754,6 +878,7 @@ public class GoalRepository {
         == 1;
   }
 
+  /** 目標の達成管理において、活動中に該当するか判定する。 */
   public boolean active(Claim claim, String run) {
     return db.sql(
                 "SELECT COUNT(*) FROM agent_goals WHERE id=? AND project=? AND token=? AND run=? AND status='RUNNING' AND EXISTS(SELECT 1 FROM agent_goal_attempts WHERE goal=agent_goals.id AND run=? AND status='RUNNING')")
@@ -763,6 +888,7 @@ public class GoalRepository {
         == 1;
   }
 
+  /** 目標の達成管理において、活動中に該当するか判定する。 */
   public boolean active(Claim claim) {
     return db.sql(
                 "SELECT COUNT(*) FROM agent_goals WHERE id=? AND project=? AND token=? AND status='RUNNING'")
@@ -772,6 +898,7 @@ public class GoalRepository {
         == 1;
   }
 
+  /** 後から経緯や使用量を確認できるよう、試行を記録する。 */
   public void recordAttempt(Claim claim, String run, String state, String reason) {
     if (!Set.of("VERIFIED", "UNVERIFIED", "FAILED", "CANCELLED", "WAITING_APPROVAL", "BLOCKED")
         .contains(state)) throw new IllegalArgumentException("Invalid attempt state");
@@ -795,6 +922,7 @@ public class GoalRepository {
         });
   }
 
+  /** 実行中の処理を停止する。 */
   public Goal stop(Claim claim, String state, String reason) {
     if (!Set.of("COMPLETED", "FAILED", "PAUSED", "BLOCKED", "WAITING_APPROVAL").contains(state))
       throw new IllegalArgumentException("Invalid Goal state");
@@ -833,6 +961,7 @@ public class GoalRepository {
     return get(claim.goal().projectId(), claim.goal().id());
   }
 
+  /** 目標の達成管理で用いる確認済みなし実行を返す。 */
   public Goal verifiedWithoutRun(String project, String id) {
     var goal = get(project, id);
     return verifiedWithoutRun(
@@ -843,6 +972,7 @@ public class GoalRepository {
             : "file_digest_verified");
   }
 
+  /** 目標の達成管理に関する古い状態段階完了条件を処理する。 */
   void staleStageCompletion(Goal expected) {
     if (db.sql(
                 "UPDATE agent_goals SET status='BLOCKED',reason='stage_evidence_stale' WHERE project=? AND id=? AND status='COMPLETED' AND EXISTS(SELECT 1 FROM agent_goal_stages WHERE goal=agent_goals.id AND state<>'VERIFIED')")
@@ -851,10 +981,12 @@ public class GoalRepository {
         == 1) history(expected.id(), "BLOCKED", "stage_evidence_stale");
   }
 
+  /** 目標の達成管理で用いる確認済みなし実行を返す。 */
   public Goal verifiedWithoutRun(String project, String id, String verifiedReason) {
     return verifiedWithoutRun(get(project, id), verifiedReason);
   }
 
+  /** 目標の達成管理で用いる確認済みなし実行を返す。 */
   public Goal verifiedWithoutRun(Goal expected, String verifiedReason) {
     String project = expected.projectId(), id = expected.id();
     String definition =
@@ -878,7 +1010,9 @@ public class GoalRepository {
   }
 
   /**
-   * Human reconciliation only: unknown side effects remain unknown; no budget or evidence is
+   * 現在の状態と記録を照合し、差異に応じて管理状態を整える。
+   *
+   * <p>Human reconciliation only: unknown side effects remain unknown; no budget or evidence is
    * restored.
    */
   public Goal reconcile(String project, String id, String expectedRunId) {
@@ -900,14 +1034,17 @@ public class GoalRepository {
     return get(project, id);
   }
 
+  /** 対象の実行をキャンセルする。 */
   public Goal cancel(String project, String id) {
     return cancel(project, id, null, null);
   }
 
+  /** 対象の実行をキャンセルする。 */
   public Goal cancel(String project, String id, String expectedRun, long expectedAttempts) {
     return cancel(project, id, expectedRun, Long.valueOf(expectedAttempts));
   }
 
+  /** 対象の実行をキャンセルする。 */
   private Goal cancel(String project, String id, String expectedRun, Long expectedAttempts) {
     transaction.executeWithoutResult(
         status -> {
@@ -933,6 +1070,7 @@ public class GoalRepository {
     return get(project, id);
   }
 
+  /** 目標の達成管理で用いる試行回数を返す。 */
   public List<Attempt> attempts(String project, String id) {
     get(project, id);
     return db.sql("SELECT * FROM agent_goal_attempts WHERE goal=? ORDER BY number")
@@ -947,8 +1085,16 @@ public class GoalRepository {
         .list();
   }
 
+  /**
+   * 目標の達成管理で受け渡す履歴を表す。
+   *
+   * @param status 状態
+   * @param reason 理由
+   * @param timestamp 記録日時
+   */
   public record History(String status, String reason, Instant timestamp) {}
 
+  /** 過去の記録を、条件に従って参照できる形で返す。 */
   public List<History> history(String project, String id) {
     get(project, id);
     return db.sql("SELECT * FROM agent_goal_history WHERE goal=? ORDER BY sequence")
@@ -962,13 +1108,18 @@ public class GoalRepository {
         .list();
   }
 
+  /** 過去の記録を、条件に従って参照できる形で返す。 */
   private void history(String id, String status, String reason) {
     db.sql("INSERT INTO agent_goal_history(goal,status,reason,timestamp) VALUES(?,?,?,?)")
         .params(id, status, reason, clock.millis())
         .update();
   }
 
-  /** Supplemental lifecycle preserving existing claims, reservations and old rows. */
+  /**
+   * 目標の達成管理で用いる完了条件段階を返す。
+   *
+   * <p>Supplemental lifecycle preserving existing claims, reservations and old rows.
+   */
   public String completionPhase(String project, String id) {
     var goal = get(project, id);
     if (goal.status().equals("RUNNING")) {
@@ -985,6 +1136,7 @@ public class GoalRepository {
     };
   }
 
+  /** 目標の達成管理において、完了条件段階に該当するか判定する。 */
   boolean completionPhase(Claim claim, String phase) {
     if (!Set.of("RUNNING", "VERIFYING", "REPAIRING").contains(phase))
       throw new IllegalArgumentException("Invalid active completion phase");

@@ -13,7 +13,9 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況並列の結果と状態の契約を検証するテスト。 */
 class ActivityParallelTest {
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void blockedBackgroundStillAllowsOsRecordingAndQueuesLatestForeground() throws Exception {
     var f = new DesktopContextQueueTest.Fixture();
@@ -42,6 +44,7 @@ class ActivityParallelTest {
     assertEquals(2, f.pipeline.queueMetrics().completed());
   }
 
+  /** 元の観測内容を維持することを確認する。 */
   @Test
   void backgroundHasOneLatestSlotAndLateResultKeepsOriginalObservation() throws Exception {
     var f = new DesktopContextQueueTest.Fixture();
@@ -63,6 +66,7 @@ class ActivityParallelTest {
                             == VisionDiagnostics.State.USED));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void pauseDiscardsQueuedBackgroundAndDoesNotPublishAfterResume() throws Exception {
     var f = new DesktopContextQueueTest.Fixture();
@@ -73,6 +77,7 @@ class ActivityParallelTest {
     verifyNoInteractions(f.extractor);
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void desktopNeverExecutesBeforeForeground() throws Exception {
     var f = new DesktopContextQueueTest.Fixture();
@@ -89,6 +94,7 @@ class ActivityParallelTest {
     assertEquals(List.of("foreground", "background"), scopes);
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
   void pauseOrCloseDuringBackgroundCallDiscardsResult(boolean close) throws Exception {

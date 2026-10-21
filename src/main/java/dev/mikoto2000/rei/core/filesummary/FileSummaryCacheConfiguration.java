@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class FileSummaryCacheConfiguration {
 
+  /** ファイル内容の要約で用いるファイル要約キャッシュを返す。 */
   @org.springframework.context.annotation.Scope(
       value = "reiProject",
       proxyMode = org.springframework.context.annotation.ScopedProxyMode.TARGET_CLASS)

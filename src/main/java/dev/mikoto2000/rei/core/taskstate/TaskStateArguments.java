@@ -12,18 +12,27 @@ import tools.jackson.databind.JsonNode;
 import tools.jackson.databind.json.JsonMapper;
 
 /**
- * Pure, bounded preflight before approval or deserialization; never guesses how to split a string.
+ * 作業状態の記録に必要なタスク状態引数を扱う。
+ *
+ * <p>Pure, bounded preflight before approval or deserialization; never guesses how to split a
+ * string.
  */
 public final class TaskStateArguments {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private TaskStateArguments() {}
 
+  /** 最大入力文字数。 */
   private static final int MAX_INPUT_CHARS = 1_048_576;
+
+  /** 受け付ける状態の一覧。 */
   private static final Set<String> STATUSES =
       Set.of(
           TaskState.STATUS_IDLE,
           TaskState.STATUS_IN_PROGRESS,
           TaskState.STATUS_COMPLETED,
           TaskState.STATUS_BLOCKED);
+
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final JsonMapper JSON =
       JsonMapper.builder(
               JsonFactory.builder()
@@ -38,14 +47,17 @@ public final class TaskStateArguments {
           .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
           .build();
 
+  /** 作業状態の記録において、タスク状態引数への対応可否を返す。 */
   public static boolean supports(String tool) {
     return "updateTaskState".equals(tool);
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public static void validate(String tool, String input) {
     if (!supports(tool)) return;
     JsonNode root;
     try {
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (input == null || input.isBlank() || input.length() > MAX_INPUT_CHARS)
         throw new IllegalArgumentException();
       root = JSON.readTree(input);
@@ -69,6 +81,7 @@ public final class TaskStateArguments {
               + String.join("\n", problems));
   }
 
+  /** 作業状態の記録に関するarrayを処理する。 */
   private static void array(JsonNode root, String field, List<String> problems) {
     var value = root.path(field);
     if (value.isMissingNode() || value.isNull()) return;

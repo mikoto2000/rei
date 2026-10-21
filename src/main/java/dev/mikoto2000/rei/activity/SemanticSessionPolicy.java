@@ -13,13 +13,24 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
-/** Two stages: compatible primary contexts, then bounded A/B/A excursions for presentation. */
+/**
+ * 作業状況の把握で受け渡す意味による会話判断基準を表す。
+ *
+ * <p>Two stages: compatible primary contexts, then bounded A/B/A excursions for presentation.
+ *
+ * @param normalGap 通常間隔
+ * @param maximumGap 最大間隔
+ * @param briefSwitch 要点Switch
+ * @param minimumConfidence 最小確信度
+ * @param zone タイムゾーン
+ */
 public record SemanticSessionPolicy(
     Duration normalGap,
     Duration maximumGap,
     Duration briefSwitch,
     double minimumConfidence,
     ZoneId zone) {
+  /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public SemanticSessionPolicy(Duration maximumGap, Duration briefSwitch, ZoneId zone) {
     this(
         maximumGap.compareTo(Duration.ofSeconds(120)) < 0 ? maximumGap : Duration.ofSeconds(120),
@@ -29,22 +40,34 @@ public record SemanticSessionPolicy(
         zone);
   }
 
+  /** 受け取った情報からSemanticSessionPolicyを作成する。 */
   public SemanticSessionPolicy {
     new SessionGapPolicy(normalGap, maximumGap);
     new ActivityRolePolicy(minimumConfidence);
     if (briefSwitch.isNegative()) throw new IllegalArgumentException("Negative summary threshold");
   }
 
+  /**
+   * 作業状況の把握で受け渡すサンプルを表す。
+   *
+   * @param record 記録
+   * @param start 開始
+   * @param end 終了
+   * @param roles 役割一覧
+   */
   private record Sample(ActivityRecord record, Instant start, Instant end, ActivityRoles roles) {
+    /** 作業状況の把握で用いる秒数を返す。 */
     long seconds() {
       return Duration.between(start, end).getSeconds();
     }
   }
 
+  /** 記録された情報を集計し、全体の傾向や結果をまとめる。 */
   public List<SummarySegment> aggregate(List<ActivityRecord> records) {
     return aggregate(records, Instant.MIN, Instant.MAX);
   }
 
+  /** 記録された情報を集計し、全体の傾向や結果をまとめる。 */
   public List<SummarySegment> aggregate(List<ActivityRecord> records, Instant from, Instant until) {
     if (!from.isBefore(until)) throw new IllegalArgumentException("Invalid summary range");
     var sorted =
@@ -94,12 +117,14 @@ public record SemanticSessionPolicy(
     return groups.stream().map(this::segment).toList();
   }
 
+  /** 作業状況の把握で用いる統合を返す。 */
   private static List<Sample> join(List<Sample> a, List<Sample> b) {
     var result = new ArrayList<>(a);
     result.addAll(b);
     return result;
   }
 
+  /** 作業状況の把握において、プロジェクト一覧互換に該当するか判定する。 */
   private boolean projectsCompatible(List<Sample> a, List<Sample> b) {
     return join(a, b).stream()
             .map(s -> s.roles().primary())
@@ -111,6 +136,7 @@ public record SemanticSessionPolicy(
         <= 1;
   }
 
+  /** 作業状況の把握において、間隔Allowsに該当するか判定する。 */
   private boolean gapAllows(List<Sample> a, List<Sample> b) {
     var all = join(a, b);
     long observed = all.stream().mapToLong(Sample::seconds).sum();
@@ -123,6 +149,7 @@ public record SemanticSessionPolicy(
             strongAgreement(a.getLast().roles(), b.getFirst().roles()));
   }
 
+  /** 作業状況の把握において、確かな合意の程度に該当するか判定する。 */
   public boolean strongAgreement(ActivityRoles a, ActivityRoles b) {
     var x = a.primary();
     var y = b.primary();
@@ -133,12 +160,14 @@ public record SemanticSessionPolicy(
             && x.application().equals(y.application()));
   }
 
+  /** 作業状況の把握において、adjacentに該当するか判定する。 */
   private boolean adjacent(Sample a, Sample b) {
     return Objects.equals(a.record().continuityId(), b.record().continuityId())
         && a.start().atZone(zone).toLocalDate().equals(b.start().atZone(zone).toLocalDate())
         && Duration.between(a.end(), b.start()).compareTo(maximumGap) <= 0;
   }
 
+  /** 作業状況の把握において、互換に該当するか判定する。 */
   private boolean compatible(List<Sample> group, Sample sample) {
     Activity primary = group.getFirst().roles().primary(), next = sample.roles().primary();
     if (primary == null || next == null) {
@@ -161,6 +190,7 @@ public record SemanticSessionPolicy(
             .allMatch(project::equals);
   }
 
+  /** 作業状況の把握で用いる区間を返す。 */
   private SummarySegment segment(List<Sample> samples) {
     var votes = new LinkedHashMap<Activity, Long>();
     for (var s : samples)

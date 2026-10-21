@@ -5,12 +5,21 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Adds Spring AI 2.x message ordering to an existing SQLite chat-memory table. */
+/**
+ * データ保存先の利用に必要なSQLiteチャット記憶データ形式移行を扱う。
+ *
+ * <p>Adds Spring AI 2.x message ordering to an existing SQLite chat-memory table.
+ */
 public final class SqliteChatMemorySchemaMigration {
 
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private SqliteChatMemorySchemaMigration() {}
 
-  /** Must run before Spring AI's schema initializer creates the sequence-id index. */
+  /**
+   * データ保存先の利用に関するmigrateを処理する。
+   *
+   * <p>Must run before Spring AI's schema initializer creates the sequence-id index.
+   */
   public static void migrate(DataSource dataSource) {
     var jdbc = new JdbcTemplate(dataSource);
     var transaction = new TransactionTemplate(new DataSourceTransactionManager(dataSource));

@@ -32,15 +32,28 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 import org.sqlite.SQLiteDataSource;
 
+/** 再開用の記録強制同時実行数の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class CheckpointForceConcurrencyTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う保存と検索の窓口。 */
   private PersistentCheckpointRepository repository;
+
+  /** 検証に使うサービス。 */
   private PersistentCheckpointService service;
+
+  /** 検証に使う通知の連携先。 */
   private final InspectionBus bus = new InspectionBus();
+
+  /** 検証に使う待機中。 */
   private final List<Runnable> queued = new ArrayList<>();
+
+  /** 検証に使う所有者。 */
   private AgentRunContext owner;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     var source = new SQLiteDataSource();
@@ -68,11 +81,13 @@ class CheckpointForceConcurrencyTest {
     service.start(owner, "original request");
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void close() {
     service.close();
   }
 
+  /** 作業の中断と再開で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void toolBoundaryPublishesAfterReleasingCheckpointLock() {
     bus.inspectOn(AgentEventType.CHECKPOINT_REVISION_SAVED);
@@ -87,6 +102,7 @@ class CheckpointForceConcurrencyTest {
     assertTrue(repository.historyUsage().revisions() > 1);
   }
 
+  /** 作業の中断と再開で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void finishPublishesAfterReleasingCheckpointLock() {
     bus.inspectOn(AgentEventType.CHECKPOINT_REVISION_SAVED);
@@ -97,6 +113,7 @@ class CheckpointForceConcurrencyTest {
     assertEquals("INTERRUPTED", saved().status());
   }
 
+  /** 作業の中断と再開で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void resumePublishesAfterReleasingCheckpointLock() {
     service.finish(owner, "INTERRUPTED");
@@ -110,6 +127,7 @@ class CheckpointForceConcurrencyTest {
     assertEquals(1, queued.size());
   }
 
+  /** 作業の中断と再開で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void goalContinuationPublishesAfterReleasingCheckpointLock() {
     service.finish(owner, "INTERRUPTED");
@@ -123,20 +141,32 @@ class CheckpointForceConcurrencyTest {
     assertEquals(next.runId(), saved().runId());
   }
 
+  /** {@code saved} の条件を再現するための補助情報を返す。 */
   private PersistentCheckpoint saved() {
     return repository.list("project").getFirst();
   }
 
-  /** Observers may inspect checkpoint history from another thread before notification returns. */
+  /**
+   * 検証条件を再現するためのInspection通知の連携先。
+   *
+   * <p>Observers may inspect checkpoint history from another thread before notification returns.
+   */
   private static final class InspectionBus extends InMemoryAgentEventBus {
+    /** 検証に使うinspection種別。 */
     private final AtomicReference<AgentEventType> inspectionType = new AtomicReference<>();
+
+    /** 検証に使うinspections。 */
     private final AtomicInteger inspections = new AtomicInteger();
+
+    /** 検証に使うサービス。 */
     private PersistentCheckpointService service;
 
+    /** {@code inspectOn} の条件を再現するため、検証用の操作や状態を扱う。 */
     void inspectOn(AgentEventType type) {
       inspectionType.set(type);
     }
 
+    /** 検証用に、状態や結果を購読先へ通知する。 */
     @Override
     public void publish(AgentEvent event) {
       if (inspectionType.compareAndSet(event.type(), null)) {

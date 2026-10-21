@@ -17,7 +17,9 @@ import org.jline.reader.Widget;
 import org.jline.reader.impl.BufferImpl;
 import org.jline.reader.impl.LineReaderImpl;
 
+/** 活動中実行プロンプトの結果と状態の契約を検証するテスト。 */
 class ActiveRunPromptTest {
+  /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(
       dev.mikoto2000.rei.core.execution.ExecutionType.class)

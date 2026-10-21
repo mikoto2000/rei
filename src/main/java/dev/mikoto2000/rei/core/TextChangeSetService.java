@@ -25,18 +25,23 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 
 /**
- * Single existing UTF-8 file, exact baseline, durable proposal identity and explicit one-shot
+ * テキスト変更集合のユースケースを実現する。
+ *
+ * <p>Single existing UTF-8 file, exact baseline, durable proposal identity and explicit one-shot
  * Apply.
  */
 @Service
 public class TextChangeSetService {
+  /** 保存済み文書。 */
   private TextDocumentChangeSetService documents;
 
+  /** 共通の実行基盤で使用する保存済み文書を設定する。 */
   @Autowired(required = false)
   public void setDocuments(TextDocumentChangeSetService service) {
     documents = service;
   }
 
+  /** 後続の判断で選べる候補を用意するため、保存済み文書を提案する。 */
   public TextDocumentChangeSetService.View proposeDocuments(
       dev.mikoto2000.rei.core.chat.AgentRunContext owner,
       TextDocumentChangeSetService.Request request)
@@ -44,17 +49,20 @@ public class TextChangeSetService {
     return documents().propose(owner, request);
   }
 
+  /** 共通の実行基盤で用いる状態確認保存済み文書を返す。 */
   public TextDocumentChangeSetService.View inspectDocuments(
       dev.mikoto2000.rei.core.chat.AgentRunContext owner, String id) throws IOException {
     return documents().inspect(owner, id);
   }
 
+  /** 共通の実行基盤で用いる破棄保存済み文書を返す。 */
   public TextDocumentChangeSetService.View discardDocuments(
       dev.mikoto2000.rei.core.chat.AgentRunContext owner, String id, String sha)
       throws IOException {
     return documents().discard(owner, id, sha);
   }
 
+  /** 指定された変更を有効にするため、保存済み文書を反映する。 */
   public TextDocumentChangeSetService.View applyDocuments(
       dev.mikoto2000.rei.core.chat.AgentRunContext owner,
       String id,
@@ -64,6 +72,7 @@ public class TextChangeSetService {
     return documents().apply(owner, id, sha, committed);
   }
 
+  /** 共通の実行基盤で用いる取り消し保存済み文書を返す。 */
   public TextDocumentChangeSetService.View rollbackDocuments(
       dev.mikoto2000.rei.core.chat.AgentRunContext owner,
       String id,
@@ -73,6 +82,7 @@ public class TextChangeSetService {
     return documents().rollback(owner, id, sha, actualRequest);
   }
 
+  /** 共通の実行基盤で用いる変更なし文書反映前の準備領域を返す。 */
   public TextDocumentChangeSetService.View cleanDocumentStaging(
       dev.mikoto2000.rei.core.chat.AgentRunContext owner,
       String id,
@@ -82,27 +92,65 @@ public class TextChangeSetService {
     return documents().cleanup(owner, id, sha, actualRequest);
   }
 
+  /** 共通の実行基盤で用いる保存済み文書を返す。 */
   private TextDocumentChangeSetService documents() {
     if (documents == null)
       throw new IllegalStateException("Multi-file document service unavailable");
     return documents;
   }
 
+  /**
+   * 共通の実行基盤で受け渡す編集を表す。
+   *
+   * @param oldText 以前のテキスト
+   * @param newText 新規テキスト
+   */
   public record Edit(String oldText, String newText) {}
 
+  /**
+   * 共通の実行基盤で受け渡す要求を表す。
+   *
+   * @param path パス
+   * @param expectedText 期待する内容テキスト
+   * @param replacement 置換
+   * @param baseVersion 基準形式のバージョン
+   * @param edits 編集一覧
+   */
   public record Request(
       String path,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) String expectedText,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) String replacement,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) String baseVersion,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) List<Edit> edits) {
+    /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Request(String path, String expectedText, String replacement) {
       this(path, expectedText, replacement, null, null);
     }
   }
 
+  /**
+   * 共通の実行基盤で受け渡す比較の基準を表す。
+   *
+   * @param path パス
+   * @param text テキスト
+   * @param sha256 内容の同一性を照合するSHA-256ハッシュ
+   */
   public record Baseline(String path, String text, String sha256) {}
 
+  /**
+   * 共通の実行基盤で受け渡す表示内容を表す。
+   *
+   * @param id 識別子
+   * @param projectId 所属プロジェクトの識別子
+   * @param path パス
+   * @param status 状態
+   * @param baselineSha256 比較の基準内容の同一性を照合するSHA-256ハッシュ
+   * @param proposedSha256 提案内容内容の同一性を照合するSHA-256ハッシュ
+   * @param proposalSha256 提案内容の同一性を照合するSHA-256ハッシュ
+   * @param currentSha256 現在内容の同一性を照合するSHA-256ハッシュ
+   * @param diff 差分
+   * @param createdAt 作成日時
+   */
   public record View(
       String id,
       String projectId,
@@ -115,20 +163,29 @@ public class TextChangeSetService {
       String diff,
       Instant createdAt) {}
 
+  /** 共通の実行基盤に必要な書き込み先を扱う。 */
   @FunctionalInterface
   public interface Writer {
+    /** 指定された内容を書き込み先へ反映する。 */
     void write(Path path, String oldText, String newText) throws IOException;
   }
 
+  /** 保存と検索の窓口。 */
   private final TextChangeSetRepository repository;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 識別子一覧。 */
   private final Supplier<String> ids;
 
+  /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @Autowired
   public TextChangeSetService(TextChangeSetRepository repository) {
     this(repository, Clock.systemUTC(), () -> UUID.randomUUID().toString());
   }
 
+  /** 指定された値や利用先を使って、TextChangeSetServiceを初期化する。 */
   public TextChangeSetService(
       TextChangeSetRepository repository, Clock clock, Supplier<String> ids) {
     this.repository = repository;
@@ -136,6 +193,7 @@ public class TextChangeSetService {
     this.ids = ids;
   }
 
+  /** 必要な内容を参照できるよう、基準を読み取る。 */
   public Baseline readBase(ProjectContext project, String path) throws IOException {
     RunCancellation.propagate(null);
     var root = project.root().toRealPath();
@@ -144,6 +202,7 @@ public class TextChangeSetService {
     return new Baseline(root.relativize(file).toString().replace('\\', '/'), text, hash(text));
   }
 
+  /** 後続の判断で選べる候補を用意するため、テキスト変更集合サービスを提案する。 */
   public View propose(ProjectContext project, Request request) throws IOException {
     RunCancellation.propagate(null);
     if (request == null) throw new IllegalArgumentException("Change Set request required");
@@ -212,6 +271,7 @@ public class TextChangeSetService {
     return view(saved, base);
   }
 
+  /** 対象の状態や内容を調べ、呼び出し元が確認できる情報として返す。 */
   public View inspect(ProjectContext project, String id) throws IOException {
     var saved = owned(project, id);
     String current = null;
@@ -224,7 +284,9 @@ public class TextChangeSetService {
   }
 
   /**
-   * Export the persisted proposal, including stale proposals, without touching the current file.
+   * 共通の実行基盤で用いる書き出し提案を返す。
+   *
+   * <p>Export the persisted proposal, including stale proposals, without touching the current file.
    */
   public byte[] exportProposal(ProjectContext project, String id) throws IOException {
     var saved = owned(project, id);
@@ -232,6 +294,7 @@ public class TextChangeSetService {
     return saved.proposed().getBytes(StandardCharsets.UTF_8);
   }
 
+  /** 共通の実行基盤で用いる破棄を返す。 */
   public View discard(ProjectContext project, String id, String proposalHash) throws IOException {
     var saved = owned(project, id);
     if (proposalHash == null || !saved.proposalHash().equals(proposalHash))
@@ -243,11 +306,13 @@ public class TextChangeSetService {
     return inspect(project, id);
   }
 
+  /** 指定された内容を、現在の対象へ反映する。 */
   public View apply(ProjectContext project, String id, String proposalHash, Writer writer)
       throws IOException {
     return apply(project, id, proposalHash, writer, null);
   }
 
+  /** 共通の実行基盤に関する保護診断済みを処理する。 */
   void protectDiagnosed(ProjectContext project, String id) throws IOException {
     var saved = owned(project, id);
     if (!saved.status().equals("PROPOSED"))
@@ -255,11 +320,13 @@ public class TextChangeSetService {
     repository.protectDiagnosed(project.id(), id);
   }
 
+  /** 指定された変更を有効にするため、診断済みを反映する。 */
   View applyDiagnosed(ProjectContext project, String id, String proposalHash, Writer writer)
       throws IOException {
     return apply(project, id, proposalHash, writer, "DIAGNOSED_REPAIR");
   }
 
+  /** 指定された内容を、現在の対象へ反映する。 */
   private View apply(
       ProjectContext project, String id, String proposalHash, Writer writer, String trustedGuard)
       throws IOException {
@@ -313,6 +380,7 @@ public class TextChangeSetService {
     }
   }
 
+  /** 現在の状態と記録を照合し、差異に応じて管理状態を整える。 */
   public View reconcile(
       dev.mikoto2000.rei.core.chat.AgentRunContext owner,
       String id,
@@ -343,6 +411,7 @@ public class TextChangeSetService {
     return inspect(project, id);
   }
 
+  /** 共通の実行基盤で用いる自分が所有する対象を返す。 */
   private TextChangeSetRepository.Saved owned(ProjectContext project, String id)
       throws IOException {
     RunCancellation.propagate(null);
@@ -353,6 +422,7 @@ public class TextChangeSetService {
     return repository.get(project.id(), id);
   }
 
+  /** 指定や設定を照合し、実際に利用する対象を確定する。 */
   private static Path resolve(Path root, String name) throws IOException {
     if (name == null
         || name.isBlank()
@@ -384,6 +454,7 @@ public class TextChangeSetService {
     return file;
   }
 
+  /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private static String read(Path file) throws IOException {
     if (Files.size(file) > 65536) throw new IllegalArgumentException("Text exceeds 64KiB");
     var bytes = new FileSnapshots().get(file.getParent(), file).bytes();
@@ -397,6 +468,7 @@ public class TextChangeSetService {
     }
   }
 
+  /** 利用条件に合わない指定を受け付けないよう、テキストを検証する。 */
   private static void validateText(String text) {
     if (text == null
         || text.indexOf(0) >= 0
@@ -409,9 +481,18 @@ public class TextChangeSetService {
     }
   }
 
+  /** 共通の実行基盤で用いる編集を返す。 */
   private static String edit(String baseline, List<Edit> edits) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (edits.isEmpty() || edits.size() > 64)
       throw new IllegalArgumentException("Partial edits require 1 to 64 hunks");
+    /**
+     * 共通の実行基盤で受け渡すHunkを表す。
+     *
+     * @param start 開始
+     * @param end 終了
+     * @param replacement 置換
+     */
     record Hunk(int start, int end, String replacement) {}
     var hunks = new ArrayList<Hunk>();
     int inputBytes = 0;
@@ -445,6 +526,7 @@ public class TextChangeSetService {
     return result.toString();
   }
 
+  /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(String text) {
     try {
       return HexFormat.of()
@@ -455,6 +537,7 @@ public class TextChangeSetService {
     }
   }
 
+  /** 共通の実行基盤で用いる表示内容を返す。 */
   private static View view(TextChangeSetRepository.Saved saved, String current) {
     return new View(
         saved.id(),
@@ -469,6 +552,7 @@ public class TextChangeSetService {
         saved.createdAt());
   }
 
+  /** 共通の実行基盤で用いる差分を返す。 */
   private static String diff(String path, String before, String after) {
     // Keep the existing exact replacement renderer, omitting only identical outer lines.
     // This is a review preview, not an executable patch. Export retains the complete proposal.
@@ -508,6 +592,7 @@ public class TextChangeSetService {
         + lines(newPart, "+");
   }
 
+  /** 共通の実行基盤で用いる行一覧を返す。 */
   private static String lines(String text, String prefix) {
     if (text.isEmpty()) return "";
     var out = new StringBuilder();

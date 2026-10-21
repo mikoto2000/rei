@@ -14,6 +14,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class ToolEventConfiguration {
 
+  /** 実行状況の通知で用いるツールイベント完了時の処理提供元を返す。 */
   @Bean
   @ConditionalOnBean(SyncMcpToolCallbackProvider.class)
   public ToolEventCallbackProvider toolEventCallbackProvider(

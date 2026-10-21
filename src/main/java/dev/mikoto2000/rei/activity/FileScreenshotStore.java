@@ -10,14 +10,21 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 
-/** Flat generated filenames only; retention never follows links or touches journal tables. */
+/**
+ * ファイル画面画像の記録を保持し、後続の処理で参照できるようにする。
+ *
+ * <p>Flat generated filenames only; retention never follows links or touches journal tables.
+ */
 public final class FileScreenshotStore implements ScreenshotStore {
+  /** 作業ルート。 */
   private final Path root;
 
+  /** 指定された値や利用先を使って、FileScreenshotStoreを初期化する。 */
   public FileScreenshotStore(Path root) {
     this.root = root.toAbsolutePath().normalize();
   }
 
+  /** 後から参照できるよう、指定された情報を保存する。 */
   public List<String> save(String id, Instant capturedAt, CapturedScreen screen) throws Exception {
     UUID.fromString(id);
     Files.createDirectories(root);
@@ -41,6 +48,7 @@ public final class FileScreenshotStore implements ScreenshotStore {
     }
   }
 
+  /** 作業状況の把握に関する後片付けを処理する。 */
   public void cleanup(Instant before) throws Exception {
     if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) return;
     try (var files = Files.newDirectoryStream(root, "*.png")) {

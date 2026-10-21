@@ -5,10 +5,19 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Offline scoring only: observations come from an executor, conditions from independent oracles.
+ * 成果の評価に必要な目標完了条件評価を扱う。
+ *
+ * <p>Offline scoring only: observations come from an executor, conditions from independent oracles.
  */
 public final class GoalCompletionEvaluation {
+  /**
+   * 成果の評価で受け渡す計測値を表す。
+   *
+   * @param value 値
+   * @param reason 理由
+   */
   public record Measurement(Long value, String reason) {
+    /** 受け取った情報からMeasurementを作成する。 */
     public Measurement {
       if (value != null && value < 0 || value == null && (reason == null || reason.isBlank()))
         throw new IllegalArgumentException(
@@ -16,18 +25,35 @@ public final class GoalCompletionEvaluation {
       reason = value == null ? reason : "";
     }
 
+    /** 成果の評価で用いる既知を返す。 */
     public static Measurement known(long value) {
       return new Measurement(value, "");
     }
 
+    /** 成果の評価で用いる利用不可を返す。 */
     public static Measurement unavailable(String reason) {
       return new Measurement(null, reason);
     }
   }
 
+  /**
+   * 成果の評価で受け渡す頻度を表す。
+   *
+   * @param value 値
+   * @param reason 理由
+   */
   public record Rate(Double value, String reason) {}
 
+  /**
+   * 成果の評価で受け渡す条件を表す。
+   *
+   * @param id 識別子
+   * @param required 必須
+   * @param satisfied 条件を満たしたかどうか
+   * @param evidence 根拠
+   */
   public record Condition(String id, boolean required, boolean satisfied, String evidence) {
+    /** 受け取った情報からConditionを作成する。 */
     public Condition {
       identity(id);
       if (evidence == null || evidence.isBlank() || evidence.length() > 1024)
@@ -35,6 +61,21 @@ public final class GoalCompletionEvaluation {
     }
   }
 
+  /**
+   * 成果の評価で受け渡す観測内容を表す。
+   *
+   * @param completionClaimed 完了条件Claimed
+   * @param exited 終了済み
+   * @param repairAttempts 修復試行回数
+   * @param successfulRepairs successful修復一覧
+   * @param interventions 追加入力一覧
+   * @param unnecessaryIterations unnecessary繰り返し回数
+   * @param duplicateExecutions 重複の有無実行一覧
+   * @param permissionViolations 権限満たしていない条件
+   * @param elapsedMillis 経過時間ミリ秒数
+   * @param modelCalls モデル呼び出し回数
+   * @param tokens トークン数
+   */
   public record Observation(
       boolean completionClaimed,
       boolean exited,
@@ -47,6 +88,7 @@ public final class GoalCompletionEvaluation {
       Measurement elapsedMillis,
       Measurement modelCalls,
       Measurement tokens) {
+    /** 受け取った情報からObservationを作成する。 */
     public Observation {
       if (repairAttempts < 0
           || successfulRepairs < 0
@@ -63,6 +105,17 @@ public final class GoalCompletionEvaluation {
     }
   }
 
+  /**
+   * 成果の評価で受け渡す結果を表す。
+   *
+   * @param id 識別子
+   * @param observation 観測内容
+   * @param conditions 条件一覧
+   * @param verifiedCompletion 確認済み完了条件
+   * @param falseCompletion 無効完了条件
+   * @param endedWithUnmet 終了付き未達成の条件
+   * @param unmet 未達成の条件
+   */
   public record Result(
       String id,
       Observation observation,
@@ -72,6 +125,22 @@ public final class GoalCompletionEvaluation {
       boolean endedWithUnmet,
       List<String> unmet) {}
 
+  /**
+   * 成果の評価で受け渡すレポートを表す。
+   *
+   * @param cases 事例一覧
+   * @param verifiedCompletionRate 確認済み完了条件頻度
+   * @param falseCompletionRate 無効完了条件頻度
+   * @param endedWithUnmetRate 終了付き未達成の条件頻度
+   * @param repairSuccessRate 修復成功頻度
+   * @param interventions 追加入力一覧
+   * @param unnecessaryIterations unnecessary繰り返し回数
+   * @param duplicateExecutions 重複の有無実行一覧
+   * @param permissionViolations 権限満たしていない条件
+   * @param elapsedMillis 経過時間ミリ秒数
+   * @param modelCalls モデル呼び出し回数
+   * @param tokens トークン数
+   */
   public record Report(
       int cases,
       double verifiedCompletionRate,
@@ -86,6 +155,7 @@ public final class GoalCompletionEvaluation {
       Measurement modelCalls,
       Measurement tokens) {}
 
+  /** 成果の評価で用いる評価値を返す。 */
   public Result score(String id, Observation observation, List<Condition> conditions) {
     RunCancellation.propagate(null);
     identity(id);
@@ -109,6 +179,7 @@ public final class GoalCompletionEvaluation {
         unmet);
   }
 
+  /** 記録された情報を集計し、全体の傾向や結果をまとめる。 */
   public Report aggregate(List<Result> results) {
     RunCancellation.propagate(null);
     if (results == null
@@ -139,11 +210,13 @@ public final class GoalCompletionEvaluation {
         sum(checked, Observation::tokens));
   }
 
+  /** 成果の評価で用いる割合を返す。 */
   private static double fraction(
       List<Result> results, java.util.function.Predicate<Result> predicate) {
     return results.stream().filter(predicate).count() / (double) results.size();
   }
 
+  /** 成果の評価で用いる合計を返す。 */
   private static Measurement sum(
       List<Result> results, java.util.function.Function<Observation, Measurement> field) {
     long total = 0;
@@ -160,6 +233,7 @@ public final class GoalCompletionEvaluation {
     return Measurement.known(total);
   }
 
+  /** 成果の評価に関する識別情報を処理する。 */
   private static void identity(String value) {
     if (value == null || !value.matches("[A-Za-z0-9_.-]{1,128}"))
       throw new IllegalArgumentException("Bounded fixture identity required");

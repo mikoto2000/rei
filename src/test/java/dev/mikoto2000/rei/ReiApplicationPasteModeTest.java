@@ -16,8 +16,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** れいアプリケーションPaste動作モードの結果と状態の契約を検証するテスト。 */
 class ReiApplicationPasteModeTest {
 
+  /** 終了日時状態表示行を読み取ることを確認する。 */
   @Test
   void readPasteBlock_readsUntilDotLine() {
     ReiApplication app = newApp();
@@ -27,6 +29,7 @@ class ReiApplicationPasteModeTest {
     assertEquals("line1" + System.lineSeparator() + "line2", app.readPasteBlock(reader));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private ReiApplication newApp() {
     AsyncVectorDocumentService asyncVectorDocumentService =
         Mockito.mock(AsyncVectorDocumentService.class);

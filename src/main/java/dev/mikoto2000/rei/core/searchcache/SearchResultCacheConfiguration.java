@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class SearchResultCacheConfiguration {
 
+  /** 依頼に関連する情報を得るため、結果キャッシュを検索する。 */
   @org.springframework.context.annotation.Scope(
       value = "reiProject",
       proxyMode = org.springframework.context.annotation.ScopedProxyMode.TARGET_CLASS)

@@ -8,8 +8,13 @@ import javax.imageio.ImageIO;
 import org.springframework.ai.openai.OpenAiChatModel;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
-/** Manual frozen-image inference only: never constructs Robot or dispatches input. */
+/**
+ * 検証条件を再現するための画面操作画像認識要求やイベントの再送。
+ *
+ * <p>Manual frozen-image inference only: never constructs Robot or dispatches input.
+ */
 public final class ComputerVisionReplay {
+  /** 検証用に、画面操作の支援の起動要求を受け付け、実行を開始する。 */
   public static void main(String[] args) throws Exception {
     if (args.length != 5)
       throw new IllegalArgumentException("baseUrl model savedStepDirectory outputDirectory goal");

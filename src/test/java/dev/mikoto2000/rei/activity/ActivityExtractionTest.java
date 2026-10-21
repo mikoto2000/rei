@@ -8,7 +8,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 作業状況Extractionの結果と状態の契約を検証するテスト。 */
 class ActivityExtractionTest {
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void requestSchemaAllowsOnlyCapturedMonitorsAndDoesNotRetainPreviousIds() {
     var mapper = new tools.jackson.databind.json.JsonMapper();
@@ -39,6 +41,7 @@ class ActivityExtractionTest {
             .isMissingNode());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void diagnosticIdentifiesConfidenceConstraintWithoutOutputValues() {
     var error =
@@ -50,6 +53,7 @@ class ActivityExtractionTest {
     assertEquals("/confidence:maximum", error.diagnostic());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void emptyOutputHasDistinctDiagnostic() {
     var error =
@@ -59,6 +63,7 @@ class ActivityExtractionTest {
     assertEquals("/:empty_output", error.diagnostic());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void diagnosticCannotLeakArbitraryPathsOrCodes() {
     var error =
@@ -68,6 +73,7 @@ class ActivityExtractionTest {
     assertEquals("/:validation_error", error.diagnostic());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void diagnosticIdentifiesActivityField() {
     var error =
@@ -81,6 +87,7 @@ class ActivityExtractionTest {
     assertEquals("/activities/0/service:type", error.diagnostic());
   }
 
+  /** 検証に使う有効な。 */
   static final String VALID =
       """
       {"summary":"X and YouTube are visible", "confidence":0.86,"activities":[
@@ -88,6 +95,7 @@ class ActivityExtractionTest {
         {"monitor":"m2","type":"media","application":"Firefox","service":"YouTube","contentTitle":"Xxx","projectCandidate":""}]}
       """;
 
+  /** 並列作業状況の記録を保持することを確認する。 */
   @Test
   void retainsParallelActivitiesAndConfidence() {
     var result = new ActivityOutputParser().parse(VALID, List.of("m1", "m2"));
@@ -95,6 +103,7 @@ class ActivityExtractionTest {
     assertEquals(.86, result.confidence());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidJsonRejected() {
     assertThrows(
@@ -102,6 +111,7 @@ class ActivityExtractionTest {
         () -> new ActivityOutputParser().parse("oops", List.of("m1")));
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidConfidenceRejected() {
     assertThrows(
@@ -109,6 +119,7 @@ class ActivityExtractionTest {
         () -> new ActivityOutputParser().parse(VALID.replace("0.86", "1.2"), List.of("m1", "m2")));
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void inventedMonitorRejected() {
     assertThrows(
@@ -116,6 +127,7 @@ class ActivityExtractionTest {
         () -> new ActivityOutputParser().parse(VALID, List.of("m1")));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void modelCannotReplaceObservation() {
     assertThrows(
@@ -127,6 +139,7 @@ class ActivityExtractionTest {
                     List.of("m1", "m2")));
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void trailingJsonRejected() {
     assertThrows(
@@ -134,6 +147,7 @@ class ActivityExtractionTest {
         () -> new ActivityOutputParser().parse(VALID + "{}", List.of("m1", "m2")));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void extensibleCategory() {
     assertEquals(

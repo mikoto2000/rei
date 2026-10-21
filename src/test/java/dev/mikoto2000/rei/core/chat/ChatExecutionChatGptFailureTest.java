@@ -27,23 +27,33 @@ import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.Prompt;
 import reactor.core.publisher.Flux;
 
+/** チャット実行チャットGPT失敗情報の結果と状態の契約を検証するテスト。 */
 class ChatExecutionChatGptFailureTest {
+  /** 検証に使う所有者。 */
   private final AgentRunContext owner =
       new AgentRunContext("run", "session", Path.of("."), "project");
+
+  /** 通知された出来事と順序を検証するための記録。 */
   private final List<AgentEvent> events = new ArrayList<>();
+
+  /** 検証に使うモデル呼び出し回数。 */
   private final AtomicInteger modelCalls = new AtomicInteger();
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   private ChatExecutionService service(Throwable error) {
     ChatModel model =
         new ChatModel() {
+          /** 検証用に、会話の実行で参照する選択可能な設定を返す。 */
           public org.springframework.ai.chat.prompt.ChatOptions getOptions() {
             return org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build();
           }
 
+          /** 検証用に、会話の実行の要求を実行し、呼び出し元へ結果を返す。 */
           public ChatResponse call(Prompt prompt) {
             throw new UnsupportedOperationException();
           }
 
+          /** {@code stream} の条件を再現するための補助情報を返す。 */
           public Flux<ChatResponse> stream(Prompt prompt) {
             modelCalls.incrementAndGet();
             return Flux.error(error);
@@ -60,6 +70,7 @@ class ChatExecutionChatGptFailureTest {
         events::add);
   }
 
+  /** {@code terminals} の条件を再現するための補助情報を返す。 */
   private List<AgentEvent> terminals() {
     return events.stream()
         .filter(
@@ -69,6 +80,7 @@ class ChatExecutionChatGptFailureTest {
         .toList();
   }
 
+  /** 会話の実行で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void wrappedModelDenialHasOneActionableFailureEventAndDoesNotRetry() {
     var refusal = ChatGptException.permission(ChatGptException.PermissionReason.MODEL_NOT_ALLOWED);
@@ -90,6 +102,7 @@ class ChatExecutionChatGptFailureTest {
     assertThat(terminal.error().message()).isEqualTo(result.errorMessage());
   }
 
+  /** 会話の実行で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void safeTypedFailureIsNotReplacedByTerminalCheckpointCapacityFailure() {
     var refusal = ChatGptException.permission(ChatGptException.PermissionReason.MODEL_NOT_ALLOWED);
@@ -108,6 +121,7 @@ class ChatExecutionChatGptFailureTest {
     verify(checkpoints).finish(owner, "FAILED");
   }
 
+  /** 会話の実行で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void typedFailureOutsideTheResponseStreamAlsoProducesItsControlledTerminalDiagnostic() {
     var refusal = ChatGptException.permission(ChatGptException.PermissionReason.MODEL_NOT_ALLOWED);
@@ -125,6 +139,7 @@ class ChatExecutionChatGptFailureTest {
     verify(checkpoints).finish(owner, "FAILED");
   }
 
+  /** 会話の実行で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void arbitraryFailuresRemainRedacted() {
     var result =

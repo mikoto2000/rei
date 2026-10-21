@@ -59,103 +59,159 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import reactor.core.Disposable;
 
+/** 会話の文脈とモデルを使って応答を生成し、実行の完了・失敗・中断を処理する。 */
 @Component
 public class ChatExecutionService {
+  /** 継続入力提供元。 */
   private org.springframework.beans.factory.ObjectProvider<RunContinuation> continuationProvider;
 
+  /** 会話の実行で使用する継続入力一覧を設定する。 */
   @Autowired
   void setContinuations(
       org.springframework.beans.factory.ObjectProvider<RunContinuation> continuations) {
     this.continuationProvider = continuations;
   }
 
+  /** 時間計測。 */
   private dev.mikoto2000.rei.timing.TimingExecution timing;
 
+  /** 会話の実行で使用する時間計測を設定する。 */
   @Autowired(required = false)
   void setTiming(dev.mikoto2000.rei.timing.TimingExecution timing) {
     this.timing = timing;
   }
 
+  /** 権限一覧。 */
   private dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions;
 
+  /** 会話の実行で使用するツール権限利用条件の確認を設定する。 */
   @Autowired
   void setToolPermissionGuard(dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {
     this.permissions = permissions;
   }
 
+  /** 再開用の記録一覧。 */
   private dev.mikoto2000.rei.checkpoint.PersistentCheckpointService checkpoints;
 
+  /** 会話の実行で使用する再開用の記録一覧を設定する。 */
   @Autowired
   void setCheckpoints(dev.mikoto2000.rei.checkpoint.PersistentCheckpointService checkpoints) {
     this.checkpoints = checkpoints;
   }
 
+  /** 作業文脈。 */
   private dev.mikoto2000.rei.workcontext.WorkContextAutomation workContext;
+
+  /** 自動待機。 */
   private dev.mikoto2000.rei.memory.service.AutoSleepService autoSleep;
 
+  /** 会話の実行で使用する自動待機を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setAutoSleep(dev.mikoto2000.rei.memory.service.AutoSleepService autoSleep) {
     this.autoSleep = autoSleep;
   }
 
+  /** 会話の実行で使用する作業文脈を設定する。 */
   @Autowired
   void setWorkContext(dev.mikoto2000.rei.workcontext.WorkContextAutomation workContext) {
     this.workContext = workContext;
   }
 
+  /** 論文コマンド一覧。 */
   private dev.mikoto2000.rei.paper.PaperCommandExecutor paperCommands;
 
+  /** 会話の実行で使用する論文コマンド一覧を設定する。 */
   @Autowired
   void setPaperCommands(dev.mikoto2000.rei.paper.PaperCommandExecutor commands) {
     this.paperCommands = commands;
   }
 
+  /** 環境診断。 */
   private dev.mikoto2000.rei.doctor.DoctorActiveService doctor;
 
+  /** 会話の実行で使用する環境診断を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setDoctor(dev.mikoto2000.rei.doctor.DoctorActiveService doctor) {
     this.doctor = doctor;
   }
 
+  /** 初学者レビュー一覧。 */
   private dev.mikoto2000.rei.externalagent.BeginnerReviewService beginnerReviews;
 
+  /** 会話の実行で使用する初学者レビュー一覧を設定する。 */
   @Autowired
   void setBeginnerReviews(dev.mikoto2000.rei.externalagent.BeginnerReviewService reviews) {
     this.beginnerReviews = reviews;
   }
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(ChatExecutionService.class);
 
+  /** モデルへ対話を依頼する窓口提供元。 */
   private final LlmChatClientProvider chatClientProvider;
 
+  /** 現在モデル保持先。 */
   private final ModelHolderService currentModelHolder;
+
+  /** モデル提供元。 */
   private final LlmModelProvider modelProvider;
+
+  /** 言語モデル設定。 */
   private final LlmProperties llmProperties;
 
+  /** キャンセルサービス。 */
   private final CommandCancellationService cancellationService;
 
+  /** 記憶Consolidatorサービス。 */
   private final Optional<MemoryConsolidatorService> memoryConsolidatorService;
+
+  /** 出力上限Replanner。 */
   private final Optional<OutputLimitReplanner> outputLimitReplanner;
+
+  /** 話題Orchestrator。 */
   private final Optional<TopicOrchestrator> topicOrchestrator;
+
+  /** 作業中集合。 */
   private final Optional<WorkingSet> workingSet;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
+
+  /** 作業状況追跡。 */
   private final Optional<AgentActivityTracker> activityTracker;
+
+  /** 実行状況の通知を生成する窓口。 */
   private final AgentEventFactory eventFactory;
+
+  /** 実行状況の通知先。 */
   private final AgentEventPublisher eventPublisher;
+
+  /** inlineファイル添付ファイル対象の解決。 */
   private final InlineFileAttachmentResolver inlineFileAttachmentResolver =
       new InlineFileAttachmentResolver();
+
+  /** 会話ログ保存先。 */
   private ConversationLogStore conversationLogStore;
+
+  /** プロジェクトサービス。 */
   private ProjectService projectService;
+
+  /** 操作計画。 */
   private ActionPlan actionPlan;
+
+  /** 委譲案内。 */
   private dev.mikoto2000.rei.chatgpt.ChatGptDelegationGuidance delegationGuidance;
 
+  /** 会話の実行で使用する委譲案内を設定する。 */
   @Autowired(required = false)
   public void setDelegationGuidance(dev.mikoto2000.rei.chatgpt.ChatGptDelegationGuidance guidance) {
     delegationGuidance = guidance;
   }
 
+  /** 並行タイムアウト。 */
   private java.time.Duration concurrentTimeout = java.time.Duration.ofMinutes(5);
 
+  /** 会話の実行で使用する並行タイムアウトを設定する。 */
   @Autowired
   void setConcurrentTimeout(
       @org.springframework.beans.factory.annotation.Value("${rei.conversation.timeout:PT5M}")
@@ -168,37 +224,47 @@ public class ChatExecutionService {
     concurrentTimeout = timeout;
   }
 
+  /** 機能の構成要素生成元。 */
   private org.springframework.beans.factory.config.ConfigurableBeanFactory beanFactory;
 
+  /** 会話の実行で使用する機能の構成要素生成元を設定する。 */
   @Autowired(required = false)
   void setBeanFactory(org.springframework.beans.factory.config.ConfigurableBeanFactory factory) {
     this.beanFactory = factory;
   }
 
+  /** チャット記憶。 */
   private ChatMemory chatMemory;
+
+  /** やり取り一覧。 */
   private ConversationTurnStore turns = ConversationTurnStore.inMemory();
 
+  /** 会話の実行で使用する会話一回のやり取り保存先を設定する。 */
   @Autowired
   void setConversationTurnStore(ConversationTurnStore turns) {
     this.turns = turns;
   }
 
+  /** 会話の実行で使用するチャット記憶を設定する。 */
   @Autowired
   void setChatMemory(ChatMemory chatMemory) {
     this.chatMemory = chatMemory;
   }
 
+  /** 会話の実行で使用する実行状態を設定する。 */
   @Autowired(required = false)
   void setExecutionState(ProjectService projectService, ActionPlan actionPlan) {
     this.projectService = projectService;
     this.actionPlan = actionPlan;
   }
 
+  /** 会話の実行で使用する会話ログ保存先を設定する。 */
   @Autowired
   void setConversationLogStore(ConversationLogStore conversationLogStore) {
     this.conversationLogStore = conversationLogStore;
   }
 
+  /** 会話の実行を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ChatExecutionService(
       ChatClient chatClient,
       ModelHolderService currentModelHolder,
@@ -220,6 +286,7 @@ public class ChatExecutionService {
         new InMemoryAgentEventBus());
   }
 
+  /** 会話の実行を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ChatExecutionService(
       ChatClient chatClient,
       ModelHolderService currentModelHolder,
@@ -243,6 +310,7 @@ public class ChatExecutionService {
         eventPublisher);
   }
 
+  /** 会話の実行を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ChatExecutionService(
       LlmChatClientProvider chatClientProvider,
       ModelHolderService currentModelHolder,
@@ -267,6 +335,7 @@ public class ChatExecutionService {
         new InMemoryAgentEventBus());
   }
 
+  /** 指定された値や利用先を使って、ChatExecutionServiceを初期化する。 */
   @Autowired
   public ChatExecutionService(
       LlmChatClientProvider chatClientProvider,
@@ -297,13 +366,16 @@ public class ChatExecutionService {
     this.eventPublisher = eventPublisher;
   }
 
+  /** 要求取得記録一覧。 */
   private dev.mikoto2000.rei.llm.capture.CaptureStore requestCaptures;
 
+  /** 会話の実行で使用する要求取得記録一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setRequestCaptures(dev.mikoto2000.rei.llm.capture.CaptureStore captures) {
     requestCaptures = captures;
   }
 
+  /** 要求された処理を実行する。 */
   public ChatExecutionResult execute(String promptText) {
     String conversationId = ConversationIds.currentChat();
     return execute(
@@ -316,11 +388,13 @@ public class ChatExecutionService {
         new UserInterventionQueue());
   }
 
+  /** 要求された処理を実行する。 */
   public ChatExecutionResult execute(
       AgentRunContext context, String promptText, UserInterventionQueue interventions) {
     return execute(context, promptText, interventions, null);
   }
 
+  /** 要求された処理を実行する。 */
   public ChatExecutionResult execute(
       AgentRunContext context,
       String promptText,
@@ -331,6 +405,7 @@ public class ChatExecutionService {
         context, () -> executeOwned(context, promptText, interventions, reservation));
   }
 
+  /** 依頼された操作を進めるため、自分が所有する対象を実行する。 */
   private ChatExecutionResult executeOwned(
       AgentRunContext context,
       String promptText,
@@ -348,6 +423,7 @@ public class ChatExecutionService {
     }
   }
 
+  /** 依頼された操作を進めるため、入力先対象範囲を実行する。 */
   private ChatExecutionResult executeInScope(
       AgentRunContext context,
       String promptText,
@@ -712,12 +788,14 @@ public class ChatExecutionService {
     }
   }
 
+  /** 既存の記録へ経緯を残すため、会話ログを追記する。 */
   private void appendConversationLog(String conversationId, String speaker, String content) {
     if (conversationLogStore != null) {
       conversationLogStore.append(conversationId, speaker, content);
     }
   }
 
+  /** 会話の実行で用いる終端エラーを返す。 */
   private ErrorInformation terminalError(ChatRunStatus status) {
     return switch (status) {
       case OUTPUT_LIMIT ->
@@ -766,12 +844,16 @@ public class ChatExecutionService {
     };
   }
 
+  /** 会話の実行で用いる終端エラーを返す。 */
   private ErrorInformation terminalError(ChatRunResult result) {
     return result.error() == null ? terminalError(result.status()) : result.error();
   }
 
   /**
-   * Known local checkpoint diagnostics are safe to expose; arbitrary cause messages remain private.
+   * 会話の実行で用いる再開用の記録エラーを返す。
+   *
+   * <p>Known local checkpoint diagnostics are safe to expose; arbitrary cause messages remain
+   * private.
    */
   private ErrorInformation checkpointError(Throwable error) {
     var seen =
@@ -790,6 +872,7 @@ public class ChatExecutionService {
     return null;
   }
 
+  /** 終了時の状態を確定するため、再開用の記録を完了させる。 */
   private ErrorInformation finishCheckpoint(AgentRunContext context, String status) {
     try {
       checkpoints.finish(context, status);
@@ -805,6 +888,7 @@ public class ChatExecutionService {
     }
   }
 
+  /** 会話の実行で用いる操作対象出力上限を返す。 */
   private ChatRunResult handleOutputLimit(
       String originalUserRequest,
       String currentGoal,
@@ -935,6 +1019,7 @@ public class ChatExecutionService {
         lastGenerationMetrics);
   }
 
+  /** 依頼された操作を進めるため、プロンプトを実行する。 */
   private ChatRunResult executePrompt(
       String promptText,
       boolean resolveAttachments,
@@ -1042,6 +1127,7 @@ public class ChatExecutionService {
                       if (chunk == null || chunk.isEmpty()) {
                         return;
                       }
+                      // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
                       if (messageStarted.compareAndSet(false, true)) {
                         completeThinking(
                             thinkingEventStarted,
@@ -1126,12 +1212,14 @@ public class ChatExecutionService {
       if (cancellationService.isCancellationRequested()) {
         return ChatRunResult.cancelled();
       }
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
       Thread.currentThread().interrupt();
       logChatFailure("Chat response wait interrupted", e);
       return ChatRunResult.cancelled();
     }
   }
 
+  /** 会話の実行に関するログチャット失敗情報を処理する。 */
   private void logChatFailure(String message, Throwable error) {
     var diagnostic = FailureDiagnostics.safeError(error);
     log.warn(
@@ -1142,15 +1230,18 @@ public class ChatExecutionService {
         diagnostic.message());
   }
 
+  /** 会話の実行で用いるツール失敗情報エラーを返す。 */
   private ErrorInformation toolFailureError(Throwable error) {
     var known = dev.mikoto2000.rei.chatgpt.ChatGptRunFailure.find(error);
     return known == null ? FailureDiagnostics.safeError(error) : known;
   }
 
+  /** 会話の実行で用いる経過時間ミリ秒数を返す。 */
   private long elapsedMillis(long startedAtNanos) {
     return (System.nanoTime() - startedAtNanos) / 1_000_000L;
   }
 
+  /** 会話の実行で用いる失敗情報結果を返す。 */
   private ChatRunResult failureResult(Throwable error) {
     if (RunCancellation.isCancellation(error)) return ChatRunResult.cancelled();
     ErrorInformation checkpointError = checkpointError(error);
@@ -1168,6 +1259,7 @@ public class ChatExecutionService {
     return new ChatRunResult(ChatRunStatus.FAILED, "", FailureDiagnostics.safeError(error));
   }
 
+  /** 会話の実行で用いる失敗情報原因一覧を返す。 */
   private static java.util.List<Throwable> failureCauses(Throwable error) {
     var causes = new java.util.ArrayList<Throwable>();
     var seen =
@@ -1178,6 +1270,7 @@ public class ChatExecutionService {
     return causes;
   }
 
+  /** 会話の実行で用いる予算停止状態を返す。 */
   private ChatRunStatus budgetStopStatus(OutputLimitRunBudget budget) {
     return budget.usageUnknown()
         ? ChatRunStatus.TOKEN_USAGE_UNKNOWN
@@ -1186,6 +1279,7 @@ public class ChatExecutionService {
             : ChatRunStatus.LLM_CALL_BUDGET_EXCEEDED;
   }
 
+  /** 利用先に渡せるよう、外部連携プロンプトを組み立てる。 */
   private String buildIntegrationPrompt(
       String originalUserRequest, String finalGoal, String subgoalResults) {
     return """
@@ -1203,6 +1297,7 @@ public class ChatExecutionService {
         .formatted(originalUserRequest, finalGoal, subgoalResults);
   }
 
+  /** 利用者が要点を把握できるよう、対象ログを要約する。 */
   private String summarizeForLog(String value) {
     if (value == null) {
       return "";
@@ -1214,6 +1309,7 @@ public class ChatExecutionService {
         : normalized.substring(0, maxLength) + "...";
   }
 
+  /** 会話の実行で用いる完了履歴状態の記録を返す。 */
   private java.util.List<org.springframework.ai.chat.messages.Message> completedHistorySnapshot(
       AgentRunContext context) {
     var history = turns.read(context.conversationId());
@@ -1241,6 +1337,7 @@ public class ChatExecutionService {
     return java.util.List.copyOf(messages);
   }
 
+  /** 会話の実行において、提案統合の実施条件を判定する。 */
   private boolean shouldSuggestConsolidation() {
     AtomicBoolean suggested = new AtomicBoolean(false);
     memoryConsolidatorService.ifPresent(
@@ -1256,6 +1353,7 @@ public class ChatExecutionService {
     return suggested.get();
   }
 
+  /** 会話の実行に関するmaybe再確認話題候補一覧を処理する。 */
   private void maybeRefreshTopicCandidates() {
     topicOrchestrator.ifPresent(
         orchestrator -> {
@@ -1268,6 +1366,7 @@ public class ChatExecutionService {
         });
   }
 
+  /** 利用先に渡せるよう、利用者Facingメッセージを組み立てる。 */
   private String buildUserFacingMessage(Throwable error) {
     Throwable root = rootCause(error);
     String message = root.getMessage();
@@ -1277,6 +1376,7 @@ public class ChatExecutionService {
     return "回答の取得に失敗しました: " + message;
   }
 
+  /** 会話の実行で用いる作業ルート原因を返す。 */
   private Throwable rootCause(Throwable error) {
     Throwable current = error;
     while (current.getCause() != null) {
@@ -1285,6 +1385,7 @@ public class ChatExecutionService {
     return current;
   }
 
+  /** 後から状況を確認できるよう、応答生成に使ったトークン数を記録する。 */
   private void captureCompletionTokens(ChatResponse response, AtomicInteger completionTokens) {
     if (response == null || response.getMetadata() == null) {
       return;
@@ -1296,6 +1397,7 @@ public class ChatExecutionService {
     completionTokens.set(usage.getCompletionTokens());
   }
 
+  /** 会話の実行で用いるcalculate生成計測値を返す。 */
   public static GenerationMetrics calculateGenerationMetrics(
       long requestStartedAtNanos,
       long answerStartedAtNanos,
@@ -1320,11 +1422,19 @@ public class ChatExecutionService {
         ttftMillis, outputTokensPerSecond, completionTokens / endToEndSeconds);
   }
 
+  /**
+   * 会話の実行で受け渡す生成計測値を表す。
+   *
+   * @param timeToFirstTokenMillis 時刻終点最初トークンミリ秒数
+   * @param outputTokensPerSecond 出力トークン数ごとの秒
+   * @param endToEndTokensPerSecond 終了終点終了トークン数ごとの秒
+   */
   public record GenerationMetrics(
       Double timeToFirstTokenMillis,
       Double outputTokensPerSecond,
       Double endToEndTokensPerSecond) {}
 
+  /** 実行状況を利用先で把握できるよう、推論を通知する。 */
   private void publishThinking(
       ChatResponse response,
       AtomicReference<String> previousThinking,
@@ -1339,6 +1449,7 @@ public class ChatExecutionService {
     if (delta.isEmpty()) {
       return;
     }
+    // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
     if (thinkingEventStarted.compareAndSet(false, true)) {
       eventPublisher.publish(eventFactory.thinkingStarted(thinkingId));
     }
@@ -1346,6 +1457,7 @@ public class ChatExecutionService {
     eventPublisher.publish(eventFactory.thinkingDelta(thinkingId, delta));
   }
 
+  /** 実行結果を後続の処理へ引き渡すため、推論を完了させる。 */
   private void completeThinking(
       AtomicBoolean thinkingEventStarted,
       AtomicBoolean thinkingEventCompleted,
@@ -1357,6 +1469,7 @@ public class ChatExecutionService {
     }
   }
 
+  /** 会話の実行で用いる回答テキストを返す。 */
   private String answerText(ChatResponse response) {
     Generation generation = response.getResult();
     if (generation == null || generation.getOutput() == null) {
@@ -1366,6 +1479,7 @@ public class ChatExecutionService {
     return text == null ? "" : text;
   }
 
+  /** 会話の実行で用いる推論テキストを返す。 */
   private String thinkingText(ChatResponse response) {
     Generation generation = response.getResult();
     if (generation == null) {
@@ -1379,6 +1493,7 @@ public class ChatExecutionService {
     return thinkingValue(generation.getMetadata());
   }
 
+  /** 会話の実行で用いる推論値を返す。 */
   private String thinkingValue(ChatGenerationMetadata metadata) {
     if (metadata == null || metadata.isEmpty()) {
       return "";
@@ -1397,6 +1512,7 @@ public class ChatExecutionService {
     return "";
   }
 
+  /** 会話の実行で用いる推論値を返す。 */
   private String thinkingValue(Map<String, Object> metadata) {
     if (metadata == null || metadata.isEmpty()) {
       return "";
@@ -1415,6 +1531,7 @@ public class ChatExecutionService {
     return "";
   }
 
+  /** 会話の実行で用いる推論値を返す。 */
   @SuppressWarnings("unchecked")
   private String thinkingValue(Object value) {
     if (value instanceof Map<?, ?> map) {
@@ -1423,6 +1540,7 @@ public class ChatExecutionService {
     return "";
   }
 
+  /** 会話の実行において、推論キーかどうかを判定する。 */
   private boolean isThinkingKey(String key) {
     if (key == null) {
       return false;
@@ -1434,6 +1552,7 @@ public class ChatExecutionService {
         || normalized.equals("reasoningcontent");
   }
 
+  /** 会話の実行で用いる文字列表現値を返す。 */
   private String stringValue(Object value) {
     if (value == null) {
       return "";
@@ -1441,6 +1560,7 @@ public class ChatExecutionService {
     return value.toString();
   }
 
+  /** 会話の実行で用いる推論差分を返す。 */
   private String thinkingDelta(String current, AtomicReference<String> previousThinking) {
     String previous = previousThinking.get();
     previousThinking.set(current);
@@ -1450,39 +1570,65 @@ public class ChatExecutionService {
     return current;
   }
 
+  /** 会話の実行におけるチャット実行状態の選択肢。 */
   private enum ChatRunStatus {
+    /** 成功。 */
     SUCCESS,
+    /** 進捗が得られず停滞した状態。 */
     STAGNATED,
+    /** 言語モデル呼び出し予算上限超過。 */
     LLM_CALL_BUDGET_EXCEEDED,
+    /** ツール引数修復残量なし。 */
     TOOL_ARGUMENT_REPAIR_EXHAUSTED,
+    /** トークン予算上限超過。 */
     TOKEN_BUDGET_EXCEEDED,
+    /** トークン使用状況不明。 */
     TOKEN_USAGE_UNKNOWN,
+    /** 計画の見直し予算上限超過。 */
     REPLAN_BUDGET_EXCEEDED,
+    /** レビュー部分的な結果。 */
     REVIEW_PARTIAL,
+    /** 出力上限。 */
     OUTPUT_LIMIT,
+    /** 文脈厳しい条件上限。 */
     CONTEXT_HARD_LIMIT,
+    /** 失敗。 */
     FAILED,
+    /** TIMED出力先。 */
     TIMED_OUT,
+    /** キャンセル済み。 */
     CANCELLED
   }
 
+  /**
+   * 会話の実行で受け渡すチャット実行結果を表す。
+   *
+   * @param status 状態
+   * @param text テキスト
+   * @param error エラー
+   */
   private record ChatRunResult(ChatRunStatus status, String text, ErrorInformation error) {
+    /** 会話の実行を利用するため、指定を補って共通の初期化へ引き渡す。 */
     ChatRunResult(ChatRunStatus status, String text) {
       this(status, text, null);
     }
 
+    /** 処理が成功したことを、呼び出し元へ伝える情報として表す。 */
     static ChatRunResult success(String text) {
       return new ChatRunResult(ChatRunStatus.SUCCESS, text);
     }
 
+    /** 会話の実行で用いる出力上限を返す。 */
     static ChatRunResult outputLimit(String text) {
       return new ChatRunResult(ChatRunStatus.OUTPUT_LIMIT, text);
     }
 
+    /** 対象の処理が失敗したことを、理由を含む結果として表す。 */
     static ChatRunResult failed() {
       return new ChatRunResult(ChatRunStatus.FAILED, "");
     }
 
+    /** 会話の実行で用いるキャンセル済みを返す。 */
     static ChatRunResult cancelled() {
       return new ChatRunResult(ChatRunStatus.CANCELLED, "");
     }

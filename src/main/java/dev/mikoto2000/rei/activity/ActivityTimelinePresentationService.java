@@ -9,9 +9,17 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 
-/** Bulk reads followed by a stable timestamp merge. Does not evaluate, notify or re-extract. */
+/**
+ * 作業状況の把握で受け渡す作業状況時系列の記録Presentationサービスを表す。
+ *
+ * <p>Bulk reads followed by a stable timestamp merge. Does not evaluate, notify or re-extract.
+ *
+ * @param timeline 時系列の記録
+ * @param behavior 作業習慣
+ */
 public record ActivityTimelinePresentationService(
     ActivityTimeline timeline, BehaviorStateStore behavior) {
+  /** 作業状況の把握で用いる項目一覧を返す。 */
   public List<ActivityTimelineEntry> entries(String day, boolean verbose) {
     var date = timeline.date(day);
     var zone = timeline.clock().getZone();
@@ -36,6 +44,7 @@ public record ActivityTimelinePresentationService(
     return List.copyOf(entries);
   }
 
+  /** 受け取った情報を、表示や受け渡しに適した形式へ整える。 */
   public String format(String day, boolean verbose) {
     var entries = entries(day, verbose);
     if (entries.isEmpty()) return "この期間の Activity 記録はありません。";
@@ -85,6 +94,7 @@ public record ActivityTimelinePresentationService(
           var descriptions =
               a.segment().evidence().stream().map(evidence::evidence).distinct().toList();
           out.append("  evidence: ").append(String.join(" / ", descriptions));
+          // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
           if (descriptions.size() > 1) out.append("（区間内で判定根拠が変化）");
           out.append('\n');
           if (verbose)

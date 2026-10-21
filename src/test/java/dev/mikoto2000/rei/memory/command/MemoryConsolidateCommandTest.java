@@ -20,9 +20,11 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import picocli.CommandLine;
 
+/** 記憶Consolidateコマンドの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class MemoryConsolidateCommandTest {
 
+  /** 長期記憶の活用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void consolidateDoesNotSaveWithoutApproveOption() {
     MemoryConsolidatorService consolidator = Mockito.mock(MemoryConsolidatorService.class);
@@ -58,6 +60,7 @@ class MemoryConsolidateCommandTest {
     verify(memoryService, never()).save(any());
   }
 
+  /** 長期記憶の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void consolidateSavesWhenApproved() {
     MemoryConsolidatorService consolidator = Mockito.mock(MemoryConsolidatorService.class);
@@ -93,6 +96,7 @@ class MemoryConsolidateCommandTest {
     verify(memoryService, times(1)).save(any());
   }
 
+  /** 長期記憶の活用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void consolidateSkipsWhenConflictCheckTimesOut() {
     MemoryConsolidatorService consolidator = Mockito.mock(MemoryConsolidatorService.class);

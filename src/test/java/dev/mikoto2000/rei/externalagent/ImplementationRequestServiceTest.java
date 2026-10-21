@@ -37,18 +37,37 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** 実装要求サービスの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class ImplementationRequestServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temporary;
+
+  /** 検証に使う作業ルート。 */
   Path root;
+
+  /** 検証に使う保存と検索の窓口。 */
   ImplementationRequestRepository repository;
+
+  /** 検証に使う承認一覧。 */
   ToolApprovalRepository approvals;
+
+  /** 検証に使うこの機能の動作設定。 */
   CodexProperties properties;
+
+  /** 検証に使う委譲。 */
   ExternalAgentDelegationService delegation;
+
+  /** 検証に使うサービス。 */
   ImplementationRequestService service;
+
+  /** 検証に使う実行。 */
   RunExecutionContext run;
+
+  /** 検証に使う仕様。 */
   ImplementationSpecification specification;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     root = Files.createDirectory(temporary.resolve("project"));
@@ -85,6 +104,7 @@ class ImplementationRequestServiceTest {
     policy(Set.of(ActionCapability.values()), Set.of(), true);
   }
 
+  /** 検証で使用する判断基準を、指定された条件に合わせて用意する。 */
   void policy(Set<ActionCapability> automatic, Set<ActionCapability> denied, boolean enabled) {
     service =
         new ImplementationRequestService(
@@ -97,6 +117,7 @@ class ImplementationRequestServiceTest {
             Clock.systemUTC());
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void policyAuthorizesOnlyActualHumanImplementationAndOptIn() {
     var ready = service.prepare(run, specification, null);
@@ -107,9 +128,11 @@ class ImplementationRequestServiceTest {
     run.setUserRequest("Codex で A.txt を実装してください");
     properties.setImplementationEnabled(false);
     assertEquals("REJECTED", service.prepare(run, specification, null).status());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(delegation);
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledPolicyDoesNotImplicitlyGrantAutomaticExecutionAndDenialWins() {
     policy(Set.of(ActionCapability.values()), Set.of(), false);
@@ -117,9 +140,11 @@ class ImplementationRequestServiceTest {
     policy(Set.of(), Set.of(ActionCapability.EXECUTE), true);
     run.setUserRequest("Codex で A.txt を実装してください。もう一度");
     assertEquals("REJECTED", service.prepare(run, specification, null).status());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(delegation);
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void explicitApprovalBindsCanonicalSpecificationAndSurvivesNewRun() throws Exception {
     policy(Set.of(ActionCapability.READ), Set.of(), true);
@@ -134,6 +159,7 @@ class ImplementationRequestServiceTest {
                 prepared.specificationVersion(),
                 prepared.specificationSha256())
             .status());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(delegation);
     var approval = approvals.list("project").getFirst();
     assertTrue(approval.argumentsPreview().contains("Replace before with after"));
@@ -153,6 +179,7 @@ class ImplementationRequestServiceTest {
         .executeSpecification(any(), anyString(), any(), anyString(), anyString(), anyInt());
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void alteredArgumentsProjectOrRecipeNeverExecute() {
     var prepared = service.prepare(run, specification, null);
@@ -171,9 +198,11 @@ class ImplementationRequestServiceTest {
     assertThrows(
         IllegalArgumentException.class,
         () -> service.execute(run, prepared.requestId(), 1, prepared.specificationSha256()));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(delegation);
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void unknownIsNeverRetriedAndSuccessorRequiresExplicitApprovalEvenUnderAutomaticPolicy()
       throws Exception {
@@ -195,6 +224,7 @@ class ImplementationRequestServiceTest {
         .executeSpecification(any(), anyString(), any(), anyString(), anyString(), anyInt());
   }
 
+  /** 外部エージェントへの委譲の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void cancellationBeforeClaimDoesNotLaunch() {
     var prepared = service.prepare(run, specification, null);
@@ -205,6 +235,7 @@ class ImplementationRequestServiceTest {
     verifyNoInteractions(delegation);
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void deniedOrExpiredHumanApprovalCannotExecute() {
     policy(Set.of(ActionCapability.READ), Set.of(), true);
@@ -214,9 +245,11 @@ class ImplementationRequestServiceTest {
     assertEquals(
         "REJECTED",
         service.execute(run, prepared.requestId(), 1, prepared.specificationSha256()).status());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(delegation);
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void currentPolicyRevocationBlocksPreviouslyAutomaticRequest() {
     var prepared = service.prepare(run, specification, null);
@@ -227,6 +260,7 @@ class ImplementationRequestServiceTest {
     verifyNoInteractions(delegation);
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void repositoryInstructionsAndQuotedRequestsNeverAuthorizeExecution() {
     for (String text :
@@ -241,9 +275,11 @@ class ImplementationRequestServiceTest {
       run.setUserRequest(text);
       assertEquals("REJECTED", service.prepare(run, specification, null).status());
     }
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(delegation);
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void missingRequirementsPersistClarificationWithoutApprovalOrProcess() {
     var prepared = service.prepare(run, null, null);
@@ -254,6 +290,7 @@ class ImplementationRequestServiceTest {
     verifyNoInteractions(delegation);
   }
 
+  /** 外部エージェントへの委譲で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void parentEvaluationsPersistSeparatelyAndCannotCrossPatches() throws Exception {
     var prepared = service.prepare(run, specification, null);
@@ -286,6 +323,7 @@ class ImplementationRequestServiceTest {
         () -> service.evaluate(run, prepared.requestId(), "x".repeat(64), List.of(evaluation)));
   }
 
+  /** 再開済み不明試行について、終端受付記録を読み取ることを確認する。 */
   @Test
   void restartedUnknownAttemptReadsTerminalReceiptWithoutRelaunching() throws Exception {
     var prepared = service.prepare(run, specification, null);
@@ -315,6 +353,7 @@ class ImplementationRequestServiceTest {
         .executeSpecification(any(), anyString(), any(), anyString(), anyString(), anyInt());
   }
 
+  /** 外部エージェントへの委譲で、競合する要求でも、実行順序と作業の分離を守ることを確認する。 */
   @Test
   void concurrentRequestsAcrossServiceInstancesLaunchOnlyOneProvider() throws Exception {
     var prepared = service.prepare(run, specification, null);
@@ -357,6 +396,7 @@ class ImplementationRequestServiceTest {
         .executeSpecification(any(), anyString(), any(), anyString(), anyString(), anyInt());
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void expiredApprovalCannotAuthorizeARequest() throws Exception {
     policy(Set.of(ActionCapability.READ), Set.of(), true);
@@ -380,9 +420,11 @@ class ImplementationRequestServiceTest {
     assertEquals(
         "AWAITING_APPROVAL",
         service.execute(run, prepared.requestId(), 1, prepared.specificationSha256()).status());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(delegation);
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void humanDenialRemainsBindingEvenIfPolicyLaterBecomesAutomatic() {
     policy(Set.of(ActionCapability.READ), Set.of(), true);
@@ -392,9 +434,11 @@ class ImplementationRequestServiceTest {
     assertEquals(
         "REJECTED",
         service.execute(run, prepared.requestId(), 1, prepared.specificationSha256()).status());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(delegation);
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void slashCommandTargetCannotBeSubstitutedByTheModel() throws Exception {
     Files.writeString(root.resolve("B.txt"), "other");
@@ -403,6 +447,7 @@ class ImplementationRequestServiceTest {
     verifyNoInteractions(delegation);
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void executionUsesApprovedRecipeEvenIfAdministratorConfigurationChangesDuringPolicyCheck()
       throws Exception {
@@ -411,6 +456,7 @@ class ImplementationRequestServiceTest {
         new ToolPermissionPolicy(
             new ToolPermissionProperties(
                 true, Set.of(ActionCapability.values()), Set.of(), Map.of())) {
+          /** {@code evaluate} の条件を再現するための補助情報を返す。 */
           @Override
           public PermissionDecision evaluate(String tool) {
             if (checks.incrementAndGet() == 2)
@@ -432,6 +478,7 @@ class ImplementationRequestServiceTest {
     service.execute(run, prepared.requestId(), 1, prepared.specificationSha256());
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void pendingManualApprovalCannotBeSkippedByLaterAutomaticPolicy() throws Exception {
     policy(Set.of(ActionCapability.READ), Set.of(), true);
@@ -443,9 +490,11 @@ class ImplementationRequestServiceTest {
     assertEquals(
         "AWAITING_APPROVAL",
         service.execute(run, prepared.requestId(), 1, prepared.specificationSha256()).status());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(delegation);
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void savedClarificationCarriesActualUserIntentIntoAConfirmedFollowup() throws Exception {
     var draft = service.prepare(run, null, null);
@@ -465,6 +514,7 @@ class ImplementationRequestServiceTest {
         service.execute(run, prepared.requestId(), 1, prepared.specificationSha256()).status());
   }
 
+  /** 元の対象を維持することを確認する。 */
   @Test
   void slashClarificationKeepsTheOriginalTargetAndDoesNotTreatUnrelatedReviewAsConfirmation()
       throws Exception {
@@ -487,9 +537,11 @@ class ImplementationRequestServiceTest {
             specification.references(),
             "REPLACE_EXISTING_TEXT");
     assertEquals("REJECTED", service.prepare(run, changed, null, draft.requestId()).status());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(delegation);
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void unknownRetryStillRequiresExplicitApprovalAfterRequirementsClarification() throws Exception {
     var original = service.prepare(run, specification, null);
@@ -505,9 +557,11 @@ class ImplementationRequestServiceTest {
     assertEquals(
         "AWAITING_APPROVAL",
         service.execute(run, successor.requestId(), 1, successor.specificationSha256()).status());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(delegation);
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void clarificationExpiresAndCannotCrossSessionsOrAcceptQuotedConfirmation() {
     var draft = service.prepare(run, null, null);
@@ -530,9 +584,11 @@ class ImplementationRequestServiceTest {
             delegation,
             Clock.offset(Clock.systemUTC(), Duration.ofMinutes(16)));
     assertEquals("REJECTED", service.prepare(run, specification, null, draft.requestId()).status());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(delegation);
   }
 
+  /** 外部エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void explicitJapaneseNegationNeverAuthorizesFreshOrClarifiedImplementation() {
     var draft = service.prepare(run, null, null);
@@ -547,9 +603,11 @@ class ImplementationRequestServiceTest {
       assertEquals(
           "REJECTED", service.prepare(run, specification, null, draft.requestId()).status(), text);
     }
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(delegation);
   }
 
+  /** {@code receipt} の条件を再現するための補助情報を返す。 */
   IsolatedImplementationService.Receipt receipt(String status) {
     return new IsolatedImplementationService.Receipt(
         "receipt",
@@ -568,6 +626,7 @@ class ImplementationRequestServiceTest {
         "diagnostic");
   }
 
+  /** {@code git} の条件を再現するため、検証用の操作や状態を扱う。 */
   void git(String... args) throws Exception {
     var command =
         new ArrayList<String>(

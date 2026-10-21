@@ -30,9 +30,12 @@ import java.util.Map;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
+/** 時系列作業状況推定の結果と状態の契約を検証するテスト。 */
 class TemporalActivityInferenceTest {
+  /** 検証に使う日時。 */
   static final Instant AT = Instant.parse("2026-10-10T14:00:00Z");
 
+  /** 検証用に、後から経緯を確認できるよう、指定された内容を記録する。 */
   static ActivityRecord record(String id, Instant at, String content) {
     var fg = new ForegroundWindow("IDE", 1, "rei tests", "window");
     var evidence =
@@ -71,6 +74,7 @@ class TemporalActivityInferenceTest {
             evidence, List.of("WINDOW_TITLE"), false, "EVIDENCE_ONLY", "FINAL", Map.of(), ""));
   }
 
+  /** 全対象識別子一覧を維持することを確認する。 */
   @Test
   void aggregatesChronologicallyAndKeepsAllIdsAndAgentOwnership() {
     var event =
@@ -90,6 +94,7 @@ class TemporalActivityInferenceTest {
     assertTrue(input.ruleInference().inferredActivity().contains("可能性"));
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void oneObservationOrConflictingProjectsDoesNotClaimSpecificWork() {
     var input =
@@ -99,6 +104,7 @@ class TemporalActivityInferenceTest {
     assertEquals(0, input.ruleInference().confidence());
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void repeatedObservationsHaveSameSemanticFingerprintButLateEnrichmentChangesIt() {
     var a = record("a", AT, "テスト修正");
@@ -127,6 +133,7 @@ class TemporalActivityInferenceTest {
             .fingerprint());
   }
 
+  /** 上限内に収めた入力について、大きすぎる根拠を受け付けないことを確認する。 */
   @Test
   void boundedInputRejectsOversizedEvidenceInsteadOfSendingFullHistory() {
     var input =
@@ -141,6 +148,7 @@ class TemporalActivityInferenceTest {
     assertThrows(IllegalArgumentException.class, () -> input.structuredInput(10));
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void serviceLimitsFrequencySkipsSameMeaningAndReevaluatesLateResults() {
     var p = new ActivityProperties();
@@ -169,6 +177,7 @@ class TemporalActivityInferenceTest {
     assertEquals(2, service.metrics().completed());
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void failureRetriesAreBoundedAndDoNotRewriteBaseActivity() throws Exception {
     var p = new ActivityProperties();
@@ -197,6 +206,7 @@ class TemporalActivityInferenceTest {
     assertEquals(2, service.metrics().failed());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void sqliteSupplementsAndMidnightQueriesNeverAddObservedSeconds(
       @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) {
@@ -235,6 +245,7 @@ class TemporalActivityInferenceTest {
             .sum());
   }
 
+  /** 作業状況の把握で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void backgroundCandidateMustNotBecomeSpecificForegroundWork() {
     var base = record("a", AT, "テスト修正");
@@ -277,6 +288,7 @@ class TemporalActivityInferenceTest {
     assertFalse(inferred.inferredActivity().contains("秘密の別作業"));
   }
 
+  /** 不正な再試行回数を停止することを確認する。 */
   @Test
   void knownUsageOfRejectedCompletionIsCountedAndStopsInvalidRetries() throws Exception {
     var p = new ActivityProperties();
@@ -304,6 +316,7 @@ class TemporalActivityInferenceTest {
     verify(supplements).save(argThat(r -> r.totalTokens() == 100 && r.llmCalls() == 1));
   }
 
+  /** 再試行について、元の状態の記録を利用することを確認する。 */
   @Test
   void retryUsesOriginalSnapshotAndIdsEvenWhenEquivalentObservationsArrive() throws Exception {
     var p = new ActivityProperties();
@@ -339,6 +352,7 @@ class TemporalActivityInferenceTest {
     assertEquals(time.instant(), saved.getValue().inferredAt());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void storageFailureRetriesSaveWithoutPayingForTheModelAgain() throws Exception {
     var p = new ActivityProperties();
@@ -364,6 +378,7 @@ class TemporalActivityInferenceTest {
     verify(supplements, times(2)).save(any());
   }
 
+  /** 作業状況の把握で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void unchangedFiveMinuteInputMakesOneModelCallInsteadOfSix() throws Exception {
     var p = new ActivityProperties();
@@ -403,6 +418,7 @@ class TemporalActivityInferenceTest {
         records.size(), service.metrics().llmCalls(), service.metrics().totalTokens());
   }
 
+  /** 基準要約を維持することを確認する。 */
   @Test
   void timelineSupplementIsSeparateAndItsFailureKeepsBaseSummary() {
     var records = mock(ActivityStore.class);
@@ -437,6 +453,7 @@ class TemporalActivityInferenceTest {
     verify(records, never()).replace(any());
   }
 
+  /** 作業状況の把握で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void exactRecentQueryIsBoundedWithoutScanningEarlierSameDay(
       @org.junit.jupiter.api.io.TempDir java.nio.file.Path directory) {
@@ -458,6 +475,7 @@ class TemporalActivityInferenceTest {
         () -> raw.findObservationsBetweenBounded(AT.minusSeconds(300), AT.plusSeconds(30), 1));
   }
 
+  /** 作業状況の把握で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void pausedDisabledAndRestartedSameEvidenceDoesNotInvokeModel() {
     var p = new ActivityProperties();
@@ -470,6 +488,7 @@ class TemporalActivityInferenceTest {
         new TemporalActivityInferenceService(
             p, store, supplements, null, time, () -> List.of(), () -> true);
     service.tick();
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(store, supplements);
     p.getTemporal().setEnabled(false);
     service =
@@ -492,6 +511,7 @@ class TemporalActivityInferenceTest {
     verify(supplements, never()).save(any());
   }
 
+  /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void temporalExecutionsRetainFiveMinuteFailuresAndNeverBecomeUserActions() {
     var source = new ActivityAgentEvidenceSource(null);
@@ -536,6 +556,7 @@ class TemporalActivityInferenceTest {
                 0));
   }
 
+  /** 作業状況の把握で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void conflictingProjectEvidenceStaysUnknownAndEmptyWindowClearsCachedInference() {
     var a = record("a", AT, "テスト修正");

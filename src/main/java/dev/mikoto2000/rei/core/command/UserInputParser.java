@@ -3,26 +3,44 @@ package dev.mikoto2000.rei.core.command;
 import java.util.ArrayList;
 import java.util.List;
 
-/** UI-independent classification and tokenization of shell-style user input. */
+/**
+ * 利用者入力の入力を解釈し、機能内で扱える情報へ整える。
+ *
+ * <p>UI-independent classification and tokenization of shell-style user input.
+ */
 public final class UserInputParser {
 
+  /** 共通の実行基盤における種類の選択肢。 */
   public enum Kind {
+    /** 空。 */
     EMPTY,
+    /** チャット。 */
     CHAT,
+    /** SLASHコマンド。 */
     SLASH_COMMAND
   }
 
+  /**
+   * 共通の実行基盤で受け渡す解釈済み入力を表す。
+   *
+   * @param kind 種類
+   * @param text テキスト
+   * @param arguments 引数
+   */
   public record ParsedInput(Kind kind, String text, String[] arguments) {
+    /** 受け取った情報からParsedInputを作成する。 */
     public ParsedInput {
       arguments = arguments.clone();
     }
 
+    /** 共通の実行基盤で用いる引数を返す。 */
     @Override
     public String[] arguments() {
       return arguments.clone();
     }
   }
 
+  /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   public ParsedInput parse(String input) {
     String text = input == null ? "" : input.trim();
     if (text.isEmpty()) {
@@ -34,6 +52,7 @@ public final class UserInputParser {
     return new ParsedInput(Kind.SLASH_COMMAND, text, split(text.substring(1).trim()));
   }
 
+  /** 共通の実行基盤で用いる分割を返す。 */
   public String[] split(String line) {
     // Preserve execution semantics: explicitly empty quoted arguments were historically omitted.
     return tokenize(line).stream()
@@ -42,9 +61,18 @@ public final class UserInputParser {
         .toArray(String[]::new);
   }
 
-  /** Shared lexical rules, with raw spans for cursor-aware input adapters. */
+  /**
+   * 共通の実行基盤で受け渡すトークンを表す。
+   *
+   * <p>Shared lexical rules, with raw spans for cursor-aware input adapters.
+   *
+   * @param value 値
+   * @param start 開始
+   * @param end 終了
+   */
   public record Token(String value, int start, int end) {}
 
+  /** 共通の実行基盤で用いるtokenizeを返す。 */
   public List<Token> tokenize(String line) {
     List<Token> words = new ArrayList<>();
     StringBuilder current = new StringBuilder();
@@ -69,7 +97,11 @@ public final class UserInputParser {
     return List.copyOf(words);
   }
 
-  /** Encode one argument using the same literal-backslash grammar as split(). */
+  /**
+   * 共通の実行基盤で用いる引用を返す。
+   *
+   * <p>Encode one argument using the same literal-backslash grammar as split().
+   */
   public static String quote(String value, boolean complete, char preferredQuote) {
     boolean needsQuotes =
         preferredQuote != 0

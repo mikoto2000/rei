@@ -9,22 +9,42 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.SmartLifecycle;
 
 /**
- * Connection failures are contained to this opt-in channel; initialization never blocks startup.
+ * Slackとの連携に必要なSlack通信の接続受付から終了までの管理を扱う。
+ *
+ * <p>Connection failures are contained to this opt-in channel; initialization never blocks startup.
  */
 public final class SlackSocketLifecycle implements SmartLifecycle, AutoCloseable {
+  /** Slackとの連携に必要な接続を扱う。 */
   public interface Connection extends AutoCloseable {
+    /** Slackとの連携に関するpumpを処理する。 */
     void pump();
   }
 
+  /** 設定。 */
   private final SlackProperties settings;
+
+  /** 実行環境。 */
   private final Map<String, String> environment;
+
+  /** 生成元。 */
   private final Supplier<Connection> factory;
+
+  /** 接続。 */
   private volatile Connection connection;
+
+  /** 実行の担当。 */
   private ScheduledExecutorService worker;
+
+  /** 実行中。 */
   private volatile boolean running;
+
+  /** connecting／終了済み。 */
   private boolean connecting, closed;
+
+  /** 再試行日時。 */
   private long retryAt;
 
+  /** 指定された値や利用先を使って、SlackSocketLifecycleを初期化する。 */
   public SlackSocketLifecycle(
       SlackProperties settings, Map<String, String> environment, Supplier<Connection> factory) {
     this.settings = settings;
@@ -32,6 +52,7 @@ public final class SlackSocketLifecycle implements SmartLifecycle, AutoCloseable
     this.factory = factory;
   }
 
+  /** Slackとの連携において、接続Onceに該当するか判定する。 */
   boolean connectOnce() {
     synchronized (this) {
       if (connection != null) return true;
@@ -71,6 +92,7 @@ public final class SlackSocketLifecycle implements SmartLifecycle, AutoCloseable
     }
   }
 
+  /** 要求された処理を開始する。 */
   @Override
   public synchronized void start() {
     if (running || !settings.isEnabled()) return;
@@ -99,6 +121,7 @@ public final class SlackSocketLifecycle implements SmartLifecycle, AutoCloseable
         TimeUnit.SECONDS);
   }
 
+  /** 実行中の処理を停止する。 */
   @Override
   public synchronized void stop() {
     closed = true;
@@ -119,11 +142,13 @@ public final class SlackSocketLifecycle implements SmartLifecycle, AutoCloseable
     }
   }
 
+  /** Slackとの連携において、実行中かどうかを判定する。 */
   @Override
   public boolean isRunning() {
     return running;
   }
 
+  /** Slackとの連携で利用した資源や登録を解放し、利用を終了する。 */
   @Override
   public void close() {
     stop();

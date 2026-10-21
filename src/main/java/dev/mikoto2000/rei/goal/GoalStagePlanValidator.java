@@ -4,11 +4,18 @@ import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 
-/** Host validation. Existing contracts cannot be removed or relaxed by a plan proposal. */
+/**
+ * 目標の達成管理に必要な目標段階計画検証の窓口を扱う。
+ *
+ * <p>Host validation. Existing contracts cannot be removed or relaxed by a plan proposal.
+ */
 public final class GoalStagePlanValidator {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private GoalStagePlanValidator() {}
 
+  /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   public static void validate(GoalRepository.Goal goal, List<GoalStageDefinition> plan) {
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (plan == null || plan.isEmpty() || plan.size() > 32)
       throw new IllegalArgumentException("Expected 1..32 stages");
     var byId = new LinkedHashMap<String, GoalStageDefinition>();
@@ -75,6 +82,7 @@ public final class GoalStagePlanValidator {
     if (visited.size() != plan.size()) throw new IllegalArgumentException("Stage dependency cycle");
   }
 
+  /** 目標の達成管理に関するpreserveを処理する。 */
   public static void preserve(List<GoalStageDefinition> previous, List<GoalStageDefinition> next) {
     if (!new HashSet<>(next).containsAll(previous))
       throw new IllegalArgumentException(

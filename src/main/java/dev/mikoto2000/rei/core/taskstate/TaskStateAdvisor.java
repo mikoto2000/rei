@@ -19,14 +19,21 @@ import org.springframework.stereotype.Component;
 @Component
 public class TaskStateAdvisor implements BaseAdvisor {
 
+  /** タスク状態。 */
   private final TaskState taskState;
+
+  /** イベント一覧。 */
   private final AgentEventFactory events;
+
+  /** 実行状況の通知先。 */
   private final AgentEventPublisher eventPublisher;
 
+  /** 作業状態の記録を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public TaskStateAdvisor(TaskState taskState) {
     this(taskState, (AgentEventFactory) null, (AgentEventPublisher) null);
   }
 
+  /** 作業状態の記録を利用するため、指定を補って共通の初期化へ引き渡す。 */
   @Autowired
   public TaskStateAdvisor(
       TaskState taskState,
@@ -35,6 +42,7 @@ public class TaskStateAdvisor implements BaseAdvisor {
     this(taskState, events.getIfAvailable(), eventPublisher.getIfAvailable());
   }
 
+  /** 指定された値や利用先を使って、TaskStateAdvisorを初期化する。 */
   public TaskStateAdvisor(
       TaskState taskState, AgentEventFactory events, AgentEventPublisher eventPublisher) {
     this.taskState = taskState;
@@ -42,10 +50,12 @@ public class TaskStateAdvisor implements BaseAdvisor {
     this.eventPublisher = eventPublisher;
   }
 
+  /** 作業状態の記録で用いるタスク状態を返す。 */
   TaskState taskState() {
     return taskState;
   }
 
+  /** 作業状態の記録の本処理へ渡す文脈を準備する。 */
   @Override
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     UserMessage userMessage = request.prompt().getUserMessage();
@@ -69,16 +79,19 @@ public class TaskStateAdvisor implements BaseAdvisor {
         .build();
   }
 
+  /** 作業状態の記録の実行結果を受け取り、後続の処理へ反映する。 */
   @Override
   public ChatClientResponse after(ChatClientResponse response, AdvisorChain chain) {
     return response;
   }
 
+  /** 他の補助処理と組み合わせる際の適用順序を返す。 */
   @Override
   public int getOrder() {
     return -80;
   }
 
+  /** 指定された内容へ切り替えるため、利用者メッセージを置き換える。 */
   private List<Message> replaceUserMessage(
       List<Message> messages, UserMessage original, UserMessage replacement) {
     List<Message> replaced = new ArrayList<>(messages.size());
@@ -94,6 +107,7 @@ public class TaskStateAdvisor implements BaseAdvisor {
     return List.copyOf(replaced);
   }
 
+  /** 実行状況を利用先で把握できるよう、追加されたを通知する。 */
   private void publishInjected(String context) {
     if (events != null && eventPublisher != null) {
       eventPublisher.publish(events.contextInjected("task_state", null, context.length()));

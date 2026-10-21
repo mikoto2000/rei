@@ -5,8 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.junit.jupiter.api.Test;
 
+/** 操作計画の結果と状態の契約を検証するテスト。 */
 class ActionPlanTest {
 
+  /** 行動計画の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void emptyActionPlanHasNoSteps() {
     ActionPlan plan = new ActionPlan();
@@ -14,12 +16,14 @@ class ActionPlanTest {
     assertTrue(plan.currentStep().isEmpty());
   }
 
+  /** 行動計画の管理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void emptyActionPlanRendersBlank() {
     ActionPlan plan = new ActionPlan();
     assertEquals("", plan.renderForPrompt());
   }
 
+  /** 行動計画の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void todoStepCanBeAdded() {
     ActionPlan plan = new ActionPlan();
@@ -29,6 +33,7 @@ class ActionPlanTest {
     assertEquals(ActionPlan.STATUS_TODO, plan.steps().get(0).status());
   }
 
+  /** 行動計画の管理で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void stepOrderIsPreserved() {
     ActionPlan plan = new ActionPlan();
@@ -41,6 +46,7 @@ class ActionPlanTest {
     assertEquals("step-3", plan.steps().get(2).id());
   }
 
+  /** 行動計画の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void todoCanTransitionToInProgress() {
     ActionPlan plan = new ActionPlan();
@@ -50,6 +56,7 @@ class ActionPlanTest {
     assertTrue(plan.currentStep().isPresent());
   }
 
+  /** 行動計画の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void inProgressCanTransitionToDone() {
     ActionPlan plan = new ActionPlan();
@@ -60,6 +67,7 @@ class ActionPlanTest {
     assertTrue(plan.currentStep().isEmpty());
   }
 
+  /** 行動計画の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void inProgressCanTransitionToBlocked() {
     ActionPlan plan = new ActionPlan();
@@ -69,6 +77,7 @@ class ActionPlanTest {
     assertEquals(ActionPlan.STATUS_BLOCKED, plan.steps().get(0).status());
   }
 
+  /** 行動計画の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void todoCanTransitionToSkipped() {
     ActionPlan plan = new ActionPlan();
@@ -77,6 +86,7 @@ class ActionPlanTest {
     assertEquals(ActionPlan.STATUS_SKIPPED, plan.steps().get(0).status());
   }
 
+  /** 行動計画の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void onlyOneStepCanBeInProgress() {
     ActionPlan plan = new ActionPlan();
@@ -89,6 +99,7 @@ class ActionPlanTest {
     assertEquals(1, inProgress);
   }
 
+  /** 行動計画の管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void currentStepCanBeRetrieved() {
     ActionPlan plan = new ActionPlan();
@@ -98,6 +109,7 @@ class ActionPlanTest {
     assertEquals("step-1", plan.currentStep().get().id());
   }
 
+  /** 行動計画の管理で、検索条件に応じて、必要な候補と根拠を選ぶことを確認する。 */
   @Test
   void nextStepCanBeRetrieved() {
     ActionPlan plan = new ActionPlan();
@@ -109,6 +121,7 @@ class ActionPlanTest {
     assertEquals("step-2", plan.currentStep().get().id());
   }
 
+  /** 行動計画の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void failureCountCanBeIncremented() {
     ActionPlan plan = new ActionPlan();
@@ -117,6 +130,7 @@ class ActionPlanTest {
     assertEquals(1, plan.steps().get(0).failureCount());
   }
 
+  /** 行動計画の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void planCompletionIsDetected() {
     ActionPlan plan = new ActionPlan();
@@ -129,6 +143,7 @@ class ActionPlanTest {
     assertTrue(plan.isComplete());
   }
 
+  /** 行動計画の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void skippedStepsCountAsComplete() {
     ActionPlan plan = new ActionPlan();
@@ -139,6 +154,7 @@ class ActionPlanTest {
     assertTrue(plan.isComplete());
   }
 
+  /** 行動計画の管理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void planRendersSteps() {
     ActionPlan plan = new ActionPlan();

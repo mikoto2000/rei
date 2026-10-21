@@ -15,9 +15,12 @@ import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 実装委譲外部連携の結果と状態の契約を検証するテスト。 */
 class ImplementationDelegationIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temporary;
 
+  /** 外部エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.EnumSource(ExternalAgentRequest.Agent.class)
   void explicitCommandSharesOneDelegationAndParentModelBudgetWithRealIsolatedVerification(
@@ -33,12 +36,14 @@ class ImplementationDelegationIntegrationTest {
     var calls = new AtomicInteger();
     var executor =
         new ExternalAgentExecutor() {
+          /** 検証用に、要求された処理を実行する。 */
           public ExternalAgentResult execute(
               ExternalAgentRequest request, java.util.function.BooleanSupplier cancelled) {
             fail("Parent budget is mandatory");
             return null;
           }
 
+          /** 検証用に、要求された処理を実行する。 */
           public ExternalAgentResult execute(
               ExternalAgentRequest request,
               java.util.function.BooleanSupplier cancelled,
@@ -152,6 +157,7 @@ class ImplementationDelegationIntegrationTest {
     service.close();
   }
 
+  /** {@code git} の条件を再現するため、検証用の操作や状態を扱う。 */
   void git(Path root, List<String> args) throws Exception {
     var cmd =
         new ArrayList<String>(

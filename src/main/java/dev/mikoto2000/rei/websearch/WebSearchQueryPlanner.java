@@ -4,9 +4,11 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import org.springframework.stereotype.Component;
 
+/** Web検索検索条件の計画を組み立てる。 */
 @Component
 public class WebSearchQueryPlanner {
 
+  /** 依頼を進めるための候補や手順を組み立てる。 */
   public List<String> plan(String query) {
     LinkedHashSet<String> queries = new LinkedHashSet<>();
     String trimmed = query == null ? "" : query.trim();

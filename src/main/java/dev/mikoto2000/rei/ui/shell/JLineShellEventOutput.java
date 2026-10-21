@@ -3,27 +3,42 @@ package dev.mikoto2000.rei.ui.shell;
 import java.io.PrintWriter;
 import org.jline.reader.LineReader;
 
-/** JLine-aware output that preserves an input line being edited. */
+/**
+ * ターミナルでの対話に必要なJLineシェルイベント出力を扱う。
+ *
+ * <p>JLine-aware output that preserves an input line being edited.
+ */
 public final class JLineShellEventOutput implements ShellEventOutput {
+  /** 読み取り元。 */
   private final LineReader reader;
+
+  /** 書き込み先。 */
   private final PrintWriter writer;
+
+  /** 待機中。 */
   private final StringBuilder pending = new StringBuilder();
+
+  /** 承認操作の選択肢。 */
   private dev.mikoto2000.rei.core.completion.ApprovalActionMenu approvalMenu;
 
+  /** ターミナルでの対話で使用する承認操作の選択肢を設定する。 */
   public void setApprovalMenu(dev.mikoto2000.rei.core.completion.ApprovalActionMenu menu) {
     approvalMenu = menu;
   }
 
+  /** ターミナルでの対話に関する承認操作一覧を処理する。 */
   @Override
   public void approvalActions(String project, String session, String id) {
     if (approvalMenu != null) approvalMenu.offer(project, session, id);
   }
 
+  /** 指定された値や利用先を使って、JLineShellEventOutputを初期化する。 */
   public JLineShellEventOutput(LineReader reader) {
     this.reader = reader;
     this.writer = reader.getTerminal().writer();
   }
 
+  /** ターミナルでの対話に関する承認必須を処理する。 */
   @Override
   public synchronized void approvalRequired(String message) {
     if (dev.mikoto2000.rei.core.completion.ApprovalDisplayState.interactive(reader.getTerminal()))
@@ -37,7 +52,9 @@ public final class JLineShellEventOutput implements ShellEventOutput {
   }
 
   /**
-   * Print one styled, newline-delimited block without interleaving stream chunks or damaging the
+   * 利用者に結果を伝えるため、まとまりを出力する。
+   *
+   * <p>Print one styled, newline-delimited block without interleaving stream chunks or damaging the
    * prompt.
    */
   public synchronized void printBlock(org.jline.utils.AttributedString block) {
@@ -48,6 +65,7 @@ public final class JLineShellEventOutput implements ShellEventOutput {
     reader.printAbove(combined.toAttributedString());
   }
 
+  /** 利用者に結果を伝えるため、JLineシェルイベント出力を出力する。 */
   @Override
   public synchronized void print(String text) {
     if (reader.isReading()) {
@@ -58,6 +76,7 @@ public final class JLineShellEventOutput implements ShellEventOutput {
     }
   }
 
+  /** ターミナルでの対話に関する改行付きの出力を処理する。 */
   @Override
   public synchronized void println(String text) {
     if (reader.isReading()) {
@@ -69,6 +88,7 @@ public final class JLineShellEventOutput implements ShellEventOutput {
     }
   }
 
+  /** ターミナルでの対話に関する保存の確定を処理する。 */
   @Override
   public synchronized void flush() {
     if (!reader.isReading()) {
@@ -79,6 +99,7 @@ public final class JLineShellEventOutput implements ShellEventOutput {
     }
   }
 
+  /** ターミナルでの対話に関する保存の確定完了行一覧を処理する。 */
   private void flushCompleteLines() {
     int width = reader.getTerminal().getWidth();
     if (width <= 0) width = 80;
@@ -114,6 +135,7 @@ public final class JLineShellEventOutput implements ShellEventOutput {
     }
   }
 
+  /** ターミナルでの対話に関する保存の確定待機中終点書き込み先を処理する。 */
   private void flushPendingToWriter() {
     if (!pending.isEmpty()) {
       writer.print(pending);

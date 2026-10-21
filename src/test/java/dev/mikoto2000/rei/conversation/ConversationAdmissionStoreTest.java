@@ -23,18 +23,25 @@ import java.time.ZoneOffset;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 会話受付保存先の結果と状態の契約を検証するテスト。 */
 class ConversationAdmissionStoreTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock = Clock.fixed(Instant.parse("2026-10-11T00:00:00Z"), ZoneOffset.UTC);
 
+  /** 検証で使用する会話を、指定された条件に合わせて用意する。 */
   SessionMetadata session(String id) {
     return new SessionMetadata(id, "project", "title", clock.instant(), clock.instant());
   }
 
+  /** 検証用に、会話履歴と受付記録の管理の操作を実行する。 */
   AgentRunContext run(String id, String session) {
     return new AgentRunContext(id, session, root, "project", AgentRunContext.RequestSource.WEB);
   }
 
+  /** 会話履歴と受付記録の管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void acceptancePersistsSessionRunAndReceiptTogetherAndReplaysAfterRestart() throws Exception {
     try (var gate = new StorageMigrationCoordinator(root)) {
@@ -60,6 +67,7 @@ class ConversationAdmissionStoreTest {
     }
   }
 
+  /** 会話履歴と受付記録の管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void changedRequestCannotReuseAKeyAndRejectedSessionIsNotPersisted() throws Exception {
     try (var gate = new StorageMigrationCoordinator(root)) {
@@ -74,6 +82,7 @@ class ConversationAdmissionStoreTest {
     }
   }
 
+  /** 会話履歴と受付記録の管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void sessionsAreExclusiveUntilActualRunnerCleanupEvenAfterCancellation() throws Exception {
     try (var gate = new StorageMigrationCoordinator(root)) {
@@ -96,6 +105,7 @@ class ConversationAdmissionStoreTest {
     }
   }
 
+  /** 会話履歴と受付記録の管理で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   void expiredKeysNeverAutomaticallyCreateAnotherRun() throws Exception {
     try (var gate = new StorageMigrationCoordinator(root)) {
@@ -114,6 +124,7 @@ class ConversationAdmissionStoreTest {
     }
   }
 
+  /** 会話履歴と受付記録の管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void concurrentReceiptAndSessionAdmissionProduceOnlyOneRun() throws Exception {
     try (var gate = new StorageMigrationCoordinator(root)) {
@@ -140,6 +151,7 @@ class ConversationAdmissionStoreTest {
     }
   }
 
+  /** 会話履歴と受付記録の管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void failedMetadataValidationRollsBackRunLeaseAndReceipt() throws Exception {
     try (var gate = new StorageMigrationCoordinator(root)) {
@@ -159,6 +171,7 @@ class ConversationAdmissionStoreTest {
     }
   }
 
+  /** 会話履歴と受付記録の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void anotherStoreCannotReleaseAStillLiveOwnersSession() throws Exception {
     try (var gate = new StorageMigrationCoordinator(root)) {
@@ -175,6 +188,7 @@ class ConversationAdmissionStoreTest {
     }
   }
 
+  /** 旧形式シェルについて、排他入力実行待ちを保持することを確認する。 */
   @Test
   void legacyShellRetainsItsExclusiveInputQueueButOnlyOneRunCanExecute() throws Exception {
     try (var gate = new StorageMigrationCoordinator(root)) {
@@ -200,6 +214,7 @@ class ConversationAdmissionStoreTest {
     }
   }
 
+  /** 会話履歴と受付記録の管理の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void externalReplyWaitRetainsSessionUntilCancellationAndCanResumeSameRun() throws Exception {
     try (var gate = new StorageMigrationCoordinator(root)) {
@@ -235,6 +250,7 @@ class ConversationAdmissionStoreTest {
     }
   }
 
+  /** 会話履歴と受付記録の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void waitingSessionRemainsReservedAcrossOwnerShutdown() throws Exception {
     try (var gate = new StorageMigrationCoordinator(root)) {
@@ -255,6 +271,7 @@ class ConversationAdmissionStoreTest {
     }
   }
 
+  /** 会話履歴と受付記録の管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void registryAdoptsWaitingAdmissionOnceAndResumesOriginalReceiptAfterRestart() throws Exception {
     try (var gate = new StorageMigrationCoordinator(root)) {

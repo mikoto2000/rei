@@ -16,7 +16,9 @@ import java.time.Instant;
 import java.util.ArrayList;
 import org.junit.jupiter.api.Test;
 
+/** エージェントメッセージ読み上げの案内の結果と状態の契約を検証するテスト。 */
 class AgentMessageNarratorTest {
+  /** ターミナルの音通知で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void behaviorIsNarratedAsynchronouslyWithoutChangingCommandFlag() {
     var sound = mock(SoundNotificationService.class);
@@ -26,6 +28,7 @@ class AgentMessageNarratorTest {
     var tasks = new ArrayList<Runnable>();
     var messages = new AgentMessageNarrator(narrator, settings, tasks::add);
     messages.onPublished(message(MessageOrigin.BEHAVIOR, "assistant", "**休憩**しましょう"));
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(sound);
     assertEquals(1, tasks.size());
     tasks.getFirst().run();
@@ -33,6 +36,7 @@ class AgentMessageNarratorTest {
     assertFalse(narrator.wasNarrated());
   }
 
+  /** ターミナルの音通知で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void disabledOtherOriginsAndEmptyMessagesAreNotQueued() {
     var settings = new SoundNotificationProperties();
@@ -47,9 +51,11 @@ class AgentMessageNarratorTest {
     messages.onPublished(message(MessageOrigin.BEHAVIOR, "assistant", " "));
     messages.onPublished(null);
     assertTrue(tasks.isEmpty());
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(narrator);
   }
 
+  /** ターミナルの音通知で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void audioFailureDoesNotFailMessageDelivery() {
     var settings = new SoundNotificationProperties();
@@ -71,6 +77,7 @@ class AgentMessageNarratorTest {
                 .onPublished(message(MessageOrigin.BEHAVIOR, "assistant", "notice")));
   }
 
+  /** {@code message} の条件を再現するための補助情報を返す。 */
   private AgentMessage message(MessageOrigin origin, String role, String content) {
     return new AgentMessage("id", role, content, origin, Instant.now());
   }

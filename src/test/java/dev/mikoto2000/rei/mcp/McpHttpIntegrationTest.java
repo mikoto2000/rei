@@ -60,10 +60,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
 
+/** MCPHTTP通信外部連携の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class McpHttpIntegrationTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
   @Import({
     McpConfiguration.class,
@@ -84,22 +87,26 @@ class McpHttpIntegrationTest {
         .McpServerStreamableHttpWebMvcAutoConfiguration.class
   })
   static class Config {
+    /** {@code placeholders} の条件を再現するための補助情報を返す。 */
     @Bean
     static org.springframework.context.support.PropertySourcesPlaceholderConfigurer placeholders() {
       return new org.springframework.context.support.PropertySourcesPlaceholderConfigurer();
     }
 
+    /** {@code clock} の条件を再現するための補助情報を返す。 */
     @Bean
     Clock clock() {
       return Clock.systemUTC();
     }
 
+    /** {@code dotRequests} の条件を再現するための補助情報を返す。 */
     @Bean
     dev.mikoto2000.rei.dot.DotRequestRepository dotRequests(
         @Value("${rei.data-dir}") String root, Clock clock) {
       return new dev.mikoto2000.rei.dot.DotRequestRepository(Path.of(root), clock);
     }
 
+    /** {@code dotTools} の条件を再現するための補助情報を返す。 */
     @Bean
     dev.mikoto2000.rei.dot.DotMcpTools dotTools(
         dev.mikoto2000.rei.dot.DotRequestRepository repo, ProjectRegistry projects) {
@@ -111,26 +118,31 @@ class McpHttpIntegrationTest {
           true);
     }
 
+    /** {@code projects} の条件を再現するための補助情報を返す。 */
     @Bean
     ProjectRegistry projects(@Value("${rei.data-dir}") String root) {
       return new ProjectRegistry(Path.of(root, "projects.json"));
     }
 
+    /** {@code bus} の条件を再現するための補助情報を返す。 */
     @Bean
     AgentEventBus bus() {
       return new InMemoryAgentEventBus();
     }
 
+    /** {@code events} の条件を再現するための補助情報を返す。 */
     @Bean
     AgentEventFactory events(Clock clock) {
       return new AgentEventFactory(clock);
     }
 
+    /** {@code pending} の条件を再現するための補助情報を返す。 */
     @Bean
     Queue<Runnable> pending() {
       return new java.util.concurrent.ConcurrentLinkedQueue<>();
     }
 
+    /** {@code router} の条件を再現するための補助情報を返す。 */
     @Bean
     ConversationInputRouter router(
         Queue<Runnable> pending, AgentEventBus bus, AgentEventFactory events) {
@@ -139,21 +151,25 @@ class McpHttpIntegrationTest {
           (c, p, q) -> bus.publish(events.runCompleted(c.runId(), 0).withOwnership(c)));
     }
 
+    /** {@code registry} の条件を再現するための補助情報を返す。 */
     @Bean
     RunRegistry registry(Clock clock) {
       return new RunRegistry(clock);
     }
 
+    /** {@code sessions} の条件を再現するための補助情報を返す。 */
     @Bean
     SessionRegistry sessions(Clock clock) {
       return new SessionRegistry(clock);
     }
 
+    /** {@code cancellation} の条件を再現するための補助情報を返す。 */
     @Bean
     CommandCancellationService cancellation() {
       return new CommandCancellationService();
     }
 
+    /** {@code runs} の条件を再現するための補助情報を返す。 */
     @Bean
     RunService runs(
         RunRegistry registry,
@@ -164,6 +180,7 @@ class McpHttpIntegrationTest {
       return new RunService(registry, bus, events, cancellation, router::cancelQueued);
     }
 
+    /** {@code chats} の条件を再現するための補助情報を返す。 */
     @Bean
     ChatSubmitService chats(
         ProjectRegistry projects,
@@ -181,6 +198,7 @@ class McpHttpIntegrationTest {
           true);
     }
 
+    /** {@code contexts} の条件を再現するための補助情報を返す。 */
     @Bean
     dev.mikoto2000.rei.workcontext.WorkContextService contexts() {
       var result = mock(dev.mikoto2000.rei.workcontext.WorkContextService.class);
@@ -199,6 +217,7 @@ class McpHttpIntegrationTest {
       return result;
     }
 
+    /** {@code approvals} の条件を再現するための補助情報を返す。 */
     @Bean
     dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvals() {
       var result = mock(dev.mikoto2000.rei.core.policy.ToolApprovalRepository.class);
@@ -207,20 +226,24 @@ class McpHttpIntegrationTest {
     }
   }
 
+  /** 検証条件を再現するための利用可否の確認。 */
   @org.springframework.web.bind.annotation.RestController
   static class Probe {
+    /** {@code probe} の条件を再現するための補助情報を返す。 */
     @org.springframework.web.bind.annotation.GetMapping("/api/probe")
     String probe() {
       return "ok";
     }
   }
 
+  /** {@code availablePort} の条件を再現するための補助情報を返す。 */
   int availablePort() throws Exception {
     try (var socket = new ServerSocket(0, 1, InetAddress.getByName("127.0.0.1"))) {
       return socket.getLocalPort();
     }
   }
 
+  /** 検証用に、要求された処理を開始する。 */
   org.springframework.context.ConfigurableApplicationContext start(
       boolean enabled, int port, String project) {
     var app = new SpringApplication(Config.class);
@@ -242,6 +265,7 @@ class McpHttpIntegrationTest {
         "--logging.config=classpath:web-test-logback.xml");
   }
 
+  /** {@code status} の条件を再現するための補助情報を返す。 */
   int status(String url, String body, String origin, String auth) throws Exception {
     var builder = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofSeconds(5));
     if (origin != null) builder.header("Origin", origin);
@@ -256,6 +280,7 @@ class McpHttpIntegrationTest {
         .statusCode();
   }
 
+  /** MCPによる機能の提供で、指定した条件に対する結果と状態の変化を確認する。 */
   @SuppressWarnings("unchecked")
   @Test
   void sdkInitializesAndCallsExactlySixToolsWhileWebBearerRemainsRequired() throws Exception {
@@ -419,6 +444,7 @@ class McpHttpIntegrationTest {
     }
   }
 
+  /** MCPによる機能の提供で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void disabledServerHasNoDedicatedListener() throws Exception {
     int port = availablePort();

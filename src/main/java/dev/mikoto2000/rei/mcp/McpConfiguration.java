@@ -30,10 +30,12 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.web.SecurityFilterChain;
 
+/** MCPの構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 @EnableScheduling
 public class McpConfiguration {
+  /** MCPによる機能の提供で用いるMCPIngressを返す。 */
   @Bean
   FilterRegistrationBean<McpIngressFilter> mcpIngress(Environment env) {
     int port = env.getProperty("rei.mcp-server.port", Integer.class, 8091);
@@ -64,6 +66,7 @@ public class McpConfiguration {
     return registration;
   }
 
+  /** MCPによる機能の提供で用いるMCPConnectorを返す。 */
   @Bean
   @ConditionalOnProperty(name = "rei.mcp-server.enabled", havingValue = "true")
   WebServerFactoryCustomizer<TomcatServletWebServerFactory> mcpConnector(
@@ -77,6 +80,7 @@ public class McpConfiguration {
     };
   }
 
+  /** MCPによる機能の提供で用いるMCPSecurityを返す。 */
   @Bean
   @org.springframework.core.annotation.Order(-10)
   @ConditionalOnProperty(name = "rei.mcp-server.enabled", havingValue = "true")
@@ -89,6 +93,7 @@ public class McpConfiguration {
         .build();
   }
 
+  /** MCPによる機能の提供で用いるMCP要求保存先を返す。 */
   @Bean
   @ConditionalOnProperty(name = "rei.mcp-server.enabled", havingValue = "true")
   McpRequestStore mcpRequestStore(
@@ -128,12 +133,14 @@ public class McpConfiguration {
     return store;
   }
 
+  /** MCPによる機能の提供で用いる継続時間を返す。 */
   private static Duration duration(Environment env, String name, long fallback) {
     long days = env.getProperty("rei.mcp-server." + name, Long.class, fallback);
     if (days < 1 || days > 3650) throw new IllegalArgumentException("Invalid MCP retention");
     return Duration.ofDays(days);
   }
 
+  /** MCPによる機能の提供で用いるMCPツール一覧を返す。 */
   @Bean
   @ConditionalOnProperty(name = "rei.mcp-server.enabled", havingValue = "true")
   McpTools mcpTools(
@@ -148,6 +155,7 @@ public class McpConfiguration {
     String configured = env.getProperty("rei.mcp-server.allowed-projects", "");
     Set<String> allowed = new HashSet<>();
     for (String id : configured.split(",")) if (!id.isBlank()) allowed.add(id.trim());
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (allowed.size() > 100)
       throw new IllegalArgumentException("At most 100 MCP projects allowed");
     return new McpTools(
@@ -164,6 +172,7 @@ public class McpConfiguration {
         approvals);
   }
 
+  /** MCPによる機能の提供で用いるれいMCP仕様一覧を返す。 */
   @Bean
   @ConditionalOnProperty(name = "rei.mcp-server.enabled", havingValue = "true")
   List<McpServerFeatures.SyncToolSpecification> reiMcpSpecifications(
@@ -198,6 +207,7 @@ public class McpConfiguration {
     return List.copyOf(specifications);
   }
 
+  /** MCPによる機能の提供で用いる説明を返す。 */
   private static String description(String name) {
     return switch (name) {
       case "rei_projects_list" -> "List explicitly allowed project IDs and names";
@@ -211,6 +221,7 @@ public class McpConfiguration {
     };
   }
 
+  /** MCPによる機能の提供で用いるデータ形式を返す。 */
   static Map<String, Object> schema(String name) {
     var properties = new LinkedHashMap<String, Object>();
     var required = new ArrayList<String>();

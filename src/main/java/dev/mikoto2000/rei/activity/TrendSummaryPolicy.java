@@ -13,22 +13,35 @@ import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
 
-/** Read-only trend grouping. Session gap rules remain intact in the source projections. */
+/**
+ * 作業状況の把握で受け渡す傾向要約判断基準を表す。
+ *
+ * <p>Read-only trend grouping. Session gap rules remain intact in the source projections.
+ *
+ * @param zone タイムゾーン
+ * @param minimumConfidence 最小確信度
+ * @param maximumWindow 最大範囲
+ * @param maximumGap 最大間隔
+ * @param softMaximumDuration soft最大継続時間
+ */
 public record TrendSummaryPolicy(
     ZoneId zone,
     double minimumConfidence,
     Duration maximumWindow,
     Duration maximumGap,
     Duration softMaximumDuration) {
+  /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public TrendSummaryPolicy(ZoneId zone, double minimumConfidence) {
     this(zone, minimumConfidence, Duration.ofMinutes(60), Duration.ofMinutes(20));
   }
 
+  /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public TrendSummaryPolicy(
       ZoneId zone, double minimumConfidence, Duration maximumWindow, Duration maximumGap) {
     this(zone, minimumConfidence, maximumWindow, maximumGap, Duration.ofMinutes(45));
   }
 
+  /** 受け取った情報からTrendSummaryPolicyを作成する。 */
   public TrendSummaryPolicy {
     new ActivityRolePolicy(minimumConfidence);
     if (maximumWindow.isNegative()
@@ -38,20 +51,40 @@ public record TrendSummaryPolicy(
         || softMaximumDuration.isZero()) throw new IllegalArgumentException("Invalid trend window");
   }
 
+  /**
+   * 作業状況の把握で受け渡すサンプルを表す。
+   *
+   * @param record 記録
+   * @param start 開始
+   * @param end 終了
+   * @param roles 役割一覧
+   */
   private record Sample(ActivityRecord record, Instant start, Instant end, ActivityRoles roles) {
+    /** 作業状況の把握で用いる秒数を返す。 */
     long seconds() {
       return Duration.between(start, end).getSeconds();
     }
 
+    /** 作業状況の把握において、既知に該当するか判定する。 */
     boolean known() {
       return roles.primary() != null && !Set.of("unknown", "other").contains(roles.category());
     }
 
+    /** 作業状況の把握で用いるプロジェクトを返す。 */
     String project() {
       return known() ? ActivityDisplayLabels.project(roles.primary(), record) : "";
     }
   }
 
+  /**
+   * 作業状況の把握で受け渡す文脈を表す。
+   *
+   * @param source 取得元
+   * @param samples サンプル一覧
+   * @param projects プロジェクト一覧
+   * @param families 分類のまとまり
+   * @param labels 表示名一覧
+   */
   private record Context(
       SummarySegment source,
       List<Sample> samples,
@@ -59,6 +92,7 @@ public record TrendSummaryPolicy(
       Set<String> families,
       Set<String> labels) {}
 
+  /** 記録された情報を集計し、全体の傾向や結果をまとめる。 */
   public List<TrendSummarySegment> aggregate(List<SummarySegment> source) {
     var groups = new ArrayList<List<Context>>();
     for (var segment :
@@ -71,6 +105,7 @@ public record TrendSummaryPolicy(
     return groups.stream().flatMap(group -> split(group).stream()).map(this::summarize).toList();
   }
 
+  /** 作業状況の把握で用いる文脈を返す。 */
   private Context context(SummarySegment segment) {
     var records =
         segment.evidence().stream()
@@ -106,7 +141,11 @@ public record TrendSummaryPolicy(
     return new Context(segment, List.copyOf(samples), projects, families, labels);
   }
 
-  /** Revisit evidence inside a source projection too; source sessions themselves stay unchanged. */
+  /**
+   * 作業状況の把握で用いる分割を返す。
+   *
+   * <p>Revisit evidence inside a source projection too; source sessions themselves stay unchanged.
+   */
   private List<List<Context>> split(List<Context> group) {
     var atoms = new ArrayList<Context>();
     for (var c : group)
@@ -117,6 +156,7 @@ public record TrendSummaryPolicy(
     return result;
   }
 
+  /** 作業状況の把握に関する分割日時Meaningful境界を処理する。 */
   private void splitAtMeaningfulBoundary(List<Context> atoms, List<List<Context>> result) {
     var samples = atoms.stream().map(c -> c.samples().getFirst()).toList();
     boolean overSoft =
@@ -173,14 +213,17 @@ public record TrendSummaryPolicy(
     splitAtMeaningfulBoundary(atoms.subList(best, atoms.size()), result);
   }
 
+  /** 作業状況の把握で用いる前面キーを返す。 */
   private static String foregroundKey(Sample s) {
     return s.roles().primary().application() + "/" + s.roles().primary().service();
   }
 
+  /** 作業状況の把握で用いる観測を返す。 */
   private static long observed(List<Sample> samples) {
     return samples.stream().mapToLong(Sample::seconds).sum();
   }
 
+  /** 作業状況の把握において、安定した変更に該当するか判定する。 */
   private static boolean stableChange(
       List<Sample> samples, int boundary, java.util.function.Function<Sample, String> key) {
     Instant pivot = samples.get(boundary).start();
@@ -197,6 +240,7 @@ public record TrendSummaryPolicy(
         && after.equals(key.apply(samples.get(boundary)));
   }
 
+  /** 作業状況の把握で用いる主要な対象を返す。 */
   private static String dominant(
       List<Sample> samples,
       Instant start,
@@ -223,6 +267,7 @@ public record TrendSummaryPolicy(
         .orElse("");
   }
 
+  /** 作業状況の把握において、joinsに該当するか判定する。 */
   private boolean joins(List<Context> group, Context next) {
     var first = group.getFirst().source();
     var last = group.getLast().source();
@@ -236,6 +281,7 @@ public record TrendSummaryPolicy(
         || Duration.between(last.endedAt(), b.startedAt()).compareTo(maximumGap) > 0) return false;
     var projects = new HashSet<>(next.projects());
     group.forEach(c -> projects.addAll(c.projects()));
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (projects.size() > 1) return false;
     // Unknowns do not establish a new activity; retain them inside a bounded period with an
     // explicit ratio.
@@ -254,6 +300,7 @@ public record TrendSummaryPolicy(
         || next.source().observedSeconds() <= 300;
   }
 
+  /** 作業状況の把握で用いるfamilyを返す。 */
   private static String family(String category) {
     return switch (category) {
       case "development", "research", "documentation" -> "development-research";
@@ -263,13 +310,22 @@ public record TrendSummaryPolicy(
     };
   }
 
+  /** 作業状況の把握に必要な表示名評価値を扱う。 */
   private static final class LabelScore {
+    /** 主要な。 */
     boolean primary;
+
+    /** 秒数。 */
     long seconds;
+
+    /** プロジェクト。 */
     boolean project;
+
+    /** 表示。 */
     String display;
   }
 
+  /** 対象の内容を、要点が分かる形にまとめる。 */
   private TrendSummarySegment summarize(List<Context> group) {
     var samples =
         group.stream()

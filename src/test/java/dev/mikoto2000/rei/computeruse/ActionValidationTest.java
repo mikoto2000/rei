@@ -11,7 +11,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
+/** 操作検証の結果と状態の契約を検証するテスト。 */
 class ActionValidationTest {
+  /** 上限内に収めた説明を受け付けられることを確認する。 */
   @Test
   void acceptsBoundedExplanationWithoutChangingTheAction() {
     String response =
@@ -29,6 +31,7 @@ class ActionValidationTest {
                     ComputerUseServiceTest.screen()));
   }
 
+  /** 画面操作の支援で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void distinguishesMissingAndOversizedOutput() {
     var parser = new ActionParser();
@@ -46,6 +49,7 @@ class ActionValidationTest {
             .contains("30001"));
   }
 
+  /** 画面操作の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void diagnosticsNeverIncludeModelSuppliedValues() {
     for (String invalid :
@@ -63,6 +67,7 @@ class ActionValidationTest {
     }
   }
 
+  /** {@code json} の条件を再現するための補助情報を返す。 */
   static String json(String action, String field, String value) {
     var fields = new java.util.LinkedHashMap<String, String>();
     for (String name :
@@ -78,6 +83,7 @@ class ActionValidationTest {
         + "}";
   }
 
+  /** 画面操作の支援で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void parsesExactlyOneDecision() {
     var parser = new ActionParser();
@@ -89,6 +95,7 @@ class ActionValidationTest {
         parser.parse(json("TYPE_TEXT", "text", "\"日本語😀\""), ComputerUseServiceTest.screen()));
   }
 
+  /** 対象付随情報を保持することを確認する。 */
   @Test
   void decodesAllSupportedActionsAndRetainsTargetMetadata() {
     var parser = new ActionParser();
@@ -121,6 +128,7 @@ class ActionValidationTest {
             json("FAILED", "reason", "\"Cannot continue\""), ComputerUseServiceTest.screen()));
   }
 
+  /** 重複の有無追加を受け付けないことを確認する。 */
   @Test
   void rejectsDuplicateExtraAndConflictingFields() {
     var valid = json("DONE", "reason", "\"Visible\"");
@@ -134,6 +142,7 @@ class ActionValidationTest {
           () -> new ActionParser().parse(invalid, ComputerUseServiceTest.screen()));
   }
 
+  /** 不正なJSON変換を受け付けないことを確認する。 */
   @ParameterizedTest
   @ValueSource(strings = {"[]", "{}", "null", "{\"action\":\"CLICK\"}", "```json\n{}\n```"})
   void rejectsInvalidJson(String json) {
@@ -142,6 +151,7 @@ class ActionValidationTest {
         () -> new ActionParser().parse(json, ComputerUseServiceTest.screen()));
   }
 
+  /** 未指定を受け付けないことを確認する。 */
   @Test
   void rejectsMissingAndUnknownAndWrongTypes() {
     var parser = new ActionParser();
@@ -162,6 +172,7 @@ class ActionValidationTest {
     }
   }
 
+  /** 画面操作の支援で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void validatesCoordinatesAndConfidenceEvenForInjectedModels() {
     for (double confidence : new double[] {Double.NaN, Double.POSITIVE_INFINITY, -0.1, 1.1}) {

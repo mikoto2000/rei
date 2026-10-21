@@ -3,21 +3,32 @@ package dev.mikoto2000.rei.core.diagnostic;
 import dev.mikoto2000.rei.event.ErrorInformation;
 
 /**
- * Server-only typed failure classification; no provider body or arbitrary exception message is
+ * 実行上の問題の診断に必要な失敗情報診断情報を扱う。
+ *
+ * <p>Server-only typed failure classification; no provider body or arbitrary exception message is
  * exposed.
  */
 public final class FailureDiagnostics {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private FailureDiagnostics() {}
 
   /**
-   * Safe diagnostics for automated events; provider messages and response bodies are never copied.
+   * 実行上の問題の診断で受け渡す診断を表す。
+   *
+   * <p>Safe diagnostics for automated events; provider messages and response bodies are never
+   * copied.
+   *
+   * @param code コード
+   * @param message メッセージ
    */
   public record Diagnostic(String code, String message) {
+    /** 実行上の問題の診断で用いる表示を返す。 */
     public String display() {
       return code + ": " + message;
     }
   }
 
+  /** 実行上の問題の診断で用いる安全性エラーを返す。 */
   public static ErrorInformation safeError(Throwable error) {
     var diagnostic = classify(error);
     return new ErrorInformation(
@@ -26,6 +37,7 @@ public final class FailureDiagnostics {
         diagnostic.code());
   }
 
+  /** 得られた情報を分類し、後続の判断で扱い分けられるようにする。 */
   public static Diagnostic classify(Throwable error) {
     var causes = new java.util.ArrayList<Throwable>();
     var seen =
@@ -121,6 +133,7 @@ public final class FailureDiagnostics {
     return diagnostic("unknown_failure", "分類できないエラーが発生しました。実行結果とアプリのログを確認してください。");
   }
 
+  /** 実行上の問題の診断で用いるHTTP通信を返す。 */
   private static Diagnostic http(int status) {
     String code;
     String guidance;
@@ -162,10 +175,12 @@ public final class FailureDiagnostics {
     return diagnostic(code, "HTTP " + status + ": " + guidance);
   }
 
+  /** 実行上の問題の診断で用いる診断を返す。 */
   private static Diagnostic diagnostic(String code, String message) {
     return new Diagnostic(code, message);
   }
 
+  /** 実行上の問題の診断で用いるSQLiteを返す。 */
   private static Diagnostic sqlite(int code) {
     return switch (code) {
       case 5, 6 -> diagnostic("database_busy", "データベースが別の処理で使用中です。進行中の処理と保存済みの結果を確認してください。");

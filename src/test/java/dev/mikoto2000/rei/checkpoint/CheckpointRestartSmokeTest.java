@@ -12,10 +12,13 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.sqlite.SQLiteDataSource;
 
+/** 再開用の記録再開Smokeの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class CheckpointRestartSmokeTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 作業の中断と再開で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void independentJvmRestartThenStateChangeReconciliationAndResume() throws Exception {
     Files.writeString(root.resolve("artifact.txt"), "before");
@@ -24,6 +27,7 @@ class CheckpointRestartSmokeTest {
     run("resume");
   }
 
+  /** 検証用に、作業の中断と再開の操作を実行する。 */
   void run(String mode) throws Exception {
     var builder =
         new ProcessBuilder(
@@ -36,7 +40,9 @@ class CheckpointRestartSmokeTest {
     assertEquals(0, process.exitValue(), Files.readString(root.resolve(mode + ".log")));
   }
 
+  /** 検証条件を再現するための利用可否の確認。 */
   public static class Probe {
+    /** 検証用に、作業の中断と再開の起動要求を受け付け、実行を開始する。 */
     public static void main(String[] args) {
       Path root = Path.of(args[0]);
       var ds = new SQLiteDataSource();

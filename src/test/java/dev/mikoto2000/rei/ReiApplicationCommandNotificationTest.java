@@ -25,17 +25,29 @@ import org.mockito.Mockito;
 import picocli.CommandLine;
 
 /**
- * Tests that executeInterruptibly() calls soundNotificationService.notify() in its finally block
+ * れいアプリケーションコマンド通知の結果と状態の契約を検証するテスト。
+ *
+ * <p>Tests that executeInterruptibly() calls soundNotificationService.notify() in its finally block
  * after command execution.
  */
 class ReiApplicationCommandNotificationTest {
 
+  /** 検証に使う音通知通知サービス。 */
   private SoundNotificationService soundNotificationService;
+
+  /** 検証に使うescキャンセル排他制御。 */
   private EscCancellationMonitor escCancellationMonitor;
+
+  /** 検証に使うチャット応答読み上げの案内。 */
   private ChatResponseNarrator chatResponseNarrator;
+
+  /** 検証に使う終端。 */
   private Terminal terminal;
+
+  /** 検証に使うコマンド実行先。 */
   private ExecutorService commandExecutor;
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setUp() throws IOException {
     soundNotificationService = mock(SoundNotificationService.class);
@@ -48,12 +60,14 @@ class ReiApplicationCommandNotificationTest {
     commandExecutor = Executors.newSingleThreadExecutor();
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void tearDown() throws IOException {
     commandExecutor.shutdownNow();
     terminal.close();
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   private ReiApplication newApp() {
     AsyncVectorDocumentService asyncVectorDocumentService =
         Mockito.mock(AsyncVectorDocumentService.class);
@@ -72,11 +86,14 @@ class ReiApplicationCommandNotificationTest {
         Mockito.mock(dev.mikoto2000.rei.event.AgentEventBus.class));
   }
 
+  /** れいの起動で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void notifiesOnNormalCompletion() throws IOException {
     // Arrange: a stub picocli command that returns exit code 0
+    /** 検証条件を再現するための検証用の応答コマンド。 */
     @CommandLine.Command(name = "stub")
     class StubCommand implements Runnable {
+      /** 検証用に、れいの起動の操作を実行する。 */
       @Override
       public void run() {
         // normal completion, exit code 0
@@ -103,14 +120,18 @@ class ReiApplicationCommandNotificationTest {
   }
 
   /**
-   * Requirement 1.2: Even when a RuntimeException is thrown during command execution, the finally
-   * block must still call soundNotificationService.notify().
+   * れいの起動で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。
+   *
+   * <p>Requirement 1.2: Even when a RuntimeException is thrown during command execution, the
+   * finally block must still call soundNotificationService.notify().
    */
   @Test
   void notifiesEvenWhenRuntimeExceptionIsThrown() throws IOException {
     // Arrange: a stub picocli command (content doesn't matter since await() will throw)
+    /** 検証条件を再現するための検証用の応答コマンド。 */
     @CommandLine.Command(name = "stub")
     class StubCommand implements Runnable {
+      /** 検証用に、れいの起動の操作を実行する。 */
       @Override
       public void run() {
         // normal stub
@@ -137,14 +158,18 @@ class ReiApplicationCommandNotificationTest {
   }
 
   /**
-   * Requirement 2.1: When wasNarrated() returns true, the command completion notification must be
-   * skipped.
+   * れいの起動で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。
+   *
+   * <p>Requirement 2.1: When wasNarrated() returns true, the command completion notification must
+   * be skipped.
    */
   @Test
   void skipsCommandCompletionNotificationWhenNarrated() throws IOException {
     // Arrange: a stub picocli command
+    /** 検証条件を再現するための検証用の応答コマンド。 */
     @CommandLine.Command(name = "stub")
     class StubCommand implements Runnable {
+      /** 検証用に、れいの起動の操作を実行する。 */
       @Override
       public void run() {
         // normal completion
@@ -173,14 +198,18 @@ class ReiApplicationCommandNotificationTest {
   }
 
   /**
-   * Requirement 2.2: When wasNarrated() returns false, the command completion notification must be
-   * executed as usual.
+   * れいの起動で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。
+   *
+   * <p>Requirement 2.2: When wasNarrated() returns false, the command completion notification must
+   * be executed as usual.
    */
   @Test
   void executesCommandCompletionNotificationWhenNotNarrated() throws IOException {
     // Arrange: a stub picocli command
+    /** 検証条件を再現するための検証用の応答コマンド。 */
     @CommandLine.Command(name = "stub")
     class StubCommand implements Runnable {
+      /** 検証用に、れいの起動の操作を実行する。 */
       @Override
       public void run() {
         // normal completion
@@ -208,10 +237,13 @@ class ReiApplicationCommandNotificationTest {
     verify(soundNotificationService).notify("コマンド実行が完了しました");
   }
 
+  /** れいの起動で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void skipsCommandCompletionNotificationForModelCommand() throws IOException {
+    /** 検証条件を再現するための検証用の応答コマンド。 */
     @CommandLine.Command(name = "stub")
     class StubCommand implements Runnable {
+      /** 検証用に、れいの起動の操作を実行する。 */
       @Override
       public void run() {}
     }
@@ -231,10 +263,13 @@ class ReiApplicationCommandNotificationTest {
     verify(soundNotificationService, never()).notify("コマンド実行が完了しました");
   }
 
+  /** れいの起動で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void skipsCommandCompletionNotificationForModelsCommand() throws IOException {
+    /** 検証条件を再現するための検証用の応答コマンド。 */
     @CommandLine.Command(name = "stub")
     class StubCommand implements Runnable {
+      /** 検証用に、れいの起動の操作を実行する。 */
       @Override
       public void run() {}
     }
@@ -254,10 +289,13 @@ class ReiApplicationCommandNotificationTest {
     verify(soundNotificationService, never()).notify("コマンド実行が完了しました");
   }
 
+  /** れいの起動で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void skipsCommandCompletionNotificationForProjectCommand() throws IOException {
+    /** 検証条件を再現するための検証用の応答コマンド。 */
     @CommandLine.Command(name = "stub")
     class StubCommand implements Runnable {
+      /** 検証用に、れいの起動の操作を実行する。 */
       @Override
       public void run() {}
     }

@@ -12,13 +12,23 @@ import java.util.Objects;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.SearchRequest;
 
-/** Calls the actual lexical/dense/RRF components without changing production search defaults. */
+/**
+ * Hybrid関連情報の取得評価を別の利用先へ接続する。
+ *
+ * <p>Calls the actual lexical/dense/RRF components without changing production search defaults.
+ */
 public final class HybridRetrievalEvaluationAdapter
     implements RetrievalQualityEvaluation.Retriever {
+  /** バックエンド。 */
   private final RetrievalCandidates backend;
+
+  /** 設定。 */
   private final HybridRetrievalProperties settings;
+
+  /** 候補の関連度を再評価する窓口。 */
   private final CandidateReranker reranker;
 
+  /** 指定された値や利用先を使って、HybridRetrievalEvaluationAdapterを初期化する。 */
   public HybridRetrievalEvaluationAdapter(
       RetrievalCandidates backend, HybridRetrievalProperties settings, CandidateReranker reranker) {
     this.backend = Objects.requireNonNull(backend);
@@ -26,6 +36,7 @@ public final class HybridRetrievalEvaluationAdapter
     this.reranker = reranker;
   }
 
+  /** 成果の評価で用いる取得を返す。 */
   public List<String> retrieve(
       RetrievalQualityEvaluation.Case fixture,
       RetrievalQualityEvaluation.Mode mode,

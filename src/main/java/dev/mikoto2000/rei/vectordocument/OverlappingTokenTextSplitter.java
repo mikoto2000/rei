@@ -8,12 +8,19 @@ import java.util.ArrayList;
 import java.util.List;
 import org.springframework.ai.transformer.splitter.TextSplitter;
 
+/** 検索対象文書の管理に必要なOverlappingトークンテキストSplitterを扱う。 */
 class OverlappingTokenTextSplitter extends TextSplitter {
 
+  /** 文字コード。 */
   private final Encoding encoding;
+
+  /** 文書の分割単位大きさ。 */
   private final int chunkSize;
+
+  /** 文書の分割単位Overlap。 */
   private final int chunkOverlap;
 
+  /** 指定された値や利用先を使って、OverlappingTokenTextSplitterを初期化する。 */
   OverlappingTokenTextSplitter(int chunkSize, int chunkOverlap) {
     if (chunkSize <= 0) {
       throw new IllegalArgumentException("chunkSize must be greater than zero");
@@ -29,6 +36,7 @@ class OverlappingTokenTextSplitter extends TextSplitter {
     this.chunkOverlap = chunkOverlap;
   }
 
+  /** 検索対象文書の管理で用いる分割テキストを返す。 */
   @Override
   protected List<String> splitText(String text) {
     if (text == null || text.isBlank()) {

@@ -7,9 +7,12 @@ import java.time.Instant;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 話題順位付けおよび判断結果の結果と状態の契約を検証するテスト。 */
 class TopicRankingAndDecisionTest {
+  /** 検証に使うranker。 */
   private final DeterministicTopicRanker ranker = new DeterministicTopicRanker();
 
+  /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void highScoreCandidateIsSelectedFromMultipleCandidates() {
     var ranked = ranker.rank(List.of(low("low"), high("high")), new TopicRankingContext(List.of()));
@@ -22,6 +25,7 @@ class TopicRankingAndDecisionTest {
     assertEquals("high", decision.selected().candidate().topic());
   }
 
+  /** 話題の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void lowScoreCandidateDoesNotSpeak() {
     TopicGeneratorProperties properties = new TopicGeneratorProperties();
@@ -34,6 +38,7 @@ class TopicRankingAndDecisionTest {
     assertEquals(SpeakDecisionStatus.DO_NOT_SPEAK, decision.decision());
   }
 
+  /** 話題の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void lowConfidenceCandidateDoesNotSpeak() {
     TopicCandidate candidate =
@@ -59,6 +64,7 @@ class TopicRankingAndDecisionTest {
     assertEquals(SpeakDecisionStatus.DO_NOT_SPEAK, decision.decision());
   }
 
+  /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void intrusivenessLowersScore() {
     double calm =
@@ -85,6 +91,7 @@ class TopicRankingAndDecisionTest {
     assertTrue(noisy < calm);
   }
 
+  /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void repetitionPenaltyLowersScore() {
     double original =
@@ -101,6 +108,7 @@ class TopicRankingAndDecisionTest {
     assertTrue(repeated < original);
   }
 
+  /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void scoreBreakdownExplainsFinalScore() {
     TopicCandidate candidate =
@@ -132,6 +140,7 @@ class TopicRankingAndDecisionTest {
     assertEquals(0.21, score.finalScore(), 0.0001);
   }
 
+  /** 話題の管理で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void cooldownPreventsSpeakingAndAllowsAfterInterval() {
     TopicGeneratorProperties properties = new TopicGeneratorProperties();
@@ -146,6 +155,7 @@ class TopicRankingAndDecisionTest {
         policy.decide(ranked, context(Instant.parse("2026-09-02T00:00:00Z"))).decision());
   }
 
+  /** 話題の管理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void noCandidatesDoesNotSpeak() {
     assertEquals(
@@ -155,11 +165,13 @@ class TopicRankingAndDecisionTest {
             .decision());
   }
 
+  /** 検証で使用する文脈を、指定された条件に合わせて用意する。 */
   private SpeakDecisionContext context(Instant lastSpokenAt) {
     return new SpeakDecisionContext(
         Instant.parse("2026-09-02T00:40:00Z"), lastSpokenAt, List.of(), false, false);
   }
 
+  /** {@code high} の条件を再現するための補助情報を返す。 */
   private TopicCandidate high(String topic) {
     return new TopicCandidate(
         topic,
@@ -175,6 +187,7 @@ class TopicRankingAndDecisionTest {
         Instant.parse("2026-09-02T00:00:00Z"));
   }
 
+  /** {@code low} の条件を再現するための補助情報を返す。 */
   private TopicCandidate low(String topic) {
     return new TopicCandidate(
         topic,

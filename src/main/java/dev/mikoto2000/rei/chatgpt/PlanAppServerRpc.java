@@ -20,14 +20,21 @@ import java.util.Set;
 import java.util.function.BooleanSupplier;
 import java.util.function.Function;
 
-/** Pinned Linux 0.154.0 / Windows 0.162.1 stdio schemas. No raw RPC is persisted. */
+/**
+ * ChatGPTとの連携に必要な計画アプリケーションサーバーRpcを扱う。
+ *
+ * <p>Pinned Linux 0.154.0 / Windows 0.162.1 stdio schemas. No raw RPC is persisted.
+ */
 public final class PlanAppServerRpc {
+  /** 形式のバージョン／実行環境。 */
   private final String version, platform;
 
+  /** ChatGPTとの連携を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public PlanAppServerRpc() {
     this("0.154.0", "linux");
   }
 
+  /** 指定された値や利用先を使って、PlanAppServerRpcを初期化する。 */
   public PlanAppServerRpc(String version, String platform) {
     if (!(version.equals("0.154.0") && platform.equals("linux"))
         && !(version.equals("0.162.1") && platform.equals("windows")))
@@ -36,14 +43,28 @@ public final class PlanAppServerRpc {
     this.platform = platform;
   }
 
+  /** ChatGPTとの連携に必要な会話を扱う。 */
   public interface Session extends AutoCloseable {
+    /** ChatGPTとの連携に関する送信を処理する。 */
     void send(String json);
 
+    /** ChatGPTとの連携で用いる状態確認を返す。 */
     String poll(Duration timeout);
 
+    /** ChatGPTとの連携で利用した資源や登録を解放し、利用を終了する。 */
     void close();
   }
 
+  /**
+   * ChatGPTとの連携で受け渡す追跡情報を表す。
+   *
+   * @param threadId スレッド識別子
+   * @param turnId やり取りの識別子
+   * @param sourceReads 取得元Reads
+   * @param deniedRequests 拒否要求一覧
+   * @param eventCount イベント件数
+   * @param interruptRequested 中断要求された
+   */
   public record Trace(
       String threadId,
       String turnId,
@@ -52,24 +73,54 @@ public final class PlanAppServerRpc {
       int eventCount,
       boolean interruptRequested) {}
 
+  /**
+   * ChatGPTとの連携で受け渡す最終結果を表す。
+   *
+   * @param result 結果
+   * @param trace 追跡情報
+   */
   public record Outcome(PlanSseAssembler.Result result, Trace trace) {}
 
+  /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json =
       new ObjectMapper()
           .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
           .enable(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION);
+
+  /** スレッド／一回のやり取り。 */
   private String thread, turn;
+
+  /** 読み取り件数／拒否／イベント一覧／バイト数。 */
   private int readCount, denied, events, bytes;
+
+  /** 使用状況。 */
   private Integer usage;
+
+  /** 引き渡し済み／中断要求された。 */
   private boolean dispatched, interruptRequested;
+
+  /** 期限。 */
   private long deadline;
+
+  /** 会話。 */
   private Session session;
+
+  /** 停止。 */
   private BooleanSupplier stop;
+
+  /** 上限。 */
   private int limit;
+
+  /** 最大Reads。 */
   private int maxReads;
+
+  /** 通知時使用状況。 */
   private java.util.function.IntConsumer onUsage;
+
+  /** 待機中Refusal。 */
   private Object pendingRefusal;
 
+  /** 要求された処理を実行する。 */
   public Outcome execute(
       Session channel,
       String cwd,
@@ -96,6 +147,7 @@ public final class PlanAppServerRpc {
         tokens -> {});
   }
 
+  /** 要求された処理を実行する。 */
   public Outcome execute(
       Session channel,
       String cwd,
@@ -375,6 +427,7 @@ public final class PlanAppServerRpc {
     }
   }
 
+  /** ChatGPTとの連携で用いる最終結果を返す。 */
   private Outcome outcome(PlanSseAssembler.State state, String text, ChatGptException.Code error) {
     return new Outcome(
         new PlanSseAssembler.Result(
@@ -388,6 +441,7 @@ public final class PlanAppServerRpc {
         new Trace(thread, turn, readCount, denied, events, interruptRequested));
   }
 
+  /** ChatGPTとの連携の要求を実行し、呼び出し元へ結果を返す。 */
   private JsonNode call(int id, String method, Object params) {
     send(Map.of("id", id, "method", method, "params", params));
     for (int count = 0; count < 100; count++) {
@@ -405,6 +459,7 @@ public final class PlanAppServerRpc {
     throw ChatGptException.of(PROTOCOL);
   }
 
+  /** ChatGPTとの連携で用いる次を返す。 */
   private JsonNode next() {
     check();
     String line =
@@ -426,6 +481,7 @@ public final class PlanAppServerRpc {
     }
   }
 
+  /** ChatGPTとの連携に関する送信を処理する。 */
   private void send(Object value) {
     try {
       session.send(json.writeValueAsString(value));
@@ -434,18 +490,21 @@ public final class PlanAppServerRpc {
     }
   }
 
+  /** 後続の処理を進められるか、現在の条件を確認する。 */
   private void check() {
     if (stop.getAsBoolean() || Thread.currentThread().isInterrupted())
       throw ChatGptException.of(CANCELLED);
     if (System.nanoTime() >= deadline) throw ChatGptException.of(TIMEOUT);
   }
 
+  /** ChatGPTとの連携で用いる識別子を返す。 */
   private String id(JsonNode n) {
     if (!n.isTextual() || !n.asText().matches("[A-Za-z0-9_-]{1,128}"))
       throw ChatGptException.of(PROTOCOL);
     return n.asText();
   }
 
+  /** ChatGPTとの連携に関する中断を処理する。 */
   private void interrupt() {
     if (turn != null && !interruptRequested) {
       interruptRequested = true;
@@ -463,6 +522,7 @@ public final class PlanAppServerRpc {
     }
   }
 
+  /** ChatGPTとの連携で用いるエラーコードを返す。 */
   private ChatGptException.Code errorCode(JsonNode info) {
     if (info.isTextual())
       return switch (info.asText()) {

@@ -23,7 +23,9 @@ import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 外部エージェントレビュー対話の補助の結果と状態の契約を検証するテスト。 */
 class ExternalAgentReviewAdvisorTest {
+  /** レポートを維持することを確認する。 */
   @Test
   void materialReviewDispatchesOnceAndKeepsReportInEphemeralSystemContext() throws Exception {
     var run = mock(RunExecutionContext.class);
@@ -65,6 +67,7 @@ class ExternalAgentReviewAdvisorTest {
     assertEquals(request.prompt().getUserMessage(), evaluated.prompt().getUserMessage());
   }
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void slashCallsSharedServiceThenInjectsReviewIntoSystemOnly() {
     var run = mock(RunExecutionContext.class);
@@ -101,6 +104,7 @@ class ExternalAgentReviewAdvisorTest {
     assertFalse(result.prompt().getSystemMessage().getText().contains("RAW SECRET LOG"));
   }
 
+  /** 外部エージェントへの委譲で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void normalConversationDoesNotDispatch() {
     var run = mock(RunExecutionContext.class);
@@ -111,6 +115,7 @@ class ExternalAgentReviewAdvisorTest {
     var request =
         ChatClientRequest.builder().prompt(new Prompt(new UserMessage("review"), options)).build();
     new ExternalAgentReviewAdvisor(service).before(request, null);
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(service);
   }
 }

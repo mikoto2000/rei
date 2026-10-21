@@ -10,12 +10,22 @@ import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
-/** Wording only: no tools, conversation memory, screenshots, tasks or calendars. */
+/**
+ * 言語モデル作業習慣メッセージの内容を生成する。
+ *
+ * <p>Wording only: no tools, conversation memory, screenshots, tasks or calendars.
+ */
 public final class LlmBehaviorMessageGenerator implements BehaviorMessageGenerator {
+  /** モデル。 */
   private final Supplier<ChatModel> model;
+
+  /** 選択可能な設定。 */
   private final Supplier<OpenAiChatOptions> options;
+
+  /** 文字。 */
   private final Supplier<String> character;
 
+  /** 指定された値や利用先を使って、LlmBehaviorMessageGeneratorを初期化する。 */
   public LlmBehaviorMessageGenerator(
       Supplier<ChatModel> model, Supplier<OpenAiChatOptions> options, Supplier<String> character) {
     this.model = model;
@@ -23,6 +33,7 @@ public final class LlmBehaviorMessageGenerator implements BehaviorMessageGenerat
     this.character = character;
   }
 
+  /** 指定された条件に従って、依頼された内容を生成する。 */
   @Override
   public String generate(BehaviorNotification notification) throws Exception {
     var a = notification.assessment();

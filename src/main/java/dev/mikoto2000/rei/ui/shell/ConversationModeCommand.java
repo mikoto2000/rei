@@ -8,28 +8,36 @@ import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
 import picocli.CommandLine.Spec;
 
+/** Sessionごとの応答スタイル。実行能力・承認は維持しますを行うための利用者コマンド。 */
 @Component
 @Command(
     name = "mode",
     description = "Sessionごとの応答スタイル。実行能力・承認は維持します",
     mixinStandardHelpOptions = true)
 public final class ConversationModeCommand implements java.util.concurrent.Callable<Integer> {
+  /** シェル。 */
   private final ShellConversationService shell;
+
+  /** 仕様。 */
   @Spec private CommandSpec spec;
 
+  /** ターミナルでの対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ConversationModeCommand() {
     this(null);
   }
 
+  /** 指定された値や利用先を使って、ConversationModeCommandを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public ConversationModeCommand(ShellConversationService shell) {
     this.shell = shell;
   }
 
+  /** Sessionごとの応答スタイル。実行能力・承認は維持しますを行う。 */
   public Integer call() {
     return status();
   }
 
+  /** ターミナルでの対話で用いる自動を返す。 */
   @Command(name = "auto", description = "音声入力は会話、文字入力は通常へ自動切替する", mixinStandardHelpOptions = true)
   public int auto() {
     return display(
@@ -39,6 +47,7 @@ public final class ConversationModeCommand implements java.util.concurrent.Calla
         });
   }
 
+  /** ターミナルでの対話で用いる通常を返す。 */
   @Command(
       name = "normal",
       description = "現在のSessionを通常の応答スタイルに戻す",
@@ -51,6 +60,7 @@ public final class ConversationModeCommand implements java.util.concurrent.Calla
         });
   }
 
+  /** ターミナルでの対話で用いる会話を返す。 */
   @Command(
       name = "conversation",
       description = "現在のSessionを自然で簡潔な会話スタイルにする",
@@ -70,11 +80,13 @@ public final class ConversationModeCommand implements java.util.concurrent.Calla
         });
   }
 
+  /** 対象の現在の状態を、照会用の情報として返す。 */
   @Command(name = "status", description = "現在のSessionの応答スタイルを表示する", mixinStandardHelpOptions = true)
   public int status() {
     return display(this::show);
   }
 
+  /** 利用者が対象の情報を確認できるように表示する。 */
   private void show() {
     var metadata = shell.currentMetadata();
     var style = metadata == null ? ResponseStyle.AUTO : metadata.responseStyle();
@@ -91,6 +103,7 @@ public final class ConversationModeCommand implements java.util.concurrent.Calla
                 + (metadata == null ? "; no active Session" : ""));
   }
 
+  /** ターミナルでの対話で用いる表示を返す。 */
   private int display(Runnable action) {
     try {
       action.run();

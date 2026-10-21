@@ -13,25 +13,33 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** 対象範囲影響サービスの結果と状態の契約を検証するテスト。 */
 class CoverageImpactServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
+
+  /** 検証に使う取得元一覧。 */
   List<String> sources = new ArrayList<>();
 
+  /** 検証用に、指定された内容を書き込み先へ反映する。 */
   void write(String path, String text) throws Exception {
     Path file = root.resolve(path);
     Files.createDirectories(file.getParent());
     Files.writeString(file, text);
   }
 
+  /** 検証で使用する取得元を、指定された条件に合わせて用意する。 */
   void source(String path, String text) throws Exception {
     write(path, text);
     sources.add(path);
   }
 
+  /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
   CoverageImpactService service() {
     return new CoverageImpactService(new RepositoryMapService(directory -> List.copyOf(sources)));
   }
 
+  /** 検証用に、指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   CoverageImpactService.Result read(String path, int first, int last, String... reports)
       throws Exception {
     return service()
@@ -39,6 +47,7 @@ class CoverageImpactServiceTest {
             root, List.of(new CoverageImpactService.Range(path, first, last)), List.of(reports));
   }
 
+  /** {@code line} の条件を再現するための補助情報を返す。 */
   CoverageImpactService.Line line(CoverageImpactService.Result result, int number) {
     return result.areas().getFirst().lines().stream()
         .filter(value -> value.number() == number)
@@ -46,6 +55,7 @@ class CoverageImpactServiceTest {
         .orElseThrow();
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void lcovTestIdentityMapsReportedHitsWithoutInventingUnmeasuredCoverage() throws Exception {
     source("src/helper.ts", "export function help() {\n return 1;\n}\n");
@@ -64,6 +74,7 @@ class CoverageImpactServiceTest {
     assertTrue(result.partial());
   }
 
+  /** 未接続を読み取ることを確認する。 */
   @Test
   void jacocoStandardDoctypeIsReadOfflineAndAggregateHasNoInventedTests() throws Exception {
     source("src/main/java/p/A.java", "package p;\nclass A {}\n");
@@ -77,6 +88,7 @@ class CoverageImpactServiceTest {
     assertTrue(line(result, 1).reportedTests().isEmpty());
   }
 
+  /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void coberturaRelativeSourceRootsMapActualLineHits() throws Exception {
     source("src/main/java/p/A.java", "package p;\nclass A {}\n");
@@ -90,6 +102,7 @@ class CoverageImpactServiceTest {
     assertTrue(line(result, 1).reportedTests().isEmpty());
   }
 
+  /** 存在しない未指定および未完了のについて、決して行わないゼロ対象範囲成功を伝えることを確認する。 */
   @Test
   void absentMissingAndIncompleteReportsAreNeverZeroCoverageSuccess() throws Exception {
     source("helper.js", "export function help() {}\n");
@@ -104,6 +117,7 @@ class CoverageImpactServiceTest {
     assertEquals("UNMEASURED", line(incomplete, 1).status());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void staleReportIsHistoricalAndDoesNotClaimCurrentCoveringTests() throws Exception {
     source("helper.py", "def help():\n    return 1\n");
@@ -115,6 +129,7 @@ class CoverageImpactServiceTest {
     assertTrue(result.partial());
   }
 
+  /** 共通の実行基盤で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void entityDoctypeEscapesNegativeCountsAndOversizedReportsCannotSupplyEvidence()
       throws Exception {
@@ -134,6 +149,7 @@ class CoverageImpactServiceTest {
         read("helper.ts", 1, 1, "coverage/large.info").reports().getFirst().status());
   }
 
+  /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void ambiguousJacocoSourceAndOutsideLcovPathsDoNotGuessCoverage() throws Exception {
     source("one/src/p/A.java", "package p; class A {}\n");
@@ -148,6 +164,7 @@ class CoverageImpactServiceTest {
         "UNMEASURED", line(read("one/src/p/A.java", 1, 1, "coverage/outside.info"), 1).status());
   }
 
+  /** 共通の実行基盤で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void existingImpactKeepsStructuralCandidatesAndAddsIndependentCoverageFacts() throws Exception {
     source("src/helper.ts", "export function help() {}\n");
@@ -180,6 +197,7 @@ class CoverageImpactServiceTest {
                 List.of("coverage/lcov.info")));
   }
 
+  /** 共通の実行基盤で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
   void credentialTestNamesCancellationAndBoundsDoNotEscape() throws Exception {
     source("helper.ts", "export function help() {}\n");

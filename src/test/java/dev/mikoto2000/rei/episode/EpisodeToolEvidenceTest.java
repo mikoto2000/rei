@@ -18,7 +18,9 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
 
+/** 経験の記録ツール根拠の結果と状態の契約を検証するテスト。 */
 class EpisodeToolEvidenceTest {
+  /** 過去の経験の活用で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
   void toolEvidenceRequiresExactRetainedEventAndRun() {
     var repository = mock(EpisodeRepository.class);

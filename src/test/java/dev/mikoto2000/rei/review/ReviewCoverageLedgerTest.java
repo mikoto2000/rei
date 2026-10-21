@@ -11,13 +11,24 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** レビュー対象範囲記録台帳の結果と状態の契約を検証するテスト。 */
 class ReviewCoverageLedgerTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う記録台帳。 */
   ReviewCoverageLedger ledger;
+
+  /** 検証に使う対象範囲。 */
   final ReviewCoverageLedger.Scope scope = new ReviewCoverageLedger.Scope("project", "chat", "run");
+
+  /** 検証に使う最初。 */
   final ReviewCoverageLedger.Span first = new ReviewCoverageLedger.Span(0, 3, 1, 1, 0, 3);
+
+  /** 検証に使う秒。 */
   final ReviewCoverageLedger.Span second = new ReviewCoverageLedger.Span(3, 6, 1, 1, 3, 6);
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() throws Exception {
     try (var migration = new StorageMigrationCoordinator(dir)) {
@@ -26,6 +37,7 @@ class ReviewCoverageLedgerTest {
     ledger = new ReviewCoverageLedger(new StorageDatabase(dir));
   }
 
+  /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
   String create() {
     return ledger
         .create(
@@ -38,10 +50,12 @@ class ReviewCoverageLedgerTest {
         .id();
   }
 
+  /** {@code range} の条件を再現するための補助情報を返す。 */
   ReviewCoverageLedger.Range range(ReviewCoverageLedger.Span span) {
     return new ReviewCoverageLedger.Range("a.md", "sha1", span, "hash" + span.start());
   }
 
+  /** 対象範囲を保持することを確認する。 */
   @Test
   void fetchedDeliveredReviewedAreDistinctAndResumeRetainsCoverage() {
     String id = create();
@@ -59,6 +73,7 @@ class ReviewCoverageLedgerTest {
     assertThat(ledger.get(id, scope).status()).isEqualTo("COMPLETE");
   }
 
+  /** 変更内容のレビューで、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void duplicatesDoNotAdvanceRevisionAndOtherConversationIsDenied() {
     String id = create();
@@ -71,6 +86,7 @@ class ReviewCoverageLedgerTest {
         .hasMessageContaining("ACCESS_DENIED");
   }
 
+  /** 変更内容のレビューで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void explicitlyGrantedChildCanListTheSameJobWithoutCrossProjectAccess() {
     String id = create();
@@ -82,6 +98,7 @@ class ReviewCoverageLedgerTest {
         .hasMessageContaining("ACCESS_DENIED");
   }
 
+  /** 再開用の記録再開について、完全一致の対象範囲一覧を保持することを確認する。 */
   @Test
   void checkpointResumeRetainsExactRangesAndFindings() {
     String id = create();
@@ -93,6 +110,7 @@ class ReviewCoverageLedgerTest {
     assertThat(ledger.jobs(resumed)).containsExactly(id);
   }
 
+  /** 変更内容のレビューで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void staleVersionNeverCompletesAndExternalSuccessIsUnverified() {
     String id = create();

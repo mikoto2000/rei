@@ -9,16 +9,24 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatModel.ResponseFormat;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+/** 作業状況の把握に必要な言語モデル分類規則モデルを扱う。 */
 public final class LlmClassificationRuleModel implements ClassificationRuleSuggestions.Model {
+  /** モデル。 */
   private final Supplier<ChatModel> model;
+
+  /** 選択可能な設定。 */
   private final Supplier<OpenAiChatOptions> options;
+
+  /** 最大出力トークン数。 */
   private final int maxOutputTokens;
 
+  /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public LlmClassificationRuleModel(
       Supplier<ChatModel> model, Supplier<OpenAiChatOptions> options) {
     this(model, options, ActivityProperties.RuleSuggestion.DEFAULT_MAX_OUTPUT_TOKENS);
   }
 
+  /** 指定された値や利用先を使って、LlmClassificationRuleModelを初期化する。 */
   public LlmClassificationRuleModel(
       Supplier<ChatModel> model, Supplier<OpenAiChatOptions> options, int maxOutputTokens) {
     if (maxOutputTokens < 1) throw new IllegalArgumentException("maxOutputTokens must be positive");
@@ -27,6 +35,7 @@ public final class LlmClassificationRuleModel implements ClassificationRuleSugge
     this.maxOutputTokens = maxOutputTokens;
   }
 
+  /** 後続の判断で選べる候補を用意するため、言語モデル分類規則モデルを提案する。 */
   public String propose(String input, String schema) {
     var format = new ResponseFormat();
     format.setType(ResponseFormat.Type.JSON_SCHEMA);

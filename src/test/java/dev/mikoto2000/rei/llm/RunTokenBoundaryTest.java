@@ -35,7 +35,9 @@ import org.springframework.ai.tool.ToolCallback;
 import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
+/** 実行トークン境界条件の結果と状態の契約を検証するテスト。 */
 class RunTokenBoundaryTest {
+  /** 検証用に、用途に応じたモデル利用の操作を実行する。 */
   RunExecutionContext run(OutputLimitRunBudget budget) {
     return new RunExecutionContext(
         "run",
@@ -45,6 +47,7 @@ class RunTokenBoundaryTest {
         new InMemoryAgentEventBus());
   }
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   ChatResponse response(int tokens, List<AssistantMessage.ToolCall> calls) {
     return new ChatResponse(
         List.of(
@@ -52,11 +55,13 @@ class RunTokenBoundaryTest {
         ChatResponseMetadata.builder().usage(new DefaultUsage(1, tokens - 1)).build());
   }
 
+  /** 用途に応じたモデル利用で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void overLimitParentResponseCannotExecuteRequestedTool() {
     var count = new AtomicInteger();
     ToolCallback tool =
         new ToolCallback() {
+          /** 検証用に、用途に応じたモデル利用で参照するツール定義を返す。 */
           public ToolDefinition getToolDefinition() {
             return ToolDefinition.builder()
                 .name("readMultiFile")
@@ -65,6 +70,7 @@ class RunTokenBoundaryTest {
                 .build();
           }
 
+          /** 検証用に、用途に応じたモデル利用の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input) {
             count.incrementAndGet();
             return "read";
@@ -93,6 +99,7 @@ class RunTokenBoundaryTest {
     assertThat(count).hasValue(0);
   }
 
+  /** 用途に応じたモデル利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void unknownFailedChildUsageBlocksParentAndReportedChildUsageIsCharged() {
     for (boolean failed : List.of(false, true)) {
@@ -124,6 +131,7 @@ class RunTokenBoundaryTest {
     }
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void prepaidCallCannotStartAfterHelperExhaustsTokens() {
     var model = mock(ChatModel.class);
@@ -138,9 +146,11 @@ class RunTokenBoundaryTest {
                 .build());
     assertThatThrownBy(() -> new StagnationChatModel(model).stream(prompt).collectList().block())
         .hasMessageContaining("TOKEN_BUDGET_EXCEEDED");
+    // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(model);
   }
 
+  /** 実際のチャット境界条件について、トークン停止を伝えることを確認する。 */
   @Test
   void actualChatBoundaryReportsTokenStopInsteadOfSuccess() {
     var model = mock(ChatModel.class);

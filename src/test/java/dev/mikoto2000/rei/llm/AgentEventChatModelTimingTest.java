@@ -38,10 +38,16 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
 
+/** エージェントイベント応答生成に使うモデル時間計測の結果と状態の契約を検証するテスト。 */
 class AgentEventChatModelTimingTest {
+  /** 検証に使う定期確認。 */
   final AtomicLong tick = new AtomicLong();
+
+  /** 検証に使う保存先。 */
   final TimingStore store =
       new TimingStore(true, 10, 20, 100, Duration.ofHours(1), Clock.systemUTC(), tick::get);
+
+  /** 検証に使う所有者。 */
   final AgentRunContext owner =
       new AgentRunContext(
           "run",
@@ -49,6 +55,8 @@ class AgentEventChatModelTimingTest {
           java.nio.file.Path.of("."),
           "project",
           AgentRunContext.RequestSource.SHELL);
+
+  /** 検証に使うプロンプト。 */
   final Prompt prompt =
       new Prompt(
           "PROMPT-SECRET",
@@ -56,10 +64,12 @@ class AgentEventChatModelTimingTest {
               .toolContext(Map.of(AgentRunContext.class.getName(), owner))
               .build());
 
+  /** 検証で使用する応答を、指定された条件に合わせて用意する。 */
   ChatResponse response(String text) {
     return new ChatResponse(List.of(new Generation(new AssistantMessage(text))));
   }
 
+  /** 検証で使用するモデルを、指定された条件に合わせて用意する。 */
   AgentEventChatModel model(ChatModel delegate) {
     store.beginRun("run", "project", "session");
     return new AgentEventChatModel(
@@ -70,6 +80,7 @@ class AgentEventChatModelTimingTest {
         new TimingExecution(store));
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void emptyFirstChunkIsDistinctFromFirstTextAndDoesNotInventGeneratedTokenOrTps() {
     var delegate = mock(ChatModel.class);
@@ -99,6 +110,7 @@ class AgentEventChatModelTimingTest {
     assertFalse(run.toString().contains("SECRET"));
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void synchronousAuxiliaryCallInRunScopeIsMeasuredWithoutToolContext() {
     var delegate = mock(ChatModel.class);
@@ -112,6 +124,7 @@ class AgentEventChatModelTimingTest {
     assertFalse(spans.toString().contains("SECRET"));
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void knownUsageIsRecordedWithoutUsingTextLengthAsTokens() {
     var delegate = mock(ChatModel.class);
@@ -127,6 +140,7 @@ class AgentEventChatModelTimingTest {
     assertNull(span.generatedTokens());
   }
 
+  /** 用途に応じたモデル利用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void partialFailureAndUnfinishedCancellationDoNotBecomeSuccessful() {
     var delegate = mock(ChatModel.class);
@@ -140,6 +154,7 @@ class AgentEventChatModelTimingTest {
         store.latest("project", "session").orElseThrow().spans().getFirst().status());
   }
 
+  /** 既存の手順予算を保持することを確認する。 */
   @Test
   void retryGroupsPhysicalAttemptsAndPreservesExistingStepBudget() {
     var delegate = mock(ChatModel.class);
@@ -171,6 +186,7 @@ class AgentEventChatModelTimingTest {
     verify(delegate, times(2)).stream(prompt);
   }
 
+  /** 用途に応じたモデル利用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void subscriberDisconnectionIsRecordedWithoutChangingCancellation() {
     var delegate = mock(ChatModel.class);
@@ -182,6 +198,7 @@ class AgentEventChatModelTimingTest {
         store.latest("project", "session").orElseThrow().spans().getFirst().status());
   }
 
+  /** 用途に応じたモデル利用で、記録した情報を、定められた分類と集約の規則に従ってまとめることを確認する。 */
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void summaryPurposeIsRecordedForCallAndStream(boolean streaming) {
@@ -202,6 +219,7 @@ class AgentEventChatModelTimingTest {
     assertFalse(span.toString().contains("SUMMARY-SECRET"));
   }
 
+  /** 用途に応じたモデル利用で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void unknownPurposeDoesNotEnterTimingLabel() {
     var context =

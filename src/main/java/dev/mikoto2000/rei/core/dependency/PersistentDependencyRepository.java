@@ -16,9 +16,29 @@ import org.springframework.jdbc.datasource.DataSourceTransactionManager;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.support.TransactionTemplate;
 
-/** Immutable conditions and an acyclic graph: prerequisites can only refer to existing entries. */
+/**
+ * 保存される依存条件を保存・検索するための窓口。
+ *
+ * <p>Immutable conditions and an acyclic graph: prerequisites can only refer to existing entries.
+ */
 @Component
 public class PersistentDependencyRepository {
+  /**
+   * 外部条件の待機で受け渡す項目を表す。
+   *
+   * @param id 識別子
+   * @param projectId 所属プロジェクトの識別子
+   * @param projectRoot 作業対象のルートディレクトリ
+   * @param sessionId 会話の識別子
+   * @param spec 仕様
+   * @param createdAt 作成日時
+   * @param deadline 期限
+   * @param state 状態
+   * @param reason 理由
+   * @param version 形式のバージョン
+   * @param answer 回答
+   * @param prerequisites 前提条件
+   */
   public record Entry(
       String id,
       String projectId,
@@ -32,11 +52,25 @@ public class PersistentDependencyRepository {
       long version,
       String answer,
       List<String> prerequisites) {
+    /** 受け取った情報からEntryを作成する。 */
     public Entry {
       prerequisites = List.copyOf(prerequisites);
     }
   }
 
+  /**
+   * 外部条件の待機で受け渡す事実を表す。
+   *
+   * @param eventId イベントの識別子
+   * @param dependencyId 依存条件識別子
+   * @param projectId 所属プロジェクトの識別子
+   * @param sessionId 会話の識別子
+   * @param kind 種類
+   * @param state 状態
+   * @param reason 理由
+   * @param version 形式のバージョン
+   * @param timestamp 記録日時
+   */
   public record Fact(
       String eventId,
       String dependencyId,
@@ -48,10 +82,16 @@ public class PersistentDependencyRepository {
       long version,
       Instant timestamp) {}
 
+  /** データベースへのアクセス。 */
   private final JdbcClient db;
+
+  /** 一連の更新。 */
   private final TransactionTemplate transaction;
+
+  /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  /** 指定された値や利用先を使って、PersistentDependencyRepositoryを初期化する。 */
   public PersistentDependencyRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, Clock clock) {
     db = JdbcClient.create(source);
@@ -81,6 +121,7 @@ public class PersistentDependencyRepository {
         .update();
   }
 
+  /** 行。 */
   private final RowMapper<Entry> row =
       (rs, n) ->
           new Entry(
@@ -100,6 +141,7 @@ public class PersistentDependencyRepository {
               rs.getString("answer"),
               parents(rs.getString("id")));
 
+  /** 外部条件の待機で用いるparentsを返す。 */
   private List<String> parents(String id) {
     return db.sql("SELECT parent FROM agent_dependency_edges WHERE child=? ORDER BY ordinal")
         .param(id)
@@ -107,6 +149,7 @@ public class PersistentDependencyRepository {
         .list();
   }
 
+  /** 指定された内容から新しい対象を作成する。 */
   public Entry create(
       AgentRunContext owner, DependencySpec spec, Duration lifetime, List<String> prerequisites) {
     if (owner == null
@@ -120,6 +163,7 @@ public class PersistentDependencyRepository {
         || lifetime.compareTo(Duration.ofDays(366)) > 0)
       throw new IllegalArgumentException("Lifetime must be 1 second..366 days");
     var deps = List.copyOf(prerequisites == null ? List.of() : prerequisites);
+    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (deps.size() > 16 || new HashSet<>(deps).size() != deps.size())
       throw new IllegalArgumentException("At most 16 unique prerequisites");
     return transaction.execute(
@@ -166,6 +210,7 @@ public class PersistentDependencyRepository {
         });
   }
 
+  /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public Entry get(String project, String id) {
     return db.sql("SELECT * FROM agent_dependencies WHERE project=? AND id=?")
         .params(project, id)
@@ -174,6 +219,7 @@ public class PersistentDependencyRepository {
         .orElseThrow(() -> new IllegalArgumentException("Dependency not found in this Project"));
   }
 
+  /** 外部条件の待機で用いるcreator実行を返す。 */
   public String creatorRun(String project, String id) {
     get(project, id);
     return db.sql("SELECT creator_run FROM agent_dependencies WHERE project=? AND id=?")
@@ -183,6 +229,7 @@ public class PersistentDependencyRepository {
         .orElse(null);
   }
 
+  /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   public List<Entry> list(String project) {
     return db.sql(
             "SELECT * FROM agent_dependencies WHERE project=? ORDER BY created DESC,id LIMIT 256")
@@ -191,6 +238,7 @@ public class PersistentDependencyRepository {
         .list();
   }
 
+  /** 外部条件の待機で用いるタスクページを返す。 */
   public List<Entry> taskPage(
       String project, String root, String session, String after, int limit) {
     if (limit < 1 || limit > 101)
@@ -206,6 +254,7 @@ public class PersistentDependencyRepository {
         .list();
   }
 
+  /** 外部条件の待機で用いる作成別実行を返す。 */
   public List<Entry> createdByRun(String project, String root, String session, String run) {
     return db.sql(
             "SELECT * FROM agent_dependencies WHERE project=:project AND root=:root AND session=:session AND creator_run=:run ORDER BY id LIMIT 101")
@@ -217,6 +266,7 @@ public class PersistentDependencyRepository {
         .list();
   }
 
+  /** 外部条件の待機で用いる活動中変更後を返す。 */
   public List<Entry> activeAfter(String after) {
     return db.sql(
             "SELECT * FROM agent_dependencies WHERE state IN ('RUNNING','WAITING','BLOCKED') AND id>? ORDER BY id LIMIT 8")
@@ -225,12 +275,14 @@ public class PersistentDependencyRepository {
         .list();
   }
 
+  /** 外部条件の待機において、終端に該当するか判定する。 */
   public static boolean terminal(DependencyState state) {
     return state == DependencyState.COMPLETED
         || state == DependencyState.FAILED
         || state == DependencyState.CANCELLED;
   }
 
+  /** 外部条件の待機で用いる準備を返す。 */
   public Entry prepare(String project, String id) {
     var entry = get(project, id);
     if (terminal(entry.state())) return entry;
@@ -251,10 +303,12 @@ public class PersistentDependencyRepository {
     return entry;
   }
 
+  /** 状況を判断する根拠を得るため、保存される依存条件保存と検索の窓口を観測する。 */
   public Entry observe(Entry expected, DependencyState state, String reason) {
     return observe(expected, state, reason, false);
   }
 
+  /** 状況を判断する根拠を得るため、保存される依存条件保存と検索の窓口を観測する。 */
   private Entry observe(Entry expected, DependencyState state, String reason, boolean strict) {
     if (state == null || reason == null || !reason.matches("[a-z_]{1,80}"))
       throw new IllegalArgumentException("Structured observation required");
@@ -276,12 +330,14 @@ public class PersistentDependencyRepository {
         });
   }
 
+  /** 対象の実行をキャンセルする。 */
   public Entry cancel(String project, String id) {
     var entry = get(project, id);
     if (terminal(entry.state())) throw new IllegalStateException("Dependency is terminal");
     return observe(entry, DependencyState.CANCELLED, "user_cancelled");
   }
 
+  /** 対象の実行をキャンセルする。 */
   public Entry cancel(String project, String id, long expectedVersion) {
     var entry = get(project, id);
     if (entry.version() != expectedVersion || terminal(entry.state()))
@@ -289,10 +345,12 @@ public class PersistentDependencyRepository {
     return observe(entry, DependencyState.CANCELLED, "user_cancelled", true);
   }
 
+  /** 外部条件の待機で用いる回答を返す。 */
   public Entry answer(String project, String id, String text) {
     return answer(project, id, text, null);
   }
 
+  /** 外部条件の待機で用いる回答を返す。 */
   public Entry answer(String project, String id, String text, Long expectedVersion) {
     var entry = prepare(project, id);
     if (expectedVersion != null && entry.version() != expectedVersion)
@@ -320,6 +378,7 @@ public class PersistentDependencyRepository {
         });
   }
 
+  /** 外部条件の待機に関する事実を処理する。 */
   private void fact(Entry entry) {
     db.sql(
             "INSERT INTO agent_dependency_facts(event,dependency,project,session,kind,state,reason,version,timestamp) VALUES(?,?,?,?,?,?,?,?,?)")
@@ -336,6 +395,7 @@ public class PersistentDependencyRepository {
         .update();
   }
 
+  /** 外部条件の待機で用いる待機中事実一覧を返す。 */
   public List<Fact> pendingFacts() {
     return db.sql("SELECT * FROM agent_dependency_facts WHERE sent=0 ORDER BY sequence LIMIT 16")
         .query(
@@ -353,10 +413,12 @@ public class PersistentDependencyRepository {
         .list();
   }
 
+  /** 外部条件の待機に関する確認事実を処理する。 */
   public void ackFact(String event) {
     db.sql("UPDATE agent_dependency_facts SET sent=1 WHERE event=?").param(event).update();
   }
 
+  /** 過去の記録を、条件に従って参照できる形で返す。 */
   public List<Fact> history(String project, String id) {
     get(project, id);
     return db.sql(

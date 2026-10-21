@@ -13,7 +13,9 @@ import java.util.ArrayList;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
+/** 要求やイベントの再送一時保持領域の結果と状態の契約を検証するテスト。 */
 class ReplayBufferTest {
+  /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void perRunEvictionDoesNotConfuseGlobalSequenceGapsWithMissingHistory() {
     var bus = InMemoryAgentEventBus.withReplayBuffer(new ReplayBuffer(2, Clock.systemUTC()));
@@ -33,6 +35,7 @@ class ReplayBufferTest {
     retained.subscription().unsubscribe();
   }
 
+  /** Web APIによる操作で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void replayBoundaryAndLiveSubscriptionHaveNoDuplicatesOrMissingEvents() {
     var bus = new InMemoryAgentEventBus();

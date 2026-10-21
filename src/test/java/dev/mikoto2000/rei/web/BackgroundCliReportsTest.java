@@ -36,9 +36,12 @@ import java.util.ArrayDeque;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** バックグラウンド軽量CLI伝えるの結果と状態の契約を検証するテスト。 */
 class BackgroundCliReportsTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** Web APIによる操作の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void failedOrCancelledImagesNeverReplaceLastSuccessfulImage() throws Exception {
     var projects = new ProjectRegistry(directory.resolve("projects.json"));
@@ -92,6 +95,7 @@ class BackgroundCliReportsTest {
     }
   }
 
+  /** Web APIによる操作で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void imageHonorsExplicitOptionsInItsProjectExecutionAndPersistsSummaryWithoutSession()
       throws Exception {
@@ -142,6 +146,7 @@ class BackgroundCliReportsTest {
       var image =
           service.imageForCli(
               project.id(), "raw prompt", output.toString(), "image-test", "512x768", true);
+      // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(images);
       pending.remove().run();
       assertEquals(RunStatus.COMPLETED, runs.get(image.runId()).status());

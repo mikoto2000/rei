@@ -10,9 +10,11 @@ import org.springframework.boot.context.properties.EnableConfigurationProperties
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+/** 状態表示の構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @EnableConfigurationProperties(DotProperties.class)
 public class DotConfiguration {
+  /** 利用者の状態表示で用いる状態表示要求保存と検索の窓口を返す。 */
   @Bean
   DotRequestRepository dotRequestRepository(
       @Value("${rei.data-dir}") String root,
@@ -37,6 +39,7 @@ public class DotConfiguration {
     return repo;
   }
 
+  /** 利用者の状態表示で用いる状態表示MCPツール一覧を返す。 */
   @Bean
   @ConditionalOnProperty(name = "rei.mcp-server.enabled", havingValue = "true")
   DotMcpTools dotMcpTools(

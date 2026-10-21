@@ -5,10 +5,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
-/** Shared explicit document glob expansion; callers select their own local filesystem base. */
+/**
+ * 文書パスの指定を解決し、利用する対象を確定する。
+ *
+ * <p>Shared explicit document glob expansion; callers select their own local filesystem base.
+ */
 public final class DocumentPathResolver {
+  /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private DocumentPathResolver() {}
 
+  /** 指定や設定を照合し、実際に利用する対象を確定する。 */
   public static List<String> resolve(List<String> documents, Path baseDirectory) {
     var base = baseDirectory.toAbsolutePath().normalize();
     return documents.stream()
@@ -17,6 +23,7 @@ public final class DocumentPathResolver {
         .toList();
   }
 
+  /** 入力候補の提示で用いる展開を返す。 */
   private static List<String> expand(String document, Path base) {
     if (document.indexOf('*') < 0 && document.indexOf('?') < 0 && document.indexOf('[') < 0)
       return List.of(document);

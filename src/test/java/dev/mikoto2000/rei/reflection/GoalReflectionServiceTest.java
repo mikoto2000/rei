@@ -18,15 +18,28 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
+/** 目標振り返りサービスの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class GoalReflectionServiceTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  /** 検証に使う目標一覧。 */
   GoalRepository goals;
+
+  /** 検証に使う振り返り一覧。 */
   GoalReflectionRepository reflections;
+
+  /** 検証に使うサービス。 */
   GoalReflectionService service;
+
+  /** 検証に使う通知の連携先。 */
   InMemoryAgentEventBus bus;
+
+  /** 日時や期限の条件を再現するために使う検証時刻。 */
   Clock clock = Clock.systemUTC();
 
+  /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void setup() {
     var source = new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("reflection.db"));
@@ -37,11 +50,13 @@ class GoalReflectionServiceTest {
     service.start();
   }
 
+  /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void close() {
     service.close();
   }
 
+  /** {@code goal} の条件を再現するための補助情報を返す。 */
   GoalRepository.Goal goal() {
     return goals.create(
         new AgentRunContext("source", "session", dir, "project"),
@@ -52,6 +67,7 @@ class GoalReflectionServiceTest {
         5);
   }
 
+  /** 作業の振り返りで、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void recordsExpectedAndVerifiedDifferenceWithoutTreatingFailureAsAValidatedLesson() {
     var goal = goal();
@@ -76,6 +92,7 @@ class GoalReflectionServiceTest {
     assertThrows(IllegalArgumentException.class, () -> restarted.get("other", item.id()));
   }
 
+  /** 作業の振り返りの操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void approvalAndUnknownExecutionDoNotFabricateVerificationEvidence() {
     var goal = goal();
@@ -92,6 +109,7 @@ class GoalReflectionServiceTest {
     assertEquals(1, reflections.list("project").size());
   }
 
+  /** 作業の振り返りで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void completedCriterionIsRecordedAsEvidenceAndRunningGoalsCannotBeCollected() {
     var goal = goal();
@@ -103,6 +121,7 @@ class GoalReflectionServiceTest {
     assertEquals("REVIEW_VERIFIED_RESULT", item.nextAction());
   }
 
+  /** 作業の振り返りで、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
   void lateEventUsesItsOwnAttemptInsteadOfTheLatestGoalResult() {
     var goal = goal();
@@ -121,6 +140,7 @@ class GoalReflectionServiceTest {
     assertEquals("REVIEW_APPROVAL", item.nextAction());
   }
 
+  /** 作業の振り返りで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void shellShowsScopedFactsAndCollectDoesNotExecuteOrVerifyTheGoalAgain() {
     var goal = goal();

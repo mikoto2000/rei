@@ -13,9 +13,12 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+/** Claude実装連携の窓口の結果と状態の契約を検証するテスト。 */
 class ClaudeImplementationAdapterTest {
+  /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
+  /** 外部エージェントへの委譲で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void implementationIsToolFreeEphemeralAndReturnsOnlyStructuredChanges() throws Exception {
     Path file = Files.writeString(root.resolve("A.txt"), "before\n");
@@ -26,6 +29,7 @@ class ClaudeImplementationAdapterTest {
     properties.setPersistSessions(true);
     var runner =
         new ExternalAgentProcessRunner() {
+          /** 検証用に、外部エージェントへの委譲の操作を実行する。 */
           @Override
           public Output run(
               List<String> command,

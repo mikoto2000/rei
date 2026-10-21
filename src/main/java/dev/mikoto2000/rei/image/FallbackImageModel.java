@@ -10,15 +10,25 @@ import org.springframework.ai.image.ImagePrompt;
 import org.springframework.ai.image.ImageResponse;
 import org.springframework.ai.openai.OpenAiImageOptions;
 
+/** 画像の生成に必要な代替手段画像モデルを扱う。 */
 class FallbackImageModel implements ImageModel {
 
+  /** 処理状況と問題の調査に使うログの出力先。 */
   private static final Logger log = LoggerFactory.getLogger(FallbackImageModel.class);
 
+  /** 機能。 */
   private final String feature;
+
+  /** 主要な。 */
   private final ImageModel primary;
+
+  /** 代替手段。 */
   private final ImageModel fallback;
+
+  /** 主要なモデル。 */
   private final String primaryModel;
 
+  /** 指定された値や利用先を使って、FallbackImageModelを初期化する。 */
   FallbackImageModel(String feature, ImageModel primary, ImageModel fallback, String primaryModel) {
     this.feature = feature;
     this.primary = primary;
@@ -26,6 +36,7 @@ class FallbackImageModel implements ImageModel {
     this.primaryModel = primaryModel;
   }
 
+  /** 画像の生成の要求を実行し、呼び出し元へ結果を返す。 */
   @Override
   public ImageResponse call(ImagePrompt prompt) {
     try {
@@ -39,6 +50,7 @@ class FallbackImageModel implements ImageModel {
     }
   }
 
+  /** 画像の生成で用いる代替手段プロンプトを返す。 */
   private ImagePrompt fallbackPrompt(ImagePrompt prompt) {
     ImageOptions options = prompt.getOptions();
     if (options == null

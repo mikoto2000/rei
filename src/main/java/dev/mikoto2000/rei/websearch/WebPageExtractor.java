@@ -5,24 +5,30 @@ import org.jsoup.nodes.Element;
 import org.jsoup.select.Elements;
 import org.springframework.stereotype.Component;
 
+/** Webページに必要な情報を入力から取り出す。 */
 @Component
 public class WebPageExtractor {
 
+  /** この機能の動作設定。 */
   private final WebSearchProperties properties;
 
+  /** Web上の情報の調査を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public WebPageExtractor() {
     this(new WebSearchProperties());
   }
 
+  /** 指定された値や利用先を使って、WebPageExtractorを初期化する。 */
   @org.springframework.beans.factory.annotation.Autowired
   public WebPageExtractor(WebSearchProperties properties) {
     this.properties = properties;
   }
 
+  /** 受け取った内容から、後続の処理に必要な情報を取り出す。 */
   public WebSearchPage extract(WebSearchResult result, String html) {
     return extract(result, html, WebExtractionScope.query());
   }
 
+  /** 受け取った内容から、後続の処理に必要な情報を取り出す。 */
   public WebSearchPage extract(WebSearchResult result, String html, String query) {
     properties.validateSelection();
     Document document;
@@ -108,6 +114,7 @@ public class WebPageExtractor {
     return page;
   }
 
+  /** Web上の情報の調査で用いる付随情報内容を返す。 */
   private String metaContent(Document document, String property) {
     Elements elements =
         document.select("meta[property=" + property + "], meta[name=" + property + "]");
@@ -120,11 +127,13 @@ public class WebPageExtractor {
     return null;
   }
 
+  /** Web上の情報の調査で用いる時刻日時を返す。 */
   private String timeDatetime(Document document) {
     Element time = document.selectFirst("time[datetime]");
     return time == null ? null : blankToFallback(time.attr("datetime"), null);
   }
 
+  /** 同じ意味の指定を共通に扱えるよう、表記や形式をそろえる。 */
   private String normalize(String value) {
     if (value == null) {
       return "";
@@ -132,6 +141,7 @@ public class WebPageExtractor {
     return value.replaceAll("\\s+", " ").trim();
   }
 
+  /** Web上の情報の調査で用いる最初以外空白を返す。 */
   private String firstNonBlank(String... values) {
     for (String value : values) {
       if (value != null && !value.isBlank()) {
@@ -141,6 +151,7 @@ public class WebPageExtractor {
     return null;
   }
 
+  /** Web上の情報の調査で用いる空白終点代替手段を返す。 */
   private String blankToFallback(String value, String fallback) {
     return value == null || value.isBlank() ? fallback : value;
   }
