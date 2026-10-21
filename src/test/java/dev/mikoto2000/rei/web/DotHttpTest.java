@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 
 import dev.mikoto2000.rei.dot.DotDelegationService;
 import dev.mikoto2000.rei.dot.DotResumeService;
+import dev.mikoto2000.rei.websearch.WebSearchProperties;
 import java.net.http.HttpClient;
 import java.nio.file.Path;
 import java.util.List;
@@ -23,6 +24,7 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.boot.SpringApplication;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.Import;
@@ -35,6 +37,7 @@ class DotHttpTest {
 
   /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
   @Configuration(proxyBeanMethods = false)
+  @EnableConfigurationProperties(WebSearchProperties.class)
   @Import({
     WebApiIntegrationTest.Config.class,
     DotController.class,

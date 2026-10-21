@@ -12,6 +12,7 @@ import dev.mikoto2000.rei.computeruse.FullAutoOptions;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.websearch.WebSearchProperties;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.ArrayList;
@@ -28,6 +29,7 @@ class FullAutoToolPermissionTest {
   void springWiresStartupArgumentsIntoCommonPolicy() {
     new org.springframework.boot.test.context.runner.ApplicationContextRunner()
         .withUserConfiguration(ToolPermissionPolicy.class, FullAutoOptions.class)
+        .withBean(WebSearchProperties.class, WebSearchProperties::new)
         .withBean(
             org.springframework.boot.ApplicationArguments.class,
             () -> new DefaultApplicationArguments("--fullauto"))
