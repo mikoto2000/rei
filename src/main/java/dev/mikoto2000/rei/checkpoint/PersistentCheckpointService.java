@@ -532,14 +532,14 @@ public class PersistentCheckpointService implements AutoCloseable {
       throw new CheckpointException(
           CheckpointException.Code.DISABLED, "Checkpoint saving is disabled");
     CheckpointReconciler.active();
-    var state = get(project, task);
+    get(project, task);
     String run = assignedRun == null ? UUID.randomUUID().toString() : assignedRun;
     if (!repository.acquire(project, task, run))
       throw new CheckpointException(CheckpointException.Code.TASK_BUSY, "Task already executing");
     boolean submitted = false;
     try {
       // Re-read after acquiring the cross-process lease; never resume a stale pre-lock revision.
-      state = get(project, task);
+      var state = get(project, task);
       if ("WAITING_APPROVAL".equals(state.status()))
         throw new IllegalStateException(
             "承認待ちは /approval list で内容を確認し、/approval approve <approvalId> --continue で続行してください。");
