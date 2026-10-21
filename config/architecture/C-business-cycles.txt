@@ -429,7 +429,6 @@ dev.mikoto2000.rei.checkpoint.PersistentCheckpointService -> dev.mikoto2000.rei.
 dev.mikoto2000.rei.checkpoint.PersistentCheckpointService -> dev.mikoto2000.rei.review.ReviewCoverageLedger$Scope
 dev.mikoto2000.rei.checkpoint.PersistentCheckpointService -> dev.mikoto2000.rei.review.ReviewTools
 dev.mikoto2000.rei.checkpoint.PersistentCheckpointService$1 -> dev.mikoto2000.rei.event.AgentEventType
-dev.mikoto2000.rei.checkpoint.ResumeCommand -> dev.mikoto2000.rei.core.chat.AgentRunContext$RequestSource
 dev.mikoto2000.rei.checkpoint.ResumeCommand -> dev.mikoto2000.rei.core.project.ProjectContext
 dev.mikoto2000.rei.checkpoint.ResumeCommand -> dev.mikoto2000.rei.core.project.ProjectService
 dev.mikoto2000.rei.checkpoint.ResumeCommand -> dev.mikoto2000.rei.core.service.CommandCancellationService

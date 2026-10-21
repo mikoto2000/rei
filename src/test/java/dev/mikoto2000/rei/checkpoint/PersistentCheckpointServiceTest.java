@@ -453,6 +453,39 @@ class PersistentCheckpointServiceTest {
     assertFalse(repository.leased("A", saved.taskId()));
   }
 
+  /** 再開先への切り替えが即時に実行される処理より先になることを確認する。 */
+  @Test
+  void shellSelectsSessionBeforeImmediateExecutionAndReturnsItsIdentity() {
+    service.finish(owner, "CANCELLED");
+    var selected = new java.util.concurrent.atomic.AtomicReference<String>("other");
+    factory.addBean(
+        "router",
+        new ConversationInputRouter(
+            Runnable::run,
+            (context, prompt, interventions) -> {
+              assertEquals(context.conversationId(), selected.get());
+              started.add(context.runId());
+            }));
+    var resumed = service.resumeForShell("A", state().taskId(), selected::set);
+    assertEquals("session", resumed.sessionId());
+    assertEquals(List.of(resumed.runId()), started);
+  }
+
+  /** 再開の照合に失敗した場合は表示先を切り替えないことを確認する。 */
+  @Test
+  void rejectedResumeDoesNotSelectSession() {
+    assertThrows(
+        IllegalStateException.class,
+        () ->
+            service.resumeForShell(
+                "A",
+                state().taskId(),
+                context -> {
+                  throw new AssertionError("Must not change selection for a busy task");
+                }));
+    assertTrue(queue.isEmpty());
+  }
+
   /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void inspectionNeverExecutesAndResumeCreatesNewRunWithLineageAndLease() {
@@ -464,6 +497,7 @@ class PersistentCheckpointServiceTest {
     var resumed = service.resume("A", task, AgentRunContext.RequestSource.SHELL);
     assertNotEquals(owner.runId(), resumed.runId());
     assertEquals(owner.runId(), resumed.previousRunId());
+    assertEquals(owner.conversationId(), resumed.sessionId());
     assertEquals("run", state().resumedFromRunId());
     assertEquals(resumed.checkpointRevision(), state().resumedFromRevision());
     assertThrows(

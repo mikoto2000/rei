@@ -150,7 +150,6 @@ business: dev.mikoto2000.rei.checkpoint.PersistentCheckpointService -> dev.mikot
 business: dev.mikoto2000.rei.checkpoint.PersistentCheckpointService -> dev.mikoto2000.rei.core.taskstate.TaskState
 business: dev.mikoto2000.rei.checkpoint.PersistentCheckpointService -> dev.mikoto2000.rei.core.working.FileReference
 business: dev.mikoto2000.rei.checkpoint.PersistentCheckpointService -> dev.mikoto2000.rei.core.working.WorkingSet
-business: dev.mikoto2000.rei.checkpoint.ResumeCommand -> dev.mikoto2000.rei.core.chat.AgentRunContext$RequestSource
 business: dev.mikoto2000.rei.checkpoint.ResumeCommand -> dev.mikoto2000.rei.core.project.ProjectContext
 business: dev.mikoto2000.rei.checkpoint.ResumeCommand -> dev.mikoto2000.rei.core.project.ProjectService
 business: dev.mikoto2000.rei.checkpoint.ResumeCommand -> dev.mikoto2000.rei.core.service.CommandCancellationService

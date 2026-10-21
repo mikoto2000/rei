@@ -89,6 +89,7 @@ class ResumeOverviewServiceTest {
     verify(service).abandon("A", "task");
     assertEquals(0, command.execute("task"));
     verify(service)
-        .resume("A", "task", dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.SHELL);
+        .resumeForShell(
+            org.mockito.ArgumentMatchers.eq("A"), org.mockito.ArgumentMatchers.eq("task"), any());
   }
 }

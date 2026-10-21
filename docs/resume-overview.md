@@ -66,3 +66,7 @@ checkpoint_headsのtask単位で最新revisionへ主キー結合する。正常h
 実SQLiteのEXPLAIN QUERY PLANでは`checkpoint_heads(project)`と`checkpoint_revisions(project,task,revision)`の既存主キーインデックスを使用する。全revisionテーブルの走査はない。正確な件数・JSON状態判定のためプロジェクト内のheadを調べ、並べ替えには一時B-treeを使う。LIMIT 1で走査やソートがなくなる設計ではない。追加インデックスや手動DB移行は不要。
 
 破損headが大量にある場合は過去revisionのdecoderによる調査が増える。自動案内は参考表示であり、厳密な整合性確認は既存`/resume show`とResume実行に委ねる。
+
+## 再開時のセッション選択
+
+`/resume <taskId>` が成功すると、Shell・簡易 CLI ともに再開先セッションを選択します。再開した処理の出力表示と、その後の入力先は同じセッションになります。Shell は実行開始前に表示先を切り替え、受付に失敗した場合は元の選択（未選択を含む）へ戻します。簡易 CLI は再開応答の `sessionId` を選択し、`runId` の出力を購読します。一覧・詳細表示・除外では選択を変更しません。
