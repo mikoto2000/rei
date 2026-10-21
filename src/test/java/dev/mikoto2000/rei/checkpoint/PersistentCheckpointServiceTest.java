@@ -466,9 +466,7 @@ class PersistentCheckpointServiceTest {
               assertEquals(context.conversationId(), selected.get());
               started.add(context.runId());
             }));
-    var resumed =
-        service.resumeForShell(
-            "A", state().taskId(), context -> selected.set(context.conversationId()));
+    var resumed = service.resumeForShell("A", state().taskId(), selected::set);
     assertEquals("session", resumed.sessionId());
     assertEquals(List.of(resumed.runId()), started);
   }

@@ -111,8 +111,8 @@ public class ResumeCommand implements Callable<Integer> {
       return service.resumeForShell(
           project(),
           task,
-          context -> {
-            projects.selectSession(context.conversationId());
+          sessionId -> {
+            projects.selectSession(sessionId);
             selected[0] = true;
           });
     } catch (RuntimeException | Error error) {

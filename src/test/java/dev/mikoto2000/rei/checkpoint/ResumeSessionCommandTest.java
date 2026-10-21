@@ -69,10 +69,10 @@ class ResumeSessionCommandTest {
       when(service.resumeForShell(eq(projects.currentContext().id()), eq("task"), any()))
           .thenAnswer(
               invocation -> {
-                Consumer<AgentRunContext> select = invocation.getArgument(2);
+                Consumer<String> select = invocation.getArgument(2);
                 var context =
                     new AgentRunContext("resumed", target, root, projects.currentContext().id());
-                select.accept(context);
+                select.accept(target);
                 assertEquals(target, conversations.currentSessionId());
                 if (fail) throw new IllegalStateException("Submission rejected");
                 var events = new dev.mikoto2000.rei.event.AgentEventFactory(Clock.systemUTC());
