@@ -1,6 +1,5 @@
 package dev.mikoto2000.rei.checkpoint;
 
-import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import java.util.concurrent.Callable;
 import org.springframework.stereotype.Component;
@@ -101,11 +100,25 @@ public class ResumeCommand implements Callable<Integer> {
   /** 保存タスクの一覧・照合・明示再開・除外を行う。 */
   @Override
   public Integer call() {
-    return print(
-        () ->
-            task == null
-                ? service.list(project())
-                : service.resume(project(), task, AgentRunContext.RequestSource.SHELL));
+    return print(() -> task == null ? service.list(project()) : resumeTask());
+  }
+
+  /** 再開した実行の出力と後続の入力を同じ会話へ向ける。 */
+  private PersistentCheckpointService.ResumeResult resumeTask() {
+    String previousSession = projects.currentSessionId();
+    boolean[] selected = {false};
+    try {
+      return service.resumeForShell(
+          project(),
+          task,
+          context -> {
+            projects.selectSession(context.conversationId());
+            selected[0] = true;
+          });
+    } catch (RuntimeException | Error error) {
+      if (selected[0]) projects.selectSession(previousSession);
+      throw error;
+    }
   }
 
   /** 作業の中断と再開に必要な一覧タスク一覧を扱う。 */

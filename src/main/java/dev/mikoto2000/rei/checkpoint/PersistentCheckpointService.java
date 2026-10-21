@@ -465,6 +465,7 @@ public class PersistentCheckpointService implements AutoCloseable {
    * @param runId 実行の識別子
    * @param previousRunId 前回実行の識別子
    * @param checkpointRevision 再開用の記録改訂番号
+   * @param sessionId 再開先の会話の識別子
    * @param reconciliation 状態の照合結果
    */
   public record ResumeResult(
@@ -472,6 +473,7 @@ public class PersistentCheckpointService implements AutoCloseable {
       String runId,
       String previousRunId,
       long checkpointRevision,
+      String sessionId,
       CheckpointReconciler.Result reconciliation) {}
 
   /** 保存された状況を引き継いで、中断した作業を再開する。 */
@@ -482,7 +484,14 @@ public class PersistentCheckpointService implements AutoCloseable {
   /** 保存された状況を引き継いで、中断した作業を再開する。 */
   public ResumeResult resume(
       String project, String task, AgentRunContext.RequestSource source, Long expectedRevision) {
-    return resumeChecked(project, task, source, expectedRevision, null, null, null);
+    return resumeChecked(project, task, source, expectedRevision, null, null, null, context -> {});
+  }
+
+  /** 実行開始前に表示先を切り替えて、Shell から保存タスクを再開する。 */
+  public ResumeResult resumeForShell(
+      String project, String task, java.util.function.Consumer<AgentRunContext> beforeSubmit) {
+    return resumeChecked(
+        project, task, AgentRunContext.RequestSource.SHELL, null, null, null, null, beforeSubmit);
   }
 
   /**
@@ -505,7 +514,8 @@ public class PersistentCheckpointService implements AutoCloseable {
         revision,
         run,
         previousRun,
-        untrustedSummary);
+        untrustedSummary,
+        context -> {});
   }
 
   /** 中断した作業を引き継ぐため、確認済みを再開する。 */
@@ -516,7 +526,8 @@ public class PersistentCheckpointService implements AutoCloseable {
       Long expectedRevision,
       String assignedRun,
       String expectedPrevious,
-      String untrustedSummary) {
+      String untrustedSummary,
+      java.util.function.Consumer<AgentRunContext> beforeSubmit) {
     if (!settings.isEnabled())
       throw new CheckpointException(
           CheckpointException.Code.DISABLED, "Checkpoint saving is disabled");
@@ -599,6 +610,7 @@ public class PersistentCheckpointService implements AutoCloseable {
               + " を明示的に再開してください。まず現在の状態を確認し、未完了・未検証の工程を再計画してください。結果不明の副作用を再実行する前に、その項目だけをユーザーに確認してください。";
       if (next.mode() != AgentRunContext.Mode.EXCLUSIVE) prompt = next.request();
       try {
+        beforeSubmit.accept(context);
         router
             .getObject()
             .submit(
@@ -623,7 +635,7 @@ public class PersistentCheckpointService implements AutoCloseable {
       }
       submitted = true;
       publish(next, AgentEventType.CHECKPOINT_RESUMED, result.decision());
-      return new ResumeResult(task, run, state.runId(), state.revision(), result);
+      return new ResumeResult(task, run, state.runId(), state.revision(), next.sessionId(), result);
     } finally {
       if (!submitted) {
         active.remove(run);

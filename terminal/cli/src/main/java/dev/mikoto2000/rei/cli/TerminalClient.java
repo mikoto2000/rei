@@ -704,6 +704,12 @@ public final class TerminalClient implements AutoCloseable {
               "追加処理を開始: "
                   + String.join(", ", words.subList(action.equals("add") ? 2 : 1, words.size())));
         if (response.path("text").isTextual()) out(response.path("text").asText());
+        if (name.equals("/resume")) {
+          String resumedSession = response.path("sessionId").asText();
+          if (resumedSession.isBlank()) throw new IOException("Resume response has no Session");
+          session = resumedSession;
+          out("Current session: " + session);
+        }
         run = response.path("runId").asText();
         out("Run: " + run);
         watch(run);
