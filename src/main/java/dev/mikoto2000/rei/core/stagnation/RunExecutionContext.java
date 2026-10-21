@@ -158,6 +158,8 @@ public class RunExecutionContext {
   public void validateToolArguments(String name, String input) {
     if (permissions != null) permissions.validateArguments(name, input, runContext);
     else {
+      dev.mikoto2000.rei.websearch.WebSearchArguments.validate(
+          name, input, new dev.mikoto2000.rei.websearch.WebSearchProperties().getMaxResults());
       dev.mikoto2000.rei.core.taskstate.TaskStateArguments.validate(name, input);
       dev.mikoto2000.rei.core.policy.ShellFileReadArguments.validate(name, input);
       dev.mikoto2000.rei.core.policy.ProcessWaitArguments.validate(name, input);

@@ -18,6 +18,22 @@ import org.junit.jupiter.api.Test;
 
 class ToolPermissionPolicyTest {
   @Test
+  void webSearchPreflightUsesInjectedSearchLimit() {
+    var policy = policy(Set.of(), Set.of());
+    var properties = new dev.mikoto2000.rei.websearch.WebSearchProperties();
+    properties.setMaxResults(8);
+    policy.setWebSearchProperties(properties);
+    String input = "{\"request\":{\"query\":\"Void\",\"maxResults\":8,\"readTop\":8}}";
+    assertDoesNotThrow(() -> policy.validateArguments("webSearchAndRead", input));
+    properties.setMaxResults(3);
+    var error =
+        assertThrows(
+            InvalidToolArgumentsException.class,
+            () -> policy.validateArguments("webSearchAndRead", input));
+    assertTrue(error.getMessage().contains("between 1 and 3"));
+  }
+
+  @Test
   void administratorConfigurationBindsCapabilitiesAndDefaults() {
     var source =
         new org.springframework.boot.context.properties.source.MapConfigurationPropertySource(

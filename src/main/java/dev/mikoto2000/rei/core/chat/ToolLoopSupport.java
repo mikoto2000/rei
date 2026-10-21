@@ -117,6 +117,7 @@ public final class ToolLoopSupport {
                         || dev.mikoto2000.rei.core.policy.ShellFileReadArguments.supports(
                             call.name())
                         || dev.mikoto2000.rei.core.policy.ProcessWaitArguments.supports(call.name())
+                        || dev.mikoto2000.rei.websearch.WebSearchArguments.supports(call.name())
                         || dev.mikoto2000.rei.core.policy.RawToolResultArguments.supports(
                             call.name()))) return execute(prompt, response);
     if (response.getResults().size() != 1)

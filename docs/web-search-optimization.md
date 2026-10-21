@@ -1,5 +1,15 @@
 # Web 検索の効率・品質改善
 
+## ツール引数の修正と Run の継続
+
+`webSearchAndRead` は `request` の形、query、maxResults、readTop、forceRefresh を
+実行前に検証する。maxResults の上限は `rei.web-search.max-results` の現在の設定値を使う。
+型・範囲・必須項目の不備は既存の `INVALID_TOOL_ARGUMENTS` 応答としてモデルへ返す。
+応答には具体的な制約、`executed:false`、残りの修正回数を含め、検索・本文取得は行わない。
+モデルは引数を修正した新しいツール呼び出しで同じ Run を継続できる。
+成功済みの同時呼び出しを繰り返す必要はなく、修正回数は Run 全体の既存上限（既定5回）に従う。
+通信・設定・権限・保存エラーを引数エラーとして扱うことはしない。
+
 ## 調査結果と Phase 0
 
 `webSearch` → `WebSearchService` は設定順に DuckDuckGo / Brave の全プロバイダーを呼ぶ。

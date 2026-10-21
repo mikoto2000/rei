@@ -86,7 +86,14 @@ public class ToolPermissionPolicy {
           "cancelDependency");
   private final ToolPermissionProperties properties;
   private final boolean fullAuto;
+  private dev.mikoto2000.rei.websearch.WebSearchProperties webSearchProperties =
+      new dev.mikoto2000.rei.websearch.WebSearchProperties();
   private dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver delegation;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void setWebSearchProperties(dev.mikoto2000.rei.websearch.WebSearchProperties properties) {
+    this.webSearchProperties = properties;
+  }
 
   @org.springframework.beans.factory.annotation.Autowired
   void setDelegationResolver(
@@ -95,6 +102,8 @@ public class ToolPermissionPolicy {
   }
 
   public void validateArguments(String tool, String input) {
+    dev.mikoto2000.rei.websearch.WebSearchArguments.validate(
+        tool, input, webSearchProperties.getMaxResults());
     ShellFileReadArguments.validate(tool, input);
     ProcessWaitArguments.validate(tool, input);
     RawToolResultArguments.validate(tool, input);

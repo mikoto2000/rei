@@ -71,7 +71,9 @@ public class WebSearchTools {
       Prefer this over calling webSearch followed by fetchUrlContent manually.
       Use webSearch directly only when search-result metadata or URL candidates are needed without page contents.
       Use fetchUrlContent directly when the exact URL to read is already known.
-      query is required. maxResults defaults to the configured maximum (normally 5). readTop defaults to 3.
+      Pass arguments inside request. query is required (1..2048 characters).
+      maxResults must be an integer from 1 to the configured maximum (normally 5); omit it to use that maximum.
+      readTop must be an integer from 0 to maxResults; it defaults to min(3, maxResults).
       Set readTop = 0 to return search metadata without fetching page contents.
       Individual page fetch failures are returned per result and do not fail the whole search.
       """)
