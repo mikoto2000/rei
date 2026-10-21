@@ -4,10 +4,11 @@ import com.sun.source.tree.ClassTree;
 import com.sun.source.tree.MethodTree;
 import com.sun.source.tree.VariableTree;
 import com.sun.source.util.JavacTask;
-import com.sun.source.util.TreeScanner;
+import com.sun.source.util.TreePathScanner;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -30,6 +31,7 @@ class ArchitectureSourceReportTest {
       if (annotation != null) toolAnnotations.put(method.getName(), annotation);
     }
     List<String> fields = new ArrayList<>(List.of("name\ttype\tline"));
+    List<String> sizes = new ArrayList<>(List.of("path\ttype\tstartLine\tendLine\tlines"));
     var compiler = ToolProvider.getSystemJavaCompiler();
     try (var manager = compiler.getStandardFileManager(null, null, StandardCharsets.UTF_8)) {
       for (String root :
@@ -67,10 +69,31 @@ class ArchitectureSourceReportTest {
           String relative =
               Path.of("").toAbsolutePath().relativize(path).toString().replace('\\', '/');
           int[] count = {0};
-          new TreeScanner<Void, Void>() {
+          new TreePathScanner<Void, Void>() {
             @Override
             public Void visitClass(ClassTree type, Void unused) {
               count[0]++;
+              long first = unit.getLineMap().getLineNumber(positions.getStartPosition(unit, type));
+              long last = unit.getLineMap().getLineNumber(positions.getEndPosition(unit, type) - 1);
+              var names = new ArrayDeque<String>();
+              for (var cursor = getCurrentPath(); cursor != null; cursor = cursor.getParentPath()) {
+                if (cursor.getLeaf() instanceof ClassTree enclosing) {
+                  String name = enclosing.getSimpleName().toString();
+                  names.addFirst(name.isEmpty() ? "anonymous@" + first : name);
+                }
+              }
+              sizes.add(
+                  relative
+                      + "\t"
+                      + unit.getPackageName()
+                      + "."
+                      + String.join("$", names)
+                      + "\t"
+                      + first
+                      + "\t"
+                      + last
+                      + "\t"
+                      + (last - first + 1));
               if (relative.endsWith("/core/Tools.java")
                   && type.getSimpleName().contentEquals("Tools")) {
                 for (var member : type.getMembers()) {
@@ -126,6 +149,7 @@ class ArchitectureSourceReportTest {
     Files.write(output.resolve("sources.tsv"), inventory, StandardCharsets.UTF_8);
     Files.write(output.resolve("tools.tsv"), tools, StandardCharsets.UTF_8);
     Files.write(output.resolve("tools-fields.tsv"), fields, StandardCharsets.UTF_8);
+    Files.write(output.resolve("type-sizes.tsv"), sizes, StandardCharsets.UTF_8);
   }
 
   private static String clean(String value) {

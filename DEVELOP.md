@@ -14,6 +14,8 @@ Episode の経緯・根拠・差分整理・横断検索は [Episode Memory](doc
 
 初めてコードを読む場合は、[図解付きプログラム構造ガイド](docs/program-structure.md)から始めてください。全体構成、会話の実行経路、状態と保存先、機能別の変更箇所を説明しています。
 
+パッケージ依存の実測、循環、ArchUnitの既存負債予算と更新手順は [パッケージ構成改善 Phase 0](docs/architecture/README.md) を参照してください。
+
 内部仕様・変更記録は [.kiro の実装補足](.kiro/docs/readme-implementation-notes.md)を参照してください。
 
 ファイル読み取り・検索順位・部分編集・Java シンボル読み取りの上限、互換性と計測は [ファイル操作の改善記録](docs/file-operations-optimization.md)を参照してください。
