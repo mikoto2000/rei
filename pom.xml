@@ -40,6 +40,12 @@
 		<checkstyle.version>14.3.0</checkstyle.version>
 	</properties>
 	<dependencies>
+		<dependency>
+			<groupId>com.tngtech.archunit</groupId>
+			<artifactId>archunit</artifactId>
+			<version>1.4.2</version>
+			<scope>test</scope>
+		</dependency>
 <dependency><groupId>org.springframework.ai</groupId><artifactId>spring-ai-starter-mcp-server-webmvc</artifactId></dependency>
 		<dependency>
 			<groupId>net.java.dev.jna</groupId><artifactId>jna-platform</artifactId><version>5.17.0</version>
