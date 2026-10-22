@@ -36,6 +36,65 @@ class DurableSubAgentRepositoryTest {
             "parent", "session", Files.createDirectory(directory.resolve("project")), "project");
   }
 
+  /** 別接続の書き込み中でも読み取りロックの昇格で即時失敗せず、解放後に保存できる。 */
+  @Test
+  void checkpointWaitsForWriterBeforeReadingInBothJournalModes() throws Exception {
+    for (String mode : java.util.List.of("DELETE", "WAL")) {
+      try (var blocker = source.getConnection();
+          var statement = blocker.createStatement()) {
+        try (var rows = statement.executeQuery("PRAGMA journal_mode=" + mode)) {
+          assertTrue(rows.next());
+          assertEquals(mode, rows.getString(1).toUpperCase(java.util.Locale.ROOT));
+        }
+        var begun =
+            new java.util.concurrent.atomic.AtomicReference<>(
+                new java.util.concurrent.CountDownLatch(1));
+        var observed =
+            new org.springframework.jdbc.datasource.DelegatingDataSource(source) {
+              @Override
+              public java.sql.Connection getConnection() throws java.sql.SQLException {
+                var connection = super.getConnection();
+                return (java.sql.Connection)
+                    java.lang.reflect.Proxy.newProxyInstance(
+                        java.sql.Connection.class.getClassLoader(),
+                        new Class<?>[] {java.sql.Connection.class},
+                        (proxy, method, args) -> {
+                          try {
+                            Object result = method.invoke(connection, args);
+                            if (method.getName().equals("setAutoCommit")
+                                && Boolean.FALSE.equals(args[0])) begun.get().countDown();
+                            return result;
+                          } catch (java.lang.reflect.InvocationTargetException error) {
+                            throw error.getCause();
+                          }
+                        });
+              }
+            };
+        var repository = new DurableSubAgentRepository(observed, Clock.systemUTC());
+        var saved = repository.create(parent, "reviewer", "inspect", null, 3, 1000, "baseline");
+        // create also begins a transaction; only observe the subsequent claim.
+        begun.set(new java.util.concurrent.CountDownLatch(1));
+        blocker.setAutoCommit(false);
+        statement.executeUpdate("UPDATE subagent_checkpoints SET revision=revision WHERE 0");
+        try (var executor = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+          var pending = executor.submit(
+              () -> repository.claim(parent, saved.id(), saved.revision(), "child-" + mode));
+          try {
+            assertTrue(begun.get().await(5, java.util.concurrent.TimeUnit.SECONDS));
+            assertThrows(
+                java.util.concurrent.TimeoutException.class,
+                () -> pending.get(300, java.util.concurrent.TimeUnit.MILLISECONDS));
+          } finally {
+            blocker.commit();
+          }
+          assertEquals("RUNNING", pending.get(5, java.util.concurrent.TimeUnit.SECONDS).status());
+        } finally {
+          blocker.setAutoCommit(true);
+        }
+      }
+    }
+  }
+
   /** 補助エージェントへの委譲で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @Test
   void graphAdmissionRollsBackAllPreparedChildrenWhenCapacityIsExceeded() {

@@ -33,6 +33,12 @@ public final class LocalDelegationFailure {
             + ": 子のツール権限または承認が不足しています。ロールの権限と承認設定を確認してください。";
       if (failure instanceof SubAgentValidationException invalid)
         return validation(invalid.errors());
+      if (failure instanceof org.sqlite.SQLiteException database) {
+        int code = database.getResultCode().code & 0xff;
+        if (code == 5 || code == 6)
+          return "database_busy: データベースが別の処理で使用中です。進行中の処理と保存済みの結果を確認してください。";
+        return "database_failure: データベースの操作に失敗しました。保存先の状態・権限・空き容量と保存済みの結果を確認してください。";
+      }
       if (failure instanceof BoundedToolLoop.SharedBudgetExceeded)
         return "SHARED_LLM_BUDGET_EXHAUSTED: 親と子の共有モデル呼び出し予算を使い切りました。";
       if (failure instanceof dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException stopped)

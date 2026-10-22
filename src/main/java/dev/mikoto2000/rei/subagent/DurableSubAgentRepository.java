@@ -236,6 +236,7 @@ public final class DurableSubAgentRepository {
     String encoded = encode(state);
     return transaction.execute(
         tx -> {
+          lockWriter();
           if (db.sql("SELECT COUNT(*) FROM subagent_checkpoints").query(Long.class).single() >= 1024
               || db.sql(
                               "SELECT COALESCE(SUM(length(CAST(snapshot AS BLOB))),0) FROM subagent_checkpoints")
@@ -253,7 +254,18 @@ public final class DurableSubAgentRepository {
 
   /** 補助エージェントへの委譲で用いる一括反映を返す。 */
   synchronized <T> T atomic(java.util.function.Supplier<T> action) {
-    return transaction.execute(tx -> action.get());
+    return transaction.execute(
+        tx -> {
+          lockWriter();
+          return action.get();
+        });
+  }
+
+  /** 読み取り後のロック昇格を避け、容量確認と更新を同じ書き込み予約の下で行う。 */
+  private void lockWriter() {
+    // A deferred SQLite transaction cannot wait safely when upgrading a read snapshot.
+    // Reserve the writer before any SELECT; no checkpoint or revision is changed.
+    db.sql("UPDATE subagent_checkpoints SET revision=revision WHERE 0").update();
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
@@ -553,6 +565,7 @@ public final class DurableSubAgentRepository {
     String encoded = encode(next);
     return transaction.execute(
         tx -> {
+          lockWriter();
           var current = load(saved.id());
           if (current.revision() != saved.revision())
             throw new ConcurrentModificationException("Child checkpoint revision changed");

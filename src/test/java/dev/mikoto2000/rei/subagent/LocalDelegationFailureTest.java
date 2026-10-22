@@ -9,6 +9,18 @@ import org.junit.jupiter.api.Test;
 
 /** ローカル委譲失敗情報の結果と状態の契約を検証するテスト。 */
 class LocalDelegationFailureTest {
+  /** SQLite の競合は内部のパスや例外メッセージを含めずに表示する。 */
+  @Test
+  void sqliteContentionHasSafeStorageGuidance() {
+    var failure =
+        new RuntimeException(
+            new org.sqlite.SQLiteException(
+                "private database path", org.sqlite.SQLiteErrorCode.SQLITE_BUSY));
+    String description = LocalDelegationFailure.describe(failure, false);
+    assertTrue(description.startsWith("database_busy:"));
+    assertFalse(description.contains("private database path"));
+  }
+
   /** 補助エージェントへの委譲の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void wrappedPermissionAndTransportFailuresAreClassifiedWithoutPrivateMessages() {

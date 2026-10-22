@@ -17,6 +17,10 @@ last state/revision, call reservations/consumption, token usage uncertainty, Too
 Recognized credentials are redacted in retained task/context/result and reconciliation notes. Source bodies, raw intermediate Tool output and reasoning traces are not checkpointed.
 Result storage is capped at 64 KiB characters and the serialized record at 256 KiB bytes; at most 64 Tool operations, 1024 children and 8 MiB total snapshots are retained.
 Admission and growing results both enforce the total cap. Capacity/revision failures preserve the previous checkpoint and do not authorize a Tool invocation.
+Write transactions reserve the SQLite writer before reading checkpoint revisions or storage capacity,
+including graph admission. This avoids a deferred read-to-write lock upgrade failing immediately
+with `SQLITE_BUSY` when another connection is writing; contention waits within the connection's busy timeout.
+Database failures in child diagnostics use safe storage categories such as `database_busy` without exposing SQL or paths.
 Operator cleanup is deliberate; unknown histories are not automatically evicted to make room.
 
 Each execution still receives an ordinary `subagentRunId`; results additionally expose `durableTaskId`.
