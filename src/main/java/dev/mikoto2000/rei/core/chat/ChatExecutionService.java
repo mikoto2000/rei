@@ -496,6 +496,13 @@ public class ChatExecutionService {
       execution.evaluator().capturePlanBaseline();
       if (checkpoints != null && checkpoints.hasProgressHistory(context)) {
         execution.restoreProgress(checkpoints.progress(context));
+        if (execution.needsProgressReconciliation()) {
+          boolean corrected = false;
+          for (String result : checkpoints.recentSkillResults(context))
+            corrected |= execution.reconcileSkillProgress(result);
+          if (corrected)
+            checkpoints.preserveResults(context, java.util.List.of(), execution.progressSnapshot());
+        }
         execution.beginContextRestoration();
       }
       if (workContext != null

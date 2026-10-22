@@ -851,4 +851,127 @@ class PersistentCheckpointServiceTest {
       service.finish(owner, "CANCELLED");
     }
   }
+
+  @Test
+  void resumedChatRepairsIgnoredSkillProgressFromConfirmedSqliteResultsBeforeFirstModelCall()
+      throws Exception {
+    service.setRawResults(new dev.mikoto2000.rei.core.contextbudget.RawToolResultStore(root));
+    var events = new AgentEventFactory(Clock.systemUTC());
+    var responses =
+        new ArrayList<org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse>();
+    for (int i = 0; i < 4; i++) {
+      String call = "skill-" + i;
+      String body =
+          "[{\"path\":\"references/report-format.md\",\"startLine\":"
+              + (20 + i)
+              + ",\"content\":[\"instruction "
+              + i
+              + "\"],\"error\":null,\"version\":\"v1\"}]";
+      bus.publishBoundary(
+          events.toolStarted(call, "readSkillResource", "read").withOwnership(owner));
+      bus.publishBoundary(
+          events.toolCompleted(call, "readSkillResource", 1, body).withOwnership(owner));
+      responses.add(
+          new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
+              call, "readSkillResource", body));
+    }
+    dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState legacy;
+    try (var input =
+        getClass().getResourceAsStream("/checkpoint/skill-read-stalled-progress.json")) {
+      legacy =
+          new com.fasterxml.jackson.databind.ObjectMapper()
+              .readValue(
+                  input,
+                  dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState.class);
+    }
+    service.preserveResults(
+        owner,
+        List.of(
+            org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+                .responses(responses)
+                .build()),
+        legacy);
+    service.finish(owner, "FAILED");
+    var resumed = service.resume("A", state().taskId(), AgentRunContext.RequestSource.SHELL);
+    var next = new AgentRunContext(resumed.runId(), "session", root, "A");
+    assertEquals(4, service.recentSkillResults(next).size());
+    var model = org.mockito.Mockito.mock(org.springframework.ai.chat.model.ChatModel.class);
+    org.mockito.Mockito.when(model.getOptions())
+        .thenReturn(
+            org.springframework.ai.openai.OpenAiChatOptions.builder().model("test").build());
+    org.mockito.Mockito.when(
+            model.stream(
+                org.mockito.ArgumentMatchers.any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenAnswer(
+            invocation -> {
+              assertEquals(0, service.progress(next).continuity().detector().stagnationCount());
+              String prompt = invocation.getArgument(0).toString();
+              assertTrue(prompt.contains("replansUsed"));
+              assertTrue(prompt.contains("restorationUsed"));
+              assertTrue(prompt.contains("intermediate findings"));
+              return reactor.core.publisher.Flux.error(
+                  new java.util.concurrent.CancellationException());
+            });
+    var holder = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.service.ModelHolderService.class);
+    org.mockito.Mockito.when(holder.get()).thenReturn("test");
+    var chat =
+        new ChatExecutionService(
+            org.springframework.ai.chat.client.ChatClient.builder(model)
+                .defaultAdvisors(new RunScopedAdvisor(new ResumeContextAdvisor(service)))
+                .build(),
+            holder,
+            new dev.mikoto2000.rei.core.service.CommandCancellationService(),
+            Optional.empty(),
+            events,
+            bus);
+    org.springframework.test.util.ReflectionTestUtils.setField(chat, "checkpoints", service);
+    ((dev.mikoto2000.rei.llm.LlmProperties)
+            org.springframework.test.util.ReflectionTestUtils.getField(chat, "llmProperties"))
+        .getOutputLimit()
+        .setMaxLlmCallsPerRun(1000);
+    chat.execute(next, "resume", new dev.mikoto2000.rei.core.chat.UserInterventionQueue());
+    var repaired = repository.get("A", state().taskId()).progress();
+    assertEquals(0, repaired.continuity().detector().stagnationCount());
+    assertEquals(8, repaired.continuity().evaluator().restorationReads());
+    assertEquals(2, repaired.budget().stagnationReplans());
+    var again =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+            "again",
+            new dev.mikoto2000.rei.llm.OutputLimitRunBudget(2, 1000),
+            new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(root),
+            events,
+            e -> {});
+    again.restoreProgress(repaired);
+    for (int i = 0; i < 4; i++) {
+      again.beginIteration();
+      again.endIteration();
+    }
+    for (var response : responses)
+      assertFalse(again.reconcileSkillProgress(response.responseData()));
+    assertThrows(
+        dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.class, again::requestReplan);
+  }
+
+  @Test
+  void historicalProgressRepairRejectsMissingFailedAndMismatchedToolResults() {
+    service.setRawResults(new dev.mikoto2000.rei.core.contextbudget.RawToolResultStore(root));
+    var events = new AgentEventFactory(Clock.systemUTC());
+    bus.publishBoundary(
+        events.toolStarted("wrong", "readSkillResource", "read").withOwnership(owner));
+    bus.publishBoundary(
+        events.toolCompleted("wrong", "readSkillResource", 1, "done").withOwnership(owner));
+    var wrong =
+        org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+            .responses(
+                List.of(
+                    new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
+                        "wrong", "runCommand", "stdout")))
+            .build();
+    service.preserveResults(owner, List.of(wrong));
+    assertTrue(service.recentSkillResults(owner).isEmpty());
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            service.recentSkillResults(new AgentRunContext(owner.runId(), "different", root, "A")));
+  }
 }

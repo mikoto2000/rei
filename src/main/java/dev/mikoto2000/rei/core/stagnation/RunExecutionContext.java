@@ -226,6 +226,26 @@ public class RunExecutionContext {
     }
   }
 
+  /** Keep detector details inside the execution boundary. */
+  public synchronized boolean needsProgressReconciliation() {
+    return detector.isStagnant();
+  }
+
+  /** Reconcile a previously ignored, host-confirmed skill result without replenishing budgets. */
+  public synchronized boolean reconcileSkillProgress(String result) {
+    checkActive();
+    var evidence =
+        evaluator.afterTool(
+            "readSkillResource", "{}", result, evaluator.beforeTool("readSkillResource", "{}"));
+    var newlyAccounted =
+        evidence.stream().filter(e -> e.kind() == ProgressEvent.NEW_INFORMATION).findFirst();
+    if (newlyAccounted.isEmpty()) return false;
+    detector.recordIteration(true);
+    lastProgress = newlyAccounted.get();
+    emit(AgentEventType.PROGRESS_DETECTED, lastProgress, "historical_skill_progress_reconciled");
+    return true;
+  }
+
   public synchronized void beginContextRestoration() {
     evaluator.beginContextRestoration();
   }

@@ -140,6 +140,42 @@ public class PersistentCheckpointService implements AutoCloseable {
     return saved.progress();
   }
 
+  /** Bounded, confirmed skill outputs for repairing progress recorded by older classifiers. */
+  public List<String> recentSkillResults(AgentRunContext owner) {
+    progress(owner); // Enforce the same project/root/session ownership as the restored ledger.
+    var saved = active.get(owner.runId());
+    if (saved == null || rawResults == null) return List.of();
+    var results = new ArrayList<String>();
+    var json = new com.fasterxml.jackson.databind.ObjectMapper();
+    var operations = saved.operations();
+    for (var operation :
+        operations.subList(Math.max(0, operations.size() - 8), operations.size())) {
+      if (!operation.toolName().equals("readSkillResource")
+          || operation.status() != OperationStatus.SUCCEEDED) continue;
+      var reference =
+          saved.evidence().stream()
+              .filter(
+                  e ->
+                      e.origin().equals("RAW_RESULT_REFERENCE")
+                          && Objects.equals(e.toolCallId(), operation.toolCallId())
+                          && Objects.equals(e.runId(), operation.runId()))
+              .findFirst();
+      if (reference.isEmpty()) continue;
+      try {
+        Map<?, ?> result =
+            json.convertValue(
+                rawResults.read(owner.conversationId(), reference.get().summary()), Map.class);
+        if (operation.toolName().equals(result.get("toolName"))
+            && operation.toolCallId().equals(result.get("toolCallId"))
+            && result.get("rawResult") instanceof String data
+            && data.length() <= 65536) results.add(data);
+      } catch (RuntimeException unavailable) {
+        // Missing or unverified history cannot justify a counter correction.
+      }
+    }
+    return List.copyOf(results);
+  }
+
   /** 作業の中断と再開において、進捗履歴の有無を判定する。 */
   public boolean hasProgressHistory(AgentRunContext owner) {
     var saved = active.get(owner.runId());
@@ -997,6 +1033,20 @@ public class PersistentCheckpointService implements AutoCloseable {
         "changed", check == null ? List.of() : check.changed().stream().limit(5).toList());
     essentials.put(
         "recheck", check == null ? List.of() : check.recheck().stream().limit(5).toList());
+    if (state.progress() != null) {
+      var progress = json.valueToTree(state.progress());
+      essentials.put(
+          "progressControl",
+          Map.of(
+              "noProgress",
+                  progress.path("continuity").path("detector").path("stagnationCount").asInt(),
+              "replansUsed", progress.path("budget").path("stagnationReplans").asInt(),
+              "restorationUsed",
+                  progress.path("continuity").path("evaluator").path("restorationReads").asInt()));
+      essentials.put(
+          "recoveryHint",
+          "Host reconciliation is already reflected above. Re-reading known material alone is not progress. Use saved evidence to produce intermediate findings or verify the next unfinished step; do not claim completion without evidence.");
+    }
     String essential = json.valueToTree(essentials).toString();
     StringBuilder text =
         new StringBuilder(header).append(bounded(essential, budget / 3)).append('\n');
