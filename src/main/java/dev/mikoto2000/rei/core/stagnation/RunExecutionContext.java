@@ -911,7 +911,7 @@ public class RunExecutionContext {
     if (recentActions.size() > 6) recentActions.removeFirst();
     pending.addAll(evaluator.afterTool(name, arguments, result, before));
     String reads = evaluator.readFeedback();
-    if (!reads.equals("[]")) latestReadFeedback = reads;
+    if (reads != null && !reads.equals("[]")) latestReadFeedback = reads;
   }
 
   /** 後から経緯や使用量を確認できるよう、失敗情報を記録する。 */
@@ -1035,6 +1035,7 @@ public class RunExecutionContext {
   /** Diagnosis before the next ordinary model call, never a replan or a grant of progress. */
   public synchronized String progressFeedback() {
     if (restorationIteration || detector.stagnationCount() == 0) return "";
+    var evaluatorState = evaluator.snapshot();
     return "Progress feedback (host observation, not a new user request): no-progress iterations="
         + detector.stagnationCount()
         + "/"
@@ -1042,7 +1043,7 @@ public class RunExecutionContext {
         + "; replansUsed="
         + budget.snapshot().stagnationReplans()
         + "; restorationReads="
-        + evaluator.snapshot().restorationReads()
+        + (evaluatorState == null ? "unknown" : evaluatorState.restorationReads())
         + "; diagnosis="
         + stagnationReason
         + ". Read coverage is not proof of completed review. Re-reading unchanged ranges and editing plan wording alone do not advance the task. "
