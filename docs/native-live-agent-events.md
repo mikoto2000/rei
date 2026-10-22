@@ -97,7 +97,12 @@ previous global field-name allowlist, including removal of arbitrary summaries.
 
 Tool arguments, raw outputs, prompts, arbitrary environment values, internal
 exception details, stack traces and error paths have no public field. All errors
-are `{ "type": "operation_failed", "message": "Operation failed." }`.
+are `{ "type": "operation_failed", "message": "Operation failed." }` by default.
+Known context-limit and Run stops use fixed public messages: `context_hard_limit`,
+`replan_budget_exceeded`, `stagnated`, and `llm_call_budget_exceeded`.
+No internal error message is copied into those diagnostics. Stagnation counters
+describe the current episode; progress resets them without replenishing the
+Run-wide replan budget, so `0/2` does not imply two remaining replans.
 Public strings use CredentialRedactor (credential assignments, private keys,
 API-key patterns), exact configured API key replacement and Bearer/Basic masking.
 Shell's formatter and shared internal events are unchanged.

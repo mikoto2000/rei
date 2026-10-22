@@ -12,6 +12,39 @@ import org.junit.jupiter.api.Test;
 
 /** WebAPIイベントDtoの結果と状態の契約を検証するテスト。 */
 class WebApiEventDtoTest {
+  /** 既知の実行停止理由だけを固定メッセージに変換し、内部の詳細を公開しない。 */
+  @Test
+  void runBudgetAndStagnationStopsExposeSafeSpecificDiagnostics() {
+    var factory = new AgentEventFactory(Clock.systemUTC());
+    var cases =
+        java.util.Map.of(
+            "ReplanBudgetExceeded", "replan_budget_exceeded",
+            "Stagnated", "stagnated",
+            "LlmCallBudgetExceeded", "llm_call_budget_exceeded");
+    cases.forEach(
+        (errorType, publicType) -> {
+          var error = new ErrorInformation(errorType, "private credential=secret", "private-code");
+          var dto = WebApiEventDto.from(factory.runFailed("run", error), false, "");
+          assertThat(dto.payload().get("error").toString())
+              .contains("type=" + publicType)
+              .doesNotContain("Operation failed.", "private", "secret");
+          // 同名のツール例外は実行全体の停止理由として扱わない。
+          assertThat(
+                  WebApiEventDto.from(factory.toolFailed("call", "read", error), false, "")
+                      .payload()
+                      .get("error")
+                      .toString())
+              .contains("type=operation_failed");
+        });
+    var exhausted =
+        WebApiEventDto.from(
+            factory.runFailed(
+                "run", new ErrorInformation("ReplanBudgetExceeded", "private", "private")),
+            false,
+            "");
+    assertThat(exhausted.payload().get("error").toString()).contains("実行全体", "リセット");
+  }
+
   /** 公開受付から終了までの管理対応付け一覧について、共通の通知属性を保持することを確認する。 */
   @Test
   void publicLifecycleMappingsPreserveEnvelopeAndOnlyApprovedPayloadFields() {

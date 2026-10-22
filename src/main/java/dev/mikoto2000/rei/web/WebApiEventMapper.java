@@ -114,6 +114,9 @@ public final class WebApiEventMapper {
                       "context_hard_limit",
                       "message",
                       "CONTEXT_HARD_LIMIT: context remains too large after compression."));
+            else if (event.type() == AgentEventType.AGENT_RUN_FAILED
+                && value instanceof Map<?, ?> error)
+              payload.put(name, runStopError(error.get("errorType")));
             else
               payload.put(name, Map.of("type", "operation_failed", "message", "Operation failed."));
           } else if (fields(event.type()).contains(name)) payload.put(name, clean(value, apiKey));
@@ -137,6 +140,27 @@ public final class WebApiEventMapper {
         safeText(event.correlationId(), apiKey),
         safeText(event.parentEventId(), apiKey),
         Collections.unmodifiableMap(payload));
+  }
+
+  /** 既知の停止理由は固定文で公開し、例外に含まれる任意のメッセージは公開しない。 */
+  private static Map<String, String> runStopError(Object errorType) {
+    return switch (java.util.Objects.toString(errorType, "")) {
+      case "ReplanBudgetExceeded" ->
+          Map.of(
+              "type",
+              "replan_budget_exceeded",
+              "message",
+              "実行全体の再計画回数の上限に達しました。進捗による停滞カウンターのリセット後も、消費済みの再計画回数は保持されます。依頼の範囲や手順を見直して新しい実行を開始してください。");
+      case "Stagnated" ->
+          Map.of(
+              "type", "stagnated",
+              "message", "再計画後も進捗が得られなかったため停止しました。依頼の範囲や手順を見直してください。");
+      case "LlmCallBudgetExceeded" ->
+          Map.of(
+              "type", "llm_call_budget_exceeded",
+              "message", "実行全体のモデル呼び出し回数の上限に達しました。依頼を小さく分けて新しい実行を開始してください。");
+      default -> Map.of("type", "operation_failed", "message", "Operation failed.");
+    };
   }
 
   /** Web APIによる操作で用いる安全性テキストを返す。 */

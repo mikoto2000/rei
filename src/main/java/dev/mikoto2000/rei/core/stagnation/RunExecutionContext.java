@@ -839,8 +839,10 @@ public class RunExecutionContext {
       }
       if (unknownReplanNotices < 2
           && unknownIterations >= (unknownReplanNotices + 1) * UNKNOWN_GRACE_ITERATIONS) {
-        if (!budget.hasRemainingLlmCalls())
+        if (!budget.hasRemainingLlmCalls()) {
+          emit(AgentEventType.STAGNATION_STOPPED, null, "LLM_CALL_BUDGET_EXCEEDED");
           throw new ExecutionStoppedException(LLM_CALL_BUDGET_EXCEEDED);
+        }
         unknownReplanNotices++;
         publisher.publish(
             factory
@@ -866,10 +868,14 @@ public class RunExecutionContext {
       emit(AgentEventType.STAGNATION_STOPPED, null, "STAGNATED");
       throw new ExecutionStoppedException(STAGNATED);
     }
-    if (!budget.hasRemainingLlmCalls())
+    if (!budget.hasRemainingLlmCalls()) {
+      emit(AgentEventType.STAGNATION_STOPPED, null, "LLM_CALL_BUDGET_EXCEEDED");
       throw new ExecutionStoppedException(LLM_CALL_BUDGET_EXCEEDED);
-    if (!budget.tryConsumeStagnationReplan())
+    }
+    if (!budget.tryConsumeStagnationReplan()) {
+      emit(AgentEventType.STAGNATION_STOPPED, null, "REPLAN_BUDGET_EXCEEDED");
       throw new ExecutionStoppedException(REPLAN_BUDGET_EXCEEDED);
+    }
     String notice =
         new StagnationAdvisor(detector).replanNotice(String.join(", ", recentActions), lastError);
     notice +=

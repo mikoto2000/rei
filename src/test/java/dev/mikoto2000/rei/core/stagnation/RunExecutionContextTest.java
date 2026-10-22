@@ -176,6 +176,10 @@ class RunExecutionContextTest {
       context.endIteration();
     }
     assertThatThrownBy(context::requestReplan).hasMessageContaining("REPLAN_BUDGET_EXCEEDED");
+    assertThat(events.getLast().type()).isEqualTo(AgentEventType.STAGNATION_STOPPED);
+    assertThat((ExecutionProgressPayload) events.getLast().payload())
+        .extracting(ExecutionProgressPayload::reason)
+        .isEqualTo("REPLAN_BUDGET_EXCEEDED");
     assertThat(budget.snapshot().stagnationReplans()).isEqualTo(1);
     assertThat(budget.replanCount()).isZero();
     assertThat(events).anyMatch(e -> e.type() == AgentEventType.STAGNATION_RECOVERED);
