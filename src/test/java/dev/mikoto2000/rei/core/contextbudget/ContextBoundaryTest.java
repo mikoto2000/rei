@@ -42,6 +42,8 @@ class ContextBoundaryTest {
             "run", new OutputLimitRunBudget(2, 10), mock(ProgressEvaluator.class), events, e -> {});
     context.setRunContext(new AgentRunContext("run", "chat", Path.of(".")));
     when(context.evaluator().afterTool(any(), any(), any(), any())).thenReturn(List.of());
+    when(context.evaluator().readFeedback()).thenReturn("[]");
+    when(context.evaluator().snapshot()).thenReturn(new ProgressEvaluator(Path.of(".")).snapshot());
     var assembler = mock(ContextAssembler.class);
     when(assembler.assemble(any(), any(), any(), any()))
         .thenAnswer(

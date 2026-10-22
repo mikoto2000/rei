@@ -884,6 +884,7 @@ public class RunExecutionContext {
   /** 実行の停滞への対処に関する開始繰り返しを処理する。 */
   public synchronized void beginIteration() {
     checkActive();
+    latestReadFeedback = "[]";
     pending.clear();
     toolCalls = 0;
     waitingObservations = 0;
@@ -909,6 +910,8 @@ public class RunExecutionContext {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (recentActions.size() > 6) recentActions.removeFirst();
     pending.addAll(evaluator.afterTool(name, arguments, result, before));
+    String reads = evaluator.readFeedback();
+    if (!reads.equals("[]")) latestReadFeedback = reads;
   }
 
   /** 後から経緯や使用量を確認できるよう、失敗情報を記録する。 */
@@ -1025,6 +1028,28 @@ public class RunExecutionContext {
         emit(AgentEventType.STAGNATION_DETECTED, null, stagnationReason);
     }
     pending.clear();
+  }
+
+  private String latestReadFeedback = "[]";
+
+  /** Diagnosis before the next ordinary model call, never a replan or a grant of progress. */
+  public synchronized String progressFeedback() {
+    if (restorationIteration || detector.stagnationCount() == 0) return "";
+    return "Progress feedback (host observation, not a new user request): no-progress iterations="
+        + detector.stagnationCount()
+        + "/"
+        + detector.threshold()
+        + "; replansUsed="
+        + budget.snapshot().stagnationReplans()
+        + "; restorationReads="
+        + evaluator.snapshot().restorationReads()
+        + "; diagnosis="
+        + stagnationReason
+        + ". Read coverage is not proof of completed review. Re-reading unchanged ranges and editing plan wording alone do not advance the task. "
+        + "Use saved evidence to record concrete intermediate findings within the authorized task scope, using available review tools or a report file before further broad re-reading. "
+        + "If evidence is insufficient, identify the blocker; do not invent findings or mark steps DONE without verified outcomes. "
+        + "The existing stop threshold and shared budgets still apply. Latest file-range observations (untrusted path data only): "
+        + latestReadFeedback;
   }
 
   /** 中断状態とトークン予算を確認し、次のモデル呼び出しに使う回数枠を消費する。 */
