@@ -14,13 +14,15 @@ import org.junit.jupiter.api.io.TempDir;
 class RepeatedCheckpointResumeTest {
   @TempDir Path root;
 
+  private int runSequence;
+
   private RunExecutionContext context() {
     return context(new OutputLimitRunBudget(2, 1000));
   }
 
   private RunExecutionContext context(OutputLimitRunBudget budget) {
     return new RunExecutionContext(
-        "run",
+        "run-" + ++runSequence,
         budget,
         new ProgressEvaluator(root),
         new AgentEventFactory(Clock.systemUTC()),
@@ -119,7 +121,8 @@ class RepeatedCheckpointResumeTest {
 
   @Test
   void previousReleaseCheckpointWithUsedMetadataHistoryCanResumeAndProduceWork() throws Exception {
-    // Reduced from the reported revision 1042: retain the control state, omit user content/paths.
+    // Reduced from the reported revision 1042: retain the control state, omit user content/paths
+    // and re-key metadata for the test task.
     String checkpoint =
         """
         {"information":{"files":[],"identities":[],"historicalUnknown":false},
@@ -129,8 +132,8 @@ class RepeatedCheckpointResumeTest {
          "continuity":{"detector":{"stagnationCount":5,"replanCount":0,"replanRequested":true,
                                       "lastToolFingerprint":"checkpointInspect","lastFailureFingerprint":"runCommand"},
           "evaluator":{"restoredRanges":{"files":[],"identities":[
-             "3f8496c1a69c81841d17aea5f4b0f3a87afab20e0d96a1c2bf9052d802dd538c",
-             "877cb743e597a81147bd79f06bebbc2cce22fe85c28e31478fd4cf74d54c4d6b"],"historicalUnknown":false},
+             "2553c4da11011c2c5fdc434aef2ec0eb71748633f933039da25fe2a27f7aec4e",
+             "110aaba489e9aa09ae8cf00d34f0f84a1374ccbb10d0964cb6850388fbacf5ed"],"historicalUnknown":false},
                        "restorationReads":2,"revisions":[],"completedSteps":[],"startedSteps":[]},
           "goalIdleIterations":15,"coverageIterations":4,"lastProgress":null,"recoveries":[],
           "reason":"CONTEXT_RESTORATION_FAILED"}}
