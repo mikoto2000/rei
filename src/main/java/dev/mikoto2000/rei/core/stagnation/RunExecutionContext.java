@@ -19,11 +19,9 @@ import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Deque;
-import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -34,6 +32,9 @@ import java.util.UUID;
 public class RunExecutionContext {
   /** 情報の取得限定上限。 */
   private static final int ACQUISITION_ONLY_LIMIT = 32;
+
+  /** Separate outcome horizon: forward pagination remains locally productive. */
+  private static final int GOAL_IDLE_LIMIT = 96;
 
   /** 不明判定を猶予する繰り返し回数。 */
   private static final int UNKNOWN_GRACE_ITERATIONS = 16;
@@ -52,7 +53,23 @@ public class RunExecutionContext {
       OutputLimitRunBudget.Snapshot budget,
       int acquisitionOnlyIterations,
       int unknownIterations,
-      int unknownReplanNotices) {
+      int unknownReplanNotices,
+      Continuity continuity) {
+    public ProgressState(
+        InformationLedger.State information,
+        OutputLimitRunBudget.Snapshot budget,
+        int acquisitionOnlyIterations,
+        int unknownIterations,
+        int unknownReplanNotices) {
+      this(
+          information,
+          budget,
+          acquisitionOnlyIterations,
+          unknownIterations,
+          unknownReplanNotices,
+          null);
+    }
+
     /** 実行の停滞への対処を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public ProgressState(
         InformationLedger.State information,
@@ -63,6 +80,105 @@ public class RunExecutionContext {
     }
   }
 
+  /** Additive checkpoint data; old checkpoints use the conservative legacy fallback. */
+  public record Continuity(
+      StagnationDetector.State detector,
+      ProgressEvaluator.State evaluator,
+      int goalIdleIterations,
+      int coverageIterations,
+      ProgressEvidence lastProgress,
+      List<String> recoveries,
+      String reason) {
+    public Continuity {
+      recoveries = List.copyOf(recoveries);
+      if (goalIdleIterations < 0 || coverageIterations < 0 || recoveries.size() > 2)
+        throw new IllegalArgumentException("Invalid continuity state");
+    }
+  }
+
+  private int goalIdleIterations;
+  private int coverageIterations;
+  private ProgressEvidence lastProgress;
+  private final List<String> recoveries = new ArrayList<>();
+  private boolean restorationIteration;
+
+  /** Compact evidence for Activity Timeline and terminal failure diagnostics. */
+  public record Diagnosis(
+      boolean localStagnant,
+      boolean goalStagnant,
+      int goalIdleIterations,
+      int goalThreshold,
+      int coverageIterations,
+      String currentStep,
+      ProgressEvidence lastProgress,
+      String reason,
+      List<String> recentActions,
+      List<String> recoveries,
+      int replanBudget,
+      List<String> remainingSteps) {
+    public Diagnosis {
+      recentActions = List.copyOf(recentActions);
+      recoveries = List.copyOf(recoveries);
+      remainingSteps = List.copyOf(remainingSteps);
+    }
+  }
+
+  public synchronized Diagnosis diagnosis() {
+    boolean legacyGoal = "WORK_STALLED".equals(stagnationReason) && detector.isStagnant();
+    return new Diagnosis(
+        detector.isStagnant() && !legacyGoal,
+        goalIdleIterations >= GOAL_IDLE_LIMIT || legacyGoal,
+        goalIdleIterations,
+        GOAL_IDLE_LIMIT,
+        coverageIterations,
+        java.util.Objects.toString(evaluator.currentStep(), "unstructured"),
+        lastProgress,
+        stagnationReason,
+        List.copyOf(recentActions),
+        recoveries,
+        budget.snapshot().stagnationReplans(),
+        evaluator.remainingSteps());
+  }
+
+  private String recoveryGuidance() {
+    return switch (stagnationReason) {
+      case "REPEATED_READ" -> "取得済み情報で判断を整理し、次の未読範囲へ進んでください。再読が必要なら理由を明確にしてください。";
+      case "COVERAGE_WITHOUT_WORK", "WORK_STALLED" -> "取得済み情報から中間成果物を作り、工程の完了条件と追加調査の必要性を確認してください。";
+      case "CONTEXT_RESTORATION_FAILED" ->
+          "復元対象とバージョンを再確認し、既存の要約・保存済み情報を利用してください。復元できない情報を明示してください。";
+      default -> "現在工程の阻害要因と完了条件を確認し、実行方法を変更して再計画してください。";
+    };
+  }
+
+  private ExecutionStoppedException stagnationStop(ExecutionStoppedException.Reason reason) {
+    var diagnosis = diagnosis();
+    emit(AgentEventType.STAGNATION_STOPPED, null, reason.name());
+    return new ExecutionStoppedException(
+        reason,
+        CredentialRedactor.redact(
+            "reason="
+                + stagnationReason
+                + ", local="
+                + diagnosis.localStagnant()
+                + ", goal="
+                + diagnosis.goalStagnant()
+                + ", step="
+                + diagnosis.currentStep()
+                + ", lastProgress="
+                + lastProgress
+                + ", actions="
+                + diagnosis.recentActions()
+                + ", recoveries="
+                + recoveries
+                + ", replanBudget="
+                + diagnosis.replanBudget()
+                + ", remainingSteps="
+                + diagnosis.remainingSteps()
+                + ". "
+                + recoveryGuidance()
+                + " 保存済み成果と権限を確認し、/resume list から再開対象を確認してください。消費済み予算は引き継ぎます。"));
+  }
+
   /** 実行の停滞への対処で用いる進捗状態の記録を返す。 */
   public synchronized ProgressState progressSnapshot() {
     return new ProgressState(
@@ -70,7 +186,15 @@ public class RunExecutionContext {
         budget.snapshot(),
         acquisitionOnlyIterations,
         unknownIterations,
-        unknownReplanNotices);
+        unknownReplanNotices,
+        new Continuity(
+            detector.snapshot(),
+            evaluator.snapshot(),
+            goalIdleIterations,
+            coverageIterations,
+            lastProgress,
+            recoveries,
+            stagnationReason));
   }
 
   /** 保存済みの状態を引き継ぐため、進捗を復元する。 */
@@ -89,6 +213,21 @@ public class RunExecutionContext {
     acquisitionOnlyIterations = saved.acquisitionOnlyIterations();
     unknownIterations = saved.unknownIterations();
     unknownReplanNotices = saved.unknownReplanNotices();
+    if (saved.continuity() != null) {
+      var continuity = saved.continuity();
+      detector.restore(continuity.detector());
+      evaluator.restore(continuity.evaluator());
+      goalIdleIterations = continuity.goalIdleIterations();
+      coverageIterations = continuity.coverageIterations();
+      lastProgress = continuity.lastProgress();
+      recoveries.clear();
+      recoveries.addAll(continuity.recoveries());
+      if (continuity.reason() != null) stagnationReason = continuity.reason();
+    }
+  }
+
+  public synchronized void beginContextRestoration() {
+    evaluator.beginContextRestoration();
   }
 
   /** 継続入力。 */
@@ -327,15 +466,21 @@ public class RunExecutionContext {
   private java.util.function.Consumer<List<org.springframework.ai.chat.messages.Message>>
       toolResultsCheckpoint = messages -> {};
 
+  private List<org.springframework.ai.chat.messages.Message> lastCheckpointMessages = List.of();
+
   /** 実行の停滞への対処で使用するツールの結果一覧再開用の記録を設定する。 */
-  public void setToolResultsCheckpoint(
+  public synchronized void setToolResultsCheckpoint(
       java.util.function.Consumer<List<org.springframework.ai.chat.messages.Message>> observer) {
     toolResultsCheckpoint = observer;
   }
 
   /** 実行の停滞への対処に関するpreserveツールの結果一覧を処理する。 */
-  public void preserveToolResults(List<org.springframework.ai.chat.messages.Message> messages) {
-    toolResultsCheckpoint.accept(messages);
+  public synchronized void preserveToolResults(
+      List<org.springframework.ai.chat.messages.Message> messages) {
+    // Commit the completed batch's counters before taking the existing atomic checkpoint.
+    endIteration();
+    lastCheckpointMessages = List.copyOf(messages);
+    toolResultsCheckpoint.accept(lastCheckpointMessages);
   }
 
   /** 実行の停滞への対処で用いる開始永続化されたツールを返す。 */
@@ -396,9 +541,6 @@ public class RunExecutionContext {
 
   /** 直近操作一覧。 */
   private final Deque<String> recentActions = new ArrayDeque<>();
-
-  /** 完了小さな目標。 */
-  private final Set<String> completedSubgoals = new HashSet<>();
 
   /** 直近エラー。 */
   private String lastError = "none";
@@ -662,7 +804,7 @@ public class RunExecutionContext {
    * success.
    */
   public synchronized void completeSubgoal(String goal) {
-    if (closed || !completedSubgoals.add(goal)) return;
+    if (closed || !evaluator.completeSubgoal(goal)) return;
     boolean recovering = detector.replanCount() > 0 || detector.isReplanRequested();
     var evidence =
         new ProgressEvidence(
@@ -671,6 +813,9 @@ public class RunExecutionContext {
             ProgressEvaluator.actionKey("subgoal", goal));
     detector.recordProgress(evidence.kind());
     acquisitionOnlyIterations = 0;
+    goalIdleIterations = 0;
+    coverageIterations = 0;
+    lastProgress = evidence;
     progressVersion++;
     emit(AgentEventType.PROGRESS_DETECTED, evidence, "subgoal_completed");
     if (recovering) emit(AgentEventType.STAGNATION_RECOVERED, evidence, "progress_resumed");
@@ -724,6 +869,7 @@ public class RunExecutionContext {
     waitingObservations = 0;
     iterationFailed = false;
     iterationOpen = true;
+    restorationIteration = false;
   }
 
   /** 後から経緯や使用量を確認できるよう、ツールを記録する。 */
@@ -767,38 +913,76 @@ public class RunExecutionContext {
       return;
     }
     boolean recovering = detector.replanCount() > 0 || detector.isReplanRequested();
+    boolean restored = pending.stream().anyMatch(e -> e.kind() == ProgressEvent.CONTEXT_RESTORED);
+    boolean onlyRestoration =
+        restored
+            && !iterationFailed
+            && pending.stream().allMatch(e -> e.kind() == ProgressEvent.CONTEXT_RESTORED);
+    if (onlyRestoration) {
+      restorationIteration = true;
+      for (var evidence : pending)
+        emit(AgentEventType.PROGRESS_DETECTED, evidence, "context_restored");
+      pending.clear();
+      return;
+    }
+    boolean restorationFailed =
+        evaluator.restoringContext() || "CONTEXT_RESTORATION_FAILED".equals(stagnationReason);
+    evaluator.finishContextRestoration();
     boolean work =
         pending.stream()
             .anyMatch(
                 e ->
                     e.kind() == ProgressEvent.SUBGOAL_COMPLETED
-                        || e.kind() == ProgressEvent.STATE_CHANGED);
+                        || e.kind() == ProgressEvent.STATE_CHANGED
+                        || e.kind() == ProgressEvent.STEP_CHANGED);
     boolean acquisitionProgress = pending.stream().anyMatch(ProgressEvidence::acquisitionProgress);
-    boolean known = pending.stream().anyMatch(e -> e.kind() != ProgressEvent.INFORMATION_UNKNOWN);
+    boolean known =
+        pending.stream()
+            .anyMatch(
+                e ->
+                    e.kind() != ProgressEvent.INFORMATION_UNKNOWN
+                        && e.kind() != ProgressEvent.CONTEXT_RESTORED);
     boolean unknown = pending.stream().anyMatch(e -> e.kind() == ProgressEvent.INFORMATION_UNKNOWN);
     // 作業状態の変化と情報収集の進展を区別し、読み取りだけで成果が完成したと見なさない。
     if (work) acquisitionOnlyIterations = 0;
     // 同じファイルでも未確認の範囲を読むことは情報収集の進展として認める。
     // ただし、作業の完了や共有予算の回復としては扱わない。
     else if (known && !acquisitionProgress) acquisitionOnlyIterations++;
+    if (work) {
+      goalIdleIterations = 0;
+      coverageIterations = 0;
+    } else {
+      goalIdleIterations = Math.min(GOAL_IDLE_LIMIT, goalIdleIterations + 1);
+      if (acquisitionProgress)
+        coverageIterations = Math.min(GOAL_IDLE_LIMIT, coverageIterations + 1);
+    }
     if (unknown && !known) unknownIterations++;
     else unknownIterations = 0;
     boolean stalledWork =
         acquisitionOnlyIterations >= ACQUISITION_ONLY_LIMIT && !acquisitionProgress;
     stagnationReason =
-        stalledWork
-            ? "WORK_STALLED"
-            : unknown
-                ? "INFORMATION_UNKNOWN"
-                : iterationFailed
-                    ? "TOOL_FAILURE"
-                    : detector.hasRepeatedToolCall()
-                        ? lastToolName.startsWith("read")
-                            ? "REPEATED_READ"
-                            : "REPEATED_SEARCH_OR_ACTION"
-                        : toolCalls > 0 && !known
-                            ? "DUPLICATE_OR_UNSUPPORTED_INFORMATION"
-                            : "no_progress";
+        goalIdleIterations >= GOAL_IDLE_LIMIT && coverageIterations > 0
+            ? "COVERAGE_WITHOUT_WORK"
+            : stalledWork
+                ? "WORK_STALLED"
+                : unknown
+                    ? "INFORMATION_UNKNOWN"
+                    : restorationFailed && !known
+                        ? "CONTEXT_RESTORATION_FAILED"
+                        : iterationFailed
+                            ? "TOOL_FAILURE"
+                            : detector.hasRepeatedToolCall()
+                                ? lastToolName.startsWith("read")
+                                    ? "REPEATED_READ"
+                                    : "REPEATED_SEARCH_OR_ACTION"
+                                : !known
+                                        && !java.util.Objects.toString(
+                                                evaluator.currentStep(), "unstructured")
+                                            .equals("unstructured")
+                                    ? "STEP_STALLED"
+                                    : toolCalls > 0 && !known
+                                        ? "DUPLICATE_OR_UNSUPPORTED_INFORMATION"
+                                        : "no_progress";
     // 判定不能を進捗や重複と決め付けず、限られた猶予の中で診断を続ける。
     if (!(unknown && !known)) detector.recordIteration(known && !stalledWork);
     for (ProgressEvidence evidence : pending) {
@@ -806,15 +990,17 @@ public class RunExecutionContext {
         emit(AgentEventType.STAGNATION_UPDATED, evidence, stagnationReason);
         continue;
       }
-      if (!stalledWork) detector.recordProgress(evidence.kind());
+      if (evidence.kind() == ProgressEvent.CONTEXT_RESTORED) continue;
+      lastProgress = evidence;
       progressVersion++;
       emit(AgentEventType.PROGRESS_DETECTED, evidence, "meaningful_progress");
     }
-    if (known && !stalledWork && recovering)
+    if (known && !stalledWork && recovering && !diagnosis().goalStagnant())
       emit(AgentEventType.STAGNATION_RECOVERED, pending.getFirst(), "progress_resumed");
-    if (!known || stalledWork) {
+    if (!known || stalledWork || diagnosis().goalStagnant()) {
       emit(AgentEventType.STAGNATION_UPDATED, null, stagnationReason);
-      if (detector.isStagnant()) emit(AgentEventType.STAGNATION_DETECTED, null, stagnationReason);
+      if (detector.isStagnant() || diagnosis().goalStagnant())
+        emit(AgentEventType.STAGNATION_DETECTED, null, stagnationReason);
     }
     pending.clear();
   }
@@ -829,7 +1015,8 @@ public class RunExecutionContext {
 
   /** 停滞や判定不能の状態に応じて方針の見直しを促し、継続できる予算がなければ実行を止める。 */
   public synchronized String requestReplan() {
-    if (!detector.isReplanRequested()) {
+    if (restorationIteration) return null;
+    if (!detector.isReplanRequested() && !diagnosis().goalStagnant()) {
       // 呼び出し回数の上限がない場合も、判定不能のまま無限に実行を続けない。
       if (!budget.llmCallBudgetEnabled()
           && unknownReplanNotices >= 2
@@ -844,6 +1031,7 @@ public class RunExecutionContext {
           throw new ExecutionStoppedException(LLM_CALL_BUDGET_EXCEEDED);
         }
         unknownReplanNotices++;
+        toolResultsCheckpoint.accept(lastCheckpointMessages);
         publisher.publish(
             factory
                 .executionProgress(
@@ -865,16 +1053,14 @@ public class RunExecutionContext {
       return null;
     }
     if (detector.isMaxReplanReached()) {
-      emit(AgentEventType.STAGNATION_STOPPED, null, "STAGNATED");
-      throw new ExecutionStoppedException(STAGNATED);
+      throw stagnationStop(STAGNATED);
     }
     if (!budget.hasRemainingLlmCalls()) {
       emit(AgentEventType.STAGNATION_STOPPED, null, "LLM_CALL_BUDGET_EXCEEDED");
       throw new ExecutionStoppedException(LLM_CALL_BUDGET_EXCEEDED);
     }
     if (!budget.tryConsumeStagnationReplan()) {
-      emit(AgentEventType.STAGNATION_STOPPED, null, "REPLAN_BUDGET_EXCEEDED");
-      throw new ExecutionStoppedException(REPLAN_BUDGET_EXCEEDED);
+      throw stagnationStop(REPLAN_BUDGET_EXCEEDED);
     }
     String notice =
         new StagnationAdvisor(detector).replanNotice(String.join(", ", recentActions), lastError);
@@ -882,10 +1068,21 @@ public class RunExecutionContext {
         "\nProgress diagnosis: "
             + stagnationReason
             + ". Information acquisition does not complete planned work. Confirm work outcomes; do not infer completion from reads.";
+    String recovery =
+        recoveries.isEmpty()
+            ? recoveryGuidance()
+            : "既に試した復旧では解消していません。工程の完了条件と阻害要因を確認し、既存Planning Loopで実行方法を変更してください。 "
+                + recoveryGuidance();
+    if (recoveries.size() < 2)
+      recoveries.add(stagnationReason + ":attempt-" + (recoveries.size() + 1));
+    notice += "\n" + recovery;
     detector.recordReplan();
     acquisitionOnlyIterations = 0;
+    goalIdleIterations = 0;
+    coverageIterations = 0;
     unknownIterations = 0;
     emit(AgentEventType.STAGNATION_REPLAN_REQUESTED, null, stagnationReason);
+    toolResultsCheckpoint.accept(lastCheckpointMessages);
     return notice;
   }
 
@@ -902,7 +1099,26 @@ public class RunExecutionContext {
                     detector.threshold(),
                     detector.replanCount(),
                     detector.maxReplans(),
-                    reason))
+                    reason,
+                    diagnosisDetails()))
             .withOwnership(runContext));
+  }
+
+  /** Keep the event boundary independent of Run implementation types. */
+  private Map<String, Object> diagnosisDetails() {
+    var current = diagnosis();
+    return Map.ofEntries(
+        Map.entry("localStagnant", current.localStagnant()),
+        Map.entry("goalStagnant", current.goalStagnant()),
+        Map.entry("goalIdleIterations", current.goalIdleIterations()),
+        Map.entry("goalThreshold", current.goalThreshold()),
+        Map.entry("coverageIterations", current.coverageIterations()),
+        Map.entry("currentStep", current.currentStep()),
+        Map.entry("lastProgress", lastProgress == null ? Map.of() : lastProgress),
+        Map.entry("reason", current.reason()),
+        Map.entry("recentActions", current.recentActions()),
+        Map.entry("recoveries", current.recoveries()),
+        Map.entry("replanBudget", current.replanBudget()),
+        Map.entry("remainingSteps", current.remainingSteps()));
   }
 }

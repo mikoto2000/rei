@@ -107,6 +107,33 @@ public class StagnationDetector {
     return repeatedFailure;
   }
 
+  /** Counters survive checkpoint resume, including a pending recovery request. */
+  public record State(
+      int stagnationCount,
+      int replanCount,
+      boolean replanRequested,
+      String lastToolFingerprint,
+      String lastFailureFingerprint) {
+    public State {
+      if (stagnationCount < 0 || replanCount < 0)
+        throw new IllegalArgumentException("Invalid detector state");
+    }
+  }
+
+  public State snapshot() {
+    return new State(
+        stagnationCount, replanCount, replanRequested, lastToolFingerprint, lastFailureFingerprint);
+  }
+
+  public void restore(State state) {
+    if (state == null) return;
+    stagnationCount = state.stagnationCount();
+    replanCount = state.replanCount();
+    replanRequested = state.replanRequested();
+    lastToolFingerprint = state.lastToolFingerprint();
+    lastFailureFingerprint = state.lastFailureFingerprint();
+  }
+
   /** 1 iteration を記録する。progress があればカウントをリセットする。 */
   public void recordIteration(boolean progress) {
     if (progress) {
@@ -128,6 +155,7 @@ public class StagnationDetector {
   public void recordProgress(ProgressEvent event) {
     if (event == ProgressEvent.FAILURE
         || event == ProgressEvent.TOOL_CALL
+        || event == ProgressEvent.CONTEXT_RESTORED
         || event == ProgressEvent.INFORMATION_UNKNOWN) return;
     stagnationCount = 0;
     replanCount = 0;

@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.core.stagnation;
 
 /** 進展を表す軽量な内部イベント。 */
 public enum ProgressEvent {
+  /** A bounded reread of an explicitly restored range; never new information. */
+  CONTEXT_RESTORED,
   /** 新規情報。 */
   NEW_INFORMATION,
   /** 情報不明。 */

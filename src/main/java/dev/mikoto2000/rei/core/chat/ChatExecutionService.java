@@ -494,8 +494,10 @@ public class ChatExecutionService {
       if (resumed == null) turns.startOrdered(context, promptText, clock.instant());
       if (checkpoints != null) checkpoints.start(context, promptText);
       execution.evaluator().capturePlanBaseline();
-      if (checkpoints != null && checkpoints.hasProgressHistory(context))
+      if (checkpoints != null && checkpoints.hasProgressHistory(context)) {
         execution.restoreProgress(checkpoints.progress(context));
+        execution.beginContextRestoration();
+      }
       if (workContext != null
           && context.mode() == AgentRunContext.Mode.EXCLUSIVE
           && !structuredCommand) workContext.afterStart(context);
@@ -1249,7 +1251,15 @@ public class ChatExecutionService {
       return new ChatRunResult(ChatRunStatus.FAILED, "", checkpointError);
     for (Throwable cause : failureCauses(error)) {
       if (cause instanceof ExecutionStoppedException stopped) {
-        return new ChatRunResult(ChatRunStatus.valueOf(stopped.reason().name()), "");
+        return new ChatRunResult(
+            ChatRunStatus.valueOf(stopped.reason().name()),
+            "",
+            stopped.getMessage().equals(stopped.reason().name())
+                ? null
+                : new ErrorInformation(
+                    "ExecutionStopped",
+                    stopped.getMessage(),
+                    stopped.reason().name().toLowerCase(java.util.Locale.ROOT)));
       }
       if (cause instanceof java.util.concurrent.CancellationException)
         return ChatRunResult.cancelled();

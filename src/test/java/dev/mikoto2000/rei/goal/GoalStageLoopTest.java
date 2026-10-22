@@ -95,6 +95,42 @@ class GoalStageLoopTest {
 
   /** 目標の達成管理で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
+  void runningObservationUsesIndependentConditionsAndKeepsStageCompletionWithHost() {
+    var goal = setup();
+    var loop =
+        loop(
+            (claim, run, completed) -> {
+              var owner = new AgentRunContext(run, "session", dir, "project");
+              var stage = stages.forRun(goal, run);
+              assertEquals(
+                  GoalStageVerifier.Result.UNSATISFIED,
+                  ((GoalStageVerifier.Observation)
+                          service.inspectRunning(owner, goal.id()).get("observation"))
+                      .result());
+              write(stage.stageId(), true);
+              var verified = service.inspectRunning(owner, goal.id());
+              assertEquals(stage.stageId(), verified.get("stageId"));
+              var observation = (GoalStageVerifier.Observation) verified.get("observation");
+              assertEquals(GoalStageVerifier.Result.VERIFIED, observation.result());
+              assertFalse(observation.artifactVersions().isEmpty());
+              assertEquals(
+                  "RUNNING",
+                  stages.list(goal).stream()
+                      .filter(s -> s.definition().id().equals(stage.stageId()))
+                      .findFirst()
+                      .orElseThrow()
+                      .state());
+              assertThrows(
+                  IllegalStateException.class,
+                  () ->
+                      service.inspectRunning(
+                          new AgentRunContext("other", "session", dir, "project"), goal.id()));
+              completed.accept(done());
+            });
+    assertEquals("COMPLETED", loop.run("project", goal.id()).status());
+  }
+
+  @Test
   void onlyVerifiedStageUnlocksNextAndDuplicateCallbackDoesNotAdvance() {
     var goal = setup();
     var calls = new AtomicInteger();

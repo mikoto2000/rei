@@ -17,6 +17,31 @@ public record ProgressEvidence(
     String source,
     String revision,
     boolean acquisitionProgress) {
+  /** Semantic dimensions; legacy event names remain readable by existing consumers. */
+  public enum Category {
+    INFORMATION_DISCOVERED,
+    COVERAGE_ADVANCED,
+    WORK_PRODUCT_UPDATED,
+    STEP_ADVANCED,
+    CONTEXT_RESTORED,
+    UNKNOWN
+  }
+
+  /** Classify evidence without promoting fetched content to examined or reviewed work. */
+  @com.fasterxml.jackson.annotation.JsonProperty(
+      access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+  public Category category() {
+    if (acquisitionProgress) return Category.COVERAGE_ADVANCED;
+    return switch (kind) {
+      case NEW_INFORMATION, NEW_RELEVANT_FILE, ERROR_RESOLVED -> Category.INFORMATION_DISCOVERED;
+      case STATE_CHANGED, FILE_CHANGED -> Category.WORK_PRODUCT_UPDATED;
+      case SUBGOAL_COMPLETED, STEP_COMPLETED, STEP_CHANGED, TASK_COMPLETED_ITEM_ADDED ->
+          Category.STEP_ADVANCED;
+      case CONTEXT_RESTORED -> Category.CONTEXT_RESTORED;
+      default -> Category.UNKNOWN;
+    };
+  }
+
   /** 実行の停滞への対処を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ProgressEvidence(ProgressEvent kind, String description, String source, String revision) {
     this(kind, description, source, revision, false);

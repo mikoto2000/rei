@@ -118,10 +118,11 @@ public class Tools {
   @Tool(
       description =
           "現在のGoal Stageへ保存Review/Artifact IDとSHAのproofを添付します。捕捉Run/root/sessionを照合し、現在patch/report/Artifact/条件はホストが独立検証します。条件や状態を変更する権限はありません。")
-  void attachGoalStageEvidence(
+  java.util.Map<String, Object> attachGoalStageEvidence(
       String goalId, dev.mikoto2000.rei.goal.GoalCompletionGate.Proof proof) {
     if (goalStages == null) throw new IllegalStateException("Stages unavailable");
     goalStages.attachRunning(diagnosedOwner(), goalId, proof);
+    return goalStages.inspectRunning(diagnosedOwner(), goalId);
   }
 
   /** 後続の判断で選べる候補を用意するため、目標段階分割を提案する。 */

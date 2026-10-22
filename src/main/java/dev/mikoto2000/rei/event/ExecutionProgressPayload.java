@@ -18,5 +18,27 @@ public record ExecutionProgressPayload(
     int threshold,
     int stagnationReplanCount,
     int maxStagnationReplans,
-    String reason)
-    implements AgentEventPayload {}
+    String reason,
+    java.util.Map<String, Object> diagnosis)
+    implements AgentEventPayload {
+  public ExecutionProgressPayload {
+    diagnosis = diagnosis == null ? java.util.Map.of() : java.util.Map.copyOf(diagnosis);
+  }
+
+  public ExecutionProgressPayload(
+      ProgressEvidence evidence,
+      int consecutiveNoProgressIterations,
+      int threshold,
+      int stagnationReplanCount,
+      int maxStagnationReplans,
+      String reason) {
+    this(
+        evidence,
+        consecutiveNoProgressIterations,
+        threshold,
+        stagnationReplanCount,
+        maxStagnationReplans,
+        reason,
+        null);
+  }
+}
