@@ -238,7 +238,7 @@ public class ProgressEvaluator {
         .forEach(s -> evidence.add(new ProgressEvidence(ProgressEvent.STEP_CHANGED,
             "Plan step started (completion still requires verification)", s.id())));
     JsonNode output = parse(result);
-    if (name.equals("readReviewFile") && output != null && output.has("range")) {
+    if (name.equals("readReviewFile") && output != null && !failed(output) && output.has("range")) {
       var range = output.path("range");
       var span = range.path("span");
       var observed =
@@ -621,6 +621,12 @@ public class ProgressEvaluator {
   /** Safe compact identity for diagnostics; document text is not logged. */
   public String currentStep() {
     return plan == null ? "unstructured" : plan.currentStep().map(s -> s.id()).orElse("unstructured");
+  }
+
+  public List<String> remainingSteps() {
+    return plan == null ? List.of() : plan.steps().stream()
+        .filter(s -> !ActionPlan.STATUS_DONE.equals(s.status()) && !ActionPlan.STATUS_SKIPPED.equals(s.status()))
+        .limit(100).map(s -> s.id()).toList();
   }
 
   /** 実行の停滞への対処に関する収集パス一覧を処理する。 */

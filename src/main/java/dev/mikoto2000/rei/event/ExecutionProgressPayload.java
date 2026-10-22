@@ -18,5 +18,12 @@ public record ExecutionProgressPayload(
     int threshold,
     int stagnationReplanCount,
     int maxStagnationReplans,
-    String reason)
-    implements AgentEventPayload {}
+    String reason,
+    dev.mikoto2000.rei.core.stagnation.RunExecutionContext.Diagnosis diagnosis)
+    implements AgentEventPayload {
+  public ExecutionProgressPayload(ProgressEvidence evidence, int consecutiveNoProgressIterations,
+      int threshold, int stagnationReplanCount, int maxStagnationReplans, String reason) {
+    this(evidence, consecutiveNoProgressIterations, threshold, stagnationReplanCount,
+        maxStagnationReplans, reason, null);
+  }
+}

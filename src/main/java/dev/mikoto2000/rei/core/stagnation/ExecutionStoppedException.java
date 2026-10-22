@@ -35,6 +35,11 @@ public class ExecutionStoppedException extends RuntimeException {
     this.reason = reason;
   }
 
+  public ExecutionStoppedException(Reason reason, String diagnosis) {
+    super(reason.name() + ": " + diagnosis);
+    this.reason = reason;
+  }
+
   /** 実行の停滞への対処で用いる理由を返す。 */
   public Reason reason() {
     return reason;
