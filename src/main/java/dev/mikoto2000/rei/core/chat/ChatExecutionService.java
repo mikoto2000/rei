@@ -1257,7 +1257,7 @@ public class ChatExecutionService {
             stopped.getMessage().equals(stopped.reason().name())
                 ? null
                 : new ErrorInformation(
-                    "ExecutionStopped",
+                    terminalError(ChatRunStatus.valueOf(stopped.reason().name())).errorType(),
                     stopped.getMessage(),
                     stopped.reason().name().toLowerCase(java.util.Locale.ROOT)));
       }
