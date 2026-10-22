@@ -134,7 +134,7 @@ class ResumeObservationTest {
   }
 
   @Test
-  void checkpointInspectionAtResumeDefersPendingStopOnlyOnceAcrossLineage() {
+  void checkpointInspectionDefersPendingStopOnlyOnceInTheSameRun() {
     var budget = new dev.mikoto2000.rei.llm.OutputLimitRunBudget(2, 1000);
     budget.tryConsumeStagnationReplan();
     budget.tryConsumeStagnationReplan();

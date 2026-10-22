@@ -82,6 +82,10 @@ public class ProgressEvaluator {
 
   private InformationLedger.State restorationTargets;
   private int restorationReads;
+
+  /** Metadata may be needed again in a new Run; only its total allowance is lineage-wide. */
+  private final Set<String> restoredCheckpoints = new HashSet<>();
+
   private final Set<String> startedSteps = new HashSet<>();
 
   /** Persist only bounded evidence, alongside the existing information checkpoint. */
@@ -183,9 +187,7 @@ public class ProgressEvaluator {
                     .contains(output.path("decision").asText())
                 && output.path("usable").isArray()
                 && output.path("blockers").isArray();
-    if (valid
-        && restoredRanges.observe(digest("checkpoint:" + name + ":" + task))
-            == InformationLedger.Status.NEW) {
+    if (valid && restoredCheckpoints.add(digest("checkpoint:" + name + ":" + task))) {
       restorationReads++;
       evidence.add(
           new ProgressEvidence(
