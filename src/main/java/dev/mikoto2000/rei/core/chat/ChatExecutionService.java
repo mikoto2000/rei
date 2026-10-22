@@ -1251,9 +1251,14 @@ public class ChatExecutionService {
       return new ChatRunResult(ChatRunStatus.FAILED, "", checkpointError);
     for (Throwable cause : failureCauses(error)) {
       if (cause instanceof ExecutionStoppedException stopped) {
-        return new ChatRunResult(ChatRunStatus.valueOf(stopped.reason().name()), "",
-            stopped.getMessage().equals(stopped.reason().name()) ? null
-                : new ErrorInformation("ExecutionStopped", dev.mikoto2000.rei.event.CredentialRedactor.redact(stopped.getMessage()),
+        return new ChatRunResult(
+            ChatRunStatus.valueOf(stopped.reason().name()),
+            "",
+            stopped.getMessage().equals(stopped.reason().name())
+                ? null
+                : new ErrorInformation(
+                    "ExecutionStopped",
+                    stopped.getMessage(),
                     stopped.reason().name().toLowerCase(java.util.Locale.ROOT)));
       }
       if (cause instanceof java.util.concurrent.CancellationException)

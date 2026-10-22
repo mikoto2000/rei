@@ -19,11 +19,26 @@ public record ExecutionProgressPayload(
     int stagnationReplanCount,
     int maxStagnationReplans,
     String reason,
-    dev.mikoto2000.rei.core.stagnation.RunExecutionContext.Diagnosis diagnosis)
+    java.util.Map<String, Object> diagnosis)
     implements AgentEventPayload {
-  public ExecutionProgressPayload(ProgressEvidence evidence, int consecutiveNoProgressIterations,
-      int threshold, int stagnationReplanCount, int maxStagnationReplans, String reason) {
-    this(evidence, consecutiveNoProgressIterations, threshold, stagnationReplanCount,
-        maxStagnationReplans, reason, null);
+  public ExecutionProgressPayload {
+    diagnosis = diagnosis == null ? java.util.Map.of() : java.util.Map.copyOf(diagnosis);
+  }
+
+  public ExecutionProgressPayload(
+      ProgressEvidence evidence,
+      int consecutiveNoProgressIterations,
+      int threshold,
+      int stagnationReplanCount,
+      int maxStagnationReplans,
+      String reason) {
+    this(
+        evidence,
+        consecutiveNoProgressIterations,
+        threshold,
+        stagnationReplanCount,
+        maxStagnationReplans,
+        reason,
+        null);
   }
 }

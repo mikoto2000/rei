@@ -470,6 +470,21 @@ public class GoalStageService {
         });
   }
 
+  /** Observation for the existing proof tool; this does not mark a Stage complete. */
+  public java.util.Map<String, Object> inspectRunning(
+      dev.mikoto2000.rei.core.chat.AgentRunContext owner, String id) {
+    var goal = owningRun(owner, id);
+    var attempt = stages.forRun(goal, owner.runId());
+    if (attempt == null) throw new IllegalStateException("Current Stage required");
+    return java.util.Map.of(
+        "stageId",
+        attempt.stageId(),
+        "planVersion",
+        attempt.planVersion(),
+        "observation",
+        observeRun(goal, owner.runId()));
+  }
+
   /** 目標の達成管理において、反映提案に該当するか判定する。 */
   public boolean applyProposal(GoalRepository.Claim claim, String run) {
     return allowSplit && stages.applyProposal(claim, run);

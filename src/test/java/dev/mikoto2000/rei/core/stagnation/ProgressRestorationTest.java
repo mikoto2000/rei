@@ -18,22 +18,35 @@ class ProgressRestorationTest {
   private final ArrayList<AgentEvent> events = new ArrayList<>();
 
   private RunExecutionContext context() {
-    return new RunExecutionContext("run", new OutputLimitRunBudget(2, 500), new ProgressEvaluator(root), new AgentEventFactory(Clock.systemUTC()), events::add);
+    return new RunExecutionContext(
+        "run",
+        new OutputLimitRunBudget(2, 500),
+        new ProgressEvaluator(root),
+        new AgentEventFactory(Clock.systemUTC()),
+        events::add);
   }
 
   private void read(RunExecutionContext context, int line) {
     context.beginIteration();
-    context.recordTool("readMultiFile", "{}", "{\"path\":\"A\",\"version\":\"v1\",\"startLine\":" + line + ",\"content\":[\"line\"]}", context.evaluator().beforeTool("readMultiFile", "{}"));
+    context.recordTool(
+        "readMultiFile",
+        "{}",
+        "{\"path\":\"A\",\"version\":\"v1\",\"startLine\":" + line + ",\"content\":[\"line\"]}",
+        context.evaluator().beforeTool("readMultiFile", "{}"));
     context.endIteration();
   }
 
   @Test
-  void identifiedRestorationPreservesLocalCounterAndBudgetWithoutDiscoveringInformation() throws Exception {
+  void identifiedRestorationPreservesLocalCounterAndBudgetWithoutDiscoveringInformation()
+      throws Exception {
     var original = context();
     for (int i = 1; i <= 8; i++) read(original, i);
     for (int i = 0; i < 3; i++) read(original, 1);
     var json = new ObjectMapper();
-    var saved = json.readValue(json.writeValueAsString(original.progressSnapshot()), RunExecutionContext.ProgressState.class);
+    var saved =
+        json.readValue(
+            json.writeValueAsString(original.progressSnapshot()),
+            RunExecutionContext.ProgressState.class);
     var resumed = context();
     resumed.restoreProgress(saved);
     resumed.beginContextRestoration();
@@ -44,7 +57,12 @@ class ProgressRestorationTest {
     assertThat(resumed.progressVersion()).isZero();
     assertThat(resumed.detector().stagnationCount()).isEqualTo(3);
     assertThat(resumed.budgetSnapshot()).isEqualTo(original.budgetSnapshot());
-    assertThat(events).anyMatch(e -> e.payload() instanceof ExecutionProgressPayload p && p.evidence() != null && p.evidence().kind() == ProgressEvent.CONTEXT_RESTORED);
+    assertThat(events)
+        .anyMatch(
+            e ->
+                e.payload() instanceof ExecutionProgressPayload p
+                    && p.evidence() != null
+                    && p.evidence().kind() == ProgressEvent.CONTEXT_RESTORED);
     read(resumed, 1);
     assertThat(resumed.detector().isStagnant()).isTrue();
     var again = context();
@@ -52,6 +70,22 @@ class ProgressRestorationTest {
     again.beginContextRestoration();
     read(again, 2);
     assertThat(again.detector().isStagnant()).isTrue();
+  }
+
+  @Test
+  void restorationDefersAlreadyPendingReplanWithoutErasingIt() {
+    var original = context();
+    read(original, 1);
+    for (int i = 0; i < 4; i++) read(original, 1);
+    var resumed = context();
+    resumed.restoreProgress(original.progressSnapshot());
+    resumed.beginContextRestoration();
+    read(resumed, 1);
+    assertThat(resumed.requestReplan()).isNull();
+    assertThat(resumed.detector().isReplanRequested()).isTrue();
+    assertThat(resumed.budgetSnapshot().stagnationReplans()).isZero();
+    read(resumed, 1);
+    assertThat(resumed.requestReplan()).isNotNull();
   }
 
   @Test
@@ -87,7 +121,9 @@ class ProgressRestorationTest {
     assertThat(evaluator.afterTool("readMultiFile", "{}", result, before)).isEmpty();
     var write = evaluator.beforeTool("writeTextFile", "{\"path\":\"result.md\"}");
     java.nio.file.Files.writeString(root.resolve("result.md"), "findings");
-    assertThat(evaluator.afterTool("writeTextFile", "{}", "{}", write)).extracting(e -> e.category().name()).containsExactly("WORK_PRODUCT_UPDATED");
+    assertThat(evaluator.afterTool("writeTextFile", "{}", "{}", write))
+        .extracting(e -> e.category().name())
+        .containsExactly("WORK_PRODUCT_UPDATED");
     write = evaluator.beforeTool("writeTextFile", "{\"path\":\"result.md\"}");
     assertThat(evaluator.afterTool("writeTextFile", "{}", "{}", write)).isEmpty();
   }

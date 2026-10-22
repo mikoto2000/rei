@@ -28,13 +28,15 @@ public record ProgressEvidence(
   }
 
   /** Classify evidence without promoting fetched content to examined or reviewed work. */
-  @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+  @com.fasterxml.jackson.annotation.JsonProperty(
+      access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
   public Category category() {
     if (acquisitionProgress) return Category.COVERAGE_ADVANCED;
     return switch (kind) {
       case NEW_INFORMATION, NEW_RELEVANT_FILE, ERROR_RESOLVED -> Category.INFORMATION_DISCOVERED;
       case STATE_CHANGED, FILE_CHANGED -> Category.WORK_PRODUCT_UPDATED;
-      case SUBGOAL_COMPLETED, STEP_COMPLETED, STEP_CHANGED, TASK_COMPLETED_ITEM_ADDED -> Category.STEP_ADVANCED;
+      case SUBGOAL_COMPLETED, STEP_COMPLETED, STEP_CHANGED, TASK_COMPLETED_ITEM_ADDED ->
+          Category.STEP_ADVANCED;
       case CONTEXT_RESTORED -> Category.CONTEXT_RESTORED;
       default -> Category.UNKNOWN;
     };

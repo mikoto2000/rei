@@ -20,6 +20,7 @@ import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.event.ToolEventCallbackDecorator;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -200,6 +201,48 @@ class PersistentCheckpointServiceTest {
   }
 
   /** 未指定進捗入力先以前の再開用の記録読み取り可能なおよびについて、形式不明を復元することを確認する。 */
+  @Test
+  void restorationAndRecoveryCountersSurviveSqliteCheckpointResume() {
+    var original =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+            owner.runId(),
+            new dev.mikoto2000.rei.llm.OutputLimitRunBudget(2, 100),
+            new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(root),
+            new AgentEventFactory(Clock.systemUTC()),
+            event -> {});
+    for (int i = 0; i < 5; i++) recordRead(original);
+    assertNotNull(original.requestReplan());
+    service.preserveResults(owner, List.of(), original.progressSnapshot());
+    service.finish(owner, "INTERRUPTED");
+    var resumed = service.resume("A", state().taskId(), AgentRunContext.RequestSource.SHELL);
+    var saved = service.progress(new AgentRunContext(resumed.runId(), "session", root, "A"));
+    var execution =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+            resumed.runId(),
+            new dev.mikoto2000.rei.llm.OutputLimitRunBudget(2, 100),
+            new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(root),
+            new AgentEventFactory(Clock.systemUTC()),
+            event -> {});
+    execution.restoreProgress(saved);
+    execution.beginContextRestoration();
+    recordRead(execution);
+    assertNull(execution.requestReplan());
+    assertEquals(1, execution.budgetSnapshot().stagnationReplans());
+    assertEquals(1, execution.detector().replanCount());
+    assertEquals(1, execution.progressSnapshot().continuity().evaluator().restorationReads());
+    assertEquals(0, execution.progressVersion());
+  }
+
+  private void recordRead(dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution) {
+    execution.beginIteration();
+    execution.recordTool(
+        "readMultiFile",
+        "{}",
+        "{\"path\":\"A\",\"version\":\"v1\",\"startLine\":1,\"content\":[\"line\"]}",
+        execution.evaluator().beforeTool("readMultiFile", "{}"));
+    execution.endIteration();
+  }
+
   @Test
   void missingProgressInOldCheckpointIsReadableAndRestoresAsUnknown() {
     var old = repository.fields(state());
