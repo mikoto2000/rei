@@ -927,7 +927,6 @@ public class RunExecutionContext {
     }
     boolean restorationFailed =
         evaluator.restoringContext() || "CONTEXT_RESTORATION_FAILED".equals(stagnationReason);
-    evaluator.finishContextRestoration();
     boolean work =
         pending.stream()
             .anyMatch(
@@ -935,6 +934,9 @@ public class RunExecutionContext {
                     e.kind() == ProgressEvent.SUBGOAL_COMPLETED
                         || e.kind() == ProgressEvent.STATE_CHANGED
                         || e.kind() == ProgressEvent.STEP_CHANGED);
+    // Preparatory observations do not prove restoration finished. Keep the bounded targets
+    // available until work advances; ordinary no-progress iterations still count below.
+    if (work) evaluator.finishContextRestoration();
     boolean acquisitionProgress = pending.stream().anyMatch(ProgressEvidence::acquisitionProgress);
     boolean known =
         pending.stream()
