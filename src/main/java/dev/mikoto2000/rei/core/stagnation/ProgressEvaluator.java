@@ -166,6 +166,36 @@ public class ProgressEvaluator {
     }
   }
 
+  /** Resume metadata shares the persisted restoration budget; revision churn never grants grace. */
+  private void restoreCheckpoint(
+      String name, String arguments, JsonNode output, List<ProgressEvidence> evidence) {
+    if (restorationTargets == null || restorationReads >= 8 || output == null || failed(output))
+      return;
+    var input = parse(arguments);
+    String task = input == null ? "" : input.path("taskId").asText();
+    if (task.isBlank()) return;
+    boolean valid =
+        name.equals("checkpointShow")
+            ? task.equals(output.path("taskId").asText())
+                && output.path("schemaVersion").asInt() == 1
+                && output.path("plan").isArray()
+            : Set.of("CONTINUE", "CONFIRMATION_REQUIRED", "BLOCKED")
+                    .contains(output.path("decision").asText())
+                && output.path("usable").isArray()
+                && output.path("blockers").isArray();
+    if (valid
+        && restoredRanges.observe(digest("checkpoint:" + name + ":" + task))
+            == InformationLedger.Status.NEW) {
+      restorationReads++;
+      evidence.add(
+          new ProgressEvidence(
+              ProgressEvent.CONTEXT_RESTORED,
+              "Saved task inspected for context restoration",
+              name));
+      if (restorationReads == 8) finishContextRestoration();
+    }
+  }
+
   /** 実行の停滞への対処で用いる情報状態の記録を返す。 */
   public InformationLedger.State informationSnapshot() {
     return information.snapshot();
@@ -212,7 +242,7 @@ public class ProgressEvaluator {
   /** 指定された値や利用先を使って、ProgressEvaluatorを初期化する。 */
   public ProgressEvaluator(Path root, ActionPlan plan) {
     this.root = root.toAbsolutePath().normalize();
-    this.plan = plan;
+    this.plan = plan == null ? null : plan.bind().get();
     initializePlanBaseline();
   }
 
@@ -278,6 +308,10 @@ public class ProgressEvaluator {
                           "Plan step started (completion still requires verification)",
                           s.id())));
     JsonNode output = parse(result);
+    if (name.equals("checkpointShow") || name.equals("checkpointInspect")) {
+      restoreCheckpoint(name, arguments, output, evidence);
+      return List.copyOf(evidence);
+    }
     if (name.equals("attachGoalStageEvidence")
         && output != null
         && !failed(output)
@@ -385,6 +419,35 @@ public class ProgressEvaluator {
       } catch (RuntimeException invalid) {
         unknown(name, "RAW_RANGE_UNAVAILABLE", evidence);
       }
+      return List.copyOf(evidence);
+    }
+    if (name.equals("countFileLines") && output != null) {
+      for (var file : output.path("files")) {
+        if (failed(file)
+            || !file.path("lineCount").isIntegralNumber()
+            || file.path("lineCount").asLong() < 0
+            || file.path("path").asText().isBlank()) continue;
+        try {
+          String source = normalizeSource(file.path("path").asText());
+          addInformation(
+              "line-count:" + source + ":" + file.path("lineCount").asLong(), source, evidence);
+        } catch (RuntimeException invalid) {
+          // Invalid paths are not observable file facts.
+        }
+      }
+      return List.copyOf(evidence);
+    }
+    if (name.equals("getShellProcessStatus")
+        && output != null
+        && !output.path("processId").asText().isBlank()
+        && output.path("found").isBoolean()
+        && Set.of("STARTING", "RUNNING", "EXITED", "FAILED", "KILLED")
+            .contains(output.path("status").asText())) {
+      var facts = JSON.createObjectNode();
+      for (String field : List.of("processId", "found", "status", "exitCode", "stdout", "stderr"))
+        if (output.has(field)) facts.set(field, output.get(field));
+      addInformation(
+          "process-observation:" + canonical(facts), output.path("processId").asText(), evidence);
       return List.copyOf(evidence);
     }
     if (name.equals("applyTextChangeSet")) observeChangeSet(output, evidence);

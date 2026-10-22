@@ -32,6 +32,14 @@ public class ActionPlan {
   /** 次順序。 */
   private int nextOrder = 1;
 
+  /**
+   * Capture this project's plan for later async evaluation. The supplier keeps Spring's scoped
+   * proxy from replacing a direct self return with the proxy again.
+   */
+  public java.util.function.Supplier<ActionPlan> bind() {
+    return () -> this;
+  }
+
   /** 現在のステップ一覧。 */
   public List<PlanStep> steps() {
     return List.copyOf(steps);

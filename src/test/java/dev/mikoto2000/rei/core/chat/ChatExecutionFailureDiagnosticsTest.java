@@ -237,4 +237,18 @@ class ChatExecutionFailureDiagnosticsTest {
     assertThat(terminals()).hasSize(1);
     assertThat(events.toString()).doesNotContain("PRIVATE");
   }
+
+  @Test
+  void detailedStagnationStopKeepsPublicBudgetErrorType() {
+    var result =
+        service(
+                new ExecutionStoppedException(
+                    ExecutionStoppedException.Reason.REPLAN_BUDGET_EXCEEDED, "reason=STEP_STALLED"))
+            .execute(owner, "work", new UserInterventionQueue());
+    assertThat(result.stopCode()).isEqualTo("replan_budget_exceeded");
+    var dto = dev.mikoto2000.rei.web.WebApiEventDto.from(terminals().getFirst(), false, "");
+    assertThat(dto.payload().get("error").toString())
+        .contains("type=replan_budget_exceeded")
+        .doesNotContain("Operation failed.", "STEP_STALLED");
+  }
 }
