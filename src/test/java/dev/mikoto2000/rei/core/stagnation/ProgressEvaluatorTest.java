@@ -77,12 +77,15 @@ class ProgressEvaluatorTest {
 
   /** 実行の停滞への対処で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
-  void planCompletionCountsOnceAndNotMerelyChangingStep() {
+  void planStartAndCompletionCountOnceWithoutClaimingNewInformation() {
     var plan = new dev.mikoto2000.rei.core.actionplan.ActionPlan();
     plan.addStep("verify");
     var evaluator = new ProgressEvaluator(root, plan);
     var before = evaluator.beforeTool("plan", "{}");
     plan.startStep("step-1");
+    assertThat(evaluator.afterTool("plan", "{}", "success", before))
+        .extracting(ProgressEvidence::kind)
+        .containsExactly(ProgressEvent.STEP_CHANGED);
     assertThat(evaluator.afterTool("plan", "{}", "success", before)).isEmpty();
     plan.completeStep("step-1");
     assertThat(evaluator.afterTool("plan", "{}", "success", before))

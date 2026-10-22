@@ -107,6 +107,31 @@ public class StagnationDetector {
     return repeatedFailure;
   }
 
+  /** Counters survive checkpoint resume, including a pending recovery request. */
+  public record State(int stagnationCount, int replanCount, boolean replanRequested) {
+    public State {
+      if (stagnationCount < 0 || replanCount < 0) throw new IllegalArgumentException("Invalid detector state");
+    }
+  }
+
+  public State snapshot() {
+    return new State(stagnationCount, replanCount, replanRequested);
+  }
+
+  public void restore(State state) {
+    if (state == null) return;
+    stagnationCount = state.stagnationCount();
+    replanCount = state.replanCount();
+    replanRequested = state.replanRequested();
+  }
+
+  /** Acquisition prevents local stalls without replenishing recovery attempts. */
+  public void recordObservation(boolean progress, boolean work) {
+    int spent = replanCount;
+    recordIteration(progress);
+    if (!work) replanCount = spent;
+  }
+
   /** 1 iteration を記録する。progress があればカウントをリセットする。 */
   public void recordIteration(boolean progress) {
     if (progress) {

@@ -52,7 +52,12 @@ public class RunExecutionContext {
       OutputLimitRunBudget.Snapshot budget,
       int acquisitionOnlyIterations,
       int unknownIterations,
-      int unknownReplanNotices) {
+      int unknownReplanNotices,
+      Continuity continuity) {
+    public ProgressState(InformationLedger.State information, OutputLimitRunBudget.Snapshot budget,
+        int acquisitionOnlyIterations, int unknownIterations, int unknownReplanNotices) {
+      this(information, budget, acquisitionOnlyIterations, unknownIterations, unknownReplanNotices, null);
+    }
     /** 実行の停滞への対処を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public ProgressState(
         InformationLedger.State information,
@@ -63,6 +68,21 @@ public class RunExecutionContext {
     }
   }
 
+  /** Additive checkpoint data; old checkpoints use the conservative legacy fallback. */
+  public record Continuity(StagnationDetector.State detector, ProgressEvaluator.State evaluator,
+      int goalIdleIterations, int coverageIterations, ProgressEvidence lastProgress, List<String> recoveries) {
+    public Continuity {
+      recoveries = List.copyOf(recoveries);
+      if (goalIdleIterations < 0 || coverageIterations < 0 || recoveries.size() > 2)
+        throw new IllegalArgumentException("Invalid continuity state");
+    }
+  }
+
+  private int goalIdleIterations;
+  private int coverageIterations;
+  private ProgressEvidence lastProgress;
+  private final List<String> recoveries = new ArrayList<>();
+
   /** 実行の停滞への対処で用いる進捗状態の記録を返す。 */
   public synchronized ProgressState progressSnapshot() {
     return new ProgressState(
@@ -70,7 +90,9 @@ public class RunExecutionContext {
         budget.snapshot(),
         acquisitionOnlyIterations,
         unknownIterations,
-        unknownReplanNotices);
+        unknownReplanNotices,
+        new Continuity(detector.snapshot(), evaluator.snapshot(), goalIdleIterations,
+            coverageIterations, lastProgress, recoveries));
   }
 
   /** 保存済みの状態を引き継ぐため、進捗を復元する。 */
@@ -89,6 +111,20 @@ public class RunExecutionContext {
     acquisitionOnlyIterations = saved.acquisitionOnlyIterations();
     unknownIterations = saved.unknownIterations();
     unknownReplanNotices = saved.unknownReplanNotices();
+    if (saved.continuity() != null) {
+      var continuity = saved.continuity();
+      detector.restore(continuity.detector());
+      evaluator.restore(continuity.evaluator());
+      goalIdleIterations = continuity.goalIdleIterations();
+      coverageIterations = continuity.coverageIterations();
+      lastProgress = continuity.lastProgress();
+      recoveries.clear();
+      recoveries.addAll(continuity.recoveries());
+    }
+  }
+
+  public synchronized void beginContextRestoration() {
+    evaluator.beginContextRestoration();
   }
 
   /** 継続入力。 */
@@ -335,6 +371,8 @@ public class RunExecutionContext {
 
   /** 実行の停滞への対処に関するpreserveツールの結果一覧を処理する。 */
   public void preserveToolResults(List<org.springframework.ai.chat.messages.Message> messages) {
+    // Commit the completed batch's counters before taking the existing atomic checkpoint.
+    endIteration();
     toolResultsCheckpoint.accept(messages);
   }
 
@@ -767,14 +805,26 @@ public class RunExecutionContext {
       return;
     }
     boolean recovering = detector.replanCount() > 0 || detector.isReplanRequested();
+    boolean restored = pending.stream().anyMatch(e -> e.kind() == ProgressEvent.CONTEXT_RESTORED);
+    boolean onlyRestoration = restored && !iterationFailed
+        && pending.stream().allMatch(e -> e.kind() == ProgressEvent.CONTEXT_RESTORED);
+    if (onlyRestoration) {
+      for (var evidence : pending) emit(AgentEventType.PROGRESS_DETECTED, evidence, "context_restored");
+      pending.clear();
+      return;
+    }
+    boolean restorationFailed = evaluator.restoringContext();
+    evaluator.finishContextRestoration();
     boolean work =
         pending.stream()
             .anyMatch(
                 e ->
                     e.kind() == ProgressEvent.SUBGOAL_COMPLETED
-                        || e.kind() == ProgressEvent.STATE_CHANGED);
+                        || e.kind() == ProgressEvent.STATE_CHANGED
+                        || e.kind() == ProgressEvent.STEP_CHANGED);
     boolean acquisitionProgress = pending.stream().anyMatch(ProgressEvidence::acquisitionProgress);
-    boolean known = pending.stream().anyMatch(e -> e.kind() != ProgressEvent.INFORMATION_UNKNOWN);
+    boolean known = pending.stream().anyMatch(e -> e.kind() != ProgressEvent.INFORMATION_UNKNOWN
+        && e.kind() != ProgressEvent.CONTEXT_RESTORED);
     boolean unknown = pending.stream().anyMatch(e -> e.kind() == ProgressEvent.INFORMATION_UNKNOWN);
     // 作業状態の変化と情報収集の進展を区別し、読み取りだけで成果が完成したと見なさない。
     if (work) acquisitionOnlyIterations = 0;
@@ -790,6 +840,8 @@ public class RunExecutionContext {
             ? "WORK_STALLED"
             : unknown
                 ? "INFORMATION_UNKNOWN"
+                : restorationFailed && !known
+                    ? "CONTEXT_RESTORATION_FAILED"
                 : iterationFailed
                     ? "TOOL_FAILURE"
                     : detector.hasRepeatedToolCall()
@@ -800,13 +852,14 @@ public class RunExecutionContext {
                             ? "DUPLICATE_OR_UNSUPPORTED_INFORMATION"
                             : "no_progress";
     // 判定不能を進捗や重複と決め付けず、限られた猶予の中で診断を続ける。
-    if (!(unknown && !known)) detector.recordIteration(known && !stalledWork);
+    if (!(unknown && !known)) detector.recordObservation(known && !stalledWork, work);
     for (ProgressEvidence evidence : pending) {
       if (evidence.kind() == ProgressEvent.INFORMATION_UNKNOWN) {
         emit(AgentEventType.STAGNATION_UPDATED, evidence, stagnationReason);
         continue;
       }
-      if (!stalledWork) detector.recordProgress(evidence.kind());
+      if (evidence.kind() == ProgressEvent.CONTEXT_RESTORED) continue;
+      lastProgress = evidence;
       progressVersion++;
       emit(AgentEventType.PROGRESS_DETECTED, evidence, "meaningful_progress");
     }

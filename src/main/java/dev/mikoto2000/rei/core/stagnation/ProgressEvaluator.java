@@ -77,6 +77,67 @@ public class ProgressEvaluator {
   /** 情報。 */
   private final InformationLedger information = new InformationLedger();
 
+  /** Restoration is bounded across the entire persisted Run lineage. */
+  private final InformationLedger restoredRanges = new InformationLedger();
+  private InformationLedger.State restorationTargets;
+  private int restorationReads;
+  private final Set<String> startedSteps = new HashSet<>();
+
+  /** Persist only bounded evidence, alongside the existing information checkpoint. */
+  public record State(InformationLedger.State restoredRanges, int restorationReads,
+      Set<String> revisions, Set<String> completedSteps, Set<String> startedSteps) {
+    public State {
+      revisions = Set.copyOf(revisions);
+      completedSteps = Set.copyOf(completedSteps);
+      startedSteps = Set.copyOf(startedSteps);
+      if (restorationReads < 0 || restorationReads > 8 || revisions.size() > LEDGER_LIMIT
+          || completedSteps.size() > LEDGER_LIMIT || startedSteps.size() > LEDGER_LIMIT)
+        throw new IllegalArgumentException("Invalid evaluator state");
+    }
+  }
+
+  public synchronized State snapshot() {
+    return new State(restoredRanges.snapshot(), restorationReads, revisions, completedSteps, startedSteps);
+  }
+
+  public synchronized void restore(State state) {
+    if (state == null) return;
+    restoredRanges.restore(state.restoredRanges());
+    restorationReads = state.restorationReads();
+    revisions.clear();
+    revisions.addAll(state.revisions());
+    completedSteps.addAll(state.completedSteps());
+    startedSteps.addAll(state.startedSteps());
+  }
+
+  /** Called only after a real checkpoint resume, never for compression or ordinary iterations. */
+  public synchronized void beginContextRestoration() {
+    restorationTargets = restorationReads < 8 ? information.snapshot() : null;
+  }
+
+  public synchronized void finishContextRestoration() {
+    restorationTargets = null;
+  }
+
+  public synchronized boolean restoringContext() {
+    return restorationTargets != null;
+  }
+
+  /** A reread is exempt only when its exact version and delivered interval were checkpointed. */
+  private void restoreRange(String path, String version, int start, int end,
+      List<ProgressEvidence> evidence) {
+    if (restorationTargets == null || restorationReads >= 8) return;
+    boolean target = restorationTargets.files().stream().anyMatch(f ->
+        f.normalizedPath().equals(path) && f.revision().equals(version)
+            && f.ranges().stream().anyMatch(r -> r.startInclusive() <= start && r.endExclusive() >= end));
+    if (target && restoredRanges.observeRange(path, version, start, end).status() == InformationLedger.Status.NEW) {
+      restorationReads++;
+      evidence.add(new ProgressEvidence(ProgressEvent.CONTEXT_RESTORED,
+          "Checkpointed range fetched for context restoration", path, version));
+      if (restorationReads == 8) finishContextRestoration();
+    }
+  }
+
   /** 実行の停滞への対処で用いる情報状態の記録を返す。 */
   public InformationLedger.State informationSnapshot() {
     return information.snapshot();
@@ -94,7 +155,11 @@ public class ProgressEvaluator {
    */
   public synchronized void capturePlanBaseline() {
     completedSteps.clear();
+    startedSteps.clear();
     completedSteps.addAll(doneSteps());
+    if (plan != null) plan.steps().stream()
+        .filter(s -> ActionPlan.STATUS_IN_PROGRESS.equals(s.status()))
+        .forEach(s -> remember(startedSteps, s.id()));
   }
 
   /** 改訂一覧。 */
@@ -115,7 +180,7 @@ public class ProgressEvaluator {
   public ProgressEvaluator(Path root, ActionPlan plan) {
     this.root = root.toAbsolutePath().normalize();
     this.plan = plan;
-    completedSteps.addAll(doneSteps());
+    capturePlanBaseline();
   }
 
   /**
@@ -161,12 +226,17 @@ public class ProgressEvaluator {
               }
             });
     for (String step : doneSteps()) {
-      if (!before.completedSteps().contains(step) && completedSteps.add(step)) {
+      if (!before.completedSteps().contains(step) && remember(completedSteps, step)) {
         evidence.add(
             new ProgressEvidence(
                 ProgressEvent.SUBGOAL_COMPLETED, "Plan step transitioned to DONE", step));
       }
     }
+    if (plan != null) plan.steps().stream()
+        .filter(s -> ActionPlan.STATUS_IN_PROGRESS.equals(s.status()))
+        .filter(s -> remember(startedSteps, s.id()))
+        .forEach(s -> evidence.add(new ProgressEvidence(ProgressEvent.STEP_CHANGED,
+            "Plan step started (completion still requires verification)", s.id())));
     JsonNode output = parse(result);
     if (name.equals("readReviewFile") && output != null && output.has("range")) {
       var range = output.path("range");
@@ -183,6 +253,9 @@ public class ProgressEvaluator {
                 "New review characters fetched",
                 range.path("path").asText(),
                 range.path("version").asText()));
+      else if (observed.status() == InformationLedger.Status.DUPLICATE)
+        restoreRange("review-chars:" + range.path("path").asText(), range.path("version").asText(),
+            span.path("start").asInt() + 1, span.path("end").asInt() + 1, evidence);
       else if (observed.status() == InformationLedger.Status.UNKNOWN)
         unknown(name, "LEDGER_CAPACITY_OR_HISTORY", evidence);
       return List.copyOf(evidence);
@@ -232,6 +305,9 @@ public class ProgressEvaluator {
           evidence.add(
               ProgressEvidence.acquiredRange(
                   "New raw result characters", page.rawResultRef(), page.rawResultRef()));
+        else if (observed.status() == InformationLedger.Status.DUPLICATE)
+          restoreRange("raw:" + page.rawResultRef(), page.rawResultRef(), page.offset() + 1,
+              page.nextOffset() + 1, evidence);
         else if (observed.status() == InformationLedger.Status.UNKNOWN)
           unknown(name, "LEDGER_CAPACITY_OR_HISTORY", evidence);
       } catch (RuntimeException invalid) {
@@ -455,6 +531,8 @@ public class ProgressEvaluator {
         evidence.add(
             ProgressEvidence.acquiredRange(
                 "type=FILE_RANGE newLines=" + observed.newLines(), source, version));
+      } else if (observed.status() == InformationLedger.Status.DUPLICATE) {
+        restoreRange(source, version, start, start + count, evidence);
       } else if (observed.status() == InformationLedger.Status.UNKNOWN)
         unknown(source, "LEDGER_CAPACITY_OR_HISTORY", evidence);
     }
@@ -538,6 +616,11 @@ public class ProgressEvaluator {
         .filter(s -> ActionPlan.STATUS_DONE.equals(s.status()))
         .forEach(s -> done.add(s.id() + ":" + s.description()));
     return done;
+  }
+
+  /** Safe compact identity for diagnostics; document text is not logged. */
+  public String currentStep() {
+    return plan == null ? "unstructured" : plan.currentStep().map(s -> s.id()).orElse("unstructured");
   }
 
   /** 実行の停滞への対処に関する収集パス一覧を処理する。 */

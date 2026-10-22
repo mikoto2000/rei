@@ -494,8 +494,10 @@ public class ChatExecutionService {
       if (resumed == null) turns.startOrdered(context, promptText, clock.instant());
       if (checkpoints != null) checkpoints.start(context, promptText);
       execution.evaluator().capturePlanBaseline();
-      if (checkpoints != null && checkpoints.hasProgressHistory(context))
+      if (checkpoints != null && checkpoints.hasProgressHistory(context)) {
         execution.restoreProgress(checkpoints.progress(context));
+        execution.beginContextRestoration();
+      }
       if (workContext != null
           && context.mode() == AgentRunContext.Mode.EXCLUSIVE
           && !structuredCommand) workContext.afterStart(context);
