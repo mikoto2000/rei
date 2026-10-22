@@ -30,6 +30,7 @@ public class ProgressEvaluator {
   private static final Set<String> READ_TOOLS =
       Set.of(
           "readMultiFile",
+          "readSkillResource",
           "readFile",
           "readTextFile",
           "readTextFileRange",
@@ -472,6 +473,8 @@ public class ProgressEvaluator {
     if (WEB_TOOLS.contains(name)) {
       for (var item : webInformation)
         addInformation(item.key(), item.source(), item.revision(), evidence);
+    } else if (name.equals("readSkillResource")) {
+      collectSkillInformation(output, evidence);
     } else if (READ_TOOLS.contains(name)) {
       // Key by returned information, not arbitrary argument spelling or changing batch order.
       collectInformation(output, result, name, arguments, evidence);
@@ -498,6 +501,36 @@ public class ProgressEvaluator {
   public static String actionKey(String name, String arguments) {
     JsonNode node = parse(arguments);
     return name + ":" + digest(node == null ? Objects.toString(arguments, "") : canonical(node));
+  }
+
+  /** Instruction text is information, never evidence that project documents were reviewed. */
+  private void collectSkillInformation(JsonNode output, List<ProgressEvidence> evidence) {
+    if (output == null || !output.isArray()) {
+      unknown("readSkillResource", "MALFORMED_RESULT", evidence);
+      return;
+    }
+    for (var file : output) {
+      if (failed(file)
+          || file.path("path").asText().isBlank()
+          || !file.path("content").isArray()
+          || file.path("startLine").asInt() < 1) continue;
+      String source;
+      try {
+        var relative = Path.of(file.path("path").asText()).normalize();
+        if (relative.isAbsolute() || relative.startsWith("..")) continue;
+        source = "skill-resource:" + relative.toString().replace('\\', '/');
+        if (root.getFileSystem().getSeparator().equals("\\"))
+          source = source.toLowerCase(Locale.ROOT);
+      } catch (RuntimeException invalid) {
+        continue;
+      }
+      int line = file.path("startLine").asInt();
+      for (var text : file.path("content")) {
+        if (text.isTextual() && !text.asText().isBlank())
+          addInformation(source + ":" + line + ":" + text.asText(), source, evidence);
+        line++;
+      }
+    }
   }
 
   /** 実行の停滞への対処に関する収集情報を処理する。 */

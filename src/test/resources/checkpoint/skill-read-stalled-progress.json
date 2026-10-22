@@ -1,0 +1,43 @@
+{
+  "information": {
+    "files": [],
+    "identities": [],
+    "historicalUnknown": false
+  },
+  "budget": {
+    "replans": 0,
+    "llmCalls": 264,
+    "totalTokens": 0,
+    "usageUnknown": false,
+    "stagnationReplans": 2,
+    "argumentCorrections": 0
+  },
+  "acquisitionOnlyIterations": 7,
+  "unknownIterations": 0,
+  "unknownReplanNotices": 0,
+  "continuity": {
+    "detector": {
+      "stagnationCount": 5,
+      "replanCount": 0,
+      "replanRequested": true,
+      "lastToolFingerprint": "checkpointInspect",
+      "lastFailureFingerprint": "runCommand"
+    },
+    "evaluator": {
+      "restoredRanges": {
+        "files": [],
+        "identities": [],
+        "historicalUnknown": false
+      },
+      "restorationReads": 8,
+      "revisions": [],
+      "completedSteps": [],
+      "startedSteps": []
+    },
+    "goalIdleIterations": 28,
+    "coverageIterations": 10,
+    "lastProgress": null,
+    "recoveries": [],
+    "reason": "STEP_STALLED"
+  }
+}
