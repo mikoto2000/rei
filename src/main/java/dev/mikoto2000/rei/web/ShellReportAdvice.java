@@ -48,8 +48,9 @@ public final class ShellReportAdvice implements ResponseBodyAdvice<Object> {
    *
    * @param text テキスト
    * @param runId 実行の識別子
+   * @param sessionId 後続の入力を送る会話の識別子
    */
-  public record RunText(String text, String runId) {}
+  public record RunText(String text, String runId, String sessionId) {}
 
   /** Web APIによる操作において、シェルレポート助言への対応可否を返す。 */
   public boolean supports(
@@ -80,7 +81,9 @@ public final class ShellReportAdvice implements ResponseBodyAdvice<Object> {
     if (body
         instanceof dev.mikoto2000.rei.checkpoint.PersistentCheckpointService.ResumeResult result)
       return new RunText(
-          dev.mikoto2000.rei.event.CredentialRedactor.redact(result.toString()), result.runId());
+          dev.mikoto2000.rei.event.CredentialRedactor.redact(result.toString()),
+          result.runId(),
+          result.sessionId());
     String name = method.getMethod().getName(), text;
     if (method.getContainingClass() == CheckpointController.class
         && name.equals("save")
