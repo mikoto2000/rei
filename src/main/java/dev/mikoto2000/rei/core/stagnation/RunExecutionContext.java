@@ -131,7 +131,7 @@ public class RunExecutionContext {
         goalIdleIterations,
         GOAL_IDLE_LIMIT,
         coverageIterations,
-        evaluator.currentStep(),
+        java.util.Objects.toString(evaluator.currentStep(), "unstructured"),
         lastProgress,
         stagnationReason,
         List.copyOf(recentActions),
@@ -975,7 +975,10 @@ public class RunExecutionContext {
                                 ? lastToolName.startsWith("read")
                                     ? "REPEATED_READ"
                                     : "REPEATED_SEARCH_OR_ACTION"
-                                : !known && !evaluator.currentStep().equals("unstructured")
+                                : !known
+                                        && !java.util.Objects.toString(
+                                                evaluator.currentStep(), "unstructured")
+                                            .equals("unstructured")
                                     ? "STEP_STALLED"
                                     : toolCalls > 0 && !known
                                         ? "DUPLICATE_OR_UNSUPPORTED_INFORMATION"
