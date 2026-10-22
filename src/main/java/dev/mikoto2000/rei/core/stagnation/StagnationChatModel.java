@@ -134,6 +134,15 @@ public class StagnationChatModel implements ChatModel {
           context.checkActive();
           context.checkModelTokenBudget();
           if (!prepaid) context.consumeNextLlmCall();
+          String feedback = context.progressFeedback();
+          var invocationMessages = new ArrayList<Message>(prompt.getInstructions());
+          if (!feedback.isEmpty())
+            invocationMessages.addFirst(
+                SystemMessage.builder()
+                    .text(feedback)
+                    .metadata(java.util.Map.of("rei.progressFeedback", true))
+                    .build());
+          Prompt invocationPrompt = new Prompt(invocationMessages, prompt.getOptions());
           context.beginIteration();
           AtomicReference<ChatResponse> aggregate = new AtomicReference<>();
           AtomicReference<Prompt> sent = new AtomicReference<>();
@@ -145,7 +154,7 @@ public class StagnationChatModel implements ChatModel {
                       () -> {
                         context.checkModelTokenBudget();
                         invoked.set(true);
-                        return delegate.stream(prompt);
+                        return delegate.stream(invocationPrompt);
                       })
                   : Mono.fromCallable(
                           () -> {
@@ -154,7 +163,7 @@ public class StagnationChatModel implements ChatModel {
                                     context.runContext())) {
                               try {
                                 return assembler.assemble(
-                                    prompt,
+                                    invocationPrompt,
                                     context.runContext().conversationId(),
                                     context.runContext().runId(),
                                     context::checkActive);

@@ -89,6 +89,13 @@ public class ProgressEvaluator {
 
   private final Set<String> startedSteps = new HashSet<>();
 
+  /** Bounded diagnostics for the latest tool, separate from durable evidence. */
+  private final List<Map<String, Object>> readObservations = new ArrayList<>();
+
+  public synchronized String readFeedback() {
+    return JSON.valueToTree(readObservations).toString();
+  }
+
   /** Persist only bounded evidence, alongside the existing information checkpoint. */
   public record State(
       InformationLedger.State restoredRanges,
@@ -273,6 +280,7 @@ public class ProgressEvaluator {
   /** 実行結果を後続の処理へ渡すため、ツールを反映する。 */
   public synchronized List<ProgressEvidence> afterTool(
       String name, String arguments, String result, Snapshot before) {
+    readObservations.clear();
     List<ProgressEvidence> evidence = new ArrayList<>();
     before
         .files()
@@ -697,6 +705,18 @@ public class ProgressEvaluator {
     }
     if (count > 0) {
       var observed = information.observeRange(source, version, start, start + count);
+      if (readObservations.size() < 4)
+        readObservations.add(
+            Map.of(
+                "path",
+                source.substring(0, Math.min(source.length(), 256)),
+                "startLine",
+                start,
+                "endLine",
+                start + count - 1,
+                "classification",
+                observed.status().name()));
+
       if (observed.status() == InformationLedger.Status.NEW) {
         evidence.add(
             ProgressEvidence.acquiredRange(
