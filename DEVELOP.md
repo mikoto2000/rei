@@ -8,6 +8,8 @@ Checkstyle / SpotBugs の実行手順、CI レポートと導入方針は [静�
 
 Rei の開発者向けドキュメントです。利用手順は [README.md](./README.md) を参照してください。
 
+進捗イベント、Read範囲、局所・目標停滞、再開時の復元と復旧予算は [進捗・停滞判定ガイド](docs/progress-stagnation.md) を参照してください。
+
 Episode の経緯・根拠・差分整理・横断検索は [Episode Memory](docs/episode-memory.md) を参照してください。
 
 回答生成中の SQLite 接続再利用・耐久性・I/O 計測は [ディスク I/O の改善記録](docs/answer-generation-disk-io.md)を参照してください。
