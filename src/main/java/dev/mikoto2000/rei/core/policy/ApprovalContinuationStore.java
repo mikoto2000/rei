@@ -43,6 +43,12 @@ public class ApprovalContinuationStore {
       List<AssistantMessage.ToolCall> calls,
       List<ToolResponseMessage.ToolResponse> responses,
       ToolResultMetadata delivery) {
+    /** 保存後に外部から呼び出しや応答の一覧を変更できないようにする。 */
+    public StoredMessage {
+      calls = calls == null ? List.of() : List.copyOf(calls);
+      responses = responses == null ? List.of() : List.copyOf(responses);
+    }
+
     /** 配信属性を持たないメッセージと旧形式の呼び出しを受け付ける。 */
     public StoredMessage(
         String kind,
