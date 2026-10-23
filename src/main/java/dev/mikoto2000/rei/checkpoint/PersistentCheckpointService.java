@@ -620,11 +620,9 @@ public class PersistentCheckpointService implements AutoCloseable {
       CheckpointReconciler.active();
       var next = state.resume(run);
       var fields = repository.fields(next);
-      if (explicitUserResume)
-        fields.put(
-            "progress",
-            dev.mikoto2000.rei.core.stagnation.RunExecutionContext.forExplicitResume(
-                state.progress()));
+      var progress = state.progress();
+      if (explicitUserResume && progress != null)
+        fields.put("progress", progress.forExplicitResume());
       fields.put("nextAction", result.nextAction());
       fields.put("reconciliation", result);
       if (expectedPrevious != null) {
