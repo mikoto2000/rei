@@ -974,4 +974,127 @@ class PersistentCheckpointServiceTest {
         () ->
             service.recentSkillResults(new AgentRunContext(owner.runId(), "different", root, "A")));
   }
+
+  @Test
+  void resumedDispatchUsesCompletedHostReconciliationInsteadOfRequestingAnotherInspection() {
+    var prompt = new java.util.concurrent.atomic.AtomicReference<String>();
+    factory.addBean(
+        "router",
+        new ConversationInputRouter(
+            queue::add, (context, text, interventions) -> prompt.set(text)));
+    service.finish(owner, "FAILED");
+    var resumed = service.resume("A", state().taskId(), AgentRunContext.RequestSource.SHELL);
+    queue.removeFirst().run();
+    assertEquals("CONTINUE", resumed.reconciliation().decision());
+    assertFalse(prompt.get().contains("まず現在の状態を確認し"));
+    assertTrue(prompt.get().contains("ホスト照合は完了"));
+    assertTrue(prompt.get().contains("中間成果"));
+  }
+
+  @Test
+  void handoffRestoresConfirmedReadExcerptsPastRepeatedMetadataWithoutChangingProgress()
+      throws Exception {
+    service.setRawResults(new dev.mikoto2000.rei.core.contextbudget.RawToolResultStore(root));
+    var events = new AgentEventFactory(Clock.systemUTC());
+    String body =
+        "[{\"path\":\"intro.md\",\"startLine\":1,\"version\":\"v1\",\"content\":[\"Observed evidence for the unfinished review\"],\"error\":null}]";
+    java.nio.file.Files.writeString(
+        root.resolve("intro.md"), "Observed evidence for the unfinished review");
+    bus.publishBoundary(
+        events.toolStarted("read-proof", "readMultiFile", "read").withOwnership(owner));
+    bus.publishBoundary(
+        events.toolCompleted("read-proof", "readMultiFile", 1, body).withOwnership(owner));
+    service.preserveResults(
+        owner,
+        List.of(
+            org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+                .responses(
+                    List.of(
+                        new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
+                            "read-proof", "readMultiFile", body)))
+                .build()));
+    for (int i = 0; i < 12; i++) {
+      String call = "metadata-" + i;
+      bus.publishBoundary(events.toolStarted(call, "checkpointShow", "show").withOwnership(owner));
+      bus.publishBoundary(
+          events
+              .toolCompleted(
+                  call, "checkpointShow", 1, "{\"metadata\":\"self-referential-checkpoint-body\"}")
+              .withOwnership(owner));
+    }
+    dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState saved;
+    try (var input =
+        getClass().getResourceAsStream("/checkpoint/skill-read-stalled-progress.json")) {
+      saved =
+          new com.fasterxml.jackson.databind.ObjectMapper()
+              .readValue(
+                  input,
+                  dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState.class);
+    }
+    service.preserveResults(owner, List.of(), saved);
+    service.finish(owner, "FAILED");
+    var resumed = service.resume("A", state().taskId(), AgentRunContext.RequestSource.SHELL);
+    var next = new AgentRunContext(resumed.runId(), "session", root, "A");
+    String context = service.context(resumed.runId());
+    assertTrue(context.contains("confirmedReadExcerpts"));
+    assertTrue(context.contains("Observed evidence for the unfinished review"));
+    assertTrue(context.contains("read-proof"));
+    assertTrue(context.contains("partial"));
+    assertTrue(context.contains("Unknown operations MUST NOT be replayed"));
+    assertTrue(context.length() <= settings.getContextCharacters());
+    assertEquals(saved, service.progress(next));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"mismatch", "failed", "outside", "malformed", "oversized", "missing"})
+  void handoffOmitsUnverifiedFailedOutOfScopeAndOversizedReadBodies(String kind) throws Exception {
+    service.setRawResults(new dev.mikoto2000.rei.core.contextbudget.RawToolResultStore(root));
+    var events = new AgentEventFactory(Clock.systemUTC());
+    String body =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .writeValueAsString(
+                List.of(
+                    Map.of(
+                        "path",
+                        kind.equals("outside") ? "../outside.md" : "intro.md",
+                        "version",
+                        "v1",
+                        "startLine",
+                        1,
+                        "content",
+                        List.of(
+                            kind.equals("oversized") ? "x".repeat(66000) : "unverified payload"))));
+    if (kind.equals("malformed")) body = "{";
+    bus.publishBoundary(
+        events.toolStarted("read-proof", "readMultiFile", "read").withOwnership(owner));
+    if (kind.equals("failed"))
+      bus.publishBoundary(
+          events
+              .toolFailed(
+                  "read-proof",
+                  "readMultiFile",
+                  new dev.mikoto2000.rei.event.ErrorInformation("EXPECTED", "read failed", null))
+              .withOwnership(owner));
+    else
+      bus.publishBoundary(
+          events.toolCompleted("read-proof", "readMultiFile", 1, body).withOwnership(owner));
+    if (!kind.equals("missing"))
+      service.preserveResults(
+          owner,
+          List.of(
+              org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+                  .responses(
+                      List.of(
+                          new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
+                              "read-proof",
+                              kind.equals("mismatch") ? "runCommand" : "readMultiFile",
+                              body)))
+                  .build()));
+    service.finish(owner, "FAILED");
+    var resumed = service.resume("A", state().taskId(), AgentRunContext.RequestSource.SHELL);
+    String context = service.context(resumed.runId());
+    assertTrue(context.contains("confirmedReadExcerpts: []"));
+    assertTrue(context.length() <= settings.getContextCharacters());
+  }
 }
