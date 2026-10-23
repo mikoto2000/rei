@@ -21,6 +21,60 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
 /** シェルレポート助言の結果と状態の契約を検証するテスト。 */
 class ShellReportAdviceTest {
+  /** 承認操作ではCLIの所有確認と表示に必要な構造化フィールドを保持する。 */
+  @Test
+  void approvalShellOutputPreservesOwnershipAcrossListShowAndContinue() throws Exception {
+    var repository = mock(dev.mikoto2000.rei.core.policy.ToolApprovalRepository.class);
+    var continuations = mock(dev.mikoto2000.rei.core.policy.ApprovalContinuationService.class);
+    var request =
+        new dev.mikoto2000.rei.core.policy.ToolApprovalRepository.Request(
+            "approval",
+            "project",
+            "session",
+            "run",
+            "writeMultiFile",
+            "preview",
+            "PENDING",
+            java.time.Instant.parse("2030-01-01T00:00:00Z"));
+    when(repository.get("project", "approval")).thenReturn(request);
+    when(continuations.list("project")).thenReturn(List.of(request));
+    when(continuations.state("approval")).thenReturn(java.util.Optional.of("WAITING_APPROVAL"));
+    when(continuations.decide("project", "approval", true, true)).thenReturn(request);
+    var controller = new ApprovalController(repository);
+    controller.setContinuations(continuations);
+    var mvc =
+        MockMvcBuilders.standaloneSetup(controller)
+            .setControllerAdvice(new ShellReportAdvice())
+            .build();
+    String base = "/api/v1/projects/project/approvals";
+    mvc.perform(get(base).header("X-Rei-Shell-Output", "true"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[0].id").value("approval"))
+        .andExpect(jsonPath("$[0].projectId").value("project"));
+    mvc.perform(get(base + "/approval").header("X-Rei-Shell-Output", "true"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.projectId").value("project"))
+        .andExpect(jsonPath("$.sessionId").value("session"))
+        .andExpect(jsonPath("$.runId").value("run"))
+        .andExpect(jsonPath("$.argumentsPreview").value("preview"));
+    mvc.perform(
+            post(base + "/approval/decision")
+                .header("X-Rei-Shell-Output", "true")
+                .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                .content("{\"approved\":true,\"continueRun\":true}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.id").value("approval"))
+        .andExpect(jsonPath("$.projectId").value("project"))
+        .andExpect(jsonPath("$.sessionId").value("session"))
+        .andExpect(jsonPath("$.runId").value("run"));
+    mvc.perform(get(base + "/approval/continuation").header("X-Rei-Shell-Output", "true"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.approvalId").value("approval"))
+        .andExpect(jsonPath("$.runId").value("run"))
+        .andExpect(jsonPath("$.state").value("WAITING_APPROVAL"));
+    verify(continuations, times(1)).decide("project", "approval", true, true);
+  }
+
   /** CLI向けの再開応答にも、出力購読と後続入力に必要な識別子を保持する。 */
   @Test
   void resumeShellOutputPreservesRunAndSessionWhileWebClientsKeepFullResult() throws Exception {

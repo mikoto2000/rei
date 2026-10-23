@@ -341,6 +341,114 @@ class ExhaustedResumeRecoveryTest {
     assertThat(c.progressSnapshot().continuity().evaluator().restorationReads()).isEqualTo(8);
   }
 
+  @Test
+  void aTextOnlyIntentAfterContentDoesNotCompleteTheResumedWork() throws Exception {
+    var c = context(0, 2, 8, true);
+    var calls = new AtomicInteger();
+    var delegate =
+        model(
+            p -> {
+              int n = calls.incrementAndGet();
+              if (n == 1) return call(n, "readMultiFile", "{}");
+              if (n == 2)
+                return new AssistantMessage("I will continue reading the unfinished page.");
+              if (n == 3) {
+                assertThat(names(p)).doesNotContain("readMultiFile").contains("writeMultiFile");
+                assertThat(p.getContents())
+                    .contains("No verified work followed the delivered content");
+                return call(n, "writeMultiFile", "{\"files\":[{\"path\":\"review.md\"}]}");
+              }
+              assertThat(p.getContents())
+                  .doesNotContain("No verified work followed the delivered content");
+              assertThat(names(p)).contains("readMultiFile", "listFile");
+              return new AssistantMessage("Partial assessment saved with unresolved gaps.");
+            });
+    new StagnationChatModel(delegate)
+        .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast();
+    assertThat(calls).hasValue(4);
+    assertThat(root.resolve("review.md")).exists();
+    assertThat(c.needsResumeContentWork()).isFalse();
+    assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
+    assertThat(c.progressSnapshot().continuity().evaluator().restorationReads()).isEqualTo(8);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"I will continue reading.", "All done.", ""})
+  void repeatedTextWithoutWorkStopsWithinTheExistingBudget(String text) throws Exception {
+    var c = context(0, 2, 8, true);
+    var calls = new AtomicInteger();
+    assertThatThrownBy(
+            () ->
+                new StagnationChatModel(
+                        model(
+                            p -> {
+                              int n = calls.incrementAndGet();
+                              assertThat(n).isLessThanOrEqualTo(4);
+                              return n == 1
+                                  ? call(n, "readMultiFile", "{}")
+                                  : new AssistantMessage(text);
+                            }))
+                    .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
+        .isInstanceOf(ExecutionStoppedException.class)
+        .hasMessageContaining("REPLAN_BUDGET_EXCEEDED");
+    assertThat(calls).hasValue(4);
+    assertThat(c.detector().stagnationCount()).isEqualTo(4);
+    assertThat(root.resolve("review.md")).doesNotExist();
+    assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"rei.progressFeedback", "rei.resumeWorkReminder"})
+  void savedTemporaryHostFeedbackIsReplacedByCurrentObservation(String key) throws Exception {
+    var c = context(0, 2, 8, true);
+    var original = prompt(c, true, "resume", new AtomicInteger());
+    var messages = new ArrayList<>(original.getInstructions());
+    messages.add(
+        SystemMessage.builder()
+            .text("Stale saved host restriction")
+            .metadata(Map.of(key, true))
+            .build());
+    new StagnationChatModel(
+            model(
+                p -> {
+                  assertThat(p.getContents()).doesNotContain("Stale saved host restriction");
+                  return new AssistantMessage("Current state observed");
+                }))
+        .stream(new Prompt(messages, original.getOptions())).blockLast();
+  }
+
+  @Test
+  void emptyModelStreamsCannotFinishUnassessedContent() throws Exception {
+    var c = context(0, 2, 8, true);
+    var calls = new AtomicInteger();
+    var delegate =
+        new ChatModel() {
+          public ChatResponse call(Prompt p) {
+            throw new UnsupportedOperationException();
+          }
+
+          public Flux<ChatResponse> stream(Prompt p) {
+            int n = calls.incrementAndGet();
+            assertThat(n).isLessThanOrEqualTo(4);
+            return n == 1
+                ? Flux.just(
+                    new ChatResponse(
+                        List.of(
+                            new Generation(
+                                ExhaustedResumeRecoveryTest.this.call(n, "readMultiFile", "{}")))))
+                : Flux.empty();
+          }
+        };
+    assertThatThrownBy(
+            () ->
+                new StagnationChatModel(delegate)
+                    .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
+        .isInstanceOf(ExecutionStoppedException.class)
+        .hasMessageContaining("REPLAN_BUDGET_EXCEEDED");
+    assertThat(calls).hasValue(4);
+    assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = {false, true})
   void bodyReacquisitionYieldsToPartialAssessmentOnEveryCycle(boolean newCoverage)
@@ -481,25 +589,34 @@ class ExhaustedResumeRecoveryTest {
   void aReadAfterWorkInTheSameBatchStillNeedsAssessment() throws Exception {
     var c = context(0, 2, 8, true);
     var calls = new AtomicInteger();
-    new StagnationChatModel(
-            model(
-                p -> {
-                  if (calls.incrementAndGet() == 1)
-                    return AssistantMessage.builder()
-                        .toolCalls(
-                            List.of(
-                                new AssistantMessage.ToolCall(
-                                    "write",
-                                    "function",
-                                    "writeMultiFile",
-                                    "{\"files\":[{\"path\":\"review.md\"}]}"),
-                                new AssistantMessage.ToolCall(
-                                    "read", "function", "readMultiFile", "{}")))
-                        .build();
-                  assertThat(names(p)).doesNotContain("readMultiFile").contains("writeMultiFile");
-                  return new AssistantMessage("The newly read range still needs assessment");
-                }))
-        .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast();
+    assertThatThrownBy(
+            () ->
+                new StagnationChatModel(
+                        model(
+                            p -> {
+                              if (calls.incrementAndGet() == 1)
+                                return AssistantMessage.builder()
+                                    .toolCalls(
+                                        List.of(
+                                            new AssistantMessage.ToolCall(
+                                                "write",
+                                                "function",
+                                                "writeMultiFile",
+                                                "{\"files\":[{\"path\":\"review.md\"}]}"),
+                                            new AssistantMessage.ToolCall(
+                                                "read", "function", "readMultiFile", "{}")))
+                                    .build();
+                              assertThat(names(p))
+                                  .doesNotContain("readMultiFile")
+                                  .contains("writeMultiFile");
+                              return new AssistantMessage(
+                                  "The newly read range still needs assessment");
+                            }))
+                    .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
+        .isInstanceOf(ExecutionStoppedException.class)
+        .hasMessageContaining("REPLAN_BUDGET_EXCEEDED");
+    assertThat(c.detector().stagnationCount()).isEqualTo(4);
+    assertThat(c.needsResumeContentWork()).isTrue();
   }
 
   @Test
