@@ -121,8 +121,10 @@ public final class ConversationInputRouter {
    * @param context 文脈
    * @param prompt プロンプト
    * @param queue 実行待ち
+   * @param execution 実行処理
    */
-  private record Slot(AgentRunContext context, String prompt, UserInterventionQueue queue) {}
+  private record Slot(
+      AgentRunContext context, String prompt, UserInterventionQueue queue, Runner execution) {}
 
   /** 会話の実行を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ConversationInputRouter(Executor executor, Runner runner) {
@@ -248,6 +250,17 @@ public final class ConversationInputRouter {
     return enqueue(slot(context, prompt), lifecycle);
   }
 
+  /** 承認後の会話を、同じ実行の追加入力を受け付けるキューで続行する。 */
+  public Disposition submitContinuation(
+      AgentRunContext context,
+      String prompt,
+      Consumer<UserInterventionQueue> operation,
+      Consumer<Runnable> lifecycle) {
+    Objects.requireNonNull(operation);
+    return enqueue(
+        slot(context, prompt, (owner, request, queue) -> operation.accept(queue)), lifecycle);
+  }
+
   /** 会話の実行で判断に用いる含有実行の条件を確認する。 */
   public boolean containsRun(String projectId, String runId) {
     return projectQueue.containsRun(projectId, runId);
@@ -347,8 +360,16 @@ public final class ConversationInputRouter {
 
   /** 会話の実行で用いるslotを返す。 */
   private Slot slot(AgentRunContext context, String prompt) {
+    return slot(context, prompt, runner);
+  }
+
+  /** 続行処理にも通常実行と同じ追加入力キューを用意する。 */
+  private Slot slot(AgentRunContext context, String prompt, Runner execution) {
     return new Slot(
-        context, prompt, new UserInterventionQueue(entry -> received.accept(context, entry)));
+        context,
+        prompt,
+        new UserInterventionQueue(entry -> received.accept(context, entry)),
+        execution);
   }
 
   /** 実行順序を管理するため、会話入力入力の振り分けを実行待ちに登録する。 */
@@ -369,7 +390,8 @@ public final class ConversationInputRouter {
                 try {
                   if (admissions != null) admissions.startExecution(context);
                   admitted.run();
-                  lifecycle.accept(() -> runner.execute(context, slot.prompt(), slot.queue()));
+                  lifecycle.accept(
+                      () -> slot.execution().execute(context, slot.prompt(), slot.queue()));
                 } finally {
                   agentSlots.remove(context.runId());
                   forget(slot);
