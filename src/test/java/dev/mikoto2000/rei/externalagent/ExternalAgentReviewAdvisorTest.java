@@ -118,4 +118,25 @@ class ExternalAgentReviewAdvisorTest {
     // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(service);
   }
+  @Test
+  void normalReviewPreservesAllSystemMessagesAndHostMetadata() {
+    var run = mock(RunExecutionContext.class);
+    when(run.userRequest()).thenReturn("Continue review");
+    var service = mock(ExternalAgentDelegationService.class);
+    var handoff = SystemMessage.builder().text("verified handoff")
+        .metadata(Map.of("rei.resumeContext", true, "rei.resumeRunId", "current",
+            "rei.knownFileInventory", true)).build();
+    var other = SystemMessage.builder().text("working context")
+        .metadata(Map.of("rei.workingSet", true)).build();
+    var options = OpenAiChatOptions.builder().toolContext(Map.of(RunExecutionContext.KEY, run)).build();
+    var request = ChatClientRequest.builder().prompt(new Prompt(
+        List.of(handoff, other, new UserMessage("Continue review")), options)).build();
+    var result = new ExternalAgentReviewAdvisor(service).before(request, null).prompt();
+    assertEquals(handoff.getMetadata(), result.getInstructions().getFirst().getMetadata());
+    assertTrue(result.getInstructions().getFirst().getText().contains("verified handoff"));
+    assertTrue(result.getContents().contains("independently"));
+    assertEquals(other, result.getInstructions().get(1));
+    verifyNoInteractions(service);
+  }
+
 }

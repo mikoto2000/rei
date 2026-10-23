@@ -7,7 +7,6 @@ import org.springframework.ai.chat.client.ChatClientResponse;
 import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
 /**
@@ -43,7 +42,7 @@ public final class ConversationLifecycleAdvisor implements BaseAdvisor {
     var messages = new ArrayList<Message>();
     var originalSystem = request.prompt().getSystemMessage();
     String system = originalSystem.getText();
-    messages.add(new SystemMessage(system + "\n\n" + context));
+    messages.add(originalSystem.mutate().text(system + "\n\n" + context).build());
     request.prompt().getInstructions().stream()
         .filter(m -> m != originalSystem)
         .forEach(messages::add);
