@@ -73,47 +73,44 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
     }
     // Budget exhaustion must stop the run, rather than become a selection fallback.
     if (beforeModelCall != null) beforeModelCall.run();
-    if (beforeModelCall instanceof dev.mikoto2000.rei.llm.ModelCallBudget budget
-        && budget.tokenLimitEnabled()) {
-      org.springframework.ai.chat.model.ChatResponse response;
-      try {
-        var model = modelProvider.chatModel(LlmFeature.AGENT_SKILLS);
-        dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
-        // AI 2 uses provider-specific request options without merging model defaults.
-        var options =
-            modelProvider
-                .chatOptions(LlmFeature.AGENT_SKILLS, null)
-                .mutate()
-                .toolCallbacks(List.of())
-                .toolChoice("none")
-                .build();
-        dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
-        response =
-            model.call(
-                new org.springframework.ai.chat.prompt.Prompt(
-                    buildSelectionPrompt(prompt, candidates), options));
-      } catch (Exception error) {
-        dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
-        budget.recordTotalTokens(null);
-        return List.of();
-      }
-      var usage = response == null ? null : response.getMetadata().getUsage();
-      budget.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
-      String content =
-          response.getResult() == null ? "" : response.getResult().getOutput().getText();
-      return resolveSelectedSkills(parseJsonStringArray(content), candidates);
-    }
+    var budget =
+        beforeModelCall instanceof dev.mikoto2000.rei.llm.ModelCallBudget supplied
+                && supplied.tokenLimitEnabled()
+            ? supplied
+            : null;
+    org.springframework.ai.chat.model.ChatResponse response;
     try {
-      String content =
+      var model = modelProvider.chatModel(LlmFeature.AGENT_SKILLS);
+      dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
+      // Apply feature options on every path; a plain String call uses model defaults instead.
+      // Per-request output limits are independent of the optional total-token Run budget.
+      var options =
           modelProvider
-              .chatModel(LlmFeature.AGENT_SKILLS)
-              .call(buildSelectionPrompt(prompt, candidates));
-      return resolveSelectedSkills(parseJsonStringArray(content), candidates);
-    } catch (Exception e) {
-      dev.mikoto2000.rei.core.chat.RunCancellation.propagate(e);
-      log.debug("Agent Skill implicit selection failed", e);
+              .chatOptions(LlmFeature.AGENT_SKILLS, null)
+              .mutate()
+              .toolCallbacks(List.of())
+              .toolChoice("none")
+              .build();
+      dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
+      response =
+          model.call(
+              new org.springframework.ai.chat.prompt.Prompt(
+                  buildSelectionPrompt(prompt, candidates), options));
+    } catch (Exception error) {
+      dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
+      if (budget != null) budget.recordTotalTokens(null);
+      log.debug("Agent Skill implicit selection failed", error);
       return List.of();
     }
+    if (budget != null) {
+      var usage = response == null ? null : response.getMetadata().getUsage();
+      budget.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
+    }
+    String content =
+        response == null || response.getResult() == null
+            ? ""
+            : response.getResult().getOutput().getText();
+    return resolveSelectedSkills(parseJsonStringArray(content), candidates);
   }
 
   /** 利用先に渡せるよう、選択内容プロンプトを組み立てる。 */
