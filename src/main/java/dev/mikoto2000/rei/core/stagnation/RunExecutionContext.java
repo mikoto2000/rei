@@ -101,6 +101,55 @@ public class RunExecutionContext {
               c.recoveries(),
               c.reason()));
     }
+
+    /**
+     * Bounded historical fetched ranges; neither current filesystem truth nor reviewed coverage.
+     */
+    public String fetchedCoverage(java.nio.file.Path root, int budget) {
+      if (information == null || budget < 2) return "{}";
+      var json = new com.fasterxml.jackson.databind.ObjectMapper();
+      var files = new ArrayList<Map<String, Object>>();
+      var summary =
+          Map.of(
+              "historical",
+              true,
+              "reviewed",
+              false,
+              "partial",
+              true,
+              "trackingIncomplete",
+              information.historicalUnknown(),
+              "files",
+              files);
+      if (json.valueToTree(summary).toString().length() > budget) return "{}";
+      var normalizedRoot = root.toAbsolutePath().normalize();
+      for (int i = 0; i < Math.min(64, information.files().size()) && files.size() < 16; i++) {
+        var file = information.files().get(i);
+        if (file.revision() == null || file.revision().isBlank() || file.revision().length() > 128)
+          continue;
+        try {
+          var path = java.nio.file.Path.of(file.normalizedPath()).toAbsolutePath().normalize();
+          if (!path.startsWith(normalizedRoot)) continue;
+          String relative = normalizedRoot.relativize(path).toString().replace('\\', '/');
+          if (relative.isBlank() || relative.length() > 256 || file.ranges().isEmpty()) continue;
+          files.add(
+              Map.of(
+                  "path",
+                  relative,
+                  "version",
+                  file.revision(),
+                  "ranges",
+                  file.ranges().stream().limit(8).toList()));
+          if (json.valueToTree(summary).toString().length() > budget) {
+            files.removeLast();
+            break;
+          }
+        } catch (java.nio.file.InvalidPathException invalid) {
+          // Raw-result identifiers are not project files and cannot supply filesystem coverage.
+        }
+      }
+      return json.valueToTree(summary).toString();
+    }
   }
 
   /** Additive checkpoint data; old checkpoints use the conservative legacy fallback. */
@@ -269,20 +318,19 @@ public class RunExecutionContext {
     return true;
   }
 
-  private boolean checkpointRestorationStarted;
+  private boolean resumeWorkPending;
 
   /** Start the existing bounded restoration only on an explicit checkpoint continuation. */
   public synchronized void beginContextRestoration() {
-    checkpointRestorationStarted = true;
+    resumeWorkPending = true;
     evaluator.beginContextRestoration();
   }
 
   /** A depleted resumed execution must use its handed-off evidence before broad discovery. */
   public synchronized boolean needsResumeWorkRecovery() {
-    return checkpointRestorationStarted
+    return resumeWorkPending
         && runContext != null
         && runContext.mode() == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE
-        && detector.isStagnant()
         && evaluator.snapshot().restorationReads() >= 8
         && budget.remainingStagnationReplans() == 0;
   }
@@ -862,6 +910,7 @@ public class RunExecutionContext {
    */
   public synchronized void completeSubgoal(String goal) {
     if (closed || !evaluator.completeSubgoal(goal)) return;
+    resumeWorkPending = false;
     boolean recovering = detector.replanCount() > 0 || detector.isReplanRequested();
     var evidence =
         new ProgressEvidence(
@@ -996,7 +1045,10 @@ public class RunExecutionContext {
                         || e.kind() == ProgressEvent.STEP_CHANGED);
     // Preparatory observations do not prove restoration finished. Keep the bounded targets
     // available until work advances; ordinary no-progress iterations still count below.
-    if (work) evaluator.finishContextRestoration();
+    if (work) {
+      evaluator.finishContextRestoration();
+      resumeWorkPending = false;
+    }
     boolean acquisitionProgress = pending.stream().anyMatch(ProgressEvidence::acquisitionProgress);
     boolean known =
         pending.stream()

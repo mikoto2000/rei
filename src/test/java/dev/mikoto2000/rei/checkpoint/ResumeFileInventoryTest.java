@@ -142,6 +142,17 @@ class ResumeFileInventoryTest {
       ((ObjectNode) tree.path("evidence").get(0)).put("runId", "different");
     if (condition.equals("missingReference")) tree.set("evidence", json.createArrayNode());
     if (condition.equals("smallBudget")) tree.put("request", "large request ".repeat(1000));
+    var coverage = new dev.mikoto2000.rei.core.stagnation.InformationLedger();
+    coverage.observeRange(root.resolve("docs/intro.md").toString(), "v1", 1, 21);
+    coverage.observeRange(root.resolve("../private.md").normalize().toString(), "v1", 1, 100);
+    tree.set(
+        "progress",
+        json.valueToTree(
+            new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState(
+                coverage.snapshot(),
+                new dev.mikoto2000.rei.llm.OutputLimitRunBudget.Snapshot(0, 4, 0, false),
+                0,
+                0)));
     var saved = json.treeToValue(tree, PersistentCheckpoint.class);
     try (var service =
         new PersistentCheckpointService(
@@ -182,6 +193,18 @@ class ResumeFileInventoryTest {
                 "docs/security.md",
                 ref,
                 "completeProjectInventory");
+        String prefix = "fetchedCoverage: ";
+        int offset = handoff.getText().indexOf(prefix) + prefix.length();
+        assertThat(handoff.getText()).contains(prefix).doesNotContain("private.md");
+        var fetched =
+            json.readTree(
+                handoff.getText().substring(offset, handoff.getText().indexOf('\n', offset)));
+        assertThat(fetched.path("historical").asBoolean()).isTrue();
+        assertThat(fetched.path("reviewed").asBoolean()).isFalse();
+        assertThat(fetched.path("partial").asBoolean()).isTrue();
+        assertThat(fetched.path("files").get(0).path("path").asText()).isEqualTo("docs/intro.md");
+        assertThat(fetched.path("files").get(0).path("ranges").get(0).path("endExclusive").asInt())
+            .isEqualTo(21);
         assertThat(handoff.getMetadata()).containsEntry("rei.resumeRunId", "resumed");
       }
       assertThat(handoff.getText().length()).isLessThanOrEqualTo(settings.getContextCharacters());
