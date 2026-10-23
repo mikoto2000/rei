@@ -319,16 +319,29 @@ public class RunExecutionContext {
   }
 
   private boolean resumeWorkPending;
+  private boolean resumedContext;
+  private boolean resumeContentPending;
 
   /** Start the existing bounded restoration only on an explicit checkpoint continuation. */
   public synchronized void beginContextRestoration() {
     resumeWorkPending = true;
+    resumedContext = true;
+    resumeContentPending = false;
     evaluator.beginContextRestoration();
   }
 
   /** A depleted resumed execution must use its handed-off evidence before broad discovery. */
   public synchronized boolean needsResumeWorkRecovery() {
-    return resumeWorkPending
+    return (resumeWorkPending || resumeContentPending) && depletedResume();
+  }
+
+  /** Use the received content before fetching the next chunk; no additional budget or grace. */
+  public synchronized boolean needsResumeContentWork() {
+    return resumeContentPending && depletedResume();
+  }
+
+  private boolean depletedResume() {
+    return resumedContext
         && runContext != null
         && runContext.mode() == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE
         && evaluator.snapshot().restorationReads() >= 8
@@ -911,6 +924,7 @@ public class RunExecutionContext {
   public synchronized void completeSubgoal(String goal) {
     if (closed || !evaluator.completeSubgoal(goal)) return;
     resumeWorkPending = false;
+    resumeContentPending = false;
     boolean recovering = detector.replanCount() > 0 || detector.isReplanRequested();
     var evidence =
         new ProgressEvidence(
@@ -995,7 +1009,15 @@ public class RunExecutionContext {
     recentActions.addLast(action);
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (recentActions.size() > 6) recentActions.removeFirst();
-    pending.addAll(evaluator.afterTool(name, arguments, result, before));
+    var observed = evaluator.afterTool(name, arguments, result, before);
+    pending.addAll(observed);
+    if (observed.stream()
+        .anyMatch(
+            e ->
+                e.kind() == ProgressEvent.STATE_CHANGED
+                    || e.kind() == ProgressEvent.STEP_CHANGED
+                    || e.kind() == ProgressEvent.SUBGOAL_COMPLETED)) resumeContentPending = false;
+    if (resumedContext && evaluator.readContentObserved()) resumeContentPending = true;
     String reads = evaluator.readFeedback();
     if (!reads.equals("[]")) latestReadFeedback = reads;
   }

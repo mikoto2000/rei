@@ -165,15 +165,20 @@ class ExhaustedResumeRecoveryTest {
   }
 
   private Prompt advised(Prompt prompt) {
-    var turns = org.mockito.Mockito.mock(dev.mikoto2000.rei.conversation.ConversationTurnStore.class);
+    var turns =
+        org.mockito.Mockito.mock(dev.mikoto2000.rei.conversation.ConversationTurnStore.class);
     org.mockito.Mockito.when(turns.cancelledContext("conversation"))
         .thenReturn("Historical cancelled request; explicit resumption allowed");
-    var request = org.springframework.ai.chat.client.ChatClientRequest.builder().prompt(prompt).build();
-    request = new dev.mikoto2000.rei.core.chat.ConversationLifecycleAdvisor(turns, "conversation")
-        .before(request, null);
+    var request =
+        org.springframework.ai.chat.client.ChatClientRequest.builder().prompt(prompt).build();
+    request =
+        new dev.mikoto2000.rei.core.chat.ConversationLifecycleAdvisor(turns, "conversation")
+            .before(request, null);
     return new dev.mikoto2000.rei.externalagent.ExternalAgentReviewAdvisor(
-        org.mockito.Mockito.mock(dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService.class))
-        .before(request, null).prompt();
+            org.mockito.Mockito.mock(
+                dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService.class))
+        .before(request, null)
+        .prompt();
   }
 
   @ParameterizedTest
@@ -334,6 +339,281 @@ class ExhaustedResumeRecoveryTest {
     assertThat(calls).hasValue(3);
     assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
     assertThat(c.progressSnapshot().continuity().evaluator().restorationReads()).isEqualTo(8);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void bodyReacquisitionYieldsToPartialAssessmentOnEveryCycle(boolean newCoverage)
+      throws Exception {
+    var c = context(0, 2, 8, true);
+    String seed = PAGE.replace("[\"known\"]", "[\"one\",\"two\",\"three\"]");
+    c.evaluator()
+        .afterTool("readMultiFile", "{}", seed, c.evaluator().beforeTool("readMultiFile", "{}"));
+    var initial = prompt(c, true, "resume", new AtomicInteger());
+    var options = (ToolCallingChatOptions) initial.getOptions();
+    var callbacks = new ArrayList<>(options.getToolCallbacks());
+    callbacks.removeIf(t -> t.getToolDefinition().name().equals("readMultiFile"));
+    var reads = new AtomicInteger();
+    var writes = new AtomicInteger();
+    callbacks.add(
+        tool(
+            "readMultiFile",
+            () -> {
+              int line = reads.incrementAndGet();
+              return PAGE.replace("\"startLine\":1", "\"startLine\":" + line)
+                  .replace("docs/intro.md", newCoverage ? "docs/unseen.md" : "docs/intro.md");
+            }));
+    callbacks.removeIf(t -> t.getToolDefinition().name().equals("writeMultiFile"));
+    callbacks.add(
+        tool(
+            "writeMultiFile",
+            () -> {
+              try {
+                Files.writeString(
+                    root.resolve("review.md"),
+                    "Partial assessment of delivered range " + reads.get());
+                writes.incrementAndGet();
+                return "[{\"path\":\"review.md\",\"success\":true}]";
+              } catch (Exception e) {
+                throw new IllegalStateException(e);
+              }
+            }));
+    var invocations = new AtomicInteger();
+    var delegate =
+        model(
+            p -> {
+              int n = invocations.incrementAndGet();
+              assertThat(n).isLessThanOrEqualTo(7);
+              if (writes.get() == 3) {
+                assertThat(names(p)).contains("readMultiFile", "listFile");
+                assertThat(c.detector().stagnationCount()).isZero();
+                return new AssistantMessage(
+                    "Three partial assessments saved; remaining review is incomplete");
+              }
+              // Reproduce the observed preference for sequential body reads while they are
+              // advertised.
+              if (names(p).contains("readMultiFile")) {
+                assertThat(reads.get()).isEqualTo(writes.get());
+                return call(n, "readMultiFile", "{}");
+              }
+              assertThat(names(p))
+                  .contains("writeMultiFile")
+                  .doesNotContain("listFile", "checkpointShow");
+              assertThat(p.getContents()).contains("partial assessment", "Do not invent");
+              return call(n, "writeMultiFile", "{\"files\":[{\"path\":\"review.md\"}]}");
+            });
+    new StagnationChatModel(delegate)
+        .stream(
+                advised(
+                    new Prompt(
+                        initial.getInstructions(),
+                        options.mutate().toolCallbacks(callbacks).build())))
+            .blockLast();
+    assertThat(reads).hasValue(3);
+    assertThat(writes).hasValue(3);
+    assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
+    assertThat(c.progressSnapshot().continuity().evaluator().restorationReads()).isEqualTo(8);
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "[]",
+        "{\"error\":\"failed\"}",
+        "malformed",
+        "[{\"path\":\"docs/intro.md\",\"version\":\"v1\",\"startLine\":1,\"content\":[]}]"
+      })
+  void unsuccessfulBodyReadDoesNotWithholdTheNextRead(String result) throws Exception {
+    var c = context(0, 2, 8, true);
+    var initial = prompt(c, true, "resume", new AtomicInteger());
+    var options = (ToolCallingChatOptions) initial.getOptions();
+    var callbacks = new ArrayList<>(options.getToolCallbacks());
+    callbacks.removeIf(t -> t.getToolDefinition().name().equals("readMultiFile"));
+    callbacks.add(tool("readMultiFile", () -> result));
+    var calls = new AtomicInteger();
+    new StagnationChatModel(
+            model(
+                p -> {
+                  assertThat(names(p)).contains("readMultiFile");
+                  if (calls.incrementAndGet() == 1) return call(1, "readMultiFile", "{}");
+                  return new AssistantMessage("Missing evidence remains unresolved");
+                }))
+        .stream(
+                new Prompt(
+                    initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
+            .blockLast();
+  }
+
+  @Test
+  void failedWriteAndAnnotationCannotUnlockMoreBodyReads() throws Exception {
+    var c = context(0, 2, 8, true);
+    var initial = prompt(c, true, "resume", new AtomicInteger());
+    var options = (ToolCallingChatOptions) initial.getOptions();
+    var callbacks = new ArrayList<>(options.getToolCallbacks());
+    callbacks.removeIf(t -> t.getToolDefinition().name().equals("writeMultiFile"));
+    callbacks.add(tool("writeMultiFile", () -> "{\"success\":false}"));
+    callbacks.add(tool("checkpointAnnotate", () -> "{\"success\":true}"));
+    var calls = new AtomicInteger();
+    assertThatThrownBy(
+            () ->
+                new StagnationChatModel(
+                        model(
+                            p -> {
+                              int n = calls.incrementAndGet();
+                              if (n == 1) return call(n, "readMultiFile", "{}");
+                              assertThat(names(p)).doesNotContain("readMultiFile");
+                              return call(
+                                  n, n == 2 ? "writeMultiFile" : "checkpointAnnotate", "{}");
+                            }))
+                    .stream(
+                            new Prompt(
+                                initial.getInstructions(),
+                                options.mutate().toolCallbacks(callbacks).build()))
+                        .blockLast())
+        .isInstanceOf(ExecutionStoppedException.class)
+        .hasMessageContaining("REPLAN_BUDGET_EXCEEDED");
+    assertThat(c.detector().stagnationCount()).isEqualTo(4);
+    assertThat(calls).hasValue(4);
+    assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
+  }
+
+  @Test
+  void aReadAfterWorkInTheSameBatchStillNeedsAssessment() throws Exception {
+    var c = context(0, 2, 8, true);
+    var calls = new AtomicInteger();
+    new StagnationChatModel(
+            model(
+                p -> {
+                  if (calls.incrementAndGet() == 1)
+                    return AssistantMessage.builder()
+                        .toolCalls(
+                            List.of(
+                                new AssistantMessage.ToolCall(
+                                    "write",
+                                    "function",
+                                    "writeMultiFile",
+                                    "{\"files\":[{\"path\":\"review.md\"}]}"),
+                                new AssistantMessage.ToolCall(
+                                    "read", "function", "readMultiFile", "{}")))
+                        .build();
+                  assertThat(names(p)).doesNotContain("readMultiFile").contains("writeMultiFile");
+                  return new AssistantMessage("The newly read range still needs assessment");
+                }))
+        .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast();
+  }
+
+  @Test
+  void modelCannotExecuteAHiddenContentCallback() throws Exception {
+    var c = context(0, 2, 8, true);
+    var initial = prompt(c, true, "resume", new AtomicInteger());
+    var options = (ToolCallingChatOptions) initial.getOptions();
+    var callbacks = new ArrayList<>(options.getToolCallbacks());
+    callbacks.removeIf(t -> t.getToolDefinition().name().equals("readMultiFile"));
+    var reads = new AtomicInteger();
+    callbacks.add(
+        tool(
+            "readMultiFile",
+            () -> {
+              reads.incrementAndGet();
+              return PAGE;
+            }));
+    var calls = new AtomicInteger();
+    assertThatThrownBy(
+            () ->
+                new StagnationChatModel(
+                        model(p -> call(calls.incrementAndGet(), "readMultiFile", "{}")))
+                    .stream(
+                            new Prompt(
+                                initial.getInstructions(),
+                                options.mutate().toolCallbacks(callbacks).build()))
+                        .blockLast())
+        .isInstanceOf(RuntimeException.class);
+    assertThat(reads).hasValue(1);
+    assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "ordinary",
+        "noInventory",
+        "wrongOwner",
+        "readOnly",
+        "replanRemaining",
+        "restorationRemaining"
+      })
+  void contentBoundaryDoesNotAffectOrdinaryOrUnverifiedExecutions(String condition)
+      throws Exception {
+    var c =
+        context(
+            0,
+            condition.equals("replanRemaining") ? 1 : 2,
+            condition.equals("restorationRemaining") ? 6 : 8,
+            !condition.equals("ordinary"));
+    if (condition.equals("readOnly") || condition.equals("conversation"))
+      c.setRunContext(
+          new AgentRunContext(
+              "resume",
+              "conversation",
+              root,
+              "project",
+              AgentRunContext.RequestSource.SHELL,
+              condition.equals("readOnly")
+                  ? AgentRunContext.Mode.READ_ONLY
+                  : AgentRunContext.Mode.CONVERSATION,
+              false));
+    var calls = new AtomicInteger();
+    new StagnationChatModel(
+            model(
+                p -> {
+                  assertThat(names(p)).contains("readMultiFile");
+                  if (calls.incrementAndGet() == 1) return call(1, "readMultiFile", "{}");
+                  return new AssistantMessage("Ordinary content use");
+                }))
+        .stream(
+                prompt(
+                    c,
+                    !condition.equals("noInventory"),
+                    condition.equals("wrongOwner") ? "different" : "resume",
+                    new AtomicInteger()))
+            .blockLast();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"readReviewFile", "readRawToolResult"})
+  void otherContentReadersAlsoYieldToWork(String reader) throws Exception {
+    var c = context(0, 2, 8, true);
+    var initial = prompt(c, true, "resume", new AtomicInteger());
+    var options = (ToolCallingChatOptions) initial.getOptions();
+    var callbacks = new ArrayList<>(options.getToolCallbacks());
+    String result =
+        reader.equals("readReviewFile")
+            ? "{\"range\":{\"path\":\"docs/intro.md\",\"version\":\"v1\",\"span\":{\"start\":0,\"end\":5}},\"content\":\"known\"}"
+            : "toolName: readMultiFile\ntoolCallId: original\nrawResultRef: 00000000-0000-0000-0000-000000000001\noffset: 0\ntotalCharacters: 5\nnextOffset: 5\nhasMore: false\nknown";
+    callbacks.add(tool(reader, () -> result));
+    var calls = new AtomicInteger();
+    new StagnationChatModel(
+            model(
+                p -> {
+                  int n = calls.incrementAndGet();
+                  if (n == 1)
+                    return call(
+                        n,
+                        reader,
+                        reader.equals("readRawToolResult")
+                            ? "{\"rawResultRef\":\"00000000-0000-0000-0000-000000000001\",\"offset\":0,\"limit\":5}"
+                            : "{}");
+                  if (n == 2) {
+                    assertThat(names(p)).doesNotContain(reader, "readMultiFile");
+                    return call(n, "writeMultiFile", "{\"files\":[{\"path\":\"review.md\"}]}");
+                  }
+                  assertThat(names(p)).contains(reader, "readMultiFile");
+                  return new AssistantMessage("Partial evidence used");
+                }))
+        .stream(
+                new Prompt(
+                    initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
+            .blockLast();
   }
 
   @Test
