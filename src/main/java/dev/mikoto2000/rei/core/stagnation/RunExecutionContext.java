@@ -78,6 +78,29 @@ public class RunExecutionContext {
         int unknownIterations) {
       this(information, budget, acquisitionOnlyIterations, unknownIterations, 0);
     }
+
+    /** A user-requested retry clears only the consecutive streak and its pending request latch. */
+    public ProgressState forExplicitResume() {
+      var c = continuity;
+      if (c == null) return this;
+      var d = c.detector();
+      if (d == null) return this;
+      return new ProgressState(
+          information,
+          budget,
+          acquisitionOnlyIterations,
+          unknownIterations,
+          unknownReplanNotices,
+          new Continuity(
+              new StagnationDetector.State(
+                  0, d.replanCount(), false, d.lastToolFingerprint(), d.lastFailureFingerprint()),
+              c.evaluator(),
+              c.goalIdleIterations(),
+              c.coverageIterations(),
+              c.lastProgress(),
+              c.recoveries(),
+              c.reason()));
+    }
   }
 
   /** Additive checkpoint data; old checkpoints use the conservative legacy fallback. */

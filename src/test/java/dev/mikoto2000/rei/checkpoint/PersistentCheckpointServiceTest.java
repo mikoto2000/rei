@@ -233,6 +233,148 @@ class PersistentCheckpointServiceTest {
     assertEquals(0, execution.progressVersion());
   }
 
+  @Test
+  void explicitResumeResetsOnlyConsecutiveStagnationAndCanTryFourIterationsAgain() {
+    var saved = exhaustedProgress();
+    service.preserveResults(owner, List.of(), saved);
+    service.finish(owner, "FAILED");
+    var previous = state();
+    var result =
+        service.resumeForShell(
+            "A",
+            previous.taskId(),
+            session -> {
+              assertEquals(0, state().progress().continuity().detector().stagnationCount());
+            });
+    var nextOwner = new AgentRunContext(result.runId(), "session", root, "A");
+    var restored = service.progress(nextOwner);
+    assertEquals(0, restored.continuity().detector().stagnationCount());
+    assertFalse(restored.continuity().detector().replanRequested());
+    assertPreservedExceptConsecutiveStagnation(saved, restored);
+    assertEquals(7, previous.progress().continuity().detector().stagnationCount());
+    assertEquals(previous.plan(), state().plan());
+    assertEquals(previous.files(), state().files());
+    var execution =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+            result.runId(),
+            new dev.mikoto2000.rei.llm.OutputLimitRunBudget(2, 100),
+            new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(root),
+            new AgentEventFactory(Clock.systemUTC()),
+            event -> {});
+    execution.restoreProgress(restored);
+    execution.beginContextRestoration();
+    assertEquals(0, execution.progressVersion());
+    assertNull(execution.requestReplan());
+    for (int i = 1; i <= 4; i++) {
+      recordRead(execution);
+      assertEquals(i, execution.detector().stagnationCount());
+      if (i < 4) assertNull(execution.requestReplan());
+    }
+    assertEquals(
+        dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.REPLAN_BUDGET_EXCEEDED,
+        assertThrows(
+                dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.class,
+                execution::requestReplan)
+            .reason());
+    assertEquals(saved.budget(), execution.budgetSnapshot());
+    service.preserveResults(nextOwner, List.of(), execution.progressSnapshot());
+    service.finish(nextOwner, "FAILED");
+    var second = service.resumeForShell("A", previous.taskId(), session -> {});
+    var secondProgress =
+        service.progress(new AgentRunContext(second.runId(), "session", root, "A"));
+    assertEquals(0, secondProgress.continuity().detector().stagnationCount());
+    assertEquals(saved.budget(), secondProgress.budget());
+    assertEquals(8, secondProgress.continuity().evaluator().restorationReads());
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"SHELL", "WEB", "MCP"})
+  void toolResumeDoesNotInferExplicitUserIntentFromRequestSource(String source) {
+    var saved = exhaustedProgress();
+    service.preserveResults(owner, List.of(), saved);
+    service.finish(owner, "FAILED");
+    var resumed =
+        service.resume("A", state().taskId(), AgentRunContext.RequestSource.valueOf(source));
+    assertEquals(
+        saved, service.progress(new AgentRunContext(resumed.runId(), "session", root, "A")));
+  }
+
+  @Test
+  void explicitResumeAcceptsLegacyProgressWithoutInventingContinuity() {
+    var saved =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState(
+            new dev.mikoto2000.rei.core.stagnation.InformationLedger().snapshot(),
+            new dev.mikoto2000.rei.llm.OutputLimitRunBudget.Snapshot(1, 20, 400, false, 2, 1),
+            12,
+            2,
+            1);
+    service.preserveResults(owner, List.of(), saved);
+    service.finish(owner, "FAILED");
+    var resumed = service.resumeForShell("A", state().taskId(), session -> {});
+    assertEquals(
+        saved, service.progress(new AgentRunContext(resumed.runId(), "session", root, "A")));
+  }
+
+  private dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState exhaustedProgress() {
+    var baseline =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+            "baseline",
+            new dev.mikoto2000.rei.llm.OutputLimitRunBudget(2, 100),
+            new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(root),
+            new AgentEventFactory(Clock.systemUTC()),
+            event -> {});
+    recordRead(baseline);
+    var information = baseline.progressSnapshot().information();
+    var evaluator =
+        new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator.State(
+            information,
+            8,
+            java.util.Set.of("A:v1"),
+            java.util.Set.of("done"),
+            java.util.Set.of("active"));
+    var detector =
+        new dev.mikoto2000.rei.core.stagnation.StagnationDetector.State(
+            7, 1, true, "readMultiFile|{}", "earlier-failure");
+    return new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState(
+        information,
+        new dev.mikoto2000.rei.llm.OutputLimitRunBudget.Snapshot(1, 20, 400, false, 2, 1),
+        12,
+        2,
+        1,
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.Continuity(
+            detector,
+            evaluator,
+            23,
+            17,
+            baseline.progressSnapshot().continuity().lastProgress(),
+            List.of("attempt-1", "attempt-2"),
+            "STEP_STALLED"));
+  }
+
+  private void assertPreservedExceptConsecutiveStagnation(
+      dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState expected,
+      dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState actual) {
+    var c = expected.continuity();
+    var d = c.detector();
+    assertEquals(
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState(
+            expected.information(),
+            expected.budget(),
+            expected.acquisitionOnlyIterations(),
+            expected.unknownIterations(),
+            expected.unknownReplanNotices(),
+            new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.Continuity(
+                new dev.mikoto2000.rei.core.stagnation.StagnationDetector.State(
+                    0, d.replanCount(), false, d.lastToolFingerprint(), d.lastFailureFingerprint()),
+                c.evaluator(),
+                c.goalIdleIterations(),
+                c.coverageIterations(),
+                c.lastProgress(),
+                c.recoveries(),
+                c.reason())),
+        actual);
+  }
+
   private void recordRead(dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution) {
     execution.beginIteration();
     execution.recordTool(
