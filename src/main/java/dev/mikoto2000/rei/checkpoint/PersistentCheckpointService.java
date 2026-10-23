@@ -524,6 +524,12 @@ public class PersistentCheckpointService implements AutoCloseable {
         project, task, source, expectedRevision, null, null, null, false, context -> {});
   }
 
+  /** Explicit user resume from the authenticated HTTP control used by the client CLI. */
+  public ResumeResult resumeForUser(
+      String project, String task, AgentRunContext.RequestSource source) {
+    return resumeChecked(project, task, source, null, null, null, null, true, context -> {});
+  }
+
   /** 実行開始前に表示先を切り替えて、Shell から保存タスクを再開する。 */
   public ResumeResult resumeForShell(
       String project, String task, java.util.function.Consumer<String> beforeSubmit) {
