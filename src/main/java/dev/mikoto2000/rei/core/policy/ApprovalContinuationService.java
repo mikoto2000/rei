@@ -363,7 +363,7 @@ public class ApprovalContinuationService implements RunContinuation {
   }
 
   /** ツール利用の権限制御に関するpumpを処理する。 */
-  @Scheduled(fixedDelay = 500)
+  @Scheduled(fixedDelay = 500, scheduler = "approvalContinuationScheduler")
   public synchronized void pump() {
     for (var entry : store.active()) {
       try {
