@@ -121,8 +121,10 @@ public final class ConversationInputRouter {
    * @param context 文脈
    * @param prompt プロンプト
    * @param queue 実行待ち
+   * @param execution 実行処理
    */
-  private record Slot(AgentRunContext context, String prompt, UserInterventionQueue queue) {}
+  private record Slot(
+      AgentRunContext context, String prompt, UserInterventionQueue queue, Runner execution) {}
 
   /** 会話の実行を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ConversationInputRouter(Executor executor, Runner runner) {
@@ -256,7 +258,7 @@ public final class ConversationInputRouter {
       Consumer<Runnable> lifecycle) {
     Objects.requireNonNull(operation);
     return enqueue(
-        slot(context, prompt), lifecycle, (owner, request, queue) -> operation.accept(queue));
+        slot(context, prompt, (owner, request, queue) -> operation.accept(queue)), lifecycle);
   }
 
   /** 会話の実行で判断に用いる含有実行の条件を確認する。 */
@@ -358,17 +360,20 @@ public final class ConversationInputRouter {
 
   /** 会話の実行で用いるslotを返す。 */
   private Slot slot(AgentRunContext context, String prompt) {
+    return slot(context, prompt, runner);
+  }
+
+  /** 続行処理にも通常実行と同じ追加入力キューを用意する。 */
+  private Slot slot(AgentRunContext context, String prompt, Runner execution) {
     return new Slot(
-        context, prompt, new UserInterventionQueue(entry -> received.accept(context, entry)));
+        context,
+        prompt,
+        new UserInterventionQueue(entry -> received.accept(context, entry)),
+        execution);
   }
 
   /** 実行順序を管理するため、会話入力入力の振り分けを実行待ちに登録する。 */
   private Disposition enqueue(Slot slot, Consumer<Runnable> lifecycle) {
-    return enqueue(slot, lifecycle, runner);
-  }
-
-  /** 会話の実行と承認後の続行を、同じ受付・後片付けの経路へ登録する。 */
-  private Disposition enqueue(Slot slot, Consumer<Runnable> lifecycle, Runner execution) {
     var context = slot.context();
     if (admissions != null) admissions.reserveKnownSession(context);
     var admitted = beforeExecution.getOrDefault(context.runId(), () -> {});
@@ -385,7 +390,8 @@ public final class ConversationInputRouter {
                 try {
                   if (admissions != null) admissions.startExecution(context);
                   admitted.run();
-                  lifecycle.accept(() -> execution.execute(context, slot.prompt(), slot.queue()));
+                  lifecycle.accept(
+                      () -> slot.execution().execute(context, slot.prompt(), slot.queue()));
                 } finally {
                   agentSlots.remove(context.runId());
                   forget(slot);
