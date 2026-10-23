@@ -104,7 +104,9 @@ public class StagnationChatModel implements ChatModel {
                           return Flux.just(
                               new ChatResponse(ToolExecutionResult.buildGenerations(result)));
                         return iteration(
-                            new Prompt(result.conversationHistory(), prepared.getOptions()),
+                            new Prompt(
+                                withoutResumeWorkReminder(result.conversationHistory()),
+                                prepared.getOptions()),
                             context,
                             false,
                             context.progressVersion());
@@ -234,13 +236,16 @@ public class StagnationChatModel implements ChatModel {
                                       context.planTools(generation.getOutput().getToolCalls());
                                       var toolResult =
                                           tools.executeResumable(actionPrompt, result, context);
+                                      var history =
+                                          withoutResumeWorkReminder(
+                                              toolResult.conversationHistory());
                                       if (assembler != null && context.runContext() != null)
                                         assembler.preserveToolResults(
-                                            toolResult.conversationHistory(),
+                                            history,
                                             context.runContext().conversationId(),
                                             context.runContext().runId());
-                                      context.preserveToolResults(toolResult.conversationHistory());
-                                      context.suspendIfWaiting(toolResult.conversationHistory());
+                                      context.preserveToolResults(history);
+                                      context.suspendIfWaiting(history);
                                       return toolResult;
                                     } finally {
                                       context.endIteration();
@@ -254,7 +259,9 @@ public class StagnationChatModel implements ChatModel {
                                           new ChatResponse(
                                               ToolExecutionResult.buildGenerations(toolResult)));
                                     List<Message> messages =
-                                        new ArrayList<>(toolResult.conversationHistory());
+                                        new ArrayList<>(
+                                            withoutResumeWorkReminder(
+                                                toolResult.conversationHistory()));
                                     messages.addAll(context.applyInterventions());
                                     String notice = context.requestReplan();
                                     if (notice != null) messages.add(new UserMessage(notice));
@@ -332,7 +339,7 @@ public class StagnationChatModel implements ChatModel {
     // The response already consumed an ordinary iteration. Enforce the same shared limits as
     // tool iterations; do not replenish budgets or treat continuation wording as progress.
     String notice = context.requestReplan();
-    List<Message> messages = new ArrayList<>(prompt.getInstructions());
+    List<Message> messages = new ArrayList<>(withoutResumeWorkReminder(prompt.getInstructions()));
     if (reply != null) messages.add(reply);
     messages.add(
         SystemMessage.builder()
@@ -343,9 +350,20 @@ public class StagnationChatModel implements ChatModel {
                     + "Do not fabricate findings, permission or completion. If blocked, record the specific blocker through the existing task controls. "
                     + "The existing no-progress and shared call limits still apply."
                     + (notice == null ? "" : " " + notice))
-            .metadata(java.util.Map.of("rei.progressFeedback", true))
+            .metadata(java.util.Map.of("rei.resumeWorkReminder", true))
             .build());
     return iteration(new Prompt(messages, prompt.getOptions()), context, false, progressAtLimit);
+  }
+
+  /** The reminder describes one decision, not a permanent restriction after verified work. */
+  private List<Message> withoutResumeWorkReminder(List<Message> messages) {
+    return messages.stream()
+        .filter(
+            m ->
+                !(m instanceof SystemMessage
+                    && (Boolean.TRUE.equals(m.getMetadata().get("rei.resumeWorkReminder"))
+                        || Boolean.TRUE.equals(m.getMetadata().get("rei.progressFeedback")))))
+        .toList();
   }
 
   /** Limit only the recovery choice, keeping the complete callbacks for the next iteration. */
@@ -403,7 +421,7 @@ public class StagnationChatModel implements ChatModel {
       instructions.addAll(resumed);
     }
     return new Prompt(
-        instructions,
+        withoutResumeWorkReminder(instructions),
         options
             .mutate()
             .toolContext(toolContext)

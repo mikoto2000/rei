@@ -21,7 +21,6 @@ import org.springframework.web.servlet.mvc.method.annotation.ResponseBodyAdvice;
       GoalController.class,
       AttentionController.class,
       DependencyController.class,
-      ApprovalController.class,
       ScheduleController.class,
       CheckpointController.class
     })
@@ -59,7 +58,6 @@ public final class ShellReportAdvice implements ResponseBodyAdvice<Object> {
             GoalController.class,
             AttentionController.class,
             DependencyController.class,
-            ApprovalController.class,
             ScheduleController.class,
             CheckpointController.class)
         .contains(method.getContainingClass());

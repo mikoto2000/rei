@@ -358,6 +358,9 @@ class ExhaustedResumeRecoveryTest {
                     .contains("No verified work followed the delivered content");
                 return call(n, "writeMultiFile", "{\"files\":[{\"path\":\"review.md\"}]}");
               }
+              assertThat(p.getContents())
+                  .doesNotContain("No verified work followed the delivered content");
+              assertThat(names(p)).contains("readMultiFile", "listFile");
               return new AssistantMessage("Partial assessment saved with unresolved gaps.");
             });
     new StagnationChatModel(delegate)
@@ -392,6 +395,26 @@ class ExhaustedResumeRecoveryTest {
     assertThat(c.detector().stagnationCount()).isEqualTo(4);
     assertThat(root.resolve("review.md")).doesNotExist();
     assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"rei.progressFeedback", "rei.resumeWorkReminder"})
+  void savedTemporaryHostFeedbackIsReplacedByCurrentObservation(String key) throws Exception {
+    var c = context(0, 2, 8, true);
+    var original = prompt(c, true, "resume", new AtomicInteger());
+    var messages = new ArrayList<>(original.getInstructions());
+    messages.add(
+        SystemMessage.builder()
+            .text("Stale saved host restriction")
+            .metadata(Map.of(key, true))
+            .build());
+    new StagnationChatModel(
+            model(
+                p -> {
+                  assertThat(p.getContents()).doesNotContain("Stale saved host restriction");
+                  return new AssistantMessage("Current state observed");
+                }))
+        .stream(new Prompt(messages, original.getOptions())).blockLast();
   }
 
   @Test
