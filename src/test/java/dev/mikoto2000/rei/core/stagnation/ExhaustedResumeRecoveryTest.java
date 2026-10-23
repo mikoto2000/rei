@@ -25,6 +25,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -319,7 +320,7 @@ class ExhaustedResumeRecoveryTest {
                 assertThat(c.detector().stagnationCount()).isZero();
                 assertThat(c.needsResumeWorkRecovery()).isTrue();
                 assertThat(names(p)).doesNotContain("listFile", "countFileLines");
-                assertThat(p.getContents()).contains("intermediate", "not proof");
+                assertThat(p.getContents()).contains("partial assessment", "Do not invent");
                 return call(
                     n,
                     "writeMultiFile",
@@ -450,14 +451,35 @@ class ExhaustedResumeRecoveryTest {
   }
 
   @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void bodyReacquisitionYieldsToPartialAssessmentOnEveryCycle(boolean newCoverage)
+  @CsvSource({
+    "false, inventory",
+    "true, inventory",
+    "false, missing",
+    "true, missing",
+    "false, absent",
+    "true, absent",
+    "false, foreign",
+    "true, foreign"
+  })
+  void bodyReacquisitionYieldsToPartialAssessmentOnEveryCycle(boolean newCoverage, String handoff)
       throws Exception {
     var c = context(0, 2, 8, true);
     String seed = PAGE.replace("[\"known\"]", "[\"one\",\"two\",\"three\"]");
     c.evaluator()
         .afterTool("readMultiFile", "{}", seed, c.evaluator().beforeTool("readMultiFile", "{}"));
-    var initial = prompt(c, true, "resume", new AtomicInteger());
+    var initial =
+        prompt(
+            c,
+            !handoff.equals("missing"),
+            handoff.equals("foreign") ? "other-run" : "resume",
+            new AtomicInteger());
+    if (handoff.equals("absent"))
+      initial =
+          new Prompt(
+              initial.getInstructions().stream()
+                  .filter(m -> !(m instanceof SystemMessage))
+                  .toList(),
+              initial.getOptions());
     var options = (ToolCallingChatOptions) initial.getOptions();
     var callbacks = new ArrayList<>(options.getToolCallbacks());
     callbacks.removeIf(t -> t.getToolDefinition().name().equals("readMultiFile"));
@@ -507,7 +529,9 @@ class ExhaustedResumeRecoveryTest {
               assertThat(names(p))
                   .contains("writeMultiFile")
                   .doesNotContain("listFile", "checkpointShow");
-              assertThat(p.getContents()).contains("partial assessment", "Do not invent");
+              assertThat(p.getContents())
+                  .contains("partial assessment", "Do not invent")
+                  .doesNotContain("Use the handed-off historical inventory");
               return call(n, "writeMultiFile", "{\"files\":[{\"path\":\"review.md\"}]}");
             });
     new StagnationChatModel(delegate)
@@ -650,15 +674,7 @@ class ExhaustedResumeRecoveryTest {
   }
 
   @ParameterizedTest
-  @ValueSource(
-      strings = {
-        "ordinary",
-        "noInventory",
-        "wrongOwner",
-        "readOnly",
-        "replanRemaining",
-        "restorationRemaining"
-      })
+  @ValueSource(strings = {"ordinary", "readOnly", "replanRemaining", "restorationRemaining"})
   void contentBoundaryDoesNotAffectOrdinaryOrUnverifiedExecutions(String condition)
       throws Exception {
     var c =

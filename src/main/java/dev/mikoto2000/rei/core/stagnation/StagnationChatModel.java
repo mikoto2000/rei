@@ -138,7 +138,7 @@ public class StagnationChatModel implements ChatModel {
           if (!prepaid) context.consumeNextLlmCall();
           Prompt actionPrompt = resumeRecoveryPrompt(prompt, context);
           String feedback = context.progressFeedback();
-          if (actionPrompt != prompt)
+          if (actionPrompt != prompt && !context.needsResumeContentWork())
             feedback +=
                 " Broad discovery tools are temporarily unavailable during this depleted resume. "
                     + "Use the handed-off historical inventory, fetched coverage and read excerpts. Record authorized intermediate findings with evidence and explicit gaps before further reacquisition; read only named missing content. "
@@ -381,7 +381,8 @@ public class StagnationChatModel implements ChatModel {
             .findFirst()
             .map(m -> Boolean.TRUE.equals(m.getMetadata().get("rei.knownFileInventory")))
             .orElse(false);
-    if (!inventoryDelivered) return prompt;
+    // Delivered source content establishes the assessment boundary independently of inventory.
+    if (!inventoryDelivered && !context.needsResumeContentWork()) return prompt;
     if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return prompt;
     var available = options.getToolCallbacks();
     if (available == null) return prompt;
