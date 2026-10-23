@@ -164,6 +164,18 @@ class ExhaustedResumeRecoveryTest {
     };
   }
 
+  private Prompt advised(Prompt prompt) {
+    var turns = org.mockito.Mockito.mock(dev.mikoto2000.rei.conversation.ConversationTurnStore.class);
+    org.mockito.Mockito.when(turns.cancelledContext("conversation"))
+        .thenReturn("Historical cancelled request; explicit resumption allowed");
+    var request = org.springframework.ai.chat.client.ChatClientRequest.builder().prompt(prompt).build();
+    request = new dev.mikoto2000.rei.core.chat.ConversationLifecycleAdvisor(turns, "conversation")
+        .before(request, null);
+    return new dev.mikoto2000.rei.externalagent.ExternalAgentReviewAdvisor(
+        org.mockito.Mockito.mock(dev.mikoto2000.rei.externalagent.ExternalAgentDelegationService.class))
+        .before(request, null).prompt();
+  }
+
   @ParameterizedTest
   @ValueSource(ints = {0, 7})
   void exhaustedResumeUsesHandedOffInventoryAndRestoresDiscoveryAfterVerifiedWork(int count)
@@ -214,7 +226,7 @@ class ExhaustedResumeRecoveryTest {
               return new AssistantMessage("Intermediate coverage recorded; not a completed review");
             });
     new StagnationChatModel(delegate, assembler)
-        .stream(prompt(c, true, "resume", broad)).blockLast();
+        .stream(advised(prompt(c, true, "resume", broad))).blockLast();
     assertThat(root.resolve("review.md")).exists();
     assertThat(broad).hasValue(0);
     assertThat(calls).hasValue(2);

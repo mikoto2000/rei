@@ -11,7 +11,6 @@ import org.springframework.ai.chat.client.advisor.api.AdvisorChain;
 import org.springframework.ai.chat.client.advisor.api.BaseAdvisor;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.Message;
-import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.model.tool.ToolCallingChatOptions;
 
@@ -176,11 +175,13 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
         throw new IllegalStateException("Cannot serialize external review result", error);
       }
     }
-    List<Message> messages = new ArrayList<>();
-    messages.add(new SystemMessage(request.prompt().getSystemMessage().getText() + "\n" + extra));
-    request.prompt().getInstructions().stream()
-        .filter(m -> !(m instanceof SystemMessage))
-        .forEach(messages::add);
+    // Preserve the independent host contexts and metadata used by resume recovery.
+    List<Message> messages = new ArrayList<>(request.prompt().getInstructions());
+    var original = request.prompt().getSystemMessage();
+    var updated = original.mutate().text(original.getText() + "\n" + extra).build();
+    int index = messages.indexOf(original);
+    if (index < 0) messages.addFirst(updated);
+    else messages.set(index, updated);
     return request.mutate().prompt(new Prompt(messages, request.prompt().getOptions())).build();
   }
 
