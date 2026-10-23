@@ -229,6 +229,11 @@ public class OutputLimitRunBudget {
     return true;
   }
 
+  /** Remaining recovery attempts; observation never consumes or replenishes them. */
+  public synchronized int remainingStagnationReplans() {
+    return Math.max(0, maxReplans - stagnationReplans);
+  }
+
   /** 用途に応じたモデル利用で用いる残量言語モデル呼び出し回数を返す。 */
   public synchronized int remainingLlmCalls() {
     if (tokenExhausted()) return 0;

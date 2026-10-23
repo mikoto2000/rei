@@ -134,15 +134,22 @@ public class StagnationChatModel implements ChatModel {
           context.checkActive();
           context.checkModelTokenBudget();
           if (!prepaid) context.consumeNextLlmCall();
+          Prompt actionPrompt = resumeRecoveryPrompt(prompt, context);
           String feedback = context.progressFeedback();
-          var invocationMessages = new ArrayList<Message>(prompt.getInstructions());
+          if (actionPrompt != prompt)
+            feedback +=
+                " Broad discovery tools are temporarily unavailable during this depleted resume. "
+                    + "Use the handed-off historical inventory for targeted missing-content reads or authorized intermediate work. "
+                    + "The inventory is not proof that all files exist unchanged or that review is complete. "
+                    + "Normal discovery returns after verified progress; budgets are not replenished.";
+          var invocationMessages = new ArrayList<Message>(actionPrompt.getInstructions());
           if (!feedback.isEmpty())
             invocationMessages.addFirst(
                 SystemMessage.builder()
                     .text(feedback)
                     .metadata(java.util.Map.of("rei.progressFeedback", true))
                     .build());
-          Prompt invocationPrompt = new Prompt(invocationMessages, prompt.getOptions());
+          Prompt invocationPrompt = new Prompt(invocationMessages, actionPrompt.getOptions());
           context.beginIteration();
           AtomicReference<ChatResponse> aggregate = new AtomicReference<>();
           AtomicReference<Prompt> sent = new AtomicReference<>();
@@ -190,7 +197,8 @@ public class StagnationChatModel implements ChatModel {
                   Flux.defer(
                       () -> {
                         ChatResponse result = aggregate.get();
-                        if (result == null || result.getResult() == null) {
+                        var generation = result == null ? null : result.getResult();
+                        if (generation == null) {
                           reported.set(true);
                           context.recordTotalTokens(null);
                           context.endIteration();
@@ -211,10 +219,9 @@ public class StagnationChatModel implements ChatModel {
                                   () -> {
                                     context.checkActive();
                                     try {
-                                      context.planTools(
-                                          result.getResult().getOutput().getToolCalls());
+                                      context.planTools(generation.getOutput().getToolCalls());
                                       var toolResult =
-                                          tools.executeResumable(prompt, result, context);
+                                          tools.executeResumable(actionPrompt, result, context);
                                       if (assembler != null && context.runContext() != null)
                                         assembler.preserveToolResults(
                                             toolResult.conversationHistory(),
@@ -254,7 +261,7 @@ public class StagnationChatModel implements ChatModel {
                             return Flux.empty();
                           }
                           List<Message> messages = new ArrayList<>(prompt.getInstructions());
-                          messages.add(result.getResult().getOutput());
+                          messages.add(generation.getOutput());
                           messages.addAll(guidance);
                           return iteration(
                               new Prompt(messages, prompt.getOptions()),
@@ -269,7 +276,7 @@ public class StagnationChatModel implements ChatModel {
                           // be replayed/executed.
                           messages.add(
                               new AssistantMessage(
-                                  Objects.toString(result.getResult().getOutput().getText(), "")));
+                                  Objects.toString(generation.getOutput().getText(), "")));
                           messages.add(
                               new UserMessage(
                                   notice != null
@@ -302,6 +309,32 @@ public class StagnationChatModel implements ChatModel {
                     }
                   });
         });
+  }
+
+  /** Limit only the recovery choice, keeping the complete callbacks for the next iteration. */
+  private Prompt resumeRecoveryPrompt(Prompt prompt, RunExecutionContext context) {
+    var owner = context.runContext();
+    if (!context.needsResumeWorkRecovery() || owner == null) return prompt;
+    // The advisor prepends the current handoff; saved continuation messages follow it.
+    boolean inventoryDelivered =
+        prompt.getInstructions().stream()
+            .filter(
+                m ->
+                    m instanceof SystemMessage
+                        && Boolean.TRUE.equals(m.getMetadata().get("rei.resumeContext"))
+                        && owner.runId().equals(m.getMetadata().get("rei.resumeRunId")))
+            .findFirst()
+            .map(m -> Boolean.TRUE.equals(m.getMetadata().get("rei.knownFileInventory")))
+            .orElse(false);
+    if (!inventoryDelivered) return prompt;
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return prompt;
+    var available = options.getToolCallbacks();
+    if (available == null) return prompt;
+    var excluded = java.util.Set.of("listFile", "findFile", "checkpointShow", "checkpointInspect");
+    var callbacks =
+        available.stream().filter(t -> !excluded.contains(t.getToolDefinition().name())).toList();
+    if (callbacks.size() == available.size()) return prompt;
+    return new Prompt(prompt.getInstructions(), options.mutate().toolCallbacks(callbacks).build());
   }
 
   /** 実行の停滞への対処で用いる準備を返す。 */

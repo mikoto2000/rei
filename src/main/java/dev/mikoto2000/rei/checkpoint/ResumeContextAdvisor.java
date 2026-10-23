@@ -31,7 +31,8 @@ public class ResumeContextAdvisor implements BaseAdvisor {
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     var run = AgentRunScope.current();
     if (run == null) return request;
-    String context = service.context(run.runId());
+    var handoff = service.modelHandoff(run.runId());
+    String context = handoff.text();
     if (context.isBlank()) return request;
     var messages = new ArrayList<Message>(request.prompt().getInstructions());
     var current = request.prompt().getUserMessage();
@@ -45,7 +46,14 @@ public class ResumeContextAdvisor implements BaseAdvisor {
     messages.addFirst(
         SystemMessage.builder()
             .text(context)
-            .metadata(java.util.Map.of("rei.resumeContext", true))
+            .metadata(
+                java.util.Map.of(
+                    "rei.resumeContext",
+                    true,
+                    "rei.resumeRunId",
+                    run.runId(),
+                    "rei.knownFileInventory",
+                    handoff.hasFileInventory()))
             .build());
     return request.mutate().prompt(new Prompt(messages, request.prompt().getOptions())).build();
   }

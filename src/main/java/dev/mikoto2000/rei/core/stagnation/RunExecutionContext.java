@@ -246,8 +246,22 @@ public class RunExecutionContext {
     return true;
   }
 
+  private boolean checkpointRestorationStarted;
+
+  /** Start the existing bounded restoration only on an explicit checkpoint continuation. */
   public synchronized void beginContextRestoration() {
+    checkpointRestorationStarted = true;
     evaluator.beginContextRestoration();
+  }
+
+  /** A depleted resumed execution must use its handed-off evidence before broad discovery. */
+  public synchronized boolean needsResumeWorkRecovery() {
+    return checkpointRestorationStarted
+        && runContext != null
+        && runContext.mode() == dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE
+        && detector.isStagnant()
+        && evaluator.snapshot().restorationReads() >= 8
+        && budget.remainingStagnationReplans() == 0;
   }
 
   /** 継続入力。 */
