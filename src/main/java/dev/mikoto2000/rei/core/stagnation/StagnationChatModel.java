@@ -139,9 +139,9 @@ public class StagnationChatModel implements ChatModel {
           if (actionPrompt != prompt)
             feedback +=
                 " Broad discovery tools are temporarily unavailable during this depleted resume. "
-                    + "Use the handed-off historical inventory for targeted missing-content reads or authorized intermediate work. "
+                    + "Use the handed-off historical inventory, fetched coverage and read excerpts. Record authorized intermediate findings with evidence and explicit gaps before further reacquisition; read only named missing content. "
                     + "The inventory is not proof that all files exist unchanged or that review is complete. "
-                    + "Normal discovery returns after verified progress; budgets are not replenished.";
+                    + "Normal discovery returns after verified work or step advancement; new coverage alone does not end this recovery. Budgets are not replenished.";
           var invocationMessages = new ArrayList<Message>(actionPrompt.getInstructions());
           if (!feedback.isEmpty())
             invocationMessages.addFirst(
@@ -330,7 +330,9 @@ public class StagnationChatModel implements ChatModel {
     if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return prompt;
     var available = options.getToolCallbacks();
     if (available == null) return prompt;
-    var excluded = java.util.Set.of("listFile", "findFile", "checkpointShow", "checkpointInspect");
+    var excluded =
+        java.util.Set.of(
+            "listFile", "findFile", "countFileLines", "checkpointShow", "checkpointInspect");
     var callbacks =
         available.stream().filter(t -> !excluded.contains(t.getToolDefinition().name())).toList();
     if (callbacks.size() == available.size()) return prompt;

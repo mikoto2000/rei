@@ -1120,6 +1120,14 @@ public class PersistentCheckpointService implements AutoCloseable {
             && "CONTINUE".equals(check.decision())
             && check.changed().isEmpty()
             && unknown.isEmpty();
+    int coverageBudget = Math.max(2, Math.min(budget / 5, budget - text.length() - 64));
+    var progress = state.progress();
+    text.append("fetchedCoverage: ")
+        .append(
+            progress == null
+                ? "{}"
+                : progress.fetchedCoverage(Path.of(state.projectRoot()), coverageBudget))
+        .append('\n');
     int factsBudget = Math.max(2, Math.min(budget / 4, budget - text.length() - 64));
     text.append("confirmedReadExcerpts: ")
         .append(confirmedReadExcerpts(state, factsBudget))

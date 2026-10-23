@@ -95,7 +95,8 @@ class ExhaustedResumeRecoveryTest {
   private Prompt prompt(
       RunExecutionContext c, boolean inventory, String owner, AtomicInteger broadCalls) {
     var tools = new ArrayList<ToolCallback>();
-    for (String name : List.of("listFile", "findFile", "checkpointShow", "checkpointInspect"))
+    for (String name :
+        List.of("listFile", "findFile", "countFileLines", "checkpointShow", "checkpointInspect"))
       tools.add(
           tool(
               name,
@@ -163,10 +164,11 @@ class ExhaustedResumeRecoveryTest {
     };
   }
 
-  @Test
-  void exhaustedResumeUsesHandedOffInventoryAndRestoresDiscoveryAfterVerifiedWork()
+  @ParameterizedTest
+  @ValueSource(ints = {0, 7})
+  void exhaustedResumeUsesHandedOffInventoryAndRestoresDiscoveryAfterVerifiedWork(int count)
       throws Exception {
-    var c = context(7, 2, 8, true);
+    var c = context(count, 2, 8, true);
     var broad = new AtomicInteger();
     var calls = new AtomicInteger();
     var estimator = TokenEstimator.conservative();
@@ -188,7 +190,12 @@ class ExhaustedResumeRecoveryTest {
                 // Reproduce the previous model choice if broad discovery is still advertised.
                 if (names(p).contains("listFile")) return call(n, "listFile", "{}");
                 assertThat(names(p))
-                    .doesNotContain("listFile", "findFile", "checkpointShow", "checkpointInspect")
+                    .doesNotContain(
+                        "listFile",
+                        "findFile",
+                        "countFileLines",
+                        "checkpointShow",
+                        "checkpointInspect")
                     .contains("readMultiFile", "writeMultiFile");
                 assertThat(p.getContents()).contains("Known inventory");
                 return call(
@@ -198,7 +205,12 @@ class ExhaustedResumeRecoveryTest {
               }
               assertThat(c.detector().stagnationCount()).isZero();
               assertThat(names(p))
-                  .contains("listFile", "findFile", "checkpointShow", "checkpointInspect");
+                  .contains(
+                      "listFile",
+                      "findFile",
+                      "countFileLines",
+                      "checkpointShow",
+                      "checkpointInspect");
               return new AssistantMessage("Intermediate coverage recorded; not a completed review");
             });
     new StagnationChatModel(delegate, assembler)
@@ -214,7 +226,7 @@ class ExhaustedResumeRecoveryTest {
   @ValueSource(
       strings = {
         "ordinary",
-        "healthy",
+        "workCompleted",
         "replanRemaining",
         "restorationRemaining",
         "noInventory",
@@ -225,10 +237,11 @@ class ExhaustedResumeRecoveryTest {
   void ordinaryOrUnverifiedRecoveryKeepsDiscoveryTools(String condition) throws Exception {
     var c =
         context(
-            condition.equals("healthy") ? 0 : 7,
+            condition.equals("workCompleted") ? 0 : 7,
             condition.equals("replanRemaining") ? 1 : 2,
             condition.equals("restorationRemaining") ? 7 : 8,
             !condition.equals("ordinary"));
+    if (condition.equals("workCompleted")) c.completeSubgoal("verified");
     if (condition.equals("readOnly") || condition.equals("conversation"))
       c.setRunContext(
           new AgentRunContext(
@@ -245,7 +258,12 @@ class ExhaustedResumeRecoveryTest {
         model(
             p -> {
               assertThat(names(p))
-                  .contains("listFile", "findFile", "checkpointShow", "checkpointInspect");
+                  .contains(
+                      "listFile",
+                      "findFile",
+                      "countFileLines",
+                      "checkpointShow",
+                      "checkpointInspect");
               throw new java.util.concurrent.CancellationException();
             });
     assertThatThrownBy(
@@ -259,6 +277,51 @@ class ExhaustedResumeRecoveryTest {
                                 new AtomicInteger()))
                         .blockLast())
         .isInstanceOf(java.util.concurrent.CancellationException.class);
+  }
+
+  @Test
+  void newCoverageKeepsRecoveryFocusedUntilActualWorkAdvances() throws Exception {
+    var c = context(0, 2, 8, true);
+    var initial = prompt(c, true, "resume", new AtomicInteger());
+    var options = (ToolCallingChatOptions) initial.getOptions();
+    var callbacks = new ArrayList<>(options.getToolCallbacks());
+    callbacks.removeIf(t -> t.getToolDefinition().name().equals("readMultiFile"));
+    callbacks.add(tool("readMultiFile", () -> PAGE.replace("docs/intro.md", "docs/unseen.md")));
+    var calls = new AtomicInteger();
+    var delegate =
+        model(
+            p -> {
+              int n = calls.incrementAndGet();
+              if (n == 1) {
+                assertThat(names(p))
+                    .doesNotContain("listFile", "countFileLines")
+                    .contains("readMultiFile");
+                return call(n, "readMultiFile", "{}");
+              }
+              if (n == 2) {
+                assertThat(c.detector().stagnationCount()).isZero();
+                assertThat(c.needsResumeWorkRecovery()).isTrue();
+                assertThat(names(p)).doesNotContain("listFile", "countFileLines");
+                assertThat(p.getContents()).contains("intermediate", "not proof");
+                return call(
+                    n,
+                    "writeMultiFile",
+                    "{\"files\":[{\"path\":\"review.md\",\"content\":\"Partial verified coverage; assessment remains incomplete\"}]}");
+              }
+              assertThat(c.needsResumeWorkRecovery()).isFalse();
+              assertThat(names(p)).contains("listFile", "countFileLines");
+              return new AssistantMessage(
+                  "Intermediate evidence recorded; review remains incomplete");
+            });
+    new StagnationChatModel(delegate)
+        .stream(
+                new Prompt(
+                    initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
+            .blockLast();
+    assertThat(root.resolve("review.md")).exists();
+    assertThat(calls).hasValue(3);
+    assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
+    assertThat(c.progressSnapshot().continuity().evaluator().restorationReads()).isEqualTo(8);
   }
 
   @Test
@@ -283,7 +346,12 @@ class ExhaustedResumeRecoveryTest {
         model(
             p -> {
               assertThat(names(p))
-                  .contains("listFile", "findFile", "checkpointShow", "checkpointInspect");
+                  .contains(
+                      "listFile",
+                      "findFile",
+                      "countFileLines",
+                      "checkpointShow",
+                      "checkpointInspect");
               throw new java.util.concurrent.CancellationException();
             });
     assertThatThrownBy(
