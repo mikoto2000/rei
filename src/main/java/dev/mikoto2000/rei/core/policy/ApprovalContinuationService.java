@@ -8,7 +8,6 @@ import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
 import dev.mikoto2000.rei.core.chat.ChatExecutionService;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.chat.RunContinuation;
-import dev.mikoto2000.rei.core.chat.UserInterventionQueue;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
 import java.time.Clock;
@@ -423,9 +422,10 @@ public class ApprovalContinuationService implements RunContinuation {
         if (!registry.getObject().claimWaiting(owner) || !store.claim(entry.approvalId())) continue;
         router
             .getObject()
-            .submitOperation(
+            .submitContinuation(
                 owner,
-                () -> {
+                doc.request(),
+                queue -> {
                   ChatExecutionResult result;
                   try {
                     validate(owner);
@@ -448,7 +448,7 @@ public class ApprovalContinuationService implements RunContinuation {
                             .execute(
                                 owner,
                                 doc.request(),
-                                new UserInterventionQueue(),
+                                queue,
                                 parent == null ? null : parent.reservation());
                   } catch (RuntimeException uncertain) {
                     approvals.retireContinuationGrant(owner.projectId(), entry.approvalId());

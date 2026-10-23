@@ -212,6 +212,50 @@ class ApprovalContinuationTest {
     return id;
   }
 
+  /** 承認続行後も所有者の追加入力が同じ実行キューへ届き、完了後は受け付けない。 */
+  @Test
+  void continuedRunAcceptsOwnedWebGuidanceWithoutResettingSavedBudget() {
+    router =
+        new ConversationInputRouter(
+            Runnable::run,
+            (context, prompt, queue) -> {
+              throw new AssertionError("Unexpected ordinary runner");
+            });
+    beans.addBean("router", router);
+    service = createService(clock);
+    String id = pause();
+    service.decide(owner.projectId(), id, true, true);
+    var controller = new dev.mikoto2000.rei.web.RunController(runs, router, true);
+    when(chat.execute(eq(owner), anyString(), any(), any()))
+        .thenAnswer(
+            invocation -> {
+              assertEquals(RunStatus.RUNNING, registry.get(owner.runId()).status());
+              var input =
+                  new dev.mikoto2000.rei.web.RunController.InputRequest(
+                      owner.projectId(),
+                      owner.conversationId(),
+                      "Complete all remaining review pages");
+              assertEquals(202, controller.input(owner.runId(), input).getStatusCode().value());
+              assertTrue(
+                  !router.offerIntervention(
+                      "wrong-project", owner.conversationId(), owner.runId(), "wrong"));
+              assertTrue(
+                  !router.offerIntervention(
+                      owner.projectId(), "wrong-session", owner.runId(), "wrong"));
+              dev.mikoto2000.rei.core.chat.UserInterventionQueue queue = invocation.getArgument(2);
+              assertEquals(List.of(input.message()), queue.drain());
+              assertEquals(1, store.document(store.find(id).orElseThrow()).budget().llmCalls());
+              return ChatExecutionResult.success("done", false);
+            });
+    service.pump();
+    verify(chat, times(1)).execute(eq(owner), anyString(), any(), any());
+    assertEquals("COMPLETED", service.state(id).orElseThrow());
+    assertTrue(
+        !router.offerIntervention(
+            owner.projectId(), owner.conversationId(), owner.runId(), "late"));
+    assertTrue(router.activeRuns().isEmpty());
+  }
+
   /** ツール利用の権限制御で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
   void approveAndContinueIsDurableAndQueuesOnlyOnce() {
@@ -223,7 +267,7 @@ class ApprovalContinuationTest {
     assertEquals("QUEUED", store.find(id).orElseThrow().state());
     service.pump();
     service.pump();
-    verify(router, times(1)).submitOperation(eq(owner), any(Runnable.class), any());
+    verify(router, times(1)).submitContinuation(eq(owner), anyString(), any(), any());
     assertEquals("RESUMING", store.find(id).orElseThrow().state());
   }
 
@@ -236,19 +280,21 @@ class ApprovalContinuationTest {
         .thenReturn(ChatExecutionResult.success("done", false));
     doAnswer(
             invocation -> {
-              Runnable operation = invocation.getArgument(1);
-              Consumer<Runnable> lifecycle = invocation.getArgument(2);
-              lifecycle.accept(operation);
+              Consumer<dev.mikoto2000.rei.core.chat.UserInterventionQueue> operation =
+                  invocation.getArgument(2);
+              Consumer<Runnable> lifecycle = invocation.getArgument(3);
+              lifecycle.accept(
+                  () -> operation.accept(new dev.mikoto2000.rei.core.chat.UserInterventionQueue()));
               return null;
             })
         .when(router)
-        .submitOperation(eq(owner), any(), any());
+        .submitContinuation(eq(owner), anyString(), any(), any());
     service.pump();
     service.pump();
     assertEquals("COMPLETED", service.state(id).orElseThrow());
     assertEquals("CONSUMED", approvals.get(owner.projectId(), id).status());
     service.decide(owner.projectId(), id, true, true);
-    verify(router, times(1)).submitOperation(eq(owner), any(), any());
+    verify(router, times(1)).submitContinuation(eq(owner), anyString(), any(), any());
   }
 
   /** Web判断結果について、継続入力一度だけを受け付けられることを確認する。 */
@@ -276,7 +322,7 @@ class ApprovalContinuationTest {
               org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.runId")
                   .value(owner.runId()));
     service.pump();
-    verify(router, times(1)).submitOperation(eq(owner), any(), any());
+    verify(router, times(1)).submitContinuation(eq(owner), anyString(), any(), any());
   }
 
   /** ツール利用の権限制御で、指定した条件に対する結果と状態の変化を確認する。 */
@@ -413,7 +459,7 @@ class ApprovalContinuationTest {
         IllegalStateException.class, () -> expired.decide(owner.projectId(), id, true, true));
     expired.pump();
     assertEquals("EXPIRED", store.find(id).orElseThrow().state());
-    verify(router, never()).submitOperation(any(), any(), any());
+    verify(router, never()).submitContinuation(any(), anyString(), any(), any());
     // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
     verifyNoInteractions(chat);
   }
@@ -464,7 +510,7 @@ class ApprovalContinuationTest {
     beans.addBean("runs", runs);
     service = createService(clock);
     service.pump();
-    verify(router).submitOperation(eq(owner), any(Runnable.class), any());
+    verify(router).submitContinuation(eq(owner), anyString(), any(), any());
     assertEquals(pending().calls(), service.restore(owner).pendingTools().calls());
   }
 

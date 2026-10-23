@@ -248,6 +248,17 @@ public final class ConversationInputRouter {
     return enqueue(slot(context, prompt), lifecycle);
   }
 
+  /** 承認後の会話を、同じ実行の追加入力を受け付けるキューで続行する。 */
+  public Disposition submitContinuation(
+      AgentRunContext context,
+      String prompt,
+      Consumer<UserInterventionQueue> operation,
+      Consumer<Runnable> lifecycle) {
+    Objects.requireNonNull(operation);
+    return enqueue(
+        slot(context, prompt), lifecycle, (owner, request, queue) -> operation.accept(queue));
+  }
+
   /** 会話の実行で判断に用いる含有実行の条件を確認する。 */
   public boolean containsRun(String projectId, String runId) {
     return projectQueue.containsRun(projectId, runId);
@@ -353,6 +364,11 @@ public final class ConversationInputRouter {
 
   /** 実行順序を管理するため、会話入力入力の振り分けを実行待ちに登録する。 */
   private Disposition enqueue(Slot slot, Consumer<Runnable> lifecycle) {
+    return enqueue(slot, lifecycle, runner);
+  }
+
+  /** 会話の実行と承認後の続行を、同じ受付・後片付けの経路へ登録する。 */
+  private Disposition enqueue(Slot slot, Consumer<Runnable> lifecycle, Runner execution) {
     var context = slot.context();
     if (admissions != null) admissions.reserveKnownSession(context);
     var admitted = beforeExecution.getOrDefault(context.runId(), () -> {});
@@ -369,7 +385,7 @@ public final class ConversationInputRouter {
                 try {
                   if (admissions != null) admissions.startExecution(context);
                   admitted.run();
-                  lifecycle.accept(() -> runner.execute(context, slot.prompt(), slot.queue()));
+                  lifecycle.accept(() -> execution.execute(context, slot.prompt(), slot.queue()));
                 } finally {
                   agentSlots.remove(context.runId());
                   forget(slot);
