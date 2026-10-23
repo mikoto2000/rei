@@ -1031,8 +1031,16 @@ public class PersistentCheckpointService implements AutoCloseable {
 
   /** 作業の中断と再開で用いる文脈を返す。 */
   public String context(String run) {
+    return modelHandoff(run).text();
+  }
+
+  /** One bounded input and its delivery facts, derived from the same immutable checkpoint. */
+  public record ModelHandoff(String text, boolean hasFileInventory) {}
+
+  /** Build the input and advertise only facts that fit entirely in the existing context cap. */
+  public ModelHandoff modelHandoff(String run) {
     var state = active.get(run);
-    if (state == null || state.resumedFromRunId() == null) return "";
+    if (state == null || state.resumedFromRunId() == null) return new ModelHandoff("", false);
     var check = state.reconciliation();
     var json = new com.fasterxml.jackson.databind.ObjectMapper();
     int budget = settings.getContextCharacters();
@@ -1082,6 +1090,16 @@ public class PersistentCheckpointService implements AutoCloseable {
     text.append("plan: ")
         .append(bounded(json.valueToTree(state.plan()).toString(), budget / 10))
         .append('\n');
+    int inventoryBudget = Math.max(2, Math.min(budget / 5, budget - text.length() - 32));
+    String inventory = confirmedFileInventory(state, inventoryBudget);
+    text.append("knownFileInventory: ").append(inventory).append('\n');
+    boolean inventoryDelivered =
+        !inventory.equals("{}")
+            && text.length() <= budget
+            && check != null
+            && "CONTINUE".equals(check.decision())
+            && check.changed().isEmpty()
+            && unknown.isEmpty();
     int factsBudget = Math.max(2, Math.min(budget / 4, budget - text.length() - 64));
     text.append("confirmedReadExcerpts: ")
         .append(confirmedReadExcerpts(state, factsBudget))
@@ -1089,7 +1107,74 @@ public class PersistentCheckpointService implements AutoCloseable {
     int referencesBudget = Math.max(0, Math.min(budget / 10, budget - text.length() - 16));
     text.append("evidence: ")
         .append(bounded(json.valueToTree(state.evidence()).toString(), referencesBudget));
-    return bounded(text.toString(), budget);
+    return new ModelHandoff(bounded(text.toString(), budget), inventoryDelivered);
+  }
+
+  /** Restore the actual known paths rather than leaving them only in the deduplication ledger. */
+  private String confirmedFileInventory(PersistentCheckpoint state, int budget) {
+    if (rawResults == null || budget < 2) return "{}";
+    var json = new com.fasterxml.jackson.databind.ObjectMapper();
+    var operations = state.operations();
+    int inspected = 0;
+    for (int i = operations.size() - 1;
+        i >= Math.max(0, operations.size() - 64) && inspected < 4;
+        i--) {
+      CheckpointReconciler.active();
+      var op = operations.get(i);
+      if (!Set.of("listFile", "findFile").contains(op.toolName())
+          || op.status() != OperationStatus.SUCCEEDED) continue;
+      inspected++;
+      var reference =
+          state.evidence().stream()
+              .filter(
+                  e ->
+                      e.origin().equals("RAW_RESULT_REFERENCE")
+                          && Objects.equals(e.runId(), op.runId())
+                          && Objects.equals(e.toolCallId(), op.toolCallId()))
+              .findFirst();
+      if (reference.isEmpty()) continue;
+      try {
+        Map<?, ?> stored =
+            json.convertValue(
+                rawResults.read(state.sessionId(), reference.get().summary()), Map.class);
+        if (!op.toolName().equals(stored.get("toolName"))
+            || !op.toolCallId().equals(stored.get("toolCallId"))
+            || !(stored.get("rawResult") instanceof String body)
+            || body.length() > 65536) continue;
+        var result = json.readTree(body);
+        if (result == null || !result.isArray() || result.isEmpty() || result.size() > 64) continue;
+        Path root = Path.of(state.projectRoot()).toAbsolutePath().normalize();
+        var paths = new ArrayList<String>();
+        for (var entry : result) {
+          if (!entry.isTextual() || entry.asText().isBlank() || entry.asText().length() > 256)
+            break;
+          Path path = root.resolve(entry.asText()).normalize();
+          if (!path.startsWith(root)) break;
+          paths.add(root.relativize(path).toString().replace('\\', '/'));
+        }
+        if (paths.size() != result.size()) continue;
+        String inventory =
+            json.valueToTree(
+                    Map.of(
+                        "toolName",
+                        op.toolName(),
+                        "toolCallId",
+                        op.toolCallId(),
+                        "rawResultRef",
+                        reference.get().summary(),
+                        "historical",
+                        true,
+                        "completeProjectInventory",
+                        false,
+                        "paths",
+                        paths))
+                .toString();
+        if (inventory.length() <= budget) return inventory;
+      } catch (java.io.IOException | RuntimeException unavailable) {
+        // Missing, malformed or unverifiable historical results cannot justify recovery filtering.
+      }
+    }
+    return "{}";
   }
 
   /** Bounded historical bodies, with the same verified provenance as the saved tool results. */
