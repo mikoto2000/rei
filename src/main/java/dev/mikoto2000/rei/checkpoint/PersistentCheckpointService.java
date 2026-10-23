@@ -1014,6 +1014,21 @@ public class PersistentCheckpointService implements AutoCloseable {
         + "結果不明の副作用を再実行する前に、その項目だけをユーザーに確認してください。";
   }
 
+  /** Only exact host-generated controls for this resumed task are superseded by its live input. */
+  boolean isSupersededResumeRequest(String run, String text) {
+    var state = active.get(run);
+    if (state == null
+        || state.resumedFromRunId() == null
+        || state.mode() != AgentRunContext.Mode.EXCLUSIVE) return false;
+    String task = state.taskId();
+    // Compatibility with controls persisted before the reconciled-handoff request was introduced.
+    String legacy =
+        "保存されたタスク "
+            + task
+            + " を明示的に再開してください。まず現在の状態を確認し、未完了・未検証の工程を再計画してください。結果不明の副作用を再実行する前に、その項目だけをユーザーに確認してください。";
+    return Objects.equals(text, legacy) || Objects.equals(text, resumePrompt(task));
+  }
+
   /** 作業の中断と再開で用いる文脈を返す。 */
   public String context(String run) {
     var state = active.get(run);
