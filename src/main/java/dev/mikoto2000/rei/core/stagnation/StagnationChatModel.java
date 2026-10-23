@@ -197,7 +197,8 @@ public class StagnationChatModel implements ChatModel {
                   Flux.defer(
                       () -> {
                         ChatResponse result = aggregate.get();
-                        if (result == null || result.getResult() == null) {
+                        var generation = result == null ? null : result.getResult();
+                        if (generation == null) {
                           reported.set(true);
                           context.recordTotalTokens(null);
                           context.endIteration();
@@ -218,8 +219,7 @@ public class StagnationChatModel implements ChatModel {
                                   () -> {
                                     context.checkActive();
                                     try {
-                                      context.planTools(
-                                          result.getResult().getOutput().getToolCalls());
+                                      context.planTools(generation.getOutput().getToolCalls());
                                       var toolResult =
                                           tools.executeResumable(actionPrompt, result, context);
                                       if (assembler != null && context.runContext() != null)
@@ -261,7 +261,7 @@ public class StagnationChatModel implements ChatModel {
                             return Flux.empty();
                           }
                           List<Message> messages = new ArrayList<>(prompt.getInstructions());
-                          messages.add(result.getResult().getOutput());
+                          messages.add(generation.getOutput());
                           messages.addAll(guidance);
                           return iteration(
                               new Prompt(messages, prompt.getOptions()),
@@ -276,7 +276,7 @@ public class StagnationChatModel implements ChatModel {
                           // be replayed/executed.
                           messages.add(
                               new AssistantMessage(
-                                  Objects.toString(result.getResult().getOutput().getText(), "")));
+                                  Objects.toString(generation.getOutput().getText(), "")));
                           messages.add(
                               new UserMessage(
                                   notice != null
@@ -313,7 +313,8 @@ public class StagnationChatModel implements ChatModel {
 
   /** Limit only the recovery choice, keeping the complete callbacks for the next iteration. */
   private Prompt resumeRecoveryPrompt(Prompt prompt, RunExecutionContext context) {
-    if (!context.needsResumeWorkRecovery() || context.runContext() == null) return prompt;
+    var owner = context.runContext();
+    if (!context.needsResumeWorkRecovery() || owner == null) return prompt;
     boolean inventoryDelivered =
         prompt.getInstructions().stream()
             .anyMatch(
@@ -321,19 +322,15 @@ public class StagnationChatModel implements ChatModel {
                     m instanceof SystemMessage
                         && Boolean.TRUE.equals(m.getMetadata().get("rei.resumeContext"))
                         && Boolean.TRUE.equals(m.getMetadata().get("rei.knownFileInventory"))
-                        && context
-                            .runContext()
-                            .runId()
-                            .equals(m.getMetadata().get("rei.resumeRunId")));
+                        && owner.runId().equals(m.getMetadata().get("rei.resumeRunId")));
     if (!inventoryDelivered) return prompt;
-    var options = (ToolCallingChatOptions) prompt.getOptions();
-    if (options.getToolCallbacks() == null) return prompt;
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return prompt;
+    var available = options.getToolCallbacks();
+    if (available == null) return prompt;
     var excluded = java.util.Set.of("listFile", "findFile", "checkpointShow", "checkpointInspect");
     var callbacks =
-        options.getToolCallbacks().stream()
-            .filter(t -> !excluded.contains(t.getToolDefinition().name()))
-            .toList();
-    if (callbacks.size() == options.getToolCallbacks().size()) return prompt;
+        available.stream().filter(t -> !excluded.contains(t.getToolDefinition().name())).toList();
+    if (callbacks.size() == available.size()) return prompt;
     return new Prompt(prompt.getInstructions(), options.mutate().toolCallbacks(callbacks).build());
   }
 
