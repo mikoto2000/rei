@@ -92,6 +92,20 @@ public class ProgressEvaluator {
   /** Bounded diagnostics for the latest tool, separate from durable evidence. */
   private final List<Map<String, Object>> readObservations = new ArrayList<>();
 
+  private boolean readContentObserved;
+
+  /** Current tool content observation, including duplicate ranges; never grants progress. */
+  public synchronized boolean readContentObserved() {
+    return readContentObserved;
+  }
+
+  /** Existing acquisition tools share the same temporary recovery choice boundary. */
+  static boolean acquisitionTool(String name) {
+    return READ_TOOLS.contains(name)
+        || name.equals("readReviewFile")
+        || name.equals("readRawToolResult");
+  }
+
   public synchronized String readFeedback() {
     return JSON.valueToTree(readObservations).toString();
   }
@@ -281,6 +295,7 @@ public class ProgressEvaluator {
   public synchronized List<ProgressEvidence> afterTool(
       String name, String arguments, String result, Snapshot before) {
     readObservations.clear();
+    readContentObserved = false;
     List<ProgressEvidence> evidence = new ArrayList<>();
     before
         .files()
@@ -344,6 +359,10 @@ public class ProgressEvaluator {
     if (name.equals("readReviewFile") && output != null && !failed(output) && output.has("range")) {
       var range = output.path("range");
       var span = range.path("span");
+      readContentObserved =
+          !output.path("content").asText().isBlank()
+              && span.path("start").asInt(-1) >= 0
+              && span.path("end").asInt(-1) > span.path("start").asInt(-1);
       var observed =
           information.observeRange(
               "review-chars:" + range.path("path").asText(),
@@ -408,6 +427,7 @@ public class ProgressEvaluator {
       try {
         var page = dev.mikoto2000.rei.core.contextbudget.RawResultPage.parse(result);
         if (page.content().isEmpty()) return List.copyOf(evidence);
+        readContentObserved = !page.content().isBlank();
         var observed =
             information.observeRange(
                 "raw:" + page.rawResultRef(),
@@ -577,6 +597,7 @@ public class ProgressEvaluator {
         if (!match.hasNonNull("path") || !match.hasNonNull("content")) continue;
         try {
           String source = normalizeSource(match.path("path").asText());
+          if (!match.path("content").asText().isBlank()) readContentObserved = true;
           addInformation(
               "grep:"
                   + source
@@ -632,6 +653,8 @@ public class ProgressEvaluator {
         } else unknown(source, "FILE_RANGE_UNAVAILABLE", evidence);
         return;
       }
+      if (fileSource && node != null && hasReadContent(node.path("content")))
+        readContentObserved = true;
       // Share line identities across file readers; metadata and argument spelling do not add facts.
       int line =
           Math.max(
@@ -657,6 +680,17 @@ public class ProgressEvaluator {
     }
   }
 
+  private static boolean hasReadContent(JsonNode content) {
+    if (content.isTextual()) return !content.asText().isBlank();
+    if (!content.isArray()) return false;
+    boolean nonblank = false;
+    for (var line : content) {
+      if (!line.isTextual()) return false;
+      nonblank |= !line.asText().isBlank();
+    }
+    return nonblank;
+  }
+
   /** 状況を判断する根拠を得るため、対象範囲を観測する。 */
   private void observeRange(
       String source,
@@ -673,6 +707,7 @@ public class ProgressEvaluator {
       unknown(source, "FILE_RANGE_UNAVAILABLE", evidence);
       return;
     }
+    if (hasReadContent(section.path("content"))) readContentObserved = true;
     boolean firstFragment = false;
     boolean ambiguousOffset = false;
     if (input != null) {

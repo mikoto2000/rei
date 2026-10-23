@@ -142,6 +142,15 @@ public class StagnationChatModel implements ChatModel {
                     + "Use the handed-off historical inventory, fetched coverage and read excerpts. Record authorized intermediate findings with evidence and explicit gaps before further reacquisition; read only named missing content. "
                     + "The inventory is not proof that all files exist unchanged or that review is complete. "
                     + "Normal discovery returns after verified work or step advancement; new coverage alone does not end this recovery. Budgets are not replenished.";
+          if (actionPrompt != prompt && context.needsResumeContentWork())
+            feedback +=
+                " Content acquisition is temporarily unavailable because this resumed run has received source content. "
+                    + "Use only the text actually visible in this context to record an authorized partial assessment before the next read. "
+                    + "Cite the delivered path/range and evidence, distinguish assessed content from unread or omitted content, and state exact unresolved gaps. "
+                    + "For review, use submitReviewResult for a delivered review range or update the authorized review artifact incrementally. "
+                    + "Do not wait to reread a whole chapter before recording its assessed portion. Do not invent findings, evidence, authorization or completion. "
+                    + "If an assessment is not supportable, explain the specific blockage instead of fabricating work. "
+                    + "Actual work advancement restores acquisition; failed writes, annotations and repeated text alone do not. This boundary applies again after each subsequent content read.";
           var invocationMessages = new ArrayList<Message>(actionPrompt.getInstructions());
           if (!feedback.isEmpty())
             invocationMessages.addFirst(
@@ -334,7 +343,13 @@ public class StagnationChatModel implements ChatModel {
         java.util.Set.of(
             "listFile", "findFile", "countFileLines", "checkpointShow", "checkpointInspect");
     var callbacks =
-        available.stream().filter(t -> !excluded.contains(t.getToolDefinition().name())).toList();
+        available.stream()
+            .filter(t -> !excluded.contains(t.getToolDefinition().name()))
+            .filter(
+                t ->
+                    !context.needsResumeContentWork()
+                        || !ProgressEvaluator.acquisitionTool(t.getToolDefinition().name()))
+            .toList();
     if (callbacks.size() == available.size()) return prompt;
     return new Prompt(prompt.getInstructions(), options.mutate().toolCallbacks(callbacks).build());
   }
