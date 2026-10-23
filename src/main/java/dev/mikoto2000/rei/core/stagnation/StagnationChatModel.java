@@ -211,6 +211,9 @@ public class StagnationChatModel implements ChatModel {
                           reported.set(true);
                           context.recordTotalTokens(null);
                           context.endIteration();
+                          if (actionPrompt != prompt && context.needsResumeContentWork())
+                            return continuePendingContentWork(
+                                prompt, null, context, progressAtLimit);
                           return Flux.empty();
                         }
                         context.checkActive();
@@ -266,6 +269,9 @@ public class StagnationChatModel implements ChatModel {
                         if (!OutputLimitDetector.isOutputLimitReached(result)) {
                           var guidance = context.applyInterventions();
                           if (guidance.isEmpty()) {
+                            if (actionPrompt != prompt && context.needsResumeContentWork())
+                              return continuePendingContentWork(
+                                  prompt, generation.getOutput(), context, progressAtLimit);
                             if (assembler != null) assembler.requireReviewed(context.runContext());
                             return Flux.empty();
                           }
@@ -318,6 +324,28 @@ public class StagnationChatModel implements ChatModel {
                     }
                   });
         });
+  }
+
+  /** A text-only or empty response cannot finish an outstanding resumed content assessment. */
+  private Flux<ChatResponse> continuePendingContentWork(
+      Prompt prompt, AssistantMessage reply, RunExecutionContext context, long progressAtLimit) {
+    // The response already consumed an ordinary iteration. Enforce the same shared limits as
+    // tool iterations; do not replenish budgets or treat continuation wording as progress.
+    String notice = context.requestReplan();
+    List<Message> messages = new ArrayList<>(prompt.getInstructions());
+    if (reply != null) messages.add(reply);
+    messages.add(
+        SystemMessage.builder()
+            .text(
+                "No verified work followed the delivered content. A text-only promise to continue is not execution or completion. "
+                    + "Use an available authorized tool now to record a partial assessment from the visible evidence, with exact gaps. "
+                    + "Do not announce another read while content acquisition is withheld. "
+                    + "Do not fabricate findings, permission or completion. If blocked, record the specific blocker through the existing task controls. "
+                    + "The existing no-progress and shared call limits still apply."
+                    + (notice == null ? "" : " " + notice))
+            .metadata(java.util.Map.of("rei.progressFeedback", true))
+            .build());
+    return iteration(new Prompt(messages, prompt.getOptions()), context, false, progressAtLimit);
   }
 
   /** Limit only the recovery choice, keeping the complete callbacks for the next iteration. */
