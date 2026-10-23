@@ -404,6 +404,11 @@ public class RunExecutionContext {
     return false;
   }
 
+  /** 次のモデル準備で保存済み会話履歴を復元するかを判定する。 */
+  public boolean hasRestoredConversation() {
+    return !resumeMessages.isEmpty();
+  }
+
   /** 実行の停滞への対処で用いる取り出し再開メッセージ一覧を返す。 */
   public List<org.springframework.ai.chat.messages.Message> takeResumeMessages() {
     var saved = resumeMessages;

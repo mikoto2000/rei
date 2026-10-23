@@ -135,6 +135,20 @@ public class AgentSkillAdvisor implements BaseAdvisor {
       return request;
     }
 
+    var execution =
+        prompt.getOptions()
+                    instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
+                && options.getToolContext() != null
+                && options
+                        .getToolContext()
+                        .get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+                    instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext context
+            ? context
+            : null;
+    // The model restores this saved history, including its rendered skill instructions.
+    // A newly selected user message would be discarded by that restoration.
+    if (execution != null && execution.hasRestoredConversation()) return request;
+
     SkillRoutingRunContext routingContext =
         request.context().get(ROUTING_CONTEXT_KEY) instanceof SkillRoutingRunContext context
             ? context
@@ -149,16 +163,6 @@ public class AgentSkillAdvisor implements BaseAdvisor {
         eventFactory.skillRoutingStarted(runId, routingId, candidateCount, routingInvocation));
     AgentSkillSelection selection;
     try {
-      var execution =
-          prompt.getOptions()
-                      instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-                  && options.getToolContext() != null
-                  && options
-                          .getToolContext()
-                          .get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
-                      instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext context
-              ? context
-              : null;
       selection =
           execution == null
               ? selectionService.select(userMessage.getText())
