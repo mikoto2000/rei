@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.skills;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import java.nio.file.Path;
@@ -19,17 +18,19 @@ class AgentSkillImplicitSelectorTest {
   void sendsOnlySkillMetadataAndUserRequestOnNormalPath() {
     AgentSkill skill = skill("skill-a");
     ChatModel model = Mockito.mock(ChatModel.class);
-    when(model.call(anyString())).thenReturn("[\"skill-a\"]");
+    when(model.call(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(response("[\"skill-a\"]"));
     var selector =
         new AgentSkillImplicitSelector(model, new InMemoryAgentSkillRepository(List.of(skill)));
 
     assertThat(selector.select("please use it", Set.of(), null)).containsExactly(skill);
 
-    var prompt = org.mockito.ArgumentCaptor.forClass(String.class);
+    var prompt =
+        org.mockito.ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
     Mockito.verify(model).call(prompt.capture());
-    assertSelectionPrompt(prompt.getValue(), skill);
-    assertThat(prompt.getValue().indexOf("Skills:"))
-        .isLessThan(prompt.getValue().indexOf("User request:"));
+    assertSelectionPrompt(prompt.getValue().getContents(), skill);
+    assertThat(prompt.getValue().getContents().indexOf("Skills:"))
+        .isLessThan(prompt.getValue().getContents().indexOf("User request:"));
     assertThat(new AgentSkillPromptRenderer().render("please use it", List.of(skill)))
         .contains(skill.instructions());
   }
@@ -83,7 +84,7 @@ class AgentSkillImplicitSelectorTest {
   @Test
   void wrappedInterruptionTerminatesSelectionAndRestoresInterrupt() {
     var model = Mockito.mock(ChatModel.class);
-    when(model.call(anyString()))
+    when(model.call(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
         .thenThrow(new RuntimeException(new InterruptedException("cancelled")));
     var selector =
         new AgentSkillImplicitSelector(
@@ -146,10 +147,19 @@ class AgentSkillImplicitSelectorTest {
     assertThat(selector.select("request", Set.of(), List.of(included))).isEmpty();
   }
 
+  /** 選択用の実際の応答形式を返す。 */
+  private org.springframework.ai.chat.model.ChatResponse response(String content) {
+    return new org.springframework.ai.chat.model.ChatResponse(
+        List.of(
+            new org.springframework.ai.chat.model.Generation(
+                new org.springframework.ai.chat.messages.AssistantMessage(content))));
+  }
+
   /** {@code selector} の条件を再現するための補助情報を返す。 */
   private AgentSkillImplicitSelector selector(String llmResponse, AgentSkill... skills) {
     ChatModel chatModel = Mockito.mock(ChatModel.class);
-    when(chatModel.call(anyString())).thenReturn(llmResponse);
+    when(chatModel.call(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(response(llmResponse));
     return new AgentSkillImplicitSelector(
         chatModel, new InMemoryAgentSkillRepository(List.of(skills)));
   }

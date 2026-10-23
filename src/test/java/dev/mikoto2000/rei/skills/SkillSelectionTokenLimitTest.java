@@ -29,8 +29,11 @@ import org.springframework.ai.chat.prompt.Prompt;
 class SkillSelectionTokenLimitTest {
   /** トークン制限された選択内容について、提供元選択可能な設定を利用することを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
-  void tokenLimitedSelectionUsesProviderOptionsAndDisablesToolsOnTheWire(boolean completionTokens) {
+  @org.junit.jupiter.params.provider.CsvSource({
+    "false,0", "true,0", "false,1", "true,1", "false,2", "true,2"
+  })
+  void selectionUsesProviderOptionsWithOrWithoutRunTokenBudget(
+      boolean completionTokens, int budgetMode) {
     var requests = new ArrayList<com.fasterxml.jackson.databind.JsonNode>();
     var defaults =
         org.springframework.ai.openai.OpenAiChatOptions.builder()
@@ -85,10 +88,15 @@ class SkillSelectionTokenLimitTest {
             "instructions");
     var selector =
         new AgentSkillImplicitSelector(provider, new InMemoryAgentSkillRepository(List.of(skill)));
-    var budget = new OutputLimitRunBudget(0, 10, null, 10);
+    var budget = new OutputLimitRunBudget(0, 10, null, budgetMode == 2 ? 10 : 0);
     var run = new RunExecutionContext("run", budget, null, null, null);
 
-    assertThat(selector.select("request", Set.of(), List.of(skill), run.modelCallBudget()))
+    assertThat(
+            selector.select(
+                "request",
+                Set.of(),
+                List.of(skill),
+                budgetMode == 0 ? null : run.modelCallBudget()))
         .containsExactly(skill);
 
     assertThat(requests).hasSize(1);
@@ -100,9 +108,9 @@ class SkillSelectionTokenLimitTest {
     assertThat(request.path("temperature").asDouble()).isEqualTo(0.25);
     assertThat(request.path("tool_choice").asText()).isEqualTo("none");
     assertThat(request.has("tools")).isFalse();
-    assertThat(budget.totalTokens()).isEqualTo(3);
+    assertThat(budget.totalTokens()).isEqualTo(budgetMode == 2 ? 3 : 0);
     assertThat(budget.usageUnknown()).isFalse();
-    assertThat(budget.remainingLlmCalls()).isEqualTo(9);
+    assertThat(budget.remainingLlmCalls()).isEqualTo(budgetMode == 0 ? 10 : 9);
     assertThat(model.getOptions().getModel()).isEqualTo("default-model");
   }
 
