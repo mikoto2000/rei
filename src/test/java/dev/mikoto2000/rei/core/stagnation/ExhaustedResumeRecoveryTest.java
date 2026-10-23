@@ -262,6 +262,38 @@ class ExhaustedResumeRecoveryTest {
   }
 
   @Test
+  void olderRestoredHandoffCannotOverrideCurrentUnverifiedInventory() throws Exception {
+    var c = context(7, 2, 8, true);
+    var current = prompt(c, false, "resume", new AtomicInteger());
+    var messages = new ArrayList<>(current.getInstructions());
+    messages.add(
+        1,
+        SystemMessage.builder()
+            .text("Older saved continuation handoff")
+            .metadata(
+                Map.of(
+                    "rei.resumeContext",
+                    true,
+                    "rei.resumeRunId",
+                    "resume",
+                    "rei.knownFileInventory",
+                    true))
+            .build());
+    var delegate =
+        model(
+            p -> {
+              assertThat(names(p))
+                  .contains("listFile", "findFile", "checkpointShow", "checkpointInspect");
+              throw new java.util.concurrent.CancellationException();
+            });
+    assertThatThrownBy(
+            () ->
+                new StagnationChatModel(delegate)
+                    .stream(new Prompt(messages, current.getOptions())).blockLast())
+        .isInstanceOf(java.util.concurrent.CancellationException.class);
+  }
+
+  @Test
   void duplicateBodyReadsStillStopWithoutAnyRefundOrExtraGrace() throws Exception {
     var c = context(7, 2, 8, true);
     assertThatThrownBy(

@@ -315,14 +315,17 @@ public class StagnationChatModel implements ChatModel {
   private Prompt resumeRecoveryPrompt(Prompt prompt, RunExecutionContext context) {
     var owner = context.runContext();
     if (!context.needsResumeWorkRecovery() || owner == null) return prompt;
+    // The advisor prepends the current handoff; saved continuation messages follow it.
     boolean inventoryDelivered =
         prompt.getInstructions().stream()
-            .anyMatch(
+            .filter(
                 m ->
                     m instanceof SystemMessage
                         && Boolean.TRUE.equals(m.getMetadata().get("rei.resumeContext"))
-                        && Boolean.TRUE.equals(m.getMetadata().get("rei.knownFileInventory"))
-                        && owner.runId().equals(m.getMetadata().get("rei.resumeRunId")));
+                        && owner.runId().equals(m.getMetadata().get("rei.resumeRunId")))
+            .findFirst()
+            .map(m -> Boolean.TRUE.equals(m.getMetadata().get("rei.knownFileInventory")))
+            .orElse(false);
     if (!inventoryDelivered) return prompt;
     if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return prompt;
     var available = options.getToolCallbacks();
