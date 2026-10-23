@@ -520,14 +520,23 @@ public class PersistentCheckpointService implements AutoCloseable {
   /** 保存された状況を引き継いで、中断した作業を再開する。 */
   public ResumeResult resume(
       String project, String task, AgentRunContext.RequestSource source, Long expectedRevision) {
-    return resumeChecked(project, task, source, expectedRevision, null, null, null, context -> {});
+    return resumeChecked(
+        project, task, source, expectedRevision, null, null, null, false, context -> {});
   }
 
   /** 実行開始前に表示先を切り替えて、Shell から保存タスクを再開する。 */
   public ResumeResult resumeForShell(
       String project, String task, java.util.function.Consumer<String> beforeSubmit) {
     return resumeChecked(
-        project, task, AgentRunContext.RequestSource.SHELL, null, null, null, null, beforeSubmit);
+        project,
+        task,
+        AgentRunContext.RequestSource.SHELL,
+        null,
+        null,
+        null,
+        null,
+        true,
+        beforeSubmit);
   }
 
   /**
@@ -551,6 +560,7 @@ public class PersistentCheckpointService implements AutoCloseable {
         run,
         previousRun,
         untrustedSummary,
+        false,
         context -> {});
   }
 
@@ -563,6 +573,7 @@ public class PersistentCheckpointService implements AutoCloseable {
       String assignedRun,
       String expectedPrevious,
       String untrustedSummary,
+      boolean explicitUserResume,
       java.util.function.Consumer<String> beforeSubmit) {
     if (!settings.isEnabled())
       throw new CheckpointException(
@@ -609,6 +620,11 @@ public class PersistentCheckpointService implements AutoCloseable {
       CheckpointReconciler.active();
       var next = state.resume(run);
       var fields = repository.fields(next);
+      if (explicitUserResume)
+        fields.put(
+            "progress",
+            dev.mikoto2000.rei.core.stagnation.RunExecutionContext.forExplicitResume(
+                state.progress()));
       fields.put("nextAction", result.nextAction());
       fields.put("reconciliation", result);
       if (expectedPrevious != null) {
