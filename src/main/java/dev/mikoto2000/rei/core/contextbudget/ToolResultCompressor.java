@@ -34,7 +34,7 @@ public class ToolResultCompressor {
    * @param ref 参照先
    * @param offset 開始位置
    */
-  private record PagedResult(String ref, int offset) {}
+  public record PagedResult(String ref, int offset) {}
 
   /** モデルへ渡す文脈の管理で使用する配信設定を設定する。 */
   public void setDeliveryProperties(ToolResultDeliveryProperties properties) {
