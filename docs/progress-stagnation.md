@@ -245,7 +245,7 @@ listFile / findFile / checkpointShow / checkpointInspect を当該モデル反�
 
 ### ユーザーが明示的に /resume した場合
 
-`ResumeCommand` が呼ぶ `resumeForShell` だけは、照合・所有権確認を通過した後、
+組み込み Shell の `ResumeCommand` が呼ぶ `resumeForShell` と、クライアント CLI の /resume が呼ぶ認証付き HTTP 操作は、照合・所有権確認を通過した後、
 新しい Run の保存状態で連続停滞カウンタを 0 にする。以前のチェックポイント履歴は変更しない。
 古い連続停滞に由来する保留中の再計画要求も解除する。解除しないと、カウンタを戻しても
 最初の反復で消費済み再計画予算による停止が起きるためである。
@@ -255,7 +255,14 @@ listFile / findFile / checkpointShow / checkpointInspect を当該モデル反�
 同じ既読本文を再取得するだけなら、既定 4 反復で再び停滞と判定する。ほかの予算・目標停滞・承認・照合等の
 停止条件は引き続き適用されるため、必ず 4 回実行できることを保証するものではない。
 
-モデルの `checkpointResume` ツール、一般の `resume` API、Goal / Dot の内部継続、承認後の継続、
+モデルの `checkpointResume` ツール、一般の Java `resume` API、Goal / Dot の内部継続、承認後の継続、
 Compression、自動再計画ではリセットしない。`RequestSource.SHELL` だけではユーザーの明示的意図と
-判定しない。ツールからも同じ source が伝わるため、コマンド専用の入口で区別する。
+判定しない。ツールからも同じ source が伝わるため、ユーザー操作専用の入口で区別する。
 旧形式で連続停滞情報がない保存状態には、新しい進捗や復元枠を作らずそのまま互換復元する。
+
+クライアント CLI は `ResumeCommand` を直接実行せず、
+`POST /api/v1/projects/{projectId}/checkpoints/{taskId}/resume` を呼ぶ。
+`CheckpointController` はこの明示再開操作を `resumeForUser` へ渡し、組み込み Shell と同じ
+連続停滞リセットを適用する。HTTP の認証・照合・所有権確認は維持する。
+Shell と HTTP の双方を実 SQLite と既存進捗評価器へ接続したテストで検証し、
+ツール経由の再開や内部継続をユーザー操作と誤認しない。

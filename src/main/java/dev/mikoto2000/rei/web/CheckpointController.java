@@ -107,7 +107,7 @@ public class CheckpointController {
   @ResponseStatus(org.springframework.http.HttpStatus.ACCEPTED)
   public PersistentCheckpointService.ResumeResult resume(
       @PathVariable String projectId, @PathVariable String taskId) {
-    return service.resume(projectId, taskId, AgentRunContext.RequestSource.WEB);
+    return service.resumeForUser(projectId, taskId, AgentRunContext.RequestSource.WEB);
   }
 
   /** Web APIによる操作で用いるabandonを返す。 */

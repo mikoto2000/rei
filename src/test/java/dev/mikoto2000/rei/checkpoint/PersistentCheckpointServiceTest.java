@@ -233,19 +233,15 @@ class PersistentCheckpointServiceTest {
     assertEquals(0, execution.progressVersion());
   }
 
-  @Test
-  void explicitResumeResetsOnlyConsecutiveStagnationAndCanTryFourIterationsAgain() {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"shell", "client-http"})
+  void explicitResumeResetsOnlyConsecutiveStagnationAndCanTryFourIterationsAgain(String entry)
+      throws Exception {
     var saved = exhaustedProgress();
     service.preserveResults(owner, List.of(), saved);
     service.finish(owner, "FAILED");
     var previous = state();
-    var result =
-        service.resumeForShell(
-            "A",
-            previous.taskId(),
-            session -> {
-              assertEquals(0, state().progress().continuity().detector().stagnationCount());
-            });
+    var result = explicitResume(entry, previous.taskId());
     var nextOwner = new AgentRunContext(result.runId(), "session", root, "A");
     var restored = service.progress(nextOwner);
     assertEquals(0, restored.continuity().detector().stagnationCount());
@@ -279,7 +275,7 @@ class PersistentCheckpointServiceTest {
     assertEquals(saved.budget(), execution.budgetSnapshot());
     service.preserveResults(nextOwner, List.of(), execution.progressSnapshot());
     service.finish(nextOwner, "FAILED");
-    var second = service.resumeForShell("A", previous.taskId(), session -> {});
+    var second = explicitResume(entry, previous.taskId());
     var secondProgress =
         service.progress(new AgentRunContext(second.runId(), "session", root, "A"));
     assertEquals(0, secondProgress.continuity().detector().stagnationCount());
@@ -313,6 +309,33 @@ class PersistentCheckpointServiceTest {
     var resumed = service.resumeForShell("A", state().taskId(), session -> {});
     assertEquals(
         saved, service.progress(new AgentRunContext(resumed.runId(), "session", root, "A")));
+  }
+
+  private PersistentCheckpointService.ResumeResult explicitResume(String entry, String task)
+      throws Exception {
+    if (entry.equals("shell")) return service.resumeForShell("A", task, session -> {});
+    var mvc =
+        org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(
+                new dev.mikoto2000.rei.web.CheckpointController(service))
+            .build();
+    var response =
+        mvc.perform(
+                org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post(
+                        "/api/v1/projects/A/checkpoints/{task}/resume", task)
+                    .contentType(org.springframework.http.MediaType.APPLICATION_JSON)
+                    .content("{}"))
+            .andReturn()
+            .getResponse();
+    assertEquals(202, response.getStatus());
+    String run =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(response.getContentAsString())
+            .path("runId")
+            .asText();
+    assertEquals(run, state().runId());
+    assertEquals(0, state().progress().continuity().detector().stagnationCount());
+    return new com.fasterxml.jackson.databind.ObjectMapper()
+        .readValue(response.getContentAsString(), PersistentCheckpointService.ResumeResult.class);
   }
 
   private dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState exhaustedProgress() {

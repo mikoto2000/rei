@@ -34,7 +34,7 @@ class ShellReportAdviceTest {
             "target-session",
             new CheckpointReconciler.Result(
                 "CONTINUE", List.of(), List.of(), List.of(), List.of(), List.of(), "continue"));
-    when(service.resume("project", "task", AgentRunContext.RequestSource.WEB)).thenReturn(result);
+    when(service.resumeForUser("project", "task", AgentRunContext.RequestSource.WEB)).thenReturn(result);
     var mvc =
         MockMvcBuilders.standaloneSetup(new CheckpointController(service))
             .setControllerAdvice(new ShellReportAdvice())
@@ -96,3 +96,4 @@ class ShellReportAdviceTest {
     verify(repo, times(1)).acknowledge("project", "item");
   }
 }
+
