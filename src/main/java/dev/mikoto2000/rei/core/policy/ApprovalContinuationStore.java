@@ -5,6 +5,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunContinuation;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
+import dev.mikoto2000.rei.tooldelivery.ToolResultMetadata;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -34,12 +35,29 @@ public class ApprovalContinuationStore {
    * @param text テキスト
    * @param calls 呼び出し回数
    * @param responses 応答一覧
+   * @param delivery 登録済みツール結果の配信情報（旧形式では未指定）
    */
   public record StoredMessage(
       String kind,
       String text,
       List<AssistantMessage.ToolCall> calls,
-      List<ToolResponseMessage.ToolResponse> responses) {}
+      List<ToolResponseMessage.ToolResponse> responses,
+      ToolResultMetadata delivery) {
+    /** 保存後に外部から呼び出しや応答の一覧を変更できないようにする。 */
+    public StoredMessage {
+      calls = calls == null ? List.of() : List.copyOf(calls);
+      responses = responses == null ? List.of() : List.copyOf(responses);
+    }
+
+    /** 配信属性を持たないメッセージと旧形式の呼び出しを受け付ける。 */
+    public StoredMessage(
+        String kind,
+        String text,
+        List<AssistantMessage.ToolCall> calls,
+        List<ToolResponseMessage.ToolResponse> responses) {
+      this(kind, text, calls, responses, null);
+    }
+  }
 
   /**
    * ツール利用の権限制御で受け渡す文書を表す。
@@ -114,7 +132,8 @@ public class ApprovalContinuationStore {
                         a.getToolCalls(),
                         List.of());
                   if (m instanceof ToolResponseMessage t)
-                    return new StoredMessage("TOOL", "", List.of(), t.getResponses());
+                    return new StoredMessage(
+                        "TOOL", "", List.of(), t.getResponses(), ToolResultMetadata.capture(t));
                   if (m instanceof UserMessage)
                     return new StoredMessage("USER", m.getText(), List.of(), List.of());
                   throw new IllegalArgumentException("Unsupported continuation message");
@@ -210,7 +229,13 @@ public class ApprovalContinuationStore {
                                   .toolCalls(m.calls())
                                   .build();
                           case "TOOL" ->
-                              ToolResponseMessage.builder().responses(m.responses()).build();
+                              ToolResponseMessage.builder()
+                                  .responses(m.responses())
+                                  .metadata(
+                                      m.delivery() == null
+                                          ? java.util.Map.of()
+                                          : m.delivery().restore())
+                                  .build();
                           default ->
                               throw new IllegalStateException("Invalid continuation message");
                         })
