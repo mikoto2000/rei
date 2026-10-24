@@ -914,11 +914,8 @@ public class PersistentCheckpointService implements AutoCloseable {
           // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
           if (evidence.size() > 200)
             evidence = new ArrayList<>(evidence.subList(evidence.size() - 200, evidence.size()));
-          if (operations.size() > 500)
-            throw new IllegalStateException(
-                "Checkpoint operation capacity reached; save history before proceeding");
           fields.put("evidence", evidence);
-          fields.put("operations", operations);
+          fields.put("operations", CheckpointOperationRetention.retain(operations, evidence));
           var owner = AgentRunScope.current();
           if (event.type() != AgentEventType.TOOL_PLANNED
               && owner != null
