@@ -137,8 +137,13 @@ class ApprovalDeliveryContinuityTest {
                     "rei.reviewReceipts",
                     Map.of("read", receipt)))
             .build();
-    assertThat(roundTrip(message).getMetadata().get("rei.reviewReceipts"))
-        .isEqualTo(Map.of("read", receipt));
+    var restored = (Map<?, ?>) roundTrip(message).getMetadata().get("rei.reviewReceipts");
+    assertThat(restored.get("read"))
+        .isInstanceOf(dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.ReceiptValue.class);
+    assertThat(
+            ((dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.ReceiptValue) restored.get("read"))
+                .serializedHash())
+        .isEqualTo(receipt.serializedHash());
   }
 
   /** 属性のない旧形式も一般結果として復元する。 */

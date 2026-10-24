@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
+import dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.Page;
+import dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.PolicyValue;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -27,14 +29,6 @@ public class ToolResultCompressor {
 
   /** 配信。 */
   private ToolResultDeliveryProperties delivery = new ToolResultDeliveryProperties();
-
-  /**
-   * モデルへ渡す文脈の管理で受け渡すPaged結果を表す。
-   *
-   * @param ref 参照先
-   * @param offset 開始位置
-   */
-  public record PagedResult(String ref, int offset) {}
 
   /** モデルへ渡す文脈の管理で使用する配信設定を設定する。 */
   public void setDeliveryProperties(ToolResultDeliveryProperties properties) {
@@ -67,7 +61,7 @@ public class ToolResultCompressor {
   /** モデルへ渡す文脈の管理で用いる簡潔な形式を返す。 */
   public Message compact(Message message, String conversation, String run) {
     if (!(message instanceof ToolResponseMessage tool)) return message;
-    var pages = new HashMap<String, PagedResult>();
+    var pages = new HashMap<String, Page>();
     var responses = new ArrayList<ToolResponseMessage.ToolResponse>();
     boolean changed = false;
     for (var response : tool.getResponses()) {
@@ -104,7 +98,7 @@ public class ToolResultCompressor {
                         raw,
                         0,
                         delivery.getPageTargetTokens())));
-        pages.put(response.id(), new PagedResult(ref, 0));
+        pages.put(response.id(), new Page(ref, 0));
         continue;
       }
       if (estimator.text(raw) <= threshold) {
@@ -157,12 +151,11 @@ public class ToolResultCompressor {
     for (int index = 0; index < messages.size() && total > hard; index++) {
       if (!(messages.get(index) instanceof ToolResponseMessage tool)) continue;
       var responses = new ArrayList<>(tool.getResponses());
-      var pages = new HashMap<String, PagedResult>();
+      var pages = new HashMap<String, Page>();
       if (tool.getMetadata().get("rei.losslessPages") instanceof Map<?, ?> existing)
         existing.forEach(
             (key, value) -> {
-              if (key instanceof String id && value instanceof PagedResult page)
-                pages.put(id, page);
+              if (key instanceof String id && value instanceof Page page) pages.put(id, page);
             });
       for (int r = 0; r < responses.size() && total > hard; r++) {
         var response = responses.get(r);
@@ -183,8 +176,7 @@ public class ToolResultCompressor {
           if (page == null) {
             source = response.responseData();
             page =
-                new PagedResult(
-                    store.save(conversation, run, response.name(), response.id(), source), 0);
+                new Page(store.save(conversation, run, response.name(), response.id(), source), 0);
           } else source = store.read(conversation, page.ref()).rawResult();
           replacement =
               new LosslessResultPager(estimator)
@@ -219,7 +211,13 @@ public class ToolResultCompressor {
   public static ResultDelivery.Kind policy(ToolResponseMessage message, String call) {
     Object policies = message.getMetadata().get("rei.deliveryPolicies");
     if (policies instanceof Map<?, ?> registered
-        && registered.get(call) instanceof ResultDelivery.Kind kind) return kind;
+        && registered.get(call) instanceof PolicyValue value) {
+      try {
+        return ResultDelivery.Kind.valueOf(value.deliveryKind());
+      } catch (IllegalArgumentException | NullPointerException invalid) {
+        return ResultDelivery.Kind.GENERAL;
+      }
+    }
     return ResultDelivery.Kind.GENERAL;
   }
 

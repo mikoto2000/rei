@@ -55,7 +55,8 @@ public final class ReviewTools {
    * @param range 対象範囲
    * @param serializedHash serializedハッシュ値
    */
-  public record Receipt(String job, Range range, String serializedHash) {}
+  public record Receipt(String job, Range range, String serializedHash)
+      implements dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.ReceiptValue {}
 
   /** 記録台帳。 */
   private final ReviewCoverageLedger ledger;
@@ -381,7 +382,8 @@ public final class ReviewTools {
       if (message instanceof org.springframework.ai.chat.messages.ToolResponseMessage tool
           && tool.getMetadata().get("rei.reviewReceipts") instanceof Map<?, ?> receipts) {
         for (var response : tool.getResponses())
-          if (receipts.get(response.id()) instanceof Receipt receipt
+          if (receipts.get(response.id())
+                  instanceof dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.ReceiptValue receipt
               && hash(response.responseData()).equals(receipt.serializedHash())) {
             try {
               pages.add(decodePage(response.responseData()));

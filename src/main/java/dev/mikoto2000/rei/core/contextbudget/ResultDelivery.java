@@ -17,7 +17,7 @@ public @interface ResultDelivery {
   Kind value();
 
   /** モデルへ渡す文脈の管理における種類の選択肢。 */
-  enum Kind {
+  enum Kind implements dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.PolicyValue {
     /** ファイル内容。 */
     FILE_CONTENT,
     /** LOSSLESS結果。 */
@@ -29,6 +29,12 @@ public @interface ResultDelivery {
     /** 元の結果ページ。 */
     RAW_RESULT_PAGE,
     /** 通常の結果配信方式。 */
-    GENERAL
+    GENERAL;
+
+    /** 保存する配信方式名を返す。 */
+    @Override
+    public String deliveryKind() {
+      return name();
+    }
   }
 }
