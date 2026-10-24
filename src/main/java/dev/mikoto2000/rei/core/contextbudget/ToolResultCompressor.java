@@ -212,9 +212,11 @@ public class ToolResultCompressor {
     Object policies = message.getMetadata().get("rei.deliveryPolicies");
     if (policies instanceof Map<?, ?> registered
         && registered.get(call) instanceof PolicyValue value) {
+      String kind = value.deliveryKind();
+      if (kind == null) return ResultDelivery.Kind.GENERAL;
       try {
-        return ResultDelivery.Kind.valueOf(value.deliveryKind());
-      } catch (IllegalArgumentException | NullPointerException invalid) {
+        return ResultDelivery.Kind.valueOf(kind);
+      } catch (IllegalArgumentException invalid) {
         return ResultDelivery.Kind.GENERAL;
       }
     }
