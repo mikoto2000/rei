@@ -45,6 +45,26 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 /** エージェント実行予定実行先の振り分けの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class AgentScheduleDispatcherTest {
+  @Test
+  void secretaryClockUsesExistingTimerWithoutEnablingAgentExecutionAndIsolatesFailures() {
+    var ticks = new AtomicInteger();
+    var dispatcher =
+        dispatcher(
+            false,
+            false,
+            (entry, done) -> {
+              throw new AssertionError("Agent execution must stay disabled");
+            });
+    dispatcher.setSecretary(ticks::incrementAndGet);
+    dispatcher.tick();
+    assertEquals(1, ticks.get());
+    dispatcher.setSecretary(
+        () -> {
+          throw new IllegalStateException("observer failed");
+        });
+    org.junit.jupiter.api.Assertions.assertDoesNotThrow(dispatcher::tick);
+  }
+
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 

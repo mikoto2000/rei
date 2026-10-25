@@ -22,7 +22,21 @@ import org.springframework.transaction.support.TransactionTemplate;
  * <p>Immutable conditions and an acyclic graph: prerequisites can only refer to existing entries.
  */
 @Component
-public class PersistentDependencyRepository {
+public class PersistentDependencyRepository
+    implements dev.mikoto2000.rei.secretary.SecretaryDependencies {
+  @Override
+  public java.util.Optional<dev.mikoto2000.rei.secretary.SecretaryDependencies.Fact> fact(
+      String project, String id) {
+    try {
+      var entry = get(project, id);
+      return java.util.Optional.of(
+          new dev.mikoto2000.rei.secretary.SecretaryDependencies.Fact(
+              entry.state().name(), entry.version()));
+    } catch (IllegalArgumentException missing) {
+      return java.util.Optional.empty();
+    }
+  }
+
   /**
    * 外部条件の待機で受け渡す項目を表す。
    *

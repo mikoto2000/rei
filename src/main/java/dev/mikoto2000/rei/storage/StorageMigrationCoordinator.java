@@ -23,7 +23,7 @@ import java.util.UUID;
  */
 public final class StorageMigrationCoordinator implements AutoCloseable {
   /** データ形式形式のバージョン。 */
-  public static final int SCHEMA_VERSION = 11;
+  public static final int SCHEMA_VERSION = 12;
 
   /** データ保存の共通処理における段階の選択肢。 */
   public enum Stage {
@@ -324,6 +324,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
       if (version >= 9) ReviewCoverageMigration.verify(db);
       if (version >= 10) ReviewRuntimeMigration.verify(db);
       if (version >= 11) SecretaryMigration.verify(db);
+      if (version >= 12) SecretaryFollowupMigration.verify(db);
     } catch (SQLException error) {
       throw new IOException("Storage schema is not a verified completed schema", error);
     }
@@ -385,6 +386,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
         if (sourceVersion < 9) ReviewCoverageMigration.apply(db);
         if (sourceVersion < 10) ReviewRuntimeMigration.apply(db);
         if (sourceVersion < 11) SecretaryMigration.apply(db);
+        if (sourceVersion < 12) SecretaryFollowupMigration.apply(db);
         checkpoint.reached(Stage.ROWS_IMPORTED, backup);
         if (backup != null) {
           StorageBackup.verify(backup);

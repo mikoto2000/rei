@@ -115,7 +115,7 @@ MCP ツールはまだ公開しない。LLM が候補の承認を代理で実行
 旧バージョンへの移行 fixture は現行 DB から後発テーブルを除去して旧形式を再現する。
 schema 11 追加に伴い、その除去対象にも秘書の 4 テーブルを追加する。既存の試験条件・期待結果は変更しない。
 抽出されない表現は明示登録か手動 extract で確認する。未設定での外部接続は発生しない。
-後続 Phase の監視・提案・自律実行・外部サービス統合は、この Phase の機能ではない。
+Phase 1 自体には監視・提案・自律実行・外部サービス統合を含めない。監視と報告は以下の Phase 2 を参照する。
 
 ### Phase 1 の検証記録
 
@@ -137,3 +137,140 @@ schema 11 追加に伴い、その除去対象にも秘書の 4 テーブルを�
 
 一般的な embedding モデルによる意味検索は含めない。語彙範囲が明示されたローカル関連付けのみであり、
 タスク名・会話を外部モデルへ送信する経路は追加していない。
+
+## Phase 2: フォローアップ・朝夕の報告
+
+Phase 1 は [PR #150](https://github.com/mikoto2000/rei/pull/150) / merge `5153f3ba` で main に取り込まれた。
+最終のローカル全件 `-Pintegration verify` は6,294件、failure/error 0、既存 skip 5、JAR 生成成功。
+GitHub の全体回帰・静的解析も成功してからマージし、Phase 1 の worktree とローカルブランチを削除した。
+
+### 責務とイベントフロー
+
+- `SecretaryFollowups`: 期限・放置・待機の確認、朝夕報告、通知キューと履歴。通常判定に LLM は使わない。
+- `AgentScheduleDispatcher`: 既存の定期起動から秘書の軽量 tick を呼ぶ。エージェントの予約実行を有効化せずに利用可能。
+  秘書側が失敗しても既存のエージェント dispatch を止めない。
+- 秘書ワーカーは1本・有界 queue 1件。実行中の tick はまとめ、終了時には割り込みと最大5秒の終了待ちを行う。
+- `SecretaryDependencyIntake`: 既存の所有 Project 付き依存状態イベントだけを受け取る。
+  `PersistentDependencyRepository` の最新の保存事実も読み、再起動やイベント欠落後も確認できる。
+  秘書側で新たに外部 API をポーリングしない。ネットワーク再試行は既存の Dependency watcher が担当する。
+- `SecretaryContext`: 既存 Scheduler の予定と、有効な `DailyPlanningService` の現在の内部作業投影を読み取る窓口。
+  プロバイダー未設定・失敗時は他の情報で報告し、部分結果を示す。
+- `AttentionService` / `AttentionRepository`: 同じ通知 ID の再送を同じローカル受信箱項目にする。
+  外部送信は既存 Attention delivery の設定・Policy・配信状態管理に従う。
+
+`Scheduler tick → 有界ワーカー → Project 設定・タスクの分割走査 → 条件評価 → 永続通知キュー
+→ idempotent な Attention 受付 → 既存 Shell/SSE/任意の配信 outbox` の流れ。
+
+schema 11 → 12 は、既存バックアップ付き自動移行で以下のテーブルを追加する。
+`secretary_settings`、`secretary_followup_state`、`secretary_notices`、`secretary_dependencies`。
+Phase 1 の台帳・履歴・出典を維持する。設定・確認位置・通知 ID・試行回数・次回時刻・観測 revision は再起動後も残る。
+
+### 有効化と操作
+
+全体の `rei.secretary.enabled` に加え、背景処理は以下を明示設定し、アプリを再起動する。
+
+```yaml
+rei:
+  secretary:
+    enabled: true
+    followups-enabled: true
+```
+
+背景処理の既定値は false。Project 設定も未登録なら監視・通知とも OFF、報告時刻は空。
+`rei.agent-scheduler.enabled` は複雑なエージェントの予約実行用であり、このルール監視のためには ON にしない。
+既存 `rei.agent-scheduler.check-interval-ms` の定期起動を利用する。
+
+```text
+/secretary settings --project PROJECT
+/secretary configure --project PROJECT --watch-enabled --notifications --zone Asia/Tokyo --briefing-time 09:00 --review-time 18:00 --repeat-seconds 86400 --notification-priority 2 --destination INBOX
+/secretary followup-status --project PROJECT
+/secretary check --project PROJECT
+/secretary notifications --project PROJECT --limit 100
+/secretary briefing --project PROJECT
+/secretary review --project PROJECT --date 2026-10-26
+```
+
+Shell と軽量 CLI の両方で使える。configure は設定全体の置換。監視・通知のフラグを省略すれば OFF にする。
+時刻は HH:mm、空でその報告を停止。zone 未指定なら既存 Clock の zone、既存設定があればその zone を使う。
+再通知間隔は60秒〜30日、優先度は1〜5。設定がない場合も手動報告は利用できる。
+check は指定 Project の有効な監視だけを手動評価し、同じ Project の通知を処理する。背景処理の ON は不要。
+
+通知先は `INBOX`（ローカル受信箱・Shell/SSE）か `DELIVERY`（既存の外部配信設定を利用）。
+DELIVERY を選ぶだけでは外部送信を許可しない。既存 Attention の対象 Project・通知先・provider と
+`deliverAttention` の Policy が必要。外部配信は既存仕様の bounded metadata のみで、タスク本文を追加送信しない。
+実際の配送結果は既存 `/attention delivery` で確認する。秘書側の DELIVERED はローカル受付の確認であり、
+Slack/Webhook への送信完了を意味しない。
+
+### 待機と完了条件
+
+承認済みタスクの references に `dependency:依存ID` を設定すると、全条件 COMPLETED で WAITING → OPEN に戻す。
+`completion:dependency:依存ID` は人が明示設定する完了条件で、全条件 COMPLETED の場合だけ DONE にする。
+候補・取消・完了済みのタスクは自動変更しない。単なる Run 成功や自由文から DONE と判断しない。
+外部入力を条件定義・実行許可と解釈しない。依存が不明・取得失敗なら成立とはみなさない。
+状態表示にキャッシュした依存事実を含め、既存の `/dependency` から詳細を確認できる。
+
+期限当日・翌日までの接近、期限超過、待機、1日以上更新のない未完了を再確認する。
+DONE/CANCELLED では依存評価と期限監視を停止し、残っている不要通知を配信直前にも抑制する。
+完了通知は監視設定後の完了だけを対象とし、過去の完了作業を起動時に一斉通知しない。
+
+### 報告と通知の制御
+
+朝夕の報告は、今日・期限接近・重要事項・待機・前日完了・継続・優先候補、
+今日完了・未完了・新規・期限超過・持越し・14日以上放置の項目を決定的に集計する。
+既存の内部予定・現在の作業投影も `context` に含める。外部カレンダー接続はまだ必須ではない。
+報告は最大1,000タスクで `partial` を返し、任意プロバイダーは最大16個・各256項目とする。
+手動報告は読み取りだけで、タスクの承認・実行・状態変更は行わない。
+
+定時報告は設定時刻を過ぎた最初の確認で、そのローカル日付について一度通知する。停止中の当日分は追いつき通知し、
+過去日を一括送信しない。日付の重複時間・再起動でも同じ通知 ID を使う。
+通知には集計件数と詳細確認のコマンドを含める。タスク通知は同じ内容の再通知間隔を永続的に検査する。
+
+一度に最大16 Project・各64タスクを永続カーソルで巡回し、最大256 Project を管理する。
+通知受付は一回最大8件・優先度順。各通知の受付試行は5回まで、60秒から指数バックオフ、最大1時間。
+SENDING は60秒の利用期限後、同じ ID を安全に再送できるローカル受付だけを再試行する。
+5回目で結果未記録のまま停止した項目は期限後に FAILED / delivery_result_unconfirmed として残し、自動再試行しない。
+通知停止・通知先変更・タスク終端を配信直前に再検査し、古い通知を SUPPRESSED にする。
+既に受付・配送中の通知を取り消す機能ではない。
+
+通知履歴は直近から最大1,000件。Pending/Sending の次回時刻、試行数、安全な失敗種別を確認できる。
+履歴保存量はタスク数と通知頻度に比例する。重複キーの確認は読み取りで済ませ、変更のない確認位置を再書き込みしない。
+
+### API と検証
+
+既存認証下の `/api/v1/secretary` に以下を追加する。
+
+| 操作 | API |
+| --- | --- |
+| 設定確認・全体置換 | GET / PUT `/settings` |
+| 手動ブリーフィング・レビュー | GET `/briefing`, `/review`（projectId, 任意 date） |
+| 通知履歴 | GET `/notifications`（projectId, limit） |
+| 監視・通知・依存の状態 | GET `/followup/status`（projectId） |
+| 手動の条件確認 | POST `/check`（projectId） |
+
+PUT は projectId, enabled, notifications, briefingTime, reviewTime, zone,
+repeatSeconds, notificationPriority, destination。省略値は安全な既定値で補い、未知の項目を拒否する。
+
+テストは Clock・通知受付・依存情報・HTTP を差し替え、実 LLM・実外部サービスに接続しない。
+期限、朝夕報告、再起動、重複、競合、再通知境界、再試行上限、結果不明の lease、通知先変更、
+条件成立・古い観測・欠落イベントの回復、旧台帳保存、OFF 時の手動報告、CLI/API を検証する。
+
+```powershell
+.\mvnw.cmd -B -Pfull '-Dtest=Secretary*Test,AgentScheduleDispatcherTest,PackageArchitectureTest,ArchitectureGuardTest' test
+.\mvnw.cmd -B -Pintegration verify
+.\mvnw.cmd -B -f terminal/pom.xml verify
+.\mvnw.cmd -B checkstyle:checkstyle
+.\mvnw.cmd -B -DskipTests compile spotbugs:spotbugs
+.\.github\ci\static-analysis-gate.ps1
+```
+
+実 Slack / Webhook の配送は、この Phase のテストで検証済みとは扱わない。
+
+### Phase 2 のローカル検証記録
+
+バックエンド13件・軽量CLI1件を追加した。最初の全体回帰は6,307件、failure 0 / error 1 / 既存 skip 5。
+error は新規の配線テストが、Publisher も実装するイベントバスと別の Publisher を二重登録した fixture の問題で、
+重複を削除した。同じ検査を含む関連45件の最終 Maven verify は failure/error/skip 0、実行可能 JAR 生成も成功した。
+全件の最終確認は PR の CI と区別して報告する。
+
+Checkstyle 0件、SpotBugs 既存1,897件・新規0件。既存の増分ゲートと自己試験8ケースが成功した。
+軽量 CLI126件とランチャー6件の Maven verify も成功した。既存の依存許容基準・静的解析基準・テスト除外は変更していない。

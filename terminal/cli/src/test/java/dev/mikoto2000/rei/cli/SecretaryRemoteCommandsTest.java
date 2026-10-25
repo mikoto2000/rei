@@ -10,6 +10,39 @@ import org.junit.jupiter.api.Test;
 
 class SecretaryRemoteCommandsTest {
   @Test
+  void followupConfigurationAndReportsUseFixedAuthenticatedEndpoints() {
+    var configure =
+        RemoteCommands.route(
+            List.of(
+                "/secretary",
+                "configure",
+                "--watch-enabled",
+                "--notifications",
+                "--zone",
+                "Asia/Tokyo",
+                "--briefing-time",
+                "09:00"),
+            "p",
+            null);
+    assertEquals("PUT", configure.method());
+    assertEquals("/api/v1/secretary/settings", configure.path());
+    assertEquals(true, ((Map<?, ?>) configure.body()).get("enabled"));
+    assertEquals(true, ((Map<?, ?>) configure.body()).get("notifications"));
+    var report =
+        RemoteCommands.route(List.of("/secretary", "review", "--date", "2026-10-26"), "p", null);
+    assertEquals("GET", report.method());
+    assertTrue(report.path().contains("/api/v1/secretary/review?"));
+    assertTrue(report.path().contains("date=2026-10-26"));
+    var check = RemoteCommands.route(List.of("/secretary", "check"), "p", null);
+    assertEquals(Map.of("projectId", "p"), check.body());
+    assertThrows(
+        IllegalArgumentException.class,
+        () ->
+            RemoteCommands.route(
+                List.of("/secretary", "review", "--root", "elsewhere"), "p", null));
+  }
+
+  @Test
   void readsUseSelectedProjectAndExplicitOverrides() {
     assertTrue(RemoteCommands.NAMES.contains("/secretary"));
     var list = RemoteCommands.route(List.of("/secretary", "list", "--limit", "20"), "p", "s");

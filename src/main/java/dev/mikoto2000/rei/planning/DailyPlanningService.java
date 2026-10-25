@@ -32,7 +32,21 @@ import java.util.Set;
  *
  * <p>Deterministic read projection. No extraction, scheduling, reconciliation, or model invocation.
  */
-public final class DailyPlanningService {
+public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.SecretaryContext {
+  @Override
+  public List<dev.mikoto2000.rei.secretary.SecretaryContext.Item> context(
+      String project, LocalDate date, ZoneId zone) {
+    if (!date.equals(clock.instant().atZone(zone).toLocalDate())) return List.of();
+    return today(List.of(project)).projects().stream()
+        .flatMap(p -> p.items().stream())
+        .limit(256)
+        .map(
+            item ->
+                new dev.mikoto2000.rei.secretary.SecretaryContext.Item(
+                    item.source(), item.id(), item.title(), item.status(), item.reason()))
+        .toList();
+  }
+
   /** 分類一覧。 */
   public static final List<String> CATEGORIES =
       List.of("Today", "Overdue", "Waiting", "Blocked", "Scheduled", "Suggested Next");

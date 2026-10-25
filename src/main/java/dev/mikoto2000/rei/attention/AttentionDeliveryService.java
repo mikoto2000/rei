@@ -28,6 +28,7 @@ public class AttentionDeliveryService {
   /** 種類一覧。 */
   private static final Set<String> KINDS =
       Set.of(
+          "SECRETARY_DELIVERY",
           "APPROVAL_REQUIRED",
           "POLICY_DENIED",
           "LONG_WAIT",

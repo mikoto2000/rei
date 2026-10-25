@@ -26,13 +26,17 @@ class SecretaryMigrationTest {
       sql.execute("DROP TABLE secretary_sources");
       sql.execute("DROP TABLE secretary_history");
       sql.execute("DROP TABLE secretary_inputs");
-      sql.execute("DELETE FROM storage_migrations WHERE version=11");
+      sql.execute("DROP TABLE secretary_settings");
+      sql.execute("DROP TABLE secretary_followup_state");
+      sql.execute("DROP TABLE secretary_notices");
+      sql.execute("DROP TABLE secretary_dependencies");
+      sql.execute("DELETE FROM storage_migrations WHERE version>=11");
       sql.execute("PRAGMA user_version=10");
       sql.execute("INSERT INTO review_participants VALUES('job','project','conversation','run')");
     }
     try (var migration = new StorageMigrationCoordinator(root)) {
       var result = migration.prepare();
-      assertEquals(11, result.schemaVersion());
+      assertEquals(StorageMigrationCoordinator.SCHEMA_VERSION, result.schemaVersion());
       assertNotNull(result.backup());
       StorageBackup.verify(result.backup());
     }

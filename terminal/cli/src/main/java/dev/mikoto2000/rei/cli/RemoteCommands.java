@@ -1604,6 +1604,18 @@ public final class RemoteCommands {
     if (identified && words.size() < 3) throw invalid();
     Set<String> allowed = new HashSet<>(Set.of("--project"));
     switch (action) {
+      case "settings", "followup-status", "check" -> {}
+      case "briefing", "review" -> allowed.add("--date");
+      case "notifications" -> allowed.add("--limit");
+      case "configure" ->
+          allowed.addAll(
+              Set.of(
+                  "--zone",
+                  "--briefing-time",
+                  "--review-time",
+                  "--repeat-seconds",
+                  "--notification-priority",
+                  "--destination"));
       case "list" -> allowed.addAll(Set.of("--limit", "--offset"));
       case "show", "sources", "history", "related" -> {}
       case "extract" -> allowed.addAll(Set.of("--key", "--title"));
@@ -1614,11 +1626,52 @@ public final class RemoteCommands {
       case "approve", "done", "cancel" -> allowed.add("--revision");
       default -> throw invalid();
     }
-    var options = options(words, identified ? 3 : 2, allowed, Set.of());
+    var options =
+        options(
+            words,
+            identified ? 3 : 2,
+            allowed,
+            action.equals("configure") ? Set.of("--watch-enabled", "--notifications") : Set.of());
     String project = options.getOrDefault("--project", selectedProject);
     if (project == null || project.isBlank())
       throw new IllegalArgumentException("Select a Project first");
     String base = "/api/v1/secretary/tasks";
+    if (action.equals("settings"))
+      return query("/api/v1/secretary/settings", Map.of("projectId", project));
+    if (action.equals("followup-status"))
+      return query("/api/v1/secretary/followup/status", Map.of("projectId", project));
+    if (action.equals("check"))
+      return post("/api/v1/secretary/check", Map.of("projectId", project));
+    if (action.equals("briefing") || action.equals("review")) {
+      var parameters = new LinkedHashMap<String, Object>();
+      parameters.put("projectId", project);
+      if (options.containsKey("--date"))
+        parameters.put("date", java.time.LocalDate.parse(options.get("--date")).toString());
+      return query("/api/v1/secretary/" + action, parameters);
+    }
+    if (action.equals("notifications")) {
+      int limit = Integer.parseInt(options.getOrDefault("--limit", "100"));
+      if (limit < 1 || limit > 1000) throw invalid();
+      return query("/api/v1/secretary/notifications", Map.of("projectId", project, "limit", limit));
+    }
+    if (action.equals("configure")) {
+      var settings = new LinkedHashMap<String, Object>();
+      settings.put("projectId", project);
+      settings.put(
+          "enabled", Boolean.parseBoolean(options.getOrDefault("--watch-enabled", "false")));
+      settings.put(
+          "notifications", Boolean.parseBoolean(options.getOrDefault("--notifications", "false")));
+      settings.put("briefingTime", options.getOrDefault("--briefing-time", ""));
+      settings.put("reviewTime", options.getOrDefault("--review-time", ""));
+      settings.put("zone", options.get("--zone"));
+      settings.put(
+          "repeatSeconds", Long.parseLong(options.getOrDefault("--repeat-seconds", "86400")));
+      settings.put(
+          "notificationPriority",
+          Integer.parseInt(options.getOrDefault("--notification-priority", "3")));
+      settings.put("destination", options.getOrDefault("--destination", "INBOX"));
+      return new Request("PUT", "/api/v1/secretary/settings", settings);
+    }
     if (action.equals("list")) {
       int limit = Integer.parseInt(options.getOrDefault("--limit", "100"));
       int offset = Integer.parseInt(options.getOrDefault("--offset", "0"));

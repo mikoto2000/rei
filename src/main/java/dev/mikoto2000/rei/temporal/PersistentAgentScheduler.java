@@ -29,7 +29,24 @@ import org.springframework.transaction.support.TransactionTemplate;
  * uncertain execution.
  */
 @Component
-public class PersistentAgentScheduler implements AgentScheduler {
+public class PersistentAgentScheduler
+    implements AgentScheduler, dev.mikoto2000.rei.secretary.SecretaryContext {
+  @Override
+  public List<dev.mikoto2000.rei.secretary.SecretaryContext.Item> context(
+      String project, java.time.LocalDate date, java.time.ZoneId zone) {
+    return list(project).stream()
+        .filter(entry -> entry.task().executeAt().atZone(zone).toLocalDate().equals(date))
+        .map(
+            entry ->
+                new dev.mikoto2000.rei.secretary.SecretaryContext.Item(
+                    "scheduler",
+                    entry.task().id(),
+                    entry.task().action(),
+                    entry.status(),
+                    "scheduled"))
+        .toList();
+  }
+
   /**
    * 時刻と期間の解釈で受け渡す項目を表す。
    *
