@@ -852,10 +852,12 @@ public class ChatExecutionService {
           }
           if (!suspended && continuations != null) continuations.terminal(context);
           if (!suspended
+              && !execution.isCancelled()
               && workContext != null
               && context.mode() == AgentRunContext.Mode.EXCLUSIVE
               && !structuredCommand) workContext.afterTerminal(context);
           if (!suspended
+              && !execution.isCancelled()
               && autoSleep != null
               && context.mode() == AgentRunContext.Mode.EXCLUSIVE
               && !structuredCommand) autoSleep.afterTerminal(context);

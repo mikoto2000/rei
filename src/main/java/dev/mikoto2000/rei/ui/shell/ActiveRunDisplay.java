@@ -52,6 +52,13 @@ public class ActiveRunDisplay {
         : name;
   }
 
+  /** 通常状態を維持しつつ、Agent の停止進行状況を同じ台帳から読む。 */
+  private String status(dev.mikoto2000.rei.core.execution.ActiveExecution run) {
+    if (run.type() != dev.mikoto2000.rei.core.execution.ExecutionType.AGENT) return run.status();
+    var diagnostic = runs.cancellationDiagnostic(run.id());
+    return diagnostic.status().equals("NOT_FOUND") ? run.status() : diagnostic.status();
+  }
+
   /** ターミナルでの対話で用いる行一覧を返す。 */
   public List<String> rows() {
     return runs.activeExecutions().stream()
@@ -63,11 +70,11 @@ public class ActiveRunDisplay {
                   + "  "
                   + run.type()
                   + "  "
-                  + run.status()
+                  + status(run)
                   + "  "
                   + String.format("%02d:%02d", seconds / 60, seconds % 60)
                   + "  "
-                  + run.summary();
+                  + run.summary() + "  [run=" + run.id() + "]";
             })
         .toList();
   }

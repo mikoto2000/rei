@@ -218,7 +218,7 @@ public class RunService implements AutoCloseable {
     } catch (RuntimeException error) {
       failure = "Runner failed: " + dev.mikoto2000.rei.event.FailureMessages.describe(error);
     } finally {
-      cancellation.awaitChildren(context.runId());
+      cancellation.completeResources(context.runId());
       synchronized (monitor()) {
         executing.remove(context.runId());
         var terminal = terminalEvents.remove(context.runId());

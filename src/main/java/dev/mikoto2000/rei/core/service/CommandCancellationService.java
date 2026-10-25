@@ -28,20 +28,26 @@ public class CommandCancellationService {
 
   /** 子処理の実体が戻るまで所有権を保持する。停止済みなら開始を拒否する。 */
   public ChildLease enterChild(String runId) {
-    var state = runId == null ? null : runs.get(runId);
+    State state;
+    synchronized (this) {
+      state = runId == null ? null : runs.get(runId);
+      if (state == null && runId != null && finished.containsKey(runId))
+        throw new java.util.concurrent.CancellationException("Run already finished");
+    }
     if (state == null) return () -> {};
+    final State owner = state;
     var thread = Thread.currentThread();
-    synchronized (state) {
-      if (state.requestedAt != null || state.finishedAt != null || state.closing)
+    synchronized (owner) {
+      if (owner.requestedAt != null || owner.finishedAt != null || owner.closing)
         throw new java.util.concurrent.CancellationException("Run is stopping");
-      state.workers.merge(thread, 1, Integer::sum);
+      owner.workers.merge(thread, 1, Integer::sum);
     }
     var closed = new AtomicBoolean();
     return () -> {
       if (!closed.compareAndSet(false, true)) return;
-      synchronized (state) {
-        state.workers.computeIfPresent(thread, (key, count) -> count == 1 ? null : count - 1);
-        state.notifyAll();
+      synchronized (owner) {
+        owner.workers.computeIfPresent(thread, (key, count) -> count == 1 ? null : count - 1);
+        owner.notifyAll();
       }
     };
   }
@@ -59,7 +65,7 @@ public class CommandCancellationService {
     boolean interrupted = false;
     synchronized (state) {
       state.closing = true;
-      while (!state.workers.isEmpty()) {
+      while (!state.workers.isEmpty() || state.signals > 0) {
         try { state.wait(); }
         catch (InterruptedException stop) { interrupted = true; }
       }
@@ -80,6 +86,7 @@ public class CommandCancellationService {
     Instant finishedAt;
     String failure;
     int depth;
+    int signals;
     boolean managed;
 
     State(String runId, String projectId) {
@@ -166,7 +173,8 @@ public class CommandCancellationService {
     Disposable previous;
     synchronized (state) {
       previous = state.disposable;
-      if (state.requestedAt == null && state.finishedAt == null) state.disposable = disposable;
+      if (state.requestedAt == null && state.finishedAt == null && !state.closing)
+        state.disposable = disposable;
       else previous = disposable;
     }
     if (previous != null) invoke(state, previous::dispose);
@@ -181,13 +189,18 @@ public class CommandCancellationService {
 
   /** 子の登録と要求が競合しても一度だけ実行し、一つの失敗で他の停止を妨げない。 */
   public Disposable onCancel(String runId, Runnable child) {
-    State state = runId == null ? legacy : runs.get(runId);
+    State found;
+    synchronized (this) {
+      found = runId == null ? legacy : runs.get(runId);
+      if (found == null) found = finished.get(runId);
+    }
+    final State state = found;
     if (state == null) return () -> {};
     var called = new AtomicBoolean();
     Runnable once = () -> { if (called.compareAndSet(false, true)) invoke(state, child); };
     boolean stopped;
     synchronized (state) {
-      stopped = state.requestedAt != null || state.finishedAt != null;
+      stopped = state.requestedAt != null || state.finishedAt != null || state.closing;
       if (!stopped) state.children.add(once);
     }
     if (stopped) once.run();
@@ -201,6 +214,7 @@ public class CommandCancellationService {
     synchronized (state) {
       if (state.finishedAt != null || state.requestedAt != null) return false;
       state.requestedAt = clock.instant();
+      state.signals++;
       children = List.copyOf(state.children);
       state.children.clear();
       disposable = state.disposable;
@@ -210,10 +224,12 @@ public class CommandCancellationService {
       for (var worker : state.workers.keySet())
         if (worker != state.thread) invoke(state, worker::interrupt);
     }
-    log(state, "requested");
-    children.forEach(Runnable::run);
-    if (disposable != null) invoke(state, disposable::dispose);
-    return true;
+    try {
+      log(state, "requested");
+      children.forEach(Runnable::run);
+      if (disposable != null) invoke(state, disposable::dispose);
+      return true;
+    } finally { signalFinished(state); }
   }
 
   private void invoke(State state, Runnable action) {
@@ -269,6 +285,7 @@ public class CommandCancellationService {
     if (state == legacy) {
       release(state);
       synchronized (state) {
+        state.thread = null;
         state.requestedAt = null;
         state.finishedAt = null;
         state.failure = null;
@@ -278,35 +295,69 @@ public class CommandCancellationService {
 
   /** 実際に runner と cleanup が戻った時だけ呼び出す。 */
   public void finish(String runId) {
-    awaitChildren(runId);
     State state;
-    synchronized (this) {
-      pendingCancellations.remove(runId);
-      state = runs.remove(runId);
-      if (state == null) return;
-      synchronized (state) {
-        state.finishedAt = clock.instant();
-        state.thread = null;
+    while (true) {
+      completeResources(runId);
+      synchronized (this) {
+        state = runs.get(runId);
+        if (state == null) {
+          pendingCancellations.remove(runId);
+          return;
+        }
+        synchronized (state) {
+          // 解放完了と終端確定の間に届いた停止要求も、実体の完了を確認する。
+          if (!state.workers.isEmpty() || state.signals > 0) continue;
+          state.finishedAt = clock.instant();
+          state.thread = null;
+          runs.remove(runId, state);
+          pendingCancellations.remove(runId);
+          finished.put(runId, state);
+          while (finished.size() > 256) finished.remove(finished.keySet().iterator().next());
+        }
       }
-      finished.put(runId, state);
-      while (finished.size() > 256) finished.remove(finished.keySet().iterator().next());
+      break;
     }
-    release(state);
     log(state, "finished");
+  }
+
+  /** 資源解放と並行している停止処理がすべて戻るまで、登録を保持する。 */
+  public void completeResources(String runId) {
+    awaitChildren(runId);
+    var state = runs.get(runId);
+    if (state == null) return;
+    release(state);
+    awaitChildren(runId);
+  }
+
+  private void signalFinished(State state) {
+    synchronized (state) {
+      state.signals--;
+      state.notifyAll();
+    }
   }
 
   private void release(State state) {
     List<Runnable> children;
     Disposable disposable;
     synchronized (state) {
-      state.thread = null;
+      state.signals++;
       children = List.copyOf(state.children);
       state.children.clear();
       disposable = state.disposable;
       state.disposable = null;
     }
-    children.forEach(Runnable::run);
-    if (disposable != null) invoke(state, disposable::dispose);
+    try {
+      children.forEach(Runnable::run);
+      if (disposable != null) invoke(state, disposable::dispose);
+    } finally { signalFinished(state); }
+  }
+
+  /** 現在の利用者操作と同じ Project の停止進行状況。 */
+  public List<Diagnostic> currentProjectDiagnostics() {
+    var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
+    if (project != null) return projectDiagnostics(project.id());
+    return runs.values().stream().filter(s -> s.projectId == null)
+        .map(s -> diagnostic(s.runId)).toList();
   }
 
   public synchronized Diagnostic diagnostic(String runId) {

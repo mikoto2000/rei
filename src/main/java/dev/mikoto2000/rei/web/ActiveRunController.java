@@ -36,7 +36,13 @@ public final class ActiveRunController {
    *
    * @param accepted 受付済み
    */
-  public record Cancellation(boolean accepted) {}
+  public record Cancellation(boolean accepted, String status,
+      java.util.List<CommandCancellationService.Diagnostic> runs) {
+    /** 既存の Java 呼び出し元を維持する。 */
+    public Cancellation(boolean accepted) {
+      this(accepted, accepted ? "CANCEL_REQUESTED" : "NOT_FOUND", java.util.List.of());
+    }
+  }
 
   /** 指定された値や利用先を使って、ActiveRunControllerを初期化する。 */
   public ActiveRunController(
@@ -68,6 +74,13 @@ public final class ActiveRunController {
             .resolveById(projectId)
             .orElseThrow(
                 () -> new dev.mikoto2000.rei.application.run.ResourceNotFoundException("Project"));
-    return new Cancellation(cancellation.cancelProject(project.id()));
+    boolean accepted = cancellation.cancelProject(project.id());
+    var diagnostics = cancellation.projectDiagnostics(project.id());
+    String status = diagnostics.stream().anyMatch(d -> d.status().equals("CANCEL_FAILED"))
+        ? "CANCEL_FAILED"
+        : diagnostics.stream().anyMatch(d -> d.status().equals("CANCEL_STALLED"))
+            ? "CANCEL_STALLED"
+            : accepted || !diagnostics.isEmpty() ? "CANCEL_REQUESTED" : "NOT_FOUND";
+    return new Cancellation(accepted, status, diagnostics);
   }
 }

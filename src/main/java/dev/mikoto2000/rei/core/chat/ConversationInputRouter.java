@@ -322,8 +322,10 @@ public final class ConversationInputRouter {
           ProjectRunQueue.Access.valueOf(context.mode().name()),
           () -> {
             try {
-              if (admissions != null) admissions.startExecution(context);
-              executeCancellable(context, operation, lifecycle);
+              executeCancellable(context, operation, work -> {
+                if (admissions != null) admissions.startExecution(context);
+                lifecycle.accept(work);
+              });
             } finally {
               forget(slot);
             }
@@ -400,10 +402,12 @@ public final class ConversationInputRouter {
               ProjectRunQueue.Access.valueOf(context.mode().name()),
               () -> {
                 try {
-                  if (admissions != null) admissions.startExecution(context);
-                  admitted.run();
                   executeCancellable(context,
-                      () -> slot.execution().execute(context, slot.prompt(), slot.queue()), lifecycle);
+                      () -> slot.execution().execute(context, slot.prompt(), slot.queue()), work -> {
+                        if (admissions != null) admissions.startExecution(context);
+                        admitted.run();
+                        lifecycle.accept(work);
+                      });
                 } finally {
                   agentSlots.remove(context.runId());
                   forget(slot);
@@ -470,6 +474,7 @@ public final class ConversationInputRouter {
 
   /** 会話の実行に関する記憶の削除を処理する。 */
   private void forget(Slot slot) {
+    cancellation.finish(slot.context().runId());
     if (admissions != null) admissions.release(slot.context().runId());
     active.remove(slot.context().runId());
     synchronized (mailboxes) {
@@ -482,7 +487,6 @@ public final class ConversationInputRouter {
         org.slf4j.LoggerFactory.getLogger(ConversationInputRouter.class)
             .warn("Run cleanup observer unavailable: {}", failure.getClass().getSimpleName());
       }
-    cancellation.finish(slot.context().runId());
     changed();
   }
 
