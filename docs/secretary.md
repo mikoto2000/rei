@@ -546,3 +546,322 @@ schema 13→14 を起動時バックアップ付きで追加し、`secretary_aut
 最終 Checkstyle 0件、SpotBugs 既存1,895件・新規0件、増分ゲートと自己試験8ケースが成功した。
 静的解析の新規指摘は広すぎる例外再送出と SQL 準備の表現を修正して解消し、基準を変更していない。
 terminal verify は CLI128件・ランチャー6件、failure/error/skip 0 で成功した。
+
+
+## Phase 4: 外部サービス統合
+
+`SecretaryConnections` が Project / Session / 接続名 / サービス / リソースを固定し、
+サービスを所有する adapter を `SecretaryProvider` port 経由で使用する。
+読み取りの定期巡回、変更証拠、タスク候補、書込み要求・承認・結果は個別の状態を持つ。
+Google は既存 OAuth / 更新ジョブ / Calendar service、Slack は既存 admission / transport、
+GitHub は既存署名検証済み Webhook fact と新しい固定 REST 読取りを再利用する。
+モデルに任意 URL・トークン・送信先を選ばせる MCP ツールは追加しない。
+
+### 設定と接続
+
+グローバル巡回、サービス、接続ごとの enabled は別々。新設項目は既定 OFF。
+手動 poll もレート制限・接続ごとの next を守る。無効な資格情報を対話なしで再認可しない。
+
+```yaml
+rei:
+  secretary:
+    enabled: true
+    connections-enabled: true
+    github:
+      enabled: true
+    slack:
+      enabled: false
+  google:
+    calendar:
+      enabled: true
+    gmail:
+      enabled: true
+      drafts-enabled: false
+      send-enabled: false
+```
+
+`NETWORK_READ` を既存 `rei.tool-permission.auto-approve` に明示追加する。
+権限機構が無効なら外部連携は fail closed。書込みには `NETWORK_WRITE` / `EXTERNAL_SIDE_EFFECT`、
+Calendar の取消にはさらに `DESTRUCTIVE` が必要。拒否設定が自動承認より優先する。
+通常の書込みは同じポリシーから承認要否を決定するが、**MAIL_SEND は必ず個別承認**する。
+Calendar も読取り専用で使う場合は、ポリシーで NETWORK_WRITE を拒否して運用する。
+
+| サービス | 手動設定・資格情報 | 最小限の権限と制約 |
+| --- | --- | --- |
+| Calendar | 既存 Google Desktop OAuth client JSON / token directory。resource は `primary` または既知の calendar ID | 既存 Calendar Events scope と空き時間用 `calendar.events.freebusy`。Tasks を使わない場合は既存 task.enabled を OFF |
+| Gmail | 同じ Google OAuth。resource は `me` 固定。Google Cloud 側で Gmail API を有効にする | 読取り `gmail.readonly`。下書き保存時だけ `gmail.compose`、送信のみなら `gmail.send` を追加。compose 自体は送信権限も含むがアプリの send-enabled と個別承認は別途必要 |
+| GitHub | 環境変数 `GH_TOKEN`（優先）または `GITHUB_TOKEN`。resource は `owner/repository` | 対象 repository だけの fine-grained PAT、Metadata / Pull requests / Issues / Checks / Commit statuses の Read。Classic PAT なら private repository に広い repo 権限が必要になり得る |
+| Slack | 既存 `SLACK_BOT_TOKEN` と `rei.slack` の workspace / channel / user allowlist / channelProjects または dmProject | bot `chat:write`、対象会話の history scope。公開・非公開チャンネルの thread 読取りには任意の `SLACK_USER_TOKEN` と対応する history scope が必要。Bot と同 workspace かつ allowlist の本人のみ |
+
+Google の token directory は既存 FileDataStore を共用する。秘密は DB に複製しない。
+現在必要な scope の SHA-256 marker を同じ directory に保存し、marker がない旧 credential や
+scope 変更は明示再認可を要求する。バックグラウンド処理からブラウザを開かない。
+端末本人だけが読める Windows ACL と、同期・Git 管理対象外の data directory を利用する。
+既存の tokens-directory と client JSON を秘密情報として管理する。
+資格情報や API 本文を診断に含めず、DB の identity は資格情報の SHA-256 のみ。
+接続 status の CONFIGURED は保存済み資格情報の存在確認であり、実サービスでの認証成功を意味しない。
+
+```text
+/secretary connection-configure --project PROJECT --session SESSION --name calendar --service CALENDAR --resource primary --connection-enabled --poll-seconds 300
+/secretary connection-configure --project PROJECT --session SESSION --name mail --service GMAIL --resource me --connection-enabled --import-candidates --poll-seconds 300
+/secretary connection-configure --project PROJECT --session SESSION --name github --service GITHUB --resource OWNER/REPO --connection-enabled --import-candidates
+/secretary connection-list --project PROJECT
+/secretary connection-auth CONNECTION_ID --project PROJECT
+/secretary connection-authorize CONNECTION_ID --project PROJECT --session SESSION
+/secretary connection-poll CONNECTION_ID --project PROJECT
+/secretary connection-items CONNECTION_ID --project PROJECT
+/secretary connection-history CONNECTION_ID --project PROJECT
+/secretary connection-task CONNECTION_ID --project PROJECT --key EXTERNAL_ITEM_ID
+```
+
+新規設定は version -1。更新には `--connection-version CURRENT_VERSION` が必須。
+resource / service の変更には別の接続名を使う。Session は既存所有者と一致しなければ拒否する。
+既存接続を同名で更新する際も全 Config を指定する。
+`connection-authorize` は Google のみ。Web / 軽量CLI では既存 Run queue に受付けて202を返し、
+SSE / Run API で対話認可 URL と終了状態を確認する。GitHub / Slack はサービス側で PAT / token を発行する。
+
+`connection-disconnect ID --connection-version V` はその Project 接続を無効にする。
+共有 Google / Slack / GitHub 資格情報は他機能への影響を避けるため保持する。
+アカウントの完全なアクセス取消は Google の第三者接続、GitHub の PAT、Slack の installed app / token 管理画面で行う。
+期限切れ・取消済み token は REAUTH_REQUIRED。環境変数の更新はプロセスを再起動する。
+
+### 読取り操作
+
+`connection-read ID --operation OP --arguments JSON` は明示的な人間向け読取り。
+JSON は文字列 map で、未知引数・未知操作・任意接続先を拒否する。
+保存 poll は原則 metadata のみ、メール本文・添付ファイルを一括取得しない。
+
+| サービス | operation と arguments |
+| --- | --- |
+| Calendar | LIST `{from,to,page}`（最大31日）、TODAY `{date}`、DETAIL `{id}`、FREEBUSY `{from,to}`。日時は offset または接続 zone |
+| Gmail | LIST `{q,page}`、UNREAD / NEEDS_REPLY `{page}`、MESSAGE / THREAD / REPLY `{id}`。返信要否は unread / IMPORTANT / subject の限定したルール |
+| GitHub | LIST / PRS / REVIEWS / ISSUES / UNFINISHED `{page}`、DETAIL / CI / REVIEW_SUMMARY `{number,page}`。本人の関連 PR・Issue とレビュー待ち。review summary は reviewer ごとの状態集計で、本文の意味要約ではない |
+| Slack | LIST / MENTIONS `{cursor,oldest}`、THREAD / REPLY `{ts,cursor}`。allowlist channel 内の人間のメンションだけを候補化。bot / 自分 / subtype は既存 admission と同じく除外 |
+
+REPLY はローカルの編集用テンプレートを返す。実際の AI 下書きは後述する Phase 5 の専用経路を使う。
+Calendar freebusy の部分失敗を「空き」と扱わず、CI は check と commit status の双方と head SHA を検査する。
+不足権限・check 未取得・ページ途中・head 更新中は UNKNOWN / PENDING / STALE として成功を断定しない。
+GitHub CI API の局所障害は PR の metadata 取得まで止めない。
+メール thread は最大50件、Slack15件、GitHub20件/page。partial / SYNCING を確認し、必要なら続きの cursor で取得する。
+
+### 変更・送信・進捗報告
+
+書込みは `external-prepare --connection ID --key UNIQUE --operation OP --arguments JSON` で
+具体的な送信内容を保存してから承認を要求する。接続先・account identity・policy・設定版も束縛する。
+承認表示は既存 credential redactor を通す。本文を変更する際は新しい key と承認が必要。
+
+| operation | arguments |
+| --- | --- |
+| CALENDAR_CREATE | title / start / end / 任意 description / location |
+| CALENDAR_UPDATE | id / etag と変更する title / start / end / description / location |
+| CALENDAR_CANCEL | id / etag |
+| MAIL_DRAFT / MAIL_SEND | to / 任意 cc / subject / body / 任意 threadId / inReplyTo / references。送信には任意 trackReply（既定 true） |
+| SLACK_POST | body / 任意 thread |
+| SLACK_REPORT | taskId / taskRevision / 任意 thread。現在のタスク名・状態を承認対象本文に固定 |
+
+宛先は plain address のみ、CRLF によるヘッダ追加を拒否する。返信の threadId には In-Reply-To が必要。
+Slack は機械投稿の prefix と action ID を承認前に本文へ追加し、mention の特殊文字を escape する。
+既存 bot 入力経路が自己投稿を再受付しない規則を維持し、metadata にも機械投稿識別を付ける。
+進捗報告は明示操作と権限の対象で、タスク状態変更から無条件に Slack 投稿しない。
+
+```text
+/secretary external-list --project PROJECT
+/secretary external-show ACTION_ID --project PROJECT
+/approval show PERMIT_ID
+/approval approve PERMIT_ID
+/secretary external-execute ACTION_ID --project PROJECT --revision CURRENT_REVISION
+/secretary external-history ACTION_ID --project PROJECT
+/secretary external-verify ACTION_ID --project PROJECT --revision CURRENT_REVISION
+/secretary external-cancel ACTION_ID --project PROJECT --revision CURRENT_REVISION
+```
+
+承認は15分・一回限り、アクション受付も15分で失効する。全体2件 / 同じ接続1件の書込みに制限する。
+同じ key の再要求は同じ action。既知の429だけ最大3試行し、Retry-After と next を保持する。
+SENDING を書込み前に永続化し、再起動時の SENDING は UNCERTAIN。タイムアウトや不明な ACK を自動再送しない。
+UNCERTAIN の verify は独立した読取りだけで照合する。Gmail の決定的 Message-ID、
+Calendar の決定的 event ID / 更新内容 / 取消状態、Slack の action marker と bot 本人を確認する。
+見つからない場合は UNCERTAIN のまま。手動再送も重複し得るため実際のサービス画面と履歴を確認する。
+
+COMPLETED は独立した外部読取りで確認した状態。API の200や AI の自己申告だけで成功にしない。
+確認済み MAIL_SEND は thread に結びつく WAITING タスクを一度だけ作る。
+巡回時に返信待ち thread を3件ずつ公平に観測し、新しい inbound を検知したら WAITING→OPEN に戻す。
+人が DONE / CANCELLED にしたタスクは再開せず、返信だけで DONE にしない。
+外部情報からの自動 import は CANDIDATE に限定し、会話由来の確定タスクへタイトル一致だけで自動結合しない。
+
+### プライバシーと AI 下書き
+
+外部起源・external reference のあるタスクは、通常の会話 planner へ自動投入しない。
+外部本文をモデルへ送るには、次の **全て** を明示設定する。
+
+```yaml
+rei:
+  secretary:
+    external-content-to-model: true
+    private-model-endpoints: http://127.0.0.1:1234/v1
+  llm:
+    features:
+      secretary-reply:
+        base-url: http://127.0.0.1:1234/v1
+        model: EXPLICIT_PRIVATE_MODEL
+        api-key: ${PRIVATE_REPLY_API_KEY:dummy-key}
+```
+
+加えて接続設定を現在 version で更新し `--allow-model-content` を指定する。
+HTTPS または loopback HTTP のみで、URL 内の認証情報・query・fragment を拒否する。
+専用 model / endpoint の完全一致が必要で、通常 CHAT / fallback / capture を使わない。
+取得した情報を最大12,000文字へ制限し、既存 SensitiveInfoDetector の規則で secret / PEM を拒否、
+メールアドレス・電話番号を伏字にする。一般的な機密判定が完全であることは保証しない。
+外部テキストを untrusted evidence として一回だけモデルに渡し、ツール・会話履歴・記憶統合・追加閲覧を使用しない。
+モデル出力の tool calls は失敗にし、最大45秒・32,768文字・自動 SDK retry 0。
+専用 HTTP client は再利用し、稼働中の専用モデル変更は拒否する。設定変更時はアプリを再起動する。
+Phase 5 の実行ごと・日次予算を呼出前に予約し、取消と絶対期限を共用する。
+
+候補を承認後、`work-add TASK_ID --kind DRAFT --key KEY --revision V` と通常の承認・work-start を使う。
+生成物は既存 ArtifactStore に保存され、送信されない。人が確認して別途 external-prepare する。
+設定版 / evidence revision / model identity を permission に固定し、開始前と各呼出直前に再検査する。
+許可の取消・接続解除後の保存済み実行も拒否する。本文・生成結果を通常 briefing context に複製しない。
+許可を変更した後は新しい execution key で登録し直す。
+
+### イベント方式・保存・制約
+
+| 方式 | 採否・理由 |
+| --- | --- |
+| 定期 polling | Windows ローカルの標準経路。公開 HTTP 不要。接続ごと60秒以上、最大8接続/巡回。Gmail は historyId / page cursor を永続化し失効時は full resync |
+| Webhook | 既存 GitHub 署名検証・Project/Session 所有権・fact 保存を再利用。秘書の投影は1 worker / queue32。飽和時も原本 fact を保持。公開受信経路を設定した場合だけ追加の即時証拠として使う |
+| Calendar watch / Gmail push | 公開 HTTPS や Pub/Sub / subscription 更新管理が必要になるため必須化しない |
+| Calendar syncToken | 高速だが query 制約と410後の全同期管理が必要。本実装は昨日〜30日先の31日 snapshot を分割取得し etag / cancelled を照合。範囲外の変更は次の読取りまで追跡しない |
+| Slack Socket Mode | 既存人間受付を維持。秘書は allowlist channel の bounded polling と併用。広い search.messages / search:read を追加しない |
+
+Calendar の取消 tombstone、メール削除、GitHub head 変更を証拠更新として保存する。
+同じ connection / external ID / revision を一意にし、候補・通知重複を抑止する。
+外部更新は既存 Secretary outbox / Attention、日次 briefing / review に反映する。
+Slack 通知先は Phase 2 の `--destination DELIVERY` と既存
+[Slack notification provider](slack-notification-provider.md) の allowlist / delivery policy を組み合わせる。
+この既存通知は本文を外部に送らず、Inbox ID などの metadata のみ送信する。
+投稿本文を送る進捗報告とは権限・要求を分ける。
+
+schema 14→15 は既存バックアップ付き移行で、connections / items / events / actions / action history /
+reply waits の6テーブルと既存 job 用 index を追加する。古い台帳・提案・予算は保持する。
+接続上限256、cache 5,000件/接続、履歴は保持して増える。本文抜粋512文字、metadata最大64KiB、
+明示 action 本文最大32,768文字。保存容量は接続数・外部変更・送信履歴に比例する。
+DB とバックアップには件名・抜粋・承認対象本文・AI 下書きが含まれ得る。data-dir 全体を保護する。
+秘密 token は含めないが、この DB を一般公開しない。
+
+401 は再認可、403 は権限不足、429 は保存した待機期限を確認する。あるサービスの障害で他の接続を無効化しない。
+HTTP body 最大1MiB、redirect・通信自動 retry なし、同時ネットワークを制限する。
+poll の部分取得は SYNCING で示し、ページが完了するまで全情報の取得済みと扱わない。
+履歴の UNKNOWN / UNCERTAIN は未確認として実サービス画面で照合する。
+
+実 Google OAuth / Google APIs / GitHub account / Slack workspace / 実 LLM には接続していない。
+プロトコルと主要状態遷移はモック・固定 Clock・SQLite・既存 HTTP 認証基盤で検証する。
+送信、token 更新、scope 設定、workspace 制限、モデル endpoint の動作は資格情報を設定した後に手動確認が必要。
+
+公式仕様:
+[Calendar incremental sync](https://developers.google.com/workspace/calendar/api/guides/sync)、
+[Calendar freebusy](https://developers.google.com/workspace/calendar/api/v3/reference/freebusy/query)、
+[Gmail scopes](https://developers.google.com/workspace/gmail/api/auth/scopes)、
+[Gmail sending](https://developers.google.com/workspace/gmail/api/guides/sending)、
+[Gmail threads](https://developers.google.com/workspace/gmail/api/guides/threads)、
+[GitHub API versions](https://docs.github.com/en/rest/about-the-rest-api/api-versions)、
+[GitHub rate limits](https://docs.github.com/en/rest/using-the-rest-api/rate-limits-for-the-rest-api)、
+[Slack replies](https://docs.slack.dev/reference/methods/conversations.replies/)、
+[Slack rate changes](https://docs.slack.dev/changelog/2025/05/29/rate-limit-changes-for-non-marketplace-apps/)。
+GitHub API は2022-11-28を固定し、公式のサポート期間内を前提にする。
+UNFINISHED は更新日で古い未完了作業を除外せず、LIST の直近30日・レビュー待ちと順番に巡回する。
+[GitHub search の上限](https://docs.github.com/en/rest/search/search) は1検索1,000件のため50 pageまでとし、
+それを超える場合は partial を示して次の種類へ進む。大きい repository で全件を観測したと主張しない。
+Calendar 削除後の404 / 410は、[公式の deleted resource](https://developers.google.com/workspace/calendar/api/guides/errors)
+の扱いに従って読取り照合する。
+Slack history/replies は配布形態によって1分1回・15件の制限があるため、下限60秒と15件を採用し429を優先する。
+
+### Phase 4 API
+
+すべて既存 Bearer 認証下。秘書と Web の両方が有効な場合だけ公開する。
+
+| 操作 | `/api/v1/secretary` 配下 |
+| --- | --- |
+| 接続一覧・設定 | GET / PUT `/connections`。PUT は `{config: Config全項目, version: -1または現在版}` |
+| 状態・資格情報状態 | GET `/connections/{id}`, `/connections/{id}/auth`、projectId 必須 |
+| poll / disconnect | POST `/connections/{id}/poll`, `/disconnect`。projectId / disconnect は revision 必須 |
+| 読取り | POST `/connections/{id}/read`、projectId / operation / arguments |
+| 証拠・履歴 | GET `/connections/{id}/items`, `/history`、projectId / 任意 limit |
+| 候補変換 | POST `/connections/{id}/tasks`、projectId / externalId |
+| 書込み受付 | POST `/external-actions`、projectId / connectionId / key / operation / arguments |
+| 一覧・詳細・履歴 | GET `/external-actions`, `/{id}`, `/{id}/history` |
+| 制御 | POST `/external-actions/{id}/execute`, `/cancel`, `/verify`、projectId / revision |
+
+Google の明示認可だけは既存 `/api/v1/google-operations/secretary/authorize` に POST
+（projectId / sessionId / connectionId / force）し、Run ID を返す。
+認可 URL をログではなく本人の既存 Run 表示に返す。OAuth の token は含めない。
+未知 JSON フィールドを拒否し、設定版・実行版の競合は409、外部 rate limit は429、その他の外部障害は503。
+
+
+## 全 Phase を通した手動確認
+
+まず既存の方法で Project と Session を作成し、現在の ID を控える。以下の TASK_ID / EXECUTION_ID /
+PERMIT_ID / CONNECTION_ID と revision は各コマンドの応答に置き換える。古い値を推測して再利用しない。
+外部送信の試験には本人が管理するテスト宛先とテストチャンネルを使う。
+
+1. `rei.secretary.enabled=true`、`extraction-enabled=true` で起動し、既存の会話から
+   「明日テスト報告を作成したい」と入力する。`/secretary list --project PROJECT` で CANDIDATE と出典を確認する。
+   モデル不要の確認なら `/secretary extract --project PROJECT --key smoke:one --title "明日テスト報告を作成したい"` を使う。
+2. `/secretary approve TASK_ID --project PROJECT --revision V` で OPEN にする。承認だけでは Run が開始しないことを確認する。
+3. `/secretary update TASK_ID --project PROJECT --revision V --title "テスト報告" --intent TODO --status OPEN --due YYYY-MM-DD --priority 2`
+   で期限を設定する。update は置換なので、残すタグ・参照も明示する。
+4. `rei.secretary.followups-enabled=true` と既存 scheduler を有効にする。
+   `/secretary configure --project PROJECT --watch-enabled --notifications --zone Asia/Tokyo --briefing-time 09:00 --review-time 18:00`
+   の後、`/secretary check --project PROJECT`、`followup-status`、`notifications` を確認する。
+5. `/secretary briefing --project PROJECT --date YYYY-MM-DD`、`/secretary review --project PROJECT --date YYYY-MM-DD`
+   で期限・待機・実行結果を確認する。通知履歴と Attention Inbox を照合する。
+6. `rei.secretary.orchestrator-enabled=true`、
+   `/secretary orchestrator-configure --project PROJECT --proposals-enabled --minimum-seconds 60` を設定し、
+   `/secretary suggest --project PROJECT`、`/secretary suggestions --project PROJECT` で根拠と時刻を確認する。
+   LATER / DISMISS / NEVER / stop / snooze が反映されることも確認できる。
+7. `rei.conversation.concurrent-enabled=true`、提案を拾う場合は `rei.secretary.autonomy-enabled=true` と Phase 5 の権限設定を有効にし、
+   `/secretary autonomy-configure --project PROJECT --session SESSION --autonomy-enabled --max-level 2 --max-llm-calls 2 --max-daily-calls 4 --max-retries 0`
+   で小さい予算を設定する。`/secretary feedback SUGGESTION_ID --project PROJECT --revision V --reaction EXECUTE` の後、
+   `autonomy-check` / `work-list` で準備実行を確認する。直接の確認は `work-add TASK_ID --revision V --key smoke:draft --kind DRAFT`。
+8. 応答に permitId があれば `/approval show PERMIT_ID` で対象を確認して approve / deny する。
+   `work-start EXECUTION_ID --project PROJECT --revision V` で開始し、必要な個別ツール承認は既存手順に従う。
+9. `work-show` / `work-history` / `autonomy-status` と Artifact を確認する。
+   準備成功だけでタスク DONE にならず、日次・実行予算が減っていることを確認する。
+   Goal を使う場合は元の必須チェック・独立した完了条件を持つ Goal を既存 UI / CLI で先に作成する。
+10. Phase 4 の資格情報と接続を設定し、connection-auth → connection-poll → connection-items → connection-task の順で確認する。
+    Calendar TODAY / FREEBUSY、Gmail MESSAGE / THREAD、GitHub REVIEWS / CI、Slack MENTIONS / THREAD をそれぞれ read する。
+    メールまたは Slack の AI 下書きが必要なら専用モデルと接続ごとの利用許可を明示設定して DRAFT を生成する。
+    本文・宛先を確認して external-prepare し、**メール送信は個別 approval**、その後 external-execute を行う。
+    external-show / external-history と実サービスを照合する。返信後に WAITING→OPEN と日次報告への反映を確認する。
+
+未設定・機能 OFF の起動、資格情報取消、429、通信切断、再起動については、同じ手動手順をテスト環境で追加確認する。
+UNCERTAIN を success と見なさず、`external-verify` の読取り照合と実サービス画面を用いる。
+
+
+### 前段 Phase の最終 CI 記録
+
+| Phase | PR / merge | exact-head backend CI | 静的解析 |
+| --- | --- | --- | --- |
+| 1 | [150](https://github.com/mikoto2000/rei/pull/150) / `5153f3ba5bc4682d205356497dcb3260a49bfa74` | 6,294件、failure/error 0、既存skip5 | Checkstyle0、SpotBugs新規0（既存1,897） |
+| 2 | [151](https://github.com/mikoto2000/rei/pull/151) / `1f238e7a48f7fb4d8fa9340d31666e76194cf359` | 6,307件、failure/error 0、既存skip5 | Checkstyle0、SpotBugs新規0（既存1,897） |
+| 3 | [152](https://github.com/mikoto2000/rei/pull/152) / `1b7782010aa8a611de7dfba21f3dbd7a4e188ea2` | 6,323件、failure/error 0、既存skip5 | Checkstyle0、SpotBugs新規0（既存1,897） |
+| 5 | [153](https://github.com/mikoto2000/rei/pull/153) / `3ab311ad38f03a70f80250a4536e6091ec0fbe79` | 6,340件、failure/error 0、既存skip5 | Checkstyle0、SpotBugs新規0（既存1,895） |
+
+各 PR は exact head の回帰・静的 CI 成功後にマージし、各 worktree とローカル branch を削除してから次へ進んだ。
+Phase 2 は最初の CI が期限内に終了せず、同じコミット・同じチェックを再実行して成功を確認した。
+基準・除外・時間上限は緩和していない。Phase 4 の最終 head と CI はその PR と完了報告で確認する。
+
+
+### Phase 4 のローカル検証記録
+
+サービスの protocol と台帳の先行 Red、専用モデルの fallback 拒否、削除後410、未完了 Issue の古い更新日、
+検索上限、承認待ちの公平性、専用 client の再利用を失敗から修正した。
+既存の HTTP 改訂競合テストを維持し、新しい通信上限テストは別クラスに分けた。既存試験の削除はない。
+
+全件の最初の `-Pfull verify` は6,371件、failure1 / error0 / 既存skip5。
+唯一の失敗は新しい enabled 項目の設定テンプレート更新漏れで、生成テンプレートを修正して既存7件を再確認した。
+これは最終コードの全件成功記録とは区別する。その後の関連129件、Calendar adapter 分離後109件、
+送信の読取り再照合10件、全実 adapter の資格情報なし共存起動1件はそれぞれ failure/error/skip0で成功し、実行可能JARを生成した。
+軽量 CLI は129件、launcher6件で verify 成功。
+
+完全 Checkstyle は0件。SpotBugs は既存1,895件・新規0件。増分ゲートと自己試験8ケースが成功。
+例外型・購読前の null 防御・承認 Map の不変化・所有 service の adapter 境界を修正し、
+解析基準や除外設定を拡張していない。最終コミットの全件は PR の exact-head CI で判定する。

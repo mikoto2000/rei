@@ -75,7 +75,13 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
       String proposalId,
       String preparationPermit,
       String preparationRule,
-      SecretaryGoalRuntime.Goal goal) {}
+      SecretaryGoalRuntime.Goal goal,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          String externalPermission,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          String privateModelFingerprint) {}
 
   public record Result(String text, String sha256, String artifactId, String verification) {}
 
@@ -178,6 +184,25 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
     this.goals = goals;
     this.orchestrators = orchestrators;
     this.reports = reports;
+  }
+
+  private ObjectProvider<SecretaryPreparationContext> externalContexts;
+
+  @Autowired
+  public void setExternalContexts(ObjectProvider<SecretaryPreparationContext> value) {
+    externalContexts = value;
+  }
+
+  private static boolean external(SecretaryTask task) {
+    return "EXTERNAL".equals(task.origin())
+        || task.references().stream().anyMatch(r -> r.startsWith("external:"));
+  }
+
+  private boolean externalAllowed(Job job, SecretaryTask task) {
+    if (job.spec().request().kind() == Kind.UPDATE_TASK || goal(job)) return true;
+    if (!external(task) && job.spec().externalPermission() == null) return true;
+    var context = optional(externalContexts);
+    return context != null && context.allowsExternal(task, job.spec().externalPermission());
   }
 
   private static <T> T optional(ObjectProvider<T> source) {
@@ -355,11 +380,15 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
     String session = goal == null ? settings.sessionId() : goal.sessionId();
     required(runtimes).validate(request.projectId(), session);
     var authority = policy(request.kind());
+    var evidence =
+        external(task) && !isGoal && request.kind() != Kind.UPDATE_TASK
+            ? required(externalContexts).prepareExternal(task)
+            : null;
     var spec =
         new Spec(
             request,
             session,
-            task.title(),
+            evidence == null ? task.title() : evidence.objective(),
             fingerprint,
             authority.fingerprint(),
             settings.maxSeconds(),
@@ -369,7 +398,9 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
             proposal == null ? null : proposal.id(),
             proposal == null ? null : proposal.approvalId(),
             proposal == null ? null : proposal.rule(),
-            goal);
+            goal,
+            evidence == null ? null : evidence.permission(),
+            evidence == null ? null : evidence.modelFingerprint());
     String id = uuid(request.projectId() + ":" + request.key());
     var created =
         database.transaction(
@@ -505,6 +536,8 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
     if (task.revision() != job.spec().request().taskRevision()
         || !Set.of(SecretaryTask.Status.OPEN, SecretaryTask.Status.WAITING).contains(task.status()))
       return transition(job, "BLOCKED", "task_changed");
+    if (!externalAllowed(job, task))
+      return transition(job, "BLOCKED", "external_model_permission_changed");
     required(runtimes).validate(project, job.spec().sessionId());
     if (job.spec().request().kind() != Kind.UPDATE_TASK && !required(runtimes).available())
       return transition(job, "BLOCKED", "managed_execution_unavailable");
@@ -599,7 +632,8 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
                     project,
                     captured.spec().sessionId(),
                     captured.spec().objective(),
-                    captured.spec().request().kind().name()),
+                    captured.spec().request().kind().name(),
+                    captured.spec().privateModelFingerprint()),
                 budget(captured),
                 outcome -> completed(project, id, captured.runId(), outcome));
         database.transaction(
@@ -662,6 +696,11 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
       @Override
       public boolean tryReserve() {
         if (closed.get()) return false;
+        if (owner.spec().externalPermission() != null) {
+          var currentTask =
+              ledger.get(owner.spec().request().projectId(), owner.spec().request().taskId());
+          if (!externalAllowed(owner, currentTask)) return false;
+        }
         String day = day(owner.spec().request().projectId());
         return database.transaction(
             db -> {
@@ -1302,13 +1341,20 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
             try (var r = q.executeQuery()) {
               while (r.next()) {
                 var job = row(r);
-                String detail = job.result() == null ? job.reason() : job.result().text();
+                String detail =
+                    job.spec().privateModelFingerprint() != null
+                        ? "Private draft retained in the authenticated execution result."
+                        : job.result() == null ? job.reason() : job.result().text();
                 if (detail.length() > 512) detail = detail.substring(0, 512) + "…";
                 values.add(
                     new Item(
                         "secretary-execution",
                         job.id(),
-                        job.spec().request().kind() + ": " + job.spec().objective(),
+                        job.spec().request().kind()
+                            + ": "
+                            + (job.spec().privateModelFingerprint() != null
+                                ? "Private external preparation"
+                                : job.spec().objective()),
                         job.state(),
                         detail));
               }

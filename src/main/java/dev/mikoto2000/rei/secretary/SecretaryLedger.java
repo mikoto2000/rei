@@ -114,6 +114,58 @@ public final class SecretaryLedger {
         });
   }
 
+  /** Intake an external fact as a candidate; this method cannot confirm or execute it. */
+  SecretaryTask externalCandidate(
+      String project, String key, String title, LocalDate due, String reference) {
+    return database.transaction(
+        db -> externalCandidateWithin(db, project, key, title, due, reference));
+  }
+
+  SecretaryTask externalCandidateWithin(
+      Connection db, String project, String key, String title, LocalDate due, String reference)
+      throws java.sql.SQLException, com.fasterxml.jackson.core.JsonProcessingException {
+    validate(project, title, SecretaryTask.Intent.TODO, 3, List.of("external"), List.of(reference));
+    required(key, 512);
+    String fingerprint = hash(title + "\n" + reference);
+    input(db, project, key, fingerprint);
+    return register(
+        db,
+        project,
+        key,
+        0,
+        fingerprint,
+        title,
+        SecretaryTask.Intent.TODO,
+        SecretaryTask.Status.CANDIDATE,
+        due,
+        3,
+        List.of("external"),
+        List.of(reference),
+        "EXTERNAL");
+  }
+
+  SecretaryTask externalWaitWithin(
+      Connection db, String project, String key, String title, String reference)
+      throws java.sql.SQLException, com.fasterxml.jackson.core.JsonProcessingException {
+    validate(project, title, SecretaryTask.Intent.TODO, 3, List.of("external"), List.of(reference));
+    String fingerprint = hash(title + "\n" + reference);
+    input(db, project, key, fingerprint);
+    return register(
+        db,
+        project,
+        key,
+        0,
+        fingerprint,
+        title,
+        SecretaryTask.Intent.TODO,
+        SecretaryTask.Status.WAITING,
+        null,
+        3,
+        List.of("external"),
+        List.of(reference),
+        "EXTERNAL");
+  }
+
   private void input(Connection db, String project, String event, String fingerprint)
       throws java.sql.SQLException {
     try (var insert = db.prepareStatement("INSERT OR IGNORE INTO secretary_inputs VALUES(?,?,?)")) {
@@ -162,7 +214,7 @@ public final class SecretaryLedger {
     SecretaryTask task = null;
     // Extracted duplicates may add evidence to an existing task; explicit creates retain all
     // metadata.
-    if (status == SecretaryTask.Status.CANDIDATE) {
+    if (status == SecretaryTask.Status.CANDIDATE && !origin.equals("EXTERNAL")) {
       try (var query =
           db.prepareStatement(
               "SELECT record FROM secretary_tasks WHERE project=? AND title_key=? AND status IN ('CANDIDATE','OPEN','WAITING') ORDER BY id LIMIT 1")) {

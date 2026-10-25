@@ -97,6 +97,77 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
     return service;
   }
 
+  private ObjectProvider<SecretaryConnections> connectionServices;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setConnections(ObjectProvider<SecretaryConnections> value) {
+    connectionServices = value;
+  }
+
+  private SecretaryConnections connections() {
+    var value = connectionServices == null ? null : connectionServices.getIfAvailable();
+    if (value == null) throw new IllegalStateException("Secretary connections unavailable");
+    return value;
+  }
+
+  @Option(names = "--connection")
+  String connectionId;
+
+  @Option(names = "--service")
+  SecretaryProvider.Service service;
+
+  @Option(names = "--resource")
+  String resource;
+
+  @Option(names = "--name")
+  String connectionName;
+
+  @Option(names = "--connection-version", defaultValue = "-1")
+  long connectionVersion;
+
+  @Option(names = "--connection-enabled")
+  boolean connectionEnabled;
+
+  @Option(names = "--poll-seconds", defaultValue = "300")
+  int pollSeconds;
+
+  @Option(names = "--import-candidates")
+  boolean importCandidates;
+
+  @Option(names = "--allow-model-content")
+  boolean allowModelContent;
+
+  @Option(names = "--operation")
+  String externalOperation;
+
+  @Option(names = "--arguments", defaultValue = "{}")
+  String externalArguments;
+
+  @Option(names = "--force-auth")
+  boolean forceAuth;
+
+  private java.util.Map<String, String> externalArguments() {
+    try {
+      var node =
+          SecretaryJson.JSON
+              .reader()
+              .with(com.fasterxml.jackson.core.JsonParser.Feature.STRICT_DUPLICATE_DETECTION)
+              .with(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
+              .readTree(externalArguments);
+      if (!node.isObject() || node.size() > 32)
+        throw new IllegalArgumentException("Arguments must be a string map");
+      var result = new java.util.HashMap<String, String>();
+      for (var entry : node.properties()) {
+        if (!entry.getValue().isTextual())
+          throw new IllegalArgumentException("Arguments must be strings");
+        result.put(entry.getKey(), entry.getValue().asText());
+      }
+      return java.util.Map.copyOf(result);
+    } catch (java.io.IOException invalid) {
+      throw new IllegalArgumentException("Invalid JSON arguments");
+    }
+  }
+
   @Option(names = "--session")
   String session;
 
@@ -193,6 +264,52 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
       if (ledger == null) throw new IllegalStateException("Enable rei.secretary.enabled first");
       Object result =
           switch (action) {
+            case "connection-list" -> connections().list(project);
+            case "connection-configure" ->
+                connections()
+                    .configure(
+                        new SecretaryConnections.Config(
+                            project,
+                            session,
+                            connectionName,
+                            service,
+                            resource,
+                            connectionEnabled,
+                            pollSeconds,
+                            importCandidates,
+                            allowModelContent,
+                            zone.isBlank() ? "Asia/Tokyo" : zone),
+                        connectionVersion);
+            case "connection-show" -> connections().status(project, id);
+            case "connection-auth" -> connections().authStatus(project, id);
+            case "connection-authorize" -> connections().authorize(project, id, forceAuth);
+            case "connection-disconnect" ->
+                connections().disconnect(project, id, connectionVersion, false);
+            case "connection-poll" -> connections().pollNow(project, id);
+            case "connection-items" -> connections().items(project, id, limit);
+            case "connection-history" -> connections().history(project, id, limit);
+            case "connection-read" ->
+                connections().read(project, id, externalOperation, externalArguments());
+            case "connection-task" -> connections().toTask(project, id, key);
+            case "external-prepare" ->
+                connections()
+                    .prepare(project, connectionId, key, externalOperation, externalArguments());
+            case "external-list" -> connections().actions(project, limit);
+            case "external-show" -> connections().action(project, id);
+            case "external-history" -> connections().actionHistory(project, id, limit);
+            case "external-execute" -> {
+              requireExecutionRevision();
+              yield connections().execute(project, id, revision);
+            }
+            case "external-verify" -> {
+              requireExecutionRevision();
+              yield connections().verify(project, id, revision);
+            }
+            case "external-cancel" -> {
+              requireExecutionRevision();
+              yield connections().cancel(project, id, revision);
+            }
+
             case "autonomy-settings" -> autonomy().settings(project);
             case "autonomy-status" -> autonomy().status(project);
             case "autonomy-check" -> {

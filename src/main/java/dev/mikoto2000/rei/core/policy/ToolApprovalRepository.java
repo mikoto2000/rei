@@ -70,10 +70,23 @@ public class ToolApprovalRepository implements dev.mikoto2000.rei.secretary.Secr
         || project.isBlank()
         || project.length() > 128
         || project.chars().anyMatch(Character::isISOControl)
-        || !java.util.Set.of("DRAFT", "UPDATE_TASK", "GOAL", "ROUTINE").contains(action)
+        || !java.util.Set.of(
+                "DRAFT",
+                "UPDATE_TASK",
+                "GOAL",
+                "ROUTINE",
+                "EXTERNAL_CALENDAR_CREATE",
+                "EXTERNAL_CALENDAR_UPDATE",
+                "EXTERNAL_CALENDAR_CANCEL",
+                "EXTERNAL_MAIL_DRAFT",
+                "EXTERNAL_MAIL_SEND",
+                "EXTERNAL_SLACK_POST",
+                "EXTERNAL_SLACK_REPORT",
+                "EXTERNAL_REVOKE")
+            .contains(action)
         || canonical == null
         || canonical.isBlank()
-        || canonical.length() > 16384)
+        || canonical.length() > (action.startsWith("EXTERNAL_") ? 65536 : 16384))
       throw new IllegalArgumentException("Invalid scoped secretary action");
   }
 

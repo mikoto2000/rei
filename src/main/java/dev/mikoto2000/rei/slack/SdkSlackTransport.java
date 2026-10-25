@@ -36,6 +36,13 @@ final class SdkSlackTransport implements SlackTransport {
                   .unfurlLinks(false)
                   .unfurlMedia(false)
                   .replyBroadcast(false)
+                  .metadata(
+                      row.id() != null && row.id().startsWith("secretary:")
+                          ? new com.slack.api.model.Message.Metadata(
+                              "rei_secretary",
+                              java.util.Map.of(
+                                  "action_id", row.id().substring("secretary:".length())))
+                          : null)
                   .build());
       if (result.isOk())
         return row.channel().equals(result.getChannel()) && result.getTs() != null

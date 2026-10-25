@@ -8,6 +8,15 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 /** API例外の要求や通知を受け付ける。 */
 @RestControllerAdvice(basePackages = "dev.mikoto2000.rei.web")
 public class ApiExceptionHandler {
+  @ExceptionHandler(dev.mikoto2000.rei.secretary.SecretaryProvider.Failure.class)
+  public ResponseEntity<Error> externalServiceFailure(
+      dev.mikoto2000.rei.secretary.SecretaryProvider.Failure failure) {
+    String code = failure.code().matches("[A-Z_]{1,64}") ? failure.code() : "UNAVAILABLE";
+    return ResponseEntity.status(code.equals("RATE_LIMITED") ? 429 : 503)
+        .header("Retry-After", Integer.toString(failure.retrySeconds()))
+        .body(new Error("External service: " + code));
+  }
+
   @ExceptionHandler(dev.mikoto2000.rei.secretary.SecretaryConflictException.class)
   public ResponseEntity<Error> secretaryConflict() {
     return ResponseEntity.status(409).body(new Error("Secretary revision changed"));

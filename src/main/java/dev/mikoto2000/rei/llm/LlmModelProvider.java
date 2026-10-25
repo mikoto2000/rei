@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
 
 /** 言語モデルモデルを用途や設定に応じて提供する窓口。 */
 @Component
-public class LlmModelProvider {
+public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryPrivateModel {
   /** 時間計測。 */
   private dev.mikoto2000.rei.timing.TimingExecution timing;
 
@@ -216,6 +216,81 @@ public class LlmModelProvider {
       options.streamUsage(true);
     }
     return options.build();
+  }
+
+  @Override
+  public dev.mikoto2000.rei.secretary.SecretaryPrivateModel.Descriptor
+      privateSecretaryDescriptor() {
+    var server = properties.feature("secretary-reply");
+    if (server == null
+        || !server.hasCustomServer()
+        || server.getModel() == null
+        || server.getModel().isBlank()) return null;
+    try {
+      var uri = java.net.URI.create(server.getBaseUrl()).normalize();
+      if (uri.getUserInfo() != null
+          || uri.getQuery() != null
+          || uri.getFragment() != null
+          || uri.getHost() == null) return null;
+      boolean local =
+          java.util.Set.of("localhost", "127.0.0.1", "[::1]", "::1").contains(uri.getHost());
+      if (!"https".equals(uri.getScheme()) && !(local && "http".equals(uri.getScheme())))
+        return null;
+      String endpoint = uri.toASCIIString();
+      String identity =
+          endpoint
+              + "\n"
+              + server.getModel()
+              + "\n"
+              + server.getApiKey()
+              + "\n"
+              + server.getTemperature()
+              + "\n"
+              + server.getMaxOutputTokens();
+      String fingerprint =
+          java.util.HexFormat.of()
+              .formatHex(
+                  java.security.MessageDigest.getInstance("SHA-256")
+                      .digest(identity.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+      return new dev.mikoto2000.rei.secretary.SecretaryPrivateModel.Descriptor(
+          endpoint, fingerprint);
+    } catch (java.security.NoSuchAlgorithmException impossible) {
+      throw new IllegalStateException(impossible);
+    } catch (IllegalArgumentException invalid) {
+      return null;
+    }
+  }
+
+  private final Map<String, ChatModel> privateSecretaryModels = new ConcurrentHashMap<>();
+
+  /** No capture, fallback, memory advisors, observations or tool callbacks for private evidence. */
+  public synchronized ChatModel privateSecretaryModel(String expectedFingerprint) {
+    var descriptor = privateSecretaryDescriptor();
+    if (descriptor == null || !descriptor.fingerprint().equals(expectedFingerprint))
+      throw new IllegalStateException("Private model configuration changed or unavailable");
+    if (privateSecretaryModels.containsKey(expectedFingerprint))
+      return privateSecretaryModels.get(expectedFingerprint);
+    if (!privateSecretaryModels.isEmpty())
+      throw new IllegalStateException("Private model changes require restarting the application");
+    var server = properties.feature("secretary-reply");
+    var options =
+        chatOptionsBuilder(server, server.getModel())
+            .maxRetries(0)
+            .timeout(java.time.Duration.ofSeconds(45))
+            .baseUrl(OpenAiCompatibleEndpoint.baseUrl(server.getBaseUrl()))
+            .apiKey(
+                server.getApiKey() == null || server.getApiKey().isBlank()
+                    ? "dummy-key"
+                    : server.getApiKey())
+            .build();
+    var model =
+        OpenAiChatModel.builder()
+            .options(options)
+            .observationRegistry(ObservationRegistry.NOOP)
+            .build();
+    dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoDefaultTools(model);
+    privateSecretaryModels.put(expectedFingerprint, model);
+    return model;
   }
 
   /** 新たな対象を利用できるよう、開始AI互換応答生成に使うモデルを作成する。 */

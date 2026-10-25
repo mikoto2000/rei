@@ -4,7 +4,18 @@ import java.util.function.Consumer;
 
 /** Existing owned READ_ONLY planner runtime. Never substitutes a writable execution mode. */
 public interface SecretaryPreparationRuntime {
-  record Request(String runId, String projectId, String sessionId, String objective, String kind) {}
+  record Request(
+      String runId,
+      String projectId,
+      String sessionId,
+      String objective,
+      String kind,
+      String privateModelFingerprint) {
+    public Request(
+        String runId, String projectId, String sessionId, String objective, String kind) {
+      this(runId, projectId, sessionId, objective, kind, null);
+    }
+  }
 
   record Outcome(String status, String text, String reason) {}
 
