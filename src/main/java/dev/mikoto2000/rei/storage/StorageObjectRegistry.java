@@ -95,7 +95,8 @@ public final class StorageObjectRegistry {
 
   /** 後から対象を参照できるよう、イベントを登録する。 */
   public static void registerEvent(
-      Connection db, dev.mikoto2000.rei.event.AgentEvent event, String record) throws Exception {
+      Connection db, dev.mikoto2000.rei.event.AgentEvent event, String record)
+      throws java.sql.SQLException, java.security.NoSuchAlgorithmException {
     String scope = dev.mikoto2000.rei.event.SqliteProjectAgentEventStore.scope(event.projectId());
     String id = "event:" + scope + ":" + event.id();
     byte[] bytes = record.getBytes(StandardCharsets.UTF_8);

@@ -127,6 +127,7 @@ public class AttentionDeliveryService {
   /** 状況を判断する根拠を得るため、注意配信サービスを観測する。 */
   private void observe(AgentEvent event) {
     if (closed
+        || event.projectId() == null
         || !properties.enabled()
         || !properties.automatic()
         || event.type() != AgentEventType.ATTENTION_REQUIRED

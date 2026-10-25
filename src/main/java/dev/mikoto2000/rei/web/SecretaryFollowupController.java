@@ -51,7 +51,11 @@ public class SecretaryFollowupController {
       implements StrictApiRequest {}
 
   @PostMapping("/briefings/generate")
-  public SecretaryFollowups.Generation generate(@RequestBody Generate request) {
+  public Object generate(@RequestBody Generate request) {
+    if (request.projectId() == null)
+      return service()
+          .globalBriefings()
+          .generate(request.date(), Boolean.TRUE.equals(request.review()), request.key());
     return service()
         .generate(
             request.projectId(),
@@ -61,19 +65,24 @@ public class SecretaryFollowupController {
   }
 
   @GetMapping("/briefings")
-  public List<SecretaryFollowups.Generation> briefings(
-      @RequestParam String projectId, @RequestParam(defaultValue = "20") int limit) {
+  public Object briefings(
+      @RequestParam(required = false) String projectId,
+      @RequestParam(defaultValue = "20") int limit) {
+    if (projectId == null) return service().globalBriefings().history(limit);
     return service().briefingHistory(projectId, limit);
   }
 
   @GetMapping("/briefings/{id}")
-  public SecretaryFollowups.Generation briefingHistory(
-      @PathVariable String id, @RequestParam String projectId) {
+  public Object briefingHistory(
+      @PathVariable String id, @RequestParam(required = false) String projectId) {
+    if (projectId == null) return service().globalBriefings().show(id);
     return service().briefing(projectId, id);
   }
 
   @PostMapping("/briefings/delete")
   public java.util.Map<String, Integer> deleteBriefings(@RequestBody Check request) {
+    if (request.projectId() == null)
+      return java.util.Map.of("deleted", service().globalBriefings().deleteHistory());
     return java.util.Map.of("deleted", service().deleteBriefings(request.projectId()));
   }
 
@@ -101,14 +110,18 @@ public class SecretaryFollowupController {
   }
 
   @GetMapping("/briefing")
-  public SecretaryFollowups.Report briefing(
-      @RequestParam String projectId, @RequestParam(required = false) LocalDate date) {
+  public Object briefing(
+      @RequestParam(required = false) String projectId,
+      @RequestParam(required = false) LocalDate date) {
+    if (projectId == null) return service().globalBriefings().report(date, false);
     return service().report(projectId, date, false);
   }
 
   @GetMapping("/review")
-  public SecretaryFollowups.Report review(
-      @RequestParam String projectId, @RequestParam(required = false) LocalDate date) {
+  public Object review(
+      @RequestParam(required = false) String projectId,
+      @RequestParam(required = false) LocalDate date) {
+    if (projectId == null) return service().globalBriefings().report(date, true);
     return service().report(projectId, date, true);
   }
 
@@ -126,5 +139,24 @@ public class SecretaryFollowupController {
   @PostMapping("/check")
   public List<SecretaryFollowups.Delivery> check(@RequestBody Check request) {
     return service().checkNow(request.projectId());
+  }
+
+  @GetMapping("/briefings/settings")
+  public dev.mikoto2000.rei.secretary.SecretaryGlobalBriefings.Settings globalSettings() {
+    return service().globalBriefings().settings();
+  }
+
+  public record GlobalCheck() implements StrictApiRequest {}
+
+  @PostMapping("/briefings/check")
+  public List<SecretaryFollowups.Delivery> globalCheck(@RequestBody GlobalCheck request) {
+    return service().checkGlobalNow();
+  }
+
+  @GetMapping("/briefings/notifications")
+  public List<SecretaryFollowups.Delivery> globalNotifications(
+      @RequestParam(defaultValue = "100") int limit) {
+    return service()
+        .history(dev.mikoto2000.rei.secretary.SecretaryNotifications.GLOBAL_SCOPE, limit);
   }
 }

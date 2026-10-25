@@ -37,7 +37,7 @@ public final class StorageDatabase {
     boolean transaction;
 
     /** 読み取り接続の貸し借りだけを保護し、SQL実行中は保持しない。 */
-    final Object readerLock = new Object();
+    private final Object readerLock = new Object();
 
     /** 待機中の読み取り接続は一つだけ保持する。 */
     Connection reader;
@@ -74,26 +74,29 @@ public final class StorageDatabase {
   }
 
   /** 必要な対象を利用できるよう、保存データベースの利用を開始する。 */
-  private Connection open(boolean readOnly) throws Exception {
+  private Connection open(boolean readOnly) throws java.io.IOException, SQLException {
     StorageBackup.requireSafePath(file);
     Connection connection =
         DriverManager.getConnection(
             "jdbc:sqlite:" + file.toUri().toASCIIString() + (readOnly ? "?mode=ro" : "?mode=rw"));
-    try (var query = connection.createStatement()) {
-      query.execute("PRAGMA busy_timeout=5000");
-      if (!readOnly) {
-        query.execute("PRAGMA synchronous=FULL");
-        int pageSize;
-        try (var rows = query.executeQuery("PRAGMA page_size")) {
-          pageSize = rows.getInt(1);
+    boolean configured = false;
+    try {
+      try (var query = connection.createStatement()) {
+        query.execute("PRAGMA busy_timeout=5000");
+        if (!readOnly) {
+          query.execute("PRAGMA synchronous=FULL");
+          int pageSize;
+          try (var rows = query.executeQuery("PRAGMA page_size")) {
+            pageSize = rows.getInt(1);
+          }
+          query.execute("PRAGMA wal_autocheckpoint=" + Math.max(1, WAL_TARGET_BYTES / pageSize));
         }
-        query.execute("PRAGMA wal_autocheckpoint=" + Math.max(1, WAL_TARGET_BYTES / pageSize));
+        requireCurrentSchema(connection);
       }
-      requireCurrentSchema(connection);
+      configured = true;
       return connection;
-    } catch (Exception error) {
-      connection.close();
-      throw error;
+    } finally {
+      if (!configured) connection.close();
     }
   }
 
@@ -105,7 +108,7 @@ public final class StorageDatabase {
    * otherwise checkpoints and deletes the WAL. The startup gate must close this handle before
    * releasing its process lease.
    */
-  AutoCloseable keepWalOpen() throws Exception {
+  AutoCloseable keepWalOpen() throws java.io.IOException, SQLException {
     synchronized (writer) {
       if (state.keepOpen)
         throw new IllegalStateException("Storage writer already has a lifetime owner");
@@ -153,6 +156,10 @@ public final class StorageDatabase {
   }
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "REC_CATCH_EXCEPTION",
+      justification =
+          "The public Work callback declares arbitrary checked Exception; read must wrap it and discard the failed reader, as StorageReadReuseTest verifies.")
   public <T> T read(Work<T> work) {
     try (var reader = borrowReader()) {
       // 接続を再利用しても、パスと形式の検証は省略しない。
@@ -170,7 +177,7 @@ public final class StorageDatabase {
   }
 
   /** 同時読み取りや再入時は接続の空きを待たず、従来どおり別接続を使う。 */
-  private ReaderLease borrowReader() throws Exception {
+  private ReaderLease borrowReader() throws java.io.IOException, SQLException {
     Connection connection = null;
     Object owner;
     synchronized (state.readerLock) {

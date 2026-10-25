@@ -60,7 +60,7 @@ public class AttentionService implements dev.mikoto2000.rei.secretary.SecretaryN
             saved.id(),
             null,
             new AttentionRequiredPayload(saved.id(), saved.kind(), saved.message()),
-            notice.projectId()));
+            notice.global() ? null : notice.projectId()));
   }
 
   /**

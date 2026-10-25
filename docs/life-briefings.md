@@ -1,5 +1,7 @@
 # 朝夕ブリーフィング
 
+指定Projectをまとめる全体の朝夕設定は [全体秘書設定](global-secretary-settings.md) を参照してください。以下のProject別操作は `--project` の明示指定で利用できます。
+
 準備候補の負荷・依存関係・利用可能時間による選択は [先回り準備](life-preparation.md) を参照してください。
 
 勤務・休息の設定は [生活コンテキスト](life-context.md)、既存の台帳・実行権限は [秘書機能](secretary.md) を参照してください。

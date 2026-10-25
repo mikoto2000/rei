@@ -753,6 +753,8 @@ public final class SecretaryOrchestrator
     }
     required(project);
     var routing = followups.getObject().settings(project);
+    if (SecretaryNotifications.GLOBAL_SCOPE.equals(project))
+      return 0; // already aggregated across projects
     var held =
         database.read(
             db -> {

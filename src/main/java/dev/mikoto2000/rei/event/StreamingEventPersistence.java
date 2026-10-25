@@ -10,6 +10,10 @@ public final class StreamingEventPersistence implements AutoCloseable {
   private final AgentEventBus.Subscription subscription;
   private volatile boolean closed;
 
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      justification =
+          "Shared Spring persistence services are intentional; no dependency is exposed.")
   public StreamingEventPersistence(
       AgentEventBus bus, ProjectAgentEventStore events, ProfileEventLogStore profile) {
     this.events = events;
@@ -35,8 +39,8 @@ public final class StreamingEventPersistence implements AutoCloseable {
   }
 
   private void persist(AgentEvent event) {
-    if (handles(event)) {
-      profile.persistStreamingEvent((SqliteProjectAgentEventStore) events, event);
+    if (handles(event) && events instanceof SqliteProjectAgentEventStore sqlite) {
+      profile.persistStreamingEvent(sqlite, event);
     }
   }
 

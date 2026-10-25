@@ -40,6 +40,13 @@
 		<checkstyle.version>14.3.0</checkstyle.version>
 	</properties>
 	<dependencies>
+		<!-- Compile-time, narrowly justified false-positive annotations; no runtime dependency. -->
+		<dependency>
+			<groupId>com.github.spotbugs</groupId>
+			<artifactId>spotbugs-annotations</artifactId>
+			<version>4.10.5</version>
+			<scope>provided</scope>
+		</dependency>
         <!-- Direct PSL API usage; retain the Guava version already resolved via google-api-client. -->
         <dependency>
             <groupId>com.google.guava</groupId>

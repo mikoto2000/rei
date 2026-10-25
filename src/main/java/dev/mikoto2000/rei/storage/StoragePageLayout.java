@@ -13,7 +13,8 @@ final class StoragePageLayout {
 
   private StoragePageLayout() {}
 
-  static void apply(Connection db, java.nio.file.Path database) throws Exception {
+  static void apply(Connection db, java.nio.file.Path database)
+      throws java.sql.SQLException, java.io.IOException, java.security.NoSuchAlgorithmException {
     try (var sql = db.createStatement();
         var rows = sql.executeQuery("PRAGMA page_size")) {
       if (rows.getInt(1) == PAGE_BYTES) return;
@@ -45,7 +46,7 @@ final class StoragePageLayout {
           "Storage contents changed during page repack; retain verified backup");
   }
 
-  private static void integrity(Connection db) throws Exception {
+  private static void integrity(Connection db) throws java.sql.SQLException, java.io.IOException {
     try (var sql = db.createStatement();
         var rows = sql.executeQuery("PRAGMA integrity_check")) {
       if (!rows.next() || !"ok".equals(rows.getString(1)) || rows.next())
@@ -54,7 +55,12 @@ final class StoragePageLayout {
   }
 
   /** 物理ページ番号や暗黙rowidに依存せず、schemaと型付き全列の論理内容を照合する。 */
-  static String contents(Connection db) throws Exception {
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "SQL_NONCONSTANT_STRING_PASSED_TO_EXECUTE",
+      justification =
+          "Identifiers come only from sqlite_schema/table_info, are double-quote escaped, and cannot be bound as SQL parameters; quoted schema names are integration tested.")
+  static String contents(Connection db)
+      throws java.sql.SQLException, java.io.IOException, java.security.NoSuchAlgorithmException {
     var digest = MessageDigest.getInstance("SHA-256");
     var tables = new ArrayList<String>();
     try (var sql = db.createStatement();
