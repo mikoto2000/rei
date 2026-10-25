@@ -156,6 +156,10 @@ public final class StorageDatabase {
   }
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "REC_CATCH_EXCEPTION",
+      justification =
+          "The public Work callback declares arbitrary checked Exception; read must wrap it and discard the failed reader, as StorageReadReuseTest verifies.")
   public <T> T read(Work<T> work) {
     try (var reader = borrowReader()) {
       // 接続を再利用しても、パスと形式の検証は省略しない。
