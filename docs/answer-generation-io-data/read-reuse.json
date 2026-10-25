@@ -1,0 +1,58 @@
+{
+  "notes" : "Process I/O includes native SQLite and other JVM activity; not physical SSD I/O. Standalone uses short-lived reads; application context retains at most one idle reader.",
+  "results" : [ {
+    "elapsedMs" : 6361.3323,
+    "queries" : 1000,
+    "readBytes" : 62279399,
+    "readOperations" : 16217,
+    "repeat" : 0,
+    "reuse" : false,
+    "writeBytes" : 0,
+    "writeOperations" : 0
+  }, {
+    "elapsedMs" : 89.7606,
+    "queries" : 1000,
+    "readBytes" : 0,
+    "readOperations" : 0,
+    "repeat" : 0,
+    "reuse" : true,
+    "writeBytes" : 0,
+    "writeOperations" : 0
+  }, {
+    "elapsedMs" : 6866.7886,
+    "queries" : 1000,
+    "readBytes" : 62279368,
+    "readOperations" : 16216,
+    "repeat" : 1,
+    "reuse" : false,
+    "writeBytes" : 0,
+    "writeOperations" : 0
+  }, {
+    "elapsedMs" : 71.1424,
+    "queries" : 1000,
+    "readBytes" : 0,
+    "readOperations" : 0,
+    "repeat" : 1,
+    "reuse" : true,
+    "writeBytes" : 0,
+    "writeOperations" : 0
+  }, {
+    "elapsedMs" : 6678.2972,
+    "queries" : 1000,
+    "readBytes" : 62238323,
+    "readOperations" : 16205,
+    "repeat" : 2,
+    "reuse" : false,
+    "writeBytes" : 0,
+    "writeOperations" : 0
+  }, {
+    "elapsedMs" : 39.0399,
+    "queries" : 1000,
+    "readBytes" : 0,
+    "readOperations" : 0,
+    "repeat" : 2,
+    "reuse" : true,
+    "writeBytes" : 0,
+    "writeOperations" : 0
+  } ]
+}

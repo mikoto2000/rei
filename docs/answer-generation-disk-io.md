@@ -216,3 +216,62 @@ COMMIT / Activity force 自体をさらに減らすには、イベントの永�
 未保存 delta の損失許容範囲を明示してから検討し、今回のコードで黙って導入しない。
 Defender / Indexer 等の寄与、SQLite 内部の fsync / checkpoint 総数、Native の描画遅延の切り分けは
 権限を持つ実機での ETW / Procmon と実際のストリーム再現が今後の計測候補。
+
+## 追加改善：読み取り接続と進んでいない再生位置
+
+`StorageDatabase.read` もアプリケーションの起動 lease 内で読み取り専用接続を再利用する。
+データディレクトリごとに待機接続を最大1個保持し、同時読み取り・再入時は空きを待たず
+従来どおり別接続を開く。貸し借り用のロックはSQL実行中には保持しない。
+接続のページキャッシュを再利用するが、検索結果自体はキャッシュしない。
+各callbackはStatement / ResultSetを閉じ、autocommitのまま返る。
+接続を再利用する場合もパスとschema versionを確認し、失敗した接続や明示transactionに
+切り替わった接続は閉じる。最後のcontext終了時には待機readerをwriterより先に閉じる。
+貸出中にアプリケーションの所有leaseが入れ替わった接続は次のleaseへ持ち越さない。
+standaloneで起動leaseがない場合は従来どおり毎回閉じる。
+
+`SqliteEventCursorStore.compareAndSet` は再生位置が同じ場合、UPDATEではなく単一のSELECTで
+既存行・sequence・generation・converted・保存済みイベント末尾を照合する。
+カーソル未作成、世代変更、末尾を超える位置を成功扱いにしない。
+進む場合は従来の条件付きUPDATEと即時COMMITを維持する。
+同値UPDATEはSQLite自体が物理書き込みを省ける場合もあり、この変更による
+SSD書き込みbytesの削減量は主張しない。不要な書き込みtransactionとwriter lock取得を避ける改善である。
+
+読み取り計測は1,000行の一時DBに対する同じcount queryを各方式1,000回、交互に3回行う。
+起動・migration・fixture作成・warmupは計測区間外にする。
+`StorageReadReuseTest#measureRepeatedReads` を
+`-Pfull -Drei.io.read-benchmark=true` で明示実行し、結果を
+`target/io-read-reuse.json` に出力する。
+Windows GetProcessIoCountersによるプロセス全体の読み取り量であり、OS cacheを含む
+ファイル読み取りとSSDの物理読み取り量は区別する。
+更新のないDBの繰り返し読み取りなので、実会話中の負荷全体の削減率としては扱わない。
+
+2026-10-26の最終コードによるWindows実行の3回の中央値は次のとおり。
+生データは [read-reuse.json](answer-generation-io-data/read-reuse.json) に保存した。
+
+| 指標（1,000回のquery） | 毎回接続を開閉 | 読み取り接続を再利用 |
+| --- | ---: | ---: |
+| プロセス読み取りbytes | 62,279,368 | 0 |
+| プロセス読み取り操作数 | 16,216 | 0 |
+| 所要時間 | 6,678.30 ms | 71.14 ms |
+| プロセス書き込みbytes | 0 | 0 |
+
+0はwarmup済み・更新なしの計測区間の値であり、起動や更新検知に一切読み取りがないという意味ではない。
+`StorageReadReuseTest`の6件は、外部COMMITの反映、読み取り専用、snapshotを残さないこと、
+checkpoint / VACUUM、並列・再入、失敗・明示transactionの破棄、schema再検証、
+lease切り替え、カーソルの未作成・世代・末尾検査とI/O計測を検証する。
+既存の`StorageWalLifetimeTest`12件も成功し、個別COMMITと異常終了後の復旧を維持した。
+
+全体の`-Pfull verify`は6,384件、失敗0・エラー0・既存skip 5でテストが完了し、
+`target/rei-io-reduction.jar`を生成した。既存の起動用JARは上書きしていない。
+skipはWindows Codex 2件、WSL Codex 1件、実PlantUML 1件、既存の回答生成I/O benchmark 1件。
+今回の新規6件はskipなし。Checkstyleは違反0、変更したJava 3ファイルのSpotlessも成功した。
+全体Spotlessは変更していない既存5ファイルの整形違反により失敗したため、
+後続goalを含むMavenコマンド全体はBUILD FAILUREとなった。
+対象は`ConversationLifecycleAdvisorTest`、`ExternalAgentReviewAdvisorTest`、
+`memory/package-info.java`、`DurableSubAgentRepositoryTest`、`testsupport/package-info.java`。
+検証ログは`target/io-reduction-full.log`、変更ファイルの整形確認は
+`target/io-reduction-format-check.log`。実行時のみMockitoを起動時javaagentに指定し、
+tempをリポジトリ内に隔離し、ローカルHTTP通信が可能な環境で実行した。
+
+書き込みの`synchronous=FULL`、イベントごとのCOMMIT、Activityのforce、
+保持期間と保存形式は変更しない。回答断片ごとの同期書き込み負荷は引き続き残る。

@@ -27,8 +27,20 @@ public final class StorageDatabase {
     /** 処理中に再利用するデータベース接続。 */
     Connection retained;
 
-    /** keep開始／一連の更新。 */
-    boolean keepOpen, transaction;
+    /** アプリケーションが接続を保持しているか。 */
+    volatile boolean keepOpen;
+
+    /** 書き込みトランザクションへの再入を拒否するための状態。 */
+    boolean transaction;
+
+    /** 読み取り接続の貸し借りだけを保護し、SQL実行中は保持しない。 */
+    final Object readerLock = new Object();
+
+    /** 待機中の読み取り接続は一つだけ保持する。 */
+    Connection reader;
+
+    /** 再起動をまたいで貸出中の接続を再利用しないための所有者。 */
+    Object readerOwner;
   }
 
   /** 書き込み先一覧。 */
@@ -88,7 +100,10 @@ public final class StorageDatabase {
       if (state.keepOpen)
         throw new IllegalStateException("Storage writer already has a lifetime owner");
       state.retained = open(false);
-      state.keepOpen = true;
+      synchronized (state.readerLock) {
+        state.readerOwner = new Object();
+        state.keepOpen = true;
+      }
       return new AutoCloseable() {
         /** 終了済み。 */
         private boolean closed;
@@ -102,7 +117,16 @@ public final class StorageDatabase {
             state.keepOpen = false;
             var connection = state.retained;
             state.retained = null;
-            if (connection != null) connection.close();
+            try {
+              synchronized (state.readerLock) {
+                state.readerOwner = null;
+                var reader = state.reader;
+                state.reader = null;
+                if (reader != null) reader.close();
+              }
+            } finally {
+              if (connection != null) connection.close();
+            }
           }
         }
       };
@@ -120,10 +144,57 @@ public final class StorageDatabase {
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   public <T> T read(Work<T> work) {
-    try (var connection = open(true)) {
-      return work.run(connection);
+    try (var reader = borrowReader()) {
+      // 接続を再利用しても、パスと形式の検証は省略しない。
+      if (reader.reused) {
+        StorageBackup.requireSafePath(file);
+        requireCurrentSchema(reader.connection);
+      }
+      T result = work.run(reader.connection);
+      // 明示的なtransactionや失敗した接続を次の読み取りへ渡さない。
+      reader.reusable = reader.connection.getAutoCommit();
+      return result;
     } catch (Exception error) {
       throw new IllegalStateException("Cannot read SQLite storage", error);
+    }
+  }
+
+  /** 同時読み取りや再入時は接続の空きを待たず、従来どおり別接続を使う。 */
+  private ReaderLease borrowReader() throws Exception {
+    Connection connection = null;
+    Object owner;
+    synchronized (state.readerLock) {
+      owner = state.readerOwner;
+      if (state.keepOpen) {
+        connection = state.reader;
+        state.reader = null;
+      }
+    }
+    return new ReaderLease(connection == null ? open(true) : connection, connection != null, owner);
+  }
+
+  /** SQL実行中に共有ロックを取らず、正常なautocommit接続だけを返却する。 */
+  private final class ReaderLease implements AutoCloseable {
+    private final Connection connection;
+    private final boolean reused;
+    private final Object owner;
+    private boolean reusable;
+
+    private ReaderLease(Connection connection, boolean reused, Object owner) {
+      this.connection = connection;
+      this.reused = reused;
+      this.owner = owner;
+    }
+
+    @Override
+    public void close() throws SQLException {
+      synchronized (state.readerLock) {
+        if (reusable && state.keepOpen && owner == state.readerOwner && state.reader == null) {
+          state.reader = connection;
+          return;
+        }
+      }
+      connection.close();
     }
   }
 

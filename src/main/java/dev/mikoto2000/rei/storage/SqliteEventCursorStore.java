@@ -77,6 +77,25 @@ public final class SqliteEventCursorStore {
   public boolean compareAndSet(String project, Cursor expected, long next) {
     if (next < expected.sequence() || next < 0)
       throw new IllegalArgumentException("Cursor cannot move backwards without a new generation");
+    if (next == expected.sequence()) {
+      // 同じ位置でもCASの成立条件はDBで一度に確認する。未作成や世代違いは成功にしない。
+      return database.read(
+          db -> {
+            try (var query =
+                db.prepareStatement(
+                    "SELECT 1 FROM event_cursors WHERE project_id=? AND sequence=? AND generation=? AND converted=1 AND ?<=COALESCE((SELECT sequence FROM event_sequences WHERE project_id=?),0)")) {
+              String scope = scope(project);
+              query.setString(1, scope);
+              query.setLong(2, expected.sequence());
+              query.setLong(3, expected.generation());
+              query.setLong(4, next);
+              query.setString(5, scope);
+              try (var rows = query.executeQuery()) {
+                return rows.next();
+              }
+            }
+          });
+    }
     return database.transaction(
         db -> {
           try (var update =
