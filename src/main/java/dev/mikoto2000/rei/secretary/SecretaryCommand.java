@@ -394,6 +394,8 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
             case "suggest" -> orchestrator().evaluate(project);
             case "release" -> orchestrator().release(project);
             case "suggestions" -> orchestrator().suggestions(project, limit);
+            case "preparation" -> orchestrator().preparation(project);
+            case "work-mode" -> java.util.Map.of("mode", autonomy().executionMode(project, id));
             case "suggestion" -> orchestrator().suggestion(project, id);
             case "suggestion-history" -> orchestrator().history(project, id, limit);
             case "feedback" -> {
@@ -417,6 +419,12 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
                             destination));
             case "briefing" -> followups().report(project, reportDate, false);
             case "review" -> followups().report(project, reportDate, true);
+            case "briefing-generate", "review-generate" ->
+                followups().generate(project, reportDate, action.equals("review-generate"), key);
+            case "briefing-history" -> followups().briefingHistory(project, limit);
+            case "briefing-show" -> followups().briefing(project, id);
+            case "briefing-clear" ->
+                java.util.Map.of("deleted", followups().deleteBriefings(project));
             case "notifications" -> followups().history(project, limit);
             case "check" -> followups().checkNow(project);
             case "followup-status" -> followups().status(project);

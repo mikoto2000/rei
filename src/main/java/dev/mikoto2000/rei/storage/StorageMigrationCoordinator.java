@@ -331,6 +331,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
       if (version >= 14) SecretaryAutonomyMigration.verify(db);
       if (version >= 15) SecretaryConnectionsMigration.verify(db);
       if (version >= 16) LifeContextMigration.verify(db);
+      if (version >= 17) SecretaryBriefingMigration.verify(db);
     } catch (SQLException error) {
       throw new IOException("Storage schema is not a verified completed schema", error);
     }
@@ -402,6 +403,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
         if (sourceVersion < 14) SecretaryAutonomyMigration.apply(db);
         if (sourceVersion < 15) SecretaryConnectionsMigration.apply(db);
         if (sourceVersion < 16) LifeContextMigration.apply(db);
+        if (sourceVersion < 17) SecretaryBriefingMigration.apply(db);
         checkpoint.reached(Stage.ROWS_IMPORTED, backup);
         if (backup != null) {
           StorageBackup.verify(backup);

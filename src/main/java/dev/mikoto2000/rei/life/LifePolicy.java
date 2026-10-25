@@ -8,6 +8,10 @@ public interface LifePolicy {
 
   LifeContext.Status status();
 
+  default long availableMinutes() {
+    return 0;
+  }
+
   LifeContext.Lease begin();
 
   boolean valid(LifeContext.Lease lease);

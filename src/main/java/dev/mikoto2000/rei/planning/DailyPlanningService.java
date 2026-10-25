@@ -43,7 +43,23 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
         .map(
             item ->
                 new dev.mikoto2000.rei.secretary.SecretaryContext.Item(
-                    item.source(), item.id(), item.title(), item.status(), item.reason()))
+                    item.source(),
+                    item.id(),
+                    item.title(),
+                    item.status(),
+                    item.reason(),
+                    switch (item.certainty()) {
+                      case "SAVED_EXECUTION_STATE", "TOOL" ->
+                          dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.FACT;
+                      case "USER" ->
+                          dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.USER_REGISTERED;
+                      case "ASSISTANT" ->
+                          dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.PROPOSAL;
+                      case "INFERENCE" ->
+                          dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.INFERENCE;
+                      default -> dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.UNKNOWN;
+                    },
+                    item.references().stream().map(r -> r.kind() + ":" + r.id()).toList()))
         .toList();
   }
 

@@ -1687,7 +1687,9 @@ public final class SecretaryConnections
                         reference(r.getString(1), r.getString(2)),
                         "[UNTRUSTED] " + item.title(),
                         item.status(),
-                        "External body omitted; use an explicit connection read for details."));
+                        "External body omitted; use an explicit connection read for details. External assertions are unverified.",
+                        Reliability.UNKNOWN,
+                        List.of(reference(r.getString(1), r.getString(2)))));
               }
             }
           }

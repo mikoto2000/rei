@@ -315,6 +315,7 @@ class StorageReferenceProtectionTest {
               "dot_audit",
               "review_participants",
               "review_jobs",
+              "secretary_briefings",
               "life_context",
               "secretary_tasks",
               "secretary_sources",

@@ -118,6 +118,12 @@ public class SecretaryAutonomyController {
     return service().get(projectId, id);
   }
 
+  @GetMapping("/executions/{id}/mode")
+  public java.util.Map<String, dev.mikoto2000.rei.secretary.SecretaryExecutionMode> mode(
+      @RequestParam String projectId, @PathVariable String id) {
+    return java.util.Map.of("mode", service().executionMode(projectId, id));
+  }
+
   @GetMapping("/executions/{id}/history")
   public List<SecretaryAutonomy.History> history(
       @RequestParam String projectId,

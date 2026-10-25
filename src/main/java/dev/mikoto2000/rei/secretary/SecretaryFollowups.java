@@ -63,14 +63,33 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
       boolean review,
       Map<String, List<SecretaryTask>> sections,
       List<SecretaryContext.Item> context,
-      boolean partial) {
+      boolean partial,
+      List<SecretaryContext.Item> evidence,
+      List<String> cautions,
+      List<Delivery> held) {
+    public Report(
+        LocalDate date,
+        String zone,
+        boolean review,
+        Map<String, List<SecretaryTask>> sections,
+        List<SecretaryContext.Item> context,
+        boolean partial) {
+      this(date, zone, review, sections, context, partial, List.of(), List.of(), List.of());
+    }
+
     public Report {
       var copy = new LinkedHashMap<String, List<SecretaryTask>>();
       sections.forEach((key, value) -> copy.put(key, List.copyOf(value)));
       sections = java.util.Collections.unmodifiableMap(copy);
       context = List.copyOf(context);
+      evidence = List.copyOf(evidence);
+      cautions = List.copyOf(cautions);
+      held = List.copyOf(held);
     }
   }
+
+  public record Generation(
+      String id, String projectId, String key, Instant generated, Report report) {}
 
   private volatile dev.mikoto2000.rei.life.LifePolicy life;
 
@@ -171,7 +190,15 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
               return rows.next()
                   ? SecretaryJson.JSON.readValue(rows.getString(1), Settings.class)
                   : new Settings(
-                      project, false, false, "", "", clock.getZone().getId(), 86400, 3, "INBOX");
+                      project,
+                      false,
+                      false,
+                      "",
+                      "",
+                      life == null ? clock.getZone().getId() : life.settings().zone(),
+                      86400,
+                      3,
+                      "INBOX");
             }
           }
         });
@@ -231,7 +258,16 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
     var date = requested == null ? clock.instant().atZone(zone).toLocalDate() : requested;
     var tasks = ledger.list(project, 0, 1000);
     var sections = new LinkedHashMap<String, List<SecretaryTask>>();
-    var open = tasks.stream().filter(SecretaryFollowups::active).toList();
+    var open =
+        tasks.stream()
+            .filter(SecretaryFollowups::active)
+            .sorted(
+                java.util.Comparator.comparingInt(SecretaryTask::priority)
+                    .thenComparing(
+                        SecretaryTask::due,
+                        java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()))
+                    .thenComparing(SecretaryTask::id))
+            .toList();
     sections.put("today", open.stream().filter(t -> date.equals(t.due())).toList());
     sections.put(
         "near",
@@ -256,7 +292,12 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
     sections.put("continuation", open);
     sections.put(
         "next",
-        open.stream().filter(t -> t.status() == SecretaryTask.Status.OPEN).limit(10).toList());
+        life != null
+                && date.equals(clock.instant().atZone(zone).toLocalDate())
+                && life.status().availability()
+                    == dev.mikoto2000.rei.life.LifeContext.Availability.AVAILABLE
+            ? SecretaryPreparation.choices(open, ledger, life.availableMinutes(), zone)
+            : List.of());
     sections.put(
         "completed",
         tasks.stream()
@@ -273,22 +314,215 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
         "overdue", open.stream().filter(t -> t.due() != null && t.due().isBefore(date)).toList());
     sections.put("carryover", open);
     sections.put(
+        "tomorrow",
+        open.stream().filter(t -> t.due() != null && !t.due().isBefore(date.plusDays(1))).toList());
+    sections.put(
+        "changed",
+        tasks.stream()
+            .filter(t -> !t.updated().isBefore(date.minusDays(1).atStartOfDay(zone).toInstant()))
+            .toList());
+    sections.put(
+        "preparation",
+        open.stream()
+            .filter(t -> t.due() != null && !t.due().isAfter(date.plusDays(1)))
+            .limit(3)
+            .toList());
+    sections.put(
         "neglected",
         open.stream()
             .filter(t -> t.updated().isBefore(date.minusDays(14).atStartOfDay(zone).toInstant()))
             .toList());
     var information = new ArrayList<SecretaryContext.Item>();
+    var contextKeys = new java.util.HashSet<List<String>>();
     boolean partial = tasks.size() == 1000;
     for (var provider : contexts) {
       try {
         var items = provider.context(project, date, zone);
-        if (items.size() > 256) partial = true;
-        information.addAll(items.stream().limit(256).toList());
+        if (items.size() >= 256) partial = true;
+        for (var item : items.stream().limit(256).toList())
+          if (contextKeys.add(List.of(item.source(), item.id()))) information.add(item);
       } catch (RuntimeException unavailable) {
         partial = true;
       }
     }
-    return new Report(date, zone.getId(), review, sections, information, partial);
+    var evidence = new ArrayList<SecretaryContext.Item>();
+    for (var task : tasks)
+      evidence.add(
+          new SecretaryContext.Item(
+              "secretary-task",
+              task.id(),
+              task.title(),
+              task.status().name(),
+              "Registered intention, not execution permission; revision=" + task.revision(),
+              task.status() == SecretaryTask.Status.CANDIDATE
+                  ? task.origin().equals("EXTERNAL")
+                      ? SecretaryContext.Reliability.UNKNOWN
+                      : SecretaryContext.Reliability.INFERENCE
+                  : SecretaryContext.Reliability.USER_REGISTERED,
+              task.references()));
+    evidence.addAll(information);
+    evidence.add(
+        new SecretaryContext.Item(
+            "life-policy",
+            "work-agenda",
+            "勤務中の業務予定は不明",
+            "UNKNOWN",
+            "業務予定を取得・推測しません。予定の空白は利用可能を意味しません。",
+            SecretaryContext.Reliability.UNKNOWN,
+            List.of()));
+    var held = held(project);
+    if (held.size() == 20) partial = true;
+    var cautions = new ArrayList<String>();
+    cautions.add("勤務中の業務予定は不明。業務予定を推測しません。");
+    if (sections.get("next").isEmpty()) cautions.add("利用可能時間を確認できないか、候補がありません。自由時間を自動で埋めません。");
+    if (partial) cautions.add("一部の情報源を取得できないか、表示上限に達しました。取得済みの情報だけを表示します。");
+    if (life != null && !life.settings().zone().equals(zone.getId()))
+      cautions.add("レポートのタイムゾーンと生活制約のタイムゾーンが異なります。通知は生活制約を優先します。");
+    return new Report(
+        date, zone.getId(), review, sections, information, partial, evidence, cautions, held);
+  }
+
+  /** Explicit generation does not publish a notice or invoke a model. */
+  public synchronized Generation generate(
+      String project, LocalDate requested, boolean review, String key) {
+    required(project);
+    required(key);
+    var zone = ZoneId.of(settings(project).zone());
+    var date = requested == null ? clock.instant().atZone(zone).toLocalDate() : requested;
+    var existing = generationByKey(project, key);
+    if (existing != null) return compatible(existing, date, review);
+    var generation =
+        new Generation(
+            UUID.randomUUID().toString(),
+            project,
+            key,
+            clock.instant(),
+            report(project, date, review));
+    database.transaction(
+        db -> {
+          try (var q =
+              db.prepareStatement("INSERT OR IGNORE INTO secretary_briefings VALUES(?,?,?,?,?)")) {
+            q.setString(1, generation.id());
+            q.setString(2, project);
+            q.setString(3, key);
+            q.setLong(4, generation.generated().toEpochMilli());
+            q.setString(5, SecretaryJson.JSON.writeValueAsString(generation));
+            q.executeUpdate();
+          }
+          // Keep the latest 100 snapshots per project. Delivery dedupe stays in the existing
+          // outbox.
+          try (var q =
+              db.prepareStatement(
+                  "DELETE FROM secretary_briefings WHERE project=? AND id NOT IN (SELECT id FROM secretary_briefings WHERE project=? ORDER BY generated DESC,rowid DESC LIMIT 100)")) {
+            q.setString(1, project);
+            q.setString(2, project);
+            q.executeUpdate();
+          }
+          return null;
+        });
+    return compatible(
+        java.util.Objects.requireNonNull(generationByKey(project, key)), date, review);
+  }
+
+  private static Generation compatible(Generation saved, LocalDate date, boolean review) {
+    if (!saved.report().date().equals(date) || saved.report().review() != review)
+      throw new SecretaryConflictException();
+    return saved;
+  }
+
+  private Generation generationByKey(String project, String key) {
+    return database.read(
+        db -> {
+          try (var q =
+              db.prepareStatement(
+                  "SELECT record FROM secretary_briefings WHERE project=? AND request_key=?")) {
+            q.setString(1, project);
+            q.setString(2, key);
+            try (var r = q.executeQuery()) {
+              return r.next()
+                  ? SecretaryJson.JSON.readValue(r.getString(1), Generation.class)
+                  : null;
+            }
+          }
+        });
+  }
+
+  public Generation briefing(String project, String id) {
+    required(project);
+    required(id);
+    var saved =
+        database.read(
+            db -> {
+              try (var q =
+                  db.prepareStatement(
+                      "SELECT record FROM secretary_briefings WHERE project=? AND id=?")) {
+                q.setString(1, project);
+                q.setString(2, id);
+                try (var r = q.executeQuery()) {
+                  return r.next()
+                      ? SecretaryJson.JSON.readValue(r.getString(1), Generation.class)
+                      : null;
+                }
+              }
+            });
+    if (saved == null) throw new IllegalArgumentException("Briefing not found");
+    return saved;
+  }
+
+  public List<Generation> briefingHistory(String project, int limit) {
+    required(project);
+    if (limit < 1 || limit > 100)
+      throw new IllegalArgumentException("History limit must be 1..100");
+    return database.read(
+        db -> {
+          var result = new ArrayList<Generation>();
+          try (var q =
+              db.prepareStatement(
+                  "SELECT record FROM secretary_briefings WHERE project=? ORDER BY generated DESC,rowid DESC LIMIT ?")) {
+            q.setString(1, project);
+            q.setInt(2, limit);
+            try (var r = q.executeQuery()) {
+              while (r.next())
+                result.add(SecretaryJson.JSON.readValue(r.getString(1), Generation.class));
+            }
+          }
+          return List.copyOf(result);
+        });
+  }
+
+  public int deleteBriefings(String project) {
+    required(project);
+    return database.transaction(
+        db -> {
+          try (var q = db.prepareStatement("DELETE FROM secretary_briefings WHERE project=?")) {
+            q.setString(1, project);
+            return q.executeUpdate();
+          }
+        });
+  }
+
+  private List<Delivery> held(String project) {
+    return database.read(
+        db -> {
+          var result = new ArrayList<Delivery>();
+          try (var q =
+              db.prepareStatement(
+                  "SELECT record,status,attempts,error FROM secretary_notices WHERE project=? AND status='HELD' ORDER BY priority,created,id LIMIT 20")) {
+            q.setString(1, project);
+            try (var r = q.executeQuery()) {
+              while (r.next())
+                result.add(
+                    new Delivery(
+                        SecretaryJson.JSON.readValue(
+                            r.getString(1), SecretaryNotifications.Notice.class),
+                        r.getString(2),
+                        r.getInt(3),
+                        null,
+                        r.getString(4)));
+            }
+          }
+          return List.copyOf(result);
+        });
   }
 
   /** A duplicate/older observation cannot roll a dependency backwards. */
@@ -512,7 +746,23 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
     if (configured.isEmpty() || time.isBefore(LocalTime.parse(configured))) return;
     String kind = review ? "REVIEW" : "BRIEFING";
     // One persisted notice per local date, including repeated clock hours and restarts.
-    var summary = report(settings.projectId(), date, review);
+    String key = kind + ":" + date;
+    String noticeId =
+        UUID.nameUUIDFromBytes(
+                (settings.projectId() + ":" + key)
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8))
+            .toString();
+    if (database.read(
+        db -> {
+          try (var q = db.prepareStatement("SELECT 1 FROM secretary_notices WHERE id=?")) {
+            q.setString(1, noticeId);
+            try (var r = q.executeQuery()) {
+              return r.next();
+            }
+          }
+        })) return;
+    var generated = generate(settings.projectId(), date, review, "scheduled:" + key);
+    var summary = generated.report();
     String message =
         kind
             + " "
@@ -526,7 +776,10 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
             + " 完了="
             + summary.sections().get("completed").size()
             + "; /secretary "
-            + (review ? "review" : "briefing");
+            + (review ? "review" : "briefing")
+            + "; 履歴="
+            + generated.id()
+            + "; 勤務中の業務予定は不明";
     enqueue(settings, null, kind, kind + ":" + date, message);
   }
 

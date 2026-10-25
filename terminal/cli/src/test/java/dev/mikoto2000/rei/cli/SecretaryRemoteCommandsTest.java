@@ -9,6 +9,21 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class SecretaryRemoteCommandsTest {
+  @Test void preparationAndExecutionModeAreReadOnlyScopedViews() {
+    assertEquals("/api/v1/secretary/preparation?projectId=p", RemoteCommands.route(List.of("/secretary", "preparation"), "p", null).path());
+    var mode = RemoteCommands.route(List.of("/secretary", "work-mode", "job"), "p", null);
+    assertEquals("GET", mode.method());
+    assertEquals("/api/v1/secretary/executions/job/mode?projectId=p", mode.path());
+  }
+  @Test void generatedBriefingsHaveExplicitKeysAndScopedHistory() {
+    var generated = RemoteCommands.route(List.of("/secretary", "review-generate", "--key", "evening-one"), "p", null);
+    assertEquals("POST", generated.method());
+    assertEquals("/api/v1/secretary/briefings/generate", generated.path());
+    assertEquals(Map.of("projectId", "p", "review", true, "key", "evening-one"), generated.body());
+    assertThrows(IllegalArgumentException.class, () -> RemoteCommands.route(List.of("/secretary", "briefing-generate"), "p", null));
+    assertEquals("/api/v1/secretary/briefings/id?projectId=p", RemoteCommands.route(List.of("/secretary", "briefing-show", "id"), "p", null).path());
+    assertEquals("/api/v1/secretary/briefings/delete", RemoteCommands.route(List.of("/secretary", "briefing-clear"), "p", null).path());
+  }
   @Test void connectionsUseFixedPathsAndRequireWriteRevisions() {
     var config=RemoteCommands.route(List.of("/secretary","connection-configure","--name","mail","--service","GMAIL","--resource","me","--connection-enabled"),"p","s");
     assertEquals("PUT",config.method());assertEquals("/api/v1/secretary/connections",config.path());

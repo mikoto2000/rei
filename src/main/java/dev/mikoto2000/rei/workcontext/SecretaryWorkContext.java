@@ -43,7 +43,18 @@ public final class SecretaryWorkContext implements SecretaryContext {
                                     + " declaration at "
                                     + i.updatedAt()
                                     + "; "
-                                    + i.reason()))
+                                    + i.reason(),
+                                i.userCorrected() || i.certainty() == WorkContext.Origin.USER
+                                    ? Reliability.USER_REGISTERED
+                                    : i.certainty() == WorkContext.Origin.TOOL
+                                        ? Reliability.FACT
+                                        : i.certainty() == WorkContext.Origin.ASSISTANT
+                                            ? Reliability.PROPOSAL
+                                            : Reliability.INFERENCE,
+                                i.evidence().stream()
+                                    .limit(32)
+                                    .map(e -> "work-evidence:" + e.id())
+                                    .toList()))
                     .toList())
         .orElse(List.of());
   }

@@ -130,6 +130,19 @@ public final class LifeContext implements LifePolicy {
   private final Clock clock;
   private volatile Settings settings;
   private volatile Instant changedAt = Instant.MIN;
+  private volatile org.springframework.beans.factory.ObjectProvider<LifeAvailability>
+      availabilitySources;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void setAvailabilitySources(
+      org.springframework.beans.factory.ObjectProvider<LifeAvailability> sources) {
+    availabilitySources = sources;
+  }
+
+  private List<LifeAvailability> availabilitySources() {
+    var sources = availabilitySources;
+    return sources == null ? List.of() : sources.orderedStream().limit(8).toList();
+  }
 
   public LifeContext(Store store, Clock clock) {
     this.store = store;
@@ -194,6 +207,17 @@ public final class LifeContext implements LifePolicy {
         && exception != null
         && !now.isBefore(exception.start())
         && now.isBefore(exception.end())) availability = exception.availability();
+    if (availability != Availability.UNAVAILABLE && availability != Availability.BUSY) {
+      try {
+        for (var source : availabilitySources())
+          if (source.busy(now)) {
+            availability = Availability.BUSY;
+            break;
+          }
+      } catch (RuntimeException unavailable) {
+        availability = Availability.UNKNOWN;
+      }
+    }
     return new Status(
         s,
         now,
@@ -202,6 +226,62 @@ public final class LifeContext implements LifePolicy {
         availability,
         observationAllowed(now),
         notificationAllowed("NORMAL", ""));
+  }
+
+  /** Conservative continuous window; overlapping windows never expand the user's declared time. */
+  public long availableMinutes() {
+    var current = status();
+    if (current.availability() != Availability.AVAILABLE) return 0;
+    var s = current.settings();
+    var now = current.at();
+    var zone = ZoneId.of(s.zone());
+    var local = now.atZone(zone);
+    Instant until = now.plusSeconds(86400);
+    for (var w : s.personal()) {
+      if (!matches(w, local)) continue;
+      var date = local.toLocalDate();
+      if (LocalTime.parse(w.start()).isAfter(LocalTime.parse(w.end()))
+          && !local.toLocalTime().isBefore(LocalTime.parse(w.start()))) date = date.plusDays(1);
+      for (var end : boundaries(date, w.end(), zone))
+        if (end.isAfter(now) && end.isBefore(until)) until = end;
+    }
+    var exception = s.exception();
+    if (exception != null) {
+      if (!now.isBefore(exception.start())
+          && now.isBefore(exception.end())
+          && exception.end().isBefore(until)) until = exception.end();
+      if (exception.availability() != Availability.AVAILABLE
+          && exception.start().isAfter(now)
+          && exception.start().isBefore(until)) until = exception.start();
+    }
+    var protectedWindows = new java.util.ArrayList<>(s.rest());
+    protectedWindows.add(new Window(s.workDays(), s.workStart(), s.workEnd()));
+    for (var w : protectedWindows)
+      for (int day = 0; day <= 1; day++) {
+        var date = local.toLocalDate().plusDays(day);
+        if (!w.days().contains(date.getDayOfWeek())) continue;
+        for (var start : boundaries(date, w.start(), zone))
+          if (start.isAfter(now) && start.isBefore(until)) until = start;
+      }
+    try {
+      for (var source : availabilitySources()) {
+        var limit = source.availableUntil(now, until);
+        if (limit == null || limit.isBefore(now)) return 0;
+        if (limit.isBefore(until)) until = limit;
+      }
+    } catch (RuntimeException unavailable) {
+      return 0;
+    }
+    return s == settings ? Math.max(0, Duration.between(now, until).toMinutes()) : 0;
+  }
+
+  private static List<Instant> boundaries(LocalDate date, String time, ZoneId zone) {
+    var value = date.atTime(LocalTime.parse(time));
+    var rules = zone.getRules();
+    var offsets = rules.getValidOffsets(value);
+    if (offsets.isEmpty())
+      return List.of(Objects.requireNonNull(rules.getTransition(value)).getInstant());
+    return offsets.stream().map(value::toInstant).toList();
   }
 
   public Lease begin() {
@@ -255,7 +335,17 @@ public final class LifeContext implements LifePolicy {
     return !exceptionBlocks(s, local.toInstant(), true)
         && !working(s, local)
         && !matches(s.rest(), local)
-        && (s.notifications().isEmpty() || matches(s.notifications(), local));
+        && (s.notifications().isEmpty() || matches(s.notifications(), local))
+        && scheduleAllowsNotification(local.toInstant());
+  }
+
+  private boolean scheduleAllowsNotification(Instant at) {
+    try {
+      for (var source : availabilitySources()) if (source.busy(at)) return false;
+    } catch (RuntimeException unavailable) {
+      return false;
+    }
+    return true;
   }
 
   public boolean backgroundAllowed(String project, String task) {
