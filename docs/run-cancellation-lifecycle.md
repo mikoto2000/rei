@@ -33,6 +33,7 @@
 - `CancelCommandStateTest` と `CancellationApiDiagnosticsTest`: Run ID 指定と追加の停止進行情報が未提供であることを確認。
 - `CancelledRunBoundaryTest`: 子処理が残る間の終端イベントを検出して失敗。
 - `CancellationCompletionTest`: 停止フックが共有 bus monitor 内で実行されることを検出して失敗。
+- `AdmissionTerminalOwnershipTest`: SQLite admission の直接イベント購読が cleanup 中に COMPLETED を返すことを修正前に検出。通常完了と停止要求の双方を検証する。
 
 Red/Green の実行ログは開発用 `target/cancellation-evidence/` に保存。初回はローカル Maven mirror の名前解決、Mockito の自己接続、一時 Git registry の権限による環境問題も発生した。既存のキャッシュを offline で使用し、Mockito を明示的な Java agent として指定し、実プロセス系は通常実行環境で再検証した。環境による失敗を機能の Red として数えていない。
 
@@ -71,7 +72,9 @@ API の構造と既存の Java コンストラクターは保持する。ただ�
 
 追加テストは同一 Project の複数 READ_ONLY Run、別 Project との並列、開始前停止、登録との競合、子フック登録との競合、終了と再要求の競合、重複停止、cleanup 中の表示、停止不能処理、Clock を使った停滞診断を検証する。競合テストは Thread.sleep に依存しない。
 
-初回全件検証は 6,395 件（既存の条件による skip 5）。検出した停止タイミング・承認継続・テスト fixture・キュー受付競合・背景画像保存の回帰を修正し、最終全件検証を再実行する。最終結果は後述。
+初回全件検証は 6,395 件（既存の条件による skip 5）。検出した停止タイミング・承認継続・テスト fixture・キュー受付競合・背景画像保存の回帰を修正した。`0b558040` のローカル再検証は 6,397 件、失敗・エラー 0、skip 5、14 分 20 秒で成功した。Lightweight CLI / launcher は 135 件が成功した。
+
+その後の追加再現で、永続 admission のイベント購読による早過ぎる終端適用を発見した。RunService の実行区間では RunRegistry を終端確定の所有者にし、cleanup 後にだけ永続台帳へ適用する。Web の並列テストも終端イベントと cleanup 完了を区別して検証する。最終コミットは対象回帰テストと静的解析をローカル実行し、全件検証は PR の GitHub Actions で同じ最終 HEAD に対して確認する。
 
 停止は協調的であり、外部サービスが受信済みの処理を取り消せることや、OS から切り離され所有関係を取得できない daemon の停止までは保証しない。無関係なプロセスには信号を送らない。確認できない実体が残る場合は停止待ちとして保持し、診断可能にする。終了済み ID のローカル診断履歴は直近 256 件に制限し、永続的な最終結果は従来の RunRegistry に残す。旧生存プロセスへの hot patch や自動停止は行わず、新しいバイナリで適用する。
 
@@ -86,3 +89,11 @@ SpotBugs の既存 RuntimeException 指摘は、executeInScope の引数追加�
 新規 EI_EXPOSE_REP2 の 1 件は Router への共有 CommandCancellationService 注入を個別レビューした。同じ Run を表示と停止で扱うために singleton を共有する必要があり、防御コピーで別サービスにすることは修正目的に反する。Router はサービス参照や内部 State を外へ返さない。これ以外の新規指摘（null 安全性、DTO の可変一覧、boxing、冗長条件、wildcard import）は修正し、許容件数の水増しや包括的な suppression は行わない。
 
 全件検証で追加確認した回帰として、キュー削除が admission を先に CANCELLED にする競合でも初回受付を true にすること、ExecutionScope 内の画像結果保存が ambient フラグではなく明示 Run ID の停止要求を確認することを修正した。承認継続の台帳には公開前の RunStatus を推測させず、既存シグネチャを残した結果付き terminal overload で結果を渡す。背景処理用 scope が親 Agent の begin/clear の対を増減させないことも保証する。
+
+
+## 最終コミットのローカル検証
+
+- admission / Run API / 承認継続 / Slack / background / architecture の関連 64 件: 失敗・エラー 0。
+- Checkstyle: 0 件。SpotBugs: 既存 1,894 件に一致、新規 0 件。
+- static-analysis gate の破損・欠落・指摘増加を拒否する fixture も成功。
+- 最終 HEAD の全件結果とマージ結果は PR のチェック・履歴を参照。

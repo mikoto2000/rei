@@ -207,7 +207,10 @@ public class RunService implements AutoCloseable {
       if (stopped && registry.transition(context.runId(), RunStatus.CANCELLED, null))
         bus.publish(events.runCancelled(context.runId(), null).withOwnership(context));
       started = !stopped && registry.transition(context.runId(), RunStatus.RUNNING, null);
-      if (started) executing.add(context.runId());
+      if (started) {
+        executing.add(context.runId());
+        registry.beginExecution(context.runId());
+      }
       if (!started) {
         cancellation.forgetPendingCancellation(context.runId());
       }
@@ -222,29 +225,33 @@ public class RunService implements AutoCloseable {
     } catch (RuntimeException error) {
       failure = "Runner failed: " + dev.mikoto2000.rei.event.FailureMessages.describe(error);
     } finally {
-      cancellation.completeResources(context.runId());
-      synchronized (monitor()) {
-        executing.remove(context.runId());
-        var terminal = terminalEvents.remove(context.runId());
-        var stop = cancellation.diagnostic(context.runId());
-        if (stop.requestedAt() != null) {
-          if (registry.transition(context.runId(), RunStatus.CANCELLED, null))
-            bus.publish(
-                events
-                    .runCancelled(
-                        context.runId(),
-                        new ErrorInformation(
-                            "CancellationException",
-                            "ユーザーの停止要求後、実行と後片付けが終了しました。",
-                            "user_cancelled"))
-                    .withOwnership(context));
-        } else if (stop.failure() != null) {
-          fail(context, "Run resource cleanup failed: " + stop.failure());
-        } else {
-          if (terminal != null) onEvent(terminal);
-          if (!registry.get(context.runId()).status().isWaiting()) fail(context, failure);
+      try {
+        cancellation.completeResources(context.runId());
+        synchronized (monitor()) {
+          executing.remove(context.runId());
+          var terminal = terminalEvents.remove(context.runId());
+          var stop = cancellation.diagnostic(context.runId());
+          if (stop.requestedAt() != null) {
+            if (registry.transition(context.runId(), RunStatus.CANCELLED, null))
+              bus.publish(
+                  events
+                      .runCancelled(
+                          context.runId(),
+                          new ErrorInformation(
+                              "CancellationException",
+                              "ユーザーの停止要求後、実行と後片付けが終了しました。",
+                              "user_cancelled"))
+                      .withOwnership(context));
+          } else if (stop.failure() != null) {
+            fail(context, "Run resource cleanup failed: " + stop.failure());
+          } else {
+            if (terminal != null) onEvent(terminal);
+            if (!registry.get(context.runId()).status().isWaiting()) fail(context, failure);
+          }
+          cancellation.forgetPendingCancellation(context.runId());
         }
-        cancellation.forgetPendingCancellation(context.runId());
+      } finally {
+        registry.endExecution(context.runId());
       }
     }
   }
@@ -276,7 +283,7 @@ public class RunService implements AutoCloseable {
   public void finishMissingTerminal(AgentRunContext context, RunStatus terminal) {
     // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
     if (!terminal.isTerminal()) throw new IllegalArgumentException("Terminal state required");
-    cancellation.awaitChildren(context.runId());
+    cancellation.completeResources(context.runId());
     synchronized (monitor()) {
       if (cancellation.diagnostic(context.runId()).requestedAt() != null)
         terminal = RunStatus.CANCELLED;
