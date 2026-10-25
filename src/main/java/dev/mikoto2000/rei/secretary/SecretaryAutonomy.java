@@ -1369,7 +1369,9 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
                                 ? "Private external preparation"
                                 : job.spec().objective()),
                         job.state(),
-                        detail));
+                        detail,
+                        Reliability.PROPOSAL,
+                        List.of("secretary-job:" + job.id())));
               }
             }
           }

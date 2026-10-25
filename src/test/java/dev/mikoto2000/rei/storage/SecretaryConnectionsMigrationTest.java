@@ -37,6 +37,7 @@ class SecretaryConnectionsMigrationTest {
         var sql = db.createStatement()) {
       for (var table :
           java.util.List.of(
+              "secretary_briefings",
               "life_context",
               "secretary_connections",
               "secretary_external_items",

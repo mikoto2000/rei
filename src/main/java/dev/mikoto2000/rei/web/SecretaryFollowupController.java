@@ -6,6 +6,7 @@ import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -45,6 +46,36 @@ public class SecretaryFollowupController {
       implements StrictApiRequest {}
 
   public record Check(String projectId) implements StrictApiRequest {}
+
+  public record Generate(String projectId, LocalDate date, Boolean review, String key)
+      implements StrictApiRequest {}
+
+  @PostMapping("/briefings/generate")
+  public SecretaryFollowups.Generation generate(@RequestBody Generate request) {
+    return service()
+        .generate(
+            request.projectId(),
+            request.date(),
+            Boolean.TRUE.equals(request.review()),
+            request.key());
+  }
+
+  @GetMapping("/briefings")
+  public List<SecretaryFollowups.Generation> briefings(
+      @RequestParam String projectId, @RequestParam(defaultValue = "20") int limit) {
+    return service().briefingHistory(projectId, limit);
+  }
+
+  @GetMapping("/briefings/{id}")
+  public SecretaryFollowups.Generation briefingHistory(
+      @PathVariable String id, @RequestParam String projectId) {
+    return service().briefing(projectId, id);
+  }
+
+  @PostMapping("/briefings/delete")
+  public java.util.Map<String, Integer> deleteBriefings(@RequestBody Check request) {
+    return java.util.Map.of("deleted", service().deleteBriefings(request.projectId()));
+  }
 
   @GetMapping("/settings")
   public SecretaryFollowups.Settings settings(@RequestParam String projectId) {
