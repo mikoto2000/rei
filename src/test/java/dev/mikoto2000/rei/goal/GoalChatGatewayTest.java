@@ -620,4 +620,91 @@ class GoalChatGatewayTest {
     assertEquals(2, attempts.get());
     assertEquals(3, goals.get(project, goal.id()).llmCallsUsed());
   }
+
+  @Test
+  void secretaryPreparationRequiresManagedReadOnlyModeAndPreservesReservation() throws Exception {
+    assertFalse(gateway.available());
+    trackRuns();
+    gateway.setContinuations(mock(RunContinuation.class));
+    var field = GoalChatGateway.class.getDeclaredField("secretaryConcurrent");
+    field.setAccessible(true);
+    field.setBoolean(gateway, true);
+    var used = new java.util.concurrent.atomic.AtomicInteger();
+    var budget =
+        new dev.mikoto2000.rei.secretary.SecretaryPreparationRuntime.CallBudget() {
+          public boolean tryReserve() {
+            return used.getAndIncrement() < 1;
+          }
+
+          public int remaining() {
+            return Math.max(0, 1 - used.get());
+          }
+        };
+    var outcome =
+        new java.util.concurrent.atomic.AtomicReference<
+            dev.mikoto2000.rei.secretary.SecretaryPreparationRuntime.Outcome>();
+    when(chat.execute(any(), anyString(), any(), any()))
+        .thenAnswer(
+            inv -> {
+              var owner = inv.getArgument(0, AgentRunContext.class);
+              assertEquals(AgentRunContext.Mode.READ_ONLY, owner.mode());
+              var reservation = inv.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class);
+              assertTrue(reservation.tryReserve());
+              assertFalse(reservation.tryReserve());
+              return ChatExecutionResult.success("prepared", false);
+            });
+    gateway.start(
+        new dev.mikoto2000.rei.secretary.SecretaryPreparationRuntime.Request(
+            "prep", project, "session", "research", "RESEARCH"),
+        budget,
+        outcome::set);
+    jobs.remove().run();
+    assertEquals("SUCCESS", outcome.get().status());
+    assertFalse(gateway.inspect(project, "session", "prep").active());
+    assertThrows(IllegalArgumentException.class, () -> gateway.inspect("other", "session", "prep"));
+  }
+
+  @Test
+  void secretaryGoalUsesOriginalVerifierAndNeverResetsModelBudget() throws Exception {
+    var descriptor = loop.describe(project, goal.id());
+    assertFalse(descriptor.verified());
+    assertThrows(
+        IllegalStateException.class,
+        () -> loop.start(project, goal.id(), descriptor.fingerprint(), () -> false));
+    verifyNoInteractions(chat);
+    when(chat.execute(any(), anyString(), any(), any()))
+        .thenAnswer(
+            inv -> {
+              assertTrue(
+                  inv.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class).tryReserve());
+              Files.writeString(dir.resolve("out.txt"), "correct");
+              return ChatExecutionResult.success("done", false);
+            });
+    loop.start(project, goal.id(), descriptor.fingerprint(), () -> true);
+    jobs.remove().run();
+    var completed = loop.describe(project, goal.id());
+    assertTrue(completed.verified());
+    assertEquals(descriptor.fingerprint(), completed.fingerprint());
+    assertEquals(1, completed.callsUsed());
+  }
+
+  @Test
+  void resumedSecretaryGoalCannotLoseItsRevocableAdmissionGate() {
+    var claim = goals.claim(project, goal.id());
+    String old = goals.beginAttempt(claim);
+    loop.reconcile(project, goal.id(), old);
+    assertEquals("PAUSED", goals.get(project, goal.id()).status());
+    var allowed = new java.util.concurrent.atomic.AtomicBoolean(true);
+    when(chat.execute(any(), anyString(), any(), any()))
+        .thenAnswer(
+            inv -> {
+              allowed.set(false);
+              assertFalse(
+                  inv.getArgument(3, OutputLimitRunBudget.LlmCallReservation.class).tryReserve());
+              return ChatExecutionResult.failed("stopped", "llm_call_budget_exceeded");
+            });
+    loop.start(project, goal.id(), loop.describe(project, goal.id()).fingerprint(), allowed::get);
+    jobs.remove().run();
+    assertEquals(0, goals.get(project, goal.id()).llmCallsUsed());
+  }
 }

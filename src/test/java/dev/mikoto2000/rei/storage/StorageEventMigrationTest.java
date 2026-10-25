@@ -452,6 +452,10 @@ class StorageEventMigrationTest {
               "secretary_followup_state",
               "secretary_notices",
               "secretary_dependencies",
+              "secretary_autonomy_settings",
+              "secretary_jobs",
+              "secretary_job_history",
+              "secretary_model_budget",
               "secretary_orchestration",
               "secretary_suggestions",
               "secretary_suggestion_history")) sql.execute("DROP TABLE " + table);

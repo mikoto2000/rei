@@ -30,6 +30,10 @@ class SecretaryMigrationTest {
       sql.execute("DROP TABLE secretary_followup_state");
       sql.execute("DROP TABLE secretary_notices");
       sql.execute("DROP TABLE secretary_dependencies");
+      sql.execute("DROP TABLE secretary_autonomy_settings");
+      sql.execute("DROP TABLE secretary_jobs");
+      sql.execute("DROP TABLE secretary_job_history");
+      sql.execute("DROP TABLE secretary_model_budget");
       sql.execute("DROP TABLE secretary_orchestration");
       sql.execute("DROP TABLE secretary_suggestions");
       sql.execute("DROP TABLE secretary_suggestion_history");

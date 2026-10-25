@@ -413,3 +413,136 @@ Checkstyle 0件、SpotBugs 既存1,897件・新規0件、増分ゲート・自�
 新規の参照保持2件は遅延 provider と読み取り用 port へ変更し、解析基準の追加・除外は行っていない。
 CLI127件・ランチャー6件の terminal verify も成功した。既存ランチャーテストの子プロセス終了要求と
 一時ディレクトリ削除が競合したため、finally で終了完了を待つよう修正した。検証内容や除外条件は弱めていない。
+
+
+### Phase 3 の最終 CI
+
+PR #152 の最終コミット `11049c4` は回帰 CI 6,323件・failure/error 0・既存 skip 5、静的解析とも成功し、
+`1b778201` で main へマージした。専用 worktree とローカルブランチは削除済み。
+
+## Phase 5: 許可範囲内の実行
+
+秘書の実行は既存の会話実行・Planning/SubAgent・GoalLoop・Policy/Approval・成果物保存を使用する。
+別のモデル実行ループは追加しない。既定は Project の実行無効・自動準備無効。
+`rei.secretary.enabled=true` と `rei.tool-permission.enabled=true` が必要で、LLM 準備と Goal の実行には
+`rei.conversation.concurrent-enabled=true` と既存の Run 管理・承認継続基盤が必要。
+利用できない場合は BLOCKED とし、書込可能モードへ切り替えない。
+
+| レベル | kind | 権限 |
+| --- | --- | --- |
+| 1 | RESEARCH / ORGANIZE / SUMMARY / PREPARE / STATUS | READ_ONLY の既存会話実行。取得・整理・報告・実行準備のみ |
+| 2 | DRAFT / UPDATE_TASK | 既存の明示的 AUTO_APPROVE ポリシー、または対象内容に結び付けた一回の承認 |
+| 3 | GOAL / ROUTINE | 人間が作成済みの Goal を指定し、その定義・予算を含む一回の承認 |
+
+DRAFT は immutable な内部 Artifact の保存で、メール送信等は行わない。
+UPDATE_TASK は指定した改訂の受理済みタスクだけを変更し、履歴と実行参照を同じ DB トランザクションで保存する。
+GOAL / ROUTINE は元の GoalLoop が実際のツールを選択し、各ツールの既存権限・承認を引き続き検査する。
+秘書の承認で対外操作や破壊操作を包括許可しない。メール送信等の外部操作は Phase 4 の個別経路で制御する。
+
+### 設定と操作
+
+Project と、その Project に属する既存 Session を指定する。
+
+```text
+/secretary autonomy-configure --project PROJECT --session SESSION --autonomy-enabled --max-level 2 --max-concurrent 1 --max-seconds 300 --max-llm-calls 8 --max-daily-calls 32 --max-retries 1
+/secretary autonomy-settings --project PROJECT
+/secretary autonomy-status --project PROJECT
+/secretary work-add TASK --project PROJECT --revision TASK_REVISION --key request:1 --kind RESEARCH
+/secretary work-show JOB --project PROJECT
+/secretary work-start JOB --project PROJECT --revision JOB_REVISION
+/secretary work-list --project PROJECT
+/secretary work-history JOB --project PROJECT
+/secretary work-suspend JOB --project PROJECT --revision JOB_REVISION
+/secretary work-resume JOB --project PROJECT --revision JOB_REVISION
+/secretary work-cancel JOB --project PROJECT --revision JOB_REVISION
+/secretary work-verify JOB --project PROJECT --revision JOB_REVISION
+```
+
+`work-add` の `--revision` は対象タスク、開始以降の操作は実行自身の現在 revision。省略・競合を拒否する。
+`--key` は Project 内の冪等キー。同じ要求は同じ実行を返し、同じキーの別内容は409。
+UPDATE_TASK は `--kind UPDATE_TASK --status WAITING` 等、Goal は `--kind GOAL --goal GOAL_ID`。
+返された permitId は既存 `/approval show ID`、`/approval approve ID`、`/approval deny ID` で処理する。
+秘書用承認に `--continue` は不要。承認後は Scheduler または `work-start` が再検査して一度だけ消費する。
+承認期限切れ・拒否後は新しいキーで実行を登録し直し、別の承認を要求する。
+
+自動準備には、上記に加えて `rei.secretary.autonomy-enabled=true` と Project の `--auto-prepare` を指定する。
+`--auto-kind` は既定 PREPARE。DRAFT を指定する場合はレベル2と承認条件が必要。
+Phase 3 の EXECUTE は明示実行要求、ALLOW_AUTO は既存の準備承認を引き継ぐ。
+有効化前に保存された古い明示要求は拾わない。提案の延期・停止・削除等は開始前に再検査する。
+自動巡回は16 Project・各32提案ずつで、永続カーソルにより後続も処理する。
+`autonomy-check` は巡回を一回実行する。通常は既存 Scheduler が同じ処理を呼ぶ。
+
+### API
+
+すべて既存 Bearer 認証下の `/api/v1/secretary`。
+
+| 操作 | API |
+| --- | --- |
+| 設定・状態 | GET / PUT `/autonomy/settings`, GET `/autonomy/status` |
+| 巡回 | POST `/autonomy/check` |
+| 登録・一覧 | POST / GET `/executions` |
+| 詳細・履歴 | GET `/executions/{id}`, `/executions/{id}/history` |
+| 制御 | POST `/executions/{id}/start`, `/cancel`, `/suspend`, `/resume`, `/verify` |
+
+設定 PUT は projectId / enabled / sessionId / maxLevel / autoPrepare / autoKind / maxConcurrent /
+maxSeconds / maxLlmCalls / maxDailyCalls / maxRetries。CLI と同じ既定値。未知フィールドは拒否する。
+登録 POST は projectId / taskId / taskRevision / key / kind / 任意 targetStatus / goalId。
+制御 POST は projectId / revision。GET は projectId、一覧・履歴には limit（1〜1,000）。
+Project をまたぐ参照や Session の流用を拒否する。無効時に API 自体を公開しない。
+
+### 実行予算・状態・検証
+
+同時実行は全体2件、Project 内1〜2件、同一タスク1件。未終端実行は全体256件まで。
+時間10〜3,600秒、モデル呼出0〜100回、日次0〜10,000回、再試行0〜3回。
+呼出の直前に storage.db へ予約し、失敗・再開でも戻さない。日付は既存ブリーフィングの Project タイムゾーン。
+Goal は元の残予算を日次枠へ先に全量予約するため、使用しなかった分も保守的に計上する。
+元 Goal の maxRuns・呼出上限・トークン上限・段階・完了条件は変更しない。
+残予算が秘書側上限を超える Goal は登録できない。Project 設定の増額で実行作成時の上限を拡大しない。
+
+初回開始時の絶対期限には一時停止・バックオフ時間も含む。再開は期限・試行・呼出上限をリセットしない。
+読み取り準備の一時障害だけを上限付きで再試行する。副作用の不明なものを自動再実行しない。
+WAITING は既存の承認継続経路と同じ予算を保持する。再起動後に親予算が復元できない承認継続は既存基盤が UNKNOWN にし、
+秘書側は UNCERTAIN として明示確認を要求する。
+
+準備成功は PREPARED で、元タスクを DONE にしない。結果本文は最大32,768文字、SHA-256 を保存する。
+DRAFT は Artifact の実バイトと SHA を検証して COMPLETED、UPDATE_TASK は保存改訂と実行参照で検証、
+Goal は既存の独立したファイル条件・必須チェック・段階を満たして COMPLETED とする。
+実行者の「完了した」という文章だけでは完了にしない。
+取消・一時停止・時間超過は実行停止の確認まで中間状態に留める。
+書込可能な Goal を途中停止した場合は、停止確認だけでは副作用の成否を証明できないため UNCERTAIN とする。
+その実行を直接 resume せず、実際のファイル・外部状態・Goal 履歴を確認し、元の残予算を保持する Goal に
+新しい実行キーと承認を与える。読み取り準備の確認済み PAUSED は通常の work-resume で再開できる。
+FINALIZING の保存処理が始まったものは取消済みと偽って返さず、その結果を検証する。
+不明な外部影響・クラッシュ境界は UNCERTAIN。`work-show`、実際の成果物・Goal 履歴を確認してから操作する。
+
+実行結果と承認要求は既存の通知 outbox へ登録し、集中・停止・まとめ通知の既存ルールを通す。
+通知を受けるには Phase 2 の通知設定が必要。日次 briefing/review の context にも実行結果を含む。
+
+### 保存・コスト・実環境確認
+
+schema 13→14 を起動時バックアップ付きで追加し、`secretary_autonomy_settings`、`secretary_jobs`、
+`secretary_job_history`、`secretary_model_budget` を storage.db に保存する。台帳・提案・保留通知を保持する。
+内部承認は既存 tool_approvals、下書きは既存 ArtifactStore の容量・有効期限・所有者保護に従う。
+実行履歴と日次予算は自動削除しないため、実行数に比例して DB 使用量が増える。
+自動準備を有効にすると実モデル利用料金が発生し得る。日次と実行ごとの呼出上限を小さく設定して開始する。
+
+固定 Clock・SQLite・実際の会話 Gateway / GoalLoop / ArtifactStore とモデル代替により契約を検証する。
+実 LLM、実外部送信、実サービス資格情報を用いた動作は、この Phase では検証済みと扱わない。
+
+
+### Phase 5 のローカル検証記録
+
+バックエンド17件と軽量CLI1件を追加し、既存の認証・移行 fixture を拡張した。
+最初の6件を未実装の Red から実装し、承認前再開と取消後の更新の2競合も Red で再現して修正した。
+書込可能 Goal の中断を安全な一時停止と誤認する問題も先行テストで再現し、UNCERTAIN と明示確認へ変更した。
+
+途中の全件 `-Pfull verify` は6,337件・構造ガード1失敗・error 0・既存 skip 5。
+構造の依存追加を既存の予算管理経路へ修正し、基準の追加・除外なしで構造ガードを通した。
+その後、秘書・Goal・成果物・既存承認/権限・移行・構造の317件で verify と JAR 生成が成功した。
+承認待ちの公平性変更で既存の再試行順序が変わった問題は、元のテストを維持して修正した。
+最終の実行管理可用性・Goal 定義固定・秘書API・認証・構造を含む74件でも verify と JAR 生成が成功した。
+最終コミット全件の確認は PR の CI と区別して報告する。
+
+最終 Checkstyle 0件、SpotBugs 既存1,895件・新規0件、増分ゲートと自己試験8ケースが成功した。
+静的解析の新規指摘は広すぎる例外再送出と SQL 準備の表現を修正して解消し、基準を変更していない。
+terminal verify は CLI128件・ランチャー6件、failure/error/skip 0 で成功した。

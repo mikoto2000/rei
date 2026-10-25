@@ -157,4 +157,28 @@ class ArtifactStoreTest {
     assertThatThrownBy(() -> store.content(project.id(), "session", "../outside"))
         .isInstanceOf(ResourceNotFoundException.class);
   }
+
+  @Test
+  void secretaryDraftIsImmutableOwnerScopedAndIndependentlyVerified() throws Exception {
+    var projects = new ProjectRegistry(root.resolve("projects.json"));
+    var project = projects.resolve(root);
+    var source = new SQLiteDataSource();
+    source.setUrl("jdbc:sqlite:" + root.resolve("drafts.db"));
+    var store =
+        new ArtifactStore(
+            source,
+            projects,
+            root.resolve("delivery"),
+            Clock.systemUTC(),
+            new ArtifactProperties());
+    var draft = store.save(project.id(), "session", "job-1", "prepared text");
+    assertThat(store.save(project.id(), "session", "job-1", "prepared text")).isEqualTo(draft);
+    assertThat(store.find(project.id(), "session", "job-1")).isEqualTo(draft);
+    assertThat(store.find(project.id(), "other", "job-1")).isNull();
+    assertThat(store.verify(project.id(), "session", draft)).isTrue();
+    assertThatThrownBy(() -> store.save(project.id(), "session", "job-1", "changed"))
+        .isInstanceOf(dev.mikoto2000.rei.application.state.OperationConflictException.class);
+    Files.writeString(root.resolve("delivery").resolve(draft.id() + ".bin"), "tampered");
+    assertThat(store.verify(project.id(), "session", draft)).isFalse();
+  }
 }

@@ -167,4 +167,31 @@ class ToolApprovalRepositoryTest {
         ToolPermissionException.class,
         () -> guard.check("writeMultiFile", "{}", owner("p", "s", "r2")));
   }
+
+  @Test
+  void secretaryGrantsAreExactSingleUseAndExpireAcrossRestart() {
+    String id = repository.requestSecretaryAction("p", "UPDATE_TASK", "{definition:one}");
+    assertEquals(
+        "PENDING", repository.secretaryActionStatus("p", id, "UPDATE_TASK", "{definition:one}"));
+    assertEquals(
+        "MISSING", repository.secretaryActionStatus("q", id, "UPDATE_TASK", "{definition:one}"));
+    assertEquals("MISSING", repository.secretaryActionStatus("p", id, "DRAFT", "{definition:one}"));
+    repository.decide("p", id, true);
+    assertFalse(repository.consumeSecretaryAction("p", id, "UPDATE_TASK", "{definition:two}"));
+    assertTrue(repository.consumeSecretaryAction("p", id, "UPDATE_TASK", "{definition:one}"));
+    assertFalse(repository.consumeSecretaryAction("p", id, "UPDATE_TASK", "{definition:one}"));
+    String expiring = repository.requestSecretaryAction("p", "GOAL", "exact");
+    repository.decide("p", expiring, true);
+    var restored =
+        new ToolApprovalRepository(
+            new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("approval.db")),
+            Clock.fixed(now.plusSeconds(901), ZoneOffset.UTC));
+    assertEquals("EXPIRED", restored.secretaryActionStatus("p", expiring, "GOAL", "exact"));
+    assertFalse(restored.consumeSecretaryAction("p", expiring, "GOAL", "exact"));
+    String prep = repository.requestSecretaryPermission("p", "task", "DUE");
+    repository.decide("p", prep, true);
+    assertFalse(repository.consumeSecretaryPreparation("p", prep, "other", "DUE"));
+    assertTrue(repository.consumeSecretaryPreparation("p", prep, "task", "DUE"));
+    assertFalse(repository.consumeSecretaryPreparation("p", prep, "task", "DUE"));
+  }
 }

@@ -50,8 +50,13 @@ class SecretaryOrchestrationMigrationTest {
           var sql = connection.createStatement()) {
         for (String table :
             List.of(
-                "secretary_orchestration", "secretary_suggestions", "secretary_suggestion_history"))
-          sql.execute("DROP TABLE " + table);
+                "secretary_autonomy_settings",
+                "secretary_jobs",
+                "secretary_job_history",
+                "secretary_model_budget",
+                "secretary_orchestration",
+                "secretary_suggestions",
+                "secretary_suggestion_history")) sql.execute("DROP TABLE " + table);
         sql.execute("DROP INDEX secretary_notice_created");
         sql.execute("DROP INDEX secretary_notice_held");
         sql.execute("DELETE FROM storage_migrations WHERE version>=13");

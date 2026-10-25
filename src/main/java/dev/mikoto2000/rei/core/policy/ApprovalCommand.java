@@ -193,7 +193,8 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
 
   /** 利用者に結果を伝えるため、再開を出力する。 */
   private void printResume(java.io.PrintWriter writer, ToolApprovalRepository.Request request) {
-    if (request.tool().startsWith("secretaryAuto:")) {
+    if (request.tool().startsWith("secretaryAuto:")
+        || request.tool().startsWith("secretaryAction:")) {
       writer.println("秘書の準備許可です。/secretary orchestrator-status --project PROJECT で状態を確認してください。");
       return;
     }

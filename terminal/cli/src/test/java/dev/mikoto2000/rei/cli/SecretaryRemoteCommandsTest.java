@@ -125,4 +125,13 @@ class SecretaryRemoteCommandsTest {
             RemoteCommands.route(
                 List.of("/secretary", "done", "id", "--revision", "-1"), "p", null));
   }
+  @org.junit.jupiter.api.Test void boundedExecutionsHaveFixedRoutesAndExplicitRevision() {
+    var add=RemoteCommands.route(List.of("/secretary","work-add","task","--revision","2","--key","one","--kind","UPDATE_TASK","--status","WAITING"),"p","s");
+    org.junit.jupiter.api.Assertions.assertEquals("/api/v1/secretary/executions",add.path());
+    org.junit.jupiter.api.Assertions.assertEquals(2L,((Map<?,?>)add.body()).get("taskRevision"));
+    org.junit.jupiter.api.Assertions.assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/secretary","work-start","work"),"p","s"));
+    var control=RemoteCommands.route(List.of("/secretary","work-cancel","work","--revision","3"),"p","s");
+    org.junit.jupiter.api.Assertions.assertEquals("/api/v1/secretary/executions/work/cancel",control.path());
+  }
+
 }
