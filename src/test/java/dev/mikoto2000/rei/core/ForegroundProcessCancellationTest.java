@@ -21,9 +21,13 @@ class ForegroundProcessCancellationTest {
     when(root.isAlive()).thenReturn(true, false);
     when(child.isAlive()).thenReturn(true, false);
     when(process.waitFor(anyLong(), any())).thenThrow(new InterruptedException("cancelled"));
-    var tools = new Tools() {
-      @Override Process startProcess(ProcessBuilder builder) { return process; }
-    };
+    var tools =
+        new Tools() {
+          @Override
+          Process startProcess(ProcessBuilder builder) {
+            return process;
+          }
+        };
     try {
       assertThatThrownBy(() -> tools.executeShellCommand("fake", 5))
           .isInstanceOf(InterruptedException.class);
@@ -31,6 +35,8 @@ class ForegroundProcessCancellationTest {
       verify(child).destroy();
       verifyNoInteractions(unrelated);
       org.assertj.core.api.Assertions.assertThat(Thread.currentThread().isInterrupted()).isTrue();
-    } finally { Thread.interrupted(); }
+    } finally {
+      Thread.interrupted();
+    }
   }
 }

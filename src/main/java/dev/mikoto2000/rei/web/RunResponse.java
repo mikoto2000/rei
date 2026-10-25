@@ -28,10 +28,19 @@ public record RunResponse(
     String mode,
     dev.mikoto2000.rei.core.service.CommandCancellationService.Diagnostic cancellation) {
   /** 既存の Java 呼び出し元のコンストラクターを維持する。 */
-  public RunResponse(String runId, String status, String sessionId, String turnId,
-      String projectId, String startedAt, String completedAt, Failure failure, String mode) {
+  public RunResponse(
+      String runId,
+      String status,
+      String sessionId,
+      String turnId,
+      String projectId,
+      String startedAt,
+      String completedAt,
+      Failure failure,
+      String mode) {
     this(runId, status, sessionId, turnId, projectId, startedAt, completedAt, failure, mode, null);
   }
+
   /**
    * Web APIによる操作で受け渡す失敗情報を表す。
    *
@@ -46,7 +55,8 @@ public record RunResponse(
   }
 
   /** 既存のレスポンス項目を維持し、停止進行状況を追加する。 */
-  public static RunResponse from(RunSnapshot run,
+  public static RunResponse from(
+      RunSnapshot run,
       dev.mikoto2000.rei.core.service.CommandCancellationService.Diagnostic cancellation) {
     var context = run.context();
     boolean conversation = !context.conversationId().isEmpty();
@@ -59,6 +69,7 @@ public record RunResponse(
         run.startedAt() == null ? null : run.startedAt().toString(),
         run.completedAt() == null ? null : run.completedAt().toString(),
         run.failure() == null ? null : new Failure(run.failure().type(), run.failure().message()),
-        context.mode().name(), cancellation);
+        context.mode().name(),
+        cancellation);
   }
 }

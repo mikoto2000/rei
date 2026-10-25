@@ -952,8 +952,9 @@ public final class SubAgentRunner {
           public String call(String input, ToolContext context) {
             try (var scope = AgentRunScope.open(owner);
                 var lease = cancellation.enterChild(owner.runId());
-                var parentLease = cancellation.enterChild(
-                    approvalParent == null ? null : approvalParent.runId());
+                var parentLease =
+                    cancellation.enterChild(
+                        approvalParent == null ? null : approvalParent.runId());
                 var budgetScope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(modelBudget)) {
               check.run();
               Runnable authorize =

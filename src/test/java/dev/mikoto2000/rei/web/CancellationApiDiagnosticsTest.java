@@ -1,8 +1,8 @@
 package dev.mikoto2000.rei.web;
 
+import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
-import static org.mockito.Mockito.mock;
 
 import dev.mikoto2000.rei.application.run.RunRegistry;
 import dev.mikoto2000.rei.application.run.RunService;
@@ -15,8 +15,8 @@ import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.ui.shell.ActiveRunDisplay;
 import java.nio.file.Path;
 import java.time.Clock;
-import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 
@@ -32,8 +32,13 @@ class CancellationApiDiagnosticsTest {
     registry.register(owner);
     registry.transition("run", RunStatus.RUNNING, null);
     cancellation.prepare(owner);
-    try (var service = new RunService(registry, new InMemoryAgentEventBus(),
-        new AgentEventFactory(Clock.systemUTC()), cancellation, id -> false)) {
+    try (var service =
+        new RunService(
+            registry,
+            new InMemoryAgentEventBus(),
+            new AgentEventFactory(Clock.systemUTC()),
+            cancellation,
+            id -> false)) {
       var mvc = MockMvcBuilders.standaloneSetup(new RunController(service)).build();
       mvc.perform(post("/api/v1/runs/run/cancel"))
           .andExpect(status().isAccepted())
@@ -42,9 +47,10 @@ class CancellationApiDiagnosticsTest {
           .andExpect(jsonPath("$.cancellation.requestedAt").isNotEmpty());
       mvc.perform(get("/api/v1/runs/run"))
           .andExpect(jsonPath("$.cancellation.status").value("CANCEL_REQUESTED"));
-      mvc.perform(post("/api/v1/runs/run/cancel"))
-          .andExpect(status().isOk());
-    } finally { cancellation.finish("run"); }
+      mvc.perform(post("/api/v1/runs/run/cancel")).andExpect(status().isOk());
+    } finally {
+      cancellation.finish("run");
+    }
   }
 
   @Test
@@ -53,8 +59,10 @@ class CancellationApiDiagnosticsTest {
     var projects = new ProjectRegistry(temp.resolve("projects.json"));
     var project = projects.resolve(temp);
     cancellation.prepare(new AgentRunContext("run", project, "session"));
-    var mvc = MockMvcBuilders.standaloneSetup(new ActiveRunController(
-        mock(ActiveRunDisplay.class), cancellation, projects)).build();
+    var mvc =
+        MockMvcBuilders.standaloneSetup(
+                new ActiveRunController(mock(ActiveRunDisplay.class), cancellation, projects))
+            .build();
     mvc.perform(post("/api/v1/projects/" + project.id() + "/runs/cancel"))
         .andExpect(jsonPath("$.accepted").value(true))
         .andExpect(jsonPath("$.status").value("CANCEL_REQUESTED"))

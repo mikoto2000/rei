@@ -23,7 +23,9 @@ class CancellationLifecycleTest {
       org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.enterChild(owner.runId()))
           .isInstanceOf(java.util.concurrent.CancellationException.class);
       assertThat(service.hasActiveChildren(owner.runId())).isTrue();
-    } finally { Thread.interrupted(); }
+    } finally {
+      Thread.interrupted();
+    }
     assertThat(service.hasActiveChildren(owner.runId())).isFalse();
     service.finish(owner.runId());
   }
@@ -56,7 +58,11 @@ class CancellationLifecycleTest {
     var other = new AtomicInteger();
     var disposed = new AtomicInteger();
     service.begin(thread);
-    service.onCancel(null, () -> { throw new IllegalStateException("secret"); });
+    service.onCancel(
+        null,
+        () -> {
+          throw new IllegalStateException("secret");
+        });
     service.onCancel(null, other::incrementAndGet);
     service.register(disposed::incrementAndGet);
     assertThatCode(service::cancel).doesNotThrowAnyException();

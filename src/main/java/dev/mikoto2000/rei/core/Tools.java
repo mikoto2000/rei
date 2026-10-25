@@ -913,9 +913,11 @@ public class Tools {
   }
 
   /** 出力待機も割り込み可能にし、読み取り失敗を隠さない。 */
-  private String awaitOutput(CompletableFuture<String> output) throws IOException, InterruptedException {
-    try { return output.get(); }
-    catch (java.util.concurrent.ExecutionException failure) {
+  private String awaitOutput(CompletableFuture<String> output)
+      throws IOException, InterruptedException {
+    try {
+      return output.get();
+    } catch (java.util.concurrent.ExecutionException failure) {
       throw new IOException("Process output could not be read", failure.getCause());
     }
   }

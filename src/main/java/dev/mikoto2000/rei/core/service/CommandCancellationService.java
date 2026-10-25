@@ -16,8 +16,16 @@ import reactor.core.Disposable;
 @Component
 public class CommandCancellationService {
   /** 停止要求の受付と実際の終了を区別する照会情報。 */
-  public record Diagnostic(String runId, String projectId, String status,
-      Instant requestedAt, Instant finishedAt, String failure) {}
+  public record Diagnostic(
+      String runId,
+      String projectId,
+      String status,
+      Instant requestedAt,
+      Instant finishedAt,
+      String failure) {}
+
+  /** 要求の確定と外部への停止通知を分け、共有ロックの外で通知する。 */
+  public record CancellationRequest(boolean accepted, Runnable dispatch) {}
 
   /** 非同期の子処理が実際に戻るまで保持する所有権。 */
   @FunctionalInterface
@@ -55,7 +63,9 @@ public class CommandCancellationService {
   public boolean hasActiveChildren(String runId) {
     var state = runs.get(runId);
     if (state == null) return false;
-    synchronized (state) { return !state.workers.isEmpty(); }
+    synchronized (state) {
+      return !state.workers.isEmpty();
+    }
   }
 
   /** タイムアウトを終了と見なさず、実体が戻るまで登録と排他枠を保持する。 */
@@ -66,8 +76,11 @@ public class CommandCancellationService {
     synchronized (state) {
       state.closing = true;
       while (!state.workers.isEmpty() || state.signals > 0) {
-        try { state.wait(); }
-        catch (InterruptedException stop) { interrupted = true; }
+        try {
+          state.wait();
+        } catch (InterruptedException stop) {
+          interrupted = true;
+        }
       }
     }
     if (interrupted) Thread.currentThread().interrupt();
@@ -97,8 +110,10 @@ public class CommandCancellationService {
 
   private final Map<String, State> runs = new java.util.concurrent.ConcurrentHashMap<>();
   private final Map<String, Instant> pendingCancellations = new java.util.HashMap<>();
+
   /** 終了済み ID への遅延要求を診断するための有界履歴。資源参照は保持しない。 */
   private final Map<String, State> finished = new LinkedHashMap<>();
+
   private final State legacy = new State(null, null);
   private final Clock clock;
 
@@ -131,8 +146,10 @@ public class CommandCancellationService {
     var run = AgentRunScope.current();
     State state;
     synchronized (this) {
-      state = run == null ? legacy : runs.computeIfAbsent(run.runId(),
-          id -> new State(id, run.projectId()));
+      state =
+          run == null
+              ? legacy
+              : runs.computeIfAbsent(run.runId(), id -> new State(id, run.projectId()));
       synchronized (state) {
         state.depth++;
         var pending = run == null ? null : pendingCancellations.remove(run.runId());
@@ -145,13 +162,23 @@ public class CommandCancellationService {
 
   /** ID による開始直前の要求。呼び出し側は実在する受付済み Run を検証する。 */
   public boolean cancelRun(String runId) {
+    var request = requestRun(runId);
+    request.dispatch().run();
+    return request.accepted();
+  }
+
+  /** 要求だけを原子的に確定する。呼び出し元は共有ロックを解放してから dispatch する。 */
+  public CancellationRequest requestRun(String runId) {
     State state;
     synchronized (this) {
       state = runs.get(runId);
-      if (state == null) return !finished.containsKey(runId)
-          && pendingCancellations.putIfAbsent(runId, clock.instant()) == null;
+      if (state == null)
+        return new CancellationRequest(
+            !finished.containsKey(runId)
+                && pendingCancellations.putIfAbsent(runId, clock.instant()) == null,
+            () -> {});
     }
-    return cancel(state);
+    return request(state);
   }
 
   public synchronized void forgetPendingCancellation(String runId) {
@@ -197,45 +224,71 @@ public class CommandCancellationService {
     final State state = found;
     if (state == null) return () -> {};
     var called = new AtomicBoolean();
-    Runnable once = () -> { if (called.compareAndSet(false, true)) invoke(state, child); };
+    Runnable once =
+        () -> {
+          if (called.compareAndSet(false, true)) invoke(state, child);
+        };
     boolean stopped;
     synchronized (state) {
       stopped = state.requestedAt != null || state.finishedAt != null || state.closing;
       if (!stopped) state.children.add(once);
     }
     if (stopped) once.run();
-    return () -> { synchronized (state) { state.children.remove(once); } };
+    return () -> {
+      synchronized (state) {
+        state.children.remove(once);
+      }
+    };
   }
 
   private boolean cancel(State state) {
-    if (state == null) return false;
+    var request = request(state);
+    request.dispatch().run();
+    return request.accepted();
+  }
+
+  private CancellationRequest request(State state) {
+    if (state == null) return new CancellationRequest(false, () -> {});
     List<Runnable> children;
     Disposable disposable;
     synchronized (state) {
-      if (state.finishedAt != null || state.requestedAt != null) return false;
+      if (state.finishedAt != null || state.requestedAt != null)
+        return new CancellationRequest(false, () -> {});
       state.requestedAt = clock.instant();
       state.signals++;
       children = List.copyOf(state.children);
       state.children.clear();
       disposable = state.disposable;
       state.disposable = null;
-      // 終了との競合で、終了後に再利用されたスレッドを割り込まない。
-      if (state.thread != null) invoke(state, state.thread::interrupt);
-      for (var worker : state.workers.keySet())
-        if (worker != state.thread) invoke(state, worker::interrupt);
     }
-    try {
-      log(state, "requested");
-      children.forEach(Runnable::run);
-      if (disposable != null) invoke(state, disposable::dispose);
-      return true;
-    } finally { signalFinished(state); }
+    var dispatched = new AtomicBoolean();
+    return new CancellationRequest(
+        true,
+        () -> {
+          if (!dispatched.compareAndSet(false, true)) return;
+          try {
+            synchronized (state) {
+              // signals が終端確定を防ぎ、再利用されたスレッドへの割り込みを防止する。
+              if (state.thread != null) invoke(state, state.thread::interrupt);
+              for (var worker : state.workers.keySet())
+                if (worker != state.thread) invoke(state, worker::interrupt);
+            }
+            log(state, "requested");
+            children.forEach(Runnable::run);
+            if (disposable != null) invoke(state, disposable::dispose);
+          } finally {
+            signalFinished(state);
+          }
+        });
   }
 
   private void invoke(State state, Runnable action) {
-    try { action.run(); }
-    catch (RuntimeException error) {
-      synchronized (state) { state.failure = error.getClass().getSimpleName(); }
+    try {
+      action.run();
+    } catch (RuntimeException error) {
+      synchronized (state) {
+        state.failure = error.getClass().getSimpleName();
+      }
       log(state, "signal_failed");
     }
   }
@@ -260,7 +313,9 @@ public class CommandCancellationService {
   public boolean isCancellationRequested() {
     var state = state();
     if (state == null) return false;
-    synchronized (state) { return state.requestedAt != null; }
+    synchronized (state) {
+      return state.requestedAt != null;
+    }
   }
 
   /** Run の停止は sticky。旧単独コマンドだけ消費 API の互換動作を残す。 */
@@ -349,43 +404,66 @@ public class CommandCancellationService {
     try {
       children.forEach(Runnable::run);
       if (disposable != null) invoke(state, disposable::dispose);
-    } finally { signalFinished(state); }
+    } finally {
+      signalFinished(state);
+    }
   }
 
   /** 現在の利用者操作と同じ Project の停止進行状況。 */
   public List<Diagnostic> currentProjectDiagnostics() {
     var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
     if (project != null) return projectDiagnostics(project.id());
-    return runs.values().stream().filter(s -> s.projectId == null)
-        .map(s -> diagnostic(s.runId)).toList();
+    return runs.values().stream()
+        .filter(s -> s.projectId == null)
+        .map(s -> diagnostic(s.runId))
+        .toList();
   }
 
   public synchronized Diagnostic diagnostic(String runId) {
     var state = runs.get(runId);
     if (state == null) state = finished.get(runId);
-    if (state == null) return new Diagnostic(runId, null,
-        pendingCancellations.containsKey(runId) ? "CANCEL_REQUESTED" : "NOT_FOUND",
-        pendingCancellations.get(runId), null, null);
+    if (state == null)
+      return new Diagnostic(
+          runId,
+          null,
+          pendingCancellations.containsKey(runId) ? "CANCEL_REQUESTED" : "NOT_FOUND",
+          pendingCancellations.get(runId),
+          null,
+          null);
     synchronized (state) {
-      String status = state.finishedAt != null ? "FINISHED"
-          : state.failure != null ? "CANCEL_FAILED"
-          : state.requestedAt == null ? "RUNNING"
-          : java.time.Duration.between(state.requestedAt, clock.instant()).toSeconds() >= 30
-              ? "CANCEL_STALLED" : "CANCEL_REQUESTED";
-      return new Diagnostic(runId, state.projectId, status,
-          state.requestedAt, state.finishedAt, state.failure);
+      String status =
+          state.finishedAt != null
+              ? "FINISHED"
+              : state.failure != null
+                  ? "CANCEL_FAILED"
+                  : state.requestedAt == null
+                      ? "RUNNING"
+                      : java.time.Duration.between(state.requestedAt, clock.instant()).toSeconds()
+                              >= 30
+                          ? "CANCEL_STALLED"
+                          : "CANCEL_REQUESTED";
+      return new Diagnostic(
+          runId, state.projectId, status, state.requestedAt, state.finishedAt, state.failure);
     }
   }
 
   public List<Diagnostic> projectDiagnostics(String projectId) {
     validateProject(projectId);
-    return runs.values().stream().filter(s -> projectId.equals(s.projectId))
-        .map(s -> diagnostic(s.runId)).toList();
+    return runs.values().stream()
+        .filter(s -> projectId.equals(s.projectId))
+        .map(s -> diagnostic(s.runId))
+        .toList();
   }
 
   private void log(State state, String outcome) {
-    org.slf4j.LoggerFactory.getLogger(CommandCancellationService.class).info(
-        "Run cancellation: runId={}, projectId={}, requestedAt={}, finishedAt={}, outcome={}, failure={}",
-        state.runId, state.projectId, state.requestedAt, state.finishedAt, outcome, state.failure);
+    org.slf4j.LoggerFactory.getLogger(CommandCancellationService.class)
+        .info(
+            "Run cancellation: runId={}, projectId={}, requestedAt={}, finishedAt={}, outcome={}, failure={}",
+            state.runId,
+            state.projectId,
+            state.requestedAt,
+            state.finishedAt,
+            outcome,
+            state.failure);
   }
 }

@@ -23,9 +23,10 @@ class RouterCancellationLifecycleTest {
     var router = new ConversationInputRouter(tasks::add, (c, p, q) -> called.set(true));
     router.setCancellation(cancellation);
     var accepted = new AtomicBoolean();
-    router.onChange(() -> {
-      if (!router.activeRuns().isEmpty()) accepted.set(cancellation.cancelProject("a"));
-    });
+    router.onChange(
+        () -> {
+          if (!router.activeRuns().isEmpty()) accepted.set(cancellation.cancelProject("a"));
+        });
     router.submit(owner("run", "a"), "hello");
     assertThat(accepted).isTrue();
     try {
@@ -33,7 +34,9 @@ class RouterCancellationLifecycleTest {
       assertThat(called).isFalse();
       assertThat(router.activeRuns()).isEmpty();
       assertThat(cancellation.cancelRun("run")).isFalse();
-    } finally { Thread.interrupted(); }
+    } finally {
+      Thread.interrupted();
+    }
   }
 
   @Test
@@ -43,15 +46,24 @@ class RouterCancellationLifecycleTest {
     var finishedA = new CountDownLatch(1);
     var releaseB = new CountDownLatch(1);
     var cleanupB = new CountDownLatch(1);
-    var router = new ConversationInputRouter(work -> Thread.ofVirtual().start(work), (c, p, q) -> {
-      started.countDown();
-      try {
-        if (c.projectId().equals("a")) new CountDownLatch(1).await();
-        else releaseB.await();
-      } catch (InterruptedException cancelled) { Thread.currentThread().interrupt(); }
-    });
+    var router =
+        new ConversationInputRouter(
+            work -> Thread.ofVirtual().start(work),
+            (c, p, q) -> {
+              started.countDown();
+              try {
+                if (c.projectId().equals("a")) new CountDownLatch(1).await();
+                else releaseB.await();
+              } catch (InterruptedException cancelled) {
+                Thread.currentThread().interrupt();
+              }
+            });
     router.setCancellation(cancellation);
-    router.onCleanup(c -> { if (c.projectId().equals("a")) finishedA.countDown(); else cleanupB.countDown(); });
+    router.onCleanup(
+        c -> {
+          if (c.projectId().equals("a")) finishedA.countDown();
+          else cleanupB.countDown();
+        });
     router.submit(owner("a1", "a"), "A");
     router.submit(owner("b1", "b"), "B");
     try {

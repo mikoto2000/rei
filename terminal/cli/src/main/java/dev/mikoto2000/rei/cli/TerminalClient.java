@@ -962,8 +962,9 @@ public final class TerminalClient implements AutoCloseable {
         if (words.size() > 2) throw new IllegalArgumentException("Usage: /cancel [RUN_ID]");
         if (words.size() == 1) {
           requireProject();
-          show(backend.post(
-              "/api/v1/projects/" + BackendClient.segment(project) + "/runs/cancel", Map.of()));
+          show(
+              backend.post(
+                  "/api/v1/projects/" + BackendClient.segment(project) + "/runs/cancel", Map.of()));
         } else
           show(
               backend.post(

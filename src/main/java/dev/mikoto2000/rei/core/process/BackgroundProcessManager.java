@@ -312,6 +312,12 @@ public class BackgroundProcessManager {
   private List<ProcessHandle> terminateProcessTree(ProcessHandle root) {
     List<ProcessHandle> handles =
         Stream.concat(root.descendants(), Stream.of(root)).distinct().toList();
+    terminateProcessTree(handles);
+    return handles;
+  }
+
+  /** 所有権を確認済みのハンドルにだけ、既存の終了猶予を適用する。 */
+  private void terminateProcessTree(List<ProcessHandle> handles) {
     handles.forEach(
         handle -> {
           if (handle.isAlive()) {
@@ -326,20 +332,40 @@ public class BackgroundProcessManager {
           }
         });
     waitForExit(handles, Duration.ofSeconds(1));
-    return handles;
   }
 
   /** 呼び出しが所有する前面 Process だけを既存ポリシーで終了し、実際の終了を待つ。 */
   public void terminateOwned(Process process) {
     boolean interrupted = Thread.interrupted();
     try {
-      var handles = terminateProcessTree(process.toHandle());
+      var root = process.toHandle();
+      var handles = Stream.concat(root.descendants(), Stream.of(root)).distinct().toList();
+      try {
+        terminateProcessTree(handles);
+      } catch (RuntimeException failure) {
+        org.slf4j.LoggerFactory.getLogger(BackgroundProcessManager.class)
+            .warn(
+                "Owned process stop signal failed: pid={}, reason={}",
+                process.pid(),
+                failure.getClass().getSimpleName());
+      }
       for (var handle : handles) {
         while (handle.isAlive()) {
-          try { handle.onExit().get(); }
-          catch (InterruptedException stop) { interrupted = true; }
-          catch (java.util.concurrent.ExecutionException failure) {
-            throw new IllegalStateException("Owned process termination could not be confirmed", failure);
+          try {
+            handle.onExit().get();
+          } catch (InterruptedException stop) {
+            interrupted = true;
+          } catch (java.util.concurrent.ExecutionException failure) {
+            org.slf4j.LoggerFactory.getLogger(BackgroundProcessManager.class)
+                .warn(
+                    "Owned process termination unconfirmed: pid={}, reason={}",
+                    handle.pid(),
+                    failure.getClass().getSimpleName());
+            try {
+              TimeUnit.MILLISECONDS.sleep(250);
+            } catch (InterruptedException stop) {
+              interrupted = true;
+            }
           }
         }
       }

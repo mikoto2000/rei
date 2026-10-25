@@ -40,27 +40,35 @@ public class CancelCommand implements Runnable {
       else if (before.status().equals("FINISHED")) out.println("[cancel] Run は既に終了しています: " + runId);
       else {
         boolean accepted = cancellation.cancelRegisteredRun(runId);
-        out.println(accepted ? "[cancel] 停止を要求しました: " + runId
-            : "[cancel] 既に停止要求済みで、終了を待っています: " + runId);
+        out.println(
+            accepted ? "[cancel] 停止を要求しました: " + runId : "[cancel] 既に停止要求済みで、終了を待っています: " + runId);
         printDiagnostic(out, cancellation.diagnostic(runId));
       }
     } else {
       boolean accepted = cancellation.cancelCurrentProject();
       var diagnostics = cancellation.currentProjectDiagnostics();
-      out.println(accepted
-          ? "[cancel] ユーザーの要求により停止を要求しました。終了通知を確認してください。"
-          : diagnostics.isEmpty() ? "[cancel] 停止対象の実行がない状態です。"
-              : "[cancel] 既に停止要求済みで、終了を待っています。");
+      out.println(
+          accepted
+              ? "[cancel] ユーザーの要求により停止を要求しました。終了通知を確認してください。"
+              : diagnostics.isEmpty()
+                  ? "[cancel] 停止対象の実行がない状態です。"
+                  : "[cancel] 既に停止要求済みで、終了を待っています。");
       diagnostics.forEach(diagnostic -> printDiagnostic(out, diagnostic));
     }
     out.flush();
   }
 
   /** 停止未完了や失敗は終了と区別し、ID と安全な原因コードを表示する。 */
-  private void printDiagnostic(java.io.PrintWriter out, CommandCancellationService.Diagnostic diagnostic) {
-    out.println("[cancel] run=" + diagnostic.runId() + " status=" + diagnostic.status()
-        + " requestedAt=" + diagnostic.requestedAt()
-        + (diagnostic.status().equals("CANCEL_STALLED") ? " 停止要求済みですが、処理が終了できていません。" : "")
-        + (diagnostic.failure() == null ? "" : " 停止処理の失敗: " + diagnostic.failure()));
+  private void printDiagnostic(
+      java.io.PrintWriter out, CommandCancellationService.Diagnostic diagnostic) {
+    out.println(
+        "[cancel] run="
+            + diagnostic.runId()
+            + " status="
+            + diagnostic.status()
+            + " requestedAt="
+            + diagnostic.requestedAt()
+            + (diagnostic.status().equals("CANCEL_STALLED") ? " 停止要求済みですが、処理が終了できていません。" : "")
+            + (diagnostic.failure() == null ? "" : " 停止処理の失敗: " + diagnostic.failure()));
   }
 }

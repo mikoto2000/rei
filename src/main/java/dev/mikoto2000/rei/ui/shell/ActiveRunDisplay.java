@@ -74,7 +74,10 @@ public class ActiveRunDisplay {
                   + "  "
                   + String.format("%02d:%02d", seconds / 60, seconds % 60)
                   + "  "
-                  + run.summary() + "  [run=" + run.id() + "]";
+                  + run.summary()
+                  + "  [run="
+                  + run.id()
+                  + "]";
             })
         .toList();
   }

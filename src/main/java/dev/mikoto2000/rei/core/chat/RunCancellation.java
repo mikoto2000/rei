@@ -24,10 +24,12 @@ public final class RunCancellation {
   /** 非同期境界を越えた処理が実際に戻るまで、Run の資源として保持する。 */
   public static dev.mikoto2000.rei.core.service.CommandCancellationService.ChildLease enterChild(
       org.springframework.ai.chat.prompt.Prompt prompt) {
-    if (prompt.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
+    if (prompt.getOptions()
+            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
         && options.getToolContext() != null
-        && options.getToolContext().get(
-            dev.mikoto2000.rei.core.service.CommandCancellationService.class.getName())
+        && options
+                .getToolContext()
+                .get(dev.mikoto2000.rei.core.service.CommandCancellationService.class.getName())
             instanceof dev.mikoto2000.rei.core.service.CommandCancellationService cancellation
         && options.getToolContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
             instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)

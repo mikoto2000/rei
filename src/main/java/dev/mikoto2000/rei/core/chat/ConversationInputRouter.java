@@ -322,10 +322,13 @@ public final class ConversationInputRouter {
           ProjectRunQueue.Access.valueOf(context.mode().name()),
           () -> {
             try {
-              executeCancellable(context, operation, work -> {
-                if (admissions != null) admissions.startExecution(context);
-                lifecycle.accept(work);
-              });
+              executeCancellable(
+                  context,
+                  operation,
+                  work -> {
+                    if (admissions != null) admissions.startExecution(context);
+                    lifecycle.accept(work);
+                  });
             } finally {
               forget(slot);
             }
@@ -402,8 +405,10 @@ public final class ConversationInputRouter {
               ProjectRunQueue.Access.valueOf(context.mode().name()),
               () -> {
                 try {
-                  executeCancellable(context,
-                      () -> slot.execution().execute(context, slot.prompt(), slot.queue()), work -> {
+                  executeCancellable(
+                      context,
+                      () -> slot.execution().execute(context, slot.prompt(), slot.queue()),
+                      work -> {
                         if (admissions != null) admissions.startExecution(context);
                         admitted.run();
                         lifecycle.accept(work);
@@ -452,14 +457,15 @@ public final class ConversationInputRouter {
   }
 
   /** 予約済みの停止要求を実行スレッドへ結び付け、子処理の開始前に確認する。 */
-  private void executeCancellable(AgentRunContext context, Runnable operation,
-      Consumer<Runnable> lifecycle) {
+  private void executeCancellable(
+      AgentRunContext context, Runnable operation, Consumer<Runnable> lifecycle) {
     try (var scope = AgentRunScope.open(context)) {
       cancellation.begin(Thread.currentThread());
       try {
-        lifecycle.accept(() -> {
-          if (!cancellation.isCancellationRequested()) operation.run();
-        });
+        lifecycle.accept(
+            () -> {
+              if (!cancellation.isCancellationRequested()) operation.run();
+            });
       } finally {
         cancellation.clear();
       }
