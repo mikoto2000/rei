@@ -34,7 +34,26 @@ import org.springframework.stereotype.Component;
  * <p>Derives attention only from owned execution facts, without interpreting model text.
  */
 @Component
-public class AttentionService {
+public class AttentionService implements dev.mikoto2000.rei.secretary.SecretaryNotifications {
+  @Override
+  public void deliver(dev.mikoto2000.rei.secretary.SecretaryNotifications.Notice notice) {
+    var saved = inbox.createSecretary(notice);
+    publisher.publish(
+        new AgentEvent(
+            notice.id(),
+            0,
+            notice.created(),
+            AgentEventType.ATTENTION_REQUIRED,
+            1,
+            null,
+            null,
+            null,
+            saved.id(),
+            null,
+            new AttentionRequiredPayload(saved.id(), saved.kind(), saved.message()),
+            notice.projectId()));
+  }
+
   /**
    * 注意の管理で受け渡す実行を表す。
    *

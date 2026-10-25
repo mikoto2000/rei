@@ -14,6 +14,46 @@ import picocli.CommandLine.Spec;
 @Command(name = "secretary", description = "約束・タスク台帳を操作します", mixinStandardHelpOptions = true)
 public class SecretaryCommand implements java.util.concurrent.Callable<Integer> {
   private final ObjectProvider<SecretaryLedger> ledgers;
+  private ObjectProvider<SecretaryFollowups> followups;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setFollowups(ObjectProvider<SecretaryFollowups> followups) {
+    this.followups = followups;
+  }
+
+  @Option(names = "--date")
+  LocalDate reportDate;
+
+  @Option(names = "--zone", defaultValue = "")
+  String zone;
+
+  @Option(names = "--briefing-time", defaultValue = "")
+  String briefingTime;
+
+  @Option(names = "--review-time", defaultValue = "")
+  String reviewTime;
+
+  @Option(names = "--repeat-seconds", defaultValue = "86400")
+  long repeatSeconds;
+
+  @Option(names = "--notification-priority", defaultValue = "3")
+  int notificationPriority;
+
+  @Option(names = "--destination", defaultValue = "INBOX")
+  String destination;
+
+  @Option(names = "--watch-enabled")
+  boolean watchEnabled;
+
+  @Option(names = "--notifications")
+  boolean notificationsEnabled;
+
+  private SecretaryFollowups followups() {
+    var service = followups == null ? null : followups.getIfAvailable();
+    if (service == null) throw new IllegalStateException("Secretary followups unavailable");
+    return service;
+  }
+
   @Spec picocli.CommandLine.Model.CommandSpec spec;
 
   @Parameters(index = "0", defaultValue = "list")
@@ -74,6 +114,25 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
       if (ledger == null) throw new IllegalStateException("Enable rei.secretary.enabled first");
       Object result =
           switch (action) {
+            case "settings" -> followups().settings(project);
+            case "configure" ->
+                followups()
+                    .configure(
+                        new SecretaryFollowups.Settings(
+                            project,
+                            watchEnabled,
+                            notificationsEnabled,
+                            briefingTime,
+                            reviewTime,
+                            zone.isEmpty() ? followups().settings(project).zone() : zone,
+                            repeatSeconds,
+                            notificationPriority,
+                            destination));
+            case "briefing" -> followups().report(project, reportDate, false);
+            case "review" -> followups().report(project, reportDate, true);
+            case "notifications" -> followups().history(project, limit);
+            case "check" -> followups().checkNow(project);
+            case "followup-status" -> followups().status(project);
             case "list" -> ledger.list(project, offset, limit);
             case "show" -> ledger.get(project, id);
             case "sources" -> ledger.sources(project, id);

@@ -26,6 +26,19 @@ import org.springframework.stereotype.Component;
 @Component
 @EnableConfigurationProperties(AgentSchedulerProperties.class)
 public class AgentScheduleDispatcher {
+  private java.util.List<dev.mikoto2000.rei.secretary.SecretaryTick> secretaries =
+      java.util.List.of();
+
+  public void setSecretary(dev.mikoto2000.rei.secretary.SecretaryTick secretary) {
+    this.secretaries = java.util.List.of(secretary);
+  }
+
+  @Autowired(required = false)
+  public void setSecretaries(
+      java.util.List<dev.mikoto2000.rei.secretary.SecretaryTick> secretaries) {
+    this.secretaries = java.util.List.copyOf(secretaries);
+  }
+
   /** 状態表示Resumes。 */
   private dev.mikoto2000.rei.dot.DotResumeService dotResumes;
 
@@ -244,6 +257,14 @@ public class AgentScheduleDispatcher {
   /** 時刻と期間の解釈に関する定期確認を処理する。 */
   @Scheduled(fixedDelayString = "${rei.agent-scheduler.check-interval-ms:5000}")
   public synchronized void tick() {
+    for (var secretary : secretaries) {
+      try {
+        secretary.tick();
+      } catch (RuntimeException failure) {
+        org.slf4j.LoggerFactory.getLogger(getClass())
+            .warn("Secretary clock observer failed: {}", failure.getClass().getSimpleName());
+      }
+    }
     // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
     if (!properties.enabled() || !permissions.enabled() || !busy.compareAndSet(false, true)) return;
     PersistentAgentScheduler.Entry claim = null;

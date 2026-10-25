@@ -18,6 +18,28 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class AttentionRepository {
+  /** Idempotent local ingress; the existing delivery service keeps its policy and destination. */
+  public Item createSecretary(dev.mikoto2000.rei.secretary.SecretaryNotifications.Notice notice) {
+    String kind = "SECRETARY_" + notice.destination();
+    String id =
+        UUID.nameUUIDFromBytes(
+                ("secretary:" + notice.projectId() + ":" + notice.id())
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8))
+            .toString();
+    db.sql("INSERT OR IGNORE INTO agent_attention VALUES(?,?,?,? ,?,?,?,'OPEN',?)")
+        .params(
+            id,
+            notice.projectId(),
+            "",
+            "",
+            kind,
+            notice.id(),
+            notice.message(),
+            notice.created().toEpochMilli())
+        .update();
+    return get(notice.projectId(), id);
+  }
+
   /**
    * 注意の管理で受け渡す項目を表す。
    *
@@ -67,7 +89,7 @@ public class AttentionRepository {
           new Item(
               rs.getString("id"),
               rs.getString("project"),
-              rs.getString("session"),
+              rs.getString("session").isEmpty() ? null : rs.getString("session"),
               rs.getString("run").isEmpty() ? null : rs.getString("run"),
               rs.getString("kind"),
               rs.getString("reference"),
