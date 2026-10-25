@@ -13,6 +13,13 @@ public class IdleTopicScheduler {
   private static final Logger log = LoggerFactory.getLogger(IdleTopicScheduler.class);
 
   /** 操作がない状態話題実行条件。 */
+  private volatile dev.mikoto2000.rei.life.LifePolicy life;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setLifeContext(dev.mikoto2000.rei.life.LifePolicy value) {
+    life = value;
+  }
+
   private final IdleTopicTrigger idleTopicTrigger;
 
   /** 話題Orchestrator。 */
@@ -47,6 +54,7 @@ public class IdleTopicScheduler {
   /** 話題の管理に関する定期確認を処理する。 */
   @Scheduled(fixedDelayString = "${rei.topic-generator.idle-trigger.check-interval:30s}")
   public void tick() {
+    if (life != null && !life.notificationAllowed("LOW", "")) return;
     try {
       IdleTriggerDecision decision = idleTopicTrigger.evaluate(clock.instant());
       maybePublishDecision(decision);

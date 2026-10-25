@@ -73,6 +73,13 @@ public final class SecretaryOrchestrator
     }
   }
 
+  private volatile dev.mikoto2000.rei.life.LifePolicy life;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setLifeContext(dev.mikoto2000.rei.life.LifePolicy value) {
+    life = value;
+  }
+
   private final SecretaryDatabase database;
   private final SecretaryLedger ledger;
   private final ObjectProvider<SecretaryReports> followups;
@@ -505,6 +512,8 @@ public final class SecretaryOrchestrator
   }
 
   private Admission assess(SecretaryNotifications.Notice notice) {
+    if (life != null && !life.notificationAllowed(notice.category().name(), notice.id()))
+      return new Admission(Decision.HOLD, "life_policy");
     if (notice.kind().equals("SUGGESTION") && !liveSuggestion(notice))
       return new Admission(Decision.SUPPRESS, "superseded_feedback");
     if (!database.read(db -> hasSettings(db, notice.projectId())))

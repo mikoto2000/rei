@@ -29,6 +29,7 @@ public class AttentionDeliveryService {
   private static final Set<String> KINDS =
       Set.of(
           "SECRETARY_DELIVERY",
+          "LIFE_DIGEST",
           "APPROVAL_REQUIRED",
           "POLICY_DENIED",
           "LONG_WAIT",
@@ -48,6 +49,13 @@ public class AttentionDeliveryService {
       org.slf4j.LoggerFactory.getLogger(AttentionDeliveryService.class);
 
   /** この機能の動作設定。 */
+  private volatile dev.mikoto2000.rei.life.LifePolicy life;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setLifeContext(dev.mikoto2000.rei.life.LifePolicy policy) {
+    life = policy;
+  }
+
   private final AttentionDeliveryProperties properties;
 
   /** 受信した案内や確認待ち情報の保存先。 */
@@ -221,6 +229,7 @@ public class AttentionDeliveryService {
     if (closed || !properties.enabled()) return;
     var pending = outbox.pending();
     if (pending.isEmpty()) return;
+    if (life != null && !life.notificationAllowed("NORMAL", pending.getFirst().id())) return;
     var item = pending.getFirst();
     AttentionRepository.Item attention;
     try {
@@ -274,6 +283,14 @@ public class AttentionDeliveryService {
     }
     var lease = outbox.claimActive(item, selected.minimumIntervalMillis());
     if (lease == null) return;
+    if (life != null && !life.notificationAllowed("NORMAL", item.id())) {
+      try {
+        outbox.deferForLifePolicy(lease.delivery());
+      } finally {
+        lease.close();
+      }
+      return;
+    }
     NotificationProvider.Receipt receipt =
         new NotificationProvider.Receipt("UNKNOWN", "transport_outcome_unknown", "", 0);
     boolean interrupted = false;

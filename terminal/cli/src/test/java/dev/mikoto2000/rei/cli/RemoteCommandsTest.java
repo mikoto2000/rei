@@ -7,6 +7,14 @@ import org.junit.jupiter.api.Test;
 
 /** 外部コマンド一覧の結果と状態の契約を検証するテスト。 */
 class RemoteCommandsTest {
+  @Test void lifeSettingsUseFixedGlobalEndpointsAndStructuredReplacement() {
+    assertEquals("/api/v1/life/settings",RemoteCommands.route(List.of("/secretary","life-settings"),null,null).path());
+    assertEquals("/api/v1/life/status",RemoteCommands.route(List.of("/secretary","life-status"),null,null).path());
+    var request=RemoteCommands.route(List.of("/secretary","life-configure","--settings-json","{\"revision\":1,\"zone\":\"Asia/Tokyo\"}"),null,null);
+    assertEquals("PUT",request.method());assertTrue(((Map<?,?>)request.body()).containsKey("settings"));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/secretary","life-configure","--settings-json","[]"),null,null));
+  }
+
   /** 再開用の記録履歴保守全体共通およびについて、明示的な反映を必要とすることを確認する。 */
   @Test
   void checkpointHistoryMaintenanceIsGlobalAndRequiresExplicitApply() {

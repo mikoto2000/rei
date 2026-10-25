@@ -19,10 +19,43 @@ import java.util.concurrent.TimeUnit;
  * Robot adapter.
  */
 public final class WindowsDesktopActivityObserver implements DesktopActivityObserver {
+  private java.util.function.Supplier<dev.mikoto2000.rei.life.LifePolicy> life = () -> null;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void useLifeContext(dev.mikoto2000.rei.life.LifePolicy policy) {
+    life = () -> policy;
+  }
+
+  private <T> T guarded(java.util.concurrent.Callable<T> read) throws Exception {
+    var policy = life.get();
+    var lease = policy == null ? null : policy.begin();
+    if (policy != null && !policy.valid(lease)) throw new IllegalStateException("life_policy");
+    var result = read.call();
+    if (policy != null && !policy.valid(lease))
+      throw new IllegalStateException("life_policy_changed");
+    return result;
+  }
+
+  public CapturedScreen capture() throws Exception {
+    return guarded(this::readCapture);
+  }
+
+  public ForegroundWindow foreground() throws Exception {
+    return guarded(this::readForeground);
+  }
+
+  public Metadata metadata() throws Exception {
+    return guarded(this::readMetadata);
+  }
+
   /** 作業状況の把握で用いるlightweightを返す。 */
   @Override
   public Lightweight lightweight() {
-    return WindowsInputProbe.read();
+    try {
+      return guarded(WindowsInputProbe::read);
+    } catch (Exception failure) {
+      throw new IllegalStateException("life_policy_or_probe", failure);
+    }
   }
 
   /** この機能の動作設定。 */
@@ -45,8 +78,7 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
   private final ScreenCapture capture = new RobotScreenCapture(new AwtRobotDriver());
 
   /** 後から状況を確認できるよう、Windowsデスクトップ作業状況観測を記録する。 */
-  @Override
-  public CapturedScreen capture() throws Exception {
+  private CapturedScreen readCapture() throws Exception {
     var metadata = lastMetadata;
     boolean identified =
         properties != null && properties.getDetection().isBackgroundFullScreenEnabled();
@@ -96,8 +128,7 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
   }
 
   /** 作業状況の把握で用いる付随情報を返す。 */
-  @Override
-  public Metadata metadata() throws Exception {
+  private Metadata readMetadata() throws Exception {
     var node = probe("metadata.ps1", 1048576);
     if (node == null) return null;
     var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -107,8 +138,7 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
   }
 
   /** 作業状況の把握で用いる前面を返す。 */
-  @Override
-  public ForegroundWindow foreground() throws Exception {
+  private ForegroundWindow readForeground() throws Exception {
     var node = probe("foreground.ps1", 32768);
     if (node == null
         || !node.path("processName").isTextual()

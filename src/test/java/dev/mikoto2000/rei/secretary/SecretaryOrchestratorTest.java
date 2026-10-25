@@ -19,6 +19,43 @@ import org.junit.jupiter.api.io.TempDir;
 @Tag("integration")
 class SecretaryOrchestratorTest {
   @Test
+  void workNotificationsPersistAndResumeAsOneDigestWithoutPriorityBypass() throws Exception {
+    var db = database();
+    var ledger = new SecretaryLedger(db, clock);
+    task(ledger, "one", 1);
+    task(ledger, "two", 3);
+    var life = org.mockito.Mockito.mock(dev.mikoto2000.rei.life.LifeContext.class);
+    try (var followups = new SecretaryFollowups(db, ledger, clock, received::add, false);
+        var service = new SecretaryOrchestrator(db, ledger, reports(followups), clock, false)) {
+      followups.configure(
+          new SecretaryFollowups.Settings("p", true, true, "", "", "UTC", 86400, 3, "INBOX"));
+      followups.setLifeContext(life);
+      service.setLifeContext(life);
+      followups.setInterruption(service);
+      clock.now = clock.now.plusSeconds(86400);
+      followups.checkNow("p");
+      assertTrue(received.isEmpty());
+      assertEquals(
+          2, followups.history("p", 100).stream().filter(n -> n.status().equals("HELD")).count());
+      assertTrue(followups.history("p", 100).stream().allMatch(n -> n.attempts() == 0));
+    }
+    try (var followups = new SecretaryFollowups(db, ledger, clock, received::add, false);
+        var service = new SecretaryOrchestrator(db, ledger, reports(followups), clock, false)) {
+      org.mockito.Mockito.when(
+              life.notificationAllowed(
+                  org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString()))
+          .thenReturn(true);
+      followups.setLifeContext(life);
+      service.setLifeContext(life);
+      followups.setInterruption(service);
+      followups.checkNow("p");
+      followups.checkNow("p");
+      assertEquals(1, received.size());
+      assertEquals("DIGEST", received.getFirst().kind());
+    }
+  }
+
+  @Test
   void snoozingAnExistingDigestPreservesItsIdentityAndOriginalCount() throws Exception {
     var db = database();
     var ledger = new SecretaryLedger(db, clock);

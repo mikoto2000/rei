@@ -105,15 +105,28 @@ public class TopicGeneratorService {
 
   /** 話題の管理で用いる準備候補一覧を返す。 */
   public synchronized List<TopicCandidate> prepareCandidates(TopicGenerationContext context) {
-    if (!properties.isEnabled()) return List.of();
-    return generateCandidates(context, true);
+    return prepareCandidates(context, () -> true);
+  }
+
+  public synchronized List<TopicCandidate> prepareCandidates(
+      TopicGenerationContext context, java.util.function.BooleanSupplier allowed) {
+    if (!properties.isEnabled() || !allowed.getAsBoolean()) return List.of();
+    return generateCandidates(context, true, allowed);
   }
 
   /** 依頼された内容を提供するため、候補一覧を生成する。 */
   private List<TopicCandidate> generateCandidates(
       TopicGenerationContext context, boolean ignoreFailures) {
+    return generateCandidates(context, ignoreFailures, () -> true);
+  }
+
+  private List<TopicCandidate> generateCandidates(
+      TopicGenerationContext context,
+      boolean ignoreFailures,
+      java.util.function.BooleanSupplier allowed) {
     List<TopicCandidate> candidates = new ArrayList<>();
     for (TopicCandidateGenerator generator : generators) {
+      if (!allowed.getAsBoolean()) return List.of();
       try {
         dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);
         candidates.addAll(generator.generate(context));
@@ -122,6 +135,7 @@ public class TopicGeneratorService {
         if (!ignoreFailures) throw e;
         log.warn("Topic candidate refresh failed: {}", generator.getClass().getSimpleName());
       }
+      if (!allowed.getAsBoolean()) return List.of();
       if (candidates.size() >= properties.getMaxCandidates()) break;
     }
     return candidates.stream().limit(properties.getMaxCandidates()).toList();

@@ -31,6 +31,12 @@ final class ActivityEvidencePipeline {
   /** 観測内容。 */
   InputAwareObservation observation;
 
+  volatile dev.mikoto2000.rei.life.LifePolicy life;
+
+  private boolean lifeAllowed(Instant since) {
+    return life == null || life.observationAllowed(since);
+  }
+
   /** 観測。 */
   private final DesktopActivityObserver observer;
 
@@ -221,6 +227,8 @@ final class ActivityEvidencePipeline {
     /** 生成。 */
     final long generation;
 
+    final dev.mikoto2000.rei.life.LifeContext.Lease lifeLease;
+
     /** 画面。 */
     final CapturedScreen screen;
 
@@ -237,7 +245,13 @@ final class ActivityEvidencePipeline {
     ActivityRecord record;
 
     /** 指定された値や利用先を使って、Workを初期化する。 */
-    Work(long generation, CapturedScreen screen, ActivityRecord record, Instant imageCapturedAt) {
+    Work(
+        long generation,
+        CapturedScreen screen,
+        ActivityRecord record,
+        Instant imageCapturedAt,
+        dev.mikoto2000.rei.life.LifeContext.Lease lifeLease) {
+      this.lifeLease = lifeLease;
       this.generation = generation;
       this.screen = screen;
       this.record = record;
@@ -302,11 +316,16 @@ final class ActivityEvidencePipeline {
 
   /** 作業状況の把握において、許可に該当するか判定する。 */
   private synchronized boolean allowed(long token) {
-    return p.isEnabled() && !paused && !closed && generation == token;
+    return p.isEnabled()
+        && !paused
+        && !closed
+        && generation == token
+        && lifeAllowed(clock.instant());
   }
 
   /** 作業状況の把握に関する定期確認を処理する。 */
   void tick() {
+    if (!lifeAllowed(clock.instant())) return;
     // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
     if (!observing.compareAndSet(false, true)) return;
     long started = System.nanoTime();
@@ -323,6 +342,7 @@ final class ActivityEvidencePipeline {
         warn("retention", e);
       }
       if (!allowed(token)) return;
+      var lifeLease = life == null ? null : life.begin();
       DesktopActivityObserver.Metadata metadata;
       try {
         metadata = observer.metadata();
@@ -338,7 +358,9 @@ final class ActivityEvidencePipeline {
         return;
       }
       var at = clock.instant();
+      if (life != null && !life.valid(lifeLease)) return;
       var evidence = aggregator.collect(at, metadata, prior);
+      if (life != null && !life.valid(lifeLease)) return;
       boolean idle = false;
       if (p.getDetection().isBackgroundFullScreenEnabled())
         try {
@@ -370,7 +392,7 @@ final class ActivityEvidencePipeline {
               && !classification.usable(p.getDetection().getSkipVisionConfidence());
       ActivityRecord record;
       synchronized (this) {
-        if (!allowed(token)) return;
+        if (!allowed(token) || life != null && !life.valid(lifeLease)) return;
         boolean duplicateVision = fallback && duplicate(CandidateKey.of(evidence), at);
         boolean candidate = fallback;
         if (duplicateVision) fallback = false;
@@ -538,7 +560,7 @@ final class ActivityEvidencePipeline {
         }
         screen = front;
       }
-      var work = new Work(token, screen, record, imageCapturedAt);
+      var work = new Work(token, screen, record, imageCapturedAt, lifeLease);
       work.desktop = desktop;
       if (keep)
         synchronized (this) {
@@ -621,7 +643,8 @@ final class ActivityEvidencePipeline {
           background = false;
           if (duplicate(work.key, clock.instant())) {
             duplicateSkipped.increment();
-            if (allowed(work.generation)) work.record = finishSkipped(work.record);
+            if (allowed(work.generation) && lifeAllowed(work.record.capturedAt()))
+              work.record = finishSkipped(work.record);
             continue;
           }
         } else {
@@ -632,7 +655,9 @@ final class ActivityEvidencePipeline {
             foregroundBusy = false;
             return;
           }
-          if (!allowed(work.generation)
+          if ((!allowed(work.generation)
+                  || (!lifeAllowed(work.record.capturedAt())
+                      || life != null && !life.valid(work.lifeLease)))
               || !desktopPolicy.executionAllowed(clock.instant())
               || clock.instant().isBefore(work.record.capturedAt())
               || Duration.between(work.record.capturedAt(), clock.instant()).getSeconds()
@@ -742,7 +767,9 @@ final class ActivityEvidencePipeline {
     boolean supplementSaved = false;
     ActivityRecord original;
     synchronized (this) {
-      if (!allowed(work.generation)) return;
+      if ((!allowed(work.generation)
+          || (!lifeAllowed(work.record.capturedAt())
+              || life != null && !life.valid(work.lifeLease)))) return;
       original = work.record;
     }
     String source = background ? "VISION_BACKGROUND" : "VISION_FOREGROUND";
@@ -767,7 +794,9 @@ final class ActivityEvidencePipeline {
       }
       apiStarted = clock.instant();
       synchronized (this) {
-        if (!allowed(work.generation)) return;
+        if ((!allowed(work.generation)
+            || (!lifeAllowed(work.record.capturedAt())
+                || life != null && !life.valid(work.lifeLease)))) return;
         if (background) {
           desktopPolicy.executed(apiStarted);
           backgroundCalls.increment();
@@ -780,7 +809,9 @@ final class ActivityEvidencePipeline {
       var result = extractor.extract(image, original.foreground());
       apiCompleted = clock.instant();
       synchronized (this) {
-        if (!allowed(work.generation)) return;
+        if ((!allowed(work.generation)
+            || (!lifeAllowed(work.record.capturedAt())
+                || life != null && !life.valid(work.lifeLease)))) return;
         var base = work.record;
         ActivityRecord merged;
         if (background)
@@ -871,7 +902,7 @@ final class ActivityEvidencePipeline {
           background ? "background" : "foreground",
           kind);
       synchronized (this) {
-        if (allowed(work.generation))
+        if (allowed(work.generation) && lifeAllowed(work.record.capturedAt()))
           try {
             var r = work.record;
             var d = r.detection();
@@ -967,7 +998,9 @@ final class ActivityEvidencePipeline {
 
   /** 後から経緯や使用量を確認できるよう、試行を記録する。 */
   private synchronized void recordAttempt(Work work, boolean background, Instant startedAt) {
-    if (!allowed(work.generation)) return;
+    if ((!allowed(work.generation)
+        || (!lifeAllowed(work.record.capturedAt()) || life != null && !life.valid(work.lifeLease))))
+      return;
     var r = work.record;
     var d = r.detection();
     var vision =

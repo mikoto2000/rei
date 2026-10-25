@@ -67,6 +67,8 @@ public class AttentionRepository {
   /** データベースへのアクセス。 */
   private final JdbcClient db;
 
+  private final org.springframework.transaction.support.TransactionTemplate transactions;
+
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
@@ -74,6 +76,9 @@ public class AttentionRepository {
   public AttentionRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source, Clock clock) {
     db = JdbcClient.create(source);
+    transactions =
+        new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(source));
     this.clock = clock;
     db.sql(
             "CREATE TABLE IF NOT EXISTS agent_attention(id TEXT PRIMARY KEY,project TEXT NOT NULL,session TEXT NOT NULL,run TEXT NOT NULL,kind TEXT NOT NULL,reference TEXT NOT NULL,message TEXT NOT NULL,status TEXT NOT NULL,created INTEGER NOT NULL,UNIQUE(project,session,run,kind,reference))")
@@ -155,9 +160,71 @@ public class AttentionRepository {
   }
 
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
+  public void hold(String project, String id) {
+    db.sql("UPDATE agent_attention SET status='HELD' WHERE project=? AND id=? AND status='OPEN'")
+        .params(project, id)
+        .update();
+  }
+
+  public List<String> heldProjects() {
+    return db.sql(
+            "SELECT DISTINCT project FROM agent_attention WHERE status='HELD' ORDER BY project LIMIT 16")
+        .query(String.class)
+        .list();
+  }
+
+  /** Reuse the inbox state, atomically moving a bounded group into one persistent digest. */
+  public Optional<Item> releaseHeld(String project) {
+    return transactions.execute(
+        status -> {
+          var held =
+              db.sql(
+                      "SELECT * FROM agent_attention WHERE project=? AND status='HELD' ORDER BY CASE kind WHEN 'APPROVAL_REQUIRED' THEN 0 WHEN 'RUN_FAILED' THEN 1 ELSE 2 END,created,id LIMIT 8")
+                  .param(project)
+                  .query(ROW)
+                  .list();
+          var existing = held.stream().filter(i -> i.kind().equals("LIFE_DIGEST")).findFirst();
+          if (existing.isPresent()) {
+            var digest = existing.get();
+            int changed =
+                db.sql(
+                        "UPDATE agent_attention SET status='OPEN' WHERE project=? AND id=? AND status='HELD'")
+                    .params(project, digest.id())
+                    .update();
+            return changed == 1 ? Optional.of(get(project, digest.id())) : Optional.empty();
+          }
+          var claimed = new java.util.ArrayList<String>();
+          for (var item : held)
+            if (db.sql(
+                        "UPDATE agent_attention SET status='OPEN' WHERE project=? AND id=? AND status='HELD'")
+                    .params(project, item.id())
+                    .update()
+                == 1) claimed.add(item.id());
+          if (claimed.isEmpty()) return Optional.empty();
+          String reference = String.join(",", claimed.stream().sorted().toList());
+          String id =
+              UUID.nameUUIDFromBytes(
+                      ("life-digest:" + project + ":" + reference)
+                          .getBytes(java.nio.charset.StandardCharsets.UTF_8))
+                  .toString();
+          db.sql("INSERT OR IGNORE INTO agent_attention VALUES(?,?,? ,? ,?,?,?,'OPEN',?)")
+              .params(
+                  id,
+                  project,
+                  "",
+                  "",
+                  "LIFE_DIGEST",
+                  id,
+                  "保留通知 " + claimed.size() + "件。/attention list で判断待ち・失敗・完了を確認してください。",
+                  clock.millis())
+              .update();
+          return Optional.of(get(project, id));
+        });
+  }
+
   public List<Item> list(String project) {
     return db.sql(
-            "SELECT * FROM agent_attention WHERE project=? AND status='OPEN' ORDER BY created,id LIMIT 256")
+            "SELECT * FROM agent_attention WHERE project=? AND status IN ('OPEN','HELD') ORDER BY created,id LIMIT 256")
         .param(project)
         .query(ROW)
         .list();
@@ -177,7 +244,7 @@ public class AttentionRepository {
   public void acknowledge(String project, String id) {
     get(project, id);
     db.sql(
-            "UPDATE agent_attention SET status='ACKNOWLEDGED' WHERE project=? AND id=? AND status='OPEN'")
+            "UPDATE agent_attention SET status='ACKNOWLEDGED' WHERE project=? AND id=? AND status IN ('OPEN','HELD')")
         .params(project, id)
         .update();
   }

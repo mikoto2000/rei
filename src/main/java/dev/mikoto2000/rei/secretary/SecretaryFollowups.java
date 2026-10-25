@@ -72,6 +72,13 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
     }
   }
 
+  private volatile dev.mikoto2000.rei.life.LifePolicy life;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setLifeContext(dev.mikoto2000.rei.life.LifePolicy value) {
+    life = value;
+  }
+
   private final SecretaryDatabase database;
   private final SecretaryLedger ledger;
   private final Clock clock;
@@ -641,32 +648,44 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
         continue;
       }
       try {
-        if (gate != null) {
-          var admission = gate.admit(claimed);
+        if (gate != null || life != null) {
+          var admission =
+              life != null && !life.notificationAllowed(claimed.category().name(), claimed.id())
+                  ? new SecretaryInterruptions.Admission(
+                      SecretaryInterruptions.Decision.HOLD, "life_policy")
+                  : gate == null
+                      ? new SecretaryInterruptions.Admission(
+                          SecretaryInterruptions.Decision.ALLOW, "eligible")
+                      : gate.admit(claimed);
           if (admission.decision() != SecretaryInterruptions.Decision.ALLOW) {
             if (admission.decision() == SecretaryInterruptions.Decision.SUPPRESS)
               finish(claimed, "SUPPRESSED", admission.reason());
-            else
-              database.transaction(
-                  db -> {
-                    try (var q =
-                        db.prepareStatement(
-                            "UPDATE secretary_notices SET status='HELD',attempts=max(0,attempts-1),error=? WHERE id=? AND status='SENDING'")) {
-                      q.setString(1, admission.reason());
-                      q.setString(2, claimed.id());
-                      q.executeUpdate();
-                    }
-                    return null;
-                  });
+            else hold(claimed, admission.reason());
             continue;
           }
         }
         notifications.deliver(claimed);
         finish(claimed, "DELIVERED", "");
+      } catch (dev.mikoto2000.rei.life.LifeContext.NotificationDeferred held) {
+        hold(claimed, "life_policy");
       } catch (RuntimeException failure) {
         finish(claimed, "PENDING", failure.getClass().getSimpleName());
       }
     }
+  }
+
+  private void hold(SecretaryNotifications.Notice notice, String reason) {
+    database.transaction(
+        db -> {
+          try (var q =
+              db.prepareStatement(
+                  "UPDATE secretary_notices SET status='HELD',attempts=max(0,attempts-1),error=? WHERE id=? AND status='SENDING'")) {
+            q.setString(1, reason);
+            q.setString(2, notice.id());
+            q.executeUpdate();
+          }
+          return null;
+        });
   }
 
   private void finish(SecretaryNotifications.Notice notice, String status, String error) {

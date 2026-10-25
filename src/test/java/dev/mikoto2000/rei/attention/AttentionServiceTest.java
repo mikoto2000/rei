@@ -30,6 +30,39 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 /** 注意サービスの結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class AttentionServiceTest {
+  @Test
+  void heldFactsSurviveRestartAndReleaseAsOneDigest() {
+    var events = new java.util.ArrayList<AgentEvent>();
+    bus.subscribe(events::add);
+    var life = org.mockito.Mockito.mock(dev.mikoto2000.rei.life.LifeContext.class);
+    service.setLifeContext(life);
+    bus.publish(waiting("one"));
+    bus.publish(waiting("two"));
+    time.set(Duration.ofMinutes(3).toNanos());
+    bus.publish(waiting("one"));
+    bus.publish(waiting("two"));
+    assertEquals(
+        0, events.stream().filter(e -> e.type() == AgentEventType.ATTENTION_REQUIRED).count());
+    assertEquals(
+        2, repository.list("project").stream().filter(i -> i.status().equals("HELD")).count());
+    service.close();
+    repository =
+        new AttentionRepository(
+            new DriverManagerDataSource("jdbc:sqlite:" + dir.resolve("attention.db")), clock);
+    service = new AttentionService(repository, bus, bus, clock, time::get);
+    service.setLifeContext(life);
+    org.mockito.Mockito.when(
+            life.notificationAllowed(
+                org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString()))
+        .thenReturn(true);
+    service.releaseHeld();
+    service.releaseHeld();
+    assertEquals(
+        1, events.stream().filter(e -> e.type() == AgentEventType.ATTENTION_REQUIRED).count());
+    assertEquals(
+        1, repository.list("project").stream().filter(i -> i.kind().equals("LIFE_DIGEST")).count());
+  }
+
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 

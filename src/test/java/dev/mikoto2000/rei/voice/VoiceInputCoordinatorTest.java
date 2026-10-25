@@ -28,6 +28,32 @@ import org.junit.jupiter.api.Test;
 
 /** 音声入力からの依頼かどうか処理の調整の結果と状態の契約を検証するテスト。 */
 class VoiceInputCoordinatorTest {
+  @Test
+  void workPolicyStopsBeforeMicrophoneOrRecognizerInitialization() {
+    var captures = new AtomicInteger();
+    var recognizers = new AtomicInteger();
+    try (var voice =
+        new VoiceInputCoordinator(
+            d -> {
+              captures.incrementAndGet();
+              return new Source();
+            },
+            settings -> {
+              recognizers.incrementAndGet();
+              throw new IllegalStateException("must not initialize");
+            },
+            input -> {
+              throw new AssertionError("must not submit");
+            },
+            new VoiceEventPublisher(),
+            clock)) {
+      voice.useLifeContext(org.mockito.Mockito.mock(dev.mikoto2000.rei.life.LifeContext.class));
+      voice.start(target, device, VoiceSettings.defaults()).await(Duration.ofSeconds(3));
+      assertThat(captures.get()).isZero();
+      assertThat(recognizers.get()).isZero();
+    }
+  }
+
   /** 日時や期限の条件を再現するために使う検証時刻。 */
   final Clock clock = Clock.fixed(Instant.parse("2026-10-09T00:00:00Z"), ZoneOffset.UTC);
 
