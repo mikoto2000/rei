@@ -522,7 +522,7 @@ public final class SecretaryOrchestrator
               var values = new ArrayList<SecretaryNotifications.Notice>();
               try (var q =
                   db.prepareStatement(
-                      "SELECT record FROM secretary_notices WHERE project=? AND status='HELD' ORDER BY priority,created,id LIMIT 8")) {
+                      "SELECT record FROM secretary_notices WHERE project=? AND status='HELD' ORDER BY priority,CASE WHEN kind='DIGEST' THEN 0 ELSE 1 END,created,id LIMIT 8")) {
                 q.setString(1, project);
                 try (var r = q.executeQuery()) {
                   while (r.next())
@@ -551,13 +551,31 @@ public final class SecretaryOrchestrator
     }
     if (eligible.isEmpty()) return 0;
     long previous = database.read(db -> state(db, "notice:last:" + project));
-    if (eligible.stream().noneMatch(n -> n.priority() == 1)
-        && previous != 0
-        && previous > clock.millis() - settings(project).minimumSeconds() * 1000) return 0;
+    if (previous != 0 && previous > clock.millis() - settings(project).minimumSeconds() * 1000)
+      eligible.removeIf(n -> n.priority() > 1);
+    if (eligible.isEmpty()) return 0;
     return database.transaction(
         db -> {
+          var existingDigest =
+              eligible.stream()
+                  .filter(
+                      n ->
+                          n.kind().equals("DIGEST")
+                              && n.priority() <= eligible.getFirst().priority())
+                  .findFirst();
+          if (existingDigest.isPresent()) {
+            try (var q =
+                db.prepareStatement(
+                    "UPDATE secretary_notices SET status='PENDING',next=?,error='' WHERE project=? AND id=? AND status='HELD'")) {
+              q.setLong(1, clock.millis());
+              q.setString(2, project);
+              q.setString(3, existingDigest.get().id());
+              return q.executeUpdate();
+            }
+          }
           var claimed = new ArrayList<SecretaryNotifications.Notice>();
           for (var notice : eligible) {
+            if (notice.kind().equals("DIGEST")) continue;
             try (var q =
                 db.prepareStatement(
                     "UPDATE secretary_notices SET status='BUNDLED' WHERE id=? AND status='HELD'")) {

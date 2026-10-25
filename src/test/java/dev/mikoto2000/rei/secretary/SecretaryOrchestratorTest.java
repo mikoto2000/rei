@@ -18,6 +18,41 @@ import org.junit.jupiter.api.io.TempDir;
 
 @Tag("integration")
 class SecretaryOrchestratorTest {
+  @Test
+  void snoozingAnExistingDigestPreservesItsIdentityAndOriginalCount() throws Exception {
+    var db = database();
+    var ledger = new SecretaryLedger(db, clock);
+    task(ledger, "one", 3);
+    task(ledger, "two", 3);
+    try (var followups = new SecretaryFollowups(db, ledger, clock, received::add, false);
+        var service = new SecretaryOrchestrator(db, ledger, reports(followups), clock, false)) {
+      followups.configure(
+          new SecretaryFollowups.Settings("p", true, true, "", "", "UTC", 86400, 3, "INBOX"));
+      service.configure(settings(true, false, null));
+      service.setActivities(
+          List.of((p, now) -> new SecretaryActivity.Snapshot("DEVELOPMENT", now, true, false)));
+      followups.setInterruption(service);
+      clock.now = clock.now.plusSeconds(86400);
+      followups.checkNow("p");
+      service.setActivities(List.of());
+      assertEquals(2, service.release("p"));
+      var digest =
+          followups.history("p", 100).stream()
+              .filter(d -> d.notice().kind().equals("DIGEST"))
+              .findFirst()
+              .orElseThrow()
+              .notice();
+      service.configure(settings(true, false, clock.instant().plusSeconds(120)));
+      followups.checkNow("p");
+      assertTrue(received.isEmpty());
+      clock.now = clock.now.plusSeconds(120);
+      followups.checkNow("p");
+      assertEquals(1, received.size());
+      assertEquals(digest.id(), received.getFirst().id());
+      assertTrue(received.getFirst().message().contains("2件"));
+    }
+  }
+
   static org.springframework.beans.factory.ObjectProvider<SecretaryReports> reports(
       SecretaryReports reports) {
     var beans = new org.springframework.beans.factory.support.StaticListableBeanFactory();
