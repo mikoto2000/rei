@@ -34,7 +34,8 @@ class WebResearchResilienceTest {
   }
 
   private WebSearchResult result(int index) {
-    return new WebSearchResult("Java streams", "https://site" + index + ".com/page", "Java streams", null);
+    return new WebSearchResult(
+        "Java streams", "https://site" + index + ".com/page", "Java streams", null);
   }
 
   private List<WebSearchResult> candidates() {
@@ -42,19 +43,38 @@ class WebResearchResilienceTest {
   }
 
   private WebSearchPage page(WebSearchResult result, String body) {
-    return new WebSearchPage(result.title(), result.url(), result.snippet(), null, body, false,
-        WebContentDeduplication.fingerprint(body), List.of(WebSourceAlias.from(result)));
+    return new WebSearchPage(
+        result.title(),
+        result.url(),
+        result.snippet(),
+        null,
+        body,
+        false,
+        WebContentDeduplication.fingerprint(body),
+        List.of(WebSourceAlias.from(result)));
   }
 
-  private WebResearchPipeline.Research<WebSearchPage> run(int readTop, boolean complete, boolean failSecond) throws Exception {
+  private WebResearchPipeline.Research<WebSearchPage> run(
+      int readTop, boolean complete, boolean failSecond) throws Exception {
     try (var batch = new WebFetchBatch(1, 1, 8)) {
-      return WebResearchPipeline.run(search, new WebSearchQueryPlanner(), properties, batch, QUERY, 5, readTop,
+      return WebResearchPipeline.run(
+          search,
+          new WebSearchQueryPlanner(),
+          properties,
+          batch,
+          QUERY,
+          5,
+          readTop,
           candidate -> {
             String url = candidate.result().url();
             fetched.add(url);
-            if (failSecond && url.equals(result(2).url())) throw new IOException("page unavailable");
-            return page(candidate.result(), (complete ? "Java streams guide " : "Java partial guide ") + url);
-          }, WebResearchPipeline.PAGES);
+            if (failSecond && url.equals(result(2).url()))
+              throw new IOException("page unavailable");
+            return page(
+                candidate.result(),
+                (complete ? "Java streams guide " : "Java partial guide ") + url);
+          },
+          WebResearchPipeline.PAGES);
     }
   }
 
@@ -85,7 +105,9 @@ class WebResearchResilienceTest {
   }
 
   static List<Exception> providerFailures() {
-    return List.of(new IOException("secret must not be logged"), new IllegalStateException("provider unavailable"));
+    return List.of(
+        new IOException("secret must not be logged"),
+        new IllegalStateException("provider unavailable"));
   }
 
   /** 連続する検索障害でも候補を一度ずつ取得し、取得済み本文と障害診断を保持する。 */
@@ -99,7 +121,8 @@ class WebResearchResilienceTest {
     assertEquals(5, research.pageAttempts());
     assertEquals(3, research.queries());
     assertTrue(research.results().stream().allMatch(page -> "success".equals(page.fetchStatus())));
-    assertTrue(research.results().stream().anyMatch(page -> page.content().contains(result(1).url())));
+    assertTrue(
+        research.results().stream().anyMatch(page -> page.content().contains(result(1).url())));
     assertTrue(research.omissions().contains("additional_search_failed"));
     assertEquals("unknown", research.assessment().status());
     verify(search, times(3)).search(anyString(), eq(5));
@@ -111,8 +134,14 @@ class WebResearchResilienceTest {
     outage(new IOException("provider unavailable"));
     var research = run(5, false, true);
     assertEquals(5, fetched.size());
-    assertEquals(4, research.results().stream().filter(page -> "success".equals(page.fetchStatus())).count());
-    var failed = research.results().stream().filter(page -> page.url().equals(result(2).url())).findFirst().orElseThrow();
+    assertEquals(
+        4,
+        research.results().stream().filter(page -> "success".equals(page.fetchStatus())).count());
+    var failed =
+        research.results().stream()
+            .filter(page -> page.url().equals(result(2).url()))
+            .findFirst()
+            .orElseThrow();
     assertEquals("failed", failed.fetchStatus());
     assertEquals("FETCH_ERROR", failed.errorType());
     assertTrue(research.omissions().contains("additional_search_failed"));
@@ -128,7 +157,11 @@ class WebResearchResilienceTest {
     assertEquals(2, fetched.size());
     assertEquals(2, research.pageAttempts());
     assertEquals(2, research.queries());
-    assertEquals(3, research.results().stream().filter(page -> "not_requested".equals(page.fetchStatus())).count());
+    assertEquals(
+        3,
+        research.results().stream()
+            .filter(page -> "not_requested".equals(page.fetchStatus()))
+            .count());
   }
 
   /** 空の検索結果は候補取得をせず有限回で終了する。 */
@@ -142,8 +175,11 @@ class WebResearchResilienceTest {
   }
 
   static List<Exception> cancellations() {
-    return List.of(new CancellationException(), new InterruptedException(),
-        new IOException(new InterruptedException()), new IllegalStateException(new CancellationException()));
+    return List.of(
+        new CancellationException(),
+        new InterruptedException(),
+        new IOException(new InterruptedException()),
+        new IllegalStateException(new CancellationException()));
   }
 
   /** 直接・ラップされたキャンセルと中断は通常の障害として扱わない。 */
@@ -152,8 +188,10 @@ class WebResearchResilienceTest {
   void cancellationPropagates(Exception failure) throws Exception {
     outage(failure);
     try {
-      Class<? extends Throwable> expected = failure instanceof InterruptedException
-          ? InterruptedException.class : CancellationException.class;
+      Class<? extends Throwable> expected =
+          failure instanceof InterruptedException
+              ? InterruptedException.class
+              : CancellationException.class;
       assertThrows(expected, () -> run(5, false, false));
       assertEquals(1, fetched.size());
     } finally {
@@ -177,6 +215,7 @@ class WebResearchResilienceTest {
     assertTrue(research.omissions().contains(code.name()));
     assertFalse(research.omissions().contains("additional_search_failed"));
   }
+
   @Test
   void searchRequestLimitStillAllowsPendingPages() throws Exception {
     outage(new HttpFetchException(HttpFetchException.Code.REQUEST_BUDGET));
@@ -195,17 +234,27 @@ class WebResearchResilienceTest {
 
   @Test
   void failureLogContainsOnlySafeCauseType() throws Exception {
-    var logger = (ch.qos.logback.classic.Logger)
-        org.slf4j.LoggerFactory.getLogger(WebResearchPipeline.class);
-    var appender = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    var logger =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger("dev.mikoto2000.rei.websearch");
+    var appender =
+        new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
     appender.start();
     logger.addAppender(appender);
     try {
       outage(new IOException("secret must not be logged"));
       run(5, false, false);
-      var messages = appender.list.stream().map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage).toList();
-      assertTrue(messages.stream().anyMatch(message -> message.contains("additional_search") && message.contains("IOException")));
-      assertTrue(messages.stream().noneMatch(message -> message.contains("secret must not be logged")));
+      var messages =
+          appender.list.stream()
+              .map(ch.qos.logback.classic.spi.ILoggingEvent::getFormattedMessage)
+              .toList();
+      assertTrue(
+          messages.stream()
+              .anyMatch(
+                  message ->
+                      message.contains("additional_search") && message.contains("IOException")));
+      assertTrue(
+          messages.stream().noneMatch(message -> message.contains("secret must not be logged")));
       assertTrue(appender.list.stream().allMatch(event -> event.getThrowableProxy() == null));
     } finally {
       logger.detachAppender(appender);
@@ -213,4 +262,43 @@ class WebResearchResilienceTest {
     }
   }
 
+  @Test
+  void partialSearchResultsDoNotSwallowWrappedInterruption() throws Exception {
+    when(search.search(QUERY, 5)).thenReturn(List.of(result(1)));
+    when(search.search(QUERY + " official", 5))
+        .thenThrow(new IOException(new InterruptedException()));
+    try {
+      assertThrows(CancellationException.class, () -> run(5, false, false));
+      assertEquals(List.of(), fetched);
+      assertTrue(Thread.currentThread().isInterrupted());
+    } finally {
+      Thread.interrupted();
+    }
+  }
+
+  @ParameterizedTest
+  @MethodSource("providerFailures")
+  void partialSupplementRetainsCandidatesAndReportsLaterFailure(Exception failure)
+      throws Exception {
+    when(search.search(QUERY, 5)).thenReturn(candidates());
+    when(search.search(QUERY + " official", 5)).thenReturn(List.of(result(6)));
+    when(search.search(QUERY + " reference", 5)).thenThrow(failure);
+    var research = run(2, false, false);
+    assertEquals(List.of(result(1).url(), result(6).url()), fetched);
+    assertTrue(research.omissions().contains("additional_search_failed"));
+    assertEquals("unknown", research.assessment().status());
+    assertEquals(3, research.queries());
+  }
+
+  @ParameterizedTest
+  @MethodSource("limits")
+  void partialSupplementDoesNotSwallowGlobalLimits(HttpFetchException.Code code) throws Exception {
+    when(search.search(QUERY, 5)).thenReturn(candidates());
+    when(search.search(QUERY + " official", 5)).thenReturn(List.of(result(6)));
+    when(search.search(QUERY + " reference", 5)).thenThrow(new HttpFetchException(code));
+    var research = run(5, false, false);
+    assertEquals(List.of(result(1).url()), fetched);
+    assertTrue(research.omissions().contains(code.name()));
+    assertFalse(research.omissions().contains("additional_search_failed"));
+  }
 }

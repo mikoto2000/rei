@@ -51,6 +51,7 @@ public record WebRetrievalAssessment(
         (int)
             readable.stream()
                 .map(page -> WebSearchSelection.domain(actualUrl(page)))
+                .filter(Objects::nonNull)
                 .distinct()
                 .count();
     if (readable.isEmpty()) return result("unknown", List.of("no_readable_verified_body"), 0);

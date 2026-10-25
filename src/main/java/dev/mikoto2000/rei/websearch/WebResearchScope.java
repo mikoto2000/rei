@@ -14,6 +14,9 @@ import java.util.Set;
  * planning.
  */
 final class WebResearchScope implements AutoCloseable {
+  /** 部分結果を返す検索経路も含めた障害の有無。 */
+  private boolean searchFailed;
+
   /** 現在。 */
   private static final ThreadLocal<WebResearchScope> CURRENT = new ThreadLocal<>();
 
@@ -88,6 +91,17 @@ final class WebResearchScope implements AutoCloseable {
   /** Web上の情報の調査で用いる合計検索条件一覧を返す。 */
   int totalQueries() {
     return root.queries.size();
+  }
+
+  /** 取得済み候補を返す場合も検索障害の診断を共有する。 */
+  static void recordSearchFailure() {
+    var scope = CURRENT.get();
+    if (scope != null) scope.searchFailed = true;
+  }
+
+  /** 調査中の検索障害はスコープの解放後も参照できる。 */
+  boolean searchFailed() {
+    return root.searchFailed;
   }
 
   /** Web上の情報の調査で利用した資源や登録を解放し、利用を終了する。 */

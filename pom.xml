@@ -40,6 +40,12 @@
 		<checkstyle.version>14.3.0</checkstyle.version>
 	</properties>
 	<dependencies>
+        <!-- Direct PSL API usage; retain the Guava version already resolved via google-api-client. -->
+        <dependency>
+            <groupId>com.google.guava</groupId>
+            <artifactId>guava</artifactId>
+            <version>33.1.0-jre</version>
+        </dependency>
 		<dependency>
 			<groupId>com.tngtech.archunit</groupId>
 			<artifactId>archunit</artifactId>
