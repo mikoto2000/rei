@@ -13,7 +13,8 @@ final class StoragePageLayout {
 
   private StoragePageLayout() {}
 
-  static void apply(Connection db, java.nio.file.Path database) throws Exception {
+  static void apply(Connection db, java.nio.file.Path database)
+      throws java.sql.SQLException, java.io.IOException, java.security.NoSuchAlgorithmException {
     try (var sql = db.createStatement();
         var rows = sql.executeQuery("PRAGMA page_size")) {
       if (rows.getInt(1) == PAGE_BYTES) return;

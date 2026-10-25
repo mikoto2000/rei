@@ -108,7 +108,7 @@ public final class StorageDatabase {
    * otherwise checkpoints and deletes the WAL. The startup gate must close this handle before
    * releasing its process lease.
    */
-  AutoCloseable keepWalOpen() throws Exception {
+  AutoCloseable keepWalOpen() throws java.io.IOException, SQLException {
     synchronized (writer) {
       if (state.keepOpen)
         throw new IllegalStateException("Storage writer already has a lifetime owner");
@@ -173,7 +173,7 @@ public final class StorageDatabase {
   }
 
   /** 同時読み取りや再入時は接続の空きを待たず、従来どおり別接続を使う。 */
-  private ReaderLease borrowReader() throws Exception {
+  private ReaderLease borrowReader() throws java.io.IOException, SQLException {
     Connection connection = null;
     Object owner;
     synchronized (state.readerLock) {

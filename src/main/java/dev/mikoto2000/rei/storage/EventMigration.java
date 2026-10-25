@@ -180,7 +180,7 @@ final class EventMigration {
 
   /** データ保存の共通処理に関する取り込みファイルを処理する。 */
   private static void importFile(Connection db, Path root, Path source, String scope)
-      throws Exception {
+      throws IOException, SQLException, java.security.NoSuchAlgorithmException {
     if (!Files.isRegularFile(source, LinkOption.NOFOLLOW_LINKS))
       throw new IOException("Event source is not a regular file");
     String sourceHash = StorageBackup.hash(source);
