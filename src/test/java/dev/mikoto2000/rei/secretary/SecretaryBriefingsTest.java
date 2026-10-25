@@ -146,7 +146,14 @@ class SecretaryBriefingsTest {
       var ledger = new SecretaryLedger(db, clock);
       for (int i = 0; i < 5; i++)
         ledger.create(
-            "p", "t" + i, "task" + i, SecretaryTask.Intent.TODO, null, 3, List.of(), List.of());
+            "p",
+            "t" + i,
+            "task" + i,
+            SecretaryTask.Intent.TODO,
+            null,
+            3,
+            List.of("prep-minutes:10"),
+            List.of());
       assertTrue(service.report("p", null, true).sections().get("next").isEmpty());
       var life =
           new dev.mikoto2000.rei.life.LifeContext(

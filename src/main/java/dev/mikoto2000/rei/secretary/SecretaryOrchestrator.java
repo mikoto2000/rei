@@ -28,7 +28,7 @@ import org.springframework.stereotype.Component;
 @Component
 @ConditionalOnProperty(name = "rei.secretary.enabled", havingValue = "true")
 public final class SecretaryOrchestrator
-    implements SecretaryTick, SecretaryInterruptions, AutoCloseable {
+    implements SecretaryTick, SecretaryInterruptions, SecretaryContext, AutoCloseable {
   public record Settings(
       String projectId,
       boolean enabled,
@@ -53,6 +53,127 @@ public final class SecretaryOrchestrator
       String approvalId) {}
 
   public record History(long sequence, String action, long revision, Instant at, String detail) {}
+
+  public record Preparation(
+      Suggestion suggestion,
+      Integer minutes,
+      String load,
+      SecretaryContext.Reliability certainty,
+      long availableMinutes,
+      boolean feasible,
+      Instant expires,
+      SecretaryExecutionMode mode) {}
+
+  public List<Preparation> preparation(String project) {
+    required(project);
+    long available = life == null ? 0 : life.availableMinutes();
+    var zone = ZoneId.of(followups.getObject().settings(project).zone());
+    var values = new ArrayList<Preparation>();
+    for (var proposal : suggestions(project, 1000)) {
+      if (!proposal.status().equals("PROPOSED")
+          || !proposal.updated().plusSeconds(7 * 86400L).isAfter(clock.instant())) continue;
+      var task = ledger.get(project, proposal.taskId());
+      if (task.revision() != proposal.taskRevision() || !SecretaryPreparation.ready(task, ledger))
+        continue;
+      var minutes = SecretaryPreparation.minutes(task);
+      values.add(
+          new Preparation(
+              proposal,
+              minutes,
+              SecretaryPreparation.load(task),
+              SecretaryContext.Reliability.USER_REGISTERED,
+              available,
+              minutes != null && minutes <= Math.min(60, available / 2),
+              proposal.updated().plusSeconds(7 * 86400L),
+              SecretaryExecutionMode.PROPOSAL_ONLY));
+    }
+    values.sort(
+        java.util.Comparator.comparing(
+            p ->
+                SecretaryPreparation.prepareBy(
+                    ledger.get(project, p.suggestion().taskId()), zone)));
+    return values.stream().limit(3).toList();
+  }
+
+  @Override
+  public List<SecretaryContext.Item> context(String project, LocalDate date, ZoneId zone) {
+    return preparation(project).stream()
+        .map(
+            p ->
+                new SecretaryContext.Item(
+                    "secretary-suggestion",
+                    p.suggestion().id(),
+                    p.suggestion().reason(),
+                    "PROPOSED",
+                    "Optional proposal; prep-minutes="
+                        + p.minutes()
+                        + "; load="
+                        + p.load()
+                        + "; feasible-now="
+                        + p.feasible()
+                        + "; mode="
+                        + p.mode()
+                        + "; expires="
+                        + p.expires(),
+                    SecretaryContext.Reliability.PROPOSAL,
+                    List.of(
+                        "secretary-task:" + p.suggestion().taskId(),
+                        "secretary-suggestion:" + p.suggestion().id())))
+        .toList();
+  }
+
+  private void refresh(String project) {
+    database.transaction(
+        db -> {
+          var values = new ArrayList<Suggestion>();
+          try (var q =
+              db.prepareStatement(
+                  "SELECT record FROM secretary_suggestions WHERE project=? AND status IN ('PROPOSED','EXECUTION_REQUESTED','APPROVAL_REQUESTED','DEFERRED') ORDER BY updated,id LIMIT 256")) {
+            q.setString(1, project);
+            try (var r = q.executeQuery()) {
+              while (r.next())
+                values.add(SecretaryJson.JSON.readValue(r.getString(1), Suggestion.class));
+            }
+          }
+          for (var value : values) {
+            String status = null;
+            try {
+              var task = ledger.getWithin(db, project, value.taskId());
+              if (task.revision() != value.taskRevision()
+                  || task.status() == SecretaryTask.Status.DONE
+                  || task.status() == SecretaryTask.Status.CANCELLED) status = "INVALIDATED";
+            } catch (IllegalArgumentException missing) {
+              status = "INVALIDATED";
+            }
+            var lifetime =
+                value.status().equals("DEFERRED") && value.notBefore().isAfter(value.updated())
+                    ? value.notBefore()
+                    : value.updated();
+            if (status == null && !lifetime.plusSeconds(7 * 86400L).isAfter(clock.instant()))
+              status = "EXPIRED";
+            if (status != null) {
+              var changed =
+                  new Suggestion(
+                      value.id(),
+                      project,
+                      value.taskId(),
+                      value.rule(),
+                      status,
+                      value.priority(),
+                      value.revision() + 1,
+                      value.taskRevision(),
+                      value.created(),
+                      clock.instant(),
+                      value.notBefore(),
+                      value.reason(),
+                      value.approvalId());
+              save(db, changed);
+              history(db, changed, status, "source revision or lifetime changed");
+            }
+          }
+          return null;
+        });
+  }
 
   public enum Feedback {
     EXECUTE,
@@ -186,6 +307,7 @@ public final class SecretaryOrchestrator
   public List<Suggestion> evaluate(String project) {
     var settings = settings(project);
     if (!settings.enabled()) return List.of();
+    refresh(project);
     int offset = Math.toIntExact(database.read(db -> state(db, "proposal:cursor:" + project)));
     var tasks = ledger.list(project, offset, 64);
     database.transaction(
@@ -196,11 +318,32 @@ public final class SecretaryOrchestrator
     var routing = followups.getObject().settings(project);
     var report = followups.getObject().report(project, null, false);
     var date = clock.instant().atZone(ZoneId.of(routing.zone())).toLocalDate();
+    var orderedTasks =
+        tasks.stream().sorted(SecretaryPreparation.order(ZoneId.of(routing.zone()))).toList();
+    int slots =
+        Math.max(
+            0,
+            3
+                - database.<Integer>read(
+                    db -> {
+                      try (var q =
+                          db.prepareStatement(
+                              "SELECT COUNT(*) FROM secretary_suggestions WHERE project=? AND status IN ('PROPOSED','EXECUTION_REQUESTED','APPROVAL_REQUESTED')")) {
+                        q.setString(1, project);
+                        try (var r = q.executeQuery()) {
+                          r.next();
+                          return r.getInt(1);
+                        }
+                      }
+                    }));
     var candidates = new ArrayList<Suggestion>();
-    for (var task : tasks) {
+    for (var task : orderedTasks) {
+      if (candidates.size() >= slots) break;
       if (Thread.currentThread().isInterrupted()) break;
       if (task.status() != SecretaryTask.Status.OPEN
           && task.status() != SecretaryTask.Status.WAITING) continue;
+      if (task.status() == SecretaryTask.Status.OPEN && !SecretaryPreparation.ready(task, ledger))
+        continue;
       String rule = rule(task, date, report.context());
       if (rule == null) continue;
       var saved = propose(settings, routing, task, rule);
@@ -213,6 +356,11 @@ public final class SecretaryOrchestrator
   private String rule(SecretaryTask task, LocalDate date, List<SecretaryContext.Item> context) {
     if (task.due() != null && task.due().isBefore(date)) return "OVERDUE";
     if (task.due() != null && !task.due().isAfter(date.plusDays(1))) return "DUE";
+    if (task.due() != null
+        && SecretaryPreparation.minutes(task) != null
+        && !SecretaryPreparation.prepareBy(
+                task, ZoneId.of(followups.getObject().settings(task.projectId()).zone()))
+            .isAfter(clock.instant().plusSeconds(86400))) return "PREPARATION";
     if (task.status() == SecretaryTask.Status.WAITING)
       return task.updated().isBefore(clock.instant().minusSeconds(86400)) ? "WAITING" : null;
     var predecessors = task.references().stream().filter(r -> r.startsWith("after:")).toList();
@@ -248,7 +396,16 @@ public final class SecretaryOrchestrator
           var old = find(db, settings.projectId(), id);
           try (var q =
               db.prepareStatement(
-                  "SELECT 1 FROM secretary_suggestions WHERE project=? AND task=? AND (status IN ('MUTED','EXECUTION_REQUESTED','APPROVAL_REQUESTED') OR (status='DEFERRED' AND next>?)) LIMIT 1")) {
+                  "SELECT COUNT(*) FROM secretary_suggestions WHERE project=? AND status IN ('PROPOSED','EXECUTION_REQUESTED','APPROVAL_REQUESTED')")) {
+            q.setString(1, task.projectId());
+            try (var r = q.executeQuery()) {
+              r.next();
+              if (r.getInt(1) >= 3) return null;
+            }
+          }
+          try (var q =
+              db.prepareStatement(
+                  "SELECT 1 FROM secretary_suggestions WHERE project=? AND task=? AND (status IN ('MUTED','EXECUTION_REQUESTED','APPROVAL_REQUESTED','PROPOSED') OR (status IN ('DEFERRED','DISMISSED') AND next>?)) LIMIT 1")) {
             q.setString(1, task.projectId());
             q.setString(2, task.id());
             q.setLong(3, clock.millis());
@@ -257,9 +414,13 @@ public final class SecretaryOrchestrator
             }
           }
           if (old != null
+              && old.taskRevision() == task.revision()
+              && Set.of("EXPIRED", "INVALIDATED").contains(old.status())) return null;
+          if (old != null
               && (Set.of("MUTED", "EXECUTION_REQUESTED", "APPROVAL_REQUESTED")
                       .contains(old.status())
-                  || old.notBefore().isAfter(clock.instant()))) return null;
+                  || old.taskRevision() == task.revision()
+                      && old.notBefore().isAfter(clock.instant()))) return null;
           var now = clock.instant();
           int priority = rule.equals("OVERDUE") ? 1 : task.priority();
           var suggestion =
@@ -300,12 +461,15 @@ public final class SecretaryOrchestrator
       String project, String id, long revision, Feedback reaction, long delaySeconds) {
     required(project);
     required(id);
+    refresh(project);
     if (reaction == null || revision < 0 || delaySeconds < 0 || delaySeconds > 2592000)
       throw new IllegalArgumentException("Invalid feedback");
     if (reaction == Feedback.ALLOW_AUTO && permissions == null)
       throw new IllegalStateException("Existing approval owner unavailable");
     // Validate before requesting approval; the request cannot grant a permission by itself.
     var before = suggestion(project, id);
+    if (Set.of("EXPIRED", "INVALIDATED").contains(before.status()))
+      throw new SecretaryConflictException();
     if (before.revision() != revision) throw new SecretaryConflictException();
     if (reaction == Feedback.EXECUTE || reaction == Feedback.ALLOW_AUTO) {
       var task = ledger.get(project, before.taskId());
@@ -327,7 +491,8 @@ public final class SecretaryOrchestrator
               switch (reaction) {
                 case LATER ->
                     now.plusSeconds(delaySeconds == 0 ? 3600 : Math.max(60, delaySeconds));
-                case DISMISS -> now.plusSeconds(settings(project).repeatSeconds());
+                case DISMISS ->
+                    now.plusSeconds(Math.max(7 * 86400L, settings(project).repeatSeconds()));
                 default -> Instant.ofEpochMilli(Long.MAX_VALUE);
               };
           String status =
@@ -362,6 +527,7 @@ public final class SecretaryOrchestrator
   public Suggestion suggestion(String project, String id) {
     required(project);
     required(id);
+    refresh(project);
     var value = database.read(db -> find(db, project, id));
     if (value == null) throw new IllegalArgumentException("Suggestion not found in this project");
     return value;
@@ -427,6 +593,7 @@ public final class SecretaryOrchestrator
 
   public List<Suggestion> executionCandidates(String project, int offset, int limit) {
     required(project);
+    refresh(project);
     limit(limit);
     if (offset < 0) throw new IllegalArgumentException("Invalid cursor");
     return database.read(
@@ -514,6 +681,7 @@ public final class SecretaryOrchestrator
   private Admission assess(SecretaryNotifications.Notice notice) {
     if (life != null && !life.notificationAllowed(notice.category().name(), notice.id()))
       return new Admission(Decision.HOLD, "life_policy");
+    if (notice.kind().equals("SUGGESTION")) refresh(notice.projectId());
     if (notice.kind().equals("SUGGESTION") && !liveSuggestion(notice))
       return new Admission(Decision.SUPPRESS, "superseded_feedback");
     if (!database.read(db -> hasSettings(db, notice.projectId())))

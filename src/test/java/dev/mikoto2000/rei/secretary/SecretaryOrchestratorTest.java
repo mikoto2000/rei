@@ -334,14 +334,14 @@ class SecretaryOrchestratorTest {
               "p", again.id(), again.revision(), SecretaryOrchestrator.Feedback.DISMISS, 0);
       assertEquals("DISMISSED", dismiss.status());
       clock.now = clock.now.plusSeconds(3600);
-      again = service.evaluate("p").getFirst();
+      assertTrue(service.evaluate("p").isEmpty());
       var never =
           service.feedback(
-              "p", again.id(), again.revision(), SecretaryOrchestrator.Feedback.NEVER, 0);
+              "p", dismiss.id(), dismiss.revision(), SecretaryOrchestrator.Feedback.NEVER, 0);
       assertEquals("MUTED", never.status());
       clock.now = clock.now.plusSeconds(86400);
       assertTrue(service.evaluate("p").isEmpty());
-      assertEquals(6, service.history("p", suggestion.id(), 100).size());
+      assertEquals(5, service.history("p", suggestion.id(), 100).size());
       assertThrows(
           IllegalArgumentException.class,
           () ->

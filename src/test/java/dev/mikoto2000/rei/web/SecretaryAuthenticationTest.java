@@ -61,6 +61,14 @@ class SecretaryAuthenticationTest {
         project = context.getBean(ProjectRegistry.class).resolve(root).id();
         assertEquals(
             401,
+            send(client, port, "/api/v1/secretary/preparation?projectId=" + project, null, false)
+                .statusCode());
+        assertEquals(
+            200,
+            send(client, port, "/api/v1/secretary/preparation?projectId=" + project, null, true)
+                .statusCode());
+        assertEquals(
+            401,
             send(client, port, "/api/v1/secretary/briefings?projectId=" + project, null, false)
                 .statusCode());
         assertEquals(

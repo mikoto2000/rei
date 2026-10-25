@@ -296,7 +296,7 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
                 && date.equals(clock.instant().atZone(zone).toLocalDate())
                 && life.status().availability()
                     == dev.mikoto2000.rei.life.LifeContext.Availability.AVAILABLE
-            ? open.stream().filter(t -> t.status() == SecretaryTask.Status.OPEN).limit(3).toList()
+            ? SecretaryPreparation.choices(open, ledger, life.availableMinutes(), zone)
             : List.of());
     sections.put(
         "completed",

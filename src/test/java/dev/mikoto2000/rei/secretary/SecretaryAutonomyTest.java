@@ -19,6 +19,44 @@ import org.springframework.beans.factory.support.StaticListableBeanFactory;
 @Tag("integration")
 class SecretaryAutonomyTest {
   @Test
+  void runningPreparationIsPausedWhenTheWorkScopeIsRevoked() throws Exception {
+    var db = db();
+    var ledger = new SecretaryLedger(db, clock);
+    var task = task(ledger);
+    var life = org.mockito.Mockito.mock(dev.mikoto2000.rei.life.LifePolicy.class);
+    org.mockito.Mockito.when(life.backgroundAllowed("p", task.id())).thenReturn(true);
+    try (var service = service(db, ledger)) {
+      service.setLifeContext(life);
+      service.configure(settings(1, 3, 1));
+      var job = service.create(request(task, "life-change", SecretaryAutonomy.Kind.RESEARCH, null));
+      service.start("p", job.id(), job.revision());
+      org.mockito.Mockito.when(life.backgroundAllowed("p", task.id())).thenReturn(false);
+      assertFalse(runtime.budget.tryReserve());
+      service.check();
+      assertEquals("PAUSED", service.get("p", job.id()).state());
+      assertEquals(1, runtime.cancels);
+    }
+  }
+
+  @Test
+  void changedTaskCannotReserveAnotherModelCallOrSaveAnOldResult() throws Exception {
+    var db = db();
+    var ledger = new SecretaryLedger(db, clock);
+    var task = task(ledger);
+    try (var service = service(db, ledger)) {
+      service.configure(settings(1, 3, 1));
+      var job =
+          service.create(request(task, "source-change", SecretaryAutonomy.Kind.RESEARCH, null));
+      service.start("p", job.id(), job.revision());
+      ledger.transition("p", task.id(), task.revision(), SecretaryTask.Status.DONE);
+      assertFalse(runtime.budget.tryReserve());
+      runtime.completed.accept(new SecretaryPreparationRuntime.Outcome("SUCCESS", "obsolete", ""));
+      assertEquals("BLOCKED", service.get("p", job.id()).state());
+      assertEquals(null, service.get("p", job.id()).result());
+    }
+  }
+
+  @Test
   void externalTasksNeverUseGenericPlannerAndConsentIsRevocableBeforeBudgetReservation()
       throws Exception {
     var db = db();
@@ -294,6 +332,7 @@ class SecretaryAutonomyTest {
       var job = service.create(request(task, "one", SecretaryAutonomy.Kind.RESEARCH, null));
       var blocked = service.start("p", job.id(), job.revision());
       assertEquals("BLOCKED", blocked.state());
+      assertEquals(SecretaryExecutionMode.PROPOSAL_ONLY, service.executionMode("p", job.id()));
       assertEquals(0, runtime.starts);
       assertThrows(IllegalArgumentException.class, () -> service.get("other", job.id()));
       assertThrows(
@@ -323,6 +362,7 @@ class SecretaryAutonomyTest {
     try (var service = service(db, ledger)) {
       service.configure(settings(1, 2, 1));
       var job = service.create(request(task, "one", SecretaryAutonomy.Kind.SUMMARY, null));
+      assertEquals(SecretaryExecutionMode.AUTO_PREPARATION, service.executionMode("p", job.id()));
       service.start("p", job.id(), job.revision());
       assertTrue(runtime.budget.tryReserve());
       assertTrue(runtime.budget.tryReserve());
@@ -362,11 +402,13 @@ class SecretaryAutonomyTest {
               request(
                   task, "one", SecretaryAutonomy.Kind.UPDATE_TASK, SecretaryTask.Status.WAITING));
       assertEquals("WAITING_APPROVAL", job.state());
+      assertEquals(SecretaryExecutionMode.APPROVAL_REQUIRED, service.executionMode("p", job.id()));
       assertEquals(SecretaryTask.Status.OPEN, ledger.get("p", task.id()).status());
       assertEquals("WAITING_APPROVAL", service.start("p", job.id(), job.revision()).state());
       permits.approved = true;
       var completed = service.start("p", job.id(), service.get("p", job.id()).revision());
       assertEquals("COMPLETED", completed.state());
+      assertEquals(SecretaryExecutionMode.APPROVED_SCOPE, service.executionMode("p", job.id()));
       assertEquals(1, permits.consumed);
       assertEquals(0, runtime.starts);
       var changed = ledger.get("p", task.id());
@@ -499,6 +541,15 @@ class SecretaryAutonomyTest {
                   .isBadRequest());
       var job = service.create(request(task, "api", SecretaryAutonomy.Kind.PREPARE, null));
       String path = "/api/v1/secretary/executions/" + job.id();
+      mvc.perform(
+              org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(
+                      path + "/mode")
+                  .param("projectId", "p"))
+          .andExpect(
+              org.springframework.test.web.servlet.result.MockMvcResultMatchers.status().isOk())
+          .andExpect(
+              org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath("$.mode")
+                  .value("AUTO_PREPARATION"));
       mvc.perform(
               org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get(path)
                   .param("projectId", "other"))
