@@ -33,6 +33,9 @@ class SecretaryFollowupMigrationTest {
       sql.execute("DROP TABLE secretary_followup_state");
       sql.execute("DROP TABLE secretary_notices");
       sql.execute("DROP TABLE secretary_dependencies");
+      sql.execute("DROP TABLE secretary_orchestration");
+      sql.execute("DROP TABLE secretary_suggestions");
+      sql.execute("DROP TABLE secretary_suggestion_history");
       sql.execute("DELETE FROM storage_migrations WHERE version>=12");
       sql.execute("PRAGMA user_version=11");
     }

@@ -20,7 +20,51 @@ import org.springframework.stereotype.Repository;
  * <p>Exact, expiring grants. Atomic SQL consumption happens before the side effect, never after it.
  */
 @Repository
-public class ToolApprovalRepository {
+public class ToolApprovalRepository implements dev.mikoto2000.rei.secretary.SecretaryPermissions {
+  /** Request a narrowly scoped, single-use preparation permit through the existing human UI. */
+  @Override
+  public String requestSecretaryPermission(String project, String task, String kind) {
+    for (String value : new String[] {project, task, kind}) {
+      if (value == null
+          || value.isBlank()
+          || value.length() > 128
+          || value.chars().anyMatch(Character::isISOControl))
+        throw new IllegalArgumentException("Invalid secretary approval scope");
+    }
+    if (!java.util.Set.of(
+            "OVERDUE",
+            "DUE",
+            "NEXT_STEP",
+            "WAITING",
+            "IMPORTANT",
+            "NEGLECTED",
+            "STALLED",
+            "CONTINUATION")
+        .contains(kind)) throw new IllegalArgumentException("Unknown secretary preparation kind");
+    String id = UUID.randomUUID().toString();
+    String scope = project + "\n" + task + "\n" + kind;
+    db.sql("INSERT INTO tool_approvals VALUES(?,?,?,?,?,?,?,?,?)")
+        .params(
+            id,
+            project,
+            "secretary:" + task,
+            id,
+            "secretaryAuto:" + kind,
+            digest(scope),
+            CredentialRedactor.redact(
+                "Secretary preparation only: project="
+                    + project
+                    + ", task="
+                    + task
+                    + ", kind="
+                    + kind
+                    + ". One execution within 15 minutes. Existing tool permissions still apply; external or destructive actions need their own approval."),
+            "PENDING",
+            clock.instant().plus(Duration.ofMinutes(15)).toEpochMilli())
+        .update();
+    return id;
+  }
+
   /** 時間計測。 */
   private dev.mikoto2000.rei.timing.TimingRecorder timing;
 

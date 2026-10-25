@@ -55,6 +55,7 @@ class SecretaryFollowupWiringTest {
           SqliteSecretaryDatabase.class,
           SecretaryLedger.class,
           SecretaryFollowups.class,
+          SecretaryOrchestrator.class,
           AttentionRepository.class,
           AttentionService.class,
           SecretaryDependencyIntake.class);

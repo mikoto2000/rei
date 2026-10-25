@@ -58,7 +58,11 @@ class DetachedBackendTest {
       assertNotEquals(before, Files.readString(marker));
     } finally {
       parent.destroyForcibly();
-      if (child != null) child.destroyForcibly();
+      assertTrue(parent.waitFor(5, java.util.concurrent.TimeUnit.SECONDS));
+      if (child != null) {
+        child.destroyForcibly();
+        child.onExit().get(5, java.util.concurrent.TimeUnit.SECONDS);
+      }
     }
   }
 

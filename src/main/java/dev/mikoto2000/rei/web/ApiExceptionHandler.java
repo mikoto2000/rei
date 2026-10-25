@@ -8,6 +8,11 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 /** API例外の要求や通知を受け付ける。 */
 @RestControllerAdvice(basePackages = "dev.mikoto2000.rei.web")
 public class ApiExceptionHandler {
+  @ExceptionHandler(dev.mikoto2000.rei.secretary.SecretaryConflictException.class)
+  public ResponseEntity<Error> secretaryConflict() {
+    return ResponseEntity.status(409).body(new Error("Secretary revision changed"));
+  }
+
   /**
    * Web APIによる操作で受け渡す使用中を表す。
    *
