@@ -1,202 +1,284 @@
 package dev.mikoto2000.rei.core.service;
 
+import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import java.time.Clock;
+import java.time.Instant;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicReference;
 import org.springframework.stereotype.Component;
 import reactor.core.Disposable;
 
-/** コマンドキャンセルのユースケースを実現する。 */
+/** Run の所有期間と停止要求を管理し、終了確認までキャンセル情報を保持する。 */
 @Component
 public class CommandCancellationService {
+  /** 停止要求の受付と実際の終了を区別する照会情報。 */
+  public record Diagnostic(String runId, String projectId, String status,
+      Instant requestedAt, Instant finishedAt, String failure) {}
 
-  /** 対話から使う共通操作に必要な状態を扱う。 */
+  /** 各実行が所有する資源。状態の操作はこのオブジェクトで同期する。 */
   private static final class State {
-    /** disposable参照先。 */
-    final AtomicReference<Disposable> disposableRef = new AtomicReference<>();
-
-    /** 実行スレッド参照先。 */
-    final AtomicReference<Thread> executionThreadRef = new AtomicReference<>();
-
-    /** キャンセル要求された。 */
-    final AtomicBoolean cancellationRequested = new AtomicBoolean(false);
-
-    /** 子の一覧。 */
-    final java.util.concurrent.CopyOnWriteArrayList<Runnable> children =
-        new java.util.concurrent.CopyOnWriteArrayList<>();
-
-    /** 所属プロジェクトの識別子。 */
+    final String runId;
     final String projectId;
+    final List<Runnable> children = new ArrayList<>();
+    Disposable disposable;
+    Thread thread;
+    Instant requestedAt;
+    Instant finishedAt;
+    String failure;
+    int depth;
+    boolean managed;
 
-    /** 指定された値や利用先を使って、Stateを初期化する。 */
-    State(String projectId) {
+    State(String runId, String projectId) {
+      this.runId = runId;
       this.projectId = projectId;
     }
   }
 
-  /** 実行一覧。 */
-  private final java.util.concurrent.ConcurrentMap<String, State> runs =
-      new java.util.concurrent.ConcurrentHashMap<>();
-
-  /** 待機中Cancellations。 */
+  private final Map<String, State> runs = new java.util.concurrent.ConcurrentHashMap<>();
   private final java.util.Set<String> pendingCancellations = new java.util.HashSet<>();
+  /** 終了済み ID への遅延要求を診断するための有界履歴。資源参照は保持しない。 */
+  private final Map<String, State> finished = new LinkedHashMap<>();
+  private final State legacy = new State(null, null);
+  private final Clock clock;
 
-  /** 旧形式。 */
-  private final State legacy = new State(null);
+  public CommandCancellationService() {
+    this(Clock.systemUTC());
+  }
 
-  /** 対話から使う共通操作で用いる状態を返す。 */
+  public CommandCancellationService(Clock clock) {
+    this.clock = clock;
+  }
+
   private State state() {
     if (dev.mikoto2000.rei.core.execution.ExecutionScope.current() != null) return null;
-    var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
+    var run = AgentRunScope.current();
     return run == null ? legacy : runs.get(run.runId());
   }
 
-  /** 対話から使う共通操作に関する開始を処理する。 */
-  public void begin(Thread executionThread) {
-    var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
-    var state = run == null ? legacy : new State(run.projectId());
-    synchronized (this) {
-      state.cancellationRequested.set(run != null && pendingCancellations.remove(run.runId()));
-      state.disposableRef.set(null);
-      state.executionThreadRef.set(executionThread);
-      if (run != null) runs.put(run.runId(), state);
+  /** 一覧に公開する前に予約する。解除は Router の finally が所有する。 */
+  public synchronized void prepare(AgentRunContext context) {
+    var state = runs.computeIfAbsent(context.runId(), id -> new State(id, context.projectId()));
+    synchronized (state) {
+      state.managed = true;
+      if (pendingCancellations.remove(context.runId()) && state.requestedAt == null)
+        state.requestedAt = clock.instant();
     }
-    if (state.cancellationRequested.get()) cancel(state);
   }
 
-  /**
-   * 利用者が不要とした実行を止めるため、実行をキャンセルする。
-   *
-   * <p>A stop request may precede runner registration; begin must not reset it.
-   */
+  /** 実行スレッドを結び付ける。開始前の要求を上書きしない。 */
+  public void begin(Thread executionThread) {
+    var run = AgentRunScope.current();
+    State state;
+    synchronized (this) {
+      state = run == null ? legacy : runs.computeIfAbsent(run.runId(),
+          id -> new State(id, run.projectId()));
+      synchronized (state) {
+        state.depth++;
+        if (run != null && pendingCancellations.remove(run.runId()) && state.requestedAt == null)
+          state.requestedAt = clock.instant();
+        if (state.thread == null) state.thread = executionThread;
+        if (state.requestedAt != null && executionThread != null) executionThread.interrupt();
+      }
+    }
+  }
+
+  /** ID による開始直前の要求。呼び出し側は実在する受付済み Run を検証する。 */
   public boolean cancelRun(String runId) {
     State state;
     synchronized (this) {
       state = runs.get(runId);
-      if (state == null) return pendingCancellations.add(runId);
+      if (state == null) return !finished.containsKey(runId) && pendingCancellations.add(runId);
     }
     return cancel(state);
   }
 
-  /** 対話から使う共通操作に関する記憶の削除待機中キャンセルを処理する。 */
   public synchronized void forgetPendingCancellation(String runId) {
     pendingCancellations.remove(runId);
   }
 
-  /**
-   * 利用者が不要とした実行を止めるため、登録済み実行をキャンセルする。
-   *
-   * <p>Stop only an existing child; a terminal Goal must not leave an orphan future cancellation.
-   */
   public boolean cancelRegisteredRun(String runId) {
-    var existing = runs.get(runId);
-    return existing != null && cancel(existing);
+    return cancel(runs.get(runId));
   }
 
-  /** 後から対象を参照できるよう、コマンドキャンセルサービスを登録する。 */
+  /** 新しいストリームも、停止要求と登録の競合時に確実に破棄する。 */
   public void register(Disposable disposable) {
-    if (disposable == null) {
-      return;
-    }
+    if (disposable == null) return;
     var state = state();
     if (state == null) {
       disposable.dispose();
       return;
     }
-    state.disposableRef.set(disposable);
-    if (state.cancellationRequested.get()) {
-      disposable.dispose();
+    Disposable previous;
+    synchronized (state) {
+      previous = state.disposable;
+      if (state.requestedAt == null && state.finishedAt == null) state.disposable = disposable;
+      else previous = disposable;
     }
+    if (previous != null) invoke(state, previous::dispose);
   }
 
-  /** 対象の実行をキャンセルする。 */
   public boolean cancel() {
-    if (dev.mikoto2000.rei.core.chat.AgentRunScope.current() != null) return cancel(state());
-    // Compatibility for standalone ChatCommand, which has a RunId but no ProjectId.
+    if (AgentRunScope.current() != null) return cancel(state());
     boolean changed = cancel(legacy);
     for (var state : runs.values()) if (state.projectId == null) changed |= cancel(state);
     return changed;
   }
 
-  /**
-   * 通知に応じて状態や表示を更新するため、キャンセルを受け付ける。
-   *
-   * <p>Adds a child without replacing the parent's streaming subscription. Safe against
-   * registration/cancel races.
-   */
+  /** 子の登録と要求が競合しても一度だけ実行し、一つの失敗で他の停止を妨げない。 */
   public Disposable onCancel(String runId, Runnable child) {
     State state = runId == null ? legacy : runs.get(runId);
     if (state == null) return () -> {};
-    state.children.add(child);
-    if (state.cancellationRequested.get()) child.run();
-    return () -> state.children.remove(child);
+    var called = new AtomicBoolean();
+    Runnable once = () -> { if (called.compareAndSet(false, true)) invoke(state, child); };
+    boolean stopped;
+    synchronized (state) {
+      stopped = state.requestedAt != null || state.finishedAt != null;
+      if (!stopped) state.children.add(once);
+    }
+    if (stopped) once.run();
+    return () -> { synchronized (state) { state.children.remove(once); } };
   }
 
-  /** 対象の実行をキャンセルする。 */
   private boolean cancel(State state) {
     if (state == null) return false;
-    boolean changed = state.cancellationRequested.compareAndSet(false, true);
-    state.children.forEach(Runnable::run);
-    Disposable disposable = state.disposableRef.getAndSet(null);
-    if (disposable != null) {
-      disposable.dispose();
+    List<Runnable> children;
+    Disposable disposable;
+    synchronized (state) {
+      if (state.finishedAt != null || state.requestedAt != null) return false;
+      state.requestedAt = clock.instant();
+      children = List.copyOf(state.children);
+      state.children.clear();
+      disposable = state.disposable;
+      state.disposable = null;
+      // 終了との競合で、終了後に再利用されたスレッドを割り込まない。
+      if (state.thread != null) invoke(state, state.thread::interrupt);
     }
-    Thread executionThread = state.executionThreadRef.get();
-    if (executionThread != null) {
-      executionThread.interrupt();
-    }
-    return changed;
+    log(state, "requested");
+    children.forEach(Runnable::run);
+    if (disposable != null) invoke(state, disposable::dispose);
+    return true;
   }
 
-  /** 利用者が不要とした実行を止めるため、現在プロジェクトをキャンセルする。 */
+  private void invoke(State state, Runnable action) {
+    try { action.run(); }
+    catch (RuntimeException error) {
+      synchronized (state) { state.failure = error.getClass().getSimpleName(); }
+      log(state, "signal_failed");
+    }
+  }
+
   public boolean cancelCurrentProject() {
     var project = dev.mikoto2000.rei.core.project.ProjectService.contextForOperation();
-    if (project == null) return cancel();
-    return cancelProject(project.id());
+    return project == null ? cancel() : cancelProject(project.id());
   }
 
-  /**
-   * 利用者が不要とした実行を止めるため、プロジェクトをキャンセルする。
-   *
-   * <p>Explicit human Project control; never infer another client's mutable selection.
-   */
   public boolean cancelProject(String projectId) {
-    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-    if (projectId == null || projectId.isBlank() || projectId.length() > 128)
-      throw new IllegalArgumentException("Project ID required");
+    validateProject(projectId);
     boolean changed = false;
     for (var state : runs.values()) if (projectId.equals(state.projectId)) changed |= cancel(state);
     return changed;
   }
 
-  /** 対話から使う共通操作において、キャンセル要求されたかどうかを判定する。 */
+  private void validateProject(String projectId) {
+    if (projectId == null || projectId.isBlank() || projectId.length() > 128)
+      throw new IllegalArgumentException("Project ID required");
+  }
+
   public boolean isCancellationRequested() {
     var state = state();
-    return state != null && state.cancellationRequested.get();
+    if (state == null) return false;
+    synchronized (state) { return state.requestedAt != null; }
   }
 
-  /** 対話から使う共通操作において、consumeキャンセル要求されたに該当するか判定する。 */
+  /** Run の停止は sticky。旧単独コマンドだけ消費 API の互換動作を残す。 */
   public boolean consumeCancellationRequested() {
     var state = state();
-    return state != null && state.cancellationRequested.compareAndSet(true, false);
+    if (state == null) return false;
+    synchronized (state) {
+      boolean requested = state.requestedAt != null;
+      if (state == legacy) state.requestedAt = null;
+      return requested;
+    }
   }
 
-  /** 保持している情報を初期状態へ戻すため、コマンドキャンセルサービスを消去する。 */
+  /** 内側の処理の終了では親の登録を消さない。 */
   public void clear() {
-    var run = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
-    if (run != null) {
-      forgetPendingCancellation(run.runId());
-      var removed = runs.remove(run.runId());
-      if (removed != null) {
-        removed.children.forEach(Runnable::run);
-        removed.children.clear();
-        var disposable = removed.disposableRef.getAndSet(null);
-        if (disposable != null) disposable.dispose();
-      }
-      return;
+    var state = state();
+    if (state == null) return;
+    synchronized (state) {
+      if (state.depth > 0) state.depth--;
+      if (state.managed || state.depth > 0) return;
     }
-    var disposable = legacy.disposableRef.getAndSet(null);
-    if (disposable != null) disposable.dispose();
-    legacy.executionThreadRef.set(null);
-    legacy.cancellationRequested.set(false);
+    if (state == legacy) {
+      release(state);
+      synchronized (state) {
+        state.requestedAt = null;
+        state.finishedAt = null;
+        state.failure = null;
+      }
+    } else finish(state.runId);
+  }
+
+  /** 実際に runner と cleanup が戻った時だけ呼び出す。 */
+  public void finish(String runId) {
+    State state;
+    synchronized (this) {
+      pendingCancellations.remove(runId);
+      state = runs.remove(runId);
+      if (state == null) return;
+      synchronized (state) {
+        state.finishedAt = clock.instant();
+        state.thread = null;
+      }
+      finished.put(runId, state);
+      while (finished.size() > 256) finished.remove(finished.keySet().iterator().next());
+    }
+    release(state);
+    log(state, "finished");
+  }
+
+  private void release(State state) {
+    List<Runnable> children;
+    Disposable disposable;
+    synchronized (state) {
+      state.thread = null;
+      children = List.copyOf(state.children);
+      state.children.clear();
+      disposable = state.disposable;
+      state.disposable = null;
+    }
+    children.forEach(Runnable::run);
+    if (disposable != null) invoke(state, disposable::dispose);
+  }
+
+  public synchronized Diagnostic diagnostic(String runId) {
+    var state = runs.get(runId);
+    if (state == null) state = finished.get(runId);
+    if (state == null) return new Diagnostic(runId, null, "NOT_FOUND", null, null, null);
+    synchronized (state) {
+      String status = state.finishedAt != null ? "FINISHED"
+          : state.failure != null ? "CANCEL_FAILED"
+          : state.requestedAt == null ? "RUNNING"
+          : java.time.Duration.between(state.requestedAt, clock.instant()).toSeconds() >= 30
+              ? "CANCEL_STALLED" : "CANCEL_REQUESTED";
+      return new Diagnostic(runId, state.projectId, status,
+          state.requestedAt, state.finishedAt, state.failure);
+    }
+  }
+
+  public List<Diagnostic> projectDiagnostics(String projectId) {
+    validateProject(projectId);
+    return runs.values().stream().filter(s -> projectId.equals(s.projectId))
+        .map(s -> diagnostic(s.runId)).toList();
+  }
+
+  private void log(State state, String outcome) {
+    org.slf4j.LoggerFactory.getLogger(CommandCancellationService.class).info(
+        "Run cancellation: runId={}, projectId={}, requestedAt={}, finishedAt={}, outcome={}, failure={}",
+        state.runId, state.projectId, state.requestedAt, state.finishedAt, outcome, state.failure);
   }
 }
