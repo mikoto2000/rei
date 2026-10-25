@@ -31,6 +31,41 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 @Tag("integration")
 class AttentionServiceTest {
   @Test
+  void globalSecretaryBriefingPublishesOneProfileEventAndKeepsAnIdempotentLocalReceipt() {
+    var events = new java.util.ArrayList<AgentEvent>();
+    bus.subscribe(events::add);
+    var notice =
+        new dev.mikoto2000.rei.secretary.SecretaryNotifications.Notice(
+            "global-one",
+            dev.mikoto2000.rei.secretary.SecretaryNotifications.GLOBAL_SCOPE,
+            null,
+            "GLOBAL_BRIEFING",
+            "combined report",
+            3,
+            "INBOX",
+            clock.instant(),
+            "report-one");
+    service.deliver(notice);
+    var event =
+        events.stream()
+            .filter(e -> e.type() == AgentEventType.ATTENTION_REQUIRED)
+            .findFirst()
+            .orElseThrow();
+    assertEquals(null, event.projectId());
+    assertEquals(null, event.sessionId());
+    assertEquals(
+        "SECRETARY_GLOBAL_INBOX",
+        repository
+            .list(dev.mikoto2000.rei.secretary.SecretaryNotifications.GLOBAL_SCOPE)
+            .getFirst()
+            .kind());
+    service.deliver(notice);
+    assertEquals(
+        1,
+        repository.list(dev.mikoto2000.rei.secretary.SecretaryNotifications.GLOBAL_SCOPE).size());
+  }
+
+  @Test
   void heldFactsSurviveRestartAndReleaseAsOneDigest() {
     var events = new java.util.ArrayList<AgentEvent>();
     bus.subscribe(events::add);

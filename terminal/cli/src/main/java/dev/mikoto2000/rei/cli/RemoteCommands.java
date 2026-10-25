@@ -1748,7 +1748,8 @@ public final class RemoteCommands {
       case "briefing", "review" -> allowed.add("--date");
       case "briefing-generate", "review-generate" -> allowed.addAll(Set.of("--date", "--key"));
       case "briefing-history" -> allowed.add("--limit");
-      case "briefing-show", "briefing-clear" -> {}
+      case "briefing-show", "briefing-clear", "briefing-settings", "briefing-check" -> {}
+      case "briefing-notifications" -> allowed.add("--limit");
       case "notifications" -> allowed.add("--limit");
       case "configure" ->
           allowed.addAll(
@@ -1779,6 +1780,23 @@ public final class RemoteCommands {
                 : action.equals("orchestrator-configure")
                     ? Set.of("--proposals-enabled", "--stopped")
                     : Set.of());
+    if (options.containsKey("--project") && Set.of("briefing-settings", "briefing-check", "briefing-notifications").contains(action)) throw invalid();
+    if (!options.containsKey("--project") && Set.of("briefing", "review", "briefing-generate", "review-generate", "briefing-history", "briefing-show", "briefing-clear", "briefing-settings", "briefing-check", "briefing-notifications").contains(action)) {
+      var parameters = new LinkedHashMap<String, Object>();
+      if (options.containsKey("--date")) parameters.put("date", java.time.LocalDate.parse(options.get("--date")).toString());
+      if (action.equals("briefing") || action.equals("review")) return query("/api/v1/secretary/" + action, parameters);
+      if (action.endsWith("-generate")) {
+        String key = options.get("--key"); if (key == null || key.isBlank() || key.length() > 128) throw invalid();
+        parameters.put("key", key); parameters.put("review", action.equals("review-generate"));
+        return post("/api/v1/secretary/briefings/generate", parameters);
+      }
+      if (action.equals("briefing-show")) return query("/api/v1/secretary/briefings/" + id(words.get(2)), Map.of());
+      if (action.equals("briefing-clear")) return post("/api/v1/secretary/briefings/delete", Map.of());
+      if (action.equals("briefing-settings")) return query("/api/v1/secretary/briefings/settings", Map.of());
+      if (action.equals("briefing-check")) return post("/api/v1/secretary/briefings/check", Map.of());
+      int limit = Integer.parseInt(options.getOrDefault("--limit", "20")); if (limit < 1 || limit > 100) throw invalid();
+      return query("/api/v1/secretary/briefings" + (action.equals("briefing-notifications") ? "/notifications" : ""), Map.of("limit", limit));
+    }
     String project = options.getOrDefault("--project", selectedProject);
     if (project == null || project.isBlank())
       throw new IllegalArgumentException("Select a Project first");

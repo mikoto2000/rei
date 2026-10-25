@@ -39,6 +39,28 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 @Tag("integration")
 class AttentionDeliveryTest {
   @Test
+  void globalMeetingNeverEntersTheProjectExternalDeliveryOutbox() {
+    start(properties(true, true), true);
+    var notice =
+        new dev.mikoto2000.rei.secretary.SecretaryNotifications.Notice(
+            UUID.randomUUID().toString(),
+            dev.mikoto2000.rei.secretary.SecretaryNotifications.GLOBAL_SCOPE,
+            null,
+            "GLOBAL_BRIEFING",
+            "private combined report",
+            3,
+            "INBOX",
+            Instant.EPOCH,
+            "report");
+    attention.deliver(notice);
+    var item =
+        inbox.list(dev.mikoto2000.rei.secretary.SecretaryNotifications.GLOBAL_SCOPE).getFirst();
+    assertTrue(outbox.find(item.projectId(), item.id()).isEmpty());
+    delivery.dispatchOne();
+    assertEquals(0, calls.get());
+  }
+
+  @Test
   void lifeDigestUsesTheExistingAutomaticOutbox() {
     start(properties(true, true), true);
     var life = org.mockito.Mockito.mock(dev.mikoto2000.rei.life.LifeContext.class);

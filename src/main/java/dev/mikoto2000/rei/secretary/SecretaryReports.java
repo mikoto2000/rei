@@ -7,4 +7,9 @@ public interface SecretaryReports {
   SecretaryFollowups.Settings settings(String project);
 
   SecretaryFollowups.Report report(String project, LocalDate date, boolean review);
+
+  default SecretaryFollowups.Report report(
+      String project, LocalDate date, boolean review, java.time.ZoneId zone) {
+    return report(project, date, review);
+  }
 }

@@ -1,5 +1,7 @@
 # 勤務時間制約と生活コンテキスト
 
+勤務・生活時間のYAML設定と優先順位は [全体秘書設定](global-secretary-settings.md) を参照してください。通常Shellでもlife操作にProject指定は不要です。
+
 朝夕の生成・履歴・情報源の分類は [朝夕ブリーフィング](life-briefings.md) を参照してください。
 
 ## 導入と既存機能

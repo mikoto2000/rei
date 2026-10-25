@@ -16,6 +16,7 @@ import org.springframework.stereotype.Component;
 
 /** 利用者が明示した生活制約。空白の予定から利用可能とは推定しない。 */
 @Component
+@org.springframework.boot.context.properties.EnableConfigurationProperties(LifeProperties.class)
 public final class LifeContext implements LifePolicy {
   public static final class NotificationDeferred extends RuntimeException {
     private static final long serialVersionUID = 1L;
@@ -128,6 +129,7 @@ public final class LifeContext implements LifePolicy {
 
   private final Store store;
   private final Clock clock;
+  private final LifeProperties properties;
   private volatile Settings settings;
   private volatile Instant changedAt = Instant.MIN;
   private volatile org.springframework.beans.factory.ObjectProvider<LifeAvailability>
@@ -145,10 +147,16 @@ public final class LifeContext implements LifePolicy {
   }
 
   public LifeContext(Store store, Clock clock) {
+    this(store, clock, LifeProperties.empty());
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public LifeContext(Store store, Clock clock, LifeProperties properties) {
     this.store = store;
     this.clock = clock;
+    this.properties = properties;
     var saved = store.load();
-    settings = saved == null ? defaults() : saved;
+    settings = properties.apply(saved == null ? defaults() : saved);
   }
 
   public static Settings defaults() {
@@ -173,6 +181,9 @@ public final class LifeContext implements LifePolicy {
     if (value == null) throw new IllegalArgumentException("Life settings required");
     if (value.revision() != settings.revision())
       throw new IllegalArgumentException("Stale life context revision");
+    if (!properties.apply(value).equals(value))
+      throw new IllegalArgumentException(
+          "YAML-managed life settings must be changed in rei.life and applied by restart");
     var next =
         new Settings(
             value.revision() + 1,

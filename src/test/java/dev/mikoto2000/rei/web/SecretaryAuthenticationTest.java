@@ -37,6 +37,7 @@ class SecretaryAuthenticationTest {
     dev.mikoto2000.rei.secretary.SecretaryConnections.class,
     dev.mikoto2000.rei.secretary.SecretaryAutonomy.class,
     dev.mikoto2000.rei.secretary.SecretaryFollowups.class,
+    dev.mikoto2000.rei.secretary.SecretaryGlobalBriefings.class,
     dev.mikoto2000.rei.secretary.SecretaryOrchestrator.class,
     SecretaryIntake.class
   })
@@ -59,6 +60,22 @@ class SecretaryAuthenticationTest {
       try (var context = application().run(args(true))) {
         int port = Integer.parseInt(context.getEnvironment().getProperty("local.server.port"));
         project = context.getBean(ProjectRegistry.class).resolve(root).id();
+        assertEquals(
+            401, send(client, port, "/api/v1/secretary/briefing", null, false).statusCode());
+        assertEquals(
+            200, send(client, port, "/api/v1/secretary/briefing", null, true).statusCode());
+        assertEquals(
+            200,
+            send(client, port, "/api/v1/secretary/briefings/settings", null, true).statusCode());
+        assertEquals(
+            200,
+            send(
+                    client,
+                    port,
+                    "/api/v1/secretary/briefings/generate",
+                    "{\"key\":\"global-test\",\"review\":true}",
+                    true)
+                .statusCode());
         assertEquals(
             401,
             send(client, port, "/api/v1/secretary/preparation?projectId=" + project, null, false)

@@ -9,6 +9,17 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class SecretaryRemoteCommandsTest {
+  @Test void globalBriefingsIgnoreTheSelectedProjectAndUseExplicitProjectOnlyWhenRequested() {
+    assertEquals("/api/v1/secretary/briefing", RemoteCommands.route(List.of("/secretary", "briefing"), "selected", null).path());
+    assertEquals("/api/v1/secretary/briefing", RemoteCommands.route(List.of("/secretary", "briefing"), null, null).path());
+    assertEquals("/api/v1/secretary/briefing?projectId=explicit", RemoteCommands.route(List.of("/secretary", "briefing", "--project", "explicit"), "selected", null).path());
+    var generated = RemoteCommands.route(List.of("/secretary", "review-generate", "--key", "global-one"), "selected", null);
+    assertEquals(Map.of("key", "global-one", "review", true), generated.body());
+    assertEquals("/api/v1/secretary/briefings/id", RemoteCommands.route(List.of("/secretary", "briefing-show", "id"), "selected", null).path());
+    assertEquals("/api/v1/secretary/briefings/settings", RemoteCommands.route(List.of("/secretary", "briefing-settings"), null, null).path());
+    assertEquals("/api/v1/secretary/briefings/check", RemoteCommands.route(List.of("/secretary", "briefing-check"), null, null).path());
+    assertThrows(IllegalArgumentException.class, () -> RemoteCommands.route(List.of("/secretary", "briefing-settings", "--project", "p"), null, null));
+  }
   @Test void preparationAndExecutionModeAreReadOnlyScopedViews() {
     assertEquals("/api/v1/secretary/preparation?projectId=p", RemoteCommands.route(List.of("/secretary", "preparation"), "p", null).path());
     var mode = RemoteCommands.route(List.of("/secretary", "work-mode", "job"), "p", null);
@@ -16,12 +27,12 @@ class SecretaryRemoteCommandsTest {
     assertEquals("/api/v1/secretary/executions/job/mode?projectId=p", mode.path());
   }
   @Test void generatedBriefingsHaveExplicitKeysAndScopedHistory() {
-    var generated = RemoteCommands.route(List.of("/secretary", "review-generate", "--key", "evening-one"), "p", null);
+    var generated = RemoteCommands.route(List.of("/secretary", "review-generate", "--key", "evening-one", "--project", "p"), "p", null);
     assertEquals("POST", generated.method());
     assertEquals("/api/v1/secretary/briefings/generate", generated.path());
     assertEquals(Map.of("projectId", "p", "review", true, "key", "evening-one"), generated.body());
     assertThrows(IllegalArgumentException.class, () -> RemoteCommands.route(List.of("/secretary", "briefing-generate"), "p", null));
-    assertEquals("/api/v1/secretary/briefings/id?projectId=p", RemoteCommands.route(List.of("/secretary", "briefing-show", "id"), "p", null).path());
+    assertEquals("/api/v1/secretary/briefings/id?projectId=p", RemoteCommands.route(List.of("/secretary", "briefing-show", "id", "--project", "p"), "p", null).path());
     assertEquals("/api/v1/secretary/briefings/delete", RemoteCommands.route(List.of("/secretary", "briefing-clear"), "p", null).path());
   }
   @Test void connectionsUseFixedPathsAndRequireWriteRevisions() {

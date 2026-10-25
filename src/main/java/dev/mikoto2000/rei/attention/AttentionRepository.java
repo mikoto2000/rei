@@ -20,7 +20,7 @@ import org.springframework.stereotype.Repository;
 public class AttentionRepository {
   /** Idempotent local ingress; the existing delivery service keeps its policy and destination. */
   public Item createSecretary(dev.mikoto2000.rei.secretary.SecretaryNotifications.Notice notice) {
-    String kind = "SECRETARY_" + notice.destination();
+    String kind = notice.global() ? "SECRETARY_GLOBAL_INBOX" : "SECRETARY_" + notice.destination();
     String id =
         UUID.nameUUIDFromBytes(
                 ("secretary:" + notice.projectId() + ":" + notice.id())

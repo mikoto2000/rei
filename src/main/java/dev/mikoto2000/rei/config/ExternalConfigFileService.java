@@ -511,10 +511,23 @@ public class ExternalConfigFileService {
                 - handle: "alice.bsky.social"
                   probability: 0.25
                   max-replies-per-day: 3
+          # Optional global life overrides. Unspecified fields retain persisted values.
+          # life:
+          #   zone: Asia/Tokyo
+          #   work-days: [MONDAY, TUESDAY, WEDNESDAY, THURSDAY, FRIDAY]
+          #   work-start: '09:00'
+          #   work-end: '18:00'
           secretary:
             enabled: ${REI_SECRETARY_ENABLED:false}
             extraction-enabled: ${REI_SECRETARY_EXTRACTION_ENABLED:false}
             followups-enabled: ${REI_SECRETARY_FOLLOWUPS_ENABLED:false}
+            # Global morning/evening briefing: set explicit times and project IDs before enabling.
+            briefings:
+              enabled: false
+              morning-time: ''
+              evening-time: ''
+              zone: '' # Inherit rei.life.zone / the effective global life setting.
+              projects: []
             orchestrator-enabled: ${REI_SECRETARY_ORCHESTRATOR_ENABLED:false}
             autonomy-enabled: ${REI_SECRETARY_AUTONOMY_ENABLED:false}
             connections-enabled: ${REI_SECRETARY_CONNECTIONS_ENABLED:false}

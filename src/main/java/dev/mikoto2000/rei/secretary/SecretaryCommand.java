@@ -219,7 +219,9 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
   @Parameters(index = "1", arity = "0..1")
   String id;
 
-  @Option(names = "--project", required = true)
+  @Option(
+      names = "--project",
+      description = "Project ID; omit for global life settings and briefings")
   String project;
 
   @Option(names = "--title")
@@ -282,6 +284,43 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
         spec.commandLine().getOut().println(SecretaryJson.JSON.writeValueAsString(result));
         return 0;
       }
+      if (project == null
+          && java.util.Set.of(
+                  "briefing",
+                  "review",
+                  "briefing-generate",
+                  "review-generate",
+                  "briefing-history",
+                  "briefing-show",
+                  "briefing-clear",
+                  "briefing-settings",
+                  "briefing-check",
+                  "briefing-notifications")
+              .contains(action)) {
+        var service = followups();
+        Object result =
+            switch (action) {
+              case "briefing", "review" ->
+                  service.globalBriefings().report(reportDate, action.equals("review"));
+              case "briefing-generate", "review-generate" ->
+                  service
+                      .globalBriefings()
+                      .generate(reportDate, action.equals("review-generate"), key);
+              case "briefing-history" -> service.globalBriefings().history(limit);
+              case "briefing-show" -> service.globalBriefings().show(id);
+              case "briefing-clear" ->
+                  java.util.Map.of("deleted", service.globalBriefings().deleteHistory());
+              case "briefing-settings" -> service.globalBriefings().settings();
+              case "briefing-check" -> service.checkGlobalNow();
+              case "briefing-notifications" ->
+                  service.history(SecretaryNotifications.GLOBAL_SCOPE, limit);
+              default -> throw new IllegalArgumentException("Unknown global operation");
+            };
+        spec.commandLine().getOut().println(SecretaryJson.JSON.writeValueAsString(result));
+        return 0;
+      }
+      if (project == null || project.isBlank())
+        throw new IllegalArgumentException("Project required for this operation");
       var ledger = ledgers == null ? null : ledgers.getIfAvailable();
       if (ledger == null) throw new IllegalStateException("Enable rei.secretary.enabled first");
       Object result =

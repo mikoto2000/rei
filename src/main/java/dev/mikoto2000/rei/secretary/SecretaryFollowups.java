@@ -100,6 +100,40 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
 
   private final SecretaryDatabase database;
   private final SecretaryLedger ledger;
+  private final SecretarySnapshotStore snapshots;
+  private ObjectProvider<SecretaryGlobalBriefings> globalBriefings;
+
+  @Autowired
+  void setGlobalBriefings(ObjectProvider<SecretaryGlobalBriefings> globals) {
+    globalBriefings = globals;
+  }
+
+  public SecretaryGlobalBriefings globalBriefings() {
+    var value = globalBriefings == null ? null : globalBriefings.getIfAvailable();
+    if (value == null) throw new IllegalStateException("Global briefings unavailable");
+    return value;
+  }
+
+  private boolean globalMode() {
+    return globalBriefings != null
+        && globalBriefings.getIfAvailable() != null
+        && globalBriefings.getObject().enabled();
+  }
+
+  public synchronized List<Delivery> checkGlobalNow() {
+    globalBriefings().schedule(this::queueGlobal);
+    deliver(SecretaryNotifications.GLOBAL_SCOPE);
+    return history(SecretaryNotifications.GLOBAL_SCOPE, 100);
+  }
+
+  private void queueGlobal(SecretaryNotifications.Notice notice) {
+    database.transaction(
+        db -> {
+          SecretaryOrchestrator.queue(db, notice);
+          return null;
+        });
+  }
+
   private final Clock clock;
   private final SecretaryNotifications notifications;
   private final boolean enabled;
@@ -168,6 +202,7 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
       SecretaryNotifications notifications,
       boolean enabled) {
     this.database = database;
+    this.snapshots = new SecretarySnapshotStore(database);
     this.ledger = ledger;
     this.clock = clock;
     this.notifications = notifications;
@@ -253,8 +288,13 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
   }
 
   public Report report(String project, LocalDate requested, boolean review) {
-    var settings = settings(project);
-    var zone = ZoneId.of(settings.zone());
+    return report(project, requested, review, ZoneId.of(settings(project).zone()));
+  }
+
+  @Override
+  public Report report(String project, LocalDate requested, boolean review, ZoneId zone) {
+    required(project);
+    java.util.Objects.requireNonNull(zone);
     var date = requested == null ? clock.instant().atZone(zone).toLocalDate() : requested;
     var tasks = ledger.list(project, 0, 1000);
     var sections = new LinkedHashMap<String, List<SecretaryTask>>();
@@ -398,28 +438,7 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
             key,
             clock.instant(),
             report(project, date, review));
-    database.transaction(
-        db -> {
-          try (var q =
-              db.prepareStatement("INSERT OR IGNORE INTO secretary_briefings VALUES(?,?,?,?,?)")) {
-            q.setString(1, generation.id());
-            q.setString(2, project);
-            q.setString(3, key);
-            q.setLong(4, generation.generated().toEpochMilli());
-            q.setString(5, SecretaryJson.JSON.writeValueAsString(generation));
-            q.executeUpdate();
-          }
-          // Keep the latest 100 snapshots per project. Delivery dedupe stays in the existing
-          // outbox.
-          try (var q =
-              db.prepareStatement(
-                  "DELETE FROM secretary_briefings WHERE project=? AND id NOT IN (SELECT id FROM secretary_briefings WHERE project=? ORDER BY generated DESC,rowid DESC LIMIT 100)")) {
-            q.setString(1, project);
-            q.setString(2, project);
-            q.executeUpdate();
-          }
-          return null;
-        });
+    snapshots.save(generation.id(), project, key, generation.generated(), generation);
     return compatible(
         java.util.Objects.requireNonNull(generationByKey(project, key)), date, review);
   }
@@ -431,74 +450,27 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
   }
 
   private Generation generationByKey(String project, String key) {
-    return database.read(
-        db -> {
-          try (var q =
-              db.prepareStatement(
-                  "SELECT record FROM secretary_briefings WHERE project=? AND request_key=?")) {
-            q.setString(1, project);
-            q.setString(2, key);
-            try (var r = q.executeQuery()) {
-              return r.next()
-                  ? SecretaryJson.JSON.readValue(r.getString(1), Generation.class)
-                  : null;
-            }
-          }
-        });
+    return SecretarySnapshotStore.decode(snapshots.byKey(project, key), Generation.class);
   }
 
   public Generation briefing(String project, String id) {
     required(project);
     required(id);
-    var saved =
-        database.read(
-            db -> {
-              try (var q =
-                  db.prepareStatement(
-                      "SELECT record FROM secretary_briefings WHERE project=? AND id=?")) {
-                q.setString(1, project);
-                q.setString(2, id);
-                try (var r = q.executeQuery()) {
-                  return r.next()
-                      ? SecretaryJson.JSON.readValue(r.getString(1), Generation.class)
-                      : null;
-                }
-              }
-            });
+    var saved = SecretarySnapshotStore.decode(snapshots.byId(project, id), Generation.class);
     if (saved == null) throw new IllegalArgumentException("Briefing not found");
     return saved;
   }
 
   public List<Generation> briefingHistory(String project, int limit) {
     required(project);
-    if (limit < 1 || limit > 100)
-      throw new IllegalArgumentException("History limit must be 1..100");
-    return database.read(
-        db -> {
-          var result = new ArrayList<Generation>();
-          try (var q =
-              db.prepareStatement(
-                  "SELECT record FROM secretary_briefings WHERE project=? ORDER BY generated DESC,rowid DESC LIMIT ?")) {
-            q.setString(1, project);
-            q.setInt(2, limit);
-            try (var r = q.executeQuery()) {
-              while (r.next())
-                result.add(SecretaryJson.JSON.readValue(r.getString(1), Generation.class));
-            }
-          }
-          return List.copyOf(result);
-        });
+    return snapshots.list(project, limit).stream()
+        .map(v -> SecretarySnapshotStore.decode(v, Generation.class))
+        .toList();
   }
 
   public int deleteBriefings(String project) {
     required(project);
-    return database.transaction(
-        db -> {
-          try (var q = db.prepareStatement("DELETE FROM secretary_briefings WHERE project=?")) {
-            q.setString(1, project);
-            return q.executeUpdate();
-          }
-        });
+    return snapshots.delete(project);
   }
 
   private List<Delivery> held(String project) {
@@ -568,6 +540,8 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
   }
 
   public synchronized void poll() {
+    if (globalBriefings != null && globalBriefings.getIfAvailable() != null)
+      globalBriefings.getObject().schedule(this::queueGlobal);
     var projects =
         database.read(
             db -> {
@@ -580,7 +554,10 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
                 return result;
               }
             });
-    if (projects.isEmpty()) return;
+    if (projects.isEmpty()) {
+      deliver(null);
+      return;
+    }
     int offset = state("projects");
     if (offset >= projects.size()) offset = 0;
     for (int i = offset; i < Math.min(offset + 16, projects.size()); i++) {
@@ -677,7 +654,7 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
               + (clock.instant().getEpochSecond() / settings.repeatSeconds());
       enqueue(settings, current, kind, key, kind + ": " + current.title());
     }
-    if (settings.notifications()) {
+    if (settings.notifications() && !globalMode()) {
       scheduleReport(settings, local.toLocalDate(), local.toLocalTime(), false);
       scheduleReport(settings, local.toLocalDate(), local.toLocalTime(), true);
     }
@@ -842,6 +819,26 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
   }
 
   private void deliver(String project) {
+    // Global meetings already aggregate projects, so retain their own identity while held.
+    database.transaction(
+        db -> {
+          if (globalMode()) {
+            try (var q =
+                db.prepareStatement(
+                    "UPDATE secretary_notices SET status='SUPPRESSED',error='global_briefings_enabled' WHERE kind IN ('BRIEFING','REVIEW') AND status IN ('PENDING','HELD','SENDING')")) {
+              q.executeUpdate();
+            }
+          }
+          if (life == null || life.notificationAllowed("BRIEFING", "")) {
+            try (var q =
+                db.prepareStatement(
+                    "UPDATE secretary_notices SET status='PENDING' WHERE project=? AND status='HELD'")) {
+              q.setString(1, SecretaryNotifications.GLOBAL_SCOPE);
+              q.executeUpdate();
+            }
+          }
+          return null;
+        });
     var gate = interruption();
     if (gate != null) gate.release(project);
     database.transaction(
@@ -889,13 +886,22 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
                 }
               });
       if (claimed == null) return;
-      var settings = settings(claimed.projectId());
-      boolean eligible =
-          settings.enabled()
-              && settings.notifications()
-              && settings.destination().equals(claimed.destination());
-      if (claimed.taskId() != null && !claimed.kind().equals("COMPLETED"))
-        eligible &= active(ledger.get(claimed.projectId(), claimed.taskId()));
+      boolean eligible;
+      if (claimed.global())
+        eligible =
+            globalBriefings != null
+                && globalBriefings.getIfAvailable() != null
+                && globalBriefings.getObject().eligible(claimed);
+      else {
+        var settings = settings(claimed.projectId());
+        eligible =
+            settings.enabled()
+                && settings.notifications()
+                && settings.destination().equals(claimed.destination());
+        if (globalMode() && Set.of("BRIEFING", "REVIEW").contains(claimed.kind())) eligible = false;
+        if (claimed.taskId() != null && !claimed.kind().equals("COMPLETED"))
+          eligible &= active(ledger.get(claimed.projectId(), claimed.taskId()));
+      }
       if (!eligible) {
         finish(claimed, "SUPPRESSED", "");
         continue;

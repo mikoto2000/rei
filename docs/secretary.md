@@ -71,7 +71,7 @@ rei:
 ### CLI
 
 `PROJECT` は既存プロジェクト ID。スラッシュ入力は通常の Shell コマンドとして使用する。
-軽量版 `rei-cli` からも同じ `/secretary` を利用でき、`--project` を省略した場合は選択中 Project を使う。
+軽量版 `rei-cli` からも同じ `/secretary` を利用でき、タスク操作で `--project` を省略した場合は選択中 Project を使う。ブリーフィング・レビューでの省略は[グローバル設定](global-secretary-settings.md)の対象Projectを集約する。
 軽量版の `--tag` と `--ref` はカンマ区切りで指定する。誤った操作・未知の引数をモデルへ送らない。
 
 ```text
