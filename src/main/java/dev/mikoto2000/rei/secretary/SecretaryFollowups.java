@@ -25,7 +25,7 @@ import org.springframework.stereotype.Component;
 /** Deterministic reports, bounded monitoring and a durable idempotent notification outbox. */
 @Component
 @ConditionalOnProperty(name = "rei.secretary.enabled", havingValue = "true")
-public final class SecretaryFollowups implements SecretaryTick, AutoCloseable {
+public final class SecretaryFollowups implements SecretaryTick, SecretaryReports, AutoCloseable {
   public record Settings(
       String projectId,
       boolean enabled,
@@ -79,6 +79,23 @@ public final class SecretaryFollowups implements SecretaryTick, AutoCloseable {
   private final boolean enabled;
   private List<SecretaryContext> contexts = List.of();
   private SecretaryDependencies dependencies;
+  private ObjectProvider<SecretaryInterruptions> interruptions;
+  private SecretaryInterruptions interruptionOverride;
+
+  @Autowired
+  public void setInterruptions(ObjectProvider<SecretaryInterruptions> interruptions) {
+    this.interruptions = interruptions;
+  }
+
+  void setInterruption(SecretaryInterruptions interruption) {
+    this.interruptionOverride = interruption;
+  }
+
+  private SecretaryInterruptions interruption() {
+    return interruptionOverride != null
+        ? interruptionOverride
+        : interruptions == null ? null : interruptions.getIfAvailable();
+  }
 
   @Autowired
   public void setDependencies(ObjectProvider<SecretaryDependencies> dependencies) {
@@ -565,6 +582,8 @@ public final class SecretaryFollowups implements SecretaryTick, AutoCloseable {
   }
 
   private void deliver(String project) {
+    var gate = interruption();
+    if (gate != null) gate.release(project);
     database.transaction(
         db -> {
           try (var write =
@@ -622,6 +641,26 @@ public final class SecretaryFollowups implements SecretaryTick, AutoCloseable {
         continue;
       }
       try {
+        if (gate != null) {
+          var admission = gate.admit(claimed);
+          if (admission.decision() != SecretaryInterruptions.Decision.ALLOW) {
+            if (admission.decision() == SecretaryInterruptions.Decision.SUPPRESS)
+              finish(claimed, "SUPPRESSED", admission.reason());
+            else
+              database.transaction(
+                  db -> {
+                    try (var q =
+                        db.prepareStatement(
+                            "UPDATE secretary_notices SET status='HELD',attempts=max(0,attempts-1),error=? WHERE id=? AND status='SENDING'")) {
+                      q.setString(1, admission.reason());
+                      q.setString(2, claimed.id());
+                      q.executeUpdate();
+                    }
+                    return null;
+                  });
+            continue;
+          }
+        }
         notifications.deliver(claimed);
         finish(claimed, "DELIVERED", "");
       } catch (RuntimeException failure) {

@@ -10,6 +10,18 @@ import org.junit.jupiter.api.Test;
 
 class SecretaryRemoteCommandsTest {
   @Test
+  void proposalsAndFeedbackUseRevisionScopedEndpointsAndExplicitSettings() {
+    var configure = RemoteCommands.route(List.of("/secretary", "orchestrator-configure", "--proposals-enabled", "--stopped", "--minimum-seconds", "120"), "p", null);
+    assertEquals("/api/v1/secretary/orchestrator/settings", configure.path());
+    assertEquals(true, ((Map<?, ?>) configure.body()).get("stopped"));
+    var feedback = RemoteCommands.route(List.of("/secretary", "feedback", "id", "--revision", "3", "--reaction", "LATER", "--delay-seconds", "600"), "p", null);
+    assertEquals("/api/v1/secretary/suggestions/id/feedback", feedback.path());
+    assertEquals(Map.of("projectId", "p", "revision", 3L, "reaction", "LATER", "delaySeconds", 600L), feedback.body());
+    assertThrows(IllegalArgumentException.class, () -> RemoteCommands.route(List.of("/secretary", "feedback", "id", "--reaction", "ALLOW_AUTO"), "p", null));
+    assertThrows(IllegalArgumentException.class, () -> RemoteCommands.route(List.of("/secretary", "feedback", "id", "--revision", "0", "--reaction", "AUTO_APPROVE"), "p", null));
+    assertTrue(RemoteCommands.route(List.of("/secretary", "suggestions"), "p", null).path().contains("/suggestions?"));
+  }
+  @Test
   void followupConfigurationAndReportsUseFixedAuthenticatedEndpoints() {
     var configure =
         RemoteCommands.route(

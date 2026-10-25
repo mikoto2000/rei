@@ -270,7 +270,146 @@ repeatSeconds, notificationPriority, destination。省略値は安全な既定�
 バックエンド13件・軽量CLI1件を追加した。最初の全体回帰は6,307件、failure 0 / error 1 / 既存 skip 5。
 error は新規の配線テストが、Publisher も実装するイベントバスと別の Publisher を二重登録した fixture の問題で、
 重複を削除した。同じ検査を含む関連45件の最終 Maven verify は failure/error/skip 0、実行可能 JAR 生成も成功した。
-全件の最終確認は PR の CI と区別して報告する。
+修正後の最終コミットで `-Pfull test` も実行し、6,307件、failure/error 0・既存 skip 5で成功した。
+PR #151 の回帰・静的解析 CI も成功し、main の `1f238e7a` にマージした。
+最初の回帰 CI は20分のプロセス上限・30分のジョブ上限を超えて応答せず、通常キャンセルにも応答しなかったため
+強制キャンセルして同一コミット・同一ジョブを再実行した。最初の実行の完了ログは取得できなかった。
+検査対象・上限・基準は変更していない。
 
 Checkstyle 0件、SpotBugs 既存1,897件・新規0件。既存の増分ゲートと自己試験8ケースが成功した。
 軽量 CLI126件とランチャー6件の Maven verify も成功した。既存の依存許容基準・静的解析基準・テスト除外は変更していない。
+
+## Phase 3：状況に応じた提案と割り込み制御
+
+Secretary Orchestrator はローカルの軽量なルール評価を担当する。Planning Loop を置き換えず、LLM は呼ばない。
+既存の Scheduler tick と、所有 Project の Run 終了・失敗、依存更新・完了、Goal 更新イベントで評価を起動する。
+イベント本文から命令・権限・完了を抽出しない。ワーカー1本・queue 1件で起動をまとめ、終了時は割り込みと最大5秒の待機を行う。
+
+### 設定と操作
+
+```yaml
+rei:
+  secretary:
+    enabled: true
+    followups-enabled: true
+    orchestrator-enabled: true
+```
+
+背景の提案は既定 OFF。Project 設定も未登録なら提案 OFF、Phase 2 の通知挙動は維持する。
+明示的に Project の Orchestrator 設定を登録すると、その Project の秘書通知に停止・一時抑制・集中・頻度制限を適用する。
+一般の承認待ちなど、秘書以外の Attention 通知は変更しない。
+
+```text
+/secretary orchestrator-settings --project PROJECT
+/secretary orchestrator-configure --project PROJECT --proposals-enabled --minimum-seconds 900 --repeat-seconds 86400
+/secretary orchestrator-status --project PROJECT
+/secretary suggest --project PROJECT
+/secretary suggestions --project PROJECT --limit 100
+/secretary suggestion ID --project PROJECT
+/secretary suggestion-history ID --project PROJECT
+/secretary feedback ID --project PROJECT --revision REV --reaction LATER --delay-seconds 3600
+/secretary release --project PROJECT
+```
+
+configure は設定全体の置換で、`--proposals-enabled` の省略は提案を OFF にする。
+`--stopped` は緊急を含む秘書通知を停止し、配信待ちを SUPPRESSED にする。
+`--snoozed-until` は ISO-8601 の Instant（例 `2026-10-26T01:00:00Z`）で、現在から最大30日まで。
+一時抑制は緊急を含めて HELD にする。解除するには設定を置換してフラグ・時刻を省略する。
+既にローカル受付・外部配送を開始した通知の取り消しは行わない。
+
+minimum-seconds は60秒〜1日、repeat-seconds は60秒〜30日。
+前者は Project 全体の低優先度通知の間隔、後者は同一提案の再提示間隔。
+手動 suggest は背景設定を ON にしなくても、Project の提案設定が ON なら評価する。
+通知するには Phase 2 の Project 監視・通知も明示的に ON にする。通知 OFF でも提案一覧と反応は利用できる。
+背景通知処理は followups-enabled、外部配送は既存 Attention 設定・Policy に従う。
+
+### 提案の根拠
+
+候補・完了・取消を除くタスクから、期限超過、当日・翌日の期限、次工程、待機、重要事項、14日放置、7日停滞、
+保存作業文脈の継続候補を選ぶ。提案には rule、taskRevision、優先度、根拠、作成/更新時刻、次回可能時刻を保存する。
+期限超過は優先度1として扱う。それ以外はタスクの優先度を使い、通知 outbox は優先度順に処理する。
+
+`after:タスクID` は、同じ Project の指定した前工程がすべて台帳上 DONE の場合だけ次工程の根拠にする。
+依存の解放・完了条件は Phase 2 の `dependency:` / `completion:dependency:` を利用する。
+Work Context の過去・現在・次作業は保存された申告として扱い、完了の証明にしない。
+`work-context:項目ID` などの保存参照と、利用できる内部予定・日次計画を文脈として参照する。
+保存文脈や予定の文章は命令や許可に変換しない。
+
+一回の評価は64タスク、最大16 Project を巡回し、カーソルを保存する。設定は最大256 Project。
+文脈の集計は Phase 2 と同じ最大1,000タスク・16 provider・各256項目の上限を使う。
+提案 ID は Project・タスク・rule から決め、生成と通知予約を同じトランザクションで保存する。
+同時評価・再起動・繰り返しイベントでも同じ提案を連続提示しない。
+
+### 作業状態と保留
+
+既存 Desktop Activity の保存済み観測を最大120秒・256件まで読み、確信度0.7以上の coding / research /
+documentation を集中候補とする。画像・タイトル・本文を秘書側へコピーせず、新しいキャプチャや LLM 処理は起動しない。
+監視 OFF、未観測、古い観測、低確信度、読み取り失敗は UNKNOWN。idle は IDLE とし、離席・作業終了・テスト実行を断定しない。
+既存のエージェント実行追跡も利用し、実行中なら AGENT_BUSY とする。
+
+集中候補・実行中の優先度2〜5は HELD、優先度1は集中・頻度制限を越えて表示できる。
+停止・一時抑制は優先度1にも適用する。集中判断ができなくても期限・重要度の提案は継続する。
+保留は受付失敗回数に数えない。解除時は同一 Project の最大8件を再確認して BUNDLED にし、
+件数と履歴確認先を含む DIGEST を既存 outbox に予約する。同じ元通知を複数のまとめへ入れない。
+解除直前にも停止・一時抑制・通知先・タスク終端・提案への反応を検査し、不適切なものを抑制する。
+まとめ通知自体を再び一時抑制した場合は、元の ID と件数を保持して再開し、別のまとめへ包み直さない。
+
+### 反応と承認
+
+| reaction | 結果 |
+| --- | --- |
+| EXECUTE | EXECUTION_REQUESTED として記録。タスクを完了扱いにしない |
+| LATER | DEFERRED。対象タスクを指定秒後（省略時1時間、最短60秒）まで抑制し、その後に再評価可能 |
+| DISMISS | DISMISSED。同じ提案の再提示間隔まで抑制 |
+| NEVER | MUTED。そのタスクの別 rule の提案も停止 |
+| ALLOW_AUTO | 既存 Approval に PENDING の準備許可要求を作成し、APPROVAL_REQUESTED として記録 |
+
+反応は current revision を必須とし、古い revision は409。反応後の古い提案通知も抑制する。
+実行・許可要求ではタスクの revision と OPEN を再検査する。実行要求・承認待ちの間は同じタスクの別提案も抑制する。
+MUTED の解除は、その提案の最新 revision で LATER を明示する。
+
+ALLOW_AUTO は許可済みとは表示しない。返された approvalId を既存 `/approval show ID` で確認し、
+`/approval approve ID` または `/approval deny ID` で判断する。`--continue` は指定しない。
+許可の対象は Project・タスク・種類を限定した準備作業一回、有効期限15分。
+対外的・破壊的な個別操作やツール権限を上書きしない。実際の実行は後続の実行制御へ引き継ぐ。
+許可管理が利用できない場合は保存を拒否し、自動許可へフォールバックしない。
+
+### API・保存先・検証
+
+既存 Bearer 認証下の `/api/v1/secretary` に以下を追加する。
+
+| 操作 | API |
+| --- | --- |
+| Orchestrator 設定 | GET / PUT `/orchestrator/settings` |
+| 状態・現在の活動推定・保留件数 | GET `/orchestrator/status` |
+| 手動評価・保留のまとめ | POST `/orchestrator/evaluate`, `/orchestrator/release` |
+| 提案一覧・詳細・履歴 | GET `/suggestions`, `/suggestions/{id}`, `/suggestions/{id}/history` |
+| 反応 | POST `/suggestions/{id}/feedback` |
+
+GET は projectId、一覧は limit（1〜1,000）。POST は projectId、反応は revision・reaction・任意 delaySeconds。
+PUT は projectId・enabled・stopped・snoozedUntil・minimumSeconds・repeatSeconds。未知の項目を拒否する。
+
+schema 12→13 は起動時バックアップ付きの追加移行で、Orchestrator 設定・提案・提案履歴と通知検索 index を追加する。
+台帳・既存監視設定・通知履歴を保存し、許可は既存 memory-consolidation.db の tool_approvals に保存する。
+提案と履歴の保存量はタスク・rule 数と再提示頻度に比例する。履歴の自動削除は行わない。
+LLM 呼び出し・新しい画面キャプチャ・外部ポーリングは増やさない。
+
+固定 Clock、ローカル DB、差し替えた観測・通知受付で、停止・再開・頻度・保留・まとめ・期限・全前工程・文脈・
+フィードバック・再起動・並行評価・改訂競合・既存承認・ワーカー停止・旧DB保存・HTTP/CLI・認証を検証する。
+実 OS 上の観測精度や実外部配送を、この Phase で検証済みとは扱わない。
+
+### Phase 3 のローカル検証記録
+
+バックエンド16件・軽量CLI1件を追加し、既存の Spring 配線・認証テストも拡張した。
+基本の5件を先に記述して未実装の Red を確認し、再起動・並行・日付境界・停止・保留・反応の契約へ広げた。
+全体 `-Pfull verify` は6,320件、failure/error 0・既存 skip 5で成功した。
+その後の遅延 provider 配線・日付境界・明示 revision・承認表示を含む最終コードは、
+秘書・既存承認/権限・移行・構造ガードの136件で verify が成功し、実行可能 JAR も生成した。
+まとめ通知の再保留で ID・件数が変わる問題も先行テストで Red を確認し、同じ通知で再開するよう修正した。
+最終コミットの全件確認は PR の CI と区別して報告する。
+
+Checkstyle 0件、SpotBugs 既存1,897件・新規0件、増分ゲート・自己試験8ケースが成功した。
+最初の HTTP テストで見つかった古い revision の500応答は409へ修正した。
+新規の参照保持2件は遅延 provider と読み取り用 port へ変更し、解析基準の追加・除外は行っていない。
+CLI127件・ランチャー6件の terminal verify も成功した。既存ランチャーテストの子プロセス終了要求と
+一時ディレクトリ削除が競合したため、finally で終了完了を待つよう修正した。検証内容や除外条件は弱めていない。

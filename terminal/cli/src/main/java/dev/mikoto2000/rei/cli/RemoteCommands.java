@@ -1599,12 +1599,19 @@ public final class RemoteCommands {
   private static Request secretary(List<String> words, String selectedProject) {
     String action = words.size() > 1 ? words.get(1) : "list";
     boolean identified =
-        Set.of("show", "sources", "history", "related", "update", "approve", "done", "cancel")
+        Set.of(
+                "show", "sources", "history", "related", "update", "approve", "done", "cancel",
+                "suggestion", "suggestion-history", "feedback")
             .contains(action);
     if (identified && words.size() < 3) throw invalid();
     Set<String> allowed = new HashSet<>(Set.of("--project"));
     switch (action) {
-      case "settings", "followup-status", "check" -> {}
+      case "settings", "followup-status", "check", "orchestrator-settings", "orchestrator-status",
+          "suggest", "release", "suggestion" -> {}
+      case "suggestions", "suggestion-history" -> allowed.add("--limit");
+      case "feedback" -> allowed.addAll(Set.of("--revision", "--reaction", "--delay-seconds"));
+      case "orchestrator-configure" ->
+          allowed.addAll(Set.of("--snoozed-until", "--minimum-seconds", "--repeat-seconds"));
       case "briefing", "review" -> allowed.add("--date");
       case "notifications" -> allowed.add("--limit");
       case "configure" ->
@@ -1631,11 +1638,66 @@ public final class RemoteCommands {
             words,
             identified ? 3 : 2,
             allowed,
-            action.equals("configure") ? Set.of("--watch-enabled", "--notifications") : Set.of());
+            action.equals("configure")
+                ? Set.of("--watch-enabled", "--notifications")
+                : action.equals("orchestrator-configure")
+                    ? Set.of("--proposals-enabled", "--stopped")
+                    : Set.of());
     String project = options.getOrDefault("--project", selectedProject);
     if (project == null || project.isBlank())
       throw new IllegalArgumentException("Select a Project first");
     String base = "/api/v1/secretary/tasks";
+    String orchestration = "/api/v1/secretary/orchestrator";
+    String proposals = "/api/v1/secretary/suggestions";
+    if (action.equals("orchestrator-settings") || action.equals("orchestrator-status"))
+      return query(
+          orchestration + (action.endsWith("settings") ? "/settings" : "/status"),
+          Map.of("projectId", project));
+    if (action.equals("suggest") || action.equals("release"))
+      return post(
+          orchestration + (action.equals("suggest") ? "/evaluate" : "/release"),
+          Map.of("projectId", project));
+    if (action.equals("orchestrator-configure")) {
+      var body = new LinkedHashMap<String, Object>();
+      body.put("projectId", project);
+      body.put(
+          "enabled", Boolean.parseBoolean(options.getOrDefault("--proposals-enabled", "false")));
+      body.put("stopped", Boolean.parseBoolean(options.getOrDefault("--stopped", "false")));
+      body.put(
+          "snoozedUntil",
+          options.containsKey("--snoozed-until")
+              ? java.time.Instant.parse(options.get("--snoozed-until")).toString()
+              : null);
+      body.put("minimumSeconds", Long.parseLong(options.getOrDefault("--minimum-seconds", "900")));
+      body.put("repeatSeconds", Long.parseLong(options.getOrDefault("--repeat-seconds", "86400")));
+      return new Request("PUT", orchestration + "/settings", body);
+    }
+    if (Set.of("suggestions", "suggestion-history", "suggestion").contains(action)) {
+      int limit = Integer.parseInt(options.getOrDefault("--limit", "100"));
+      if (limit < 1 || limit > 1000) throw invalid();
+      if (action.equals("suggestion"))
+        return query(proposals + "/" + id(words.get(2)), Map.of("projectId", project));
+      return query(
+          proposals
+              + (action.equals("suggestion-history") ? "/" + id(words.get(2)) + "/history" : ""),
+          Map.of("projectId", project, "limit", limit));
+    }
+    if (action.equals("feedback")) {
+      String reaction = options.get("--reaction");
+      if (reaction == null
+          || !Set.of("EXECUTE", "LATER", "DISMISS", "NEVER", "ALLOW_AUTO").contains(reaction)
+          || !options.containsKey("--revision")) throw invalid();
+      long revision = Long.parseLong(options.get("--revision"));
+      long delay = Long.parseLong(options.getOrDefault("--delay-seconds", "0"));
+      if (revision < 0 || delay < 0 || delay > 2592000) throw invalid();
+      return post(
+          proposals + "/" + id(words.get(2)) + "/feedback",
+          Map.of(
+              "projectId", project,
+              "revision", revision,
+              "reaction", reaction,
+              "delaySeconds", delay));
+    }
     if (action.equals("settings"))
       return query("/api/v1/secretary/settings", Map.of("projectId", project));
     if (action.equals("followup-status"))

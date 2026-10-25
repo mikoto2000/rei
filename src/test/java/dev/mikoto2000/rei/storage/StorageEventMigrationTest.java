@@ -451,7 +451,10 @@ class StorageEventMigrationTest {
               "secretary_settings",
               "secretary_followup_state",
               "secretary_notices",
-              "secretary_dependencies")) sql.execute("DROP TABLE " + table);
+              "secretary_dependencies",
+              "secretary_orchestration",
+              "secretary_suggestions",
+              "secretary_suggestion_history")) sql.execute("DROP TABLE " + table);
       sql.executeUpdate("DELETE FROM storage_migrations WHERE version>3");
       sql.execute("PRAGMA user_version=3");
     }

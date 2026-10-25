@@ -15,6 +15,36 @@ import picocli.CommandLine.Spec;
 public class SecretaryCommand implements java.util.concurrent.Callable<Integer> {
   private final ObjectProvider<SecretaryLedger> ledgers;
   private ObjectProvider<SecretaryFollowups> followups;
+  private ObjectProvider<SecretaryOrchestrator> orchestrators;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setOrchestrators(ObjectProvider<SecretaryOrchestrator> orchestrators) {
+    this.orchestrators = orchestrators;
+  }
+
+  private SecretaryOrchestrator orchestrator() {
+    var service = orchestrators == null ? null : orchestrators.getIfAvailable();
+    if (service == null) throw new IllegalStateException("Secretary orchestrator unavailable");
+    return service;
+  }
+
+  @Option(names = "--proposals-enabled")
+  boolean proposalsEnabled;
+
+  @Option(names = "--stopped")
+  boolean stopped;
+
+  @Option(names = "--snoozed-until")
+  java.time.Instant snoozedUntil;
+
+  @Option(names = "--minimum-seconds", defaultValue = "900")
+  long minimumSeconds;
+
+  @Option(names = "--reaction")
+  SecretaryOrchestrator.Feedback reaction;
+
+  @Option(names = "--delay-seconds", defaultValue = "0")
+  long delaySeconds;
 
   @org.springframework.beans.factory.annotation.Autowired
   public void setFollowups(ObjectProvider<SecretaryFollowups> followups) {
@@ -114,6 +144,28 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
       if (ledger == null) throw new IllegalStateException("Enable rei.secretary.enabled first");
       Object result =
           switch (action) {
+            case "orchestrator-settings" -> orchestrator().settings(project);
+            case "orchestrator-configure" ->
+                orchestrator()
+                    .configure(
+                        new SecretaryOrchestrator.Settings(
+                            project,
+                            proposalsEnabled,
+                            stopped,
+                            snoozedUntil,
+                            minimumSeconds,
+                            repeatSeconds));
+            case "orchestrator-status" -> orchestrator().status(project);
+            case "suggest" -> orchestrator().evaluate(project);
+            case "release" -> orchestrator().release(project);
+            case "suggestions" -> orchestrator().suggestions(project, limit);
+            case "suggestion" -> orchestrator().suggestion(project, id);
+            case "suggestion-history" -> orchestrator().history(project, id, limit);
+            case "feedback" -> {
+              if (!spec.commandLine().getParseResult().hasMatchedOption("--revision"))
+                throw new IllegalArgumentException("Revision required");
+              yield orchestrator().feedback(project, id, revision, reaction, delaySeconds);
+            }
             case "settings" -> followups().settings(project);
             case "configure" ->
                 followups()

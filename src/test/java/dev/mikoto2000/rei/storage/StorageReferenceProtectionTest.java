@@ -322,7 +322,10 @@ class StorageReferenceProtectionTest {
               "secretary_settings",
               "secretary_followup_state",
               "secretary_notices",
-              "secretary_dependencies")) sql.execute("DROP TABLE IF EXISTS " + table);
+              "secretary_dependencies",
+              "secretary_orchestration",
+              "secretary_suggestions",
+              "secretary_suggestion_history")) sql.execute("DROP TABLE IF EXISTS " + table);
       sql.execute("DELETE FROM storage_migrations WHERE version>2");
       sql.execute("PRAGMA user_version=2");
     }

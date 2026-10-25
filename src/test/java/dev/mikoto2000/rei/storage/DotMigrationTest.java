@@ -39,7 +39,10 @@ class DotMigrationTest {
             "secretary_settings",
             "secretary_followup_state",
             "secretary_notices",
-            "secretary_dependencies"
+            "secretary_dependencies",
+            "secretary_orchestration",
+            "secretary_suggestions",
+            "secretary_suggestion_history"
           }) s.execute("DROP TABLE " + table);
       s.execute("DELETE FROM storage_migrations WHERE version>=8");
       s.execute("PRAGMA user_version=7");

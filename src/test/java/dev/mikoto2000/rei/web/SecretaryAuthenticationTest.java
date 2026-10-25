@@ -30,6 +30,9 @@ class SecretaryAuthenticationTest {
     SecretaryLedger.class,
     SqliteSecretaryDatabase.class,
     SecretaryController.class,
+    SecretaryOrchestratorController.class,
+    dev.mikoto2000.rei.secretary.SecretaryFollowups.class,
+    dev.mikoto2000.rei.secretary.SecretaryOrchestrator.class,
     SecretaryIntake.class
   })
   static class Config {}
@@ -42,11 +45,33 @@ class SecretaryAuthenticationTest {
         assertEquals(
             404,
             send(client, port, "/api/v1/secretary/tasks?projectId=p", null, true).statusCode());
+        assertEquals(
+            404,
+            send(client, port, "/api/v1/secretary/orchestrator/settings?projectId=p", null, true)
+                .statusCode());
       }
       String project;
       try (var context = application().run(args(true))) {
         int port = Integer.parseInt(context.getEnvironment().getProperty("local.server.port"));
         project = context.getBean(ProjectRegistry.class).resolve(root).id();
+        assertEquals(
+            401,
+            send(
+                    client,
+                    port,
+                    "/api/v1/secretary/orchestrator/settings?projectId=" + project,
+                    null,
+                    false)
+                .statusCode());
+        assertEquals(
+            200,
+            send(
+                    client,
+                    port,
+                    "/api/v1/secretary/orchestrator/settings?projectId=" + project,
+                    null,
+                    true)
+                .statusCode());
         assertEquals(
             401,
             send(client, port, "/api/v1/secretary/tasks?projectId=" + project, null, false)

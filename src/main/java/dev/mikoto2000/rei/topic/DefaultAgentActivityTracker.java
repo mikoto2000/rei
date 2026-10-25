@@ -9,7 +9,16 @@ import org.springframework.stereotype.Component;
 
 /** 話題の管理に必要な既定エージェント作業状況追跡を扱う。 */
 @Component
-public class DefaultAgentActivityTracker implements AgentActivityTracker {
+public class DefaultAgentActivityTracker
+    implements AgentActivityTracker, dev.mikoto2000.rei.secretary.SecretaryActivity {
+  @Override
+  public dev.mikoto2000.rei.secretary.SecretaryActivity.Snapshot snapshot(
+      String project, Instant now) {
+    boolean busy = isAgentBusy();
+    return new dev.mikoto2000.rei.secretary.SecretaryActivity.Snapshot(
+        busy ? "AGENT_BUSY" : "UNKNOWN", now, false, busy);
+  }
+
   /** アプリケーション開始日時。 */
   private final Instant applicationStartedAt;
 
