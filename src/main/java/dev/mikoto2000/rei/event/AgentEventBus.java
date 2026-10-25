@@ -15,6 +15,12 @@ public interface AgentEventBus {
    */
   Subscription subscribe(AgentEventListener listener);
 
+  /** 永続化を完了してからreplayと通常購読者へ渡す。失敗は発行元へ伝える。 */
+  default Subscription subscribePersistence(AgentEventListener listener) {
+    throw new UnsupportedOperationException(
+        "Durable persistence is not supported by this event bus");
+  }
+
   /** 実行状況の通知で用いる購読境界を返す。 */
   default Subscription subscribeBoundary(AgentEventListener listener) {
     return subscribe(listener);

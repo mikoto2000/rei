@@ -15,6 +15,9 @@ import java.util.concurrent.ConcurrentHashMap;
  * <p>Independent commits through one serialized application writer per data directory.
  */
 public final class StorageDatabase {
+  /** ページを小さくしても自動checkpointの目安は従来の約4 MiBを維持する。 */
+  static final int WAL_TARGET_BYTES = 4096 * 1000;
+
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   public static final ObjectMapper JSON =
       new ObjectMapper()
@@ -78,7 +81,14 @@ public final class StorageDatabase {
             "jdbc:sqlite:" + file.toUri().toASCIIString() + (readOnly ? "?mode=ro" : "?mode=rw"));
     try (var query = connection.createStatement()) {
       query.execute("PRAGMA busy_timeout=5000");
-      if (!readOnly) query.execute("PRAGMA synchronous=FULL");
+      if (!readOnly) {
+        query.execute("PRAGMA synchronous=FULL");
+        int pageSize;
+        try (var rows = query.executeQuery("PRAGMA page_size")) {
+          pageSize = rows.getInt(1);
+        }
+        query.execute("PRAGMA wal_autocheckpoint=" + Math.max(1, WAL_TARGET_BYTES / pageSize));
+      }
       requireCurrentSchema(connection);
       return connection;
     } catch (Exception error) {

@@ -1,5 +1,9 @@
 # 回答生成中のディスク I/O
 
+2026-10-26追記：現在のproject付き`MESSAGE_DELTA` / `THINKING_DELTA`は、
+イベントと診断ログの管理情報を同じFULL COMMITで確定する。
+以下の「計2トランザクション」は当初の保存経路であり、末尾の共同確定の節も参照。
+
 ## 保存経路と原因
 
 `ChatExecutionService` は回答断片を `MESSAGE_DELTA`、思考断片を
@@ -275,3 +279,141 @@ tempをリポジトリ内に隔離し、ローカルHTTP通信が可能な環境
 
 書き込みの`synchronous=FULL`、イベントごとのCOMMIT、Activityのforce、
 保持期間と保存形式は変更しない。回答断片ごとの同期書き込み負荷は引き続き残る。
+
+## 追加改善：ストリームの共同確定
+
+`StreamingEventPersistence`はproject付きの回答・思考deltaを、通常配送前の永続化段階で保存する。
+既存の診断adapterである`ProfileEventLogStore.persistStreamingEvent`と`ManagedActivityLog.appendWith`が
+同じ保存ルートであることを確認し、一つの`StorageDatabase.transaction`で次を行う。
+
+1. 元のイベント本文・project連番・参照メタデータを登録する。
+2. 本文を長さに置換した既存形式の診断JSONLを追記し、従来どおりforceする。
+3. 診断segmentの長さ・SHA-256チェーンを更新する。
+4. `synchronous=FULL`でCOMMITし、その後にreplayと通常購読者へ配送する。
+
+同じイベントを通常の履歴・診断購読者が再保存しないため、deltaごとのCOMMITは2回から1回になる。
+イベントを時間や件数で遅延保存せず、トップレベルのpublishが正常に戻った時点で本文と管理情報の両方が確定する。
+再入publishは従来どおり外側の配送ループで処理し、各イベントはその配送前に確定する。
+JSONLのforce・4 MiBまたは1日のrotation・改変検出・参照保護・既存の保持処理は維持する。
+Run開始・完了・失敗・キャンセル・Tool・承認・Checkpoint等は従来の保存境界を使う。
+明示ファイルの診断出力、旧ファイルイベントstore、projectなしのイベントは従来の経路を使う。
+JSONLやイベントrecordの保存形式は維持する。DBのページ配置変更は後述のversion 17移行で行う。
+
+永続化段階の例外は発行元へ伝え、失敗したイベントをreplay・通常購読者へ渡さない。
+再入で待機した未配送イベントも、次のpublishへ持ち越さない。
+通常購読者の例外をログへ記録して他の購読者へ配送する既存の動作は維持する。
+
+JSONLの同期後・DB確定前に失敗した場合は、従来と同様に未確定の末尾を削除しない。
+DBのイベント・連番・診断管理情報はrollbackされ、本文は保全される。
+長さやチェーンが一致しないsegmentは読み取りと後続追記を拒否するため、
+調査・復旧が必要な状態を正常な履歴として扱わない。
+すでに確定・配送したイベントはDBとJSONLの先頭に残る。
+この障害時の診断ログ保護を、末尾の自動削除で回避しない。
+
+`StreamingPersistenceTest`は本番と同じSpring配線で、表示購読者を先に登録しても
+両方の保存が表示前に完了すること、deltaごとのFULL COMMITが1回であること、
+project分離、非stream境界、DBエラー時の非表示・非replay、確定済み本文の保持を確認する。
+子JVMの`Runtime.halt`でCOMMIT後とJSONL同期後・COMMIT前をそれぞれ検証する。
+共同確定の依存は既存の診断保存adapterを経由し、機能間の循環依存の予算を増やさない。
+
+計測は次のコマンドで、writer再利用あり・共同確定なしと、writer再利用あり・共同確定ありを比較する。
+同一のfixture・50イベント/秒・各ケース3回で、ユーザーデータや実LLMは使わない。
+
+```powershell
+.\scripts\measure-answer-generation-io.ps1 -StreamingCommits -EventsPerSecond 50
+```
+
+共同確定後のappend計測は一つの保存処理全体、変更前は個別の保存処理であるため、
+両方式の`persistenceP95Ms`を直接比較しない。配送全体の`publishP95Ms`を比較する。
+プロセス書き込みbytesはSQLiteのnative I/Oを含むがSSDの物理書き込み量ではない。
+ディスク稼働率は指定した物理ディスクinstance全体の値であり、他プロセスの影響を含む。
+
+## 追加改善：小更新によるページ書き込みの増幅を抑える
+
+共同確定だけを適用した比較では、COMMITが半減してもプロセスの書き込み回数とbytesは変わらなかった。
+そこで`storage.db`のページサイズを4 KiBから1 KiBに変更し、小さなイベントや索引の更新で
+書き直すページのbytesを減らす。SQLiteがサポートするページ設定とVACUUMを使い、
+独自の遅延保存journalや未保存のメモリキューは追加しない。
+仕様は[SQLite page_size](https://www.sqlite.org/pragma.html#pragma_page_size)、
+[VACUUM](https://www.sqlite.org/lang_vacuum.html)、[WAL](https://www.sqlite.org/wal.html)を参照。
+
+version 17の起動移行は、他のプロセスを排除する既存leaseと検証済みオンラインバックアップの下で行う。
+schema作成・通常beanの起動前にFULL同期のrollback journalへ切り替え、空き容量を確認して
+VACUUMを実行し、1 KiBが適用されたことを検査する。その後WALへ戻して移行を確定する。
+SQLite自身の原子的な再構築に任せ、DBファイルを手作業で置き換えたりWALを削除したりしない。
+
+変換前後にintegrity_checkを行い、schemaの定義と全テーブルの全行・全列の型付き値を
+SHA-256で照合する。BLOB、NULを含むTEXT、64 bit整数、REAL、NULL、自動採番の状態も対象にする。
+物理ページ番号や暗黙rowidには依存しない。
+不一致やI/Oエラーでは通常起動を停止し、検証済みバックアップを保持する。
+ページ再構築の完了直後・schema更新前の中断からも、既存の移行手順で再試行できる。
+
+書き込み接続の`synchronous=FULL`は維持し、`wal_autocheckpoint`は1 KiB × 4,000ページとして
+従来の4 KiB × 1,000ページと同じ約4 MiBを目安にする。checkpointを無効化しない。
+読み取り接続のautocheckpoint値は書き込み接続の設定と区別する。
+既存のmemory / consolidation / vector DBは対象外。
+初回起動にはバックアップと再構築の時間・空き容量が必要になる。
+旧versionのJARはversion 17を開かず停止するため、旧版へ戻す場合は
+[既存のバックアップ復元手順](storage-backup-restore.md)で確認済みの旧DBを復元する。
+
+書き込みbytesが減る一方、1ページが小さいためnativeの書き込み操作数は増えうる。
+このトレードオフも計測表に記録し、COMMIT数・書き込みbytes・操作数・ディスク稼働率を区別する。
+計測スクリプトの`-StreamingCommits`は、4 KiB・個別確定と1 KiB・共同確定を同じ条件で比較する。
+
+### 最終構成の計測結果
+
+各条件3回の中央値、全Run合計50イベント/秒。短文は20イベント、他は1,000イベント。
+beforeはwriter再利用済み・4 KiB・個別確定、afterはwriter再利用済み・1 KiB・共同確定。
+入力payload、イベント・診断のrecord形式、FULL同期、JSONL forceは共通。
+beforeのschema 16とafterのschema 17は同じ論理テーブルを持ち、version 17はページ配置の移行である。
+
+| 条件 | 書き込みbytes 前→後 | 変化率 | native書き込み操作数 前→後 | 変化率 |
+| --- | ---: | ---: | ---: | ---: |
+| 短文 | 965,789→291,933 | -69.77% | 487→567 | +16.43% |
+| 長文 | 59,329,731→23,963,867 | -59.61% | 28,911→44,210 | +52.92% |
+| 高頻度 | 59,174,675→22,340,507 | -62.25% | 28,853→41,862 | +45.09% |
+| 並列 | 60,938,213→22,325,093 | -63.36% | 29,561→41,734 | +41.18% |
+
+| 条件 | ディスク平均稼働率 % 前→後 | P95稼働率 % 前→後 | 配送P95 ms 前→後 |
+| --- | ---: | ---: | ---: |
+| 短文 | 12.22→7.15 | 14.39→8.18 | 7.60→5.83 |
+| 長文 | 15.22→6.96 | 31.22→8.46 | 8.35→5.62 |
+| 高頻度 | 15.43→6.92 | 35.24→8.41 | 8.18→5.49 |
+| 並列 | 13.87→7.04 | 34.41→8.59 | 8.38→5.64 |
+
+COMMITは全条件で50%減（1,000イベントでは2,000→1,000）。明示forceは変化なし
+（1,000イベントで1,001回）。小ページのためnative書き込み操作数は増えたが、
+bytesは約60〜70%減り、長文・高頻度・並列の平均稼働率は約49〜55%減った。
+稼働率は`_Total`、100 ms周期の共有ディスク指標で、他プロセスの寄与を分離していない。
+短文は数サンプルしかないため稼働率の精度が低い。全ケース3回の実行結果であり、
+実LLM・実GUI・実運用すべてで同じ削減率になるという保証ではない。
+
+生データ：[before](answer-generation-io-data/stream-before.json)、
+[共同確定のみ](answer-generation-io-data/stream-commit-only.json)、
+[after](answer-generation-io-data/stream-after.json)、
+[中央値比較](answer-generation-io-data/stream-comparison.json)。
+[最大速度の1 KiB予備計測](answer-generation-io-data/stream-page-maximum.json)は
+入力頻度が異なるため、上の稼働率比較には含めない。
+
+### 最終回帰と適用物
+
+最終コードの`-Pfull verify`は6,438件、失敗0・エラー0・既存skip 5
+（Windows Codex 2、WSL Codex 1、実PlantUML 1、opt-in回答生成I/O benchmark 1）で成功した。
+読取再利用のopt-in benchmarkは実行している。構成の依存予算は拡大していない。
+Checkstyleは違反0、変更したJava 18ファイルのSpotlessも成功。
+全体Spotlessの既存の未整形5ファイルは変更対象外とし、この回帰では変更ファイルを確認した。
+
+`StoragePageLayoutTest`の4件、`StreamingPersistenceTest`の6件、既存のmigration / backup /
+reference / retention / WAL crashのテストを含む。
+最終JARは`target/rei-stream-io-reduction.jar`。既存の起動JARと前回の読取改善JARは上書きしていない。
+実行中のReiへの差し替えや再起動、実ユーザーDBの移行はこの作業では行っていない。
+初回起動時に検証済みバックアップを作成し、version 17のページ配置へ移行する。
+
+全体実行ログは`target/stream-write-full.log`。実行時のみMockitoを起動時javaagentで読み込み、
+tempとtest dataをリポジトリ内へ隔離し、ローカルHTTP通信が可能な環境で実行した。
+
+依存関係の整理後の最終コードも最大速度モードで各条件3回を再実行し、成功した。
+長文は毎回23,963,867 bytes・1,000 COMMIT・1,001 forceで、50イベント/秒時と同じ書き込み量を確認した。
+[最終コードの再計測](answer-generation-io-data/stream-final-maximum.json)と
+`target/stream-write-final-counter.log`を保存した。入力頻度が違うため、この追加実行の
+稼働率と配送時間は50イベント/秒の比較表には混ぜていない。

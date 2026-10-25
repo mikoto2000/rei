@@ -1,0 +1,198 @@
+[
+  {
+    "Scenario": "short",
+    "Metric": "commits",
+    "Before": 40.0,
+    "After": 20.0,
+    "ChangePercent": -50.0
+  },
+  {
+    "Scenario": "short",
+    "Metric": "explicitForceCalls",
+    "Before": 21.0,
+    "After": 21.0,
+    "ChangePercent": 0.0
+  },
+  {
+    "Scenario": "short",
+    "Metric": "processWriteOperations",
+    "Before": 487.0,
+    "After": 567.0,
+    "ChangePercent": 16.43
+  },
+  {
+    "Scenario": "short",
+    "Metric": "processWriteBytes",
+    "Before": 965789.0,
+    "After": 291933.0,
+    "ChangePercent": -69.77
+  },
+  {
+    "Scenario": "short",
+    "Metric": "diskActiveMeanPercent",
+    "Before": 12.216,
+    "After": 7.149,
+    "ChangePercent": -41.48
+  },
+  {
+    "Scenario": "short",
+    "Metric": "diskActiveP95Percent",
+    "Before": 14.393,
+    "After": 8.179,
+    "ChangePercent": -43.18
+  },
+  {
+    "Scenario": "short",
+    "Metric": "publishP95Ms",
+    "Before": 7.598,
+    "After": 5.829,
+    "ChangePercent": -23.29
+  },
+  {
+    "Scenario": "long",
+    "Metric": "commits",
+    "Before": 2000.0,
+    "After": 1000.0,
+    "ChangePercent": -50.0
+  },
+  {
+    "Scenario": "long",
+    "Metric": "explicitForceCalls",
+    "Before": 1001.0,
+    "After": 1001.0,
+    "ChangePercent": 0.0
+  },
+  {
+    "Scenario": "long",
+    "Metric": "processWriteOperations",
+    "Before": 28911.0,
+    "After": 44210.0,
+    "ChangePercent": 52.92
+  },
+  {
+    "Scenario": "long",
+    "Metric": "processWriteBytes",
+    "Before": 59329731.0,
+    "After": 23963867.0,
+    "ChangePercent": -59.61
+  },
+  {
+    "Scenario": "long",
+    "Metric": "diskActiveMeanPercent",
+    "Before": 15.224,
+    "After": 6.96,
+    "ChangePercent": -54.28
+  },
+  {
+    "Scenario": "long",
+    "Metric": "diskActiveP95Percent",
+    "Before": 31.221,
+    "After": 8.458,
+    "ChangePercent": -72.91
+  },
+  {
+    "Scenario": "long",
+    "Metric": "publishP95Ms",
+    "Before": 8.354,
+    "After": 5.616,
+    "ChangePercent": -32.78
+  },
+  {
+    "Scenario": "high-frequency",
+    "Metric": "commits",
+    "Before": 2000.0,
+    "After": 1000.0,
+    "ChangePercent": -50.0
+  },
+  {
+    "Scenario": "high-frequency",
+    "Metric": "explicitForceCalls",
+    "Before": 1001.0,
+    "After": 1001.0,
+    "ChangePercent": 0.0
+  },
+  {
+    "Scenario": "high-frequency",
+    "Metric": "processWriteOperations",
+    "Before": 28853.0,
+    "After": 41862.0,
+    "ChangePercent": 45.09
+  },
+  {
+    "Scenario": "high-frequency",
+    "Metric": "processWriteBytes",
+    "Before": 59174675.0,
+    "After": 22340507.0,
+    "ChangePercent": -62.25
+  },
+  {
+    "Scenario": "high-frequency",
+    "Metric": "diskActiveMeanPercent",
+    "Before": 15.431,
+    "After": 6.922,
+    "ChangePercent": -55.14
+  },
+  {
+    "Scenario": "high-frequency",
+    "Metric": "diskActiveP95Percent",
+    "Before": 35.235,
+    "After": 8.414,
+    "ChangePercent": -76.12
+  },
+  {
+    "Scenario": "high-frequency",
+    "Metric": "publishP95Ms",
+    "Before": 8.184,
+    "After": 5.493,
+    "ChangePercent": -32.88
+  },
+  {
+    "Scenario": "parallel",
+    "Metric": "commits",
+    "Before": 2000.0,
+    "After": 1000.0,
+    "ChangePercent": -50.0
+  },
+  {
+    "Scenario": "parallel",
+    "Metric": "explicitForceCalls",
+    "Before": 1001.0,
+    "After": 1001.0,
+    "ChangePercent": 0.0
+  },
+  {
+    "Scenario": "parallel",
+    "Metric": "processWriteOperations",
+    "Before": 29561.0,
+    "After": 41734.0,
+    "ChangePercent": 41.18
+  },
+  {
+    "Scenario": "parallel",
+    "Metric": "processWriteBytes",
+    "Before": 60938213.0,
+    "After": 22325093.0,
+    "ChangePercent": -63.36
+  },
+  {
+    "Scenario": "parallel",
+    "Metric": "diskActiveMeanPercent",
+    "Before": 13.869,
+    "After": 7.042,
+    "ChangePercent": -49.23
+  },
+  {
+    "Scenario": "parallel",
+    "Metric": "diskActiveP95Percent",
+    "Before": 34.408,
+    "After": 8.594,
+    "ChangePercent": -75.02
+  },
+  {
+    "Scenario": "parallel",
+    "Metric": "publishP95Ms",
+    "Before": 8.383,
+    "After": 5.645,
+    "ChangePercent": -32.66
+  }
+]

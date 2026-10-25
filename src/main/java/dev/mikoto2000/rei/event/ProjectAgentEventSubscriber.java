@@ -11,12 +11,19 @@ public class ProjectAgentEventSubscriber implements AutoCloseable {
   /** 永続化済み。 */
   private final java.util.LinkedHashSet<String> persisted = new java.util.LinkedHashSet<>();
 
+  private StreamingEventPersistence streaming;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setStreamingPersistence(StreamingEventPersistence streaming) {
+    this.streaming = streaming;
+  }
+
   /** 指定された値や利用先を使って、ProjectAgentEventSubscriberを初期化する。 */
   public ProjectAgentEventSubscriber(AgentEventBus bus, ProjectAgentEventStore store) {
     boundary =
         bus.subscribeBoundary(
             event -> {
-              if (event.projectId() != null) {
+              if (event.projectId() != null && (streaming == null || !streaming.handles(event))) {
                 store.append(event);
                 synchronized (persisted) {
                   persisted.add(event.id());
@@ -27,6 +34,7 @@ public class ProjectAgentEventSubscriber implements AutoCloseable {
     subscription =
         bus.subscribe(
             event -> {
+              if (streaming != null && streaming.handles(event)) return;
               boolean already;
               synchronized (persisted) {
                 already = persisted.remove(event.id());

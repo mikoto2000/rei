@@ -23,7 +23,7 @@ import java.util.UUID;
  */
 public final class StorageMigrationCoordinator implements AutoCloseable {
   /** データ形式形式のバージョン。 */
-  public static final int SCHEMA_VERSION = 16;
+  public static final int SCHEMA_VERSION = 17;
 
   /** データ保存の共通処理における段階の選択肢。 */
   public enum Stage {
@@ -35,6 +35,8 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
     VERIFIED,
     /** 変更を反映中の段階。 */
     APPLYING,
+    /** ページ配置を照合済みで、schema更新前の段階。 */
+    PAGES_REPACKED,
     /** データ形式WRITTEN。 */
     SCHEMA_WRITTEN,
     /** 行一覧取り込んだ内容。 */
@@ -361,6 +363,11 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
             throw new IOException("Unknown tables in unversioned storage database");
         }
       db.setAutoCommit(true);
+      // 通常beanの起動前・排他leaseと検証済みバックアップの下で一度だけ実行する。
+      if (sourceVersion < 17) {
+        StoragePageLayout.apply(db, root.resolve("storage.db"));
+        checkpoint.reached(Stage.PAGES_REPACKED, backup);
+      }
       try (var mode = statement.executeQuery("PRAGMA journal_mode=WAL")) {
         if (!mode.next() || !"wal".equalsIgnoreCase(mode.getString(1)))
           throw new IOException("Cannot enable concurrent history reads");

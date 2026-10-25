@@ -29,9 +29,11 @@ public final class StorageMigrationCrashWorker {
             java.nio.file.Path.of(arguments[0]),
             (stage, backup) -> {
               String pause =
-                  arguments.length > 1 && arguments[1].equals("rows-imported")
-                      ? "ROWS_IMPORTED"
-                      : "SCHEMA_WRITTEN";
+                  arguments.length > 1 && arguments[1].equals("pages-repacked")
+                      ? "PAGES_REPACKED"
+                      : arguments.length > 1 && arguments[1].equals("rows-imported")
+                          ? "ROWS_IMPORTED"
+                          : "SCHEMA_WRITTEN";
               if (stage.name().equals(pause)) {
                 System.out.println("APPLYING");
                 System.out.flush();

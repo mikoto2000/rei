@@ -25,6 +25,16 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
   /** 境界通知の受け取り先一覧。 */
   private final List<AgentEventListener> boundaryListeners = new CopyOnWriteArrayList<>();
 
+  /** replay・表示より先に確定し、保存失敗を発行元へ返す購読先。 */
+  private final List<AgentEventListener> persistenceListeners = new CopyOnWriteArrayList<>();
+
+  @Override
+  public Subscription subscribePersistence(AgentEventListener listener) {
+    java.util.Objects.requireNonNull(listener);
+    persistenceListeners.add(listener);
+    return () -> persistenceListeners.remove(listener);
+  }
+
   /** 実行状況の通知で用いる購読境界を返す。 */
   @Override
   public Subscription subscribeBoundary(AgentEventListener listener) {
@@ -134,6 +144,7 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
     try {
       while (!pending.isEmpty()) {
         AgentEvent sequenced = pending.removeFirst();
+        for (var listener : persistenceListeners) listener.onEvent(sequenced);
         replay.append(sequenced);
         for (AgentEventListener listener : listeners) {
           try {
@@ -147,6 +158,10 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
           }
         }
       }
+    } catch (RuntimeException | Error failure) {
+      // 保存できなかったイベントや再入で待機したイベントを次のpublishへ持ち越さない。
+      pending.clear();
+      throw failure;
     } finally {
       dispatching = false;
     }
