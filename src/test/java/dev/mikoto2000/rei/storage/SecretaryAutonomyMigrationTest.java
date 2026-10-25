@@ -32,6 +32,7 @@ class SecretaryAutonomyMigrationTest {
         var sql = c.createStatement()) {
       for (var table :
           List.of(
+              "secretary_briefings",
               "life_context",
               "secretary_connections",
               "secretary_external_items",

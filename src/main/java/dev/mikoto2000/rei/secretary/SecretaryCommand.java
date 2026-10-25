@@ -417,6 +417,12 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
                             destination));
             case "briefing" -> followups().report(project, reportDate, false);
             case "review" -> followups().report(project, reportDate, true);
+            case "briefing-generate", "review-generate" ->
+                followups().generate(project, reportDate, action.equals("review-generate"), key);
+            case "briefing-history" -> followups().briefingHistory(project, limit);
+            case "briefing-show" -> followups().briefing(project, id);
+            case "briefing-clear" ->
+                java.util.Map.of("deleted", followups().deleteBriefings(project));
             case "notifications" -> followups().history(project, limit);
             case "check" -> followups().checkNow(project);
             case "followup-status" -> followups().status(project);

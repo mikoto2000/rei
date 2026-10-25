@@ -30,6 +30,7 @@ class SecretaryAuthenticationTest {
     SecretaryLedger.class,
     SqliteSecretaryDatabase.class,
     SecretaryController.class,
+    SecretaryFollowupController.class,
     SecretaryOrchestratorController.class,
     SecretaryAutonomyController.class,
     SecretaryConnectionsController.class,
@@ -58,6 +59,28 @@ class SecretaryAuthenticationTest {
       try (var context = application().run(args(true))) {
         int port = Integer.parseInt(context.getEnvironment().getProperty("local.server.port"));
         project = context.getBean(ProjectRegistry.class).resolve(root).id();
+        assertEquals(
+            401,
+            send(client, port, "/api/v1/secretary/briefings?projectId=" + project, null, false)
+                .statusCode());
+        assertEquals(
+            200,
+            send(
+                    client,
+                    port,
+                    "/api/v1/secretary/briefings/generate",
+                    "{\"projectId\":\"" + project + "\",\"key\":\"manual-test\",\"review\":true}",
+                    true)
+                .statusCode());
+        assertEquals(
+            400,
+            send(
+                    client,
+                    port,
+                    "/api/v1/secretary/briefings/generate",
+                    "{\"projectId\":\"" + project + "\",\"key\":\"x\",\"unknown\":true}",
+                    true)
+                .statusCode());
         assertEquals(
             401,
             send(client, port, "/api/v1/secretary/connections?projectId=" + project, null, false)
