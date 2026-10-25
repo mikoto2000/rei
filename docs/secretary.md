@@ -718,8 +718,8 @@ Phase 5 の実行ごと・日次予算を呼出前に予約し、取消と絶対
 
 候補を承認後、`work-add TASK_ID --kind DRAFT --key KEY --revision V` と通常の承認・work-start を使う。
 生成物は既存 ArtifactStore に保存され、送信されない。人が確認して別途 external-prepare する。
-設定版 / evidence revision / model identity を permission に固定し、開始前と各呼出直前に再検査する。
-許可の取消・接続解除後の保存済み実行も拒否する。本文・生成結果を通常 briefing context に複製しない。
+設定版 / evidence revision / 認証アカウント identity / model identity を permission に固定し、開始前と各呼出直前に再検査する。
+許可の取消・接続解除・認証アカウント変更・サービス無効化後の保存済み実行も拒否する。本文・生成結果を通常 briefing context に複製しない。
 許可を変更した後は新しい execution key で登録し直す。
 
 ### イベント方式・保存・制約
@@ -865,3 +865,8 @@ Phase 2 は最初の CI が期限内に終了せず、同じコミット・同�
 完全 Checkstyle は0件。SpotBugs は既存1,895件・新規0件。増分ゲートと自己試験8ケースが成功。
 例外型・購読前の null 防御・承認 Map の不変化・所有 service の adapter 境界を修正し、
 解析基準や除外設定を拡張していない。最終コミットの全件は PR の exact-head CI で判定する。
+
+
+保存済み AI 本文利用許可の account 変更も追加の先行 Red で再現し、許可 digest に現在の credential identity を含めた。
+各呼出直前に provider の有効状態・Project/Session 所有権・account を検査し、古い権限での呼出を拒否する。
+外部書込みの account 検査と同様に、設定の変更だけで保存済み要求を通過させない。

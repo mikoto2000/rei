@@ -223,6 +223,7 @@ public final class SecretaryConnections
                             List.of(
                                 e.connection().id(),
                                 e.connection().version(),
+                                usable(e.connection()).identity(e.connection()),
                                 e.item().id(),
                                 e.item().revision()))
                     .toList(),

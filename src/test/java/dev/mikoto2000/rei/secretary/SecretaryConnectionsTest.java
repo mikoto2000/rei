@@ -86,6 +86,7 @@ class SecretaryConnectionsTest {
 
   static class FakeProvider implements SecretaryProvider {
     int polls, writes;
+    String account = "account";
     boolean configured = true;
     boolean limited, uncertain, reconciled;
     List<Item> items = List.of();
@@ -100,7 +101,7 @@ class SecretaryConnectionsTest {
     }
 
     public String identity(SecretaryConnections.Connection connection) {
-      return "account";
+      return account;
     }
 
     public Page poll(SecretaryConnections.Connection connection, String cursor) {
@@ -313,6 +314,12 @@ class SecretaryConnectionsTest {
       var evidence = service.prepareExternal(candidate);
       assertFalse(evidence.objective().contains("a@example.invalid"));
       assertTrue(service.allowsExternal(candidate, evidence.permission()));
+      provider.account = "another-account";
+      assertFalse(service.allowsExternal(candidate, evidence.permission()));
+      provider.account = "account";
+      provider.configured = false;
+      assertFalse(service.allowsExternal(candidate, evidence.permission()));
+      provider.configured = true;
       service.configure(config, c.version());
       assertFalse(service.allowsExternal(candidate, evidence.permission()));
     }
