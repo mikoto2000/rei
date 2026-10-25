@@ -19,11 +19,61 @@ public class CommandCancellationService {
   public record Diagnostic(String runId, String projectId, String status,
       Instant requestedAt, Instant finishedAt, String failure) {}
 
+  /** 非同期の子処理が実際に戻るまで保持する所有権。 */
+  @FunctionalInterface
+  public interface ChildLease extends AutoCloseable {
+    @Override
+    void close();
+  }
+
+  /** 子処理の実体が戻るまで所有権を保持する。停止済みなら開始を拒否する。 */
+  public ChildLease enterChild(String runId) {
+    var state = runId == null ? null : runs.get(runId);
+    if (state == null) return () -> {};
+    var thread = Thread.currentThread();
+    synchronized (state) {
+      if (state.requestedAt != null || state.finishedAt != null || state.closing)
+        throw new java.util.concurrent.CancellationException("Run is stopping");
+      state.workers.merge(thread, 1, Integer::sum);
+    }
+    var closed = new AtomicBoolean();
+    return () -> {
+      if (!closed.compareAndSet(false, true)) return;
+      synchronized (state) {
+        state.workers.computeIfPresent(thread, (key, count) -> count == 1 ? null : count - 1);
+        state.notifyAll();
+      }
+    };
+  }
+
+  public boolean hasActiveChildren(String runId) {
+    var state = runs.get(runId);
+    if (state == null) return false;
+    synchronized (state) { return !state.workers.isEmpty(); }
+  }
+
+  /** タイムアウトを終了と見なさず、実体が戻るまで登録と排他枠を保持する。 */
+  public void awaitChildren(String runId) {
+    var state = runs.get(runId);
+    if (state == null) return;
+    boolean interrupted = false;
+    synchronized (state) {
+      state.closing = true;
+      while (!state.workers.isEmpty()) {
+        try { state.wait(); }
+        catch (InterruptedException stop) { interrupted = true; }
+      }
+    }
+    if (interrupted) Thread.currentThread().interrupt();
+  }
+
   /** 各実行が所有する資源。状態の操作はこのオブジェクトで同期する。 */
   private static final class State {
     final String runId;
     final String projectId;
     final List<Runnable> children = new ArrayList<>();
+    final Map<Thread, Integer> workers = new java.util.IdentityHashMap<>();
+    boolean closing;
     Disposable disposable;
     Thread thread;
     Instant requestedAt;
@@ -39,7 +89,7 @@ public class CommandCancellationService {
   }
 
   private final Map<String, State> runs = new java.util.concurrent.ConcurrentHashMap<>();
-  private final java.util.Set<String> pendingCancellations = new java.util.HashSet<>();
+  private final Map<String, Instant> pendingCancellations = new java.util.HashMap<>();
   /** 終了済み ID への遅延要求を診断するための有界履歴。資源参照は保持しない。 */
   private final Map<String, State> finished = new LinkedHashMap<>();
   private final State legacy = new State(null, null);
@@ -64,8 +114,8 @@ public class CommandCancellationService {
     var state = runs.computeIfAbsent(context.runId(), id -> new State(id, context.projectId()));
     synchronized (state) {
       state.managed = true;
-      if (pendingCancellations.remove(context.runId()) && state.requestedAt == null)
-        state.requestedAt = clock.instant();
+      var pending = pendingCancellations.remove(context.runId());
+      if (pending != null && state.requestedAt == null) state.requestedAt = pending;
     }
   }
 
@@ -78,8 +128,8 @@ public class CommandCancellationService {
           id -> new State(id, run.projectId()));
       synchronized (state) {
         state.depth++;
-        if (run != null && pendingCancellations.remove(run.runId()) && state.requestedAt == null)
-          state.requestedAt = clock.instant();
+        var pending = run == null ? null : pendingCancellations.remove(run.runId());
+        if (pending != null && state.requestedAt == null) state.requestedAt = pending;
         if (state.thread == null) state.thread = executionThread;
         if (state.requestedAt != null && executionThread != null) executionThread.interrupt();
       }
@@ -91,7 +141,8 @@ public class CommandCancellationService {
     State state;
     synchronized (this) {
       state = runs.get(runId);
-      if (state == null) return !finished.containsKey(runId) && pendingCancellations.add(runId);
+      if (state == null) return !finished.containsKey(runId)
+          && pendingCancellations.putIfAbsent(runId, clock.instant()) == null;
     }
     return cancel(state);
   }
@@ -156,6 +207,8 @@ public class CommandCancellationService {
       state.disposable = null;
       // 終了との競合で、終了後に再利用されたスレッドを割り込まない。
       if (state.thread != null) invoke(state, state.thread::interrupt);
+      for (var worker : state.workers.keySet())
+        if (worker != state.thread) invoke(state, worker::interrupt);
     }
     log(state, "requested");
     children.forEach(Runnable::run);
@@ -225,6 +278,7 @@ public class CommandCancellationService {
 
   /** 実際に runner と cleanup が戻った時だけ呼び出す。 */
   public void finish(String runId) {
+    awaitChildren(runId);
     State state;
     synchronized (this) {
       pendingCancellations.remove(runId);
@@ -258,7 +312,9 @@ public class CommandCancellationService {
   public synchronized Diagnostic diagnostic(String runId) {
     var state = runs.get(runId);
     if (state == null) state = finished.get(runId);
-    if (state == null) return new Diagnostic(runId, null, "NOT_FOUND", null, null, null);
+    if (state == null) return new Diagnostic(runId, null,
+        pendingCancellations.containsKey(runId) ? "CANCEL_REQUESTED" : "NOT_FOUND",
+        pendingCancellations.get(runId), null, null);
     synchronized (state) {
       String status = state.finishedAt != null ? "FINISHED"
           : state.failure != null ? "CANCEL_FAILED"

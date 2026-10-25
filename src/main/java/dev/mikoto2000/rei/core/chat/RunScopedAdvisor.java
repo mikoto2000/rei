@@ -113,7 +113,8 @@ public final class RunScopedAdvisor implements BaseAdvisor {
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
     try (var scope =
         AgentRunScope.open(
-            (AgentRunContext) request.context().get(AgentRunContext.class.getName()))) {
+            (AgentRunContext) request.context().get(AgentRunContext.class.getName()));
+        var lease = RunCancellation.enterChild(request.prompt())) {
       RunCancellation.checkActive(request.prompt());
       var result = delegate.before(request, chain);
       RunCancellation.checkActive(result.prompt());

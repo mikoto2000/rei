@@ -780,6 +780,7 @@ public final class SubAgentRunner {
       return claimed == null ? result : result.withDurableTask(claimed.id());
     } finally {
       subscriptions.dispose();
+      cancellation.awaitChildren(runId);
       active.remove(runId);
       durableChildren.remove(runId);
       if (claimed != null && durable.get(parent, claimed.id()).status().equals("RUNNING"))
@@ -950,6 +951,9 @@ public final class SubAgentRunner {
           /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
           public String call(String input, ToolContext context) {
             try (var scope = AgentRunScope.open(owner);
+                var lease = cancellation.enterChild(owner.runId());
+                var parentLease = cancellation.enterChild(
+                    approvalParent == null ? null : approvalParent.runId());
                 var budgetScope = dev.mikoto2000.rei.llm.ModelCallBudgetScope.open(modelBudget)) {
               check.run();
               Runnable authorize =

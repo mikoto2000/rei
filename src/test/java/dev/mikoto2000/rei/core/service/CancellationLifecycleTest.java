@@ -13,6 +13,22 @@ import org.junit.jupiter.api.Test;
 
 class CancellationLifecycleTest {
   @Test
+  void asynchronousChildOwnershipSurvivesSignalAndRejectsNewWork() {
+    var service = new CommandCancellationService();
+    var owner = new AgentRunContext("child-owner", "session", Path.of("."), "project");
+    service.prepare(owner);
+    try (var lease = service.enterChild(owner.runId())) {
+      assertThat(service.hasActiveChildren(owner.runId())).isTrue();
+      assertThat(service.cancelProject("project")).isTrue();
+      org.assertj.core.api.Assertions.assertThatThrownBy(() -> service.enterChild(owner.runId()))
+          .isInstanceOf(java.util.concurrent.CancellationException.class);
+      assertThat(service.hasActiveChildren(owner.runId())).isTrue();
+    } finally { Thread.interrupted(); }
+    assertThat(service.hasActiveChildren(owner.runId())).isFalse();
+    service.finish(owner.runId());
+  }
+
+  @Test
   void nestedBeginMustNotReplaceParentCancellationOrSubscription() {
     var service = new CommandCancellationService();
     var owner = new AgentRunContext("run", "session", Path.of("."), "project");

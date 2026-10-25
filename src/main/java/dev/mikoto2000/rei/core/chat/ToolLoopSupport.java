@@ -52,7 +52,9 @@ public final class ToolLoopSupport {
 
   /** 要求された処理を実行する。 */
   public ToolExecutionResult execute(Prompt prompt, ChatResponse response) {
-    return deliveryMetadata(prompt, manager.executeToolCalls(prompt, response));
+    try (var lease = RunCancellation.enterChild(prompt)) {
+      return deliveryMetadata(prompt, manager.executeToolCalls(prompt, response));
+    }
   }
 
   /** 会話の実行で用いる配信付随情報を返す。 */
@@ -210,7 +212,7 @@ public final class ToolLoopSupport {
         context.reportToolPermissionFailure(call.id(), call.name(), denied);
         throw denied;
       }
-      try {
+      try (var lease = RunCancellation.enterChild(prompt)) {
         var values = new java.util.HashMap<String, Object>();
         if (options.getToolContext() != null) values.putAll(options.getToolContext());
         values.put("toolCallId", call.id());

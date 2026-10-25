@@ -812,6 +812,7 @@ public class ChatExecutionService {
       eventPublisher.publish(eventFactory.runFailed(runId, terminalError(ChatRunStatus.CANCELLED)));
       return ChatExecutionResult.cancelled();
     } finally {
+      cancellationService.awaitChildren(context.runId());
       // Preserve interruption for the caller, but allow terminal metadata to be written during
       // cleanup.
       boolean interrupted = Thread.interrupted();
@@ -1130,7 +1131,8 @@ public class ChatExecutionService {
     var baseOptions = modelProvider.chatOptions(LlmFeature.CHAT, currentModelHolder.get(), true);
     if (mode != AgentRunContext.Mode.EXCLUSIVE) ToolLoopSupport.requireNoRawTools(baseOptions);
     var optionsBuilder =
-        baseOptions.mutate().toolContext(Map.of(RunExecutionContext.KEY, execution));
+        baseOptions.mutate().toolContext(Map.of(RunExecutionContext.KEY, execution,
+            CommandCancellationService.class.getName(), cancellationService));
     if (mode == AgentRunContext.Mode.CONVERSATION)
       optionsBuilder.toolCallbacks(java.util.List.of()).toolChoice("none");
     var options = optionsBuilder.build();
@@ -1293,6 +1295,7 @@ public class ChatExecutionService {
       lastGenerationMetrics.set(metrics);
       return ChatRunResult.success(responseBuilder.toString());
     } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
       completeThinking(thinkingEventStarted, thinkingEventCompleted, thinkingId, thinkingBuilder);
       if (cancellationService.isCancellationRequested()) {
         return ChatRunResult.cancelled();

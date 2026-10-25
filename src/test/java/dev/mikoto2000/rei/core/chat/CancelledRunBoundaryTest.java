@@ -137,11 +137,12 @@ class CancelledRunBoundaryTest {
       try {
         assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
         cancellation.cancel();
-        assertThat(run.get(5, TimeUnit.SECONDS).status())
-            .isEqualTo(ChatExecutionResult.Status.CANCELLED);
+        assertThat(run.isDone()).isFalse();
       } finally {
         release.countDown();
       }
+      assertThat(run.get(5, TimeUnit.SECONDS).status())
+          .isEqualTo(ChatExecutionResult.Status.CANCELLED);
       assertThat(returned.await(5, TimeUnit.SECONDS)).isTrue();
     }
     assertThat(advisorFinished.await(5, TimeUnit.SECONDS)).isTrue();
@@ -239,11 +240,12 @@ class CancelledRunBoundaryTest {
       try {
         assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
         cancellation.cancel();
-        assertThat(run.get(5, TimeUnit.SECONDS).status())
-            .isEqualTo(ChatExecutionResult.Status.CANCELLED);
+        assertThat(run.isDone()).isFalse();
       } finally {
         release.countDown();
       }
+      assertThat(run.get(5, TimeUnit.SECONDS).status())
+          .isEqualTo(ChatExecutionResult.Status.CANCELLED);
       assertThat(returned.await(5, TimeUnit.SECONDS)).isTrue();
     }
     assertThat(calls).hasValue(1);
