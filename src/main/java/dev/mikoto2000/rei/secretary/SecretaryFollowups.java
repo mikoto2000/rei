@@ -101,7 +101,7 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
   private final SecretaryDatabase database;
   private final SecretaryLedger ledger;
   private final SecretarySnapshotStore snapshots;
-  private ObjectProvider<SecretaryGlobalBriefings> globalBriefings;
+  private volatile ObjectProvider<SecretaryGlobalBriefings> globalBriefings;
 
   @Autowired
   void setGlobalBriefings(ObjectProvider<SecretaryGlobalBriefings> globals) {

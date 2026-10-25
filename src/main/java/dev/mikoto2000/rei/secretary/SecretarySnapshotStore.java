@@ -24,10 +24,11 @@ final class SecretarySnapshotStore {
     return database.read(
         db -> {
           try (var q =
-              db.prepareStatement(
-                  byId
-                      ? "SELECT record FROM secretary_briefings WHERE project=? AND id=?"
-                      : "SELECT record FROM secretary_briefings WHERE project=? AND request_key=?")) {
+              byId
+                  ? db.prepareStatement(
+                      "SELECT record FROM secretary_briefings WHERE project=? AND id=?")
+                  : db.prepareStatement(
+                      "SELECT record FROM secretary_briefings WHERE project=? AND request_key=?")) {
             q.setString(1, scope);
             q.setString(2, value);
             try (var r = q.executeQuery()) {
