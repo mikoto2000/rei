@@ -309,7 +309,7 @@ public class BackgroundProcessManager {
   }
 
   /** 外部プロセスの管理に関する終了プロセス構造を処理する。 */
-  private void terminateProcessTree(ProcessHandle root) {
+  private List<ProcessHandle> terminateProcessTree(ProcessHandle root) {
     List<ProcessHandle> handles =
         Stream.concat(root.descendants(), Stream.of(root)).distinct().toList();
     handles.forEach(
@@ -326,6 +326,34 @@ public class BackgroundProcessManager {
           }
         });
     waitForExit(handles, Duration.ofSeconds(1));
+    return handles;
+  }
+
+  /** 呼び出しが所有する前面 Process だけを既存ポリシーで終了し、実際の終了を待つ。 */
+  public void terminateOwned(Process process) {
+    boolean interrupted = Thread.interrupted();
+    try {
+      var handles = terminateProcessTree(process.toHandle());
+      for (var handle : handles) {
+        while (handle.isAlive()) {
+          try { handle.onExit().get(); }
+          catch (InterruptedException stop) { interrupted = true; }
+          catch (java.util.concurrent.ExecutionException failure) {
+            throw new IllegalStateException("Owned process termination could not be confirmed", failure);
+          }
+        }
+      }
+    } finally {
+      if (interrupted) Thread.currentThread().interrupt();
+    }
+  }
+
+  /** AUTO の前面待機中に停止された、まだ引き渡していない Process を終了する。 */
+  public void cancelOwned(String processId) {
+    var owned = processes.get(processId);
+    if (owned == null) return;
+    terminateOwned(owned.process);
+    forgetCompleted(processId);
   }
 
   /** 必要な状態が整ってから先へ進むため、対象終了を待つ。 */
