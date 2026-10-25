@@ -1,10 +1,13 @@
 package dev.mikoto2000.rei.websearch;
 
+import com.google.common.net.InetAddresses;
+import com.google.common.net.InternetDomainName;
 import dev.mikoto2000.rei.http.FetchOperation;
 import dev.mikoto2000.rei.http.FetchScope;
 import dev.mikoto2000.rei.http.HttpFetchException;
 import dev.mikoto2000.rei.http.PublicNetworkPolicy;
 import java.io.IOException;
+import java.net.IDN;
 import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -28,6 +31,10 @@ import java.util.regex.Pattern;
  * <p>Shared bounded planning. Candidate sufficiency is not a verified answer.
  */
 public final class WebSearchSelection {
+  /** 外部の例外メッセージを含めず検索障害を記録する。 */
+  private static final org.slf4j.Logger log =
+      org.slf4j.LoggerFactory.getLogger(WebSearchSelection.class);
+
   /**
    * Web上の情報の調査で受け渡す候補を表す。
    *
@@ -116,13 +123,19 @@ public final class WebSearchSelection {
           results = service.search(planned, limit);
         } catch (RuntimeException failed) {
           FetchOperation.propagateControls(failed);
-          if (failed instanceof HttpFetchException http
-              && http.code() == HttpFetchException.Code.REQUEST_BUDGET) break;
+          if (failed instanceof HttpFetchException http) {
+            if (http.code() == HttpFetchException.Code.REQUEST_BUDGET) break;
+            if (http.code() == HttpFetchException.Code.TOTAL_TIMEOUT
+                || http.code() == HttpFetchException.Code.TRANSFER_BUDGET) throw http;
+          }
           if (unique.isEmpty()) throw failed;
-          else continue;
+          recordSearchFailure(failed);
+          continue;
         } catch (IOException failed) {
+          FetchOperation.propagateControls(failed);
           if (unique.isEmpty()) throw failed;
-          else continue;
+          recordSearchFailure(failed);
+          continue;
         }
         for (WebSearchResult result : results) {
           observations++;
@@ -155,6 +168,15 @@ public final class WebSearchSelection {
     return choose(query, new ArrayList<>(unique.values()), limit);
   }
 
+  /** 通常の検索障害を記録し、部分結果にも診断を引き継ぐ。 */
+  static void recordSearchFailure(Exception failure) {
+    WebResearchScope.recordSearchFailure();
+    log.warn(
+        "Web research additional_search failed; causeType={}, code={}; processing pending candidates",
+        failure.getClass().getSimpleName(),
+        failure instanceof HttpFetchException http ? http.code().name() : "PROVIDER_ERROR");
+  }
+
   /** 条件に合う対象を利用するため、Web検索選択内容を選択する。 */
   public static List<Candidate> choose(String query, List<Candidate> candidates, int limit) {
     var ordered = new ArrayList<>(candidates);
@@ -166,7 +188,8 @@ public final class WebSearchSelection {
     Set<String> domains = new HashSet<>();
     for (Candidate candidate : ordered) {
       if (selected.size() >= limit) break;
-      if (domains.add(domain(candidate.result().url()))) selected.add(candidate);
+      String site = domain(candidate.result().url());
+      if (site != null && domains.add(site)) selected.add(candidate);
     }
     for (Candidate candidate : ordered) {
       if (selected.size() >= limit) break;
@@ -202,8 +225,12 @@ public final class WebSearchSelection {
     if (needsFreshness(query) && relevant.stream().noneMatch(result -> fresh(result.publishedAt())))
       return false;
     if (lower.matches("(?s).*(\\bvs\\b|compar|比較|複数|sources).*")
-        && relevant.stream().map(result -> domain(result.url())).distinct().count() < 2)
-      return false;
+        && relevant.stream()
+                .map(result -> domain(result.url()))
+                .filter(Objects::nonNull)
+                .distinct()
+                .count()
+            < 2) return false;
     return true;
   }
 
@@ -297,11 +324,29 @@ public final class WebSearchSelection {
     }
   }
 
-  /** Web上の情報の調査で用いるドメインを返す。 */
+  /**
+   * PSL（private suffix を含む）の eTLD+1 を返す。導出できない有効なホストはそのまま使い、 不正な URL は null
+   * として出典数に含めない。DNS・外部通信は行わない。
+   */
   static String domain(String url) {
-    String host = host(url);
-    String[] labels = host.split("\\.");
-    return labels.length < 2 ? host : labels[labels.length - 2] + "." + labels[labels.length - 1];
+    if (url == null) return null;
+    try {
+      URI uri = URI.create(url);
+      if (!"http".equalsIgnoreCase(uri.getScheme()) && !"https".equalsIgnoreCase(uri.getScheme()))
+        return null;
+      var parsed = uri.toURL();
+      if (parsed.getUserInfo() != null || parsed.getPort() > 65535) return null;
+      String host = parsed.getHost();
+      if (host == null || host.isBlank()) return null;
+      if (host.startsWith("[") && host.endsWith("]")) host = host.substring(1, host.length() - 1);
+      if (InetAddresses.isInetAddress(host))
+        return InetAddresses.toAddrString(InetAddresses.forString(host));
+      String ascii = IDN.toASCII(host, IDN.USE_STD3_ASCII_RULES).toLowerCase(Locale.ROOT);
+      var name = InternetDomainName.from(ascii);
+      return name.isUnderPublicSuffix() ? name.topPrivateDomain().toString() : name.toString();
+    } catch (IllegalArgumentException | java.net.MalformedURLException invalid) {
+      return null;
+    }
   }
 
   /** 同じ意味の指定を共通に扱えるよう、参照先のURLの表記をそろえる。 */

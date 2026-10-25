@@ -136,8 +136,8 @@ final class WebResearchPipeline {
                 candidates,
                 WebSearchSelection.search(search, planner, query, limit, properties));
           } catch (IOException failed) {
-            omissions.add("additional_search_failed");
-            break;
+            FetchOperation.propagateControls(failed);
+            WebSearchSelection.recordSearchFailure(failed);
           } catch (RuntimeException failed) {
             FetchOperation.propagateControls(failed);
             if (failed instanceof HttpFetchException http
@@ -146,8 +146,7 @@ final class WebResearchPipeline {
                         HttpFetchException.Code.TRANSFER_BUDGET,
                         HttpFetchException.Code.REQUEST_BUDGET)
                     .contains(http.code())) throw http;
-            omissions.add("additional_search_failed");
-            break;
+            WebSearchSelection.recordSearchFailure(failed);
           }
         }
         // 確認済みのURLを再取得せず、新たに見つかった候補を優先して調べる。
@@ -197,6 +196,7 @@ final class WebResearchPipeline {
                     .map(adapter::evidence)
                     .toList());
       }
+      if (scope.searchFailed()) omissions.add("additional_search_failed");
       var rows = new ArrayList<T>();
       for (var candidate :
           WebSearchSelection.choose(
@@ -232,6 +232,7 @@ final class WebResearchPipeline {
               HttpFetchException.Code.REQUEST_BUDGET)
           .contains(limitReached.code())) throw limitReached;
       // 取得制限に達した場合も確認済みの結果を返し、根拠の充足度は未確定として伝える。
+      if (scope.searchFailed()) omissions.add("additional_search_failed");
       omissions.add(limitReached.code().name());
       return new Research<>(
           adapter.deduplicate(new ArrayList<>(loaded.values())).stream().limit(limit).toList(),
