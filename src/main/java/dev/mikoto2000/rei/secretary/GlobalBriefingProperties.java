@@ -5,10 +5,21 @@ import java.time.ZoneId;
 import java.util.List;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
-/** One explicitly selected personal briefing, independently of per-project reminder settings. */
+/** Registered projects share a briefing unless explicitly separated. */
 @ConfigurationProperties(prefix = "rei.secretary.briefings", ignoreUnknownFields = false)
 public record GlobalBriefingProperties(
-    boolean enabled, String morningTime, String eveningTime, String zone, List<String> projects) {
+    boolean enabled,
+    String morningTime,
+    String eveningTime,
+    String zone,
+    List<String> projects,
+    List<String> independentProjects) {
+  public GlobalBriefingProperties(
+      boolean enabled, String morningTime, String eveningTime, String zone, List<String> projects) {
+    this(enabled, morningTime, eveningTime, zone, projects, List.of());
+  }
+
+  @org.springframework.boot.context.properties.bind.ConstructorBinding
   public GlobalBriefingProperties {
     morningTime = morningTime == null ? "" : morningTime;
     eveningTime = eveningTime == null ? "" : eveningTime;
@@ -17,6 +28,16 @@ public record GlobalBriefingProperties(
     if (!eveningTime.isEmpty()) LocalTime.parse(eveningTime);
     if (!zone.isEmpty()) ZoneId.of(zone);
     projects = projects == null ? List.of() : List.copyOf(projects);
+    independentProjects =
+        independentProjects == null ? List.of() : List.copyOf(independentProjects);
+    validate(projects);
+    validate(independentProjects);
+    if (enabled && morningTime.isEmpty() && eveningTime.isEmpty())
+      throw new IllegalArgumentException(
+          "Enabled global briefings require an explicit morning-time or evening-time");
+  }
+
+  private static void validate(List<String> projects) {
     if (projects.size() > 16
         || projects.stream()
             .anyMatch(
@@ -27,8 +48,5 @@ public record GlobalBriefingProperties(
         || projects.stream().distinct().count() != projects.size())
       throw new IllegalArgumentException(
           "Select at most 16 unique project IDs for global briefings");
-    if (enabled && (projects.isEmpty() || morningTime.isEmpty() && eveningTime.isEmpty()))
-      throw new IllegalArgumentException(
-          "Enabled global briefings require projects and an explicit morning-time or evening-time");
   }
 }

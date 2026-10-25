@@ -8,9 +8,18 @@ import java.util.List;
  *
  * <p>Read registered identities without changing the Shell's current project.
  */
-public final class ProjectQueryService {
+@org.springframework.stereotype.Service("webProjectQueryService")
+@org.springframework.context.annotation.Lazy
+public final class ProjectQueryService implements dev.mikoto2000.rei.secretary.SecretaryProjects {
   /** プロジェクト一覧。 */
   private final ProjectRegistry projects;
+
+  /** Shell and Backend share the registered identity query without changing current selection. */
+  @org.springframework.beans.factory.annotation.Autowired
+  public ProjectQueryService(
+      @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
+    this(new ProjectRegistry(java.nio.file.Path.of(directory).resolve("projects.json")));
+  }
 
   /** 指定された値や利用先を使って、ProjectQueryServiceを初期化する。 */
   public ProjectQueryService(ProjectRegistry projects) {
@@ -31,5 +40,10 @@ public final class ProjectQueryService {
     return projects.list().stream()
         .map(project -> new ProjectSummary(project.id(), project.name(), project.root().toString()))
         .toList();
+  }
+
+  @Override
+  public List<String> registeredProjectIds() {
+    return list().stream().map(ProjectSummary::id).toList();
   }
 }

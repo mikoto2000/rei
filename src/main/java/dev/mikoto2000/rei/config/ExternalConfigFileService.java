@@ -521,13 +521,13 @@ public class ExternalConfigFileService {
             enabled: ${REI_SECRETARY_ENABLED:false}
             extraction-enabled: ${REI_SECRETARY_EXTRACTION_ENABLED:false}
             followups-enabled: ${REI_SECRETARY_FOLLOWUPS_ENABLED:false}
-            # Global morning/evening briefing: set explicit times and project IDs before enabling.
+            # All registered projects share a briefing; optionally separate selected projects.
             briefings:
               enabled: false
               morning-time: ''
               evening-time: ''
               zone: '' # Inherit rei.life.zone / the effective global life setting.
-              projects: []
+              independent-projects: []
             orchestrator-enabled: ${REI_SECRETARY_ORCHESTRATOR_ENABLED:false}
             autonomy-enabled: ${REI_SECRETARY_AUTONOMY_ENABLED:false}
             connections-enabled: ${REI_SECRETARY_CONNECTIONS_ENABLED:false}

@@ -1,6 +1,6 @@
 # YAMLによる全体の生活設定・朝夕ブリーフィング
 
-勤務時間は利用者全体の `rei.life`、朝夕ブリーフィングは `rei.secretary.briefings` で設定できます。朝夕それぞれ一つのレポートに、明示したProjectだけをまとめます。タスク・Session・自律実行の権限と予算は従来のProject単位のままです。
+勤務時間は利用者全体の `rei.life`、朝夕ブリーフィングは `rei.secretary.briefings` で設定できます。既定では登録済みの全Projectを、朝夕それぞれ一つのレポートにまとめます。`independent-projects` に指定したProjectだけは全体から除き、各Projectに独立したレポート・通知を作ります。タスク・Session・自律実行の権限と予算は従来のProject単位のままです。
 
 ## 設定ファイルと例
 
@@ -30,15 +30,26 @@ rei:
     followups-enabled: true
     briefings:
       enabled: true
-      morning-time: '08:00'
-      evening-time: '19:00'
+      morning-time: '08:30' # 勤務開始の前
+      evening-time: '18:30' # 勤務終了の後
       # zone: Asia/Tokyo # 省略/空なら、その時点の全体生活設定のzoneを使用
-      projects:
-        - PROJECT_ID_A
+      independent-projects: [] # 全Projectをひとまとめにする
+```
+
+`PROJECT_ID_A` と `TASK_ID` は実際のIDに置き換えます。`/session show` のprojectIdを確認できます。自動通知を有効にするには少なくとも一方の時刻が必要です。初期状態では無効・時刻未設定です。`rei.agent-scheduler.enabled` の追加有効化は不要で、既存followupsのtickを使います。朝夕の時刻は毎日に適用し、勤務曜日は通知を抑止する勤務時間の判定に使います。
+
+たとえばProject Bだけを独立させる場合は、次のように指定します。
+
+```yaml
+      independent-projects:
         - PROJECT_ID_B
 ```
 
-`PROJECT_ID_*` と `TASK_ID` は実際のIDに置き換えます。`/session show` のprojectIdを確認できます。対象Projectは最大16件で、空・重複したIDや内部の予約scopeは指定できません。全Projectを暗黙に走査・選択しません。自動実行を有効にするには、対象Projectと少なくとも一方の時刻が必要です。初期状態では無効・時刻未設定です。`rei.agent-scheduler.enabled` の追加有効化は不要で、既存followupsのtickを使います。
+この場合、各時刻に「Bを除く全Projectの全体ブリーフィング1件」と「Bの独立ブリーフィング1件」を生成します。独立分にも共通の朝夕時刻・zone・生活制約を適用します。残りが空なら空の全体通知を送りません。登録済みProjectがない場合も自動通知しません。新たに登録したProjectは、次の朝夕レポート生成時に自動で対象になります。作業ディレクトリ全体を探索してProjectを作ることはありません。
+
+独立指定は最大16件で、空・重複したIDや内部の予約scopeは指定できません。登録されていない独立IDは通知を作らず、`briefing-settings` の `projects`（解決済み対象）と `independentProjects`（独立指定）で照合できます。全体にまとめる登録済みProject数には従来の16件制限を適用しません。
+
+以前の `briefings.projects` は互換用の対象限定リストとして残しています。**全Projectを自動でまとめるには、この項目を削除するか `projects: []` にしてください。** 空・省略が既定の全Projectモードで、`briefing-settings` の `allProjects` は `true` になります。既存の明示リストを残した場合は、そのリストの範囲内で全体・独立を分けます。
 
 `life` の通知・休息・個人時間帯は `days` / `start` / `end` の配列です。日付をまたぐ時間帯にも対応します。`exception` は既存の `start` / `end`（ISO instant）/ `availability` で一時例外を指定できます。`revision` はYAMLに書きません。
 
@@ -86,7 +97,7 @@ CLI/APIで生活設定を変更する場合も、YAMLで管理している項目
 
 Project指定のない通知イベントとして通常Shellへ表示し、既存の認証付き全体イベント経路を使います。通知はRei内のINBOXだけです。全体レポートを既存のProject向けSlack/Webhook等へ自動配送しません。
 
-既存のsnapshotテーブルと通知outboxで再起動・同日再実行・夏時間の重複を扱い、当日各1件にします。停止中に時刻を過ぎた場合は当日分だけ追いつきます。勤務・休息・既知予定中はHELDで保持し、解除後に同じ通知IDを使います。保持を配送失敗回数に数えません。全体レポートは集約済みなので、別のProject向けDIGESTには混ぜません。
+既存のsnapshotテーブルと通知outboxで再起動・同日再実行・夏時間の重複を扱い、全体グループ・各独立グループで当日の朝夕各1件にします。停止中に時刻を過ぎた場合は当日分だけ追いつきます。勤務・休息・既知予定中はHELDで保持し、解除後に同じ通知IDを使います。保持を配送失敗回数に数えません。全体・独立ともに全体INBOXへ届け、別のProject向けDIGESTには混ぜません。自動生成の作業候補予算は独立分も含めて共有し、分割だけで増やしません。
 
 再起動後に対象Project/zoneが変わった未配信通知や、日付が古くなった朝夕通知は抑止します。すでに保存された同日の自動レポートを設定変更だけで再通知しません。必要なら新しい手動キーで再生成し、履歴を確認してください。
 
@@ -100,7 +111,9 @@ Project指定のない通知イベントとして通常Shellへ表示し、既�
 - `POST /api/v1/secretary/briefings/check`: body `{}`、当日分の時刻確認
 - `POST /api/v1/secretary/briefings/delete`: body `{}`、全体の保存レポート削除
 
-全体履歴は既存storage.db内でProject別履歴と分離し、最新100件に制限します。元タスクや実行状態を複製した別台帳は作りません。
+全体・独立の自動生成履歴は `/secretary briefing-history` と `briefing-show` で確認できます。独立分は `independentProject` に対象IDが入り、通知文にも独立Projectを表示します。`briefing` / `review` のProject省略は独立分を除く全体グループの読み取りです。明示 `--project` の手動表示・保存は従来どおりProject単位で利用できます。
+
+全体・独立の自動生成履歴は既存storage.db内で従来のProject別履歴と分離し、合計で最新100件に制限します。元タスクや実行状態を複製した別台帳は作りません。
 
 ```text
 /secretary briefing-clear

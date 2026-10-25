@@ -24,9 +24,16 @@ import org.springframework.stereotype.Component;
 @EnableConfigurationProperties(GlobalBriefingProperties.class)
 public final class SecretaryGlobalBriefings {
   public record Settings(
-      boolean enabled, String morningTime, String eveningTime, String zone, List<String> projects) {
+      boolean enabled,
+      String morningTime,
+      String eveningTime,
+      String zone,
+      List<String> projects,
+      List<String> independentProjects,
+      boolean allProjects) {
     public Settings {
       projects = List.copyOf(projects);
+      independentProjects = List.copyOf(independentProjects);
     }
   }
 
@@ -46,7 +53,14 @@ public final class SecretaryGlobalBriefings {
   }
 
   public record Generation(
-      String id, String key, Instant generated, List<String> projects, Report report) {
+      String id,
+      String key,
+      Instant generated,
+      List<String> projects,
+      Report report,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          String independentProject) {
     public Generation {
       projects = List.copyOf(projects);
     }
@@ -59,6 +73,12 @@ public final class SecretaryGlobalBriefings {
   private LocalDate receiptDate;
   private final Set<String> scheduledReceipts = new java.util.HashSet<>();
   private volatile dev.mikoto2000.rei.life.LifePolicy life;
+  private volatile ObjectProvider<SecretaryProjects> projectQueries;
+
+  @Autowired
+  void setProjectQueries(ObjectProvider<SecretaryProjects> queries) {
+    projectQueries = queries;
+  }
 
   @Autowired(required = false)
   void setLifeContext(dev.mikoto2000.rei.life.LifePolicy value) {
@@ -77,14 +97,39 @@ public final class SecretaryGlobalBriefings {
   }
 
   public Settings settings() {
+    var sources = properties.projects();
+    if (sources.isEmpty()) {
+      var service = projectQueries == null ? null : projectQueries.getIfAvailable();
+      sources =
+          service == null
+              ? List.of()
+              : service.registeredProjectIds().stream().sorted().distinct().toList();
+    }
     return new Settings(
         properties.enabled(),
         properties.morningTime(),
         properties.eveningTime(),
-        properties.zone().isEmpty()
-            ? life == null ? clock.getZone().getId() : life.settings().zone()
-            : properties.zone(),
-        properties.projects());
+        zone(),
+        sources,
+        properties.independentProjects(),
+        properties.projects().isEmpty());
+  }
+
+  private String zone() {
+    return properties.zone().isEmpty()
+        ? life == null ? clock.getZone().getId() : life.settings().zone()
+        : properties.zone();
+  }
+
+  private static List<String> members(Settings settings, String independentProject) {
+    return independentProject == null
+        ? settings.projects().stream()
+            .filter(p -> !settings.independentProjects().contains(p))
+            .toList()
+        : settings.projects().contains(independentProject)
+                && settings.independentProjects().contains(independentProject)
+            ? List.of(independentProject)
+            : List.of();
   }
 
   public boolean enabled() {
@@ -93,19 +138,21 @@ public final class SecretaryGlobalBriefings {
 
   public Report report(LocalDate requested, boolean review) {
     var settings = settings();
+    return report(requested, review, settings, members(settings, null));
+  }
+
+  private Report report(
+      LocalDate requested, boolean review, Settings settings, List<String> projects) {
     var zone = ZoneId.of(settings.zone());
     var date = requested == null ? clock.instant().atZone(zone).toLocalDate() : requested;
     var values = new LinkedHashMap<String, SecretaryFollowups.Report>();
     var unavailable = new ArrayList<String>();
-    boolean partial = settings.projects().isEmpty();
-    for (var project : settings.projects()) {
+    for (var project : projects) {
       try {
         var value = reports.getObject().report(project, date, review, zone);
         values.put(project, value);
-        partial |= value.partial();
       } catch (RuntimeException failure) {
         unavailable.add(project);
-        partial = true;
       }
     }
     // A global meeting shares a single human time budget across all selected projects.
@@ -141,32 +188,81 @@ public final class SecretaryGlobalBriefings {
               value.cautions(),
               value.held());
         });
+    return aggregate(date, zone.getId(), review, values, unavailable);
+  }
+
+  private static Report aggregate(
+      LocalDate date,
+      String zone,
+      boolean review,
+      Map<String, SecretaryFollowups.Report> values,
+      List<String> unavailable) {
+    boolean partial =
+        values.isEmpty()
+            || !unavailable.isEmpty()
+            || values.values().stream().anyMatch(SecretaryFollowups.Report::partial);
     var cautions = new ArrayList<String>();
     cautions.add("勤務中の業務予定は不明。対象Projectに登録済みの私用情報だけを集約します。");
-    if (settings.projects().isEmpty())
-      cautions.add("rei.secretary.briefings.projects に対象Projectを指定してください。");
+    if (values.isEmpty() && unavailable.isEmpty())
+      cautions.add("集約対象の登録済みProjectがありません。独立指定したProjectは別の通知になります。");
     if (partial) cautions.add("一部のProject・情報源を取得できないか、対象が未設定です。");
-    return new Report(date, zone.getId(), review, values, unavailable, partial, cautions);
+    return new Report(date, zone, review, values, unavailable, partial, cautions);
+  }
+
+  private static Report subset(Report report, List<String> projects) {
+    var values = new LinkedHashMap<String, SecretaryFollowups.Report>();
+    projects.forEach(
+        p -> {
+          if (report.projects().containsKey(p)) values.put(p, report.projects().get(p));
+        });
+    return aggregate(
+        report.date(),
+        report.zone(),
+        report.review(),
+        values,
+        report.unavailable().stream().filter(projects::contains).toList());
   }
 
   public synchronized Generation generate(LocalDate requested, boolean review, String key) {
-    required(key);
     var settings = settings();
     var date =
         requested == null
             ? clock.instant().atZone(ZoneId.of(settings.zone())).toLocalDate()
             : requested;
+    return generate(
+        date,
+        review,
+        key,
+        settings,
+        null,
+        () -> report(date, review, settings, members(settings, null)));
+  }
+
+  private Generation generate(
+      LocalDate requested,
+      boolean review,
+      String key,
+      Settings settings,
+      String independentProject,
+      java.util.function.Supplier<Report> report) {
+    required(key);
+    var date =
+        requested == null
+            ? clock.instant().atZone(ZoneId.of(settings.zone())).toLocalDate()
+            : requested;
     var saved = byKey(key);
-    if (saved != null) return compatible(saved, date, review, settings);
+    if (saved != null) return compatible(saved, date, review, settings, independentProject);
     var value =
         new Generation(
             UUID.randomUUID().toString(),
             key,
             clock.instant(),
-            settings.projects(),
-            report(date, review));
+            members(settings, independentProject),
+            report.get(),
+            independentProject);
     snapshots.save(value.id(), SecretaryNotifications.GLOBAL_SCOPE, key, value.generated(), value);
-    return compatible(java.util.Objects.requireNonNull(byKey(key)), date, review, settings);
+    return compatible(
+        java.util.Objects.requireNonNull(byKey(key)), date, review, settings, independentProject);
   }
 
   private Generation byKey(String key) {
@@ -175,15 +271,21 @@ public final class SecretaryGlobalBriefings {
   }
 
   private static Generation compatible(
-      Generation saved, LocalDate date, boolean review, Settings settings) {
+      Generation saved,
+      LocalDate date,
+      boolean review,
+      Settings settings,
+      String independentProject) {
     if (!saved.report().date().equals(date)
         || saved.report().review() != review
+        || !java.util.Objects.equals(saved.independentProject(), independentProject)
         || !scopeMatches(saved, settings)) throw new SecretaryConflictException();
     return saved;
   }
 
   private static boolean scopeMatches(Generation saved, Settings settings) {
-    return Set.copyOf(saved.projects()).equals(Set.copyOf(settings.projects()))
+    return Set.copyOf(saved.projects())
+            .equals(Set.copyOf(members(settings, saved.independentProject())))
         && saved.report().zone().equals(settings.zone());
   }
 
@@ -207,40 +309,87 @@ public final class SecretaryGlobalBriefings {
   }
 
   synchronized void schedule(Consumer<SecretaryNotifications.Notice> enqueue) {
-    var settings = settings();
-    if (!settings.enabled()) return;
-    var now = clock.instant().atZone(ZoneId.of(settings.zone()));
+    if (!enabled()) return;
+    var now = clock.instant().atZone(ZoneId.of(zone()));
     if (!now.toLocalDate().equals(receiptDate)) {
       scheduledReceipts.clear();
       receiptDate = now.toLocalDate();
     }
-    schedule(settings, now.toLocalDate(), now.toLocalTime(), false, enqueue);
-    schedule(settings, now.toLocalDate(), now.toLocalTime(), true, enqueue);
+    schedule(now.toLocalDate(), now.toLocalTime(), false, enqueue);
+    schedule(now.toLocalDate(), now.toLocalTime(), true, enqueue);
+  }
+
+  private void schedule(
+      LocalDate date,
+      LocalTime time,
+      boolean review,
+      Consumer<SecretaryNotifications.Notice> enqueue) {
+    var configured = review ? properties.eveningTime() : properties.morningTime();
+    if (configured.isEmpty() || time.isBefore(LocalTime.parse(configured))) return;
+    var groups = new ArrayList<String>();
+    groups.add(null);
+    groups.addAll(properties.independentProjects());
+    if (groups.stream().allMatch(p -> scheduledReceipts.contains(receipt(key(date, review, p)))))
+      return;
+    var settings = settings();
+    // One preparation budget is shared even when reports are split into independent notices.
+    var batch =
+        new java.util.function.Supplier<Report>() {
+          private Report cached;
+
+          public Report get() {
+            if (cached == null) cached = report(date, review, settings, settings.projects());
+            return cached;
+          }
+        };
+    for (var group : groups) schedule(settings, date, review, group, batch, enqueue);
+  }
+
+  private static String key(LocalDate date, boolean review, String independentProject) {
+    return "scheduled:"
+        + (review ? "GLOBAL_REVIEW" : "GLOBAL_BRIEFING")
+        + ":"
+        + date
+        + (independentProject == null ? "" : ":project:" + receipt(independentProject));
+  }
+
+  private static String receipt(String key) {
+    return UUID.nameUUIDFromBytes(
+            (SecretaryNotifications.GLOBAL_SCOPE + ":" + key)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8))
+        .toString();
   }
 
   private void schedule(
       Settings settings,
       LocalDate date,
-      LocalTime time,
       boolean review,
+      String independentProject,
+      java.util.function.Supplier<Report> batch,
       Consumer<SecretaryNotifications.Notice> enqueue) {
-    var configured = review ? settings.eveningTime() : settings.morningTime();
-    if (configured.isEmpty() || time.isBefore(LocalTime.parse(configured))) return;
     String kind = review ? "GLOBAL_REVIEW" : "GLOBAL_BRIEFING";
-    String key = "scheduled:" + kind + ":" + date;
-    String id =
-        UUID.nameUUIDFromBytes(
-                (SecretaryNotifications.GLOBAL_SCOPE + ":" + key)
-                    .getBytes(java.nio.charset.StandardCharsets.UTF_8))
-            .toString();
+    String key = key(date, review, independentProject);
+    String id = receipt(key);
     if (scheduledReceipts.contains(id)) return;
     if (snapshots.noticeExists(id)) {
       scheduledReceipts.add(id);
       return;
     }
+    var members = members(settings, independentProject);
+    if (members.isEmpty()) {
+      scheduledReceipts.add(id);
+      return;
+    }
     var old = byKey(key);
-    if (old != null && !scopeMatches(old, settings)) return;
-    var generation = generate(date, review, key);
+    if (old != null
+        && (!scopeMatches(old, settings)
+            || !java.util.Objects.equals(old.independentProject(), independentProject))) {
+      scheduledReceipts.add(id);
+      return;
+    }
+    var generation =
+        generate(
+            date, review, key, settings, independentProject, () -> subset(batch.get(), members));
     int due =
         generation.report().projects().values().stream()
             .mapToInt(r -> r.sections().getOrDefault("today", List.of()).size())
@@ -257,6 +406,7 @@ public final class SecretaryGlobalBriefings {
             kind,
             (review ? "夕" : "朝")
                 + "のブリーフィング "
+                + (independentProject == null ? "[全体] " : "[独立Project=" + independentProject + "] ")
                 + date
                 + ": Project="
                 + generation.projects().size()

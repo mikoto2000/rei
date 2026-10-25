@@ -21,6 +21,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 /** WebAPIの構成要素を接続し、設定に従って利用できるようにする。 */
 @Configuration(proxyBeanMethods = false)
 @Import({
+  dev.mikoto2000.rei.application.project.ProjectQueryService.class,
   dev.mikoto2000.rei.conversation.SessionHistoryConfiguration.class,
   dev.mikoto2000.rei.application.task.TaskManagerConfiguration.class,
   dev.mikoto2000.rei.artifact.ArtifactConfiguration.class,
@@ -55,13 +56,6 @@ public class WebApiConfiguration {
           boolean slackEnabled) {
     return new RunRegistry(
         clock, enabled || tasksEnabled || todayEnabled || slackEnabled ? source.getObject() : null);
-  }
-
-  /** Web APIによる操作で用いるWebプロジェクト検索条件サービスを返す。 */
-  @Bean
-  dev.mikoto2000.rei.application.project.ProjectQueryService webProjectQueryService(
-      ProjectRegistry projects) {
-    return new dev.mikoto2000.rei.application.project.ProjectQueryService(projects);
   }
 
   /** Web APIによる操作で用いるWeb会話登録台帳を返す。 */
