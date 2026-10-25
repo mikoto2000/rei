@@ -1,5 +1,9 @@
 # 回答生成中のディスク I/O
 
+mainの先行変更との統合後、ページ配置の移行番号は**version 18**。
+version 17は先行するBriefing移行に割り当てられている。
+以下の計測時のversion 17は統合前の検証用JARであり、同じ1 KiB配置を使う。
+
 2026-10-26追記：現在のproject付き`MESSAGE_DELTA` / `THINKING_DELTA`は、
 イベントと診断ログの管理情報を同じFULL COMMITで確定する。
 以下の「計2トランザクション」は当初の保存経路であり、末尾の共同確定の節も参照。
@@ -297,7 +301,7 @@ tempをリポジトリ内に隔離し、ローカルHTTP通信が可能な環境
 JSONLのforce・4 MiBまたは1日のrotation・改変検出・参照保護・既存の保持処理は維持する。
 Run開始・完了・失敗・キャンセル・Tool・承認・Checkpoint等は従来の保存境界を使う。
 明示ファイルの診断出力、旧ファイルイベントstore、projectなしのイベントは従来の経路を使う。
-JSONLやイベントrecordの保存形式は維持する。DBのページ配置変更は後述のversion 17移行で行う。
+JSONLやイベントrecordの保存形式は維持する。DBのページ配置変更は後述のversion 18移行で行う。
 
 永続化段階の例外は発行元へ伝え、失敗したイベントをreplay・通常購読者へ渡さない。
 再入で待機した未配送イベントも、次のpublishへ持ち越さない。
@@ -337,7 +341,7 @@ project分離、非stream境界、DBエラー時の非表示・非replay、確�
 仕様は[SQLite page_size](https://www.sqlite.org/pragma.html#pragma_page_size)、
 [VACUUM](https://www.sqlite.org/lang_vacuum.html)、[WAL](https://www.sqlite.org/wal.html)を参照。
 
-version 17の起動移行は、他のプロセスを排除する既存leaseと検証済みオンラインバックアップの下で行う。
+version 18の起動移行は、他のプロセスを排除する既存leaseと検証済みオンラインバックアップの下で行う。
 schema作成・通常beanの起動前にFULL同期のrollback journalへ切り替え、空き容量を確認して
 VACUUMを実行し、1 KiBが適用されたことを検査する。その後WALへ戻して移行を確定する。
 SQLite自身の原子的な再構築に任せ、DBファイルを手作業で置き換えたりWALを削除したりしない。
@@ -353,7 +357,7 @@ SHA-256で照合する。BLOB、NULを含むTEXT、64 bit整数、REAL、NULL、
 読み取り接続のautocheckpoint値は書き込み接続の設定と区別する。
 既存のmemory / consolidation / vector DBは対象外。
 初回起動にはバックアップと再構築の時間・空き容量が必要になる。
-旧versionのJARはversion 17を開かず停止するため、旧版へ戻す場合は
+旧versionのJARはversion 18を開かず停止するため、旧版へ戻す場合は
 [既存のバックアップ復元手順](storage-backup-restore.md)で確認済みの旧DBを復元する。
 
 書き込みbytesが減る一方、1ページが小さいためnativeの書き込み操作数は増えうる。
@@ -395,7 +399,7 @@ bytesは約60〜70%減り、長文・高頻度・並列の平均稼働率は約4
 [最大速度の1 KiB予備計測](answer-generation-io-data/stream-page-maximum.json)は
 入力頻度が異なるため、上の稼働率比較には含めない。
 
-### 最終回帰と適用物
+### 先行変更統合前の回帰と適用物
 
 最終コードの`-Pfull verify`は6,438件、失敗0・エラー0・既存skip 5
 （Windows Codex 2、WSL Codex 1、実PlantUML 1、opt-in回答生成I/O benchmark 1）で成功した。
@@ -417,3 +421,16 @@ tempとtest dataをリポジトリ内へ隔離し、ローカルHTTP通信が可
 [最終コードの再計測](answer-generation-io-data/stream-final-maximum.json)と
 `target/stream-write-final-counter.log`を保存した。入力頻度が違うため、この追加実行の
 稼働率と配送時間は50イベント/秒の比較表には混ぜていない。
+
+### mainの先行変更との統合
+
+main上のBriefing移行がversion 17を使用するため、ページ配置変更をversion 18へ移した。
+正常なBriefing付きversion 17はそのまま保全して配置を変換する。
+以前の検証用JARによるページ配置のみのversion 17も、1 KiB配置・完了したmigration-state・
+既存のversion 16までのschemaが揃う場合に限って認識し、バックアップ後に不足するBriefing schemaを作成する。
+認識できない状態で必須のBriefing tableが欠落していれば、従来どおり起動を拒否する。
+追加の互換テスト2件を含む関連62件は失敗・エラー・skipなしで成功した。
+統合後の適用物は`target/rei-stream-io-reduction-v18.jar`を使用する。
+統合後の`-Pfull verify`は6,464件、失敗0・エラー0・既存skip 5で成功。
+Checkstyleは違反0、変更した18ファイルのSpotlessも成功した。
+検証ログは`target/stream-merge-full.log`。

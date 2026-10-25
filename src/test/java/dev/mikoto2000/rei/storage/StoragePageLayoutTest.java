@@ -45,8 +45,8 @@ class StoragePageLayoutTest {
       sql.executeUpdate("INSERT INTO \"fixture\"\"quoted\"(id,body,number) VALUES(9,NULL,NULL)");
       sql.executeUpdate("INSERT INTO \"fixture\"\"quoted\"(id,body) VALUES(100,'deleted')");
       sql.executeUpdate("DELETE FROM \"fixture\"\"quoted\" WHERE id=100");
-      sql.executeUpdate("DELETE FROM storage_migrations WHERE version=17");
-      sql.execute("PRAGMA user_version=16");
+      sql.executeUpdate("DELETE FROM storage_migrations WHERE version>=18");
+      sql.execute("PRAGMA user_version=17");
     }
   }
 
@@ -133,7 +133,7 @@ class StoragePageLayoutTest {
     try (var db = connection();
         var sql = db.createStatement();
         var rows = sql.executeQuery("PRAGMA user_version")) {
-      assertThat(rows.getInt(1)).isEqualTo(16);
+      assertThat(rows.getInt(1)).isEqualTo(17);
     }
     try (var migration = new StorageMigrationCoordinator(root)) {
       migration.prepare();
@@ -186,7 +186,7 @@ class StoragePageLayoutTest {
     try (var db = connection();
         var sql = db.createStatement();
         var rows = sql.executeQuery("PRAGMA user_version")) {
-      assertThat(rows.getInt(1)).isEqualTo(16);
+      assertThat(rows.getInt(1)).isEqualTo(17);
     }
     try (var migration = new StorageMigrationCoordinator(root)) {
       migration.prepare();
@@ -196,5 +196,38 @@ class StoragePageLayoutTest {
 
   private static String quote(String value) {
     return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+  }
+
+  @Test
+  void upgradesPreviouslyBuiltPageOnlyVersionSeventeenWithoutLosingData() throws Exception {
+    prepareLegacy();
+    try (var db = connection();
+        var sql = db.createStatement()) {
+      StoragePageLayout.apply(db, root.resolve("storage.db"));
+      sql.execute("DROP TABLE secretary_briefings");
+    }
+    java.nio.file.Files.writeString(
+        root.resolve(".storage/migration-state.json"),
+        "{\"sourceVersion\":0,\"targetVersion\":17,\"stage\":\"COMPLETE\",\"backup\":\"\"}");
+    try (var migration = new StorageMigrationCoordinator(root)) {
+      assertThat(migration.prepare().schemaVersion()).isEqualTo(18);
+      assertThat(migration.prepare().backup()).isNotNull();
+    }
+    verifyValues();
+    try (var db = connection()) {
+      SecretaryBriefingMigration.verify(db);
+    }
+  }
+
+  @Test
+  void missingBriefingWithoutKnownPageOnlyCompletionStillStopsStartup() throws Exception {
+    prepareLegacy();
+    try (var db = connection();
+        var sql = db.createStatement()) {
+      sql.execute("DROP TABLE secretary_briefings");
+    }
+    try (var migration = new StorageMigrationCoordinator(root)) {
+      assertThatThrownBy(migration::prepare).isInstanceOf(java.io.IOException.class);
+    }
   }
 }

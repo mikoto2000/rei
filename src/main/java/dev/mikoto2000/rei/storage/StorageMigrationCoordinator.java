@@ -23,7 +23,7 @@ import java.util.UUID;
  */
 public final class StorageMigrationCoordinator implements AutoCloseable {
   /** データ形式形式のバージョン。 */
-  public static final int SCHEMA_VERSION = 17;
+  public static final int SCHEMA_VERSION = 18;
 
   /** データ保存の共通処理における段階の選択肢。 */
   public enum Stage {
@@ -80,6 +80,9 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
 
   /** 取得元形式のバージョン。 */
   private int sourceVersion;
+
+  /** main統合前に配布したページ配置のみのversion 17を識別する。 */
+  private boolean legacyPageLayout17;
 
   /** データ保存の共通処理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public StorageMigrationCoordinator(Path root) throws IOException {
@@ -331,10 +334,36 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
       if (version >= 14) SecretaryAutonomyMigration.verify(db);
       if (version >= 15) SecretaryConnectionsMigration.verify(db);
       if (version >= 16) LifeContextMigration.verify(db);
-      if (version >= 17) SecretaryBriefingMigration.verify(db);
+      if (version >= 17) {
+        boolean briefingExists;
+        try (var sql = db.createStatement();
+            var rows =
+                sql.executeQuery(
+                    "SELECT count(*) FROM sqlite_schema WHERE type='table' AND name='secretary_briefings'")) {
+          briefingExists = rows.getInt(1) != 0;
+        }
+        if (version == 17 && !briefingExists && isLegacyPageLayout17(db)) legacyPageLayout17 = true;
+        else SecretaryBriefingMigration.verify(db);
+      }
     } catch (SQLException error) {
       throw new IOException("Storage schema is not a verified completed schema", error);
     }
+  }
+
+  /** 以前の検証用JARの完了記録と1 KiB配置が揃う場合だけ互換経路を認める。 */
+  private boolean isLegacyPageLayout17(java.sql.Connection db) throws IOException, SQLException {
+    try (var sql = db.createStatement();
+        var rows = sql.executeQuery("PRAGMA page_size")) {
+      if (rows.getInt(1) != StoragePageLayout.PAGE_BYTES) return false;
+    }
+    var state =
+        new ObjectMapper()
+            .readTree(StorageBackup.metadata(root.resolve(".storage/migration-state.json")));
+    int source = state.path("sourceVersion").asInt(-1);
+    return state.path("targetVersion").asInt(-1) == 17
+        && source >= 0
+        && source < 17
+        && "COMPLETE".equals(state.path("stage").asText());
   }
 
   /** 要求された条件を満たすか判断するため、現在準備完了形式のバージョンを確認する。 */
@@ -365,7 +394,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
         }
       db.setAutoCommit(true);
       // 通常beanの起動前・排他leaseと検証済みバックアップの下で一度だけ実行する。
-      if (sourceVersion < 17) {
+      if (sourceVersion < 18) {
         StoragePageLayout.apply(db, root.resolve("storage.db"));
         checkpoint.reached(Stage.PAGES_REPACKED, backup);
       }
@@ -403,7 +432,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
         if (sourceVersion < 14) SecretaryAutonomyMigration.apply(db);
         if (sourceVersion < 15) SecretaryConnectionsMigration.apply(db);
         if (sourceVersion < 16) LifeContextMigration.apply(db);
-        if (sourceVersion < 17) SecretaryBriefingMigration.apply(db);
+        if (sourceVersion < 17 || legacyPageLayout17) SecretaryBriefingMigration.apply(db);
         checkpoint.reached(Stage.ROWS_IMPORTED, backup);
         if (backup != null) {
           StorageBackup.verify(backup);
