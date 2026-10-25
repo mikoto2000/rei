@@ -80,17 +80,19 @@ public final class StorageDatabase {
         DriverManager.getConnection(
             "jdbc:sqlite:" + file.toUri().toASCIIString() + (readOnly ? "?mode=ro" : "?mode=rw"));
     boolean configured = false;
-    try (var query = connection.createStatement()) {
-      query.execute("PRAGMA busy_timeout=5000");
-      if (!readOnly) {
-        query.execute("PRAGMA synchronous=FULL");
-        int pageSize;
-        try (var rows = query.executeQuery("PRAGMA page_size")) {
-          pageSize = rows.getInt(1);
+    try {
+      try (var query = connection.createStatement()) {
+        query.execute("PRAGMA busy_timeout=5000");
+        if (!readOnly) {
+          query.execute("PRAGMA synchronous=FULL");
+          int pageSize;
+          try (var rows = query.executeQuery("PRAGMA page_size")) {
+            pageSize = rows.getInt(1);
+          }
+          query.execute("PRAGMA wal_autocheckpoint=" + Math.max(1, WAL_TARGET_BYTES / pageSize));
         }
-        query.execute("PRAGMA wal_autocheckpoint=" + Math.max(1, WAL_TARGET_BYTES / pageSize));
+        requireCurrentSchema(connection);
       }
-      requireCurrentSchema(connection);
       configured = true;
       return connection;
     } finally {
