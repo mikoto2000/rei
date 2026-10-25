@@ -122,7 +122,7 @@ public final class RemoteCommands {
   private static Request routeDirect(
       List<String> words, String project, String session, java.nio.file.Path localBase) {
     String name = words.getFirst(), action = words.size() > 1 ? words.get(1) : "list";
-    if (name.equals("/secretary")) return secretary(words, project);
+    if (name.equals("/secretary")) return secretary(words, project, session);
     if (name.equals("/dot")) {
       var command = dev.mikoto2000.rei.dot.DotCommandRequest.parse(words.subList(1, words.size()));
       String owner = command.projectId() == null ? project : command.projectId();
@@ -1595,8 +1595,57 @@ public final class RemoteCommands {
     return String.join(" ", words.subList(start, words.size()));
   }
 
+  private static Request secretaryExecution(List<String> words,String selectedProject,String selectedSession) {
+    String action=words.get(1);
+    boolean identified=Set.of("work-add","work-show","work-history","work-start","work-cancel","work-suspend","work-resume","work-verify").contains(action);
+    if(identified && words.size()<3)throw invalid();
+    var allowed=new HashSet<String>(Set.of("--project"));
+    switch(action) {
+      case "autonomy-settings","autonomy-status","autonomy-check","work-show" -> {}
+      case "autonomy-configure" -> allowed.addAll(Set.of("--session","--max-level","--auto-kind","--max-concurrent","--max-seconds","--max-llm-calls","--max-daily-calls","--max-retries"));
+      case "work-list","work-history" -> allowed.add("--limit");
+      case "work-add" -> allowed.addAll(Set.of("--revision","--key","--kind","--status","--goal"));
+      case "work-start","work-cancel","work-suspend","work-resume","work-verify" -> allowed.add("--revision");
+      default -> throw invalid();
+    }
+    var options=options(words,identified?3:2,allowed,action.equals("autonomy-configure")?Set.of("--autonomy-enabled","--auto-prepare"):Set.of());
+    String project=options.getOrDefault("--project",selectedProject);
+    if(project==null || project.isBlank())throw invalid();
+    String base="/api/v1/secretary/";
+    if(action.equals("autonomy-settings") || action.equals("autonomy-status"))return query(base+"autonomy/"+action.substring(9),Map.of("projectId",project));
+    if(action.equals("autonomy-check"))return post(base+"autonomy/check",Map.of());
+    if(action.equals("autonomy-configure")) {
+      var body=new LinkedHashMap<String,Object>();body.put("projectId",project);
+      body.put("enabled",Boolean.parseBoolean(options.getOrDefault("--autonomy-enabled","false")));
+      body.put("sessionId",options.getOrDefault("--session",selectedSession));
+      body.put("autoPrepare",Boolean.parseBoolean(options.getOrDefault("--auto-prepare","false")));
+      body.put("autoKind",options.getOrDefault("--auto-kind","PREPARE"));
+      String[][] fields={{"maxLevel","--max-level","1"},{"maxConcurrent","--max-concurrent","1"},{"maxSeconds","--max-seconds","300"},{"maxLlmCalls","--max-llm-calls","8"},{"maxDailyCalls","--max-daily-calls","32"},{"maxRetries","--max-retries","1"}};
+      for(var field:fields)body.put(field[0],Integer.parseInt(options.getOrDefault(field[1],field[2])));
+      return new Request("PUT",base+"autonomy/settings",body);
+    }
+    if(action.equals("work-show"))return query(base+"executions/"+id(words.get(2)),Map.of("projectId",project));
+    if(action.equals("work-list") || action.equals("work-history")) {
+      int limit=Integer.parseInt(options.getOrDefault("--limit","100"));if(limit<1 || limit>1000)throw invalid();
+      return query(base+"executions"+(identified?"/"+id(words.get(2))+"/history":""),Map.of("projectId",project,"limit",limit));
+    }
+    if(!options.containsKey("--revision"))throw invalid();long revision=Long.parseLong(options.get("--revision"));if(revision<0)throw invalid();
+    var body=new LinkedHashMap<String,Object>();body.put("projectId",project);
+    if(action.equals("work-add")) {
+      if(!options.containsKey("--key"))throw invalid();
+      String kind=options.getOrDefault("--kind","PREPARE");
+      if(!Set.of("RESEARCH","ORGANIZE","SUMMARY","PREPARE","STATUS","DRAFT","UPDATE_TASK","GOAL","ROUTINE").contains(kind))throw invalid();
+      body.put("taskId",words.get(2));body.put("taskRevision",revision);body.put("key",options.get("--key"));body.put("kind",kind);
+      body.put("targetStatus",kind.equals("UPDATE_TASK")?options.getOrDefault("--status","OPEN"):null);body.put("goalId",options.get("--goal"));
+      return post(base+"executions",body);
+    }
+    body.put("revision",revision);return post(base+"executions/"+id(words.get(2))+"/"+action.substring(5),body);
+  }
+
   /** 軽量CLIでの対話で用いる選択可能な設定を返す。 */
-  private static Request secretary(List<String> words, String selectedProject) {
+  private static Request secretary(List<String> words, String selectedProject, String selectedSession) {
+    if(words.size()>1 && (words.get(1).startsWith("autonomy-") || words.get(1).startsWith("work-")))
+      return secretaryExecution(words,selectedProject,selectedSession);
     String action = words.size() > 1 ? words.get(1) : "list";
     boolean identified =
         Set.of(

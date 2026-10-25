@@ -21,6 +21,84 @@ import org.springframework.stereotype.Repository;
  */
 @Repository
 public class ToolApprovalRepository implements dev.mikoto2000.rei.secretary.SecretaryPermissions {
+  @Override
+  public String requestSecretaryAction(String project, String action, String canonical) {
+    secretaryScope(project, action, canonical);
+    String id = UUID.randomUUID().toString();
+    db.sql("INSERT INTO tool_approvals VALUES(?,?,?,?,?,?,?,?,?)")
+        .params(
+            id,
+            project,
+            "secretary-action:" + id,
+            id,
+            "secretaryAction:" + action,
+            digest(canonical),
+            CredentialRedactor.redact(canonical),
+            "PENDING",
+            clock.instant().plus(Duration.ofMinutes(15)).toEpochMilli())
+        .update();
+    return id;
+  }
+
+  @Override
+  public String secretaryActionStatus(String project, String id, String action, String canonical) {
+    secretaryScope(project, action, canonical);
+    return secretaryGrantStatus(project, id, "secretaryAction:" + action, digest(canonical));
+  }
+
+  @Override
+  public boolean consumeSecretaryAction(
+      String project, String id, String action, String canonical) {
+    secretaryScope(project, action, canonical);
+    return consumeSecretaryGrant(project, id, "secretaryAction:" + action, digest(canonical));
+  }
+
+  @Override
+  public String secretaryPreparationStatus(String project, String id, String task, String rule) {
+    return secretaryGrantStatus(
+        project, id, "secretaryAuto:" + rule, digest(project + "\n" + task + "\n" + rule));
+  }
+
+  @Override
+  public boolean consumeSecretaryPreparation(String project, String id, String task, String rule) {
+    return consumeSecretaryGrant(
+        project, id, "secretaryAuto:" + rule, digest(project + "\n" + task + "\n" + rule));
+  }
+
+  private static void secretaryScope(String project, String action, String canonical) {
+    if (project == null
+        || project.isBlank()
+        || project.length() > 128
+        || project.chars().anyMatch(Character::isISOControl)
+        || !java.util.Set.of("DRAFT", "UPDATE_TASK", "GOAL", "ROUTINE").contains(action)
+        || canonical == null
+        || canonical.isBlank()
+        || canonical.length() > 16384)
+      throw new IllegalArgumentException("Invalid scoped secretary action");
+  }
+
+  private String secretaryGrantStatus(String project, String id, String tool, String digest) {
+    return db.sql(
+            "SELECT status,expires FROM tool_approvals WHERE project=? AND id=? AND tool=? AND digest=?")
+        .params(project, id, tool, digest)
+        .query(
+            (r, n) ->
+                r.getLong(2) <= clock.millis()
+                        && java.util.Set.of("PENDING", "APPROVED").contains(r.getString(1))
+                    ? "EXPIRED"
+                    : r.getString(1))
+        .optional()
+        .orElse("MISSING");
+  }
+
+  private boolean consumeSecretaryGrant(String project, String id, String tool, String digest) {
+    return db.sql(
+                "UPDATE tool_approvals SET status='CONSUMED' WHERE project=? AND id=? AND tool=? AND digest=? AND status='APPROVED' AND expires>?")
+            .params(project, id, tool, digest, clock.millis())
+            .update()
+        == 1;
+  }
+
   /** Request a narrowly scoped, single-use preparation permit through the existing human UI. */
   @Override
   public String requestSecretaryPermission(String project, String task, String kind) {

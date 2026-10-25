@@ -31,6 +31,8 @@ class SecretaryAuthenticationTest {
     SqliteSecretaryDatabase.class,
     SecretaryController.class,
     SecretaryOrchestratorController.class,
+    SecretaryAutonomyController.class,
+    dev.mikoto2000.rei.secretary.SecretaryAutonomy.class,
     dev.mikoto2000.rei.secretary.SecretaryFollowups.class,
     dev.mikoto2000.rei.secretary.SecretaryOrchestrator.class,
     SecretaryIntake.class
@@ -54,6 +56,24 @@ class SecretaryAuthenticationTest {
       try (var context = application().run(args(true))) {
         int port = Integer.parseInt(context.getEnvironment().getProperty("local.server.port"));
         project = context.getBean(ProjectRegistry.class).resolve(root).id();
+        assertEquals(
+            401,
+            send(
+                    client,
+                    port,
+                    "/api/v1/secretary/autonomy/settings?projectId=" + project,
+                    null,
+                    false)
+                .statusCode());
+        assertEquals(
+            200,
+            send(
+                    client,
+                    port,
+                    "/api/v1/secretary/autonomy/settings?projectId=" + project,
+                    null,
+                    true)
+                .statusCode());
         assertEquals(
             401,
             send(

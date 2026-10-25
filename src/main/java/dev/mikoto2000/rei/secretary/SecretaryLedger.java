@@ -278,38 +278,65 @@ public final class SecretaryLedger {
     if (status == null || revision < 0)
       throw new IllegalArgumentException("Status and revision required");
     return database.transaction(
-        db -> {
-          var current = get(db, project, id);
-          if (current.revision() != revision) throw new SecretaryConflictException();
-          if (current.status() == SecretaryTask.Status.DONE
-              || current.status() == SecretaryTask.Status.CANCELLED)
-            throw new IllegalArgumentException("Terminal task cannot be changed");
-          if (current.status() == SecretaryTask.Status.CANDIDATE
-              && status != SecretaryTask.Status.CANDIDATE
-              && status != SecretaryTask.Status.OPEN
-              && status != SecretaryTask.Status.CANCELLED)
-            throw new IllegalArgumentException("Approve candidate before progressing");
-          if (current.status() != SecretaryTask.Status.CANDIDATE
-              && status == SecretaryTask.Status.CANDIDATE)
-            throw new IllegalArgumentException("Confirmed task cannot become a candidate");
-          var updated =
-              new SecretaryTask(
-                  id,
-                  project,
-                  title.strip(),
-                  intent,
-                  status,
-                  due,
-                  priority,
-                  tags,
-                  references,
-                  current.origin(),
-                  revision + 1,
-                  current.created(),
-                  clock.instant());
-          save(db, updated, revision);
-          return updated;
-        });
+        db ->
+            updateWithin(
+                db, project, id, revision, title, intent, status, due, priority, tags, references));
+  }
+
+  /** Same ledger invariants inside an already-owned storage transaction. */
+  SecretaryTask updateWithin(
+      Connection db,
+      String project,
+      String id,
+      long revision,
+      String title,
+      SecretaryTask.Intent intent,
+      SecretaryTask.Status status,
+      LocalDate due,
+      int priority,
+      List<String> tags,
+      List<String> references)
+      throws java.sql.SQLException, com.fasterxml.jackson.core.JsonProcessingException {
+    validate(project, title, intent, priority, tags, references);
+    if (status == null || revision < 0)
+      throw new IllegalArgumentException("Status and revision required");
+    var current = get(db, project, id);
+    if (current.revision() != revision) throw new SecretaryConflictException();
+    if (current.status() == SecretaryTask.Status.DONE
+        || current.status() == SecretaryTask.Status.CANCELLED)
+      throw new IllegalArgumentException("Terminal task cannot be changed");
+    if (current.status() == SecretaryTask.Status.CANDIDATE
+        && status != SecretaryTask.Status.CANDIDATE
+        && status != SecretaryTask.Status.OPEN
+        && status != SecretaryTask.Status.CANCELLED)
+      throw new IllegalArgumentException("Approve candidate before progressing");
+    if (current.status() != SecretaryTask.Status.CANDIDATE
+        && status == SecretaryTask.Status.CANDIDATE)
+      throw new IllegalArgumentException("Confirmed task cannot become a candidate");
+    var updated =
+        new SecretaryTask(
+            id,
+            project,
+            title.strip(),
+            intent,
+            status,
+            due,
+            priority,
+            tags,
+            references,
+            current.origin(),
+            revision + 1,
+            current.created(),
+            clock.instant());
+    save(db, updated, revision);
+    return updated;
+  }
+
+  SecretaryTask getWithin(Connection db, String project, String id)
+      throws java.sql.SQLException, com.fasterxml.jackson.core.JsonProcessingException {
+    required(project, 128);
+    required(id, 128);
+    return get(db, project, id);
   }
 
   private void save(Connection db, SecretaryTask task, Long expected)

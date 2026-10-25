@@ -360,6 +360,44 @@ public final class SecretaryOrchestrator
     return value;
   }
 
+  /** Record an owned execution result without overwriting a later human dismissal or mute. */
+  public void executionResult(
+      String project, String id, long taskRevision, String execution, String state) {
+    required(project);
+    required(id);
+    required(execution);
+    database.transaction(
+        db -> {
+          var old = find(db, project, id);
+          if (old == null || old.taskRevision() != taskRevision) return null;
+          var now = clock.instant();
+          if (Set.of("PROPOSED", "EXECUTION_REQUESTED", "APPROVAL_REQUESTED")
+              .contains(old.status())) {
+            boolean stable = Set.of("COMPLETED", "PREPARED", "PAUSED", "UNCERTAIN").contains(state);
+            var changed =
+                new Suggestion(
+                    old.id(),
+                    project,
+                    old.taskId(),
+                    old.rule(),
+                    "EXECUTION_" + state,
+                    old.priority(),
+                    old.revision() + 1,
+                    old.taskRevision(),
+                    old.created(),
+                    now,
+                    stable
+                        ? Instant.ofEpochMilli(Long.MAX_VALUE)
+                        : now.plusSeconds(settings(project).repeatSeconds()),
+                    old.reason(),
+                    old.approvalId());
+            save(db, changed);
+            history(db, changed, "EXECUTION_RESULT", execution + ":" + state);
+          } else history(db, old, "EXECUTION_RESULT", execution + ":" + state);
+          return null;
+        });
+  }
+
   public List<Suggestion> suggestions(String project, int limit) {
     required(project);
     limit(limit);
@@ -371,6 +409,28 @@ public final class SecretaryOrchestrator
                   "SELECT record FROM secretary_suggestions WHERE project=? ORDER BY priority,updated DESC,id LIMIT ?")) {
             q.setString(1, project);
             q.setInt(2, limit);
+            try (var r = q.executeQuery()) {
+              while (r.next())
+                values.add(SecretaryJson.JSON.readValue(r.getString(1), Suggestion.class));
+            }
+          }
+          return List.copyOf(values);
+        });
+  }
+
+  public List<Suggestion> executionCandidates(String project, int offset, int limit) {
+    required(project);
+    limit(limit);
+    if (offset < 0) throw new IllegalArgumentException("Invalid cursor");
+    return database.read(
+        db -> {
+          var values = new ArrayList<Suggestion>();
+          try (var q =
+              db.prepareStatement(
+                  "SELECT record FROM secretary_suggestions WHERE project=? AND status IN ('PROPOSED','EXECUTION_REQUESTED','APPROVAL_REQUESTED') ORDER BY id LIMIT ? OFFSET ?")) {
+            q.setString(1, project);
+            q.setInt(2, limit);
+            q.setInt(3, offset);
             try (var r = q.executeQuery()) {
               while (r.next())
                 values.add(SecretaryJson.JSON.readValue(r.getString(1), Suggestion.class));

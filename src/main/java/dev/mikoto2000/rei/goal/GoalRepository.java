@@ -1146,4 +1146,43 @@ public class GoalRepository {
             .update()
         == 1;
   }
+
+  /**
+   * Capture only immutable execution authority, using unambiguous JSON rather than display text.
+   */
+  public String secretaryDefinitionFingerprint(Goal goal, long planVersion) {
+    try {
+      var definition =
+          COMPLETION_JSON.writeValueAsBytes(
+              java.util.Arrays.asList(
+                  goal.id(),
+                  goal.projectId(),
+                  goal.projectRoot(),
+                  goal.sessionId(),
+                  goal.objective(),
+                  goal.criteria(),
+                  goal.maxRuns(),
+                  goal.maxLlmCalls(),
+                  goal.maxTotalTokens(),
+                  goal.completion(),
+                  planVersion));
+      return java.util.HexFormat.of()
+          .formatHex(java.security.MessageDigest.getInstance("SHA-256").digest(definition));
+    } catch (java.io.IOException | java.security.NoSuchAlgorithmException error) {
+      throw new IllegalStateException("Goal definition unavailable", error);
+    }
+  }
+
+  /** Connect the durable owner to the already shared model budget. */
+  public dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation secretaryBudget(
+      java.util.function.BooleanSupplier reserve, java.util.function.IntSupplier remaining) {
+    return dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation.of(reserve, remaining);
+  }
+
+  /** Keep the existing Goal reservation and token accounting under revocable admission. */
+  public dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation guardedBudget(
+      dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation parent,
+      java.util.function.BooleanSupplier allowed) {
+    return dev.mikoto2000.rei.llm.OutputLimitRunBudget.LlmCallReservation.guarded(parent, allowed);
+  }
 }

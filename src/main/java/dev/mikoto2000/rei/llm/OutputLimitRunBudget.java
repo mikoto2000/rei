@@ -90,6 +90,58 @@ public class OutputLimitRunBudget {
    * <p>Optional durable parent budget. Reservations precede every model call.
    */
   public interface LlmCallReservation {
+    /** Adapt a durable owner without retaining an executor or changing the shared ceilings. */
+    static LlmCallReservation of(
+        java.util.function.BooleanSupplier reserve, java.util.function.IntSupplier remaining) {
+      return new LlmCallReservation() {
+        @Override
+        public boolean tryReserve() {
+          return reserve.getAsBoolean();
+        }
+
+        @Override
+        public int remaining() {
+          return remaining.getAsInt();
+        }
+      };
+    }
+
+    /** Add a revocable admission gate while preserving token accounting in the original owner. */
+    static LlmCallReservation guarded(
+        LlmCallReservation delegate, java.util.function.BooleanSupplier allowed) {
+      return new LlmCallReservation() {
+        @Override
+        public boolean tryReserve() {
+          return allowed.getAsBoolean() && delegate.tryReserve();
+        }
+
+        @Override
+        public int remaining() {
+          return allowed.getAsBoolean() ? delegate.remaining() : 0;
+        }
+
+        @Override
+        public void recordTotalTokens(Integer count) {
+          delegate.recordTotalTokens(count);
+        }
+
+        @Override
+        public boolean tokenLimitEnabled() {
+          return delegate.tokenLimitEnabled();
+        }
+
+        @Override
+        public boolean tokenExhausted() {
+          return delegate.tokenExhausted();
+        }
+
+        @Override
+        public boolean usageUnknown() {
+          return delegate.usageUnknown();
+        }
+      };
+    }
+
     /** 用途に応じたモデル利用で判断に用いる試行予約の条件を確認する。 */
     boolean tryReserve();
 

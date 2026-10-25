@@ -14,7 +14,24 @@ import org.springframework.stereotype.Component;
  */
 @Component
 @EnableConfigurationProperties(ToolPermissionProperties.class)
-public class ToolPermissionPolicy {
+public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.SecretaryExecutionPolicy {
+  @Override
+  public dev.mikoto2000.rei.secretary.SecretaryExecutionPolicy.Decision decision(String kind) {
+    // Fixed intrinsic host capabilities cannot be relabeled as reads by a caller/tool override.
+    var required =
+        switch (kind) {
+          case "DRAFT", "UPDATE_TASK" -> Set.of(ActionCapability.LOCAL_WRITE);
+          case "GOAL", "ROUTINE" -> Set.of(ActionCapability.EXECUTE, ActionCapability.LOCAL_WRITE);
+          case "RESEARCH", "ORGANIZE", "SUMMARY", "PREPARE", "STATUS" ->
+              Set.of(ActionCapability.READ);
+          default -> Set.copyOf(EnumSet.allOf(ActionCapability.class));
+        };
+    return new dev.mikoto2000.rei.secretary.SecretaryExecutionPolicy.Decision(
+        properties.enabled(),
+        properties.enabled() ? evaluateCapabilities(required).name() : "DENY",
+        authorityFingerprint());
+  }
+
   /** 既定で慎重な権限判断を必要とする、実行や変更を伴うツール名。 */
   private static final Set<String> CONSERVATIVE_TOOLS =
       Set.of(

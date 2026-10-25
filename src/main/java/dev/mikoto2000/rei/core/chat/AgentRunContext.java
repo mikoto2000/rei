@@ -68,6 +68,19 @@ public record AgentRunContext(
         runId, conversationId, projectRoot, projectId, requestSource, mode, true, responseStyle);
   }
 
+  /** Preparation never silently acquires a writable mode. */
+  public AgentRunContext asReadOnly() {
+    return new AgentRunContext(
+        runId,
+        conversationId,
+        projectRoot,
+        projectId,
+        requestSource,
+        Mode.READ_ONLY,
+        voiceInput,
+        responseStyle);
+  }
+
   /** 会話の実行における依頼を受け付けた入力元の選択肢。 */
   public enum RequestSource {
     /** シェル。 */

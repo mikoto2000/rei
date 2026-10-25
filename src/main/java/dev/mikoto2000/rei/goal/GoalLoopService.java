@@ -13,7 +13,7 @@ import org.springframework.stereotype.Service;
  * continuation.
  */
 @Service
-public class GoalLoopService {
+public class GoalLoopService implements dev.mikoto2000.rei.secretary.SecretaryGoalRuntime {
   /**
    * 目標の達成管理で受け渡す最終結果を表す。
    *
@@ -35,6 +35,9 @@ public class GoalLoopService {
 
     /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
     default void validate(GoalRepository.Goal goal) {}
+
+    default void secretaryGuard(
+        String project, String id, java.util.function.BooleanSupplier guard) {}
 
     /** 対象の実行をキャンセルする。 */
     default void cancel(GoalRepository.Goal goal) {}
@@ -594,5 +597,65 @@ public class GoalLoopService {
           goals.recordAttempt(claim, run, state, reason);
           return null;
         });
+  }
+
+  @Override
+  public dev.mikoto2000.rei.secretary.SecretaryGoalRuntime.Goal describe(
+      String project, String id) {
+    var goal = goals.get(project, id);
+    gateway.validate(goal);
+    var observed = progress(project, id);
+    if (java.util.Set.of("COMPLETED", "CANCELLED", "FAILED", "BLOCKED", "PAUSED")
+        .contains(goal.status())) gateway.secretaryGuard(project, id, null);
+    String fingerprint =
+        goals.secretaryDefinitionFingerprint(
+            goal, observed.stageProgress() == null ? 0 : observed.stageProgress().planVersion());
+    return new dev.mikoto2000.rei.secretary.SecretaryGoalRuntime.Goal(
+        id,
+        goal.sessionId(),
+        fingerprint,
+        goal.status(),
+        Math.max(0, goal.maxRuns() - goal.attempts()),
+        Math.max(0, goal.maxLlmCalls() - goal.llmCallsUsed()),
+        goal.llmCallsUsed(),
+        goal.attempts(),
+        goal.currentRunId(),
+        goal.status().equals("COMPLETED")
+            && observed.verification().satisfied()
+            && observed.conditions().stream().allMatch(c -> !c.required() || c.satisfied()),
+        goal.reason());
+  }
+
+  @Override
+  public synchronized void start(String project, String id, String fingerprint) {
+    if (!describe(project, id).fingerprint().equals(fingerprint))
+      throw new IllegalStateException("Goal definition changed");
+    run(project, id);
+  }
+
+  @Override
+  public synchronized void stop(String project, String id, boolean cancel) {
+    var goal = goals.get(project, id);
+    gateway.validate(goal);
+    if (cancel && !java.util.Set.of("COMPLETED", "CANCELLED").contains(goal.status()))
+      cancel(project, id);
+    else gateway.cancel(goal);
+  }
+
+  @Override
+  public synchronized void start(
+      String project, String id, String fingerprint, java.util.function.BooleanSupplier admission) {
+    if (!admission.getAsBoolean()) throw new IllegalStateException("Secretary admission revoked");
+    if (!describe(project, id).fingerprint().equals(fingerprint))
+      throw new IllegalStateException("Goal definition changed");
+    gateway.secretaryGuard(project, id, admission);
+    run(project, id);
+  }
+
+  @Override
+  public synchronized String stopRun(String project, String id, boolean cancel) {
+    var before = goals.get(project, id);
+    stop(project, id, cancel);
+    return before.currentRunId();
   }
 }

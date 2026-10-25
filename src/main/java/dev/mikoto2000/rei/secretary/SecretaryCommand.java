@@ -84,6 +84,55 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
     return service;
   }
 
+  private ObjectProvider<SecretaryAutonomy> autonomies;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setAutonomies(ObjectProvider<SecretaryAutonomy> autonomies) {
+    this.autonomies = autonomies;
+  }
+
+  private SecretaryAutonomy autonomy() {
+    var service = autonomies == null ? null : autonomies.getIfAvailable();
+    if (service == null) throw new IllegalStateException("Secretary autonomy unavailable");
+    return service;
+  }
+
+  @Option(names = "--session")
+  String session;
+
+  @Option(names = "--autonomy-enabled")
+  boolean autonomyEnabled;
+
+  @Option(names = "--max-level", defaultValue = "1")
+  int maxLevel;
+
+  @Option(names = "--auto-prepare")
+  boolean autoPrepare;
+
+  @Option(names = "--auto-kind", defaultValue = "PREPARE")
+  SecretaryAutonomy.Kind autoKind;
+
+  @Option(names = "--kind", defaultValue = "PREPARE")
+  SecretaryAutonomy.Kind kind;
+
+  @Option(names = "--max-concurrent", defaultValue = "1")
+  int maxConcurrent;
+
+  @Option(names = "--max-seconds", defaultValue = "300")
+  int maxSeconds;
+
+  @Option(names = "--max-llm-calls", defaultValue = "8")
+  int maxLlmCalls;
+
+  @Option(names = "--max-daily-calls", defaultValue = "32")
+  int maxDailyCalls;
+
+  @Option(names = "--max-retries", defaultValue = "1")
+  int maxRetries;
+
+  @Option(names = "--goal")
+  String goal;
+
   @Spec picocli.CommandLine.Model.CommandSpec spec;
 
   @Parameters(index = "0", defaultValue = "list")
@@ -144,6 +193,53 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
       if (ledger == null) throw new IllegalStateException("Enable rei.secretary.enabled first");
       Object result =
           switch (action) {
+            case "autonomy-settings" -> autonomy().settings(project);
+            case "autonomy-status" -> autonomy().status(project);
+            case "autonomy-check" -> {
+              autonomy().check();
+              yield autonomy().status(project);
+            }
+            case "autonomy-configure" ->
+                autonomy()
+                    .configure(
+                        new SecretaryAutonomy.Settings(
+                            project,
+                            autonomyEnabled,
+                            session,
+                            maxLevel,
+                            autoPrepare,
+                            autoKind,
+                            maxConcurrent,
+                            maxSeconds,
+                            maxLlmCalls,
+                            maxDailyCalls,
+                            maxRetries));
+            case "work-list" -> autonomy().list(project, limit);
+            case "work-show" -> autonomy().get(project, id);
+            case "work-history" -> autonomy().history(project, id, limit);
+            case "work-add" -> {
+              requireExecutionRevision();
+              yield autonomy()
+                  .create(
+                      new SecretaryAutonomy.Request(
+                          project,
+                          id,
+                          revision,
+                          key,
+                          kind,
+                          kind == SecretaryAutonomy.Kind.UPDATE_TASK ? status : null,
+                          goal));
+            }
+            case "work-start", "work-cancel", "work-suspend", "work-resume", "work-verify" -> {
+              requireExecutionRevision();
+              yield switch (action) {
+                case "work-start" -> autonomy().start(project, id, revision);
+                case "work-cancel" -> autonomy().cancel(project, id, revision);
+                case "work-suspend" -> autonomy().suspend(project, id, revision);
+                case "work-resume" -> autonomy().resume(project, id, revision);
+                default -> autonomy().verify(project, id, revision);
+              };
+            }
             case "orchestrator-settings" -> orchestrator().settings(project);
             case "orchestrator-configure" ->
                 orchestrator()
@@ -210,5 +306,10 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
       spec.commandLine().getErr().println("[error] " + error.getClass().getSimpleName());
       return 2;
     }
+  }
+
+  private void requireExecutionRevision() {
+    if (!spec.commandLine().getParseResult().hasMatchedOption("--revision"))
+      throw new IllegalArgumentException("Revision required");
   }
 }

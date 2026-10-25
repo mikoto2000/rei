@@ -38,7 +38,7 @@ import org.springframework.jdbc.core.simple.JdbcClient;
  *
  * <p>A bounded immutable copy plus durable receipt, with no client-selected filesystem lookup.
  */
-public final class ArtifactStore {
+public final class ArtifactStore implements dev.mikoto2000.rei.secretary.SecretaryDrafts {
   /** データベースへのアクセス。 */
   private final JdbcClient db;
 
@@ -551,6 +551,42 @@ public final class ArtifactStore {
       return HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
     } catch (NoSuchAlgorithmException impossible) {
       throw new IllegalStateException(impossible);
+    }
+  }
+
+  @Override
+  public Draft save(String project, String session, String job, String text) {
+    var item =
+        publishSession(
+            project(project),
+            session,
+            "secretary:" + job,
+            "text/plain",
+            "draft.txt",
+            text.getBytes(StandardCharsets.UTF_8));
+    return new Draft(item.artifactId(), item.sha256());
+  }
+
+  @Override
+  public Draft find(String project, String session, String job) {
+    var owner = project(project);
+    var stored =
+        db.sql(
+                "SELECT * FROM rei_artifacts WHERE project=? AND root=? AND session=? AND run='' AND source_key=?")
+            .params(project, owner.root().toString(), session, "secretary:" + job)
+            .query(ROW)
+            .optional();
+    return stored
+        .map(value -> new Draft(value.item().artifactId(), value.item().sha256()))
+        .orElse(null);
+  }
+
+  @Override
+  public boolean verify(String project, String session, Draft draft) {
+    try {
+      return hash(content(project, session, draft.id())).equals(draft.sha256());
+    } catch (ArtifactException unavailable) {
+      return false;
     }
   }
 }
