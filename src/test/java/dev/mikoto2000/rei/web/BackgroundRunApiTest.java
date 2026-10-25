@@ -203,6 +203,10 @@ class BackgroundRunApiTest {
                 chat.countDown();
                 bus.publish(events.runCompleted(c.runId(), 1).withOwnership(c));
               });
+      router.setCancellation(cancellation);
+      var cleaned = new java.util.concurrent.ConcurrentHashMap<String, CompletableFuture<Void>>();
+      router.onCleanup(
+          c -> cleaned.computeIfAbsent(c.runId(), id -> new CompletableFuture<>()).complete(null));
       try (var runs = new RunService(registry, bus, events, cancellation, router::cancelQueued)) {
         var otherCompleted = new CompletableFuture<String>();
         var completion =
@@ -232,12 +236,21 @@ class BackgroundRunApiTest {
           router.submit(context, "chat", work -> runs.execute(context, work));
           var other = submit.image(two.id(), "other", null);
           assertThat(otherCompleted.get(1, TimeUnit.SECONDS)).isEqualTo(other.runId());
+          cleaned
+              .computeIfAbsent(other.runId(), id -> new CompletableFuture<>())
+              .get(5, TimeUnit.SECONDS);
           assertThat(runs.get(other.runId()).status()).isEqualTo(RunStatus.COMPLETED);
           assertThat(chat.getCount()).isEqualTo(1);
           assertThat(runs.get(queued.runId()).status()).isEqualTo(RunStatus.QUEUED);
           runs.cancel(slow.runId());
           assertThat(interrupted.await(5, TimeUnit.SECONDS)).isTrue();
           assertThat(chat.await(5, TimeUnit.SECONDS)).isTrue();
+          cleaned
+              .computeIfAbsent(slow.runId(), id -> new CompletableFuture<>())
+              .get(5, TimeUnit.SECONDS);
+          cleaned
+              .computeIfAbsent(queued.runId(), id -> new CompletableFuture<>())
+              .get(5, TimeUnit.SECONDS);
           assertThat(runs.get(slow.runId()).status()).isEqualTo(RunStatus.CANCELLED);
           assertThat(runs.get(queued.runId()).status()).isEqualTo(RunStatus.COMPLETED);
         } finally {

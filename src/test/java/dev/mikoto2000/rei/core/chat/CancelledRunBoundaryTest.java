@@ -130,18 +130,29 @@ class CancelledRunBoundaryTest {
         ChatClient.builder(model(calls, Flux.empty()))
             .defaultAdvisors(RunScopedAdvisor.wrap(List.of(advisor)))
             .build();
-    var cancellation = new CommandCancellationService();
+    var cleanupEntered = new CountDownLatch(1);
+    var cancellation =
+        new CommandCancellationService() {
+          @Override
+          public void awaitChildren(String runId) {
+            cleanupEntered.countDown();
+            super.awaitChildren(runId);
+          }
+        };
     var service = service(client, cancellation, events);
     try (var executor = Executors.newSingleThreadExecutor()) {
       var run = executor.submit(() -> service.execute("work"));
       try {
         assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
         cancellation.cancel();
-        assertThat(run.get(5, TimeUnit.SECONDS).status())
-            .isEqualTo(ChatExecutionResult.Status.CANCELLED);
+        assertThat(cleanupEntered.await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(events).noneMatch(e -> e.type() == AgentEventType.AGENT_RUN_FAILED);
+        assertThat(run.isDone()).isFalse();
       } finally {
         release.countDown();
       }
+      assertThat(run.get(5, TimeUnit.SECONDS).status())
+          .isEqualTo(ChatExecutionResult.Status.CANCELLED);
       assertThat(returned.await(5, TimeUnit.SECONDS)).isTrue();
     }
     assertThat(advisorFinished.await(5, TimeUnit.SECONDS)).isTrue();
@@ -239,11 +250,12 @@ class CancelledRunBoundaryTest {
       try {
         assertThat(entered.await(5, TimeUnit.SECONDS)).isTrue();
         cancellation.cancel();
-        assertThat(run.get(5, TimeUnit.SECONDS).status())
-            .isEqualTo(ChatExecutionResult.Status.CANCELLED);
+        assertThat(run.isDone()).isFalse();
       } finally {
         release.countDown();
       }
+      assertThat(run.get(5, TimeUnit.SECONDS).status())
+          .isEqualTo(ChatExecutionResult.Status.CANCELLED);
       assertThat(returned.await(5, TimeUnit.SECONDS)).isTrue();
     }
     assertThat(calls).hasValue(1);

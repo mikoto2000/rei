@@ -266,7 +266,9 @@ public final class SlackRuntime {
     reply(
         m.key() + ":control",
         m,
-        result.accepted() ? "キャンセルを受け付けました。停止を確認しています。" : "キャンセル対象は終了済みです。");
+        result.accepted()
+            ? "キャンセルを受け付けました。停止を確認しています。"
+            : result.run().status().isTerminal() ? "キャンセル対象は終了済みです。" : "既に停止要求済みです。実行の終了を確認しています。");
   }
 
   /** 通知に応じて状態や表示を更新するため、イベントを受け付ける。 */

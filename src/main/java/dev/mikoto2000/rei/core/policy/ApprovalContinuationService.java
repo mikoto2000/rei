@@ -297,6 +297,24 @@ public class ApprovalContinuationService implements RunContinuation {
     if (external != null) external.terminal(owner);
   }
 
+  /** 終端イベント公開前でも、実行結果から承認継続の結果を確定する。 */
+  @Override
+  public void terminal(AgentRunContext owner, ChatExecutionResult result) {
+    if (store.active().stream().anyMatch(entry -> entry.runId().equals(owner.runId()))) {
+      store.active().stream()
+          .filter(entry -> entry.runId().equals(owner.runId()))
+          .forEach(
+              entry -> approvals.retireContinuationGrant(owner.projectId(), entry.approvalId()));
+      store.finishRun(
+          owner.runId(),
+          result.success()
+              ? "COMPLETED"
+              : result.status() == ChatExecutionResult.Status.CANCELLED ? "CANCELLED" : "UNKNOWN");
+    }
+    var external = slack.getIfAvailable();
+    if (external != null) external.terminal(owner);
+  }
+
   /** 要求を後続の処理へ引き渡すため、案内を受け付ける。 */
   @Override
   public void acceptGuidance(AgentRunContext owner, List<Message> guidance) {

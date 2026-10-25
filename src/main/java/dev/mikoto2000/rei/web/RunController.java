@@ -70,7 +70,9 @@ public class RunController {
     if (!request.projectId().equals(run.context().projectId())
         || !request.sessionId().equals(run.context().conversationId()))
       throw new dev.mikoto2000.rei.application.run.RunNotFoundException();
-    if (run.status() != dev.mikoto2000.rei.application.run.RunStatus.RUNNING
+    var stop = runs.cancellationDiagnostic(runId);
+    if (stop != null && stop.requestedAt() != null
+        || run.status() != dev.mikoto2000.rei.application.run.RunStatus.RUNNING
         || !inputs.offerIntervention(
             request.projectId(), request.sessionId(), runId, request.message()))
       throw new org.springframework.web.server.ResponseStatusException(
@@ -81,7 +83,7 @@ public class RunController {
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   @GetMapping("/api/v1/runs/{runId}")
   public RunResponse get(@PathVariable String runId) {
-    return RunResponse.from(runs.get(runId));
+    return RunResponse.from(runs.get(runId), runs.cancellationDiagnostic(runId));
   }
 
   /** 対象の実行をキャンセルする。 */
@@ -89,6 +91,6 @@ public class RunController {
   public org.springframework.http.ResponseEntity<RunResponse> cancel(@PathVariable String runId) {
     var result = runs.cancel(runId);
     return org.springframework.http.ResponseEntity.status(result.accepted() ? 202 : 200)
-        .body(RunResponse.from(result.run()));
+        .body(RunResponse.from(result.run(), runs.cancellationDiagnostic(runId)));
   }
 }

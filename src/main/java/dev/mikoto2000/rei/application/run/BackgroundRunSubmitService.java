@@ -177,7 +177,7 @@ public final class BackgroundRunSubmitService {
       dev.mikoto2000.rei.core.execution.ExecutionType type,
       String source,
       String result) {
-    if (cancellation.isCancellationRequested()
+    if (cancellation.diagnostic(context.runId()).requestedAt() != null
         || Thread.currentThread().isInterrupted()
         || registry.get(context.runId()).status() == RunStatus.CANCELLED)
       throw new java.util.concurrent.CancellationException();

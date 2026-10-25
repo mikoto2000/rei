@@ -84,12 +84,15 @@ class SecretaryPrivateDraftTest {
                 "exact")
             .success());
     verifyNoInteractions(model);
-    cancellation.cancelRun("private");
+    // A new request has a new Run identity; a late stop must not target a finished Run.
+    var cancelledOwner =
+        new AgentRunContext("private-cancelled", "s", Path.of("."), "p").asReadOnly();
+    assertTrue(cancellation.cancelRun(cancelledOwner.runId()));
     assertEquals(
         ChatExecutionResult.Status.CANCELLED,
         service
             .executePrivateSecretaryDraft(
-                owner,
+                cancelledOwner,
                 "private",
                 OutputLimitRunBudget.LlmCallReservation.of(
                     () -> {
