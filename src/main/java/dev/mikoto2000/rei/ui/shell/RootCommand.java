@@ -34,6 +34,7 @@ import picocli.CommandLine.Command;
     name = "",
     description = "AI シェル",
     subcommands = {
+      dev.mikoto2000.rei.secretary.SecretaryCommand.class,
       dev.mikoto2000.rei.dot.DotCommand.class,
       dev.mikoto2000.rei.chatgpt.ChatGptCommand.class,
       dev.mikoto2000.rei.timing.TimingCommand.class,

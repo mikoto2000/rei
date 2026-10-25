@@ -443,7 +443,11 @@ class StorageEventMigrationTest {
               "dot_resume_intents",
               "dot_audit",
               "review_participants",
-              "review_jobs")) sql.execute("DROP TABLE " + table);
+              "review_jobs",
+              "secretary_tasks",
+              "secretary_sources",
+              "secretary_history",
+              "secretary_inputs")) sql.execute("DROP TABLE " + table);
       sql.executeUpdate("DELETE FROM storage_migrations WHERE version>3");
       sql.execute("PRAGMA user_version=3");
     }

@@ -314,7 +314,11 @@ class StorageReferenceProtectionTest {
               "dot_resume_intents",
               "dot_audit",
               "review_participants",
-              "review_jobs")) sql.execute("DROP TABLE IF EXISTS " + table);
+              "review_jobs",
+              "secretary_tasks",
+              "secretary_sources",
+              "secretary_history",
+              "secretary_inputs")) sql.execute("DROP TABLE IF EXISTS " + table);
       sql.execute("DELETE FROM storage_migrations WHERE version>2");
       sql.execute("PRAGMA user_version=2");
     }
