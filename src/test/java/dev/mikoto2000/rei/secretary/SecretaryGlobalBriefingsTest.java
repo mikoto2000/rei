@@ -32,6 +32,14 @@ class SecretaryGlobalBriefingsTest {
   }
 
   Fixture fixture(List<String> projects) throws Exception {
+    return fixture(
+        new GlobalBriefingProperties(true, "08:00", "19:00", "Asia/Tokyo", projects), null);
+  }
+
+  Fixture fixture(
+      GlobalBriefingProperties properties,
+      dev.mikoto2000.rei.application.project.ProjectQueryService projectService)
+      throws Exception {
     try (var migration = new StorageMigrationCoordinator(root)) {
       migration.prepare();
     }
@@ -42,13 +50,135 @@ class SecretaryGlobalBriefingsTest {
     beans.addBean("reports", followups);
     var global =
         new SecretaryGlobalBriefings(
-            db,
-            beans.getBeanProvider(SecretaryReports.class),
-            clock,
-            new GlobalBriefingProperties(true, "08:00", "19:00", "Asia/Tokyo", projects));
+            db, beans.getBeanProvider(SecretaryReports.class), clock, properties);
+    if (projectService != null) {
+      beans.addBean("projects", projectService);
+      global.setProjectQueries(beans.getBeanProvider(SecretaryProjects.class));
+    }
     beans.addBean("global", global);
     followups.setGlobalBriefings(beans.getBeanProvider(SecretaryGlobalBriefings.class));
     return new Fixture(followups, global, ledger);
+  }
+
+  dev.mikoto2000.rei.core.project.ProjectRegistry registry() {
+    return new dev.mikoto2000.rei.core.project.ProjectRegistry(root.resolve("projects.json"));
+  }
+
+  String register(dev.mikoto2000.rei.core.project.ProjectRegistry registry, String name)
+      throws Exception {
+    return registry.resolve(java.nio.file.Files.createDirectories(root.resolve(name))).id();
+  }
+
+  dev.mikoto2000.rei.application.project.ProjectQueryService service(
+      dev.mikoto2000.rei.core.project.ProjectRegistry registry) {
+    return new dev.mikoto2000.rei.application.project.ProjectQueryService(registry);
+  }
+
+  @Test
+  void defaultGroupingIncludesAllRegisteredProjectsAndDiscoversAdditionsAtTheNextMeeting()
+      throws Exception {
+    var registry = registry();
+    String p = register(registry, "p"), q = register(registry, "q");
+    var properties = new GlobalBriefingProperties(true, "08:30", "18:30", "Asia/Tokyo", List.of());
+    clock.now = Instant.parse("2026-10-25T23:30:00Z");
+    try (var f = fixture(properties, service(registry))) {
+      assertTrue(f.global().settings().allProjects());
+      f.followups().poll();
+      assertEquals(1, received.size());
+      assertEquals(
+          java.util.Set.of(p, q),
+          java.util.Set.copyOf(f.global().show(received.getFirst().reportId()).projects()));
+      String r = register(registry, "new-project");
+      f.followups().poll();
+      assertEquals(1, received.size());
+      clock.now = Instant.parse("2026-10-26T09:30:00Z");
+      f.followups().poll();
+      assertEquals(2, received.size());
+      assertEquals(
+          java.util.Set.of(p, q, r),
+          java.util.Set.copyOf(f.global().show(received.getLast().reportId()).projects()));
+    }
+    try (var f = fixture(properties, service(registry))) {
+      f.followups().poll();
+      assertEquals(2, received.size());
+    }
+  }
+
+  @Test
+  void independentProjectsReceiveTheirOwnReportsAndNeverAppearInTheCombinedReport()
+      throws Exception {
+    var registry = registry();
+    String p = register(registry, "p"), q = register(registry, "q");
+    var properties =
+        new GlobalBriefingProperties(true, "08:30", "18:30", "Asia/Tokyo", List.of(), List.of(p));
+    clock.now = Instant.parse("2026-10-26T10:00:00Z");
+    try (var f = fixture(properties, service(registry))) {
+      f.followups().poll();
+      f.followups().poll();
+      assertEquals(4, received.size());
+      var history = f.global().history(100);
+      assertEquals(4, history.size());
+      assertEquals(2, history.stream().filter(g -> p.equals(g.independentProject())).count());
+      for (var generation : history) {
+        String expected = generation.independentProject() == null ? q : p;
+        assertEquals(List.of(expected), generation.projects());
+        assertEquals(java.util.Set.of(expected), generation.report().projects().keySet());
+      }
+      assertEquals(java.util.Set.of(q), f.global().report(null, false).projects().keySet());
+      assertTrue(received.stream().allMatch(SecretaryNotifications.Notice::global));
+      assertTrue(f.followups().briefingHistory(p, 100).isEmpty());
+    }
+    try (var f = fixture(properties, service(registry))) {
+      f.followups().poll();
+      assertEquals(4, received.size());
+    }
+  }
+
+  @Test
+  void anEmptyCombinedGroupIsNotNotifiedWhenEveryProjectIsIndependent() throws Exception {
+    var registry = registry();
+    String p = register(registry, "p");
+    clock.now = Instant.parse("2026-10-26T10:00:00Z");
+    try (var f =
+        fixture(
+            new GlobalBriefingProperties(
+                true, "08:30", "18:30", "Asia/Tokyo", List.of(), List.of(p)),
+            service(registry))) {
+      f.followups().poll();
+      assertEquals(2, received.size());
+      assertTrue(f.global().history(100).stream().allMatch(g -> p.equals(g.independentProject())));
+    }
+  }
+
+  @Test
+  void changingToIndependentSuppressesAnOldHeldCombinedReport() throws Exception {
+    var registry = registry();
+    String p = register(registry, "p"), q = register(registry, "q");
+    try (var f =
+        fixture(
+            new GlobalBriefingProperties(true, "08:30", "18:30", "Asia/Tokyo", List.of()),
+            service(registry))) {
+      f.followups()
+          .setLifeContext(new LifeContext(new SqliteLifeContextStore(root.toString()), clock));
+      f.followups().poll();
+      assertTrue(received.isEmpty());
+    }
+    clock.now = Instant.parse("2026-10-26T09:15:00Z");
+    try (var f =
+        fixture(
+            new GlobalBriefingProperties(
+                true, "08:30", "18:30", "Asia/Tokyo", List.of(), List.of(p)),
+            service(registry))) {
+      f.followups().poll();
+      assertEquals(1, received.size());
+      assertEquals(p, f.global().show(received.getFirst().reportId()).independentProject());
+      assertEquals(
+          1,
+          f.followups().history(SecretaryNotifications.GLOBAL_SCOPE, 100).stream()
+              .filter(n -> n.status().equals("SUPPRESSED"))
+              .count());
+      assertEquals(java.util.Set.of(q), f.global().report(null, false).projects().keySet());
+    }
   }
 
   @Test
@@ -87,6 +217,128 @@ class SecretaryGlobalBriefingsTest {
       f.followups().poll();
       assertEquals(2, received.size());
       assertEquals(2, f.global().history(100).size());
+    }
+  }
+
+  @Test
+  void splitMeetingsShareOnePreparationBudgetAcrossAllGroups() throws Exception {
+    var registry = registry();
+    String p = register(registry, "p"), q = register(registry, "q");
+    clock.now = Instant.parse("2026-10-26T10:00:00Z");
+    try (var f =
+        fixture(
+            new GlobalBriefingProperties(true, "", "18:30", "Asia/Tokyo", List.of(), List.of(p)),
+            service(registry))) {
+      var life = new LifeContext(new SqliteLifeContextStore(root.toString()), clock);
+      life.configure(
+          new LifeContext.Settings(
+              0,
+              "Asia/Tokyo",
+              java.util.Set.of(),
+              "09:00",
+              "18:00",
+              List.of(),
+              List.of(),
+              List.of(
+                  new LifeContext.Window(
+                      java.util.Set.of(java.time.DayOfWeek.MONDAY), "19:00", "21:00")),
+              List.of(),
+              null,
+              java.util.Set.of()));
+      f.followups().setLifeContext(life);
+      f.global().setLifeContext(life);
+      for (String project : List.of(p, q))
+        for (int i = 0; i < 2; i++)
+          f.ledger()
+              .create(
+                  project,
+                  "task-" + i,
+                  "prepare",
+                  SecretaryTask.Intent.TODO,
+                  null,
+                  2,
+                  List.of("prep-minutes:30"),
+                  List.of());
+      f.followups().poll();
+      assertEquals(2, received.size());
+      long choices =
+          f.global().history(100).stream()
+              .flatMap(g -> g.report().projects().values().stream())
+              .flatMap(r -> r.sections().get("next").stream())
+              .count();
+      assertEquals(2, choices);
+    }
+  }
+
+  @Test
+  void anEmptyRegistryDoesNotInventProjectsOrSendAnEmptyAutomaticMeeting() throws Exception {
+    clock.now = Instant.parse("2026-10-26T10:00:00Z");
+    try (var f =
+        fixture(
+            new GlobalBriefingProperties(true, "08:30", "18:30", "Asia/Tokyo", List.of()),
+            service(registry()))) {
+      f.followups().poll();
+      assertTrue(received.isEmpty());
+      assertTrue(f.global().report(null, false).partial());
+      assertTrue(f.global().generate(null, false, "empty-manual").projects().isEmpty());
+    }
+  }
+
+  @Test
+  void defaultAggregationDoesNotTruncateTheRegistryAtTheLegacyExplicitListLimit() throws Exception {
+    var registry = registry();
+    for (int i = 0; i < 18; i++) register(registry, "project-" + i);
+    try (var f =
+        fixture(
+            new GlobalBriefingProperties(false, "", "", "Asia/Tokyo", List.of()),
+            service(registry))) {
+      assertEquals(18, f.global().settings().projects().size());
+      assertEquals(18, f.global().report(null, false).projects().size());
+    }
+  }
+
+  @Test
+  void failureInAnIndependentProjectDoesNotMarkTheCombinedReportUnavailable() throws Exception {
+    clock.now = Instant.parse("2026-10-26T10:00:00Z");
+    try (var f = fixture(List.of("p", "q"))) {
+      var beans = new StaticListableBeanFactory();
+      beans.addBean(
+          "reports",
+          new SecretaryReports() {
+            public SecretaryFollowups.Settings settings(String project) {
+              return f.followups().settings(project);
+            }
+
+            public SecretaryFollowups.Report report(
+                String project, java.time.LocalDate date, boolean review) {
+              if (project.equals("q")) throw new IllegalStateException("unavailable");
+              return f.followups().report(project, date, review);
+            }
+          });
+      var global =
+          new SecretaryGlobalBriefings(
+              new SqliteSecretaryDatabase(root.toString()),
+              beans.getBeanProvider(SecretaryReports.class),
+              clock,
+              new GlobalBriefingProperties(
+                  true, "08:30", "", "Asia/Tokyo", List.of("p", "q"), List.of("q")));
+      var notices = new ArrayList<SecretaryNotifications.Notice>();
+      global.schedule(notices::add);
+      assertEquals(2, notices.size());
+      var combined =
+          global.history(100).stream()
+              .filter(g -> g.independentProject() == null)
+              .findFirst()
+              .orElseThrow();
+      assertFalse(combined.report().partial());
+      assertEquals(java.util.Set.of("p"), combined.report().projects().keySet());
+      var independent =
+          global.history(100).stream()
+              .filter(g -> "q".equals(g.independentProject()))
+              .findFirst()
+              .orElseThrow();
+      assertTrue(independent.report().partial());
+      assertEquals(List.of("q"), independent.report().unavailable());
     }
   }
 

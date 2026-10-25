@@ -32,6 +32,7 @@ class WebApiIntegrationTest {
   @Configuration(proxyBeanMethods = false)
   @Import({
     WebApiConfiguration.class,
+    dev.mikoto2000.rei.application.project.ProjectQueryService.class,
     SecurityConfig.class,
     ChatController.class,
     RunController.class,
@@ -126,8 +127,20 @@ class WebApiIntegrationTest {
                   "--logging.config=classpath:web-test-logback.xml");
           var client = HttpClient.newHttpClient()) {
         int port = Integer.parseInt(context.getEnvironment().getProperty("local.server.port"));
+        assertThat(
+                context.getBeansOfType(
+                    dev.mikoto2000.rei.application.project.ProjectQueryService.class))
+            .hasSize(1);
+        assertThat(context.getBean(dev.mikoto2000.rei.secretary.SecretaryProjects.class))
+            .isSameAs(
+                context.getBean(dev.mikoto2000.rei.application.project.ProjectQueryService.class));
         if (restart == 0) {
           projectId = context.getBean(ProjectRegistry.class).resolve(directory).id();
+          assertThat(
+                  context
+                      .getBean(dev.mikoto2000.rei.secretary.SecretaryProjects.class)
+                      .registeredProjectIds())
+              .contains(projectId);
           var response =
               send(
                   client,

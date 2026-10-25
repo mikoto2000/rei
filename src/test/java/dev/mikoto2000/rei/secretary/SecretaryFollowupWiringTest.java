@@ -28,6 +28,60 @@ class SecretaryFollowupWiringTest {
   @TempDir Path root;
 
   @Test
+  void springResolvesTheRegisteredProjectsAndIndependentConfigurationWithoutAnAllowlist()
+      throws Exception {
+    var registry =
+        new dev.mikoto2000.rei.core.project.ProjectRegistry(root.resolve("projects.json"));
+    var p = registry.resolve(java.nio.file.Files.createDirectories(root.resolve("p"))).id();
+    var q = registry.resolve(java.nio.file.Files.createDirectories(root.resolve("q"))).id();
+    var received = new java.util.ArrayList<SecretaryNotifications.Notice>();
+    try (var context = new AnnotationConfigApplicationContext()) {
+      context
+          .getEnvironment()
+          .getPropertySources()
+          .addFirst(
+              new MapPropertySource(
+                  "test",
+                  Map.of(
+                      "rei.data-dir",
+                      root.toString(),
+                      "rei.secretary.enabled",
+                      true,
+                      "rei.secretary.followups-enabled",
+                      true,
+                      "rei.secretary.briefings.enabled",
+                      true,
+                      "rei.secretary.briefings.morning-time",
+                      "08:30",
+                      "rei.secretary.briefings.zone",
+                      "Asia/Tokyo",
+                      "rei.secretary.briefings.independent-projects[0]",
+                      q)));
+      context.registerBean(
+          Clock.class,
+          () ->
+              Clock.fixed(
+                  java.time.Instant.parse("2026-10-25T23:30:00Z"),
+                  java.time.ZoneId.of("Asia/Tokyo")));
+      context.registerBean(SecretaryNotifications.class, () -> received::add);
+      context.register(
+          StorageMigrationConfiguration.class,
+          SqliteSecretaryDatabase.class,
+          SecretaryLedger.class,
+          SecretaryFollowups.class,
+          SecretaryGlobalBriefings.class,
+          dev.mikoto2000.rei.application.project.ProjectQueryService.class);
+      context.refresh();
+      var global = context.getBean(SecretaryGlobalBriefings.class);
+      assertEquals(java.util.Set.of(p, q), java.util.Set.copyOf(global.settings().projects()));
+      assertEquals(List.of(q), global.settings().independentProjects());
+      context.getBean(SecretaryFollowups.class).poll();
+      assertEquals(2, received.size());
+      assertEquals(java.util.Set.of(p), global.report(null, false).projects().keySet());
+    }
+  }
+
+  @Test
   void springResolvesExistingAttentionIngressAndPublishesProjectOnlyNotifications() {
     try (var context = new AnnotationConfigApplicationContext()) {
       context
