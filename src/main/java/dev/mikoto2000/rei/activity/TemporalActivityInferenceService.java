@@ -90,6 +90,13 @@ public final class TemporalActivityInferenceService {
   private final WorkActivityInferenceStore store;
 
   /** モデル。 */
+  private volatile dev.mikoto2000.rei.life.LifePolicy life;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setLifeContext(dev.mikoto2000.rei.life.LifePolicy value) {
+    life = value;
+  }
+
   private final Model model;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */
@@ -162,6 +169,7 @@ public final class TemporalActivityInferenceService {
   public synchronized void tick() {
     if (!p.isEnabled() || !p.getTemporal().isEnabled() || paused.getAsBoolean()) return;
     var now = clock.instant();
+    var lifeLease = life == null ? null : life.begin();
     var settings = p.getTemporal();
     if (lastAttempt != null
         && !now.isBefore(lastAttempt)
@@ -224,6 +232,7 @@ public final class TemporalActivityInferenceService {
           && candidate.confidence() > 0
           && input.groups().stream().anyMatch(g -> !g.facts().content().isBlank())) {
         try {
+          if (paused.getAsBoolean() || life != null && !life.valid(lifeLease)) return;
           String structured = candidateEvidence.structuredInput(settings.getMaxInputChars());
           inputChars += structured.length();
           if (tokens >= settings.getMaxTotalTokens()) throw new BudgetFailure();
@@ -285,6 +294,7 @@ public final class TemporalActivityInferenceService {
       candidate = result;
       if (!retry && !savePending) attempts = settings.getMaxRetries() + 1;
       savePending = true;
+      if (paused.getAsBoolean() || life != null && !life.valid(lifeLease)) return;
       store.save(result);
       savePending = false;
       fingerprint = input.fingerprint();

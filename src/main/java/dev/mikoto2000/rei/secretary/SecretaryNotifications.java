@@ -13,7 +13,16 @@ public interface SecretaryNotifications {
       String message,
       int priority,
       String destination,
-      Instant created) {}
+      Instant created) {
+    public dev.mikoto2000.rei.life.LifeContext.NotificationClass category() {
+      return switch (kind) {
+        case "EMERGENCY" -> dev.mikoto2000.rei.life.LifeContext.NotificationClass.EMERGENCY;
+        case "BRIEFING", "REVIEW" -> dev.mikoto2000.rei.life.LifeContext.NotificationClass.BRIEFING;
+        case "SUGGESTION" -> dev.mikoto2000.rei.life.LifeContext.NotificationClass.LOW;
+        default -> dev.mikoto2000.rei.life.LifeContext.NotificationClass.NORMAL;
+      };
+    }
+  }
 
   void deliver(Notice notice);
 }

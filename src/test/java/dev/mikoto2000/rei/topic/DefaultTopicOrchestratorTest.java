@@ -23,6 +23,106 @@ import org.junit.jupiter.api.Test;
 /** 既定話題Orchestratorの結果と状態の契約を検証するテスト。 */
 class DefaultTopicOrchestratorTest {
 
+  @Test
+  void guardedRefreshStopsBetweenProvidersWhenWorkBegins() {
+    var p = enabledProperties();
+    var allowed = new java.util.concurrent.atomic.AtomicBoolean(true);
+    var later = new java.util.concurrent.atomic.AtomicInteger();
+    TopicCandidateGenerator first =
+        context -> {
+          allowed.set(false);
+          return List.of(candidate());
+        };
+    TopicCandidateGenerator second =
+        context -> {
+          later.incrementAndGet();
+          return List.of(candidate());
+        };
+    var service =
+        new TopicGeneratorService(
+            List.of(first, second),
+            new DeterministicTopicRanker(),
+            new DefaultSpeakDecisionPolicy(p),
+            new TemplateTopicMessageGenerator(),
+            new InMemoryCuriosityQueue(),
+            p,
+            new AgentEventFactory(clock()),
+            new InMemoryAgentEventBus(),
+            clock());
+    assertTrue(service.prepareCandidates(context(), allowed::get).isEmpty());
+    assertEquals(0, later.get());
+  }
+
+  @Test
+  void queuedAutomaticRefreshDoesNotReadContextAfterWorkBegins() {
+    var properties = enabledProperties();
+    var store = new InMemoryTopicCandidateStore();
+    var tasks = new java.util.ArrayDeque<Runnable>();
+    var contexts = new java.util.concurrent.atomic.AtomicInteger();
+    var allowed = new java.util.concurrent.atomic.AtomicBoolean(true);
+    var life = mock(dev.mikoto2000.rei.life.LifePolicy.class);
+    org.mockito.Mockito.when(
+            life.notificationAllowed(
+                org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString()))
+        .thenAnswer(i -> allowed.get());
+    org.mockito.Mockito.when(life.valid(org.mockito.Mockito.any())).thenReturn(true);
+    var orchestrator =
+        new DefaultTopicOrchestrator(
+            service(properties, new TemplateTopicMessageGenerator()),
+            store,
+            () -> {
+              contexts.incrementAndGet();
+              return context();
+            },
+            new RecordingActivityTracker(now()),
+            new RecordingMessagePublisher(),
+            properties,
+            new AgentEventFactory(clock()),
+            new InMemoryAgentEventBus(),
+            clock(),
+            tasks::add);
+    orchestrator.setLifeContext(life);
+    orchestrator.onChatCompleted();
+    allowed.set(false);
+    tasks.remove().run();
+    assertEquals(0, contexts.get());
+    assertTrue(store.currentCandidates(now(), Duration.ofMinutes(30)).isEmpty());
+  }
+
+  @Test
+  void workBeginningDuringAutomaticMessagePreparationPreventsPublication() {
+    var properties = enabledProperties();
+    var store = new InMemoryTopicCandidateStore();
+    store.replace(List.of(candidate()), now().minus(Duration.ofMinutes(1)));
+    var allowed = new java.util.concurrent.atomic.AtomicBoolean(true);
+    var life = mock(dev.mikoto2000.rei.life.LifePolicy.class);
+    org.mockito.Mockito.when(
+            life.notificationAllowed(
+                org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString()))
+        .thenAnswer(i -> allowed.get());
+    var publisher = new RecordingMessagePublisher();
+    TopicMessageGenerator generator =
+        (candidate, context) -> {
+          allowed.set(false);
+          return "prepared before work";
+        };
+    var orchestrator =
+        new DefaultTopicOrchestrator(
+            service(properties, generator),
+            store,
+            this::context,
+            new RecordingActivityTracker(now().minus(Duration.ofMinutes(5))),
+            publisher,
+            properties,
+            new AgentEventFactory(clock()),
+            new InMemoryAgentEventBus(),
+            clock());
+    orchestrator.setLifeContext(life);
+    var result = orchestrator.onUserIdle();
+    assertEquals("life_policy", result.reason());
+    assertTrue(publisher.messages.isEmpty());
+  }
+
   /** 話題の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void refreshReturnsBeforeGenerationAndDiscardsSupersededResults() {

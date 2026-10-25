@@ -220,24 +220,23 @@ public class ActivityConfiguration {
   TemporalActivityJob temporalActivityJob(
       TemporalActivityInferenceService service,
       @Qualifier("activityTemporalExecutor") ThreadPoolTaskExecutor executor) {
-    return new TemporalActivityJob(service, executor);
+    return new TemporalActivityJob(service::tick, executor);
   }
 
   /**
    * 作業状況の把握で受け渡す時系列作業状況実行する作業を表す。
    *
-   * @param service サービス
+   * @param tick 読み取り・推定を開始する限定コールバック
    * @param executor 実行先
    */
-  public record TemporalActivityJob(
-      TemporalActivityInferenceService service, ThreadPoolTaskExecutor executor) {
+  public record TemporalActivityJob(Runnable tick, java.util.concurrent.Executor executor) {
     /** 作業状況の把握に関する状態確認を処理する。 */
     @Scheduled(
         fixedDelayString = "#{${rei.activity.temporal.interval-seconds:60} * 1000}",
         initialDelayString = "#{${rei.activity.temporal.interval-seconds:60} * 1000}")
     public void poll() {
       try {
-        executor.execute(service::tick);
+        executor.execute(tick);
       } catch (org.springframework.core.task.TaskRejectedException ignored) {
         /* No stale inference queue. */
       }

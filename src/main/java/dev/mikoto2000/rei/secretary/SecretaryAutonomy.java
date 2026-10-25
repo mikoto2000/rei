@@ -131,6 +131,13 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
           "BLOCKED",
           "UNCERTAIN",
           "LIMITED");
+  private volatile dev.mikoto2000.rei.life.LifePolicy life;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setLifeContext(dev.mikoto2000.rei.life.LifePolicy value) {
+    life = value;
+  }
+
   private final SecretaryDatabase database;
   private final SecretaryLedger ledger;
   private final Clock clock;
@@ -518,6 +525,7 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
     if (!Set.of("READY", "WAITING_APPROVAL", "RETRY_PENDING").contains(job.state()))
       throw new IllegalStateException("Inspect the saved execution before retrying");
     if (job.state().equals("RETRY_PENDING") && job.notBefore().isAfter(clock.instant())) return job;
+    if (life != null && !life.backgroundAllowed(project, job.spec().request().taskId())) return job;
     var settings = settings(project);
     var authority = policy(job.spec().request().kind());
     if (!settings.enabled()
@@ -620,6 +628,8 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
               return find(db, project, id);
             });
     if (!admitted.state().equals("DISPATCHING")) return admitted;
+    if (life != null && !life.backgroundAllowed(project, admitted.spec().request().taskId()))
+      return transition(admitted, "PAUSED", "life_policy");
     try {
       if (goal(admitted)) startGoal(admitted);
       else if (admitted.spec().request().kind() == Kind.UPDATE_TASK) updateTask(admitted);
@@ -696,6 +706,9 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
       @Override
       public boolean tryReserve() {
         if (closed.get()) return false;
+        if (life != null
+            && !life.backgroundAllowed(
+                owner.spec().request().projectId(), owner.spec().request().taskId())) return false;
         if (owner.spec().externalPermission() != null) {
           var currentTask =
               ledger.get(owner.spec().request().projectId(), owner.spec().request().taskId());

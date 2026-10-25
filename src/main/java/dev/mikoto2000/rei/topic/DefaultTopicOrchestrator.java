@@ -19,6 +19,23 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
   private final TopicGeneratorService topicGeneratorService;
 
   /** 候補保存先。 */
+  private volatile dev.mikoto2000.rei.life.LifePolicy life;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setLifeContext(dev.mikoto2000.rei.life.LifePolicy policy) {
+    life = policy;
+  }
+
+  private boolean lifeAllowed() {
+    var policy = life;
+    return policy == null || policy.notificationAllowed("LOW", "");
+  }
+
+  private boolean lifeValid(dev.mikoto2000.rei.life.LifeContext.Lease lease) {
+    var policy = life;
+    return policy == null || policy.valid(lease);
+  }
+
   private final TopicCandidateStore candidateStore;
 
   /** 文脈提供元。 */
@@ -103,15 +120,21 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
   /** 通知に応じて状態や表示を更新するため、チャット完了を受け付ける。 */
   @Override
   public void onChatCompleted() {
-    if (!properties.isEnabled()) return;
+    if (!properties.isEnabled() || !lifeAllowed()) return;
     var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     long version = refreshVersion.incrementAndGet();
     try {
       refreshExecutor.execute(
           () -> {
             try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
+              if (!lifeAllowed()) return;
+              var lease = life == null ? null : life.begin();
+              var context = contextProvider.currentContext();
+              if (!lifeAllowed() || !lifeValid(lease)) return;
               List<TopicCandidate> candidates =
-                  topicGeneratorService.prepareCandidates(contextProvider.currentContext());
+                  topicGeneratorService.prepareCandidates(
+                      context, () -> lifeAllowed() && lifeValid(lease));
+              if (!lifeAllowed() || !lifeValid(lease)) return;
               if (refreshVersion.get() != version || Thread.currentThread().isInterrupted()) return;
               candidateStore.replace(candidates, Instant.now(clock));
               eventPublisher.publish(
@@ -129,6 +152,7 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
   /** 通知に応じて状態や表示を更新するため、利用者操作がない状態を受け付ける。 */
   @Override
   public TopicGeneratorService.TopicRunResult onUserIdle() {
+    if (!lifeAllowed()) return TopicGeneratorService.TopicRunResult.skipped("life_policy");
     // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
     if (!running.compareAndSet(false, true))
       return TopicGeneratorService.TopicRunResult.skipped("running");
@@ -151,6 +175,10 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
       if (activityTracker.isAgentBusy() || activityTracker.activityVersion() != activityVersion) {
         eventPublisher.publish(eventFactory.topicAutoSpeakSuppressed("stale activity"));
         return TopicGeneratorService.TopicRunResult.skipped("stale activity");
+      }
+      if (!lifeAllowed()) {
+        eventPublisher.publish(eventFactory.topicAutoSpeakSuppressed("life_policy"));
+        return TopicGeneratorService.TopicRunResult.skipped("life_policy");
       }
       Instant publishedAt = Instant.now(clock);
       AgentMessage message =

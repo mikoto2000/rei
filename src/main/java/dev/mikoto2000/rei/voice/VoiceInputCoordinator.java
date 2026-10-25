@@ -44,6 +44,17 @@ public final class VoiceInputCoordinator implements AutoCloseable {
   /** 取得記録。 */
   private final MicrophoneCaptureService capture;
 
+  private volatile dev.mikoto2000.rei.life.LifePolicy life;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void useLifeContext(dev.mikoto2000.rei.life.LifePolicy value) {
+    life = value;
+  }
+
+  private boolean lifeAllowed(java.time.Instant since) {
+    return life == null || life.observationAllowed(since);
+  }
+
   /** 音声処理の実行先を生成する窓口。 */
   private final VoiceBackendFactory backends;
 
@@ -147,6 +158,8 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     final VoiceInputQueue segments = new VoiceInputQueue();
 
     /** 対象ごとの世代番号。 */
+    dev.mikoto2000.rei.life.LifeContext.Lease lifeLease;
+
     final ConcurrentMap<java.util.UUID, Long> epochs = new ConcurrentHashMap<>();
 
     /** 完了。 */
@@ -482,6 +495,8 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     if (run.stop
         || active != run
         || !selected(run)
+        || !lifeAllowed(completed.input().createdAt())
+        || life != null && !life.valid(run.lifeLease)
         || !audioGate.allowed(completed.audioEpoch())
         || completed.decision().reason().equals("cancelled")) return;
     try {
@@ -519,6 +534,8 @@ public final class VoiceInputCoordinator implements AutoCloseable {
         run.startupThread = Thread.currentThread();
       }
       try {
+        if (!lifeAllowed(clock.instant()))
+          throw new IllegalStateException("Work-hours privacy guard");
         run.backend = backends.open(run.settings);
       } finally {
         synchronized (guard) {
@@ -530,6 +547,9 @@ public final class VoiceInputCoordinator implements AutoCloseable {
         stop(run, VoiceEventPublisher.Type.TARGET_CHANGED, false);
         return;
       }
+      if (!lifeAllowed(clock.instant()))
+        throw new IllegalStateException("Work-hours privacy guard");
+      run.lifeLease = life == null ? null : life.begin();
       run.source = capture.open(run.device);
       if (run.source == null) throw new IllegalStateException("Capture source unavailable");
       synchronized (guard) {
@@ -627,7 +647,16 @@ public final class VoiceInputCoordinator implements AutoCloseable {
     long vadNanos = 0;
     try {
       while (!run.stop) {
+        if (!lifeAllowed(clock.instant()) || life != null && !life.valid(run.lifeLease)) {
+          fail(run, VoiceEventPublisher.Type.CAPTURE_FAILED);
+          break;
+        }
+        var frameStarted = clock.instant();
         var frame = run.source.readFrame();
+        if (!lifeAllowed(frameStarted)) {
+          fail(run, VoiceEventPublisher.Type.CAPTURE_FAILED);
+          break;
+        }
         if (run.stop) break;
         if (frame == null) {
           fail(run, VoiceEventPublisher.Type.CAPTURE_FAILED);
@@ -699,7 +728,10 @@ public final class VoiceInputCoordinator implements AutoCloseable {
         var segment = run.segments.poll(200, TimeUnit.MILLISECONDS);
         if (segment == null) continue;
         var epoch = run.epochs.remove(segment.id());
-        if (epoch == null || !audioGate.allowed(epoch)) continue;
+        if (epoch == null
+            || !audioGate.allowed(epoch)
+            || !lifeAllowed(segment.createdAt())
+            || life != null && !life.valid(run.lifeLease)) continue;
         long asrStarted = ticks.getAsLong();
         String asrOriginal = run.backend.recognizer().recognize(segment);
         var result = SpeechResultFilter.filter(asrOriginal);
@@ -716,7 +748,11 @@ public final class VoiceInputCoordinator implements AutoCloseable {
         }
         ConversationInput[] prepared = new ConversationInput[1];
         synchronized (guard) {
-          if (run.stop || active != run || !audioGate.allowed(epoch)) continue;
+          if (run.stop
+              || active != run
+              || !audioGate.allowed(epoch)
+              || !lifeAllowed(segment.createdAt())
+              || life != null && !life.valid(run.lifeLease)) continue;
           if (result.isEmpty()) {
             events.publish(VoiceEventPublisher.Type.RESULT_REJECTED, "recognition dropped");
             continue;
@@ -782,7 +818,12 @@ public final class VoiceInputCoordinator implements AutoCloseable {
             correction.correct(
                 input,
                 asrOriginal,
-                () -> !run.stop && selected(run) && audioGate.allowed(epoch),
+                () ->
+                    !run.stop
+                        && selected(run)
+                        && audioGate.allowed(epoch)
+                        && lifeAllowed(input.createdAt())
+                        && (life == null || life.valid(run.lifeLease)),
                 complete);
         }
       }

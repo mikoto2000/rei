@@ -1,5 +1,7 @@
 # DEVELOP
 
+勤務時間制約・生活時間の設定と検証は [生活コンテキスト](docs/life-context.md) を参照してください。
+
 秘書の約束・タスク台帳と段階的な統合は [秘書機能](docs/secretary.md) を参照してください。
 
 Checkstyle / SpotBugs の実行手順、CI レポートと導入方針は [静的解析ガイド](docs/static-analysis.md) を参照してください。

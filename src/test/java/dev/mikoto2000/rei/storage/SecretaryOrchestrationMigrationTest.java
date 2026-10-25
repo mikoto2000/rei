@@ -50,6 +50,7 @@ class SecretaryOrchestrationMigrationTest {
           var sql = connection.createStatement()) {
         for (String table :
             List.of(
+                "life_context",
                 "secretary_connections",
                 "secretary_external_items",
                 "secretary_external_events",

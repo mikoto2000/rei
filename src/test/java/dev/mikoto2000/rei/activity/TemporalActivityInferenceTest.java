@@ -32,6 +32,34 @@ import org.junit.jupiter.api.Test;
 
 /** 時系列作業状況推定の結果と状態の契約を検証するテスト。 */
 class TemporalActivityInferenceTest {
+  @Test
+  void aLifePolicyChangeDuringModelAnalysisPreventsPersistence() throws Exception {
+    var p = new ActivityProperties();
+    p.setEnabled(true);
+    p.getTemporal().setEnabled(true);
+    p.getTemporal().setLlmEnabled(true);
+    var records = mock(ActivityStore.class);
+    var supplements = mock(WorkActivityInferenceStore.class);
+    var model = mock(TemporalActivityInferenceService.Model.class);
+    when(records.findObservationsBetweenBounded(any(), any(), anyInt()))
+        .thenReturn(List.of(record("a", AT.minusSeconds(15), "テスト修正"), record("b", AT, "テスト修正")));
+    var life = mock(dev.mikoto2000.rei.life.LifeContext.class);
+    when(life.valid(any())).thenReturn(true);
+    when(model.infer(any(), anyInt(), anyInt(), anyLong()))
+        .thenAnswer(
+            call -> {
+              when(life.valid(any())).thenReturn(false);
+              return new TemporalActivityInferenceService.Outcome("テスト修正の可能性があります", .6, 100);
+            });
+    var service =
+        new TemporalActivityInferenceService(
+            p, records, supplements, model, Clock.fixed(AT, ZoneOffset.UTC), List::of, () -> false);
+    service.setLifeContext(life);
+    service.tick();
+    verify(model).infer(any(), anyInt(), anyInt(), anyLong());
+    verify(supplements, never()).save(any());
+  }
+
   /** 検証に使う日時。 */
   static final Instant AT = Instant.parse("2026-10-10T14:00:00Z");
 

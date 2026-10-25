@@ -39,6 +39,18 @@ public final class ActivityCapture implements AutoCloseable {
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  private volatile dev.mikoto2000.rei.life.LifePolicy life;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void useLifeContext(dev.mikoto2000.rei.life.LifePolicy value) {
+    life = value;
+    evidencePipeline.life = value;
+  }
+
+  private boolean lifeAllowed(Instant since) {
+    return life == null || life.observationAllowed(since);
+  }
+
   /** 根拠処理の連携。 */
   private final ActivityEvidencePipeline evidencePipeline;
 
@@ -65,6 +77,8 @@ public final class ActivityCapture implements AutoCloseable {
     /** 日時。 */
     final Instant at;
 
+    final dev.mikoto2000.rei.life.LifeContext.Lease lifeLease;
+
     /** 前面。 */
     final ForegroundWindow foreground;
 
@@ -77,7 +91,9 @@ public final class ActivityCapture implements AutoCloseable {
         Instant at,
         ForegroundWindow foreground,
         dev.mikoto2000.rei.computeruse.CapturedScreen screen,
-        long queuedAt) {
+        long queuedAt,
+        dev.mikoto2000.rei.life.LifeContext.Lease lifeLease) {
+      this.lifeLease = lifeLease;
       this.token = token;
       this.at = at;
       this.foreground = foreground;
@@ -240,7 +256,7 @@ public final class ActivityCapture implements AutoCloseable {
 
   /** 作業状況の把握において、一時停止中かどうかを判定する。 */
   public synchronized boolean isPaused() {
-    return paused;
+    return paused || !lifeAllowed(clock.instant());
   }
 
   /** 作業状況の把握に関する強制観測内容を処理する。 */
@@ -258,12 +274,20 @@ public final class ActivityCapture implements AutoCloseable {
 
   /** 作業状況の把握において、許可に該当するか判定する。 */
   private synchronized boolean allowed(long token) {
-    return properties.isEnabled() && !paused && !closed && token == generation;
+    return properties.isEnabled()
+        && !paused
+        && !closed
+        && token == generation
+        && lifeAllowed(clock.instant());
   }
 
   /** 作業状況の把握に関する定期確認を処理する。 */
   public void tick() {
     try {
+      if (!lifeAllowed(clock.instant())) {
+        invalidate();
+        return;
+      }
       observationTick();
     } finally {
       evidencePipeline.pollForeground();
@@ -303,6 +327,7 @@ public final class ActivityCapture implements AutoCloseable {
   /** 作業状況の把握で用いるlightweightを返す。 */
   private DesktopActivityObserver.Lightweight lightweight() {
     try {
+      if (!lifeAllowed(clock.instant())) return null;
       return observer.lightweight();
     } catch (Exception | LinkageError e) {
       return new DesktopActivityObserver.Lightweight(0, 0, null, null, false, false);
@@ -333,6 +358,7 @@ public final class ActivityCapture implements AutoCloseable {
         token = generation;
       }
       if (!allowed(token)) return;
+      var lifeLease = life == null ? null : life.begin();
       var foreground = observer.foreground();
       if (new CapturePolicy(properties).excluded(foreground)) {
         invalidate();
@@ -345,7 +371,7 @@ public final class ActivityCapture implements AutoCloseable {
         at = clock.instant();
         screen = observer.capture();
       }
-      if (!allowed(token)) return;
+      if (!allowed(token) || !lifeAllowed(at)) return;
       if (!Objects.equals(foreground, observer.foreground())) {
         invalidate();
         return;
@@ -355,7 +381,7 @@ public final class ActivityCapture implements AutoCloseable {
           "Activity observation timing: observe_ms={} displays={}",
           ms(observed - started),
           screen.displays().size());
-      var frame = new Frame(token, at, foreground, screen, observed);
+      var frame = new Frame(token, at, foreground, screen, observed, lifeLease);
       submit(frame);
       status = "submitted";
     } catch (Exception e) {
@@ -417,7 +443,8 @@ public final class ActivityCapture implements AutoCloseable {
     var at = frame.at();
     var foreground = frame.foreground();
     var screen = frame.screen();
-    if (!allowed(token)) return;
+    if ((!allowed(token) || (!lifeAllowed(at) || life != null && !life.valid(frame.lifeLease))))
+      return;
     long started = System.nanoTime();
     try {
       var observations =
@@ -452,7 +479,8 @@ public final class ActivityCapture implements AutoCloseable {
                   <= Math.max(
                       properties.getSessionGapSeconds(),
                       properties.getCaptureIntervalSeconds() * 2L);
-      if (!allowed(token)) return;
+      if ((!allowed(token) || (!lifeAllowed(at) || life != null && !life.valid(frame.lifeLease))))
+        return;
       log.info(
           "Activity analysis timing: queue_wait_ms={} change_check_ms={} scope={} duplicate={}",
           ms(started - frame.queuedAt()),
@@ -485,7 +513,8 @@ public final class ActivityCapture implements AutoCloseable {
         return;
       }
       synchronized (this) {
-        if (!allowed(token)) return;
+        if ((!allowed(token) || (!lifeAllowed(at) || life != null && !life.valid(frame.lifeLease))))
+          return;
         long saveStarted = System.nanoTime();
         var id = UUID.randomUUID().toString();
         var refs =
@@ -537,6 +566,7 @@ public final class ActivityCapture implements AutoCloseable {
     // Called only after the foreground privacy checks. A pause/close invalidates in-flight failures
     // too.
     if (!allowed(token)
+        || !lifeAllowed(at)
         || !new ScreenshotPersistencePolicy(properties).shouldSave(duplicate, outcome))
       return List.of();
     try {

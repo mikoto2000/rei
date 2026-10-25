@@ -30,6 +30,37 @@ import org.junit.jupiter.api.Test;
 
 /** 作業状況取得記録の結果と状態の契約を検証するテスト。 */
 class ActivityCaptureTest {
+  @Test
+  void workGuardPreventsAllDesktopReadsInBothPipelines() {
+    var life = mock(dev.mikoto2000.rei.life.LifeContext.class);
+    capture.useLifeContext(life);
+    clearInvocations(observer, extractor, store, screenshots);
+    for (var mode : ActivityProperties.DetectionMode.values()) {
+      properties.getDetection().setMode(mode);
+      capture.tick();
+    }
+    verifyNoInteractions(observer, extractor, store, screenshots);
+  }
+
+  @Test
+  void policyChangeDuringExtractionDiscardsResultAndImages() throws Exception {
+    var life = mock(dev.mikoto2000.rei.life.LifeContext.class);
+    when(life.observationAllowed(any(java.time.Instant.class))).thenReturn(true);
+    when(life.valid(any())).thenReturn(true);
+    capture.useLifeContext(life);
+    when(extractor.extract(any(), any()))
+        .thenAnswer(
+            invocation -> {
+              when(life.observationAllowed(any(java.time.Instant.class))).thenReturn(false);
+              return new ActivityExtractor.Result(
+                  ActivityPolicyTest.record("2026-09-22T10:00:00Z", "coding").inference(), .8);
+            });
+    capture.tick();
+    verify(extractor).extract(any(), any());
+    verify(store, never()).append(any());
+    verify(screenshots, never()).save(anyString(), any(), any());
+  }
+
   /** 作業状況の把握で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void validationFailureLogsSanitizedDiagnostic() throws Exception {

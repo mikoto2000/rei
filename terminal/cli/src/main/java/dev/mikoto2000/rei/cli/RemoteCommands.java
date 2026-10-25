@@ -1711,6 +1711,21 @@ public final class RemoteCommands {
 
   /** 軽量CLIでの対話で用いる選択可能な設定を返す。 */
   private static Request secretary(List<String> words, String selectedProject, String selectedSession) {
+    if(words.size()>1 && words.get(1).startsWith("life-")) {
+      String action=words.get(1);
+      var opts=options(words,2,action.equals("life-configure")?Set.of("--settings-json"):Set.of(),Set.of());
+      if(action.equals("life-settings")) return query("/api/v1/life/settings",Map.of());
+      if(action.equals("life-status")) return query("/api/v1/life/status",Map.of());
+      if(action.equals("life-configure")) {
+        try {
+          var node=COMMAND_JSON.readTree(opts.getOrDefault("--settings-json",""));
+          if(node==null || !node.isObject()) throw invalid();
+          return new Request("PUT","/api/v1/life/settings",Map.of("settings",COMMAND_JSON.convertValue(node,Map.class)));
+        } catch(java.io.IOException error) { throw invalid(); }
+      }
+      throw invalid();
+    }
+
     if(words.size()>1 && (words.get(1).startsWith("connection-") || words.get(1).startsWith("external-"))) return secretaryConnection(words,selectedProject,selectedSession);
     if(words.size()>1 && (words.get(1).startsWith("autonomy-") || words.get(1).startsWith("work-")))
       return secretaryExecution(words,selectedProject,selectedSession);

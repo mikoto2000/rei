@@ -14,6 +14,13 @@ import picocli.CommandLine.Spec;
 @Command(name = "secretary", description = "約束・タスク台帳を操作します", mixinStandardHelpOptions = true)
 public class SecretaryCommand implements java.util.concurrent.Callable<Integer> {
   private final ObjectProvider<SecretaryLedger> ledgers;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private dev.mikoto2000.rei.life.LifeContext life;
+
+  @Option(names = "--settings-json")
+  String lifeJson;
+
   private ObjectProvider<SecretaryFollowups> followups;
   private ObjectProvider<SecretaryOrchestrator> orchestrators;
 
@@ -260,6 +267,21 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
   @Override
   public Integer call() {
     try {
+      if (action.startsWith("life-")) {
+        if (life == null) throw new IllegalStateException("Life context unavailable");
+        Object result =
+            switch (action) {
+              case "life-settings" -> life.settings();
+              case "life-status" -> life.status();
+              case "life-configure" ->
+                  life.configure(
+                      SecretaryJson.JSON.readValue(
+                          lifeJson, dev.mikoto2000.rei.life.LifeContext.Settings.class));
+              default -> throw new IllegalArgumentException("Unknown life operation");
+            };
+        spec.commandLine().getOut().println(SecretaryJson.JSON.writeValueAsString(result));
+        return 0;
+      }
       var ledger = ledgers == null ? null : ledgers.getIfAvailable();
       if (ledger == null) throw new IllegalStateException("Enable rei.secretary.enabled first");
       Object result =

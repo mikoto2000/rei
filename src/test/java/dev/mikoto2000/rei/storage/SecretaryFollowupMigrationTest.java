@@ -33,6 +33,7 @@ class SecretaryFollowupMigrationTest {
       sql.execute("DROP TABLE secretary_followup_state");
       sql.execute("DROP TABLE secretary_notices");
       sql.execute("DROP TABLE secretary_dependencies");
+      sql.execute("DROP TABLE life_context");
       sql.execute("DROP TABLE secretary_connections");
       sql.execute("DROP TABLE secretary_external_items");
       sql.execute("DROP TABLE secretary_external_events");

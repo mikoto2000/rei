@@ -38,6 +38,64 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 /** 注意配信の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
 class AttentionDeliveryTest {
+  @Test
+  void lifeDigestUsesTheExistingAutomaticOutbox() {
+    start(properties(true, true), true);
+    var life = org.mockito.Mockito.mock(dev.mikoto2000.rei.life.LifeContext.class);
+    attention.setLifeContext(life);
+    fact("held-for-work");
+    org.mockito.Mockito.when(
+            life.notificationAllowed(
+                org.mockito.Mockito.anyString(), org.mockito.Mockito.anyString()))
+        .thenReturn(true);
+    attention.releaseHeld();
+    var digest =
+        inbox.list("project").stream()
+            .filter(i -> i.kind().equals("LIFE_DIGEST"))
+            .findFirst()
+            .orElseThrow();
+    assertTrue(outbox.find("project", digest.id()).isPresent());
+    delivery.dispatchOne();
+    assertEquals(1, calls.get());
+  }
+
+  @Test
+  void secretaryDeliveryUsesTheExistingAutomaticOutbox() {
+    start(properties(true, true), true);
+    var notice =
+        new dev.mikoto2000.rei.secretary.SecretaryNotifications.Notice(
+            UUID.randomUUID().toString(),
+            "project",
+            null,
+            "BRIEFING",
+            "summary",
+            3,
+            "DELIVERY",
+            Instant.EPOCH);
+    attention.deliver(notice);
+    var item = inbox.list("project").getFirst();
+    assertTrue(outbox.find("project", item.id()).isPresent());
+    delivery.dispatchOne();
+    assertEquals(1, calls.get());
+  }
+
+  @Test
+  void lifeHoldDoesNotSendOrConsumeTransportAttemptsAndResumesOnce() {
+    start(properties(true, false), true);
+    var item = fact("life");
+    delivery.request("project", item.id());
+    var life = org.mockito.Mockito.mock(dev.mikoto2000.rei.life.LifeContext.class);
+    delivery.setLifeContext(life);
+    delivery.dispatchOne();
+    assertEquals(0, calls.get());
+    assertEquals(0, outbox.find("project", item.id()).orElseThrow().attempts());
+    assertEquals("PENDING", outbox.find("project", item.id()).orElseThrow().status());
+    org.mockito.Mockito.when(life.notificationAllowed("NORMAL", item.id())).thenReturn(true);
+    delivery.dispatchOne();
+    delivery.dispatchOne();
+    assertEquals(1, calls.get());
+  }
+
   /** 起動時について、活動中利用権を保持することを確認する。 */
   @Test
   void startupPreservesActiveLeaseAndLostLeaseBecomesUnknown() {

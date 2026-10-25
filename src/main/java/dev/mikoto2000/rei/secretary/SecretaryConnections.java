@@ -106,6 +106,13 @@ public final class SecretaryConnections
           Set.of("body", "thread"),
           "SLACK_REPORT",
           Set.of("taskId", "taskRevision", "thread"));
+  private volatile dev.mikoto2000.rei.life.LifePolicy life;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  void setLifeContext(dev.mikoto2000.rei.life.LifePolicy value) {
+    life = value;
+  }
+
   private final SecretaryDatabase database;
   private final SecretaryLedger ledger;
   private final Clock clock;
@@ -1643,7 +1650,8 @@ public final class SecretaryConnections
             });
     for (var c : due) {
       if (Thread.currentThread().isInterrupted()) return;
-      pollNow(c.config().projectId(), c.id());
+      if (life == null || life.backgroundAllowed(c.config().projectId(), "connection:" + c.id()))
+        pollNow(c.config().projectId(), c.id());
     }
   }
 

@@ -74,6 +74,18 @@ class SecretaryCalendarTest {
   }
 
   @Test
+  void anEmptyCalendarDoesNotProvePersonalAvailability() throws Exception {
+    var service = service("{\"calendars\":{\"primary\":{\"busy\":[]}}}");
+    var result =
+        service.read(
+            connection(),
+            "FREEBUSY",
+            Map.of("from", "2026-10-26T09:00:00+09:00", "to", "2026-10-26T18:00:00+09:00"));
+    assertEquals(1, result.items().size());
+    assertEquals("UNKNOWN", result.items().getFirst().status());
+  }
+
+  @Test
   void confirmedDeleteWithGoneResponseIsVerifiedWithoutAnotherWrite() {
     var calls = new java.util.concurrent.atomic.AtomicInteger();
     var transport =

@@ -35,8 +35,17 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class AttentionService implements dev.mikoto2000.rei.secretary.SecretaryNotifications {
+  private volatile dev.mikoto2000.rei.life.LifePolicy life;
+
+  @Autowired(required = false)
+  void setLifeContext(dev.mikoto2000.rei.life.LifePolicy value) {
+    life = value;
+  }
+
   @Override
   public void deliver(dev.mikoto2000.rei.secretary.SecretaryNotifications.Notice notice) {
+    if (life != null && !life.notificationAllowed(notice.category().name(), notice.id()))
+      throw new dev.mikoto2000.rei.life.LifeContext.NotificationDeferred();
     var saved = inbox.createSecretary(notice);
     publisher.publish(
         new AgentEvent(
@@ -293,6 +302,10 @@ public class AttentionService implements dev.mikoto2000.rei.secretary.SecretaryN
   /** 実行状況を利用先で把握できるよう、注意を通知する。 */
   private void publishAttention(
       AgentEvent source, Optional<AttentionRepository.Item> item, String kind, String message) {
+    if (life != null && !life.notificationAllowed("NORMAL", source.id())) {
+      item.ifPresent(saved -> inbox.hold(saved.projectId(), saved.id()));
+      return;
+    }
     item.ifPresent(
         saved ->
             publisher.publish(
@@ -309,6 +322,37 @@ public class AttentionService implements dev.mikoto2000.rei.secretary.SecretaryN
                     source.id(),
                     new AttentionRequiredPayload(saved.id(), kind, message),
                     source.projectId())));
+  }
+
+  @org.springframework.scheduling.annotation.Scheduled(
+      fixedDelayString = "${rei.attention.life-release-interval-ms:60000}")
+  public synchronized void releaseHeld() {
+    if (life == null || !life.notificationAllowed("NORMAL", "")) return;
+    for (var project : inbox.heldProjects()) {
+      var digest = inbox.releaseHeld(project);
+      if (digest.isPresent()) {
+        var saved = digest.get();
+        if (!life.notificationAllowed("NORMAL", saved.id())) {
+          inbox.hold(project, saved.id());
+          return;
+        }
+        publisher.publish(
+            new AgentEvent(
+                saved.id(),
+                0,
+                clock.instant(),
+                AgentEventType.ATTENTION_REQUIRED,
+                1,
+                saved.sessionId(),
+                null,
+                saved.runId(),
+                saved.id(),
+                null,
+                new AttentionRequiredPayload(saved.id(), saved.kind(), saved.message()),
+                project));
+        return;
+      }
+    }
   }
 
   /** 状態の変化を利用先へ伝えるため、注意サービスを通知する。 */
