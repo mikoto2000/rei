@@ -49,12 +49,15 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
   /** データベース。 */
   private final StorageDatabase database;
 
+  private final Path root;
+
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = EventJsonCodec.mapper();
 
   /** 指定された値や利用先を使って、SqliteProjectAgentEventStoreを初期化する。 */
   public SqliteProjectAgentEventStore(Path root) {
     super(root);
+    this.root = root.toAbsolutePath().normalize();
     database = new StorageDatabase(root);
   }
 
@@ -66,43 +69,59 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
   /** 既存の記録へ経緯を残すため、SQLiteプロジェクトエージェントイベント保存先を追記する。 */
   @Override
   public AgentEvent append(AgentEvent event) {
+    return database.transaction(db -> append(db, event));
+  }
+
+  Path root() {
+    return root;
+  }
+
+  /** 同じevent機能内の共同確定から、渡されたtransactionへ登録する。 */
+  AgentEvent appendInTransaction(Connection db, AgentEvent event) {
+    try {
+      return append(db, event);
+    } catch (RuntimeException error) {
+      throw error;
+    } catch (Exception error) {
+      throw new IllegalStateException("Cannot append event in coordinated transaction", error);
+    }
+  }
+
+  private AgentEvent append(Connection db, AgentEvent event) throws Exception {
     String project = scope(event.projectId());
-    return database.transaction(
-        db -> {
-          long previous;
-          try (var query =
-              db.prepareStatement("SELECT sequence FROM event_sequences WHERE project_id=?")) {
-            query.setString(1, project);
-            try (var rows = query.executeQuery()) {
-              previous = rows.next() ? rows.getLong(1) : 0;
-            }
-          }
-          long next = Math.addExact(previous, 1);
-          var stored =
-              new AgentEvent(
-                  event.id(),
-                  next,
-                  event.timestamp(),
-                  event.type(),
-                  event.version(),
-                  event.sessionId(),
-                  event.turnId(),
-                  event.runId(),
-                  event.correlationId(),
-                  event.parentEventId(),
-                  event.payload(),
-                  event.projectId());
-          String record = json.writeValueAsString(stored);
-          put(db, stored, record, true, null, null);
-          try (var update =
-              db.prepareStatement(
-                  "INSERT INTO event_sequences VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET sequence=excluded.sequence")) {
-            update.setString(1, project);
-            update.setLong(2, next);
-            update.executeUpdate();
-          }
-          return stored;
-        });
+    long previous;
+    try (var query =
+        db.prepareStatement("SELECT sequence FROM event_sequences WHERE project_id=?")) {
+      query.setString(1, project);
+      try (var rows = query.executeQuery()) {
+        previous = rows.next() ? rows.getLong(1) : 0;
+      }
+    }
+    long next = Math.addExact(previous, 1);
+    var stored =
+        new AgentEvent(
+            event.id(),
+            next,
+            event.timestamp(),
+            event.type(),
+            event.version(),
+            event.sessionId(),
+            event.turnId(),
+            event.runId(),
+            event.correlationId(),
+            event.parentEventId(),
+            event.payload(),
+            event.projectId());
+    String record = json.writeValueAsString(stored);
+    put(db, stored, record, true, null, null);
+    try (var update =
+        db.prepareStatement(
+            "INSERT INTO event_sequences VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET sequence=excluded.sequence")) {
+      update.setString(1, project);
+      update.setLong(2, next);
+      update.executeUpdate();
+    }
+    return stored;
   }
 
   /** 実行状況の通知に関する登録を処理する。 */

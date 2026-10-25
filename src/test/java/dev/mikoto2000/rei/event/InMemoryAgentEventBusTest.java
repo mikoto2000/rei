@@ -14,6 +14,29 @@ import org.junit.jupiter.api.Test;
 /** 入力先記憶エージェント実行状況を共有する通知先の結果と状態の契約を検証するテスト。 */
 class InMemoryAgentEventBusTest {
 
+  @Test
+  void failedPersistenceIsNeverDeliveredOrReplayedAndQueuedReentryIsCleared() {
+    var bus = new InMemoryAgentEventBus();
+    var displayed = new ArrayList<AgentEvent>();
+    bus.subscribe(displayed::add);
+    var persistence =
+        bus.subscribePersistence(
+            event -> {
+              bus.publish(event("agent.run.completed"));
+              throw new IllegalStateException("storage failed");
+            });
+    org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalStateException.class, () -> bus.publish(event("agent.run.started")));
+    assertTrue(displayed.isEmpty());
+    var replay = bus.subscribe("run-1", 0, ignored -> {});
+    assertTrue(replay.replay().isEmpty());
+    replay.subscription().unsubscribe();
+    persistence.unsubscribe();
+    bus.publish(event("agent.run.failed"));
+    assertEquals(
+        List.of("agent.run.failed"), displayed.stream().map(e -> e.type().value()).toList());
+  }
+
   /** 日時や期限の条件を再現するために使う検証時刻。 */
   private final Clock clock =
       Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));

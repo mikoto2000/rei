@@ -15,6 +15,7 @@ import dev.mikoto2000.rei.event.ProfileEventLogStore;
 import dev.mikoto2000.rei.event.ProjectAgentEventStore;
 import dev.mikoto2000.rei.event.ProjectAgentEventSubscriber;
 import dev.mikoto2000.rei.event.SqliteProjectAgentEventStore;
+import dev.mikoto2000.rei.event.StreamingEventPersistence;
 import dev.mikoto2000.rei.event.ThinkingDeltaPayload;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Proxy;
@@ -204,11 +205,30 @@ class AnswerGenerationIoBenchmarkTest {
     DriverManager.registerDriver(probe);
     var results = new ArrayList<Map<String, Object>>();
     boolean optimized = Boolean.getBoolean("rei.io.optimized");
+    boolean coordinated = Boolean.getBoolean("rei.io.coordinated");
+    int pageSize = Integer.getInteger("rei.io.page-size", 0);
+    if (pageSize != 0 && pageSize != 1024 && pageSize != 2048 && pageSize != 4096)
+      throw new IllegalArgumentException("Unsupported benchmark page size");
+    if (coordinated && !optimized)
+      throw new IllegalArgumentException("Coordinated mode requires writer reuse");
     try {
       for (int repeat = 0; repeat < 3; repeat++)
         for (String scenario : List.of("short", "long", "high-frequency", "parallel")) {
           Path root = temporary.resolve(scenario + repeat);
           Files.createDirectories(root);
+          if (pageSize != 0) {
+            try (var preparation = new StorageMigrationCoordinator(root)) {
+              preparation.prepare();
+            }
+            try (var db = DriverManager.getConnection("jdbc:sqlite:" + root.resolve("storage.db"));
+                var sql = db.createStatement()) {
+              sql.execute("PRAGMA synchronous=FULL");
+              sql.execute("PRAGMA journal_mode=DELETE");
+              sql.execute("PRAGMA page_size=" + pageSize);
+              sql.execute("VACUUM");
+              sql.execute("PRAGMA journal_mode=WAL");
+            }
+          }
           AnnotationConfigApplicationContext context = null;
           StorageMigrationCoordinator coordinator = null;
           try {
@@ -220,11 +240,28 @@ class AnswerGenerationIoBenchmarkTest {
                   .addFirst(new MapPropertySource("test", Map.of("rei.data-dir", root.toString())));
               context.register(StorageMigrationConfiguration.class);
               context.refresh();
+              if (pageSize != 0)
+                new StorageDatabase(root)
+                    .transaction(
+                        db -> {
+                          try (var sql = db.createStatement()) {
+                            sql.execute("PRAGMA wal_autocheckpoint=" + (4096000 / pageSize));
+                          }
+                          return null;
+                        });
             } else {
               coordinator = new StorageMigrationCoordinator(root);
               coordinator.prepare();
             }
             var registry = new StorageObjectRegistry(root);
+            int actualPageSize =
+                registry.database.read(
+                    db -> {
+                      try (var sql = db.createStatement();
+                          var rows = sql.executeQuery("PRAGMA page_size")) {
+                        return rows.getInt(1);
+                      }
+                    });
             var project = new SqliteProjectAgentEventStore(root);
             var persistenceLatency = new ConcurrentLinkedQueue<Long>();
             var measuredProject =
@@ -256,9 +293,21 @@ class AnswerGenerationIoBenchmarkTest {
                 };
             profile.setManagedActivityLog(activity);
             var bus = new InMemoryAgentEventBus();
+            var coordinatedStart = new ThreadLocal<Long>();
+            if (coordinated)
+              bus.subscribePersistence(event -> coordinatedStart.set(System.nanoTime()));
             var displayed = new AtomicLong();
-            try (var subscription = new ProjectAgentEventSubscriber(bus, measuredProject)) {
-              bus.subscribe(profile);
+            try (var streaming =
+                    coordinated ? new StreamingEventPersistence(bus, project, profile) : null;
+                var subscription = new ProjectAgentEventSubscriber(bus, measuredProject)) {
+              subscription.setStreamingPersistence(streaming);
+              if (coordinated)
+                bus.subscribePersistence(
+                    event -> {
+                      persistenceLatency.add(System.nanoTime() - coordinatedStart.get());
+                      coordinatedStart.remove();
+                    });
+              if (!coordinated) bus.subscribe(profile);
               bus.subscribe(e -> displayed.incrementAndGet());
               int runs = scenario.equals("parallel") ? 4 : 1;
               int count = scenario.equals("short") ? 20 : scenario.equals("parallel") ? 250 : 1000;
@@ -310,12 +359,14 @@ class AnswerGenerationIoBenchmarkTest {
               Arrays.sort(latency);
               var row = new LinkedHashMap<String, Object>();
               row.put("scenario", scenario);
+              row.put("pageSizeOverride", pageSize);
+              row.put("pageSizeBytes", actualPageSize);
               row.put("repeat", repeat);
-              row.put("mode", optimized ? "optimized" : "baseline");
+              row.put("mode", coordinated ? "coordinated" : optimized ? "optimized" : "baseline");
               row.put("offeredEventsPerSecond", offeredRate);
               row.put("events", runs * count);
               row.put("displayed", displayed.get());
-              row.put("persistenceCalls", runs * count * 2);
+              row.put("persistenceCalls", runs * count * (coordinated ? 1 : 2));
               row.put("transactions", probe.transactions.get());
               row.put("commits", probe.commits.get());
               row.put("connectionOpens", probe.opens.get());
@@ -342,7 +393,7 @@ class AnswerGenerationIoBenchmarkTest {
               row.putAll(sampler.summary());
               results.add(row);
               assertThat(displayed.get()).isEqualTo(runs * count);
-              assertThat(probe.commits.get()).isEqualTo(runs * count * 2);
+              assertThat(probe.commits.get()).isEqualTo(runs * count * (coordinated ? 1 : 2));
               assertThat(activity.read(PROJECT)).hasSize(runs * count);
               assertThat(project.lastSequence(PROJECT)).isEqualTo(runs * count);
             }
@@ -356,7 +407,11 @@ class AnswerGenerationIoBenchmarkTest {
       DriverManager.registerDriver(original);
     }
     Path output =
-        Path.of("target/answer-generation-io-" + (optimized ? "optimized" : "baseline") + ".json");
+        Path.of(
+            "target/answer-generation-io-"
+                + (coordinated ? "coordinated" : optimized ? "optimized" : "baseline")
+                + (pageSize == 0 ? "" : "-page" + pageSize)
+                + ".json");
     Files.createDirectories(output.getParent());
     Files.writeString(
         output, StorageDatabase.JSON.writerWithDefaultPrettyPrinter().writeValueAsString(results));

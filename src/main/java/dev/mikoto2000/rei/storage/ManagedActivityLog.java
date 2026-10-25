@@ -201,61 +201,76 @@ public final class ManagedActivityLog {
 
   /** 既存の記録へ経緯を残すため、管理対象作業状況ログを追記する。 */
   public void append(String supplied, ProfileEventLogEntry entry) {
+    appendWith(supplied, entry, registry.root, db -> null);
+  }
+
+  /** 同じ保存ルートのイベントと診断管理情報を一つのFULL COMMITで確定する。 */
+  public <T> T appendWith(
+      String supplied,
+      ProfileEventLogEntry entry,
+      Path expectedRoot,
+      java.util.function.Function<Connection, T> work) {
     Objects.requireNonNull(entry);
+    if (!registry.root.equals(expectedRoot.toAbsolutePath().normalize()))
+      throw new IllegalArgumentException("Activity and event storage roots must match");
     String scope = scope(supplied);
-    registry.database.transaction(
+    return registry.database.transaction(
         db -> {
-          byte[] record =
-              (StorageDatabase.JSON.writeValueAsString(entry) + "\n")
-                  .getBytes(StandardCharsets.UTF_8);
-          if (record.length > 1024 * 1024)
-            throw new IllegalArgumentException("Activity record exceeds 1 MiB");
-          var segment = open(db, scope);
-          if (segment != null) {
-            verify(segment);
-            if (segment.bytes() + record.length > segmentBytes
-                || !segment.created().plus(Duration.ofDays(1)).isAfter(registry.clock.instant())) {
-              close(db, segment);
-              segment = null;
-            }
-          }
-          if (segment == null) {
-            String id = UUID.randomUUID().toString();
-            Path file = directory(scope).resolve(id + ".jsonl");
-            StorageBackup.requireSafePath(file);
-            Files.createDirectories(file.getParent());
-            Files.createFile(file);
-            StorageBackup.force(file);
-            String relative = registry.root.relativize(file).toString().replace('\\', '/'),
-                hash = StorageBackup.hash(file),
-                now = registry.clock.instant().toString();
-            try (var insert =
-                db.prepareStatement("INSERT INTO activity_segments VALUES(?,?,?,'OPEN',0,?,?,?)")) {
-              insert.setString(1, id);
-              insert.setString(2, scope);
-              insert.setString(3, relative);
-              insert.setString(4, hash);
-              insert.setString(5, now);
-              insert.setString(6, now);
-              insert.executeUpdate();
-            }
-            segment = new Segment(id, scope, relative, 0, hash, registry.clock.instant());
-          }
-          Path file = path(segment);
-          Files.write(file, record, StandardOpenOption.APPEND);
-          StorageIoObservation.written(record.length);
-          StorageBackup.force(file);
-          try (var update =
-              db.prepareStatement(
-                  "UPDATE activity_segments SET bytes=?,sha256=?,updated=? WHERE id=?")) {
-            update.setLong(1, segment.bytes() + record.length);
-            update.setString(2, chain(segment.sha256(), record));
-            update.setString(3, registry.clock.instant().toString());
-            update.setString(4, segment.id());
-            update.executeUpdate();
-          }
-          return null;
+          T result = work.apply(db);
+          append(db, scope, entry);
+          return result;
         });
+  }
+
+  /** JSONL本文を同期してから、同じトランザクションの管理情報を更新する。 */
+  private void append(Connection db, String scope, ProfileEventLogEntry entry) throws Exception {
+    byte[] record =
+        (StorageDatabase.JSON.writeValueAsString(entry) + "\n").getBytes(StandardCharsets.UTF_8);
+    if (record.length > 1024 * 1024)
+      throw new IllegalArgumentException("Activity record exceeds 1 MiB");
+    var segment = open(db, scope);
+    if (segment != null) {
+      verify(segment);
+      if (segment.bytes() + record.length > segmentBytes
+          || !segment.created().plus(Duration.ofDays(1)).isAfter(registry.clock.instant())) {
+        close(db, segment);
+        segment = null;
+      }
+    }
+    if (segment == null) {
+      String id = UUID.randomUUID().toString();
+      Path file = directory(scope).resolve(id + ".jsonl");
+      StorageBackup.requireSafePath(file);
+      Files.createDirectories(file.getParent());
+      Files.createFile(file);
+      StorageBackup.force(file);
+      String relative = registry.root.relativize(file).toString().replace('\\', '/'),
+          hash = StorageBackup.hash(file),
+          now = registry.clock.instant().toString();
+      try (var insert =
+          db.prepareStatement("INSERT INTO activity_segments VALUES(?,?,?,'OPEN',0,?,?,?)")) {
+        insert.setString(1, id);
+        insert.setString(2, scope);
+        insert.setString(3, relative);
+        insert.setString(4, hash);
+        insert.setString(5, now);
+        insert.setString(6, now);
+        insert.executeUpdate();
+      }
+      segment = new Segment(id, scope, relative, 0, hash, registry.clock.instant());
+    }
+    Path file = path(segment);
+    Files.write(file, record, StandardOpenOption.APPEND);
+    StorageIoObservation.written(record.length);
+    StorageBackup.force(file);
+    try (var update =
+        db.prepareStatement("UPDATE activity_segments SET bytes=?,sha256=?,updated=? WHERE id=?")) {
+      update.setLong(1, segment.bytes() + record.length);
+      update.setString(2, chain(segment.sha256(), record));
+      update.setString(3, registry.clock.instant().toString());
+      update.setString(4, segment.id());
+      update.executeUpdate();
+    }
   }
 
   /**

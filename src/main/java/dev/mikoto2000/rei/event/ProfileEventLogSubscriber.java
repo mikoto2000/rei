@@ -19,10 +19,17 @@ public class ProfileEventLogSubscriber {
   /** 購読。 */
   private AgentEventBus.Subscription subscription;
 
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private StreamingEventPersistence streaming;
+
   /** 実行状況の通知に関する購読を処理する。 */
   @PostConstruct
   void subscribe() {
-    subscription = eventBus.subscribe(logStore);
+    subscription =
+        eventBus.subscribe(
+            event -> {
+              if (streaming == null || !streaming.handles(event)) logStore.onEvent(event);
+            });
   }
 
   /** 実行状況の通知に関する購読の終了を処理する。 */

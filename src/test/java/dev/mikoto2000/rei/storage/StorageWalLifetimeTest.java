@@ -94,7 +94,7 @@ class StorageWalLifetimeTest {
 
   /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
-  void contextKeepsWalAliveWithoutDeferringCommitsOrChangingPragmas() throws Exception {
+  void contextKeepsWalAliveWithImmediateFullCommitsAndSameCheckpointByteBudget() throws Exception {
     try (var context = context()) {
       write("committed");
       assertThat(Files.exists(root.resolve("storage.db-wal"))).isTrue();
@@ -109,8 +109,21 @@ class StorageWalLifetimeTest {
                     assertThat(rows.next()).isTrue();
                     assertThat(rows.getLong(1)).isEqualTo(1);
                   }
+                  for (var expected : Map.of("synchronous", 2, "page_size", 1024).entrySet()) {
+                    try (var rows = sql.executeQuery("PRAGMA " + expected.getKey())) {
+                      assertThat(rows.getInt(1)).isEqualTo(expected.getValue());
+                    }
+                  }
+                }
+                return null;
+              });
+      new StorageDatabase(root)
+          .transaction(
+              db -> {
+                try (var sql = db.createStatement()) {
                   for (var expected :
-                      Map.of("synchronous", 2, "wal_autocheckpoint", 1000).entrySet()) {
+                      Map.of("synchronous", 2, "wal_autocheckpoint", 4000, "page_size", 1024)
+                          .entrySet()) {
                     try (var rows = sql.executeQuery("PRAGMA " + expected.getKey())) {
                       assertThat(rows.getInt(1)).isEqualTo(expected.getValue());
                     }

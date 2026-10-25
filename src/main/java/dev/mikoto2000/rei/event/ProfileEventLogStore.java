@@ -45,6 +45,20 @@ public class ProfileEventLogStore implements AgentEventListener {
     this.managed = managed;
   }
 
+  /** 明示ファイル出力は従来の経路を使い、同じ管理ログだけを共同確定に参加させる。 */
+  boolean hasManagedLog() {
+    return file == null && managed != null;
+  }
+
+  /** 既存の診断保存adapterがイベントも同じtransactionへ参加させる。 */
+  void persistStreamingEvent(SqliteProjectAgentEventStore events, AgentEvent event) {
+    managed.appendWith(
+        event.projectId(),
+        toEntry(event),
+        events.root(),
+        db -> events.appendInTransaction(db, event));
+  }
+
   /** 実行状況の通知を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ProfileEventLogStore() {
     this(null, new ObjectMapper().registerModule(new JavaTimeModule()));
@@ -179,7 +193,7 @@ public class ProfileEventLogStore implements AgentEventListener {
   }
 
   /** 利用先へ渡せるよう、項目の形式に変換する。 */
-  private ProfileEventLogEntry toEntry(AgentEvent event) {
+  ProfileEventLogEntry toEntry(AgentEvent event) {
     AgentEventPayload payload = event.payload();
     return new ProfileEventLogEntry(
         event.id(),
