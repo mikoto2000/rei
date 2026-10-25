@@ -9,6 +9,20 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class SecretaryRemoteCommandsTest {
+  @Test void connectionsUseFixedPathsAndRequireWriteRevisions() {
+    var config=RemoteCommands.route(List.of("/secretary","connection-configure","--name","mail","--service","GMAIL","--resource","me","--connection-enabled"),"p","s");
+    assertEquals("PUT",config.method());assertEquals("/api/v1/secretary/connections",config.path());
+    assertEquals(-1L,((Map<?,?>)config.body()).get("version"));
+    var prepare=RemoteCommands.route(List.of("/secretary","external-prepare","--connection","mail","--key","send:one","--operation","MAIL_SEND","--arguments","{\"to\":\"a@example.invalid\",\"body\":\"review\"}"),"p","s");
+    assertEquals("/api/v1/secretary/external-actions",prepare.path());
+    assertEquals("MAIL_SEND",((Map<?,?>)prepare.body()).get("operation"));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/secretary","external-execute","id"),"p","s"));
+    var execute=RemoteCommands.route(List.of("/secretary","external-execute","id","--revision","3"),"p","s");
+    assertEquals("/api/v1/secretary/external-actions/id/execute",execute.path());
+    assertEquals(3L,((Map<?,?>)execute.body()).get("revision"));
+    assertThrows(IllegalArgumentException.class,()->RemoteCommands.route(List.of("/secretary","connection-read","id","--url","https://evil.invalid"),"p","s"));
+  }
+
   @Test
   void proposalsAndFeedbackUseRevisionScopedEndpointsAndExplicitSettings() {
     var configure = RemoteCommands.route(List.of("/secretary", "orchestrator-configure", "--proposals-enabled", "--stopped", "--minimum-seconds", "120"), "p", null);

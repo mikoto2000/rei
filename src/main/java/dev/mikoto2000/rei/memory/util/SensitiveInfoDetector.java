@@ -7,7 +7,7 @@ import org.springframework.stereotype.Component;
 
 /** 長期記憶の補助に必要な秘密を含む付随情報検出の窓口を扱う。 */
 @Component
-public class SensitiveInfoDetector {
+public class SensitiveInfoDetector implements dev.mikoto2000.rei.secretary.SecretaryDataPolicy {
 
   /** メールアドレス。 */
   private static final Pattern EMAIL =
@@ -31,6 +31,18 @@ public class SensitiveInfoDetector {
   /** 秘密鍵などのPEM情報を検出する規則。 */
   private static final Pattern PEM =
       Pattern.compile("-----BEGIN (?:CERTIFICATE|[A-Z ]*PRIVATE KEY)-----");
+
+  @Override
+  public String scrubSecretaryContent(String content) {
+    String value = content == null ? "" : content;
+    if (SECRET_KEY.matcher(value).find()
+        || BARE_KEY.matcher(value).find()
+        || PEM.matcher(value).find())
+      throw new IllegalArgumentException("Sensitive external evidence requires manual handling");
+    value = EMAIL.matcher(value).replaceAll("[email]");
+    value = PHONE_INTL.matcher(value).replaceAll("[phone]");
+    return PHONE_JP.matcher(value).replaceAll("[phone]");
+  }
 
   /** 長期記憶の補助で判断に用いる含有秘密を含む付随情報の条件を確認する。 */
   public boolean containsSensitiveInfo(String content) {

@@ -18,6 +18,25 @@ import org.junit.jupiter.api.Test;
 
 /** ツール権限判断基準の結果と状態の契約を検証するテスト。 */
 class ToolPermissionPolicyTest {
+  @Test
+  void externalWritesCannotBeRelabeledAsReadsAndCancelRequiresDestructivePermission() {
+    var readOnly =
+        policy(
+            Set.of(ActionCapability.READ, ActionCapability.NETWORK_READ),
+            Set.of(ActionCapability.NETWORK_WRITE));
+    assertEquals("AUTO_APPROVE", readOnly.decision("EXTERNAL_READ").decision());
+    assertEquals("DENY", readOnly.decision("EXTERNAL_MAIL_SEND").decision());
+    var writes =
+        policy(
+            Set.of(
+                ActionCapability.NETWORK_READ,
+                ActionCapability.NETWORK_WRITE,
+                ActionCapability.EXTERNAL_SIDE_EFFECT),
+            Set.of(ActionCapability.DESTRUCTIVE));
+    assertEquals("AUTO_APPROVE", writes.decision("EXTERNAL_CALENDAR_UPDATE").decision());
+    assertEquals("DENY", writes.decision("EXTERNAL_CALENDAR_CANCEL").decision());
+  }
+
   /** 追加された検索上限を利用することを確認する。 */
   @Test
   void webSearchPreflightUsesInjectedSearchLimit() {

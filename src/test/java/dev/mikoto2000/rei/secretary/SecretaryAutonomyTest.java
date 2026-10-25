@@ -19,6 +19,62 @@ import org.springframework.beans.factory.support.StaticListableBeanFactory;
 @Tag("integration")
 class SecretaryAutonomyTest {
   @Test
+  void externalTasksNeverUseGenericPlannerAndConsentIsRevocableBeforeBudgetReservation()
+      throws Exception {
+    var db = db();
+    var ledger = new SecretaryLedger(db, clock);
+    var candidate =
+        ledger.externalCandidate("p", "external:one", "private subject", null, "external:c:item");
+    var task =
+        ledger.update(
+            "p",
+            candidate.id(),
+            candidate.revision(),
+            candidate.title(),
+            candidate.intent(),
+            SecretaryTask.Status.OPEN,
+            null,
+            3,
+            candidate.tags(),
+            candidate.references());
+    try (var service = service(db, ledger)) {
+      service.configure(settings(2, 3, 1));
+      assertThrows(
+          IllegalStateException.class,
+          () -> service.create(request(task, "blocked", SecretaryAutonomy.Kind.SUMMARY, null)));
+      assertEquals(0, runtime.starts);
+      var allowed = new java.util.concurrent.atomic.AtomicBoolean(true);
+      var beans = new StaticListableBeanFactory();
+      beans.addBean(
+          "external",
+          new SecretaryPreparationContext() {
+            public Evidence prepareExternal(SecretaryTask ignored) {
+              return new Evidence("sanitized evidence", "permission", "model");
+            }
+
+            public boolean allowsExternal(SecretaryTask ignored, String permission) {
+              return allowed.get() && permission.equals("permission");
+            }
+          });
+      service.setExternalContexts(beans.getBeanProvider(SecretaryPreparationContext.class));
+      var job = service.create(request(task, "explicit", SecretaryAutonomy.Kind.SUMMARY, null));
+      service.start("p", job.id(), job.revision());
+      assertEquals(1, runtime.starts);
+      allowed.set(false);
+      assertFalse(runtime.budget.tryReserve());
+      assertEquals(0, service.get("p", job.id()).calls());
+      assertFalse(
+          service
+              .context(
+                  "p",
+                  clock.instant().atZone(java.time.ZoneOffset.UTC).toLocalDate(),
+                  java.time.ZoneOffset.UTC)
+              .toString()
+              .contains("sanitized evidence"));
+    }
+  }
+
+  @Test
   void interruptedAdmissionCannotTurnAnAttemptCounterIntoAnApproval() throws Exception {
     var db = db();
     var ledger = new SecretaryLedger(db, clock);

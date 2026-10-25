@@ -32,6 +32,8 @@ class SecretaryAuthenticationTest {
     SecretaryController.class,
     SecretaryOrchestratorController.class,
     SecretaryAutonomyController.class,
+    SecretaryConnectionsController.class,
+    dev.mikoto2000.rei.secretary.SecretaryConnections.class,
     dev.mikoto2000.rei.secretary.SecretaryAutonomy.class,
     dev.mikoto2000.rei.secretary.SecretaryFollowups.class,
     dev.mikoto2000.rei.secretary.SecretaryOrchestrator.class,
@@ -56,6 +58,41 @@ class SecretaryAuthenticationTest {
       try (var context = application().run(args(true))) {
         int port = Integer.parseInt(context.getEnvironment().getProperty("local.server.port"));
         project = context.getBean(ProjectRegistry.class).resolve(root).id();
+        assertEquals(
+            401,
+            send(client, port, "/api/v1/secretary/connections?projectId=" + project, null, false)
+                .statusCode());
+        assertEquals(
+            200,
+            send(client, port, "/api/v1/secretary/connections?projectId=" + project, null, true)
+                .statusCode());
+        assertEquals(
+            401,
+            send(
+                    client,
+                    port,
+                    "/api/v1/secretary/external-actions?projectId=" + project,
+                    null,
+                    false)
+                .statusCode());
+        assertEquals(
+            200,
+            send(
+                    client,
+                    port,
+                    "/api/v1/secretary/external-actions?projectId=" + project,
+                    null,
+                    true)
+                .statusCode());
+        assertEquals(
+            400,
+            send(
+                    client,
+                    port,
+                    "/api/v1/secretary/external-actions",
+                    "{\"projectId\":\"p\",\"unknown\":true}",
+                    true)
+                .statusCode());
         assertEquals(
             401,
             send(

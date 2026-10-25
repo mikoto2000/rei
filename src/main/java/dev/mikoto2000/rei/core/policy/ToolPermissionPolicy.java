@@ -24,6 +24,23 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
           case "GOAL", "ROUTINE" -> Set.of(ActionCapability.EXECUTE, ActionCapability.LOCAL_WRITE);
           case "RESEARCH", "ORGANIZE", "SUMMARY", "PREPARE", "STATUS" ->
               Set.of(ActionCapability.READ);
+          case "EXTERNAL_READ" -> Set.of(ActionCapability.NETWORK_READ);
+          case "EXTERNAL_CALENDAR_CREATE",
+              "EXTERNAL_CALENDAR_UPDATE",
+              "EXTERNAL_MAIL_DRAFT",
+              "EXTERNAL_MAIL_SEND",
+              "EXTERNAL_SLACK_POST",
+              "EXTERNAL_SLACK_REPORT" ->
+              Set.of(
+                  ActionCapability.NETWORK_READ,
+                  ActionCapability.NETWORK_WRITE,
+                  ActionCapability.EXTERNAL_SIDE_EFFECT);
+          case "EXTERNAL_CALENDAR_CANCEL", "EXTERNAL_REVOKE" ->
+              Set.of(
+                  ActionCapability.NETWORK_READ,
+                  ActionCapability.NETWORK_WRITE,
+                  ActionCapability.EXTERNAL_SIDE_EFFECT,
+                  ActionCapability.DESTRUCTIVE);
           default -> Set.copyOf(EnumSet.allOf(ActionCapability.class));
         };
     return new dev.mikoto2000.rei.secretary.SecretaryExecutionPolicy.Decision(

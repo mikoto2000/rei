@@ -84,6 +84,32 @@ public final class IntegrationRunSubmitService {
   /** 埋め込み表現。 */
   private dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService embeddings;
 
+  private org.springframework.beans.factory.ObjectProvider<
+          dev.mikoto2000.rei.secretary.SecretaryConnections>
+      secretaryConnections;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setSecretaryConnections(
+      org.springframework.beans.factory.ObjectProvider<
+              dev.mikoto2000.rei.secretary.SecretaryConnections>
+          connections) {
+    secretaryConnections = connections;
+  }
+
+  public AgentRunContext authorizeSecretary(
+      String project, String session, String connectionId, boolean force) {
+    var service =
+        java.util.Objects.requireNonNull(secretaryConnections, "Secretary unavailable").getObject();
+    var connection = service.status(project, connectionId);
+    if (!connection.config().sessionId().equals(session))
+      throw new IllegalArgumentException("Connection belongs to another Session");
+    return submitAuxiliary(
+        project,
+        session,
+        "secretary.authorize",
+        () -> service.authorize(project, connectionId, force).state());
+  }
+
   /** 実行の受付と状態管理で使用する埋め込み表現を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setEmbeddings(

@@ -1595,6 +1595,73 @@ public final class RemoteCommands {
     return String.join(" ", words.subList(start, words.size()));
   }
 
+  private static Request secretaryConnection(List<String> words,String selectedProject,String selectedSession) {
+    String action=words.get(1);
+    boolean identified=!Set.of("connection-list","connection-configure","external-list","external-prepare").contains(action);
+    if(identified && words.size()<3)throw invalid();
+    var allowed=new HashSet<String>(Set.of("--project"));
+    switch(action) {
+      case "connection-list","connection-show","connection-auth","connection-poll","external-show" -> {}
+      case "connection-items","connection-history","external-list","external-history" -> allowed.add("--limit");
+      case "connection-disconnect" -> allowed.add("--connection-version");
+      case "connection-configure" -> allowed.addAll(Set.of("--session","--name","--service","--resource","--zone","--connection-version","--poll-seconds"));
+      case "connection-read" -> allowed.addAll(Set.of("--operation","--arguments"));
+      case "connection-task" -> allowed.add("--key");
+      case "connection-authorize" -> allowed.add("--session");
+      case "external-prepare" -> allowed.addAll(Set.of("--connection","--key","--operation","--arguments"));
+      case "external-execute","external-cancel","external-verify" -> allowed.add("--revision");
+      default -> throw invalid();
+    }
+    var flags=action.equals("connection-configure")?Set.of("--connection-enabled","--import-candidates","--allow-model-content"):action.equals("connection-authorize")?Set.of("--force-auth"):Set.<String>of();
+    var opts=options(words,identified?3:2,allowed,flags);
+    String project=opts.getOrDefault("--project",selectedProject);if(project==null || project.isBlank())throw invalid();
+    String base="/api/v1/secretary/";
+    String path=base+(action.startsWith("connection-")?"connections":"external-actions")+(identified?"/"+id(words.get(2)):"");
+    var body=new LinkedHashMap<String,Object>();body.put("projectId",project);
+    if(action.equals("connection-configure")) {
+      var config=new LinkedHashMap<String,Object>();config.put("projectId",project);config.put("sessionId",opts.getOrDefault("--session",selectedSession));
+      config.put("name",opts.get("--name"));config.put("service",opts.get("--service"));config.put("resource",opts.get("--resource"));
+      config.put("enabled",Boolean.parseBoolean(opts.getOrDefault("--connection-enabled","false")));
+      config.put("importCandidates",Boolean.parseBoolean(opts.getOrDefault("--import-candidates","false")));
+      config.put("allowModelContent",Boolean.parseBoolean(opts.getOrDefault("--allow-model-content","false")));
+      config.put("pollSeconds",Integer.parseInt(opts.getOrDefault("--poll-seconds","300")));config.put("zone",opts.getOrDefault("--zone","Asia/Tokyo"));
+      return new Request("PUT",path,Map.of("config",config,"version",Long.parseLong(opts.getOrDefault("--connection-version","-1"))));
+    }
+    if(Set.of("connection-list","connection-show","external-list","external-show","connection-auth","connection-items","connection-history","external-history").contains(action)) {
+      if(action.equals("connection-auth"))path+="/auth";
+      if(action.endsWith("-items"))path+="/items";
+      if(action.endsWith("-history"))path+="/history";
+      var query=new LinkedHashMap<String,Object>();query.put("projectId",project);
+      if(opts.containsKey("--limit"))query.put("limit",Integer.parseInt(opts.get("--limit")));
+      return query(path,query);
+    }
+    if(action.equals("connection-authorize")) {
+      body.put("sessionId",opts.getOrDefault("--session",selectedSession));body.put("force",Boolean.parseBoolean(opts.getOrDefault("--force-auth","false")));
+      body.put("connectionId",words.get(2));return post("/api/v1/google-operations/secretary/authorize",body);
+    }
+    if(action.equals("connection-read") || action.equals("external-prepare")) {
+      body.put("operation",opts.get("--operation"));
+      try {
+        var node=COMMAND_JSON.readTree(opts.getOrDefault("--arguments","{}"));
+        if(!node.isObject() || node.size()>32)throw invalid();
+        for(var e:node.properties())if(!e.getValue().isTextual())throw invalid();
+        body.put("arguments",COMMAND_JSON.convertValue(node,Map.class));
+      } catch(java.io.IOException invalidJson) { throw invalid(); }
+      if(action.equals("external-prepare")) {body.put("connectionId",opts.get("--connection"));body.put("key",opts.get("--key"));return post(path,body);}
+      return post(path+"/read",body);
+    }
+    if(action.equals("connection-task")) { body.put("externalId",opts.get("--key"));return post(path+"/tasks",body); }
+    if(action.equals("connection-disconnect")) {
+      if(!opts.containsKey("--connection-version"))throw invalid();
+      body.put("revision",Long.parseLong(opts.get("--connection-version")));return post(path+"/disconnect",body);
+    }
+    if(action.startsWith("external-")) {
+      if(!opts.containsKey("--revision"))throw invalid();body.put("revision",Long.parseLong(opts.get("--revision")));
+      return post(path+"/"+action.substring(9),body);
+    }
+    return post(path+"/poll",body);
+  }
+
   private static Request secretaryExecution(List<String> words,String selectedProject,String selectedSession) {
     String action=words.get(1);
     boolean identified=Set.of("work-add","work-show","work-history","work-start","work-cancel","work-suspend","work-resume","work-verify").contains(action);
@@ -1644,6 +1711,7 @@ public final class RemoteCommands {
 
   /** 軽量CLIでの対話で用いる選択可能な設定を返す。 */
   private static Request secretary(List<String> words, String selectedProject, String selectedSession) {
+    if(words.size()>1 && (words.get(1).startsWith("connection-") || words.get(1).startsWith("external-"))) return secretaryConnection(words,selectedProject,selectedSession);
     if(words.size()>1 && (words.get(1).startsWith("autonomy-") || words.get(1).startsWith("work-")))
       return secretaryExecution(words,selectedProject,selectedSession);
     String action = words.size() > 1 ? words.get(1) : "list";

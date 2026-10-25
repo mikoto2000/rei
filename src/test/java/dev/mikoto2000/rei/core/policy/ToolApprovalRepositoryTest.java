@@ -44,6 +44,29 @@ class ToolApprovalRepositoryTest {
             Clock.fixed(now, ZoneOffset.UTC));
   }
 
+  @Test
+  void externalSendApprovalCannotCrossPayloadOrProjectAndIsSingleUse() {
+    String permit =
+        repository.requestSecretaryAction("p", "EXTERNAL_MAIL_SEND", "{to:one,body:reviewed}");
+    assertEquals(
+        "PENDING",
+        repository.secretaryActionStatus(
+            "p", permit, "EXTERNAL_MAIL_SEND", "{to:one,body:reviewed}"));
+    repository.decide("p", permit, true);
+    assertFalse(
+        repository.consumeSecretaryAction(
+            "other", permit, "EXTERNAL_MAIL_SEND", "{to:one,body:reviewed}"));
+    assertFalse(
+        repository.consumeSecretaryAction(
+            "p", permit, "EXTERNAL_MAIL_SEND", "{to:changed,body:reviewed}"));
+    assertTrue(
+        repository.consumeSecretaryAction(
+            "p", permit, "EXTERNAL_MAIL_SEND", "{to:one,body:reviewed}"));
+    assertFalse(
+        repository.consumeSecretaryAction(
+            "p", permit, "EXTERNAL_MAIL_SEND", "{to:one,body:reviewed}"));
+  }
+
   /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void exactApprovalSurvivesRestartAndIsConsumedOnce() {

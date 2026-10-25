@@ -511,6 +511,19 @@ public class ExternalConfigFileService {
                 - handle: "alice.bsky.social"
                   probability: 0.25
                   max-replies-per-day: 3
+          secretary:
+            enabled: ${REI_SECRETARY_ENABLED:false}
+            extraction-enabled: ${REI_SECRETARY_EXTRACTION_ENABLED:false}
+            followups-enabled: ${REI_SECRETARY_FOLLOWUPS_ENABLED:false}
+            orchestrator-enabled: ${REI_SECRETARY_ORCHESTRATOR_ENABLED:false}
+            autonomy-enabled: ${REI_SECRETARY_AUTONOMY_ENABLED:false}
+            connections-enabled: ${REI_SECRETARY_CONNECTIONS_ENABLED:false}
+            external-content-to-model: ${REI_SECRETARY_EXTERNAL_CONTENT_TO_MODEL:false}
+            private-model-endpoints: ${REI_SECRETARY_PRIVATE_MODEL_ENDPOINTS:}
+            github:
+              enabled: ${REI_SECRETARY_GITHUB_ENABLED:false}
+            slack:
+              enabled: ${REI_SECRETARY_SLACK_ENABLED:false}
           google:
             application-name: Rei
             credentials-path: ${REI_GOOGLE_CREDENTIALS_PATH:${rei.data-dir}/google-calendar-credentials.json}
@@ -521,6 +534,10 @@ public class ExternalConfigFileService {
               enabled: false
               default-calendar-id: ${REI_GOOGLE_CALENDAR_DEFAULT_CALENDAR_ID:primary}
               time-zone: ${REI_GOOGLE_CALENDAR_TIME_ZONE:}
+            gmail:
+              enabled: ${REI_GOOGLE_GMAIL_ENABLED:false}
+              drafts-enabled: ${REI_GOOGLE_GMAIL_DRAFTS_ENABLED:false}
+              send-enabled: ${REI_GOOGLE_GMAIL_SEND_ENABLED:false}
             task:
               enabled: true
         """;

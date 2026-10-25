@@ -29,6 +29,21 @@ public final class GoogleQueuedController {
     this.runs = runs;
   }
 
+  public record SecretaryAuthorize(
+      String projectId, String sessionId, String connectionId, Boolean force)
+      implements StrictApiRequest {}
+
+  @PostMapping("/secretary/authorize")
+  public ResponseEntity<BackgroundRunController.AcceptedRunResponse> authorizeSecretary(
+      @RequestBody SecretaryAuthorize r) {
+    scope(r.projectId(), r.sessionId());
+    required(r.sessionId());
+    required(r.connectionId());
+    return accepted(
+        runs.authorizeSecretary(
+            r.projectId(), r.sessionId(), r.connectionId(), Boolean.TRUE.equals(r.force())));
+  }
+
   /**
    * Web APIによる操作で受け渡す予定表一覧を表す。
    *
