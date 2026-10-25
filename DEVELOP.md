@@ -1,5 +1,7 @@
 # DEVELOP
 
+先回り提案・準備時間・期限切れの仕様は [先回り準備](docs/life-preparation.md) を参照してください。
+
 朝夕レポートの生成・履歴・検証は [朝夕ブリーフィング](docs/life-briefings.md) を参照してください。
 
 勤務時間制約・生活時間の設定と検証は [生活コンテキスト](docs/life-context.md) を参照してください。

@@ -719,6 +719,12 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
             db -> {
               var job = find(db, owner.spec().request().projectId(), owner.id());
               var settings = settings(db, owner.spec().request().projectId());
+              var task =
+                  ledger.getWithin(
+                      db, owner.spec().request().projectId(), owner.spec().request().taskId());
+              if (task.revision() != owner.spec().request().taskRevision()
+                  || !Set.of(SecretaryTask.Status.OPEN, SecretaryTask.Status.WAITING)
+                      .contains(task.status())) return false;
               if (job == null
                   || !owner.runId().equals(job.runId())
                   || !Set.of("DISPATCHING", "RUNNING", "WAITING").contains(job.state())
@@ -763,6 +769,11 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
     if (!run.equals(job.runId())
         || !Set.of("DISPATCHING", "RUNNING", "WAITING").contains(job.state())) return;
     if (outcome.status().equals("SUCCESS")) {
+      if (!sourceCurrent(job)
+          || life != null && !life.backgroundAllowed(project, job.spec().request().taskId())) {
+        finish(job, "BLOCKED", "source_or_life_policy_changed", null);
+        return;
+      }
       if (outcome.text() == null || outcome.text().isBlank() || outcome.text().length() > 32768) {
         finish(job, "FAILED", "invalid_preparation_result", null);
         return;
@@ -1072,6 +1083,14 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
       return;
     }
     if (!Set.of("CANCELLING", "SUSPENDING", "TIMING_OUT").contains(job.state())
+        && (!sourceCurrent(job)
+            || life != null && !life.backgroundAllowed(project, job.spec().request().taskId()))) {
+      var paused = transition(job, "SUSPENDING", "source_or_life_policy_changed");
+      stopRuntime(paused, true);
+      monitor(get(project, job.id()));
+      return;
+    }
+    if (!Set.of("CANCELLING", "SUSPENDING", "TIMING_OUT").contains(job.state())
         && (job.deadline() != null && !clock.instant().isBefore(job.deadline())
             || !settings(project).enabled())) {
       var timing =
@@ -1165,6 +1184,17 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
       }
     }
     intake();
+  }
+
+  private boolean sourceCurrent(Job job) {
+    try {
+      var task = ledger.get(job.spec().request().projectId(), job.spec().request().taskId());
+      return task.revision() == job.spec().request().taskRevision()
+          && Set.of(SecretaryTask.Status.OPEN, SecretaryTask.Status.WAITING)
+              .contains(task.status());
+    } catch (IllegalArgumentException missing) {
+      return false;
+    }
   }
 
   private void intake() {
@@ -1270,6 +1300,22 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
     return value;
   }
 
+  public SecretaryExecutionMode executionMode(String project, String id) {
+    return executionMode(get(project, id));
+  }
+
+  private SecretaryExecutionMode executionMode(Job job) {
+    if (job.state().equals("WAITING_APPROVAL")) return SecretaryExecutionMode.APPROVAL_REQUIRED;
+    if (job.authorization() != null && !job.authorization().equals("READ_ONLY"))
+      return SecretaryExecutionMode.APPROVED_SCOPE;
+    if (level(job.spec().request().kind()) == 1
+        && !Set.of("BLOCKED", "CANCELLED", "UNCERTAIN").contains(job.state())
+        && policy(job.spec().request().kind()).enabled()
+        && !policy(job.spec().request().kind()).decision().equals("DENY"))
+      return SecretaryExecutionMode.AUTO_PREPARATION;
+    return SecretaryExecutionMode.PROPOSAL_ONLY;
+  }
+
   public List<Job> list(String project, int limit) {
     identifier(project, 128);
     bounded(limit);
@@ -1371,7 +1417,8 @@ public final class SecretaryAutonomy implements SecretaryTick, SecretaryContext,
                         job.state(),
                         detail,
                         Reliability.PROPOSAL,
-                        List.of("secretary-job:" + job.id())));
+                        List.of(
+                            "secretary-job:" + job.id(), "execution-mode:" + executionMode(job))));
               }
             }
           }

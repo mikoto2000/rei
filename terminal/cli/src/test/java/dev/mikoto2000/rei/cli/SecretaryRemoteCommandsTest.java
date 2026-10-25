@@ -9,6 +9,12 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 class SecretaryRemoteCommandsTest {
+  @Test void preparationAndExecutionModeAreReadOnlyScopedViews() {
+    assertEquals("/api/v1/secretary/preparation?projectId=p", RemoteCommands.route(List.of("/secretary", "preparation"), "p", null).path());
+    var mode = RemoteCommands.route(List.of("/secretary", "work-mode", "job"), "p", null);
+    assertEquals("GET", mode.method());
+    assertEquals("/api/v1/secretary/executions/job/mode?projectId=p", mode.path());
+  }
   @Test void generatedBriefingsHaveExplicitKeysAndScopedHistory() {
     var generated = RemoteCommands.route(List.of("/secretary", "review-generate", "--key", "evening-one"), "p", null);
     assertEquals("POST", generated.method());

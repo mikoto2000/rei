@@ -394,6 +394,8 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
             case "suggest" -> orchestrator().evaluate(project);
             case "release" -> orchestrator().release(project);
             case "suggestions" -> orchestrator().suggestions(project, limit);
+            case "preparation" -> orchestrator().preparation(project);
+            case "work-mode" -> java.util.Map.of("mode", autonomy().executionMode(project, id));
             case "suggestion" -> orchestrator().suggestion(project, id);
             case "suggestion-history" -> orchestrator().history(project, id, limit);
             case "feedback" -> {

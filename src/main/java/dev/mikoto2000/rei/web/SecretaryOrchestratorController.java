@@ -71,6 +71,11 @@ public class SecretaryOrchestratorController {
     return service().status(projectId);
   }
 
+  @GetMapping("/preparation")
+  public List<SecretaryOrchestrator.Preparation> preparation(@RequestParam String projectId) {
+    return service().preparation(projectId);
+  }
+
   @PostMapping("/orchestrator/evaluate")
   public List<SecretaryOrchestrator.Suggestion> evaluate(@RequestBody Project request) {
     return service().evaluate(request.projectId());

@@ -1664,11 +1664,11 @@ public final class RemoteCommands {
 
   private static Request secretaryExecution(List<String> words,String selectedProject,String selectedSession) {
     String action=words.get(1);
-    boolean identified=Set.of("work-add","work-show","work-history","work-start","work-cancel","work-suspend","work-resume","work-verify").contains(action);
+    boolean identified=Set.of("work-add","work-show","work-mode","work-history","work-start","work-cancel","work-suspend","work-resume","work-verify").contains(action);
     if(identified && words.size()<3)throw invalid();
     var allowed=new HashSet<String>(Set.of("--project"));
     switch(action) {
-      case "autonomy-settings","autonomy-status","autonomy-check","work-show" -> {}
+      case "autonomy-settings","autonomy-status","autonomy-check","work-show","work-mode" -> {}
       case "autonomy-configure" -> allowed.addAll(Set.of("--session","--max-level","--auto-kind","--max-concurrent","--max-seconds","--max-llm-calls","--max-daily-calls","--max-retries"));
       case "work-list","work-history" -> allowed.add("--limit");
       case "work-add" -> allowed.addAll(Set.of("--revision","--key","--kind","--status","--goal"));
@@ -1692,6 +1692,7 @@ public final class RemoteCommands {
       return new Request("PUT",base+"autonomy/settings",body);
     }
     if(action.equals("work-show"))return query(base+"executions/"+id(words.get(2)),Map.of("projectId",project));
+    if(action.equals("work-mode"))return query(base+"executions/"+id(words.get(2))+"/mode",Map.of("projectId",project));
     if(action.equals("work-list") || action.equals("work-history")) {
       int limit=Integer.parseInt(options.getOrDefault("--limit","100"));if(limit<1 || limit>1000)throw invalid();
       return query(base+"executions"+(identified?"/"+id(words.get(2))+"/history":""),Map.of("projectId",project,"limit",limit));
@@ -1739,7 +1740,7 @@ public final class RemoteCommands {
     Set<String> allowed = new HashSet<>(Set.of("--project"));
     switch (action) {
       case "settings", "followup-status", "check", "orchestrator-settings", "orchestrator-status",
-          "suggest", "release", "suggestion" -> {}
+          "suggest", "release", "suggestion", "preparation" -> {}
       case "suggestions", "suggestion-history" -> allowed.add("--limit");
       case "feedback" -> allowed.addAll(Set.of("--revision", "--reaction", "--delay-seconds"));
       case "orchestrator-configure" ->
@@ -1784,6 +1785,7 @@ public final class RemoteCommands {
     String base = "/api/v1/secretary/tasks";
     String orchestration = "/api/v1/secretary/orchestrator";
     String proposals = "/api/v1/secretary/suggestions";
+    if (action.equals("preparation")) return query("/api/v1/secretary/preparation", Map.of("projectId", project));
     if (action.equals("orchestrator-settings") || action.equals("orchestrator-status"))
       return query(
           orchestration + (action.endsWith("settings") ? "/settings" : "/status"),
