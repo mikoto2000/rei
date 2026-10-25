@@ -28,6 +28,16 @@ public final class RunRegistry implements AutoCloseable {
     this.admissions = admissions;
   }
 
+  /** 実行と cleanup 中の終端イベントは RunService が一度だけ確定する。 */
+  public void beginExecution(String runId) {
+    if (admissions != null) admissions.deferTerminalEvents(runId, true);
+  }
+
+  /** 実行所有者による終端確定後、通常のイベント購読へ戻す。 */
+  public void endExecution(String runId) {
+    if (admissions != null) admissions.deferTerminalEvents(runId, false);
+  }
+
   /** 終了後の実行記録を保持する期間。 */
   public static final Duration RETENTION = Duration.ofMinutes(30);
 

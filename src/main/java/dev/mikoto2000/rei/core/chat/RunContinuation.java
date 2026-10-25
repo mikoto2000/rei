@@ -79,6 +79,11 @@ public interface RunContinuation {
   /** 会話の実行に関する終端を処理する。 */
   default void terminal(AgentRunContext owner) {}
 
+  /** 公開状態の終端確定を待たず、終了済み処理の結果を継続台帳へ引き渡す。 */
+  default void terminal(AgentRunContext owner, ChatExecutionResult result) {
+    terminal(owner);
+  }
+
   /** 要求を後続の処理へ引き渡すため、案内を受け付ける。 */
   default void acceptGuidance(AgentRunContext owner, List<Message> guidance) {}
 }

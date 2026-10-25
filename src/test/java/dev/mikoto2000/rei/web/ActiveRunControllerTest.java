@@ -33,6 +33,7 @@ class ActiveRunControllerTest {
     when(cancellation.cancelProject(project.id())).thenReturn(true);
     assertTrue(controller.cancel(project.id()).accepted());
     verify(cancellation).cancelProject(project.id());
+    verify(cancellation).projectDiagnostics(project.id());
     assertThrows(
         dev.mikoto2000.rei.application.run.ResourceNotFoundException.class,
         () -> controller.cancel("unknown"));

@@ -207,6 +207,7 @@ public class SearchCommand implements Runnable {
       log.warn("Search knowledge retrieval failed", e);
       println("[error] 検索結果の取得に失敗しました: " + safeMessage(e, "原因不明"));
     } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
       if (cancellationService.consumeCancellationRequested()) {
         println("");
         println("[cancelled] ユーザーの停止要求により検索を中止しました。");

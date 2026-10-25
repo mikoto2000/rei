@@ -124,6 +124,7 @@ dev.mikoto2000.rei.application.run.BackgroundRunSubmitService -> dev.mikoto2000.
 dev.mikoto2000.rei.application.run.BackgroundRunSubmitService -> dev.mikoto2000.rei.core.project.ProjectRegistry
 dev.mikoto2000.rei.application.run.BackgroundRunSubmitService -> dev.mikoto2000.rei.core.project.ProjectRunStateStore
 dev.mikoto2000.rei.application.run.BackgroundRunSubmitService -> dev.mikoto2000.rei.core.service.CommandCancellationService
+dev.mikoto2000.rei.application.run.BackgroundRunSubmitService -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 dev.mikoto2000.rei.application.run.BackgroundRunSubmitService -> dev.mikoto2000.rei.event.AgentEvent
 dev.mikoto2000.rei.application.run.BackgroundRunSubmitService -> dev.mikoto2000.rei.event.AgentEventBus
 dev.mikoto2000.rei.application.run.BackgroundRunSubmitService -> dev.mikoto2000.rei.event.AgentEventFactory
@@ -206,6 +207,8 @@ dev.mikoto2000.rei.application.run.RunRegistry$StoredRun -> dev.mikoto2000.rei.c
 dev.mikoto2000.rei.application.run.RunRegistry$StoredRun -> dev.mikoto2000.rei.core.chat.AgentRunContext$RequestSource
 dev.mikoto2000.rei.application.run.RunService -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.application.run.RunService -> dev.mikoto2000.rei.core.service.CommandCancellationService
+dev.mikoto2000.rei.application.run.RunService -> dev.mikoto2000.rei.core.service.CommandCancellationService$CancellationRequest
+dev.mikoto2000.rei.application.run.RunService -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 dev.mikoto2000.rei.application.run.RunService -> dev.mikoto2000.rei.event.AgentEvent
 dev.mikoto2000.rei.application.run.RunService -> dev.mikoto2000.rei.event.AgentEventBus
 dev.mikoto2000.rei.application.run.RunService -> dev.mikoto2000.rei.event.AgentEventBus$Subscription
@@ -691,6 +694,7 @@ dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.core.pro
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.core.project.ProjectService
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.core.project.ProjectStorage
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.core.service.CommandCancellationService
+dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.core.service.ModelHolderService
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException$Reason
@@ -699,6 +703,7 @@ dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.core.sta
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.core.working.WorkingSet
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.doctor.DoctorActiveService
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.doctor.DoctorRequest
+dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.event.AgentEvent
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.event.AgentEventFactory
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.event.AgentEventPublisher
 dev.mikoto2000.rei.core.chat.ChatExecutionService -> dev.mikoto2000.rei.event.ErrorInformation
@@ -739,13 +744,19 @@ dev.mikoto2000.rei.core.chat.ConversationInputRouter -> dev.mikoto2000.rei.core.
 dev.mikoto2000.rei.core.chat.ConversationInputRouter -> dev.mikoto2000.rei.core.project.ProjectContext
 dev.mikoto2000.rei.core.chat.ConversationInputRouter -> dev.mikoto2000.rei.core.project.ProjectService
 dev.mikoto2000.rei.core.chat.ConversationInputRouter -> dev.mikoto2000.rei.core.project.ProjectStorage
+dev.mikoto2000.rei.core.chat.ConversationInputRouter -> dev.mikoto2000.rei.core.service.CommandCancellationService
+dev.mikoto2000.rei.core.chat.ConversationInputRouter -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 dev.mikoto2000.rei.core.chat.ConversationInputRouter -> dev.mikoto2000.rei.llm.ConversationIds
 dev.mikoto2000.rei.core.chat.ConversationInputRouter -> dev.mikoto2000.rei.llm.capture.CaptureStore
 dev.mikoto2000.rei.core.chat.ConversationLifecycleAdvisor -> dev.mikoto2000.rei.conversation.ConversationTurnStore
+dev.mikoto2000.rei.core.chat.RunCancellation -> dev.mikoto2000.rei.core.service.CommandCancellationService
+dev.mikoto2000.rei.core.chat.RunCancellation -> dev.mikoto2000.rei.core.service.CommandCancellationService$ChildLease
 dev.mikoto2000.rei.core.chat.RunCancellation -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
 dev.mikoto2000.rei.core.chat.RunContinuation -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
 dev.mikoto2000.rei.core.chat.RunContinuation -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$LlmCallReservation
 dev.mikoto2000.rei.core.chat.RunContinuation$Saved -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$Snapshot
+dev.mikoto2000.rei.core.chat.RunScopedAdvisor -> dev.mikoto2000.rei.core.service.CommandCancellationService
+dev.mikoto2000.rei.core.chat.RunScopedAdvisor -> dev.mikoto2000.rei.core.service.CommandCancellationService$ChildLease
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration$Registered
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.contextbudget.ResultDelivery$Kind
@@ -753,6 +764,7 @@ dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.policy.P
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.policy.RawToolResultArguments
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.policy.ShellFileReadArguments
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.policy.ToolPermissionException
+dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.service.CommandCancellationService$ChildLease
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.taskstate.TaskStateArguments
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.review.ReviewTools
@@ -2129,6 +2141,7 @@ dev.mikoto2000.rei.subagent.ChatGptSubAgentBackend -> dev.mikoto2000.rei.core.po
 dev.mikoto2000.rei.subagent.ChatGptSubAgentBackend -> dev.mikoto2000.rei.core.policy.ToolPermissionException
 dev.mikoto2000.rei.subagent.ChatGptSubAgentBackend -> dev.mikoto2000.rei.core.policy.ToolPermissionGuard
 dev.mikoto2000.rei.subagent.ChatGptSubAgentBackend -> dev.mikoto2000.rei.core.service.CommandCancellationService
+dev.mikoto2000.rei.subagent.ChatGptSubAgentBackend -> dev.mikoto2000.rei.core.service.CommandCancellationService$ChildLease
 dev.mikoto2000.rei.subagent.ChatGptSubAgentBackend -> dev.mikoto2000.rei.event.AgentEvent
 dev.mikoto2000.rei.subagent.ChatGptSubAgentBackend -> dev.mikoto2000.rei.event.AgentEventFactory
 dev.mikoto2000.rei.subagent.ChatGptSubAgentBackend -> dev.mikoto2000.rei.event.AgentEventPublisher
@@ -2230,6 +2243,8 @@ dev.mikoto2000.rei.subagent.SubAgentRunner$2 -> dev.mikoto2000.rei.llm.OutputLim
 dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.chat.AgentRunScope
 dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.policy.ToolPermissionGuard
+dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.service.CommandCancellationService
+dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.service.CommandCancellationService$ChildLease
 dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.llm.ModelCallBudget
 dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.llm.ModelCallBudgetScope
 dev.mikoto2000.rei.subagent.SubAgentSemanticValidator -> dev.mikoto2000.rei.core.chat.AgentRunContext
@@ -2409,13 +2424,16 @@ dev.mikoto2000.rei.ui.projection.ErrorView -> dev.mikoto2000.rei.event.ErrorInfo
 dev.mikoto2000.rei.ui.shell.ActiveRunDisplay -> dev.mikoto2000.rei.core.chat.ActiveRun
 dev.mikoto2000.rei.ui.shell.ActiveRunDisplay -> dev.mikoto2000.rei.core.chat.ConversationInputRouter
 dev.mikoto2000.rei.ui.shell.ActiveRunDisplay -> dev.mikoto2000.rei.core.execution.ActiveExecution
+dev.mikoto2000.rei.ui.shell.ActiveRunDisplay -> dev.mikoto2000.rei.core.execution.ExecutionType
 dev.mikoto2000.rei.ui.shell.ActiveRunDisplay -> dev.mikoto2000.rei.core.project.ProjectContext
 dev.mikoto2000.rei.ui.shell.ActiveRunDisplay -> dev.mikoto2000.rei.core.project.ProjectService
+dev.mikoto2000.rei.ui.shell.ActiveRunDisplay -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 dev.mikoto2000.rei.ui.shell.ActiveRunPrompt -> dev.mikoto2000.rei.core.chat.ConversationInputRouter
 dev.mikoto2000.rei.ui.shell.ActiveRunPrompt -> dev.mikoto2000.rei.core.chat.ConversationInputRouter$Subscription
 dev.mikoto2000.rei.ui.shell.AgentConsoleSession -> dev.mikoto2000.rei.core.chat.AgentRunScope
 dev.mikoto2000.rei.ui.shell.AgentConsoleSession -> dev.mikoto2000.rei.core.execution.ExecutionScope
 dev.mikoto2000.rei.ui.shell.CancelCommand -> dev.mikoto2000.rei.core.service.CommandCancellationService
+dev.mikoto2000.rei.ui.shell.CancelCommand -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 dev.mikoto2000.rei.ui.shell.ChatCommand -> dev.mikoto2000.rei.application.session.ShellConversationService
 dev.mikoto2000.rei.ui.shell.ChatCommand -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
 dev.mikoto2000.rei.ui.shell.ChatCommand -> dev.mikoto2000.rei.core.chat.ChatExecutionResult

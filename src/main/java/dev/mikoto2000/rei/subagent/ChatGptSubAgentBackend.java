@@ -431,6 +431,18 @@ public final class ChatGptSubAgentBackend {
       boolean standalone,
       LlmCallReservation sharedBudget,
       boolean automaticRun) {
+    try (var lease = cancellation.enterChild(standalone || owner == null ? null : owner.runId())) {
+      return runInternalOwned(request, owner, standalone, sharedBudget, automaticRun);
+    }
+  }
+
+  /** 親の停止後も、子の実体と後片付けが戻るまで所有権を保持する。 */
+  private Receipt runInternalOwned(
+      Request request,
+      AgentRunContext owner,
+      boolean standalone,
+      LlmCallReservation sharedBudget,
+      boolean automaticRun) {
     String id = UUID.randomUUID().toString();
     Instant started = clock.instant();
     String parent = standalone || owner == null ? null : owner.runId();
@@ -966,7 +978,7 @@ public final class ChatGptSubAgentBackend {
         }
         if (reserved && sharedBudget != null)
           try {
-            sharedBudget.recordTotalTokens(!submitted.get() ? 0 : callUsage);
+            sharedBudget.recordTotalTokens(!submitted.get() ? Integer.valueOf(0) : callUsage);
           } catch (RuntimeException exhausted) {
             String accounting = "phase=BUDGET_ACCOUNTING; 親 Run の使用量を計上できません。親の予算と使用量を確認してください。";
             if (state == State.COMPLETED || error == null) {

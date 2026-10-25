@@ -51,6 +51,15 @@ public final class ConversationAdmissionStore implements AutoCloseable {
   /** 終了済み。 */
   private boolean closed;
 
+  /** 実行の所有者が cleanup 後に終端を確定する Run。イベントの二重適用を防ぐ。 */
+  private final Set<String> deferredTerminals = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+  /** RunService の実行区間では、終端の適用を正規 RunRegistry に委ねる。 */
+  public void deferTerminalEvents(String runId, boolean deferred) {
+    if (deferred) deferredTerminals.add(runId);
+    else deferredTerminals.remove(runId);
+  }
+
   /** 購読。 */
   private dev.mikoto2000.rei.event.AgentEventBus.Subscription subscription;
 
@@ -68,7 +77,8 @@ public final class ConversationAdmissionStore implements AutoCloseable {
                     case AGENT_RUN_CANCELLED -> RunStatus.CANCELLED;
                     default -> null;
                   };
-              if (next != null) transition(event.runId(), next);
+              if (next != null && !(next.isTerminal() && deferredTerminals.contains(event.runId())))
+                transition(event.runId(), next);
             });
   }
 
@@ -673,6 +683,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
             });
       } finally {
         OPEN.remove(instance);
+        deferredTerminals.clear();
       }
     }
   }

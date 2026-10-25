@@ -46,7 +46,8 @@ class TaskControlServiceTest {
             0,
             "start");
     var registry = new RunRegistry(Clock.systemUTC());
-    registry.register(new AgentRunContext("active", "session", root, project.id()));
+    var active = new AgentRunContext("active", "session", root, project.id());
+    registry.register(active);
     registry.transition("active", RunStatus.RUNNING, null);
     registry.register(new AgentRunContext("bare", "session", root, project.id()));
     var bus = new InMemoryAgentEventBus();
@@ -65,8 +66,11 @@ class TaskControlServiceTest {
             controls
                 .suspend(project.id(), "session", "run:active", "active", saved.revision())
                 .status())
-        .isEqualTo("CANCELLED");
+        .isEqualTo("RUNNING");
+    assertThat(lifecycle.cancellationDiagnostic("active").requestedAt()).isNotNull();
     assertThat(checkpoints.get(project.id(), "checkpoint").revision()).isEqualTo(saved.revision());
+    assertThat(tasks.get(project.id(), "session", "run:active").resumeSupported()).isFalse();
+    lifecycle.finishMissingTerminal(active, RunStatus.CANCELLED);
     assertThat(tasks.get(project.id(), "session", "run:active").resumeSupported()).isTrue();
     assertThatThrownBy(() -> controls.suspend(project.id(), "session", "run:bare", "bare", 0))
         .isInstanceOf(dev.mikoto2000.rei.application.state.OperationConflictException.class);

@@ -854,19 +854,21 @@ public class Tools {
     ProcessBuilder processBuilder = new ProcessBuilder(commandLine);
     processBuilder.directory(currentWorkingDirectory().toFile());
     processBuilder.redirectErrorStream(true);
-    Process process = processBuilder.start();
+    Process process = startProcess(processBuilder);
 
-    String output;
-    try (BufferedReader reader =
-        new BufferedReader(
-            new InputStreamReader(process.getInputStream(), StandardCharsets.UTF_8))) {
-      output = reader.lines().collect(Collectors.joining(System.lineSeparator()));
+    var output = readStreamAsync(process.getInputStream());
+    try {
+      int exitCode = process.waitFor();
+      String text = awaitOutput(output);
+      IO.println(String.format("%s コマンドは終了コード %d で終了したよ", command, exitCode));
+      return text;
+    } catch (InterruptedException stop) {
+      Thread.currentThread().interrupt();
+      throw stop;
+    } finally {
+      backgroundProcessManager.terminateOwned(process);
+      output.cancel(true);
     }
-
-    int exitCode = process.waitFor();
-    IO.println(String.format("%s コマンドは終了コード %d で終了したよ", command, exitCode));
-
-    return output;
   }
 
   /** 依頼された操作を進めるため、シェルコマンドを実行する。 */
@@ -890,22 +892,41 @@ public class Tools {
 
     ProcessBuilder processBuilder = new ProcessBuilder(commandLine);
     processBuilder.directory(workingDirectory.toFile());
-    Process process = processBuilder.start();
+    Process process = startProcess(processBuilder);
 
     CompletableFuture<String> stdout = readStreamAsync(process.getInputStream());
     CompletableFuture<String> stderr = readStreamAsync(process.getErrorStream());
 
-    boolean completed = process.waitFor(effectiveTimeoutSeconds, TimeUnit.SECONDS);
-    if (!completed) {
-      process.destroyForcibly();
+    try {
+      boolean completed = process.waitFor(effectiveTimeoutSeconds, TimeUnit.SECONDS);
+      if (!completed) backgroundProcessManager.terminateOwned(process);
+      int exitCode = completed ? process.exitValue() : -1;
+      return new ShellCommandResult(exitCode, awaitOutput(stdout), awaitOutput(stderr), !completed);
+    } catch (InterruptedException stop) {
+      Thread.currentThread().interrupt();
+      throw stop;
+    } finally {
+      backgroundProcessManager.terminateOwned(process);
+      stdout.cancel(true);
+      stderr.cancel(true);
     }
+  }
 
-    int exitCode = completed ? process.exitValue() : -1;
-    String stdoutText = stdout.join();
-    String stderrText = stderr.join();
-    IO.println(String.format("%s のシェルコマンドは終了コード %d で終了したよ", shell, exitCode));
+  /** 出力待機も割り込み可能にし、読み取り失敗を隠さない。 */
+  private String awaitOutput(CompletableFuture<String> output)
+      throws IOException, InterruptedException {
+    try {
+      return output.get();
+    } catch (java.util.concurrent.ExecutionException failure) {
+      throw new IOException("Process output could not be read", failure.getCause());
+    }
+  }
 
-    return new ShellCommandResult(exitCode, stdoutText, stderrText, !completed);
+  /** 起動する Process の所有権を、この呼び出しへ限定する。 */
+  Process startProcess(ProcessBuilder builder) throws IOException {
+    if (Thread.currentThread().isInterrupted())
+      throw new java.util.concurrent.CancellationException("Run cancelled before process start");
+    return builder.start();
   }
 
   /** 指定や設定に応じた対象を利用するため、シェルを確定する。 */
@@ -1057,8 +1078,14 @@ public class Tools {
           false,
           started.message());
     }
-    BackgroundProcessSnapshot observed =
-        backgroundProcessManager.await(started.processId(), autoWait);
+    BackgroundProcessSnapshot observed;
+    try {
+      observed = backgroundProcessManager.await(started.processId(), autoWait);
+    } catch (InterruptedException stop) {
+      Thread.currentThread().interrupt();
+      backgroundProcessManager.cancelOwned(started.processId());
+      throw stop;
+    }
     if (observed.status() == BackgroundProcessStatus.RUNNING) {
       return new RunCommandResult(
           "running",

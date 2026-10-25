@@ -85,7 +85,9 @@ business: dev.mikoto2000.rei.web.ActiveRunController -> dev.mikoto2000.rei.appli
 business: dev.mikoto2000.rei.web.ActiveRunController -> dev.mikoto2000.rei.core.project.ProjectContext
 business: dev.mikoto2000.rei.web.ActiveRunController -> dev.mikoto2000.rei.core.project.ProjectRegistry
 business: dev.mikoto2000.rei.web.ActiveRunController -> dev.mikoto2000.rei.core.service.CommandCancellationService
+business: dev.mikoto2000.rei.web.ActiveRunController -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 business: dev.mikoto2000.rei.web.ActiveRunController -> dev.mikoto2000.rei.ui.shell.ActiveRunDisplay
+business: dev.mikoto2000.rei.web.ActiveRunController$Cancellation -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 business: dev.mikoto2000.rei.web.ActivityCoachingController -> dev.mikoto2000.rei.activity.PeriodCoaching$Settings
 business: dev.mikoto2000.rei.web.ActivityCoachingController -> dev.mikoto2000.rei.activity.PeriodCoachingService
 business: dev.mikoto2000.rei.web.ActivityCoachingController -> dev.mikoto2000.rei.activity.PeriodCoachingStore$Snapshot
@@ -318,11 +320,13 @@ business: dev.mikoto2000.rei.web.RunController -> dev.mikoto2000.rei.application
 business: dev.mikoto2000.rei.web.RunController -> dev.mikoto2000.rei.application.run.RunStatus
 business: dev.mikoto2000.rei.web.RunController -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.web.RunController -> dev.mikoto2000.rei.core.chat.ConversationInputRouter
+business: dev.mikoto2000.rei.web.RunController -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 business: dev.mikoto2000.rei.web.RunResponse -> dev.mikoto2000.rei.application.run.RunFailure
 business: dev.mikoto2000.rei.web.RunResponse -> dev.mikoto2000.rei.application.run.RunSnapshot
 business: dev.mikoto2000.rei.web.RunResponse -> dev.mikoto2000.rei.application.run.RunStatus
 business: dev.mikoto2000.rei.web.RunResponse -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.web.RunResponse -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
+business: dev.mikoto2000.rei.web.RunResponse -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 business: dev.mikoto2000.rei.web.ScheduleController -> dev.mikoto2000.rei.application.state.OperationConflictException
 business: dev.mikoto2000.rei.web.ScheduleController -> dev.mikoto2000.rei.temporal.AgentScheduleDispatcher
 business: dev.mikoto2000.rei.web.ScheduleController -> dev.mikoto2000.rei.temporal.PersistentAgentScheduler

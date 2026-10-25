@@ -488,14 +488,27 @@ public class ChatExecutionService {
       UserInterventionQueue interventions,
       OutputLimitRunBudget.LlmCallReservation reservation) {
     try (var scope = AgentRunScope.open(context)) {
+      var terminalEvents = new java.util.ArrayList<dev.mikoto2000.rei.event.AgentEvent>();
+      ChatExecutionResult result;
+      boolean stopped;
       try {
-        return executeInScope(context, promptText, interventions, reservation);
+        result = executeInScope(context, promptText, interventions, reservation, terminalEvents);
       } finally {
+        cancellationService.completeResources(context.runId());
         if (requestCaptures != null) requestCaptures.finish(context.runId());
+        stopped = cancellationService.diagnostic(context.runId()).requestedAt() != null;
         cancellationService.clear();
         activityTracker.ifPresent(
             tracker -> tracker.recordAgentCompleted(java.time.Instant.now(clock)));
       }
+      // 終端イベントは実体と後片付けの完了後に一度だけ公開する。
+      if (stopped || result.status() == ChatExecutionResult.Status.CANCELLED) {
+        eventPublisher.publish(
+            eventFactory.runFailed(context.runId(), terminalError(ChatRunStatus.CANCELLED)));
+        return ChatExecutionResult.cancelled();
+      }
+      terminalEvents.forEach(eventPublisher::publish);
+      return result;
     }
   }
 
@@ -504,7 +517,8 @@ public class ChatExecutionService {
       AgentRunContext context,
       String promptText,
       UserInterventionQueue interventions,
-      OutputLimitRunBudget.LlmCallReservation reservation) {
+      OutputLimitRunBudget.LlmCallReservation reservation,
+      java.util.List<dev.mikoto2000.rei.event.AgentEvent> terminalEvents) {
     RunContinuation continuations =
         continuationProvider == null ? null : continuationProvider.getIfAvailable();
     boolean beginnerReview =
@@ -702,7 +716,7 @@ public class ChatExecutionService {
           && result.status() == ChatRunStatus.SUCCESS
           && !interventions.finishIfEmpty()) {
         var guidance = execution.applyInterventions();
-        if (!structuredCommand && !budget.tryConsumeLlmCall()) {
+        if (!budget.tryConsumeLlmCall()) {
           result = new ChatRunResult(budgetStopStatus(budget), "");
           break;
         }
@@ -741,12 +755,12 @@ public class ChatExecutionService {
           ErrorInformation checkpointError = finishCheckpoint(context, "COMPLETED");
           if (checkpointError != null) {
             turnStatus = ConversationTurnStore.Status.FAILED;
-            eventPublisher.publish(eventFactory.runFailed(runId, checkpointError));
+            terminalEvents.add(eventFactory.runFailed(runId, checkpointError));
             return ChatExecutionResult.failed(checkpointError.message(), checkpointError.code());
           }
         }
         GenerationMetrics metrics = lastGenerationMetrics.get();
-        eventPublisher.publish(
+        terminalEvents.add(
             eventFactory.runCompleted(
                 runId,
                 elapsedMillis(startedAtNanos),
@@ -755,7 +769,7 @@ public class ChatExecutionService {
                 metrics == null ? null : metrics.outputTokensPerSecond(),
                 metrics == null ? null : metrics.endToEndTokensPerSecond()));
         if (consolidationSuggested) {
-          eventPublisher.publish(eventFactory.memoryConsolidationSuggested());
+          terminalEvents.add(eventFactory.memoryConsolidationSuggested());
         }
         return ChatExecutionResult.success(result.text(), consolidationSuggested);
       } else {
@@ -769,7 +783,7 @@ public class ChatExecutionService {
               && result.status() != ChatRunStatus.CANCELLED
               && result.error() == null) failure = checkpointError;
         }
-        eventPublisher.publish(eventFactory.runFailed(runId, failure));
+        terminalEvents.add(eventFactory.runFailed(runId, failure));
         if (result.status() == ChatRunStatus.CANCELLED) return ChatExecutionResult.cancelled();
         return ChatExecutionResult.failed(failure.message(), failure.code());
       }
@@ -786,7 +800,7 @@ public class ChatExecutionService {
               finishCheckpoint(context, approval ? "WAITING_APPROVAL" : "WAITING");
           if (checkpointError != null) {
             suspended = false;
-            eventPublisher.publish(eventFactory.runFailed(runId, checkpointError));
+            terminalEvents.add(eventFactory.runFailed(runId, checkpointError));
             return ChatExecutionResult.failed(checkpointError.message(), checkpointError.code());
           }
         }
@@ -804,14 +818,15 @@ public class ChatExecutionService {
           checkpointFinished = true;
           finishCheckpoint(context, "FAILED");
         }
-        eventPublisher.publish(eventFactory.runFailed(runId, knownFailure));
+        terminalEvents.add(eventFactory.runFailed(runId, knownFailure));
         return ChatExecutionResult.failed(knownFailure.message(), knownFailure.code());
       }
       if (!RunCancellation.isCancellation(error) && !execution.isCancelled()) throw error;
       execution.cancel();
-      eventPublisher.publish(eventFactory.runFailed(runId, terminalError(ChatRunStatus.CANCELLED)));
+      terminalEvents.add(eventFactory.runFailed(runId, terminalError(ChatRunStatus.CANCELLED)));
       return ChatExecutionResult.cancelled();
     } finally {
+      cancellationService.awaitChildren(context.runId());
       // Preserve interruption for the caller, but allow terminal metadata to be written during
       // cleanup.
       boolean interrupted = Thread.interrupted();
@@ -849,12 +864,21 @@ public class ChatExecutionService {
                               : "WAITING")
                           : turnStatus.name());
           }
-          if (!suspended && continuations != null) continuations.terminal(context);
+          if (!suspended && continuations != null)
+            continuations.terminal(
+                context,
+                execution.isCancelled()
+                    ? ChatExecutionResult.cancelled()
+                    : turnStatus == ConversationTurnStore.Status.COMPLETED
+                        ? ChatExecutionResult.success("", false)
+                        : ChatExecutionResult.failed("Run ended"));
           if (!suspended
+              && !execution.isCancelled()
               && workContext != null
               && context.mode() == AgentRunContext.Mode.EXCLUSIVE
               && !structuredCommand) workContext.afterTerminal(context);
           if (!suspended
+              && !execution.isCancelled()
               && autoSleep != null
               && context.mode() == AgentRunContext.Mode.EXCLUSIVE
               && !structuredCommand) autoSleep.afterTerminal(context);
@@ -1130,7 +1154,14 @@ public class ChatExecutionService {
     var baseOptions = modelProvider.chatOptions(LlmFeature.CHAT, currentModelHolder.get(), true);
     if (mode != AgentRunContext.Mode.EXCLUSIVE) ToolLoopSupport.requireNoRawTools(baseOptions);
     var optionsBuilder =
-        baseOptions.mutate().toolContext(Map.of(RunExecutionContext.KEY, execution));
+        baseOptions
+            .mutate()
+            .toolContext(
+                Map.of(
+                    RunExecutionContext.KEY,
+                    execution,
+                    CommandCancellationService.class.getName(),
+                    cancellationService));
     if (mode == AgentRunContext.Mode.CONVERSATION)
       optionsBuilder.toolCallbacks(java.util.List.of()).toolChoice("none");
     var options = optionsBuilder.build();
@@ -1293,6 +1324,7 @@ public class ChatExecutionService {
       lastGenerationMetrics.set(metrics);
       return ChatRunResult.success(responseBuilder.toString());
     } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
       completeThinking(thinkingEventStarted, thinkingEventCompleted, thinkingId, thinkingBuilder);
       if (cancellationService.isCancellationRequested()) {
         return ChatRunResult.cancelled();

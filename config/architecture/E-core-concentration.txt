@@ -36,6 +36,7 @@ business: dev.mikoto2000.rei.application.run.BackgroundRunSubmitService -> dev.m
 business: dev.mikoto2000.rei.application.run.BackgroundRunSubmitService -> dev.mikoto2000.rei.core.project.ProjectRegistry
 business: dev.mikoto2000.rei.application.run.BackgroundRunSubmitService -> dev.mikoto2000.rei.core.project.ProjectRunStateStore
 business: dev.mikoto2000.rei.application.run.BackgroundRunSubmitService -> dev.mikoto2000.rei.core.service.CommandCancellationService
+business: dev.mikoto2000.rei.application.run.BackgroundRunSubmitService -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 business: dev.mikoto2000.rei.application.run.ChatSubmitService -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.application.run.ChatSubmitService -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
 business: dev.mikoto2000.rei.application.run.ChatSubmitService -> dev.mikoto2000.rei.core.chat.AgentRunContext$RequestSource
@@ -63,6 +64,8 @@ business: dev.mikoto2000.rei.application.run.RunRegistry$StoredRun -> dev.mikoto
 business: dev.mikoto2000.rei.application.run.RunRegistry$StoredRun -> dev.mikoto2000.rei.core.chat.AgentRunContext$RequestSource
 business: dev.mikoto2000.rei.application.run.RunService -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.application.run.RunService -> dev.mikoto2000.rei.core.service.CommandCancellationService
+business: dev.mikoto2000.rei.application.run.RunService -> dev.mikoto2000.rei.core.service.CommandCancellationService$CancellationRequest
+business: dev.mikoto2000.rei.application.run.RunService -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 business: dev.mikoto2000.rei.application.run.RunSnapshot -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.application.session.SessionLifecycle -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.application.session.SessionLifecycle -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
@@ -612,6 +615,7 @@ business: dev.mikoto2000.rei.subagent.ChatGptSubAgentBackend -> dev.mikoto2000.r
 business: dev.mikoto2000.rei.subagent.ChatGptSubAgentBackend -> dev.mikoto2000.rei.core.policy.ToolPermissionException
 business: dev.mikoto2000.rei.subagent.ChatGptSubAgentBackend -> dev.mikoto2000.rei.core.policy.ToolPermissionGuard
 business: dev.mikoto2000.rei.subagent.ChatGptSubAgentBackend -> dev.mikoto2000.rei.core.service.CommandCancellationService
+business: dev.mikoto2000.rei.subagent.ChatGptSubAgentBackend -> dev.mikoto2000.rei.core.service.CommandCancellationService$ChildLease
 business: dev.mikoto2000.rei.subagent.CodexAppServerSubAgentBackend -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver -> dev.mikoto2000.rei.core.policy.ActionCapability
 business: dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver -> dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException
@@ -669,6 +673,8 @@ business: dev.mikoto2000.rei.subagent.SubAgentRunner$2 -> dev.mikoto2000.rei.cor
 business: dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.chat.AgentRunScope
 business: dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.policy.ToolPermissionGuard
+business: dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.service.CommandCancellationService
+business: dev.mikoto2000.rei.subagent.SubAgentRunner$3 -> dev.mikoto2000.rei.core.service.CommandCancellationService$ChildLease
 business: dev.mikoto2000.rei.subagent.SubAgentSemanticValidator -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.subagent.SubAgentSemanticValidator -> dev.mikoto2000.rei.core.chat.BoundedToolLoop
 business: dev.mikoto2000.rei.subagent.SubAgentSemanticValidator -> dev.mikoto2000.rei.core.chat.BoundedToolLoop$ModelRetries
@@ -732,13 +738,16 @@ business: dev.mikoto2000.rei.topic.TopicGeneratorService -> dev.mikoto2000.rei.c
 business: dev.mikoto2000.rei.ui.shell.ActiveRunDisplay -> dev.mikoto2000.rei.core.chat.ActiveRun
 business: dev.mikoto2000.rei.ui.shell.ActiveRunDisplay -> dev.mikoto2000.rei.core.chat.ConversationInputRouter
 business: dev.mikoto2000.rei.ui.shell.ActiveRunDisplay -> dev.mikoto2000.rei.core.execution.ActiveExecution
+business: dev.mikoto2000.rei.ui.shell.ActiveRunDisplay -> dev.mikoto2000.rei.core.execution.ExecutionType
 business: dev.mikoto2000.rei.ui.shell.ActiveRunDisplay -> dev.mikoto2000.rei.core.project.ProjectContext
 business: dev.mikoto2000.rei.ui.shell.ActiveRunDisplay -> dev.mikoto2000.rei.core.project.ProjectService
+business: dev.mikoto2000.rei.ui.shell.ActiveRunDisplay -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 business: dev.mikoto2000.rei.ui.shell.ActiveRunPrompt -> dev.mikoto2000.rei.core.chat.ConversationInputRouter
 business: dev.mikoto2000.rei.ui.shell.ActiveRunPrompt -> dev.mikoto2000.rei.core.chat.ConversationInputRouter$Subscription
 business: dev.mikoto2000.rei.ui.shell.AgentConsoleSession -> dev.mikoto2000.rei.core.chat.AgentRunScope
 business: dev.mikoto2000.rei.ui.shell.AgentConsoleSession -> dev.mikoto2000.rei.core.execution.ExecutionScope
 business: dev.mikoto2000.rei.ui.shell.CancelCommand -> dev.mikoto2000.rei.core.service.CommandCancellationService
+business: dev.mikoto2000.rei.ui.shell.CancelCommand -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 business: dev.mikoto2000.rei.ui.shell.ChatCommand -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
 business: dev.mikoto2000.rei.ui.shell.ChatCommand -> dev.mikoto2000.rei.core.chat.ChatExecutionResult
 business: dev.mikoto2000.rei.ui.shell.ChatCommand -> dev.mikoto2000.rei.core.chat.ChatExecutionService
@@ -821,6 +830,8 @@ business: dev.mikoto2000.rei.voice.VoiceProperties -> dev.mikoto2000.rei.core.da
 business: dev.mikoto2000.rei.web.ActiveRunController -> dev.mikoto2000.rei.core.project.ProjectContext
 business: dev.mikoto2000.rei.web.ActiveRunController -> dev.mikoto2000.rei.core.project.ProjectRegistry
 business: dev.mikoto2000.rei.web.ActiveRunController -> dev.mikoto2000.rei.core.service.CommandCancellationService
+business: dev.mikoto2000.rei.web.ActiveRunController -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
+business: dev.mikoto2000.rei.web.ActiveRunController$Cancellation -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 business: dev.mikoto2000.rei.web.ActivityCommandsController -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.web.ActivityCommandsController -> dev.mikoto2000.rei.core.project.ProjectClientScope
 business: dev.mikoto2000.rei.web.ActivityCommandsController -> dev.mikoto2000.rei.core.project.ProjectContext
@@ -879,8 +890,10 @@ business: dev.mikoto2000.rei.web.ResearchOperationsController -> dev.mikoto2000.
 business: dev.mikoto2000.rei.web.ResearchOperationsController -> dev.mikoto2000.rei.core.command.UserInputParser
 business: dev.mikoto2000.rei.web.RunController -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.web.RunController -> dev.mikoto2000.rei.core.chat.ConversationInputRouter
+business: dev.mikoto2000.rei.web.RunController -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 business: dev.mikoto2000.rei.web.RunResponse -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.web.RunResponse -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
+business: dev.mikoto2000.rei.web.RunResponse -> dev.mikoto2000.rei.core.service.CommandCancellationService$Diagnostic
 business: dev.mikoto2000.rei.web.ScopedMemoryController -> dev.mikoto2000.rei.core.project.ProjectContext
 business: dev.mikoto2000.rei.web.ScopedMemoryController -> dev.mikoto2000.rei.core.project.ProjectRegistry
 business: dev.mikoto2000.rei.web.SearchCommandsController -> dev.mikoto2000.rei.core.chat.AgentRunContext
