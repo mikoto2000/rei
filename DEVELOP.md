@@ -1,5 +1,7 @@
 # DEVELOP
 
+秘書の約束・タスク台帳と段階的な統合は [秘書機能](docs/secretary.md) を参照してください。
+
 Checkstyle / SpotBugs の実行手順、CI レポートと導入方針は [静的解析ガイド](docs/static-analysis.md) を参照してください。
 
 デスクトップ監視の軽量観測・設定・限界・検証は [入力状態による軽量観測](docs/activity-lightweight-observation.md)を参照してください。

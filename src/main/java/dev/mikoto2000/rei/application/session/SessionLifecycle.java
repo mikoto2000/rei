@@ -22,6 +22,13 @@ public final class SessionLifecycle {
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
+  private org.springframework.context.ApplicationEventPublisher inputEvents;
+
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setInputEvents(org.springframework.context.ApplicationEventPublisher publisher) {
+    inputEvents = publisher;
+  }
+
   /** 重複受付防止キーと実行の受付結果を永続化する台帳。 */
   private dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions;
 
@@ -205,6 +212,16 @@ public final class SessionLifecycle {
       }
       // 外部からのMCP呼び出しで、利用者が画面上で選んだ会話を切り替えない。
       if (source != AgentRunContext.RequestSource.MCP) selected.accept(context);
+      if (inputEvents != null) {
+        try {
+          inputEvents.publishEvent(
+              new ConversationAccepted(
+                  context.projectId(), context.conversationId(), context.runId(), message));
+        } catch (RuntimeException failure) {
+          org.slf4j.LoggerFactory.getLogger(getClass())
+              .warn("Input observer failed: {}", failure.getClass().getSimpleName());
+        }
+      }
       return context;
     }
   }

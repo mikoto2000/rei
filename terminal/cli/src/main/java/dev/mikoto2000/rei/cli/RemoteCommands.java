@@ -36,6 +36,7 @@ public final class RemoteCommands {
   /** 名前一覧。 */
   public static final Set<String> NAMES =
       Set.of(
+          "/secretary",
           "/dot",
           "/llm",
           "/bsky",
@@ -121,6 +122,7 @@ public final class RemoteCommands {
   private static Request routeDirect(
       List<String> words, String project, String session, java.nio.file.Path localBase) {
     String name = words.getFirst(), action = words.size() > 1 ? words.get(1) : "list";
+    if (name.equals("/secretary")) return secretary(words, project);
     if (name.equals("/dot")) {
       var command = dev.mikoto2000.rei.dot.DotCommandRequest.parse(words.subList(1, words.size()));
       String owner = command.projectId() == null ? project : command.projectId();
@@ -1594,6 +1596,96 @@ public final class RemoteCommands {
   }
 
   /** 軽量CLIでの対話で用いる選択可能な設定を返す。 */
+  private static Request secretary(List<String> words, String selectedProject) {
+    String action = words.size() > 1 ? words.get(1) : "list";
+    boolean identified =
+        Set.of("show", "sources", "history", "related", "update", "approve", "done", "cancel")
+            .contains(action);
+    if (identified && words.size() < 3) throw invalid();
+    Set<String> allowed = new HashSet<>(Set.of("--project"));
+    switch (action) {
+      case "list" -> allowed.addAll(Set.of("--limit", "--offset"));
+      case "show", "sources", "history", "related" -> {}
+      case "extract" -> allowed.addAll(Set.of("--key", "--title"));
+      case "add", "update" -> {
+        allowed.addAll(Set.of("--title", "--intent", "--due", "--priority", "--tag", "--ref"));
+        allowed.addAll(action.equals("add") ? Set.of("--key") : Set.of("--status", "--revision"));
+      }
+      case "approve", "done", "cancel" -> allowed.add("--revision");
+      default -> throw invalid();
+    }
+    var options = options(words, identified ? 3 : 2, allowed, Set.of());
+    String project = options.getOrDefault("--project", selectedProject);
+    if (project == null || project.isBlank())
+      throw new IllegalArgumentException("Select a Project first");
+    String base = "/api/v1/secretary/tasks";
+    if (action.equals("list")) {
+      int limit = Integer.parseInt(options.getOrDefault("--limit", "100"));
+      int offset = Integer.parseInt(options.getOrDefault("--offset", "0"));
+      if (limit < 1 || limit > 1000 || offset < 0) throw invalid();
+      return query(base, Map.of("projectId", project, "limit", limit, "offset", offset));
+    }
+    if (Set.of("show", "sources", "history", "related").contains(action))
+      return get(
+          base
+              + "/"
+              + id(words.get(2))
+              + (action.equals("show") ? "" : "/" + action)
+              + "?projectId="
+              + id(project));
+    var body = new LinkedHashMap<String, Object>();
+    body.put("projectId", project);
+    if (action.equals("extract")) {
+      if (!options.containsKey("--key") || !options.containsKey("--title")) throw invalid();
+      body.put("eventId", options.get("--key"));
+      body.put("text", options.get("--title"));
+      return post(base + "/extract", body);
+    }
+    long revision = Long.parseLong(options.getOrDefault("--revision", "0"));
+    if (revision < 0) throw invalid();
+    if (Set.of("approve", "done", "cancel").contains(action)) {
+      body.put("revision", revision);
+      body.put(
+          "status",
+          switch (action) {
+            case "approve" -> "OPEN";
+            case "done" -> "DONE";
+            default -> "CANCELLED";
+          });
+      return post(base + "/" + id(words.get(2)) + "/transition", body);
+    }
+    if (!options.containsKey("--title") || options.get("--title").isBlank()) throw invalid();
+    if (action.equals("add") && !options.containsKey("--key")) throw invalid();
+    int priority = Integer.parseInt(options.getOrDefault("--priority", "3"));
+    if (priority < 1 || priority > 5) throw invalid();
+    String intent = options.getOrDefault("--intent", "TODO");
+    String status = options.getOrDefault("--status", "OPEN");
+    if (!Set.of("IDEA", "TODO", "COMMITMENT").contains(intent)
+        || !Set.of("CANDIDATE", "OPEN", "WAITING", "DONE", "CANCELLED").contains(status))
+      throw invalid();
+    body.put("title", options.get("--title"));
+    body.put("intent", intent);
+    body.put("status", status);
+    body.put("priority", priority);
+    body.put(
+        "due",
+        options.containsKey("--due")
+            ? java.time.LocalDate.parse(options.get("--due")).toString()
+            : null);
+    body.put(
+        "tags",
+        options.containsKey("--tag") ? List.of(options.get("--tag").split(",")) : List.of());
+    body.put(
+        "references",
+        options.containsKey("--ref") ? List.of(options.get("--ref").split(",")) : List.of());
+    body.put("revision", revision);
+    if (action.equals("add")) {
+      body.put("key", options.get("--key"));
+      return post(base, body);
+    }
+    return new Request("PUT", base + "/" + id(words.get(2)), body);
+  }
+
   private static Map<String, String> options(
       List<String> words, int start, Set<String> values, Set<String> flags) {
     var parsed = parse(words, start, values, flags);
