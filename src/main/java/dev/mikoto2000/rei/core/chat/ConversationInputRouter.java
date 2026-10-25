@@ -44,6 +44,17 @@ public final class ConversationInputRouter {
     void close();
   }
 
+  /** 実行の停止要求と資源の所有期間。 */
+  private dev.mikoto2000.rei.core.service.CommandCancellationService cancellation =
+      new dev.mikoto2000.rei.core.service.CommandCancellationService();
+
+  /** アプリケーション全体のキャンセル管理を接続する。 */
+  @org.springframework.beans.factory.annotation.Autowired
+  public void setCancellation(
+      dev.mikoto2000.rei.core.service.CommandCancellationService cancellation) {
+    this.cancellation = Objects.requireNonNull(cancellation);
+  }
+
   /** 要求取得記録一覧。 */
   private dev.mikoto2000.rei.llm.capture.CaptureStore requestCaptures;
 
@@ -312,12 +323,13 @@ public final class ConversationInputRouter {
           () -> {
             try {
               if (admissions != null) admissions.startExecution(context);
-              lifecycle.accept(operation);
+              executeCancellable(context, operation, lifecycle);
             } finally {
               forget(slot);
             }
           },
           () -> {
+            cancellation.prepare(context);
             active.put(context.runId(), ActiveRun.of(context, "operation"));
             changed();
           },
@@ -390,14 +402,15 @@ public final class ConversationInputRouter {
                 try {
                   if (admissions != null) admissions.startExecution(context);
                   admitted.run();
-                  lifecycle.accept(
-                      () -> slot.execution().execute(context, slot.prompt(), slot.queue()));
+                  executeCancellable(context,
+                      () -> slot.execution().execute(context, slot.prompt(), slot.queue()), lifecycle);
                 } finally {
                   agentSlots.remove(context.runId());
                   forget(slot);
                 }
               },
               () -> {
+                cancellation.prepare(context);
                 active.put(context.runId(), ActiveRun.of(context, slot.prompt()));
                 changed();
               },
@@ -434,6 +447,27 @@ public final class ConversationInputRouter {
     }
   }
 
+  /** 予約済みの停止要求を実行スレッドへ結び付け、子処理の開始前に確認する。 */
+  private void executeCancellable(AgentRunContext context, Runnable operation,
+      Consumer<Runnable> lifecycle) {
+    try (var scope = AgentRunScope.open(context)) {
+      cancellation.begin(Thread.currentThread());
+      try {
+        lifecycle.accept(() -> {
+          if (!cancellation.isCancellationRequested()) operation.run();
+        });
+      } finally {
+        cancellation.clear();
+      }
+    }
+  }
+
+  /** 表示と API で同じ Run の停止進行状況を返す。 */
+  public dev.mikoto2000.rei.core.service.CommandCancellationService.Diagnostic
+      cancellationDiagnostic(String runId) {
+    return cancellation.diagnostic(runId);
+  }
+
   /** 会話の実行に関する記憶の削除を処理する。 */
   private void forget(Slot slot) {
     if (admissions != null) admissions.release(slot.context().runId());
@@ -448,6 +482,7 @@ public final class ConversationInputRouter {
         org.slf4j.LoggerFactory.getLogger(ConversationInputRouter.class)
             .warn("Run cleanup observer unavailable: {}", failure.getClass().getSimpleName());
       }
+    cancellation.finish(slot.context().runId());
     changed();
   }
 
