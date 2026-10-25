@@ -37,7 +37,7 @@ public final class StorageDatabase {
     boolean transaction;
 
     /** 読み取り接続の貸し借りだけを保護し、SQL実行中は保持しない。 */
-    final Object readerLock = new Object();
+    private final Object readerLock = new Object();
 
     /** 待機中の読み取り接続は一つだけ保持する。 */
     Connection reader;
@@ -74,11 +74,12 @@ public final class StorageDatabase {
   }
 
   /** 必要な対象を利用できるよう、保存データベースの利用を開始する。 */
-  private Connection open(boolean readOnly) throws Exception {
+  private Connection open(boolean readOnly) throws java.io.IOException, SQLException {
     StorageBackup.requireSafePath(file);
     Connection connection =
         DriverManager.getConnection(
             "jdbc:sqlite:" + file.toUri().toASCIIString() + (readOnly ? "?mode=ro" : "?mode=rw"));
+    boolean configured = false;
     try (var query = connection.createStatement()) {
       query.execute("PRAGMA busy_timeout=5000");
       if (!readOnly) {
@@ -90,10 +91,10 @@ public final class StorageDatabase {
         query.execute("PRAGMA wal_autocheckpoint=" + Math.max(1, WAL_TARGET_BYTES / pageSize));
       }
       requireCurrentSchema(connection);
+      configured = true;
       return connection;
-    } catch (Exception error) {
-      connection.close();
-      throw error;
+    } finally {
+      if (!configured) connection.close();
     }
   }
 

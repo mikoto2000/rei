@@ -80,14 +80,17 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
   AgentEvent appendInTransaction(Connection db, AgentEvent event) {
     try {
       return append(db, event);
-    } catch (RuntimeException error) {
-      throw error;
-    } catch (Exception error) {
+    } catch (java.sql.SQLException
+        | com.fasterxml.jackson.core.JsonProcessingException
+        | java.security.NoSuchAlgorithmException error) {
       throw new IllegalStateException("Cannot append event in coordinated transaction", error);
     }
   }
 
-  private AgentEvent append(Connection db, AgentEvent event) throws Exception {
+  private AgentEvent append(Connection db, AgentEvent event)
+      throws java.sql.SQLException,
+          com.fasterxml.jackson.core.JsonProcessingException,
+          java.security.NoSuchAlgorithmException {
     String project = scope(event.projectId());
     long previous;
     try (var query =
@@ -127,7 +130,7 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
   /** 実行状況の通知に関する登録を処理する。 */
   public static void put(
       Connection db, AgentEvent event, String record, boolean replayable, Long start, Long end)
-      throws Exception {
+      throws java.sql.SQLException, java.security.NoSuchAlgorithmException {
     String project = scope(event.projectId());
     byte[] bytes = record.getBytes(StandardCharsets.UTF_8);
     if (bytes.length > MAX_RECORD_BYTES

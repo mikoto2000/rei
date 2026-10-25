@@ -241,7 +241,7 @@ public final class ManagedActivityLog {
       String id = UUID.randomUUID().toString();
       Path file = directory(scope).resolve(id + ".jsonl");
       StorageBackup.requireSafePath(file);
-      Files.createDirectories(file.getParent());
+      Files.createDirectories(java.util.Objects.requireNonNull(file.getParent()));
       Files.createFile(file);
       StorageBackup.force(file);
       String relative = registry.root.relativize(file).toString().replace('\\', '/'),

@@ -199,6 +199,27 @@ class StoragePageLayoutTest {
   }
 
   @Test
+  void digestTreatsSchemaIdentifiersAsDataEvenWhenTheyContainSqlSyntax() throws Exception {
+    try (var db = connection();
+        var sql = db.createStatement()) {
+      sql.execute("CREATE TABLE guard(value TEXT)");
+      sql.execute("INSERT INTO guard VALUES('retained')");
+      sql.execute(
+          "CREATE TABLE \"payload; DROP TABLE guard;--\"(\"value\"\"; DELETE FROM guard;--\" TEXT)");
+      sql.execute("INSERT INTO \"payload; DROP TABLE guard;--\" VALUES('before')");
+      String before = StoragePageLayout.contents(db);
+      sql.execute(
+          "UPDATE \"payload; DROP TABLE guard;--\" SET \"value\"\"; DELETE FROM guard;--\"='after'");
+      assertThat(StoragePageLayout.contents(db)).isNotEqualTo(before);
+      try (var rows = sql.executeQuery("SELECT value FROM guard")) {
+        assertThat(rows.next()).isTrue();
+        assertThat(rows.getString(1)).isEqualTo("retained");
+        assertThat(rows.next()).isFalse();
+      }
+    }
+  }
+
+  @Test
   void upgradesPreviouslyBuiltPageOnlyVersionSeventeenWithoutLosingData() throws Exception {
     prepareLegacy();
     try (var db = connection();
