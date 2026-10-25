@@ -143,6 +143,7 @@ public class CommandCancellationService {
 
   /** 実行スレッドを結び付ける。開始前の要求を上書きしない。 */
   public void begin(Thread executionThread) {
+    if (dev.mikoto2000.rei.core.execution.ExecutionScope.current() != null) return;
     var run = AgentRunScope.current();
     State state;
     synchronized (this) {

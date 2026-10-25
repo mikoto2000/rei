@@ -74,6 +74,9 @@ class SlackAgentConfigurationTest {
             "rei.slack.agent-collaboration.agents.tenten.mention-user-id=U2")
         .withBean("memoryConsolidationDataSource", javax.sql.DataSource.class, () -> source)
         .withBean(Clock.class, () -> clock)
+        .withBean(
+            dev.mikoto2000.rei.core.service.CommandCancellationService.class,
+            dev.mikoto2000.rei.core.service.CommandCancellationService::new)
         .withBean(RunRegistry.class, () -> registry)
         .withBean(RunService.class, () -> mock(RunService.class))
         .withBean(

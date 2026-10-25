@@ -106,6 +106,37 @@ class CancellationRaceTest {
   }
 
   @Test
+  void firstStopRacingWithFinishNeverInterruptsAnEndedRunOrLeavesPendingState() throws Exception {
+    var service = new CommandCancellationService();
+    try (var executor = Executors.newVirtualThreadPerTaskExecutor()) {
+      for (int i = 0; i < 50; i++) {
+        var owner = owner("first-stop-" + i);
+        service.prepare(owner);
+        var barrier = new CyclicBarrier(2);
+        var end =
+            executor.submit(
+                () -> {
+                  barrier.await();
+                  service.finish(owner.runId());
+                  return null;
+                });
+        var stop =
+            executor.submit(
+                () -> {
+                  barrier.await();
+                  return service.cancelRun(owner.runId());
+                });
+        end.get(5, TimeUnit.SECONDS);
+        boolean accepted = stop.get(5, TimeUnit.SECONDS);
+        var diagnostic = service.diagnostic(owner.runId());
+        assertThat(diagnostic.status()).isEqualTo("FINISHED");
+        assertThat(diagnostic.requestedAt() != null).isEqualTo(accepted);
+        assertThat(service.cancelRun(owner.runId())).isFalse();
+      }
+    }
+  }
+
+  @Test
   void stalledAndFailedSignalsStayDiagnosableWithoutLoggingExceptionMessages() {
     var now = new AtomicReference<>(Instant.parse("2026-10-25T00:00:00Z"));
     var clock =

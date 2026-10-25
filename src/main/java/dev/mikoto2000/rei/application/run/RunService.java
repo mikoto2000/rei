@@ -152,14 +152,15 @@ public class RunService implements AutoCloseable {
       var current = registry.get(runId);
       if (current.status().isWaiting() && !registry.claimWaiting(current.context()))
         return new CancellationResult(false, current);
+      boolean queuedRemoved = current.status() == RunStatus.QUEUED && cancelQueued.test(runId);
       if (!current.status().isTerminal()
           && (current.status() == RunStatus.RUNNING
-              || current.status() == RunStatus.QUEUED && !cancelQueued.test(runId)
+              || current.status() == RunStatus.QUEUED && !queuedRemoved
               || executing.contains(runId))) {
         request = cancellation.requestRun(runId);
         result = new CancellationResult(request.accepted(), registry.get(runId));
       } else {
-        if (!registry.transition(runId, RunStatus.CANCELLED, null))
+        if (!registry.transition(runId, RunStatus.CANCELLED, null) && !queuedRemoved)
           return new CancellationResult(false, current);
         if (current.status() == RunStatus.QUEUED) {
           cancellation.forgetPendingCancellation(runId);

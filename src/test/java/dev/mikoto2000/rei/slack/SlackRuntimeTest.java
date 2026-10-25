@@ -191,7 +191,14 @@ class SlackRuntimeTest {
     assertEquals("CANCEL_REQUESTED", store.byRun(receipt.run()).orElseThrow().state());
     assertTrue(store.replies().stream().anyMatch(r -> r.text().contains("キャンセルを受け付け")));
     assertTrue(store.replies().stream().noneMatch(r -> r.text().contains("キャンセル完了")));
+    runtime.accept(m("3b", "1", "rei cancel"));
+    runtime.tick();
+    assertTrue(store.replies().stream().anyMatch(r -> r.text().contains("既に停止要求済み")));
     when(router.containsRun(anyString(), anyString())).thenReturn(false);
+    runtime.tick();
+    assertTrue(store.replies().stream().noneMatch(r -> r.text().contains("キャンセル完了")));
+    // The real runner publishes its terminal state only after its cleanup returns.
+    registry.transition(receipt.run(), RunStatus.CANCELLED, null);
     runtime.tick();
     assertTrue(store.replies().stream().anyMatch(r -> r.text().contains("キャンセル完了")));
   }

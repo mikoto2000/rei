@@ -299,6 +299,8 @@ public final class ConversationInputRouter {
   public boolean cancelQueued(String runId) {
     boolean removed = projectQueue.cancelQueued(runId);
     if (removed) {
+      if (admissions != null)
+        admissions.transition(runId, dev.mikoto2000.rei.application.run.RunStatus.CANCELLED);
       if (requestCaptures != null) requestCaptures.finish(runId, "CANCELLED");
       var slot = agentSlots.remove(runId);
       if (slot != null) forget(slot);

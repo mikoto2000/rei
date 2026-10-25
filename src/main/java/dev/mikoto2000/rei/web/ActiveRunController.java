@@ -38,6 +38,11 @@ public final class ActiveRunController {
    */
   public record Cancellation(
       boolean accepted, String status, java.util.List<CommandCancellationService.Diagnostic> runs) {
+    /** 診断一覧の外部変更によってレスポンスが変わらないようにする。 */
+    public Cancellation {
+      runs = java.util.List.copyOf(runs);
+    }
+
     /** 既存の Java 呼び出し元を維持する。 */
     public Cancellation(boolean accepted) {
       this(accepted, accepted ? "CANCEL_REQUESTED" : "NOT_FOUND", java.util.List.of());

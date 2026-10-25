@@ -25,15 +25,30 @@ public final class RunCancellation {
   public static dev.mikoto2000.rei.core.service.CommandCancellationService.ChildLease enterChild(
       org.springframework.ai.chat.prompt.Prompt prompt) {
     if (prompt.getOptions()
-            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-        && options.getToolContext() != null
-        && options
-                .getToolContext()
-                .get(dev.mikoto2000.rei.core.service.CommandCancellationService.class.getName())
-            instanceof dev.mikoto2000.rei.core.service.CommandCancellationService cancellation
-        && options.getToolContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
-            instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)
-      return cancellation.enterChild(execution.runContext().runId());
+        instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options) {
+      var values = options.getToolContext();
+      if (values == null) return () -> {};
+      var service =
+          values.get(dev.mikoto2000.rei.core.service.CommandCancellationService.class.getName());
+      var context = values.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY);
+      if (service instanceof dev.mikoto2000.rei.core.service.CommandCancellationService cancellation
+          && context instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution) {
+        var owner = execution.runContext();
+        if (owner != null) return cancellation.enterChild(owner.runId());
+      }
+    }
+    return () -> {};
+  }
+
+  /** response 側の非同期アドバイザーも同じ Run の所有資源として保持する。 */
+  public static dev.mikoto2000.rei.core.service.CommandCancellationService.ChildLease enterChild(
+      java.util.Map<String, Object> values) {
+    var service =
+        values.get(dev.mikoto2000.rei.core.service.CommandCancellationService.class.getName());
+    var owner = values.get(AgentRunContext.class.getName());
+    if (service instanceof dev.mikoto2000.rei.core.service.CommandCancellationService cancellation
+        && owner instanceof AgentRunContext context)
+      return cancellation.enterChild(context.runId());
     return () -> {};
   }
 

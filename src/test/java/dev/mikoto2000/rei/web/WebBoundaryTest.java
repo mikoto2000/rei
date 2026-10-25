@@ -170,11 +170,13 @@ class WebBoundaryTest {
           assertThat(service.cancel("slow").accepted()).isTrue();
           assertThat(cleanup.await(5, TimeUnit.SECONDS)).isTrue();
           assertThat(next.getCount()).isEqualTo(1);
-          assertThat(service.get("slow").status()).isEqualTo(RunStatus.CANCELLED);
+          assertThat(service.get("slow").status()).isEqualTo(RunStatus.RUNNING);
+          assertThat(service.cancellationDiagnostic("slow").requestedAt()).isNotNull();
         } finally {
           release.countDown();
         }
         assertThat(next.await(5, TimeUnit.SECONDS)).isTrue();
+        assertThat(service.get("slow").status()).isEqualTo(RunStatus.CANCELLED);
       }
     }
   }

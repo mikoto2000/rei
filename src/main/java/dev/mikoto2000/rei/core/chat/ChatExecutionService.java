@@ -716,7 +716,7 @@ public class ChatExecutionService {
           && result.status() == ChatRunStatus.SUCCESS
           && !interventions.finishIfEmpty()) {
         var guidance = execution.applyInterventions();
-        if (!structuredCommand && !budget.tryConsumeLlmCall()) {
+        if (!budget.tryConsumeLlmCall()) {
           result = new ChatRunResult(budgetStopStatus(budget), "");
           break;
         }
@@ -864,7 +864,14 @@ public class ChatExecutionService {
                               : "WAITING")
                           : turnStatus.name());
           }
-          if (!suspended && continuations != null) continuations.terminal(context);
+          if (!suspended && continuations != null)
+            continuations.terminal(
+                context,
+                execution.isCancelled()
+                    ? ChatExecutionResult.cancelled()
+                    : turnStatus == ConversationTurnStore.Status.COMPLETED
+                        ? ChatExecutionResult.success("", false)
+                        : ChatExecutionResult.failed("Run ended"));
           if (!suspended
               && !execution.isCancelled()
               && workContext != null

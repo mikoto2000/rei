@@ -978,7 +978,7 @@ public final class ChatGptSubAgentBackend {
         }
         if (reserved && sharedBudget != null)
           try {
-            sharedBudget.recordTotalTokens(!submitted.get() ? 0 : callUsage);
+            sharedBudget.recordTotalTokens(!submitted.get() ? Integer.valueOf(0) : callUsage);
           } catch (RuntimeException exhausted) {
             String accounting = "phase=BUDGET_ACCOUNTING; 親 Run の使用量を計上できません。親の予算と使用量を確認してください。";
             if (state == State.COMPLETED || error == null) {
