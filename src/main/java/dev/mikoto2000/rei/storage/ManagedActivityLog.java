@@ -214,7 +214,7 @@ public final class ManagedActivityLog {
     if (!registry.root.equals(expectedRoot.toAbsolutePath().normalize()))
       throw new IllegalArgumentException("Activity and event storage roots must match");
     String scope = scope(supplied);
-    return registry.database.transaction(
+    return registry.database.activityTransaction(
         db -> {
           T result = work.apply(db);
           append(db, scope, entry);

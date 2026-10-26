@@ -72,6 +72,42 @@ Append updates a per-record hash chain without hashing the whole prefix. Closure
 verifies the chain once and publishes body hash and references atomically.
 Interrupted writes and same-size external changes prevent adoption.
 
+Cancellation must not interrupt the Activity file append/fsync/SQLite commit
+boundary. Managed Activity appends run that transaction on a private virtual
+thread and synchronously wait for commit or rollback, even if the caller is
+interrupted. The caller's interrupt flag is retained after the wait, so Run
+cancellation still takes effect. This also permits cancellation/failure terminal
+events to be saved by an already interrupted caller. Other disk/SQL errors and
+process crashes retain the existing fail-closed behavior. I/O observations are
+propagated to the worker; each streaming chunk still uses one FULL commit.
+
+### Explicit repair of an uncommitted Activity tail
+
+An interrupted append can leave the JSONL file longer than the committed
+`activity_segments.bytes` value. Further appends then fail closed, including
+chat message/thinking deltas. Do not adopt the extra records by changing the DB
+size or hash: the associated event transaction might not have committed.
+
+With the Rei backend stopped, Python 3.12 or later can inspect all open segments:
+
+```powershell
+python -B scripts/repair-activity-tail.py 'C:\Users\your-name\AppData\Local\Rei'
+```
+
+Add `--apply` to repair. The tool takes the backend's instance lock and refuses
+existing SQLite WAL/rollback journals. It validates every committed JSONL prefix
+against the DB hash chain before changing any file. Every affected original is
+copied and verified under `recovery/activity-tail-<timestamp>-<uuid>/`, with a
+manifest of the original hashes and committed sizes. Only then are the working
+files truncated to their committed lengths. SQLite metadata is never changed;
+uncommitted tails remain in the full original backups. Shortened files, changed
+committed prefixes and unsafe paths are refused. This is an explicit repair, not
+automatic adoption or a guarantee against future interrupted writes.
+
+Rerun without `--apply` to verify that no repairable tails remain, then restart
+Rei. Exercise the repair tool's regression tests with
+`python -B -m unittest discover -s scripts -p test_repair_activity_tail.py`.
+
 Every Session and Run association is retained as a reference, including unknown
 owners: inactivity is never inferred from an absent running Turn. Unregistered
 files are unmanaged and never collected. The materializing history API caps

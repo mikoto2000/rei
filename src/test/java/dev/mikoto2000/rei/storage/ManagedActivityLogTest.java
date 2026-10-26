@@ -55,6 +55,68 @@ class ManagedActivityLogTest {
         Map.of("日本語", "保持"));
   }
 
+  @Test
+  void cancelledCallerCanPersistItsTerminalEventAndNextRunCanAppend() {
+    var activity = new ManagedActivityLog(registry);
+    activity.append(null, entry("before", "session", "cancelled-run"));
+    Thread.currentThread().interrupt();
+    try {
+      activity.append(null, entry("cancelled", "session", "cancelled-run"));
+      assertThat(Thread.currentThread().isInterrupted()).isTrue();
+    } finally {
+      Thread.interrupted();
+    }
+    activity.append(null, entry("next", "session", "next-run"));
+    assertThat(activity.read(null))
+        .extracting(ProfileEventLogEntry::id)
+        .containsExactly("before", "cancelled", "next");
+  }
+
+  @Test
+  void cancellationDuringActivityCommitWaitsForDurabilityAndRestoresInterrupt() throws Exception {
+    var activity = new ManagedActivityLog(registry);
+    activity.append(null, entry("before", "session", "run"));
+    var entered = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    var failure = new java.util.concurrent.atomic.AtomicReference<Throwable>();
+    var interrupted = new java.util.concurrent.atomic.AtomicBoolean();
+    var caller =
+        Thread.ofVirtual().start(
+            () -> {
+              try {
+                activity.appendWith(
+                    null, entry("during", "session", "run"), root,
+                    db -> {
+                      entered.countDown();
+                      try {
+                        if (!release.await(10, java.util.concurrent.TimeUnit.SECONDS))
+                          throw new AssertionError("Commit barrier timed out");
+                      } catch (InterruptedException cancelled) {
+                        Thread.currentThread().interrupt();
+                      }
+                      return null;
+                    });
+                interrupted.set(Thread.currentThread().isInterrupted());
+              } catch (Throwable error) {
+                failure.set(error);
+              }
+            });
+    try {
+      assertThat(entered.await(10, java.util.concurrent.TimeUnit.SECONDS)).isTrue();
+      caller.interrupt();
+    } finally {
+      release.countDown();
+      caller.join(java.time.Duration.ofSeconds(10));
+    }
+    assertThat(caller.isAlive()).isFalse();
+    assertThat(failure.get()).isNull();
+    assertThat(interrupted.get()).isTrue();
+    activity.append(null, entry("next", "session", "next-run"));
+    assertThat(activity.read(null))
+        .extracting(ProfileEventLogEntry::id)
+        .containsExactly("before", "during", "next");
+  }
+
   /** 新規区間一覧について、旧形式ログを保持することを確認する。 */
   @Test
   void newSegmentsPreserveLegacyLogAndOnlyClosedOwnedBodiesCanBePlanned() throws Exception {

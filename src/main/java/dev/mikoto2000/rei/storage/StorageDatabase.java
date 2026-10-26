@@ -261,6 +261,43 @@ public final class StorageDatabase {
   }
 
   /**
+   * Activity本文とDBの確定中だけ、依頼元の停止割り込みから保存処理を分離する。
+   *
+   * <p>FileChannel.force is interruptible, but rolling back SQLite cannot undo a file append.
+   * Wait for the entire commit/rollback before returning, preserving the caller's interrupt flag.
+   * Other I/O and SQL failures still propagate; interrupted or changed files are never adopted.
+   */
+  <T> T activityTransaction(Work<T> work) {
+    if (Thread.holdsLock(writer))
+      throw new IllegalStateException("Activity commit cannot start inside a storage operation");
+    var observation = StorageIoObservation.current();
+    var commit =
+        new java.util.concurrent.FutureTask<T>(
+            () -> {
+              try (var scope = observation == null ? null : observation.observe()) {
+                return transaction(work);
+              }
+            });
+    Thread.ofVirtual().name("rei-activity-commit").start(commit);
+    boolean interrupted = false;
+    try {
+      while (true) {
+        try {
+          return commit.get();
+        } catch (InterruptedException cancellation) {
+          interrupted = true;
+        } catch (java.util.concurrent.ExecutionException failure) {
+          if (failure.getCause() instanceof RuntimeException runtime) throw runtime;
+          if (failure.getCause() instanceof Error error) throw error;
+          throw new IllegalStateException("Cannot commit Activity storage", failure.getCause());
+        }
+      }
+    } finally {
+      if (interrupted) Thread.currentThread().interrupt();
+    }
+  }
+
+  /**
    * データ保存の共通処理で用いる保守を返す。
    *
    * <p>Explicit maintenance statements such as VACUUM require autocommit.

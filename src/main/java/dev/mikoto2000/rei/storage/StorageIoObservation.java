@@ -14,6 +14,11 @@ final class StorageIoObservation {
   /** forces／writes／バイト数。 */
   final LongAdder forces = new LongAdder(), writes = new LongAdder(), bytes = new LongAdder();
 
+  /** 保存workerへ同じ計測先を引き継ぐ。 */
+  static StorageIoObservation current() {
+    return CURRENT.get();
+  }
+
   /** データ保存の共通処理に必要な対象範囲を扱う。 */
   interface Scope extends AutoCloseable {
     /** データ保存の共通処理で利用した資源や登録を解放し、利用を終了する。 */
