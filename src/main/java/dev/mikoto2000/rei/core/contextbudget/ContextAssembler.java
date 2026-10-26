@@ -195,6 +195,16 @@ public class ContextAssembler {
     if (raw.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
         && options.getToolContext() != null
         && "log".equals(options.getToolContext().get("rei.historySource"))) historyKey += "/log";
+    // Never reuse a rolling summary that may still contain an archived cancelled task.
+    var generation =
+        raw.getInstructions().stream()
+            .map(
+                m ->
+                    m.getMetadata().get(dev.mikoto2000.rei.context.CancelledTaskHistory.GENERATION))
+            .filter(String.class::isInstance)
+            .map(String.class::cast)
+            .findFirst();
+    if (generation.isPresent()) historyKey += "/after-cancel/" + generation.get();
     ConversationSummary conversationSummary = summaries.read(historyKey);
     ConversationSummary runSummary = summaries.read(runKey);
     history.removeIf(e -> e.sequence() <= conversationSummary.throughSequence());

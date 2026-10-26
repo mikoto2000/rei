@@ -32,6 +32,14 @@ public class ActionPlan {
   /** 次順序。 */
   private int nextOrder = 1;
 
+  /** Run that established this plan. */
+  private String ownerRunId;
+
+  /** Returns the plan's provenance for automatic context projection. */
+  public String ownerRunId() {
+    return ownerRunId;
+  }
+
   /**
    * Capture this project's plan for later async evaluation. The supplier keeps Spring's scoped
    * proxy from replacing a direct self return with the proxy again.
@@ -63,6 +71,7 @@ public class ActionPlan {
         || saved.stream().filter(s -> STATUS_IN_PROGRESS.equals(s.status())).count() > 1)
       throw new IllegalArgumentException("Invalid action plan");
     steps.clear();
+    captureOwner();
     steps.addAll(saved);
     nextOrder = saved.stream().mapToInt(PlanStep::order).max().orElse(0) + 1;
   }
@@ -84,6 +93,7 @@ public class ActionPlan {
 
   /** ステップを追加する。 */
   public void addStep(String description) {
+    if (steps.isEmpty()) captureOwner();
     String id = "step-" + nextOrder;
     steps.add(new PlanStep(id, description, STATUS_TODO, nextOrder, 0));
     nextOrder++;
@@ -172,5 +182,9 @@ public class ActionPlan {
   /** 指定された状態を反映した情報を作成する。 */
   private PlanStep withStatus(PlanStep step, String status) {
     return new PlanStep(step.id(), step.description(), status, step.order(), step.failureCount());
+  }
+
+  private void captureOwner() {
+    ownerRunId = dev.mikoto2000.rei.context.RunIdentity.currentRunId();
   }
 }

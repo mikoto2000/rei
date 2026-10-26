@@ -58,6 +58,8 @@ public class ActionPlanAdvisor implements BaseAdvisor {
   /** 行動計画の管理の本処理へ渡す文脈を準備する。 */
   @Override
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
+    if (!dev.mikoto2000.rei.context.CancelledTaskHistory.allowsState(
+        request.context(), actionPlan.ownerRunId())) return request;
     UserMessage userMessage = request.prompt().getUserMessage();
     if (userMessage == null) {
       return request;

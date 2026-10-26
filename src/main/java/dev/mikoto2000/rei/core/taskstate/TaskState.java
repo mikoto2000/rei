@@ -34,6 +34,14 @@ public class TaskState {
   /** 状態。 */
   private String status;
 
+  /** Run that established this goal; used only when projecting automatic context. */
+  private String ownerRunId;
+
+  /** Returns the goal's provenance without modifying the saved work. */
+  public String ownerRunId() {
+    return ownerRunId;
+  }
+
   /** 完了。 */
   private final List<String> completed = new ArrayList<>();
 
@@ -74,6 +82,7 @@ public class TaskState {
 
   /** 目的を設定し、作業中に遷移する。 */
   public void start(String goal) {
+    ownerRunId = dev.mikoto2000.rei.context.RunIdentity.currentRunId();
     this.goal = goal == null ? "" : goal;
     this.status = STATUS_IN_PROGRESS;
   }

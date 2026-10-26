@@ -214,7 +214,10 @@ class ChatExecutionInterventionTest {
 
   /** 会話の実行の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
-  void unrelatedTurnsKeepCancellationContextAndExplicitResumeCanUseOriginalRequest() {
+  void unrelatedTurnsOmitCancelledTaskAndExplicitResumeCanRetrieveOriginalRequest(
+      @org.junit.jupiter.api.io.TempDir Path temp) {
+    var turns = dev.mikoto2000.rei.conversation.ConversationTurnStore.inMemory();
+    var summaries = new dev.mikoto2000.rei.core.contextbudget.ConversationSummaryRepository(temp);
     var requests = new ArrayList<Prompt>();
     var workingSet = new dev.mikoto2000.rei.core.working.WorkingSet();
     workingSet.recordRead(Path.of("network.md"));
@@ -245,9 +248,8 @@ class ChatExecutionInterventionTest {
             .defaultAdvisors(
                 RunScopedAdvisor.wrap(
                     List.of(
-                        org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor.builder(
-                                memory)
-                            .build(),
+                        new dev.mikoto2000.rei.core.contextbudget.ContextHistoryAdvisor(
+                            turns, memory, summaries),
                         new dev.mikoto2000.rei.core.working.WorkingSetAdvisor(workingSet))))
             .build();
     var holder = mock(ModelHolderService.class);
@@ -256,6 +258,7 @@ class ChatExecutionInterventionTest {
         new ChatExecutionService(
             client, holder, new CommandCancellationService(), Optional.empty());
     service.setChatMemory(memory);
+    service.setConversationTurnStore(turns);
     var queue = new UserInterventionQueue();
     queue.offer("discard this guidance");
     service.execute(new AgentRunContext("A", "chat:main", Path.of(".")), "write network.md", queue);
@@ -263,11 +266,14 @@ class ChatExecutionInterventionTest {
       assertThat(service.execute(input).success()).isTrue();
       var prompt = requests.getLast();
       assertThat(prompt.getSystemMessage().getText())
-          .contains("CANCELLED", "write network.md", "unless the user explicitly asks to resume");
-      assertThat(prompt.getUserMessage().getText()).endsWith(input).contains("network.md");
+          .contains("CANCELLED", "getConversationHistory", "explicitly requests resumption")
+          .doesNotContain("write network.md");
+      assertThat(prompt.getUserMessage().getText()).isEqualTo(input);
+      assertThat(prompt.getContents()).contains("network.md");
       assertThat(prompt.getContents()).doesNotContain("discard this guidance");
     }
     assertThat(workingSet.getFiles()).hasSize(1);
+    assertThat(turns.read("chat:main").getFirst().request()).isEqualTo("write network.md");
   }
 
   /** 会話の実行の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */

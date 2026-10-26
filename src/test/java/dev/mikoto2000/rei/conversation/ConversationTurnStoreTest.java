@@ -46,7 +46,8 @@ class ConversationTurnStoreTest {
         .containsExactly(
             ConversationTurnStore.Status.CANCELLED, ConversationTurnStore.Status.COMPLETED);
     assertThat(restored.cancelledContext("chat:main"))
-        .contains("write network.md", "Explicit resumption is allowed");
+        .contains("archived", "getConversationHistory")
+        .doesNotContain("write network.md");
     assertThat(restored.cancelledContext("chat:other")).isEmpty();
     restored.finish(a, ConversationTurnStore.Status.FAILED);
     assertThat(restored.read("chat:main").getFirst().status())

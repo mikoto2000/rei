@@ -17,6 +17,8 @@ public final class AgentRunScope implements AutoCloseable {
     previous = CURRENT.get();
     if (context == null) CURRENT.remove();
     else CURRENT.set(context);
+    dev.mikoto2000.rei.context.RunIdentity.setCurrentRunId(
+        context == null ? null : context.runId());
   }
 
   /** 必要な対象を利用できるよう、エージェント実行対象範囲の利用を開始する。 */
@@ -33,5 +35,7 @@ public final class AgentRunScope implements AutoCloseable {
   public void close() {
     if (previous == null) CURRENT.remove();
     else CURRENT.set(previous);
+    dev.mikoto2000.rei.context.RunIdentity.setCurrentRunId(
+        previous == null ? null : previous.runId());
   }
 }

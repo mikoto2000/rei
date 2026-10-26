@@ -42,6 +42,10 @@ public class WorkContextAdvisor implements BaseAdvisor {
     try {
       var saved = service.current(run.projectId()).orElse(null);
       if (saved == null) return request;
+      if (request.context().get(dev.mikoto2000.rei.context.CancelledTaskHistory.KEY)
+          instanceof dev.mikoto2000.rei.context.CancelledTaskHistory cancelled) {
+        saved = forPrompt(saved, cancelled);
+      }
       String text =
           new WorkContextFormatter()
               .context(
@@ -73,5 +77,33 @@ public class WorkContextAdvisor implements BaseAdvisor {
   @Override
   public int getOrder() {
     return -109;
+  }
+
+  /** Omit abandoned execution intent while retaining observed effects in the prompt. */
+  static WorkContext forPrompt(
+      WorkContext saved, dev.mikoto2000.rei.context.CancelledTaskHistory cancelled) {
+    if (cancelled.runIds().isEmpty()) return saved;
+    var items =
+        saved.items().stream()
+            .filter(
+                item -> {
+                  if (switch (item.kind()) {
+                    case ARTIFACT, COMPLETED_WORK, VERIFICATION, DECISION -> true;
+                    default -> false;
+                  }) return true;
+                  return !item.evidence().isEmpty()
+                      && item.evidence().stream()
+                          .noneMatch(e -> cancelled.runIds().contains(e.runId()))
+                      && item.evidence().stream().anyMatch(e -> cancelled.allowsState(e.runId()));
+                })
+            .toList();
+    return new WorkContext(
+        saved.projectId(),
+        saved.revision(),
+        saved.createdAt(),
+        saved.updatedAt(),
+        saved.git(),
+        items,
+        saved.processedRuns());
   }
 }

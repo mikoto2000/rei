@@ -42,7 +42,16 @@ public final class ConversationLifecycleAdvisor implements BaseAdvisor {
     var messages = new ArrayList<Message>();
     var originalSystem = request.prompt().getSystemMessage();
     String system = originalSystem.getText();
-    messages.add(originalSystem.mutate().text(system + "\n\n" + context).build());
+    messages.add(
+        originalSystem
+            .mutate()
+            .text(
+                system
+                    + "\n\n"
+                    + context
+                    + "\nArchived conversationId for explicit retrieval: "
+                    + conversationId)
+            .build());
     request.prompt().getInstructions().stream()
         .filter(m -> m != originalSystem)
         .forEach(messages::add);

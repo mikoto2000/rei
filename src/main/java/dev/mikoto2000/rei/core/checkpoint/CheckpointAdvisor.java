@@ -60,6 +60,8 @@ public class CheckpointAdvisor implements BaseAdvisor {
   /** 実行状態の引き継ぎの本処理へ渡す文脈を準備する。 */
   @Override
   public ChatClientRequest before(ChatClientRequest request, AdvisorChain chain) {
+    if (!dev.mikoto2000.rei.context.CancelledTaskHistory.allowsState(
+        request.context(), checkpointStore.ownerRunId())) return request;
     UserMessage userMessage = request.prompt().getUserMessage();
     if (userMessage == null) {
       return request;

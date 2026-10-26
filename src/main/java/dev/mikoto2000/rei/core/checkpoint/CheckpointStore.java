@@ -25,6 +25,14 @@ public class CheckpointStore {
   /** 最新。 */
   private TurnCheckpoint latest;
 
+  /** Run that saved this resume hint. */
+  private String ownerRunId;
+
+  /** Returns the hint's provenance without discarding the checkpoint. */
+  public String ownerRunId() {
+    return ownerRunId;
+  }
+
   /** 実行状態の引き継ぎを利用するため、指定を補って共通の初期化へ引き渡す。 */
   public CheckpointStore() {
     this(Clock.systemDefaultZone());
@@ -55,6 +63,7 @@ public class CheckpointStore {
 
   /** checkpoint を保存する。最新 1 件を保持する。 */
   public void save(TurnCheckpoint checkpoint) {
+    ownerRunId = dev.mikoto2000.rei.context.RunIdentity.currentRunId();
     this.latest = checkpoint;
     if (events != null && eventPublisher != null) {
       int workingFileCount =

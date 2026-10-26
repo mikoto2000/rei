@@ -72,7 +72,7 @@ class SessionTurnMigrationTest {
     var sqlTurns = new SqliteConversationTurnStore(root);
     assertThat(sessions.findById("chat:one")).contains(metadata("chat:one"));
     assertThat(sqlTurns.read("chat:one")).isEqualTo(expected);
-    assertThat(sqlTurns.cancelledContext("chat:one")).contains("質問");
+    assertThat(sqlTurns.cancelledContext("chat:one")).contains("archived").doesNotContain("質問");
     sessions.accept(metadata("new"), () -> {});
     sqlTurns.start(new AgentRunContext("next", "chat:one", root), "続き", now.plusNanos(1));
     prepare();
@@ -188,7 +188,8 @@ class SessionTurnMigrationTest {
             java.sql.DriverManager.getConnection("jdbc:sqlite:" + root.resolve("storage.db"));
         var query = db.createStatement()) {
       query.execute(
-          "CREATE TABLE storage_migrations(version INTEGER PRIMARY KEY,status TEXT NOT NULL,backup TEXT,completed TEXT NOT NULL)");
+          "CREATE TABLE storage_migrations(version INTEGER PRIMARY KEY,status TEXT NOT NULL,backup"
+              + " TEXT,completed TEXT NOT NULL)");
       query.execute("INSERT INTO storage_migrations VALUES(1,'COMPLETE',NULL,'2026-10-01')");
       query.execute("PRAGMA user_version=1");
     }
@@ -324,7 +325,8 @@ class SessionTurnMigrationTest {
             java.sql.DriverManager.getConnection("jdbc:sqlite:" + root.resolve("storage.db"));
         var query = db.createStatement()) {
       query.execute(
-          "CREATE TRIGGER fail_session BEFORE INSERT ON sessions BEGIN SELECT RAISE(ABORT,'write failure fixture'); END");
+          "CREATE TRIGGER fail_session BEFORE INSERT ON sessions BEGIN SELECT RAISE(ABORT,'write"
+              + " failure fixture'); END");
     }
     var repository = new SqliteSessionRepository(root);
     assertThatThrownBy(
@@ -438,7 +440,8 @@ class SessionTurnMigrationTest {
             java.sql.DriverManager.getConnection("jdbc:sqlite:" + root.resolve("storage.db"));
         var query = db.createStatement()) {
       query.execute(
-          "CREATE TABLE storage_migrations(version INTEGER PRIMARY KEY,status TEXT NOT NULL,backup TEXT,completed TEXT NOT NULL)");
+          "CREATE TABLE storage_migrations(version INTEGER PRIMARY KEY,status TEXT NOT NULL,backup"
+              + " TEXT,completed TEXT NOT NULL)");
       query.execute("INSERT INTO storage_migrations VALUES(1,'COMPLETE',NULL,'2026-10-01')");
       query.execute("PRAGMA user_version=1");
     }

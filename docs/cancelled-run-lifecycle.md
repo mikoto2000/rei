@@ -46,27 +46,25 @@ mailbox が閉じた後の新規入力は、既存 router により後継 run �
 `ConversationTurnStore` は `runId`、元の依頼、`RUNNING / COMPLETED / FAILED / CANCELLED` を保持する。
 終端状態は後の cleanup で上書きしない。
 
-本番では既存の Rei データディレクトリの `state/turns/<conversation-key>.json` に保存する。
-プロジェクト付き会話は `projects/<projectId>/state/turns/` を使う。ファイルは一時ファイルから置換し、
-プロセス再起動後もキャンセルを保持する。会話 ID ごとに分離し、通常の会話ログとメモリは削除しない。
-ライフサイクル情報は会話ログ本文とは別のメタデータであり、既存 JSONL の形式は変更しない。
+本番の `SqliteConversationTurnStore` は Rei データディレクトリの `storage.db` に保存する。旧形式の `ConversationTurnStore` は `state/turns/<conversation-key>.json`、プロジェクト付き会話では `projects/<projectId>/state/turns/` を使う。どちらも再起動後にキャンセル状態を読み戻し、会話 ID ごとに分離する。通常の会話ログとメモリは削除しない。ライフサイクル情報は会話ログ本文とは別のメタデータであり、既存 JSONL の形式は変更しない。
 
-`ConversationLifecycleAdvisor` が履歴・作業コンテキスト・スキルの組み立て後に、
-キャンセル済みの依頼と次の方針を system コンテキストへ反映する。
+`ContextHistoryAdvisor` はモデルへ渡す履歴を投影するときに、キャンセル済みの依頼・応答・途中の guidance・run 要約を除外する。実行を中止した時点で直前に連続している `FAILED` の依頼も、自動継続された可能性のある未完了の試行として除外する。`COMPLETED` または別の実行中の依頼を越えて遡らない。タスク同一性を推測して削除する処理ではなく、保守的な自動注入の制限であり、別件の連続した失敗も参照が必要なら明示的に取得する。
 
-> 明示的な再開指示がない限り、キャンセル済みの依頼を再開しない。
-> 現在のユーザー入力に応答し、過去の作業情報を新しい実行指示として扱わない。
-> 明示的な再開を頼まれた場合は、過去のコンテキストを利用してよい。
+永続ログは実行の開始日時により turn と対応付ける。turn から組み立てる旧形式の履歴にも同じ除外を適用する。元のログ、turn、run 要約は変更しない。過去の圧縮要約から依頼が復活しないよう、最新のキャンセル run ID ごとに履歴要約の保存キーを分離する。キャンセル後の新しい会話は通常どおり保持・圧縮する。
 
-挨拶などの文字列判定や、次のメッセージ到着によるキャンセル解除は行わない。
-system メッセージを履歴へ追加し続ける方式でもない。
-メタデータは通常のメモリ窓から独立しており、複数の無関係な会話を挟んでも方針を保持する。
+`ConversationLifecycleAdvisor` はキャンセルした依頼の本文を再注入しない。一般的な停止方針と履歴取得先の conversation ID のみを渡す。
+
+> 現在のユーザー入力に応答し、キャンセル済みの作業を自動で取得・再開しない。
+> 明示的な再開や振り返りを頼まれた場合は、`getConversationHistory` / `searchConversationHistory`、必要に応じて `workContextGet` で記録を取得する。
+> キャンセルは変更済みファイルや起動済みプロセスを巻き戻さないため、操作の重複を避けるため実際の状態を確認する。
+
+挨拶や再開要求を文字列で判定しない。明示的な再開でも古い依頼を自動注入へ戻すのではなく、モデルが必要な履歴を取得して再開する。会話ごとの除外は再起動後や複数の無関係な会話を挟んだ後も保持する。
 
 ## Working Set と状態表示
 
-Working Set はファイルの参照情報であり、別の `TaskState` と `ActionPlan` が作業目的や手順を保持する。
-これらを一括削除しない。キャンセル状態を system コンテキストに置き、過去の作業状態を再開の許可と誤解しないよう明示する。
-従来の作業ファイル参照は、別の依頼や明示的な再開に利用できる。
+Working Set はファイルの参照情報であり、別の `TaskState` と `ActionPlan` が作業目的や手順を保持する。これらの保存内容は削除しない。Task State、Action Plan、旧形式の再開 checkpoint は作成元 run を記録し、キャンセル以前の状態や所有元が不明な状態は後続のプロンプトへ注入しない。新しい run が設定した作業状態は利用できる。古い Action Plan を進捗判定に使用したり、旧 checkpoint の再開ヒントを新しい永続 checkpoint の次操作へ引き継いだりしない。
+
+Work Context も投影だけを変更する。古い目的・現在作業・未完了項目・阻害要因・次操作は、キャンセル後の新しい run の根拠があるものだけを注入する。成果物、実施済み作業、検証、判断の記録は参照できる。`/work show` や取得ツールが返す保存記録は変更しない。Working Set と変更済みファイル、外部プロセスは維持する。
 
 既存の run 終端イベントと `error.code = cancelled` を利用する。イベント API は追加せず、
 Shell は `[agent] cancelled`、UI projection と最終 run の保存状態は `CANCELLED` とする。
@@ -76,7 +74,9 @@ Shell は `[agent] cancelled`、UI projection と最終 run の保存状態は `
 
 | 対象 | 確認内容 |
 | --- | --- |
-| `ChatExecutionInterventionTest` | キャンセル結果、pending guidance 破棄、挨拶を複数回挟んだキャンセル状態、明示的再開、Working Set 保持、正常 guidance、終端状態の一貫性 |
+| `ChatExecutionInterventionTest` | キャンセル結果、pending guidance 破棄、複数の挨拶と明示的再開要求でも元の依頼を自動注入しないこと、履歴取得の案内、Working Set 保持、正常 guidance、終端状態の一貫性 |
+| `CancelledTaskProjectionTest` | ファイル/SQLite の再起動、失敗した元依頼からの誤再開、guidance・run 要約・古い圧縮要約の除外、原本保持、別会話への非干渉 |
+| `CancelledActiveStateTest` / `CancelledWorkContextTest` | 古い作業状態の非注入と原本保持、新規タスクの注入、実施済み変更と成果物の保持 |
 | `CancelledRunBoundaryTest` | 割り込みを無視するスキル選択、通信の購読解除、ツール中断後の後続抑止、話題更新中断時の完了抑止 |
 | `ConversationTurnStoreTest` | 永続化と再起動、会話分離、通常完了後も過去のキャンセルを保持、終端状態の保護 |
 | `AgentSkillImplicitSelectorTest` | ラップされた interruption の伝播と interrupt 復元 |
@@ -142,3 +142,14 @@ ui/projection/DefaultAgentUiProjectionTest.java
 ```
 
 設計文書: `docs/cancelled-run-lifecycle.md`。合計 27 ファイル。
+
+## 自動注入からの除外の検証（2026-10-26）
+
+- 通常テスト: 3,823 件、Failures 0、Errors 0、Skipped 3。
+- 関連回帰テスト: 201 件、Failures 0、Errors 0、Skipped 0。ファイル保存と SQLite の両方を検証。
+- `PackageArchitectureTest` で循環依存が増えていないことを確認。既存 baseline は変更していない。
+- Mockito の javaagent、ワークスペース内の一時領域、子 JVM の UTF-8 出力を指定。既存の標準出力検証へ診断ログが混入するため、テスト時のみ `CommandCancellationService` の INFO ログを抑止した。
+- `build.bat -o` で Backend と軽量 CLI の JAR を更新。Backend JAR 内の新しい文脈判定クラスと停止方針を確認。
+- 実行ログは `target/cancelled-task-unit-tests-final.log`、`target/cancelled-task-integration-final.log`、`target/cancelled-task-build.log`。
+
+実モデルの自然言語応答ではなく、送信する文脈・保存記録・状態の扱いを検証している。

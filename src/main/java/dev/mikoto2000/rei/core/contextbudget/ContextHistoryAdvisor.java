@@ -75,6 +75,17 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         .filter(m -> m instanceof SystemMessage)
         .forEach(messages::add);
     var history = turns.read(id);
+    var cancelled = turns.promptHistory(id);
+    if (!cancelled.generation().isEmpty())
+      messages.add(
+          SystemMessage.builder()
+              .text(
+                  "Cancelled task history is archived. Retrieve it only at the user's explicit request.")
+              .metadata(
+                  Map.of(
+                      dev.mikoto2000.rei.context.CancelledTaskHistory.GENERATION,
+                      cancelled.generation()))
+              .build());
     var logEntries =
         logs == null
             ? java.util.List.<dev.mikoto2000.rei.conversation.ConversationLogEntry>of()
@@ -94,6 +105,8 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
                 && (entry.content().equals(request.prompt().getUserMessage().getText())
                     || currentTurn.map(t -> entry.content().equals(t.request())).orElse(false));
         if (currentInput) continue;
+        if (cancelled.hides(entry.timestamp() == null ? null : entry.timestamp().toInstant()))
+          continue;
         var properties = new HashMap<String, Object>(entry.metadata());
         if (entry.source() != null) properties.put("source", entry.source());
         if (entry.sourceId() != null) properties.put("sourceId", entry.sourceId());
@@ -137,6 +150,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
       for (int i = 0; i < history.size(); i++) {
         var turn = history.get(i);
         if (owner != null && owner.runId().equals(turn.runId())) continue;
+        if (cancelled.hides(turn.runId())) continue;
         if (turn.request() != null && !turn.request().isBlank())
           messages.add(historical(new UserMessage(turn.request()), i * 3L + 1));
         var runSummary = summaries.read(ConversationSummaryRepository.runKey(id, turn.runId()));
@@ -170,6 +184,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         request.prompt().getInstructions().stream().filter(m -> m instanceof UserMessage).toList());
     var context = new HashMap<>(request.context());
     context.put("rei.contextProjection", true);
+    context.put(dev.mikoto2000.rei.context.CancelledTaskHistory.KEY, cancelled);
     // Logs and legacy turns have different sequence domains. Never apply one cursor to the other.
     if (!logEntries.isEmpty()
         && request.prompt().getOptions()
