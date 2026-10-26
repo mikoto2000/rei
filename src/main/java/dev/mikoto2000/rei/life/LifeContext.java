@@ -300,14 +300,30 @@ public final class LifeContext implements LifePolicy {
   }
 
   public boolean valid(Lease lease) {
+    return valid(lease, false);
+  }
+
+  public boolean validManualObservation(Lease lease) {
+    return valid(lease, true);
+  }
+
+  private boolean valid(Lease lease, boolean allowDuringWork) {
     var snapshot = settings;
     return lease != null
         && lease.revision() == snapshot.revision()
-        && observationAllowed(lease.started())
+        && observationAllowed(lease.started(), allowDuringWork)
         && snapshot == settings;
   }
 
   public boolean observationAllowed(Instant since) {
+    return observationAllowed(since, false);
+  }
+
+  public boolean manualObservationAllowed(Instant since) {
+    return observationAllowed(since, true);
+  }
+
+  private boolean observationAllowed(Instant since, boolean allowDuringWork) {
     var now = clock.instant();
     var s = settings;
     if (since == null || since.isAfter(now) || since.isBefore(changedAt)) return false;
@@ -319,13 +335,15 @@ public final class LifeContext implements LifePolicy {
     var zone = ZoneId.of(s.zone());
     var from = since.atZone(zone);
     var to = now.atZone(zone);
-    if (working(s, to) || matches(s.rest(), to)) return false;
+    if ((!allowDuringWork && working(s, to)) || matches(s.rest(), to)) return false;
     // A suspended operation must not resume after having crossed a protected interval.
     if (Duration.between(since, now).toDays() > 8) return false;
     for (var date = from.toLocalDate().minusDays(1);
         !date.isAfter(to.toLocalDate());
         date = date.plusDays(1)) {
-      if (overlaps(s.workDays(), s.workStart(), s.workEnd(), date, zone, since, now)) return false;
+      if (!allowDuringWork
+          && overlaps(s.workDays(), s.workStart(), s.workEnd(), date, zone, since, now))
+        return false;
       for (var w : s.rest())
         if (overlaps(w.days(), w.start(), w.end(), date, zone, since, now)) return false;
     }

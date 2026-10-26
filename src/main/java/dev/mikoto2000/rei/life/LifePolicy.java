@@ -18,6 +18,15 @@ public interface LifePolicy {
 
   boolean observationAllowed(Instant since);
 
+  /** Explicit microphone input may ignore work hours, while retaining other privacy constraints. */
+  default boolean manualObservationAllowed(Instant since) {
+    return observationAllowed(since);
+  }
+
+  default boolean validManualObservation(LifeContext.Lease lease) {
+    return valid(lease);
+  }
+
   boolean observationAllowed();
 
   boolean notificationAllowed(String category, String criterion);

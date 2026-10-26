@@ -87,7 +87,7 @@ class VoiceReviewCommandTest {
   void startingCaptureBindsCurrentClientAndConfirmationBeforeOpeningMicrophone() {
     devices.select("dry");
     when(voice.state()).thenReturn(VoiceInputCoordinator.State.OFF);
-    when(voice.start(any(), any(), any()))
+    when(voice.startManual(any(), any(), any()))
         .thenReturn(timeout -> VoiceInputCoordinator.State.LISTENING);
     var target =
         new ConversationTarget(
@@ -99,6 +99,6 @@ class VoiceReviewCommandTest {
     order.verify(voice, times(2)).state();
     order.verify(delivery).setConfirmation(true);
     order.verify(delivery).bind(null, target);
-    order.verify(voice).start(target, devices.selected(), properties.settings());
+    order.verify(voice).startManual(target, devices.selected(), properties.settings());
   }
 }

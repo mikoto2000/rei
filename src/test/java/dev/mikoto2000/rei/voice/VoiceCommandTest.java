@@ -99,7 +99,7 @@ class VoiceCommandTest {
     var startup = mock(VoiceInputCoordinator.Startup.class);
     when(startup.await(VoiceRuntimeLimits.COMMAND_STARTUP))
         .thenReturn(VoiceInputCoordinator.State.LISTENING);
-    when(voice.start(any(), any(), any())).thenReturn(startup);
+    when(voice.startManual(any(), any(), any())).thenReturn(startup);
     var shell = mock(ShellConversationService.class);
     var target =
         new dev.mikoto2000.rei.application.input.ConversationTarget(
@@ -111,7 +111,7 @@ class VoiceCommandTest {
     assertThat(command.execute("on")).isZero();
     var order = inOrder(voice, startup);
     order.verify(voice, times(2)).state();
-    order.verify(voice).start(target, devices.selected(), VoiceSettings.defaults());
+    order.verify(voice).startManual(target, devices.selected(), VoiceSettings.defaults());
     order.verify(startup).await(VoiceRuntimeLimits.COMMAND_STARTUP);
   }
 }

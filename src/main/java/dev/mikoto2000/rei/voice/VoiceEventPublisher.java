@@ -40,6 +40,8 @@ public final class VoiceEventPublisher {
     INPUT_REJECTED,
     /** バックエンド失敗。 */
     BACKEND_FAILED,
+    /** 勤務・休息などの生活制約による録音禁止。 */
+    PRIVACY_BLOCKED,
     /** 取得記録失敗。 */
     CAPTURE_FAILED,
     /** 認識失敗。 */

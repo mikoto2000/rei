@@ -9,6 +9,18 @@ import org.junit.jupiter.api.Test;
 
 /** 音声シェルイベント表示への変換の結果と状態の契約を検証するテスト。 */
 class VoiceShellEventRendererTest {
+  @Test
+  void privacyFailureExplainsLifeSettingsInsteadOfNativeInitialization() {
+    var output = mock(ShellEventOutput.class);
+    new VoiceShellEventRenderer(output)
+        .accept(
+            new VoiceEventPublisher.Event(
+                VoiceEventPublisher.Type.PRIVACY_BLOCKED, "voice stopped"));
+    verify(output)
+        .println(
+            "[voice] 勤務・休息時間などの生活制約により音声入力を停止しました。/secretary life-status と /secretary life-settings を確認してください");
+  }
+
   /** 音声による対話で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void listeningCueAndFailuresUseJLineOutputWithoutRawTranscript() {

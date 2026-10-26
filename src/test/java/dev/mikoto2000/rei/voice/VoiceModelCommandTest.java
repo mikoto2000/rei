@@ -52,7 +52,7 @@ class VoiceModelCommandTest {
   VoiceInputCoordinator voice() {
     var voice = mock(VoiceInputCoordinator.class);
     when(voice.state()).thenReturn(VoiceInputCoordinator.State.OFF);
-    when(voice.start(any(), any(), any()))
+    when(voice.startManual(any(), any(), any()))
         .thenReturn(timeout -> VoiceInputCoordinator.State.LISTENING);
     return voice;
   }
@@ -94,7 +94,7 @@ class VoiceModelCommandTest {
       assertThat(calls).hasValue(0);
       // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
       verifyNoInteractions(shell);
-      verify(voice, never()).start(any(), any(), any());
+      verify(voice, never()).startManual(any(), any(), any());
       assertThat(output.toString())
           .contains("fixed-approved", "https://example.org/fixed", "MIT", "7 bytes", "--approve");
     }
@@ -123,7 +123,7 @@ class VoiceModelCommandTest {
       while (manager.busy() && System.nanoTime() < deadline) Thread.sleep(5);
       assertThat(manager.status().state()).isEqualTo(VoiceModelManager.State.READY);
       assertThat(command.execute("on")).isZero();
-      verify(voice).start(eq(target), any(), eq(VoiceSettings.defaults()));
+      verify(voice).startManual(eq(target), any(), eq(VoiceSettings.defaults()));
     }
   }
 

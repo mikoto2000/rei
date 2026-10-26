@@ -28,10 +28,72 @@ import org.junit.jupiter.api.Test;
 
 /** 音声入力からの依頼かどうか処理の調整の結果と状態の契約を検証するテスト。 */
 class VoiceInputCoordinatorTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void manualVoiceDuringWorkDeliversInputAndDoesNotAuthorizeNextAutomaticRun(boolean corrected)
+      throws Exception {
+    var incidentClock = Clock.fixed(Instant.parse("2026-10-26T03:05:34Z"), ZoneOffset.UTC);
+    var source = new Source();
+    var submitted = new CopyOnWriteArrayList<ConversationInput>();
+    var opens = new AtomicInteger();
+    var recognizer = org.mockito.Mockito.mock(SpeechRecognizer.class);
+    org.mockito.Mockito.when(recognizer.recognize(org.mockito.ArgumentMatchers.any()))
+        .thenReturn("今日の予定を確認してください");
+    var properties = new VoiceCorrectionProperties();
+    properties.setEnabled(corrected);
+    try (var correction =
+            new VoiceCorrectionService(
+                properties,
+                input ->
+                    new VoiceCorrectionContext.Snapshot(
+                        target.project().id(), "test", List.of(), List.of()),
+                (raw, context) -> raw,
+                new VoiceEventPublisher());
+        var voice =
+            new VoiceInputCoordinator(
+                d -> source,
+                settings -> {
+                  opens.incrementAndGet();
+                  return backend(recognizer, new AtomicInteger());
+                },
+                submitted::add,
+                new VoiceEventPublisher(),
+                incidentClock)) {
+      // Exercise ASR, optional correction and delivery with the real weekday policy.
+      voice.useLifeContext(
+          new dev.mikoto2000.rei.life.LifeContext(
+              org.mockito.Mockito.mock(dev.mikoto2000.rei.life.LifeContext.Store.class),
+              incidentClock));
+      voice.configureCorrection(correction, submitted::add);
+      voice.startManual(target, device, VoiceSettings.defaults());
+      await()
+          .atMost(Duration.ofSeconds(3))
+          .untilAsserted(
+              () -> assertThat(voice.state()).isEqualTo(VoiceInputCoordinator.State.LISTENING));
+      source.speech(1);
+      await().atMost(Duration.ofSeconds(3)).untilAsserted(() -> assertThat(submitted).hasSize(1));
+      voice.off();
+      await()
+          .atMost(Duration.ofSeconds(3))
+          .untilAsserted(
+              () -> assertThat(voice.state()).isEqualTo(VoiceInputCoordinator.State.OFF));
+      voice.start(target, device, VoiceSettings.defaults());
+      await()
+          .atMost(Duration.ofSeconds(3))
+          .untilAsserted(
+              () -> assertThat(voice.state()).isEqualTo(VoiceInputCoordinator.State.FAILED));
+      assertThat(opens).hasValue(1);
+    }
+  }
+
   @Test
   void workPolicyStopsBeforeMicrophoneOrRecognizerInitialization() {
+    var incidentClock = Clock.fixed(Instant.parse("2026-10-26T03:05:34Z"), ZoneOffset.UTC);
     var captures = new AtomicInteger();
     var recognizers = new AtomicInteger();
+    var events = new VoiceEventPublisher();
+    var failures = new CopyOnWriteArrayList<VoiceEventPublisher.Event>();
+    events.subscribe(failures::add);
     try (var voice =
         new VoiceInputCoordinator(
             d -> {
@@ -45,12 +107,52 @@ class VoiceInputCoordinatorTest {
             input -> {
               throw new AssertionError("must not submit");
             },
-            new VoiceEventPublisher(),
-            clock)) {
-      voice.useLifeContext(org.mockito.Mockito.mock(dev.mikoto2000.rei.life.LifeContext.class));
+            events,
+            incidentClock)) {
+      voice.useLifeContext(
+          new dev.mikoto2000.rei.life.LifeContext(
+              org.mockito.Mockito.mock(dev.mikoto2000.rei.life.LifeContext.Store.class),
+              incidentClock));
       voice.start(target, device, VoiceSettings.defaults()).await(Duration.ofSeconds(3));
+      await()
+          .atMost(Duration.ofSeconds(3))
+          .untilAsserted(
+              () -> assertThat(voice.state()).isEqualTo(VoiceInputCoordinator.State.FAILED));
       assertThat(captures.get()).isZero();
       assertThat(recognizers.get()).isZero();
+      assertThat(failures)
+          .extracting(VoiceEventPublisher.Event::type)
+          .contains(VoiceEventPublisher.Type.PRIVACY_BLOCKED)
+          .doesNotContain(
+              VoiceEventPublisher.Type.BACKEND_FAILED, VoiceEventPublisher.Type.CAPTURE_FAILED);
+    }
+  }
+
+  @Test
+  void privacyChangeDuringBackendStartupClosesBackendWithoutOpeningMicrophone() {
+    var policy = org.mockito.Mockito.mock(dev.mikoto2000.rei.life.LifePolicy.class);
+    org.mockito.Mockito.when(policy.observationAllowed(org.mockito.ArgumentMatchers.any()))
+        .thenReturn(true, false);
+    var backend = org.mockito.Mockito.mock(VoiceBackend.class);
+    var capture = org.mockito.Mockito.mock(MicrophoneCaptureService.class);
+    var events = new VoiceEventPublisher();
+    var failures = new CopyOnWriteArrayList<VoiceEventPublisher.Event>();
+    events.subscribe(failures::add);
+    try (var voice =
+        new VoiceInputCoordinator(capture, settings -> backend, input -> {}, events, clock)) {
+      voice.useLifeContext(policy);
+      voice.start(target, device, VoiceSettings.defaults()).await(Duration.ofSeconds(3));
+      await()
+          .atMost(Duration.ofSeconds(3))
+          .untilAsserted(
+              () -> assertThat(voice.state()).isEqualTo(VoiceInputCoordinator.State.FAILED));
+      org.mockito.Mockito.verifyNoInteractions(capture);
+      org.mockito.Mockito.verify(backend).close();
+      assertThat(failures)
+          .extracting(VoiceEventPublisher.Event::type)
+          .contains(VoiceEventPublisher.Type.PRIVACY_BLOCKED)
+          .doesNotContain(
+              VoiceEventPublisher.Type.BACKEND_FAILED, VoiceEventPublisher.Type.CAPTURE_FAILED);
     }
   }
 

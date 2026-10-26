@@ -34,6 +34,8 @@ public final class VoiceShellEventRenderer implements Consumer<VoiceEventPublish
           case INPUT_REJECTED -> "会話入力を受け付けられませんでした。/voice pending と送信先Sessionを確認してください";
           case BACKEND_FAILED ->
               "音声モデル/JNIの初期化に失敗しました。モデル一式と --enable-native-access=ALL-UNNAMED を確認してください";
+          case PRIVACY_BLOCKED ->
+              "勤務・休息時間などの生活制約により音声入力を停止しました。/secretary life-status と /secretary life-settings を確認してください";
           case CAPTURE_FAILED -> "選択マイクの録音/VADが停止しました。別マイクへは切り替えません";
           case RECOGNITION_FAILED -> "音声認識に失敗して停止しました";
           case RELEASE_FAILED -> "音声資源の解放に失敗しました";

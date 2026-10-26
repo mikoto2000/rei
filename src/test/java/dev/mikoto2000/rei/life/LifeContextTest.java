@@ -17,6 +17,53 @@ import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class LifeContextTest {
+  @Test
+  void manualObservationAllowsWorkHoursButRetainsRestExceptionsAndRevisionChecks() {
+    var clock = new Time();
+    clock.now = Instant.parse("2026-10-26T03:05:34Z");
+    var service = new LifeContext(new Memory(), clock);
+    var lease = service.begin();
+    assertFalse(service.observationAllowed());
+    assertFalse(service.valid(lease));
+    assertTrue(service.manualObservationAllowed(clock.instant()));
+    assertTrue(service.validManualObservation(lease));
+    var s = service.settings();
+    service.configure(
+        new LifeContext.Settings(
+            s.revision(),
+            s.zone(),
+            s.workDays(),
+            s.workStart(),
+            s.workEnd(),
+            s.notifications(),
+            List.of(new LifeContext.Window(Set.of(DayOfWeek.MONDAY), "12:00", "13:00")),
+            s.personal(),
+            s.background(),
+            null));
+    assertFalse(service.manualObservationAllowed(clock.instant()));
+    assertFalse(service.validManualObservation(lease));
+    clock.now = Instant.parse("2026-10-26T04:30:00Z");
+    assertTrue(service.manualObservationAllowed(clock.instant()));
+    assertFalse(service.manualObservationAllowed(lease.started()));
+    s = service.settings();
+    service.configure(
+        new LifeContext.Settings(
+            s.revision(),
+            s.zone(),
+            s.workDays(),
+            s.workStart(),
+            s.workEnd(),
+            s.notifications(),
+            List.of(),
+            s.personal(),
+            s.background(),
+            new LifeContext.ExceptionWindow(
+                clock.instant().minusSeconds(1),
+                clock.instant().plusSeconds(60),
+                LifeContext.Availability.UNAVAILABLE)));
+    assertFalse(service.manualObservationAllowed(clock.instant()));
+  }
+
   static final class Memory implements LifeContext.Store {
     LifeContext.Settings value;
 

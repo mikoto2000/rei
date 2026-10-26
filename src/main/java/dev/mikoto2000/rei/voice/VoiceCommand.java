@@ -342,7 +342,9 @@ public class VoiceCommand {
       startup =
           diagnostic
               ? voice.startDiagnostic(target, selected, properties.settings())
-              : voice.start(target, selected, properties.settings());
+              : automatic
+                  ? voice.start(target, selected, properties.settings())
+                  : voice.startManual(target, selected, properties.settings());
     }
     var state = startup.await(VoiceRuntimeLimits.COMMAND_STARTUP);
     synchronized (startGuard) {
