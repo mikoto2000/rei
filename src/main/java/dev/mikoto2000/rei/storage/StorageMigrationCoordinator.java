@@ -131,16 +131,18 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
     if (version > 0) verifyReady(version);
     Path backup = null;
     Stage stage = Stage.COPYING;
-    try {
+    try (var progress = new StorageMigrationProgress(version, SCHEMA_VERSION)) {
       if (StorageBackup.hasSources(root)) {
         backup =
             root.resolve(".storage/backups")
                 .resolve(Instant.now().toEpochMilli() + "-" + UUID.randomUUID());
         journal(stage, backup);
         checkpoint.reached(stage, backup);
+        progress.step("バックアップを作成中");
         StorageBackup.copy(root, backup);
         stage = Stage.COPIED;
         checkpoint.reached(stage, backup);
+        progress.step("バックアップの整合性を確認中");
         StorageBackup.verifyCopied(backup);
         StorageBackup.verifySources(root, backup);
         StorageBackup.markVerified(backup);
@@ -152,6 +154,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
       stage = Stage.APPLYING;
       journal(stage, backup);
       checkpoint.reached(stage, backup);
+      progress.step("保存データを移行中");
       if (backup != null) {
         StorageBackup.verify(backup);
         StorageBackup.verifySources(root, backup);
@@ -160,8 +163,11 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
       stage = Stage.COMPLETE;
       journal(stage, backup);
       checkpoint.reached(stage, backup);
+      progress.step("保存データの更新が完了しました");
       return prepared = new Result(SCHEMA_VERSION, backup);
     } catch (Exception error) {
+      System.err.printf(
+          "[storage] 保存データの更新を停止しました（stage=%s）。詳細は起動ログを確認してください。backup=%s%n", stage, backup);
       org.slf4j.LoggerFactory.getLogger(getClass())
           .error(
               "Storage startup stopped: root={}, stage={}, backup={}. Old source data retained; stop other writers and retry. Failure type: {}",
