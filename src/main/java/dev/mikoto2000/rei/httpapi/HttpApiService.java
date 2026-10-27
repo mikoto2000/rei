@@ -284,7 +284,8 @@ public class HttpApiService {
       if (type != null) {
         try {
           var media = org.springframework.http.MediaType.parseMediaType(type);
-          if (media.getCharset() != null) charset = media.getCharset();
+          var declared = media.getCharset();
+          if (declared != null) charset = declared;
         } catch (IllegalArgumentException ignored) {
           /* Fall back to UTF-8. */
         }
@@ -299,8 +300,11 @@ public class HttpApiService {
                   .with(tools.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS)
                   .readTree(text);
           text = null;
-          if (json != null && secret != null)
-            json = mapper.readTree(redact(json.toString(), secret));
+          if (json != null)
+            json =
+                mapper.readTree(
+                    dev.mikoto2000.rei.event.CredentialRedactor.redact(
+                        redact(json.toString(), secret)));
           if (json == null) error = "INVALID_JSON";
           else if (request.jsonPointer() != null) {
             json = json.at(request.jsonPointer());
@@ -323,6 +327,7 @@ public class HttpApiService {
         }
       }
     } else if (request.jsonPointer() != null) error = "EMPTY_BODY";
+    if (text != null) text = dev.mikoto2000.rei.event.CredentialRedactor.redact(text);
     int output =
         json != null
             ? json.toString().getBytes(StandardCharsets.UTF_8).length

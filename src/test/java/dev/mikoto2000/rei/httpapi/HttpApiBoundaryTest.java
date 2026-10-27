@@ -17,6 +17,7 @@ import dev.mikoto2000.rei.http.HttpFetchObserver;
 import dev.mikoto2000.rei.http.SafeHttpFetcher;
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 import org.junit.jupiter.api.Test;
 
 /** Validation and uncertain writes fail safely before exposing results. */
@@ -67,5 +68,24 @@ class HttpApiBoundaryTest {
     assertTrue(result.outcomeUnknown());
     verify(fetcher, times(1))
         .exchange(any(), anyString(), any(), anyMap(), any(), any(), any(), anyBoolean());
+  }
+
+  @Test
+  void responseCredentialFieldsAreMaskedEvenWithoutAuthProfile() {
+    var fetcher = mock(SafeHttpFetcher.class);
+    when(fetcher.exchange(any(), anyString(), any(), anyMap(), any(), any(), any(), anyBoolean()))
+        .thenReturn(
+            new SafeHttpFetcher.Response(
+                200,
+                Map.of("content-type", "application/json"),
+                "{\"access_token\":\"returned-secret\",\"items\":[1]}"
+                    .getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                URI.create("https://example.com")));
+    var service = new HttpApiService(fetcher, new HttpApiProperties(null, null, null, null, null));
+    var result =
+        service.read(
+            new HttpApiRequest("https://example.com", null, null, null, null, null, null, null));
+    assertEquals("[REDACTED]", result.json().get("access_token").asText());
+    assertEquals("[1]", result.json().get("items").toString());
   }
 }

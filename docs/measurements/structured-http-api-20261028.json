@@ -1,55 +1,55 @@
 {
-  "timestamp": "2026-10-27T20:00:55.083070700Z",
+  "timestamp": "2026-10-27T20:17:06.550800100Z",
   "java": "25",
   "os": "Windows 11",
   "fixtureResponseBytes": 23991,
   "llmCalls": 0,
-  "structuredColdMillis": 373.5968,
+  "structuredColdMillis": 576.5158,
   "full": {
-    "structuredArgumentsBytes": 157,
-    "structuredMillis": [
-      5.7188,
-      6.1395,
-      4.2002,
-      3.6421,
-      4.1894
-    ],
-    "shellArgumentsBytes": 203,
     "shellSuccesses": 5,
-    "samples": 5,
-    "structuredSuccesses": 5,
-    "shellToolOutputBytes": 25354,
-    "structuredToolOutputBytes": 24207,
+    "shellArgumentsBytes": 203,
+    "structuredMillis": [
+      11.1117,
+      12.5748,
+      11.6499,
+      7.2194,
+      8.8105
+    ],
+    "structuredArgumentsBytes": 157,
     "shellMillis": [
-      1084.5011,
-      948.7614,
-      951.4869,
-      911.4345,
-      942.0656
-    ]
+      1391.8982,
+      1316.1309,
+      1301.3629,
+      1373.2322,
+      1294.4049
+    ],
+    "structuredToolOutputBytes": 24207,
+    "shellToolOutputBytes": 25354,
+    "structuredSuccesses": 5,
+    "samples": 5
   },
   "extracted": {
-    "structuredArgumentsBytes": 159,
-    "structuredMillis": [
-      3.8581,
-      3.4432,
-      3.3487,
-      4.1337,
-      3.7431
-    ],
-    "shellArgumentsBytes": 234,
     "shellSuccesses": 5,
-    "samples": 5,
-    "structuredSuccesses": 5,
-    "shellToolOutputBytes": 1575,
-    "structuredToolOutputBytes": 1404,
+    "shellArgumentsBytes": 234,
+    "structuredMillis": [
+      11.0321,
+      7.7831,
+      9.3536,
+      6.9747,
+      7.3348
+    ],
+    "structuredArgumentsBytes": 159,
     "shellMillis": [
-      972.821,
-      1004.7398,
-      976.5591,
-      992.3787,
-      958.8641
-    ]
+      1588.2745,
+      1432.3056,
+      1269.8461,
+      1174.0761,
+      1256.165
+    ],
+    "structuredToolOutputBytes": 1404,
+    "shellToolOutputBytes": 1575,
+    "structuredSuccesses": 5,
+    "samples": 5
   },
   "errorComparison": {
     "shellExitCode": 1,

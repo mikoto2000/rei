@@ -13,4 +13,10 @@ public record HttpApiRequest(
     @ToolParam(required = false) String jsonPointer,
     @ToolParam(required = false) Integer maxItems,
     @ToolParam(required = false) String authProfile,
-    @ToolParam(required = false) JsonNode body) {}
+    @ToolParam(required = false) JsonNode body) {
+  /** Freeze request metadata before permission checks and asynchronous network execution. */
+  public HttpApiRequest {
+    query = query == null ? null : Map.copyOf(query);
+    headers = headers == null ? null : Map.copyOf(headers);
+  }
+}

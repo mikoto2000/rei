@@ -1642,6 +1642,7 @@ dev.mikoto2000.rei.httpapi.HttpApiMetrics -> dev.mikoto2000.rei.core.contextbudg
 dev.mikoto2000.rei.httpapi.HttpApiMetrics -> dev.mikoto2000.rei.http.HttpFetchObserver
 dev.mikoto2000.rei.httpapi.HttpApiMetrics$1 -> dev.mikoto2000.rei.http.HttpFetchObserver
 dev.mikoto2000.rei.httpapi.HttpApiProperties -> dev.mikoto2000.rei.http.PublicNetworkPolicy
+dev.mikoto2000.rei.httpapi.HttpApiService -> dev.mikoto2000.rei.event.CredentialRedactor
 dev.mikoto2000.rei.httpapi.HttpApiService -> dev.mikoto2000.rei.http.FetchOperation
 dev.mikoto2000.rei.httpapi.HttpApiService -> dev.mikoto2000.rei.http.FetchScope
 dev.mikoto2000.rei.httpapi.HttpApiService -> dev.mikoto2000.rei.http.HttpFetchException

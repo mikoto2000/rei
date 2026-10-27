@@ -19,8 +19,8 @@ public record HttpApiProperties(
     allowedOrigins = allowedOrigins == null ? List.of() : List.copyOf(allowedOrigins);
     authProfiles = authProfiles == null ? Map.of() : Map.copyOf(authProfiles);
     unsafeReadPrefixes = unsafeReadPrefixes == null ? List.of() : List.copyOf(unsafeReadPrefixes);
-    maxBytes = maxBytes == null ? 256 * 1024 : maxBytes;
-    timeoutMillis = timeoutMillis == null ? 30000 : timeoutMillis;
+    if (maxBytes == null) maxBytes = 256 * 1024;
+    if (timeoutMillis == null) timeoutMillis = 30000;
     if (maxBytes < 1 || maxBytes > 4 * 1024 * 1024 || timeoutMillis < 1 || timeoutMillis > 300000)
       throw new IllegalArgumentException("HTTP API limits");
     allowedOrigins.forEach(HttpApiProperties::validateOrigin);

@@ -47,7 +47,7 @@ Phase 0 の移行計画では、HTTP transport と run/cancellation/authority �
 
 | 予算 | 追加 | 理由 |
 | --- | ---: | --- |
-| C-business | 20 | HTTP transport/Origin/期限/例外への依存 12、Tool の run/guard/scope と既存エラー 6、Tools→ShellHttpUsage 1、子 catalog→HTTP tool 1 |
+| C-business | 21 | HTTP transport/Origin/期限/例外への依存 12、Tool の run/guard/scope と既存エラー 6、Tools→ShellHttpUsage 1、子 catalog→HTTP tool 1、既存 Secret マスキング 1 |
 | C-wiring | 1 | AiConfiguration→HttpApiTools の登録 |
 | D-configuration | 1 | 同じ明示的な登録配線 |
 | E-core | 6 | 既存 TokenEstimator 1、run scope・permission・停止制御 5 |

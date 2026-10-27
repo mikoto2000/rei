@@ -267,6 +267,9 @@ public final class StorageDatabase {
    * Wait for the entire commit/rollback before returning, preserving the caller's interrupt flag.
    * Other I/O and SQL failures still propagate; interrupted or changed files are never adopted.
    */
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      justification = "Preserve the original transaction failure across FutureTask; wrapping would change cancellation semantics.")
   <T> T activityTransaction(Work<T> work) {
     if (Thread.holdsLock(writer))
       throw new IllegalStateException("Activity commit cannot start inside a storage operation");

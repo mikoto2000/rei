@@ -131,6 +131,10 @@ public class SafeHttpFetcher {
   }
 
   /** Execute one bounded exchange without redirect or automatic transport retries. */
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      justification =
+          "Classified HTTP failures and cancellation controls must propagate without losing their type.")
   public Response exchange(
       URI uri,
       String method,

@@ -18,6 +18,10 @@ public class HttpApiTools {
 
   /** Legacy SDK calls still need host policy even when no run loop owns the invocation. */
   @org.springframework.beans.factory.annotation.Autowired
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      justification =
+          "Spring-owned service and permission guard must retain the same host policy and lifecycle.")
   public HttpApiTools(
       HttpApiService service, dev.mikoto2000.rei.core.policy.ToolPermissionGuard permissions) {
     this.service = service;

@@ -69,7 +69,7 @@ rei:
         secret-env: INTERNAL_API_KEY
 ```
 
-環境変数はホスト側の既存の Secret 注入手段で設定します。プロファイルは Secret を保存せず、参照名だけを保持します。
+環境変数はホスト側の既存の Secret 注入手段で設定します。プロファイルは Secret を保存せず、参照名だけを保持します。応答内の既知の認証フィールド（access_token など）は既存 CredentialRedactor で伏せ、適用した Secret の反射も解析後に再確認します。
 ChatGPT アカウント用の暗号化 store は用途が異なるため転用しません。
 内部アクセスを許可する Origin は scheme・host・実効 port が完全一致するものだけです。
 パス・query・fragment を含む allowlist は起動時に拒否します。Origin 登録はその接続先への内部 IP 通信を許可するため、管理者が信頼できる接続先だけを登録してください。
@@ -132,14 +132,15 @@ Micrometer の既存 global registry に `rei.http.api.*` を集計します。U
 Windows 11 / JDK 25、ローカル 23,991 bytes の JSON（100 件）、LLM なしで測定しました。
 A は実際の Tools.runCommand foreground → powershell -NoProfile → Invoke-RestMethod → ConvertTo-Json、
 B は HttpApiService.read です。両方で全件と 5 件抽出を測り、成功時はモデルへ返せる result 全体の JSON byte 数を測っています。
+この再測定中は同じホストで全体回帰と静的解析も動作しており、負荷を隔離したベンチマークではありません。
 承認・LLM 推論・本番ネットワークは含みません。B は 1 回目を別記し、その後の 5 回を中央値で示します。
 
 | 条件 | Shell 中央値 ms | HTTP 中央値 ms | Shell 成功 | HTTP 成功 | Shell result bytes | HTTP result bytes |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| full | 948.761 | 4.200 | 5/5 | 5/5 | 25354 | 24207 |
-| extracted | 976.559 | 3.743 | 5/5 | 5/5 | 1575 | 1404 |
+| full | 1316.131 | 11.112 | 5/5 | 5/5 | 25354 | 24207 |
+| extracted | 1269.846 | 7.783 | 5/5 | 5/5 | 1575 | 1404 |
 
-B の初回実行は 373.597 ms。B は抽出により 24,207 → 1,404 bytes
+B の初回実行は 576.516 ms。B は抽出により 24,207 → 1,404 bytes
 （94.20% 削減）でした。Shell でも抽出すれば本文量は削減できます。
 引数全体の JSON byte は全件 A=203, B=157、5 件抽出 A=234, B=159。
 400 fixture では A は exit=1 と stderr、B は status=400・HTTP_ERROR・JSON エラー本文を分離して返しました。
@@ -154,3 +155,15 @@ LLM を含む E2E、実トークン数、実サービスのレート制限下の
 
 `target/http-api-benchmark.json` を生成します。fixture サーバー以外へ通信しません。
 用途別ツールの追加は、今後の calls/error/サイズの傾向を調べてから提案します。特定サービスの専用ツールは今回追加しません。
+
+## 最終修正と検証
+
+最終修正の対象テストは 62 件成功（failure/error/skip 0）。HTTP、Policy、旧 SDK 境界、Secret 反射、
+immutable な request metadata、TLS 拒否、ArchitectureGuard を含みます。
+最初の SpotBugs ゲートは 11 件の新規指摘で失敗し、Map の defensive copy、charset の単一取得、
+既定値の boxing を修正しました。Spring/Micrometer の共有注入、および分類済み HTTP 例外の伝播は
+個別の SuppressFBWarnings と理由を記録しました。静的解析の既存警告予算は増やしていません。
+再解析のゲートは Checkstyle 0 件、SpotBugs 1,888 件すべて既存予算内、新規 0 件で成功しました。
+基準 main の StorageDatabase.activityTransaction にも既存予算未登録の runtime 例外伝播の指摘があり、
+キャンセル時の元の例外を保つ既存動作を維持する注釈だけを加えています。
+追加 fixture の PKCS12 と fixture-password はローカルの未信頼証明書テスト用であり、本番認証に使用しません。

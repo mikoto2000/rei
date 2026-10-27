@@ -13,6 +13,10 @@ public final class HttpApiMetrics {
   private final MeterRegistry registry;
 
   /** Allow an isolated registry for deterministic verification. */
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      justification =
+          "The Micrometer registry must be shared so counters are visible to host exporters.")
   public HttpApiMetrics(MeterRegistry registry) {
     this.registry = registry;
     registry.counter("rei.http.api.retries"); // Transport retries are deliberately disabled.
