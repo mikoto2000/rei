@@ -1,0 +1,62 @@
+{
+  "timestamp": "2026-10-27T20:00:55.083070700Z",
+  "java": "25",
+  "os": "Windows 11",
+  "fixtureResponseBytes": 23991,
+  "llmCalls": 0,
+  "structuredColdMillis": 373.5968,
+  "full": {
+    "structuredArgumentsBytes": 157,
+    "structuredMillis": [
+      5.7188,
+      6.1395,
+      4.2002,
+      3.6421,
+      4.1894
+    ],
+    "shellArgumentsBytes": 203,
+    "shellSuccesses": 5,
+    "samples": 5,
+    "structuredSuccesses": 5,
+    "shellToolOutputBytes": 25354,
+    "structuredToolOutputBytes": 24207,
+    "shellMillis": [
+      1084.5011,
+      948.7614,
+      951.4869,
+      911.4345,
+      942.0656
+    ]
+  },
+  "extracted": {
+    "structuredArgumentsBytes": 159,
+    "structuredMillis": [
+      3.8581,
+      3.4432,
+      3.3487,
+      4.1337,
+      3.7431
+    ],
+    "shellArgumentsBytes": 234,
+    "shellSuccesses": 5,
+    "samples": 5,
+    "structuredSuccesses": 5,
+    "shellToolOutputBytes": 1575,
+    "structuredToolOutputBytes": 1404,
+    "shellMillis": [
+      972.821,
+      1004.7398,
+      976.5591,
+      992.3787,
+      958.8641
+    ]
+  },
+  "errorComparison": {
+    "shellExitCode": 1,
+    "structuredStatus": 400,
+    "structuredError": "HTTP_ERROR",
+    "structuredErrorBody": {
+      "error": "fixture"
+    }
+  }
+}

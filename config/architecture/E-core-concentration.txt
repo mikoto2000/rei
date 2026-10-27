@@ -430,6 +430,12 @@ business: dev.mikoto2000.rei.google.GoogleOAuthService -> dev.mikoto2000.rei.cor
 business: dev.mikoto2000.rei.http.FetchOperation -> dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException
 business: dev.mikoto2000.rei.http.FetchScope -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
 business: dev.mikoto2000.rei.http.cache.HttpResponseCache -> dev.mikoto2000.rei.core.searchcache.BoundedTtlCache
+business: dev.mikoto2000.rei.httpapi.HttpApiMetrics -> dev.mikoto2000.rei.core.contextbudget.TokenEstimator
+business: dev.mikoto2000.rei.httpapi.HttpApiTools -> dev.mikoto2000.rei.core.chat.AgentRunScope
+business: dev.mikoto2000.rei.httpapi.HttpApiTools -> dev.mikoto2000.rei.core.policy.PermissionDecision
+business: dev.mikoto2000.rei.httpapi.HttpApiTools -> dev.mikoto2000.rei.core.policy.ToolPermissionException
+business: dev.mikoto2000.rei.httpapi.HttpApiTools -> dev.mikoto2000.rei.core.policy.ToolPermissionGuard
+business: dev.mikoto2000.rei.httpapi.HttpApiTools -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
 business: dev.mikoto2000.rei.image.ImageGenerationService -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.image.ImageGenerationService -> dev.mikoto2000.rei.core.chat.AgentRunScope
 business: dev.mikoto2000.rei.image.ImageGenerationService -> dev.mikoto2000.rei.core.chat.RunCancellation

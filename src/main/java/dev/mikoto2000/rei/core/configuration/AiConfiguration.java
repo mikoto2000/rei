@@ -76,6 +76,7 @@ public class AiConfiguration {
   void setHttpApiTools(dev.mikoto2000.rei.httpapi.HttpApiTools tools) {
     this.httpApiTools = tools;
   }
+
   /** 依存条件ツール一覧。 */
   private dev.mikoto2000.rei.core.dependency.DependencyTools dependencyTools;
 

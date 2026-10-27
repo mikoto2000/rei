@@ -186,6 +186,7 @@ dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.feed
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.feed.FeedTools
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools
+dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.httpapi.HttpApiTools
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.image.ImageProperties
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.interest.InterestProperties
 dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.llm.LlmProperties

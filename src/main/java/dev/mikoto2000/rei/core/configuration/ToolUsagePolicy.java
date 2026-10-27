@@ -30,7 +30,18 @@ public final class ToolUsagePolicy {
       """;
 
   /** 指示一覧。 */
-  public static final String INSTRUCTIONS = "Common tool usage policy:\n" + BATCHING + FILE_READS;
+  public static final String HTTP_APIS =
+      """
+      For HTTP APIs prefer a service-specific tool, then httpRequestRead (GET/HEAD) or
+      httpRequestWrite (POST/PUT/PATCH/DELETE). Use fetchUrlContent for public HTML and
+      webSearchAndRead for research. Use runCommand only when dedicated tools cannot perform
+      an authorized operation. Never bypass HTTP permission, origin, authentication or size
+      refusals using shell, Invoke-RestMethod, curl, scripts or another tool. A write timeout
+      may have committed: inspect resource state before retrying; never blindly repeat a write.
+      """;
+
+  public static final String INSTRUCTIONS =
+      "Common tool usage policy:\n" + BATCHING + FILE_READS + HTTP_APIS;
 
   /** 既存の記録へ経緯を残すため、終点を追記する。 */
   public static String appendTo(String prompt) {

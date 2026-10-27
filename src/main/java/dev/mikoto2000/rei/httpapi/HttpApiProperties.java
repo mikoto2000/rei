@@ -30,7 +30,8 @@ public record HttpApiProperties(
   /** Only exact origins can grant internal access. */
   private static void validateOrigin(URI origin) {
     PublicNetworkPolicy.validateSyntax(origin);
-    if (origin.getRawQuery() != null || origin.getRawFragment() != null
+    if (origin.getRawQuery() != null
+        || origin.getRawFragment() != null
         || !(origin.getRawPath().isEmpty() || origin.getRawPath().equals("/")))
       throw new IllegalArgumentException("Expected exact HTTP API origin");
   }
@@ -41,9 +42,9 @@ public record HttpApiProperties(
     public AuthProfile {
       validateOrigin(origin);
       if (!java.util.Set.of("bearer", "api-key").contains(type)
-          || secretEnv == null || !secretEnv.matches("[A-Za-z_][A-Za-z0-9_]*")
-          || ("api-key".equals(type) && (header == null
-              || !header.matches("(?i)x-[a-z0-9-]+"))))
+          || secretEnv == null
+          || !secretEnv.matches("[A-Za-z_][A-Za-z0-9_]*")
+          || ("api-key".equals(type) && (header == null || !header.matches("(?i)x-[a-z0-9-]+"))))
         throw new IllegalArgumentException("Invalid HTTP API auth profile");
     }
   }

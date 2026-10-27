@@ -979,6 +979,8 @@ public class Tools {
       description =
           """
   Run a shell command. Use this as the default and primary tool for shell command execution.
+  For REST APIs prefer service-specific tools, then httpRequestRead/httpRequestWrite.
+  Never use shell HTTP commands to bypass permissions, destination or output limits of another tool.
   File content reads (Get-Content/gc/cat/type/head/tail with file operands) are rejected before execution.
   Use readMultiFile even for one file. For truncated results, pass each returned nextRead unchanged in files;
   never switch to shell to bypass paging or output limits. Use shell for builds, tests, Git and other development commands.
@@ -1000,6 +1002,8 @@ public class Tools {
       RunCommandRequest request, java.nio.file.Path workingDirectory, Duration autoWait)
       throws IOException, InterruptedException {
     if (request == null) throw new IllegalArgumentException("request must not be null");
+    if (dev.mikoto2000.rei.core.policy.ShellHttpUsage.recognizable(request.command()))
+      io.micrometer.core.instrument.Metrics.counter("rei.http.api.shell.calls").increment();
     dev.mikoto2000.rei.core.policy.ShellFileReadArguments.validateCommand(request.command());
     return switch (request.mode()) {
       case FOREGROUND -> foregroundResult(request, workingDirectory);

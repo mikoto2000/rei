@@ -627,6 +627,7 @@ wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.
 wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.feed.FeedTools
 wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.googlecalendar.GoogleCalendarProperties
 wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.googlecalendar.GoogleCalendarTools
+wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.httpapi.HttpApiTools
 wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.image.ImageProperties
 wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.interest.InterestProperties
 wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.llm.LlmProperties

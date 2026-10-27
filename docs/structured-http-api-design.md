@@ -38,3 +38,32 @@
 ## 検証方針
 
 各機能は Red → Green → Refactor を記録し、小さく commit する。HTTP は loopback テストサーバー、DNS は既存 resolver/peer テスト、TLS はローカル証明書 fixture で検証。phase ごとに targeted tests、完了前に full profile と既存静的解析・architecture gate を実行する。
+
+## Phase 3 のアーキテクチャ予算
+
+ユーザーが依頼した「既存 SafeHttpFetcher・Policy/Permission・SubAgent・計測の再利用」を実現するため、
+新しい httpapi package と既存基盤を結ぶ辺を個別に記録する。既存 SCC 全体の免除やクラス/package の除外はしない。
+Phase 0 の移行計画では、HTTP transport と run/cancellation/authority 契約を分離した後に循環を減らす。
+
+| 予算 | 追加 | 理由 |
+| --- | ---: | --- |
+| C-business | 20 | HTTP transport/Origin/期限/例外への依存 12、Tool の run/guard/scope と既存エラー 6、Tools→ShellHttpUsage 1、子 catalog→HTTP tool 1 |
+| C-wiring | 1 | AiConfiguration→HttpApiTools の登録 |
+| D-configuration | 1 | 同じ明示的な登録配線 |
+| E-core | 6 | 既存 TokenEstimator 1、run scope・permission・停止制御 5 |
+
+`config/architecture/*.txt` は上記で確認した完全修飾名のペアだけを追加した。
+生成 report の無条件コピーは行っていない。A/B の UI 境界は増やしていない。
+PR では本依頼に必要な変更としてこれらの個別ペアをレビュー対象にし、既存 ArchitectureGuardTest の新規辺拒否を検証する。
+
+## TDD の実行記録
+
+- READ: 未存在の HttpApiService/Request に対するコンパイル失敗 → 82 件成功。
+- WRITE/Auth: write と Secret resolver が未存在のコンパイル失敗 → 51 件成功。
+- Auth の実境界: Unicode escape による Secret 反射、Spring AI 変換の失敗 → Jackson 3 と解析後マスキングに変更、54 件成功。
+- Metrics/Shell: HttpApiMetrics/ShellHttpUsage 未存在 → 35 件成功。
+- 入力安全性: optional 項目が required、null URL、encoded dot segment の失敗 → schema/入力/パス正規化を修正。
+- Legacy READ: RunExecutionContext のない経路にもホスト guard が必要な先行テスト → guard 注入を追加。
+
+初期の既存 HTTP テストは sandbox の loopback 禁止で失敗したため、以後はローカル接続を許可して実行。
+その失敗をテスト成功として計上していない。ログは作業用 target に保持し、最終の実行結果は利用ガイドに記録する。

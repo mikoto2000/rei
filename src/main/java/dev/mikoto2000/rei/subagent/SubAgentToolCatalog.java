@@ -24,6 +24,7 @@ public class SubAgentToolCatalog {
   void setHttpApiTools(dev.mikoto2000.rei.httpapi.HttpApiTools tools) {
     this.httpApiTools = tools;
   }
+
   /** 知識。 */
   private final SearchTools knowledge;
 
@@ -81,8 +82,9 @@ public class SubAgentToolCatalog {
       objects.add(new dev.mikoto2000.rei.review.ReviewTools(ledger, raw, files, estimator));
     if (httpApiTools != null) objects.add(httpApiTools);
     return java.util.Arrays.stream(
-        dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(objects.toArray())
-            .getToolCallbacks())
+            dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(
+                    objects.toArray())
+                .getToolCallbacks())
         .filter(callback -> !callback.getToolDefinition().name().equals("httpRequestWrite"))
         .toList();
   }

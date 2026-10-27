@@ -24,8 +24,6 @@ GET が既定です。HEAD も指定できます。`query` と許可された `h
 204/HEAD は本文なしです。JSON と text は区別します。サイズ超過時に不完全な JSON を返しません。
 `truncated` は配列の件数省略を示します。通信失敗時の本文切断を成功として扱いません。
 
-## ホスト設定
-
 ## WRITE と承認
 
 ```json
@@ -118,3 +116,41 @@ PowerShell の引用符や JSON エスケープを組み立てる必要がなく
 JSON Pointer と件数制限でモデルに返す情報を抑えられます。
 
 調査・設計の根拠は [Phase 0](structured-http-api-design.md) を参照してください。
+
+## 計測とローカル比較（2026-10-28）
+
+Micrometer の既存 global registry に `rei.http.api.*` を集計します。URL・headers・body はラベルやログに保存しません。
+`calls` は read/write 別呼び出し、`requests`/`redirects` は実送信試行、`http{status}` は HTTP 状態、
+`errors{code}` は通信/パース/抽出等の固定エラー分類、`truncations` は件数省略です。
+`request.duration` は HTTP exchange、`tool.duration` はサービス全体（引数処理・抽出込み、承認待ち除外）。
+`wire.bytes` は受信 byte counter、`response.bytes`/`output.bytes` は本文 byte の分布です。
+`estimated.tokens` は本文の conservative estimator による概算で、実際の LLM tokenizer の値ではありません。
+`retries` はこの実装では 0。`shell.calls` は実際の runCommand のうち判別できた HTTP コマンドだけを数えます。
+承認回数・待ち時間は既存 ToolApprovalRepository と Timing の APPROVAL_WAIT、実行境界全体は既存 tool event で観測します。
+専用の高頻度ファイルログや SQLite 保存は追加しません。registry に export 先がなければ永続化されません。
+
+Windows 11 / JDK 25、ローカル 23,991 bytes の JSON（100 件）、LLM なしで測定しました。
+A は実際の Tools.runCommand foreground → powershell -NoProfile → Invoke-RestMethod → ConvertTo-Json、
+B は HttpApiService.read です。両方で全件と 5 件抽出を測り、成功時はモデルへ返せる result 全体の JSON byte 数を測っています。
+承認・LLM 推論・本番ネットワークは含みません。B は 1 回目を別記し、その後の 5 回を中央値で示します。
+
+| 条件 | Shell 中央値 ms | HTTP 中央値 ms | Shell 成功 | HTTP 成功 | Shell result bytes | HTTP result bytes |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| full | 948.761 | 4.200 | 5/5 | 5/5 | 25354 | 24207 |
+| extracted | 976.559 | 3.743 | 5/5 | 5/5 | 1575 | 1404 |
+
+B の初回実行は 373.597 ms。B は抽出により 24,207 → 1,404 bytes
+（94.20% 削減）でした。Shell でも抽出すれば本文量は削減できます。
+引数全体の JSON byte は全件 A=203, B=157、5 件抽出 A=234, B=159。
+400 fixture では A は exit=1 と stderr、B は status=400・HTTP_ERROR・JSON エラー本文を分離して返しました。
+これは小規模なローカル計測であり、一般的な速度倍率や本番成功率を保証しません。
+LLM を含む E2E、実トークン数、実サービスのレート制限下の比較は未測定です。
+
+[実測サンプル](measurements/structured-http-api-20261028.json) を参照してください。再実行:
+
+```powershell
+./mvnw.cmd -B -Pfull "-Dtest=StructuredHttpBenchmarkTest" "-Dhttpapi.benchmark=true" test
+```
+
+`target/http-api-benchmark.json` を生成します。fixture サーバー以外へ通信しません。
+用途別ツールの追加は、今後の calls/error/サイズの傾向を調べてから提案します。特定サービスの専用ツールは今回追加しません。

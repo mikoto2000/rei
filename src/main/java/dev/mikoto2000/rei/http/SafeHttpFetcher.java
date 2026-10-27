@@ -180,8 +180,10 @@ public class SafeHttpFetcher {
               .headers(h -> headers.forEach(h::set))
               .request(io.netty.handler.codec.http.HttpMethod.valueOf(method))
               .uri(uri.toASCIIString())
-              .send(body == null ? reactor.netty.ByteBufFlux.empty()
-                  : reactor.netty.ByteBufFlux.fromInbound(Mono.just(body)))
+              .send(
+                  body == null
+                      ? reactor.netty.ByteBufFlux.empty()
+                      : reactor.netty.ByteBufFlux.fromInbound(Mono.just(body)))
               .response(
                   (response, content) -> {
                     int status = response.status().code();

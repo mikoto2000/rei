@@ -238,6 +238,8 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
 
   /** ツールと委譲内容から必要な操作権限を求め、管理者の指定を反映する。 */
   public Set<ActionCapability> capabilities(String tool, String input) {
+    if ("runCommand".equals(tool) && ShellHttpUsage.input(input))
+      return intrinsicCapabilities(tool);
     if (dev.mikoto2000.rei.subagent.DelegationToolPermissionResolver.supports(tool)) {
       var required = EnumSet.noneOf(ActionCapability.class);
       required.addAll(
@@ -274,8 +276,8 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
 
   /** ツールと委譲内容から必要な操作権限を求め、管理者の指定を反映する。 */
   public Set<ActionCapability> capabilities(String tool) {
-    if (Set.of("askExternalAgent", "requestDotResearch", "httpRequestRead", "httpRequestWrite").contains(tool))
-      return intrinsicCapabilities(tool);
+    if (Set.of("askExternalAgent", "requestDotResearch", "httpRequestRead", "httpRequestWrite")
+        .contains(tool)) return intrinsicCapabilities(tool);
     // 通常のツールでは管理者が指定した権限分類を優先する。
     var configured = properties.capabilities().get(tool);
     if (configured != null) return configured;
