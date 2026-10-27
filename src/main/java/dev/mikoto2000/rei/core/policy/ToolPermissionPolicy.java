@@ -107,6 +107,7 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
           "webSearch",
           "webSearchAndRead",
           "fetchUrlContent",
+          "httpRequestRead",
           "checkHttpDependency",
           "waitForHttpDependency");
 

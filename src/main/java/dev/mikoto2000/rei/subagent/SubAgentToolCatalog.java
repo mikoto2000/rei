@@ -17,6 +17,13 @@ import org.springframework.stereotype.Component;
  */
 @Component
 public class SubAgentToolCatalog {
+  private dev.mikoto2000.rei.httpapi.HttpApiTools httpApiTools;
+
+  /** Only the read callback is exposed to subagents. */
+  @org.springframework.beans.factory.annotation.Autowired
+  void setHttpApiTools(dev.mikoto2000.rei.httpapi.HttpApiTools tools) {
+    this.httpApiTools = tools;
+  }
   /** 知識。 */
   private final SearchTools knowledge;
 
@@ -72,9 +79,12 @@ public class SubAgentToolCatalog {
               raw, estimator, properties.getPageTargetTokens()));
     if (ledger != null && raw != null && properties.getReviewLedger().isEnabled())
       objects.add(new dev.mikoto2000.rei.review.ReviewTools(ledger, raw, files, estimator));
-    return List.of(
+    if (httpApiTools != null) objects.add(httpApiTools);
+    return java.util.Arrays.stream(
         dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(objects.toArray())
-            .getToolCallbacks());
+            .getToolCallbacks())
+        .filter(callback -> !callback.getToolDefinition().name().equals("httpRequestWrite"))
+        .toList();
   }
 
   /** 補助エージェントへの委譲で用いる既知名前一覧を返す。 */
