@@ -274,7 +274,7 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
 
   /** ツールと委譲内容から必要な操作権限を求め、管理者の指定を反映する。 */
   public Set<ActionCapability> capabilities(String tool) {
-    if (Set.of("askExternalAgent", "requestDotResearch").contains(tool))
+    if (Set.of("askExternalAgent", "requestDotResearch", "httpRequestRead", "httpRequestWrite").contains(tool))
       return intrinsicCapabilities(tool);
     // 通常のツールでは管理者が指定した権限分類を優先する。
     var configured = properties.capabilities().get(tool);
@@ -289,6 +289,8 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
    * arbitrary commands.
    */
   public static Set<ActionCapability> intrinsicCapabilities(String tool) {
+    if ("httpRequestWrite".equals(tool))
+      return Set.of(ActionCapability.NETWORK_WRITE, ActionCapability.EXTERNAL_SIDE_EFFECT);
     if (CONSERVATIVE_TOOLS.contains(tool)) return Set.copyOf(EnumSet.allOf(ActionCapability.class));
     if (Set.of(
             "activityWorkInferences",
@@ -474,11 +476,15 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
 
   /** 対象を判断基準に照らして評価する。 */
   public PermissionDecision evaluate(String tool) {
+    if ("httpRequestWrite".equals(tool) && !properties.enabled() && !fullAuto)
+      return PermissionDecision.REQUIRE_APPROVAL;
     return evaluateCapabilities(capabilities(tool));
   }
 
   /** 対象を判断基準に照らして評価する。 */
   public PermissionDecision evaluate(String tool, String input) {
+    if ("httpRequestWrite".equals(tool) && !properties.enabled() && !fullAuto)
+      return PermissionDecision.REQUIRE_APPROVAL;
     return evaluateCapabilities(capabilities(tool, input));
   }
 

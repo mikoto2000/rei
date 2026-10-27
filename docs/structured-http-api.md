@@ -26,6 +26,27 @@ GET が既定です。HEAD も指定できます。`query` と許可された `h
 
 ## ホスト設定
 
+## WRITE と承認
+
+```json
+{"request":{"url":"https://api.example.com/tasks","method":"POST","authProfile":"task-api","headers":{"Idempotency-Key":"task-create-123"},"body":{"title":"example"}}}
+```
+
+POST/PUT/PATCH/DELETE は `NETWORK_WRITE` と `EXTERNAL_SIDE_EFFECT` が必要です。
+汎用 POST が読み取り用途でも WRITE として扱います。READ の許可や SubAgent の承認継承では実行できません。
+既存の Policy/Permission、`/approval show`・承認・再開のフローを使います。承認対象の入力に URL・method・resource・body が含まれます。
+`httpRequestWrite` を READ に再分類する設定は適用しません。古い権限制御無効モードでも新規 WRITE は承認を要求し、実行 run のない旧 SDK 経路は拒否します。
+管理者が明示的に WRITE を自動承認する場合や full-auto は既存設定に従います。
+Secret は承認入力に含めません。プロファイル名だけを確認できます。
+
+body の省略は空本文、JSON `null` は 4 バイトの `null`、object/array/scalar は JSON 本文です。
+本文を送る場合 Content-Type は `application/json`。multipart/binary は対象外です。
+リダイレクトは `WRITE_REDIRECT_REFUSED`、429/503 も自動再試行しません。
+タイムアウトやキャンセル後の `outcomeUnknown` は「未実行」を意味しません。先に用途別の状態照会で結果を確認してください。
+`Idempotency-Key` は API が対応する場合のみ有効であり、このツールがサーバー側の重複排除を保証するものではありません。
+
+## 認証・内部アクセスの設定
+
 Spring の管理者設定に追加します。LLM 用の設定登録ツールはありません。
 
 ```yaml
@@ -85,6 +106,10 @@ MCP の既存 read allowlist を無断で拡張しません。SubAgent に公開
 | CONNECT_TIMEOUT / READ_TIMEOUT / TOTAL_TIMEOUT | 接続先と期限を確認。WRITE は結果不明なら状態照会を先に実施 |
 | CANCELLED | 実行を停止。WRITE を無条件に再実行しない |
 | NETWORK_ERROR | DNS/TLS/接続障害をホスト側で調査。証明書検証を無効化しない |
+| AUTH_PROFILE_NOT_FOUND | ホスト設定のプロファイル名を確認 |
+| AUTH_ORIGIN_MISMATCH | プロファイルとリクエストの Origin を確認。Secret は送られていない |
+| AUTH_SECRET_UNAVAILABLE | ホスト側の環境変数を確認。Secret を会話に貼らない |
+| WRITE_REDIRECT_REFUSED | 管理者が正しい API URL を確認。自動再送しない |
 
 ## 移行
 

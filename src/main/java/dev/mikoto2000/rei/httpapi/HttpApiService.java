@@ -1,8 +1,8 @@
 package dev.mikoto2000.rei.httpapi;
 
-import com.fasterxml.jackson.core.JsonPointer;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import tools.jackson.core.JsonPointer;
+import tools.jackson.databind.JsonNode;
+import tools.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.http.*;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -24,26 +24,39 @@ public class HttpApiService {
   private final SafeHttpFetcher fetcher;
   private final HttpApiProperties properties;
   private final ObjectMapper mapper = new ObjectMapper();
+  private final java.util.function.Function<String, String> secrets;
 
   /** Compose the shared transport with host-only policy. */
+  @org.springframework.beans.factory.annotation.Autowired
   public HttpApiService(SafeHttpFetcher fetcher, HttpApiProperties properties) {
+    this(fetcher, properties, System::getenv);
+  }
+
+  HttpApiService(SafeHttpFetcher fetcher, HttpApiProperties properties,
+      java.util.function.Function<String, String> secrets) {
     this.fetcher = fetcher;
     this.properties = properties;
+    this.secrets = secrets;
   }
 
   /** Perform an API read. */
   public HttpApiResult read(HttpApiRequest request) { return execute(request, false); }
 
+  /** Send a single write attempt. The caller must use the permission-guarded tool boundary. */
+  public HttpApiResult write(HttpApiRequest request) { return execute(request, true); }
+
   private HttpApiResult execute(HttpApiRequest request, boolean write) {
+    var sent = new java.util.concurrent.atomic.AtomicBoolean();
     try {
       if (request == null) throw new IllegalArgumentException();
       String method = request.method() == null ? "GET" : request.method().toUpperCase(Locale.ROOT);
-      if (!Set.of("GET", "HEAD").contains(method) || request.body() != null || write)
+      if (!(write ? Set.of("POST", "PUT", "PATCH", "DELETE") : Set.of("GET", "HEAD")).contains(method)
+          || !write && request.body() != null)
         throw new IllegalArgumentException();
       if (request.maxItems() != null && (request.maxItems() < 1 || request.maxItems() > 1000))
         throw new IllegalArgumentException();
       if (request.jsonPointer() != null) {
-        if (request.jsonPointer().matches(".*~(?:[^01]|$).*")) throw new IllegalArgumentException();
+        if (java.util.regex.Pattern.compile("~(?:[^01]|$)").matcher(request.jsonPointer()).find()) throw new IllegalArgumentException();
         JsonPointer.compile(request.jsonPointer());
       }
       URI uri = buildUri(request);
@@ -56,16 +69,37 @@ public class HttpApiService {
             || value.chars().anyMatch(c -> c < 32 || c == 127)) throw new IllegalArgumentException();
         headers.put(name, value);
       });
-      if (request.authProfile() != null) throw new IllegalArgumentException();
+      String secret = null;
+      if (request.authProfile() != null) {
+        var profile = properties.authProfiles().get(request.authProfile());
+        if (profile == null) return failure("AUTH_PROFILE_NOT_FOUND", false, false, false);
+        if (!sameOrigin(profile.origin(), uri)) return failure("AUTH_ORIGIN_MISMATCH", false, false, false);
+        secret = secrets.apply(profile.secretEnv());
+        if (secret == null || secret.isBlank() || secret.length() > 4096
+            || secret.chars().anyMatch(c -> c < 32 || c == 127))
+          return failure("AUTH_SECRET_UNAVAILABLE", false, false, false);
+        headers.put("bearer".equals(profile.type()) ? "Authorization" : profile.header(),
+            "bearer".equals(profile.type()) ? "Bearer " + secret : secret);
+      }
+      byte[] body = request.body() == null ? null : request.body().toString().getBytes(StandardCharsets.UTF_8);
+      if (body != null) {
+        if (body.length > properties.maxBytes()) throw new IllegalArgumentException();
+        headers.put("Content-Type", "application/json");
+      }
       var operation = FetchScope.current().withTimeout(Duration.ofMillis(properties.timeoutMillis()));
       for (int hop = 0; ; hop++) {
         operation.check();
         URI current = uri;
-        if (properties.unsafeReadPrefixes().stream().anyMatch(prefix -> sameOrigin(prefix, current)
+        if (!write && properties.unsafeReadPrefixes().stream().anyMatch(prefix -> sameOrigin(prefix, current)
             && current.normalize().getPath().startsWith(prefix.normalize().getPath())))
           throw new HttpFetchException(HttpFetchException.Code.URL_NOT_ALLOWED);
-        var response = fetcher.exchange(uri, method, null, headers, policy(uri), operation, HttpFetchObserver.NONE, hop > 0);
+        var observer = new HttpFetchObserver() {
+          @Override public void request(boolean redirect) { sent.set(true); }
+        };
+        var response = fetcher.exchange(uri, method, body, headers, policy(uri), operation, observer, hop > 0);
         if (response.status() >= 300 && response.status() < 400 && response.status() != 304) {
+          if (write) return new HttpApiResult(response.status(), null, null, null,
+              false, false, "WRITE_REDIRECT_REFUSED", false, false, false, response.body().length, 0);
           if (hop >= 5 || response.header("location") == null)
             throw new HttpFetchException(HttpFetchException.Code.REDIRECT_LIMIT);
           URI next = uri.resolve(response.header("location"));
@@ -73,14 +107,16 @@ public class HttpApiService {
           uri = next;
           continue;
         }
-        return decode(request, response, method);
+        var result = decode(request, response, method, secret);
+        operation.check();
+        return result;
       }
     } catch (CancellationException cancelled) {
-      return failure("CANCELLED", false, true);
+      return failure("CANCELLED", false, true, write && sent.get());
     } catch (HttpFetchException failed) {
-      return failure(failed.code().name(), failed.code().name().endsWith("TIMEOUT"), false);
+      return failure(failed.code().name(), failed.code().name().endsWith("TIMEOUT"), false, write && sent.get());
     } catch (IllegalArgumentException invalid) {
-      return failure("INVALID_INPUT", false, false);
+      return failure("INVALID_INPUT", false, false, false);
     }
   }
 
@@ -113,8 +149,9 @@ public class HttpApiService {
     return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20");
   }
 
-  private HttpApiResult decode(HttpApiRequest request, SafeHttpFetcher.Response response, String method) {
+  private HttpApiResult decode(HttpApiRequest request, SafeHttpFetcher.Response response, String method, String secret) {
     String type = response.header("content-type");
+    type = redact(type, secret);
     if (type != null && type.length() > 256) type = type.substring(0, 256);
     String error = response.status() >= 400 ? "HTTP_ERROR" : null;
     JsonNode json = null;
@@ -129,11 +166,12 @@ public class HttpApiService {
           if (media.getCharset() != null) charset = media.getCharset();
         } catch (IllegalArgumentException ignored) { /* Fall back to UTF-8. */ }
       }
-      text = new String(bytes, charset);
+      text = redact(new String(bytes, charset), secret);
       if (request.jsonPointer() != null || type != null && type.toLowerCase(Locale.ROOT).matches(".*(?:/json|\\+json)(?:;.*)?")) {
         try {
-          json = mapper.reader().with(com.fasterxml.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(text);
+          json = mapper.reader().with(tools.jackson.databind.DeserializationFeature.FAIL_ON_TRAILING_TOKENS).readTree(text);
           text = null;
+          if (json != null && secret != null) json = mapper.readTree(redact(json.toString(), secret));
           if (json == null) error = "INVALID_JSON";
           else if (request.jsonPointer() != null) {
             json = json.at(request.jsonPointer());
@@ -147,7 +185,7 @@ public class HttpApiService {
             json = array;
             truncated = true;
           }
-        } catch (java.io.IOException invalid) { json = null; text = null; error = "INVALID_JSON"; }
+        } catch (tools.jackson.core.JacksonException invalid) { json = null; text = null; error = "INVALID_JSON"; }
       }
     } else if (request.jsonPointer() != null) error = "EMPTY_BODY";
     int output = json != null ? json.toString().getBytes(StandardCharsets.UTF_8).length
@@ -155,7 +193,15 @@ public class HttpApiService {
     return new HttpApiResult(response.status(), type, json, text, extracted, truncated, error, false, false, false, bytes.length, output);
   }
 
-  private static HttpApiResult failure(String error, boolean timedOut, boolean cancelled) {
-    return new HttpApiResult(null, null, null, null, false, false, error, timedOut, cancelled, false, 0, 0);
+  private String redact(String value, String secret) {
+    if (value == null || secret == null) return value;
+    // JSON escaping and common URL encoding must not reveal a reflected credential either.
+    String escaped = mapper.getNodeFactory().textNode(secret).toString();
+    return value.replace(escaped.substring(1, escaped.length() - 1), "[REDACTED]")
+        .replace(secret, "[REDACTED]").replace(encode(secret), "[REDACTED]");
+  }
+
+  private static HttpApiResult failure(String error, boolean timedOut, boolean cancelled, boolean unknown) {
+    return new HttpApiResult(null, null, null, null, false, false, error, timedOut, cancelled, unknown, 0, 0);
   }
 }

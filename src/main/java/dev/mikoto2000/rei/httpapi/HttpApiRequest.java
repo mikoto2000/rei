@@ -1,6 +1,6 @@
 package dev.mikoto2000.rei.httpapi;
 
-import com.fasterxml.jackson.databind.JsonNode;
+import tools.jackson.databind.JsonNode;
 import java.util.Map;
 
 /** Structured API input. Omitted body sends no bytes; JSON null sends the literal null. */
