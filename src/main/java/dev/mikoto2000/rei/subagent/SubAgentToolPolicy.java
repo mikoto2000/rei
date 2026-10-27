@@ -25,6 +25,7 @@ public final class SubAgentToolPolicy {
           "restartReview",
           "webSearch",
           "webSearchAndRead",
+          "httpRequestRead",
           "searchKnowledge",
           "repositoryMap",
           "changeTestImpact",

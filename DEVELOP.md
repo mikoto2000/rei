@@ -1,5 +1,7 @@
 # DEVELOP
 
+構造化 REST API ツール、認証・内部通信・承認・比較測定は [HTTP API ツール](docs/structured-http-api.md) を参照してください。
+
 YAMLの生活設定とProject横断の朝夕レポートは [全体秘書設定](docs/global-secretary-settings.md) を参照してください。
 
 先回り提案・準備時間・期限切れの仕様は [先回り準備](docs/life-preparation.md) を参照してください。

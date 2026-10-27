@@ -68,6 +68,15 @@ import org.springframework.context.annotation.Configuration;
 })
 @RequiredArgsConstructor
 public class AiConfiguration {
+  /** Structured HTTP tools share the existing callback and permission boundaries. */
+  private dev.mikoto2000.rei.httpapi.HttpApiTools httpApiTools;
+
+  /** Register API tools without changing the legacy constructor contract. */
+  @org.springframework.beans.factory.annotation.Autowired
+  void setHttpApiTools(dev.mikoto2000.rei.httpapi.HttpApiTools tools) {
+    this.httpApiTools = tools;
+  }
+
   /** 依存条件ツール一覧。 */
   private dev.mikoto2000.rei.core.dependency.DependencyTools dependencyTools;
 
@@ -401,6 +410,7 @@ public class AiConfiguration {
                 conversationHistoryTools,
                 summaryTools);
 
+    if (httpApiTools != null) builder.defaultTools(httpApiTools);
     builder.defaultTools(
         (Object[])
             dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration.provider(tools)

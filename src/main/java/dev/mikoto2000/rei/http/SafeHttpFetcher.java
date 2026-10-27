@@ -127,6 +127,23 @@ public class SafeHttpFetcher {
       FetchOperation operation,
       HttpFetchObserver observer,
       boolean redirect) {
+    return exchange(uri, "GET", null, headers, policy, operation, observer, redirect);
+  }
+
+  /** Execute one bounded exchange without redirect or automatic transport retries. */
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      justification =
+          "Classified HTTP failures and cancellation controls must propagate without losing their type.")
+  public Response exchange(
+      URI uri,
+      String method,
+      byte[] body,
+      Map<String, String> headers,
+      HttpFetchPolicy policy,
+      FetchOperation operation,
+      HttpFetchObserver observer,
+      boolean redirect) {
     operation.check();
     policy.validate(uri);
     var transferBudget = TransferScope.current();
@@ -144,6 +161,7 @@ public class SafeHttpFetcher {
               .compress(false)
               .keepAlive(false)
               .followRedirect(false)
+              .disableRetry(true)
               .resolver(resolver)
               .option(
                   io.netty.channel.ChannelOption.CONNECT_TIMEOUT_MILLIS,
@@ -164,8 +182,12 @@ public class SafeHttpFetcher {
       var future =
           client
               .headers(h -> headers.forEach(h::set))
-              .get()
+              .request(io.netty.handler.codec.http.HttpMethod.valueOf(method))
               .uri(uri.toASCIIString())
+              .send(
+                  body == null
+                      ? reactor.netty.ByteBufFlux.empty()
+                      : reactor.netty.ByteBufFlux.fromInbound(Mono.just(body)))
               .response(
                   (response, content) -> {
                     int status = response.status().code();
@@ -184,7 +206,7 @@ public class SafeHttpFetcher {
                               else received.put(name, h.getValue());
                             });
                     String length = received.get("content-length");
-                    if (length != null) {
+                    if (length != null && !"HEAD".equals(method)) {
                       try {
                         if (Long.parseLong(length) > policy.maxWireBytes())
                           return Mono.<Response>error(
