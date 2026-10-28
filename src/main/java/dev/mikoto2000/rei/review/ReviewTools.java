@@ -555,6 +555,7 @@ public final class ReviewTools {
     var scope = scope(owner);
     for (var id : ledger.jobs(scope)) {
       var job = ledger.get(id, scope);
+      if (!job.participants().contains(scope)) continue;
       if (!job.status().equals("COMPLETE") && (cancelled || failed))
         ledger.stop(id, scope, cancelled);
       if (parent != null
