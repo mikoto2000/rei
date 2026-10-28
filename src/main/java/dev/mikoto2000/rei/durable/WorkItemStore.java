@@ -93,15 +93,39 @@ public final class WorkItemStore {
   }
 
   public Claim claim(DurableTaskStore.Scope scope, String task, String run) {
+    return claim(scope, task, run, (item, source) -> item.end());
+  }
+
+  public Claim claim(DurableTaskStore.Scope scope, String task, String run,
+      java.util.function.ToIntBiFunction<Item, String> split) {
     return store.write(db -> {
       requireRun(db, scope, task, run);
       Item pending = pending(db, task);
       if (pending == null) return null;
+      String source = source(db, pending);
+      int end = split.applyAsInt(pending, source);
+      if (end < pending.start() || end > pending.end() || !boundary(source, end)
+          || end == pending.start() && end < pending.end()) throw new IllegalArgumentException("WORK_SPLIT_INVALID");
+      if (end < pending.end()) {
+        DurableTaskStore.execute(db, "UPDATE durable_work SET end=? WHERE id=? AND state='PENDING'", end, pending.id());
+        DurableTaskStore.execute(db, "INSERT INTO durable_work(id,task,snapshot,path,start,end,version,kind,criterion,state,required) VALUES(?,?,?,?,?,?,?,?,?,'PENDING',?)",
+            UUID.randomUUID().toString(), task, pending.snapshot(), pending.path(), end, pending.end(), pending.version(), pending.kind(), pending.criterion(), pending.required());
+      }
       String attempt = UUID.randomUUID().toString();
       if (DurableTaskStore.execute(db, "UPDATE durable_work SET state='RUNNING',active_attempt=?,last_step='CLAIMED' WHERE id=? AND state='PENDING'", attempt, pending.id()) != 1)
         throw new IllegalStateException("WORK_CLAIM_CONFLICT");
       DurableTaskStore.execute(db, "INSERT INTO durable_item_attempts(id,work,run,started,state) VALUES(?,?,?,?,'ACTIVE')", attempt, pending.id(), run, System.currentTimeMillis());
       return new Claim(item(db, pending.id()), run, attempt);
+    });
+  }
+
+  public Claim current(DurableTaskStore.Scope scope, String work, String run, String attempt) {
+    return store.read(db -> {
+      var item = item(db, work);
+      requireRun(db, scope, item.task(), run, true);
+      var claim = new Claim(item, run, attempt);
+      delivery(db, claim);
+      return claim;
     });
   }
 

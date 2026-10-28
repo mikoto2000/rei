@@ -146,6 +146,66 @@ public final class ReviewTools {
     return tasks.status(taskScope(AgentRunScope.current()), taskId);
   }
 
+  @Tool(description = "Discover durable repository review Tasks owned by this Project, session and root, even when Checkpoints are missing. Pass nextCursor as afterTask. limit 1..1000, default 100.")
+  public dev.mikoto2000.rei.durable.DurableTaskStore.Page<dev.mikoto2000.rei.durable.DurableTaskStore.Task> listReviewTasks(
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String afterTask,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) {
+    return tasks.tasks(taskScope(AgentRunScope.current()), afterTask, limit == null ? 100 : limit);
+  }
+
+  @Tool(description = "Explicitly resume a durable review Task in this Run without a Checkpoint. Preserves results, recovers unfinished read-only review work and retires old Run authority. Cancelled or failed Tasks cannot be resumed implicitly.")
+  public dev.mikoto2000.rei.durable.DurableTaskStore.Task resumeRepositoryReview(String taskId) {
+    var owner = AgentRunScope.current();
+    return workItems().resume(taskScope(owner), taskId, owner.runId());
+  }
+
+  private dev.mikoto2000.rei.durable.WorkItemStore workItems() {
+    return new dev.mikoto2000.rei.durable.WorkItemStore(tasks);
+  }
+
+  @Tool(description = "Claim one pending frozen review range. tokenBudget 256..2048 includes serialized source metadata. Already committed ranges are never returned. Read with readReviewWorkItem and then submitReviewWorkItem; a claim is not review completion.")
+  public dev.mikoto2000.rei.durable.WorkItemStore.Claim claimReviewWorkItem(String taskId, int tokenBudget) {
+    if (tokenBudget < 256 || tokenBudget > 2048) throw new IllegalArgumentException("INVALID_TOKEN_BUDGET");
+    var owner = AgentRunScope.current();
+    return workItems().claim(taskScope(owner), taskId, owner.runId(), (item, source) -> {
+      int low = item.start(), high = Math.min(item.end(), item.start() + tokenBudget * 4);
+      while (low < high) {
+        int middle = low + (high - low + 1) / 2;
+        if (estimate(durablePage(item, "0".repeat(36), source, middle)) <= tokenBudget) low = middle;
+        else high = middle - 1;
+      }
+      if (low > item.start() && low < source.length() && Character.isHighSurrogate(source.charAt(low - 1)) && Character.isLowSurrogate(source.charAt(low))) low--;
+      if (low == item.start() && low < item.end() || estimate(durablePage(item, "0".repeat(36), source, low)) > tokenBudget)
+        throw new IllegalArgumentException("REVIEW_PAGE_BUDGET_TOO_SMALL");
+      return low;
+    });
+  }
+
+  @ResultDelivery(ResultDelivery.Kind.FILE_CONTENT)
+  @Tool(description = "Read the exact frozen range of the current claim. Reading does not mark it delivered; trusted host model-delivery confirmation is required before submitReviewWorkItem.")
+  public Page readReviewWorkItem(String workItemId, String attempt) {
+    var owner = AgentRunScope.current();
+    var work = workItems();
+    var claim = work.current(taskScope(owner), workItemId, owner.runId(), attempt);
+    if (!claim.item().state().equals("RUNNING")) throw new IllegalArgumentException("WORK_NOT_RUNNING");
+    return durablePage(claim.item(), attempt, work.source(taskScope(owner), claim.item()), claim.item().end());
+  }
+
+  @Tool(description = "Commit an assessment and optional structured findings for a delivered frozen claim. Findings use absolute UTF-16 start/end and exact evidence quotes. Saves atomically, rejects conflicting replay, and never equates reading with reviewing.")
+  public dev.mikoto2000.rei.durable.WorkItemStore.Result submitReviewWorkItem(String workItemId, String attempt,
+      String assessment, List<dev.mikoto2000.rei.durable.WorkItemStore.Finding> findings) {
+    var owner = AgentRunScope.current();
+    var work = workItems();
+    return work.commit(taskScope(owner), work.current(taskScope(owner), workItemId, owner.runId(), attempt), assessment, findings);
+  }
+
+  private Page durablePage(dev.mikoto2000.rei.durable.WorkItemStore.Item item, String attempt, String source, int end) {
+    int[] from = position(source, item.start()), to = position(source, end);
+    return page("durable:" + item.id() + ":" + attempt,
+        new Target(item.path(), item.version(), position(source, source.length())[0],
+            List.of(new Span(item.start(), end, from[0], to[0], from[1], to[1]))), source, item.start(), end);
+  }
+
   @Tool(description = "Page frozen review targets, exclusions and source errors. Pass nextCursor unchanged as afterPath; null starts at the beginning. limit is 1..1000, default 100. Reading a page never completes work.")
   public dev.mikoto2000.rei.durable.DurableTaskStore.Page<dev.mikoto2000.rei.durable.DurableTaskStore.FileEntry> listReviewTargets(
       String taskId,
@@ -337,9 +397,29 @@ public final class ReviewTools {
     for (var page : pages) {
       if (!hash(page.content()).equals(page.range().contentHash()))
         throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
-      grouped.computeIfAbsent(page.reviewJobId(), ignored -> new ArrayList<>()).add(page.range());
+      if (page.reviewJobId().startsWith("durable:")) {
+        confirmDurable(owner, page);
+      } else grouped.computeIfAbsent(page.reviewJobId(), ignored -> new ArrayList<>()).add(page.range());
     }
     grouped.forEach((job, ranges) -> ledger.delivered(job, scope(owner), ranges));
+  }
+
+  private void confirmDurable(AgentRunContext owner, Page page) {
+    String[] receipt = page.reviewJobId().split(":", -1);
+    if (receipt.length != 3) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+    var work = workItems();
+    dev.mikoto2000.rei.durable.WorkItemStore.Claim claim;
+    try {
+      claim = work.current(taskScope(owner), receipt[1], owner.runId(), receipt[2]);
+    } catch (IllegalArgumentException stale) {
+      if ("STALE_CLAIM".equals(stale.getMessage()) || "TASK_RUN_NOT_BOUND".equals(stale.getMessage())) return;
+      throw stale;
+    }
+    var item = claim.item();
+    if (!page.range().path().equals(item.path()) || !page.range().version().equals(item.version())
+        || page.range().span().start() != item.start() || page.range().span().end() != item.end())
+      throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+    work.delivered(taskScope(owner), claim, page.range().contentHash());
   }
 
   /** 受信した内容を利用できるよう、ページを復元する。 */
