@@ -27,6 +27,7 @@ class SecretaryBriefingMigrationTest {
       q.execute("DROP TABLE secretary_briefings");
       q.execute("DELETE FROM storage_migrations WHERE version>=17");
       q.execute("DROP TABLE reading_state");
+      StorageSchemaFixture.removeDurableSchema(q);
       q.execute("PRAGMA user_version=16");
     }
     try (var migration = new StorageMigrationCoordinator(root)) {

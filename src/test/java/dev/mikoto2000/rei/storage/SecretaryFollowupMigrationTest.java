@@ -50,6 +50,7 @@ class SecretaryFollowupMigrationTest {
       sql.execute("DROP TABLE secretary_suggestion_history");
       sql.execute("DELETE FROM storage_migrations WHERE version>=12");
       sql.execute("DROP TABLE reading_state");
+      StorageSchemaFixture.removeDurableSchema(sql);
       sql.execute("PRAGMA user_version=11");
     }
     try (var migration = new StorageMigrationCoordinator(root)) {

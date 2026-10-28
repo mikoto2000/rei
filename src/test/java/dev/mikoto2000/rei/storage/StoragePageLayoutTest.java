@@ -47,6 +47,7 @@ class StoragePageLayoutTest {
       sql.executeUpdate("DELETE FROM \"fixture\"\"quoted\" WHERE id=100");
       sql.executeUpdate("DELETE FROM storage_migrations WHERE version>=18");
       sql.execute("DROP TABLE reading_state");
+      StorageSchemaFixture.removeDurableSchema(sql);
       sql.execute("PRAGMA user_version=17");
     }
   }

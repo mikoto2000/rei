@@ -37,6 +37,10 @@ public class ProgressEvaluator {
           "readPdfFile",
           "readBinaryFile",
           "findFile",
+          "beginRepositoryReview",
+          "scanReviewSnapshot",
+          "reviewTaskStatus",
+          "listReviewTargets",
           "listFile",
           "grepMultiQuery",
           "searchAndRead",
@@ -140,7 +144,7 @@ public class ProgressEvaluator {
                   entry ->
                       !entry.getKey().matches("[0-9a-f]{64}")
                           || entry.getValue() < 1
-                          || entry.getValue() > 20000))
+                          || entry.getValue() > 1000000))
         throw new IllegalArgumentException("Invalid scan coverage");
       if (restorationReads < 0
           || restorationReads > 8
@@ -362,6 +366,19 @@ public class ProgressEvaluator {
                           "Plan step started (completion still requires verification)",
                           s.id())));
     JsonNode output = parse(result);
+    if (name.equals("scanReviewSnapshot") && output != null) {
+      String task = output.path("id").asText(), snapshot = output.path("snapshot").asText();
+      int revision = output.path("revision").asInt(-1);
+      String key = digest("durable-scan:" + task + ":" + snapshot);
+      if (!task.isBlank() && !snapshot.isBlank() && output.path("errors").asInt(-1) == 0
+          && Set.of("SCANNING", "VALIDATING", "SEALED").contains(output.path("enumeration").asText())
+          && revision > 0 && revision <= 1000000 && (scanCoverage.containsKey(key) || scanCoverage.size() < 256)
+          && revision > scanCoverage.getOrDefault(key, 0)) {
+        scanCoverage.put(key, revision);
+        evidence.add(ProgressEvidence.acquiredRange("Durable target enumeration advanced", task, snapshot));
+      }
+      return List.copyOf(evidence);
+    }
     if (name.equals("checkpointShow") || name.equals("checkpointInspect")) {
       restoreCheckpoint(name, arguments, output, evidence);
       return List.copyOf(evidence);

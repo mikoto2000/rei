@@ -69,6 +69,7 @@ class SecretaryOrchestrationMigrationTest {
         sql.execute("DROP INDEX secretary_notice_held");
         sql.execute("DELETE FROM storage_migrations WHERE version>=13");
         sql.execute("DROP TABLE reading_state");
+        StorageSchemaFixture.removeDurableSchema(sql);
         sql.execute("PRAGMA user_version=12");
       }
       try (var migration = new StorageMigrationCoordinator(root)) {
