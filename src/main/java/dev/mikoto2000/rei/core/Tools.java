@@ -1733,7 +1733,7 @@ public class Tools {
         ReadingMetrics.add("scannedFiles", 1);
         var snapshot = snapshots.get(workingDirectory, filePath);
         version = snapshot.version();
-        lines = snapshotLines(snapshot, query.charset());
+        lines = snapshots.lines(snapshot, query.charset(), () -> snapshotLines(snapshot, query.charset()));
       } catch (IOException ex) {
         String message = String.valueOf(ex.getMessage());
         fileErrors.add(
@@ -1959,6 +1959,7 @@ public class Tools {
       dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
   @Tool(
       name = "searchAndRead",
+      resultConverter = SearchReadResultConverter.class,
       description =
           """
       Search for one or more code patterns and immediately read the relevant surrounding source code in a single tool call.
@@ -2168,7 +2169,7 @@ public class Tools {
       FileResultBudget.require(fileResults, byteLimit, tokenLimit);
       workingSet.completeSearch(
           searchObservation, hitCount, fileMatches.size(), selectedCount, alreadyPresentCount);
-      return boundedFileResult(fileResults);
+      return boundedFileResult(Boolean.TRUE.equals(request.compactOutput()) ? fileResults.stream().map(SearchAndReadResult::withCompact).toList() : fileResults);
     } catch (IOException | InterruptedException | RuntimeException e) {
       workingSet.abandonSearch(searchObservation);
       throw e;
@@ -2190,7 +2191,7 @@ public class Tools {
       throws IOException {
     java.nio.file.Path filePath = resolveProjectPath(relativePath, workingDirectory);
     var snapshot = snapshots.get(workingDirectory, filePath);
-    List<String> lines = snapshotLines(snapshot, charset);
+    List<String> lines = snapshots.lines(snapshot, charset, () -> snapshotLines(snapshot, charset));
     workingSet.recordRead(filePath);
 
     // ヒット行から前後コンテキストを計算し、overlapping / adjacent をマージする
@@ -2368,7 +2369,11 @@ public class Tools {
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer maxTokens,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer maxLines,
       @org.springframework.ai.tool.annotation.ToolParam(required = false)
-          List<String> preferredPaths) {
+          List<String> preferredPaths,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Boolean compactOutput) {
+    public SearchAndReadRequest(List<GrepQuery> queries, Integer contextLines, Integer maxFiles, Integer maxBytes, Integer maxTokens, Integer maxLines, List<String> preferredPaths) {
+      this(queries, contextLines, maxFiles, maxBytes, maxTokens, maxLines, preferredPaths, null);
+    }
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public SearchAndReadRequest(List<GrepQuery> queries, Integer contextLines, Integer maxFiles) {
       this(queries, contextLines, maxFiles, null, null, null, null);
@@ -2420,7 +2425,14 @@ public class Tools {
       ReadFileRequest nextRead,
       int score,
       List<String> matchedBy,
-      int omittedMatches) {
+      int omittedMatches,
+      @com.fasterxml.jackson.annotation.JsonIgnore boolean compact) {
+    public SearchAndReadResult(String path, List<SearchMatch> matches, List<ReadSection> sections, String error, boolean truncated, boolean filesTruncated, String version, ReadFileRequest nextRead, int score, List<String> matchedBy, int omittedMatches) {
+      this(path, matches, sections, error, truncated, filesTruncated, version, nextRead, score, matchedBy, omittedMatches, false);
+    }
+    SearchAndReadResult withCompact() {
+      return new SearchAndReadResult(path, matches, sections, error, truncated, filesTruncated, version, nextRead, score, matchedBy, omittedMatches, true);
+    }
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public SearchAndReadResult(
         String path,
@@ -2756,7 +2768,7 @@ public class Tools {
     var snapshot = snapshots.get(workingDirectory, path);
     if (request.expectedVersion() != null && !request.expectedVersion().equals(snapshot.version()))
       throw new IOException("STALE_VERSION: File version mismatch; search/read again");
-    List<String> lines = snapshotLines(snapshot, request.charset());
+    List<String> lines = snapshots.lines(snapshot, request.charset(), () -> snapshotLines(snapshot, request.charset()));
     workingSet.recordRead(path);
     int fromIndex = startLine == null ? 0 : startLine - 1;
     if (fromIndex >= lines.size()) {

@@ -44,7 +44,8 @@ class ReadingMetricsTest {
       assertEquals(16, result.getFirst().matches().size());
       var values = ReadingMetrics.snapshot(owner);
       assertEquals(1, values.get("physicalReads"));
-      assertEquals(9, values.get("decodes"));
+      assertEquals(1, values.get("decodes"));
+      assertEquals(1, values.get("lineSplits"));
       Files.createDirectories(Path.of("target/reading-benchmark"));
       Files.writeString(Path.of("target/reading-benchmark/search.json"),
           dev.mikoto2000.rei.storage.StorageDatabase.JSON.writeValueAsString(values));
