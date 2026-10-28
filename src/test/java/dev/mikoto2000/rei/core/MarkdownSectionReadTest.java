@@ -29,6 +29,7 @@ class MarkdownSectionReadTest {
     assertFalse(String.join("\n", selected.content()).contains("ログアウト"));
     assertNotNull(selected.version());
     assertEquals(List.of("設計", "認証", "ログイン"), selected.selection().selected().path());
+    assertEquals("設計/認証/ログイン", selected.evidence().selector());
     var fake = tools.readMultiFile(List.of(request("{\"path\":\"design.md\",\"section\":\"偽見出し\"}")), root).getFirst();
     assertEquals("SECTION_NOT_FOUND", fake.problem().code());
   }

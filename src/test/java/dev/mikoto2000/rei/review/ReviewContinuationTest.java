@@ -41,6 +41,8 @@ class ReviewContinuationTest {
       assertThat(tools.reviewPending(job.id()).getFirst().start()).isZero();
       var page =
           tools.readReviewFile(job.id(), "source.md", job.targets().getFirst().version(), 0, 512);
+      assertThat(page.evidence().version()).isEqualTo(page.range().version());
+      assertThat(page.evidence().startLine()).isEqualTo(page.range().span().startLine());
       String inner = StorageDatabase.JSON.writeValueAsString(page);
       String envelope =
           StorageDatabase.JSON.writeValueAsString(

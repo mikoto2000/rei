@@ -2947,6 +2947,12 @@ public class Tools {
     public ReadFileResult(String path, Integer startLine, Integer endLine, List<String> content, boolean truncated, String error, String version, ReadFileRequest nextRead, int returnedBytes, RepositoryMapService.Symbol symbol, List<JavaSymbolReads.Candidate> candidates, List<String> ownerOverview, String truncationReason, ReadingDelivery.Notice delivery) {
       this(path, startLine, endLine, content, truncated, error, version, nextRead, returnedBytes, symbol, candidates, ownerOverview, truncationReason, delivery, null);
     }
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public dev.mikoto2000.rei.tooldelivery.SourceEvidence evidence() {
+      if (version == null || startLine == null || endLine == null || error != null) return null;
+      String selector = symbol != null ? symbol.symbolId() : selection != null && selection.selected() != null ? String.join("/", selection.selected().path()) : null;
+      return new dev.mikoto2000.rei.tooldelivery.SourceEvidence(path, version, startLine, endLine, selector, "readMultiFile", null);
+    }
     ReadFileResult withSelection(MarkdownSectionReads.Selection value) {
       return new ReadFileResult(path, startLine, endLine, content, truncated, error, version, nextRead, returnedBytes, symbol, candidates, ownerOverview, truncationReason, delivery, value);
     }
