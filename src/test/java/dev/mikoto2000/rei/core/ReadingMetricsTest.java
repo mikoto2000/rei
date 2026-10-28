@@ -1,5 +1,9 @@
 package dev.mikoto2000.rei.core;
 
+import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
+
+import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
@@ -70,7 +74,7 @@ class ReadingMetricsTest {
     try (var migration = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(data)) {
       migration.prepare();
     }
-    var store = new ReadingStateStore(new dev.mikoto2000.rei.storage.StorageDatabase(data));
+    var store = ReadingTestStores.store(new dev.mikoto2000.rei.storage.StorageDatabase(data));
     var owner = new AgentRunContext("persisted-metrics", "chat", root);
     store.save(
         owner,

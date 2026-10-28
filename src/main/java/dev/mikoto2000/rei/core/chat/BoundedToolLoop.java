@@ -389,12 +389,12 @@ public final class BoundedToolLoop {
                                   if (readingUsage != null
                                       && readingUsage.getPromptTokens() != null
                                       && readingUsage.getPromptTokens() > 0)
-                                    dev.mikoto2000.rei.core.ReadingMetrics.add(
+                                    dev.mikoto2000.rei.tooldelivery.ReadingMetrics.add(
                                         owner,
                                         "providerInputTokens",
                                         readingUsage.getPromptTokens());
                                   else
-                                    dev.mikoto2000.rei.core.ReadingMetrics.add(
+                                    dev.mikoto2000.rei.tooldelivery.ReadingMetrics.add(
                                         owner, "providerInputTokensUnavailable", 1);
                                   if (assembler != null)
                                     assembler.confirmedDelivery(projected, owner);

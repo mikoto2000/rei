@@ -1,5 +1,9 @@
 package dev.mikoto2000.rei.core;
 
+import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
+
+import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -49,7 +53,7 @@ class ReadingSecurityTest {
       gate.prepare();
     }
     var now = Instant.parse("2026-10-28T00:00:00Z");
-    var store = new ReadingStateStore(new StorageDatabase(data), Clock.fixed(now, ZoneOffset.UTC));
+    var store = ReadingTestStores.store(new StorageDatabase(data), Clock.fixed(now, ZoneOffset.UTC));
     var owner = new AgentRunContext("secure", "chat", root, "project");
     String cursor;
     try (var scope = AgentRunScope.open(owner)) {
@@ -69,7 +73,7 @@ class ReadingSecurityTest {
     }
     try (var scope = AgentRunScope.open(owner)) {
       var expiredStore =
-          new ReadingStateStore(
+          ReadingTestStores.store(
               new StorageDatabase(data),
               Clock.fixed(now.plus(Duration.ofHours(25)), ZoneOffset.UTC));
       var result =

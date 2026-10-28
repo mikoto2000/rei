@@ -232,6 +232,10 @@ dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mik
 dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.review.ReviewTools
 dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.storage.StorageDatabase
 dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.storage.StorageObjectRegistry
+dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.tooldelivery.ReadingDelivery
+dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.tooldelivery.ReadingRawAccess
+dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.tooldelivery.ReadingStateStore
+dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.tooldelivery.ReadingStateStore$Work
 dev.mikoto2000.rei.core.project.ProjectScopeConfiguration -> dev.mikoto2000.rei.llm.ConversationIds
 dev.mikoto2000.rei.core.working.WorkingSetConfiguration -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.core.working.WorkingSetConfiguration -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode

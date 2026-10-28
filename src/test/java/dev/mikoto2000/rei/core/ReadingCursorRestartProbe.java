@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.core;
 
+import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
+
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.storage.StorageDatabase;
@@ -15,7 +17,7 @@ public final class ReadingCursorRestartProbe {
     try (var scope = AgentRunScope.open(new AgentRunContext("restart", "chat", root, "project"))) {
       var search =
           new PagedFileSearch(
-              new Tools(), new ReadingStateStore(new StorageDatabase(root.resolve("data"))));
+              new Tools(), ReadingTestStores.store(new StorageDatabase(root.resolve("data"))));
       var page =
           search.read(new PagedFileSearch.Request(null, null, 512, 2048, 1, 1, args[1]), root);
       Files.writeString(Path.of(args[2]), StorageDatabase.JSON.writeValueAsString(page));

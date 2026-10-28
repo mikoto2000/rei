@@ -1,5 +1,9 @@
 package dev.mikoto2000.rei.core;
 
+import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
+
+import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -166,7 +170,7 @@ class ReadingEfficiencyBenchmarkTest {
         beforeTokens += payload(page).get("conservativeTokens");
         next = page.getFirst().nextRead();
       }
-      var search = new PagedFileSearch(reader, new ReadingStateStore(new StorageDatabase(data)));
+      var search = new PagedFileSearch(reader, ReadingTestStores.store(new StorageDatabase(data)));
       var first =
           search.read(
               new PagedFileSearch.Request(List.of(query), 1, 512, 4096, 128, 1, null), root);

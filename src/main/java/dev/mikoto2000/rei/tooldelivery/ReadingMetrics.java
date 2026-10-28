@@ -1,15 +1,14 @@
-package dev.mikoto2000.rei.core;
+package dev.mikoto2000.rei.tooldelivery;
 
-import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import dev.mikoto2000.rei.core.chat.AgentRunScope;
-import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
+import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** Bounded, optional application counters. Token values are estimates, never provider usage. */
 public final class ReadingMetrics {
-  private static final Map<AgentRunContext, Map<String, Long>> RUNS = new LinkedHashMap<>();
-  private static final Map<AgentRunContext, java.util.Set<String>> BODIES = new LinkedHashMap<>();
+  private static final Map<ReadingRun, Map<String, Long>> RUNS = new LinkedHashMap<>();
+  private static final Map<ReadingRun, java.util.Set<String>> BODIES = new LinkedHashMap<>();
 
   private ReadingMetrics() {}
 
@@ -19,7 +18,7 @@ public final class ReadingMetrics {
     return Boolean.parseBoolean(System.getProperty("rei.reading.metrics.enabled", "true"));
   }
 
-  public static synchronized void restore(AgentRunContext owner, ReadingStateStore store) {
+  public static synchronized void restore(ReadingRun owner, ReadingStateStore store) {
     if (!enabled() || owner == null || store == null || RUNS.containsKey(owner)) return;
     try {
       var saved = store.load(owner, "metrics", "totals", Saved.class);
@@ -30,7 +29,7 @@ public final class ReadingMetrics {
     }
   }
 
-  public static synchronized void flush(AgentRunContext owner, ReadingStateStore store) {
+  public static synchronized void flush(ReadingRun owner, ReadingStateStore store) {
     if (!enabled() || owner == null || store == null) return;
     try {
       store.save(
@@ -47,29 +46,28 @@ public final class ReadingMetrics {
   }
 
   public static void add(String name, long amount) {
-    add(AgentRunScope.current(), name, amount);
+    add(ReadingRuntime.current(), name, amount);
   }
 
-  public static synchronized void add(AgentRunContext owner, String name, long amount) {
+  public static synchronized void add(ReadingRun owner, String name, long amount) {
     if (owner == null || !enabled()) return;
     var values = RUNS.computeIfAbsent(owner, unused -> new LinkedHashMap<>());
     values.merge(name, amount, Long::sum);
     while (RUNS.size() > 256) RUNS.remove(RUNS.keySet().iterator().next());
   }
 
-  public static synchronized Map<String, Long> snapshot(AgentRunContext owner) {
+  public static synchronized Map<String, Long> snapshot(ReadingRun owner) {
     return Map.copyOf(RUNS.getOrDefault(owner, Map.of()));
   }
 
-  static <T> T generated(T value) throws java.io.IOException {
-    if (!enabled() || AgentRunScope.current() == null) return value;
-    byte[] bytes = dev.mikoto2000.rei.storage.StorageDatabase.JSON.writeValueAsBytes(value);
+  public static <T> T generated(T value) throws java.io.IOException {
+    if (!enabled() || ReadingRuntime.current() == null) return value;
+    byte[] bytes = ReadingJson.JSON.writeValueAsBytes(value);
     add("generatedBytes", bytes.length);
     add(
         "generatedEstimatedTokens",
-        TokenEstimator.conservative()
-            .text(new String(bytes, java.nio.charset.StandardCharsets.UTF_8)));
-    observe(dev.mikoto2000.rei.storage.StorageDatabase.JSON.valueToTree(value), "", "");
+        ReadingRuntime.estimateTokens(new String(bytes, java.nio.charset.StandardCharsets.UTF_8)));
+    observe(ReadingJson.JSON.valueToTree(value), "", "");
     return value;
   }
 
@@ -97,10 +95,10 @@ public final class ReadingMetrics {
   }
 
   private static synchronized void body(String path, String version, int line, String text) {
-    var owner = AgentRunScope.current();
+    var owner = ReadingRuntime.current();
     var seen = BODIES.computeIfAbsent(owner, unused -> new java.util.HashSet<>());
     String key =
-        FileSnapshots.hash(
+        ReadingJson.hash(
             (path + "\n" + version + "\n" + line + "\n" + text)
                 .getBytes(java.nio.charset.StandardCharsets.UTF_8));
     if (seen.contains(key))
@@ -110,18 +108,18 @@ public final class ReadingMetrics {
     while (BODIES.size() > 256) BODIES.remove(BODIES.keySet().iterator().next());
   }
 
-  static Operation operation(String kind) {
+  public static Operation operation(String kind) {
     return operation(kind, null);
   }
 
-  static Operation operation(String kind, ReadingStateStore store) {
-    var owner = AgentRunScope.current();
+  public static Operation operation(String kind, ReadingStateStore store) {
+    var owner = ReadingRuntime.current();
     restore(owner, store);
     add("toolCalls", 1);
     return new Operation(kind, System.nanoTime(), owner, store);
   }
 
-  record Operation(String kind, long started, AgentRunContext owner, ReadingStateStore store)
+  public record Operation(String kind, long started, ReadingRun owner, ReadingStateStore store)
       implements AutoCloseable {
     @Override
     public void close() {

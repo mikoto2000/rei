@@ -1,6 +1,12 @@
 package dev.mikoto2000.rei.core;
 
-import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
+
+import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
+
+import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
+
+import dev.mikoto2000.rei.tooldelivery.ReadingRuntime;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -63,7 +69,7 @@ final class PagedFileSearch {
       int bytes = value(input.maxBytes(), 16384, 1024, 65536);
       int scanLimit = value(input.scanLimit(), 128, 1, 1024);
       int maxLines = value(input.maxLines(), 1000, 1, 5000);
-      var owner = AgentRunScope.current();
+      var owner = ReadingRuntime.current();
       ReadingStateStore.scope(owner);
       if (!root.toRealPath().equals(owner.projectRoot().toRealPath()))
         throw ReadingProblem.fail("INVALID_CURSOR");
@@ -93,7 +99,7 @@ final class PagedFileSearch {
       }
       int scanned = 0, readBytes = 0;
       while (state.file < state.inventory.size()) {
-        dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);
+        Tools.checkReadingCancellation(null);
         var item = state.inventory.get(state.file);
         if (item.size() > FileSnapshots.MAX_FILE_BYTES) {
           state.file++;
@@ -237,7 +243,7 @@ final class PagedFileSearch {
       }
       return paused(state, List.of(), "COMPLETE", null);
     } catch (Exception error) {
-      dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
+      Tools.checkReadingCancellation(error);
       return new Page(
           List.of(), null, null, new Progress(0, 0, 0, "FAILED"), ReadingProblem.from(error));
     }
@@ -276,7 +282,7 @@ final class PagedFileSearch {
     if (state.file < state.inventory.size()) {
       boolean pending = state.rangeIndex < state.ranges.size();
       String id = (pending ? "RESULT:" : "SCAN:") + UUID.randomUUID();
-      store.save(AgentRunScope.current(), "search", id, state, Duration.ofHours(24));
+      store.save(ReadingRuntime.current(), "search", id, state, Duration.ofHours(24));
       if (pending) result = id;
       else scan = id;
     }
@@ -323,7 +329,7 @@ final class PagedFileSearch {
     int context = state.request.contextLines();
     int line = state.scanLine;
     for (; line < lines.size(); line++) {
-      if ((line & 31) == 0) dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);
+      if ((line & 31) == 0) Tools.checkReadingCancellation(null);
       boolean hit = false;
       for (int q = 0; q < applicable.size(); q++)
         hit |=

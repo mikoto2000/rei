@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.core;
 
+import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
+
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -167,7 +169,7 @@ final class MarkdownSectionReads {
   }
 
   static List<Section> index(List<String> lines) {
-    dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);
+    Tools.checkReadingCancellation(null);
     var parseLines = new ArrayList<>(lines);
     if (!parseLines.isEmpty() && parseLines.getFirst().strip().equals("---")) {
       int end = 1;

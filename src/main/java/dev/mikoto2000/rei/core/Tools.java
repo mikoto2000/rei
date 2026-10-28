@@ -1,5 +1,13 @@
 package dev.mikoto2000.rei.core;
 
+import dev.mikoto2000.rei.tooldelivery.ReadingDelivery;
+
+import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
+
+import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
+
+import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
+
 import dev.mikoto2000.rei.core.filesummary.FileSummaryCache;
 import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
@@ -53,6 +61,35 @@ import org.springframework.stereotype.Component;
 /** 共通の実行基盤に必要なツール一覧を扱う。 */
 @Component
 public class Tools {
+  public static void checkReadingCancellation(Throwable error) {
+    dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
+  }
+  public static String readingPath(dev.mikoto2000.rei.tooldelivery.ReadingRun owner, String input) throws IOException {
+    if (!(owner instanceof dev.mikoto2000.rei.core.chat.AgentRunContext captured))
+      throw new IOException("Unknown reading authority");
+    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(captured)) {
+      var root = owner.projectRoot().toRealPath();
+      return root.relativize(FileSnapshots.resolve(root, java.nio.file.Path.of(input))).toString().replace('\\', '/');
+    }
+  }
+
+  private ReadFileResult applyReadingDelivery(ReadFileRequest request, ReadFileResult result) {
+    var notice = readingDelivery.inspect(dev.mikoto2000.rei.tooldelivery.ReadingRuntime.current(),
+        dev.mikoto2000.rei.tooldelivery.ReadingJson.JSON.valueToTree(result),
+        result.symbol() == null && !result.truncated() && (request.offset() == null || request.offset() == 0),
+        Boolean.TRUE.equals(request.unreadOnly()) && request.startLine() != null && request.endLine() != null);
+    if (notice == null) return result;
+    return new ReadFileResult(result.path(), result.startLine(), result.endLine(),
+        notice.suppressed() ? List.of() : result.content(), result.truncated(), result.error(), result.version(),
+        result.nextRead(), notice.suppressed() ? 0 : result.returnedBytes(), result.symbol(), result.candidates(),
+        result.ownerOverview(), result.truncationReason(), notice, result.selection());
+  }
+  static {
+    dev.mikoto2000.rei.tooldelivery.ReadingRuntime.configure(
+        dev.mikoto2000.rei.core.chat.AgentRunScope::current,
+        dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative()::text);
+  }
+
   /** ファイル結果JSON変換。 */
   private static final com.fasterxml.jackson.databind.ObjectMapper FILE_RESULT_JSON =
       new com.fasterxml.jackson.databind.ObjectMapper();
@@ -2792,8 +2829,7 @@ public class Tools {
             workingSet.recordRead(workingDirectory.resolve(result.path()));
           if (readingDelivery != null)
             result =
-                readingDelivery.apply(
-                    dev.mikoto2000.rei.core.chat.AgentRunScope.current(), request, result);
+                applyReadingDelivery(request, result);
           int remaining = MAX_READ_TOTAL_LINES - totalLines;
           if (result.content().size() > remaining) {
             result =

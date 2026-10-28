@@ -1,13 +1,14 @@
-package dev.mikoto2000.rei.core;
+package dev.mikoto2000.rei.tooldelivery;
+
+import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
+
+import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
+
+import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import dev.mikoto2000.rei.core.chat.AgentRunContext;
-import dev.mikoto2000.rei.core.chat.AgentRunScope;
-import dev.mikoto2000.rei.core.contextbudget.RawToolResultStore;
-import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.tooldelivery.SourceEvidence;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -16,10 +17,8 @@ import java.util.Map;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.stereotype.Component;
 
 /** Current prompt presence is rebuilt, never inferred from the acquisition ledger or a summary. */
-@Component
 public final class ReadingDelivery {
   public record Notice(String state, boolean suppressed, List<SourceEvidence> evidence) {}
 
@@ -28,15 +27,19 @@ public final class ReadingDelivery {
   public record Saved(List<Entry> entries) {}
 
   private final ReadingStateStore store;
-  private final RawToolResultStore raw;
+  private final ReadingRawAccess raw;
+  @FunctionalInterface
+  public interface Resolver { String resolve(ReadingRun owner, String path) throws java.io.IOException; }
+  private final Resolver resolver;
   private final Map<String, List<Entry>> available = new LinkedHashMap<>();
 
-  public ReadingDelivery(ReadingStateStore store, RawToolResultStore raw) {
+  public ReadingDelivery(ReadingStateStore store, ReadingRawAccess raw, Resolver resolver) {
     this.store = store;
     this.raw = raw;
+    this.resolver = resolver;
   }
 
-  public synchronized void confirm(AgentRunContext owner, Prompt prompt) {
+  public synchronized void confirm(ReadingRun owner, Prompt prompt) {
     String scope = ReadingStateStore.scope(owner);
     List<Entry> current = collect(owner, prompt, true);
     available.put(scope, current);
@@ -52,7 +55,7 @@ public final class ReadingDelivery {
   /**
    * Recheck after projection: a previously present source may have disappeared during compression.
    */
-  public Prompt restoreSuppressed(AgentRunContext owner, Prompt prompt) {
+  public Prompt restoreSuppressed(ReadingRun owner, Prompt prompt) {
     if (owner == null) return prompt;
     var present = collect(owner, prompt, false);
     var messages = new ArrayList<org.springframework.ai.chat.messages.Message>();
@@ -68,7 +71,7 @@ public final class ReadingDelivery {
           continue;
         }
         try {
-          var tree = StorageDatabase.JSON.readTree(response.responseData());
+          var tree = ReadingJson.JSON.readTree(response.responseData());
           boolean changed = false;
           if (tree != null && tree.isArray())
             for (var node : tree) {
@@ -84,19 +87,11 @@ public final class ReadingDelivery {
                         file.path("version").asText(),
                         file.path("startLine").asInt(),
                         file.path("endLine").asInt());
-                var candidate =
-                    new Tools.ReadFileResult(
-                        path,
-                        file.path("startLine").asInt(),
-                        file.path("endLine").asInt(),
-                        rows,
-                        false,
-                        null,
-                        file.path("version").asText(),
-                        null,
-                        0);
+                var candidate = ReadingJson.JSON.createObjectNode().put("path", path)
+                    .put("startLine", file.path("startLine").asInt()).put("version", file.path("version").asText());
+                candidate.set("content", ReadingJson.JSON.valueToTree(rows));
                 if (covers(present, path, candidate)) continue;
-                file.set("content", StorageDatabase.JSON.valueToTree(rows));
+                file.set("content", ReadingJson.JSON.valueToTree(rows));
                 file.put(
                     "returnedBytes",
                     rows.stream()
@@ -110,7 +105,7 @@ public final class ReadingDelivery {
                 file.put("error", "SOURCE_RESTORATION_UNAVAILABLE");
                 file.set(
                     "readingProblem",
-                    StorageDatabase.JSON.valueToTree(
+                    ReadingJson.JSON.valueToTree(
                         new ReadingProblem(
                             "SOURCE_RESTORATION_UNAVAILABLE",
                             "Saved source could not be restored",
@@ -123,7 +118,7 @@ public final class ReadingDelivery {
           responses.add(
               changed
                   ? new ToolResponseMessage.ToolResponse(
-                      response.id(), response.name(), StorageDatabase.JSON.writeValueAsString(tree))
+                      response.id(), response.name(), ReadingJson.JSON.writeValueAsString(tree))
                   : response);
         } catch (java.io.IOException malformed) {
           responses.add(response);
@@ -136,7 +131,7 @@ public final class ReadingDelivery {
   }
 
   private List<String> recover(
-      AgentRunContext owner, String path, String version, int start, int end)
+      ReadingRun owner, String path, String version, int start, int end)
       throws java.io.IOException {
     if (start < 1 || end < start || (long) end - start > 5000)
       throw ReadingProblem.fail("SOURCE_RESTORATION_UNAVAILABLE");
@@ -144,7 +139,7 @@ public final class ReadingDelivery {
     for (var entry : history(owner)) {
       if (!entry.path().equals(path) || !entry.version().equals(version)) continue;
       var source = raw.read(owner.conversationId(), entry.ref());
-      var tree = StorageDatabase.JSON.readTree(source.rawResult());
+      var tree = ReadingJson.JSON.readTree(source);
       if (tree != null && tree.isObject() && tree.path("files").isArray())
         tree = tree.path("files");
       if (tree == null || !tree.isArray()) continue;
@@ -154,7 +149,7 @@ public final class ReadingDelivery {
         var sections =
             file.path("sections").isArray()
                 ? file.path("sections")
-                : StorageDatabase.JSON.valueToTree(List.of(file));
+                : ReadingJson.JSON.valueToTree(List.of(file));
         for (var section : sections) {
           int line = section.path("startLine").asInt();
           for (var text : section.path("content")) {
@@ -178,78 +173,29 @@ public final class ReadingDelivery {
     return List.copyOf(result);
   }
 
-  Tools.ReadFileResult apply(
-      AgentRunContext owner, Tools.ReadFileRequest request, Tools.ReadFileResult result) {
-    if (owner == null || result.error() != null || result.content().isEmpty()) return result;
+  public Notice inspect(ReadingRun owner, JsonNode result, boolean exact, boolean suppressRequested) {
+    if (owner == null || result.hasNonNull("error") || result.path("content").isEmpty()) return null;
     String path;
-    try {
-      path = relative(owner, result.path());
-    } catch (java.io.IOException error) {
-      return result;
-    }
+    try { path = relative(owner, result.path("path").asText()); }
+    catch (java.io.IOException error) { return null; }
+    String version = result.path("version").asText();
     var previous = history(owner);
     var present = current(owner);
-    boolean exact =
-        result.symbol() == null
-            && !result.truncated()
-            && (request.offset() == null || request.offset() == 0);
-    String state =
-        exact && covers(present, path, result)
-            ? "AVAILABLE"
-            : exact
-                    && covers(previous, path, result)
-                    && restorable(owner, previous, path, result.version())
-                ? "RESTORABLE"
-                : previous.stream()
-                        .anyMatch(
-                            e -> e.path().equals(path) && !e.version().equals(result.version()))
-                    ? "STALE"
-                    : "UNAVAILABLE";
-    boolean suppress =
-        Boolean.TRUE.equals(request.unreadOnly())
-            && request.startLine() != null
-            && request.endLine() != null
-            && exact
-            && state.equals("AVAILABLE");
-    var evidence =
-        previous.stream()
-            .filter(e -> e.path().equals(path) && e.version().equals(result.version()))
-            .map(
-                e ->
-                    new SourceEvidence(
-                        e.path(),
-                        e.version(),
-                        e.start(),
-                        e.start() + e.hashes().size() - 1,
-                        null,
-                        "file-read",
-                        e.ref()))
-            .limit(8)
-            .toList();
-    if (suppress) ReadingMetrics.add("suppressedBodyBytes", result.returnedBytes());
-    return new Tools.ReadFileResult(
-        result.path(),
-        result.startLine(),
-        result.endLine(),
-        suppress ? List.of() : result.content(),
-        result.truncated(),
-        result.error(),
-        result.version(),
-        result.nextRead(),
-        suppress ? 0 : result.returnedBytes(),
-        result.symbol(),
-        result.candidates(),
-        result.ownerOverview(),
-        result.truncationReason(),
-        new Notice(state, suppress, evidence),
-        result.selection());
+    String state = exact && covers(present, path, result) ? "AVAILABLE"
+        : exact && covers(previous, path, result) && restorable(owner, previous, path, version) ? "RESTORABLE"
+        : previous.stream().anyMatch(e -> e.path().equals(path) && !e.version().equals(version)) ? "STALE" : "UNAVAILABLE";
+    boolean suppress = suppressRequested && exact && state.equals("AVAILABLE");
+    var evidence = previous.stream().filter(e -> e.path().equals(path) && e.version().equals(version))
+        .map(e -> new SourceEvidence(e.path(), e.version(), e.start(), e.start() + e.hashes().size() - 1, null, "file-read", e.ref())).limit(8).toList();
+    if (suppress) ReadingMetrics.add("suppressedBodyBytes", result.path("returnedBytes").asInt());
+    return new Notice(state, suppress, evidence);
   }
 
-  private synchronized List<Entry> current(AgentRunContext owner) {
+  private synchronized List<Entry> current(ReadingRun owner) {
     return available.getOrDefault(ReadingStateStore.scope(owner), List.of());
   }
 
-  private List<Entry> history(AgentRunContext owner) {
+  private List<Entry> history(ReadingRun owner) {
     try {
       return store.load(owner, "delivery", "evidence", Saved.class).entries();
     } catch (RuntimeException unavailable) {
@@ -258,7 +204,7 @@ public final class ReadingDelivery {
   }
 
   private boolean restorable(
-      AgentRunContext owner, List<Entry> entries, String path, String version) {
+      ReadingRun owner, List<Entry> entries, String path, String version) {
     for (var entry : entries)
       if (entry.path().equals(path) && entry.version().equals(version)) {
         try {
@@ -271,31 +217,25 @@ public final class ReadingDelivery {
     return false;
   }
 
-  private static boolean covers(List<Entry> entries, String path, Tools.ReadFileResult result) {
-    if (result.startLine() == null || result.version() == null) return false;
-    for (int index = 0; index < result.content().size(); index++) {
-      int line = result.startLine() + index;
-      String hash = hash(result.content().get(index));
-      if (entries.stream()
-          .noneMatch(
-              e ->
-                  e.path().equals(path)
-                      && e.version().equals(result.version())
-                      && line >= e.start()
-                      && line - e.start() < e.hashes().size()
-                      && e.hashes().get(line - e.start()).equals(hash))) return false;
+  private static boolean covers(List<Entry> entries, String path, JsonNode result) {
+    if (!result.hasNonNull("startLine") || !result.hasNonNull("version")) return false;
+    for (int index = 0; index < result.path("content").size(); index++) {
+      int line = result.path("startLine").asInt() + index;
+      String hash = hash(result.path("content").get(index).asText());
+      if (entries.stream().noneMatch(e -> e.path().equals(path) && e.version().equals(result.path("version").asText())
+          && line >= e.start() && line - e.start() < e.hashes().size() && e.hashes().get(line - e.start()).equals(hash))) return false;
     }
     return true;
   }
 
-  private List<Entry> collect(AgentRunContext owner, Prompt prompt, boolean preserve) {
+  private List<Entry> collect(ReadingRun owner, Prompt prompt, boolean preserve) {
     var entries = new ArrayList<Entry>();
     var calls = new java.util.HashMap<String, JsonNode>();
     for (var message : prompt.getInstructions()) {
       if (message instanceof AssistantMessage assistant)
         for (var call : assistant.getToolCalls()) {
           try {
-            calls.put(call.id(), StorageDatabase.JSON.readTree(call.arguments()));
+            calls.put(call.id(), ReadingJson.JSON.readTree(call.arguments()));
           } catch (java.io.IOException malformed) {
             /* Unknown arguments are not proof of complete rows. */
           }
@@ -305,12 +245,10 @@ public final class ReadingDelivery {
         if (response.name().equals("readRawToolResult")) {
           try {
             var page =
-                dev.mikoto2000.rei.core.contextbudget.RawResultPage.parse(response.responseData());
+                raw.parse(response.responseData());
             if (page.offset() == 0
                 && !page.hasMore()
-                && raw.read(owner.conversationId(), page.rawResultRef())
-                    .rawResult()
-                    .equals(page.content()))
+                && raw.read(owner.conversationId(), page.rawResultRef()).equals(page.content()))
               entries.addAll(
                   history(owner).stream()
                       .filter(e -> e.ref().equals(page.rawResultRef()))
@@ -323,7 +261,7 @@ public final class ReadingDelivery {
         if (!List.of("readMultiFile", "searchAndRead", "searchFilePage").contains(response.name()))
           continue;
         try {
-          var tree = StorageDatabase.JSON.readTree(response.responseData());
+          var tree = ReadingJson.JSON.readTree(response.responseData());
           // Lossless result pages are not the original source JSON, so no presence is inferred.
           if (tree == null || tree.has("rawResultRef")) continue;
           String ref =
@@ -393,16 +331,11 @@ public final class ReadingDelivery {
     if (!hashes.isEmpty()) entries.add(new Entry(path, version, start, List.copyOf(hashes), ref));
   }
 
-  private static String relative(AgentRunContext owner, String path) throws java.io.IOException {
-    try (var scope = AgentRunScope.open(owner)) {
-      Path root = owner.projectRoot().toRealPath();
-      return root.relativize(FileSnapshots.resolve(root, Path.of(path)))
-          .toString()
-          .replace('\\', '/');
-    }
+  private String relative(ReadingRun owner, String path) throws java.io.IOException {
+    return resolver.resolve(owner, path);
   }
 
   private static String hash(String text) {
-    return FileSnapshots.hash(text.getBytes(StandardCharsets.UTF_8));
+    return ReadingJson.hash(text.getBytes(StandardCharsets.UTF_8));
   }
 }

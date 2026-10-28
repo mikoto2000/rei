@@ -1,5 +1,9 @@
 package dev.mikoto2000.rei.core;
 
+import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
+
+import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -87,7 +91,7 @@ final class SearchScanBatch {
       }
     }
     for (String path : paths) {
-      dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);
+      Tools.checkReadingCancellation(null);
       var selected =
           work.stream()
               .filter(Objects::nonNull)
@@ -125,7 +129,7 @@ final class SearchScanBatch {
         var done = new java.util.HashSet<Work>();
         for (var w : group.getValue()) ranges.put(w, new LinkedHashSet<>());
         for (int line = 0; line < lines.size() && done.size() < group.getValue().size(); line++) {
-          if ((line & 31) == 0) dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);
+          if ((line & 31) == 0) Tools.checkReadingCancellation(null);
           for (var w : group.getValue()) {
             if (done.contains(w)) continue;
             try {

@@ -83,3 +83,78 @@ Query groups currently require one charset. Legacy ranked `searchAndRead` is unc
 
 Tests cover two distant hits, reconstructing the store, source edits, invalid cursors, and
 1030 files with the last target reached through nine pages of at most 128 file scans.
+
+## Phase 3
+
+`ReadingDelivery` maintains current prompt presence separately from `InformationLedger`.
+Only exact source rows in registered file-tool responses are eligible. Partial rows, unknown
+arguments, Java signature displays and generic summaries cannot establish availability.
+Old evidence is persisted as restorable metadata with a raw result reference; restart never
+restores `AVAILABLE` without confirming a new prompt. A complete verified `readRawToolResult`
+page can reestablish presence. Missing originals fail open to returning source.
+
+`readMultiFile.files[].unreadOnly=true` suppresses a complete explicit line interval only if
+all its versioned row hashes are present. Full-file reads always return source. Returned
+`delivery` notices describe the last confirmed prompt, not read success. After history
+projection, `ContextAssembler` checks suppressed results again and restores their exact
+original rows before applying delivery budgets. Missing originals produce an explicit
+restoration error rather than silently presenting an empty file.
+
+Compression restoration is distinct from new information and shares the existing bounded
+restoration budget (eight observations); the same version/range cannot mint repeated grace.
+No token or replan budget is replenished. Generated, wire, final prompt estimates and reported
+provider prompt tokens have separate metric names. Run counters and duplicate identities
+persist in SQLite; diagnostic persistence failures do not fail a file read.
+
+## Phase 4
+
+Markdown requests accept `section`, `sectionPath`, `sectionId`, `headingLevel`,
+`includeChildren` (default true), and existing `contextLines`. CommonMark 0.29.0 supplies
+block source spans, covering ATX, Setext and fenced code. Initial closed YAML frontmatter
+is masked with blank lines before parsing so source line coordinates remain unchanged.
+The index contains top-level document headings, not headings nested in lists/quotes.
+It bounds nesting and heading count, and retains skipped-level ancestry. Ambiguity returns
+versioned candidates; choose the `line:<number>` section ID with `expectedVersion`.
+Native file cursors retain the selection and version, including token-pager continuations.
+
+`SourceEvidence` is the common path/version/line/selector/source identity representation for
+reads and review pages. Its adapters do not repeat existing fields in the wire JSON. Review
+plans, coverage, submissions and restart semantics remain owned by `ReviewCoverageLedger`;
+acquiring source is never treated as completing a review. Search cursors own pending search
+ranges, and the existing acquisition ledger owns historical read ranges. These different
+notions of completion are deliberately not merged into a universal plan.
+
+## Reproducible comparisons
+
+`ReadingEfficiencyBenchmarkTest` writes JSON comparisons under `target/reading-benchmark`.
+The repeated-line fixture compares the same internal results in legacy/compact wire formats.
+The gap fixture uses identical 512-token output budgets, one context line and the same initial
+one-line source budget; continuation uses the native reader versus the result cursor.
+Markdown compares the same 200-section document and source budgets. Distinct-query scans
+are measured separately. Timing is reported diagnostically, never as a pass threshold.
+
+The seven requested scenarios map to: repeated-line and distinct-query benchmarks; the
+distant-hit benchmark; the 1030-file cursor fixture; `ReadingDeliveryTest`'s compression and
+raw restoration; `MarkdownSectionReadTest`'s hierarchy/long-section fixtures; and persisted
+Run state plus `PagedFileSearchTest.cursorResumesInAFreshJvm`. The fresh-JVM probe verifies
+actual process restart, not only reconstructing Java objects.
+
+These deterministic tests make zero model calls. Returned-token estimates are not LLM total
+input usage. End-to-end task completion/quality and provider input usage require a separately
+configured live model evaluation; no live-provider improvement is claimed by these reports.
+
+## Dependency boundary
+
+Reading state, diagnostics, metrics and delivery live in the existing dependency-free
+`tooldelivery` boundary. `ReadingRun` exposes captured identity without importing the run
+engine. SQL and raw-result operations are ports bound to the existing `StorageDatabase`
+serialized writer and verified raw store; path validation delegates to the original
+Project/MCP boundary in `Tools`. No new business cycles, wiring cycles, UI dependencies
+or dependencies into core are accepted by the architecture gate.
+
+Four configuration pairs are individually registered in the D wiring budget for this
+request's Phase 2/3: `ContextCompressionConfiguration` to `ReadingStateStore`, its `Work`
+SQL callback, `ReadingDelivery`, and `ReadingRawAccess`. These are the new bean/port
+bindings required to reuse storage and exact raw-result delivery. They are listed explicitly
+for PR review; no generated report is copied into the budgets and no business-cycle budget
+is widened. Future changes remain subject to the exact-pair gate.

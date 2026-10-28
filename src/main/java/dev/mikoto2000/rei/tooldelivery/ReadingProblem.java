@@ -1,10 +1,10 @@
-package dev.mikoto2000.rei.core;
+package dev.mikoto2000.rei.tooldelivery;
 
 /** Stable failure category and actionable recovery without exposing stored cursor bodies. */
 public record ReadingProblem(String code, String message, String recovery) {
-  static final class Failure extends IllegalArgumentException {
+  public static final class Failure extends IllegalArgumentException {
     private static final long serialVersionUID = 1L;
-    final String code;
+    public final String code;
 
     Failure(String code) {
       super(code);
@@ -12,7 +12,7 @@ public record ReadingProblem(String code, String message, String recovery) {
     }
   }
 
-  static Failure fail(String code) {
+  public static Failure fail(String code) {
     return new Failure(code);
   }
 
@@ -51,7 +51,7 @@ public record ReadingProblem(String code, String message, String recovery) {
                 : "Check the source, permissions and encoding; retry with current coordinates or a narrower request.");
   }
 
-  static ReadingProblem from(Exception error) {
+  public static ReadingProblem from(Exception error) {
     Throwable cause = error;
     while (cause.getCause() != null && !(cause instanceof Failure)) cause = cause.getCause();
     String code =

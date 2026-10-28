@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.core;
 
+import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -31,12 +33,12 @@ class PagedFileSearchTest {
     var reader = new Tools();
     try (var scope = AgentRunScope.open(owner)) {
       var first =
-          new PagedFileSearch(reader, new ReadingStateStore(new StorageDatabase(data)))
+          new PagedFileSearch(reader, ReadingTestStores.store(new StorageDatabase(data)))
               .read(new PagedFileSearch.Request(List.of(query), 0, 512, 2048, 1, 1, null), root);
       assertNotNull(first.resultCursor());
       assertEquals(0, first.files().getFirst().matches().getFirst().queryIndex());
       var next =
-          new PagedFileSearch(reader, new ReadingStateStore(new StorageDatabase(data)))
+          new PagedFileSearch(reader, ReadingTestStores.store(new StorageDatabase(data)))
               .read(
                   new PagedFileSearch.Request(null, null, 512, 2048, 1, 1, first.resultCursor()),
                   root);
@@ -45,7 +47,7 @@ class PagedFileSearchTest {
       assertTrue(!next.files().getFirst().truncated());
       Files.writeString(root.resolve("a.txt"), "changed");
       var stale =
-          new PagedFileSearch(reader, new ReadingStateStore(new StorageDatabase(data)))
+          new PagedFileSearch(reader, ReadingTestStores.store(new StorageDatabase(data)))
               .read(
                   new PagedFileSearch.Request(null, null, 512, 2048, 1, 1, first.resultCursor()),
                   root);
@@ -53,7 +55,7 @@ class PagedFileSearchTest {
     }
     try (var scope = AgentRunScope.open(new AgentRunContext("other", "chat", root, "project"))) {
       var invalid =
-          new PagedFileSearch(reader, new ReadingStateStore(new StorageDatabase(data)))
+          new PagedFileSearch(reader, ReadingTestStores.store(new StorageDatabase(data)))
               .read(new PagedFileSearch.Request(null, null, 512, 2048, 1, 1, "not-a-cursor"), root);
       assertTrue(invalid.files().isEmpty());
       assertEquals("INVALID_CURSOR", invalid.error().code());
@@ -75,7 +77,7 @@ class PagedFileSearchTest {
             "hit", "sources", false, true, false, false, 0, 0, null, true, null, null);
     try (var scope = AgentRunScope.open(new AgentRunContext("large", "chat", root, "project"))) {
       var search =
-          new PagedFileSearch(new Tools(), new ReadingStateStore(new StorageDatabase(data)));
+          new PagedFileSearch(new Tools(), ReadingTestStores.store(new StorageDatabase(data)));
       var page =
           search.read(
               new PagedFileSearch.Request(List.of(query), 0, 1024, 4096, 128, 100, null), root);
@@ -106,7 +108,7 @@ class PagedFileSearchTest {
               "hit", "a.txt", false, true, false, false, 0, 0, null, true, null, null);
       cursor =
           new PagedFileSearch(
-                  new Tools(), new ReadingStateStore(new StorageDatabase(root.resolve("data"))))
+                  new Tools(), ReadingTestStores.store(new StorageDatabase(root.resolve("data"))))
               .read(new PagedFileSearch.Request(List.of(query), 0, 512, 2048, 1, 1, null), root)
               .resultCursor();
     }

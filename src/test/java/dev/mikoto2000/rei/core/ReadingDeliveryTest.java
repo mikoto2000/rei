@@ -1,5 +1,9 @@
 package dev.mikoto2000.rei.core;
 
+import dev.mikoto2000.rei.tooldelivery.ReadingDelivery;
+
+import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -30,9 +34,9 @@ class ReadingDeliveryTest {
     try (var gate = new StorageMigrationCoordinator(data)) {
       gate.prepare();
     }
-    var store = new ReadingStateStore(new StorageDatabase(data));
+    var store = ReadingTestStores.store(new StorageDatabase(data));
     var raw = new RawToolResultStore(data);
-    var delivery = new ReadingDelivery(store, raw);
+    var delivery = ReadingTestStores.delivery(store, raw);
     var tools = new Tools();
     tools.setReadingDelivery(delivery);
     var owner = new AgentRunContext("delivery", "chat", root, "project");
@@ -120,7 +124,7 @@ class ReadingDeliveryTest {
                           == dev.mikoto2000.rei.core.stagnation.ProgressEvent.CONTEXT_RESTORED));
       assertNotNull(restored.delivery().evidence().getFirst().rawResultRef());
       tools.setReadingDelivery(
-          new ReadingDelivery(new ReadingStateStore(new StorageDatabase(data)), raw));
+          ReadingTestStores.delivery(ReadingTestStores.store(new StorageDatabase(data)), raw));
       assertEquals(
           List.of("one", "two"), tools.readMultiFile(List.of(request), root).getFirst().content());
       Files.writeString(root.resolve("a.txt"), "changed\ntwo\nthree\n");

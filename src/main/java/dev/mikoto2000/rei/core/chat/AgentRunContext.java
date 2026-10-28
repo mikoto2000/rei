@@ -25,7 +25,16 @@ public record AgentRunContext(
     RequestSource requestSource,
     Mode mode,
     boolean voiceInput,
-    ResponseStyle responseStyle) {
+    ResponseStyle responseStyle) implements dev.mikoto2000.rei.tooldelivery.ReadingRun {
+  @Override
+  public String sourceName() {
+    return requestSource.name();
+  }
+
+  @Override
+  public String modeName() {
+    return mode.name();
+  }
   /** 会話の実行を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public AgentRunContext(
       String runId,
