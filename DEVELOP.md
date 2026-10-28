@@ -1,5 +1,8 @@
 # DEVELOP
 
+ロングランタスクの対象網羅性・永続結果・復旧の設計と進捗は [実行基盤](docs/durable-task-execution.md)、
+TDDとPhase別の検証記録は [実装記録](docs/implementation-report-durable-task-execution.md) を参照してください。
+
 構造化 REST API ツール、認証・内部通信・承認・比較測定は [HTTP API ツール](docs/structured-http-api.md) を参照してください。
 
 YAMLの生活設定とProject横断の朝夕レポートは [全体秘書設定](docs/global-secretary-settings.md) を参照してください。
