@@ -37,7 +37,7 @@ final class PagedFileSearch {
   PagedFileSearch(Tools tools, ReadingStateStore store) { this.tools = tools; this.store = store; }
 
   Page read(Request input, Path root) {
-    try (var measurement = ReadingMetrics.operation("search")) {
+    try (var measurement = ReadingMetrics.operation("search", store)) {
       if (input == null) throw ReadingProblem.fail("INVALID_ARGUMENT");
       int tokens = value(input.maxTokens(), 2048, 256, 8000);
       int bytes = value(input.maxBytes(), 16384, 1024, 65536);

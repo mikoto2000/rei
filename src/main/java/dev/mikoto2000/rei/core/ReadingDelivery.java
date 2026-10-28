@@ -39,6 +39,7 @@ public final class ReadingDelivery {
     for (var entry : current) if (!history.contains(entry)) history.add(entry);
     if (history.size() > 128) history = new ArrayList<>(history.subList(history.size() - 128, history.size()));
     store.save(owner, "delivery", "evidence", new Saved(List.copyOf(history)), Duration.ofDays(7));
+    ReadingMetrics.flush(owner, store);
   }
 
   /** Recheck after projection: a previously present source may have disappeared during compression. */
@@ -169,6 +170,15 @@ public final class ReadingDelivery {
       }
       if (!(message instanceof ToolResponseMessage tool)) continue;
       for (var response : tool.getResponses()) {
+        if (response.name().equals("readRawToolResult")) {
+          try {
+            var page = dev.mikoto2000.rei.core.contextbudget.RawResultPage.parse(response.responseData());
+            if (page.offset() == 0 && !page.hasMore()
+                && raw.read(owner.conversationId(), page.rawResultRef()).rawResult().equals(page.content()))
+              entries.addAll(history(owner).stream().filter(e -> e.ref().equals(page.rawResultRef())).toList());
+          } catch (RuntimeException unavailable) { /* Partial or unavailable originals cannot suppress source. */ }
+          continue;
+        }
         if (!List.of("readMultiFile", "searchAndRead", "searchFilePage").contains(response.name())) continue;
         try {
           var tree = StorageDatabase.JSON.readTree(response.responseData());

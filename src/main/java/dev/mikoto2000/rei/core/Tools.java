@@ -1477,7 +1477,9 @@ public class Tools {
   /** 共通の実行基盤で用いる内容検索複数検索条件を返す。 */
   List<GrepQueryResult> grepMultiQuery(List<GrepQuery> queries, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
-    return boundedFileResult(grepMultiQuery(queries, workingDirectory, newSnapshots()));
+    try (var measurement = ReadingMetrics.operation("search", readingStateStore)) {
+      return boundedFileResult(grepMultiQuery(queries, workingDirectory, newSnapshots()));
+    }
   }
 
   /** 共通の実行基盤で用いる内容検索複数検索条件を返す。 */
@@ -1984,7 +1986,7 @@ public class Tools {
   List<SearchAndReadResult> searchAndRead(
       SearchAndReadRequest request, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
-    try (var measurement = ReadingMetrics.operation("search")) {
+    try (var measurement = ReadingMetrics.operation("search", readingStateStore)) {
     if (request == null) {
       throw new IllegalArgumentException("request must not be null");
     }
@@ -2683,7 +2685,7 @@ public class Tools {
   /** 必要な内容を参照できるよう、複数ファイルを読み取る。 */
   List<ReadFileResult> readMultiFile(
       List<ReadFileRequest> files, java.nio.file.Path workingDirectory) throws IOException {
-    try (var measurement = ReadingMetrics.operation("read")) {
+    try (var measurement = ReadingMetrics.operation("read", readingStateStore)) {
     if (files == null || files.isEmpty()) {
       throw new IllegalArgumentException("files must not be empty");
     }

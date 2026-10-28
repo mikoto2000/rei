@@ -11,13 +11,31 @@ public final class ReadingMetrics {
   private static final Map<AgentRunContext, Map<String, Long>> RUNS = new LinkedHashMap<>();
   private static final Map<AgentRunContext, java.util.Set<String>> BODIES = new LinkedHashMap<>();
   private ReadingMetrics() {}
+  public record Saved(Map<String, Long> values, java.util.Set<String> bodies) {}
+  private static boolean enabled() { return Boolean.parseBoolean(System.getProperty("rei.reading.metrics.enabled", "true")); }
+
+  public static synchronized void restore(AgentRunContext owner, ReadingStateStore store) {
+    if (!enabled() || owner == null || store == null || RUNS.containsKey(owner)) return;
+    try {
+      var saved = store.load(owner, "metrics", "totals", Saved.class);
+      RUNS.put(owner, new LinkedHashMap<>(saved.values()));
+      BODIES.put(owner, new java.util.HashSet<>(saved.bodies()));
+    } catch (RuntimeException unavailable) { /* No prior observations is normal for a new run. */ }
+  }
+
+  public static synchronized void flush(AgentRunContext owner, ReadingStateStore store) {
+    if (!enabled() || owner == null || store == null) return;
+    try {
+      store.save(owner, "metrics", "totals", new Saved(snapshot(owner), java.util.Set.copyOf(BODIES.getOrDefault(owner, java.util.Set.of()))), java.time.Duration.ofDays(7));
+    } catch (RuntimeException unavailable) { add(owner, "metricsPersistenceFailures", 1); }
+  }
 
   public static void add(String name, long amount) {
     add(AgentRunScope.current(), name, amount);
   }
 
   public static synchronized void add(AgentRunContext owner, String name, long amount) {
-    if (owner == null || !Boolean.parseBoolean(System.getProperty("rei.reading.metrics.enabled", "true"))) return;
+    if (owner == null || !enabled()) return;
     var values = RUNS.computeIfAbsent(owner, unused -> new LinkedHashMap<>());
     values.merge(name, amount, Long::sum);
     while (RUNS.size() > 256) RUNS.remove(RUNS.keySet().iterator().next());
@@ -28,7 +46,7 @@ public final class ReadingMetrics {
   }
 
   static <T> T generated(T value) throws java.io.IOException {
-    if (AgentRunScope.current() == null) return value;
+    if (!enabled() || AgentRunScope.current() == null) return value;
     byte[] bytes = dev.mikoto2000.rei.storage.StorageDatabase.JSON.writeValueAsBytes(value);
     add("generatedBytes", bytes.length);
     add("generatedEstimatedTokens", TokenEstimator.conservative().text(new String(bytes, java.nio.charset.StandardCharsets.UTF_8)));
@@ -63,11 +81,17 @@ public final class ReadingMetrics {
   }
 
   static Operation operation(String kind) {
-    add("toolCalls", 1);
-    return new Operation(kind, System.nanoTime());
+    return operation(kind, null);
   }
 
-  record Operation(String kind, long started) implements AutoCloseable {
-    @Override public void close() { add(kind + "Nanos", System.nanoTime() - started); }
+  static Operation operation(String kind, ReadingStateStore store) {
+    var owner = AgentRunScope.current();
+    restore(owner, store);
+    add("toolCalls", 1);
+    return new Operation(kind, System.nanoTime(), owner, store);
+  }
+
+  record Operation(String kind, long started, AgentRunContext owner, ReadingStateStore store) implements AutoCloseable {
+    @Override public void close() { add(owner, kind + "Nanos", System.nanoTime() - started); flush(owner, store); }
   }
 }

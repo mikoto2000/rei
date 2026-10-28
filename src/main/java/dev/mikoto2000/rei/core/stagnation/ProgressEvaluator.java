@@ -762,7 +762,16 @@ public class ProgressEvaluator {
             ProgressEvidence.acquiredRange(
                 "type=FILE_RANGE newLines=" + observed.newLines(), source, version));
       } else if (observed.status() == InformationLedger.Status.DUPLICATE) {
-        restoreRange(source, version, start, start + count, evidence);
+        if (output.path("delivery").path("state").asText().equals("RESTORABLE")
+            && restorationReads < 8
+            && output.path("delivery").path("evidence").isArray()
+            && !output.path("delivery").path("evidence").isEmpty()
+            && restoredRanges.observeRange(source, version, start, start + count).status()
+                == InformationLedger.Status.NEW) {
+          restorationReads++;
+          evidence.add(new ProgressEvidence(ProgressEvent.CONTEXT_RESTORED,
+              "Previously acquired source restored after prompt compression", source, version));
+        } else restoreRange(source, version, start, start + count, evidence);
       } else if (observed.status() == InformationLedger.Status.UNKNOWN)
         unknown(source, "LEDGER_CAPACITY_OR_HISTORY", evidence);
     }

@@ -34,6 +34,8 @@ class ReadingDeliveryTest {
     try (var scope = AgentRunScope.open(owner)) {
       var request = StorageDatabase.JSON.readValue("{\"path\":\"a.txt\",\"startLine\":1,\"endLine\":2,\"unreadOnly\":true}", Tools.ReadFileRequest.class);
       var first = tools.readMultiFile(List.of(request), root);
+      var evaluator = new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(root);
+      evaluator.afterTool("readMultiFile", "{}", StorageDatabase.JSON.writeValueAsString(first), evaluator.beforeTool("readMultiFile", "{}"));
       assertEquals(2, first.getFirst().content().size());
       var assistant = AssistantMessage.builder().content("").toolCalls(List.of(new AssistantMessage.ToolCall("call", "function", "readMultiFile", "{\"files\":[{\"path\":\"a.txt\",\"startLine\":1,\"endLine\":2}]}"))).build();
       var response = ToolResponseMessage.builder().responses(List.of(new ToolResponseMessage.ToolResponse("call", "readMultiFile", StorageDatabase.JSON.writeValueAsString(first)))).build();
@@ -50,6 +52,10 @@ class ReadingDeliveryTest {
       var restored = tools.readMultiFile(List.of(request), root).getFirst();
       assertEquals(List.of("one", "two"), restored.content());
       assertEquals("RESTORABLE", restored.delivery().state());
+      assertTrue(evaluator.afterTool("readMultiFile", "{}", StorageDatabase.JSON.writeValueAsString(List.of(restored)), evaluator.beforeTool("readMultiFile", "{}"))
+          .stream().anyMatch(e -> e.kind() == dev.mikoto2000.rei.core.stagnation.ProgressEvent.CONTEXT_RESTORED));
+      assertFalse(evaluator.afterTool("readMultiFile", "{}", StorageDatabase.JSON.writeValueAsString(List.of(restored)), evaluator.beforeTool("readMultiFile", "{}"))
+          .stream().anyMatch(e -> e.kind() == dev.mikoto2000.rei.core.stagnation.ProgressEvent.CONTEXT_RESTORED));
       assertNotNull(restored.delivery().evidence().getFirst().rawResultRef());
       tools.setReadingDelivery(new ReadingDelivery(new ReadingStateStore(new StorageDatabase(data)), raw));
       assertEquals(List.of("one", "two"), tools.readMultiFile(List.of(request), root).getFirst().content());

@@ -52,4 +52,17 @@ class ReadingMetricsTest {
           dev.mikoto2000.rei.storage.StorageDatabase.JSON.writeValueAsString(values));
     }
   }
+
+  @Test
+  void cumulativeMetricsCanBeRestoredWithoutAnActiveModelContext() throws Exception {
+    Path data = root.resolve("data");
+    try (var migration = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(data)) { migration.prepare(); }
+    var store = new ReadingStateStore(new dev.mikoto2000.rei.storage.StorageDatabase(data));
+    var owner = new AgentRunContext("persisted-metrics", "chat", root);
+    store.save(owner, "metrics", "totals", new ReadingMetrics.Saved(java.util.Map.of("toolCalls", 12L), java.util.Set.of()), java.time.Duration.ofDays(1));
+    ReadingMetrics.restore(owner, store);
+    ReadingMetrics.add(owner, "toolCalls", 1);
+    ReadingMetrics.flush(owner, store);
+    assertEquals(13, store.load(owner, "metrics", "totals", ReadingMetrics.Saved.class).values().get("toolCalls"));
+  }
 }
