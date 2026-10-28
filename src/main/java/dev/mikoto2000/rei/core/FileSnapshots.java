@@ -118,6 +118,7 @@ final class FileSnapshots {
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   synchronized Snapshot get(Path root, Path input) throws IOException {
+    ReadingMetrics.add("fileRequests", 1);
     RunCancellation.propagate(null);
     Path path = resolve(root, input);
     var existing = files.get(path);
@@ -127,6 +128,7 @@ final class FileSnapshots {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (before.size() > MAX_FILE_BYTES || before.size() > MAX_REQUEST_BYTES - bytes)
       throw new IOException("Snapshot byte limit reached");
+    ReadingMetrics.add("physicalReads", 1);
     var content = reader.read(path);
     var after = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
     RunCancellation.propagate(null);

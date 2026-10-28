@@ -1730,6 +1730,7 @@ public class Tools {
       List<String> lines;
       String version;
       try {
+        ReadingMetrics.add("scannedFiles", 1);
         var snapshot = snapshots.get(workingDirectory, filePath);
         version = snapshot.version();
         lines = snapshotLines(snapshot, query.charset());
@@ -1980,6 +1981,7 @@ public class Tools {
   List<SearchAndReadResult> searchAndRead(
       SearchAndReadRequest request, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
+    try (var measurement = ReadingMetrics.operation("search")) {
     if (request == null) {
       throw new IllegalArgumentException("request must not be null");
     }
@@ -2171,6 +2173,8 @@ public class Tools {
       workingSet.abandonSearch(searchObservation);
       throw e;
     }
+  
+    }
   }
 
   /** 1 ファイルのヒットから、マージした範囲を読み込む。 */
@@ -2321,6 +2325,7 @@ public class Tools {
   /** 共通の実行基盤で用いる状態の記録行一覧を返す。 */
   private List<String> snapshotLines(FileSnapshots.Snapshot snapshot, String charset)
       throws IOException {
+    ReadingMetrics.add("decodes", 1);
     byte[] bytes = snapshot.bytes();
     ResolvedTextFile decoded;
     if (charset != null && !charset.isBlank())
@@ -2340,6 +2345,7 @@ public class Tools {
       }
     }
     if (decoded.content().indexOf(0) >= 0) throw new IOException("Binary file is unsupported");
+    ReadingMetrics.add("lineSplits", 1);
     return decoded.content().lines().toList();
   }
 
@@ -2647,6 +2653,7 @@ public class Tools {
   /** 必要な内容を参照できるよう、複数ファイルを読み取る。 */
   List<ReadFileResult> readMultiFile(
       List<ReadFileRequest> files, java.nio.file.Path workingDirectory) throws IOException {
+    try (var measurement = ReadingMetrics.operation("read")) {
     if (files == null || files.isEmpty()) {
       throw new IllegalArgumentException("files must not be empty");
     }
@@ -2664,6 +2671,7 @@ public class Tools {
     int totalLines = 0;
     for (int index = 0; index < files.size(); index++) {
       ReadFileRequest request = files.get(index);
+      if (request.expectedVersion() != null) ReadingMetrics.add("continuations", 1);
       int remainingRequests = files.size() - index;
       int byteBudget = budget.remaining() / remainingRequests;
       TextReadBudget fileBudget = new TextReadBudget(byteBudget);
@@ -2713,6 +2721,8 @@ public class Tools {
             ? results
             : new FileResultTokenPager(deliveryEstimator)
                 .page(results, files, deliveryProperties.getPageMaxTokens()));
+  
+    }
   }
 
   /** 1 ファイルの読み込みを実行する。 */
@@ -2720,7 +2730,7 @@ public class Tools {
     // Final envelope guard also covers escaping, error metadata and paths.
     if (FILE_RESULT_JSON.writeValueAsBytes(result).length > 1024 * 1024)
       throw new IOException("Serialized file result exceeds 1MiB; narrow the request");
-    return result;
+    return ReadingMetrics.generated(result);
   }
 
   /** 必要な内容を参照できるよう、単一ファイルを読み取る。 */
