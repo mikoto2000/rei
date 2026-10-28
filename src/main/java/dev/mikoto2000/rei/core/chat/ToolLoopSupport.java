@@ -128,17 +128,8 @@ public final class ToolLoopSupport {
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext context) {
     if (!context.hasApprovalContinuation()
         && response.getResult().getOutput().getToolCalls().stream()
-            .noneMatch(
-                call ->
-                    java.util.Set.of("delegateTask", "delegateTasks").contains(call.name())
-                        || dev.mikoto2000.rei.core.taskstate.TaskStateArguments.supports(
-                            call.name())
-                        || dev.mikoto2000.rei.core.policy.ShellFileReadArguments.supports(
-                            call.name())
-                        || dev.mikoto2000.rei.core.policy.ProcessWaitArguments.supports(call.name())
-                        || dev.mikoto2000.rei.websearch.WebSearchArguments.supports(call.name())
-                        || dev.mikoto2000.rei.core.policy.RawToolResultArguments.supports(
-                            call.name()))) return execute(prompt, response);
+            .noneMatch(call -> context.supportsArgumentCorrection(call.name())))
+      return execute(prompt, response);
     if (response.getResults().size() != 1)
       throw new IllegalArgumentException(
           "Approval continuation requires a single selected generation");

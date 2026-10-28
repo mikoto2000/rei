@@ -320,6 +320,17 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     assertTrue(callback.getToolDefinition().inputSchema().contains("maxResults"));
   }
 
+  /** 新上限の500件まで検索結果を返し、超過分は返さない。 */
+  @Test
+  void findFileReturnsUpToFiveHundredResults() throws Exception {
+    initGitRepo();
+    for (int i = 0; i < 501; i++) Files.writeString(tempDir.resolve("match-" + i + ".md"), "");
+    var tools = new Tools();
+    assertEquals(300, tools.findFile(new FindFileRequest(List.of("match-"), 300), tempDir).size());
+    assertEquals(500, tools.findFile(new FindFileRequest(List.of("match-"), 500), tempDir).size());
+    assertEquals(50, tools.findFile(new FindFileRequest(List.of("match-"), null), tempDir).size());
+  }
+
   /** 共通の実行基盤で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void listFileIncludesUntrackedFiles() throws Exception {

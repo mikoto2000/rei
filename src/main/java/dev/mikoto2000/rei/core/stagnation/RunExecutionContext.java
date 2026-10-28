@@ -460,13 +460,14 @@ public class RunExecutionContext {
   public void validateToolArguments(String name, String input) {
     if (permissions != null) permissions.validateArguments(name, input, runContext);
     else {
-      dev.mikoto2000.rei.websearch.WebSearchArguments.validate(
+      dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.validateCommonArguments(
           name, input, new dev.mikoto2000.rei.websearch.WebSearchProperties().getMaxResults());
-      dev.mikoto2000.rei.core.taskstate.TaskStateArguments.validate(name, input);
-      dev.mikoto2000.rei.core.policy.ShellFileReadArguments.validate(name, input);
-      dev.mikoto2000.rei.core.policy.ProcessWaitArguments.validate(name, input);
-      dev.mikoto2000.rei.core.policy.RawToolResultArguments.validate(name, input);
     }
+  }
+
+  /** 引数補正を扱える実行経路が必要か判定する。 */
+  public boolean supportsArgumentCorrection(String name) {
+    return dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.supportsArgumentCorrection(name);
   }
 
   /** 実行の停滞への対処に関するレポートツール権限失敗情報を処理する。 */

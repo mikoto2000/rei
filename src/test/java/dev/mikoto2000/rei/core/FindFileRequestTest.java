@@ -14,6 +14,8 @@ class FindFileRequestTest {
   void acceptsKeywordsWithOptionalLimit() {
     assertDoesNotThrow(() -> new FindFileRequest(List.of("feed", "summary"), null));
     assertDoesNotThrow(() -> new FindFileRequest(List.of("feed"), 200));
+    assertDoesNotThrow(() -> new FindFileRequest(List.of("feed"), 300));
+    assertDoesNotThrow(() -> new FindFileRequest(List.of("feed"), 500));
   }
 
   /** 未指定検索語句一覧を受け付けないことを確認する。 */
@@ -22,6 +24,6 @@ class FindFileRequestTest {
     assertThrows(IllegalArgumentException.class, () -> new FindFileRequest(List.of(), null));
     assertThrows(IllegalArgumentException.class, () -> new FindFileRequest(List.of(" "), null));
     assertThrows(IllegalArgumentException.class, () -> new FindFileRequest(List.of("feed"), 0));
-    assertThrows(IllegalArgumentException.class, () -> new FindFileRequest(List.of("feed"), 201));
+    assertThrows(IllegalArgumentException.class, () -> new FindFileRequest(List.of("feed"), 501));
   }
 }

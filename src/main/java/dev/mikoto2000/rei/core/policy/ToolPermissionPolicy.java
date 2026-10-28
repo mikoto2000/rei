@@ -160,13 +160,29 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
 
   /** 各ツールの引数の契約を検証し、不正な指定を権限確認や実行へ進めない。 */
   public void validateArguments(String tool, String input) {
-    dev.mikoto2000.rei.websearch.WebSearchArguments.validate(
-        tool, input, webSearchProperties.getMaxResults());
+    validateCommonArguments(tool, input, webSearchProperties.getMaxResults());
+    validateDelegation(tool, input);
+  }
+
+  /** ポリシー設定の有無によらず、引数補正を扱うツールを判定する。 */
+  public static boolean supportsArgumentCorrection(String tool) {
+    return Set.of("delegateTask", "delegateTasks").contains(tool)
+        || dev.mikoto2000.rei.core.taskstate.TaskStateArguments.supports(tool)
+        || ShellFileReadArguments.supports(tool)
+        || ProcessWaitArguments.supports(tool)
+        || FindFileArguments.supports(tool)
+        || dev.mikoto2000.rei.websearch.WebSearchArguments.supports(tool)
+        || RawToolResultArguments.supports(tool);
+  }
+
+  /** 承認や実行より前に、設定不要の検証とWeb検索件数の検証を共通で行う。 */
+  public static void validateCommonArguments(String tool, String input, int webSearchMaxResults) {
+    dev.mikoto2000.rei.websearch.WebSearchArguments.validate(tool, input, webSearchMaxResults);
     ShellFileReadArguments.validate(tool, input);
     ProcessWaitArguments.validate(tool, input);
+    FindFileArguments.validate(tool, input);
     RawToolResultArguments.validate(tool, input);
     dev.mikoto2000.rei.core.taskstate.TaskStateArguments.validate(tool, input);
-    validateDelegation(tool, input);
   }
 
   /** 委譲先の選択に必要な条件を検証し、修正可能な入力不足を引数エラーとして伝える。 */

@@ -1274,7 +1274,8 @@ public class Tools {
       description =
           """
       Find files whose file names partially match any supplied keyword, case-insensitively.
-      Results matching more keywords rank first and maxResults limits the response. .gitignore is respected.
+      Results matching more keywords rank first. maxResults is an optional integer from 1 to 500;
+      omitted or null defaults to 50. .gitignore is respected.
       """)
   List<String> findFile(FindFileRequest request) throws IOException, InterruptedException {
     return findFile(request, currentWorkingDirectory());

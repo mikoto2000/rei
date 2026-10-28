@@ -760,15 +760,10 @@ dev.mikoto2000.rei.core.chat.RunScopedAdvisor -> dev.mikoto2000.rei.core.service
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.contextbudget.DeliveryToolRegistration$Registered
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.contextbudget.ResultDelivery$Kind
-dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.policy.ProcessWaitArguments
-dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.policy.RawToolResultArguments
-dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.policy.ShellFileReadArguments
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.policy.ToolPermissionException
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.service.CommandCancellationService$ChildLease
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
-dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.core.taskstate.TaskStateArguments
 dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.review.ReviewTools
-dev.mikoto2000.rei.core.chat.ToolLoopSupport -> dev.mikoto2000.rei.websearch.WebSearchArguments
 dev.mikoto2000.rei.core.checkpoint.CheckpointAdvisor -> dev.mikoto2000.rei.event.AgentEventFactory
 dev.mikoto2000.rei.core.checkpoint.CheckpointAdvisor -> dev.mikoto2000.rei.event.AgentEventPublisher
 dev.mikoto2000.rei.core.checkpoint.CheckpointStore -> dev.mikoto2000.rei.event.AgentEventFactory
@@ -1124,13 +1119,9 @@ dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.cor
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.core.policy.ApprovalContinuationService
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.core.policy.PermissionDecision
-dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.core.policy.ProcessWaitArguments
-dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.core.policy.RawToolResultArguments
-dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.core.policy.ShellFileReadArguments
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.core.policy.ToolPermissionException
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.core.policy.ToolPermissionGuard
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.core.policy.ToolPermissionPolicy
-dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.core.taskstate.TaskStateArguments
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.event.AgentEvent
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.event.AgentEventFactory
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.event.AgentEventPublisher
@@ -1144,7 +1135,6 @@ dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.llm
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.llm.OutputLimitRunBudget
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$LlmCallReservation
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$Snapshot
-dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.websearch.WebSearchArguments
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext -> dev.mikoto2000.rei.websearch.WebSearchProperties
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext$1 -> dev.mikoto2000.rei.llm.OutputLimitRunBudget
 dev.mikoto2000.rei.core.stagnation.RunExecutionContext$1 -> dev.mikoto2000.rei.llm.OutputLimitRunBudget$LlmCallReservation
