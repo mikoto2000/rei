@@ -27,6 +27,12 @@ final class TaskCompletion {
     if (DurableTaskStore.number(db,
         "SELECT COUNT(*) FROM (SELECT w.path,w.criterion,MAX(w.end) AS covered,f.chars FROM durable_work w JOIN durable_files f ON f.snapshot=w.snapshot AND f.path=w.path WHERE w.task=? AND w.required=1 AND w.kind='LOCAL' GROUP BY w.path,w.criterion HAVING covered<>f.chars)", task.id()) != 0)
       return no("COVERAGE_GAP");
+    try (var query = DurableTaskStore.statement(db, "SELECT * FROM durable_work WHERE task=? AND required=1 ORDER BY id", task.id());
+        var rows = query.executeQuery()) {
+      while (rows.next()) WorkItemStore.verifyStored(db, WorkItemStore.item(rows));
+    } catch (IllegalArgumentException corrupt) {
+      return no(corrupt.getMessage());
+    }
     return new DurableTaskStore.Verification(true, "WORK_VERIFIED");
   }
 

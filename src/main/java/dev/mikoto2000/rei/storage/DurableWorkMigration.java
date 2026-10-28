@@ -6,6 +6,8 @@ import java.util.ArrayList;
 
 /** Durable claim history; UTF-16 lengths retain the existing review coordinate contract. */
 final class DurableWorkMigration {
+  private record Length(String snapshot, String path, int characters) {}
+
   static void apply(Connection db) throws SQLException {
     try (var sql = db.createStatement()) {
       sql.execute("ALTER TABLE durable_tasks ADD COLUMN current_run TEXT");
@@ -22,7 +24,7 @@ final class DurableWorkMigration {
     }
     String snapshot = "", path = "";
     while (true) {
-      var lengths = new ArrayList<Object[]>();
+      var lengths = new ArrayList<Length>();
       try (var query = db.prepareStatement("SELECT snapshot,path,text FROM durable_files WHERE snapshot>? OR (snapshot=? AND path>?) ORDER BY snapshot,path LIMIT 1000")) {
         query.setString(1, snapshot);
         query.setString(2, snapshot);
@@ -30,19 +32,19 @@ final class DurableWorkMigration {
         try (var rows = query.executeQuery()) {
           while (rows.next()) {
             String text = rows.getString(3);
-            lengths.add(new Object[] {rows.getString(1), rows.getString(2), text == null ? 0 : text.length()});
+            lengths.add(new Length(rows.getString(1), rows.getString(2), text == null ? 0 : text.length()));
           }
         }
       }
       for (var entry : lengths) {
         try (var update = db.prepareStatement("UPDATE durable_files SET chars=? WHERE snapshot=? AND path=?")) {
-          update.setInt(1, (Integer) entry[2]);
-          update.setString(2, (String) entry[0]);
-          update.setString(3, (String) entry[1]);
+          update.setInt(1, entry.characters());
+          update.setString(2, entry.snapshot());
+          update.setString(3, entry.path());
           update.executeUpdate();
         }
-        snapshot = (String) entry[0];
-        path = (String) entry[1];
+        snapshot = entry.snapshot();
+        path = entry.path();
       }
       if (lengths.size() < 1000) break;
     }

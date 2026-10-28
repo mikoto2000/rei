@@ -72,23 +72,29 @@ public final class WorkItemStore {
       }
       for (var id : ids) {
         var item = item(db, id);
-        try (var query = DurableTaskStore.statement(db, "SELECT body,sha256,task,snapshot,path,start,end,version,criterion FROM durable_results WHERE work=?", id);
-            var rows = query.executeQuery()) {
-          rows.next();
-          var body = result(rows).body();
-          if (!body.work().equals(item.id()) || !body.snapshot().equals(item.snapshot())
-              || !body.path().equals(item.path()) || body.start() != item.start() || body.end() != item.end()
-              || !body.version().equals(item.version()) || !body.criterion().equals(item.criterion())
-              || !rows.getString(3).equals(item.task()) || !rows.getString(4).equals(item.snapshot())
-              || !rows.getString(5).equals(item.path()) || rows.getInt(6) != item.start() || rows.getInt(7) != item.end()
-              || !rows.getString(8).equals(item.version()) || !rows.getString(9).equals(item.criterion()))
-            throw new IllegalArgumentException("RESULT_CORRUPT");
-          source(db, item);
-        }
+        verifyStored(db, item);
         DurableTaskStore.execute(db, "UPDATE durable_work SET state='COMPLETE',result_id=?,last_step='COMPLETED' WHERE id=?", id, id);
         cursor = id;
       }
       if (ids.size() < 100) return;
+    }
+  }
+
+  static void verifyStored(Connection db, Item item) throws SQLException {
+    try (var query = DurableTaskStore.statement(db, "SELECT body,sha256,task,snapshot,path,start,end,version,criterion FROM durable_results WHERE work=?", item.id());
+        var rows = query.executeQuery()) {
+      if (!rows.next()) throw new IllegalArgumentException("RESULT_CORRUPT");
+      var body = result(rows).body();
+      if (body == null || !Objects.equals(body.work(), item.id()) || !Objects.equals(body.snapshot(), item.snapshot())
+          || !Objects.equals(body.path(), item.path()) || body.start() != item.start() || body.end() != item.end()
+          || !Objects.equals(body.version(), item.version()) || !Objects.equals(body.criterion(), item.criterion())
+          || !rows.getString(3).equals(item.task()) || !rows.getString(4).equals(item.snapshot())
+          || !rows.getString(5).equals(item.path()) || rows.getInt(6) != item.start() || rows.getInt(7) != item.end()
+          || !rows.getString(8).equals(item.version()) || !rows.getString(9).equals(item.criterion())
+          || body.assessment() == null || body.assessment().isBlank() || body.assessment().length() > 16384)
+        throw new IllegalArgumentException("RESULT_CORRUPT");
+      try { validateFindings(item, source(db, item), body.findings()); }
+      catch (IllegalArgumentException invalid) { throw new IllegalArgumentException("RESULT_CORRUPT", invalid); }
     }
   }
 
@@ -185,17 +191,7 @@ public final class WorkItemStore {
       String source = source(db, claim.item());
       if (!delivered.equals(hash(source.substring(claim.item().start(), claim.item().end()).getBytes(StandardCharsets.UTF_8))))
         throw new IllegalArgumentException("SOURCE_NOT_DELIVERED");
-      for (var finding : findings) {
-        if (finding == null || finding.id() == null || finding.id().isBlank() || finding.id().length() > 256
-            || finding.severity() == null || finding.severity().isBlank() || finding.severity().length() > 64
-            || finding.evidence() == null || finding.evidence().isBlank() || finding.evidence().length() > 16384
-            || finding.assessment() == null || finding.assessment().isBlank() || finding.assessment().length() > 16384
-            || finding.start() < claim.item().start() || finding.end() > claim.item().end() || finding.end() <= finding.start()
-            || !boundary(source, finding.start()) || !boundary(source, finding.end())
-            || !source.substring(finding.start(), finding.end()).contains(finding.evidence()))
-          throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
-      }
-      if (findings.stream().map(Finding::id).distinct().count() != findings.size()) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+      validateFindings(claim.item(), source, findings);
       var item = claim.item();
       var body = new ReviewResult(item.id(), item.snapshot(), item.path(), item.start(), item.end(), item.version(), item.criterion(), assessment, findings);
       String json = encode(body);
@@ -220,6 +216,21 @@ public final class WorkItemStore {
         DurableTaskStore.execute(db, "UPDATE durable_tasks SET state='COMPLETE' WHERE id=? AND state='ACTIVE'", item.task());
       return new Result(body, hash);
     });
+  }
+
+  private static void validateFindings(Item item, String source, List<Finding> findings) {
+    if (findings == null || findings.size() > 100) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+    for (var finding : findings) {
+      if (finding == null || finding.id() == null || finding.id().isBlank() || finding.id().length() > 256
+          || finding.severity() == null || finding.severity().isBlank() || finding.severity().length() > 64
+          || finding.evidence() == null || finding.evidence().isBlank() || finding.evidence().length() > 16384
+          || finding.assessment() == null || finding.assessment().isBlank() || finding.assessment().length() > 16384
+          || finding.start() < item.start() || finding.end() > item.end() || finding.end() <= finding.start()
+          || !boundary(source, finding.start()) || !boundary(source, finding.end())
+          || !source.substring(finding.start(), finding.end()).contains(finding.evidence()))
+        throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+    }
+    if (findings.stream().map(Finding::id).distinct().count() != findings.size()) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
   }
 
   public DurableTaskStore.Page<Result> results(DurableTaskStore.Scope scope, String task, String after, int limit) {
