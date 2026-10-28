@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core;
 
 import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
+import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -91,6 +92,13 @@ class PagedFileSearchTest {
       assertEquals(null, page.error());
       assertEquals("sources/1029.txt", page.files().getFirst().path());
       assertEquals(9, requests);
+      long largestCursor = new StorageDatabase(data).read(db -> {
+        try (var querySize = db.createStatement(); var rows = querySize.executeQuery("SELECT MAX(bytes) FROM reading_state WHERE kind='search'")) {
+          return rows.getLong(1);
+        }
+      });
+      assertTrue(largestCursor < 8192, "The shared inventory must not be copied into every cursor");
+      assertEquals(0L, ReadingMetrics.snapshot(AgentRunScope.current()).get("unscannedFiles"));
     }
   }
 

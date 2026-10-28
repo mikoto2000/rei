@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.core;
 import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
 
 import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
+import dev.mikoto2000.rei.tooldelivery.ReadingJson;
 
 import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
 
@@ -43,9 +44,15 @@ final class PagedFileSearch {
 
   public record Range(int start, int end) {}
 
+  public record Manifest(List<Stamp> files) {
+    public Manifest { files = List.copyOf(files); }
+  }
+
   public static final class State {
     public Request request;
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
     public List<Stamp> inventory = List.of();
+    public String inventoryId;
     public int file;
     public String version;
     public List<Range> ranges = List.of();
@@ -91,6 +98,8 @@ final class PagedFileSearch {
         if (!input.cursor().matches("(?:RESULT|SCAN):[0-9a-f-]{36}"))
           throw ReadingProblem.fail("INVALID_CURSOR");
         state = store.load(owner, "search", input.cursor(), State.class);
+        if (state.inventoryId != null)
+          state.inventory = store.load(owner, "search_inventory", state.inventoryId, Manifest.class).files();
         if (input.queries() != null && !input.queries().equals(state.request.queries()))
           throw ReadingProblem.fail("INVALID_CURSOR");
         ReadingMetrics.add("continuations", 1);
@@ -280,13 +289,18 @@ final class PagedFileSearch {
       throws IOException {
     String result = null, scan = null;
     if (state.file < state.inventory.size()) {
+      if (state.inventoryId == null) {
+        var manifest = new Manifest(state.inventory);
+        state.inventoryId = ReadingJson.hash(ReadingJson.JSON.writeValueAsBytes(manifest));
+        store.save(ReadingRuntime.current(), "search_inventory", state.inventoryId, manifest, Duration.ofHours(24));
+      }
       boolean pending = state.rangeIndex < state.ranges.size();
       String id = (pending ? "RESULT:" : "SCAN:") + UUID.randomUUID();
       store.save(ReadingRuntime.current(), "search", id, state, Duration.ofHours(24));
       if (pending) result = id;
       else scan = id;
     }
-    ReadingMetrics.add("unscannedFiles", state.inventory.size() - state.file);
+    ReadingMetrics.set("unscannedFiles", state.inventory.size() - state.file);
     ReadingMetrics.add("stop." + reason, 1);
     return ReadingMetrics.generated(
         new Page(

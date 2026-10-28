@@ -56,6 +56,13 @@ public final class ReadingMetrics {
     while (RUNS.size() > 256) RUNS.remove(RUNS.keySet().iterator().next());
   }
 
+  public static synchronized void set(String name, long value) {
+    var owner = ReadingRuntime.current();
+    if (owner == null || !enabled()) return;
+    RUNS.computeIfAbsent(owner, unused -> new LinkedHashMap<>()).put(name, value);
+    while (RUNS.size() > 256) RUNS.remove(RUNS.keySet().iterator().next());
+  }
+
   public static synchronized Map<String, Long> snapshot(ReadingRun owner) {
     return Map.copyOf(RUNS.getOrDefault(owner, Map.of()));
   }
