@@ -250,6 +250,14 @@ public class LlmChatClientProvider {
   /** 経験の記録ツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.episode.EpisodeTools> episodeTools;
 
+  /** 全Project共有の祝日ツール。 */
+  private ObjectProvider<dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayTools> holidayTools;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void setHolidayTools(ObjectProvider<dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayTools> tools) {
+    holidayTools = tools;
+  }
+
   /** 用途に応じたモデル利用で使用する経験の記録ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setEpisodeTools(ObjectProvider<dev.mikoto2000.rei.episode.EpisodeTools> tools) {
@@ -509,6 +517,7 @@ public class LlmChatClientProvider {
     addIfAvailable(toolObjects, googleCalendarTools);
     addIfAvailable(toolObjects, taskTools);
     addIfAvailable(toolObjects, briefingTools);
+    if (holidayTools != null) addIfAvailable(toolObjects, holidayTools);
     addIfAvailable(toolObjects, feedTools);
     addIfAvailable(toolObjects, reminderTools);
     addIfAvailable(toolObjects, searchTools);
