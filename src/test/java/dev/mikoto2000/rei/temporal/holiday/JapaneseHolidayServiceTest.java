@@ -36,6 +36,21 @@ class JapaneseHolidayServiceTest {
   }
 
   @Test
+  void recordsFailureEvenWhenIoExceptionHasNoMessage() throws Exception {
+    Path file = csv("2026/11/23,勤労感謝の日\n");
+    var fail = new java.util.concurrent.atomic.AtomicBoolean();
+    var service = new JapaneseHolidayService(file, Set.of(2026), clock, path -> {
+      if (fail.get()) throw new java.io.IOException();
+      return Files.readAllBytes(path);
+    });
+    fail.set(true);
+    var status = service.reload();
+    assertFalse(status.current());
+    assertNotNull(status.lastError());
+    assertEquals(1, status.entryCount());
+  }
+
+  @Test
   void cachesQueriesButExplicitReloadReadsSameMetadataAgain() throws Exception {
     Path file = csv("2026/11/23,勤労感謝の日\n");
     var reads = new java.util.concurrent.atomic.AtomicInteger();
