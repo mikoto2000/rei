@@ -2,7 +2,6 @@ package dev.mikoto2000.rei.core;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
-import dev.mikoto2000.rei.event.CredentialRedactor;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -125,7 +124,12 @@ public final class TextDocumentChangeSetService {
       String phase,
       int stagingFiles,
       List<StagingView> staging,
-      boolean currentMatches) {}
+      boolean currentMatches,
+      TextDiff.Info diffInfo,
+      List<TextDiff.FileSummary> changes,
+      int changedFiles,
+      int changeCount,
+      TextEditEngine.Failure error) {}
 
   /**
    * 共通の実行基盤で受け渡す保存済みを表す。
@@ -241,6 +245,8 @@ public final class TextDocumentChangeSetService {
         changes.add(new TextDocumentTransaction.Change(op.path(), current, replacement));
         continue;
       }
+      if (TextEditEngine.inputBytes(op.expectedText()) > 65536 || TextEditEngine.inputBytes(op.replacement()) > 65536)
+        throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", op.path(), null, List.of(), null);
       if (op.baseVersion() != null) throw new IllegalArgumentException("baseVersion requires partial edits");
       if (op.kind().equals("CREATE")) {
         if (current != null || op.expectedText() != null || op.target() != null)
@@ -314,9 +320,13 @@ public final class TextDocumentChangeSetService {
 
   /** 対象の状態や内容を調べ、呼び出し元が確認できる情報として返す。 */
   public View inspect(AgentRunContext owner, String id) throws IOException {
+    return inspect(owner, id, true);
+  }
+
+  private View inspect(AgentRunContext owner, String id, boolean preview) throws IOException {
     var row = owned(owner, id);
     reconcile(row);
-    return view(owned(owner, id));
+    return view(owned(owner, id), preview);
   }
 
   /** 共通の実行基盤で用いる破棄を返す。 */
@@ -346,13 +356,13 @@ public final class TextDocumentChangeSetService {
     owner(owner, true);
     var row = owned(owner, id);
     exact(row, sha);
-    if (row.status().equals("APPLIED")) return view(row);
+    if (row.status().equals("APPLIED")) return view(row, false);
     if (!row.status().equals("PROPOSED"))
       throw new IllegalStateException("Consumed or uncertain document set; inspect without replay");
     Path root = Path.of(row.saved().root());
     if (!TextDocumentTransaction.matches(root, row.saved().changes(), false)) {
       finish(row, "PROPOSED", "STALE", List.of("Baseline changed; no writes"));
-      return inspect(owner, id);
+      return inspect(owner, id, false);
     }
     if (!ACTIVE.add(id)) throw new IllegalStateException("Document apply already active");
     try {
@@ -371,7 +381,7 @@ public final class TextDocumentChangeSetService {
         cleanupTerminal(row);
         committed.accept(row.saved().changes());
       }
-      return inspect(owner, id);
+      return inspect(owner, id, false);
     } catch (IOException | RuntimeException failure) {
       try {
         var current = owned(owner, id);
@@ -576,9 +586,18 @@ public final class TextDocumentChangeSetService {
   }
 
   /** 共通の実行基盤で用いる表示内容を返す。 */
-  private View view(Row row) throws IOException {
+  public TextDiff.Page diffPage(AgentRunContext owner, String id, String sha, int offset, int maxBytes) throws IOException {
+    var row = owned(owner, id);
+    exact(row, sha);
+    return TextDiff.page(row.saved().changes(), offset, maxBytes);
+  }
+
+  private View view(Row row) throws IOException { return view(row, true); }
+
+  private View view(Row row, boolean preview) throws IOException {
     var files = new ArrayList<FileView>();
-    var diff = new StringBuilder();
+    var page = preview ? TextDiff.page(row.saved().changes(), 0, TextWriteLimits.diffBytes()) : null;
+    var summaries = TextDiff.summaries(row.saved().changes());
     Path root = Path.of(row.saved().root());
     for (var change : row.saved().changes()) {
       var current = TextDocumentTransaction.fingerprint(root, change.path());
@@ -592,13 +611,6 @@ public final class TextDocumentChangeSetService {
               change.after() != null,
               current.available(),
               current.exists()));
-      diff.append("--- ")
-          .append(change.path())
-          .append(" (baseline)\n+++ ")
-          .append(change.path())
-          .append(" (proposal)\n");
-      append(diff, change.before(), '-');
-      append(diff, change.after(), '+');
     }
     var staging = new ArrayList<StagingView>();
     var seen = new HashSet<String>();
@@ -626,20 +638,16 @@ public final class TextDocumentChangeSetService {
         row.status(),
         row.sha(),
         List.copyOf(files),
-        CredentialRedactor.redact(diff.toString()),
+        page == null ? "" : page.diff(),
         row.saved().createdAt(),
         row.warnings(),
         row.phase(),
         (int) staging.stream().filter(StagingView::exists).count(),
         List.copyOf(staging),
-        matching);
-  }
-
-  /** 既存の記録へ経緯を残すため、テキスト文書変更集合サービスを追記する。 */
-  private static void append(StringBuilder out, String text, char prefix) {
-    if (text == null) return;
-    for (String line : text.split("\n", -1)) out.append(prefix).append(line).append('\n');
-    if (!text.endsWith("\n")) out.append("\\ No newline at end of file\n");
+        matching,
+        page == null ? null : page.info(), summaries, summaries.size(),
+        summaries.stream().mapToInt(TextDiff.FileSummary::changeCount).sum(),
+        TextEditEngine.outcome(row.status(), null, null));
   }
 
   /** 共通の実行基盤に関する完全一致を処理する。 */

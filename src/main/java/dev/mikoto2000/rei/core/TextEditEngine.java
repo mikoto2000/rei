@@ -27,6 +27,16 @@ public final class TextEditEngine {
         "Inspect the saved proposal for UNKNOWN/TRANSACTION_FAILED. Otherwise use readMultiFile with path, candidate startLine/endLine and currentVersion as expectedVersion, then propose again. Never replay an old approval against a new baseline.");
   }
 
+  static Failure outcome(String status, String path, String version) {
+    String code = switch (status) {
+      case "STALE" -> "VERSION_MISMATCH";
+      case "UNKNOWN", "FAILED_UNCERTAIN", "APPLYING", "ROLLING_BACK" -> "UNKNOWN";
+      case "ROLLED_BACK" -> "TRANSACTION_FAILED";
+      default -> null;
+    };
+    return code == null ? null : detail(code, path, null, List.of(), version);
+  }
+
   static dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.ToolFailure failure(
       String code, String path, Integer index, List<Integer> candidates, String version) {
     try {

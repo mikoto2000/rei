@@ -370,6 +370,22 @@ public class Tools {
     return changeSets().inspectDocuments(diagnosedOwner(), id);
   }
 
+  @Tool(description = "保存した複数file提案の差分を予算付きで読みます。id/proposalSha256と返却nextOffsetをoffsetへそのまま指定。maxBytesは256..65536。本文は秘密情報をマスク済み。省略ページを確認してから既存Applyへ進みます。READのみ、現在fileは変更しません。")
+  TextDiff.Page getTextDocumentChangeSetDiff(String id, String proposalSha256,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer offset,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer maxBytes) throws IOException {
+    return changeSets().documentDiffPage(diagnosedOwner(), id, proposalSha256,
+        offset == null ? 0 : offset, maxBytes == null ? TextWriteLimits.diffBytes() : maxBytes);
+  }
+
+  @Tool(description = "保存した単一file提案の差分を予算付きで読みます。id/proposalSha256と返却nextOffsetをoffsetへそのまま指定。maxBytesは256..65536。省略情報を確認し必要な全ページを既存Apply前にレビューしてください。READのみ。")
+  TextDiff.Page getTextChangeSetDiff(String id, String proposalSha256,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer offset,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer maxBytes) throws IOException {
+    return changeSets().diffPage(changeSetProject(), id, proposalSha256,
+        offset == null ? 0 : offset, maxBytes == null ? TextWriteLimits.diffBytes() : maxBytes);
+  }
+
   /** 共通の実行基盤で用いる破棄テキスト文書変更集合を返す。 */
   @Tool(description = "保存した未適用の複数file提案を、正確な全体SHAで破棄します。対象fileを変更せず、実行中やUNKNOWNの復旧記録は破棄できません。")
   TextDocumentChangeSetService.View discardTextDocumentChangeSet(String id, String proposalSha256)
