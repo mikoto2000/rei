@@ -1519,10 +1519,12 @@ public class Tools {
     TextReadBudget resultBudget = new TextReadBudget();
     int returnedErrors = 0;
     int totalMatches = 0;
+    var scans = SearchScanBatch.scan(this, queries, workingDirectory, snapshots, forSearch);
     for (int i = 0; i < queries.size(); i++) {
       GrepQuery query = queries.get(i);
       try {
-        GrepScanResult scanResult = scanGrepMatches(query, workingDirectory, snapshots, forSearch);
+        if (scans.get(i).error() != null) throw new IOException(scans.get(i).error());
+        GrepScanResult scanResult = scans.get(i).scan();
         if (forSearch) {
           int count = Math.min(32 - returnedErrors, scanResult.fileErrors().size());
           returnedErrors += count;
@@ -1890,7 +1892,7 @@ public class Tools {
    * @param fileErrors ファイルエラー一覧
    * @param truncated 省略の有無
    */
-  private record GrepScanResult(
+  record GrepScanResult(
       List<GrepMatch> matches, List<GrepFileError> fileErrors, boolean truncated) {
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     GrepScanResult(List<GrepMatch> matches, List<GrepFileError> fileErrors) {
@@ -2324,7 +2326,7 @@ public class Tools {
   }
 
   /** 共通の実行基盤で用いる状態の記録行一覧を返す。 */
-  private List<String> snapshotLines(FileSnapshots.Snapshot snapshot, String charset)
+  List<String> snapshotLines(FileSnapshots.Snapshot snapshot, String charset)
       throws IOException {
     ReadingMetrics.add("decodes", 1);
     byte[] bytes = snapshot.bytes();
@@ -3127,7 +3129,7 @@ public class Tools {
   public record WriteFileResult(String path, boolean success, String error) {}
 
   /** 条件に合う対象を選ぶため、パスの照合規則との一致を判定する。 */
-  private boolean matchesGlob(
+  boolean matchesGlob(
       String relativePath,
       SearchGlob includeMatcher,
       SearchGlob excludeMatcher,
@@ -3143,7 +3145,7 @@ public class Tools {
   }
 
   /** 共通の実行基盤で用いるコンパイル内容検索照合規則を返す。 */
-  private Pattern compileGrepPattern(String pattern, boolean ignoreCase, boolean fixedString) {
+  Pattern compileGrepPattern(String pattern, boolean ignoreCase, boolean fixedString) {
     int flags = ignoreCase ? Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE : 0;
     String effectivePattern = fixedString ? Pattern.quote(pattern) : pattern;
     try {

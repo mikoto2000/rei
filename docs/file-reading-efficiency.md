@@ -44,3 +44,18 @@ regression. No production replacement behavior was changed.
 Legacy read/search record constructors and their default JSON contracts remain supported.
 New representations and cursor behavior are opt-in. Security validation must precede cache
 reuse or persisted-cursor access. Acquisition history is not proof of current prompt presence.
+
+## Phase 1
+
+The same fixture now decodes and splits lines once per request instead of nine times.
+`FileSnapshots` owns the immutable decoded rows; the existing 8 MiB source bound also bounds
+retained decoded data, which is not shared across requests or authorities.
+`SearchScanBatch` evaluates query predicates in a file-major scan while preserving each query's
+case/regex/inversion/context/file-name-only settings, results, limits and errors.
+
+`searchAndRead.request.compactOutput=true` selects a wire projection. Internal matches still
+contain exact source. On the wire, a match whose full text is already present in a section
+uses `sectionIndex` (zero based), `line` and `queryIndex`. A partial or absent section never
+causes match text to be discarded. Default delivery is unchanged. Compare tokens with the
+same estimator; no additional LLM call is made. `wireBytes` / `wireEstimatedTokens` measure
+the converter output, separately from the internal generated JSON and final prompt.
