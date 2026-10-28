@@ -25,6 +25,9 @@ tool tokens as though they were distinct model charges. Provider token usage is 
 Counters are scoped by captured `AgentRunContext`, with at most 256 in-memory runs.
 Duplicate source-body measurement uses path/version/line/content identities, bounded at
 1024 identities per run; saturation is reported as unknown, not zero duplication.
+`duplicateBodyBytes` describes generated records, whereas `wireDuplicateBodyBytes` describes
+the projected response. Both count UTF-8 source text only, excluding JSON metadata and line
+separators; they are bounded observations, not a byte-for-byte profiler of model input.
 Disable with `-Drei.reading.metrics.enabled=false`. Reproducible fixture output is written to
 `target/reading-benchmark/search.json`.
 
@@ -38,6 +41,14 @@ temporary file is removed in `finally`, and migration ownership uses try-with-re
 This evidence does not justify a production retry or sleep. Run Windows storage tests with
 normal filesystem replacement permission; do not classify sandbox refusal as an application
 regression. No production replacement behavior was changed.
+
+The full regression also exposed legacy fixtures that initialize today's schema and then
+lower `user_version`. They now remove `reading_state` before simulating the old schema;
+production migration remains strict and is not changed to silently accept an existing table.
+On this Windows/JDK 25 installation, `file.encoding` is UTF-8 but `stdout.encoding` and
+`stderr.encoding` are MS932. Child-JVM fixtures that read captured logs with UTF-8 now
+explicitly select UTF-8 stdout/stderr in their argument files. This fixes diagnostic log
+decoding without changing production encoding or replacing process-exit assertions.
 
 ## Compatibility
 
@@ -72,6 +83,12 @@ Search state lives in schema 19's `reading_state`, using `StorageDatabase` trans
 Scope includes run, conversation, real Project root, project identity, request source and mode.
 Retention is 24 hours, with 4 MiB per record, 2048 records and 64 MiB total. Expired records
 are collected on writes. No stored body is returned before current path security checks.
+An immutable inventory is saved once and referenced by subsequent cursors, rather than
+copied into every page. Counters and restorable delivery metadata retain at most seven days.
+Empty pages expose a stable query/inventory `scanId`; advancing completed file coverage is
+finite acquisition progress. The evaluator persists a high-water position for at most 256
+searches (20,000 files each). Cursor spelling, replay and earlier positions grant no progress,
+including after checkpoint restart. This never marks review work complete or refills budgets.
 The current inventory metadata is checked on resume; a pending file's SHA-256 must also
 match its stored version. Changed files invalidate the cursor.
 
@@ -124,6 +141,11 @@ acquiring source is never treated as completing a review. Search cursors own pen
 ranges, and the existing acquisition ledger owns historical read ranges. These different
 notions of completion are deliberately not merged into a universal plan.
 
+Restorable delivery history retains the newest entries fitting a 2 MiB serialized envelope,
+and current availability is bounded to 64 runs / approximately 8 MiB of metadata. Dropping
+history or failing to persist optional diagnostics never permits omission of unknown source
+and never aborts an already confirmed prompt.
+
 ## Reproducible comparisons
 
 `ReadingEfficiencyBenchmarkTest` writes JSON comparisons under `target/reading-benchmark`.
@@ -143,7 +165,65 @@ These deterministic tests make zero model calls. Returned-token estimates are no
 input usage. End-to-end task completion/quality and provider input usage require a separately
 configured live model evaluation; no live-provider improvement is claimed by these reports.
 
+| Fixture / metric | Before | After | Difference |
+| --- | ---: | ---: | ---: |
+| Eight repeated queries: decodes / splits | 9 / 9 | 1 / 1 | -8 / -8 |
+| Eight queries: file scans | 8 | 1 | -7 |
+| Repeated hits: wire bytes | 1263 | 1119 | -144 |
+| Repeated hits: conservative estimated tokens | 350 | 284 | -66 |
+| Repeated hits: tokenizer-aware estimated tokens | 433 | 393 | -40 |
+| Repeated hits: duplicate source bytes in one response | 208 | 0 | -208 |
+| Distant hits: tool calls | 11 | 2 | -9 |
+| Distant hits: continuation calls | 10 | 1 | -9 |
+| Distant hits: cumulative returned conservative estimated tokens | 5069 | 274 | -4795 |
+| Markdown: wire bytes | 7869 | 534 | -7335 |
+| Markdown: conservative estimated tokens | 3218 | 140 | -3078 |
+| Markdown: tokenizer-aware estimated tokens | 4426 | 181 | -4245 |
+| Repeated-hit / Markdown tool calls | 1 / 1 | 1 / 1 | 0 / 0 |
+| LLM total input tokens / task completion quality | Not measured | Not measured | No live model evaluation |
+| Search elapsed | Illustrative baseline 54.4 ms | No stable comparison | No timing improvement claimed |
+| Process memory | Not profiled | Not profiled | Hard retention bounds verified instead |
+
+The distant-hit total is the sum of returned tool payload estimates, not repeated conversational
+input to a model. Markdown selection answers a section request and is not interchangeable with
+reviewing every section; the benchmark asserts the requested source is returned. Estimates
+depend on the selected estimator. Generated JSON reports are local test artifacts and are
+regenerated by the tests, rather than checked in with temporary paths and timing noise.
+
+Phase 5 candidates are version-based diff retrieval, streamed large-file search, live model
+task-quality evaluation, and measured concurrency/adaptive strategy. They are not enabled by
+this change. Current file-size, inventory, charset and bounded-history limits remain explicit.
+
+## Validation
+
+On Windows / Java 25, the full non-live regression was executed and the affected tests were
+rerun after fixes. The latest 1,189 suite reports contain 6,554 tests: 6,547 passed, zero
+failures/errors, seven conditional skips. This is the aggregate of the full execution and
+targeted reruns, not a claim that the first full invocation passed. The final related batch
+covered 379 tests; the last recompiled 20-test batch passed after correcting child log encoding.
+Twenty test methods were added across seven reading/search test classes, including the real
+child-JVM restart probe. Existing review, native/API compatibility and stagnation tests pass.
+
+The seven skips require opt-in native Windows/WSL Codex processes (three), optional unrelated
+benchmarks (three), or a local PlantUML runtime (one). Live-provider tests are excluded by the
+repository's `full` profile. The terminal reactor's 139 tests passed with no failures or skips.
+Architecture/guard effectiveness tests pass. Checkstyle reports zero findings; SpotBugs has
+1,868 grandfathered findings and zero new findings, with no static-analysis baseline expansion.
+PR CI runs the final full suite independently before merge.
+
 ## Dependency boundary
+
+| Component | Responsibility / reused implementation |
+| --- | --- |
+| `FileSnapshots`, `SearchScanBatch` | Request-local immutable bytes/decoded lines and file-major predicates; retain existing path/charset/search semantics |
+| `SearchReadResultConverter` | Opt-in lossless compact wire projection |
+| `PagedFileSearch`, `ReadingStateStore`, `ReadingStateMigration` | Separate pending-result / remaining-scan position; schema 19; existing serialized SQLite writer |
+| `ReadingDelivery`, `ReadingRawAccess` | Confirmed prompt presence and exact restoration through the existing raw-result store |
+| `ReadingMetrics`, `ReadingRuntime`, `ReadingRun` | Bounded diagnostics and host identity/estimator ports |
+| `MarkdownSectionReads` | CommonMark selection translated into the existing native file reader and token pager |
+| `SourceEvidence` | Shared immutable source coordinates for reads and review pages |
+| `ReadingProblem`, `BoundedRegex` | Structured limits/errors and bounded Java regex evaluation |
+| Existing `Tools`, `ContextAssembler`, `ProgressEvaluator`, `ReviewTools` | Tool contracts/security, prompt projection, bounded progress classification, review completion remain with their original owners |
 
 Reading state, diagnostics, metrics and delivery live in the existing dependency-free
 `tooldelivery` boundary. `ReadingRun` exposes captured identity without importing the run

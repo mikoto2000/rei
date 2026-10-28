@@ -48,6 +48,7 @@ class SecretaryConnectionsMigrationTest {
       sql.execute("DROP INDEX secretary_jobs_updated");
       sql.execute("INSERT INTO secretary_model_budget VALUES('p','2026-10-26',7)");
       sql.execute("DELETE FROM storage_migrations WHERE version>=15");
+      sql.execute("DROP TABLE reading_state");
       sql.execute("PRAGMA user_version=14");
     }
     try (var migration = new StorageMigrationCoordinator(root)) {

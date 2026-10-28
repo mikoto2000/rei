@@ -388,7 +388,7 @@ class StorageEventMigrationTest {
     Files.writeString(
         args,
         heap
-            + "\n-cp\n"
+            + "\n-Dstdout.encoding=UTF-8\n-Dstderr.encoding=UTF-8\n-cp\n"
             + javaArgument(classpath)
             + "\n"
             + type.getName()
@@ -468,6 +468,7 @@ class StorageEventMigrationTest {
               "secretary_suggestions",
               "secretary_suggestion_history")) sql.execute("DROP TABLE " + table);
       sql.executeUpdate("DELETE FROM storage_migrations WHERE version>3");
+      sql.execute("DROP TABLE reading_state");
       sql.execute("PRAGMA user_version=3");
     }
     var legacy = new ProjectAgentEventStore(root);

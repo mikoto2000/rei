@@ -339,6 +339,7 @@ class StorageReferenceProtectionTest {
               "secretary_suggestions",
               "secretary_suggestion_history")) sql.execute("DROP TABLE IF EXISTS " + table);
       sql.execute("DELETE FROM storage_migrations WHERE version>2");
+      sql.execute("DROP TABLE reading_state");
       sql.execute("PRAGMA user_version=2");
     }
     Files.writeString(root.resolve("sessions.json"), "not a session array");

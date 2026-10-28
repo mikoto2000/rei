@@ -375,7 +375,7 @@ class SessionTurnMigrationTest {
         System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
     Files.writeString(
         arguments,
-        "-Xmx64m\n-cp\n"
+        "-Xmx64m\n-Dstdout.encoding=UTF-8\n-Dstderr.encoding=UTF-8\n-cp\n"
             + javaArgument(classpath)
             + "\n"
             + StorageSessionImportWorker.class.getName()
@@ -457,7 +457,7 @@ class SessionTurnMigrationTest {
     Path arguments = root.resolve("crash.args");
     Files.writeString(
         arguments,
-        "-cp\n"
+        "-Dstdout.encoding=UTF-8\n-Dstderr.encoding=UTF-8\n-cp\n"
             + javaArgument(
                 System.getProperty(
                     "surefire.test.class.path", System.getProperty("java.class.path")))

@@ -258,7 +258,7 @@ class StreamingPersistenceTest {
     Path arguments = root.resolve("worker.args");
     Files.writeString(
         arguments,
-        "-cp\n"
+        "-Dstdout.encoding=UTF-8\n-Dstderr.encoding=UTF-8\n-cp\n"
             + quote(classpath)
             + "\n"
             + StreamingPersistenceCrashWorker.class.getName()
