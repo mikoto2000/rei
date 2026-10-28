@@ -327,6 +327,8 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
             "getLastSummary",
             "taskList",
             "getCurrentTime",
+            "getHolidayInfo",
+            "listHolidays",
             "countCharacters",
             "vectorDocumentList",
             "workContextGet",
