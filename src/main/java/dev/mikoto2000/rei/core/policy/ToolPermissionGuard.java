@@ -22,6 +22,7 @@ public class ToolPermissionGuard {
           "readMultiFile",
           "grepMultiQuery",
           "searchAndRead",
+          "searchFilePage",
           "findFile",
           "listFile",
           "repositoryMap",

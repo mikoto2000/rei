@@ -40,6 +40,7 @@ public class ProgressEvaluator {
           "listFile",
           "grepMultiQuery",
           "searchAndRead",
+          "searchFilePage",
           "search",
           "webSearch",
           "webSearchAndRead",
@@ -564,6 +565,10 @@ public class ProgressEvaluator {
   /** 実行の停滞への対処に関する収集情報を処理する。 */
   private void collectInformation(
       JsonNode node, String raw, String name, String args, List<ProgressEvidence> evidence) {
+    if (name.equals("searchFilePage") && node != null && node.path("files").isArray()) {
+      collectInformation(node.path("files"), node.path("files").toString(), "searchAndRead", args, evidence);
+      return;
+    }
     if (node != null && node.isArray()) {
       JsonNode input = parse(args);
       JsonNode requests = input == null ? null : input.get("files");

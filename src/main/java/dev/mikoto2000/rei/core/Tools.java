@@ -2180,6 +2180,18 @@ public class Tools {
     }
   }
 
+  private ReadingStateStore readingStateStore;
+
+  @Autowired
+  void setReadingStateStore(ReadingStateStore store) { readingStateStore = store; }
+
+  @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
+  @Tool(name = "searchFilePage", description = "Search with persistent RESULT and SCAN cursors. Start with queries, then pass the returned resultCursor or scanCursor unchanged as cursor. Drains exact hit neighborhoods without intervening source. Run-scoped, expires after 24 hours. File changes invalidate the cursor. maxTokens 256..8000, maxBytes 1024..65536, scanLimit 1..1024, maxLines 1..5000. Queries in one search must use the same charset. Legacy searchAndRead remains available for ranked one-shot searches.")
+  PagedFileSearch.Page searchFilePage(PagedFileSearch.Request request) {
+    if (readingStateStore == null) throw new IllegalStateException("Reading state store unavailable");
+    return new PagedFileSearch(this, readingStateStore).read(request, currentWorkingDirectory());
+  }
+
   /** 1 ファイルのヒットから、マージした範囲を読み込む。 */
   private SearchAndReadResult readFileSections(
       String relativePath,
