@@ -52,6 +52,25 @@ class TaskSnapshotTest {
   }
 
   @Test
+  void directoryMutationBeforeSavedCursorIsDetectedInsteadOfSilentlyOmittingFiles()
+      throws Exception {
+    var root = Files.createDirectory(temporary.resolve("repository"));
+    Files.writeString(root.resolve("b.java"), "b");
+    Files.writeString(root.resolve("z.java"), "z");
+    var store = store();
+    var scope = new DurableTaskStore.Scope("project", "session", root.toRealPath().toString());
+    var task = store.begin(scope, null, "WORKTREE", "", List.of(), 100, 1024);
+    var scanner = new SnapshotEnumerator(store);
+    scanner.step(scope, task.id(), 1);
+    Files.writeString(root.resolve("a.java"), "new file before cursor");
+    // Set a distinct timestamp even on filesystems with coarse time resolution.
+    Files.setLastModifiedTime(root, java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() + 10000));
+    scanner.step(scope, task.id(), 10);
+    assertThat(store.status(scope, task.id()).enumeration()).isEqualTo("FAILED");
+    assertThat(store.status(scope, task.id()).reason()).isEqualTo("DIRECTORY_CHANGED");
+  }
+
+  @Test
   void emptyTargetAndCapacityExhaustionNeverBecomeSuccessfulReviews() throws Exception {
     var root = Files.createDirectory(temporary.resolve("repository"));
     var store = store();

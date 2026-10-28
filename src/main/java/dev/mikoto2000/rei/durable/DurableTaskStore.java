@@ -46,7 +46,7 @@ public final class DurableTaskStore {
 
   public record Source(String mode, String reference) {}
 
-  record Directory(String path, String cursor) {}
+  record Directory(String path, String cursor, String stamp) {}
 
   record Captured(String path, byte[] content, String text, String version, String reason, String error, boolean directory) {
     Captured {
@@ -170,9 +170,9 @@ public final class DurableTaskStore {
     return read(db -> {
       var owner = status(db, scope, task);
       if (!owner.state().equals("ACTIVE") || !owner.enumeration().equals("SCANNING")) return null;
-      try (var query = statement(db, "SELECT path,cursor FROM durable_directories WHERE task=? AND state='PENDING' ORDER BY path LIMIT 1", task);
+      try (var query = statement(db, "SELECT path,cursor,stamp FROM durable_directories WHERE task=? AND state='PENDING' ORDER BY path LIMIT 1", task);
           var rows = query.executeQuery()) {
-        return rows.next() ? new Directory(rows.getString(1), rows.getString(2)) : null;
+        return rows.next() ? new Directory(rows.getString(1), rows.getString(2), rows.getString(3)) : null;
       }
     });
   }
@@ -189,15 +189,15 @@ public final class DurableTaskStore {
     });
   }
 
-  void captured(Scope scope, String task, Directory directory, List<Captured> entries, boolean finished) {
+  void captured(Scope scope, String task, Directory directory, List<Captured> entries, boolean finished, String stamp) {
     write(db -> {
       var owner = status(db, scope, task);
       if (!owner.state().equals("ACTIVE") || !owner.enumeration().equals("SCANNING"))
         throw new IllegalStateException("TASK_NOT_SCANNING");
       String cursor = entries.isEmpty() ? directory.cursor()
           : source(db, owner.snapshot()).mode().equals("COMMIT") ? entries.getLast().path() : name(entries.getLast().path());
-      if (execute(db, "UPDATE durable_directories SET cursor=?,state=? WHERE task=? AND path=? AND cursor=? AND state='PENDING'",
-          cursor, finished ? "DONE" : "PENDING", task, directory.path(), directory.cursor()) != 1)
+      if (execute(db, "UPDATE durable_directories SET cursor=?,state=?,stamp=? WHERE task=? AND path=? AND cursor=? AND stamp=? AND state='PENDING'",
+          cursor, finished ? "DONE" : "PENDING", stamp, task, directory.path(), directory.cursor(), directory.stamp()) != 1)
         throw new IllegalStateException("SCAN_OWNERSHIP_CHANGED");
       long maxFiles, maxBytes;
       try (var query = statement(db, "SELECT max_files,max_bytes FROM durable_snapshots WHERE id=?", owner.snapshot()); var row = query.executeQuery()) {
@@ -231,8 +231,31 @@ public final class DurableTaskStore {
       }
       execute(db, "UPDATE durable_snapshots SET files=?,excluded=?,errors=?,bytes=? WHERE id=?", count, excluded, errors, bytes, owner.snapshot());
       if (errors > 0) execute(db, "UPDATE durable_snapshots SET state='FAILED',reason='ACCESS_ERROR' WHERE id=?", owner.snapshot());
-      execute(db, "UPDATE durable_snapshots SET state='SEALED' WHERE id=? AND state='SCANNING' AND NOT EXISTS(SELECT 1 FROM durable_directories WHERE task=? AND state='PENDING')", owner.snapshot(), task);
+      String terminal = source(db, owner.snapshot()).mode().equals("COMMIT") ? "SEALED" : "VALIDATING";
+      execute(db, "UPDATE durable_snapshots SET state=? WHERE id=? AND state='SCANNING' AND NOT EXISTS(SELECT 1 FROM durable_directories WHERE task=? AND state='PENDING')", terminal, owner.snapshot(), task);
       execute(db, "UPDATE durable_tasks SET revision=revision+1 WHERE id=?", task);
+      return null;
+    });
+  }
+
+  Page<Directory> directories(Scope scope, String task, String after) {
+    return read(db -> {
+      status(db, scope, task);
+      var entries = new ArrayList<Directory>();
+      try (var query = statement(db, "SELECT path,cursor,stamp FROM durable_directories WHERE task=? AND (? IS NULL OR path>?) ORDER BY path LIMIT 1001", task, after, after);
+          var rows = query.executeQuery()) {
+        while (rows.next()) entries.add(new Directory(rows.getString(1), rows.getString(2), rows.getString(3)));
+      }
+      boolean more = entries.size() > 1000;
+      if (more) entries.removeLast();
+      return new Page<>(entries, more ? entries.getLast().path() : null);
+    });
+  }
+
+  void seal(Scope scope, String task) {
+    write(db -> {
+      var owner = status(db, scope, task);
+      execute(db, "UPDATE durable_snapshots SET state='SEALED' WHERE id=? AND state='VALIDATING' AND errors=0 AND NOT EXISTS(SELECT 1 FROM durable_directories WHERE task=? AND state='PENDING')", owner.snapshot(), task);
       return null;
     });
   }
@@ -240,7 +263,7 @@ public final class DurableTaskStore {
   void scanFailed(Scope scope, String task, String path, String error) {
     write(db -> {
       var owner = status(db, scope, task);
-      if (!owner.enumeration().equals("SCANNING")) return null;
+      if (!owner.enumeration().equals("SCANNING") && !owner.enumeration().equals("VALIDATING")) return null;
       execute(db, "INSERT INTO durable_files(snapshot,path,version,bytes,reason,error) VALUES(?,?,'',0,'',?) ON CONFLICT DO NOTHING", owner.snapshot(), path.isEmpty() ? "." : path, error);
       execute(db, "UPDATE durable_snapshots SET state='FAILED',reason=?,errors=errors+1 WHERE id=?", error, owner.snapshot());
       return null;

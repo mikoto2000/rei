@@ -37,6 +37,10 @@ public final class SnapshotEnumerator {
 
   public DurableTaskStore.Task step(DurableTaskStore.Scope scope, String task, int limit) {
     DurableTaskStore.pageLimit(limit);
+    if (store.status(scope, task).enumeration().equals("VALIDATING")) {
+      validateDirectories(scope, task);
+      return store.status(scope, task);
+    }
     var directory = store.nextDirectory(scope, task);
     if (directory == null) return store.status(scope, task);
     Path root = Path.of(scope.root());
@@ -45,12 +49,15 @@ public final class SnapshotEnumerator {
       var source = store.source(scope, task);
       if (source.mode().equals("COMMIT")) {
         var page = GitSnapshotSource.page(root, source.reference(), directory.cursor(), limit, store.exclusions(scope, task));
-        store.captured(scope, task, directory, page.entries(), page.finished());
+        store.captured(scope, task, directory, page.entries(), page.finished(), "");
         return store.status(scope, task);
       }
       Path current = root.resolve(directory.path());
       if (Files.isSymbolicLink(current) || !current.toRealPath().startsWith(root.toRealPath()))
         throw new IOException("Directory changed");
+      String stamp = stamp(current);
+      if (!directory.stamp().isEmpty() && !directory.stamp().equals(stamp))
+        throw new DirectoryChanged();
       var names = new PriorityQueue<String>(Comparator.reverseOrder());
       long remaining = 0;
       try (var children = Files.newDirectoryStream(current)) {
@@ -79,11 +86,37 @@ public final class SnapshotEnumerator {
         batchBytes += entry.size();
         if (batchBytes >= 8L * 1024 * 1024) break;
       }
-      store.captured(scope, task, directory, captured, remaining == captured.size());
+      if (!stamp.equals(stamp(current))) throw new DirectoryChanged();
+      store.captured(scope, task, directory, captured, remaining == captured.size(), stamp);
+      if (store.status(scope, task).enumeration().equals("VALIDATING")) validateDirectories(scope, task);
     } catch (IOException error) {
-      store.scanFailed(scope, task, directory.path(), error instanceof java.nio.file.AccessDeniedException ? "ACCESS_DENIED" : "SOURCE_UNAVAILABLE");
+      store.scanFailed(scope, task, directory.path(), error instanceof DirectoryChanged ? "DIRECTORY_CHANGED" : error instanceof java.nio.file.AccessDeniedException ? "ACCESS_DENIED" : "SOURCE_UNAVAILABLE");
     }
     return store.status(scope, task);
+  }
+
+  private static final class DirectoryChanged extends IOException {}
+
+  private static String stamp(Path directory) throws IOException {
+    var attributes = Files.readAttributes(directory, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+    if (!attributes.isDirectory() || attributes.isSymbolicLink()) throw new DirectoryChanged();
+    return attributes.lastModifiedTime() + "|" + attributes.fileKey();
+  }
+
+  private void validateDirectories(DurableTaskStore.Scope scope, String task) {
+    String cursor = null;
+    try {
+      do {
+        var page = store.directories(scope, task, cursor);
+        for (var directory : page.entries())
+          if (!directory.stamp().equals(stamp(Path.of(scope.root()).resolve(directory.path()))))
+            throw new DirectoryChanged();
+        cursor = page.nextCursor();
+      } while (cursor != null);
+      store.seal(scope, task);
+    } catch (IOException error) {
+      store.scanFailed(scope, task, "", error instanceof DirectoryChanged ? "DIRECTORY_CHANGED" : "SOURCE_UNAVAILABLE");
+    }
   }
 
   private DurableTaskStore.Captured capture(Path root, String relative, List<String> exclusions)
