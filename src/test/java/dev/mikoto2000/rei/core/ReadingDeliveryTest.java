@@ -1,20 +1,17 @@
 package dev.mikoto2000.rei.core;
 
-import dev.mikoto2000.rei.tooldelivery.ReadingDelivery;
-
-import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
-
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.contextbudget.RawToolResultStore;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.storage.StorageMigrationCoordinator;
+import dev.mikoto2000.rei.tooldelivery.ReadingDelivery;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -32,7 +29,9 @@ class ReadingDeliveryTest {
   void oldRestorationMetadataIsBoundedWithoutAbortingAConfirmedPrompt() throws Exception {
     Files.writeString(root.resolve("a.txt"), "\n".repeat(64000));
     Path data = root.resolve("data");
-    try (var gate = new StorageMigrationCoordinator(data)) { gate.prepare(); }
+    try (var gate = new StorageMigrationCoordinator(data)) {
+      gate.prepare();
+    }
     var store = ReadingTestStores.store(new StorageDatabase(data));
     var raw = new RawToolResultStore(data);
     var owner = new AgentRunContext("bounded-delivery", "chat", root, "project");
@@ -40,19 +39,58 @@ class ReadingDeliveryTest {
     var budgets = new dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties();
     budgets.setPageTargetTokens(16000);
     budgets.setPageMaxTokens(16000);
-    tools.configureDelivery(dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative(), budgets);
+    tools.configureDelivery(
+        dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative(), budgets);
     try (var scope = AgentRunScope.open(owner)) {
-      var initial = tools.readMultiFile(List.of(new Tools.ReadFileRequest("a.txt", 1, 1000)), root).getFirst();
+      var initial =
+          tools
+              .readMultiFile(List.of(new Tools.ReadFileRequest("a.txt", 1, 1000)), root)
+              .getFirst();
       String lineHash = FileSnapshots.hash(new byte[0]);
-      var old = java.util.stream.IntStream.range(0, 60).mapToObj(i ->
-          new ReadingDelivery.Entry("a.txt", initial.version(), i * 1000 + 1,
-              java.util.Collections.nCopies(1000, lineHash), "old-" + i)).toList();
-      store.save(owner, "delivery", "evidence", new ReadingDelivery.Saved(old), java.time.Duration.ofDays(1));
-      var requests = java.util.stream.IntStream.range(60, 64).mapToObj(i -> new Tools.ReadFileRequest("a.txt", i * 1000 + 1, (i + 1) * 1000)).toList();
+      var old =
+          java.util.stream.IntStream.range(0, 60)
+              .mapToObj(
+                  i ->
+                      new ReadingDelivery.Entry(
+                          "a.txt",
+                          initial.version(),
+                          i * 1000 + 1,
+                          java.util.Collections.nCopies(1000, lineHash),
+                          "old-" + i))
+              .toList();
+      store.save(
+          owner,
+          "delivery",
+          "evidence",
+          new ReadingDelivery.Saved(old),
+          java.time.Duration.ofDays(1));
+      var requests =
+          java.util.stream.IntStream.range(60, 64)
+              .mapToObj(i -> new Tools.ReadFileRequest("a.txt", i * 1000 + 1, (i + 1) * 1000))
+              .toList();
       var result = tools.readMultiFile(requests, root);
       assertTrue(result.stream().allMatch(file -> file.content().size() == 1000));
-      var assistant = AssistantMessage.builder().content("").toolCalls(List.of(new AssistantMessage.ToolCall("bounded-call", "function", "readMultiFile", StorageDatabase.JSON.writeValueAsString(java.util.Map.of("files", requests))))).build();
-      var response = ToolResponseMessage.builder().responses(List.of(new ToolResponseMessage.ToolResponse("bounded-call", "readMultiFile", StorageDatabase.JSON.writeValueAsString(result)))).build();
+      var assistant =
+          AssistantMessage.builder()
+              .content("")
+              .toolCalls(
+                  List.of(
+                      new AssistantMessage.ToolCall(
+                          "bounded-call",
+                          "function",
+                          "readMultiFile",
+                          StorageDatabase.JSON.writeValueAsString(
+                              java.util.Map.of("files", requests)))))
+              .build();
+      var response =
+          ToolResponseMessage.builder()
+              .responses(
+                  List.of(
+                      new ToolResponseMessage.ToolResponse(
+                          "bounded-call",
+                          "readMultiFile",
+                          StorageDatabase.JSON.writeValueAsString(result))))
+              .build();
       var delivery = ReadingTestStores.delivery(store, raw);
       assertDoesNotThrow(() -> delivery.confirm(owner, new Prompt(List.of(assistant, response))));
       var saved = store.load(owner, "delivery", "evidence", ReadingDelivery.Saved.class);

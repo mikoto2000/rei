@@ -1,13 +1,10 @@
 package dev.mikoto2000.rei.core;
 
-import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
-
-import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -65,6 +62,24 @@ class ReadingMetricsTest {
       Files.writeString(
           Path.of("target/reading-benchmark/search.json"),
           dev.mikoto2000.rei.storage.StorageDatabase.JSON.writeValueAsString(values));
+    }
+  }
+
+  @Test
+  void wireDuplicatesUseTheProjectedBody() throws Exception {
+    new Tools(); // Bind the normal host scope and estimator before observing a converter directly.
+    var owner = new AgentRunContext("wire-metrics", "chat", root);
+    var section = new Tools.ReadSection(1, 1, List.of("same"), false);
+    var match = new Tools.SearchMatch(0, 1, "same");
+    var file =
+        new Tools.SearchAndReadResult(
+            "a.txt", List.of(match), List.of(section), null, false, false);
+    try (var scope = AgentRunScope.open(owner)) {
+      var converter = new SearchReadResultConverter();
+      converter.convert(List.of(file.withCompact()), List.class);
+      assertEquals(0, ReadingMetrics.snapshot(owner).getOrDefault("wireDuplicateBodyBytes", 0L));
+      converter.convert(List.of(file.withCompact()), List.class);
+      assertEquals(4, ReadingMetrics.snapshot(owner).getOrDefault("wireDuplicateBodyBytes", 0L));
     }
   }
 

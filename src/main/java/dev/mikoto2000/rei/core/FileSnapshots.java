@@ -1,8 +1,7 @@
 package dev.mikoto2000.rei.core;
 
-import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
-
 import dev.mikoto2000.rei.core.chat.RunCancellation;
+import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;

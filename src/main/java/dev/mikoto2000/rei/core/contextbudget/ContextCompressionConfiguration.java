@@ -20,7 +20,8 @@ public class ContextCompressionConfiguration {
   @Bean
   public dev.mikoto2000.rei.tooldelivery.ReadingDelivery readingDelivery(
       dev.mikoto2000.rei.tooldelivery.ReadingStateStore store, RawToolResultStore raw) {
-    return new dev.mikoto2000.rei.tooldelivery.ReadingDelivery(store,
+    return new dev.mikoto2000.rei.tooldelivery.ReadingDelivery(
+        store,
         new dev.mikoto2000.rei.tooldelivery.ReadingRawAccess(
             raw::save, raw::readingBody, RawToolResultTools::readingPage),
         dev.mikoto2000.rei.core.Tools::readingPath);
@@ -31,8 +32,8 @@ public class ContextCompressionConfiguration {
   public dev.mikoto2000.rei.tooldelivery.ReadingStateStore readingStateStore(
       @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
     var database = new dev.mikoto2000.rei.storage.StorageDatabase(java.nio.file.Path.of(directory));
-    return new dev.mikoto2000.rei.tooldelivery.ReadingStateStore((write, work) ->
-        write ? database.transaction(work::run) : database.read(work::run));
+    return new dev.mikoto2000.rei.tooldelivery.ReadingStateStore(
+        (write, work) -> write ? database.transaction(work::run) : database.read(work::run));
   }
 
   /** モデルへ渡す文脈の管理で用いるレビュー対象範囲記録台帳を返す。 */

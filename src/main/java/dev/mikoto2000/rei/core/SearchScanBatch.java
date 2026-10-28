@@ -1,9 +1,7 @@
 package dev.mikoto2000.rei.core;
 
 import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
-
 import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
-
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;

@@ -1,9 +1,8 @@
 package dev.mikoto2000.rei.core;
 
-import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
-
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import dev.mikoto2000.rei.tooldelivery.ReadingJson;
+import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
 import java.util.List;
 
 /** Opt-in wire projection; internal source records and legacy delivery remain lossless. */
@@ -35,11 +34,7 @@ public final class SearchReadResultConverter
         }
       }
       String wire = ReadingJson.JSON.writeValueAsString(tree);
-      ReadingMetrics.add(
-          "wireBytes", wire.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
-      ReadingMetrics.add(
-          "wireEstimatedTokens",
-          dev.mikoto2000.rei.tooldelivery.ReadingRuntime.estimateTokens(wire));
+      ReadingMetrics.wire(tree);
       return wire;
     } catch (java.io.IOException invalid) {
       throw new IllegalArgumentException("Cannot encode search results", invalid);

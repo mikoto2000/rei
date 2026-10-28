@@ -1,7 +1,5 @@
 package dev.mikoto2000.rei.tooldelivery;
 
-import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
-
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -10,9 +8,15 @@ import java.util.List;
 /** Bounded SQLite state using the existing serialized writer and startup migration. */
 public final class ReadingStateStore {
   @FunctionalInterface
-  public interface Work<T> { T run(java.sql.Connection connection) throws Exception; }
+  public interface Work<T> {
+    T run(java.sql.Connection connection) throws java.sql.SQLException, java.io.IOException;
+  }
+
   @FunctionalInterface
-  public interface Access { Object run(boolean write, Work<?> work); }
+  public interface Access {
+    Object run(boolean write, Work<?> work);
+  }
+
   private final Access database;
   private final Clock clock;
 
@@ -109,8 +113,12 @@ public final class ReadingStateStore {
   }
 
   @SuppressWarnings("unchecked")
-  private <T> T read(Work<T> work) { return (T) database.run(false, work); }
+  private <T> T read(Work<T> work) {
+    return (T) database.run(false, work);
+  }
 
   @SuppressWarnings("unchecked")
-  private <T> T transaction(Work<T> work) { return (T) database.run(true, work); }
+  private <T> T transaction(Work<T> work) {
+    return (T) database.run(true, work);
+  }
 }

@@ -399,18 +399,23 @@ public final class BoundedToolLoop {
                                   if (assembler != null)
                                     assembler.confirmedDelivery(projected, owner);
                                   if (!response.hasToolCalls()) {
+                                    var generation =
+                                        Objects.requireNonNull(
+                                            response.getResult(), "Missing model result");
                                     var history = new ArrayList<Message>(prompt.getInstructions());
-                                    history.add(response.getResult().getOutput());
+                                    history.add(generation.getOutput());
                                     return Mono.just(
                                         new Outcome(
-                                            Objects.toString(
-                                                response.getResult().getOutput().getText(), ""),
+                                            Objects.toString(generation.getOutput().getText(), ""),
                                             history));
                                   }
-                                  var options = (ToolCallingChatOptions) prompt.getOptions();
+                                  var options =
+                                      Objects.requireNonNull(
+                                          (ToolCallingChatOptions) prompt.getOptions(),
+                                          "Missing tool options");
                                   Set<String> allowed = new HashSet<>();
-                                  options
-                                      .getToolCallbacks()
+                                  Objects.requireNonNull(
+                                          options.getToolCallbacks(), "Missing tool callbacks")
                                       .forEach(
                                           tool -> allowed.add(tool.getToolDefinition().name()));
                                   // Validate the entire batch before any side effect. Never let a

@@ -84,6 +84,7 @@ public class ProgressEvaluator {
 
   private InformationLedger.State restorationTargets;
   private int restorationReads;
+  private final Map<String, Integer> scanCoverage = new LinkedHashMap<>();
 
   /** Metadata may be needed again in a new Run; only its total allowance is lineage-wide. */
   private final Set<String> restoredCheckpoints = new HashSet<>();
@@ -117,11 +118,30 @@ public class ProgressEvaluator {
       int restorationReads,
       Set<String> revisions,
       Set<String> completedSteps,
-      Set<String> startedSteps) {
+      Set<String> startedSteps,
+      Map<String, Integer> scanCoverage) {
+    public State(
+        InformationLedger.State restoredRanges,
+        int restorationReads,
+        Set<String> revisions,
+        Set<String> completedSteps,
+        Set<String> startedSteps) {
+      this(restoredRanges, restorationReads, revisions, completedSteps, startedSteps, Map.of());
+    }
+
     public State {
       revisions = Set.copyOf(revisions);
       completedSteps = Set.copyOf(completedSteps);
       startedSteps = Set.copyOf(startedSteps);
+      scanCoverage = scanCoverage == null ? Map.of() : Map.copyOf(scanCoverage);
+      if (scanCoverage.size() > 256
+          || scanCoverage.entrySet().stream()
+              .anyMatch(
+                  entry ->
+                      !entry.getKey().matches("[0-9a-f]{64}")
+                          || entry.getValue() < 1
+                          || entry.getValue() > 20000))
+        throw new IllegalArgumentException("Invalid scan coverage");
       if (restorationReads < 0
           || restorationReads > 8
           || revisions.size() > LEDGER_LIMIT
@@ -133,13 +153,20 @@ public class ProgressEvaluator {
 
   public synchronized State snapshot() {
     return new State(
-        restoredRanges.snapshot(), restorationReads, revisions, completedSteps, startedSteps);
+        restoredRanges.snapshot(),
+        restorationReads,
+        revisions,
+        completedSteps,
+        startedSteps,
+        scanCoverage);
   }
 
   public synchronized void restore(State state) {
     if (state == null) return;
     restoredRanges.restore(state.restoredRanges());
     restorationReads = state.restorationReads();
+    scanCoverage.clear();
+    scanCoverage.putAll(state.scanCoverage());
     revisions.clear();
     revisions.addAll(state.revisions());
     completedSteps.clear();
@@ -566,6 +593,28 @@ public class ProgressEvaluator {
   private void collectInformation(
       JsonNode node, String raw, String name, String args, List<ProgressEvidence> evidence) {
     if (name.equals("searchFilePage") && node != null && node.path("files").isArray()) {
+      var progress = node.path("progress");
+      String id = progress.path("scanId").asText();
+      int scanned = progress.path("scanned").asInt(-1);
+      int total = progress.path("total").asInt(-1);
+      if (!node.hasNonNull("error")
+          && node.path("files").isEmpty()
+          && id.matches("[0-9a-f]{64}")
+          && scanned > 0
+          && total <= 20000
+          && total >= scanned
+          && progress.path("unscanned").asInt(-1) == total - scanned
+          && (scanCoverage.containsKey(id) || scanCoverage.size() < 256)) {
+        int previous = scanCoverage.getOrDefault(id, 0);
+        if (scanned > previous) {
+          scanCoverage.put(id, scanned);
+          evidence.add(
+              ProgressEvidence.acquiredRange(
+                  "Search inventory coverage advanced by " + (scanned - previous) + " files",
+                  name,
+                  id));
+        }
+      }
       collectInformation(
           node.path("files"), node.path("files").toString(), "searchAndRead", args, evidence);
       return;

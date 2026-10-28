@@ -1,7 +1,6 @@
 package dev.mikoto2000.rei.core;
 
 import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
-
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -21,10 +20,17 @@ final class MarkdownSectionReads {
       int startLine,
       int headingEndLine,
       int endLine,
-      int ownEndLine) {}
+      int ownEndLine) {
+    public Section {
+      path = List.copyOf(path);
+    }
+  }
 
-  public record Selection(
-      Section selected, List<Section> candidates, boolean candidatesTruncated) {}
+  public record Selection(Section selected, List<Section> candidates, boolean candidatesTruncated) {
+    public Selection {
+      candidates = List.copyOf(candidates);
+    }
+  }
 
   static boolean selected(Tools.ReadFileRequest request) {
     return request.sectionPath() != null

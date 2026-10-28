@@ -1,13 +1,5 @@
 package dev.mikoto2000.rei.core;
 
-import dev.mikoto2000.rei.tooldelivery.ReadingDelivery;
-
-import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
-
-import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
-
-import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
-
 import dev.mikoto2000.rei.core.filesummary.FileSummaryCache;
 import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import dev.mikoto2000.rei.core.process.BackgroundProcessSnapshot;
@@ -22,6 +14,10 @@ import dev.mikoto2000.rei.core.service.SystemShellService;
 import dev.mikoto2000.rei.core.working.WorkingSet;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
+import dev.mikoto2000.rei.tooldelivery.ReadingDelivery;
+import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
+import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
+import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -64,26 +60,49 @@ public class Tools {
   public static void checkReadingCancellation(Throwable error) {
     dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
   }
-  public static String readingPath(dev.mikoto2000.rei.tooldelivery.ReadingRun owner, String input) throws IOException {
+
+  public static String readingPath(dev.mikoto2000.rei.tooldelivery.ReadingRun owner, String input)
+      throws IOException {
     if (!(owner instanceof dev.mikoto2000.rei.core.chat.AgentRunContext captured))
       throw new IOException("Unknown reading authority");
     try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(captured)) {
       var root = owner.projectRoot().toRealPath();
-      return root.relativize(FileSnapshots.resolve(root, java.nio.file.Path.of(input))).toString().replace('\\', '/');
+      return root.relativize(FileSnapshots.resolve(root, java.nio.file.Path.of(input)))
+          .toString()
+          .replace('\\', '/');
     }
   }
 
   private ReadFileResult applyReadingDelivery(ReadFileRequest request, ReadFileResult result) {
-    var notice = readingDelivery.inspect(dev.mikoto2000.rei.tooldelivery.ReadingRuntime.current(),
-        dev.mikoto2000.rei.tooldelivery.ReadingJson.JSON.valueToTree(result),
-        result.symbol() == null && !result.truncated() && (request.offset() == null || request.offset() == 0),
-        Boolean.TRUE.equals(request.unreadOnly()) && request.startLine() != null && request.endLine() != null);
+    var notice =
+        readingDelivery.inspect(
+            dev.mikoto2000.rei.tooldelivery.ReadingRuntime.current(),
+            dev.mikoto2000.rei.tooldelivery.ReadingJson.JSON.valueToTree(result),
+            result.symbol() == null
+                && !result.truncated()
+                && (request.offset() == null || request.offset() == 0),
+            Boolean.TRUE.equals(request.unreadOnly())
+                && request.startLine() != null
+                && request.endLine() != null);
     if (notice == null) return result;
-    return new ReadFileResult(result.path(), result.startLine(), result.endLine(),
-        notice.suppressed() ? List.of() : result.content(), result.truncated(), result.error(), result.version(),
-        result.nextRead(), notice.suppressed() ? 0 : result.returnedBytes(), result.symbol(), result.candidates(),
-        result.ownerOverview(), result.truncationReason(), notice, result.selection());
+    return new ReadFileResult(
+        result.path(),
+        result.startLine(),
+        result.endLine(),
+        notice.suppressed() ? List.of() : result.content(),
+        result.truncated(),
+        result.error(),
+        result.version(),
+        result.nextRead(),
+        notice.suppressed() ? 0 : result.returnedBytes(),
+        result.symbol(),
+        result.candidates(),
+        result.ownerOverview(),
+        result.truncationReason(),
+        notice,
+        result.selection());
   }
+
   static {
     dev.mikoto2000.rei.tooldelivery.ReadingRuntime.configure(
         dev.mikoto2000.rei.core.chat.AgentRunScope::current,
@@ -2440,6 +2459,15 @@ public class Tools {
       @org.springframework.ai.tool.annotation.ToolParam(required = false)
           List<String> preferredPaths,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Boolean compactOutput) {
+    public SearchAndReadRequest {
+      queries =
+          queries == null ? null : java.util.Collections.unmodifiableList(new ArrayList<>(queries));
+      preferredPaths =
+          preferredPaths == null
+              ? null
+              : java.util.Collections.unmodifiableList(new ArrayList<>(preferredPaths));
+    }
+
     public SearchAndReadRequest(
         List<GrepQuery> queries,
         Integer contextLines,
@@ -2504,6 +2532,12 @@ public class Tools {
       List<String> matchedBy,
       int omittedMatches,
       @com.fasterxml.jackson.annotation.JsonIgnore boolean compact) {
+    public SearchAndReadResult {
+      matches = matches == null ? null : List.copyOf(matches);
+      sections = sections == null ? null : List.copyOf(sections);
+      matchedBy = matchedBy == null ? null : List.copyOf(matchedBy);
+    }
+
     public SearchAndReadResult(
         String path,
         List<SearchMatch> matches,
@@ -2827,9 +2861,7 @@ public class Tools {
                           request, workingDirectory, snapshots, fileBudget, lineBudget);
           if (request.symbol() != null && result.error() == null)
             workingSet.recordRead(workingDirectory.resolve(result.path()));
-          if (readingDelivery != null)
-            result =
-                applyReadingDelivery(request, result);
+          if (readingDelivery != null) result = applyReadingDelivery(request, result);
           int remaining = MAX_READ_TOTAL_LINES - totalLines;
           if (result.content().size() > remaining) {
             result =
@@ -2871,7 +2903,10 @@ public class Tools {
     // Final envelope guard also covers escaping, error metadata and paths.
     if (FILE_RESULT_JSON.writeValueAsBytes(result).length > 1024 * 1024)
       throw new IOException("Serialized file result exceeds 1MiB; narrow the request");
-    return ReadingMetrics.generated(result);
+    ReadingMetrics.generated(result);
+    if (result.isEmpty() || !(result.getFirst() instanceof SearchAndReadResult))
+      ReadingMetrics.wire(result);
+    return result;
   }
 
   /** 必要な内容を参照できるよう、単一ファイルを読み取る。 */
@@ -2999,6 +3034,10 @@ public class Tools {
               com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
           @org.springframework.ai.tool.annotation.ToolParam(required = false)
           Boolean includeChildren) {
+    public ReadFileRequest {
+      sectionPath = sectionPath == null ? null : List.copyOf(sectionPath);
+    }
+
     public ReadFileRequest(
         String path,
         Integer startLine,
@@ -3129,6 +3168,12 @@ public class Tools {
       @com.fasterxml.jackson.annotation.JsonInclude(
               com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
           MarkdownSectionReads.Selection selection) {
+    public ReadFileResult {
+      content = content == null ? null : List.copyOf(content);
+      candidates = candidates == null ? null : List.copyOf(candidates);
+      ownerOverview = ownerOverview == null ? null : List.copyOf(ownerOverview);
+    }
+
     public ReadFileResult(
         String path,
         Integer startLine,

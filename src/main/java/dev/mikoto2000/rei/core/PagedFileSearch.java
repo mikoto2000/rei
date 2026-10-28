@@ -1,13 +1,10 @@
 package dev.mikoto2000.rei.core;
 
-import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
-
-import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
 import dev.mikoto2000.rei.tooldelivery.ReadingJson;
-
+import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
 import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
-
 import dev.mikoto2000.rei.tooldelivery.ReadingRuntime;
+import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -29,29 +26,54 @@ final class PagedFileSearch {
       Integer maxBytes,
       Integer scanLimit,
       Integer maxLines,
-      String cursor) {}
+      String cursor) {
+    public Request {
+      queries =
+          queries == null ? null : java.util.Collections.unmodifiableList(new ArrayList<>(queries));
+    }
+  }
 
-  public record Progress(int scanned, int unscanned, int total, String stopReason) {}
+  public record Progress(
+      int scanned,
+      int unscanned,
+      int total,
+      String stopReason,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          String scanId) {
+    public Progress(int scanned, int unscanned, int total, String stopReason) {
+      this(scanned, unscanned, total, stopReason, null);
+    }
+  }
 
   public record Page(
       List<Tools.SearchAndReadResult> files,
       String resultCursor,
       String scanCursor,
       Progress progress,
-      ReadingProblem error) {}
+      ReadingProblem error) {
+    public Page {
+      files = List.copyOf(files);
+    }
+  }
 
   public record Stamp(String path, long size, String modified, String key) {}
 
   public record Range(int start, int end) {}
 
   public record Manifest(List<Stamp> files) {
-    public Manifest { files = List.copyOf(files); }
+    public Manifest {
+      files = List.copyOf(files);
+    }
   }
 
   public static final class State {
     public Request request;
-    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
+
+    @com.fasterxml.jackson.annotation.JsonProperty(
+        access = com.fasterxml.jackson.annotation.JsonProperty.Access.WRITE_ONLY)
     public List<Stamp> inventory = List.of();
+
     public String inventoryId;
     public int file;
     public String version;
@@ -99,7 +121,8 @@ final class PagedFileSearch {
           throw ReadingProblem.fail("INVALID_CURSOR");
         state = store.load(owner, "search", input.cursor(), State.class);
         if (state.inventoryId != null)
-          state.inventory = store.load(owner, "search_inventory", state.inventoryId, Manifest.class).files();
+          state.inventory =
+              store.load(owner, "search_inventory", state.inventoryId, Manifest.class).files();
         if (input.queries() != null && !input.queries().equals(state.request.queries()))
           throw ReadingProblem.fail("INVALID_CURSOR");
         ReadingMetrics.add("continuations", 1);
@@ -251,7 +274,7 @@ final class PagedFileSearch {
         if (state.scanLine >= lines.size()) advance(state);
       }
       return paused(state, List.of(), "COMPLETE", null);
-    } catch (Exception error) {
+    } catch (IOException | InterruptedException | RuntimeException error) {
       Tools.checkReadingCancellation(error);
       return new Page(
           List.of(), null, null, new Progress(0, 0, 0, "FAILED"), ReadingProblem.from(error));
@@ -292,7 +315,12 @@ final class PagedFileSearch {
       if (state.inventoryId == null) {
         var manifest = new Manifest(state.inventory);
         state.inventoryId = ReadingJson.hash(ReadingJson.JSON.writeValueAsBytes(manifest));
-        store.save(ReadingRuntime.current(), "search_inventory", state.inventoryId, manifest, Duration.ofHours(24));
+        store.save(
+            ReadingRuntime.current(),
+            "search_inventory",
+            state.inventoryId,
+            manifest,
+            Duration.ofHours(24));
       }
       boolean pending = state.rangeIndex < state.ranges.size();
       String id = (pending ? "RESULT:" : "SCAN:") + UUID.randomUUID();
@@ -302,14 +330,30 @@ final class PagedFileSearch {
     }
     ReadingMetrics.set("unscannedFiles", state.inventory.size() - state.file);
     ReadingMetrics.add("stop." + reason, 1);
-    return ReadingMetrics.generated(
-        new Page(
-            files,
-            result,
-            scan,
-            new Progress(
-                state.file, state.inventory.size() - state.file, state.inventory.size(), reason),
-            error));
+    String scanId = null;
+    if (files.isEmpty() && error == null) {
+      String inventoryId =
+          state.inventoryId != null
+              ? state.inventoryId
+              : ReadingJson.hash(ReadingJson.JSON.writeValueAsBytes(new Manifest(state.inventory)));
+      scanId =
+          ReadingJson.hash(ReadingJson.JSON.writeValueAsBytes(List.of(state.request, inventoryId)));
+    }
+    Page page =
+        ReadingMetrics.generated(
+            new Page(
+                files,
+                result,
+                scan,
+                new Progress(
+                    state.file,
+                    state.inventory.size() - state.file,
+                    state.inventory.size(),
+                    reason,
+                    scanId),
+                error));
+    ReadingMetrics.wire(page);
+    return page;
   }
 
   private static void advance(State state) {
@@ -370,6 +414,7 @@ final class PagedFileSearch {
       if (!candidate.equals(base)) return false;
       base = base.getParent();
     } else if (!candidate.startsWith(base)) return false;
+    if (base == null) throw ReadingProblem.fail("INVALID_ARGUMENT");
     return tools.matchesGlob(
         path,
         SearchGlob.compile(query.includeGlob()),

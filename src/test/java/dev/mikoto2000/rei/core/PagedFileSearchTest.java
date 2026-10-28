@@ -1,8 +1,5 @@
 package dev.mikoto2000.rei.core;
 
-import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
-import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -11,6 +8,7 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.storage.StorageMigrationCoordinator;
+import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -83,7 +81,20 @@ class PagedFileSearchTest {
           search.read(
               new PagedFileSearch.Request(List.of(query), 0, 1024, 4096, 128, 100, null), root);
       int requests = 1;
+      String scanId = page.progress().scanId();
+      assertNotNull(scanId);
+      var evaluator = new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(root);
       while (page.scanCursor() != null && requests++ < 12) {
+        assertEquals(scanId, page.progress().scanId());
+        assertTrue(
+            evaluator
+                .afterTool(
+                    "searchFilePage",
+                    "{}",
+                    StorageDatabase.JSON.writeValueAsString(page),
+                    evaluator.beforeTool("searchFilePage", "{}"))
+                .stream()
+                .anyMatch(e -> e.acquisitionProgress()));
         page =
             search.read(
                 new PagedFileSearch.Request(null, null, 1024, 4096, 128, 100, page.scanCursor()),
@@ -92,11 +103,17 @@ class PagedFileSearchTest {
       assertEquals(null, page.error());
       assertEquals("sources/1029.txt", page.files().getFirst().path());
       assertEquals(9, requests);
-      long largestCursor = new StorageDatabase(data).read(db -> {
-        try (var querySize = db.createStatement(); var rows = querySize.executeQuery("SELECT MAX(bytes) FROM reading_state WHERE kind='search'")) {
-          return rows.getLong(1);
-        }
-      });
+      long largestCursor =
+          new StorageDatabase(data)
+              .read(
+                  db -> {
+                    try (var querySize = db.createStatement();
+                        var rows =
+                            querySize.executeQuery(
+                                "SELECT MAX(bytes) FROM reading_state WHERE kind='search'")) {
+                      return rows.getLong(1);
+                    }
+                  });
       assertTrue(largestCursor < 8192, "The shared inventory must not be copied into every cursor");
       assertEquals(0L, ReadingMetrics.snapshot(AgentRunScope.current()).get("unscannedFiles"));
     }

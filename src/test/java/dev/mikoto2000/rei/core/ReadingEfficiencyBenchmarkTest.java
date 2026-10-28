@@ -1,9 +1,5 @@
 package dev.mikoto2000.rei.core;
 
-import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
-
-import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
-
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -13,6 +9,7 @@ import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
 import dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.storage.StorageMigrationCoordinator;
+import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -72,6 +69,21 @@ class ReadingEfficiencyBenchmarkTest {
                 new Tools.SearchAndReadRequest(queries, 0, 1, null, null, null, null, true), root);
     var before = payload(new SearchReadResultConverter().convert(legacy, List.class));
     var after = payload(new SearchReadResultConverter().convert(compact, List.class));
+    long duplicateBefore;
+    long duplicateAfter;
+    var beforeRun = new AgentRunContext("duplicate-before", "chat", root);
+    try (var scope = AgentRunScope.open(beforeRun)) {
+      new SearchReadResultConverter().convert(legacy, List.class);
+      duplicateBefore =
+          ReadingMetrics.snapshot(beforeRun).getOrDefault("wireDuplicateBodyBytes", 0L);
+    }
+    var afterRun = new AgentRunContext("duplicate-after", "chat", root);
+    try (var scope = AgentRunScope.open(afterRun)) {
+      new SearchReadResultConverter().convert(compact, List.class);
+      duplicateAfter = ReadingMetrics.snapshot(afterRun).getOrDefault("wireDuplicateBodyBytes", 0L);
+    }
+    assertEquals(208, duplicateBefore);
+    assertEquals(0, duplicateAfter);
     assertEquals(legacy.getFirst().sections(), compact.getFirst().sections());
     assertTrue(after.get("tokenizerAwareTokens") < before.get("tokenizerAwareTokens"));
     report(
@@ -85,6 +97,10 @@ class ReadingEfficiencyBenchmarkTest {
             1,
             "toolCallsAfter",
             1,
+            "duplicateBodyBytesBefore",
+            duplicateBefore,
+            "duplicateBodyBytesAfter",
+            duplicateAfter,
             "modelCalls",
             0));
   }

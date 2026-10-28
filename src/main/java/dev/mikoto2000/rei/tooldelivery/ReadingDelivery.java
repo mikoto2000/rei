@@ -1,13 +1,6 @@
 package dev.mikoto2000.rei.tooldelivery;
 
-import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
-
-import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
-
-import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
-
 import com.fasterxml.jackson.databind.JsonNode;
-import dev.mikoto2000.rei.tooldelivery.SourceEvidence;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -21,21 +14,31 @@ import org.springframework.ai.chat.prompt.Prompt;
 /** Current prompt presence is rebuilt, never inferred from the acquisition ledger or a summary. */
 public final class ReadingDelivery {
   public record Notice(String state, boolean suppressed, List<SourceEvidence> evidence) {
-    public Notice { evidence = List.copyOf(evidence); }
+    public Notice {
+      evidence = List.copyOf(evidence);
+    }
   }
 
   public record Entry(String path, String version, int start, List<String> hashes, String ref) {
-    public Entry { hashes = List.copyOf(hashes); }
+    public Entry {
+      hashes = List.copyOf(hashes);
+    }
   }
 
   public record Saved(List<Entry> entries) {
-    public Saved { entries = List.copyOf(entries); }
+    public Saved {
+      entries = List.copyOf(entries);
+    }
   }
 
   private final ReadingStateStore store;
   private final ReadingRawAccess raw;
+
   @FunctionalInterface
-  public interface Resolver { String resolve(ReadingRun owner, String path) throws java.io.IOException; }
+  public interface Resolver {
+    String resolve(ReadingRun owner, String path) throws java.io.IOException;
+  }
+
   private final Resolver resolver;
   private final Map<String, List<Entry>> available = new LinkedHashMap<>(16, .75f, true);
 
@@ -50,9 +53,12 @@ public final class ReadingDelivery {
     String scope = ReadingStateStore.scope(owner);
     List<Entry> current = collect(owner, prompt, true);
     available.put(scope, current);
-    while (available.size() > 64 || available.values().stream().flatMap(List::stream)
-        .mapToLong(entry -> entry.hashes().size() * 128L + 512L).sum() > 8L * 1024 * 1024)
-      available.remove(available.keySet().iterator().next());
+    while (available.size() > 64
+        || available.values().stream()
+                .flatMap(List::stream)
+                .mapToLong(entry -> entry.hashes().size() * 128L + 512L)
+                .sum()
+            > 8L * 1024 * 1024) available.remove(available.keySet().iterator().next());
     var history = new ArrayList<>(history(owner));
     for (var entry : current) if (!history.contains(entry)) history.add(entry);
     if (history.size() > 128)
@@ -61,12 +67,19 @@ public final class ReadingDelivery {
       int retained = ReadingJson.JSON.writeValueAsBytes(new Saved(List.of())).length;
       int start = history.size();
       for (int index = history.size() - 1; index >= 0; index--) {
-        int cost = ReadingJson.JSON.writeValueAsBytes(history.get(index)).length + (start < history.size() ? 1 : 0);
+        int cost =
+            ReadingJson.JSON.writeValueAsBytes(history.get(index)).length
+                + (start < history.size() ? 1 : 0);
         if (cost > 2 * 1024 * 1024 - retained) break;
         retained += cost;
         start = index;
       }
-      store.save(owner, "delivery", "evidence", new Saved(history.subList(start, history.size())), Duration.ofDays(7));
+      store.save(
+          owner,
+          "delivery",
+          "evidence",
+          new Saved(history.subList(start, history.size())),
+          Duration.ofDays(7));
     } catch (java.io.IOException | RuntimeException unavailable) {
       ReadingMetrics.add(owner, "deliveryPersistenceUnavailable", 1);
     }
@@ -108,8 +121,12 @@ public final class ReadingDelivery {
                         file.path("version").asText(),
                         file.path("startLine").asInt(),
                         file.path("endLine").asInt());
-                var candidate = ReadingJson.JSON.createObjectNode().put("path", path)
-                    .put("startLine", file.path("startLine").asInt()).put("version", file.path("version").asText());
+                var candidate =
+                    ReadingJson.JSON
+                        .createObjectNode()
+                        .put("path", path)
+                        .put("startLine", file.path("startLine").asInt())
+                        .put("version", file.path("version").asText());
                 candidate.set("content", ReadingJson.JSON.valueToTree(rows));
                 if (covers(present, path, candidate)) continue;
                 file.set("content", ReadingJson.JSON.valueToTree(rows));
@@ -151,8 +168,7 @@ public final class ReadingDelivery {
     return new Prompt(messages, prompt.getOptions());
   }
 
-  private List<String> recover(
-      ReadingRun owner, String path, String version, int start, int end)
+  private List<String> recover(ReadingRun owner, String path, String version, int start, int end)
       throws java.io.IOException {
     if (start < 1 || end < start || (long) end - start > 5000)
       throw ReadingProblem.fail("SOURCE_RESTORATION_UNAVAILABLE");
@@ -163,8 +179,11 @@ public final class ReadingDelivery {
       if (!entry.path().equals(path) || !entry.version().equals(version)) continue;
       if (entry.start() > end || (long) entry.start() + entry.hashes().size() <= start) continue;
       String source;
-      try { source = raw.read(owner.conversationId(), entry.ref()); }
-      catch (RuntimeException unavailable) { continue; }
+      try {
+        source = raw.read(owner.conversationId(), entry.ref());
+      } catch (RuntimeException unavailable) {
+        continue;
+      }
       var tree = ReadingJson.JSON.readTree(source);
       if (tree != null && tree.isObject() && tree.path("files").isArray())
         tree = tree.path("files");
@@ -199,20 +218,44 @@ public final class ReadingDelivery {
     return List.copyOf(result);
   }
 
-  public Notice inspect(ReadingRun owner, JsonNode result, boolean exact, boolean suppressRequested) {
-    if (owner == null || result.hasNonNull("error") || result.path("content").isEmpty()) return null;
+  public Notice inspect(
+      ReadingRun owner, JsonNode result, boolean exact, boolean suppressRequested) {
+    if (owner == null || result.hasNonNull("error") || result.path("content").isEmpty())
+      return null;
     String path;
-    try { path = relative(owner, result.path("path").asText()); }
-    catch (java.io.IOException error) { return null; }
+    try {
+      path = relative(owner, result.path("path").asText());
+    } catch (java.io.IOException error) {
+      return null;
+    }
     String version = result.path("version").asText();
     var previous = history(owner);
     var present = current(owner);
-    String state = exact && covers(present, path, result) ? "AVAILABLE"
-        : exact && covers(previous, path, result) && restorable(owner, previous, path, version) ? "RESTORABLE"
-        : previous.stream().anyMatch(e -> e.path().equals(path) && !e.version().equals(version)) ? "STALE" : "UNAVAILABLE";
+    String state =
+        exact && covers(present, path, result)
+            ? "AVAILABLE"
+            : exact && covers(previous, path, result) && restorable(owner, previous, path, version)
+                ? "RESTORABLE"
+                : previous.stream()
+                        .anyMatch(e -> e.path().equals(path) && !e.version().equals(version))
+                    ? "STALE"
+                    : "UNAVAILABLE";
     boolean suppress = suppressRequested && exact && state.equals("AVAILABLE");
-    var evidence = previous.stream().filter(e -> e.path().equals(path) && e.version().equals(version))
-        .map(e -> new SourceEvidence(e.path(), e.version(), e.start(), e.start() + e.hashes().size() - 1, null, "file-read", e.ref())).limit(8).toList();
+    var evidence =
+        previous.stream()
+            .filter(e -> e.path().equals(path) && e.version().equals(version))
+            .map(
+                e ->
+                    new SourceEvidence(
+                        e.path(),
+                        e.version(),
+                        e.start(),
+                        e.start() + e.hashes().size() - 1,
+                        null,
+                        "file-read",
+                        e.ref()))
+            .limit(8)
+            .toList();
     if (suppress) ReadingMetrics.add("suppressedBodyBytes", result.path("returnedBytes").asInt());
     return new Notice(state, suppress, evidence);
   }
@@ -229,8 +272,7 @@ public final class ReadingDelivery {
     }
   }
 
-  private boolean restorable(
-      ReadingRun owner, List<Entry> entries, String path, String version) {
+  private boolean restorable(ReadingRun owner, List<Entry> entries, String path, String version) {
     for (var entry : entries)
       if (entry.path().equals(path) && entry.version().equals(version)) {
         try {
@@ -248,8 +290,14 @@ public final class ReadingDelivery {
     for (int index = 0; index < result.path("content").size(); index++) {
       int line = result.path("startLine").asInt() + index;
       String hash = hash(result.path("content").get(index).asText());
-      if (entries.stream().noneMatch(e -> e.path().equals(path) && e.version().equals(result.path("version").asText())
-          && line >= e.start() && line - e.start() < e.hashes().size() && e.hashes().get(line - e.start()).equals(hash))) return false;
+      if (entries.stream()
+          .noneMatch(
+              e ->
+                  e.path().equals(path)
+                      && e.version().equals(result.path("version").asText())
+                      && line >= e.start()
+                      && line - e.start() < e.hashes().size()
+                      && e.hashes().get(line - e.start()).equals(hash))) return false;
     }
     return true;
   }
@@ -270,8 +318,7 @@ public final class ReadingDelivery {
       for (var response : tool.getResponses()) {
         if (response.name().equals("readRawToolResult")) {
           try {
-            var page =
-                raw.parse(response.responseData());
+            var page = raw.parse(response.responseData());
             if (page.offset() == 0
                 && !page.hasMore()
                 && raw.read(owner.conversationId(), page.rawResultRef()).equals(page.content()))
