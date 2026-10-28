@@ -1,5 +1,8 @@
 # Rei
 
+日本の祝日・休日を内閣府CSVで確認できます。配置・対応年設定・更新方法とLLMツールは
+[日本の祝日ガイド](docs/japanese-holidays.md)を参照してください。
+
 本人専用のMCPサーバーは既定OFFです。[MCP設定と6ツール](docs/mcp-server.md)、[安全境界](docs/mcp-server-security.md)、[運用](docs/mcp-server-operations.md)、[検証](docs/mcp-server-testing.md)を参照してください。
 
 軽量 CLI は `rei.bat` / `rei.sh` から起動できます。単一 Backend、Session 排他・永続 receipt、HTTP/SSE、detached 起動を実装し、音声を除く既存 Shell コマンドを接続しました。実 Windows Terminal の複数ペイン・GUI close と対話型 ConPTY を検証しています。[起動方法・制約](docs/lightweight-cli-client.md) と [全47コマンドの対応表](docs/lightweight-cli-command-matrix.md) を参照してください。既存 Shell と `start.bat` / `start.sh` は維持しています。

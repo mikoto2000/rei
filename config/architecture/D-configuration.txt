@@ -1,4 +1,6 @@
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.application.input.ConversationInput
+dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayTools
+dev.mikoto2000.rei.temporal.holiday.HolidayConfiguration -> dev.mikoto2000.rei.core.datasource.ReiDataDirectory
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.application.run.RunRegistry
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.application.run.RunSnapshot
 dev.mikoto2000.rei.ReiApplication -> dev.mikoto2000.rei.application.run.RunStatus
