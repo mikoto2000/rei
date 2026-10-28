@@ -1,4 +1,5 @@
 business: dev.mikoto2000.rei.ExternalConfigSupport -> dev.mikoto2000.rei.core.datasource.ReiDataDirectory
+wiring: dev.mikoto2000.rei.temporal.holiday.HolidayConfiguration -> dev.mikoto2000.rei.core.datasource.ReiDataDirectory
 business: dev.mikoto2000.rei.ExternalConfigSupport -> dev.mikoto2000.rei.core.datasource.ReiPaths
 business: dev.mikoto2000.rei.StartupOptions -> dev.mikoto2000.rei.core.project.ProjectService
 business: dev.mikoto2000.rei.activity.ActivityCommand -> dev.mikoto2000.rei.core.project.ProjectService

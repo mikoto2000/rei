@@ -1,4 +1,5 @@
 dev.mikoto2000.rei.ApplicationShutdownNotifier -> dev.mikoto2000.rei.event.AgentEventBus
+dev.mikoto2000.rei.llm.LlmChatClientProvider -> dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayTools
 dev.mikoto2000.rei.ApplicationShutdownNotifier -> dev.mikoto2000.rei.event.AgentEventFactory
 dev.mikoto2000.rei.StartupOptions -> dev.mikoto2000.rei.core.project.ProjectService
 dev.mikoto2000.rei.activity.ActivityAgentEvidenceSource -> dev.mikoto2000.rei.event.AgentEvent

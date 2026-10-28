@@ -1,4 +1,5 @@
 business: dev.mikoto2000.rei.application.project.ProjectQueryService -> dev.mikoto2000.rei.core.project.ProjectContext
+wiring: dev.mikoto2000.rei.core.configuration.AiConfiguration -> dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayTools
 business: dev.mikoto2000.rei.application.project.ProjectQueryService -> dev.mikoto2000.rei.core.project.ProjectRegistry
 business: dev.mikoto2000.rei.application.task.TaskControlService -> dev.mikoto2000.rei.application.run.ChatSubmitService
 business: dev.mikoto2000.rei.application.task.TaskControlService -> dev.mikoto2000.rei.application.run.RunRegistry

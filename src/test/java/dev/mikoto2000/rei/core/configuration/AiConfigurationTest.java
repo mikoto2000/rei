@@ -46,6 +46,25 @@ import org.springframework.beans.factory.ObjectProvider;
 /** AI機能の構成の結果と状態の契約を検証するテスト。 */
 class AiConfigurationTest {
 
+  @Test
+  void exposesHolidayToolsInDefaultClient() throws Exception {
+    var configuration = subAgentConfiguration();
+    var holiday =
+        new dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayTools(
+            Mockito.mock(dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayService.class));
+    configuration.setHolidayTools(mockProviderReturning(holiday));
+    Object request = getDefaultChatClientRequest(configuration.chatClient());
+    Field field = request.getClass().getDeclaredField("toolCallbacks");
+    field.setAccessible(true);
+    var names =
+        ((List<?>) field.get(request))
+            .stream()
+                .map(org.springframework.ai.tool.ToolCallback.class::cast)
+                .map(callback -> callback.getToolDefinition().name())
+                .toList();
+    org.assertj.core.api.Assertions.assertThat(names).contains("getHolidayInfo", "listHolidays");
+  }
+
   /** 機能の組み立てで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({

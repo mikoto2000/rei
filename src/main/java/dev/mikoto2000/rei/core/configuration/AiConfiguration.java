@@ -128,6 +128,15 @@ public class AiConfiguration {
   /** 経験の記録ツール一覧。 */
   private ObjectProvider<dev.mikoto2000.rei.episode.EpisodeTools> episodeTools;
 
+  /** 全Project共有の祝日ツール。既存の任意ツールと同じ遅延登録方式を使う。 */
+  private ObjectProvider<dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayTools> holidayTools;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  void setHolidayTools(
+      ObjectProvider<dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayTools> tools) {
+    holidayTools = tools;
+  }
+
   /** 機能の組み立てで使用する経験の記録ツール一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
   void setEpisodeTools(ObjectProvider<dev.mikoto2000.rei.episode.EpisodeTools> tools) {
@@ -410,6 +419,10 @@ public class AiConfiguration {
                 conversationHistoryTools,
                 summaryTools);
 
+    if (holidayTools != null) {
+      var holiday = holidayTools.getIfAvailable();
+      if (holiday != null) builder.defaultTools(holiday);
+    }
     if (httpApiTools != null) builder.defaultTools(httpApiTools);
     builder.defaultTools(
         (Object[])
