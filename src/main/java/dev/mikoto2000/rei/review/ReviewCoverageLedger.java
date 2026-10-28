@@ -191,6 +191,12 @@ public final class ReviewCoverageLedger {
     this.database = database;
   }
 
+  /** Shares the existing writer and migration boundary with normalized durable work. */
+  public dev.mikoto2000.rei.durable.DurableTaskStore durableTasks() {
+    return new dev.mikoto2000.rei.durable.DurableTaskStore(
+        (write, work) -> write ? database.transaction(work::run) : database.read(work::run));
+  }
+
   /** 指定された内容から新しい対象を作成する。 */
   public Job create(Scope scope, String criteria, String criteriaVersion, List<Target> targets) {
     require(criteria);

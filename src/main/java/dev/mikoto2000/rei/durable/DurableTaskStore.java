@@ -71,6 +71,11 @@ public final class DurableTaskStore {
 
   public Task begin(Scope scope, String goal, String mode, String sourceRef, List<String> excludes,
       int maxFiles, long maxBytes) {
+    return beginForRun(scope, null, goal, mode, sourceRef, excludes, maxFiles, maxBytes);
+  }
+
+  public Task beginForRun(Scope scope, String run, String goal, String mode, String sourceRef,
+      List<String> excludes, int maxFiles, long maxBytes) {
     if (!("WORKTREE".equals(mode) || "COMMIT".equals(mode)) || maxFiles < 1 || maxFiles > 200000 || maxBytes < 1
         || maxBytes > 16L * 1024 * 1024 * 1024 || excludes == null || excludes.size() > 64)
       throw new IllegalArgumentException("INVALID_SNAPSHOT_OPTIONS");
@@ -89,6 +94,10 @@ public final class DurableTaskStore {
       execute(db, "INSERT INTO durable_snapshots(id,task,mode,source_ref,state,reason,excludes,max_files,max_bytes) VALUES(?,?,?,?,'SCANNING','',?,?,?)",
           snapshot, id, mode, Objects.toString(sourceRef, ""), String.join("\n", excludes), maxFiles, maxBytes);
       execute(db, "INSERT INTO durable_directories(task,path) VALUES(?,'')", id);
+      if (run != null) {
+        require(run, 256);
+        execute(db, "INSERT INTO durable_attempts(task,run,started,state) VALUES(?,?,?,'ACTIVE')", id, run, System.currentTimeMillis());
+      }
       return status(db, scope, id);
     });
   }
@@ -164,6 +173,46 @@ public final class DurableTaskStore {
       // Result validation is added with the executor. Inventory alone never completes a task.
       return new Verification(false, "WORK_PENDING");
     });
+  }
+
+  public Page<Task> forRun(Scope scope, String run, String after, int limit) {
+    pageLimit(limit);
+    return read(db -> {
+      var ids = new ArrayList<String>();
+      try (var query = statement(db,
+          "SELECT t.id FROM durable_tasks t JOIN durable_attempts a ON a.task=t.id WHERE t.project=? AND t.session=? AND t.root=? AND a.run=? AND t.id>? ORDER BY t.id LIMIT ?",
+          scope.project(), scope.session(), scope.root(), run, Objects.toString(after, ""), limit + 1);
+          var rows = query.executeQuery()) {
+        while (rows.next()) ids.add(rows.getString(1));
+      }
+      boolean more = ids.size() > limit;
+      if (more) ids.removeLast();
+      var entries = new ArrayList<Task>();
+      for (var id : ids) entries.add(status(db, scope, id));
+      return new Page<>(entries, more ? ids.getLast() : null);
+    });
+  }
+
+  /** Empty means no additional blocker; existing Goal predicates still have to pass. */
+  public String verifyGoal(String project, String goal) {
+    String cursor = "";
+    while (true) {
+      final String after = cursor;
+      var owners = read(db -> {
+        var entries = new ArrayList<String[]>();
+        try (var query = statement(db, "SELECT id,session,root FROM durable_tasks WHERE project=? AND goal=? AND id>? ORDER BY id LIMIT 100", project, goal, after);
+            var rows = query.executeQuery()) {
+          while (rows.next()) entries.add(new String[] {rows.getString(1), rows.getString(2), rows.getString(3)});
+        }
+        return entries;
+      });
+      for (var owner : owners) {
+        var result = verify(new Scope(project, owner[1], owner[2]), owner[0]);
+        if (!result.complete()) return "durable_task:" + result.reason();
+        cursor = owner[0];
+      }
+      if (owners.size() < 100) return "";
+    }
   }
 
   Directory nextDirectory(Scope scope, String task) {

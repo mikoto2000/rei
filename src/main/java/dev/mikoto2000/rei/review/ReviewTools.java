@@ -82,6 +82,14 @@ public final class ReviewTools {
   /** 概算。 */
   private final TokenEstimator estimator;
 
+  private final dev.mikoto2000.rei.durable.DurableTaskStore tasks;
+
+  private java.util.function.Function<AgentRunContext, String> goalResolver = owner -> null;
+
+  public void setGoalResolver(java.util.function.Function<AgentRunContext, String> resolver) {
+    goalResolver = resolver;
+  }
+
   /** 変更内容のレビューを利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ReviewTools(
       ReviewCoverageLedger ledger, RawToolResultStore raw, Tools files, TokenEstimator estimator) {
@@ -98,6 +106,57 @@ public final class ReviewTools {
     this.raw = raw;
     this.files = files;
     this.estimator = estimator;
+    this.tasks = ledger.durableTasks();
+  }
+
+  private static dev.mikoto2000.rei.durable.DurableTaskStore.Scope taskScope(AgentRunContext owner) {
+    scope(owner);
+    return new dev.mikoto2000.rei.durable.DurableTaskStore.Scope(
+        owner.projectId(), owner.conversationId(), owner.projectRoot().toString());
+  }
+
+  @Tool(description = "Begin a durable whole-repository review. COMMIT captures the immutable HEAD tree; WORKTREE preserves current contents including uncommitted files. Omitted mode prefers COMMIT at a Git root. Exclusions are explicit glob patterns with recorded reasons. Continue scanReviewSnapshot until SEALED; enumeration and processing are distinct. The owning Run and Goal cannot finish while required work remains.")
+  public dev.mikoto2000.rei.durable.DurableTaskStore.Task beginRepositoryReview(
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String snapshotMode,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) List<String> excludes,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer maxFiles,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Long maxBytes) throws java.io.IOException {
+    var owner = AgentRunScope.current();
+    var capturedScope = taskScope(owner);
+    String mode = snapshotMode == null ? "AUTO" : snapshotMode;
+    String reference = "";
+    if (!mode.equals("WORKTREE")) {
+      try {
+        reference = dev.mikoto2000.rei.durable.GitSnapshotSource.head(owner.projectRoot());
+        if (mode.equals("AUTO")) mode = "COMMIT";
+      } catch (java.io.IOException unavailable) {
+        if (!mode.equals("AUTO")) throw unavailable;
+        mode = "WORKTREE";
+      }
+    }
+    return tasks.beginForRun(capturedScope, owner.runId(), goalResolver.apply(owner), mode, reference,
+        excludes == null ? List.of("target/**", "node_modules/**", ".rei/**", ".worktrees/**") : excludes,
+        maxFiles == null ? 100000 : maxFiles, maxBytes == null ? 2L * 1024 * 1024 * 1024 : maxBytes);
+  }
+
+  @Tool(description = "Capture the next bounded page of a durable review Snapshot. maxEntries defaults to 128 and is 1..1000. Continue until enumeration is SEALED. FAILED includes an explicit error or capacity reason; never claim complete enumeration in that state.")
+  public dev.mikoto2000.rei.durable.DurableTaskStore.Task scanReviewSnapshot(String taskId,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer maxEntries) {
+    return new dev.mikoto2000.rei.durable.SnapshotEnumerator(tasks)
+        .step(taskScope(AgentRunScope.current()), taskId, maxEntries == null ? 128 : maxEntries);
+  }
+
+  @Tool(description = "Inspect durable review identity, frozen Snapshot ID, enumeration status, errors, exclusion count and unscanned directories. SEALED only proves target enumeration, not completed review.")
+  public dev.mikoto2000.rei.durable.DurableTaskStore.Task reviewTaskStatus(String taskId) {
+    return tasks.status(taskScope(AgentRunScope.current()), taskId);
+  }
+
+  @Tool(description = "Page frozen review targets, exclusions and source errors. Pass nextCursor unchanged as afterPath; null starts at the beginning. limit is 1..1000, default 100. Reading a page never completes work.")
+  public dev.mikoto2000.rei.durable.DurableTaskStore.Page<dev.mikoto2000.rei.durable.DurableTaskStore.FileEntry> listReviewTargets(
+      String taskId,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String afterPath,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) {
+    return tasks.files(taskScope(AgentRunScope.current()), taskId, afterPath, limit == null ? 100 : limit);
   }
 
   /** 変更内容のレビューで用いる対象範囲を返す。 */
@@ -474,6 +533,15 @@ public final class ReviewTools {
 
   /** 条件を満たさない操作を拒否するため、完了の前提条件を確認する。 */
   public void requireComplete(AgentRunContext owner) {
+    String cursor = null;
+    do {
+      var page = tasks.forRun(taskScope(owner), owner.runId(), cursor, 100);
+      for (var task : page.entries())
+        if (!tasks.verify(taskScope(owner), task.id()).complete())
+          throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
+              dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.REVIEW_PARTIAL);
+      cursor = page.nextCursor();
+    } while (cursor != null);
     for (var id : ledger.jobs(scope(owner)))
       try {
         if (!reviewStatus(id).status().equals("COMPLETE"))
