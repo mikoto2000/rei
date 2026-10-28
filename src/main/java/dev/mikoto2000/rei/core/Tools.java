@@ -3380,7 +3380,7 @@ public class Tools {
       Write one or more known files in a single call: replace complete contents or append to each file.
       Always pass a non-empty files array, even for one file. Put path, content, append, and charset inside each
       files element, not at the top level. append: true appends; append: false or omitted replaces complete contents.
-      Use this for full-file writes or appending chunks. For a small edit to existing text, prefer applyTextDiff.
+      Use this for direct full-file writes or appending chunks. Prefer proposeTextChangeSet or proposeTextDocumentChangeSet for reviewed UTF-8 edits. Use applyTextDiff for legacy non-UTF-8 text edits.
       @param files 書き込むファイルの空でないリスト。各要素に必須の path と content、任意の append と charset を指定する。
       @return ファイルごとの書き込み結果。path で識別できる。
 
@@ -3794,7 +3794,8 @@ public class Tools {
       description =
           """
   Apply a targeted textual replacement to an existing file.
-  Prefer this for small, localized edits that should leave the surrounding file unchanged.
+  Use this for legacy non-UTF-8 small, localized edits that leave the surrounding file unchanged.
+  For UTF-8 edits prefer proposeTextChangeSet or proposeTextDocumentChangeSet.
   oldText がファイル内に一意に存在する場合だけ newText に置換します。
   @param pathStr 対象ファイルのパス
   @param oldText 置換前の期待文字列
@@ -3813,27 +3814,26 @@ public class Tools {
     }
 
     java.nio.file.Path path = resolveProjectPath(pathStr);
-    ResolvedTextFile original = readTextFileContent(path, charset);
+    byte[] baseline = Files.readAllBytes(path);
+    ResolvedTextFile original = decodeTextFileContent(baseline, charset);
     String originalContent = original.content();
-    int firstIndex = originalContent.indexOf(oldText);
-    if (firstIndex < 0) {
-      return new TextDiffApplyResult(false, false, "oldText が見つかりません");
+    String updatedContent;
+    try {
+      updatedContent = TextEditEngine.edit(originalContent,
+          List.of(new TextChangeSetService.Edit(oldText, newText))).text();
+    } catch (IllegalArgumentException invalid) {
+      return new TextDiffApplyResult(false, false, invalid.getMessage());
     }
-    int secondIndex = originalContent.indexOf(oldText, firstIndex + oldText.length());
-    if (secondIndex >= 0) {
-      return new TextDiffApplyResult(false, false, "oldText が複数箇所に一致しました");
-    }
-
-    String updatedContent =
-        originalContent.substring(0, firstIndex)
-            + newText
-            + originalContent.substring(firstIndex + oldText.length());
     if (updatedContent.equals(originalContent)) {
       return new TextDiffApplyResult(true, false, "変更はありません");
     }
 
-    Files.writeString(
-        path, updatedContent, original.charset(), StandardOpenOption.TRUNCATE_EXISTING);
+    String encodedText = decodeStrict(baseline, original.charset()).startsWith("\ufeff")
+        ? "\ufeff" + updatedContent : updatedContent;
+    var encoded = original.charset().newEncoder().encode(java.nio.CharBuffer.wrap(encodedText));
+    byte[] replacement = new byte[encoded.remaining()];
+    encoded.get(replacement);
+    TextDocumentTransaction.writeBytes(path, baseline, replacement, TextDocumentTransaction::replace);
     recordTextEdit(path);
     return new TextDiffApplyResult(true, true, "差分を適用しました");
   }
@@ -4047,12 +4047,14 @@ public class Tools {
   /** 必要な内容を参照できるよう、テキストファイル内容を読み取る。 */
   private ResolvedTextFile readTextFileContent(java.nio.file.Path path, String charset)
       throws IOException {
+    return decodeTextFileContent(Files.readAllBytes(path), charset);
+  }
+
+  private ResolvedTextFile decodeTextFileContent(byte[] bytes, String charset) throws IOException {
     if (charset != null && !charset.isBlank()) {
       Charset resolvedCharset = resolveCharset(charset);
-      return new ResolvedTextFile(
-          stripBom(readStringStrict(path, resolvedCharset)), resolvedCharset);
+      return new ResolvedTextFile(stripBom(decodeStrict(bytes, resolvedCharset)), resolvedCharset);
     }
-    byte[] bytes = Files.readAllBytes(path);
     ResolvedTextFile bomDecoded = decodeBom(bytes);
     if (bomDecoded != null) {
       return bomDecoded;

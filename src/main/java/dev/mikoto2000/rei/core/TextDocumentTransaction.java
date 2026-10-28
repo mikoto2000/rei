@@ -111,32 +111,43 @@ public final class TextDocumentTransaction {
   static void writeSingle(Path target, String before, String after, Move move) throws IOException {
     text(before);
     text(after);
+    writeBytes(target, before.getBytes(StandardCharsets.UTF_8), after.getBytes(StandardCharsets.UTF_8), move);
+  }
+
+  /** Encoded legacy edits use the same staging, permission and atomic-publication boundary. */
+  static void writeBytes(Path target, byte[] before, byte[] after, Move move) throws IOException {
     Path root = target.toAbsolutePath().getParent().toRealPath();
     String name = target.getFileName().toString();
     if (!path(root, name).equals(target.toAbsolutePath().normalize()))
       throw new IOException("Aliased text target rejected");
-    if (!Objects.equals(read(root, name), before))
-      throw new IOException("Baseline changed before staging");
-    var staged =
-        new Stage(name, temporary(name, UUID.randomUUID().toString(), 0), hash(after), false);
+    if (!bytesMatch(target, before)) throw new IOException("Baseline changed before staging");
+    Path temporary = path(root, temporary(name, UUID.randomUUID().toString(), 0));
     try {
       RunCancellation.propagate(null);
-      stage(root, staged, after);
+      stageBytes(temporary, target, after);
       RunCancellation.propagate(null);
-      if (!Objects.equals(read(root, name), before))
-        throw new IOException("Baseline changed before atomic publication");
-      if (!Objects.equals(read(root, staged.temporary()), after))
-        throw new IOException("Staged content changed");
-      move.replace(path(root, staged.temporary()), path(root, name));
-    } catch (IOException | RuntimeException error) {
-      try {
-        cleanup(root, List.of(staged));
-      } catch (IOException | RuntimeException cleanup) {
-        error.addSuppressed(cleanup);
-      }
-      throw error;
+      if (!bytesMatch(target, before)) throw new IOException("Baseline changed before atomic publication");
+      if (!bytesMatch(temporary, after)) throw new IOException("Staged content changed");
+      move.replace(temporary, target);
+      if (!bytesMatch(target, after)) throw new IOException("Published content requires inspection");
+    } catch (IOException | RuntimeException failure) {
+      try { cleanupBytes(temporary, after); }
+      catch (IOException | RuntimeException cleanup) { failure.addSuppressed(cleanup); }
+      throw failure;
     }
-    cleanup(root, List.of(staged));
+    cleanupBytes(temporary, after);
+  }
+
+  private static boolean bytesMatch(Path path, byte[] expected) throws IOException {
+    try (var stream = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS)) {
+      return Arrays.equals(expected, stream.readNBytes(expected.length + 1));
+    }
+  }
+
+  private static void cleanupBytes(Path temporary, byte[] expected) throws IOException {
+    if (!Files.exists(temporary, LinkOption.NOFOLLOW_LINKS)) return;
+    if (!bytesMatch(temporary, expected)) throw new IOException("Staging content changed; preserve it");
+    Files.delete(temporary);
   }
 
   /** 指定された内容を、現在の対象へ反映する。 */
@@ -296,13 +307,12 @@ public final class TextDocumentTransaction {
   /** 共通の実行基盤に関する段階を処理する。 */
   private static void stage(Path root, Stage stage, String text) throws IOException {
     Path temporary = path(root, stage.temporary()), target = path(root, stage.path());
-    byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
-    try (var channel =
-        FileChannel.open(
-            temporary,
-            StandardOpenOption.CREATE_NEW,
-            StandardOpenOption.WRITE,
-            LinkOption.NOFOLLOW_LINKS)) {
+    stageBytes(temporary, target, text.getBytes(StandardCharsets.UTF_8));
+  }
+
+  private static void stageBytes(Path temporary, Path target, byte[] bytes) throws IOException {
+    try (var channel = FileChannel.open(temporary, StandardOpenOption.CREATE_NEW,
+        StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
       var buffer = ByteBuffer.wrap(bytes);
       while (buffer.hasRemaining()) channel.write(buffer);
       channel.force(true);

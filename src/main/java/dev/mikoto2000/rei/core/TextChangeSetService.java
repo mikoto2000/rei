@@ -13,9 +13,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
@@ -483,47 +481,9 @@ public class TextChangeSetService {
 
   /** 共通の実行基盤で用いる編集を返す。 */
   private static String edit(String baseline, List<Edit> edits) {
-    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-    if (edits.isEmpty() || edits.size() > 64)
-      throw new IllegalArgumentException("Partial edits require 1 to 64 hunks");
-    /**
-     * 共通の実行基盤で受け渡すHunkを表す。
-     *
-     * @param start 開始
-     * @param end 終了
-     * @param replacement 置換
-     */
-    record Hunk(int start, int end, String replacement) {}
-    var hunks = new ArrayList<Hunk>();
-    int inputBytes = 0;
-    for (var edit : edits) {
-      if (edit == null) throw new IllegalArgumentException("Hunk required");
-      validateText(edit.oldText());
-      validateText(edit.newText());
-      inputBytes +=
-          edit.oldText().getBytes(StandardCharsets.UTF_8).length
-              + edit.newText().getBytes(StandardCharsets.UTF_8).length;
-      if (inputBytes > 65536) throw new IllegalArgumentException("Hunk input exceeds 64KiB");
-      if (edit.oldText().isEmpty()) throw new IllegalArgumentException("Nonempty oldText required");
-      int start = baseline.indexOf(edit.oldText());
-      if (start < 0) throw new IllegalArgumentException("Hunk oldText not found");
-      if (baseline.indexOf(edit.oldText(), start + 1) >= 0)
-        throw new IllegalArgumentException("Hunk oldText is ambiguous; include more context");
-      hunks.add(new Hunk(start, start + edit.oldText().length(), edit.newText()));
-    }
-    hunks.sort(Comparator.comparingInt(Hunk::start));
-    for (int i = 1; i < hunks.size(); i++)
-      if (hunks.get(i).start() < hunks.get(i - 1).end())
-        throw new IllegalArgumentException("Overlapping hunks");
-    var result = new StringBuilder();
-    int cursor = 0;
-    for (var hunk : hunks) {
-      result.append(baseline, cursor, hunk.start()).append(hunk.replacement());
-      cursor = hunk.end();
-    }
-    result.append(baseline, cursor, baseline.length());
-    validateText(result.toString());
-    return result.toString();
+    String result = TextEditEngine.edit(baseline, edits).text();
+    validateText(result);
+    return result;
   }
 
   /** 内容の同一性を照合するためのハッシュ値を求める。 */
