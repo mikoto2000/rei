@@ -39,10 +39,15 @@ class JapaneseHolidayServiceTest {
   void recordsFailureEvenWhenIoExceptionHasNoMessage() throws Exception {
     Path file = csv("2026/11/23,勤労感謝の日\n");
     var fail = new java.util.concurrent.atomic.AtomicBoolean();
-    var service = new JapaneseHolidayService(file, Set.of(2026), clock, path -> {
-      if (fail.get()) throw new java.io.IOException();
-      return Files.readAllBytes(path);
-    });
+    var service =
+        new JapaneseHolidayService(
+            file,
+            Set.of(2026),
+            clock,
+            path -> {
+              if (fail.get()) throw new java.io.IOException();
+              return Files.readAllBytes(path);
+            });
     fail.set(true);
     var status = service.reload();
     assertFalse(status.current());
@@ -54,39 +59,56 @@ class JapaneseHolidayServiceTest {
   void cachesQueriesButExplicitReloadReadsSameMetadataAgain() throws Exception {
     Path file = csv("2026/11/23,勤労感謝の日\n");
     var reads = new java.util.concurrent.atomic.AtomicInteger();
-    var service = new JapaneseHolidayService(file, Set.of(2026), clock, path -> {
-      reads.incrementAndGet();
-      return Files.readAllBytes(path);
-    });
-    for (int i = 0; i < 20; i++) service.getHolidayInfo(LocalDate.of(2026,11,23));
+    var service =
+        new JapaneseHolidayService(
+            file,
+            Set.of(2026),
+            clock,
+            path -> {
+              reads.incrementAndGet();
+              return Files.readAllBytes(path);
+            });
+    for (int i = 0; i < 20; i++) service.getHolidayInfo(LocalDate.of(2026, 11, 23));
     assertEquals(1, reads.get());
     assertTrue(service.reload().current());
     assertEquals(2, reads.get());
-    assertEquals(366, java.time.temporal.ChronoUnit.DAYS.between(
-        service.listHolidays(LocalDate.of(2026,1,1), LocalDate.of(2027,1,1)).from(),
-        service.listHolidays(LocalDate.of(2026,1,1), LocalDate.of(2027,1,1)).to()) + 1);
+    assertEquals(
+        366,
+        java.time.temporal.ChronoUnit.DAYS.between(
+                service.listHolidays(LocalDate.of(2026, 1, 1), LocalDate.of(2027, 1, 1)).from(),
+                service.listHolidays(LocalDate.of(2026, 1, 1), LocalDate.of(2027, 1, 1)).to())
+            + 1);
   }
 
   @Test
   void detectsCreationAfterStartupAndMissingYearsInsideRecordedRange() throws Exception {
     Path file = directory.resolve("syukujitsu.csv");
-    var service = service(file, 2025,2026,2027);
+    var service = service(file, 2025, 2026, 2027);
     csv("2025/1/1,元日\n2027/1/1,元日\n");
-    assertEquals(HolidayStatus.HOLIDAY, service.getHolidayInfo(LocalDate.of(2027,1,1)).status());
-    assertEquals(HolidayStatus.UNKNOWN, service.getHolidayInfo(LocalDate.of(2026,11,24)).status());
-    assertEquals(Set.of(2025,2027), service.getHolidayDataStatus().completeYears());
+    assertEquals(HolidayStatus.HOLIDAY, service.getHolidayInfo(LocalDate.of(2027, 1, 1)).status());
+    assertEquals(
+        HolidayStatus.UNKNOWN, service.getHolidayInfo(LocalDate.of(2026, 11, 24)).status());
+    assertEquals(Set.of(2025, 2027), service.getHolidayDataStatus().completeYears());
   }
 
   @Test
   void rejectsFilesThatChangeWhileBeingReadAndNeverPublishesTheirPartialData() throws Exception {
     Path file = csv("2026/11/23,勤労感謝の日\n");
     var change = new java.util.concurrent.atomic.AtomicBoolean();
-    var service = new JapaneseHolidayService(file, Set.of(2026), clock, path -> {
-      byte[] result = Files.readAllBytes(path);
-      if (change.getAndSet(false)) Files.writeString(path,
-          HolidayCsvTest.HEADER + "\n2026/1/1,元日\n2026/11/23,勤労感謝の日\n", HolidayCsvTest.MS932);
-      return result;
-    });
+    var service =
+        new JapaneseHolidayService(
+            file,
+            Set.of(2026),
+            clock,
+            path -> {
+              byte[] result = Files.readAllBytes(path);
+              if (change.getAndSet(false))
+                Files.writeString(
+                    path,
+                    HolidayCsvTest.HEADER + "\n2026/1/1,元日\n2026/11/23,勤労感謝の日\n",
+                    HolidayCsvTest.MS932);
+              return result;
+            });
     change.set(true);
     var failed = service.reload();
     assertFalse(failed.current());
