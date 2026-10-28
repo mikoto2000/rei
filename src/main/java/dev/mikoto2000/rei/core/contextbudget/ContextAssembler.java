@@ -141,6 +141,10 @@ public class ContextAssembler {
     this.publisher = publisher;
   }
 
+  private Prompt restoreSuppressed(Prompt prompt) {
+    return readingDelivery == null ? prompt : readingDelivery.restoreSuppressed(dev.mikoto2000.rei.core.chat.AgentRunScope.current(), prompt);
+  }
+
   /** モデルへ渡す文脈の管理で用いるassembleを返す。 */
   public Prompt assemble(Prompt raw, String conversation, String run, Runnable checkActive) {
     if (!properties.isEnabled()) {
@@ -160,7 +164,7 @@ public class ContextAssembler {
                   })
               .toList();
       var projected =
-          tools.fit(new Prompt(messages, raw.getOptions()), conversation, run, hardLimit(raw));
+          tools.fit(restoreSuppressed(new Prompt(messages, raw.getOptions())), conversation, run, hardLimit(raw));
       if (estimate(projected) > hardLimit(raw))
         throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
             dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.CONTEXT_HARD_LIMIT);
@@ -248,7 +252,7 @@ public class ContextAssembler {
     }
     while (estimate(project(raw, h, a)) > hard && dropOldest(h)) {}
     while (estimate(project(raw, h, a)) > hard && dropOldest(a)) {}
-    Prompt result = tools.fit(project(raw, h, a), conversation, run, hard);
+    Prompt result = tools.fit(restoreSuppressed(project(raw, h, a)), conversation, run, hard);
     long after = estimate(result);
     if (after > hard)
       throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(

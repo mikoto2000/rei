@@ -41,6 +41,78 @@ public final class ReadingDelivery {
     store.save(owner, "delivery", "evidence", new Saved(List.copyOf(history)), Duration.ofDays(7));
   }
 
+  /** Recheck after projection: a previously present source may have disappeared during compression. */
+  public Prompt restoreSuppressed(AgentRunContext owner, Prompt prompt) {
+    if (owner == null) return prompt;
+    var present = collect(owner, prompt, false);
+    var messages = new ArrayList<org.springframework.ai.chat.messages.Message>();
+    for (var message : prompt.getInstructions()) {
+      if (!(message instanceof ToolResponseMessage tool)) { messages.add(message); continue; }
+      var responses = new ArrayList<ToolResponseMessage.ToolResponse>();
+      for (var response : tool.getResponses()) {
+        if (!response.name().equals("readMultiFile")) { responses.add(response); continue; }
+        try {
+          var tree = StorageDatabase.JSON.readTree(response.responseData());
+          boolean changed = false;
+          if (tree != null && tree.isArray()) for (var node : tree) {
+            if (!node.path("delivery").path("suppressed").asBoolean()) continue;
+            changed = true;
+            var file = (com.fasterxml.jackson.databind.node.ObjectNode) node;
+            try {
+              String path = relative(owner, file.path("path").asText());
+              var rows = recover(owner, path, file.path("version").asText(), file.path("startLine").asInt(), file.path("endLine").asInt());
+              var candidate = new Tools.ReadFileResult(path, file.path("startLine").asInt(), file.path("endLine").asInt(), rows, false, null,
+                  file.path("version").asText(), null, 0);
+              if (covers(present, path, candidate)) continue;
+              file.set("content", StorageDatabase.JSON.valueToTree(rows));
+              file.put("returnedBytes", rows.stream().mapToInt(row -> row.getBytes(StandardCharsets.UTF_8).length + 1).sum());
+              ((com.fasterxml.jackson.databind.node.ObjectNode) file.path("delivery")).put("suppressed", false).put("state", "RESTORABLE");
+              ReadingMetrics.add(owner, "restoredBeforeDelivery", 1);
+            } catch (java.io.IOException | RuntimeException unavailable) {
+              file.put("error", "SOURCE_RESTORATION_UNAVAILABLE");
+              file.set("readingProblem", StorageDatabase.JSON.valueToTree(new ReadingProblem("SOURCE_RESTORATION_UNAVAILABLE", "Saved source could not be restored", "Read the explicit file range again.")));
+              ((com.fasterxml.jackson.databind.node.ObjectNode) file.path("delivery")).put("suppressed", false).put("state", "UNAVAILABLE");
+            }
+          }
+          responses.add(changed ? new ToolResponseMessage.ToolResponse(response.id(), response.name(), StorageDatabase.JSON.writeValueAsString(tree)) : response);
+        } catch (java.io.IOException malformed) { responses.add(response); }
+      }
+      messages.add(ToolResponseMessage.builder().responses(responses).metadata(tool.getMetadata()).build());
+    }
+    return new Prompt(messages, prompt.getOptions());
+  }
+
+  private List<String> recover(AgentRunContext owner, String path, String version, int start, int end) throws java.io.IOException {
+    if (start < 1 || end < start || (long) end - start > 5000) throw ReadingProblem.fail("SOURCE_RESTORATION_UNAVAILABLE");
+    var rows = new java.util.TreeMap<Integer, String>();
+    for (var entry : history(owner)) {
+      if (!entry.path().equals(path) || !entry.version().equals(version)) continue;
+      var source = raw.read(owner.conversationId(), entry.ref());
+      var tree = StorageDatabase.JSON.readTree(source.rawResult());
+      if (tree != null && tree.isObject() && tree.path("files").isArray()) tree = tree.path("files");
+      if (tree == null || !tree.isArray()) continue;
+      for (var file : tree) {
+        if (!file.path("version").asText().equals(version) || !relative(owner, file.path("path").asText()).equals(path)) continue;
+        var sections = file.path("sections").isArray() ? file.path("sections") : StorageDatabase.JSON.valueToTree(List.of(file));
+        for (var section : sections) {
+          int line = section.path("startLine").asInt();
+          for (var text : section.path("content")) {
+            int index = line - entry.start();
+            if (line >= start && line <= end && index >= 0 && index < entry.hashes().size()
+                && hash(text.asText()).equals(entry.hashes().get(index))) rows.put(line, text.asText());
+            line++;
+          }
+        }
+      }
+    }
+    var result = new ArrayList<String>();
+    for (int line = start; line <= end; line++) {
+      if (!rows.containsKey(line)) throw ReadingProblem.fail("SOURCE_RESTORATION_UNAVAILABLE");
+      result.add(rows.get(line));
+    }
+    return List.copyOf(result);
+  }
+
   Tools.ReadFileResult apply(AgentRunContext owner, Tools.ReadFileRequest request, Tools.ReadFileResult result) {
     if (owner == null || result.error() != null || result.content().isEmpty()) return result;
     String path;

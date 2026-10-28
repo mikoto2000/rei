@@ -42,6 +42,10 @@ class ReadingDeliveryTest {
       assertTrue(repeated.content().isEmpty());
       assertTrue(repeated.delivery().suppressed());
       assertEquals("AVAILABLE", repeated.delivery().state());
+      var suppressedResponse = ToolResponseMessage.builder().responses(List.of(new ToolResponseMessage.ToolResponse("call", "readMultiFile", StorageDatabase.JSON.writeValueAsString(List.of(repeated))))).build();
+      var rescued = delivery.restoreSuppressed(owner, new Prompt(List.of(assistant, suppressedResponse)));
+      String rescuedJson = ((ToolResponseMessage) rescued.getInstructions().getLast()).getResponses().getFirst().responseData();
+      assertEquals("one", StorageDatabase.JSON.readTree(rescuedJson).get(0).path("content").get(0).asText());
       delivery.confirm(owner, new Prompt(List.of(new UserMessage("compressed summary"))));
       var restored = tools.readMultiFile(List.of(request), root).getFirst();
       assertEquals(List.of("one", "two"), restored.content());
