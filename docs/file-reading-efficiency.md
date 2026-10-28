@@ -59,3 +59,27 @@ uses `sectionIndex` (zero based), `line` and `queryIndex`. A partial or absent s
 causes match text to be discarded. Default delivery is unchanged. Compare tokens with the
 same estimator; no additional LLM call is made. `wireBytes` / `wireEstimatedTokens` measure
 the converter output, separately from the internal generated JSON and final prompt.
+
+## Phase 2
+
+`searchFilePage` adds a persistent, run-scoped search API. `RESULT:<uuid>` resumes pending
+hit neighborhoods; `SCAN:<uuid>` resumes exploration. Neither is a `readMultiFile.nextRead`.
+Pass the returned cursor unchanged with optional new output/scan budgets. Retrying an old
+cursor is idempotent: it describes the same source position, rather than consuming mutable
+server position and risking lost results after a transport failure.
+
+Search state lives in schema 19's `reading_state`, using `StorageDatabase` transactions.
+Scope includes run, conversation, real Project root, project identity, request source and mode.
+Retention is 24 hours, with 4 MiB per record, 2048 records and 64 MiB total. Expired records
+are collected on writes. No stored body is returned before current path security checks.
+The current inventory metadata is checked on resume; a pending file's SHA-256 must also
+match its stored version. Changed files invalidate the cursor.
+
+Each request bounds file scans and source bytes; oversized individual files return an explicit
+failure while permitting the rest of the search to continue. Source files remain limited to
+1 MiB; this change does not introduce streaming reads of larger files. The inventory safety
+ceiling is 20,000 paths; exceeding it requires a narrower scope and is explicitly reported.
+Query groups currently require one charset. Legacy ranked `searchAndRead` is unchanged.
+
+Tests cover two distant hits, reconstructing the store, source edits, invalid cursors, and
+1030 files with the last target reached through nine pages of at most 128 file scans.

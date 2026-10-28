@@ -2181,6 +2181,10 @@ public class Tools {
   }
 
   private ReadingStateStore readingStateStore;
+  private ReadingDelivery readingDelivery;
+
+  @Autowired
+  void setReadingDelivery(ReadingDelivery delivery) { readingDelivery = delivery; }
 
   @Autowired
   void setReadingStateStore(ReadingStateStore store) { readingStateStore = store; }
@@ -2543,7 +2547,7 @@ public class Tools {
       Read one or more known file paths or line ranges in a single call.
       For Java declarations, pass symbol (e.g. p.C#work(String[])), optionally path to narrow candidates.
       Overloaded names return candidates; select an exact symbolId. includeBody defaults true, includeJavadoc true,
-      contextLines defaults 0 (max 25), includeOwnerOverview defaults false. Use returned nextRead unchanged.
+      contextLines defaults 0 (max 25), includeOwnerOverview defaults false. Use returned nextRead unchanged. unreadOnly:true suppresses only complete explicit line ranges confirmed in the current model prompt; full-file requests always return source.
       A batch shares source byte/line and result token budgets fairly across files. A truncated result is a
       contiguous prefix, never head/tail excerpts. Empty content with truncated=true and nextRead is a budget
       continuation, not an empty file or a read failure; pass each returned nextRead unchanged in the next batch.
@@ -2720,6 +2724,7 @@ public class Tools {
                 : readSingleFile(request, workingDirectory, snapshots, fileBudget, lineBudget);
         if (request.symbol() != null && result.error() == null)
           workingSet.recordRead(workingDirectory.resolve(result.path()));
+        if (readingDelivery != null) result = readingDelivery.apply(dev.mikoto2000.rei.core.chat.AgentRunScope.current(), request, result);
         int remaining = MAX_READ_TOTAL_LINES - totalLines;
         if (result.content().size() > remaining) {
           result =
@@ -2857,7 +2862,11 @@ public class Tools {
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer contextLines,
       @org.springframework.ai.tool.annotation.ToolParam(required = false)
           Boolean includeOwnerOverview,
-      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer symbolOffset) {
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer symbolOffset,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Boolean unreadOnly) {
+    public ReadFileRequest(String path, Integer startLine, Integer endLine, String expectedVersion, Integer offset, String charset, String symbol, Boolean includeBody, Boolean includeJavadoc, Integer contextLines, Boolean includeOwnerOverview, Integer symbolOffset) {
+      this(path, startLine, endLine, expectedVersion, offset, charset, symbol, includeBody, includeJavadoc, contextLines, includeOwnerOverview, symbolOffset, null);
+    }
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public ReadFileRequest(
         String path,
@@ -2917,7 +2926,11 @@ public class Tools {
       RepositoryMapService.Symbol symbol,
       List<JavaSymbolReads.Candidate> candidates,
       List<String> ownerOverview,
-      String truncationReason) {
+      String truncationReason,
+      @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) ReadingDelivery.Notice delivery) {
+    public ReadFileResult(String path, Integer startLine, Integer endLine, List<String> content, boolean truncated, String error, String version, ReadFileRequest nextRead, int returnedBytes, RepositoryMapService.Symbol symbol, List<JavaSymbolReads.Candidate> candidates, List<String> ownerOverview, String truncationReason) {
+      this(path, startLine, endLine, content, truncated, error, version, nextRead, returnedBytes, symbol, candidates, ownerOverview, truncationReason, null);
+    }
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public ReadFileResult(
         String path,

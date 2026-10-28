@@ -96,7 +96,8 @@ public class ContextCompressionConfiguration {
       AgentEventPublisher publisher,
       ObjectProvider<dev.mikoto2000.rei.core.working.WorkingSet> workingSet,
       ObjectProvider<dev.mikoto2000.rei.review.ReviewTools> reviewTools,
-      ToolResultDeliveryProperties delivery) {
+      ToolResultDeliveryProperties delivery,
+      dev.mikoto2000.rei.core.ReadingDelivery readingDelivery) {
     properties.validate();
     var toolDelivery =
         new ToolResultCompressor(
@@ -112,6 +113,7 @@ public class ContextCompressionConfiguration {
             events,
             publisher);
     assembler.setReviewTools(reviewTools.getIfAvailable());
+    assembler.setReadingDelivery(readingDelivery);
     assembler.setRequireReviewCoverage(delivery.getReviewLedger().isRequireCoverage());
     assembler.setWorkingSet(() -> workingSet.getObject().renderForPrompt());
     return assembler;

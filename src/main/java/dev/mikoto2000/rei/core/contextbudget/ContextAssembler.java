@@ -77,6 +77,8 @@ public class ContextAssembler {
 
   /** レビューツール一覧。 */
   private dev.mikoto2000.rei.review.ReviewTools reviewTools;
+  private dev.mikoto2000.rei.core.ReadingDelivery readingDelivery;
+  public void setReadingDelivery(dev.mikoto2000.rei.core.ReadingDelivery delivery) { readingDelivery = delivery; }
 
   /** モデルへ渡す文脈の管理で使用するレビューツール一覧を設定する。 */
   public void setReviewTools(dev.mikoto2000.rei.review.ReviewTools tools) {
@@ -87,6 +89,7 @@ public class ContextAssembler {
   public void confirmedDelivery(Prompt prompt, dev.mikoto2000.rei.core.chat.AgentRunContext owner) {
     dev.mikoto2000.rei.core.ReadingMetrics.add(owner, "deliveredEstimatedTokens", estimate(prompt));
     dev.mikoto2000.rei.core.ReadingMetrics.add(owner, "llmRequests", 1);
+    if (readingDelivery != null) readingDelivery.confirm(owner, prompt);
     if (reviewTools != null) reviewTools.confirmedPrompt(prompt, owner);
   }
 
