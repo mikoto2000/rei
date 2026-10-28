@@ -163,18 +163,7 @@ public final class DurableTaskStore {
   }
 
   public Verification verify(Scope scope, String task) {
-    return read(db -> {
-      var owner = status(db, scope, task);
-      if (!owner.state().equals("ACTIVE")) return new Verification(false, owner.state());
-      if (!owner.enumeration().equals("SEALED") || owner.unscannedDirectories() != 0)
-        return new Verification(false, "ENUMERATION_" + owner.enumeration());
-      if (owner.errors() != 0) return new Verification(false, "ENUMERATION_ERRORS");
-      if (owner.files() == 0) return new Verification(false, "EMPTY_TARGET_SET");
-      long registered = number(db, "SELECT COUNT(DISTINCT path) FROM durable_work WHERE task=? AND required=1", task);
-      if (registered != owner.files()) return new Verification(false, "WORK_REGISTRATION_INCOMPLETE");
-      // Result validation is added with the executor. Inventory alone never completes a task.
-      return new Verification(false, "WORK_PENDING");
-    });
+    return read(db -> TaskCompletion.verify(db, status(db, scope, task)));
   }
 
   public Page<Task> forRun(Scope scope, String run, String after, int limit) {

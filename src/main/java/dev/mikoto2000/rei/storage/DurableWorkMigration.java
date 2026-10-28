@@ -16,6 +16,9 @@ final class DurableWorkMigration {
       sql.execute("ALTER TABLE durable_work ADD COLUMN last_step TEXT NOT NULL DEFAULT 'REGISTERED'");
       sql.execute("CREATE TABLE durable_item_attempts(id TEXT PRIMARY KEY,work TEXT NOT NULL,run TEXT NOT NULL,started INTEGER NOT NULL,state TEXT NOT NULL,delivered_hash TEXT NOT NULL DEFAULT '',failure TEXT NOT NULL DEFAULT '')");
       sql.execute("CREATE INDEX durable_item_attempt_work ON durable_item_attempts(work,started,id)");
+      sql.execute("CREATE TABLE durable_results(work TEXT PRIMARY KEY,task TEXT NOT NULL,snapshot TEXT NOT NULL,path TEXT NOT NULL,start INTEGER NOT NULL,end INTEGER NOT NULL,version TEXT NOT NULL,criterion TEXT NOT NULL,attempt TEXT NOT NULL,body TEXT NOT NULL,sha256 TEXT NOT NULL,created INTEGER NOT NULL)");
+      sql.execute("CREATE INDEX durable_result_task ON durable_results(task,work)");
+      sql.execute("CREATE TABLE durable_findings(work TEXT NOT NULL,id TEXT NOT NULL,severity TEXT NOT NULL,start INTEGER NOT NULL,end INTEGER NOT NULL,evidence TEXT NOT NULL,assessment TEXT NOT NULL,PRIMARY KEY(work,id))");
     }
     String snapshot = "", path = "";
     while (true) {
@@ -51,6 +54,8 @@ final class DurableWorkMigration {
       sql.executeQuery("SELECT chars FROM durable_files LIMIT 0").close();
       sql.executeQuery("SELECT active_attempt,result_id,last_step FROM durable_work LIMIT 0").close();
       sql.executeQuery("SELECT id,work,run,started,state,delivered_hash,failure FROM durable_item_attempts LIMIT 0").close();
+      sql.executeQuery("SELECT work,task,snapshot,path,start,end,version,criterion,attempt,body,sha256,created FROM durable_results LIMIT 0").close();
+      sql.executeQuery("SELECT work,id,severity,start,end,evidence,assessment FROM durable_findings LIMIT 0").close();
     }
   }
 }
