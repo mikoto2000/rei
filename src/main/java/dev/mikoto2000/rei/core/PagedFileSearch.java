@@ -97,8 +97,8 @@ final class PagedFileSearch {
             Tools.SearchAndReadResult candidate;
             while (true) {
               var pending = new ArrayList<>(sections);
-              pending.add(new Tools.ReadSection(start + 1, start + keep, slice.lines().subList(0, keep), true));
-              candidate = new Tools.SearchAndReadResult(item.path(), matches, pending, null, true, false, state.version, null);
+              pending.add(new Tools.ReadSection(start + 1, start + keep, slice.lines().subList(0, keep), slice.nextOffset() > 0));
+              candidate = new Tools.SearchAndReadResult(item.path(), matches(state, pending, lines, root, item.path()), pending, null, true, false, state.version, null);
               if (FileResultBudget.fits(candidate, Math.max(256, bytes - 768), Math.max(128, tokens - 256))) break;
               if (keep <= 1) {
                 String text = slice.lines().getFirst();
@@ -117,6 +117,7 @@ final class PagedFileSearch {
               keep = Math.max(1, keep / 2);
             }
             sections.add(candidate.sections().getLast());
+            matches.clear(); matches.addAll(candidate.matches());
             count += keep;
             if (keep < slice.lines().size()) {
               state.ranges = replaceRange(state.ranges, state.rangeIndex, new Range(start + keep, range.end()));
@@ -141,6 +142,7 @@ final class PagedFileSearch {
             state.ranges = List.of(); state.rangeIndex = 0;
             if (state.scanLine >= lines.size()) advance(state);
           }
+          result = result.withTruncated(state.file < state.inventory.size());
           return paused(state, List.of(result), state.file < state.inventory.size() ? "RESULT_OUTPUT_BUDGET" : "COMPLETE", null);
         }
         if (state.scanLine >= lines.size()) advance(state);
@@ -150,6 +152,19 @@ final class PagedFileSearch {
       dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
       return new Page(List.of(), null, null, new Progress(0, 0, 0, "FAILED"), ReadingProblem.from(error));
     }
+  }
+
+  private List<Tools.SearchMatch> matches(State state, List<Tools.ReadSection> sections, List<String> lines, Path root, String path) {
+    var result = new ArrayList<Tools.SearchMatch>();
+    for (int q = 0; q < state.request.queries().size(); q++) {
+      var query = state.request.queries().get(q);
+      if (!applies(query, path, root)) continue;
+      var pattern = tools.compileGrepPattern(query.pattern(), Boolean.TRUE.equals(query.ignoreCase()), Boolean.TRUE.equals(query.fixedString()));
+      for (var section : sections) for (int line = section.startLine(); line <= section.endLine(); line++)
+        if (pattern.matcher(lines.get(line - 1)).find() != Boolean.TRUE.equals(query.invertMatch()))
+          result.add(new Tools.SearchMatch(q, line, ""));
+    }
+    return List.copyOf(result);
   }
 
   private Tools.SearchAndReadResult result(String path, State state, List<Tools.ReadSection> sections, List<Tools.SearchMatch> matches) {
