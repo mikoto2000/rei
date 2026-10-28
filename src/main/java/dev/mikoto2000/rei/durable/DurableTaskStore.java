@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -13,7 +14,7 @@ import java.util.UUID;
 public final class DurableTaskStore {
   @FunctionalInterface
   public interface Work<T> {
-    T run(Connection connection) throws Exception;
+    T run(Connection connection) throws SQLException;
   }
 
   @FunctionalInterface
@@ -113,7 +114,7 @@ public final class DurableTaskStore {
     });
   }
 
-  private Source source(Connection db, String snapshot) throws Exception {
+  private Source source(Connection db, String snapshot) throws SQLException {
     try (var query = statement(db, "SELECT mode,source_ref FROM durable_snapshots WHERE id=?", snapshot);
         var row = query.executeQuery()) {
       row.next();
@@ -121,7 +122,7 @@ public final class DurableTaskStore {
     }
   }
 
-  private Task status(Connection db, Scope scope, String id) throws Exception {
+  private Task status(Connection db, Scope scope, String id) throws SQLException {
     try (var query = statement(db,
         "SELECT t.*,s.state AS enumeration,s.reason,s.files,s.excluded,s.errors,s.bytes,(SELECT COUNT(*) FROM durable_directories d WHERE d.task=t.id AND d.state='PENDING') AS unscanned FROM durable_tasks t JOIN durable_snapshots s ON s.id=t.snapshot WHERE t.id=? AND t.project=? AND t.session=? AND t.root=?",
         id, scope.project(), scope.session(), scope.root()); var row = query.executeQuery()) {
@@ -332,7 +333,7 @@ public final class DurableTaskStore {
       throw new IllegalArgumentException("INVALID_TASK_ARGUMENT");
   }
 
-  static PreparedStatement statement(Connection db, String sql, Object... args) throws Exception {
+  static PreparedStatement statement(Connection db, String sql, Object... args) throws SQLException {
     var query = db.prepareStatement(sql);
     try {
       for (int i = 0; i < args.length; i++) {
@@ -340,19 +341,23 @@ public final class DurableTaskStore {
         else query.setObject(i + 1, args[i]);
       }
       return query;
-    } catch (Exception error) {
-      query.close();
+    } catch (SQLException error) {
+      try {
+        query.close();
+      } catch (SQLException closing) {
+        error.addSuppressed(closing);
+      }
       throw error;
     }
   }
 
-  static int execute(Connection db, String sql, Object... args) throws Exception {
+  static int execute(Connection db, String sql, Object... args) throws SQLException {
     try (var query = statement(db, sql, args)) {
       return query.executeUpdate();
     }
   }
 
-  static long number(Connection db, String sql, Object... args) throws Exception {
+  static long number(Connection db, String sql, Object... args) throws SQLException {
     try (var query = statement(db, sql, args); ResultSet row = query.executeQuery()) {
       row.next();
       return row.getLong(1);

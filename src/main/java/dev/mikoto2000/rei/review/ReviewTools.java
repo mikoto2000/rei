@@ -84,11 +84,6 @@ public final class ReviewTools {
 
   private final dev.mikoto2000.rei.durable.DurableTaskStore tasks;
 
-  private java.util.function.Function<AgentRunContext, String> goalResolver = owner -> null;
-
-  public void setGoalResolver(java.util.function.Function<AgentRunContext, String> resolver) {
-    goalResolver = resolver;
-  }
 
   /** 変更内容のレビューを利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ReviewTools(
@@ -134,7 +129,7 @@ public final class ReviewTools {
         mode = "WORKTREE";
       }
     }
-    return tasks.beginForRun(capturedScope, owner.runId(), goalResolver.apply(owner), mode, reference,
+    return tasks.beginForRun(capturedScope, owner.runId(), ledger.goalForTask(capturedScope, owner.runId()), mode, reference,
         excludes == null ? List.of("target/**", "node_modules/**", ".rei/**", ".worktrees/**") : excludes,
         maxFiles == null ? 100000 : maxFiles, maxBytes == null ? 2L * 1024 * 1024 * 1024 : maxBytes);
   }

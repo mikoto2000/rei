@@ -666,6 +666,9 @@ wiring: dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration ->
 wiring: dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.core.working.WorkingSet
 wiring: dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.event.AgentEventFactory
 wiring: dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.event.AgentEventPublisher
+wiring: dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.goal.FileGoalVerifier
+wiring: dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.goal.GoalRepository
+wiring: dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.goal.GoalRepository$Goal
 wiring: dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.llm.LlmModelProvider
 wiring: dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.review.ReviewCoverageLedger
 wiring: dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.review.ReviewTools

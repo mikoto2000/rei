@@ -186,6 +186,18 @@ public final class ReviewCoverageLedger {
   /** データベース。 */
   private final StorageDatabase database;
 
+  private java.util.function.BiFunction<dev.mikoto2000.rei.durable.DurableTaskStore.Scope, String, String>
+      taskGoalResolver = (scope, run) -> null;
+
+  /** Startup-only host association; no model-supplied Goal identity is trusted. */
+  public void setTaskGoalResolver(java.util.function.BiFunction<dev.mikoto2000.rei.durable.DurableTaskStore.Scope, String, String> resolver) {
+    taskGoalResolver = Objects.requireNonNull(resolver);
+  }
+
+  public String goalForTask(dev.mikoto2000.rei.durable.DurableTaskStore.Scope scope, String run) {
+    return taskGoalResolver.apply(scope, run);
+  }
+
   /** 指定された値や利用先を使って、ReviewCoverageLedgerを初期化する。 */
   public ReviewCoverageLedger(StorageDatabase database) {
     this.database = database;

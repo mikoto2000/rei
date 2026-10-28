@@ -63,7 +63,9 @@ public final class SnapshotEnumerator {
       try (var children = Files.newDirectoryStream(current)) {
         for (var child : children) {
           if (Thread.currentThread().isInterrupted()) throw new java.io.InterruptedIOException();
-          String name = child.getFileName().toString();
+          var fileName = child.getFileName();
+          if (fileName == null) throw new IOException("Invalid directory entry");
+          String name = fileName.toString();
           if (name.compareTo(directory.cursor()) <= 0) continue;
           remaining++;
           names.add(name);
@@ -123,7 +125,9 @@ public final class SnapshotEnumerator {
       throws IOException {
     Path path = root.resolve(relative);
     String reason = "";
-    if (path.getFileName().toString().equalsIgnoreCase(".git")) reason = "GIT_METADATA";
+    var fileName = path.getFileName();
+    if (fileName == null) throw new IOException("Invalid snapshot path");
+    if (fileName.toString().equalsIgnoreCase(".git")) reason = "GIT_METADATA";
     if (Files.isSymbolicLink(path)) reason = "SYMBOLIC_LINK";
     for (var pattern : exclusions) {
       var matcher = path.getFileSystem().getPathMatcher("glob:" + pattern);

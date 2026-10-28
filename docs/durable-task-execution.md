@@ -81,7 +81,9 @@ fencingだけで外部副作用の重複を防げるとは扱わない。失敗�
 
 ## 変更対象と測定
 
-Phase 1 は review パッケージに対象・Snapshotの保存とTool入口、storageに移行を追加する。
+Phase 1 は durable パッケージに対象・Snapshotの保存、既存ReviewToolsにTool入口、storageに移行を追加する。
+durable は既存機能の型に依存せず、SQLiteへの接続は既存writerのcallbackを配線する。
+これにより既存機能間の処理本体の循環を増やさず、レビュー以外にも再利用できる。
 Phase 2 は作業・結果・Run関連を永続化し、既存 ReviewJob の履歴と現在権限を分離する。
 Phase 3 は同じ実行器のclaim・heartbeat・failure・cancel・予算を追加する。
 Phase 4 は索引・keysetページ・差分保存・集計と読み取りの再利用を整える。
@@ -98,8 +100,8 @@ JVM warmup・生成時間と処理時間を分離し、ハードな時間閾値�
 
 | Phase | 状態 | ブランチ | PR / マージ |
 | --- | --- | --- | --- |
-| 0 | 調査・基盤テスト実施中 | codex/long-run-phase0 | 未作成 |
-| 1 | 未着手 | — | — |
+| 0 | 完了・worktree削除済み | codex/long-run-phase0（削除済み） | [#165](https://github.com/mikoto2000/rei/pull/165) / c149ba44 |
+| 1 | 実装・ローカル検証完了（CI待ち） | codex/long-run-phase1 | PR作成予定 |
 | 2 | 未着手 | — | — |
 | 3 | 未着手 | — | — |
 | 4 | 未着手 | — | — |
@@ -107,3 +109,33 @@ JVM warmup・生成時間と処理時間を分離し、ハードな時間閾値�
 
 各PhaseのRed/Green、コミット、検証結果と残件は docs/implementation-report-durable-task-execution.md
 へ追記する。後続Phaseは直前Phaseのマージ済みmainから開始する。
+
+## 対象列挙の追加Tool（Phase 1）
+
+- `beginRepositoryReview(snapshotMode, excludes, maxFiles, maxBytes)` は現在のProject/Session/Runへ
+  作業を原子的に関連付ける。Goal試行の場合は既存GoalRepositoryのRun索引から親Goalを解決する。
+- `scanReviewSnapshot(taskId, maxEntries)` は最大1,000件の有界ページを処理する。SCANNINGは未完了。
+  VALIDATINGで中断した場合も再開できる。FAILEDの理由と未走査ディレクトリを残す。
+- `reviewTaskStatus(taskId)` は対象確定と作業完了を区別する。
+- `listReviewTargets(taskId, afterPath, limit)` は最大1,000件、既定100件のkeysetページ。
+  `nextCursor`を次の`afterPath`へ渡す。列挙結果を読んでもレビュー済みにはならない。
+
+COMMITはGitリポジトリのルートでHEADの完全IDを固定し、tree/blobを直接読み、内容をSQLiteへ保存する。
+`git archive`を使わないためexport-ignoreによる黙った対象漏れを避ける。
+仕様は[ls-tree](https://git-scm.com/docs/git-ls-tree)と[cat-file](https://git-scm.com/docs/git-cat-file)を参照。
+Git子プロセスはshellを介さず、出力を有界で読み、期限超過で自分の子プロセスだけを停止する。
+WORKTREEは未コミット・未追跡ファイルを含む現在の内容を保存する。ハッシュだけの参照ではない。
+単一時点のOSファイルシステムSnapshotではなく、走査中に取得した不変な内容集合である。
+ページ間と封印前にディレクトリの指紋を照合し、検出した集合変更はDIRECTORY_CHANGEDとして拒否する。
+開始後の変更がない同一コミットを厳密に対象とする場合はCOMMITを選ぶ。
+
+既定はGitルートならCOMMIT、それ以外はWORKTREE。対象上限は既定100,000ファイル・2GiB。
+1ファイル64MiBまで、読み込みは1ページ約8MiB（単一ファイル分を除く）に制限する。
+UTF-8テキストを対象とし、Gitメタデータ・symlink・submodule・バイナリ・未対応エンコーディングは
+理由を明示して除外する。権限エラー、読み取り失敗、上限到達は成功や除外に変換しない。
+COMMITはコミット済み全treeを基準とする。WORKTREEは.gitignoreを暗黙適用せず、明示globを保存する。
+excludesを省略した場合のみtarget、node_modules、.rei、.worktreesを既定除外し、空リストならこれらも含む。
+空の必須対象集合はEMPTY_TARGET_SETとして成功を拒否する。
+
+Phase 1は対象の確定・必須作業登録・完了拒否までを提供する。確定結果の提出とRunをまたぐ実行は
+Phase 2で接続する。既存beginReview/readReviewFile等の単発・小規模レビューは引き続き利用できる。
