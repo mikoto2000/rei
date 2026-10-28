@@ -22,28 +22,46 @@ class FileWriteExtensionTest {
       new com.fasterxml.jackson.databind.ObjectMapper().findAndRegisterModules();
 
   private TextChangeSetRepository repository() {
-    return new TextChangeSetRepository(new org.springframework.jdbc.datasource.DriverManagerDataSource(
-        "jdbc:sqlite:" + root.resolve("changes.db")));
+    return new TextChangeSetRepository(
+        new org.springframework.jdbc.datasource.DriverManagerDataSource(
+            "jdbc:sqlite:" + root.resolve("changes.db")));
   }
 
-  private AgentRunContext owner() { return new AgentRunContext("run", "session", root, "00000000-0000-0000-0000-000000000001"); }
+  private AgentRunContext owner() {
+    return new AgentRunContext("run", "session", root, "00000000-0000-0000-0000-000000000001");
+  }
 
   private TextDocumentChangeSetService.Request partial(String text, String... paths) {
-    return json.convertValue(Map.of("operations", java.util.Arrays.stream(paths).map(path -> Map.of(
-        "kind", "UPDATE", "path", path, "baseVersion", TextDocumentTransaction.hash(text),
-        "edits", List.of(Map.of("oldText", "old", "newText", "new")))).toList()),
+    return json.convertValue(
+        Map.of(
+            "operations",
+            java.util.Arrays.stream(paths)
+                .map(
+                    path ->
+                        Map.of(
+                            "kind",
+                            "UPDATE",
+                            "path",
+                            path,
+                            "baseVersion",
+                            TextDocumentTransaction.hash(text),
+                            "edits",
+                            List.of(Map.of("oldText", "old", "newText", "new"))))
+                .toList()),
         TextDocumentChangeSetService.Request.class);
   }
 
   @Test
   void batchesPartialEditsAndKeepsDurableOneShotReceipt() throws Exception {
     String text = "\ufeffold\r\nunchanged\r\n";
-    Files.writeString(root.resolve("a.txt"), text); Files.writeString(root.resolve("b.txt"), text);
+    Files.writeString(root.resolve("a.txt"), text);
+    Files.writeString(root.resolve("b.txt"), text);
     var service = new TextDocumentChangeSetService(repository(), Clock.systemUTC());
     var proposal = service.propose(owner(), partial(text, "a.txt", "b.txt"));
     assertEquals(text, Files.readString(root.resolve("a.txt")));
     var applied = service.apply(owner(), proposal.id(), proposal.proposalSha256());
-    assertEquals("APPLIED", applied.status()); assertTrue(applied.currentMatches());
+    assertEquals("APPLIED", applied.status());
+    assertTrue(applied.currentMatches());
     assertEquals(text.replace("old", "new"), Files.readString(root.resolve("b.txt")));
     Files.writeString(root.resolve("a.txt"), "external");
     assertFalse(service.apply(owner(), proposal.id(), proposal.proposalSha256()).currentMatches());
@@ -57,11 +75,23 @@ class FileWriteExtensionTest {
     var repository = repository();
     var single = new TextChangeSetService(repository);
     var project = new ProjectContext("00000000-0000-0000-0000-000000000001", "test", root);
-    var request = new TextChangeSetService.Request("a.txt", null, null,
-        TextDocumentTransaction.hash(text), List.of(new TextChangeSetService.Edit("old", "new")));
+    var request =
+        new TextChangeSetService.Request(
+            "a.txt",
+            null,
+            null,
+            TextDocumentTransaction.hash(text),
+            List.of(new TextChangeSetService.Edit("old", "new")));
     var proposal = single.propose(project, request);
-    assertEquals("APPLIED", single.apply(project, proposal.id(), proposal.proposalSha256(),
-        TextDocumentTransaction::writeSingle).status());
+    assertEquals(
+        "APPLIED",
+        single
+            .apply(
+                project,
+                proposal.id(),
+                proposal.proposalSha256(),
+                TextDocumentTransaction::writeSingle)
+            .status());
     Files.writeString(root.resolve("a.txt"), text);
     var batch = new TextDocumentChangeSetService(repository, Clock.systemUTC());
     var multi = batch.propose(owner(), partial(text, "a.txt"));
@@ -74,27 +104,50 @@ class FileWriteExtensionTest {
     Files.writeString(root.resolve("a.txt"), text);
     var service = new TextChangeSetService(repository());
     var project = new ProjectContext("00000000-0000-0000-0000-000000000001", "test", root);
-    for (var item : List.of(Map.entry("aaa", "AMBIGUOUS_MATCH"), Map.entry("missing", "TEXT_NOT_FOUND"))) {
-      var failure = assertThrows(IllegalArgumentException.class, () -> service.propose(project,
-          new TextChangeSetService.Request("a.txt", null, null, TextDocumentTransaction.hash(text),
-              List.of(new TextChangeSetService.Edit(item.getKey(), "x")))));
+    for (var item :
+        List.of(Map.entry("aaa", "AMBIGUOUS_MATCH"), Map.entry("missing", "TEXT_NOT_FOUND"))) {
+      var failure =
+          assertThrows(
+              IllegalArgumentException.class,
+              () ->
+                  service.propose(
+                      project,
+                      new TextChangeSetService.Request(
+                          "a.txt",
+                          null,
+                          null,
+                          TextDocumentTransaction.hash(text),
+                          List.of(new TextChangeSetService.Edit(item.getKey(), "x")))));
       assertTrue(failure.getMessage().contains(item.getValue()), failure.getMessage());
       assertFalse(failure.getMessage().contains("secret-token-do-not-echo"));
       var detail = json.readTree(failure.getMessage());
       assertEquals("a.txt", detail.path("path").asText());
       assertFalse(detail.path("safeToReplay").asBoolean(true));
     }
-    var failure = assertThrows(IllegalArgumentException.class, () -> service.propose(project,
-        new TextChangeSetService.Request("a.txt", null, null, "0".repeat(64),
-            List.of(new TextChangeSetService.Edit("aaaa", "x")))));
+    var failure =
+        assertThrows(
+            IllegalArgumentException.class,
+            () ->
+                service.propose(
+                    project,
+                    new TextChangeSetService.Request(
+                        "a.txt",
+                        null,
+                        null,
+                        "0".repeat(64),
+                        List.of(new TextChangeSetService.Edit("aaaa", "x")))));
     assertTrue(failure.getMessage().contains("VERSION_MISMATCH"));
     var batch = new TextDocumentChangeSetService(repository(), Clock.systemUTC());
-    var operation = new java.util.LinkedHashMap<String,Object>();
-    operation.put("kind", "UPDATE"); operation.put("path", "a.txt");
-    operation.put("expectedText", text); operation.put("replacement", "x");
+    var operation = new java.util.LinkedHashMap<String, Object>();
+    operation.put("kind", "UPDATE");
+    operation.put("path", "a.txt");
+    operation.put("expectedText", text);
+    operation.put("replacement", "x");
     operation.put("baseVersion", TextDocumentTransaction.hash(text));
     operation.put("edits", List.of(Map.of("oldText", "aaaa", "newText", "x")));
-    var mixed = json.convertValue(Map.of("operations", List.of(operation)), TextDocumentChangeSetService.Request.class);
+    var mixed =
+        json.convertValue(
+            Map.of("operations", List.of(operation)), TextDocumentChangeSetService.Request.class);
     assertThrows(IllegalArgumentException.class, () -> batch.propose(owner(), mixed));
     assertEquals(text, Files.readString(root.resolve("a.txt")));
   }

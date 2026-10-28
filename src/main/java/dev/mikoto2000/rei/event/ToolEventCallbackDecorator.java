@@ -134,7 +134,8 @@ public class ToolEventCallbackDecorator
                 new ErrorInformation(
                     e.getClass().getSimpleName(), summarize(e.getMessage()), null)));
         if (!Thread.currentThread().isInterrupted()) {
-          String failure = dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.toolFailureResult(e);
+          String failure =
+              dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.toolFailureResult(e);
           if (failure != null) return failure;
         }
         if (FILE_TOOLS.contains(toolName) && !Thread.currentThread().isInterrupted()) {

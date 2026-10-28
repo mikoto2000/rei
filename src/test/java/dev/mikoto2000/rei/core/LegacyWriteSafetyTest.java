@@ -21,6 +21,7 @@ class LegacyWriteSafetyTest {
     Files.writeString(file, "aaaa");
     var result = new Tools().applyTextDiff(file.toString(), "aaa", "b", "UTF-8");
     assertFalse(result.success());
+    assertEquals("oldText が複数箇所に一致しました", result.message());
     assertEquals("aaaa", Files.readString(file));
   }
 
@@ -34,7 +35,9 @@ class LegacyWriteSafetyTest {
       assertTrue(tools.applyTextDiff(file.toString(), "古い値", "新しい値", charset.name()).success());
       assertEquals(prefix + "日本語\r\n新しい値\r\n", Files.readString(file, charset));
       byte[] expected = Files.readAllBytes(file);
-      assertFalse(tools.applyTextDiff(file.toString(), "missing", "x", charset.name()).success());
+      var missing = tools.applyTextDiff(file.toString(), "missing", "x", charset.name());
+      assertFalse(missing.success());
+      assertEquals("oldText が見つかりません", missing.message());
       org.junit.jupiter.api.Assertions.assertArrayEquals(expected, Files.readAllBytes(file));
     }
   }

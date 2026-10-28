@@ -148,6 +148,8 @@ public class TextChangeSetService {
    * @param diff 差分
    * @param createdAt 作成日時
    */
+  @com.fasterxml.jackson.annotation.JsonInclude(
+      com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
   public record View(
       String id,
       String projectId,
@@ -165,7 +167,12 @@ public class TextChangeSetService {
       int changeCount,
       boolean currentMatches,
       List<String> warnings,
-      TextEditEngine.Failure error) {}
+      TextEditEngine.Failure error) {
+    public View {
+      changes = changes == null ? List.of() : List.copyOf(changes);
+      warnings = warnings == null ? List.of() : List.copyOf(warnings);
+    }
+  }
 
   /** 共通の実行基盤に必要な書き込み先を扱う。 */
   @FunctionalInterface
@@ -210,10 +217,13 @@ public class TextChangeSetService {
   public View propose(ProjectContext project, Request request) throws IOException {
     RunCancellation.propagate(null);
     if (request == null) throw new IllegalArgumentException("Change Set request required");
-    TextEditEngine.requestSize(TextEditEngine.inputBytes(request.expectedText())
-        + TextEditEngine.inputBytes(request.replacement()) + TextEditEngine.inputBytes(request.edits()));
-    if (request.edits() == null && (TextEditEngine.inputBytes(request.expectedText()) > 65536
-        || TextEditEngine.inputBytes(request.replacement()) > 65536))
+    TextEditEngine.requestSize(
+        TextEditEngine.inputBytes(request.expectedText())
+            + TextEditEngine.inputBytes(request.replacement())
+            + TextEditEngine.inputBytes(request.edits()));
+    if (request.edits() == null
+        && (TextEditEngine.inputBytes(request.expectedText()) > 65536
+            || TextEditEngine.inputBytes(request.replacement()) > 65536))
       throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", request.path(), null, List.of(), null);
     String snapshotText = null;
     if (request.edits() != null) {
@@ -242,7 +252,8 @@ public class TextChangeSetService {
     var file = resolve(root, request.path());
     var current = snapshotText == null ? read(file) : snapshotText;
     if (!current.equals(request.expectedText()))
-      throw TextEditEngine.failure("VERSION_MISMATCH", request.path(), null, List.of(), hash(current));
+      throw TextEditEngine.failure(
+          "VERSION_MISMATCH", request.path(), null, List.of(), hash(current));
     var relative = root.relativize(file).toString().replace('\\', '/');
     var base = hash(current);
     var proposed = hash(request.replacement());
@@ -464,15 +475,17 @@ public class TextChangeSetService {
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private static String read(Path file) throws IOException {
-    if (Files.size(file) > TextWriteLimits.fileBytes()) throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", file.getFileName().toString(), null, List.of(), null);
+    if (Files.size(file) > TextWriteLimits.fileBytes())
+      throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", file.toString(), null, List.of(), null);
     var bytes = new FileSnapshots().get(file.getParent(), file).bytes();
-    if (bytes.length > TextWriteLimits.fileBytes()) throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", file.getFileName().toString(), null, List.of(), null);
+    if (bytes.length > TextWriteLimits.fileBytes())
+      throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", file.toString(), null, List.of(), null);
     for (byte value : bytes)
       if (value == 0) throw new IllegalArgumentException("Binary text is unsupported");
     try {
       return StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString();
     } catch (java.nio.charset.CharacterCodingException error) {
-      throw TextEditEngine.failure("UNSUPPORTED_ENCODING", file.getFileName().toString(), null, List.of(), null);
+      throw TextEditEngine.failure("UNSUPPORTED_ENCODING", file.toString(), null, List.of(), null);
     }
   }
 
@@ -502,14 +515,25 @@ public class TextChangeSetService {
   }
 
   /** Pages are derived from the immutable saved proposal, never from a new current baseline. */
-  public TextDiff.Page diffPage(ProjectContext project, String id, String sha, int offset, int maxBytes) throws IOException {
+  public TextDiff.Page diffPage(
+      ProjectContext project, String id, String sha, int offset, int maxBytes) throws IOException {
     var saved = owned(project, id);
-    if (!saved.proposalHash().equals(sha)) throw new IllegalArgumentException("Exact reviewed proposal SHA required");
-    return TextDiff.page(List.of(new TextDocumentTransaction.Change(saved.path(), saved.baseline(), saved.proposed())), offset, maxBytes);
+    if (!saved.proposalHash().equals(sha))
+      throw new IllegalArgumentException("Exact reviewed proposal SHA required");
+    return TextDiff.page(
+        List.of(
+            new TextDocumentTransaction.Change(saved.path(), saved.baseline(), saved.proposed())),
+        offset,
+        maxBytes);
   }
 
-  public TextDiff.Page documentDiffPage(dev.mikoto2000.rei.core.chat.AgentRunContext owner,
-      String id, String sha, int offset, int maxBytes) throws IOException {
+  public TextDiff.Page documentDiffPage(
+      dev.mikoto2000.rei.core.chat.AgentRunContext owner,
+      String id,
+      String sha,
+      int offset,
+      int maxBytes)
+      throws IOException {
     return documents().diffPage(owner, id, sha, offset, maxBytes);
   }
 
@@ -518,15 +542,31 @@ public class TextChangeSetService {
   }
 
   private static View view(TextChangeSetRepository.Saved saved, String current, boolean preview) {
-    var changes = List.of(new TextDocumentTransaction.Change(saved.path(), saved.baseline(), saved.proposed()));
+    var changes =
+        List.of(
+            new TextDocumentTransaction.Change(saved.path(), saved.baseline(), saved.proposed()));
     var page = preview ? TextDiff.page(changes, 0, TextWriteLimits.diffBytes()) : null;
     var summaries = TextDiff.summaries(changes);
     boolean matching = saved.proposedHash().equals(current);
-    return new View(saved.id(), saved.projectId(), saved.path(), saved.status(), saved.baselineHash(),
-        saved.proposedHash(), saved.proposalHash(), current, page == null ? "" : page.diff(), saved.createdAt(),
-        page == null ? null : page.info(), summaries, summaries.size(),
-        summaries.stream().mapToInt(TextDiff.FileSummary::changeCount).sum(), matching,
-        saved.status().equals("APPLIED") && !matching ? List.of("Historical receipt; current file differs or is unavailable") : List.of(),
+    return new View(
+        saved.id(),
+        saved.projectId(),
+        saved.path(),
+        saved.status(),
+        saved.baselineHash(),
+        saved.proposedHash(),
+        saved.proposalHash(),
+        current,
+        page == null ? "" : page.diff(),
+        saved.createdAt(),
+        page == null ? null : page.info(),
+        summaries,
+        summaries.size(),
+        summaries.stream().mapToInt(TextDiff.FileSummary::changeCount).sum(),
+        matching,
+        saved.status().equals("APPLIED") && !matching
+            ? List.of("Historical receipt; current file differs or is unavailable")
+            : List.of(),
         TextEditEngine.outcome(saved.status(), saved.path(), current));
   }
 }

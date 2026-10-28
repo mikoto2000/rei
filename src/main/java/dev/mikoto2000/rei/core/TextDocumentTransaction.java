@@ -111,13 +111,20 @@ public final class TextDocumentTransaction {
   static void writeSingle(Path target, String before, String after, Move move) throws IOException {
     text(before);
     text(after);
-    writeBytes(target, before.getBytes(StandardCharsets.UTF_8), after.getBytes(StandardCharsets.UTF_8), move);
+    writeBytes(
+        target,
+        before.getBytes(StandardCharsets.UTF_8),
+        after.getBytes(StandardCharsets.UTF_8),
+        move);
   }
 
   /** Encoded legacy edits use the same staging, permission and atomic-publication boundary. */
   static void writeBytes(Path target, byte[] before, byte[] after, Move move) throws IOException {
-    Path root = target.toAbsolutePath().getParent().toRealPath();
-    String name = target.getFileName().toString();
+    Path absolute = target.toAbsolutePath();
+    Path parent = absolute.getParent(), filename = absolute.getFileName();
+    if (parent == null || filename == null) throw new IOException("Regular text target required");
+    Path root = parent.toRealPath();
+    String name = filename.toString();
     if (!path(root, name).equals(target.toAbsolutePath().normalize()))
       throw new IOException("Aliased text target rejected");
     if (!bytesMatch(target, before)) throw new IOException("Baseline changed before staging");
@@ -126,13 +133,18 @@ public final class TextDocumentTransaction {
       RunCancellation.propagate(null);
       stageBytes(temporary, target, after);
       RunCancellation.propagate(null);
-      if (!bytesMatch(target, before)) throw new IOException("Baseline changed before atomic publication");
+      if (!bytesMatch(target, before))
+        throw new IOException("Baseline changed before atomic publication");
       if (!bytesMatch(temporary, after)) throw new IOException("Staged content changed");
       move.replace(temporary, target);
-      if (!bytesMatch(target, after)) throw new IOException("Published content requires inspection");
+      if (!bytesMatch(target, after))
+        throw new IOException("Published content requires inspection");
     } catch (IOException | RuntimeException failure) {
-      try { cleanupBytes(temporary, after); }
-      catch (IOException | RuntimeException cleanup) { failure.addSuppressed(cleanup); }
+      try {
+        cleanupBytes(temporary, after);
+      } catch (IOException | RuntimeException cleanup) {
+        failure.addSuppressed(cleanup);
+      }
       throw failure;
     }
     cleanupBytes(temporary, after);
@@ -146,7 +158,8 @@ public final class TextDocumentTransaction {
 
   private static void cleanupBytes(Path temporary, byte[] expected) throws IOException {
     if (!Files.exists(temporary, LinkOption.NOFOLLOW_LINKS)) return;
-    if (!bytesMatch(temporary, expected)) throw new IOException("Staging content changed; preserve it");
+    if (!bytesMatch(temporary, expected))
+      throw new IOException("Staging content changed; preserve it");
     Files.delete(temporary);
   }
 
@@ -311,8 +324,12 @@ public final class TextDocumentTransaction {
   }
 
   private static void stageBytes(Path temporary, Path target, byte[] bytes) throws IOException {
-    try (var channel = FileChannel.open(temporary, StandardOpenOption.CREATE_NEW,
-        StandardOpenOption.WRITE, LinkOption.NOFOLLOW_LINKS)) {
+    try (var channel =
+        FileChannel.open(
+            temporary,
+            StandardOpenOption.CREATE_NEW,
+            StandardOpenOption.WRITE,
+            LinkOption.NOFOLLOW_LINKS)) {
       var buffer = ByteBuffer.wrap(bytes);
       while (buffer.hasRemaining()) channel.write(buffer);
       channel.force(true);
@@ -429,7 +446,8 @@ public final class TextDocumentTransaction {
     if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return null;
     try (var stream = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS)) {
       byte[] bytes = stream.readNBytes(TextWriteLimits.fileBytes() + 1);
-      if (bytes.length > TextWriteLimits.fileBytes()) throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", name, null, List.of(), null);
+      if (bytes.length > TextWriteLimits.fileBytes())
+        throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", name, null, List.of(), null);
       for (byte value : bytes)
         if (value == 0) throw new IllegalArgumentException("Binary text rejected");
       try {
@@ -507,6 +525,7 @@ public final class TextDocumentTransaction {
           total += value.getBytes(StandardCharsets.UTF_8).length;
         }
     }
-    if (total > TextWriteLimits.totalBytes()) throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", null, null, List.of(), null);
+    if (total > TextWriteLimits.totalBytes())
+      throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", null, null, List.of(), null);
   }
 }

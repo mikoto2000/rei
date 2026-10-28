@@ -45,6 +45,9 @@
 - ファイル操作: `findFile`, `applyTextDiff`, `readMultiFile`, `writeMultiFile`, `grepMultiQuery`, `searchAndRead` など
 - UTF-8の既存ファイルの部分編集は `proposeTextChangeSet`、複数ファイルの変更は `proposeTextDocumentChangeSet` を優先します。保存提案の差分・SHAを確認し、既存の承認・権限フローでApplyします。文字数だけで細分化しません。
 - 新規作成・全文置換もレビューが必要ならChange Setを使います。追記は `writeMultiFile`、非UTF-8の局所編集は `applyTextDiff`、バイナリは `writeBinaryFile` を使います。
+- Applyの `APPLIED` と `currentMatches: true`、新しいSHAは、保存時点で提案どおりのbytesを確認した結果です。保存確認だけのために直後に全文を再読み取りする必要はありません。構文・意味・テストの正しさは別途検証してください。
+- `STALE` / `VERSION_MISMATCH` は対象範囲と現在版を確認して再提案します。古い承認を新しい版へ流用しません。`UNKNOWN` や失敗後は提案IDで状態を確認し、Applyを自動再送しません。
+- Proposeの差分が省略された場合は `getTextChangeSetDiff` / `getTextDocumentChangeSetDiff` と返却された `nextOffset` で必要な全ページを確認してください。構文・意味の検証、競合、不確実な結果、エラー調査のための再読み取りは適切に行ってください。
 - タスク管理: `taskList`, `taskCreate`, `taskUpdate`, `taskComplete`, `taskUpdateDeadline`, `taskDelete`
 - 日次/リマインダー: `dailyBriefing`, `reminderCreate`, `reminderList`
 - Bluesky投稿: `blueskyPost` を使用します。投稿が成功した場合は結果URLを、失敗した場合はエラー内容と草案テキストを明示します。

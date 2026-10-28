@@ -35,13 +35,20 @@ public final class TextDocumentChangeSetService {
    * @param replacement 置換
    */
   public record Operation(
-      String kind, String path,
+      String kind,
+      String path,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) String target,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) String expectedText,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) String replacement,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) String baseVersion,
-      @org.springframework.ai.tool.annotation.ToolParam(required = false) List<TextChangeSetService.Edit> edits) {
-    public Operation(String kind, String path, String target, String expectedText, String replacement) {
+      @org.springframework.ai.tool.annotation.ToolParam(required = false)
+          List<TextChangeSetService.Edit> edits) {
+    public Operation {
+      edits = edits == null ? null : List.copyOf(edits);
+    }
+
+    public Operation(
+        String kind, String path, String target, String expectedText, String replacement) {
       this(kind, path, target, expectedText, replacement, null, null);
     }
   }
@@ -113,6 +120,8 @@ public final class TextDocumentChangeSetService {
    * @param staging 反映前の準備領域
    * @param currentMatches 現在一致結果
    */
+  @com.fasterxml.jackson.annotation.JsonInclude(
+      com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
   public record View(
       String id,
       String status,
@@ -129,7 +138,14 @@ public final class TextDocumentChangeSetService {
       List<TextDiff.FileSummary> changes,
       int changedFiles,
       int changeCount,
-      TextEditEngine.Failure error) {}
+      TextEditEngine.Failure error) {
+    public View {
+      files = files == null ? List.of() : List.copyOf(files);
+      warnings = warnings == null ? List.of() : List.copyOf(warnings);
+      staging = staging == null ? List.of() : List.copyOf(staging);
+      changes = changes == null ? List.of() : List.copyOf(changes);
+    }
+  }
 
   /**
    * 共通の実行基盤で受け渡す保存済みを表す。
@@ -221,9 +237,12 @@ public final class TextDocumentChangeSetService {
     if (request == null || request.operations().isEmpty() || request.operations().size() > 32)
       throw new IllegalArgumentException("1..32 text operations required");
     long inputBytes = 0;
-    for (var op : request.operations()) if (op != null)
-      inputBytes += TextEditEngine.inputBytes(op.expectedText()) + TextEditEngine.inputBytes(op.replacement())
-          + TextEditEngine.inputBytes(op.edits());
+    for (var op : request.operations())
+      if (op != null)
+        inputBytes +=
+            TextEditEngine.inputBytes(op.expectedText())
+                + TextEditEngine.inputBytes(op.replacement())
+                + TextEditEngine.inputBytes(op.edits());
     TextEditEngine.requestSize(inputBytes);
     var changes = new ArrayList<TextDocumentTransaction.Change>();
     var paths = new HashSet<String>();
@@ -236,18 +255,25 @@ public final class TextDocumentChangeSetService {
       selected(root, op.path(), paths);
       String current = TextDocumentTransaction.read(root, op.path());
       if (op.edits() != null) {
-        if (!op.kind().equals("UPDATE") || op.expectedText() != null || op.replacement() != null || op.target() != null)
-          throw new IllegalArgumentException("Partial edits require UPDATE without full text or target");
+        if (!op.kind().equals("UPDATE")
+            || op.expectedText() != null
+            || op.replacement() != null
+            || op.target() != null)
+          throw new IllegalArgumentException(
+              "Partial edits require UPDATE without full text or target");
         TextEditEngine.verifyVersion(op.path(), current, op.baseVersion());
         String replacement = TextEditEngine.edit(op.path(), current, op.edits()).text();
         TextDocumentTransaction.text(replacement);
-        if (Objects.equals(current, replacement)) throw new IllegalArgumentException("Actual update required");
+        if (Objects.equals(current, replacement))
+          throw new IllegalArgumentException("Actual update required");
         changes.add(new TextDocumentTransaction.Change(op.path(), current, replacement));
         continue;
       }
-      if (TextEditEngine.inputBytes(op.expectedText()) > 65536 || TextEditEngine.inputBytes(op.replacement()) > 65536)
+      if (TextEditEngine.inputBytes(op.expectedText()) > 65536
+          || TextEditEngine.inputBytes(op.replacement()) > 65536)
         throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", op.path(), null, List.of(), null);
-      if (op.baseVersion() != null) throw new IllegalArgumentException("baseVersion requires partial edits");
+      if (op.baseVersion() != null)
+        throw new IllegalArgumentException("baseVersion requires partial edits");
       if (op.kind().equals("CREATE")) {
         if (current != null || op.expectedText() != null || op.target() != null)
           throw new IllegalArgumentException("Create needs an absent target and no baseline");
@@ -255,7 +281,12 @@ public final class TextDocumentChangeSetService {
         changes.add(new TextDocumentTransaction.Change(op.path(), null, op.replacement()));
       } else {
         if (current == null || op.expectedText() == null || !current.equals(op.expectedText()))
-          throw TextEditEngine.failure("VERSION_MISMATCH", op.path(), null, List.of(), TextDocumentTransaction.hash(current));
+          throw TextEditEngine.failure(
+              "VERSION_MISMATCH",
+              op.path(),
+              null,
+              List.of(),
+              TextDocumentTransaction.hash(current));
         TextDocumentTransaction.text(op.expectedText());
         switch (op.kind()) {
           case "UPDATE" -> {
@@ -296,7 +327,9 @@ public final class TextDocumentChangeSetService {
             root.toString(),
             owner.conversationId(),
             clock.instant(),
-            request.operations().stream().map(op -> new Operation(op.kind(), op.path(), op.target(), null, null)).toList(),
+            request.operations().stream()
+                .map(op -> new Operation(op.kind(), op.path(), op.target(), null, null))
+                .toList(),
             List.copyOf(changes));
     String payload = encode(saved), sha = TextDocumentTransaction.hash(payload);
     db.sql(
@@ -586,17 +619,21 @@ public final class TextDocumentChangeSetService {
   }
 
   /** 共通の実行基盤で用いる表示内容を返す。 */
-  public TextDiff.Page diffPage(AgentRunContext owner, String id, String sha, int offset, int maxBytes) throws IOException {
+  public TextDiff.Page diffPage(
+      AgentRunContext owner, String id, String sha, int offset, int maxBytes) throws IOException {
     var row = owned(owner, id);
     exact(row, sha);
     return TextDiff.page(row.saved().changes(), offset, maxBytes);
   }
 
-  private View view(Row row) throws IOException { return view(row, true); }
+  private View view(Row row) throws IOException {
+    return view(row, true);
+  }
 
   private View view(Row row, boolean preview) throws IOException {
     var files = new ArrayList<FileView>();
-    var page = preview ? TextDiff.page(row.saved().changes(), 0, TextWriteLimits.diffBytes()) : null;
+    var page =
+        preview ? TextDiff.page(row.saved().changes(), 0, TextWriteLimits.diffBytes()) : null;
     var summaries = TextDiff.summaries(row.saved().changes());
     Path root = Path.of(row.saved().root());
     for (var change : row.saved().changes()) {
@@ -645,7 +682,9 @@ public final class TextDocumentChangeSetService {
         (int) staging.stream().filter(StagingView::exists).count(),
         List.copyOf(staging),
         matching,
-        page == null ? null : page.info(), summaries, summaries.size(),
+        page == null ? null : page.info(),
+        summaries,
+        summaries.size(),
         summaries.stream().mapToInt(TextDiff.FileSummary::changeCount).sum(),
         TextEditEngine.outcome(row.status(), null, null));
   }
@@ -694,7 +733,8 @@ public final class TextDocumentChangeSetService {
   /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   private <T> T decode(String value, Class<T> type) {
     try {
-      if (value == null || value.getBytes(StandardCharsets.UTF_8).length > TextWriteLimits.payloadBytes())
+      if (value == null
+          || value.getBytes(StandardCharsets.UTF_8).length > TextWriteLimits.payloadBytes())
         throw new IllegalStateException("Document payload exceeds bounds");
       return json.readValue(value, type);
     } catch (IOException invalid) {

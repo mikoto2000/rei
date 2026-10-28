@@ -29,8 +29,19 @@ class FileWriteBenchmarkTest {
   @Test
   void measureFixedWriteScenarios() throws Exception {
     var rows = new ArrayList<Map<String, Object>>();
-    for (String scenario : List.of("single", "distant", "multiple", "large", "ambiguous",
-        "conflict", "applyFailure", "rollback", "unknown", "crlfBom")) {
+    for (String scenario :
+        List.of(
+            "single",
+            "distant",
+            "multiple",
+            "large",
+            "ambiguous",
+            "conflict",
+            "applyFailure",
+            "rollback",
+            "unknown",
+            "crlfBom",
+            "cp932")) {
       Path root = Files.createDirectory(temporary.resolve(scenario)).toRealPath();
       StringBuilder source = new StringBuilder();
       int lines = scenario.equals("large") ? 9000 : 500;
@@ -45,38 +56,78 @@ class FileWriteBenchmarkTest {
         edits.add(new TextChangeSetService.Edit("line 480 unchanged", "changed 480"));
         after = after.replace("line 480 unchanged", "changed 480");
       }
-      Files.writeString(root.resolve("a.txt"), before);
+      if (scenario.equals("cp932")) {
+        before = "日本語\r\nold\r\n";
+        old = "old";
+        after = "日本語\r\nchanged 20\r\n";
+      }
+      Files.writeString(
+          root.resolve("a.txt"),
+          before,
+          scenario.equals("cp932")
+              ? java.nio.charset.Charset.forName("windows-31j")
+              : java.nio.charset.StandardCharsets.UTF_8);
       Files.writeString(root.resolve("b.txt"), before);
-      var repository = new TextChangeSetRepository(
-          new org.springframework.jdbc.datasource.DriverManagerDataSource("jdbc:sqlite:" + root.resolve("db")));
+      var repository =
+          new TextChangeSetRepository(
+              new org.springframework.jdbc.datasource.DriverManagerDataSource(
+                  "jdbc:sqlite:" + root.resolve("db")));
       var service = new TextChangeSetService(repository);
       var counter = new AtomicInteger();
-      var documents = new TextDocumentChangeSetService(repository, Clock.systemUTC(), (stage, target) -> {
-        int count = counter.incrementAndGet();
-        if (scenario.equals("unknown") && count == 2) {
-          Files.writeString(root.resolve("a.txt"), "external");
-          throw new java.io.IOException("injected second publication failure");
-        }
-        if (scenario.equals("rollback") && count == 2 || scenario.equals("applyFailure"))
-          throw new java.io.IOException("injected publication failure");
-        TextDocumentTransaction.replace(stage, target);
-      });
+      var documents =
+          new TextDocumentChangeSetService(
+              repository,
+              Clock.systemUTC(),
+              (stage, target) -> {
+                int count = counter.incrementAndGet();
+                if (scenario.equals("unknown") && count == 2) {
+                  Files.writeString(root.resolve("a.txt"), "external");
+                  throw new java.io.IOException("injected second publication failure");
+                }
+                if (scenario.equals("rollback") && count == 2 || scenario.equals("applyFailure"))
+                  throw new java.io.IOException("injected publication failure");
+                TextDocumentTransaction.replace(stage, target);
+              });
       var owner = new AgentRunContext("benchmark", "session", root, UUID.randomUUID().toString());
       var project = new ProjectContext(owner.projectId(), "benchmark", root);
       boolean batch = List.of("multiple", "applyFailure", "rollback", "unknown").contains(scenario);
       Object request;
       if (batch) {
-        if (Boolean.getBoolean("fileWrite.optimized")) {
+        if (Boolean.parseBoolean(System.getProperty("fileWrite.optimized", "true"))) {
           var op = new LinkedHashMap<String, Object>();
-          op.put("kind", "UPDATE"); op.put("path", "a.txt");
-          op.put("baseVersion", TextDocumentTransaction.hash(before)); op.put("edits", edits);
-          var second = new LinkedHashMap<>(op); second.put("path", "b.txt");
-          request = json.convertValue(Map.of("operations", List.of(op, second)), TextDocumentChangeSetService.Request.class);
-        } else request = new TextDocumentChangeSetService.Request(List.of(
-            new TextDocumentChangeSetService.Operation("UPDATE", "a.txt", null, before, after),
-            new TextDocumentChangeSetService.Operation("UPDATE", "b.txt", null, before, after)));
-      } else request = new TextChangeSetService.Request("a.txt", null, null,
-          TextDocumentTransaction.hash(before), edits);
+          op.put("kind", "UPDATE");
+          op.put("path", "a.txt");
+          op.put("baseVersion", TextDocumentTransaction.hash(before));
+          op.put("edits", edits);
+          var second = new LinkedHashMap<>(op);
+          second.put("path", "b.txt");
+          request =
+              json.convertValue(
+                  Map.of("operations", List.of(op, second)),
+                  TextDocumentChangeSetService.Request.class);
+        } else
+          request =
+              new TextDocumentChangeSetService.Request(
+                  List.of(
+                      new TextDocumentChangeSetService.Operation(
+                          "UPDATE", "a.txt", null, before, after),
+                      new TextDocumentChangeSetService.Operation(
+                          "UPDATE", "b.txt", null, before, after)));
+      } else if (scenario.equals("cp932")) {
+        request =
+            Map.of(
+                "pathStr",
+                "a.txt",
+                "oldText",
+                "old",
+                "newText",
+                "changed 20",
+                "charset",
+                "windows-31j");
+      } else
+        request =
+            new TextChangeSetService.Request(
+                "a.txt", null, null, TextDocumentTransaction.hash(before), edits);
       var row = new LinkedHashMap<String, Object>();
       row.put("case", scenario);
       row.put("inputJsonBytes", json.writeValueAsBytes(request).length);
@@ -89,7 +140,13 @@ class FileWriteBenchmarkTest {
         recording.start();
         started = System.nanoTime();
         try {
-          if (batch) {
+          if (scenario.equals("cp932")) {
+            try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
+              var result = new Tools().applyTextDiff("a.txt", "old", "changed 20", "windows-31j");
+              output += json.writeValueAsBytes(result).length;
+              status = result.success() ? "APPLIED" : "REJECTED";
+            }
+          } else if (batch) {
             var proposal = documents.propose(owner, (TextDocumentChangeSetService.Request) request);
             output += json.writeValueAsBytes(proposal).length;
             diff += proposal.diff().getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
@@ -103,7 +160,12 @@ class FileWriteBenchmarkTest {
             diff += proposal.diff().getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
             if (scenario.equals("conflict")) Files.writeString(root.resolve("a.txt"), "external");
             calls++;
-            var applied = service.apply(project, proposal.id(), proposal.proposalSha256(), TextDocumentTransaction::writeSingle);
+            var applied =
+                service.apply(
+                    project,
+                    proposal.id(),
+                    proposal.proposalSha256(),
+                    TextDocumentTransaction::writeSingle);
             output += json.writeValueAsBytes(applied).length;
             status = applied.status();
           }
@@ -113,26 +175,57 @@ class FileWriteBenchmarkTest {
         }
         row.put("elapsedNanos", System.nanoTime() - started);
         recording.stop();
-        Path trace = root.resolve("io.jfr"); recording.dump(trace);
+        Path trace = root.resolve("io.jfr");
+        recording.dump(trace);
         long reads = 0, writes = 0, readBytes = 0, writeBytes = 0;
         for (var event : RecordingFile.readAllEvents(trace)) {
           String type = event.getEventType().getName();
           if (!type.equals("jdk.FileRead") && !type.equals("jdk.FileWrite")) continue;
           String path = event.getString("path");
-          if (path == null || !path.startsWith(root.toString())
+          if (path == null
+              || !path.startsWith(root.toString())
               || !(path.endsWith(".txt") || path.endsWith(".tmp"))) continue;
-          if (type.equals("jdk.FileRead")) { reads++; readBytes += Math.max(0, event.getLong("bytesRead")); }
-          else { writes++; writeBytes += event.getLong("bytesWritten"); }
+          if (type.equals("jdk.FileRead")) {
+            reads++;
+            readBytes += Math.max(0, event.getLong("bytesRead"));
+          } else {
+            writes++;
+            writeBytes += event.getLong("bytesWritten");
+          }
         }
-        row.put("fileReadEvents", reads); row.put("fileWriteEvents", writes);
-        row.put("readBytes", readBytes); row.put("writeBytes", writeBytes);
+        row.put("fileReadEvents", reads);
+        row.put("fileWriteEvents", writes);
+        row.put("readBytes", readBytes);
+        row.put("writeBytes", writeBytes);
       }
-      if (status.equals("APPLIED")) assertEquals(after, Files.readString(root.resolve("a.txt")));
-      row.put("status", status); row.put("outputJsonBytes", output);
-      row.put("diffBytes", diff); row.put("toolCalls", calls);
+      if (status.equals("APPLIED"))
+        assertEquals(
+            after,
+            Files.readString(
+                root.resolve("a.txt"),
+                scenario.equals("cp932")
+                    ? java.nio.charset.Charset.forName("windows-31j")
+                    : java.nio.charset.StandardCharsets.UTF_8));
+      String expected =
+          switch (scenario) {
+            case "ambiguous" -> "REJECTED";
+            case "conflict" -> "STALE";
+            case "applyFailure", "rollback" -> "ROLLED_BACK";
+            case "unknown" -> "UNKNOWN";
+            default -> "APPLIED";
+          };
+      assertEquals(expected, status, scenario);
+      row.put("attempts", 1);
+      row.put("expectedOutcomes", 1);
+      row.put("successfulApplies", status.equals("APPLIED") ? 1 : 0);
+      row.put("status", status);
+      row.put("outputJsonBytes", output);
+      row.put("diffBytes", diff);
+      row.put("toolCalls", calls);
       rows.add(row);
     }
-    Path output = Path.of(System.getProperty("fileWrite.output", "target/file-write-benchmark.json"));
+    Path output =
+        Path.of(System.getProperty("fileWrite.output", "target/file-write-benchmark.json"));
     Files.createDirectories(output.toAbsolutePath().getParent());
     json.writerWithDefaultPrettyPrinter().writeValue(output.toFile(), rows);
   }
