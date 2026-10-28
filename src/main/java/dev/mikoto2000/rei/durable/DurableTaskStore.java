@@ -184,6 +184,24 @@ public final class DurableTaskStore {
     });
   }
 
+  /** Owner-scoped discovery remains available when every Checkpoint has been lost. */
+  public Page<Task> tasks(Scope scope, String after, int limit) {
+    pageLimit(limit);
+    return read(db -> {
+      var ids = new ArrayList<String>();
+      try (var query = statement(db, "SELECT id FROM durable_tasks WHERE project=? AND session=? AND root=? AND id>? ORDER BY id LIMIT ?",
+          scope.project(), scope.session(), scope.root(), Objects.toString(after, ""), limit + 1);
+          var rows = query.executeQuery()) {
+        while (rows.next()) ids.add(rows.getString(1));
+      }
+      boolean more = ids.size() > limit;
+      if (more) ids.removeLast();
+      var entries = new ArrayList<Task>();
+      for (var id : ids) entries.add(status(db, scope, id));
+      return new Page<>(entries, more ? ids.getLast() : null);
+    });
+  }
+
   /** Empty means no additional blocker; existing Goal predicates still have to pass. */
   public String verifyGoal(String project, String goal) {
     String cursor = "";

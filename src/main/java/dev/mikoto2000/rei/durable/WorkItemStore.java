@@ -38,6 +38,60 @@ public final class WorkItemStore {
     this.store = store;
   }
 
+  /** Explicit recovery reuses durable results and revokes the previous Run's write authority. */
+  public DurableTaskStore.Task resume(DurableTaskStore.Scope scope, String task, String run) {
+    DurableTaskStore.require(run, 256);
+    return store.write(db -> {
+      var owner = store.status(db, scope, task);
+      if (!owner.state().equals("ACTIVE") && !owner.state().equals("COMPLETE"))
+        throw new IllegalStateException("TASK_NOT_ACTIVE");
+      if (DurableTaskStore.number(db, "SELECT COUNT(*) FROM durable_tasks WHERE id=? AND current_run=?", task, run) != 0)
+        return owner;
+      // A previously retired Run may not reclaim authority by replaying an old resume.
+      if (DurableTaskStore.number(db, "SELECT COUNT(*) FROM durable_attempts WHERE task=? AND run=?", task, run) != 0)
+        throw new IllegalArgumentException("TASK_RUN_RETIRED");
+      reconcile(db, task);
+      DurableTaskStore.execute(db, "UPDATE durable_item_attempts SET state='REVOKED' WHERE state='ACTIVE' AND work IN (SELECT id FROM durable_work WHERE task=?)", task);
+      DurableTaskStore.execute(db, "UPDATE durable_work SET state='PENDING',active_attempt=NULL,last_step='RECOVERED' WHERE task=? AND state='RUNNING' AND result_id IS NULL", task);
+      DurableTaskStore.execute(db, "UPDATE durable_attempts SET state='RETIRED' WHERE task=? AND state='ACTIVE'", task);
+      DurableTaskStore.execute(db, "INSERT INTO durable_attempts(task,run,started,state) VALUES(?,?,?,'ACTIVE')", task, run, System.currentTimeMillis());
+      DurableTaskStore.execute(db, "UPDATE durable_tasks SET current_run=? WHERE id=?", run, task);
+      if (TaskCompletion.verify(db, store.status(db, scope, task)).complete())
+        DurableTaskStore.execute(db, "UPDATE durable_tasks SET state='COMPLETE' WHERE id=?", task);
+      return store.status(db, scope, task);
+    });
+  }
+
+  private static void reconcile(Connection db, String task) throws SQLException {
+    String cursor = "";
+    while (true) {
+      var ids = new ArrayList<String>();
+      try (var query = DurableTaskStore.statement(db, "SELECT r.work FROM durable_results r JOIN durable_work w ON w.id=r.work WHERE w.task=? AND r.work>? ORDER BY r.work LIMIT 100", task, cursor);
+          var rows = query.executeQuery()) {
+        while (rows.next()) ids.add(rows.getString(1));
+      }
+      for (var id : ids) {
+        var item = item(db, id);
+        try (var query = DurableTaskStore.statement(db, "SELECT body,sha256,task,snapshot,path,start,end,version,criterion FROM durable_results WHERE work=?", id);
+            var rows = query.executeQuery()) {
+          rows.next();
+          var body = result(rows).body();
+          if (!body.work().equals(item.id()) || !body.snapshot().equals(item.snapshot())
+              || !body.path().equals(item.path()) || body.start() != item.start() || body.end() != item.end()
+              || !body.version().equals(item.version()) || !body.criterion().equals(item.criterion())
+              || !rows.getString(3).equals(item.task()) || !rows.getString(4).equals(item.snapshot())
+              || !rows.getString(5).equals(item.path()) || rows.getInt(6) != item.start() || rows.getInt(7) != item.end()
+              || !rows.getString(8).equals(item.version()) || !rows.getString(9).equals(item.criterion()))
+            throw new IllegalArgumentException("RESULT_CORRUPT");
+          source(db, item);
+        }
+        DurableTaskStore.execute(db, "UPDATE durable_work SET state='COMPLETE',result_id=?,last_step='COMPLETED' WHERE id=?", id, id);
+        cursor = id;
+      }
+      if (ids.size() < 100) return;
+    }
+  }
+
   public Claim claim(DurableTaskStore.Scope scope, String task, String run) {
     return store.write(db -> {
       requireRun(db, scope, task, run);
