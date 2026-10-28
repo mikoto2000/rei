@@ -98,6 +98,7 @@ public final class DurableTaskStore {
       if (run != null) {
         require(run, 256);
         execute(db, "INSERT INTO durable_attempts(task,run,started,state) VALUES(?,?,?,'ACTIVE')", id, run, System.currentTimeMillis());
+        execute(db, "UPDATE durable_tasks SET current_run=? WHERE id=?", run, id);
       }
       return status(db, scope, id);
     });
@@ -122,7 +123,7 @@ public final class DurableTaskStore {
     }
   }
 
-  private Task status(Connection db, Scope scope, String id) throws SQLException {
+  Task status(Connection db, Scope scope, String id) throws SQLException {
     try (var query = statement(db,
         "SELECT t.*,s.state AS enumeration,s.reason,s.files,s.excluded,s.errors,s.bytes,(SELECT COUNT(*) FROM durable_directories d WHERE d.task=t.id AND d.state='PENDING') AS unscanned FROM durable_tasks t JOIN durable_snapshots s ON s.id=t.snapshot WHERE t.id=? AND t.project=? AND t.session=? AND t.root=?",
         id, scope.project(), scope.session(), scope.root()); var row = query.executeQuery()) {
@@ -268,8 +269,8 @@ public final class DurableTaskStore {
           execute(db, "UPDATE durable_directories SET state='PENDING' WHERE task=? AND path=?", task, directory.path());
           break;
         }
-        execute(db, "INSERT INTO durable_files(snapshot,path,version,content,text,bytes,reason,error) VALUES(?,?,?,?,?,?,?,?)",
-            owner.snapshot(), entry.path(), entry.version(), entry.content(), entry.text(), size, entry.reason(), entry.error());
+        execute(db, "INSERT INTO durable_files(snapshot,path,version,content,text,bytes,reason,error,chars) VALUES(?,?,?,?,?,?,?,?,?)",
+            owner.snapshot(), entry.path(), entry.version(), entry.content(), entry.text(), size, entry.reason(), entry.error(), entry.text() == null ? 0 : entry.text().length());
         if (!entry.error().isEmpty()) errors++;
         else if (!entry.reason().isEmpty()) excluded++;
         else {

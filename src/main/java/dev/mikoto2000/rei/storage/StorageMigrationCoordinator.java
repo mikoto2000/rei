@@ -23,7 +23,7 @@ import java.util.UUID;
  */
 public final class StorageMigrationCoordinator implements AutoCloseable {
   /** データ形式形式のバージョン。 */
-  public static final int SCHEMA_VERSION = 20;
+  public static final int SCHEMA_VERSION = 21;
 
   /** データ保存の共通処理における段階の選択肢。 */
   public enum Stage {
@@ -342,6 +342,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
       if (version >= 16) LifeContextMigration.verify(db);
       if (version >= 19) ReadingStateMigration.verify(db);
       if (version >= 20) DurableTaskMigration.verify(db);
+      if (version >= 21) DurableWorkMigration.verify(db);
       if (version >= 17) {
         boolean briefingExists;
         try (var sql = db.createStatement();
@@ -443,6 +444,7 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
         if (sourceVersion < 17 || legacyPageLayout17) SecretaryBriefingMigration.apply(db);
         if (sourceVersion < 19) ReadingStateMigration.apply(db);
         if (sourceVersion < 20) DurableTaskMigration.apply(db);
+        if (sourceVersion < 21) DurableWorkMigration.apply(db);
         checkpoint.reached(Stage.ROWS_IMPORTED, backup);
         if (backup != null) {
           StorageBackup.verify(backup);
