@@ -2547,6 +2547,9 @@ public class Tools {
       description =
           """
       Read one or more known file paths or line ranges in a single call.
+      For Markdown, use section, sectionPath (array), sectionId or headingLevel. includeChildren defaults true.
+      Duplicate headings return selection.candidates; choose a sectionId and expectedVersion. contextLines applies.
+      unreadOnly:true suppresses only confirmed complete explicit ranges; uncertain or compressed source is returned.
       For Java declarations, pass symbol (e.g. p.C#work(String[])), optionally path to narrow candidates.
       Overloaded names return candidates; select an exact symbolId. includeBody defaults true, includeJavadoc true,
       contextLines defaults 0 (max 25), includeOwnerOverview defaults false. Use returned nextRead unchanged. unreadOnly:true suppresses only complete explicit line ranges confirmed in the current model prompt; full-file requests always return source.
@@ -2710,7 +2713,9 @@ public class Tools {
       int lineBudget = (MAX_READ_TOTAL_LINES - totalLines) / remainingRequests;
       try {
         ReadFileResult result =
-            request.symbol() != null
+            MarkdownSectionReads.selected(request)
+                ? MarkdownSectionReads.read(this, request, workingDirectory, snapshots, fileBudget, lineBudget)
+                : request.symbol() != null
                 ? JavaSymbolReads.read(
                     request,
                     workingDirectory,
@@ -2767,7 +2772,7 @@ public class Tools {
   }
 
   /** 必要な内容を参照できるよう、単一ファイルを読み取る。 */
-  private ReadFileResult readSingleFile(
+  ReadFileResult readSingleFile(
       ReadFileRequest request,
       java.nio.file.Path workingDirectory,
       FileSnapshots snapshots,
@@ -2865,7 +2870,15 @@ public class Tools {
       @org.springframework.ai.tool.annotation.ToolParam(required = false)
           Boolean includeOwnerOverview,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer symbolOffset,
-      @org.springframework.ai.tool.annotation.ToolParam(required = false) Boolean unreadOnly) {
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Boolean unreadOnly,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) List<String> sectionPath,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String section,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String sectionId,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer headingLevel,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Boolean includeChildren) {
+    public ReadFileRequest(String path, Integer startLine, Integer endLine, String expectedVersion, Integer offset, String charset, String symbol, Boolean includeBody, Boolean includeJavadoc, Integer contextLines, Boolean includeOwnerOverview, Integer symbolOffset, Boolean unreadOnly) {
+      this(path, startLine, endLine, expectedVersion, offset, charset, symbol, includeBody, includeJavadoc, contextLines, includeOwnerOverview, symbolOffset, unreadOnly, null, null, null, null, null);
+    }
     public ReadFileRequest(String path, Integer startLine, Integer endLine, String expectedVersion, Integer offset, String charset, String symbol, Boolean includeBody, Boolean includeJavadoc, Integer contextLines, Boolean includeOwnerOverview, Integer symbolOffset) {
       this(path, startLine, endLine, expectedVersion, offset, charset, symbol, includeBody, includeJavadoc, contextLines, includeOwnerOverview, symbolOffset, null);
     }
@@ -2929,7 +2942,21 @@ public class Tools {
       List<JavaSymbolReads.Candidate> candidates,
       List<String> ownerOverview,
       String truncationReason,
-      @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) ReadingDelivery.Notice delivery) {
+      @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) ReadingDelivery.Notice delivery,
+      @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL) MarkdownSectionReads.Selection selection) {
+    public ReadFileResult(String path, Integer startLine, Integer endLine, List<String> content, boolean truncated, String error, String version, ReadFileRequest nextRead, int returnedBytes, RepositoryMapService.Symbol symbol, List<JavaSymbolReads.Candidate> candidates, List<String> ownerOverview, String truncationReason, ReadingDelivery.Notice delivery) {
+      this(path, startLine, endLine, content, truncated, error, version, nextRead, returnedBytes, symbol, candidates, ownerOverview, truncationReason, delivery, null);
+    }
+    ReadFileResult withSelection(MarkdownSectionReads.Selection value) {
+      return new ReadFileResult(path, startLine, endLine, content, truncated, error, version, nextRead, returnedBytes, symbol, candidates, ownerOverview, truncationReason, delivery, value);
+    }
+    @com.fasterxml.jackson.annotation.JsonProperty(access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public ReadingProblem problem() {
+      if (error == null) return null;
+      String code = error.startsWith("SECTION_NOT_FOUND") ? "SECTION_NOT_FOUND" : error.startsWith("AMBIGUOUS_SECTION") ? "AMBIGUOUS_SECTION" : error.contains("version") || error.startsWith("FILE_CHANGED") || error.contains("STALE_VERSION") ? "FILE_CHANGED" : "READ_FAILED";
+      return new ReadingProblem(code, error, code.equals("AMBIGUOUS_SECTION") ? "Choose a candidate sectionId and expectedVersion." : "Check the source and retry with current coordinates.");
+    }
     public ReadFileResult(String path, Integer startLine, Integer endLine, List<String> content, boolean truncated, String error, String version, ReadFileRequest nextRead, int returnedBytes, RepositoryMapService.Symbol symbol, List<JavaSymbolReads.Candidate> candidates, List<String> ownerOverview, String truncationReason) {
       this(path, startLine, endLine, content, truncated, error, version, nextRead, returnedBytes, symbol, candidates, ownerOverview, truncationReason, null);
     }

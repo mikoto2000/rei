@@ -133,7 +133,7 @@ public final class ReadingDelivery {
     if (suppress) ReadingMetrics.add("suppressedBodyBytes", result.returnedBytes());
     return new Tools.ReadFileResult(result.path(), result.startLine(), result.endLine(), suppress ? List.of() : result.content(),
         result.truncated(), result.error(), result.version(), result.nextRead(), suppress ? 0 : result.returnedBytes(),
-        result.symbol(), result.candidates(), result.ownerOverview(), result.truncationReason(), new Notice(state, suppress, evidence));
+        result.symbol(), result.candidates(), result.ownerOverview(), result.truncationReason(), new Notice(state, suppress, evidence), result.selection());
   }
 
   private synchronized List<Entry> current(AgentRunContext owner) {
