@@ -34,6 +34,39 @@ public final class WorkItemStore {
     });
   }
 
+  public void delivered(DurableTaskStore.Scope scope, Claim claim, String contentHash) {
+    store.write(db -> {
+      store.status(db, scope, claim.item().task());
+      String previous = delivery(db, claim);
+      String text = source(db, claim.item());
+      if (!contentHash.equals(hash(text.substring(claim.item().start(), claim.item().end()).getBytes(StandardCharsets.UTF_8))))
+        throw new IllegalArgumentException("DELIVERY_RANGE_MISMATCH");
+      if (previous.equals(contentHash)) return null;
+      requireRun(db, scope, claim.item().task(), claim.run());
+      if (!item(db, claim.item().id()).state().equals("RUNNING"))
+        throw new IllegalArgumentException("STALE_CLAIM");
+      DurableTaskStore.execute(db, "UPDATE durable_item_attempts SET delivered_hash=? WHERE id=? AND state='ACTIVE'", contentHash, claim.attempt());
+      DurableTaskStore.execute(db, "UPDATE durable_work SET last_step='DELIVERED' WHERE id=?", claim.item().id());
+      return null;
+    });
+  }
+
+  public String deliveredHash(DurableTaskStore.Scope scope, Claim claim) {
+    return store.read(db -> {
+      store.status(db, scope, claim.item().task());
+      return delivery(db, claim);
+    });
+  }
+
+  static String delivery(Connection db, Claim claim) throws SQLException {
+    try (var query = DurableTaskStore.statement(db, "SELECT a.run,a.delivered_hash FROM durable_item_attempts a JOIN durable_work w ON w.id=a.work AND w.active_attempt=a.id WHERE a.id=? AND w.id=?", claim.attempt(), claim.item().id());
+        var rows = query.executeQuery()) {
+      if (!rows.next()) throw new IllegalArgumentException("STALE_CLAIM");
+      if (!rows.getString(1).equals(claim.run())) throw new IllegalArgumentException("TASK_RUN_NOT_BOUND");
+      return rows.getString(2);
+    }
+  }
+
   void requireRun(Connection db, DurableTaskStore.Scope scope, String task, String run) throws SQLException {
     var owner = store.status(db, scope, task);
     if (!owner.state().equals("ACTIVE")) throw new IllegalStateException("TASK_NOT_ACTIVE");
