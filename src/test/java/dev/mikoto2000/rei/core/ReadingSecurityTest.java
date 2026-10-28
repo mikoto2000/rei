@@ -34,6 +34,14 @@ class ReadingSecurityTest {
   }
 
   @Test
+  void pagedSearchCanBeExplicitlyRequestedByAReadOnlySubagent() {
+    var policy =
+        new dev.mikoto2000.rei.subagent.SubAgentToolPolicy(java.util.Set.of("searchFilePage"));
+    policy.validate(List.of("searchFilePage"));
+    assertEquals(List.of("searchFilePage"), policy.effectiveTools(List.of("searchFilePage")));
+  }
+
+  @Test
   void nativeReadErrorsHaveStructuredCategories() throws Exception {
     var result =
         new Tools()

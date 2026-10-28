@@ -197,12 +197,15 @@ this change. Current file-size, inventory, charset and bounded-history limits re
 ## Validation
 
 On Windows / Java 25, the full non-live regression was executed and the affected tests were
-rerun after fixes. The latest 1,189 suite reports contain 6,554 tests: 6,547 passed, zero
+rerun after fixes. The latest 1,189 suite reports contain 6,557 tests: 6,550 passed, zero
 failures/errors, seven conditional skips. This is the aggregate of the full execution and
 targeted reruns, not a claim that the first full invocation passed. The final related batch
 covered 379 tests; the last recompiled 20-test batch passed after correcting child log encoding.
-Twenty test methods were added across seven reading/search test classes, including the real
+Twenty-one test methods were added across seven reading/search test classes, including the real
 child-JVM restart probe. Existing review, native/API compatibility and stagnation tests pass.
+Additional registry tests verify explicit subagent access, safe reads with unresolved checkpoint
+side effects, missing-source event handling, and search timing classification. The system prompt
+explains compact projection, the two search cursors, explicit unread-only reads and Markdown selection.
 
 The seven skips require opt-in native Windows/WSL Codex processes (three), optional unrelated
 benchmarks (three), or a local PlantUML runtime (one). Live-provider tests are excluded by the

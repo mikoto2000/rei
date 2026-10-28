@@ -96,7 +96,7 @@ class ToolEventCallbackDecoratorTest {
   /** 未指定ファイルについて、失敗情報を返すことを確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"readBinaryFile", "readPdfFile", "copyFile"})
+      strings = {"readBinaryFile", "readPdfFile", "copyFile", "searchFilePage"})
   void missingFileReturnsFailureAndPreservesFailedEvent(String toolName) {
     bus.subscribe(received::add);
     var callback = delegate(toolName, "unused");

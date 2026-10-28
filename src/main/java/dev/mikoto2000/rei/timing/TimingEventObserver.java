@@ -28,6 +28,7 @@ public class TimingEventObserver implements AutoCloseable {
           "searchKnowledge",
           "grepMultiQuery",
           "searchAndRead",
+          "searchFilePage",
           "repositoryMap",
           "findFile",
           "listFile",
