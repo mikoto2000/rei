@@ -12,7 +12,8 @@ import org.springframework.stereotype.Component;
 @Component
 public class JapaneseHolidayTools {
   private static final Logger LOG = LoggerFactory.getLogger(JapaneseHolidayTools.class);
-  private static final String DESCRIPTION = """
+  private static final String DESCRIPTION =
+      """
       日本の国民の祝日・休日を内閣府CSVで判定します。土日判定と国民の祝日は別です。
       年末年始休暇や個人的な休暇は含みません。対応年外・データ不足ではUNKNOWNになります。
       UNKNOWNの場合、祝日かどうかを推測して断定しないでください。
@@ -33,8 +34,11 @@ public class JapaneseHolidayTools {
     return safely(() -> service.getHolidayInfo(parseDate(date)));
   }
 
-  @Tool(name = "listHolidays", description = DESCRIPTION
-      + "from/toはyyyy-MM-dd、両端を含め最大366日です。unknownPeriodsは完全性未確認の期間で、その中の既知の休日も一覧に含みます。")
+  @Tool(
+      name = "listHolidays",
+      description =
+          DESCRIPTION
+              + "from/toはyyyy-MM-dd、両端を含め最大366日です。unknownPeriodsは完全性未確認の期間で、その中の既知の休日も一覧に含みます。")
   public Object listHolidays(String from, String to) {
     return safely(() -> service.listHolidays(parseDate(from), parseDate(to)));
   }
@@ -53,10 +57,13 @@ public class JapaneseHolidayTools {
     try {
       return operation.get();
     } catch (IllegalArgumentException e) {
-      return new ToolError("INVALID_ARGUMENT", "Use valid yyyy-MM-dd dates, from <= to, at most 366 days inclusive.");
+      return new ToolError(
+          "INVALID_ARGUMENT",
+          "Use valid yyyy-MM-dd dates, from <= to, at most 366 days inclusive.");
     } catch (RuntimeException e) {
       LOG.warn("Holiday tool failed: {}", e.getClass().getSimpleName());
-      return new ToolError("DATA_UNAVAILABLE", "Holiday data could not be queried. Do not infer holiday status.");
+      return new ToolError(
+          "DATA_UNAVAILABLE", "Holiday data could not be queried. Do not infer holiday status.");
     }
   }
 }

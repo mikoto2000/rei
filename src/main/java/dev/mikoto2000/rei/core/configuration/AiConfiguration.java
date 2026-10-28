@@ -132,7 +132,8 @@ public class AiConfiguration {
   private ObjectProvider<dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayTools> holidayTools;
 
   @org.springframework.beans.factory.annotation.Autowired
-  void setHolidayTools(ObjectProvider<dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayTools> tools) {
+  void setHolidayTools(
+      ObjectProvider<dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayTools> tools) {
     holidayTools = tools;
   }
 

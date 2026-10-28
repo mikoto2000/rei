@@ -12,9 +12,10 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class HolidayConfiguration {
   @Bean
-  JapaneseHolidayService japaneseHolidayService(Clock clock,
-      @Value("${rei.holidays.complete-years:}") String completeYears) {
-    return new JapaneseHolidayService(ReiDataDirectory.current().resolve("syukujitsu.csv"), parseYears(completeYears), clock);
+  JapaneseHolidayService japaneseHolidayService(
+      Clock clock, @Value("${rei.holidays.complete-years:}") String completeYears) {
+    return new JapaneseHolidayService(
+        ReiDataDirectory.current().resolve("syukujitsu.csv"), parseYears(completeYears), clock);
   }
 
   static Set<Integer> parseYears(String value) {
@@ -23,14 +24,17 @@ public class HolidayConfiguration {
     for (String entry : value.split(",", -1)) {
       String token = entry.strip();
       if (!token.matches("[0-9]{4}(-[0-9]{4})?"))
-        throw new IllegalArgumentException("rei.holidays.complete-years requires years or year ranges");
+        throw new IllegalArgumentException(
+            "rei.holidays.complete-years requires years or year ranges");
       String[] range = token.split("-");
       int from = Integer.parseInt(range[0]);
       int to = range.length == 1 ? from : Integer.parseInt(range[1]);
       if (from < 1 || to < from || to - from > 500)
-        throw new IllegalArgumentException("rei.holidays.complete-years range is invalid or exceeds 501 years");
+        throw new IllegalArgumentException(
+            "rei.holidays.complete-years range is invalid or exceeds 501 years");
       for (int year = from; year <= to; year++) years.add(year);
-      if (years.size() > 501) throw new IllegalArgumentException("Too many confirmed holiday years");
+      if (years.size() > 501)
+        throw new IllegalArgumentException("Too many confirmed holiday years");
     }
     return Set.copyOf(years);
   }

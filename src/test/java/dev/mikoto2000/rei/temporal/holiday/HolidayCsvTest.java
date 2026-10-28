@@ -26,20 +26,26 @@ class HolidayCsvTest {
   void acceptsUtf8OnlyWithBom() throws Exception {
     var data = ("\ufeff" + HEADER + "\n2026/1/1,元日\n").getBytes(StandardCharsets.UTF_8);
     assertEquals(1, HolidayCsv.parse(data).size());
-    assertThrows(IOException.class,
+    assertThrows(
+        IOException.class,
         () -> HolidayCsv.parse((HEADER + "\n2026/1/1,元日").getBytes(StandardCharsets.UTF_8)));
   }
 
   @ParameterizedTest
-  @ValueSource(strings = {"", "国民の祝日・休日月日,国民の祝日・休日名称", "date,name\n2026/1/1,元日",
-      "国民の祝日・休日月日,国民の祝日・休日名称\n2026/2/30,休日",
-      "国民の祝日・休日月日,国民の祝日・休日名称\n2026-01-01,元日",
-      "国民の祝日・休日月日,国民の祝日・休日名称\n2026/1/1,元日\n2026/1/1,重複",
-      "国民の祝日・休日月日,国民の祝日・休日名称\n2026/1/1,元日,余分",
-      "国民の祝日・休日月日,国民の祝日・休日名称\n2026/1/1",
-      "国民の祝日・休日月日,国民の祝日・休日名称\n2026/1/1,",
-      "国民の祝日・休日月日,国民の祝日・休日名称\n\n2026/1/1,元日",
-      "国民の祝日・休日月日,国民の祝日・休日名称\n2026/1/1,\"元日"})
+  @ValueSource(
+      strings = {
+        "",
+        "国民の祝日・休日月日,国民の祝日・休日名称",
+        "date,name\n2026/1/1,元日",
+        "国民の祝日・休日月日,国民の祝日・休日名称\n2026/2/30,休日",
+        "国民の祝日・休日月日,国民の祝日・休日名称\n2026-01-01,元日",
+        "国民の祝日・休日月日,国民の祝日・休日名称\n2026/1/1,元日\n2026/1/1,重複",
+        "国民の祝日・休日月日,国民の祝日・休日名称\n2026/1/1,元日,余分",
+        "国民の祝日・休日月日,国民の祝日・休日名称\n2026/1/1",
+        "国民の祝日・休日月日,国民の祝日・休日名称\n2026/1/1,",
+        "国民の祝日・休日月日,国民の祝日・休日名称\n\n2026/1/1,元日",
+        "国民の祝日・休日月日,国民の祝日・休日名称\n2026/1/1,\"元日"
+      })
   void rejectsMalformedOrEmptyData(String csv) {
     assertThrows(IOException.class, () -> HolidayCsv.parse(csv.getBytes(MS932)));
   }

@@ -25,24 +25,51 @@ class LlmChatClientProviderTest {
         .thenReturn(org.springframework.ai.openai.OpenAiChatOptions.builder().build());
     var system = mock(SystemPromptService.class);
     when(system.systemPrompt()).thenReturn("system");
-    var provider = new LlmChatClientProvider(models, new CoreProperties("system", 100), system,
-        mock(ChatMemory.class), optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), optional(null), optional(null), optional(null), optional(null),
-        optional(null), optional(null), null, null);
-    provider.setHolidayTools(optional(new dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayTools(
-        mock(dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayService.class))));
+    var provider =
+        new LlmChatClientProvider(
+            models,
+            new CoreProperties("system", 100),
+            system,
+            mock(ChatMemory.class),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            optional(null),
+            null,
+            null);
+    provider.setHolidayTools(
+        optional(
+            new dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayTools(
+                mock(dev.mikoto2000.rei.temporal.holiday.JapaneseHolidayService.class))));
     var client = provider.chatClient(LlmFeature.CHAT);
     var field = client.getClass().getDeclaredField("defaultChatClientRequest");
     field.setAccessible(true);
     var request = field.get(client);
     var callbacks = request.getClass().getDeclaredField("toolCallbackProviders");
     callbacks.setAccessible(true);
-    var names = ((List<?>) callbacks.get(request)).stream().map(ToolCallbackProvider.class::cast)
-        .flatMap(value -> Arrays.stream(value.getToolCallbacks()))
-        .map(value -> value.getToolDefinition().name());
+    var names =
+        ((List<?>) callbacks.get(request))
+            .stream()
+                .map(ToolCallbackProvider.class::cast)
+                .flatMap(value -> Arrays.stream(value.getToolCallbacks()))
+                .map(value -> value.getToolDefinition().name());
     assertThat(names).contains("getHolidayInfo", "listHolidays");
   }
+
   /** 用途に応じたモデル利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.CsvSource({
