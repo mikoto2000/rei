@@ -566,7 +566,8 @@ public class ProgressEvaluator {
   private void collectInformation(
       JsonNode node, String raw, String name, String args, List<ProgressEvidence> evidence) {
     if (name.equals("searchFilePage") && node != null && node.path("files").isArray()) {
-      collectInformation(node.path("files"), node.path("files").toString(), "searchAndRead", args, evidence);
+      collectInformation(
+          node.path("files"), node.path("files").toString(), "searchAndRead", args, evidence);
       return;
     }
     if (node != null && node.isArray()) {
@@ -769,8 +770,12 @@ public class ProgressEvaluator {
             && restoredRanges.observeRange(source, version, start, start + count).status()
                 == InformationLedger.Status.NEW) {
           restorationReads++;
-          evidence.add(new ProgressEvidence(ProgressEvent.CONTEXT_RESTORED,
-              "Previously acquired source restored after prompt compression", source, version));
+          evidence.add(
+              new ProgressEvidence(
+                  ProgressEvent.CONTEXT_RESTORED,
+                  "Previously acquired source restored after prompt compression",
+                  source,
+                  version));
         } else restoreRange(source, version, start, start + count, evidence);
       } else if (observed.status() == InformationLedger.Status.UNKNOWN)
         unknown(source, "LEDGER_CAPACITY_OR_HISTORY", evidence);

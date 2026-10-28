@@ -222,9 +222,14 @@ public class StagnationChatModel implements ChatModel {
                         if (assembler != null && sent.get() != null)
                           assembler.confirmedDelivery(sent.get(), context.runContext());
                         var usage = result.getMetadata().getUsage();
-                        if (usage != null && usage.getPromptTokens() != null && usage.getPromptTokens() > 0)
-                          dev.mikoto2000.rei.core.ReadingMetrics.add(context.runContext(), "providerInputTokens", usage.getPromptTokens());
-                        else dev.mikoto2000.rei.core.ReadingMetrics.add(context.runContext(), "providerInputTokensUnavailable", 1);
+                        if (usage != null
+                            && usage.getPromptTokens() != null
+                            && usage.getPromptTokens() > 0)
+                          dev.mikoto2000.rei.core.ReadingMetrics.add(
+                              context.runContext(), "providerInputTokens", usage.getPromptTokens());
+                        else
+                          dev.mikoto2000.rei.core.ReadingMetrics.add(
+                              context.runContext(), "providerInputTokensUnavailable", 1);
                         reported.set(true);
                         context.recordTotalTokens(usage == null ? null : usage.getTotalTokens());
                         if (usage != null && usage.getCompletionTokens() != null) {

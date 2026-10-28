@@ -62,13 +62,18 @@ final class FileSnapshots {
 
   /** ファイル一覧。 */
   private final Map<Path, Snapshot> files = new LinkedHashMap<>();
+
   private final Map<List<String>, List<String>> decoded = new HashMap<>();
 
   @FunctionalInterface
-  interface Decoder { List<String> decode() throws IOException; }
+  interface Decoder {
+    List<String> decode() throws IOException;
+  }
 
-  synchronized List<String> lines(Snapshot snapshot, String charset, Decoder decoder) throws IOException {
-    var key = List.of(snapshot.path().toString(), snapshot.version(), Objects.toString(charset, ""));
+  synchronized List<String> lines(Snapshot snapshot, String charset, Decoder decoder)
+      throws IOException {
+    var key =
+        List.of(snapshot.path().toString(), snapshot.version(), Objects.toString(charset, ""));
     var value = decoded.get(key);
     if (value == null) {
       value = List.copyOf(decoder.decode());

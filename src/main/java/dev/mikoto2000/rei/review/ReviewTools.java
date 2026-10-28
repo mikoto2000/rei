@@ -49,7 +49,14 @@ public final class ReviewTools {
       String content) {
     @com.fasterxml.jackson.annotation.JsonIgnore
     public dev.mikoto2000.rei.tooldelivery.SourceEvidence evidence() {
-      return new dev.mikoto2000.rei.tooldelivery.SourceEvidence(range.path(), range.version(), range.span().startLine(), range.span().endLine(), null, "review:" + reviewJobId, null);
+      return new dev.mikoto2000.rei.tooldelivery.SourceEvidence(
+          range.path(),
+          range.version(),
+          range.span().startLine(),
+          range.span().endLine(),
+          null,
+          "review:" + reviewJobId,
+          null);
     }
   }
 

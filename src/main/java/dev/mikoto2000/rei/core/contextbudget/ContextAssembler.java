@@ -77,8 +77,12 @@ public class ContextAssembler {
 
   /** レビューツール一覧。 */
   private dev.mikoto2000.rei.review.ReviewTools reviewTools;
+
   private dev.mikoto2000.rei.core.ReadingDelivery readingDelivery;
-  public void setReadingDelivery(dev.mikoto2000.rei.core.ReadingDelivery delivery) { readingDelivery = delivery; }
+
+  public void setReadingDelivery(dev.mikoto2000.rei.core.ReadingDelivery delivery) {
+    readingDelivery = delivery;
+  }
 
   /** モデルへ渡す文脈の管理で使用するレビューツール一覧を設定する。 */
   public void setReviewTools(dev.mikoto2000.rei.review.ReviewTools tools) {
@@ -142,7 +146,10 @@ public class ContextAssembler {
   }
 
   private Prompt restoreSuppressed(Prompt prompt) {
-    return readingDelivery == null ? prompt : readingDelivery.restoreSuppressed(dev.mikoto2000.rei.core.chat.AgentRunScope.current(), prompt);
+    return readingDelivery == null
+        ? prompt
+        : readingDelivery.restoreSuppressed(
+            dev.mikoto2000.rei.core.chat.AgentRunScope.current(), prompt);
   }
 
   /** モデルへ渡す文脈の管理で用いるassembleを返す。 */
@@ -164,7 +171,11 @@ public class ContextAssembler {
                   })
               .toList();
       var projected =
-          tools.fit(restoreSuppressed(new Prompt(messages, raw.getOptions())), conversation, run, hardLimit(raw));
+          tools.fit(
+              restoreSuppressed(new Prompt(messages, raw.getOptions())),
+              conversation,
+              run,
+              hardLimit(raw));
       if (estimate(projected) > hardLimit(raw))
         throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
             dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.CONTEXT_HARD_LIMIT);

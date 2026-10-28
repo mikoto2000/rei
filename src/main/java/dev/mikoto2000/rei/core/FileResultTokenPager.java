@@ -133,7 +133,8 @@ final class FileResultTokenPager {
               nextOffset,
               request.charset());
       if (MarkdownSectionReads.selected(request))
-        next = MarkdownSectionReads.continueRequest(request, next, result.selection().selected().id());
+        next =
+            MarkdownSectionReads.continueRequest(request, next, result.selection().selected().id());
       int bytes =
           content.stream().mapToInt(line -> line.getBytes(StandardCharsets.UTF_8).length + 1).sum();
       output.add(
@@ -150,7 +151,9 @@ final class FileResultTokenPager {
               result.symbol(),
               result.candidates(),
               result.ownerOverview(),
-              "RESULT_TOKEN_BUDGET", result.delivery(), result.selection()));
+              "RESULT_TOKEN_BUDGET",
+              result.delivery(),
+              result.selection()));
     }
     return List.copyOf(output);
   }

@@ -231,7 +231,8 @@ class StoragePageLayoutTest {
         root.resolve(".storage/migration-state.json"),
         "{\"sourceVersion\":0,\"targetVersion\":17,\"stage\":\"COMPLETE\",\"backup\":\"\"}");
     try (var migration = new StorageMigrationCoordinator(root)) {
-      assertThat(migration.prepare().schemaVersion()).isEqualTo(StorageMigrationCoordinator.SCHEMA_VERSION);
+      assertThat(migration.prepare().schemaVersion())
+          .isEqualTo(StorageMigrationCoordinator.SCHEMA_VERSION);
       assertThat(migration.prepare().backup()).isNotNull();
     }
     verifyValues();
