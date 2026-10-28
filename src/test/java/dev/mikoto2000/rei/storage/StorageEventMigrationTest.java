@@ -469,6 +469,7 @@ class StorageEventMigrationTest {
               "secretary_suggestion_history")) sql.execute("DROP TABLE " + table);
       sql.executeUpdate("DELETE FROM storage_migrations WHERE version>3");
       sql.execute("DROP TABLE reading_state");
+      StorageSchemaFixture.removeDurableSchema(sql);
       sql.execute("PRAGMA user_version=3");
     }
     var legacy = new ProjectAgentEventStore(root);
