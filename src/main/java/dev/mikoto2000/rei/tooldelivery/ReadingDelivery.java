@@ -20,18 +20,24 @@ import org.springframework.ai.chat.prompt.Prompt;
 
 /** Current prompt presence is rebuilt, never inferred from the acquisition ledger or a summary. */
 public final class ReadingDelivery {
-  public record Notice(String state, boolean suppressed, List<SourceEvidence> evidence) {}
+  public record Notice(String state, boolean suppressed, List<SourceEvidence> evidence) {
+    public Notice { evidence = List.copyOf(evidence); }
+  }
 
-  public record Entry(String path, String version, int start, List<String> hashes, String ref) {}
+  public record Entry(String path, String version, int start, List<String> hashes, String ref) {
+    public Entry { hashes = List.copyOf(hashes); }
+  }
 
-  public record Saved(List<Entry> entries) {}
+  public record Saved(List<Entry> entries) {
+    public Saved { entries = List.copyOf(entries); }
+  }
 
   private final ReadingStateStore store;
   private final ReadingRawAccess raw;
   @FunctionalInterface
   public interface Resolver { String resolve(ReadingRun owner, String path) throws java.io.IOException; }
   private final Resolver resolver;
-  private final Map<String, List<Entry>> available = new LinkedHashMap<>();
+  private final Map<String, List<Entry>> available = new LinkedHashMap<>(16, .75f, true);
 
   public ReadingDelivery(ReadingStateStore store, ReadingRawAccess raw, Resolver resolver) {
     this.store = store;
@@ -40,15 +46,30 @@ public final class ReadingDelivery {
   }
 
   public synchronized void confirm(ReadingRun owner, Prompt prompt) {
+    if (owner == null) return;
     String scope = ReadingStateStore.scope(owner);
     List<Entry> current = collect(owner, prompt, true);
     available.put(scope, current);
-    while (available.size() > 256) available.remove(available.keySet().iterator().next());
+    while (available.size() > 64 || available.values().stream().flatMap(List::stream)
+        .mapToLong(entry -> entry.hashes().size() * 128L + 512L).sum() > 8L * 1024 * 1024)
+      available.remove(available.keySet().iterator().next());
     var history = new ArrayList<>(history(owner));
     for (var entry : current) if (!history.contains(entry)) history.add(entry);
     if (history.size() > 128)
       history = new ArrayList<>(history.subList(history.size() - 128, history.size()));
-    store.save(owner, "delivery", "evidence", new Saved(List.copyOf(history)), Duration.ofDays(7));
+    try {
+      int retained = ReadingJson.JSON.writeValueAsBytes(new Saved(List.of())).length;
+      int start = history.size();
+      for (int index = history.size() - 1; index >= 0; index--) {
+        int cost = ReadingJson.JSON.writeValueAsBytes(history.get(index)).length + (start < history.size() ? 1 : 0);
+        if (cost > 2 * 1024 * 1024 - retained) break;
+        retained += cost;
+        start = index;
+      }
+      store.save(owner, "delivery", "evidence", new Saved(history.subList(start, history.size())), Duration.ofDays(7));
+    } catch (java.io.IOException | RuntimeException unavailable) {
+      ReadingMetrics.add(owner, "deliveryPersistenceUnavailable", 1);
+    }
     ReadingMetrics.flush(owner, store);
   }
 
@@ -136,9 +157,14 @@ public final class ReadingDelivery {
     if (start < 1 || end < start || (long) end - start > 5000)
       throw ReadingProblem.fail("SOURCE_RESTORATION_UNAVAILABLE");
     var rows = new java.util.TreeMap<Integer, String>();
-    for (var entry : history(owner)) {
+    var candidates = new ArrayList<>(history(owner));
+    for (var entry : current(owner)) if (!candidates.contains(entry)) candidates.add(entry);
+    for (var entry : candidates) {
       if (!entry.path().equals(path) || !entry.version().equals(version)) continue;
-      var source = raw.read(owner.conversationId(), entry.ref());
+      if (entry.start() > end || (long) entry.start() + entry.hashes().size() <= start) continue;
+      String source;
+      try { source = raw.read(owner.conversationId(), entry.ref()); }
+      catch (RuntimeException unavailable) { continue; }
       var tree = ReadingJson.JSON.readTree(source);
       if (tree != null && tree.isObject() && tree.path("files").isArray())
         tree = tree.path("files");
