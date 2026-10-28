@@ -300,8 +300,8 @@ public final class WorkItemStore {
 
   static String source(Connection db, Item expected) throws SQLException {
     try (var query = DurableTaskStore.statement(db,
-        "SELECT f.content,f.text FROM durable_files f JOIN durable_work w ON w.snapshot=f.snapshot AND w.path=f.path WHERE w.id=? AND w.task=? AND w.snapshot=? AND w.path=? AND w.start=? AND w.end=? AND w.version=? AND f.version=w.version AND f.error='' AND f.reason=''",
-        expected.id(), expected.task(), expected.snapshot(), expected.path(), expected.start(), expected.end(), expected.version());
+        "SELECT f.content,f.text FROM durable_files f JOIN durable_work w ON w.snapshot=f.snapshot AND w.path=f.path WHERE w.id=? AND w.task=? AND w.snapshot=? AND w.path=? AND w.start=? AND w.end=? AND w.version=? AND w.kind=? AND w.criterion=? AND w.required=? AND f.version=w.version AND f.error='' AND f.reason=''",
+        expected.id(), expected.task(), expected.snapshot(), expected.path(), expected.start(), expected.end(), expected.version(), expected.kind(), expected.criterion(), expected.required());
         var row = query.executeQuery()) {
       if (!row.next()) throw new IllegalArgumentException("WORK_ITEM_CHANGED");
       byte[] content = row.getBytes(1);
