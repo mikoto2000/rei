@@ -32,7 +32,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -49,10 +49,11 @@ class ReviewModelBoundaryTest {
 
   /** 変更内容のレビューで、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
-  @ValueSource(booleans = {true, false})
+  @CsvSource({"true,false", "false,false", "true,true", "false,true"})
   void failedTransportNeverConfirmsDeliveryAndNaturalCompletionNeverConfirmsReview(
-      boolean transportFailure) throws Exception {
-    Files.writeString(dir.resolve("lesson.md"), "本文🙂");
+      boolean transportFailure, boolean durable) throws Exception {
+    var repository = Files.createDirectory(dir.resolve("repository"));
+    Files.writeString(repository.resolve("lesson.md"), "本文🙂");
     try (var migration = new StorageMigrationCoordinator(dir.resolve("data"))) {
       migration.prepare();
     }
@@ -60,10 +61,15 @@ class ReviewModelBoundaryTest {
     var raw = new RawToolResultStore(dir.resolve("data"));
     var estimator = TokenEstimator.conservative();
     var reviews = new ReviewTools(ledger, raw, new Tools(), estimator);
-    var owner = new AgentRunContext("run", "chat", dir, "project");
-    ReviewCoverageLedger.Job job;
+    var owner = new AgentRunContext("run", "chat", repository, "project");
+    ReviewCoverageLedger.Job job = null;
+    dev.mikoto2000.rei.durable.WorkItemStore.Claim claim = null;
     try (var scope = AgentRunScope.open(owner)) {
-      job = reviews.beginReview(List.of("lesson.md"), "correctness", "v1");
+      if (durable) {
+        var task = reviews.beginRepositoryReview("WORKTREE", List.of(), 100, 1048576L);
+        reviews.scanReviewSnapshot(task.id(), 100);
+        claim = reviews.claimReviewWorkItem(task.id(), 1024);
+      } else job = reviews.beginReview(List.of("lesson.md"), "correctness", "v1");
     }
     var assembler =
         new ContextAssembler(
@@ -79,7 +85,7 @@ class ReviewModelBoundaryTest {
         new RunExecutionContext(
             "run",
             new OutputLimitRunBudget(2, 10),
-            new ProgressEvaluator(dir),
+            new ProgressEvaluator(repository),
             new AgentEventFactory(Clock.systemUTC()),
             event -> {});
     execution.setRunContext(owner);
@@ -93,7 +99,7 @@ class ReviewModelBoundaryTest {
     var calls = new AtomicInteger();
     String args =
         StorageDatabase.JSON.writeValueAsString(
-            Map.of(
+            durable ? Map.of("workItemId", claim.item().id(), "attempt", claim.attempt()) : Map.of(
                 "reviewJobId",
                 job.id(),
                 "path",
@@ -116,7 +122,7 @@ class ReviewModelBoundaryTest {
                                     .toolCalls(
                                         List.of(
                                             new AssistantMessage.ToolCall(
-                                                "read", "function", "readReviewFile", args)))
+                                                "read", "function", durable ? "readReviewWorkItem" : "readReviewFile", args)))
                                     .build()))));
               return transportFailure
                   ? Flux.error(new IllegalStateException("transport"))
@@ -128,9 +134,16 @@ class ReviewModelBoundaryTest {
                 new StagnationChatModel(model, assembler)
                     .stream(new Prompt(new UserMessage("review"), options)).blockLast())
         .hasMessageContaining(transportFailure ? "transport" : "REVIEW_PARTIAL");
-    var saved = ledger.get(job.id(), ReviewTools.scope(owner));
-    assertThat(saved.ranges().getFirst().delivered()).isEqualTo(!transportFailure);
-    assertThat(saved.ranges().getFirst().reviewed()).isFalse();
-    assertThat(saved.status()).isNotEqualTo("COMPLETE");
+    if (durable) {
+      var scope = new dev.mikoto2000.rei.durable.DurableTaskStore.Scope("project", "chat", repository.toString());
+      var work = new dev.mikoto2000.rei.durable.WorkItemStore(ledger.durableTasks());
+      assertThat(work.deliveredHash(scope, claim).isEmpty()).isEqualTo(transportFailure);
+      assertThat(ledger.durableTasks().status(scope, claim.item().task()).state()).isEqualTo("ACTIVE");
+    } else {
+      var saved = ledger.get(job.id(), ReviewTools.scope(owner));
+      assertThat(saved.ranges().getFirst().delivered()).isEqualTo(!transportFailure);
+      assertThat(saved.ranges().getFirst().reviewed()).isFalse();
+      assertThat(saved.status()).isNotEqualTo("COMPLETE");
+    }
   }
 }

@@ -7,6 +7,18 @@ import org.junit.jupiter.api.Test;
 
 class DurableSnapshotProgressTest {
   @Test
+  void onlyPersistedResultAdvancesWorkAndReplayDoesNotEarnMoreProgress() {
+    var evaluator = new ProgressEvaluator(Path.of("."));
+    String result = "{\"body\":{\"work\":\"item\",\"path\":\"a.java\",\"version\":\"v\",\"start\":0,\"end\":10},\"sha256\":\"" + "a".repeat(64) + "\"}";
+    var evidence = evaluator.afterTool("submitReviewWorkItem", "{}", result, evaluator.beforeTool("submitReviewWorkItem", "{}"));
+    assertThat(evidence).anyMatch(e -> e.category() == ProgressEvidence.Category.WORK_PRODUCT_UPDATED);
+    assertThat(evaluator.afterTool("submitReviewWorkItem", "{}", result, evaluator.beforeTool("submitReviewWorkItem", "{}")))
+        .noneMatch(e -> e.category() == ProgressEvidence.Category.WORK_PRODUCT_UPDATED);
+    assertThat(evaluator.afterTool("claimReviewWorkItem", "{}", result, evaluator.beforeTool("claimReviewWorkItem", "{}"))).isEmpty();
+    assertThat(evaluator.afterTool("resumeRepositoryReview", "{}", result, evaluator.beforeTool("resumeRepositoryReview", "{}"))).isEmpty();
+  }
+
+  @Test
   void persistedSnapshotRevisionAdvancesAcquisitionWithoutClaimingReviewedWork() {
     var evaluator = new ProgressEvaluator(Path.of("."));
     String result = "{\"id\":\"task\",\"snapshot\":\"snapshot\",\"revision\":1,\"errors\":0,\"enumeration\":\"SCANNING\"}";

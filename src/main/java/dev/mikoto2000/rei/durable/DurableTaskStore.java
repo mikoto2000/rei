@@ -70,6 +70,11 @@ public final class DurableTaskStore {
     this.database = Objects.requireNonNull(database);
   }
 
+  /** Independent stateless facade; only the serialized transaction port is shared. */
+  DurableTaskStore(DurableTaskStore other) {
+    this.database = other.database;
+  }
+
   public Task begin(Scope scope, String goal, String mode, String sourceRef, List<String> excludes,
       int maxFiles, long maxBytes) {
     return beginForRun(scope, null, goal, mode, sourceRef, excludes, maxFiles, maxBytes);
@@ -98,6 +103,7 @@ public final class DurableTaskStore {
       if (run != null) {
         require(run, 256);
         execute(db, "INSERT INTO durable_attempts(task,run,started,state) VALUES(?,?,?,'ACTIVE')", id, run, System.currentTimeMillis());
+        execute(db, "UPDATE durable_tasks SET current_run=? WHERE id=?", run, id);
       }
       return status(db, scope, id);
     });
@@ -122,7 +128,7 @@ public final class DurableTaskStore {
     }
   }
 
-  private Task status(Connection db, Scope scope, String id) throws SQLException {
+  Task status(Connection db, Scope scope, String id) throws SQLException {
     try (var query = statement(db,
         "SELECT t.*,s.state AS enumeration,s.reason,s.files,s.excluded,s.errors,s.bytes,(SELECT COUNT(*) FROM durable_directories d WHERE d.task=t.id AND d.state='PENDING') AS unscanned FROM durable_tasks t JOIN durable_snapshots s ON s.id=t.snapshot WHERE t.id=? AND t.project=? AND t.session=? AND t.root=?",
         id, scope.project(), scope.session(), scope.root()); var row = query.executeQuery()) {
@@ -162,18 +168,7 @@ public final class DurableTaskStore {
   }
 
   public Verification verify(Scope scope, String task) {
-    return read(db -> {
-      var owner = status(db, scope, task);
-      if (!owner.state().equals("ACTIVE")) return new Verification(false, owner.state());
-      if (!owner.enumeration().equals("SEALED") || owner.unscannedDirectories() != 0)
-        return new Verification(false, "ENUMERATION_" + owner.enumeration());
-      if (owner.errors() != 0) return new Verification(false, "ENUMERATION_ERRORS");
-      if (owner.files() == 0) return new Verification(false, "EMPTY_TARGET_SET");
-      long registered = number(db, "SELECT COUNT(DISTINCT path) FROM durable_work WHERE task=? AND required=1", task);
-      if (registered != owner.files()) return new Verification(false, "WORK_REGISTRATION_INCOMPLETE");
-      // Result validation is added with the executor. Inventory alone never completes a task.
-      return new Verification(false, "WORK_PENDING");
-    });
+    return read(db -> TaskCompletion.verify(db, status(db, scope, task)));
   }
 
   public Page<Task> forRun(Scope scope, String run, String after, int limit) {
@@ -183,6 +178,24 @@ public final class DurableTaskStore {
       try (var query = statement(db,
           "SELECT t.id FROM durable_tasks t JOIN durable_attempts a ON a.task=t.id WHERE t.project=? AND t.session=? AND t.root=? AND a.run=? AND t.id>? ORDER BY t.id LIMIT ?",
           scope.project(), scope.session(), scope.root(), run, Objects.toString(after, ""), limit + 1);
+          var rows = query.executeQuery()) {
+        while (rows.next()) ids.add(rows.getString(1));
+      }
+      boolean more = ids.size() > limit;
+      if (more) ids.removeLast();
+      var entries = new ArrayList<Task>();
+      for (var id : ids) entries.add(status(db, scope, id));
+      return new Page<>(entries, more ? ids.getLast() : null);
+    });
+  }
+
+  /** Owner-scoped discovery remains available when every Checkpoint has been lost. */
+  public Page<Task> tasks(Scope scope, String after, int limit) {
+    pageLimit(limit);
+    return read(db -> {
+      var ids = new ArrayList<String>();
+      try (var query = statement(db, "SELECT id FROM durable_tasks WHERE project=? AND session=? AND root=? AND id>? ORDER BY id LIMIT ?",
+          scope.project(), scope.session(), scope.root(), Objects.toString(after, ""), limit + 1);
           var rows = query.executeQuery()) {
         while (rows.next()) ids.add(rows.getString(1));
       }
@@ -268,8 +281,8 @@ public final class DurableTaskStore {
           execute(db, "UPDATE durable_directories SET state='PENDING' WHERE task=? AND path=?", task, directory.path());
           break;
         }
-        execute(db, "INSERT INTO durable_files(snapshot,path,version,content,text,bytes,reason,error) VALUES(?,?,?,?,?,?,?,?)",
-            owner.snapshot(), entry.path(), entry.version(), entry.content(), entry.text(), size, entry.reason(), entry.error());
+        execute(db, "INSERT INTO durable_files(snapshot,path,version,content,text,bytes,reason,error,chars) VALUES(?,?,?,?,?,?,?,?,?)",
+            owner.snapshot(), entry.path(), entry.version(), entry.content(), entry.text(), size, entry.reason(), entry.error(), entry.text() == null ? 0 : entry.text().length());
         if (!entry.error().isEmpty()) errors++;
         else if (!entry.reason().isEmpty()) excluded++;
         else {

@@ -333,13 +333,9 @@ public final class ReviewCoverageLedger {
   /** 指定された内容を保存先へ反映するため、参加者一覧を書き込む。 */
   public static void writeParticipants(java.sql.Connection db, Job job)
       throws java.sql.SQLException {
-    try (var remove = db.prepareStatement("DELETE FROM review_participants WHERE job=?")) {
-      remove.setString(1, job.id());
-      remove.executeUpdate();
-    }
     try (var insert =
         db.prepareStatement(
-            "INSERT INTO review_participants(job,project,conversation,run) VALUES(?,?,?,?)")) {
+            "INSERT OR IGNORE INTO review_participants(job,project,conversation,run) VALUES(?,?,?,?)")) {
       for (var scope : job.participants()) {
         insert.setString(1, job.id());
         insert.setString(2, scope.project());
@@ -394,17 +390,15 @@ public final class ReviewCoverageLedger {
         previous,
         job -> {
           if (job.participants().contains(resumed)) return job;
-          var participants = new ArrayList<>(job.participants());
-          participants.add(resumed);
-          // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-          if (participants.size() > 64) throw invalid();
+          // History remains in review_participants; only the new execution retains write authority.
+          var participants = List.of(resumed);
           String status =
               Set.of("FAILED", "REVIEW_CANCELLED").contains(job.status())
                   ? "REVIEW_PARTIAL"
                   : job.status();
           return new Job(
               job.id(),
-              job.owner(),
+              resumed,
               participants,
               job.criteria(),
               job.criteriaVersion(),
@@ -614,10 +608,12 @@ public final class ReviewCoverageLedger {
           var old = read(db, id, scope);
           var changed = operation.apply(old);
           if (changed.equals(old)) return old;
+          if (!old.participants().contains(scope))
+            throw new IllegalArgumentException("REVIEW_ACCESS_DENIED");
           var next =
               new Job(
                   old.id(),
-                  old.owner(),
+                  changed.owner(),
                   changed.participants(),
                   old.criteria(),
                   old.criteriaVersion(),
@@ -642,8 +638,17 @@ public final class ReviewCoverageLedger {
       try (var rows = query.executeQuery()) {
         if (!rows.next()) throw new IllegalArgumentException("REVIEW_JOB_NOT_FOUND");
         var job = StorageDatabase.JSON.readValue(rows.getString(1), Job.class);
-        if (!job.participants().contains(scope))
-          throw new IllegalArgumentException("REVIEW_ACCESS_DENIED");
+        if (!job.participants().contains(scope)) {
+          try (var history = db.prepareStatement("SELECT 1 FROM review_participants WHERE job=? AND project=? AND conversation=? AND run=?")) {
+            history.setString(1, id);
+            history.setString(2, scope.project());
+            history.setString(3, scope.conversation());
+            history.setString(4, scope.run());
+            try (var allowed = history.executeQuery()) {
+              if (!allowed.next()) throw new IllegalArgumentException("REVIEW_ACCESS_DENIED");
+            }
+          }
+        }
         return job;
       }
     }

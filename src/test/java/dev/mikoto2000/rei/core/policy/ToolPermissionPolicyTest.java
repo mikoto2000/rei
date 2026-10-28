@@ -19,6 +19,13 @@ import org.junit.jupiter.api.Test;
 /** ツール権限判断基準の結果と状態の契約を検証するテスト。 */
 class ToolPermissionPolicyTest {
   @Test
+  void durableReviewToolsUseExistingReadOnlyReviewPermission() {
+    var policy = policy(Set.of(ActionCapability.READ), Set.of());
+    for (var name : List.of("listReviewTasks", "resumeRepositoryReview", "claimReviewWorkItem", "readReviewWorkItem", "submitReviewWorkItem"))
+      assertEquals(PermissionDecision.AUTO_APPROVE, policy.evaluate(name), name);
+  }
+
+  @Test
   void externalWritesCannotBeRelabeledAsReadsAndCancelRequiresDestructivePermission() {
     var readOnly =
         policy(
