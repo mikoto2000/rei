@@ -24,7 +24,10 @@ class DurableWorkMigrationTest {
       sql.execute("INSERT INTO durable_attempts(task,run,started,state) VALUES('task','run',1,'ACTIVE')");
       try (var insert = db.prepareStatement("INSERT INTO durable_files(snapshot,path,version,content,text,bytes,reason,error) VALUES('snapshot','a.java','hash',?,?,?, '', '')")) {
         byte[] bytes = "a🙂".getBytes(java.nio.charset.StandardCharsets.UTF_8);
-        insert.setBytes(1, bytes); insert.setString(2, "a🙂"); insert.setInt(3, bytes.length); insert.executeUpdate();
+        insert.setBytes(1, bytes);
+        insert.setString(2, "a🙂");
+        insert.setInt(3, bytes.length);
+        insert.executeUpdate();
       }
     }
     try (var migration = new StorageMigrationCoordinator(root, (stage, backup) -> {

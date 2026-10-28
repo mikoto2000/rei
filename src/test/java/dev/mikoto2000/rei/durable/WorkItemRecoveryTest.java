@@ -72,7 +72,10 @@ class WorkItemRecoveryTest {
       assertThat(work.results(scope, task.id(), null, 10).entries()).isEmpty();
       String state = store.read(db -> WorkItemStore.item(db, claim.item().id()).state());
       assertThat(state).isEqualTo("RUNNING");
-      store.write(db -> { try (var sql = db.createStatement()) { sql.execute("DROP TRIGGER fault"); } return null; });
+      store.write(db -> {
+        try (var sql = db.createStatement()) { sql.execute("DROP TRIGGER fault"); }
+        return null;
+      });
     }
     var saved = work.commit(scope, claim, "checked", List.of());
     // Simulate a pre-existing result saved by an older, non-atomic writer.

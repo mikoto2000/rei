@@ -33,7 +33,8 @@ class TaskIntegrityTest {
     assertThatThrownBy(() -> work.resume(scope, task.id(), "next-run")).hasMessageContaining("RESULT_CORRUPT");
     String current = store.read(db -> {
       try (var query = DurableTaskStore.statement(db, "SELECT current_run FROM durable_tasks WHERE id=?", task.id()); var row = query.executeQuery()) {
-        row.next(); return row.getString(1);
+        row.next();
+        return row.getString(1);
       }
     });
     assertThat(current).isEqualTo("run");

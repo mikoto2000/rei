@@ -16,7 +16,7 @@
   リポジトリ外の一時領域で全件再実行して成功。今後の全回帰も外部一時領域を使う。
 - 専用worktreeとマージ済みローカルブランチを通常削除。既存の別worktree・未追跡ファイルは保持。
 
-## Phase 1（CI確認前）
+## Phase 1
 
 - 基準main: `c149ba44`。専用worktree: `.worktrees/long-run-phase1`。
 - 最初のRed: TaskSnapshotTestを追加しDurableTaskStore未実装で失敗。
@@ -34,6 +34,27 @@
 - 全回帰CIと静的解析CIを確認してからマージする。Phase 2の確定結果提出・Checkpointなしの実行再開はまだ未実装。
 - 初回全回帰CIは6,674件中failure 1/error 13。現行schemaから旧schemaへ戻す既存fixtureが追加テーブルを残していたため、旧版fixtureを正しく再構成する共通helperを追加。本番移行のCREATEを緩めず、衝突拒否を維持した。
 - 修正後の移行関連49件成功。schema19→20の中断・rollback・再試行、旧レビューのバイト保持、不正な既存テーブルの拒否も追加検証。全回帰CIを再実行する。
+- 修正コミット `87caa7bc` の全回帰CIと静的解析CIが成功。PR [#166](https://github.com/mikoto2000/rei/pull/166) を `9e3526f2` へマージ。
+- ローカル全回帰も6,676件、failure/error 0、skip 8、16分31秒で成功。
+- ログ保存後にworktreeを通常削除。Gitの登録解除後に空ディレクトリが残ったため、絶対パスと空であることを確認して通常削除した。強制削除なし。マージ済みブランチも削除。
+- 主checkoutには別作業のProgressEvaluator等の未コミット変更が出現し、mainのfast-forwardが拒否された。変更を保持し、後続Phaseはorigin/mainを明示して作成する。
+
+## Phase 2（実装中）
+
+- 基準main: `9e3526f2`。専用worktree: `.worktrees/long-run-phase2`。
+- 最初のRed: 既存ReviewJobの101回再開、旧Runからの遅延書込み拒否、履歴読取り維持。
+- `c5a8714c`: 上記Redを確認し、履歴を既存review_participantsへ保持、JSONの現在参加者と分離。既存Checkpointを含む49件成功。旧Runのcleanupも新しい実行を停止しない。
+- `09c22b31`: 原子的なWorkItem claimとRun関連付け、凍結内容・SHA-256・UTF-16範囲の照合。関連5件成功。schema21は追加移行。
+- `939b6869`: 原文の配信確認を現在のclaimへ限定し、範囲ハッシュの不一致・他Runからの確認を拒否。関連2件成功。
+- `505b872a`: 結果・指摘・完了状態の同一トランザクション保存、結果本文のSHA-256、冪等な再送と競合拒否、構造的な範囲網羅判定。関連6件成功。
+- `e7e0efeb`: Checkpointを参照しないTask発見と明示再開、旧Runの失効、確定結果の回収。101回の再開で完了済み項目を再実行しない。保存・完了の前後4境界にSQL障害を注入しrollbackを検証。関連3件成功。
+- `cf8ed97b`: 子JVMを実際のSQLite commit直前・直後でhaltする2件の試験に成功。直前は未完了を回収、直後は確定結果1件を再利用。実LLMなし。
+- `c96d02af`: 既存ReviewTools.Page・ResultDelivery・trusted receiptを使うツール接続と、TokenEstimatorに基づくUTF-16境界分割。権限・進捗・schema20→21のrollback/retry・既存レビューを含む20件成功。
+- `a6f04b9b`: 実際のモデル呼出しで、旧/新レビューとも通信失敗時は配信確認しない。自然文の完了はREVIEW_PARTIALになる。モデル境界4件と既存構造テスト6件成功。
+- `c6380099`: 保存本文ハッシュ・原文・引用の独立検証。破損結果を完了扱いせず、再開時にも回収せずに拒否し、元Runの状態をrollback。関連10件成功。
+- `f8826c82`: 対象版・範囲だけでなく登録済み観点と必須フラグとの一致を確認する。差替え拒否のRed/Greenと実アーキテクチャの2件成功。
+- 静的解析の最終結果: Checkstyle 0件、SpotBugs既存1,860件・新規0件。baseline拡大・抑制追加なし。DBファサードは状態を共有せず、既存の直列transaction portだけを共有する。
+- ローカル全回帰を実行中。CI確認・PRマージ・worktree削除は未完了。Lease・永続予算・取消接続はPhase 3、規模改善はPhase 4、横断レビューはPhase 5の未完了項目。
 
 ## 再開時の手順
 

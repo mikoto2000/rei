@@ -41,7 +41,10 @@ class WorkItemCrashTest {
       assertThat(child.waitFor(45, TimeUnit.SECONDS)).isTrue();
       assertThat(child.exitValue()).withFailMessage(Files.readString(log)).isEqualTo(boundary.equals("before") ? 71 : 72);
     } finally {
-      if (child.isAlive()) { child.destroyForcibly(); child.waitFor(10, TimeUnit.SECONDS); }
+      if (child.isAlive()) {
+        child.destroyForcibly();
+        child.waitFor(10, TimeUnit.SECONDS);
+      }
     }
     var restarted = new WorkItemStore(fixture.store());
     restarted.resume(scope, task.id(), "restarted");

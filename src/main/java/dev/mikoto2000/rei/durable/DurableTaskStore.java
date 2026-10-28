@@ -70,6 +70,11 @@ public final class DurableTaskStore {
     this.database = Objects.requireNonNull(database);
   }
 
+  /** Independent stateless facade; only the serialized transaction port is shared. */
+  DurableTaskStore(DurableTaskStore other) {
+    this.database = other.database;
+  }
+
   public Task begin(Scope scope, String goal, String mode, String sourceRef, List<String> excludes,
       int maxFiles, long maxBytes) {
     return beginForRun(scope, null, goal, mode, sourceRef, excludes, maxFiles, maxBytes);

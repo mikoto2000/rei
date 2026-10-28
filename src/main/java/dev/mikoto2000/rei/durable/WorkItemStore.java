@@ -35,7 +35,7 @@ public final class WorkItemStore {
   private final DurableTaskStore store;
 
   public WorkItemStore(DurableTaskStore store) {
-    this.store = store;
+    this.store = new DurableTaskStore(store);
   }
 
   /** Explicit recovery reuses durable results and revokes the previous Run's write authority. */

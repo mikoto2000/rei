@@ -101,8 +101,8 @@ JVM warmup・生成時間と処理時間を分離し、ハードな時間閾値�
 | Phase | 状態 | ブランチ | PR / マージ |
 | --- | --- | --- | --- |
 | 0 | 完了・worktree削除済み | codex/long-run-phase0（削除済み） | [#165](https://github.com/mikoto2000/rei/pull/165) / c149ba44 |
-| 1 | 実装・ローカル検証完了（CI待ち） | codex/long-run-phase1 | PR作成予定 |
-| 2 | 未着手 | — | — |
+| 1 | 完了・worktree削除済み | codex/long-run-phase1（削除済み） | [#166](https://github.com/mikoto2000/rei/pull/166) / 9e3526f2 |
+| 2 | 実装中 | codex/long-run-phase2 | 未作成 |
 | 3 | 未着手 | — | — |
 | 4 | 未着手 | — | — |
 | 5 | 未着手 | — | — |
@@ -139,3 +139,32 @@ excludesを省略した場合のみtarget、node_modules、.rei、.worktreesを�
 
 Phase 1は対象の確定・必須作業登録・完了拒否までを提供する。確定結果の提出とRunをまたぐ実行は
 Phase 2で接続する。既存beginReview/readReviewFile等の単発・小規模レビューは引き続き利用できる。
+
+## Task単位の再開と結果（Phase 2）
+
+`listReviewTasks(afterTask, limit)`で、現在のProject・Session・rootに属するTaskを発見できる。
+Checkpoint IDや元Runの生存は必要ない。`resumeRepositoryReview(taskId)`は現在のRunへ明示的に
+関連付け、旧Runの書込み権限を失効させる。Runの履歴は追加式で保持し、固定の参加者数で制限しない。
+既存の小規模ReviewJobも、参加履歴と現在の参加者を分離し、101回の再開を検証した。
+
+対象がSEALEDになった後は、次の手順で処理する。
+
+1. `claimReviewWorkItem(taskId, tokenBudget)`で未完了の範囲を1件取得する。予算は256〜2,048。
+   既存TokenEstimatorでメタデータを含むページを概算し、原文のUTF-16境界を保って残りを永続登録する。
+2. `readReviewWorkItem(workItemId, attempt)`で固定原文を取得する。返すPageには既存の
+   ResultDeliveryを付け、ToolResponseを含むモデル呼び出しが成功した後にホストが配信を確認する。
+   取得・配信・レビュー完了は別々であり、モデルの自然文の「完了」では確定しない。
+3. `submitReviewWorkItem(workItemId, attempt, assessment, findings)`で評価を提出する。
+   findingsは空リストも可。各指摘はid、severity、原文全体に対するUTF-16のstart/end、
+   evidenceの引用、assessmentを持つ。未配信・範囲外・根拠不一致・旧試行からの提出は拒否する。
+
+schema21でWorkItem試行・結果・指摘を個別行へ保存する。結果・指摘・WorkItem完了は同じSQLite
+transactionで確定し、結果本文のSHA-256と対象版を記録する。同一結果の再送は保存済み結果を返し、
+異なる再送はRESULT_CONFLICTとして既存結果を保持する。本文は最大256KiB、指摘は100件まで。
+Task完了には対象登録、必須範囲の網羅、対応結果と版の一致が必要で、保存本文のハッシュと引用も再検証する。
+有効な保存結果だけ残った状態は明示再開時に回収し、破損結果は黙って再実行・成功へ変換しない。
+
+完了済みの範囲は再claimしない。再開後に過去のToolResponseが再送されても、旧claimの配信確認を
+現在の試行へ流用しない。固定原文があるため、実ファイル変更後も取得時の内容に対する評価を継続できる。
+Run/Goalの既存予算は維持する。Task全体の永続予算・Lease期限・取消との接続はPhase 3、
+ファイル統合・横断レビューと必須観点の拡張はPhase 5で実装する未完了項目である。

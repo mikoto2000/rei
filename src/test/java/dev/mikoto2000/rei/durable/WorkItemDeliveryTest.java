@@ -37,7 +37,10 @@ class WorkItemDeliveryTest {
         item.version(), item.kind(), "different criterion", item.state(), item.required());
     assertThatThrownBy(() -> work.commit(scope, new WorkItemStore.Claim(forged, claim.run(), claim.attempt()), "checked", List.of()))
         .hasMessageContaining("WORK_ITEM_CHANGED");
-    store.write(db -> { DurableTaskStore.execute(db, "UPDATE durable_files SET text='tampered' WHERE snapshot=?", task.snapshot()); return null; });
+    store.write(db -> {
+      DurableTaskStore.execute(db, "UPDATE durable_files SET text='tampered' WHERE snapshot=?", task.snapshot());
+      return null;
+    });
     assertThatThrownBy(() -> work.source(scope, claim.item())).hasMessageContaining("SNAPSHOT_CORRUPT");
   }
 }
