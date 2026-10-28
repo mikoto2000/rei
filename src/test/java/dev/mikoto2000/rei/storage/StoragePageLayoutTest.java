@@ -46,6 +46,7 @@ class StoragePageLayoutTest {
       sql.executeUpdate("INSERT INTO \"fixture\"\"quoted\"(id,body) VALUES(100,'deleted')");
       sql.executeUpdate("DELETE FROM \"fixture\"\"quoted\" WHERE id=100");
       sql.executeUpdate("DELETE FROM storage_migrations WHERE version>=18");
+      sql.execute("DROP TABLE reading_state");
       sql.execute("PRAGMA user_version=17");
     }
   }
@@ -231,7 +232,8 @@ class StoragePageLayoutTest {
         root.resolve(".storage/migration-state.json"),
         "{\"sourceVersion\":0,\"targetVersion\":17,\"stage\":\"COMPLETE\",\"backup\":\"\"}");
     try (var migration = new StorageMigrationCoordinator(root)) {
-      assertThat(migration.prepare().schemaVersion()).isEqualTo(18);
+      assertThat(migration.prepare().schemaVersion())
+          .isEqualTo(StorageMigrationCoordinator.SCHEMA_VERSION);
       assertThat(migration.prepare().backup()).isNotNull();
     }
     verifyValues();

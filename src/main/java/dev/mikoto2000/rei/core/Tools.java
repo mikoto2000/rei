@@ -14,6 +14,10 @@ import dev.mikoto2000.rei.core.service.SystemShellService;
 import dev.mikoto2000.rei.core.working.WorkingSet;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
+import dev.mikoto2000.rei.tooldelivery.ReadingDelivery;
+import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
+import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
+import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -53,6 +57,58 @@ import org.springframework.stereotype.Component;
 /** 共通の実行基盤に必要なツール一覧を扱う。 */
 @Component
 public class Tools {
+  public static void checkReadingCancellation(Throwable error) {
+    dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
+  }
+
+  public static String readingPath(dev.mikoto2000.rei.tooldelivery.ReadingRun owner, String input)
+      throws IOException {
+    if (!(owner instanceof dev.mikoto2000.rei.core.chat.AgentRunContext captured))
+      throw new IOException("Unknown reading authority");
+    try (var scope = dev.mikoto2000.rei.core.chat.AgentRunScope.open(captured)) {
+      var root = owner.projectRoot().toRealPath();
+      return root.relativize(FileSnapshots.resolve(root, java.nio.file.Path.of(input)))
+          .toString()
+          .replace('\\', '/');
+    }
+  }
+
+  private ReadFileResult applyReadingDelivery(ReadFileRequest request, ReadFileResult result) {
+    var notice =
+        readingDelivery.inspect(
+            dev.mikoto2000.rei.tooldelivery.ReadingRuntime.current(),
+            dev.mikoto2000.rei.tooldelivery.ReadingJson.JSON.valueToTree(result),
+            result.symbol() == null
+                && !result.truncated()
+                && (request.offset() == null || request.offset() == 0),
+            Boolean.TRUE.equals(request.unreadOnly())
+                && request.startLine() != null
+                && request.endLine() != null);
+    if (notice == null) return result;
+    return new ReadFileResult(
+        result.path(),
+        result.startLine(),
+        result.endLine(),
+        notice.suppressed() ? List.of() : result.content(),
+        result.truncated(),
+        result.error(),
+        result.version(),
+        result.nextRead(),
+        notice.suppressed() ? 0 : result.returnedBytes(),
+        result.symbol(),
+        result.candidates(),
+        result.ownerOverview(),
+        result.truncationReason(),
+        notice,
+        result.selection());
+  }
+
+  static {
+    dev.mikoto2000.rei.tooldelivery.ReadingRuntime.configure(
+        dev.mikoto2000.rei.core.chat.AgentRunScope::current,
+        dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative()::text);
+  }
+
   /** ファイル結果JSON変換。 */
   private static final com.fasterxml.jackson.databind.ObjectMapper FILE_RESULT_JSON =
       new com.fasterxml.jackson.databind.ObjectMapper();
@@ -1477,7 +1533,9 @@ public class Tools {
   /** 共通の実行基盤で用いる内容検索複数検索条件を返す。 */
   List<GrepQueryResult> grepMultiQuery(List<GrepQuery> queries, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
-    return boundedFileResult(grepMultiQuery(queries, workingDirectory, newSnapshots()));
+    try (var measurement = ReadingMetrics.operation("search", readingStateStore)) {
+      return boundedFileResult(grepMultiQuery(queries, workingDirectory, newSnapshots()));
+    }
   }
 
   /** 共通の実行基盤で用いる内容検索複数検索条件を返す。 */
@@ -1519,10 +1577,12 @@ public class Tools {
     TextReadBudget resultBudget = new TextReadBudget();
     int returnedErrors = 0;
     int totalMatches = 0;
+    var scans = SearchScanBatch.scan(this, queries, workingDirectory, snapshots, forSearch);
     for (int i = 0; i < queries.size(); i++) {
       GrepQuery query = queries.get(i);
       try {
-        GrepScanResult scanResult = scanGrepMatches(query, workingDirectory, snapshots, forSearch);
+        if (scans.get(i).error() != null) throw new IOException(scans.get(i).error());
+        GrepScanResult scanResult = scans.get(i).scan();
         if (forSearch) {
           int count = Math.min(32 - returnedErrors, scanResult.fileErrors().size());
           returnedErrors += count;
@@ -1730,9 +1790,12 @@ public class Tools {
       List<String> lines;
       String version;
       try {
+        ReadingMetrics.add("scannedFiles", 1);
         var snapshot = snapshots.get(workingDirectory, filePath);
         version = snapshot.version();
-        lines = snapshotLines(snapshot, query.charset());
+        lines =
+            snapshots.lines(
+                snapshot, query.charset(), () -> snapshotLines(snapshot, query.charset()));
       } catch (IOException ex) {
         String message = String.valueOf(ex.getMessage());
         fileErrors.add(
@@ -1746,7 +1809,7 @@ public class Tools {
       for (int i = 0; i < lines.size(); i++) {
         if ((i & 31) == 0) dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);
         String line = lines.get(i);
-        boolean matched = compiled.matcher(line).find();
+        boolean matched = BoundedRegex.find(compiled, line);
         if (effectiveInvertMatch) {
           matched = !matched;
         }
@@ -1889,7 +1952,7 @@ public class Tools {
    * @param fileErrors ファイルエラー一覧
    * @param truncated 省略の有無
    */
-  private record GrepScanResult(
+  record GrepScanResult(
       List<GrepMatch> matches, List<GrepFileError> fileErrors, boolean truncated) {
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     GrepScanResult(List<GrepMatch> matches, List<GrepFileError> fileErrors) {
@@ -1958,6 +2021,7 @@ public class Tools {
       dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
   @Tool(
       name = "searchAndRead",
+      resultConverter = SearchReadResultConverter.class,
       description =
           """
       Search for one or more code patterns and immediately read the relevant surrounding source code in a single tool call.
@@ -1980,197 +2044,227 @@ public class Tools {
   List<SearchAndReadResult> searchAndRead(
       SearchAndReadRequest request, java.nio.file.Path workingDirectory)
       throws IOException, InterruptedException {
-    if (request == null) {
-      throw new IllegalArgumentException("request must not be null");
-    }
-    if (request.queries() == null || request.queries().isEmpty()) {
-      throw new IllegalArgumentException("queries must not be empty");
-    }
-    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-    if (request.queries().size() > MAX_GREP_QUERIES) {
-      throw new IllegalArgumentException(
-          "too many queries: " + request.queries().size() + " (max " + MAX_GREP_QUERIES + ")");
-    }
-    int byteLimit = request.maxBytes() == null ? TextReadBudget.MAX_BYTES : request.maxBytes();
-    int tokenLimit = request.maxTokens() == null ? 8000 : request.maxTokens();
-    int lineLimit =
-        request.maxLines() == null ? MAX_SEARCH_AND_READ_TOTAL_LINES : request.maxLines();
-    if (byteLimit < 256
-        || byteLimit > TextReadBudget.MAX_BYTES
-        || tokenLimit < 256
-        || tokenLimit > 32000
-        || lineLimit < 1
-        || lineLimit > MAX_SEARCH_AND_READ_TOTAL_LINES)
-      throw new IllegalArgumentException(
-          "Search budget: bytes 256..65536, estimated tokens 256..32000, lines 1..5000");
-    if (dev.mikoto2000.rei.core.chat.AgentRunScope.current() != null)
-      tokenLimit = Math.min(tokenLimit, deliveryProperties.getPageTargetTokens());
-    List<String> preferred = new ArrayList<>();
-    if (request.preferredPaths() != null) {
-      if (request.preferredPaths().size() > 20)
-        throw new IllegalArgumentException("At most 20 preferred paths");
-      var root = workingDirectory.toAbsolutePath().normalize();
-      for (String value : request.preferredPaths()) {
-        if (value == null || value.length() > 1024)
-          throw new IllegalArgumentException("Preferred path limit exceeded");
-        var path = root.resolve(value).normalize();
-        if (!path.startsWith(root) || RepositoryMapService.sensitive(root.relativize(path)))
-          throw new IllegalArgumentException("Outside/excluded preferred path");
-        preferred.add(root.relativize(path).toString().replace('\\', '/'));
+    try (var measurement = ReadingMetrics.operation("search", readingStateStore)) {
+      if (request == null) {
+        throw new IllegalArgumentException("request must not be null");
       }
-    }
-    int effectiveContextLines =
-        request.contextLines() == null || request.contextLines() < 0
-            ? DEFAULT_SEARCH_AND_READ_CONTEXT_LINES
-            : Math.min(1000, request.contextLines());
-    int effectiveMaxFiles =
-        request.maxFiles() == null || request.maxFiles() <= 0
-            ? MAX_SEARCH_AND_READ_FILES
-            : Math.min(MAX_SEARCH_AND_READ_FILES, request.maxFiles());
-    effectiveMaxFiles =
-        Math.min(effectiveMaxFiles, Math.min(lineLimit, Math.max(1, tokenLimit / 256)));
-
-    String observableQuery =
-        request.queries().stream().map(GrepQuery::pattern).collect(Collectors.joining(" | "));
-    WorkingSet.SearchObservation searchObservation =
-        workingSet.beginSearch(observableQuery, "searchAndRead");
-
-    // 1. 検索を実行する（grepMultiQuery と同じ共通ロジックを再利用）
-    try {
-      FileSnapshots snapshots = newSnapshots();
-      List<GrepQueryResult> queryResults =
-          grepMultiQuery(request.queries(), workingDirectory, snapshots, true);
-
-      // 2. ファイルごとにヒットをまとめる（重複排除、queryIndex と line を保持）
-      LinkedHashMap<String, List<SearchMatch>> fileMatches = new LinkedHashMap<>();
-      LinkedHashMap<String, String> fileCharsets = new LinkedHashMap<>();
-      LinkedHashMap<String, String> fileErrors = new LinkedHashMap<>();
-      for (GrepQueryResult queryResult : queryResults) {
-        if (queryResult.error() != null) {
-          fileErrors.put("(query " + queryResult.queryIndex() + ")", queryResult.error());
-          continue;
+      if (request.queries() == null || request.queries().isEmpty()) {
+        throw new IllegalArgumentException("queries must not be empty");
+      }
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
+      if (request.queries().size() > MAX_GREP_QUERIES) {
+        throw new IllegalArgumentException(
+            "too many queries: " + request.queries().size() + " (max " + MAX_GREP_QUERIES + ")");
+      }
+      int byteLimit = request.maxBytes() == null ? TextReadBudget.MAX_BYTES : request.maxBytes();
+      int tokenLimit = request.maxTokens() == null ? 8000 : request.maxTokens();
+      int lineLimit =
+          request.maxLines() == null ? MAX_SEARCH_AND_READ_TOTAL_LINES : request.maxLines();
+      if (byteLimit < 256
+          || byteLimit > TextReadBudget.MAX_BYTES
+          || tokenLimit < 256
+          || tokenLimit > 32000
+          || lineLimit < 1
+          || lineLimit > MAX_SEARCH_AND_READ_TOTAL_LINES)
+        throw new IllegalArgumentException(
+            "Search budget: bytes 256..65536, estimated tokens 256..32000, lines 1..5000");
+      if (dev.mikoto2000.rei.core.chat.AgentRunScope.current() != null)
+        tokenLimit = Math.min(tokenLimit, deliveryProperties.getPageTargetTokens());
+      List<String> preferred = new ArrayList<>();
+      if (request.preferredPaths() != null) {
+        if (request.preferredPaths().size() > 20)
+          throw new IllegalArgumentException("At most 20 preferred paths");
+        var root = workingDirectory.toAbsolutePath().normalize();
+        for (String value : request.preferredPaths()) {
+          if (value == null || value.length() > 1024)
+            throw new IllegalArgumentException("Preferred path limit exceeded");
+          var path = root.resolve(value).normalize();
+          if (!path.startsWith(root) || RepositoryMapService.sensitive(root.relativize(path)))
+            throw new IllegalArgumentException("Outside/excluded preferred path");
+          preferred.add(root.relativize(path).toString().replace('\\', '/'));
         }
-        if (queryResult.omittedErrors() > 0)
-          fileErrors.put(
-              "(query " + queryResult.queryIndex() + " omitted errors)",
-              queryResult.omittedErrors() + " file errors omitted; narrow the search");
-        for (GrepFileError fileError : queryResult.fileErrors()) {
-          fileErrors.putIfAbsent(fileError.path(), fileError.message());
-        }
-        for (GrepMatch match : queryResult.matches()) {
-          if (!match.matched()) {
+      }
+      int effectiveContextLines =
+          request.contextLines() == null || request.contextLines() < 0
+              ? DEFAULT_SEARCH_AND_READ_CONTEXT_LINES
+              : Math.min(1000, request.contextLines());
+      int effectiveMaxFiles =
+          request.maxFiles() == null || request.maxFiles() <= 0
+              ? MAX_SEARCH_AND_READ_FILES
+              : Math.min(MAX_SEARCH_AND_READ_FILES, request.maxFiles());
+      effectiveMaxFiles =
+          Math.min(effectiveMaxFiles, Math.min(lineLimit, Math.max(1, tokenLimit / 256)));
+
+      String observableQuery =
+          request.queries().stream().map(GrepQuery::pattern).collect(Collectors.joining(" | "));
+      WorkingSet.SearchObservation searchObservation =
+          workingSet.beginSearch(observableQuery, "searchAndRead");
+
+      // 1. 検索を実行する（grepMultiQuery と同じ共通ロジックを再利用）
+      try {
+        FileSnapshots snapshots = newSnapshots();
+        List<GrepQueryResult> queryResults =
+            grepMultiQuery(request.queries(), workingDirectory, snapshots, true);
+
+        // 2. ファイルごとにヒットをまとめる（重複排除、queryIndex と line を保持）
+        LinkedHashMap<String, List<SearchMatch>> fileMatches = new LinkedHashMap<>();
+        LinkedHashMap<String, String> fileCharsets = new LinkedHashMap<>();
+        LinkedHashMap<String, String> fileErrors = new LinkedHashMap<>();
+        for (GrepQueryResult queryResult : queryResults) {
+          if (queryResult.error() != null) {
+            fileErrors.put("(query " + queryResult.queryIndex() + ")", queryResult.error());
             continue;
           }
-          fileMatches
-              .computeIfAbsent(match.path(), k -> new ArrayList<>())
-              .add(new SearchMatch(queryResult.queryIndex(), match.line(), match.content()));
-          fileCharsets.putIfAbsent(
-              match.path(), request.queries().get(queryResult.queryIndex()).charset());
-        }
-      }
-      var ranked =
-          SearchRanking.rank(
-              fileMatches,
-              request.queries(),
-              preferred,
-              workingDirectory,
-              snapshots,
-              repositoryMaps,
-              workingSet);
-      Map<String, SearchRanking.Ranked> ranking = new LinkedHashMap<>();
-      fileMatches.clear();
-      for (var item : ranked) {
-        fileMatches.put(item.path(), item.matches());
-        ranking.put(item.path(), item);
-      }
-      int selectedCount = Math.min(fileMatches.size(), effectiveMaxFiles);
-      int byteShare = (byteLimit - 16) / Math.max(1, selectedCount),
-          tokenShare = (tokenLimit - 16) / Math.max(1, selectedCount),
-          lineShare = lineLimit / Math.max(1, selectedCount);
-      int alreadyPresentCount =
-          fileMatches.keySet().stream()
-              .limit(selectedCount)
-              .map(path -> resolveProjectPath(path, workingDirectory))
-              .mapToInt(path -> workingSet.contains(path) ? 1 : 0)
-              .sum();
-
-      // 3. ファイルを選び、ヒット行の前後を読み込む
-      List<SearchAndReadResult> fileResults = new ArrayList<>();
-      int totalLines = 0;
-      boolean filesTruncated = queryResults.stream().anyMatch(GrepQueryResult::truncated);
-      for (var entry : fileMatches.entrySet()) {
-        if (fileResults.size() >= effectiveMaxFiles) {
-          filesTruncated = true;
-          break;
-        }
-        try {
-          SearchAndReadResult fileResult =
-              readFileSections(
-                  entry.getKey(),
-                  entry.getValue(),
-                  effectiveContextLines,
-                  fileCharsets.get(entry.getKey()),
-                  workingDirectory,
-                  snapshots,
-                  Math.min(lineShare, Math.max(0, lineLimit - totalLines)),
-                  new TextReadBudget(byteShare));
-          var rank = ranking.get(entry.getKey());
-          fileResult = fileResult.withRanking(rank.score(), rank.matchedBy());
-          fileResult =
-              SearchResultBudget.fit(
-                  fileResult, byteShare, tokenShare, fileCharsets.get(entry.getKey()));
-          int remaining = MAX_SEARCH_AND_READ_TOTAL_LINES - totalLines;
-          if (fileResult.totalLines() > remaining) {
-            fileResult = fileResult.withTruncated(true);
+          if (queryResult.omittedErrors() > 0)
+            fileErrors.put(
+                "(query " + queryResult.queryIndex() + " omitted errors)",
+                queryResult.omittedErrors() + " file errors omitted; narrow the search");
+          for (GrepFileError fileError : queryResult.fileErrors()) {
+            fileErrors.putIfAbsent(fileError.path(), fileError.message());
           }
-          totalLines += fileResult.totalLines();
-          fileResults.add(fileResult);
-        } catch (IllegalArgumentException | IOException e) {
-          fileResults.add(
-              new SearchAndReadResult(
-                  entry.getKey(), List.of(), List.of(), e.getMessage(), true, filesTruncated));
+          for (GrepMatch match : queryResult.matches()) {
+            if (!match.matched()) {
+              continue;
+            }
+            fileMatches
+                .computeIfAbsent(match.path(), k -> new ArrayList<>())
+                .add(new SearchMatch(queryResult.queryIndex(), match.line(), match.content()));
+            fileCharsets.putIfAbsent(
+                match.path(), request.queries().get(queryResult.queryIndex()).charset());
+          }
         }
-      }
-      if (filesTruncated) {
-        for (int i = 0; i < fileResults.size(); i++) {
-          SearchAndReadResult r = fileResults.get(i);
-          fileResults.set(
-              i,
-              new SearchAndReadResult(
-                  r.path(),
-                  r.matches(),
-                  r.sections(),
-                  r.error(),
-                  r.truncated(),
-                  true,
-                  r.version(),
-                  r.nextRead(),
-                  r.score(),
-                  r.matchedBy(),
-                  r.omittedMatches()));
+        var ranked =
+            SearchRanking.rank(
+                fileMatches,
+                request.queries(),
+                preferred,
+                workingDirectory,
+                snapshots,
+                repositoryMaps,
+                workingSet);
+        Map<String, SearchRanking.Ranked> ranking = new LinkedHashMap<>();
+        fileMatches.clear();
+        for (var item : ranked) {
+          fileMatches.put(item.path(), item.matches());
+          ranking.put(item.path(), item);
         }
-      }
-      for (var entry : fileErrors.entrySet()) {
-        if (!fileMatches.containsKey(entry.getKey())) {
-          fileResults.add(
-              new SearchAndReadResult(
-                  entry.getKey(), List.of(), List.of(), entry.getValue(), false, filesTruncated));
+        int selectedCount = Math.min(fileMatches.size(), effectiveMaxFiles);
+        int byteShare = (byteLimit - 16) / Math.max(1, selectedCount),
+            tokenShare = (tokenLimit - 16) / Math.max(1, selectedCount),
+            lineShare = lineLimit / Math.max(1, selectedCount);
+        int alreadyPresentCount =
+            fileMatches.keySet().stream()
+                .limit(selectedCount)
+                .map(path -> resolveProjectPath(path, workingDirectory))
+                .mapToInt(path -> workingSet.contains(path) ? 1 : 0)
+                .sum();
+
+        // 3. ファイルを選び、ヒット行の前後を読み込む
+        List<SearchAndReadResult> fileResults = new ArrayList<>();
+        int totalLines = 0;
+        boolean filesTruncated = queryResults.stream().anyMatch(GrepQueryResult::truncated);
+        for (var entry : fileMatches.entrySet()) {
+          if (fileResults.size() >= effectiveMaxFiles) {
+            filesTruncated = true;
+            break;
+          }
+          try {
+            SearchAndReadResult fileResult =
+                readFileSections(
+                    entry.getKey(),
+                    entry.getValue(),
+                    effectiveContextLines,
+                    fileCharsets.get(entry.getKey()),
+                    workingDirectory,
+                    snapshots,
+                    Math.min(lineShare, Math.max(0, lineLimit - totalLines)),
+                    new TextReadBudget(byteShare));
+            var rank = ranking.get(entry.getKey());
+            fileResult = fileResult.withRanking(rank.score(), rank.matchedBy());
+            fileResult =
+                SearchResultBudget.fit(
+                    fileResult, byteShare, tokenShare, fileCharsets.get(entry.getKey()));
+            int remaining = MAX_SEARCH_AND_READ_TOTAL_LINES - totalLines;
+            if (fileResult.totalLines() > remaining) {
+              fileResult = fileResult.withTruncated(true);
+            }
+            totalLines += fileResult.totalLines();
+            fileResults.add(fileResult);
+          } catch (IllegalArgumentException | IOException e) {
+            fileResults.add(
+                new SearchAndReadResult(
+                    entry.getKey(), List.of(), List.of(), e.getMessage(), true, filesTruncated));
+          }
         }
+        if (filesTruncated) {
+          for (int i = 0; i < fileResults.size(); i++) {
+            SearchAndReadResult r = fileResults.get(i);
+            fileResults.set(
+                i,
+                new SearchAndReadResult(
+                    r.path(),
+                    r.matches(),
+                    r.sections(),
+                    r.error(),
+                    r.truncated(),
+                    true,
+                    r.version(),
+                    r.nextRead(),
+                    r.score(),
+                    r.matchedBy(),
+                    r.omittedMatches()));
+          }
+        }
+        for (var entry : fileErrors.entrySet()) {
+          if (!fileMatches.containsKey(entry.getKey())) {
+            fileResults.add(
+                new SearchAndReadResult(
+                    entry.getKey(), List.of(), List.of(), entry.getValue(), false, filesTruncated));
+          }
+        }
+        int hitCount =
+            queryResults.stream()
+                .filter(result -> result.error() == null)
+                .mapToInt(
+                    result -> (int) result.matches().stream().filter(GrepMatch::matched).count())
+                .sum();
+        FileResultBudget.require(fileResults, byteLimit, tokenLimit);
+        workingSet.completeSearch(
+            searchObservation, hitCount, fileMatches.size(), selectedCount, alreadyPresentCount);
+        return boundedFileResult(
+            Boolean.TRUE.equals(request.compactOutput())
+                ? fileResults.stream().map(SearchAndReadResult::withCompact).toList()
+                : fileResults);
+      } catch (IOException | InterruptedException | RuntimeException e) {
+        workingSet.abandonSearch(searchObservation);
+        throw e;
       }
-      int hitCount =
-          queryResults.stream()
-              .filter(result -> result.error() == null)
-              .mapToInt(
-                  result -> (int) result.matches().stream().filter(GrepMatch::matched).count())
-              .sum();
-      FileResultBudget.require(fileResults, byteLimit, tokenLimit);
-      workingSet.completeSearch(
-          searchObservation, hitCount, fileMatches.size(), selectedCount, alreadyPresentCount);
-      return boundedFileResult(fileResults);
-    } catch (IOException | InterruptedException | RuntimeException e) {
-      workingSet.abandonSearch(searchObservation);
-      throw e;
     }
+  }
+
+  private ReadingStateStore readingStateStore;
+  private ReadingDelivery readingDelivery;
+
+  @Autowired
+  void setReadingDelivery(ReadingDelivery delivery) {
+    readingDelivery = delivery;
+  }
+
+  @Autowired
+  void setReadingStateStore(ReadingStateStore store) {
+    readingStateStore = store;
+  }
+
+  @dev.mikoto2000.rei.core.contextbudget.ResultDelivery(
+      dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
+  @Tool(
+      name = "searchFilePage",
+      description =
+          "Search with persistent RESULT and SCAN cursors. Start with queries, then pass the returned resultCursor or scanCursor unchanged as cursor. Drains exact hit neighborhoods without intervening source. Run-scoped, expires after 24 hours. File changes invalidate the cursor. maxTokens 256..8000, maxBytes 1024..65536, scanLimit 1..1024, maxLines 1..5000. Queries in one search must use the same charset. Legacy searchAndRead remains available for ranked one-shot searches.")
+  PagedFileSearch.Page searchFilePage(PagedFileSearch.Request request) {
+    if (readingStateStore == null)
+      throw new IllegalStateException("Reading state store unavailable");
+    return new PagedFileSearch(this, readingStateStore).read(request, currentWorkingDirectory());
   }
 
   /** 1 ファイルのヒットから、マージした範囲を読み込む。 */
@@ -2186,7 +2280,7 @@ public class Tools {
       throws IOException {
     java.nio.file.Path filePath = resolveProjectPath(relativePath, workingDirectory);
     var snapshot = snapshots.get(workingDirectory, filePath);
-    List<String> lines = snapshotLines(snapshot, charset);
+    List<String> lines = snapshots.lines(snapshot, charset, () -> snapshotLines(snapshot, charset));
     workingSet.recordRead(filePath);
 
     // ヒット行から前後コンテキストを計算し、overlapping / adjacent をマージする
@@ -2319,8 +2413,8 @@ public class Tools {
   }
 
   /** 共通の実行基盤で用いる状態の記録行一覧を返す。 */
-  private List<String> snapshotLines(FileSnapshots.Snapshot snapshot, String charset)
-      throws IOException {
+  List<String> snapshotLines(FileSnapshots.Snapshot snapshot, String charset) throws IOException {
+    ReadingMetrics.add("decodes", 1);
     byte[] bytes = snapshot.bytes();
     ResolvedTextFile decoded;
     if (charset != null && !charset.isBlank())
@@ -2340,6 +2434,7 @@ public class Tools {
       }
     }
     if (decoded.content().indexOf(0) >= 0) throw new IOException("Binary file is unsupported");
+    ReadingMetrics.add("lineSplits", 1);
     return decoded.content().lines().toList();
   }
 
@@ -2362,7 +2457,28 @@ public class Tools {
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer maxTokens,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer maxLines,
       @org.springframework.ai.tool.annotation.ToolParam(required = false)
-          List<String> preferredPaths) {
+          List<String> preferredPaths,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Boolean compactOutput) {
+    public SearchAndReadRequest {
+      queries =
+          queries == null ? null : java.util.Collections.unmodifiableList(new ArrayList<>(queries));
+      preferredPaths =
+          preferredPaths == null
+              ? null
+              : java.util.Collections.unmodifiableList(new ArrayList<>(preferredPaths));
+    }
+
+    public SearchAndReadRequest(
+        List<GrepQuery> queries,
+        Integer contextLines,
+        Integer maxFiles,
+        Integer maxBytes,
+        Integer maxTokens,
+        Integer maxLines,
+        List<String> preferredPaths) {
+      this(queries, contextLines, maxFiles, maxBytes, maxTokens, maxLines, preferredPaths, null);
+    }
+
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public SearchAndReadRequest(List<GrepQuery> queries, Integer contextLines, Integer maxFiles) {
       this(queries, contextLines, maxFiles, null, null, null, null);
@@ -2414,7 +2530,57 @@ public class Tools {
       ReadFileRequest nextRead,
       int score,
       List<String> matchedBy,
-      int omittedMatches) {
+      int omittedMatches,
+      @com.fasterxml.jackson.annotation.JsonIgnore boolean compact) {
+    public SearchAndReadResult {
+      matches = matches == null ? null : List.copyOf(matches);
+      sections = sections == null ? null : List.copyOf(sections);
+      matchedBy = matchedBy == null ? null : List.copyOf(matchedBy);
+    }
+
+    public SearchAndReadResult(
+        String path,
+        List<SearchMatch> matches,
+        List<ReadSection> sections,
+        String error,
+        boolean truncated,
+        boolean filesTruncated,
+        String version,
+        ReadFileRequest nextRead,
+        int score,
+        List<String> matchedBy,
+        int omittedMatches) {
+      this(
+          path,
+          matches,
+          sections,
+          error,
+          truncated,
+          filesTruncated,
+          version,
+          nextRead,
+          score,
+          matchedBy,
+          omittedMatches,
+          false);
+    }
+
+    SearchAndReadResult withCompact() {
+      return new SearchAndReadResult(
+          path,
+          matches,
+          sections,
+          error,
+          truncated,
+          filesTruncated,
+          version,
+          nextRead,
+          score,
+          matchedBy,
+          omittedMatches,
+          true);
+    }
+
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public SearchAndReadResult(
         String path,
@@ -2509,9 +2675,12 @@ public class Tools {
       description =
           """
       Read one or more known file paths or line ranges in a single call.
+      For Markdown, use section, sectionPath (array), sectionId or headingLevel. includeChildren defaults true.
+      Duplicate headings return selection.candidates; choose a sectionId and expectedVersion. contextLines applies.
+      unreadOnly:true suppresses only confirmed complete explicit ranges; uncertain or compressed source is returned.
       For Java declarations, pass symbol (e.g. p.C#work(String[])), optionally path to narrow candidates.
       Overloaded names return candidates; select an exact symbolId. includeBody defaults true, includeJavadoc true,
-      contextLines defaults 0 (max 25), includeOwnerOverview defaults false. Use returned nextRead unchanged.
+      contextLines defaults 0 (max 25), includeOwnerOverview defaults false. Use returned nextRead unchanged. unreadOnly:true suppresses only complete explicit line ranges confirmed in the current model prompt; full-file requests always return source.
       A batch shares source byte/line and result token budgets fairly across files. A truncated result is a
       contiguous prefix, never head/tail excerpts. Empty content with truncated=true and nextRead is a budget
       continuation, not an empty file or a read failure; pass each returned nextRead unchanged in the next batch.
@@ -2647,72 +2816,86 @@ public class Tools {
   /** 必要な内容を参照できるよう、複数ファイルを読み取る。 */
   List<ReadFileResult> readMultiFile(
       List<ReadFileRequest> files, java.nio.file.Path workingDirectory) throws IOException {
-    if (files == null || files.isEmpty()) {
-      throw new IllegalArgumentException("files must not be empty");
-    }
-    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-    if (files.size() > MAX_READ_FILES) {
-      throw new IllegalArgumentException(
-          "too many files: " + files.size() + " (max " + MAX_READ_FILES + ")");
-    }
-    for (var request : files)
-      if (request == null || request.path() != null && request.path().length() > 1024)
-        throw new IllegalArgumentException("File request/path limit exceeded");
-    List<ReadFileResult> results = new ArrayList<>();
-    FileSnapshots snapshots = newSnapshots();
-    TextReadBudget budget = new TextReadBudget();
-    int totalLines = 0;
-    for (int index = 0; index < files.size(); index++) {
-      ReadFileRequest request = files.get(index);
-      int remainingRequests = files.size() - index;
-      int byteBudget = budget.remaining() / remainingRequests;
-      TextReadBudget fileBudget = new TextReadBudget(byteBudget);
-      int lineBudget = (MAX_READ_TOTAL_LINES - totalLines) / remainingRequests;
-      try {
-        ReadFileResult result =
-            request.symbol() != null
-                ? JavaSymbolReads.read(
-                    request,
-                    workingDirectory,
-                    snapshots,
-                    repositoryMaps,
-                    fileBudget,
-                    lineBudget,
-                    (dev.mikoto2000.rei.core.chat.AgentRunScope.current() == null
-                                ? 8000
-                                : deliveryProperties.getPageTargetTokens())
-                            / files.size()
-                        - 16)
-                : readSingleFile(request, workingDirectory, snapshots, fileBudget, lineBudget);
-        if (request.symbol() != null && result.error() == null)
-          workingSet.recordRead(workingDirectory.resolve(result.path()));
-        int remaining = MAX_READ_TOTAL_LINES - totalLines;
-        if (result.content().size() > remaining) {
-          result =
-              new ReadFileResult(
-                  result.path(),
-                  result.startLine(),
-                  result.endLine(),
-                  result.content().subList(0, Math.max(0, remaining)),
-                  true,
-                  null);
-        }
-        totalLines += result.content().size();
-        results.add(result);
-      } catch (IllegalArgumentException | IOException e) {
-        results.add(
-            new ReadFileResult(request.path(), null, null, List.of(), false, e.getMessage()));
-      } finally {
-        budget.reserve(byteBudget - fileBudget.remaining());
+    try (var measurement = ReadingMetrics.operation("read", readingStateStore)) {
+      if (files == null || files.isEmpty()) {
+        throw new IllegalArgumentException("files must not be empty");
       }
+      // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
+      if (files.size() > MAX_READ_FILES) {
+        throw new IllegalArgumentException(
+            "too many files: " + files.size() + " (max " + MAX_READ_FILES + ")");
+      }
+      for (var request : files)
+        if (request == null || request.path() != null && request.path().length() > 1024)
+          throw new IllegalArgumentException("File request/path limit exceeded");
+      List<ReadFileResult> results = new ArrayList<>();
+      FileSnapshots snapshots = newSnapshots();
+      TextReadBudget budget = new TextReadBudget();
+      int totalLines = 0;
+      for (int index = 0; index < files.size(); index++) {
+        ReadFileRequest request = files.get(index);
+        if (request.expectedVersion() != null) ReadingMetrics.add("continuations", 1);
+        int remainingRequests = files.size() - index;
+        int byteBudget = budget.remaining() / remainingRequests;
+        TextReadBudget fileBudget = new TextReadBudget(byteBudget);
+        int lineBudget = (MAX_READ_TOTAL_LINES - totalLines) / remainingRequests;
+        try {
+          ReadFileResult result =
+              MarkdownSectionReads.selected(request)
+                  ? MarkdownSectionReads.read(
+                      this, request, workingDirectory, snapshots, fileBudget, lineBudget)
+                  : request.symbol() != null
+                      ? JavaSymbolReads.read(
+                          request,
+                          workingDirectory,
+                          snapshots,
+                          repositoryMaps,
+                          fileBudget,
+                          lineBudget,
+                          (dev.mikoto2000.rei.core.chat.AgentRunScope.current() == null
+                                      ? 8000
+                                      : deliveryProperties.getPageTargetTokens())
+                                  / files.size()
+                              - 16)
+                      : readSingleFile(
+                          request, workingDirectory, snapshots, fileBudget, lineBudget);
+          if (request.symbol() != null && result.error() == null)
+            workingSet.recordRead(workingDirectory.resolve(result.path()));
+          if (readingDelivery != null) result = applyReadingDelivery(request, result);
+          int remaining = MAX_READ_TOTAL_LINES - totalLines;
+          if (result.content().size() > remaining) {
+            result =
+                new ReadFileResult(
+                    result.path(),
+                    result.startLine(),
+                    result.endLine(),
+                    result.content().subList(0, Math.max(0, remaining)),
+                    true,
+                    null);
+          }
+          totalLines += result.content().size();
+          results.add(result);
+        } catch (IllegalArgumentException | IOException e) {
+          results.add(
+              new ReadFileResult(
+                  request.path(),
+                  null,
+                  null,
+                  List.of(),
+                  false,
+                  ReadingProblem.from(e).code() + ": " + e.getMessage()));
+        } finally {
+          budget.reserve(byteBudget - fileBudget.remaining());
+        }
+      }
+      if (files.stream().anyMatch(request -> request.symbol() != null))
+        FileResultBudget.require(results, 65536, 8000);
+      return boundedFileResult(
+          dev.mikoto2000.rei.core.chat.AgentRunScope.current() == null
+              ? results
+              : new FileResultTokenPager(deliveryEstimator)
+                  .page(results, files, deliveryProperties.getPageMaxTokens()));
     }
-    if (files.stream().anyMatch(request -> request.symbol() != null))
-      FileResultBudget.require(results, 65536, 8000);
-    return boundedFileResult(
-        dev.mikoto2000.rei.core.chat.AgentRunScope.current() == null
-            ? results
-            : new FileResultTokenPager(deliveryEstimator)
-                .page(results, files, deliveryProperties.getPageMaxTokens()));
   }
 
   /** 1 ファイルの読み込みを実行する。 */
@@ -2720,11 +2903,14 @@ public class Tools {
     // Final envelope guard also covers escaping, error metadata and paths.
     if (FILE_RESULT_JSON.writeValueAsBytes(result).length > 1024 * 1024)
       throw new IOException("Serialized file result exceeds 1MiB; narrow the request");
+    ReadingMetrics.generated(result);
+    if (result.isEmpty() || !(result.getFirst() instanceof SearchAndReadResult))
+      ReadingMetrics.wire(result);
     return result;
   }
 
   /** 必要な内容を参照できるよう、単一ファイルを読み取る。 */
-  private ReadFileResult readSingleFile(
+  ReadFileResult readSingleFile(
       ReadFileRequest request,
       java.nio.file.Path workingDirectory,
       FileSnapshots snapshots,
@@ -2746,7 +2932,9 @@ public class Tools {
     var snapshot = snapshots.get(workingDirectory, path);
     if (request.expectedVersion() != null && !request.expectedVersion().equals(snapshot.version()))
       throw new IOException("STALE_VERSION: File version mismatch; search/read again");
-    List<String> lines = snapshotLines(snapshot, request.charset());
+    List<String> lines =
+        snapshots.lines(
+            snapshot, request.charset(), () -> snapshotLines(snapshot, request.charset()));
     workingSet.recordRead(path);
     int fromIndex = startLine == null ? 0 : startLine - 1;
     if (fromIndex >= lines.size()) {
@@ -2821,7 +3009,99 @@ public class Tools {
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer contextLines,
       @org.springframework.ai.tool.annotation.ToolParam(required = false)
           Boolean includeOwnerOverview,
-      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer symbolOffset) {
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer symbolOffset,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          @org.springframework.ai.tool.annotation.ToolParam(required = false)
+          Boolean unreadOnly,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          @org.springframework.ai.tool.annotation.ToolParam(required = false)
+          List<String> sectionPath,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          @org.springframework.ai.tool.annotation.ToolParam(required = false)
+          String section,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          @org.springframework.ai.tool.annotation.ToolParam(required = false)
+          String sectionId,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          @org.springframework.ai.tool.annotation.ToolParam(required = false)
+          Integer headingLevel,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          @org.springframework.ai.tool.annotation.ToolParam(required = false)
+          Boolean includeChildren) {
+    public ReadFileRequest {
+      sectionPath = sectionPath == null ? null : List.copyOf(sectionPath);
+    }
+
+    public ReadFileRequest(
+        String path,
+        Integer startLine,
+        Integer endLine,
+        String expectedVersion,
+        Integer offset,
+        String charset,
+        String symbol,
+        Boolean includeBody,
+        Boolean includeJavadoc,
+        Integer contextLines,
+        Boolean includeOwnerOverview,
+        Integer symbolOffset,
+        Boolean unreadOnly) {
+      this(
+          path,
+          startLine,
+          endLine,
+          expectedVersion,
+          offset,
+          charset,
+          symbol,
+          includeBody,
+          includeJavadoc,
+          contextLines,
+          includeOwnerOverview,
+          symbolOffset,
+          unreadOnly,
+          null,
+          null,
+          null,
+          null,
+          null);
+    }
+
+    public ReadFileRequest(
+        String path,
+        Integer startLine,
+        Integer endLine,
+        String expectedVersion,
+        Integer offset,
+        String charset,
+        String symbol,
+        Boolean includeBody,
+        Boolean includeJavadoc,
+        Integer contextLines,
+        Boolean includeOwnerOverview,
+        Integer symbolOffset) {
+      this(
+          path,
+          startLine,
+          endLine,
+          expectedVersion,
+          offset,
+          charset,
+          symbol,
+          includeBody,
+          includeJavadoc,
+          contextLines,
+          includeOwnerOverview,
+          symbolOffset,
+          null);
+    }
+
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public ReadFileRequest(
         String path,
@@ -2881,7 +3161,124 @@ public class Tools {
       RepositoryMapService.Symbol symbol,
       List<JavaSymbolReads.Candidate> candidates,
       List<String> ownerOverview,
-      String truncationReason) {
+      String truncationReason,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          ReadingDelivery.Notice delivery,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          MarkdownSectionReads.Selection selection) {
+    public ReadFileResult {
+      content = content == null ? null : List.copyOf(content);
+      candidates = candidates == null ? null : List.copyOf(candidates);
+      ownerOverview = ownerOverview == null ? null : List.copyOf(ownerOverview);
+    }
+
+    public ReadFileResult(
+        String path,
+        Integer startLine,
+        Integer endLine,
+        List<String> content,
+        boolean truncated,
+        String error,
+        String version,
+        ReadFileRequest nextRead,
+        int returnedBytes,
+        RepositoryMapService.Symbol symbol,
+        List<JavaSymbolReads.Candidate> candidates,
+        List<String> ownerOverview,
+        String truncationReason,
+        ReadingDelivery.Notice delivery) {
+      this(
+          path,
+          startLine,
+          endLine,
+          content,
+          truncated,
+          error,
+          version,
+          nextRead,
+          returnedBytes,
+          symbol,
+          candidates,
+          ownerOverview,
+          truncationReason,
+          delivery,
+          null);
+    }
+
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public dev.mikoto2000.rei.tooldelivery.SourceEvidence evidence() {
+      if (version == null || startLine == null || endLine == null || error != null) return null;
+      String selector =
+          symbol != null
+              ? symbol.symbolId()
+              : selection != null && selection.selected() != null
+                  ? String.join("/", selection.selected().path())
+                  : null;
+      return new dev.mikoto2000.rei.tooldelivery.SourceEvidence(
+          path, version, startLine, endLine, selector, "readMultiFile", null);
+    }
+
+    ReadFileResult withSelection(MarkdownSectionReads.Selection value) {
+      return new ReadFileResult(
+          path,
+          startLine,
+          endLine,
+          content,
+          truncated,
+          error,
+          version,
+          nextRead,
+          returnedBytes,
+          symbol,
+          candidates,
+          ownerOverview,
+          truncationReason,
+          delivery,
+          value);
+    }
+
+    @com.fasterxml.jackson.annotation.JsonProperty(
+        access = com.fasterxml.jackson.annotation.JsonProperty.Access.READ_ONLY)
+    @com.fasterxml.jackson.annotation.JsonInclude(
+        com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+    public ReadingProblem problem() {
+      if (error == null) return null;
+      return ReadingProblem.fromMessage(error);
+    }
+
+    public ReadFileResult(
+        String path,
+        Integer startLine,
+        Integer endLine,
+        List<String> content,
+        boolean truncated,
+        String error,
+        String version,
+        ReadFileRequest nextRead,
+        int returnedBytes,
+        RepositoryMapService.Symbol symbol,
+        List<JavaSymbolReads.Candidate> candidates,
+        List<String> ownerOverview,
+        String truncationReason) {
+      this(
+          path,
+          startLine,
+          endLine,
+          content,
+          truncated,
+          error,
+          version,
+          nextRead,
+          returnedBytes,
+          symbol,
+          candidates,
+          ownerOverview,
+          truncationReason,
+          null);
+    }
+
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public ReadFileResult(
         String path,
@@ -3105,7 +3502,7 @@ public class Tools {
   public record WriteFileResult(String path, boolean success, String error) {}
 
   /** 条件に合う対象を選ぶため、パスの照合規則との一致を判定する。 */
-  private boolean matchesGlob(
+  boolean matchesGlob(
       String relativePath,
       SearchGlob includeMatcher,
       SearchGlob excludeMatcher,
@@ -3121,9 +3518,10 @@ public class Tools {
   }
 
   /** 共通の実行基盤で用いるコンパイル内容検索照合規則を返す。 */
-  private Pattern compileGrepPattern(String pattern, boolean ignoreCase, boolean fixedString) {
+  Pattern compileGrepPattern(String pattern, boolean ignoreCase, boolean fixedString) {
     int flags = ignoreCase ? Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE : 0;
-    String effectivePattern = fixedString ? Pattern.quote(pattern) : pattern;
+    String effectivePattern = pattern;
+    if (fixedString) flags |= Pattern.LITERAL;
     try {
       return Pattern.compile(effectivePattern, flags);
     } catch (PatternSyntaxException e) {
@@ -3133,7 +3531,7 @@ public class Tools {
 
   /** 共通の実行基盤において、一致した行かどうかを判定する。 */
   private boolean isMatchedLine(Pattern pattern, String line, boolean invertMatch) {
-    boolean matched = pattern.matcher(line).find();
+    boolean matched = BoundedRegex.find(pattern, line);
     return invertMatch ? !matched : matched;
   }
 

@@ -109,6 +109,11 @@ public class RawToolResultStore {
     return bodyReads.get();
   }
 
+  /** Reading-state port reuses the existing scoped read and integrity verification. */
+  public String readingBody(String conversation, String ref) {
+    return read(conversation, ref).rawResult();
+  }
+
   /** モデルへ渡す文脈の管理で用いる本文書き込み件数を返す。 */
   public long bodyWriteCount() {
     return bodyWrites.get();

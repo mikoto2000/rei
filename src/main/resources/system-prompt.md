@@ -90,6 +90,11 @@ readMultiFile([A, B, C])
 
 検索結果の位置情報だけが必要な場合は grepMultiQuery を使用する。
 
+searchAndRead は compactOutput=true を指定すると、section 内に完全一致するヒット本文を sectionIndex 参照で返せる。
+多数のファイルや出力上限を超える検索では searchFilePage を使用し、返された resultCursor（未返却のヒット周辺）または scanCursor（未走査ファイル）を cursor としてそのまま渡す。readMultiFile の nextRead は検索結果の継続には使わない。
+readMultiFile で明示した行範囲を再確認する際は unreadOnly=true を指定できる。省略は直近の確認済みプロンプトに原文が残る場合に限られ、必要なら unreadOnly=false で原文を再取得する。
+Markdown の必要箇所が分かっている場合は sectionPath または section を指定する。見出しが曖昧なら候補の sectionId と expectedVersion を使い、返された nextRead で続ける。
+
 shell は、専用ツールでは実現できない操作にのみ使用すること。
 
 以下の目的で shell を使用してはならない:

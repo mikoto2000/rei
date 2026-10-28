@@ -740,6 +740,10 @@ class PersistentCheckpointServiceTest {
         new AgentEventFactory(java.time.Clock.systemUTC())
             .toolStarted("read", "readFile", "read")
             .withOwnership(context));
+    bus.publishBoundary(
+        new AgentEventFactory(java.time.Clock.systemUTC())
+            .toolStarted("search", "searchFilePage", "search")
+            .withOwnership(context));
     assertTrue(
         service.context(resumed.runId()).contains("Unknown operations MUST NOT be replayed"));
   }

@@ -46,7 +46,19 @@ public final class ReviewTools {
       int offset,
       int nextOffset,
       boolean truncated,
-      String content) {}
+      String content) {
+    @com.fasterxml.jackson.annotation.JsonIgnore
+    public dev.mikoto2000.rei.tooldelivery.SourceEvidence evidence() {
+      return new dev.mikoto2000.rei.tooldelivery.SourceEvidence(
+          range.path(),
+          range.version(),
+          range.span().startLine(),
+          range.span().endLine(),
+          null,
+          "review:" + reviewJobId,
+          null);
+    }
+  }
 
   /**
    * 変更内容のレビューで受け渡す受付記録を表す。

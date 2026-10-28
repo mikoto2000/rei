@@ -6,6 +6,12 @@ import org.springframework.ai.tool.annotation.ToolParam;
 
 /** 元のツールの結果をモデルから呼び出せるツールとして提供する。 */
 public class RawToolResultTools {
+  public static dev.mikoto2000.rei.tooldelivery.ReadingRawAccess.Page readingPage(String response) {
+    var page = RawResultPage.parse(response);
+    return new dev.mikoto2000.rei.tooldelivery.ReadingRawAccess.Page(
+        page.rawResultRef(), page.offset(), page.hasMore(), page.content());
+  }
+
   /** 保存先。 */
   private final RawToolResultStore store;
 

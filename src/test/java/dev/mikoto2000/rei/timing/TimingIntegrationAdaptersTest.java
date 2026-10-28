@@ -105,16 +105,16 @@ class TimingIntegrationAdaptersTest {
   }
 
   /** 既存の識別子一覧を利用することを確認する。 */
-  @Test
-  void toolAndNestedSearchUseExistingIdsWithoutCopyingPayloadContent() {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"webSearch", "searchFilePage"})
+  void toolAndNestedSearchUseExistingIdsWithoutCopyingPayloadContent(String tool) {
     var bus = new InMemoryAgentEventBus();
     var events = new AgentEventFactory(Clock.systemUTC());
     store.beginRun("run", "project", "session");
     try (var observer = new TimingEventObserver(store, bus)) {
-      bus.publish(events.toolStarted("call", "webSearch", "ARGUMENT-SECRET").withOwnership(owner));
+      bus.publish(events.toolStarted("call", tool, "ARGUMENT-SECRET").withOwnership(owner));
       tick.set(8);
-      bus.publish(
-          events.toolCompleted("call", "webSearch", 99999, "RESULT-SECRET").withOwnership(owner));
+      bus.publish(events.toolCompleted("call", tool, 99999, "RESULT-SECRET").withOwnership(owner));
     }
     store.finishRun("run", Status.SUCCESS);
     var run = store.latest("project", "session").orElseThrow();

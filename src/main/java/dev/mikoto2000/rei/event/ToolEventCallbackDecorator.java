@@ -32,6 +32,7 @@ public class ToolEventCallbackDecorator
           "listFile",
           "grepMultiQuery",
           "searchAndRead",
+          "searchFilePage",
           "readSkillResource",
           "writeMultiFile",
           "writeTextFile",

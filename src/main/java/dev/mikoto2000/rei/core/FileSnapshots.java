@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core;
 
 import dev.mikoto2000.rei.core.chat.RunCancellation;
+import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -63,6 +64,25 @@ final class FileSnapshots {
   /** ファイル一覧。 */
   private final Map<Path, Snapshot> files = new LinkedHashMap<>();
 
+  private final Map<List<String>, List<String>> decoded = new HashMap<>();
+
+  @FunctionalInterface
+  interface Decoder {
+    List<String> decode() throws IOException;
+  }
+
+  synchronized List<String> lines(Snapshot snapshot, String charset, Decoder decoder)
+      throws IOException {
+    var key =
+        List.of(snapshot.path().toString(), snapshot.version(), Objects.toString(charset, ""));
+    var value = decoded.get(key);
+    if (value == null) {
+      value = List.copyOf(decoder.decode());
+      decoded.put(key, value);
+    }
+    return value;
+  }
+
   /** 読み取り元。 */
   private final Reader reader;
 
@@ -118,6 +138,7 @@ final class FileSnapshots {
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   synchronized Snapshot get(Path root, Path input) throws IOException {
+    ReadingMetrics.add("fileRequests", 1);
     RunCancellation.propagate(null);
     Path path = resolve(root, input);
     var existing = files.get(path);
@@ -127,6 +148,7 @@ final class FileSnapshots {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (before.size() > MAX_FILE_BYTES || before.size() > MAX_REQUEST_BYTES - bytes)
       throw new IOException("Snapshot byte limit reached");
+    ReadingMetrics.add("physicalReads", 1);
     var content = reader.read(path);
     var after = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
     RunCancellation.propagate(null);

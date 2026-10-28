@@ -80,6 +80,7 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
           "grepMultiQuery",
           "readPdfFile",
           "searchAndRead",
+          "searchFilePage",
           "today",
           "now",
           "findFile",

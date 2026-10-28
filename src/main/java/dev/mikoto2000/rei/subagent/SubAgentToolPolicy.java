@@ -15,6 +15,7 @@ public final class SubAgentToolPolicy {
           "readMultiFile",
           "grepMultiQuery",
           "searchAndRead",
+          "searchFilePage",
           "readPdfFile",
           "readRawToolResult",
           "beginReview",

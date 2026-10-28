@@ -791,6 +791,7 @@ public class PersistentCheckpointService implements AutoCloseable {
             "listFile",
             "grepMultiQuery",
             "searchAndRead",
+            "searchFilePage",
             "readMultiFile",
             "readFile",
             "readPdfFile",
