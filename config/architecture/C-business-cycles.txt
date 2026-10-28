@@ -621,7 +621,6 @@ dev.mikoto2000.rei.core.TextChangeSetService -> dev.mikoto2000.rei.core.project.
 dev.mikoto2000.rei.core.TextDocumentChangeSetService -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.core.TextDocumentChangeSetService -> dev.mikoto2000.rei.core.chat.AgentRunContext$Mode
 dev.mikoto2000.rei.core.TextDocumentChangeSetService -> dev.mikoto2000.rei.core.chat.RunCancellation
-dev.mikoto2000.rei.core.TextDocumentChangeSetService -> dev.mikoto2000.rei.event.CredentialRedactor
 dev.mikoto2000.rei.core.TextDocumentTransaction -> dev.mikoto2000.rei.core.chat.RunCancellation
 dev.mikoto2000.rei.core.Tools -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.core.Tools -> dev.mikoto2000.rei.core.chat.AgentRunScope

@@ -12,6 +12,8 @@ existing permission policy and exclusive conversation queue.
 and RENAME. Each operation names `path`, optional rename `target`, exact existing
 `expectedText`, and optional `replacement`. CREATE requires absence. DELETE has
 no replacement. RENAME requires an absent destination and can preserve its text.
+UPDATE also accepts `baseVersion` and `edits:[{oldText,newText}]`, exclusively with
+full-text fields. All hunks use the same immutable baseline and unique exact matching.
 Parents must already exist. Inspection returns baseline/proposal/current hashes,
 existence and availability separately, a redacted diff, and whole-proposal SHA.
 
@@ -21,8 +23,11 @@ LOCAL_WRITE and DESTRUCTIVE, requires EXCLUSIVE ownership and the exact reviewed
 whole-proposal SHA. READ_ONLY and child sessions cannot write. No new toggle or
 automatic editing path is introduced; existing permission configuration applies.
 
-Limits: 32 operations, 64 distinct case-insensitive paths, 64 KiB UTF-8 per file,
-256 KiB combined before/after text, 1 MiB saved payload. Binary, malformed Unicode,
+Limits: 32 operations, 64 distinct case-insensitive paths, 1 MiB UTF-8 per file,
+8 MiB combined before/after text, 16 MiB saved payload. Full-text inputs retain their
+64 KiB limit; partial edits allow 64 hunks/64 KiB per file and 256 KiB request text.
+Independent configurable budgets and measured results are documented in
+[file-write-optimization.md](file-write-optimization.md). Binary, malformed Unicode,
 traversal, sensitive configuration, symlinks and Windows junctions are rejected.
 Staging paths are checked before saving. No directory creation or overwrite rename.
 100 safely terminal records per Project are retained; active proposals and uncertain
@@ -34,6 +39,13 @@ rechecks all baselines, publishes each path, then verifies the entire set. Only 
 the APPLIED receipt is saved are owned staging files cleaned and file events emitted.
 Historical APPLIED reads never replay writes or events; `currentMatches` distinguishes
 current content from a historical successful application.
+
+Apply returns a compact View with an empty diff, current hashes/currentMatches,
+changed-file/region counts and half-open changed line ranges. These verify saved bytes,
+not syntax, tests or meaning. Inspect retains the review preview. Preview truncation
+is explicit; getTextDocumentChangeSetDiff retrieves bounded UTF-8 pages with the exact
+id/proposalSha256 and returned nextOffset. All required pages remain reviewable before
+Apply; the approval still covers the entire immutable saved proposal.
 
 ## Failure and recovery
 

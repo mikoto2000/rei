@@ -1,5 +1,8 @@
 # ファイル操作の改善
 
+書き込み側の後続改善（複数部分編集・1 MiB対象・差分ページ・簡潔なApply結果）は
+[file-write-optimization.md](file-write-optimization.md)を参照。以下の計測は各Phase当時の記録。
+
 調査基準: `origin/main` `dc833e532dad6602ee1bdf5c2da56298e11c18b7`、2026-10-08 (Asia/Tokyo)。
 
 ## 既存実装の確認

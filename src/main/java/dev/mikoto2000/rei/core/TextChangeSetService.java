@@ -13,9 +13,6 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.time.Clock;
 import java.time.Instant;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.Set;
@@ -151,6 +148,8 @@ public class TextChangeSetService {
    * @param diff 差分
    * @param createdAt 作成日時
    */
+  @com.fasterxml.jackson.annotation.JsonInclude(
+      com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
   public record View(
       String id,
       String projectId,
@@ -161,7 +160,19 @@ public class TextChangeSetService {
       String proposalSha256,
       String currentSha256,
       String diff,
-      Instant createdAt) {}
+      Instant createdAt,
+      TextDiff.Info diffInfo,
+      List<TextDiff.FileSummary> changes,
+      int changedFiles,
+      int changeCount,
+      boolean currentMatches,
+      List<String> warnings,
+      TextEditEngine.Failure error) {
+    public View {
+      changes = changes == null ? List.of() : List.copyOf(changes);
+      warnings = warnings == null ? List.of() : List.copyOf(warnings);
+    }
+  }
 
   /** 共通の実行基盤に必要な書き込み先を扱う。 */
   @FunctionalInterface
@@ -206,6 +217,14 @@ public class TextChangeSetService {
   public View propose(ProjectContext project, Request request) throws IOException {
     RunCancellation.propagate(null);
     if (request == null) throw new IllegalArgumentException("Change Set request required");
+    TextEditEngine.requestSize(
+        TextEditEngine.inputBytes(request.expectedText())
+            + TextEditEngine.inputBytes(request.replacement())
+            + TextEditEngine.inputBytes(request.edits()));
+    if (request.edits() == null
+        && (TextEditEngine.inputBytes(request.expectedText()) > 65536
+            || TextEditEngine.inputBytes(request.replacement()) > 65536))
+      throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", request.path(), null, List.of(), null);
     String snapshotText = null;
     if (request.edits() != null) {
       if (request.expectedText() != null || request.replacement() != null)
@@ -215,13 +234,9 @@ public class TextChangeSetService {
       var root = project.root().toRealPath();
       var file = resolve(root, request.path());
       String current = read(file);
-      String version =
-          request.baseVersion().startsWith("sha256:")
-              ? request.baseVersion().substring(7)
-              : request.baseVersion();
-      if (!hash(current).equals(version))
-        throw new IllegalArgumentException("File version mismatch; read and propose again");
-      String replacement = edit(current, request.edits());
+      TextEditEngine.verifyVersion(request.path(), current, request.baseVersion());
+      String replacement = TextEditEngine.edit(request.path(), current, request.edits()).text();
+      validateText(replacement);
       // Reuse all existing validation, ownership, durable proposal identity, diff and explicit
       // Apply.
       snapshotText = current;
@@ -237,8 +252,8 @@ public class TextChangeSetService {
     var file = resolve(root, request.path());
     var current = snapshotText == null ? read(file) : snapshotText;
     if (!current.equals(request.expectedText()))
-      throw new IllegalArgumentException(
-          "Baseline differs; read the current file and propose again");
+      throw TextEditEngine.failure(
+          "VERSION_MISMATCH", request.path(), null, List.of(), hash(current));
     var relative = root.relativize(file).toString().replace('\\', '/');
     var base = hash(current);
     var proposed = hash(request.replacement());
@@ -273,6 +288,10 @@ public class TextChangeSetService {
 
   /** 対象の状態や内容を調べ、呼び出し元が確認できる情報として返す。 */
   public View inspect(ProjectContext project, String id) throws IOException {
+    return inspect(project, id, true);
+  }
+
+  private View inspect(ProjectContext project, String id, boolean preview) throws IOException {
     var saved = owned(project, id);
     String current = null;
     try {
@@ -280,7 +299,7 @@ public class TextChangeSetService {
     } catch (IOException | IllegalArgumentException unavailable) {
       /* Missing/invalid current file is not an empty file or a successful receipt. */
     }
-    return view(saved, current);
+    return view(saved, current, preview);
   }
 
   /**
@@ -338,7 +357,7 @@ public class TextChangeSetService {
     var file = resolve(root, saved.path());
     var current = hash(read(file));
     if (saved.status().equals("APPLIED"))
-      return view(saved, current); // Receipt read; never execute the writer twice.
+      return view(saved, current, false); // Receipt read; never execute the writer twice.
     var guard = repository.applyGuard(project.id(), id);
     if (guard != null && !guard.equals(trustedGuard)
         || trustedGuard != null && !trustedGuard.equals(guard))
@@ -349,7 +368,7 @@ public class TextChangeSetService {
           "Change Set is no longer applicable; inspect current content");
     if (!saved.baselineHash().equals(current)) {
       repository.transition(project.id(), id, "PROPOSED", "STALE");
-      return inspect(project, id);
+      return inspect(project, id, false);
     }
     if (!repository.transition(project.id(), id, "PROPOSED", "APPLYING"))
       throw new IllegalStateException("Change Set already claimed");
@@ -359,7 +378,7 @@ public class TextChangeSetService {
       file = resolve(root, saved.path());
       if (!saved.baselineHash().equals(hash(read(file)))) {
         repository.transition(project.id(), id, "APPLYING", "STALE");
-        return inspect(project, id);
+        return inspect(project, id, false);
       }
       writer.write(file, saved.baseline(), saved.proposed());
       RunCancellation.propagate(null);
@@ -368,7 +387,7 @@ public class TextChangeSetService {
       repository.heartbeat(id);
       if (!repository.transition(project.id(), id, "APPLYING", "APPLIED"))
         throw new IOException("Apply receipt could not be saved");
-      return inspect(project, id);
+      return inspect(project, id, false);
     } catch (IOException | RuntimeException error) {
       try {
         repository.transition(project.id(), id, "APPLYING", "FAILED_UNCERTAIN");
@@ -456,15 +475,17 @@ public class TextChangeSetService {
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private static String read(Path file) throws IOException {
-    if (Files.size(file) > 65536) throw new IllegalArgumentException("Text exceeds 64KiB");
+    if (Files.size(file) > TextWriteLimits.fileBytes())
+      throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", file.toString(), null, List.of(), null);
     var bytes = new FileSnapshots().get(file.getParent(), file).bytes();
-    if (bytes.length > 65536) throw new IllegalArgumentException("Text exceeds 64KiB");
+    if (bytes.length > TextWriteLimits.fileBytes())
+      throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", file.toString(), null, List.of(), null);
     for (byte value : bytes)
       if (value == 0) throw new IllegalArgumentException("Binary text is unsupported");
     try {
       return StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString();
     } catch (java.nio.charset.CharacterCodingException error) {
-      throw new IllegalArgumentException("UTF-8 text required");
+      throw TextEditEngine.failure("UNSUPPORTED_ENCODING", file.toString(), null, List.of(), null);
     }
   }
 
@@ -472,8 +493,8 @@ public class TextChangeSetService {
   private static void validateText(String text) {
     if (text == null
         || text.indexOf(0) >= 0
-        || text.getBytes(StandardCharsets.UTF_8).length > 65536)
-      throw new IllegalArgumentException("UTF-8 replacement/baseline must be at most 64KiB");
+        || text.getBytes(StandardCharsets.UTF_8).length > TextWriteLimits.fileBytes())
+      throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", null, null, List.of(), null);
     try {
       StandardCharsets.UTF_8.newEncoder().encode(java.nio.CharBuffer.wrap(text));
     } catch (java.nio.charset.CharacterCodingException error) {
@@ -482,50 +503,6 @@ public class TextChangeSetService {
   }
 
   /** 共通の実行基盤で用いる編集を返す。 */
-  private static String edit(String baseline, List<Edit> edits) {
-    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-    if (edits.isEmpty() || edits.size() > 64)
-      throw new IllegalArgumentException("Partial edits require 1 to 64 hunks");
-    /**
-     * 共通の実行基盤で受け渡すHunkを表す。
-     *
-     * @param start 開始
-     * @param end 終了
-     * @param replacement 置換
-     */
-    record Hunk(int start, int end, String replacement) {}
-    var hunks = new ArrayList<Hunk>();
-    int inputBytes = 0;
-    for (var edit : edits) {
-      if (edit == null) throw new IllegalArgumentException("Hunk required");
-      validateText(edit.oldText());
-      validateText(edit.newText());
-      inputBytes +=
-          edit.oldText().getBytes(StandardCharsets.UTF_8).length
-              + edit.newText().getBytes(StandardCharsets.UTF_8).length;
-      if (inputBytes > 65536) throw new IllegalArgumentException("Hunk input exceeds 64KiB");
-      if (edit.oldText().isEmpty()) throw new IllegalArgumentException("Nonempty oldText required");
-      int start = baseline.indexOf(edit.oldText());
-      if (start < 0) throw new IllegalArgumentException("Hunk oldText not found");
-      if (baseline.indexOf(edit.oldText(), start + 1) >= 0)
-        throw new IllegalArgumentException("Hunk oldText is ambiguous; include more context");
-      hunks.add(new Hunk(start, start + edit.oldText().length(), edit.newText()));
-    }
-    hunks.sort(Comparator.comparingInt(Hunk::start));
-    for (int i = 1; i < hunks.size(); i++)
-      if (hunks.get(i).start() < hunks.get(i - 1).end())
-        throw new IllegalArgumentException("Overlapping hunks");
-    var result = new StringBuilder();
-    int cursor = 0;
-    for (var hunk : hunks) {
-      result.append(baseline, cursor, hunk.start()).append(hunk.replacement());
-      cursor = hunk.end();
-    }
-    result.append(baseline, cursor, baseline.length());
-    validateText(result.toString());
-    return result.toString();
-  }
-
   /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(String text) {
     try {
@@ -537,8 +514,40 @@ public class TextChangeSetService {
     }
   }
 
-  /** 共通の実行基盤で用いる表示内容を返す。 */
+  /** Pages are derived from the immutable saved proposal, never from a new current baseline. */
+  public TextDiff.Page diffPage(
+      ProjectContext project, String id, String sha, int offset, int maxBytes) throws IOException {
+    var saved = owned(project, id);
+    if (!saved.proposalHash().equals(sha))
+      throw new IllegalArgumentException("Exact reviewed proposal SHA required");
+    return TextDiff.page(
+        List.of(
+            new TextDocumentTransaction.Change(saved.path(), saved.baseline(), saved.proposed())),
+        offset,
+        maxBytes);
+  }
+
+  public TextDiff.Page documentDiffPage(
+      dev.mikoto2000.rei.core.chat.AgentRunContext owner,
+      String id,
+      String sha,
+      int offset,
+      int maxBytes)
+      throws IOException {
+    return documents().diffPage(owner, id, sha, offset, maxBytes);
+  }
+
   private static View view(TextChangeSetRepository.Saved saved, String current) {
+    return view(saved, current, true);
+  }
+
+  private static View view(TextChangeSetRepository.Saved saved, String current, boolean preview) {
+    var changes =
+        List.of(
+            new TextDocumentTransaction.Change(saved.path(), saved.baseline(), saved.proposed()));
+    var page = preview ? TextDiff.page(changes, 0, TextWriteLimits.diffBytes()) : null;
+    var summaries = TextDiff.summaries(changes);
+    boolean matching = saved.proposedHash().equals(current);
     return new View(
         saved.id(),
         saved.projectId(),
@@ -548,58 +557,16 @@ public class TextChangeSetService {
         saved.proposedHash(),
         saved.proposalHash(),
         current,
-        diff(saved.path(), saved.baseline(), saved.proposed()),
-        saved.createdAt());
-  }
-
-  /** 共通の実行基盤で用いる差分を返す。 */
-  private static String diff(String path, String before, String after) {
-    // Keep the existing exact replacement renderer, omitting only identical outer lines.
-    // This is a review preview, not an executable patch. Export retains the complete proposal.
-    var oldRows = before.split("\n", -1);
-    var newRows = after.split("\n", -1);
-    int prefix = 0, suffix = 0;
-    while (prefix < oldRows.length
-        && prefix < newRows.length
-        && oldRows[prefix].equals(newRows[prefix])) prefix++;
-    while (suffix < oldRows.length - prefix
-        && suffix < newRows.length - prefix
-        && oldRows[oldRows.length - suffix - 1].equals(newRows[newRows.length - suffix - 1]))
-      suffix++;
-    int from = Math.max(0, prefix - 3);
-    int oldTo = Math.min(oldRows.length, oldRows.length - suffix + 3),
-        newTo = Math.min(newRows.length, newRows.length - suffix + 3);
-    String oldPart =
-        String.join("\n", Arrays.copyOfRange(oldRows, from, oldTo))
-            + (oldTo < oldRows.length ? "\n" : "");
-    String newPart =
-        String.join("\n", Arrays.copyOfRange(newRows, from, newTo))
-            + (newTo < newRows.length ? "\n" : "");
-    return "--- "
-        + path
-        + " (baseline)\n+++ "
-        + path
-        + " (proposal)\n@@ -"
-        + (from + 1)
-        + ","
-        + oldPart.lines().count()
-        + " +"
-        + (from + 1)
-        + ","
-        + newPart.lines().count()
-        + " @@\n"
-        + lines(oldPart, "-")
-        + lines(newPart, "+");
-  }
-
-  /** 共通の実行基盤で用いる行一覧を返す。 */
-  private static String lines(String text, String prefix) {
-    if (text.isEmpty()) return "";
-    var out = new StringBuilder();
-    var lines = text.split("\n", -1);
-    int count = lines.length - (text.endsWith("\n") ? 1 : 0);
-    for (int i = 0; i < count; i++) out.append(prefix).append(lines[i]).append('\n');
-    if (!text.endsWith("\n")) out.append("\\ No newline at end of file\n");
-    return out.toString();
+        page == null ? "" : page.diff(),
+        saved.createdAt(),
+        page == null ? null : page.info(),
+        summaries,
+        summaries.size(),
+        summaries.stream().mapToInt(TextDiff.FileSummary::changeCount).sum(),
+        matching,
+        saved.status().equals("APPLIED") && !matching
+            ? List.of("Historical receipt; current file differs or is unavailable")
+            : List.of(),
+        TextEditEngine.outcome(saved.status(), saved.path(), current));
   }
 }

@@ -412,7 +412,9 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
     if ("inspectDocumentRender".equals(tool)) return Set.of(ActionCapability.READ);
     if ("validateDocumentRender".equals(tool))
       return Set.of(ActionCapability.READ, ActionCapability.EXECUTE, ActionCapability.LOCAL_WRITE);
-    if ("inspectTextDocumentChangeSet".equals(tool)) return Set.of(ActionCapability.READ);
+    if (Set.of(
+            "inspectTextDocumentChangeSet", "getTextDocumentChangeSetDiff", "getTextChangeSetDiff")
+        .contains(tool)) return Set.of(ActionCapability.READ);
     if (Set.of("proposeTextDocumentChangeSet", "discardTextDocumentChangeSet").contains(tool))
       return Set.of(ActionCapability.LOCAL_WRITE);
     if (Set.of(

@@ -2,7 +2,6 @@ package dev.mikoto2000.rei.core;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
-import dev.mikoto2000.rei.event.CredentialRedactor;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
@@ -36,7 +35,23 @@ public final class TextDocumentChangeSetService {
    * @param replacement 置換
    */
   public record Operation(
-      String kind, String path, String target, String expectedText, String replacement) {}
+      String kind,
+      String path,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String target,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String expectedText,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String replacement,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String baseVersion,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false)
+          List<TextChangeSetService.Edit> edits) {
+    public Operation {
+      edits = edits == null ? null : List.copyOf(edits);
+    }
+
+    public Operation(
+        String kind, String path, String target, String expectedText, String replacement) {
+      this(kind, path, target, expectedText, replacement, null, null);
+    }
+  }
 
   /**
    * 共通の実行基盤で受け渡す要求を表す。
@@ -105,6 +120,8 @@ public final class TextDocumentChangeSetService {
    * @param staging 反映前の準備領域
    * @param currentMatches 現在一致結果
    */
+  @com.fasterxml.jackson.annotation.JsonInclude(
+      com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
   public record View(
       String id,
       String status,
@@ -116,7 +133,19 @@ public final class TextDocumentChangeSetService {
       String phase,
       int stagingFiles,
       List<StagingView> staging,
-      boolean currentMatches) {}
+      boolean currentMatches,
+      TextDiff.Info diffInfo,
+      List<TextDiff.FileSummary> changes,
+      int changedFiles,
+      int changeCount,
+      TextEditEngine.Failure error) {
+    public View {
+      files = files == null ? List.of() : List.copyOf(files);
+      warnings = warnings == null ? List.of() : List.copyOf(warnings);
+      staging = staging == null ? List.of() : List.copyOf(staging);
+      changes = changes == null ? List.of() : List.copyOf(changes);
+    }
+  }
 
   /**
    * 共通の実行基盤で受け渡す保存済みを表す。
@@ -180,7 +209,7 @@ public final class TextDocumentChangeSetService {
                   .streamReadConstraints(
                       com.fasterxml.jackson.core.StreamReadConstraints.builder()
                           .maxNestingDepth(16)
-                          .maxStringLength(1048576)
+                          .maxStringLength(8388608)
                           .maxNumberLength(64)
                           .build())
                   .build())
@@ -207,6 +236,14 @@ public final class TextDocumentChangeSetService {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (request == null || request.operations().isEmpty() || request.operations().size() > 32)
       throw new IllegalArgumentException("1..32 text operations required");
+    long inputBytes = 0;
+    for (var op : request.operations())
+      if (op != null)
+        inputBytes +=
+            TextEditEngine.inputBytes(op.expectedText())
+                + TextEditEngine.inputBytes(op.replacement())
+                + TextEditEngine.inputBytes(op.edits());
+    TextEditEngine.requestSize(inputBytes);
     var changes = new ArrayList<TextDocumentTransaction.Change>();
     var paths = new HashSet<String>();
     int bytes = 0;
@@ -217,6 +254,26 @@ public final class TextDocumentChangeSetService {
         throw new IllegalArgumentException("UPDATE/CREATE/DELETE/RENAME required");
       selected(root, op.path(), paths);
       String current = TextDocumentTransaction.read(root, op.path());
+      if (op.edits() != null) {
+        if (!op.kind().equals("UPDATE")
+            || op.expectedText() != null
+            || op.replacement() != null
+            || op.target() != null)
+          throw new IllegalArgumentException(
+              "Partial edits require UPDATE without full text or target");
+        TextEditEngine.verifyVersion(op.path(), current, op.baseVersion());
+        String replacement = TextEditEngine.edit(op.path(), current, op.edits()).text();
+        TextDocumentTransaction.text(replacement);
+        if (Objects.equals(current, replacement))
+          throw new IllegalArgumentException("Actual update required");
+        changes.add(new TextDocumentTransaction.Change(op.path(), current, replacement));
+        continue;
+      }
+      if (TextEditEngine.inputBytes(op.expectedText()) > 65536
+          || TextEditEngine.inputBytes(op.replacement()) > 65536)
+        throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", op.path(), null, List.of(), null);
+      if (op.baseVersion() != null)
+        throw new IllegalArgumentException("baseVersion requires partial edits");
       if (op.kind().equals("CREATE")) {
         if (current != null || op.expectedText() != null || op.target() != null)
           throw new IllegalArgumentException("Create needs an absent target and no baseline");
@@ -224,7 +281,12 @@ public final class TextDocumentChangeSetService {
         changes.add(new TextDocumentTransaction.Change(op.path(), null, op.replacement()));
       } else {
         if (current == null || op.expectedText() == null || !current.equals(op.expectedText()))
-          throw new IllegalArgumentException("Exact existing baseline required");
+          throw TextEditEngine.failure(
+              "VERSION_MISMATCH",
+              op.path(),
+              null,
+              List.of(),
+              TextDocumentTransaction.hash(current));
         TextDocumentTransaction.text(op.expectedText());
         switch (op.kind()) {
           case "UPDATE" -> {
@@ -254,8 +316,8 @@ public final class TextDocumentChangeSetService {
     for (var change : changes)
       for (String value : new String[] {change.before(), change.after()})
         if (value != null) bytes += value.getBytes(StandardCharsets.UTF_8).length;
-    if (bytes > 262144)
-      throw new IllegalArgumentException("Combined baseline/proposal text exceeds 256KiB");
+    if (bytes > TextWriteLimits.totalBytes())
+      throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", null, null, List.of(), null);
     String id = UUID.randomUUID().toString();
     TextDocumentTransaction.preflight(root, id, changes);
     var saved =
@@ -265,7 +327,9 @@ public final class TextDocumentChangeSetService {
             root.toString(),
             owner.conversationId(),
             clock.instant(),
-            request.operations(),
+            request.operations().stream()
+                .map(op -> new Operation(op.kind(), op.path(), op.target(), null, null))
+                .toList(),
             List.copyOf(changes));
     String payload = encode(saved), sha = TextDocumentTransaction.hash(payload);
     db.sql(
@@ -289,9 +353,13 @@ public final class TextDocumentChangeSetService {
 
   /** 対象の状態や内容を調べ、呼び出し元が確認できる情報として返す。 */
   public View inspect(AgentRunContext owner, String id) throws IOException {
+    return inspect(owner, id, true);
+  }
+
+  private View inspect(AgentRunContext owner, String id, boolean preview) throws IOException {
     var row = owned(owner, id);
     reconcile(row);
-    return view(owned(owner, id));
+    return view(owned(owner, id), preview);
   }
 
   /** 共通の実行基盤で用いる破棄を返す。 */
@@ -321,13 +389,13 @@ public final class TextDocumentChangeSetService {
     owner(owner, true);
     var row = owned(owner, id);
     exact(row, sha);
-    if (row.status().equals("APPLIED")) return view(row);
+    if (row.status().equals("APPLIED")) return view(row, false);
     if (!row.status().equals("PROPOSED"))
       throw new IllegalStateException("Consumed or uncertain document set; inspect without replay");
     Path root = Path.of(row.saved().root());
     if (!TextDocumentTransaction.matches(root, row.saved().changes(), false)) {
       finish(row, "PROPOSED", "STALE", List.of("Baseline changed; no writes"));
-      return inspect(owner, id);
+      return inspect(owner, id, false);
     }
     if (!ACTIVE.add(id)) throw new IllegalStateException("Document apply already active");
     try {
@@ -346,7 +414,7 @@ public final class TextDocumentChangeSetService {
         cleanupTerminal(row);
         committed.accept(row.saved().changes());
       }
-      return inspect(owner, id);
+      return inspect(owner, id, false);
     } catch (IOException | RuntimeException failure) {
       try {
         var current = owned(owner, id);
@@ -551,9 +619,22 @@ public final class TextDocumentChangeSetService {
   }
 
   /** 共通の実行基盤で用いる表示内容を返す。 */
+  public TextDiff.Page diffPage(
+      AgentRunContext owner, String id, String sha, int offset, int maxBytes) throws IOException {
+    var row = owned(owner, id);
+    exact(row, sha);
+    return TextDiff.page(row.saved().changes(), offset, maxBytes);
+  }
+
   private View view(Row row) throws IOException {
+    return view(row, true);
+  }
+
+  private View view(Row row, boolean preview) throws IOException {
     var files = new ArrayList<FileView>();
-    var diff = new StringBuilder();
+    var page =
+        preview ? TextDiff.page(row.saved().changes(), 0, TextWriteLimits.diffBytes()) : null;
+    var summaries = TextDiff.summaries(row.saved().changes());
     Path root = Path.of(row.saved().root());
     for (var change : row.saved().changes()) {
       var current = TextDocumentTransaction.fingerprint(root, change.path());
@@ -567,13 +648,6 @@ public final class TextDocumentChangeSetService {
               change.after() != null,
               current.available(),
               current.exists()));
-      diff.append("--- ")
-          .append(change.path())
-          .append(" (baseline)\n+++ ")
-          .append(change.path())
-          .append(" (proposal)\n");
-      append(diff, change.before(), '-');
-      append(diff, change.after(), '+');
     }
     var staging = new ArrayList<StagingView>();
     var seen = new HashSet<String>();
@@ -601,20 +675,18 @@ public final class TextDocumentChangeSetService {
         row.status(),
         row.sha(),
         List.copyOf(files),
-        CredentialRedactor.redact(diff.toString()),
+        page == null ? "" : page.diff(),
         row.saved().createdAt(),
         row.warnings(),
         row.phase(),
         (int) staging.stream().filter(StagingView::exists).count(),
         List.copyOf(staging),
-        matching);
-  }
-
-  /** 既存の記録へ経緯を残すため、テキスト文書変更集合サービスを追記する。 */
-  private static void append(StringBuilder out, String text, char prefix) {
-    if (text == null) return;
-    for (String line : text.split("\n", -1)) out.append(prefix).append(line).append('\n');
-    if (!text.endsWith("\n")) out.append("\\ No newline at end of file\n");
+        matching,
+        page == null ? null : page.info(),
+        summaries,
+        summaries.size(),
+        summaries.stream().mapToInt(TextDiff.FileSummary::changeCount).sum(),
+        TextEditEngine.outcome(row.status(), null, null));
   }
 
   /** 共通の実行基盤に関する完全一致を処理する。 */
@@ -650,7 +722,7 @@ public final class TextDocumentChangeSetService {
   private String encode(Object value) {
     try {
       String payload = json.writeValueAsString(value);
-      if (payload.getBytes(StandardCharsets.UTF_8).length > 1048576)
+      if (payload.getBytes(StandardCharsets.UTF_8).length > TextWriteLimits.payloadBytes())
         throw new IllegalArgumentException("Document payload exceeds 1MiB");
       return payload;
     } catch (IOException invalid) {
@@ -661,7 +733,8 @@ public final class TextDocumentChangeSetService {
   /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   private <T> T decode(String value, Class<T> type) {
     try {
-      if (value == null || value.getBytes(StandardCharsets.UTF_8).length > 1048576)
+      if (value == null
+          || value.getBytes(StandardCharsets.UTF_8).length > TextWriteLimits.payloadBytes())
         throw new IllegalStateException("Document payload exceeds bounds");
       return json.readValue(value, type);
     } catch (IOException invalid) {

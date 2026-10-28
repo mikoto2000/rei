@@ -356,7 +356,7 @@ public class Tools {
   /** 後続の判断で選べる候補を用意するため、テキスト文書変更集合を提案する。 */
   @Tool(
       description =
-          "既存Text Change Setを複数fileへ拡張した保存提案。request={operations:[{kind:UPDATE|CREATE|DELETE|RENAME,path,target,expectedText,replacement}]}。32操作/64target、各64KiB/元と提案合計256KiB、既存parent内UTF-8のみ。Createはbaselineなし、renameのtargetは欠落file。per-file SHAとwhole proposalSha256/diffを確認し明示Applyしてください。fileは変更しません。")
+          "既存Text Change Setを複数fileへ拡張した保存提案。request={operations:[{kind:UPDATE|CREATE|DELETE|RENAME,path,target,expectedText,replacement,baseVersion,edits:[{oldText,newText}]}]}。UPDATEは全文またはbaseVersion/editsを選択し併用不可。32操作/64target、各1MiB/元と提案合計8MiB、全文入力各64KiB/入力合計256KiB、部分編集各64hunk/64KiB。既存parent内UTF-8のみ。Createはbaselineなし、renameのtargetは欠落file。per-file SHAとwhole proposalSha256/diffを確認し明示Applyしてください。fileは変更しません。")
   TextDocumentChangeSetService.View proposeTextDocumentChangeSet(
       TextDocumentChangeSetService.Request request) throws IOException {
     return changeSets().proposeDocuments(diagnosedOwner(), request);
@@ -370,6 +370,42 @@ public class Tools {
     return changeSets().inspectDocuments(diagnosedOwner(), id);
   }
 
+  @Tool(
+      description =
+          "保存した複数file提案の差分を予算付きで読みます。id/proposalSha256と返却nextOffsetをoffsetへそのまま指定。maxBytesは256..65536。本文は秘密情報をマスク済み。省略ページを確認してから既存Applyへ進みます。READのみ、現在fileは変更しません。")
+  TextDiff.Page getTextDocumentChangeSetDiff(
+      String id,
+      String proposalSha256,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer offset,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer maxBytes)
+      throws IOException {
+    return changeSets()
+        .documentDiffPage(
+            diagnosedOwner(),
+            id,
+            proposalSha256,
+            offset == null ? 0 : offset,
+            maxBytes == null ? TextWriteLimits.diffBytes() : maxBytes);
+  }
+
+  @Tool(
+      description =
+          "保存した単一file提案の差分を予算付きで読みます。id/proposalSha256と返却nextOffsetをoffsetへそのまま指定。maxBytesは256..65536。省略情報を確認し必要な全ページを既存Apply前にレビューしてください。READのみ。")
+  TextDiff.Page getTextChangeSetDiff(
+      String id,
+      String proposalSha256,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer offset,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer maxBytes)
+      throws IOException {
+    return changeSets()
+        .diffPage(
+            changeSetProject(),
+            id,
+            proposalSha256,
+            offset == null ? 0 : offset,
+            maxBytes == null ? TextWriteLimits.diffBytes() : maxBytes);
+  }
+
   /** 共通の実行基盤で用いる破棄テキスト文書変更集合を返す。 */
   @Tool(description = "保存した未適用の複数file提案を、正確な全体SHAで破棄します。対象fileを変更せず、実行中やUNKNOWNの復旧記録は破棄できません。")
   TextDocumentChangeSetService.View discardTextDocumentChangeSet(String id, String proposalSha256)
@@ -380,7 +416,7 @@ public class Tools {
   /** 指定された変更を有効にするため、テキスト文書変更集合を反映する。 */
   @Tool(
       description =
-          "保存複数file案の正確なid/proposalSha256と全baseline一致を確認し、一回だけlogical transactionでApplyします。全fileの再検証後だけAPPLIED。通常失敗はrollback、外部編集/結果不明はUNKNOWNを保持し自動再送しません。EXCLUSIVE/LOCAL_WRITE/DESTRUCTIVEが必要です。現在一致currentMatchesとstagingを確認してください。")
+          "保存複数file案の正確なid/proposalSha256と全baseline一致を確認し、一回だけlogical transactionでApplyします。全fileの再検証後だけAPPLIED。通常失敗はrollback、外部編集/結果不明はUNKNOWNを保持し自動再送しません。EXCLUSIVE/LOCAL_WRITE/DESTRUCTIVEが必要です。簡潔な結果のcurrentMatches、新SHA、changesの変更範囲は保存bytesの確認です。直後の全文再読は不要ですが構文/意味/testの検証は別途必要です。失敗時はerror.codeとstagingを確認してください。")
   TextDocumentChangeSetService.View applyTextDocumentChangeSet(String id, String proposalSha256)
       throws IOException {
     return changeSets()
@@ -465,7 +501,7 @@ public class Tools {
   /** 後続の判断で選べる候補を用意するため、テキスト変更集合を提案する。 */
   @Tool(
       description =
-          "単一UTF-8ファイルのChange Setを提案・保存します。全文方式は{path,expectedText,replacement}。部分編集は{path,baseVersion,edits:[{oldText,newText}]}で最大64 hunk、入力合計64KiB、全oldTextを元版に一意に照合し重複範囲・古いSHAを拒否。baseVersionは読み取りのSHA-256。提案は対象fileを変更しません。diff/proposalSha256を確認し、既存の明示Apply/Discardフローを使います。")
+          "単一UTF-8ファイルのChange Setを提案・保存します。全文方式は{path,expectedText,replacement}。部分編集は{path,baseVersion,edits:[{oldText,newText}]}で最大64 hunk、編集入力合計64KiB、対象と生成後各1MiB、全oldTextを元版に一意に照合し重複範囲・古いSHAを拒否。baseVersionは読み取りのSHA-256。提案は対象fileを変更しません。diff/proposalSha256を確認し、既存の明示Apply/Discardフローを使います。")
   TextChangeSetService.View proposeTextChangeSet(TextChangeSetService.Request request)
       throws IOException {
     return changeSets().propose(changeSetProject(), request);
@@ -502,7 +538,7 @@ public class Tools {
   /** 指定された変更を有効にするため、テキスト変更集合を反映する。 */
   @Tool(
       description =
-          "確認したChange Set IDと正確なproposalSha256を指定し、元ファイルhashが一致する保存提案だけを一回適用します。古い内容はSTALE、結果不明は再送拒否。APPLIEDは保存receiptで現在hashも確認してください。LOCAL_WRITE権限を必要とします。")
+          "確認したChange Set IDと正確なproposalSha256を指定し、元ファイルhashが一致する保存提案だけを一回適用します。古い内容はSTALE、結果不明は再送拒否。APPLIEDとcurrentMatchesと新SHAは保存bytesの検証です。保存確認だけの全文再読は不要。構文/意味/testは別途検証。歴史receiptと現在版は区別してください。LOCAL_WRITE権限を必要とします。")
   TextChangeSetService.View applyTextChangeSet(String id, String proposalSha256)
       throws IOException {
     return changeSets().apply(changeSetProject(), id, proposalSha256, changeSetWriter());
@@ -3380,7 +3416,7 @@ public class Tools {
       Write one or more known files in a single call: replace complete contents or append to each file.
       Always pass a non-empty files array, even for one file. Put path, content, append, and charset inside each
       files element, not at the top level. append: true appends; append: false or omitted replaces complete contents.
-      Use this for full-file writes or appending chunks. For a small edit to existing text, prefer applyTextDiff.
+      Use this for direct full-file writes or appending chunks. Prefer proposeTextChangeSet or proposeTextDocumentChangeSet for reviewed UTF-8 edits. Use applyTextDiff for legacy non-UTF-8 text edits.
       @param files 書き込むファイルの空でないリスト。各要素に必須の path と content、任意の append と charset を指定する。
       @return ファイルごとの書き込み結果。path で識別できる。
 
@@ -3794,7 +3830,8 @@ public class Tools {
       description =
           """
   Apply a targeted textual replacement to an existing file.
-  Prefer this for small, localized edits that should leave the surrounding file unchanged.
+  Use this for legacy non-UTF-8 small, localized edits that leave the surrounding file unchanged.
+  For UTF-8 edits prefer proposeTextChangeSet or proposeTextDocumentChangeSet.
   oldText がファイル内に一意に存在する場合だけ newText に置換します。
   @param pathStr 対象ファイルのパス
   @param oldText 置換前の期待文字列
@@ -3813,27 +3850,45 @@ public class Tools {
     }
 
     java.nio.file.Path path = resolveProjectPath(pathStr);
-    ResolvedTextFile original = readTextFileContent(path, charset);
+    byte[] baseline = Files.readAllBytes(path);
+    ResolvedTextFile original = decodeTextFileContent(baseline, charset);
     String originalContent = original.content();
-    int firstIndex = originalContent.indexOf(oldText);
-    if (firstIndex < 0) {
-      return new TextDiffApplyResult(false, false, "oldText が見つかりません");
+    String updatedContent;
+    try {
+      updatedContent =
+          TextEditEngine.edit(
+                  originalContent, List.of(new TextChangeSetService.Edit(oldText, newText)))
+              .text();
+    } catch (IllegalArgumentException invalid) {
+      if (invalid instanceof dev.mikoto2000.rei.toolcontract.StructuredToolFailure failure) {
+        String message =
+            switch (failure.code()) {
+              case "TEXT_NOT_FOUND" -> "oldText が見つかりません";
+              case "AMBIGUOUS_MATCH" -> "oldText が複数箇所に一致しました";
+              default -> failure.code();
+            };
+        return new TextDiffApplyResult(
+            false,
+            false,
+            message,
+            TextEditEngine.detail(
+                failure.code(), pathStr, 0, List.of(), FileSnapshots.hash(baseline)));
+      }
+      return new TextDiffApplyResult(false, false, invalid.getMessage());
     }
-    int secondIndex = originalContent.indexOf(oldText, firstIndex + oldText.length());
-    if (secondIndex >= 0) {
-      return new TextDiffApplyResult(false, false, "oldText が複数箇所に一致しました");
-    }
-
-    String updatedContent =
-        originalContent.substring(0, firstIndex)
-            + newText
-            + originalContent.substring(firstIndex + oldText.length());
     if (updatedContent.equals(originalContent)) {
       return new TextDiffApplyResult(true, false, "変更はありません");
     }
 
-    Files.writeString(
-        path, updatedContent, original.charset(), StandardOpenOption.TRUNCATE_EXISTING);
+    String encodedText =
+        decodeStrict(baseline, original.charset()).startsWith("\ufeff")
+            ? "\ufeff" + updatedContent
+            : updatedContent;
+    var encoded = original.charset().newEncoder().encode(java.nio.CharBuffer.wrap(encodedText));
+    byte[] replacement = new byte[encoded.remaining()];
+    encoded.get(replacement);
+    TextDocumentTransaction.writeBytes(
+        path, baseline, replacement, TextDocumentTransaction::replace);
     recordTextEdit(path);
     return new TextDiffApplyResult(true, true, "差分を適用しました");
   }
@@ -3855,7 +3910,14 @@ public class Tools {
    * @param changed 変更済み
    * @param message メッセージ
    */
-  public record TextDiffApplyResult(boolean success, boolean changed, String message) {}
+  @com.fasterxml.jackson.annotation.JsonInclude(
+      com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+  public record TextDiffApplyResult(
+      boolean success, boolean changed, String message, TextEditEngine.Failure error) {
+    public TextDiffApplyResult(boolean success, boolean changed, String message) {
+      this(success, changed, message, null);
+    }
+  }
 
   /** 必要な内容を参照できるよう、バイナリファイルを読み取る。 */
   @Tool(
@@ -4047,12 +4109,14 @@ public class Tools {
   /** 必要な内容を参照できるよう、テキストファイル内容を読み取る。 */
   private ResolvedTextFile readTextFileContent(java.nio.file.Path path, String charset)
       throws IOException {
+    return decodeTextFileContent(Files.readAllBytes(path), charset);
+  }
+
+  private ResolvedTextFile decodeTextFileContent(byte[] bytes, String charset) throws IOException {
     if (charset != null && !charset.isBlank()) {
       Charset resolvedCharset = resolveCharset(charset);
-      return new ResolvedTextFile(
-          stripBom(readStringStrict(path, resolvedCharset)), resolvedCharset);
+      return new ResolvedTextFile(stripBom(decodeStrict(bytes, resolvedCharset)), resolvedCharset);
     }
-    byte[] bytes = Files.readAllBytes(path);
     ResolvedTextFile bomDecoded = decodeBom(bytes);
     if (bomDecoded != null) {
       return bomDecoded;
@@ -4073,11 +4137,6 @@ public class Tools {
       IO.println(String.format("%s は UTF-8 として読めなかったため CP932 で読み直したよ", displayPath));
     }
     return resolved.content().lines().toList();
-  }
-
-  /** 必要な内容を参照できるよう、文字列表現厳格なを読み取る。 */
-  private String readStringStrict(java.nio.file.Path path, Charset charset) throws IOException {
-    return decodeStrict(Files.readAllBytes(path), charset);
   }
 
   /** 受信した内容を利用できるよう、厳格なを復元する。 */
