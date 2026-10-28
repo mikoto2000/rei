@@ -67,4 +67,32 @@ class PagedFileSearchTest {
       assertEquals(9, requests);
     }
   }
+
+  @Test
+  @org.junit.jupiter.api.Tag("integration")
+  void cursorResumesInAFreshJvm() throws Exception {
+    Files.writeString(root.resolve("a.txt"), "hit\n" + "gap\n".repeat(998) + "hit\n");
+    try (var gate = new StorageMigrationCoordinator(root.resolve("data"))) { gate.prepare(); }
+    String cursor;
+    try (var scope = AgentRunScope.open(new AgentRunContext("restart", "chat", root, "project"))) {
+      var query = new Tools.GrepQuery("hit", "a.txt", false, true, false, false, 0, 0, null, true, null, null);
+      cursor = new PagedFileSearch(new Tools(), new ReadingStateStore(new StorageDatabase(root.resolve("data"))))
+          .read(new PagedFileSearch.Request(List.of(query), 0, 512, 2048, 1, 1, null), root).resultCursor();
+    }
+    assertNotNull(cursor);
+    String classpath = System.getProperty("surefire.test.class.path", System.getProperty("java.class.path"));
+    Path output = root.resolve("resumed.json");
+    Path arguments = root.resolve("restart.args");
+    Files.writeString(arguments, "-classpath\n\"" + classpath.replace('\\', '/') + "\"\n"
+        + ReadingCursorRestartProbe.class.getName() + "\n\"" + root.toString().replace('\\', '/') + "\"\n"
+        + cursor + "\n\"" + output.toString().replace('\\', '/') + "\"\n");
+    String binary = System.getProperty("os.name").startsWith("Windows") ? "java.exe" : "java";
+    var child = new ProcessBuilder(Path.of(System.getProperty("java.home"), "bin", binary).toString(), "@" + arguments)
+        .redirectOutput(root.resolve("restart.stdout").toFile()).redirectError(root.resolve("restart.stderr").toFile()).start();
+    try {
+      assertTrue(child.waitFor(60, java.util.concurrent.TimeUnit.SECONDS));
+      assertEquals(0, child.exitValue(), Files.readString(root.resolve("restart.stderr")));
+      assertEquals(1000, StorageDatabase.JSON.readTree(Files.readString(output)).path("files").get(0).path("sections").get(0).path("startLine").asInt());
+    } finally { if (child.isAlive()) { child.destroyForcibly(); child.waitFor(10, java.util.concurrent.TimeUnit.SECONDS); } }
+  }
 }
