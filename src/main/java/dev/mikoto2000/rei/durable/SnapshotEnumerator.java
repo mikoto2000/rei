@@ -42,6 +42,12 @@ public final class SnapshotEnumerator {
     Path root = Path.of(scope.root());
     var captured = new ArrayList<DurableTaskStore.Captured>();
     try {
+      var source = store.source(scope, task);
+      if (source.mode().equals("COMMIT")) {
+        var page = GitSnapshotSource.page(root, source.reference(), directory.cursor(), limit, store.exclusions(scope, task));
+        store.captured(scope, task, directory, page.entries(), page.finished());
+        return store.status(scope, task);
+      }
       Path current = root.resolve(directory.path());
       if (Files.isSymbolicLink(current) || !current.toRealPath().startsWith(root.toRealPath()))
         throw new IOException("Directory changed");
@@ -104,6 +110,10 @@ public final class SnapshotEnumerator {
         || !before.lastModifiedTime().equals(after.lastModifiedTime())
         || !java.util.Objects.equals(before.fileKey(), after.fileKey()))
       return entry(relative, null, null, "", "SOURCE_CHANGED_DURING_CAPTURE", false);
+    return capturedBytes(relative, bytes);
+  }
+
+  static DurableTaskStore.Captured capturedBytes(String relative, byte[] bytes) {
     String text;
     try {
       text = StandardCharsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
@@ -121,7 +131,7 @@ public final class SnapshotEnumerator {
     }
   }
 
-  private static DurableTaskStore.Captured entry(String path, byte[] bytes, String text,
+  static DurableTaskStore.Captured entry(String path, byte[] bytes, String text,
       String reason, String error, boolean directory) {
     String version = "";
     if (bytes != null) {

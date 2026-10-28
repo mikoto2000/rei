@@ -44,6 +44,8 @@ public final class DurableTaskStore {
 
   public record Verification(boolean complete, String reason) {}
 
+  public record Source(String mode, String reference) {}
+
   record Directory(String path, String cursor) {}
 
   record Captured(String path, byte[] content, String text, String version, String reason, String error, boolean directory) {
@@ -69,9 +71,11 @@ public final class DurableTaskStore {
 
   public Task begin(Scope scope, String goal, String mode, String sourceRef, List<String> excludes,
       int maxFiles, long maxBytes) {
-    if (!"WORKTREE".equals(mode) || maxFiles < 1 || maxFiles > 200000 || maxBytes < 1
+    if (!("WORKTREE".equals(mode) || "COMMIT".equals(mode)) || maxFiles < 1 || maxFiles > 200000 || maxBytes < 1
         || maxBytes > 16L * 1024 * 1024 * 1024 || excludes == null || excludes.size() > 64)
       throw new IllegalArgumentException("INVALID_SNAPSHOT_OPTIONS");
+    if ("COMMIT".equals(mode) && (sourceRef == null || !sourceRef.matches("[0-9a-f]{40}|[0-9a-f]{64}")))
+      throw new IllegalArgumentException("FULL_COMMIT_ID_REQUIRED");
     for (var exclude : excludes) {
       require(exclude, 1024);
       if (exclude.indexOf('\n') >= 0 || exclude.indexOf('\0') >= 0)
@@ -91,6 +95,21 @@ public final class DurableTaskStore {
 
   public Task status(Scope scope, String id) {
     return read(db -> status(db, scope, id));
+  }
+
+  public Source source(Scope scope, String task) {
+    return read(db -> {
+      var owner = status(db, scope, task);
+      return source(db, owner.snapshot());
+    });
+  }
+
+  private Source source(Connection db, String snapshot) throws Exception {
+    try (var query = statement(db, "SELECT mode,source_ref FROM durable_snapshots WHERE id=?", snapshot);
+        var row = query.executeQuery()) {
+      row.next();
+      return new Source(row.getString(1), row.getString(2));
+    }
   }
 
   private Task status(Connection db, Scope scope, String id) throws Exception {
@@ -175,7 +194,8 @@ public final class DurableTaskStore {
       var owner = status(db, scope, task);
       if (!owner.state().equals("ACTIVE") || !owner.enumeration().equals("SCANNING"))
         throw new IllegalStateException("TASK_NOT_SCANNING");
-      String cursor = entries.isEmpty() ? directory.cursor() : name(entries.getLast().path());
+      String cursor = entries.isEmpty() ? directory.cursor()
+          : source(db, owner.snapshot()).mode().equals("COMMIT") ? entries.getLast().path() : name(entries.getLast().path());
       if (execute(db, "UPDATE durable_directories SET cursor=?,state=? WHERE task=? AND path=? AND cursor=? AND state='PENDING'",
           cursor, finished ? "DONE" : "PENDING", task, directory.path(), directory.cursor()) != 1)
         throw new IllegalStateException("SCAN_OWNERSHIP_CHANGED");
