@@ -177,7 +177,8 @@ public final class JapaneseHolidayService {
       var data = new Data(dates, Set.copyOf(years), Set.copyOf(complete), before, success);
       state = new State(data, before, attempt, success, null);
     } catch (IOException | SecurityException e) {
-      state = new State(previous.data(), before, attempt, previous.successAt(), e.getMessage());
+      String error = e.getMessage() == null ? e.getClass().getSimpleName() : e.getMessage();
+      state = new State(previous.data(), before, attempt, previous.successAt(), error);
       LOG.warn(
           "Holiday CSV reload failed; retaining previous data: {}", e.getClass().getSimpleName());
     }
