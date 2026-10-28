@@ -17,11 +17,22 @@ import java.util.PriorityQueue;
 
 /** Bounded pages with a persisted directory frontier; no depth cutoff or silent list truncation. */
 public final class SnapshotEnumerator {
+  @FunctionalInterface
+  interface FileReader {
+    byte[] read(Path path) throws IOException;
+  }
+
   private static final int MAX_FILE_BYTES = 64 * 1024 * 1024;
   private final DurableTaskStore store;
+  private final FileReader reader;
 
   public SnapshotEnumerator(DurableTaskStore store) {
+    this(store, SnapshotEnumerator::readBytes);
+  }
+
+  SnapshotEnumerator(DurableTaskStore store, FileReader reader) {
     this.store = store;
+    this.reader = reader;
   }
 
   public DurableTaskStore.Task step(DurableTaskStore.Scope scope, String task, int limit) {
@@ -49,18 +60,27 @@ public final class SnapshotEnumerator {
       var ordered = new ArrayList<>(names);
       ordered.sort(Comparator.naturalOrder());
       var exclusions = store.exclusions(scope, task);
+      long batchBytes = 0;
       for (var name : ordered) {
         String relative = directory.path().isEmpty() ? name : directory.path() + "/" + name;
-        captured.add(capture(root, relative, exclusions));
+        DurableTaskStore.Captured entry;
+        try {
+          entry = capture(root, relative, exclusions);
+        } catch (IOException denied) {
+          entry = entry(relative, null, null, "", denied instanceof java.nio.file.AccessDeniedException ? "ACCESS_DENIED" : "SOURCE_UNAVAILABLE", false);
+        }
+        captured.add(entry);
+        batchBytes += entry.size();
+        if (batchBytes >= 8L * 1024 * 1024) break;
       }
-      store.captured(scope, task, directory, captured, remaining <= limit);
+      store.captured(scope, task, directory, captured, remaining == captured.size());
     } catch (IOException error) {
       store.scanFailed(scope, task, directory.path(), error instanceof java.nio.file.AccessDeniedException ? "ACCESS_DENIED" : "SOURCE_UNAVAILABLE");
     }
     return store.status(scope, task);
   }
 
-  private static DurableTaskStore.Captured capture(Path root, String relative, List<String> exclusions)
+  private DurableTaskStore.Captured capture(Path root, String relative, List<String> exclusions)
       throws IOException {
     Path path = root.resolve(relative);
     String reason = "";
@@ -78,10 +98,7 @@ public final class SnapshotEnumerator {
     if (before.isDirectory()) return entry(relative, null, null, "", "", true);
     if (!before.isRegularFile()) return entry(relative, null, null, "UNSUPPORTED_FILE_TYPE", "", false);
     if (before.size() > MAX_FILE_BYTES) return entry(relative, null, null, "", "FILE_BYTE_LIMIT", false);
-    byte[] bytes;
-    try (var input = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS)) {
-      bytes = input.readNBytes(MAX_FILE_BYTES + 1);
-    }
+    byte[] bytes = reader.read(path);
     var after = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
     if (bytes.length > MAX_FILE_BYTES || before.size() != after.size()
         || !before.lastModifiedTime().equals(after.lastModifiedTime())
@@ -96,6 +113,12 @@ public final class SnapshotEnumerator {
     }
     if (text.indexOf('\0') >= 0) return entry(relative, null, null, "BINARY_FILE", "", false);
     return entry(relative, bytes, text, "", "", false);
+  }
+
+  private static byte[] readBytes(Path path) throws IOException {
+    try (var input = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS)) {
+      return input.readNBytes(MAX_FILE_BYTES + 1);
+    }
   }
 
   private static DurableTaskStore.Captured entry(String path, byte[] bytes, String text,

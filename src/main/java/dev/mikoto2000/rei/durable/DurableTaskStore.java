@@ -55,6 +55,10 @@ public final class DurableTaskStore {
     public byte[] content() {
       return content == null ? null : content.clone();
     }
+
+    long size() {
+      return content == null ? 0 : content.length;
+    }
   }
 
   private final Access database;
@@ -187,7 +191,7 @@ public final class DurableTaskStore {
           execute(db, "INSERT INTO durable_directories(task,path) VALUES(?,?) ON CONFLICT DO NOTHING", task, entry.path());
           continue;
         }
-        long size = entry.content() == null ? 0 : entry.content().length;
+        long size = entry.size();
         if (entry.reason().isEmpty() && entry.error().isEmpty() && (count >= maxFiles || bytes + size > maxBytes)) {
           execute(db, "UPDATE durable_snapshots SET state='FAILED',reason=? WHERE id=?", count >= maxFiles ? "FILE_LIMIT" : "BYTE_LIMIT", owner.snapshot());
           // The unpersisted suffix remains explicit; no seal is possible after this failure.
