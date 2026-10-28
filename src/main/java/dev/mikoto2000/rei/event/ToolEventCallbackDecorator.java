@@ -133,6 +133,10 @@ public class ToolEventCallbackDecorator
                 toolName,
                 new ErrorInformation(
                     e.getClass().getSimpleName(), summarize(e.getMessage()), null)));
+        if (!Thread.currentThread().isInterrupted()) {
+          String failure = dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.toolFailureResult(e);
+          if (failure != null) return failure;
+        }
         if (FILE_TOOLS.contains(toolName) && !Thread.currentThread().isInterrupted()) {
           var diagnostic = dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(e);
           if (diagnostic.code().equals("source_missing")

@@ -204,6 +204,8 @@ public class TextChangeSetService {
   public View propose(ProjectContext project, Request request) throws IOException {
     RunCancellation.propagate(null);
     if (request == null) throw new IllegalArgumentException("Change Set request required");
+    TextEditEngine.requestSize(TextEditEngine.inputBytes(request.expectedText())
+        + TextEditEngine.inputBytes(request.replacement()) + TextEditEngine.inputBytes(request.edits()));
     String snapshotText = null;
     if (request.edits() != null) {
       if (request.expectedText() != null || request.replacement() != null)
@@ -213,13 +215,9 @@ public class TextChangeSetService {
       var root = project.root().toRealPath();
       var file = resolve(root, request.path());
       String current = read(file);
-      String version =
-          request.baseVersion().startsWith("sha256:")
-              ? request.baseVersion().substring(7)
-              : request.baseVersion();
-      if (!hash(current).equals(version))
-        throw new IllegalArgumentException("File version mismatch; read and propose again");
-      String replacement = edit(current, request.edits());
+      TextEditEngine.verifyVersion(request.path(), current, request.baseVersion());
+      String replacement = TextEditEngine.edit(request.path(), current, request.edits()).text();
+      validateText(replacement);
       // Reuse all existing validation, ownership, durable proposal identity, diff and explicit
       // Apply.
       snapshotText = current;
@@ -235,8 +233,7 @@ public class TextChangeSetService {
     var file = resolve(root, request.path());
     var current = snapshotText == null ? read(file) : snapshotText;
     if (!current.equals(request.expectedText()))
-      throw new IllegalArgumentException(
-          "Baseline differs; read the current file and propose again");
+      throw TextEditEngine.failure("VERSION_MISMATCH", request.path(), null, List.of(), hash(current));
     var relative = root.relativize(file).toString().replace('\\', '/');
     var base = hash(current);
     var proposed = hash(request.replacement());
@@ -454,15 +451,15 @@ public class TextChangeSetService {
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
   private static String read(Path file) throws IOException {
-    if (Files.size(file) > 65536) throw new IllegalArgumentException("Text exceeds 64KiB");
+    if (Files.size(file) > TextWriteLimits.fileBytes()) throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", file.getFileName().toString(), null, List.of(), null);
     var bytes = new FileSnapshots().get(file.getParent(), file).bytes();
-    if (bytes.length > 65536) throw new IllegalArgumentException("Text exceeds 64KiB");
+    if (bytes.length > TextWriteLimits.fileBytes()) throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", file.getFileName().toString(), null, List.of(), null);
     for (byte value : bytes)
       if (value == 0) throw new IllegalArgumentException("Binary text is unsupported");
     try {
       return StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString();
     } catch (java.nio.charset.CharacterCodingException error) {
-      throw new IllegalArgumentException("UTF-8 text required");
+      throw TextEditEngine.failure("UNSUPPORTED_ENCODING", file.getFileName().toString(), null, List.of(), null);
     }
   }
 
@@ -470,8 +467,8 @@ public class TextChangeSetService {
   private static void validateText(String text) {
     if (text == null
         || text.indexOf(0) >= 0
-        || text.getBytes(StandardCharsets.UTF_8).length > 65536)
-      throw new IllegalArgumentException("UTF-8 replacement/baseline must be at most 64KiB");
+        || text.getBytes(StandardCharsets.UTF_8).length > TextWriteLimits.fileBytes())
+      throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", null, null, List.of(), null);
     try {
       StandardCharsets.UTF_8.newEncoder().encode(java.nio.CharBuffer.wrap(text));
     } catch (java.nio.charset.CharacterCodingException error) {
@@ -480,12 +477,6 @@ public class TextChangeSetService {
   }
 
   /** 共通の実行基盤で用いる編集を返す。 */
-  private static String edit(String baseline, List<Edit> edits) {
-    String result = TextEditEngine.edit(baseline, edits).text();
-    validateText(result);
-    return result;
-  }
-
   /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(String text) {
     try {

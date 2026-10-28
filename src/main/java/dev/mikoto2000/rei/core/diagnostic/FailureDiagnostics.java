@@ -9,6 +9,22 @@ import dev.mikoto2000.rei.event.ErrorInformation;
  * exposed.
  */
 public final class FailureDiagnostics {
+  /** A deliberately constructed, source-free JSON failure that is safe to return to the model. */
+  public static final class ToolFailure extends IllegalArgumentException {
+    private final String code;
+
+    public ToolFailure(String code, String json) {
+      super(json);
+      this.code = code;
+    }
+  }
+
+  /** Unwrap only trusted typed failures, never arbitrary exception messages. */
+  public static String toolFailureResult(Throwable error) {
+    for (int i = 0; error != null && i < 16; i++, error = error.getCause())
+      if (error instanceof ToolFailure) return error.getMessage();
+    return null;
+  }
   /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private FailureDiagnostics() {}
 
@@ -51,6 +67,8 @@ public final class FailureDiagnostics {
           || reactor.core.Exceptions.isCancel(cause))
         return diagnostic("cancelled", "処理が中断されました。保存済みの状態を確認してください。");
     for (var cause : causes) {
+      if (cause instanceof ToolFailure failure)
+        return diagnostic(failure.code, "編集条件を確認し、新しい提案を作成してください。自動再送はできません。");
       if (cause instanceof dev.mikoto2000.rei.core.contextbudget.RawResultPageException page)
         return page.diagnostic();
       if (cause instanceof dev.mikoto2000.rei.workcontext.WorkContextExtractionException extraction)

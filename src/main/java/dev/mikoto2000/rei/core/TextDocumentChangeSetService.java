@@ -36,7 +36,16 @@ public final class TextDocumentChangeSetService {
    * @param replacement 置換
    */
   public record Operation(
-      String kind, String path, String target, String expectedText, String replacement) {}
+      String kind, String path,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String target,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String expectedText,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String replacement,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String baseVersion,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) List<TextChangeSetService.Edit> edits) {
+    public Operation(String kind, String path, String target, String expectedText, String replacement) {
+      this(kind, path, target, expectedText, replacement, null, null);
+    }
+  }
 
   /**
    * 共通の実行基盤で受け渡す要求を表す。
@@ -180,7 +189,7 @@ public final class TextDocumentChangeSetService {
                   .streamReadConstraints(
                       com.fasterxml.jackson.core.StreamReadConstraints.builder()
                           .maxNestingDepth(16)
-                          .maxStringLength(1048576)
+                          .maxStringLength(8388608)
                           .maxNumberLength(64)
                           .build())
                   .build())
@@ -207,6 +216,11 @@ public final class TextDocumentChangeSetService {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (request == null || request.operations().isEmpty() || request.operations().size() > 32)
       throw new IllegalArgumentException("1..32 text operations required");
+    long inputBytes = 0;
+    for (var op : request.operations()) if (op != null)
+      inputBytes += TextEditEngine.inputBytes(op.expectedText()) + TextEditEngine.inputBytes(op.replacement())
+          + TextEditEngine.inputBytes(op.edits());
+    TextEditEngine.requestSize(inputBytes);
     var changes = new ArrayList<TextDocumentTransaction.Change>();
     var paths = new HashSet<String>();
     int bytes = 0;
@@ -217,6 +231,17 @@ public final class TextDocumentChangeSetService {
         throw new IllegalArgumentException("UPDATE/CREATE/DELETE/RENAME required");
       selected(root, op.path(), paths);
       String current = TextDocumentTransaction.read(root, op.path());
+      if (op.edits() != null) {
+        if (!op.kind().equals("UPDATE") || op.expectedText() != null || op.replacement() != null || op.target() != null)
+          throw new IllegalArgumentException("Partial edits require UPDATE without full text or target");
+        TextEditEngine.verifyVersion(op.path(), current, op.baseVersion());
+        String replacement = TextEditEngine.edit(op.path(), current, op.edits()).text();
+        TextDocumentTransaction.text(replacement);
+        if (Objects.equals(current, replacement)) throw new IllegalArgumentException("Actual update required");
+        changes.add(new TextDocumentTransaction.Change(op.path(), current, replacement));
+        continue;
+      }
+      if (op.baseVersion() != null) throw new IllegalArgumentException("baseVersion requires partial edits");
       if (op.kind().equals("CREATE")) {
         if (current != null || op.expectedText() != null || op.target() != null)
           throw new IllegalArgumentException("Create needs an absent target and no baseline");
@@ -224,7 +249,7 @@ public final class TextDocumentChangeSetService {
         changes.add(new TextDocumentTransaction.Change(op.path(), null, op.replacement()));
       } else {
         if (current == null || op.expectedText() == null || !current.equals(op.expectedText()))
-          throw new IllegalArgumentException("Exact existing baseline required");
+          throw TextEditEngine.failure("VERSION_MISMATCH", op.path(), null, List.of(), TextDocumentTransaction.hash(current));
         TextDocumentTransaction.text(op.expectedText());
         switch (op.kind()) {
           case "UPDATE" -> {
@@ -254,8 +279,8 @@ public final class TextDocumentChangeSetService {
     for (var change : changes)
       for (String value : new String[] {change.before(), change.after()})
         if (value != null) bytes += value.getBytes(StandardCharsets.UTF_8).length;
-    if (bytes > 262144)
-      throw new IllegalArgumentException("Combined baseline/proposal text exceeds 256KiB");
+    if (bytes > TextWriteLimits.totalBytes())
+      throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", null, null, List.of(), null);
     String id = UUID.randomUUID().toString();
     TextDocumentTransaction.preflight(root, id, changes);
     var saved =
@@ -265,7 +290,7 @@ public final class TextDocumentChangeSetService {
             root.toString(),
             owner.conversationId(),
             clock.instant(),
-            request.operations(),
+            request.operations().stream().map(op -> new Operation(op.kind(), op.path(), op.target(), null, null)).toList(),
             List.copyOf(changes));
     String payload = encode(saved), sha = TextDocumentTransaction.hash(payload);
     db.sql(
@@ -650,7 +675,7 @@ public final class TextDocumentChangeSetService {
   private String encode(Object value) {
     try {
       String payload = json.writeValueAsString(value);
-      if (payload.getBytes(StandardCharsets.UTF_8).length > 1048576)
+      if (payload.getBytes(StandardCharsets.UTF_8).length > TextWriteLimits.payloadBytes())
         throw new IllegalArgumentException("Document payload exceeds 1MiB");
       return payload;
     } catch (IOException invalid) {
@@ -661,7 +686,7 @@ public final class TextDocumentChangeSetService {
   /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
   private <T> T decode(String value, Class<T> type) {
     try {
-      if (value == null || value.getBytes(StandardCharsets.UTF_8).length > 1048576)
+      if (value == null || value.getBytes(StandardCharsets.UTF_8).length > TextWriteLimits.payloadBytes())
         throw new IllegalStateException("Document payload exceeds bounds");
       return json.readValue(value, type);
     } catch (IOException invalid) {

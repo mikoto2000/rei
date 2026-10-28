@@ -428,14 +428,14 @@ public final class TextDocumentTransaction {
     Path path = path(root, name);
     if (!Files.exists(path, LinkOption.NOFOLLOW_LINKS)) return null;
     try (var stream = Files.newInputStream(path, LinkOption.NOFOLLOW_LINKS)) {
-      byte[] bytes = stream.readNBytes(65537);
-      if (bytes.length > 65536) throw new IllegalArgumentException("Text exceeds 64KiB");
+      byte[] bytes = stream.readNBytes(TextWriteLimits.fileBytes() + 1);
+      if (bytes.length > TextWriteLimits.fileBytes()) throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", name, null, List.of(), null);
       for (byte value : bytes)
         if (value == 0) throw new IllegalArgumentException("Binary text rejected");
       try {
         return StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString();
       } catch (java.nio.charset.CharacterCodingException invalid) {
-        throw new IllegalArgumentException("UTF-8 text required");
+        throw TextEditEngine.failure("UNSUPPORTED_ENCODING", name, null, List.of(), null);
       }
     }
   }
@@ -446,8 +446,8 @@ public final class TextDocumentTransaction {
       Path file = path(root, name);
       if (!Files.exists(file, LinkOption.NOFOLLOW_LINKS)) return new Fingerprint(true, false, null);
       try (var stream = Files.newInputStream(file, LinkOption.NOFOLLOW_LINKS)) {
-        byte[] bytes = stream.readNBytes(65537);
-        if (bytes.length > 65536) return new Fingerprint(false, true, null);
+        byte[] bytes = stream.readNBytes(TextWriteLimits.fileBytes() + 1);
+        if (bytes.length > TextWriteLimits.fileBytes()) return new Fingerprint(false, true, null);
         return new Fingerprint(
             true,
             true,
@@ -464,8 +464,8 @@ public final class TextDocumentTransaction {
   public static void text(String value) {
     if (value == null
         || value.indexOf(0) >= 0
-        || value.getBytes(StandardCharsets.UTF_8).length > 65536)
-      throw new IllegalArgumentException("Valid UTF-8 text of at most 64KiB required");
+        || value.getBytes(StandardCharsets.UTF_8).length > TextWriteLimits.fileBytes())
+      throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", null, null, List.of(), null);
     try {
       StandardCharsets.UTF_8.newEncoder().encode(java.nio.CharBuffer.wrap(value));
     } catch (java.nio.charset.CharacterCodingException invalid) {
@@ -507,6 +507,6 @@ public final class TextDocumentTransaction {
           total += value.getBytes(StandardCharsets.UTF_8).length;
         }
     }
-    if (total > 1048576) throw new IllegalArgumentException("Transaction text exceeds 1MiB");
+    if (total > TextWriteLimits.totalBytes()) throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", null, null, List.of(), null);
   }
 }
