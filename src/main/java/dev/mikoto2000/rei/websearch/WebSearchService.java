@@ -205,7 +205,7 @@ public class WebSearchService {
 
     var response = send(request, provider, limit);
     if (response.status() >= 400) {
-      throw new IllegalStateException("Web search failed with status " + response.status());
+      throw new WebSearchHttpException(response.status());
     }
 
     return parseBraveResults(new String(response.body(), StandardCharsets.UTF_8), limit);
@@ -228,7 +228,7 @@ public class WebSearchService {
 
     var response = send(request, provider, limit);
     if (response.status() >= 400) {
-      throw new IllegalStateException("Web search failed with status " + response.status());
+      throw new WebSearchHttpException(response.status());
     }
 
     return parseDuckDuckGoResults(new String(response.body(), StandardCharsets.UTF_8), limit);

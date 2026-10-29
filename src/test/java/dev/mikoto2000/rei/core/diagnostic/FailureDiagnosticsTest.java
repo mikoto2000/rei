@@ -10,10 +10,33 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 /** 失敗情報診断情報の結果と状態の契約を検証するテスト。 */
 class FailureDiagnosticsTest {
+  @Test
+  void typedAccessDenialReturnsSafeReasonAndGuidanceWithoutTrustingExceptionMessages() {
+    var denied =
+        new dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException(
+            "REVIEW_ACCESS_DENIED",
+            "Operation is not permitted for this run",
+            "Use beginReview with \"current\" files");
+    var wrapped = new IllegalStateException("PRIVATE_WRAPPER", denied);
+    assertEquals("REVIEW_ACCESS_DENIED", FailureDiagnostics.classify(wrapped).code());
+    assertEquals(
+        "Operation is not permitted for this run", FailureDiagnostics.safeError(wrapped).message());
+    var failure =
+        new tools.jackson.databind.json.JsonMapper()
+            .readTree(FailureDiagnostics.toolFailureResult(wrapped));
+    assertFalse(failure.path("success").asBoolean());
+    assertEquals("REVIEW_ACCESS_DENIED", failure.path("error").asText());
+    assertEquals("Use beginReview with \"current\" files", failure.path("guidance").asText());
+    assertFalse(failure.toString().contains("PRIVATE"));
+    org.junit.jupiter.api.Assertions.assertNull(
+        FailureDiagnostics.toolFailureResult(new IllegalArgumentException("REVIEW_ACCESS_DENIED")));
+  }
+
   /** 実行上の問題の診断で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @ParameterizedTest
   @CsvSource({
     "401,authentication_failed",
+    "402,payment_required",
     "403,permission_denied",
     "404,provider_not_found",
     "408,timeout",
@@ -42,6 +65,24 @@ class FailureDiagnosticsTest {
     var safe = FailureDiagnostics.safeError(response);
     assertEquals(code, safe.code());
     assertFalse(safe.message().contains("SECRET"));
+  }
+
+  @ParameterizedTest
+  @CsvSource({
+    "401,authentication_failed",
+    "402,payment_required",
+    "429,rate_limited",
+    "503,provider_unavailable"
+  })
+  void searchHttpStatusSurvivesToolWrapping(int status, String code) {
+    var diagnostic =
+        FailureDiagnostics.classify(
+            new RuntimeException(
+                "PRIVATE_WRAPPER",
+                new dev.mikoto2000.rei.websearch.WebSearchHttpException(status)));
+    assertEquals(code, diagnostic.code());
+    assertTrue(diagnostic.message().contains("HTTP " + status));
+    assertFalse(diagnostic.display().contains("PRIVATE"));
   }
 
   /** 実行上の問題の診断で、指定した条件に対する結果と状態の変化を確認する。 */

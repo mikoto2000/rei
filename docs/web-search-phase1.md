@@ -6,13 +6,29 @@
 WebResearchPipeline のループが break し、candidates に残る未取得ページも処理されなかった。
 検索候補は candidates、取得結果は loaded、取得済み URL は attempted に別々に保持されている。
 失敗時もこの状態を維持したまま pending を通常の batch.fetch に渡す。
-初回検索の全面障害は従来どおり例外、部分的な追加検索障害は omissions の
+初回検索の全面障害はサービス層では例外、部分的な追加検索障害は omissions の
 additional_search_failed と assessment=unknown、本文障害はページの fetchStatus/errorType で区別する。
 
 検索順序、正常時の充足停止、URL 正規化、取得・検索予算、期限、並列取得、キャッシュ、関連抜粋は維持する。
 追加検索障害後も次の未実行検索語を試せるが、登録済み検索語・最大検索回数・最大取得数で有限に停止する。
 同じ URL の再取得は attempted で防ぐ。キャンセル・中断は FetchOperation.propagateControls で伝播する。
 ログは処理種別、例外型、安全なエラーコードのみを記録し、例外メッセージ・スタック・URL・本文は記録しない。
+
+## 検索障害時のエージェント継続
+
+`webSearch` / `webSearchAndRead` の実行境界では、検索先の HTTP エラー・通信障害・取得制限を
+`success=false` のツール結果としてモデルへ返す。`tool.failed` は保持し、成功イベントには置き換えない。
+同じ応答内に続くローカル操作も実行できる。結果には、同じ検索の再試行を繰り返さず、
+既知の公式 URL の取得や外部確認が不要なレビュー・修正を続け、未確認事項は記録する案内を含める。
+キャンセル・中断・実行停止・プログラム内部の不整合は、この回復処理の対象外とする。
+
+検索先の HTTP ステータスは `WebSearchHttpException` に保持し、モデルへの結果の `httpStatus` と
+失敗イベントのメッセージに残す。402 は `payment_required` として契約・請求設定・利用枠の確認を案内する。
+応答本文・URL・認証情報・例外ラッパーのメッセージは結果に含めない。
+
+`WebSearchServiceTest` で Brave / DuckDuckGo の HTTP ステータス保持、
+`FailureDiagnosticsTest` と `ToolEventCallbackDecoratorTest` で分類・失敗通知・中断の伝播、
+`ToolLoopSupportTest` で実際の検索ツールコールが 402 になっても後続のローカル修正が実行されることを検証する。
 
 ## PSL による出典識別
 

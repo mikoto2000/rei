@@ -127,17 +127,22 @@ public class ToolEventCallbackDecorator
           execution.checkActive();
         result = caller.get();
       } catch (RuntimeException e) {
+        String searchFailure = searchFailureResult(toolName, e);
+        String structuredFailure =
+            !Thread.currentThread().isInterrupted()
+                    && !dev.mikoto2000.rei.core.stagnation.RunExecutionContext.isControlFailure(e)
+                ? dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.toolFailureResult(e)
+                : null;
         eventPublisher.publishBoundary(
             eventFactory.toolFailed(
                 toolCallId,
                 toolName,
-                new ErrorInformation(
-                    e.getClass().getSimpleName(), summarize(e.getMessage()), null)));
-        if (!Thread.currentThread().isInterrupted()) {
-          String failure =
-              dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.toolFailureResult(e);
-          if (failure != null) return failure;
-        }
+                searchFailure != null || structuredFailure != null
+                    ? dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(e)
+                    : new ErrorInformation(
+                        e.getClass().getSimpleName(), summarize(e.getMessage()), null)));
+        if (searchFailure != null) return searchFailure;
+        if (structuredFailure != null) return structuredFailure;
         if (FILE_TOOLS.contains(toolName) && !Thread.currentThread().isInterrupted()) {
           var diagnostic = dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(e);
           if (diagnostic.code().equals("source_missing")
@@ -158,6 +163,30 @@ public class ToolEventCallbackDecorator
           eventFactory.toolCompleted(toolCallId, toolName, duration, summarize(result)));
       return result;
     }
+  }
+
+  /** 検索先の障害は失敗結果として返し、独立したローカル作業を続行できるようにする。 */
+  private String searchFailureResult(String toolName, RuntimeException error) {
+    if (!java.util.Set.of("webSearch", "webSearchAndRead").contains(toolName)
+        || Thread.currentThread().isInterrupted()
+        || dev.mikoto2000.rei.core.stagnation.RunExecutionContext.isControlFailure(error))
+      return null;
+    Integer status = null;
+    boolean recoverable = false;
+    Throwable cause = error;
+    for (int depth = 0; cause != null && depth < 16; depth++, cause = cause.getCause()) {
+      if (cause instanceof dev.mikoto2000.rei.toolcontract.ExternalReadFailure external) {
+        status = external.httpStatus();
+        recoverable = true;
+      }
+      if (cause instanceof java.io.IOException) recoverable = true;
+    }
+    if (!recoverable) return null;
+    var diagnostic = dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(error);
+    return """
+        {"success":false,"error":"%s","httpStatus":%s,"message":"%s","guidance":"検索結果は取得できていません。同じ検索の再試行を繰り返さず、既知の公式URLを取得するか、外部確認が不要なローカルのレビュー・修正を続けてください。外部確認が必要な項目は未確認として記録し、推測で確定しないでください。"}
+        """
+        .formatted(diagnostic.code(), status, diagnostic.message());
   }
 
   /** ToolContext から toolCallId を取得する。無ければ UUID を生成する。 */

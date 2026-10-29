@@ -340,7 +340,7 @@ public final class ReviewCoverageLedger {
         parent,
         job -> {
           if (!job.owner().equals(parent) || !parent.project().equals(child.project()))
-            throw new IllegalArgumentException("REVIEW_ACCESS_DENIED");
+            throw accessDenied();
           if (job.participants().contains(child)) return job;
           var participants = new ArrayList<>(job.participants());
           participants.add(child);
@@ -369,8 +369,7 @@ public final class ReviewCoverageLedger {
    */
   public Job resume(String id, Scope previous, Scope resumed) {
     if (!previous.project().equals(resumed.project())
-        || !previous.conversation().equals(resumed.conversation()))
-      throw new IllegalArgumentException("REVIEW_ACCESS_DENIED");
+        || !previous.conversation().equals(resumed.conversation())) throw accessDenied();
     return update(
         id,
         previous,
@@ -691,11 +690,18 @@ public final class ReviewCoverageLedger {
       try (var rows = query.executeQuery()) {
         if (!rows.next()) throw new IllegalArgumentException("REVIEW_JOB_NOT_FOUND");
         var job = StorageDatabase.JSON.readValue(rows.getString(1), Job.class);
-        if (!job.participants().contains(scope))
-          throw new IllegalArgumentException("REVIEW_ACCESS_DENIED");
+        if (!job.participants().contains(scope)) throw accessDenied();
         return job;
       }
     }
+  }
+
+  /** 所有者情報を開示せず、正規の再開または新規レビューへ誘導する。 */
+  private static dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException accessDenied() {
+    return new dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException(
+        "REVIEW_ACCESS_DENIED",
+        "このレビューへの操作は、現在のProject・会話・Runに対して許可されていません。",
+        "同じreviewJobIdで再試行しないでください。checkpointShowは参照権限を引き継ぎません。過去の作業を引き継ぐ必要がある場合は、利用者が再開可能な対象タスクの再開を明示的に依頼した場合にのみcheckpointResumeを使ってください。これは新しいRunを予約する操作であり、現在のRunへ権限を追加する操作ではありません。現在の依頼を新たに進める場合は、現在のProject内の対象ファイルと評価基準でbeginReviewを実行し、新しいIDを使ってください。履歴のIDやRun情報を書き換えて権限を回避せず、独立したローカル作業は継続してください。拒否されたレビューの内容や完了状態を確認済みと扱わないでください。");
   }
 
   /** 指定された内容を書き込み先へ反映する。 */

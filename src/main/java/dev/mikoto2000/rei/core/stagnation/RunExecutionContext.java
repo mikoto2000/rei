@@ -30,6 +30,17 @@ import java.util.UUID;
  * <p>One user run, explicitly passed in ToolContext across reactive scheduler boundaries.
  */
 public class RunExecutionContext {
+  /** ツールの回復処理で消費せず、実行元へ伝播すべき停止シグナルを判定する。 */
+  public static boolean isControlFailure(Throwable error) {
+    for (int depth = 0; error != null && depth < 16; depth++, error = error.getCause()) {
+      if (error instanceof ExecutionStoppedException
+          || error instanceof InterruptedException
+          || error instanceof java.util.concurrent.CancellationException
+          || reactor.core.Exceptions.isCancel(error)) return true;
+    }
+    return false;
+  }
+
   /** 情報の取得限定上限。 */
   private static final int ACQUISITION_ONLY_LIMIT = 32;
 
