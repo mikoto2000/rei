@@ -11,12 +11,9 @@ import java.time.format.DateTimeFormatter;
  * <p>Plain terminal view; no command parsing or persistence responsibility.
  */
 public final class HistoryFormatter {
-  /** 最大本文文字数。 */
-  public static final int MAX_BODY_CHARS = 2000;
-
-  /** 会話履歴と受付記録の管理で用いる本文を返す。 */
+  /** 秘密情報と制御文字を除去し、文字数で省略せず本文を返す。 */
   public String body(String text) {
-    return clip(safe(text), MAX_BODY_CHARS);
+    return safe(text);
   }
 
   /** 会話履歴と受付記録の管理で用いる表示名を返す。 */

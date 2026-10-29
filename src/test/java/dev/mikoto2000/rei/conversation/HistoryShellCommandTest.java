@@ -152,13 +152,13 @@ class HistoryShellCommandTest extends dev.mikoto2000.rei.core.project.ProjectCli
 
   /** 会話履歴と受付記録の管理で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
   @Test
-  void displaysAllPersistedRolesAndInterventionsWithRedactionAndTruncation() {
+  void displaysAllPersistedRolesAndFullBodiesWithRedaction() {
     for (String role : List.of("system", "user", "assistant", "tool", "user"))
       add(a, "chat:main", role, role + " message");
     add(a, "chat:main", "tool", "Authorization: Bearer SECRET_VALUE\n" + "payload".repeat(600));
     assertThat(run("show", "chat:main"))
-        .contains("] system", "] user", "] assistant", "] tool", "[REDACTED]", "(truncated)")
-        .doesNotContain("SECRET_VALUE");
+        .contains("] system", "] user", "] assistant", "] tool", "[REDACTED]", "payload".repeat(600))
+        .doesNotContain("SECRET_VALUE", "(truncated)");
   }
 
   /** 検索について、既存の権限の範囲を利用することを確認する。 */
