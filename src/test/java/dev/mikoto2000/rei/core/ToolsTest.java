@@ -1690,7 +1690,13 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
     Tools tools = new Tools();
 
     assertEquals(
-        List.of("powershell", "-NoProfile", "-Command", "Write-Output hello"),
+        List.of(
+            "powershell",
+            "-NoProfile",
+            "-EncodedCommand",
+            java.util.Base64.getEncoder()
+                .encodeToString(
+                    "Write-Output hello".getBytes(java.nio.charset.StandardCharsets.UTF_16LE))),
         tools.shellCommandLine("powershell", "Write-Output hello"));
     assertEquals(List.of("cmd", "/C", "echo hello"), tools.shellCommandLine("cmd", "echo hello"));
     assertEquals(
@@ -1703,12 +1709,13 @@ class ToolsTest extends dev.mikoto2000.rei.core.project.ProjectClientTestSupport
   void executeShellCommandRunsWithDefaultShell() throws Exception {
     Tools tools = new Tools();
     String osName = System.getProperty("os.name").toLowerCase();
-    String command = osName.contains("win") ? "Write-Output hello" : "printf hello";
+    String command =
+        osName.contains("win") ? "Write-Output \"hello; quoted\"" : "printf 'hello; quoted'";
 
     Tools.ShellCommandResult result = tools.executeShellCommand(command, 10, tempDir);
 
     assertEquals(0, result.exitCode());
-    assertEquals("hello", result.stdout().trim());
+    assertEquals("hello; quoted", result.stdout().trim());
     assertFalse(result.timedOut());
   }
 

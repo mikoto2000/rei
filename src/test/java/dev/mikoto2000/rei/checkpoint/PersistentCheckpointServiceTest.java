@@ -1161,6 +1161,24 @@ class PersistentCheckpointServiceTest {
   }
 
   @Test
+  void resumedHandoffPrioritizesLatestGuidanceWithoutDiscardingSavedInstructions() {
+    var events = new AgentEventFactory(Clock.systemUTC());
+    String old = "Earlier guidance that filled the prompt. ".repeat(100);
+    String latest =
+        "Latest correction: preserve verified work and use the new validation evidence.";
+    bus.publishBoundary(events.intervention(owner.runId(), "old", old, true).withOwnership(owner));
+    bus.publishBoundary(
+        events.intervention(owner.runId(), "latest", latest, true).withOwnership(owner));
+    service.finish(owner, "FAILED");
+    var resumed = service.resume("A", state().taskId(), AgentRunContext.RequestSource.SHELL);
+    String context = service.context(resumed.runId());
+    assertTrue(context.contains(latest));
+    assertTrue(context.contains("original request"));
+    assertTrue(context.length() <= settings.getContextCharacters());
+    assertEquals(List.of(old, latest), state().instructions());
+  }
+
+  @Test
   void handoffRestoresConfirmedReadExcerptsPastRepeatedMetadataWithoutChangingProgress()
       throws Exception {
     service.setRawResults(new dev.mikoto2000.rei.core.contextbudget.RawToolResultStore(root));
@@ -1212,6 +1230,67 @@ class PersistentCheckpointServiceTest {
     assertTrue(context.contains("Unknown operations MUST NOT be replayed"));
     assertTrue(context.length() <= settings.getContextCharacters());
     assertEquals(saved, service.progress(next));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(
+      strings = {"saved", "failed", "mismatch", "outside", "missing", "binary", "oversized"})
+  void handoffRestoresLatestWorkAndGapsInsteadOfTheBeginningOfAnAccumulatedReport(String kind)
+      throws Exception {
+    service.setRawResults(new dev.mikoto2000.rei.core.contextbudget.RawToolResultStore(root));
+    var events = new AgentEventFactory(Clock.systemUTC());
+    Path artifact = root.resolve("review.md");
+    String content =
+        "Obsolete first review unit\n".repeat(9000)
+            + "Confirmed current unit: chapter B\nRemaining gap: chapter C, lines 20-80\n";
+    java.nio.file.Files.writeString(artifact, content);
+    if (kind.equals("missing")) java.nio.file.Files.delete(artifact);
+    if (kind.equals("binary")) java.nio.file.Files.write(artifact, new byte[] {(byte) 0xff});
+    if (kind.equals("oversized"))
+      java.nio.file.Files.writeString(artifact, "x".repeat(1024 * 1024 + 1));
+    String body =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .writeValueAsString(
+                List.of(
+                    Map.of(
+                        "path",
+                        kind.equals("outside") ? "../review.md" : "review.md",
+                        "success",
+                        !kind.equals("failed"))));
+    bus.publishBoundary(
+        events.toolStarted("write-outcome", "writeMultiFile", "write").withOwnership(owner));
+    bus.publishBoundary(
+        events.toolCompleted("write-outcome", "writeMultiFile", 1, body).withOwnership(owner));
+    service.preserveResults(
+        owner,
+        List.of(
+            org.springframework.ai.chat.messages.ToolResponseMessage.builder()
+                .responses(
+                    List.of(
+                        new org.springframework.ai.chat.messages.ToolResponseMessage.ToolResponse(
+                            "write-outcome",
+                            kind.equals("mismatch") ? "readMultiFile" : "writeMultiFile",
+                            body)))
+                .build()));
+    service.finish(owner, "FAILED");
+    var resumed = service.resume("A", state().taskId(), AgentRunContext.RequestSource.SHELL);
+    String context = service.context(resumed.runId());
+    if (kind.equals("saved")) {
+      assertTrue(context.contains("Remaining gap: chapter C, lines 20-80"));
+      assertTrue(context.contains("Confirmed current unit: chapter B"));
+      assertTrue(context.contains("\"endLine\":9002"));
+      assertTrue(context.contains("\"startLine\":"));
+      assertTrue(
+          context.contains("\"version\":\"" + dev.mikoto2000.rei.review.ReviewTools.hash(content)));
+      assertTrue(context.contains("write-outcome"));
+    } else {
+      assertTrue(
+          context.contains(
+              "recentWorkArtifacts (current tails; saved claims are not proof of review completion): []"));
+      assertFalse(context.contains("Remaining gap: chapter C"));
+    }
+    assertTrue(context.length() <= settings.getContextCharacters());
+    assertEquals("RUNNING", service.get("A", state().taskId()).status());
   }
 
   @org.junit.jupiter.params.ParameterizedTest

@@ -30,6 +30,11 @@ public class ProgressEvaluator {
   private static final Set<String> READ_TOOLS =
       Set.of(
           "readMultiFile",
+          "readTextChangeSetBase",
+          "inspectTextChangeSet",
+          "inspectTextDocumentChangeSet",
+          "getTextChangeSetDiff",
+          "getTextDocumentChangeSetDiff",
           "readSkillResource",
           "readFile",
           "readTextFile",
@@ -414,7 +419,35 @@ public class ProgressEvaluator {
         unknown(name, "LEDGER_CAPACITY_OR_HISTORY", evidence);
       return List.copyOf(evidence);
     }
-    if (name.equals("submitReviewResult") && output != null && output.hasNonNull("id")) {
+    if (name.equals("dismissReviewFinding") && output != null && output.has("changed")) {
+      if (!failed(output)
+          && output.path("changed").asBoolean()
+          && !output.path("id").asText().isBlank()
+          && output.path("revision").asLong() > 0) {
+        for (var finding : output.path("findings"))
+          if (finding.path("verificationStatus").asText().equals("DISMISSED")
+              && rememberProgress(
+                  revisions,
+                  "review-dismissal:"
+                      + output.path("id").asText()
+                      + ":"
+                      + output.path("revision").asLong()
+                      + ":"
+                      + canonical(finding),
+                  finding.path("path").asText(),
+                  evidence))
+            evidence.add(
+                new ProgressEvidence(
+                    ProgressEvent.STATE_CHANGED,
+                    "Review finding dismissed after corroboration",
+                    finding.path("path").asText(),
+                    finding.path("version").asText()));
+      }
+      return List.copyOf(evidence);
+    }
+    if (Set.of("submitReviewResult", "submitReviewPage", "dismissReviewFinding").contains(name)
+        && output != null
+        && output.hasNonNull("id")) {
       for (var entry : output.path("ranges"))
         if (entry.path("reviewed").asBoolean()
             && entry.path("delivered").asBoolean()
@@ -443,7 +476,9 @@ public class ProgressEvaluator {
           evidence.add(
               new ProgressEvidence(
                   ProgressEvent.STATE_CHANGED,
-                  "Verified review finding added",
+                  finding.path("verificationStatus").asText().equals("DISMISSED")
+                      ? "Review finding dismissed after corroboration"
+                      : "Verified review finding added",
                   finding.path("path").asText(),
                   finding.path("version").asText()));
         else if (status == InformationLedger.Status.UNKNOWN)
@@ -510,6 +545,7 @@ public class ProgressEvaluator {
       return List.copyOf(evidence);
     }
     if (name.equals("applyTextChangeSet")) observeChangeSet(output, evidence);
+    if (name.equals("applyTextDocumentChangeSet")) observeDocumentChangeSet(output, evidence);
     var webInformation =
         WEB_TOOLS.contains(name) ? webInformation(name, output, result) : List.<Information>of();
     String action = actionKey(name, arguments);
@@ -529,6 +565,17 @@ public class ProgressEvaluator {
     if (WEB_TOOLS.contains(name)) {
       for (var item : webInformation)
         addInformation(item.key(), item.source(), item.revision(), evidence);
+    } else if (name.equals("readTextChangeSetBase")) {
+      observeEditBaseline(output, evidence);
+    } else if (Set.of(
+            "proposeTextChangeSet",
+            "proposeTextDocumentChangeSet",
+            "inspectTextChangeSet",
+            "inspectTextDocumentChangeSet",
+            "getTextChangeSetDiff",
+            "getTextDocumentChangeSetDiff")
+        .contains(name)) {
+      observeEditDiff(name, output, evidence);
     } else if (name.equals("readSkillResource")) {
       collectSkillInformation(output, evidence);
     } else if (READ_TOOLS.contains(name)) {
@@ -557,6 +604,58 @@ public class ProgressEvaluator {
   public static String actionKey(String name, String arguments) {
     JsonNode node = parse(arguments);
     return name + ":" + digest(node == null ? Objects.toString(arguments, "") : canonical(node));
+  }
+
+  /**
+   * Exact UTF-8 text adds edit-baseline information (BOM/newlines included), never completed work.
+   */
+  private void observeEditBaseline(JsonNode node, List<ProgressEvidence> evidence) {
+    if (node == null
+        || failed(node)
+        || !node.path("text").isTextual()
+        || node.path("path").asText().isBlank()) return;
+    String text = node.path("text").asText();
+    String sha = node.path("sha256").asText();
+    if (!sha.matches("[a-f0-9]{64}")
+        || text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 65536
+        || !sha.equals(digest(text))) return;
+    try {
+      Path path = root.resolve(node.path("path").asText()).normalize();
+      if (!sha.equals(fingerprint(path))) return;
+      String source = normalizeSource(node.path("path").asText());
+      readContentObserved = !text.isBlank();
+      // A line display does not preserve the exact bytes needed for expectedText edits.
+      // One coverage unit denotes a complete exact baseline, not a source line.
+      String key = "edit-baseline:" + source;
+      var observed = information.observeRange(key, sha, 1, 2);
+      if (observed.status() == InformationLedger.Status.NEW)
+        evidence.add(ProgressEvidence.acquiredRange("Exact edit baseline fetched", source, sha));
+      else if (observed.status() == InformationLedger.Status.DUPLICATE)
+        restoreRange(key, sha, 1, 2, evidence);
+      else unknown(source, "LEDGER_CAPACITY_OR_HISTORY", evidence);
+    } catch (RuntimeException invalid) {
+      // Missing, out-of-project or unobservable content is not a verified edit baseline.
+    }
+  }
+
+  /** New proposal/diff content advances preparation, without claiming an applied file change. */
+  private void observeEditDiff(String name, JsonNode node, List<ProgressEvidence> evidence) {
+    if (node == null || failed(node) || !node.path("diff").isTextual()) return;
+    boolean page =
+        name.equals("getTextChangeSetDiff") || name.equals("getTextDocumentChangeSetDiff");
+    if (!page
+        && (!Set.of("PROPOSED", "APPLIED").contains(node.path("status").asText())
+            || node.path("id").asText().isBlank()
+            || !node.path("proposalSha256").asText().matches("[a-f0-9]{64}"))) return;
+    String diff = node.path("diff").asText();
+    var info = node.path(page ? "info" : "diffInfo");
+    int bytes = diff.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+    if (diff.isBlank()
+        || bytes > 65536
+        || info.path("returnedBytes").asInt(-1) != bytes
+        || info.path("totalBytes").asInt(-1) < bytes) return;
+    // A new proposal UUID, timestamp, SHA or tool name cannot make the same diff new again.
+    addInformation("edit-diff:" + diff, "change-set-diff", evidence);
   }
 
   /** Instruction text is information, never evidence that project documents were reviewed. */
@@ -980,6 +1079,55 @@ public class ProgressEvaluator {
     if (ledger.size() >= LEDGER_LIMIT && !ledger.contains(digest(key)))
       unknown(source, "WORK_HISTORY_CAPACITY", evidence);
     return false;
+  }
+
+  /** Observe committed multi-file revisions, including creation, deletion and rename endpoints. */
+  private void observeDocumentChangeSet(JsonNode node, List<ProgressEvidence> evidence) {
+    if (node == null
+        || !node.path("status").asText().equals("APPLIED")
+        || !node.path("currentMatches").asBoolean()
+        || node.hasNonNull("error")
+        || !node.path("files").isArray()
+        || node.path("files").isEmpty()
+        || node.path("files").size() > 64) return;
+    Map<Path, String> changed = new LinkedHashMap<>();
+    for (var file : node.path("files")) {
+      String baseline = documentRevision(file, "baseline");
+      String proposed = documentRevision(file, "proposed");
+      String current = documentRevision(file, "current");
+      if (!file.path("currentAvailable").asBoolean()
+          || baseline == null
+          || proposed == null
+          || !proposed.equals(current)
+          || file.path("path").asText().isBlank()) return;
+      try {
+        Path path = root.resolve(file.path("path").asText()).normalize();
+        // APPLIED is a historical receipt; independently verify every current endpoint.
+        if (!proposed.equals(fingerprint(path))) return;
+        if (!baseline.equals(proposed)) changed.put(path, proposed);
+      } catch (RuntimeException invalid) {
+        return;
+      }
+    }
+    changed.forEach(
+        (path, revision) -> {
+          if (rememberProgress(revisions, path + ":" + revision, path.toString(), evidence))
+            evidence.add(
+                new ProgressEvidence(
+                    ProgressEvent.STATE_CHANGED,
+                    "Applied document Change Set revision observed",
+                    path.toString(),
+                    revision));
+        });
+  }
+
+  /** Missing files use the same revision key as ordinary write snapshots. */
+  private static String documentRevision(JsonNode file, String prefix) {
+    var exists = file.path(prefix + "Exists");
+    var sha = file.path(prefix + "Sha256");
+    if (!exists.isBoolean()) return null;
+    if (!exists.asBoolean()) return sha.isNull() ? "absent" : null;
+    return sha.isTextual() && sha.asText().matches("[a-f0-9]{64}") ? sha.asText() : null;
   }
 
   /** 状況を判断する根拠を得るため、変更集合を観測する。 */

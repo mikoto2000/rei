@@ -137,22 +137,47 @@ public class StagnationChatModel implements ChatModel {
           context.checkModelTokenBudget();
           if (!prepaid) context.consumeNextLlmCall();
           Prompt actionPrompt = resumeRecoveryPrompt(prompt, context);
-          String feedback = context.progressFeedback();
+          String feedback = context.progressFeedback() + context.resumeBatchFeedback();
+          if (context.isResumedContext() && hasReviewProtocol(prompt)) {
+            feedback +=
+                " For review work, persist each assessed source range with beginReview, readReviewFile"
+                    + " and a delivered-page assessment. Prefer submitReviewPage when available: copy only"
+                    + " the delivered path/offset/nextOffset and cite unique exact evidence quotes; the server"
+                    + " supplies hashes and source coordinates. The legacy submitReviewResult requires the"
+                    + " exact unchanged Range object. A matching quote proves presence, not that a defect exists."
+                    + " Corroborate cross-file claims against referenced source, navigation/configuration and rendered"
+                    + " output before repairs. Use dismissReviewFinding, when available, for disproved candidates"
+                    + " with a reason citing the counterevidence. If no reviewJobId exists, create one with beginReview"
+                    + " for the explicit authorized targets and criteria; the missing ID is not a blocker."
+                    + " Use reviewPending to select unfinished ranges and reviewFindings for preserved candidates."
+                    + " Do not declare a previously submitted assessment unreviewed merely because its source"
+                    + " left the current prompt. Changed source versions require restartReview."
+                    + " Reports supplement the ledger; repeatedly appending a list of unread files does not"
+                    + " complete their review. An exact registered review page can be acquired at the unit"
+                    + " boundary to prepare its structured assessment; submit that delivered range before"
+                    + " further bulk reading. If that page leaves the prompt, redeliver it with the same"
+                    + " job/path/version/offset/tokenBudget before assessing; never invent an assessment from"
+                    + " ledger counts. Batch a work unit into one tool-call response: submit all assessed"
+                    + " delivered pages first, then request their known nextOffset pages in the same response."
+                    + " Assess only text already delivered. This confirms outcomes before acquiring new source. Follow the original scope"
+                    + " through all remaining targets.";
+            if (assembler != null) feedback += assembler.reviewContinuation(context.runContext());
+          }
           if (actionPrompt != prompt && !context.needsResumeContentWork())
             feedback +=
                 " Broad discovery tools are temporarily unavailable during this depleted resume. "
-                    + "Use the handed-off historical inventory, fetched coverage and read excerpts. Record authorized intermediate findings with evidence and explicit gaps before further reacquisition; read only named missing content. "
+                    + "Use the handed-off historical inventory, fetched coverage and read excerpts to select an unfinished file or chapter. Read named missing content across pages, then save one consolidated result for that work unit. "
                     + "The inventory is not proof that all files exist unchanged or that review is complete. "
                     + "Normal discovery returns after verified work or step advancement; new coverage alone does not end this recovery. Budgets are not replenished.";
           if (actionPrompt != prompt && context.needsResumeContentWork())
             feedback +=
-                " Content acquisition is temporarily unavailable because this resumed run has received source content. "
-                    + "Use only the text actually visible in this context to record an authorized partial assessment before the next read. "
+                " Content acquisition is temporarily unavailable at the resumed work-unit boundary. "
+                    + "Use only the text actually visible in this context to record an authorized partial assessment for this unit. "
                     + "Cite the delivered path/range and evidence, distinguish assessed content from unread or omitted content, and state exact unresolved gaps. "
                     + "For review, use submitReviewResult for a delivered review range or update the authorized review artifact incrementally. "
-                    + "Do not wait to reread a whole chapter before recording its assessed portion. Do not invent findings, evidence, authorization or completion. "
+                    + "Do not invent findings, evidence, authorization or completion. "
                     + "If an assessment is not supportable, explain the specific blockage instead of fabricating work. "
-                    + "Actual work advancement restores acquisition; failed writes, annotations and repeated text alone do not. This boundary applies again after each subsequent content read.";
+                    + "Actual work advancement restores acquisition for the next work unit; failed writes, annotations and repeated text alone do not.";
           var invocationMessages = new ArrayList<Message>(actionPrompt.getInstructions());
           if (!feedback.isEmpty())
             invocationMessages.addFirst(
@@ -213,10 +238,10 @@ public class StagnationChatModel implements ChatModel {
                           reported.set(true);
                           context.recordTotalTokens(null);
                           context.endIteration();
-                          if (actionPrompt != prompt && context.needsResumeContentWork())
+                          if (context.hasPendingResumeContentWork())
                             return continuePendingContentWork(
                                 prompt, null, context, progressAtLimit);
-                          return Flux.empty();
+                          return finishOrContinueReview(prompt, null, context, progressAtLimit);
                         }
                         context.checkActive();
                         if (assembler != null && sent.get() != null)
@@ -284,11 +309,11 @@ public class StagnationChatModel implements ChatModel {
                         if (!OutputLimitDetector.isOutputLimitReached(result)) {
                           var guidance = context.applyInterventions();
                           if (guidance.isEmpty()) {
-                            if (actionPrompt != prompt && context.needsResumeContentWork())
+                            if (context.hasPendingResumeContentWork())
                               return continuePendingContentWork(
                                   prompt, generation.getOutput(), context, progressAtLimit);
-                            if (assembler != null) assembler.requireReviewed(context.runContext());
-                            return Flux.empty();
+                            return finishOrContinueReview(
+                                prompt, generation.getOutput(), context, progressAtLimit);
                           }
                           List<Message> messages = new ArrayList<>(prompt.getInstructions());
                           messages.add(generation.getOutput());
@@ -341,9 +366,53 @@ public class StagnationChatModel implements ChatModel {
         });
   }
 
+  /** Use the registered range protocol only when its callbacks are actually available. */
+  private boolean hasReviewProtocol(Prompt prompt) {
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)
+        || options.getToolCallbacks() == null) return false;
+    var names = options.getToolCallbacks().stream().map(t -> t.getToolDefinition().name()).toList();
+    return names.containsAll(List.of("beginReview", "readReviewFile"))
+        && (names.contains("submitReviewPage") || names.contains("submitReviewResult"));
+  }
+
+  private Flux<ChatResponse> continueIncompleteReview(
+      Prompt prompt, AssistantMessage reply, RunExecutionContext context, long progressAtLimit) {
+    String notice = context.requestReplan();
+    var messages = new ArrayList<Message>(withoutResumeWorkReminder(prompt.getInstructions()));
+    if (reply != null) messages.add(reply);
+    messages.add(
+        SystemMessage.builder()
+            .text(
+                "The persisted review ledger still has unfinished or stale ranges. This response cannot"
+                    + " complete the review. Continue with reviewPending/readReviewFile/submitReviewResult;"
+                    + " preserve already verified assessments. Do not restart all files or append another"
+                    + " unread-file report in place of assessing a delivered range."
+                    + assembler.reviewContinuation(context.runContext())
+                    + (notice == null ? "" : " " + notice))
+            .metadata(java.util.Map.of("rei.resumeWorkReminder", true))
+            .build());
+    return iteration(new Prompt(messages, prompt.getOptions()), context, false, progressAtLimit);
+  }
+
+  private Flux<ChatResponse> finishOrContinueReview(
+      Prompt prompt, AssistantMessage reply, RunExecutionContext context, long progressAtLimit) {
+    if (assembler != null) {
+      try {
+        assembler.requireReviewed(context.runContext());
+      } catch (ExecutionStoppedException incomplete) {
+        if (!context.isResumedContext()
+            || incomplete.reason() != ExecutionStoppedException.Reason.REVIEW_PARTIAL
+            || !hasReviewProtocol(prompt)) throw incomplete;
+        return continueIncompleteReview(prompt, reply, context, progressAtLimit);
+      }
+    }
+    return Flux.empty();
+  }
+
   /** A text-only or empty response cannot finish an outstanding resumed content assessment. */
   private Flux<ChatResponse> continuePendingContentWork(
       Prompt prompt, AssistantMessage reply, RunExecutionContext context, long progressAtLimit) {
+    context.requireResumeBatchCommit();
     // The response already consumed an ordinary iteration. Enforce the same shared limits as
     // tool iterations; do not replenish budgets or treat continuation wording as progress.
     String notice = context.requestReplan();
@@ -353,7 +422,7 @@ public class StagnationChatModel implements ChatModel {
         SystemMessage.builder()
             .text(
                 "No verified work followed the delivered content. A text-only promise to continue is not execution or completion. "
-                    + "Use an available authorized tool now to record a partial assessment from the visible evidence, with exact gaps. "
+                    + "Use an available authorized tool now to record a consolidated partial assessment for the work unit from the visible evidence, with exact gaps. "
                     + "Do not announce another read while content acquisition is withheld. "
                     + "Do not fabricate findings, permission or completion. If blocked, record the specific blocker through the existing task controls. "
                     + "The existing no-progress and shared call limits still apply."
@@ -400,11 +469,18 @@ public class StagnationChatModel implements ChatModel {
     var callbacks =
         available.stream()
             .filter(t -> !excluded.contains(t.getToolDefinition().name()))
-            .filter(
-                t ->
-                    !context.needsResumeContentWork()
-                        || !ProgressEvaluator.acquisitionTool(t.getToolDefinition().name()))
+            .filter(t -> !context.resumeToolHidden(t.getToolDefinition().name()))
             .toList();
+    // The model must return a real function call at the outcome boundary. Merely asking
+    // for one in prose permits a text-only "I will save it" response, which consumes the
+    // last bounded commit attempt without executing anything.
+    if (context.needsResumeContentWork()
+        && !callbacks.isEmpty()
+        && options instanceof org.springframework.ai.openai.OpenAiChatOptions openAi
+        && (openAi.getToolChoice() == null || "auto".equals(openAi.getToolChoice())))
+      return new Prompt(
+          prompt.getInstructions(),
+          openAi.mutate().toolCallbacks(callbacks).toolChoice("required").build());
     if (callbacks.size() == available.size()) return prompt;
     return new Prompt(prompt.getInstructions(), options.mutate().toolCallbacks(callbacks).build());
   }
@@ -464,6 +540,13 @@ public class StagnationChatModel implements ChatModel {
                 dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext())) {
               context.checkActive();
               String name = getToolDefinition().name();
+              // A model may have queued several reads in one response. Recheck at execution
+              // time so the work-unit limit also applies between callbacks, before side effects.
+              if (context.resumeAcquisitionBlocked(name, input)) {
+                // Nothing ran: this host boundary is not a failed I/O attempt. Preserve the
+                // result in normal tool history without consuming the unit's outcome attempt.
+                return "{\"success\":false,\"error\":\"Resume work unit requires a consolidated outcome before more content acquisition\"}";
+              }
               // These two domain callbacks authorize the complete persisted specification, not raw
               // tool JSON.
               // Preparation never starts a process; execution checks Policy/approval on the server
@@ -500,6 +583,12 @@ public class StagnationChatModel implements ChatModel {
               } catch (RuntimeException error) {
                 if (!decorated) context.failDurableTool(durableCall, name, error);
                 context.recordFailure(name, input, error);
+                var rejected = dev.mikoto2000.rei.review.ReviewResultRejectedException.find(error);
+                if (rejected != null
+                    && java.util.Set.of(
+                            "submitReviewResult", "submitReviewPage", "dismissReviewFinding")
+                        .contains(name))
+                  return context.reviewSubmissionCorrection(rejected.getMessage());
                 throw error;
               }
               if (!decorated) context.completeDurableTool(durableCall, name, result);

@@ -281,6 +281,7 @@ public class ExternalConfigFileService {
               candidate-limit: ${REI_VECTOR_DOCUMENT_RETRIEVAL_CANDIDATE_LIMIT:40}
               rank-constant: ${REI_VECTOR_DOCUMENT_RETRIEVAL_RANK_CONSTANT:60}
           llm:
+            read-timeout: ${REI_LLM_READ_TIMEOUT:5m}
             max-output-tokens: ${REI_LLM_MAX_OUTPUT_TOKENS:8192}
             output-limit:
               llm-call-budget-enabled: ${REI_LLM_OUTPUT_LIMIT_LLM_CALL_BUDGET_ENABLED:true}

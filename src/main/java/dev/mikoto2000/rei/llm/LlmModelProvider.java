@@ -65,7 +65,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
                 .<org.springframework.ai.openai.http.okhttp.OpenAiHttpClientBuilderCustomizer>of(
                     builder ->
                         builder
-                            .interceptor(new ChatStreamTimeoutInterceptor())
+                            .interceptor(new ChatStreamTimeoutInterceptor(properties.getReadTimeout()))
                             .interceptor(new ShowUiSdkRequestInterceptor()))
             : captureCustomizers;
     return new CapturingChatModel(
@@ -308,7 +308,7 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
         .httpClientBuilderCustomizer(
             builder ->
                 builder
-                    .interceptor(new ChatStreamTimeoutInterceptor())
+                    .interceptor(new ChatStreamTimeoutInterceptor(properties.getReadTimeout()))
                     .interceptor(new ShowUiSdkRequestInterceptor()))
         .observationRegistry(ObservationRegistry.NOOP)
         .build();

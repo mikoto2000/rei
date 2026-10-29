@@ -430,7 +430,8 @@ public final class ReviewCoverageLedger {
               job.findings().stream()
                   .map(
                       finding ->
-                          versions.get(finding.path()).equals(finding.version())
+                          finding.verificationStatus().equals("DISMISSED")
+                                  || versions.get(finding.path()).equals(finding.version())
                               ? finding
                               : new Finding(
                                   finding.id(),
@@ -542,6 +543,55 @@ public final class ReviewCoverageLedger {
         });
   }
 
+  /** Preserve source evidence and the original claim when corroboration refutes a finding. */
+  public Job dismissFinding(
+      String id, Scope scope, String findingId, String path, String evidence, String reason) {
+    return dismissFindingTransition(id, scope, findingId, path, evidence, reason).job();
+  }
+
+  public record FindingTransition(Job job, boolean changed) {}
+
+  /** Report the committed transition, including idempotent calls, from the same transaction. */
+  public FindingTransition dismissFindingTransition(
+      String id, Scope scope, String findingId, String path, String evidence, String reason) {
+    require(reason);
+    if (reason.length() > 4096) throw invalid();
+    var transitioned = new java.util.concurrent.atomic.AtomicBoolean();
+    var result =
+        update(
+            id,
+            scope,
+            job -> {
+              transitioned.set(false);
+              var matches =
+                  job.findings().stream()
+                      .filter(
+                          f ->
+                              f.id().equals(findingId)
+                                  && f.path().equals(path)
+                                  && (evidence == null || f.evidence().equals(evidence)))
+                      .toList();
+              if (matches.size() != 1) throw invalid();
+              var old = matches.getFirst();
+              if (old.verificationStatus().equals("DISMISSED")) return job;
+              var findings = new ArrayList<>(job.findings());
+              findings.set(
+                  findings.indexOf(old),
+                  new Finding(
+                      old.id(),
+                      old.severity(),
+                      old.path(),
+                      old.version(),
+                      old.location(),
+                      old.evidence(),
+                      old.assessment() + "\nDismissal after corroboration: " + reason,
+                      "DISMISSED"));
+              transitioned.set(true);
+              return copy(job, job.ranges(), findings, job.status());
+            });
+    return new FindingTransition(result, transitioned.get());
+  }
+
   /** 変更内容のレビューで用いるキャッシュの無効化を返す。 */
   public Job invalidate(String id, Scope scope, String path, String actualVersion) {
     return update(
@@ -565,7 +615,24 @@ public final class ReviewCoverageLedger {
                                   entry.assessment())
                               : entry)
                   .toList();
-          return copy(job, entries, job.findings(), "STALE_VERSION");
+          var findings =
+              job.findings().stream()
+                  .map(
+                      finding ->
+                          finding.path().equals(path)
+                                  && !finding.verificationStatus().equals("DISMISSED")
+                              ? new Finding(
+                                  finding.id(),
+                                  finding.severity(),
+                                  finding.path(),
+                                  finding.version(),
+                                  finding.location(),
+                                  finding.evidence(),
+                                  finding.assessment(),
+                                  "STALE")
+                              : finding)
+                  .toList();
+          return copy(job, entries, findings, "STALE_VERSION");
         });
   }
 

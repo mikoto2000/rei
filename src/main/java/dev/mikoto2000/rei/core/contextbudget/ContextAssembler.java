@@ -75,6 +75,14 @@ public class ContextAssembler {
     }
   }
 
+  /** Bounded durable assessments, independent of which source pages remain in the prompt. */
+  public String reviewContinuation(dev.mikoto2000.rei.core.chat.AgentRunContext owner) {
+    if (!requireReviewCoverage || reviewTools == null || owner == null || owner.projectId() == null)
+      return "";
+    return " Saved review ledger (revalidate changed versions with reviewStatus): "
+        + reviewTools.continuationSummary(owner);
+  }
+
   /** レビューツール一覧。 */
   private dev.mikoto2000.rei.review.ReviewTools reviewTools;
 

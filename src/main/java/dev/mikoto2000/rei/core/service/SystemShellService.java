@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.core.service;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
+import java.util.Base64;
 import java.util.List;
 import java.util.Map;
 import org.springframework.stereotype.Component;
@@ -29,7 +31,13 @@ public class SystemShellService {
         || shellName.equals("powershell.exe")
         || shellName.equals("pwsh")
         || shellName.equals("pwsh.exe")) {
-      return List.of(shell, "-NoProfile", "-Command", command);
+      // Windows command-line reconstruction can strip nested quotes in -Command.
+      // Encode only after policy inspection of the original script; preserve its exact text.
+      return List.of(
+          shell,
+          "-NoProfile",
+          "-EncodedCommand",
+          Base64.getEncoder().encodeToString(command.getBytes(StandardCharsets.UTF_16LE)));
     }
     if (shellName.equals("cmd") || shellName.equals("cmd.exe")) {
       return List.of(shell, "/C", command);

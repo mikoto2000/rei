@@ -803,6 +803,10 @@ public class ReiApplication {
 
   /** れいの起動に関する設定Multilineキー関連付けを処理する。 */
   void configureMultilineKeyBinding(LineReader reader) {
+    var terminal = reader.getTerminal();
+    if (terminal != null
+        && (Terminal.TYPE_DUMB.equals(terminal.getType())
+            || Terminal.TYPE_DUMB_COLOR.equals(terminal.getType()))) return;
     reader
         .getWidgets()
         .put(

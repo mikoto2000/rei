@@ -161,7 +161,7 @@ public final class ReviewTools {
   @ResultDelivery(ResultDelivery.Kind.FILE_CONTENT)
   @Tool(
       description =
-          "Read an exact decoded review page. Pass reviewJobId, path, expectedVersion, UTF-16 offset, and tokenBudget 256..2048. Start at offset 0 and follow nextOffset while truncated. A version change invalidates the job. Preserve each returned range unchanged in submitReviewResult.")
+          "Read an exact decoded review page. Pass reviewJobId, path, expectedVersion, UTF-16 offset, and tokenBudget 256..2048. Start at offset 0 and follow nextOffset while truncated. A version change invalidates the job. Prefer submitReviewPage with this page's offset/nextOffset; the server preserves exact hashes and coordinates. Batch related assessments first and reads at their known nextOffset afterwards in one tool-call response.")
   public Page readReviewFile(
       String reviewJobId, String path, String expectedVersion, int offset, int tokenBudget)
       throws java.io.IOException {
@@ -215,6 +215,19 @@ public final class ReviewTools {
   public Job submitReviewResult(
       String reviewJobId, Range range, String assessment, List<Finding> findings)
       throws java.io.IOException {
+    try {
+      return submitExactReviewResult(reviewJobId, range, assessment, findings);
+    } catch (IllegalArgumentException invalid) {
+      if (!"REVIEW_RESULT_INVALID".equals(invalid.getMessage())) throw invalid;
+      throw new ReviewResultRejectedException(
+          "No assessment was accepted. Prefer submitReviewPage using the delivered page's path, offset and nextOffset. "
+              + "Do not reconstruct hashes or source coordinates. Re-read the same page if its body left the prompt.");
+    }
+  }
+
+  private Job submitExactReviewResult(
+      String reviewJobId, Range range, String assessment, List<Finding> findings)
+      throws java.io.IOException {
     var owner = AgentRunScope.current();
     var scope = scope(owner);
     var job = reviewStatus(reviewJobId);
@@ -252,6 +265,155 @@ public final class ReviewTools {
     return ledger.reviewed(reviewJobId, scope, range, assessment, findings);
   }
 
+  public record PageFinding(String id, String severity, String evidence, String assessment) {}
+
+  public record FindingDisposition(
+      String id, String status, List<Finding> findings, long revision, boolean changed) {}
+
+  @Tool(
+      description =
+          "Dismiss one owned review finding only after corroborating metadata, referenced source or rendered output disproves the alleged defect. "
+              + "Provide its findingId, path and a nonempty reason citing that counterevidence. Optional evidence quote disambiguates repeated IDs. "
+              + "Preserves original quote/assessment and records DISMISSED plus the reason. Does not modify source files or mark unread ranges reviewed. Repeated dismissal is idempotent.")
+  public FindingDisposition dismissReviewFinding(
+      String reviewJobId,
+      String findingId,
+      String path,
+      String reason,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String evidence) {
+    try {
+      var transition =
+          ledger.dismissFindingTransition(
+              reviewJobId, scope(AgentRunScope.current()), findingId, path, evidence, reason);
+      var job = transition.job();
+      return new FindingDisposition(
+          job.id(),
+          job.status(),
+          job.findings().stream()
+              .filter(
+                  f ->
+                      f.id().equals(findingId)
+                          && f.path().equals(path)
+                          && (evidence == null || f.evidence().equals(evidence)))
+              .toList(),
+          job.revision(),
+          transition.changed());
+    } catch (IllegalArgumentException invalid) {
+      if (!"REVIEW_RESULT_INVALID".equals(invalid.getMessage())) throw invalid;
+      throw new ReviewResultRejectedException(
+          "No finding was dismissed. Use an existing owned findingId/path, its exact evidence quote if needed, and a corroborated reason of 1..4096 characters.");
+    }
+  }
+
+  public record VerifiedRange(Range range, boolean delivered, boolean reviewed, boolean stale) {}
+
+  /** A receipt for this submission; the full assessments remain in the durable ledger. */
+  public record PageSubmission(
+      String id,
+      String status,
+      boolean accepted,
+      List<VerifiedRange> ranges,
+      List<Finding> findings,
+      int reviewedRanges,
+      int targetFiles,
+      long revision) {}
+
+  @Tool(
+      description =
+          "Assess one delivered readReviewFile page using its path, offset and nextOffset unchanged. "
+              + "The server selects its exact saved source range, hashes and coordinates. Provide an assessment even with no findings. "
+              + "Each finding needs id, severity, an exact unique evidence quote within this page, and assessment; the server locates it. "
+              + "Undelivered, stale, ambiguous or invented pages/quotes are rejected. No source files are changed.")
+  public PageSubmission submitReviewPage(
+      String reviewJobId,
+      String path,
+      int offset,
+      int nextOffset,
+      String assessment,
+      List<PageFinding> findings)
+      throws java.io.IOException {
+    try {
+      var job = reviewStatus(reviewJobId);
+      if (job.status().equals("STALE_VERSION"))
+        throw new ReviewResultRejectedException(
+            "No assessment was accepted: source version changed. Use restartReview, then read the new page.");
+      var matching =
+          job.ranges().stream()
+              .filter(
+                  e ->
+                      e.delivered()
+                          && !e.stale()
+                          && e.range().path().equals(path)
+                          && e.range().span().start() == offset
+                          && e.range().span().end() == nextOffset)
+              .toList();
+      if (matching.size() != 1)
+        throw new ReviewResultRejectedException(
+            "No assessment was accepted. Use the exact path, offset and nextOffset of one delivered readReviewFile page. Re-read that page if necessary.");
+      var range = matching.getFirst().range();
+      var source = files.get().reviewSnapshot(path).text();
+      if (findings == null) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+      var located = new ArrayList<Finding>();
+      for (var finding : findings) {
+        String quote = finding.evidence();
+        if (quote == null || quote.isBlank())
+          throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+        int start = source.indexOf(quote, offset);
+        int other = start < 0 ? -1 : source.indexOf(quote, start + 1);
+        if (start < offset
+            || start + quote.length() > nextOffset
+            || other >= 0 && other + quote.length() <= nextOffset)
+          throw new ReviewResultRejectedException(
+              "No assessment was accepted. Each evidence quote must match exactly once inside this delivered page; supply a longer unique quote if needed.");
+        int end = start + quote.length();
+        var from = position(source, start);
+        var to = position(source, end);
+        located.add(
+            new Finding(
+                finding.id(),
+                finding.severity(),
+                path,
+                range.version(),
+                new Span(start, end, from[0], to[0], from[1], to[1]),
+                quote,
+                finding.assessment(),
+                "VERIFIED"));
+      }
+      var saved = submitReviewResult(reviewJobId, range, assessment, located);
+      var entry =
+          saved.ranges().stream().filter(e -> e.range().equals(range)).findFirst().orElseThrow();
+      var acceptedFindings =
+          saved.findings().stream()
+              .filter(
+                  f ->
+                      located.stream()
+                          .anyMatch(
+                              l ->
+                                  l.path().equals(f.path())
+                                      && l.version().equals(f.version())
+                                      && l.location().equals(f.location())
+                                      && l.evidence().equals(f.evidence())))
+              .toList();
+      return new PageSubmission(
+          saved.id(),
+          saved.status(),
+          true,
+          List.of(
+              new VerifiedRange(entry.range(), entry.delivered(), entry.reviewed(), entry.stale())),
+          acceptedFindings,
+          (int)
+              saved.ranges().stream()
+                  .filter(e -> e.reviewed() && e.delivered() && !e.stale())
+                  .count(),
+          saved.targets().size(),
+          saved.revision());
+    } catch (IllegalArgumentException invalid) {
+      if (!"REVIEW_RESULT_INVALID".equals(invalid.getMessage())) throw invalid;
+      throw new ReviewResultRejectedException(
+          "No assessment was accepted. Use an owned delivered page, nonempty assessment, and findings=[] or exact unique evidence quotes.");
+    }
+  }
+
   /** 変更内容のレビューで用いるレビュー状態を返す。 */
   @Tool(
       description =
@@ -271,6 +433,36 @@ public final class ReviewTools {
         job = ledger.invalidate(reviewJobId, scope, target.path(), snapshot.version());
     }
     return job;
+  }
+
+  /** Coverage-free, paginated access to preserved candidate findings. */
+  public record FindingsPage(
+      String id,
+      String status,
+      int offset,
+      Integer nextOffset,
+      int totalFindings,
+      List<Finding> findings) {}
+
+  /** Return candidates without replaying every target and saved assessment. */
+  @Tool(
+      description =
+          "Get preserved review findings directly, without rereading the full coverage ledger. "
+              + "Use offset=0 and limit=5 initially, then nextOffset until null. Includes original evidence, "
+              + "assessment and verificationStatus (VERIFIED means source quote matched, not semantic correctness). "
+              + "Revalidates current source versions; corroborate candidates before repairs or dismissReviewFinding.")
+  public FindingsPage reviewFindings(String reviewJobId, int offset, int limit)
+      throws java.io.IOException {
+    var job = reviewStatus(reviewJobId);
+    int start = Math.min(Math.max(0, offset), job.findings().size());
+    int end = Math.min(start + Math.max(1, Math.min(10, limit)), job.findings().size());
+    return new FindingsPage(
+        job.id(),
+        job.status(),
+        start,
+        end < job.findings().size() ? end : null,
+        job.findings().size(),
+        List.copyOf(job.findings().subList(start, end)));
   }
 
   /**
@@ -340,9 +532,12 @@ public final class ReviewTools {
   /** 変更内容のレビューで用いるレビュー待機中を返す。 */
   @Tool(
       description =
-          "Return missing review spans with exact source version and next character offset. Stale, undelivered and unreviewed spans remain pending. Use reviewStatus for preserved findings and restartReview for changed sources.")
+          "Return missing review spans with exact source version and next character offset. Stale, undelivered and unreviewed spans remain pending. Use reviewFindings for preserved findings and restartReview for changed sources.")
   public List<Pending> reviewPending(String reviewJobId) throws java.io.IOException {
-    var job = reviewStatus(reviewJobId);
+    return pending(reviewStatus(reviewJobId));
+  }
+
+  private List<Pending> pending(Job job) {
     var pending = new ArrayList<Pending>();
     for (var target : job.targets())
       for (var required : target.required()) {
@@ -373,8 +568,7 @@ public final class ReviewTools {
   }
 
   /** 後続の処理で判断できるよう、未完了の対象を返す。 */
-  private Pending pending(Target target, int start, int end, String state)
-      throws java.io.IOException {
+  private Pending pending(Target target, int start, int end, String state) {
     int[] position = {1, 0};
     try {
       var text = files.get().reviewSnapshot(target.path()).text();
@@ -483,6 +677,64 @@ public final class ReviewTools {
         throw new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
             dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason.REVIEW_PARTIAL);
       }
+  }
+
+  /** Saved range assessments survive prompt eviction; this snapshot does not mark new reviews. */
+  public String continuationSummary(AgentRunContext owner) {
+    var jobs = ledger.jobs(scope(owner)).stream().map(id -> ledger.get(id, scope(owner))).toList();
+    var incomplete = jobs.stream().filter(job -> !job.status().equals("COMPLETE")).toList();
+    var rows = new ArrayList<Map<String, Object>>();
+    for (var job : incomplete) {
+      var row =
+          Map.<String, Object>of(
+              "reviewJobId",
+              job.id(),
+              "status",
+              job.status(),
+              "targetFiles",
+              job.targets().size(),
+              "reviewedRanges",
+              job.ranges().stream()
+                  .filter(e -> e.reviewed() && e.delivered() && !e.stale())
+                  .count(),
+              "pendingSample",
+              pending(job).stream().limit(3).toList());
+      rows.add(row);
+      if (StorageDatabase.JSON.valueToTree(rows).toString().length() > 3500) {
+        rows.removeLast();
+        break;
+      }
+      if (rows.size() >= 3) break;
+    }
+    return StorageDatabase.JSON
+        .valueToTree(
+            Map.of(
+                "registeredJobs",
+                jobs.size(),
+                "completedJobs",
+                jobs.size() - incomplete.size(),
+                "incompleteJobs",
+                incomplete.size(),
+                "findingJobs",
+                jobs.stream()
+                    .filter(job -> !job.findings().isEmpty())
+                    .limit(3)
+                    .map(
+                        job ->
+                            Map.of(
+                                "reviewJobId",
+                                job.id(),
+                                "status",
+                                job.status(),
+                                "findings",
+                                job.findings().size(),
+                                "nextAction",
+                                "Use reviewFindings(offset=0,limit=5); corroborate and resolve candidates. "
+                                    + "Coverage COMPLETE alone does not mean requested repairs are finished."))
+                    .toList(),
+                "savedPendingSample",
+                rows))
+        .toString();
   }
 
   /** 終了時の状態を確定するため、実行を完了させる。 */

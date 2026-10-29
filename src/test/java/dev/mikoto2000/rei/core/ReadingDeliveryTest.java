@@ -26,6 +26,57 @@ class ReadingDeliveryTest {
   @TempDir Path root;
 
   @Test
+  void historyReferencesInAReadNoticeAreRelevantAndDoNotCrowdOutTheSource() throws Exception {
+    String line = "読み取り済みの教材本文を再確認する。";
+    Files.writeString(root.resolve("lesson.md"), (line + "\n").repeat(400));
+    Path data = root.resolve("data");
+    try (var gate = new StorageMigrationCoordinator(data)) {
+      gate.prepare();
+    }
+    var store = ReadingTestStores.store(new StorageDatabase(data));
+    var raw = new RawToolResultStore(data);
+    var owner = new AgentRunContext("history-sample", "chat", root, "project");
+    var tools = new Tools();
+    var initial =
+        tools.readMultiFile(List.of(new Tools.ReadFileRequest("lesson.md", 1, 1)), root).getFirst();
+    String hash = FileSnapshots.hash(line.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    var history =
+        java.util.stream.IntStream.range(0, 40)
+            .mapToObj(
+                i ->
+                    new ReadingDelivery.Entry(
+                        "lesson.md",
+                        initial.version(),
+                        i * 10 + 1,
+                        java.util.Collections.nCopies(10, hash),
+                        "old-" + i))
+            .toList();
+    store.save(
+        owner,
+        "delivery",
+        "evidence",
+        new ReadingDelivery.Saved(history),
+        java.time.Duration.ofDays(1));
+    tools.setReadingDelivery(ReadingTestStores.delivery(store, raw));
+    try (var scope = AgentRunScope.open(owner)) {
+      var result =
+          tools
+              .readMultiFile(List.of(new Tools.ReadFileRequest("lesson.md", 301, 340)), root)
+              .getFirst();
+      assertEquals(2, result.delivery().evidence().size());
+      assertTrue(
+          result.delivery().evidence().stream()
+              .allMatch(e -> e.startLine() <= 340 && e.endLine() >= 301));
+      assertTrue(result.content().size() >= 20);
+      assertEquals(line, result.content().getFirst());
+      assertFalse(result.delivery().suppressed());
+      assertEquals(
+          40,
+          store.load(owner, "delivery", "evidence", ReadingDelivery.Saved.class).entries().size());
+    }
+  }
+
+  @Test
   void oldRestorationMetadataIsBoundedWithoutAbortingAConfirmedPrompt() throws Exception {
     Files.writeString(root.resolve("a.txt"), "\n".repeat(64000));
     Path data = root.resolve("data");

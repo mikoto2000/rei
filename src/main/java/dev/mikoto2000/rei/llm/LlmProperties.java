@@ -14,6 +14,18 @@ public class LlmProperties {
   /** 最大出力トークン数。 */
   private Integer maxOutputTokens = DEFAULT_MAX_OUTPUT_TOKENS;
 
+  /** チャット通信でデータが届くまでの待ち時間。 */
+  private java.time.Duration readTimeout = ChatStreamTimeoutInterceptor.DEFAULT_READ_TIMEOUT;
+
+  public java.time.Duration getReadTimeout() {
+    return readTimeout;
+  }
+
+  public void setReadTimeout(java.time.Duration readTimeout) {
+    ChatStreamTimeoutInterceptor.validatedReadTimeoutMillis(readTimeout);
+    this.readTimeout = readTimeout;
+  }
+
   /** 出力上限。 */
   private OutputLimit outputLimit = new OutputLimit();
 

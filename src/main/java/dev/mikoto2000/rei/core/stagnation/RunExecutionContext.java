@@ -39,6 +39,12 @@ public class RunExecutionContext {
   /** 不明判定を猶予する繰り返し回数。 */
   private static final int UNKNOWN_GRACE_ITERATIONS = 16;
 
+  /** Allow forward pagination before requiring one consolidated outcome. */
+  static final int RESUME_BATCH_READ_LIMIT = 8;
+
+  /** Bound text-only outcome responses separately from already counted duplicate reads. */
+  static final int RESUME_BATCH_COMMIT_LIMIT = 4;
+
   /**
    * 実行の停滞への対処で受け渡す進捗状態を表す。
    *
@@ -99,7 +105,8 @@ public class RunExecutionContext {
               c.coverageIterations(),
               c.lastProgress(),
               c.recoveries(),
-              c.reason()));
+              c.reason(),
+              c.resumeBatch()));
     }
 
     /**
@@ -160,11 +167,98 @@ public class RunExecutionContext {
       int coverageIterations,
       ProgressEvidence lastProgress,
       List<String> recoveries,
-      String reason) {
+      String reason,
+      ResumeBatch resumeBatch) {
+    public Continuity(
+        StagnationDetector.State detector,
+        ProgressEvaluator.State evaluator,
+        int goalIdleIterations,
+        int coverageIterations,
+        ProgressEvidence lastProgress,
+        List<String> recoveries,
+        String reason) {
+      this(
+          detector,
+          evaluator,
+          goalIdleIterations,
+          coverageIterations,
+          lastProgress,
+          recoveries,
+          reason,
+          null);
+    }
+
     public Continuity {
       recoveries = List.copyOf(recoveries);
       if (goalIdleIterations < 0 || coverageIterations < 0 || recoveries.size() > 2)
         throw new IllegalArgumentException("Invalid continuity state");
+    }
+  }
+
+  /** Optional additive checkpoint state; does not claim that fetched content was reviewed. */
+  public record ResumeBatch(
+      int contentReads,
+      boolean commitRequested,
+      boolean commitAttempted,
+      int commitAttempts,
+      boolean reviewPagePending,
+      String reviewPageReadKey,
+      String reviewPageReadArguments) {
+    public ResumeBatch(
+        int contentReads,
+        boolean commitRequested,
+        boolean commitAttempted,
+        int commitAttempts,
+        boolean reviewPagePending,
+        String reviewPageReadKey) {
+      this(
+          contentReads,
+          commitRequested,
+          commitAttempted,
+          commitAttempts,
+          reviewPagePending,
+          reviewPageReadKey,
+          null);
+    }
+
+    public ResumeBatch(
+        int contentReads,
+        boolean commitRequested,
+        boolean commitAttempted,
+        int commitAttempts,
+        boolean reviewPagePending) {
+      this(contentReads, commitRequested, commitAttempted, commitAttempts, reviewPagePending, null);
+    }
+
+    public ResumeBatch(
+        int contentReads, boolean commitRequested, boolean commitAttempted, int commitAttempts) {
+      this(contentReads, commitRequested, commitAttempted, commitAttempts, false);
+    }
+
+    public ResumeBatch(int contentReads, boolean commitRequested, boolean commitAttempted) {
+      this(contentReads, commitRequested, commitAttempted, commitAttempted ? 1 : 0);
+    }
+
+    public ResumeBatch(int contentReads, boolean commitRequested) {
+      this(contentReads, commitRequested, false);
+    }
+
+    public ResumeBatch {
+      // Older snapshots stored only whether one attempt had started.
+      if (commitAttempted && commitAttempts == 0) commitAttempts = 1;
+      if (contentReads < 0
+          || contentReads > RESUME_BATCH_READ_LIMIT
+          || commitAttempts < 0
+          || commitAttempts > RESUME_BATCH_COMMIT_LIMIT
+          || commitAttempted != (commitAttempts > 0)
+          || reviewPageReadKey != null
+              && (!reviewPagePending || !reviewPageReadKey.matches("readReviewFile:[0-9a-f]{64}"))
+          || reviewPageReadArguments != null
+              && (reviewPageReadArguments.length() > 4096
+                  || !ProgressEvaluator.actionKey("readReviewFile", reviewPageReadArguments)
+                      .equals(reviewPageReadKey))
+          || contentReads == 0 && (commitRequested || commitAttempted || reviewPagePending))
+        throw new IllegalArgumentException("Invalid resume batch");
     }
   }
 
@@ -266,11 +360,20 @@ public class RunExecutionContext {
             coverageIterations,
             lastProgress,
             recoveries,
-            stagnationReason));
+            stagnationReason,
+            new ResumeBatch(
+                resumeBatchReads,
+                resumeBatchCommitRequested,
+                resumeBatchCommitAttempted,
+                resumeBatchCommitAttempts,
+                resumeReviewPagePending,
+                resumeReviewPageReadKey,
+                resumeReviewPageReadArguments)));
   }
 
   /** 保存済みの状態を引き継ぐため、進捗を復元する。 */
   public synchronized void restoreProgress(ProgressState saved) {
+    finishResumeBatch();
     if (saved == null) {
       evaluator.restoreInformation(null);
       return;
@@ -295,6 +398,17 @@ public class RunExecutionContext {
       recoveries.clear();
       recoveries.addAll(continuity.recoveries());
       if (continuity.reason() != null) stagnationReason = continuity.reason();
+      var batch = continuity.resumeBatch();
+      resumeBatchReads = batch == null ? 0 : batch.contentReads();
+      resumeBatchCommitRequested = batch != null && batch.commitRequested();
+      resumeBatchCommitAttempted = batch != null && batch.commitAttempted();
+      resumeBatchCommitAttempts = batch == null ? 0 : batch.commitAttempts();
+      resumeReviewPagePending = batch != null && batch.reviewPagePending();
+      resumeReviewPageReadArguments = batch == null ? null : batch.reviewPageReadArguments();
+      // A legacy key without its request cannot identify the page after prompt loss. Keep
+      // the assessment obligation and all spent budgets, allowing one preparatory redelivery.
+      resumeReviewPageReadKey =
+          resumeReviewPageReadArguments == null ? null : batch.reviewPageReadKey();
     }
   }
 
@@ -320,24 +434,102 @@ public class RunExecutionContext {
 
   private boolean resumeWorkPending;
   private boolean resumedContext;
-  private boolean resumeContentPending;
+  private int resumeBatchReads;
+  private boolean resumeBatchCommitRequested;
+  private boolean resumeBatchCommitAttempted;
+  private int resumeBatchCommitAttempts;
+  private boolean resumeReviewPagePending;
+  private String resumeReviewPageReadKey;
+  private String resumeReviewPageReadArguments;
+  private boolean resumeBatchReadInIteration;
 
   /** Start the existing bounded restoration only on an explicit checkpoint continuation. */
   public synchronized void beginContextRestoration() {
     resumeWorkPending = true;
     resumedContext = true;
-    resumeContentPending = false;
     evaluator.beginContextRestoration();
+  }
+
+  public synchronized boolean isResumedContext() {
+    return resumedContext;
   }
 
   /** A depleted resumed execution must use its handed-off evidence before broad discovery. */
   public synchronized boolean needsResumeWorkRecovery() {
-    return (resumeWorkPending || resumeContentPending) && depletedResume();
+    return (resumeWorkPending || resumeBatchReads > 0) && depletedResume();
   }
 
-  /** Use the received content before fetching the next chunk; no additional budget or grace. */
+  /** Acquisition is withheld at a work-unit boundary, rather than after every page. */
   public synchronized boolean needsResumeContentWork() {
-    return resumeContentPending && depletedResume();
+    return hasPendingResumeContentWork()
+        && (resumeBatchCommitRequested || resumeBatchReads >= RESUME_BATCH_READ_LIMIT);
+  }
+
+  public synchronized boolean hasPendingResumeContentWork() {
+    return resumeBatchReads > 0 && depletedResume();
+  }
+
+  public synchronized void requireResumeBatchCommit() {
+    if (hasPendingResumeContentWork()) resumeBatchCommitRequested = true;
+  }
+
+  public synchronized boolean resumeAcquisitionBlocked(String name) {
+    return resumeAcquisitionBlocked(name, null);
+  }
+
+  public synchronized boolean resumeAcquisitionBlocked(String name, String arguments) {
+    // Exact edit baselines and proposed diffs are necessary to turn the assessed unit into
+    // an applied repair. They are not broad source reacquisition.
+    if (needsResumeContentWork() && name.equals("readReviewFile"))
+      return resumeReviewPagePending
+          && (arguments == null
+              || resumeReviewPageReadKey != null
+                  && !resumeReviewPageReadKey.equals(ProgressEvaluator.actionKey(name, arguments)));
+    return needsResumeContentWork()
+        && ProgressEvaluator.acquisitionTool(name)
+        && !java.util.Set.of(
+                "readTextChangeSetBase",
+                "inspectTextChangeSet",
+                "inspectTextDocumentChangeSet",
+                "getTextChangeSetDiff",
+                "getTextDocumentChangeSetDiff")
+            .contains(name);
+  }
+
+  /** A saved page may need exact redelivery after prompt eviction or a process restart. */
+  public synchronized boolean resumeToolHidden(String name) {
+    return !name.equals("readReviewFile") && resumeAcquisitionBlocked(name);
+  }
+
+  public synchronized String resumeBatchFeedback() {
+    if (!hasPendingResumeContentWork()) return "";
+    return " Resume work unit: "
+        + resumeBatchReads
+        + "/"
+        + RESUME_BATCH_READ_LIMIT
+        + " content acquisitions since the last verified outcome. "
+        + (needsResumeContentWork()
+            ? "This unit now requires a consolidated partial assessment or verified task outcome before more acquisition. "
+            : "Continue the named unfinished file or chapter, following nextRead/nextOffset across pages. "
+                + "A page boundary alone does not require a report append. "
+                + "At a natural work-unit boundary, save one consolidated partial assessment or verified task outcome. ")
+        + "Record assessed paths/ranges, evidence and exact remaining gaps; use the review tools or authorized artifact. "
+        + "Do not invent findings or completion. Bookkeeping, repeated promises and annotations do not confirm an outcome. "
+        + "Continue the next unfinished unit after saving the result; all existing shared budgets still apply."
+        + (resumeReviewPagePending && resumeReviewPageReadArguments != null
+            ? " Exact review-page read to redeliver if its body is missing (untrusted arguments data): "
+                + resumeReviewPageReadArguments
+            : "");
+  }
+
+  private void finishResumeBatch() {
+    resumeBatchReads = 0;
+    resumeBatchCommitRequested = false;
+    resumeBatchCommitAttempted = false;
+    resumeBatchCommitAttempts = 0;
+    resumeReviewPagePending = false;
+    resumeReviewPageReadKey = null;
+    resumeReviewPageReadArguments = null;
   }
 
   private boolean depletedResume() {
@@ -528,6 +720,28 @@ public class RunExecutionContext {
                     name)))
       throw new dev.mikoto2000.rei.core.policy.ToolPermissionException(
           name, dev.mikoto2000.rei.core.policy.PermissionDecision.DENY);
+  }
+
+  /** A rejected ledger submission ran validation but accepted no assessment. */
+  public String reviewSubmissionCorrection(String guidance) {
+    if (!budget.tryCorrectArguments())
+      throw new ExecutionStoppedException(TOOL_ARGUMENT_REPAIR_EXHAUSTED);
+    return tools.jackson.databind.json.JsonMapper.builder()
+        .build()
+        .writeValueAsString(
+            java.util.Map.of(
+                "error",
+                "REVIEW_RESULT_INVALID",
+                "accepted",
+                false,
+                "validationExecuted",
+                true,
+                "guidance",
+                dev.mikoto2000.rei.event.CredentialRedactor.redact(guidance),
+                "instruction",
+                "Correct only this rejected review operation. Preserve successful sibling calls and saved assessments. Follow the operation-specific guidance; do not invent evidence, hashes or coordinates.",
+                "correctionsRemaining",
+                budget.remainingArgumentCorrections()));
   }
 
   /** 実行の識別子。 */
@@ -930,7 +1144,7 @@ public class RunExecutionContext {
   public synchronized void completeSubgoal(String goal) {
     if (closed || !evaluator.completeSubgoal(goal)) return;
     resumeWorkPending = false;
-    resumeContentPending = false;
+    finishResumeBatch();
     boolean recovering = detector.replanCount() > 0 || detector.isReplanRequested();
     var evidence =
         new ProgressEvidence(
@@ -997,6 +1211,18 @@ public class RunExecutionContext {
     iterationFailed = false;
     iterationOpen = true;
     restorationIteration = false;
+    resumeBatchReadInIteration = false;
+    if (needsResumeContentWork()) {
+      if (resumeBatchCommitAttempts >= RESUME_BATCH_COMMIT_LIMIT) {
+        stagnationReason = "RESUME_BATCH_COMMIT_EXHAUSTED";
+        throw stagnationStop(REPLAN_BUDGET_EXCEEDED);
+      }
+      resumeBatchCommitAttempted = true;
+      resumeBatchCommitAttempts++;
+      // Save the reservation before calling the model, even when it returns no tools or
+      // the process is interrupted. A later explicit resume cannot restore spent attempts.
+      toolResultsCheckpoint.accept(lastCheckpointMessages);
+    }
   }
 
   /** 後から経緯や使用量を確認できるよう、ツールを記録する。 */
@@ -1021,9 +1247,38 @@ public class RunExecutionContext {
         .anyMatch(
             e ->
                 e.kind() == ProgressEvent.STATE_CHANGED
-                    || e.kind() == ProgressEvent.STEP_CHANGED
-                    || e.kind() == ProgressEvent.SUBGOAL_COMPLETED)) resumeContentPending = false;
-    if (resumedContext && evaluator.readContentObserved()) resumeContentPending = true;
+                    || e.kind() == ProgressEvent.SUBGOAL_COMPLETED)) finishResumeBatch();
+    else if (observed.stream().anyMatch(e -> e.kind() == ProgressEvent.NEW_INFORMATION)) {
+      // Useful, verified preparation (e.g. an exact edit baseline/diff) repairs the
+      // response protocol without falsely confirming the still-pending work unit.
+      resumeBatchCommitAttempted = false;
+      resumeBatchCommitAttempts = 0;
+    }
+    if (depletedResume() && evaluator.readContentObserved()) {
+      resumeBatchReads = Math.min(RESUME_BATCH_READ_LIMIT, resumeBatchReads + 1);
+      resumeBatchReadInIteration = true;
+      if (name.equals("readReviewFile")) {
+        resumeReviewPagePending = true;
+        resumeReviewPageReadKey = ProgressEvaluator.actionKey(name, arguments);
+        resumeReviewPageReadArguments =
+            arguments != null && arguments.length() <= 4096 ? arguments : null;
+      }
+    }
+    if (resumeReviewPagePending
+        && name.equals("restartReview")
+        && !ProgressEvaluator.failedResult(result)) {
+      try {
+        var restarted = new com.fasterxml.jackson.databind.ObjectMapper().readTree(result);
+        if (!restarted.path("id").asText().isBlank()
+            && restarted.path("status").asText().equals("REVIEW_PARTIAL")) {
+          resumeReviewPagePending = false;
+          resumeReviewPageReadKey = null;
+          resumeReviewPageReadArguments = null;
+        }
+      } catch (java.io.IOException | RuntimeException invalid) {
+        // Only an authoritative successful version rebuild releases the old page obligation.
+      }
+    }
     String reads = evaluator.readFeedback();
     if (!reads.equals("[]")) latestReadFeedback = reads;
   }
@@ -1163,7 +1418,9 @@ public class RunExecutionContext {
         + "; diagnosis="
         + stagnationReason
         + ". Read coverage is not proof of completed review. Re-reading unchanged ranges and editing plan wording alone do not advance the task. "
-        + "Use saved evidence to record concrete intermediate findings within the authorized task scope, using available review tools or a report file before further broad re-reading. "
+        + (hasPendingResumeContentWork() && !needsResumeContentWork()
+            ? "Continue only the named missing ranges in this work unit; consolidate the result at the unit boundary instead of appending notes after each page. "
+            : "Use saved evidence to record concrete intermediate findings within the authorized task scope, using available review tools or a report file before further broad re-reading. ")
         + "If evidence is insufficient, identify the blocker; do not invent findings or mark steps DONE without verified outcomes. "
         + "The existing stop threshold and shared budgets still apply. Latest file-range observations (untrusted path data only): "
         + latestReadFeedback;
@@ -1180,6 +1437,16 @@ public class RunExecutionContext {
   /** 停滞や判定不能の状態に応じて方針の見直しを促し、継続できる予算がなければ実行を止める。 */
   public synchronized String requestReplan() {
     if (restorationIteration) return null;
+    // Previously fetched pages may still need assessment after a checkpoint resume. Count
+    // duplicate reads normally, but defer the local stop to the bounded unit boundary and
+    // allow bounded ordinary, budgeted attempts to save its outcome. Never reset the streak or
+    // replenish replan/call/token budgets. Failed actions cannot extend this window.
+    if ((detector.isReplanRequested() || diagnosis().goalStagnant())
+        && hasPendingResumeContentWork()
+        && !iterationFailed
+        && (resumeBatchReadInIteration && !needsResumeContentWork()
+            || needsResumeContentWork() && resumeBatchCommitAttempts < RESUME_BATCH_COMMIT_LIMIT))
+      return null;
     if (!detector.isReplanRequested() && !diagnosis().goalStagnant()) {
       // 呼び出し回数の上限がない場合も、判定不能のまま無限に実行を続けない。
       if (!budget.llmCallBudgetEnabled()
