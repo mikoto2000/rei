@@ -75,7 +75,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         .filter(m -> m instanceof SystemMessage)
         .forEach(messages::add);
     var history = turns.read(id);
-    var cancelled = turns.promptHistory(id);
+    var cancelled = ConversationTurnStore.promptHistoryFor(history);
     if (!cancelled.generation().isEmpty())
       messages.add(
           SystemMessage.builder()
@@ -91,6 +91,10 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
             ? java.util.List.<dev.mikoto2000.rei.conversation.ConversationLogEntry>of()
             : logs.readConversation(id);
     if (!logEntries.isEmpty()) {
+      var hiddenAt = cancelled.indexedTimestampFilter();
+      var timeline = new java.util.TreeMap<java.time.Instant, ConversationTurnStore.Turn>();
+      for (var turn : history)
+        if (turn.createdAt() != null) timeline.putIfAbsent(turn.createdAt(), turn);
       var currentTurn =
           owner == null
               ? Optional.<ConversationTurnStore.Turn>empty()
@@ -105,7 +109,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
                 && (entry.content().equals(request.prompt().getUserMessage().getText())
                     || currentTurn.map(t -> entry.content().equals(t.request())).orElse(false));
         if (currentInput) continue;
-        if (cancelled.hides(entry.timestamp() == null ? null : entry.timestamp().toInstant()))
+        if (hiddenAt.test(entry.timestamp() == null ? null : entry.timestamp().toInstant()))
           continue;
         var properties = new HashMap<String, Object>(entry.metadata());
         if (entry.source() != null) properties.put("source", entry.source());
@@ -121,17 +125,11 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         // Carry completed run observations alongside the original final answer without rewriting
         // it.
         if ("assistant".equals(entry.speaker())) {
-          var turn =
-              history.stream()
-                  .filter(
-                      t ->
-                          t.createdAt() != null
-                              && entry.timestamp() != null
-                              && !t.createdAt().isAfter(entry.timestamp().toInstant()))
-                  .max(java.util.Comparator.comparing(ConversationTurnStore.Turn::createdAt));
-          if (turn.isPresent() && entry.content().equals(turn.get().assistantMessage())) {
-            var summary =
-                summaries.read(ConversationSummaryRepository.runKey(id, turn.get().runId()));
+          var previous =
+              entry.timestamp() == null ? null : timeline.floorEntry(entry.timestamp().toInstant());
+          var turn = previous == null ? null : previous.getValue();
+          if (turn != null && entry.content().equals(turn.assistantMessage())) {
+            var summary = summaries.read(ConversationSummaryRepository.runKey(id, turn.runId()));
             if (!summary.summary().isBlank())
               messages.add(
                   historical(

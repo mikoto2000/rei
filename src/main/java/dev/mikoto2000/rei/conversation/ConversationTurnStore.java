@@ -277,7 +277,7 @@ public class ConversationTurnStore implements ConversationHistory {
 
   /** 会話履歴と受付記録の管理で用いるキャンセル済み文脈を返す。 */
   public synchronized String cancelledContext(String conversationId) {
-    if (read(conversationId).stream().noneMatch(t -> t.status() == Status.CANCELLED)) return "";
+    if (!hasCancelled(conversationId)) return "";
     return """
     Conversation lifecycle: CANCELLED task attempts are archived, not active work.
     Respond to the current user input. Do not retrieve or resume archived tasks automatically.
@@ -288,10 +288,19 @@ public class ConversationTurnStore implements ConversationHistory {
     """;
   }
 
+  protected boolean hasCancelled(String conversationId) {
+    return read(conversationId).stream().anyMatch(t -> t.status() == Status.CANCELLED);
+  }
+
   /** Builds an immutable model-context policy without changing the persistent conversation. */
   public dev.mikoto2000.rei.context.CancelledTaskHistory promptHistory(String conversationId) {
+    return promptHistoryFor(read(conversationId));
+  }
+
+  /** Reuses an already loaded lifecycle snapshot without another storage read. */
+  public static dev.mikoto2000.rei.context.CancelledTaskHistory promptHistoryFor(List<Turn> history) {
     return dev.mikoto2000.rei.context.CancelledTaskHistory.from(
-        read(conversationId).stream()
+        history.stream()
             .map(
                 t ->
                     new dev.mikoto2000.rei.context.CancelledTaskHistory.Attempt(

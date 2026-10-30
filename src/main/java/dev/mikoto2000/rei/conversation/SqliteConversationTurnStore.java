@@ -84,6 +84,47 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
   /** データベース。 */
   private final StorageDatabase database;
 
+  @Override
+  protected boolean hasCancelled(String conversation) {
+    return database.read(
+        connection -> {
+          try (var query =
+              connection.prepareStatement(
+                  "SELECT EXISTS(SELECT 1 FROM turns WHERE project_id=? AND conversation_key=? AND status='CANCELLED')")) {
+            query.setString(1, scope(conversation));
+            query.setString(2, key(conversation));
+            try (var rows = query.executeQuery()) {
+              return rows.next() && rows.getBoolean(1);
+            }
+          }
+        });
+  }
+
+  @Override
+  public dev.mikoto2000.rei.context.CancelledTaskHistory promptHistory(String conversation) {
+    return database.read(
+        connection -> {
+          try (var query =
+              connection.prepareStatement(
+                  "SELECT run_id,status,created_seconds,created_nanos FROM turns WHERE project_id=? AND conversation_key=? ORDER BY ordinal")) {
+            query.setString(1, scope(conversation));
+            query.setString(2, key(conversation));
+            var attempts = new ArrayList<dev.mikoto2000.rei.context.CancelledTaskHistory.Attempt>();
+            try (var rows = query.executeQuery()) {
+              while (rows.next())
+                attempts.add(
+                    new dev.mikoto2000.rei.context.CancelledTaskHistory.Attempt(
+                        rows.getString(1),
+                        rows.getString(2),
+                        rows.getObject(3) == null
+                            ? null
+                            : Instant.ofEpochSecond(rows.getLong(3), rows.getInt(4))));
+            }
+            return dev.mikoto2000.rei.context.CancelledTaskHistory.from(attempts);
+          }
+        });
+  }
+
   /** 指定された値や利用先を使って、SqliteConversationTurnStoreを初期化する。 */
   public SqliteConversationTurnStore(Path root) {
     super(null);
