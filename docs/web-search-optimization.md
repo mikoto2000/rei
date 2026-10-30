@@ -552,3 +552,122 @@ optional citation metadata が主出典の根拠を圧迫しないようにし�
 未知の公式サイト、意味的な網羅性、絶対的な最新性、モデル tokenizer との誤差は残る制限である。
 external_untrusted ラベルと既存 Policy は権限の暗黙付与を防ぐが、モデルの指示追従に対する
 prompt injection の完全な防御を保証するものではない。
+
+## OpenAI Responses API を検索プロバイダとして追加する
+
+`openai` は明示的に providers に追加した場合のみ実行する。既定の DuckDuckGo 構成は変更しない。
+通常チャットの LLM 認証とは独立して、`OPENAI_API_KEY` を検索用に設定する。
+プロバイダの `api-key` が指定されていればそちらを優先する。キーを設定ファイルへ直接書いたりコミットしたりしない。
+
+PowerShell（現在のプロセスと、そこから起動する CLI に適用）:
+
+```powershell
+$env:OPENAI_API_KEY = '<検索用 OpenAI API キー>'
+```
+
+既存の外部 Spring Boot 設定ファイルに次を追加する。providers のリストは全体が置き換わるため、
+継続利用する検索先も記述する。Brave を利用しない場合はその項目を省略できる。
+
+```yaml
+rei:
+  web-search:
+    enabled: true
+    research-timeout-seconds: 60
+    providers:
+      - name: brave
+        base-url: https://api.search.brave.com/res/v1/web/search
+        api-key: ${BRAVE_SEARCH_API_KEY:}
+      - name: duckduckgo
+        base-url: https://html.duckduckgo.com/html/
+      - name: openai
+        base-url: https://api.openai.com/v1/responses
+        model: gpt-4.1-mini
+        timeout-seconds: 45
+        search-context-size: medium
+        max-urls: 5
+        allowed-domains: []
+        blocked-domains: []
+```
+
+`brave → duckduckgo → openai` の設定順で逐次実行する。既存の URL 統合・重複排除・充足判定に従い、
+前段の結果で充足すれば OpenAI は呼ばれない。前段が不足または通常障害の場合だけ次へ進む。
+OpenAI 専用のフォールバック、検索先の並列実行、充足判定の変更はない。
+
+| OpenAI provider のプロパティ | 既定値・意味 |
+| --- | --- |
+| `api-key` | 空なら `OPENAI_API_KEY` を使用 |
+| `base-url` | 省略時 `https://api.openai.com/v1/responses`（完全なエンドポイント） |
+| `model` | `gpt-4.1-mini`。利用アカウントで web_search に対応するモデルを指定 |
+| `timeout-seconds` | 省略時は共通設定。指定すると当該 provider の read/total timeout を上書き（1～300秒） |
+| `search-context-size` | `medium`。`low` / `medium` / `high` |
+| `max-urls` | 20。1～100、実際の採用数は検索要求件数・共通 max-results でも制限 |
+| `allowed-domains` / `blocked-domains` | 各100ドメインまで。スキーム・パス・ワイルドカードなし。サブドメインを含み、拒否を優先 |
+
+接続タイムアウトは共通 `connect-timeout-seconds` を使用する。研究処理全体の期限・キャンセル・転送量・検索 API 回数の
+既存予算は常に優先する。プロバイダのタイムアウトだけ延ばしても研究期限は延びない。
+日付・バージョン等の検索意図は従来の query と後段の選択・評価へ渡す。ドメイン条件は API の filters と
+取得後の URL フィルタの両方へ適用する。本文取得時の DNS・接続先・SSRF 検証は既存の SafeHttpFetcher を利用する。
+Responses POST はリダイレクト・自動再試行を行わない。
+
+### 出典と失敗の扱い
+
+`tool_choice: required`、`include: [web_search_call.action.sources]`、`store: false` を送信する。
+`web_search_call.action.sources` は参照先一覧、`url_citation` は回答内で引用した出典とタイトルであり、
+両方の構造化 URL を統合する。引用タイトルで空のタイトルを補うが、回答文から URL を抽出しない。
+日時・抜粋は API が構造化情報として返さないため、それぞれ null・空文字とする。
+生成回答は Web ページ本文として利用せず、候補を既存の本文取得・関連性評価へ渡す。
+非 URL フィード、不正 URL、非公開 IP、許可外ドメインは候補から除外する。
+
+HTTP 200 に加え Response と web_search_call の完了を確認する。
+正常に完了して有効な URL がない場合は空結果、未実行・未完了・失敗・必要な構造の欠損はエラー。
+`include` を要求した検索 action に sources 配列がない応答は欠損エラーとし、正常な0件とはみなさない。
+キー未設定、401/403、429、5xx、接続・タイムアウト、不正 JSON を空結果に変換しない。
+エラーのある HTTP 200 はキャッシュから除去し、次回は再取得できる。
+他 provider の候補があれば保持して継続し、候補がなく障害があれば既存方式で例外を伝播する。
+本文取得の失敗は従来の fetchStatus / errorType に残す。中断や全体予算による停止の伝播も維持する。
+
+### キャッシュと診断
+
+既存のメモリ HTTP キャッシュを SEARCH の JSON POST に拡張した。GET のコンストラクタ・取得・再検証は維持する。
+メソッド、完全なエンドポイント、再帰的にキー順を正規化した JSON 本文、採用上限、HTTP policy、
+認証を含むヘッダーの内容を SHA-256 の識別子にまとめる。本文には検索語・モデル・filters・context size が含まれる。
+配列順序は保持する。秘密情報の平文をキャッシュキーやログへ保存しない。
+POST 期限切れ時は条件付き GET の ETag/Last-Modified を送らず再送する。
+force refresh、no-store/private、機密を含む本文、非公開ネットワーク等の既存の再利用制限は維持する。
+サーバーのキャッシュ禁止ヘッダーがあれば再利用されない。
+
+既存 Micrometer に `provider=openai`、HTTP status、duration の `stage=openai`、
+`rei.web.search.openai.responses` の status を追加する。
+`rei.web.search.events` の `openai_received_urls` は構造化情報に現れた URL 数（重複・拒否を含む）、
+`openai_adopted_urls` はフィルタ・重複排除・上限適用後の候補数（本文取得成功数ではない）。
+`openai_web_search_calls` は API が返した web_search_call の個数。
+`openai_actual_input_tokens` / `openai_actual_output_tokens` / `openai_actual_total_tokens` は API 返却値のみを記録する。
+通常の `estimated_tokens` は別物である。キャッシュ再利用時に API 使用量・ツール実行回数を再加算しない。
+API が値を返さなければ推定値を補わない。`openai_error_*` で安全な分類を記録する。
+モデル名とネットワーク要求の有無は WebSearchService の DEBUG ログで確認できる。
+リクエスト本文・応答本文・キー・Authorization・外部の例外メッセージは診断ログに出力しない。
+
+### 任意の実 API 確認（課金あり）
+
+OpenAI のトークン・Web Search 利用料金が発生する。厳密な料金計算・課金上限管理は行わない。
+通常テストと `-Pfull` は live を除外する。次の明示的な二重 opt-in をしたときだけ実 API 試験を行う。
+
+```powershell
+$env:OPENAI_API_KEY = '<検索用 OpenAI API キー>'
+$env:REI_OPENAI_WEB_SEARCH_LIVE = 'true'
+try {
+  .\mvnw.cmd -B -Plive-e2e '-Dtest=OpenAiWebSearchLiveTest' test
+} finally {
+  Remove-Item Env:\REI_OPENAI_WEB_SEARCH_LIVE -ErrorAction SilentlyContinue
+}
+```
+
+この試験は既定モデル・公式エンドポイントへ1要求を送り、サービスの完了を確認する。
+外部設定ファイルを適用した CLI では `/search` でも確認できるが、LLM 等の別料金も発生し得る。
+今回は実 API 試験を実行していない。アカウントごとのモデル利用可否・実 API の結果品質・料金は未確認。
+
+仕様確認（2026-10-30）:
+[公式 Web Search ガイド](https://developers.openai.com/api/docs/guides/tools-web-search)、
+[Responses 作成 API](https://developers.openai.com/api/reference/resources/responses/methods/create)、
+[GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini)。
+ガイドと型定義で blocked_domains の露出に差があるため JSON でガイド記載の filters を送信し、後処理でも必ず制限する。

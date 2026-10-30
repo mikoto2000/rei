@@ -15,6 +15,10 @@ public class WebSearchProperties {
   /** 有効状態。 */
   private boolean enabled = false;
 
+  /** OpenAI search credentials are independent of chat authentication. */
+  @org.springframework.beans.factory.annotation.Value("${OPENAI_API_KEY:}")
+  private String openaiApiKey = "";
+
   /** タイムアウトの秒数。 */
   private int timeoutSeconds = 10;
 
@@ -44,8 +48,14 @@ public class WebSearchProperties {
         maxWireBytes,
         maxDecodedBytes,
         java.time.Duration.ofSeconds(connectTimeoutSeconds),
-        java.time.Duration.ofSeconds(readTimeoutSeconds),
-        java.time.Duration.ofSeconds(timeoutSeconds),
+        java.time.Duration.ofSeconds(
+            provider != null && provider.getTimeoutSeconds() != null
+                ? provider.getTimeoutSeconds()
+                : readTimeoutSeconds),
+        java.time.Duration.ofSeconds(
+            provider != null && provider.getTimeoutSeconds() != null
+                ? provider.getTimeoutSeconds()
+                : timeoutSeconds),
         maxRedirects,
         null,
         provider == null ? null : java.net.URI.create(provider.getBaseUrl()),
@@ -154,6 +164,31 @@ public class WebSearchProperties {
 
     /** APIキー。 */
     private String apiKey = "";
+
+    /** Responses search model; independently configured from the chat LLM. */
+    private String model = "gpt-4.1-mini";
+
+    /** Search context budget supported by web_search. */
+    private String searchContextSize = "medium";
+
+    /** Maximum structured URLs adopted from this provider. */
+    private int maxUrls = 20;
+
+    /** Optional per-provider total/read timeout, in seconds. */
+    private Integer timeoutSeconds;
+
+    /** Allowed search domains, including their subdomains. */
+    private List<String> allowedDomains = new ArrayList<>();
+
+    /** Blocked search domains, including their subdomains. */
+    private List<String> blockedDomains = new ArrayList<>();
+
+    /** Resolve the default Responses endpoint only for the explicitly selected provider. */
+    public String getBaseUrl() {
+      return baseUrl == null && "openai".equalsIgnoreCase(name)
+          ? "https://api.openai.com/v1/responses"
+          : baseUrl;
+    }
 
     /** 許可非公開ネットワーク。 */
     private boolean allowPrivateNetwork = false;
