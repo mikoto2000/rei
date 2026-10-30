@@ -400,7 +400,11 @@ public final class ReviewTools {
   public record PageFinding(String id, String severity, String evidence, String assessment) {}
 
   public record FindingDisposition(
-      String id, String status, List<Finding> findings, long revision, boolean changed) {}
+      String id, String status, List<Finding> findings, long revision, boolean changed) {
+    public FindingDisposition {
+      findings = List.copyOf(findings);
+    }
+  }
 
   @Tool(
       description =
@@ -448,7 +452,12 @@ public final class ReviewTools {
       List<Finding> findings,
       int reviewedRanges,
       int targetFiles,
-      long revision) {}
+      long revision) {
+    public PageSubmission {
+      ranges = List.copyOf(ranges);
+      findings = List.copyOf(findings);
+    }
+  }
 
   @Tool(
       description =
@@ -574,7 +583,11 @@ public final class ReviewTools {
       int offset,
       Integer nextOffset,
       int totalFindings,
-      List<Finding> findings) {}
+      List<Finding> findings) {
+    public FindingsPage {
+      findings = List.copyOf(findings);
+    }
+  }
 
   /** Return candidates without replaying every target and saved assessment. */
   @Tool(

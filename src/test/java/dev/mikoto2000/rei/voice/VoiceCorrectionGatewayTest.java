@@ -60,7 +60,11 @@ class VoiceCorrectionGatewayTest {
               owners.add(owner);
               turns.start(owner, prompt);
               assertThatThrownBy(
-                      () -> guard.check("writeMultiFile", "{\"path\":\"target.txt\"}", owner))
+                      () ->
+                          guard.check(
+                              "writeMultiFile",
+                              "{\"files\":[{\"path\":\"target.txt\",\"content\":\"test\"}]}",
+                              owner))
                   .isInstanceOf(ToolPermissionException.class);
               turns.finish(owner, ConversationTurnStore.Status.COMPLETED, "answer");
             });

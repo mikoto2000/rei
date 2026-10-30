@@ -63,7 +63,7 @@ class SearchRankingBudgetTest {
             .getResponses()
             .getFirst()
             .responseData();
-    assertTrue(feedback.contains("file_result_budget_exceeded"));
+    assertTrue(feedback.contains("file_result_budget_exceeded"), feedback);
     assertFalse(failed.returnDirect());
     var next = new org.springframework.ai.chat.prompt.Prompt(failed.conversationHistory(), options);
     var success =
@@ -90,6 +90,9 @@ class SearchRankingBudgetTest {
 
   private org.springframework.ai.chat.model.ChatResponse searchCall(String id, int maxFiles) {
     String args = "{\"request\":{\"queries\":[{\"pattern\":\"class\",\"baseDir\":\".\",\"fixedString\":true,"
+        + "\"ignoreCase\":false,\"invertMatch\":false,\"fileNamesOnly\":false,"
+        + "\"beforeContext\":0,\"afterContext\":0,\"maxMatches\":100,"
+        + "\"includeLineNumber\":true,\"excludeGlob\":\"\",\"charset\":\"UTF-8\","
         + "\"includeGlob\":\"" + (maxFiles == 1 ? "Target.java" : "*.java") + "\"}],"
         + "\"maxFiles\":" + maxFiles + ",\"contextLines\":0,\"maxBytes\":768,\"maxTokens\":1000}}";
     return new org.springframework.ai.chat.model.ChatResponse(

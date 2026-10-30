@@ -17,7 +17,7 @@ public final class ReadingDelivery {
     public Notice {
       // This is a prompt-facing sample, not the restoration ledger. Repeating all old
       // references can consume nearly the whole shared page budget before any source fits.
-      evidence = evidence.stream().limit(2).toList();
+      evidence = List.copyOf(evidence.stream().limit(2).toList());
     }
   }
 

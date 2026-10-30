@@ -240,14 +240,15 @@ class AttentionServiceTest {
             new dev.mikoto2000.rei.core.policy.ToolPermissionProperties(true, null, null, null));
     var guard = new dev.mikoto2000.rei.core.policy.ToolPermissionGuard(policy, factory(), bus);
     guard.setApprovals(approvals);
+    String arguments = "{\"files\":[{\"path\":\"approval-test.txt\",\"content\":\"test\"}]}";
     assertThrows(
         dev.mikoto2000.rei.core.policy.ToolPermissionException.class,
-        () -> guard.check("writeMultiFile", "{}", owner("guard-run")));
+        () -> guard.check("writeMultiFile", arguments, owner("guard-run")));
     var attention = repository.list("project").getFirst();
     repository.acknowledge("project", attention.id());
     assertThrows(
         dev.mikoto2000.rei.core.policy.ToolPermissionException.class,
-        () -> guard.check("writeMultiFile", "{}", owner("guard-run")));
+        () -> guard.check("writeMultiFile", arguments, owner("guard-run")));
     assertEquals("PENDING", approvals.list("project").getFirst().status());
     assertTrue(repository.list("project").isEmpty());
   }

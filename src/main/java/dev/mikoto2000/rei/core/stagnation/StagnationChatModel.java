@@ -368,9 +368,10 @@ public class StagnationChatModel implements ChatModel {
 
   /** Use the registered range protocol only when its callbacks are actually available. */
   private boolean hasReviewProtocol(Prompt prompt) {
-    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)
-        || options.getToolCallbacks() == null) return false;
-    var names = options.getToolCallbacks().stream().map(t -> t.getToolDefinition().name()).toList();
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return false;
+    var callbacks = options.getToolCallbacks();
+    if (callbacks == null) return false;
+    var names = callbacks.stream().map(t -> t.getToolDefinition().name()).toList();
     return names.containsAll(List.of("beginReview", "readReviewFile"))
         && (names.contains("submitReviewPage") || names.contains("submitReviewResult"));
   }

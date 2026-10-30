@@ -87,6 +87,10 @@ public class WebSearchService {
   }
 
   /** 設定済みの検索先を順に利用し、URLの重複と情報の充足度を考慮して候補を集める。 */
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      justification =
+          "Rethrow original cancellation and provider failures after safe logging; wrapping changes their semantics.")
   private List<WebSearchResult> searchObserved(String query, Integer limit)
       throws IOException, InterruptedException {
     if (!properties.isEnabled()) {
@@ -179,12 +183,11 @@ public class WebSearchService {
             e.getClass().getSimpleName(),
             e instanceof WebSearchHttpException
                 ? "HTTP_ERROR"
-                : e instanceof dev.mikoto2000.rei.http.HttpFetchException http
-                    ? http.code().name()
-                    : e instanceof dev.mikoto2000.rei.toolcontract.ExternalReadFailure failure
+                : dev.mikoto2000.rei.http.FetchOperation.diagnosticCode(
+                    e,
+                    e instanceof dev.mikoto2000.rei.toolcontract.ExternalReadFailure failure
                         ? failure.diagnosticCode()
-                        : dev.mikoto2000.rei.http.FetchOperation.diagnosticCode(
-                            e, "PROVIDER_ERROR"),
+                        : "PROVIDER_ERROR"),
             attempt.httpStatus,
             attempt.networkRequest,
             java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
@@ -248,7 +251,7 @@ public class WebSearchService {
   private List<WebSearchResult> searchWithProvider(
       ProviderProperties provider, String query, int limit, ProviderAttempt attempt)
       throws IOException, InterruptedException {
-    String providerName = provider.getName().trim().toLowerCase();
+    String providerName = provider.getName().trim().toLowerCase(java.util.Locale.ROOT);
     return switch (providerName) {
       case "duckduckgo" -> searchDuckDuckGo(provider, query, limit, attempt);
       case "brave" -> searchBrave(provider, query, limit, attempt);

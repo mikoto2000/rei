@@ -147,9 +147,10 @@ public final class ToolLoopSupport {
   }
 
   private String schema(Prompt prompt, String name) {
-    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)
-        || options.getToolCallbacks() == null) return null;
-    return options.getToolCallbacks().stream()
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return null;
+    var callbacks = options.getToolCallbacks();
+    if (callbacks == null) return null;
+    return callbacks.stream()
         .filter(callback -> callback.getToolDefinition().name().equals(name))
         .map(callback -> callback.getToolDefinition().inputSchema())
         .findFirst()

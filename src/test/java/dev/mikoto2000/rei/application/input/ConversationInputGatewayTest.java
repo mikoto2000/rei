@@ -297,7 +297,12 @@ class ConversationInputGatewayTest {
             new dev.mikoto2000.rei.event.AgentEventFactory(clock),
             event -> {});
     for (var owner : owners)
-      assertThatThrownBy(() -> guard.check("writeMultiFile", "{}", owner))
+      assertThatThrownBy(
+              () ->
+                  guard.check(
+                      "writeMultiFile",
+                      "{\"files\":[{\"path\":\"approval-test.txt\",\"content\":\"test\"}]}",
+                      owner))
           .isInstanceOf(dev.mikoto2000.rei.core.policy.ToolPermissionException.class);
     assertThat(voiceOwner.requestSource()).isEqualTo(owners.getFirst().requestSource());
   }

@@ -1,9 +1,14 @@
 package dev.mikoto2000.rei.web;
 
-import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import dev.mikoto2000.rei.event.*;
+import dev.mikoto2000.rei.event.AgentEvent;
+import dev.mikoto2000.rei.event.AgentEventPayload;
+import dev.mikoto2000.rei.event.AgentEventType;
+import dev.mikoto2000.rei.event.EventJsonCodec;
 import dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer;
 import dev.mikoto2000.rei.ui.shell.ShellEventOutput;
 import java.nio.file.Path;
