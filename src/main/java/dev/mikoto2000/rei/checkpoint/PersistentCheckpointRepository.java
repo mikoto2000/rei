@@ -57,9 +57,20 @@ public class PersistentCheckpointRepository {
   public PersistentCheckpointRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source,
       CheckpointProperties settings) {
+    this(initialize(source), source, settings);
+  }
+
+  private PersistentCheckpointRepository(
+      JdbcClient initialized, DataSource source, CheckpointProperties settings) {
     this.settings = settings;
-    db = JdbcClient.create(source);
+    db = initialized;
     transaction = new TransactionTemplate(new DataSourceTransactionManager(source));
+  }
+
+  /** Finish fallible migration before constructing the repository instance. */
+  private static JdbcClient initialize(DataSource source) {
+    var db = JdbcClient.create(source);
+    var transaction = new TransactionTemplate(new DataSourceTransactionManager(source));
     // An update obtains SQLite's writer lock before reads, avoiding read-to-write upgrade races.
     db.sql(
             "CREATE TABLE IF NOT EXISTS checkpoint_heads(project TEXT NOT NULL,task TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 0,owner TEXT,lease_run TEXT,PRIMARY KEY(project,task))")
@@ -73,6 +84,32 @@ public class PersistentCheckpointRepository {
     db.sql(
             "INSERT OR IGNORE INTO checkpoint_event_keys(project,task,event) SELECT project,task,event FROM checkpoint_revisions")
         .update();
+    // Bootstrap once; triggers account atomically for every writer.
+    transaction.executeWithoutResult(
+        tx -> {
+          db.sql(
+                  "CREATE TABLE IF NOT EXISTS checkpoint_history_usage(id INTEGER PRIMARY KEY CHECK(id=1),revisions INTEGER NOT NULL,bytes INTEGER NOT NULL,keys INTEGER NOT NULL)")
+              .update();
+          db.sql(
+                  "INSERT INTO checkpoint_history_usage SELECT 1,(SELECT COUNT(*) FROM checkpoint_revisions),(SELECT COALESCE(SUM(length(CAST(snapshot AS BLOB))),0) FROM checkpoint_revisions),(SELECT COUNT(*) FROM checkpoint_event_keys) WHERE NOT EXISTS(SELECT 1 FROM checkpoint_history_usage WHERE id=1)")
+              .update();
+          db.sql(
+                  "CREATE TRIGGER IF NOT EXISTS checkpoint_usage_insert AFTER INSERT ON checkpoint_revisions BEGIN UPDATE checkpoint_history_usage SET revisions=revisions+1,bytes=bytes+length(CAST(NEW.snapshot AS BLOB)) WHERE id=1; END")
+              .update();
+          db.sql(
+                  "CREATE TRIGGER IF NOT EXISTS checkpoint_usage_delete AFTER DELETE ON checkpoint_revisions BEGIN UPDATE checkpoint_history_usage SET revisions=revisions-1,bytes=bytes-length(CAST(OLD.snapshot AS BLOB)) WHERE id=1; END")
+              .update();
+          db.sql(
+                  "CREATE TRIGGER IF NOT EXISTS checkpoint_usage_update AFTER UPDATE OF snapshot ON checkpoint_revisions BEGIN UPDATE checkpoint_history_usage SET bytes=bytes+length(CAST(NEW.snapshot AS BLOB))-length(CAST(OLD.snapshot AS BLOB)) WHERE id=1; END")
+              .update();
+          db.sql(
+                  "CREATE TRIGGER IF NOT EXISTS checkpoint_keys_insert AFTER INSERT ON checkpoint_event_keys BEGIN UPDATE checkpoint_history_usage SET keys=keys+1 WHERE id=1; END")
+              .update();
+          db.sql(
+                  "CREATE TRIGGER IF NOT EXISTS checkpoint_keys_delete AFTER DELETE ON checkpoint_event_keys BEGIN UPDATE checkpoint_history_usage SET keys=keys-1 WHERE id=1; END")
+              .update();
+        });
+    return db;
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
@@ -471,8 +508,7 @@ public class PersistentCheckpointRepository {
 
   /** 作業の中断と再開で用いる履歴使用状況を返す。 */
   public CheckpointHistory.Usage historyUsage() {
-    return db.sql(
-            "SELECT COUNT(*) AS revisions,COALESCE(SUM(length(CAST(snapshot AS BLOB))),0) AS bytes,(SELECT COUNT(*) FROM checkpoint_event_keys) AS keys FROM checkpoint_revisions")
+    return db.sql("SELECT revisions,bytes,keys FROM checkpoint_history_usage WHERE id=1")
         .query(
             (row, index) ->
                 new CheckpointHistory.Usage(
