@@ -49,8 +49,8 @@ class ReviewModelBoundaryTest {
   @TempDir Path dir;
 
   @ParameterizedTest
-  @ValueSource(booleans = {false, true})
-  void actualMethodAndEventWrappersReturnARejectedSubmissionForCorrection(boolean legacy)
+  @ValueSource(strings = {"page", "legacy", "restart"})
+  void actualMethodAndEventWrappersReturnARejectedOperationForCorrection(String operation)
       throws Exception {
     Files.writeString(dir.resolve("lesson.md"), "本文🙂\n確認する内容\n");
     try (var migration = new StorageMigrationCoordinator(dir.resolve("data"))) {
@@ -121,7 +121,10 @@ class ReviewModelBoundaryTest {
                         0,
                         "tokenBudget",
                         512);
-              } else if (n == 2 && legacy) {
+              } else if (n == 2 && operation.equals("restart")) {
+                name = "restartReview";
+                args = Map.of("reviewJobId", job.id());
+              } else if (n == 2 && operation.equals("legacy")) {
                 name = "submitReviewResult";
                 var wrong =
                     new ReviewCoverageLedger.Range(
@@ -143,6 +146,9 @@ class ReviewModelBoundaryTest {
                 if (n == 3) {
                   assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
                       .contains("REVIEW_RESULT_INVALID", "accepted");
+                  if (operation.equals("restart"))
+                    assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
+                        .contains("No restart was performed", "reviewPending", "submitReviewPage");
                   assertThat(ledger.get(job.id(), ReviewTools.scope(owner)).ranges())
                       .noneMatch(e -> e.reviewed());
                 }

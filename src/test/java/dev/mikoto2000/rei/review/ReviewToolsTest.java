@@ -272,6 +272,39 @@ class ReviewToolsTest {
   }
 
   /** 変更内容のレビューで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void unnecessaryRestartPreservesCoverageAndReturnsNextOperation(boolean complete)
+      throws Exception {
+    Files.writeString(dir.resolve("lesson.md"), "unchanged text");
+    try (var migration = new StorageMigrationCoordinator(dir.resolve("data"))) {
+      migration.prepare();
+    }
+    var ledger = new ReviewCoverageLedger(new StorageDatabase(dir.resolve("data")));
+    var tools =
+        new ReviewTools(
+            ledger,
+            new RawToolResultStore(dir.resolve("data")),
+            new Tools(),
+            TokenEstimator.conservative());
+    var owner = new AgentRunContext("run", "chat", dir, "project");
+    try (var scope = AgentRunScope.open(owner)) {
+      var job = tools.beginReview(List.of("lesson.md"), "correctness", "v1");
+      var page =
+          tools.readReviewFile(job.id(), "lesson.md", job.targets().getFirst().version(), 0, 512);
+      tools.confirmed(owner, List.of(page));
+      if (complete) tools.submitReviewResult(job.id(), page.range(), "checked", List.of());
+      var before = ledger.get(job.id(), ReviewTools.scope(owner));
+      assertThatThrownBy(() -> tools.restartReview(job.id()))
+          .isInstanceOf(ReviewResultRejectedException.class)
+          .hasMessageContaining("No restart was performed")
+          .hasMessageContaining("current status=" + before.status())
+          .hasMessageContaining(complete ? "reviewFindings" : "reviewPending");
+      assertThat(ledger.get(job.id(), ReviewTools.scope(owner))).isEqualTo(before);
+    }
+  }
+
+  /** 版変更をrestartReview自身が検出し、旧版の評価を再利用しないことを確認する。 */
   @Test
   void changedSourceRebuildsCoverageWithoutReusingOldReview() throws Exception {
     Files.writeString(dir.resolve("lesson.md"), "old text");
@@ -293,7 +326,8 @@ class ReviewToolsTest {
       tools.confirmed(owner, List.of(page));
       tools.submitReviewResult(job.id(), page.range(), "checked", List.of());
       Files.writeString(dir.resolve("lesson.md"), "new text");
-      assertThat(tools.reviewStatus(job.id()).status()).isEqualTo("STALE_VERSION");
+      // Restart itself must detect the change, without a preceding reviewStatus/read call.
+      assertThat(ledger.get(job.id(), ReviewTools.scope(owner)).status()).isEqualTo("COMPLETE");
       var rebuilt = tools.restartReview(job.id());
       assertThat(rebuilt.id()).isEqualTo(job.id());
       assertThat(rebuilt.status()).isEqualTo("REVIEW_PARTIAL");

@@ -587,7 +587,10 @@ public class StagnationChatModel implements ChatModel {
                     dev.mikoto2000.rei.toolcontract.ToolResultRejectedException.find(error);
                 if (rejected != null
                     && java.util.Set.of(
-                            "submitReviewResult", "submitReviewPage", "dismissReviewFinding")
+                            "submitReviewResult",
+                            "submitReviewPage",
+                            "dismissReviewFinding",
+                            "restartReview")
                         .contains(name))
                   return context.reviewSubmissionCorrection(rejected.getMessage());
                 throw error;

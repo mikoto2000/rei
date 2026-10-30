@@ -1,6 +1,6 @@
 package dev.mikoto2000.rei.review;
 
-/** A review submission was validated but no assessment was accepted. */
+/** A review operation was validated but rejected with guidance for continuing the review. */
 public final class ReviewResultRejectedException
     extends dev.mikoto2000.rei.toolcontract.ToolResultRejectedException {
   public ReviewResultRejectedException(String guidance) {

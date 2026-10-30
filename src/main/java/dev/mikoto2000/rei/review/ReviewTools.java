@@ -253,10 +253,28 @@ public final class ReviewTools {
   /** 変更内容のレビューで用いる再開レビューを返す。 */
   @Tool(
       description =
-          "Rebuild a STALE_VERSION review job from the current versions of its original files. Preserves historical findings, marks old-version ranges stale and starts the changed files again; never reuses old-version reviews.")
+          "Revalidate source versions and rebuild a STALE_VERSION review job from its original files. Preserves historical findings, marks old-version ranges stale and starts the changed files again; never reuses old-version reviews. If no restart is needed, follow the returned guidance to continue the existing job.")
   public Job restartReview(String reviewJobId) throws java.io.IOException {
     var scope = scope(AgentRunScope.current());
-    var old = ledger.get(reviewJobId, scope);
+    var old = reviewStatus(reviewJobId);
+    if (!"STALE_VERSION".equals(old.status())) {
+      String next =
+          switch (old.status()) {
+            case "COMPLETE" ->
+                "The review is already complete. Use reviewFindings to inspect preserved findings and report the result.";
+            case "REVIEW_CANCELLED", "FAILED" ->
+                "This job is terminal. Use beginReview with the authorized targets and criteria if a new review is needed.";
+            default ->
+                "Use reviewPending to select unfinished ranges, then readReviewFile and submitReviewPage. "
+                    + "If a delivered page is awaiting assessment, submit it first; re-read that same page if its body left the prompt.";
+          };
+      throw new ReviewResultRejectedException(
+          "No restart was performed: current status="
+              + old.status()
+              + ". Source versions have been revalidated and the job is not STALE_VERSION. "
+              + "Preserve saved assessments and do not repeat restartReview without a source change. "
+              + next);
+    }
     var targets = new ArrayList<Target>();
     for (var target : old.targets()) {
       var snapshot = files.get().reviewSnapshot(target.path());
