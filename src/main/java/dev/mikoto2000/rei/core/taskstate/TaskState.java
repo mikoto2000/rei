@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core.taskstate;
 
+import dev.mikoto2000.rei.context.TaskStateSnapshot;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -80,6 +81,20 @@ public class TaskState {
     return List.copyOf(pending);
   }
 
+  /** Capture the exact working state for a later Run. */
+  public TaskStateSnapshot snapshot() {
+    return new TaskStateSnapshot(goal, status, completed, pending);
+  }
+
+  /** Restore saved work and bind its automatic context to the new Run. */
+  public void restore(TaskStateSnapshot saved) {
+    reset();
+    start(saved.goal());
+    status = saved.status();
+    saved.completed().forEach(this::addCompleted);
+    saved.pending().forEach(this::addPending);
+  }
+
   /** 目的を設定し、作業中に遷移する。 */
   public void start(String goal) {
     ownerRunId = dev.mikoto2000.rei.context.RunIdentity.currentRunId();
@@ -95,11 +110,12 @@ public class TaskState {
   /** 完了した作業単位を追加する。 */
   public void addCompleted(String item) {
     addUnique(completed, item);
+    pending.remove(item);
   }
 
   /** 次に行う作業単位を追加する。 */
   public void addPending(String item) {
-    addUnique(pending, item);
+    if (!completed.contains(item)) addUnique(pending, item);
   }
 
   /** 完了時に pending を空にする。 */

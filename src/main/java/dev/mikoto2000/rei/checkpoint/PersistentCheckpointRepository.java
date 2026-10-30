@@ -158,7 +158,7 @@ public class PersistentCheckpointRepository {
       AND NOT EXISTS(SELECT 1 FROM json_each(snapshot) WHERE key NOT IN (
         'schemaVersion','revision','createdAt','taskId','projectId','projectRoot','sessionId','originalRunId','runId',
         'resumedFromRunId','resumedFromRevision','request','instructions','acceptanceCriteria','plan','currentStep',
-        'status','interruptionReason','nextAction','evidence','operations','files','git','processes','blockers','reconciliation','mode','voiceInput','progress'))
+        'status','interruptionReason','nextAction','evidence','operations','files','git','processes','blockers','reconciliation','mode','voiceInput','progress','taskState'))
       AND COALESCE(json_extract(snapshot,'$.mode'),'EXCLUSIVE') IN ('EXCLUSIVE','READ_ONLY','CONVERSATION')
       AND COALESCE(json_type(snapshot,'$.nextAction'),'null') IN ('text','null')
       AND NOT EXISTS(SELECT 1 FROM json_each(snapshot,'$.instructions') WHERE type<>'text')

@@ -39,6 +39,7 @@ import java.util.Map;
  * @param mode 動作モード
  * @param voiceInput 音声入力からの依頼かどうか
  * @param progress 進捗
+ * @param taskState 保存された目的・完了済み作業・残件（旧データでは null）
  */
 public record PersistentCheckpoint(
     int schemaVersion,
@@ -69,7 +70,72 @@ public record PersistentCheckpoint(
     CheckpointReconciler.Result reconciliation,
     dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode,
     boolean voiceInput,
-    dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState progress) {
+    dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState progress,
+    dev.mikoto2000.rei.context.TaskStateSnapshot taskState) {
+  /** Compatibility constructor for checkpoints without structured task progress. */
+  public PersistentCheckpoint(
+      int schemaVersion,
+      long revision,
+      Instant createdAt,
+      String taskId,
+      String projectId,
+      String projectRoot,
+      String sessionId,
+      String originalRunId,
+      String runId,
+      String resumedFromRunId,
+      Long resumedFromRevision,
+      String request,
+      List<String> instructions,
+      List<String> acceptanceCriteria,
+      List<Map<String, Object>> plan,
+      String currentStep,
+      String status,
+      String interruptionReason,
+      String nextAction,
+      List<Evidence> evidence,
+      List<Operation> operations,
+      Map<String, String> files,
+      Map<String, String> git,
+      List<ProcessRef> processes,
+      List<String> blockers,
+      CheckpointReconciler.Result reconciliation,
+      dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode,
+      boolean voiceInput,
+      dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState progress) {
+    this(
+        schemaVersion,
+        revision,
+        createdAt,
+        taskId,
+        projectId,
+        projectRoot,
+        sessionId,
+        originalRunId,
+        runId,
+        resumedFromRunId,
+        resumedFromRevision,
+        request,
+        instructions,
+        acceptanceCriteria,
+        plan,
+        currentStep,
+        status,
+        interruptionReason,
+        nextAction,
+        evidence,
+        operations,
+        files,
+        git,
+        processes,
+        blockers,
+        reconciliation,
+        mode,
+        voiceInput,
+        progress,
+        null);
+  }
+
   /** 作業の中断と再開を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public PersistentCheckpoint(
       int schemaVersion,
@@ -400,7 +466,8 @@ public record PersistentCheckpoint(
         reconciliation,
         mode,
         voiceInput,
-        progress);
+        progress,
+        taskState);
   }
 
   /** 保存された状況を引き継いで、中断した作業を再開する。 */
@@ -445,6 +512,7 @@ public record PersistentCheckpoint(
         reconciliation,
         mode,
         voiceInput,
-        progress);
+        progress,
+        taskState);
   }
 }
