@@ -1145,6 +1145,163 @@ class PersistentCheckpointServiceTest {
   }
 
   @Test
+  void resumeRestoresCompletedAndPendingWorkAfterServiceRestart() {
+    var task = new dev.mikoto2000.rei.core.taskstate.TaskState();
+    factory.addBean("task", task);
+    task.start("review and repair docs");
+    task.addCompleted("reviewed introduction");
+    task.addPending("repair examples");
+    try (var scope = AgentRunScope.open(owner)) {
+      service.saveCurrent("A", "session");
+    }
+    service.finish(owner, "INTERRUPTED");
+    String id = state().taskId();
+    service.close();
+    service =
+        new PersistentCheckpointService(
+            repository,
+            new CheckpointReconciler(null),
+            settings,
+            bus,
+            factory.getBeanProvider(ConversationInputRouter.class),
+            factory.getBeanProvider(dev.mikoto2000.rei.application.run.RunRegistry.class),
+            factory.getBeanProvider(dev.mikoto2000.rei.application.run.RunService.class),
+            factory.getBeanProvider(dev.mikoto2000.rei.core.actionplan.ActionPlan.class),
+            factory.getBeanProvider(dev.mikoto2000.rei.core.working.WorkingSet.class),
+            factory.getBeanProvider(dev.mikoto2000.rei.core.taskstate.TaskState.class),
+            factory.getBeanProvider(dev.mikoto2000.rei.core.checkpoint.CheckpointStore.class));
+    task.reset();
+    task.start("unrelated session work");
+    task.addCompleted("unrelated result");
+    var resumed = service.resume("A", id, AgentRunContext.RequestSource.SHELL);
+    var next = new AgentRunContext(resumed.runId(), "session", root, "A");
+    try (var scope = AgentRunScope.open(next)) {
+      service.start(next, "resume");
+      assertEquals("review and repair docs", task.goal());
+      assertEquals(List.of("reviewed introduction"), task.completed());
+      assertEquals(List.of("repair examples"), task.pending());
+      assertEquals(resumed.runId(), task.ownerRunId());
+      String handoff = service.context(resumed.runId());
+      assertTrue(handoff.contains("reviewed introduction"));
+      assertTrue(handoff.contains("repair examples"));
+      var request =
+          org.springframework.ai.chat.client.ChatClientRequest.builder()
+              .prompt(new org.springframework.ai.chat.prompt.Prompt("resume"))
+              .build();
+      var taskContext =
+          new dev.mikoto2000.rei.core.taskstate.TaskStateAdvisor(task).before(request, null);
+      var sent = new ResumeContextAdvisor(service).before(taskContext, null).prompt();
+      String user = sent.getUserMessage().getText();
+      assertTrue(user.contains("Completed:\n- reviewed introduction"));
+      assertTrue(user.contains("Pending:\n- repair examples"));
+      assertFalse(user.contains("unrelated"));
+      service.saveCurrent("A", "session");
+    }
+    service.finish(next, "INTERRUPTED");
+    var again = service.resume("A", id, AgentRunContext.RequestSource.SHELL);
+    var againOwner = new AgentRunContext(again.runId(), "session", root, "A");
+    try (var scope = AgentRunScope.open(againOwner)) {
+      service.start(againOwner, "resume again");
+      assertEquals(List.of("reviewed introduction"), task.completed());
+      assertEquals(List.of("repair examples"), task.pending());
+    }
+  }
+
+  @Test
+  void legacyCheckpointRestoresClaimsAndUnfinishedPlanWithoutInventingVerifiedResults() {
+    var task = new dev.mikoto2000.rei.core.taskstate.TaskState();
+    factory.addBean("task", task);
+    var fields = repository.fields(state());
+    fields.remove("taskState");
+    fields.put(
+        "evidence",
+        List.of(
+            new PersistentCheckpoint.Evidence(
+                "ASSISTANT_CLAIM", "reviewed introduction", null, "run", null)));
+    fields.put(
+        "plan",
+        List.of(
+            Map.of(
+                "id",
+                "one",
+                "description",
+                "reviewed introduction",
+                "status",
+                "DONE",
+                "order",
+                1,
+                "failureCount",
+                0),
+            Map.of(
+                "id",
+                "two",
+                "description",
+                "repair examples",
+                "status",
+                "IN_PROGRESS",
+                "order",
+                2,
+                "failureCount",
+                0)));
+    fields.put("nextAction", "validate repaired examples");
+    repository.save(repository.fields(fields), state().revision(), "legacy-progress");
+    service.finish(owner, "INTERRUPTED");
+    var resumed = service.resume("A", state().taskId(), AgentRunContext.RequestSource.SHELL);
+    var next = new AgentRunContext(resumed.runId(), "session", root, "A");
+    try (var scope = AgentRunScope.open(next)) {
+      service.start(next, "resume");
+      assertEquals(List.of("reviewed introduction"), task.completed());
+      assertEquals(List.of("repair examples", "validate repaired examples"), task.pending());
+      assertTrue(service.context(resumed.runId()).contains("not independently verified"));
+      assertTrue(state().evidence().stream().noneMatch(e -> "TOOL_CONFIRMED".equals(e.origin())));
+    }
+  }
+
+  @Test
+  void longHistoricalEvidenceCannotHideSavedCompletionAndNextPendingUnit() {
+    var task = new dev.mikoto2000.rei.core.taskstate.TaskState();
+    factory.addBean("task", task);
+    task.start("review docs");
+    task.addCompleted("introduction assessment saved");
+    task.addPending("repair the remaining examples");
+    try (var scope = AgentRunScope.open(owner)) {
+      service.saveCurrent("A", "session");
+    }
+    var fields = repository.fields(state());
+    fields.put(
+        "evidence",
+        java.util.stream.IntStream.range(0, 100)
+            .mapToObj(
+                i ->
+                    new PersistentCheckpoint.Evidence(
+                        "TOOL_CONFIRMED", "old output ".repeat(100), null, "run", "tool-" + i))
+            .toList());
+    repository.save(repository.fields(fields), state().revision(), "large-history");
+    service.finish(owner, "INTERRUPTED");
+    var resumed = service.resume("A", state().taskId(), AgentRunContext.RequestSource.SHELL);
+    String handoff = service.context(resumed.runId());
+    assertTrue(handoff.contains("introduction assessment saved"));
+    assertTrue(handoff.contains("repair the remaining examples"));
+    assertTrue(handoff.length() <= settings.getContextCharacters());
+  }
+
+  @Test
+  void changedFilesDoNotReplaceTheSavedContinuationWithGenericReplanning() throws Exception {
+    Path file = root.resolve("changed.md");
+    java.nio.file.Files.writeString(file, "before");
+    var fields = repository.fields(state());
+    fields.put("files", Map.of(file.toString(), CheckpointReconciler.fingerprint(file)));
+    fields.put("nextAction", "repair the remaining examples");
+    repository.save(repository.fields(fields), state().revision(), "saved-next");
+    service.finish(owner, "INTERRUPTED");
+    java.nio.file.Files.writeString(file, "after");
+    var resumed = service.resume("A", state().taskId(), AgentRunContext.RequestSource.SHELL);
+    assertFalse(resumed.reconciliation().changed().isEmpty());
+    assertEquals("repair the remaining examples", state().nextAction());
+    assertTrue(service.context(resumed.runId()).contains("repair the remaining examples"));
+  }
+
+  @Test
   void resumedDispatchUsesCompletedHostReconciliationInsteadOfRequestingAnotherInspection() {
     var prompt = new java.util.concurrent.atomic.AtomicReference<String>();
     factory.addBean(
@@ -1157,7 +1314,8 @@ class PersistentCheckpointServiceTest {
     assertEquals("CONTINUE", resumed.reconciliation().decision());
     assertFalse(prompt.get().contains("まず現在の状態を確認し"));
     assertTrue(prompt.get().contains("ホスト照合は完了"));
-    assertTrue(prompt.get().contains("中間成果"));
+    assertTrue(prompt.get().contains("保存された残件"));
+    assertFalse(prompt.get().contains("最初に、既存の根拠"));
   }
 
   @Test

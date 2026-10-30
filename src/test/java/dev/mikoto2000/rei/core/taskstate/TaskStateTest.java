@@ -10,6 +10,21 @@ import org.junit.jupiter.api.Test;
 /** タスク状態の結果と状態の契約を検証するテスト。 */
 class TaskStateTest {
 
+  @Test
+  void completedWorkIsRemovedFromPendingAndCannotBeAddedBackByTheSameUpdate() {
+    var state = new TaskState();
+    state.start("review docs");
+    state.addPending("review introduction");
+    state.addPending("review examples");
+    state.addCompleted("review introduction");
+    state.addPending("review introduction");
+    assertEquals(List.of("review introduction"), state.completed());
+    assertEquals(List.of("review examples"), state.pending());
+    var restored = new TaskState();
+    restored.restore(state.snapshot());
+    assertEquals(state.snapshot(), restored.snapshot());
+  }
+
   /** 作業状態の記録で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void newTaskStateIsEmpty() {

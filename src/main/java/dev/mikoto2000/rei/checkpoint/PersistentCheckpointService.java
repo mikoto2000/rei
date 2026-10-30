@@ -333,8 +333,13 @@ public class PersistentCheckpointService implements AutoCloseable {
     }
     var task = tasks.getIfAvailable();
     if (task != null) {
-      task.reset();
-      task.start(state.request());
+      if (state.resumedFromRunId() != null
+          || Set.of("WAITING", "WAITING_APPROVAL").contains(state.status())) {
+        task.restore(savedTaskState(state));
+      } else {
+        task.reset();
+        task.start(state.request());
+      }
     }
   }
 
@@ -630,7 +635,6 @@ public class PersistentCheckpointService implements AutoCloseable {
       var progress = state.progress();
       if (explicitUserResume && progress != null)
         fields.put("progress", progress.forExplicitResume());
-      fields.put("nextAction", result.nextAction());
       fields.put("reconciliation", result);
       if (expectedPrevious != null) {
         fields.put("mode", AgentRunContext.Mode.READ_ONLY);
@@ -729,7 +733,6 @@ public class PersistentCheckpointService implements AutoCloseable {
             "Checkpoint requires reconciliation or individual effect confirmation");
       var next = state.resume(owner.runId());
       var fields = repository.fields(next);
-      fields.put("nextAction", result.nextAction());
       fields.put("reconciliation", result);
       synchronized (this) {
         next =
@@ -986,6 +989,9 @@ public class PersistentCheckpointService implements AutoCloseable {
       plan.nextStep().ifPresent(s -> fields.put("nextAction", s.description()));
     }
     var task = tasks.getIfAvailable();
+    if (task != null) {
+      fields.put("taskState", task.snapshot());
+    }
     if (task != null && !task.isEmpty()) {
       var state = repository.fields(fields);
       var evidence = new ArrayList<>(state.evidence());
@@ -1031,7 +1037,9 @@ public class PersistentCheckpointService implements AutoCloseable {
     return "保存されたタスク "
         + task
         + " を明示的に再開してください。ホスト照合は完了しています。再開文脈の計画と確認済み本文の抜粋を使って未完了の作業を継続してください。"
-        + "最初に、既存の根拠を依頼の権限内で中間成果として整理・記録してください。読み取り済みとレビュー済みを区別し、指摘や完了を捏造しないでください。"
+        + "完了済みの作業は引き継ぎ、保存された残件・現在の工程・次の作業から継続してください。"
+        + "既存成果の再整理や完了済み工程のやり直しは、新たな差分や具体的な根拠不足がある項目だけに限定してください。"
+        + "読み取り済みとレビュー済みを区別し、指摘や完了を捏造しないでください。"
         + "checkpointShow/checkpointInspect による全体の再確認は、新たな差分や具体的な情報不足がある場合だけにしてください。"
         + "結果不明の副作用を再実行する前に、その項目だけをユーザーに確認してください。";
   }
@@ -1048,7 +1056,16 @@ public class PersistentCheckpointService implements AutoCloseable {
         "保存されたタスク "
             + task
             + " を明示的に再開してください。まず現在の状態を確認し、未完了・未検証の工程を再計画してください。結果不明の副作用を再実行する前に、その項目だけをユーザーに確認してください。";
-    return Objects.equals(text, legacy) || Objects.equals(text, resumePrompt(task));
+    String previous =
+        "保存されたタスク "
+            + task
+            + " を明示的に再開してください。ホスト照合は完了しています。再開文脈の計画と確認済み本文の抜粋を使って未完了の作業を継続してください。"
+            + "最初に、既存の根拠を依頼の権限内で中間成果として整理・記録してください。読み取り済みとレビュー済みを区別し、指摘や完了を捏造しないでください。"
+            + "checkpointShow/checkpointInspect による全体の再確認は、新たな差分や具体的な情報不足がある場合だけにしてください。"
+            + "結果不明の副作用を再実行する前に、その項目だけをユーザーに確認してください。";
+    return Objects.equals(text, legacy)
+        || Objects.equals(text, previous)
+        || Objects.equals(text, resumePrompt(task));
   }
 
   /** 作業の中断と再開で用いる文脈を返す。 */
@@ -1058,6 +1075,60 @@ public class PersistentCheckpointService implements AutoCloseable {
 
   /** One bounded input and its delivery facts, derived from the same immutable checkpoint. */
   public record ModelHandoff(String text, boolean hasFileInventory) {}
+
+  /** Older checkpoints retain claims and plan steps even without the new structured snapshot. */
+  private TaskState.Snapshot savedTaskState(PersistentCheckpoint state) {
+    if (state.taskState() != null) return state.taskState();
+    var completed = new java.util.LinkedHashSet<String>();
+    state.evidence().stream()
+        .filter(e -> "ASSISTANT_CLAIM".equals(e.origin()))
+        .map(Evidence::summary)
+        .forEach(completed::add);
+    var pending = new java.util.LinkedHashSet<String>();
+    for (var step : state.plan()) {
+      String description = Objects.toString(step.get("description"), "");
+      if (ActionPlan.STATUS_DONE.equals(step.get("status"))) completed.add(description);
+      else if (!ActionPlan.STATUS_SKIPPED.equals(step.get("status"))) pending.add(description);
+    }
+    if (state.nextAction() != null && !state.nextAction().isBlank())
+      pending.add(state.nextAction());
+    pending.removeAll(completed);
+    return new TaskState.Snapshot(
+        state.request(),
+        state.blockers().isEmpty() ? TaskState.STATUS_IN_PROGRESS : TaskState.STATUS_BLOCKED,
+        List.copyOf(completed),
+        List.copyOf(pending));
+  }
+
+  /** Prioritize recent completion and the next pending units without truncating JSON mid-item. */
+  private String taskStateHandoff(PersistentCheckpoint state, int budget) {
+    var saved = savedTaskState(state);
+    var json = new com.fasterxml.jackson.databind.ObjectMapper();
+    var summary = new LinkedHashMap<String, Object>();
+    summary.put("source", "saved assistant progress; not independently verified completion");
+    summary.put("status", saved.status());
+    summary.put("completedCount", saved.completed().size());
+    summary.put("pendingCount", saved.pending().size());
+    // Use a bounded sample; the exact lists remain available in checkpointShow/taskState.
+    int itemBudget = Math.max(16, (budget - 512) / 12);
+    summary.put(
+        "completed",
+        saved.completed().reversed().stream().limit(6).map(s -> bounded(s, itemBudget)).toList());
+    summary.put(
+        "pending", saved.pending().stream().limit(6).map(s -> bounded(s, itemBudget)).toList());
+    // Escaped characters may expand in JSON. Shrink excerpts, never the stored snapshot.
+    int remaining = itemBudget;
+    while (json.valueToTree(summary).toString().length() > budget && remaining > 0) {
+      remaining /= 2;
+      int limit = remaining;
+      summary.put(
+          "completed",
+          saved.completed().reversed().stream().limit(6).map(s -> bounded(s, limit)).toList());
+      summary.put(
+          "pending", saved.pending().stream().limit(6).map(s -> bounded(s, limit)).toList());
+    }
+    return json.valueToTree(summary).toString();
+  }
 
   /** Build the input and advertise only facts that fit entirely in the existing context cap. */
   public ModelHandoff modelHandoff(String run) {
@@ -1082,6 +1153,8 @@ public class PersistentCheckpointService implements AutoCloseable {
     essentials.put("currentStep", bounded(Objects.toString(state.currentStep(), ""), 64));
     essentials.put("unknownOperationCount", unknown.size());
     essentials.put("nextAction", bounded(Objects.toString(state.nextAction(), ""), 160));
+    essentials.put(
+        "reconciliationNextAction", check == null ? "" : bounded(check.nextAction(), 160));
     essentials.put(
         "unknownOperations",
         unknown.stream().limit(3).map(o -> bounded(o.operationKey(), 128)).toList());
@@ -1109,6 +1182,9 @@ public class PersistentCheckpointService implements AutoCloseable {
     String essential = json.valueToTree(essentials).toString();
     StringBuilder text =
         new StringBuilder(header).append(bounded(essential, budget / 3)).append('\n');
+    text.append("taskState (continue pending work; do not restart completed units): ")
+        .append(taskStateHandoff(state, budget / 5))
+        .append('\n');
     text.append("originalRequest: ").append(bounded(state.request(), budget / 4)).append('\n');
     text.append("additionalUserInstructions: ")
         .append(bounded(json.valueToTree(state.instructions().reversed()).toString(), budget / 10))
