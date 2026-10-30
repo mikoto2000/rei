@@ -92,15 +92,16 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
           com.fasterxml.jackson.core.JsonProcessingException,
           java.security.NoSuchAlgorithmException {
     String project = scope(event.projectId());
-    long previous;
+    long next;
     try (var query =
-        db.prepareStatement("SELECT sequence FROM event_sequences WHERE project_id=?")) {
+        db.prepareStatement(
+            "INSERT INTO event_sequences(project_id,sequence) VALUES(?,1) ON CONFLICT(project_id) DO UPDATE SET sequence=sequence+1 WHERE sequence<9223372036854775807 RETURNING sequence")) {
       query.setString(1, project);
       try (var rows = query.executeQuery()) {
-        previous = rows.next() ? rows.getLong(1) : 0;
+        if (!rows.next()) throw new ArithmeticException("Event sequence overflow");
+        next = rows.getLong(1);
       }
     }
-    long next = Math.addExact(previous, 1);
     var stored =
         new AgentEvent(
             event.id(),
@@ -117,13 +118,6 @@ public final class SqliteProjectAgentEventStore extends ProjectAgentEventStore {
             event.projectId());
     String record = json.writeValueAsString(stored);
     put(db, stored, record, true, null, null);
-    try (var update =
-        db.prepareStatement(
-            "INSERT INTO event_sequences VALUES(?,?) ON CONFLICT(project_id) DO UPDATE SET sequence=excluded.sequence")) {
-      update.setString(1, project);
-      update.setLong(2, next);
-      update.executeUpdate();
-    }
     return stored;
   }
 
