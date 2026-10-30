@@ -25,19 +25,39 @@ public final class ReadingMetrics {
   }
 
   private static final Object LOCK = new Object();
+  // Bounded lock storage; a run always uses the same persistence stripe.
+  private static final Object[] PERSISTENCE =
+      java.util.stream.IntStream.range(0, 64).mapToObj(unused -> new Object()).toArray();
+  private static final ThreadLocal<Map<ReadingRun, Pending>> OPERATIONS = new ThreadLocal<>();
+
+  private static final class Pending {
+    int depth;
+    ReadingStateStore store;
+  }
+
+  private static Object persistenceLock(ReadingRun owner) {
+    return PERSISTENCE[Math.floorMod(owner.hashCode(), PERSISTENCE.length)];
+  }
 
   private static boolean enabled() {
     return Boolean.parseBoolean(System.getProperty("rei.reading.metrics.enabled", "true"));
   }
 
   public static void restore(ReadingRun owner, ReadingStateStore store) {
-    synchronized (LOCK) {
-      if (!enabled() || owner == null || store == null || RUNS.containsKey(owner)) return;
+    if (!enabled() || owner == null || store == null) return;
+    synchronized (persistenceLock(owner)) {
+      synchronized (LOCK) {
+        if (RUNS.containsKey(owner)) return;
+      }
       try {
         var saved = store.load(owner, "metrics", "totals", Saved.class);
-        RUNS.put(owner, new LinkedHashMap<>(saved.values()));
-        BODIES.put(owner, new java.util.HashSet<>(saved.bodies()));
-        WIRE_BODIES.put(owner, new java.util.HashSet<>(saved.wireBodies()));
+        synchronized (LOCK) {
+          // A concurrently initialized run owns its current counters; never overwrite them.
+          if (RUNS.containsKey(owner)) return;
+          RUNS.put(owner, new LinkedHashMap<>(saved.values()));
+          BODIES.put(owner, new java.util.HashSet<>(saved.bodies()));
+          WIRE_BODIES.put(owner, new java.util.HashSet<>(saved.wireBodies()));
+        }
       } catch (RuntimeException unavailable) {
         /* No prior observations is normal for a new run. */
       }
@@ -45,18 +65,18 @@ public final class ReadingMetrics {
   }
 
   public static void flush(ReadingRun owner, ReadingStateStore store) {
-    synchronized (LOCK) {
-      if (!enabled() || owner == null || store == null) return;
-      try {
-        store.save(
-            owner,
-            "metrics",
-            "totals",
+    if (!enabled() || owner == null || store == null) return;
+    synchronized (persistenceLock(owner)) {
+      Saved saved;
+      synchronized (LOCK) {
+        saved =
             new Saved(
-                snapshot(owner),
-                java.util.Set.copyOf(BODIES.getOrDefault(owner, java.util.Set.of())),
-                java.util.Set.copyOf(WIRE_BODIES.getOrDefault(owner, java.util.Set.of()))),
-            java.time.Duration.ofDays(7));
+                RUNS.getOrDefault(owner, Map.of()),
+                BODIES.getOrDefault(owner, java.util.Set.of()),
+                WIRE_BODIES.getOrDefault(owner, java.util.Set.of()));
+      }
+      try {
+        store.save(owner, "metrics", "totals", saved, java.time.Duration.ofDays(7));
       } catch (RuntimeException unavailable) {
         add(owner, "metricsPersistenceFailures", 1);
       }
@@ -134,18 +154,16 @@ public final class ReadingMetrics {
   }
 
   private static void body(String path, String version, int line, String text, boolean wire) {
+    var owner = ReadingRuntime.current();
+    String key =
+        ReadingJson.hash(
+            (path + "\n" + version + "\n" + line + "\n" + text)
+                .getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    int bytes = text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
     synchronized (LOCK) {
-      var owner = ReadingRuntime.current();
       var bodies = wire ? WIRE_BODIES : BODIES;
       var seen = bodies.computeIfAbsent(owner, unused -> new java.util.HashSet<>());
-      String key =
-          ReadingJson.hash(
-              (path + "\n" + version + "\n" + line + "\n" + text)
-                  .getBytes(java.nio.charset.StandardCharsets.UTF_8));
-      if (seen.contains(key))
-        add(
-            wire ? "wireDuplicateBodyBytes" : "duplicateBodyBytes",
-            text.getBytes(java.nio.charset.StandardCharsets.UTF_8).length);
+      if (seen.contains(key)) add(wire ? "wireDuplicateBodyBytes" : "duplicateBodyBytes", bytes);
       else if (seen.size() < 1024) seen.add(key);
       else add(wire ? "wireDuplicateMeasurementUnknown" : "duplicateMeasurementUnknown", 1);
       while (bodies.size() > 256) bodies.remove(bodies.keySet().iterator().next());
@@ -160,7 +178,30 @@ public final class ReadingMetrics {
     var owner = ReadingRuntime.current();
     restore(owner, store);
     add("toolCalls", 1);
+    if (owner != null && enabled()) {
+      var operations = OPERATIONS.get();
+      if (operations == null) {
+        operations = new java.util.HashMap<>();
+        OPERATIONS.set(operations);
+      }
+      var pending = operations.computeIfAbsent(owner, unused -> new Pending());
+      pending.depth++;
+      if (store != null) pending.store = store;
+    }
     return new Operation(kind, System.nanoTime(), owner, store);
+  }
+
+  private static void finishOperation(ReadingRun owner, ReadingStateStore store) {
+    var operations = OPERATIONS.get();
+    var pending = operations == null ? null : operations.get(owner);
+    if (pending == null) {
+      flush(owner, store); // Preserve manually constructed Operation behavior.
+      return;
+    }
+    if (--pending.depth > 0) return;
+    operations.remove(owner);
+    if (operations.isEmpty()) OPERATIONS.remove();
+    flush(owner, pending.store);
   }
 
   public record Operation(String kind, long started, ReadingRun owner, ReadingStateStore store)
@@ -168,7 +209,7 @@ public final class ReadingMetrics {
     @Override
     public void close() {
       add(owner, kind + "Nanos", System.nanoTime() - started);
-      flush(owner, store);
+      finishOperation(owner, store);
     }
   }
 }

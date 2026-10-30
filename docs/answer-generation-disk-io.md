@@ -461,3 +461,15 @@ main上のBriefing移行がversion 17を使用するため、ページ配置変�
 統合後の`-Pfull verify`は6,464件、失敗0・エラー0・既存skip 5で成功。
 Checkstyleは違反0、変更した18ファイルのSpotlessも成功した。
 検証ログは`target/stream-merge-full.log`。
+
+
+### ReadingMetrics の保存待ちと入れ子処理
+
+計測値・本文ハッシュ集合のコピーだけを共通ロック内で行い、SQLiteへのsave/loadとJSON化は共通ロック外で実行します。
+64個の固定ストライプロックで同一Runの保存・復元を直列化し、古いsnapshotが後から新しい値を上書きすることを防ぎます。
+衝突したRun同士は保存を待ちますが、カウンタの加算・参照や別ストライプのRunはデータベース待ちに巻き込まれません。
+本文ハッシュの計算も共通ロック外で行います。復元中に別スレッドがRunを初期化した場合は、その現在値を優先します。
+
+`ReadingMetrics.operation`が同じスレッド・Runで入れ子になった場合、各処理の回数と時間は計測しつつ、
+最後のcloseで1回だけ保存します。内部で渡された非nullのstoreを保持し、例外時もスレッド内の状態を解放します。
+明示的なflushは従来どおり即時保存で、保存失敗は非致命的なmetricsPersistenceFailuresに記録します。
