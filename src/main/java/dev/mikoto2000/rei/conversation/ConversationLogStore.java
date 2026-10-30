@@ -50,6 +50,17 @@ public class ConversationLogStore {
       new java.util.LinkedHashMap<>(16, 0.75f, true);
   private int notificationIndexCharacters;
 
+  private static final int HISTORY_CACHE_BYTES = 8 * 1024 * 1024;
+  private final java.util.LinkedHashMap<Path, HistoryFile> historyFiles =
+      new java.util.LinkedHashMap<>(16, 0.75f, true);
+  private int historyFileBytes;
+
+  private record HistoryFile(NotificationFileStamp stamp, List<ConversationLogEntry> entries) {
+    private HistoryFile {
+      entries = List.copyOf(entries);
+    }
+  }
+
   private record NotificationFileStamp(long bytes, String modified, String created, String key) {}
 
   private record NotificationFileIndex(
@@ -444,11 +455,57 @@ public class ConversationLogStore {
 
   /** 必要な内容を参照できるよう、ファイルを読み取る。 */
   private void readFile(Path file, List<ConversationLogEntry> entries) {
-    readFile(file, entries::add);
+    synchronized (writeLock) {
+      NotificationFileStamp stamp;
+      try {
+        stamp = historyStamp(file);
+      } catch (IOException unavailable) {
+        readFile(file, entries::add);
+        return;
+      }
+      var cached = historyFiles.get(file);
+      if (cached != null && cached.stamp().equals(stamp)) {
+        // Recheck readability even when the content and metadata have not changed.
+        try (var readable = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+          entries.addAll(cached.entries());
+        } catch (IOException unavailable) {
+          log.warn("Failed to read conversation log file: {}", file, unavailable);
+        }
+        return;
+      }
+      var previous = historyFiles.remove(file);
+      if (previous != null) historyFileBytes -= (int) previous.stamp().bytes();
+      var loaded = new ArrayList<ConversationLogEntry>();
+      boolean complete = readFile(file, loaded::add);
+      entries.addAll(loaded);
+      if (!complete || stamp.bytes() > 1024 * 1024) return;
+      try {
+        if (!stamp.equals(historyStamp(file))) return;
+      } catch (IOException unavailable) {
+        return;
+      }
+      while (historyFiles.size() >= 1024
+          || historyFileBytes + stamp.bytes() > HISTORY_CACHE_BYTES) {
+        var oldest = historyFiles.entrySet().iterator();
+        historyFileBytes -= (int) oldest.next().getValue().stamp().bytes();
+        oldest.remove();
+      }
+      historyFiles.put(file, new HistoryFile(stamp, loaded));
+      historyFileBytes += (int) stamp.bytes();
+    }
+  }
+
+  private static NotificationFileStamp historyStamp(Path file) throws IOException {
+    var attributes = Files.readAttributes(file, java.nio.file.attribute.BasicFileAttributes.class);
+    return new NotificationFileStamp(
+        attributes.size(),
+        attributes.lastModifiedTime().toString(),
+        attributes.creationTime().toString(),
+        java.util.Objects.toString(attributes.fileKey(), null));
   }
 
   /** 必要な内容を参照できるよう、ファイルを読み取る。 */
-  private void readFile(Path file, java.util.function.Consumer<ConversationLogEntry> visitor) {
+  private boolean readFile(Path file, java.util.function.Consumer<ConversationLogEntry> visitor) {
     try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
       String line;
       while ((line = reader.readLine()) != null) {
@@ -461,8 +518,10 @@ public class ConversationLogStore {
           log.warn("Skipping malformed conversation log line in {}", file);
         }
       }
+      return true;
     } catch (IOException e) {
       log.warn("Failed to read conversation log file: {}", file, e);
+      return false;
     }
   }
 

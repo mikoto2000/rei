@@ -91,6 +91,10 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
             ? java.util.List.<dev.mikoto2000.rei.conversation.ConversationLogEntry>of()
             : logs.readConversation(id);
     if (!logEntries.isEmpty()) {
+      String historyKey = id + "/log";
+      if (!cancelled.generation().isEmpty())
+        historyKey += "/after-cancel/" + cancelled.generation();
+      long through = summaries.read(historyKey).throughSequence();
       var hiddenAt = cancelled.indexedTimestampFilter();
       var timeline = new java.util.TreeMap<java.time.Instant, ConversationTurnStore.Turn>();
       for (var turn : history)
@@ -99,6 +103,7 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
           owner == null
               ? Optional.<ConversationTurnStore.Turn>empty()
               : history.stream().filter(t -> t.runId().equals(owner.runId())).findFirst();
+      boolean historyAnchor = false;
       for (int i = 0; i < logEntries.size(); i++) {
         var entry = logEntries.get(i);
         // ChatExecutionService appends the current request before advisors run. Keep it only in the
@@ -111,20 +116,26 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
         if (currentInput) continue;
         if (hiddenAt.test(entry.timestamp() == null ? null : entry.timestamp().toInstant()))
           continue;
-        var properties = new HashMap<String, Object>(entry.metadata());
-        if (entry.source() != null) properties.put("source", entry.source());
-        if (entry.sourceId() != null) properties.put("sourceId", entry.sourceId());
-        Message message =
-            "user".equals(entry.speaker())
-                ? new UserMessage(entry.content())
-                : AssistantMessage.builder()
-                    .content(entry.content())
-                    .properties(properties)
-                    .build();
-        messages.add(historical(message, entry.sequence() * 3L + 1));
+        long sequence = entry.sequence() * 3L + 1;
+        // One covered entry anchors the existing assembler's summary insertion; it is removed
+        // there by the cursor and is never delivered alongside the summary.
+        if (sequence > through || !historyAnchor) {
+          var properties = new HashMap<String, Object>(entry.metadata());
+          if (entry.source() != null) properties.put("source", entry.source());
+          if (entry.sourceId() != null) properties.put("sourceId", entry.sourceId());
+          Message message =
+              "user".equals(entry.speaker())
+                  ? new UserMessage(entry.content())
+                  : AssistantMessage.builder()
+                      .content(entry.content())
+                      .properties(properties)
+                      .build();
+          messages.add(historical(message, sequence));
+          historyAnchor = true;
+        }
         // Carry completed run observations alongside the original final answer without rewriting
         // it.
-        if ("assistant".equals(entry.speaker())) {
+        if ("assistant".equals(entry.speaker()) && sequence + 1 > through) {
           var previous =
               entry.timestamp() == null ? null : timeline.floorEntry(entry.timestamp().toInstant());
           var turn = previous == null ? null : previous.getValue();
