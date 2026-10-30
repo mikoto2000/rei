@@ -2409,6 +2409,12 @@ public class Tools {
    */
   public record ReviewSnapshot(String path, String version, String text) {}
 
+  /** 本文のデコードやPDF抽出をせず、現在のバイト列のバージョンを照合する。 */
+  public String reviewVersion(String requested) throws IOException {
+    var root = currentWorkingDirectory();
+    return newSnapshots().get(root, resolveProjectPath(requested, root)).version();
+  }
+
   /** 共通の実行基盤で用いるレビュー状態の記録を返す。 */
   public ReviewSnapshot reviewSnapshot(String requested) throws IOException {
     var root = currentWorkingDirectory();
