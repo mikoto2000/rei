@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.websearch;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import com.sun.net.httpserver.HttpServer;
 import dev.mikoto2000.rei.http.HttpFetchException;
 import java.net.InetSocketAddress;
@@ -24,37 +25,65 @@ class OpenAiWebSearchHttpTest {
     properties.setProviders(List.of(p));
     return new WebSearchService(properties, new JsonMapper());
   }
-  @Test void sendsRealPostAndDoesNotFollowCredentialedRedirects() throws Exception {
+
+  @Test
+  void sendsRealPostAndDoesNotFollowCredentialedRedirects() throws Exception {
     var observed = new AtomicReference<String>();
     var server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
-    server.createContext("/v1/responses", exchange -> {
-      observed.set(exchange.getRequestMethod() + " " + exchange.getRequestHeaders().getFirst("Authorization") + " " + new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
-      exchange.getResponseHeaders().add("Location", "/elsewhere");
-      exchange.sendResponseHeaders(307, -1);
-      exchange.close();
-    });
+    server.createContext(
+        "/v1/responses",
+        exchange -> {
+          observed.set(
+              exchange.getRequestMethod()
+                  + " "
+                  + exchange.getRequestHeaders().getFirst("Authorization")
+                  + " "
+                  + new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+          exchange.getResponseHeaders().add("Location", "/elsewhere");
+          exchange.sendResponseHeaders(307, -1);
+          exchange.close();
+        });
     server.start();
     try {
-      var failure = assertThrows(IllegalStateException.class, () -> service(server.getAddress().getPort(), 5).search("spring", 1));
+      var failure =
+          assertThrows(
+              IllegalStateException.class,
+              () -> service(server.getAddress().getPort(), 5).search("spring", 1));
       assertTrue(failure.getMessage().contains("HTTP_307"));
       assertTrue(observed.get().startsWith("POST Bearer test-only-key "));
       assertTrue(observed.get().contains("web_search_call.action.sources"));
-    } finally { server.stop(0); }
+    } finally {
+      server.stop(0);
+    }
   }
-  @Test void connectionFailureUsesExistingSafeClassification() throws Exception {
+
+  @Test
+  void connectionFailureUsesExistingSafeClassification() throws Exception {
     int port;
-    try (var socket = new java.net.ServerSocket(0)) { port = socket.getLocalPort(); }
+    try (var socket = new java.net.ServerSocket(0)) {
+      port = socket.getLocalPort();
+    }
     int closedPort = port;
-    var failure = assertThrows(HttpFetchException.class, () -> service(closedPort, 2).search("spring", 1));
+    var failure =
+        assertThrows(HttpFetchException.class, () -> service(closedPort, 2).search("spring", 1));
     assertEquals(HttpFetchException.Code.NETWORK_ERROR, failure.code());
   }
-  @Test void timeoutUsesExistingDeadlineAndIsNotEmptySuccess() throws Exception {
+
+  @Test
+  void timeoutUsesExistingDeadlineAndIsNotEmptySuccess() throws Exception {
     var server = HttpServer.create(new InetSocketAddress("localhost", 0), 0);
     server.createContext("/v1/responses", exchange -> {});
     server.start();
     try {
-      var failure = assertThrows(HttpFetchException.class, () -> service(server.getAddress().getPort(), 1).search("spring", 1));
-      assertTrue(List.of(HttpFetchException.Code.READ_TIMEOUT, HttpFetchException.Code.TOTAL_TIMEOUT).contains(failure.code()));
-    } finally { server.stop(0); }
+      var failure =
+          assertThrows(
+              HttpFetchException.class,
+              () -> service(server.getAddress().getPort(), 1).search("spring", 1));
+      assertTrue(
+          List.of(HttpFetchException.Code.READ_TIMEOUT, HttpFetchException.Code.TOTAL_TIMEOUT)
+              .contains(failure.code()));
+    } finally {
+      server.stop(0);
+    }
   }
 }
