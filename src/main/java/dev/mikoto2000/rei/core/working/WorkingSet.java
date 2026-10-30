@@ -61,7 +61,7 @@ public class WorkingSet {
   private final ThreadLocal<BatchState> persistenceBatch = new ThreadLocal<>();
 
   /** Defer disk snapshots on this thread only; memory, events and eviction remain immediate. */
-  public PersistenceBatch batchPersistence() {
+  public java.io.Closeable batchPersistence() {
     var state = persistenceBatch.get();
     if (state == null) {
       state = new BatchState();
@@ -71,7 +71,7 @@ public class WorkingSet {
     return new PersistenceBatch(state);
   }
 
-  public final class PersistenceBatch implements AutoCloseable {
+  private final class PersistenceBatch implements java.io.Closeable {
     private final BatchState state;
     private boolean closed;
 

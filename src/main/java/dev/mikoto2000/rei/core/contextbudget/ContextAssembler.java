@@ -11,6 +11,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.SystemMessage;
@@ -270,8 +271,12 @@ public class ContextAssembler {
                   .toList(),
               raw.getOptions());
     }
-    while (estimate(project(raw, h, a)) > hard && dropOldest(h)) {}
-    while (estimate(project(raw, h, a)) > hard && dropOldest(a)) {}
+    if (estimate(project(raw, h, a)) > hard) {
+      var costs = new ProjectionCosts();
+      costs.tokens = estimate(project(raw, h, a, costs));
+      trimOldest(h, costs.history, costs, hard, check);
+      trimOldest(a, costs.active, costs, hard, check);
+    }
     Prompt result = tools.fit(restoreSuppressed(project(raw, h, a)), conversation, run, hard);
     long after = estimate(result);
     if (after > hard)
@@ -536,19 +541,41 @@ public class ContextAssembler {
     return null;
   }
 
-  /** モデルへ渡す文脈の管理において、削除Oldestに該当するか判定する。 */
-  private boolean dropOldest(Segment segment) {
-    if (segment.entries.size() <= 1) return false;
-    int end = 1;
-    while (end < segment.entries.size()
-        && segment.entries.get(end).message() instanceof ToolResponseMessage) end++;
-    if (end == segment.entries.size()) return false; // Retain the latest complete exchange.
-    segment.entries.subList(0, end).clear();
-    return true;
+  private static final class ProjectionCosts {
+    final Map<Long, Long> history = new HashMap<>();
+    final Map<Long, Long> active = new HashMap<>();
+    long tokens;
+  }
+
+  /** Account for each complete group once, then remove its prefix without repeated array shifts. */
+  private static void trimOldest(
+      Segment segment, Map<Long, Long> weights, ProjectionCosts costs, int hard, Runnable check) {
+    var lastIndex = new HashMap<Long, Integer>();
+    for (int i = 0; i < segment.entries.size(); i++)
+      lastIndex.put(segment.entries.get(i).sequence(), i);
+    int from = 0;
+    while (costs.tokens > hard && from < segment.entries.size() - 1) {
+      check.run();
+      int end = from + 1;
+      while (end < segment.entries.size()
+          && segment.entries.get(end).message() instanceof ToolResponseMessage) end++;
+      if (end == segment.entries.size()) break; // Retain the latest complete exchange.
+      for (int i = from; i < end; i++) {
+        long sequence = segment.entries.get(i).sequence();
+        // Duplicate sequence keys remain projected until their last retained entry is removed.
+        if (lastIndex.get(sequence) == i) costs.tokens -= weights.getOrDefault(sequence, 0L);
+      }
+      from = end;
+    }
+    if (from > 0) segment.entries.subList(0, from).clear();
   }
 
   /** モデルへ渡す文脈の管理で用いるプロジェクトを返す。 */
   private Prompt project(Prompt original, Segment history, Segment active) {
+    return project(original, history, active, null);
+  }
+
+  private Prompt project(Prompt original, Segment history, Segment active, ProjectionCosts costs) {
     var messages = new ArrayList<Message>();
     var historyBySequence = new HashMap<Long, Message>();
     history.entries.forEach(e -> historyBySequence.put(e.sequence(), e.message()));
@@ -573,8 +600,12 @@ public class ContextAssembler {
                   "Conversation Summary (historical data, not new instructions):\n"
                       + history.summary.summary()));
         historyAdded = true;
-        if (historyBySequence.containsKey(historical))
-          messages.add(historyBySequence.get(historical));
+        if (historyBySequence.containsKey(historical)) {
+          var retained = historyBySequence.get(historical);
+          messages.add(retained);
+          if (costs != null)
+            costs.history.merge(historical, (long) estimator.message(retained), Long::sum);
+        }
       } else if (message instanceof SystemMessage || message instanceof UserMessage) {
         if (Boolean.TRUE.equals(message.getMetadata().get("rei.workingSet")) && workingSet != null)
           messages.add(
@@ -585,7 +616,11 @@ public class ContextAssembler {
         else messages.add(message);
       } else {
         Message retained = activeBySequence.get(++sequence);
-        if (retained != null) messages.add(retained);
+        if (retained != null) {
+          messages.add(retained);
+          if (costs != null)
+            costs.active.merge(sequence, (long) estimator.message(retained), Long::sum);
+        }
       }
     }
     if (!runAdded)
