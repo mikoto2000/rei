@@ -172,10 +172,16 @@ public class CheckpointReconciler {
           }
         }
     var unknown =
-        saved.operations().stream()
+        CheckpointOperationRecovery.interrupted(saved.operations()).stream()
             .filter(
                 o -> o.status() == OperationStatus.STARTED || o.status() == OperationStatus.UNKNOWN)
             .toList();
+    for (var operation : CheckpointOperationRecovery.interrupted(saved.operations()))
+      if (operation.status() == OperationStatus.RETRYABLE)
+        recheck.add(
+            "Interrupted read requires reacquisition with current source version checks: "
+                + operation.operationKey()
+                + "; no successful or delivered result is established");
     if (saved.evidence().stream().anyMatch(e -> e.origin().equals("ASSISTANT_CLAIM")))
       recheck.add(
           "Assistant completion claims are unverified; validate against tool evidence and acceptance criteria");

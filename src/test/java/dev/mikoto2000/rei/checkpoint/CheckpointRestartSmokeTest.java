@@ -27,6 +27,15 @@ class CheckpointRestartSmokeTest {
     run("resume");
   }
 
+  /** 読み取り途中でプロセスが終了しても、次プロセスでは確認待ちにせず再取得へ進める。 */
+  @Test
+  void independentJvmRestartRecoversInterruptedRead() throws Exception {
+    Files.writeString(root.resolve("artifact.txt"), "before");
+    run("write-read");
+    Files.writeString(root.resolve("artifact.txt"), "changed after crash");
+    run("resume-read");
+  }
+
   /** 検証用に、作業の中断と再開の操作を実行する。 */
   void run(String mode) throws Exception {
     var builder =
@@ -49,7 +58,8 @@ class CheckpointRestartSmokeTest {
       ds.setUrl("jdbc:sqlite:" + root.resolve("state.db"));
       var settings = new CheckpointProperties();
       var repository = new PersistentCheckpointRepository(ds, settings);
-      if (args[1].equals("write")) {
+      boolean read = args[1].endsWith("-read");
+      if (args[1].startsWith("write")) {
         var state =
             PersistentCheckpoint.initial(
                 "task", "A", "session", "original-run", root, "complete integration tests");
@@ -64,7 +74,7 @@ class CheckpointRestartSmokeTest {
             List.of(
                 new PersistentCheckpoint.Operation(
                     "external-call",
-                    "deploy",
+                    read ? "readMultiFile" : "deploy",
                     PersistentCheckpoint.OperationStatus.STARTED,
                     "event")));
         repository.save(repository.fields(fields), 0, "before-crash");
@@ -96,12 +106,19 @@ class CheckpointRestartSmokeTest {
           if (repository.leased("A", "task"))
             throw new AssertionError("Dead process retained ownership");
           var check = service.inspect("A", "task");
-          if (check.changed().isEmpty() || check.unknownOperations().size() != 1)
+          if (check.changed().isEmpty() || check.unknownOperations().size() != (read ? 0 : 1))
             throw new AssertionError("Missing reconciliation");
+          if (read && !check.decision().equals("CONTINUE"))
+            throw new AssertionError("Interrupted read required side-effect confirmation");
           var resumed =
               service.resume(
                   "A", "task", dev.mikoto2000.rei.core.chat.AgentRunContext.RequestSource.SHELL);
           var saved = repository.get("A", "task");
+          if (saved.operations().getFirst().status()
+              != (read
+                  ? PersistentCheckpoint.OperationStatus.RETRYABLE
+                  : PersistentCheckpoint.OperationStatus.UNKNOWN))
+            throw new AssertionError("Incorrect interrupted operation recovery");
           if (saved.runId().equals("original-run")
               || !saved.originalRunId().equals("original-run")
               || !saved.resumedFromRunId().equals("original-run")

@@ -171,7 +171,7 @@ public class PersistentCheckpointRepository {
       AND NOT EXISTS(SELECT 1 FROM json_each(snapshot,'$.processes') WHERE type<>'object')
       AND NOT EXISTS(SELECT 1 FROM json_each(snapshot,'$.operations')
         WHERE type<>'object' OR COALESCE(json_extract(CASE WHEN type='object' THEN value END,'$.status'),'PLANNED')
-          NOT IN ('PLANNED','STARTED','SUCCEEDED','FAILED','UNKNOWN'))
+          NOT IN ('PLANNED','STARTED','SUCCEEDED','FAILED','RETRYABLE','UNKNOWN'))
       """;
 
   /**
@@ -225,8 +225,10 @@ public class PersistentCheckpointRepository {
             CASE WHEN fallback THEN COALESCE(json_extract(state,'$.createdAt'),created) ELSE created END AS saved_at,
             substr(created,1,19)||substr(CASE WHEN substr(created,20,1)='.' THEN substr(created,21,length(created)-21) ELSE '' END||'000000000',1,9) AS saved_sort,
             json_extract(state,'$.status') AS status,
-            EXISTS(SELECT 1 FROM json_each(state,'$.operations') WHERE json_extract(value,'$.status')='UNKNOWN'
-              OR (json_extract(state,'$.status')='RUNNING' AND json_extract(value,'$.status')='STARTED')) AS unknown,
+            EXISTS(SELECT 1 FROM json_each(state,'$.operations') WHERE
+              (json_extract(value,'$.status')='UNKNOWN'
+                OR (json_extract(state,'$.status')='RUNNING' AND json_extract(value,'$.status')='STARTED'))
+              AND COALESCE(json_extract(value,'$.toolName'),'') NOT IN (SELECT value FROM json_each(:retryableReads))) AS unknown,
             state
           FROM restored
         ), candidates AS MATERIALIZED (
@@ -255,6 +257,9 @@ public class PersistentCheckpointRepository {
       return db.sql((explain ? "EXPLAIN QUERY PLAN " : "") + sql)
           .param("project", project)
           .param("cutoff", cutoff)
+          .param(
+              "retryableReads",
+              json.writeValueAsString(CheckpointOperationRecovery.RETRYABLE_READS))
           .param("fallbacks", json.writeValueAsString(fallbacks))
           .param("live", json.writeValueAsString(live));
     } catch (java.io.IOException error) {

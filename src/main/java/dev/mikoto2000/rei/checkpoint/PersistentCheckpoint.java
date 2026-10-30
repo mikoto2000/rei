@@ -295,6 +295,8 @@ public record PersistentCheckpoint(
     SUCCEEDED,
     /** 失敗。 */
     FAILED,
+    /** 読み取り結果が未確定。版を確認して再取得できる状態。 */
+    RETRYABLE,
     /** 不明。 */
     UNKNOWN
   }
@@ -493,18 +495,7 @@ public record PersistentCheckpoint(
         null,
         nextAction,
         evidence,
-        operations.stream()
-            .map(
-                o ->
-                    o.status() == OperationStatus.STARTED
-                        ? new Operation(
-                            o.toolCallId(),
-                            o.toolName(),
-                            OperationStatus.UNKNOWN,
-                            o.eventId(),
-                            o.runId())
-                        : o)
-            .toList(),
+        CheckpointOperationRecovery.interrupted(operations),
         files,
         git,
         processes,

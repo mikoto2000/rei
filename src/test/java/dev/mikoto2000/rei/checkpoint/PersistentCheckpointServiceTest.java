@@ -748,6 +748,133 @@ class PersistentCheckpointServiceTest {
         service.context(resumed.runId()).contains("Unknown operations MUST NOT be replayed"));
   }
 
+  /** 読み取り中断は版の変わった本文を再取得でき、後続のレビュー確認を妨げない。 */
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"INTERRUPTED", "CANCELLED", "FAILED"})
+  void interruptedReadCanReacquireCurrentContentAndContinue(String terminal) throws Exception {
+    var file = root.resolve("lesson.md");
+    java.nio.file.Files.writeString(file, "before");
+    var events = new AgentEventFactory(Clock.systemUTC());
+    bus.publishBoundary(
+        events.toolStarted("read", "readMultiFile", "lesson.md").withOwnership(owner));
+    service.finish(owner, terminal);
+    var saved = state();
+    assertEquals(
+        PersistentCheckpoint.OperationStatus.RETRYABLE, saved.operations().getFirst().status());
+    assertTrue(saved.evidence().stream().noneMatch(e -> e.origin().equals("TOOL_CONFIRMED")));
+    assertEquals("CONTINUE", service.inspect("A", saved.taskId()).decision());
+    assertTrue(service.inspect("A", saved.taskId()).unknownOperations().isEmpty());
+
+    java.nio.file.Files.writeString(file, "after");
+    var resumed = service.resume("A", saved.taskId(), AgentRunContext.RequestSource.SHELL);
+    var context = new AgentRunContext(resumed.runId(), "session", root, "A");
+    String handoff = service.context(resumed.runId());
+    assertTrue(handoff.contains("retryableReadCount"));
+    assertTrue(handoff.contains("\"retryableReadCount\":1"));
+    assertTrue(handoff.contains("confirmedReadExcerpts: []"));
+    var callback =
+        new org.springframework.ai.tool.ToolCallback() {
+          @Override
+          public org.springframework.ai.tool.definition.ToolDefinition getToolDefinition() {
+            return org.springframework.ai.tool.definition.ToolDefinition.builder()
+                .name("readMultiFile")
+                .description("read fixture")
+                .inputSchema("{}")
+                .build();
+          }
+
+          @Override
+          public String call(String input) {
+            try {
+              return java.nio.file.Files.readString(file);
+            } catch (java.io.IOException error) {
+              throw new java.io.UncheckedIOException(error);
+            }
+          }
+        };
+    try (var scope = AgentRunScope.open(context)) {
+      assertEquals("after", new ToolEventCallbackDecorator(callback, events, bus).call("{}"));
+    }
+    assertDoesNotThrow(
+        () ->
+            bus.publishBoundary(
+                events.toolStarted("review", "reviewStatus", "review").withOwnership(context)));
+    assertTrue(
+        repository.get("A", saved.taskId()).operations().stream()
+            .anyMatch(
+                o ->
+                    o.runId().equals(resumed.runId())
+                        && o.toolName().equals("readMultiFile")
+                        && o.status() == PersistentCheckpoint.OperationStatus.SUCCEEDED));
+  }
+
+  /** 旧 UNKNOWN と所有権喪失時の STARTED を、永続化・再開の両経路で救済する。 */
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"STARTED", "UNKNOWN"})
+  void savedInterruptedReadsRecoverWithoutConfirmation(String status) {
+    service.finish(owner, "INTERRUPTED");
+    var saved = state();
+    var fields = repository.fields(saved);
+    fields.put("status", status.equals("STARTED") ? "RUNNING" : "INTERRUPTED");
+    fields.put(
+        "operations",
+        List.of(
+            new PersistentCheckpoint.Operation(
+                "read",
+                "readMultiFile",
+                PersistentCheckpoint.OperationStatus.valueOf(status),
+                "event",
+                "run")));
+    repository.save(repository.fields(fields), saved.revision(), "legacy-" + status);
+    var recovered = service.get("A", saved.taskId());
+    assertEquals("INTERRUPTED", recovered.status());
+    assertEquals(
+        PersistentCheckpoint.OperationStatus.RETRYABLE, recovered.operations().getFirst().status());
+    var inspected = service.inspect("A", saved.taskId());
+    assertEquals("CONTINUE", inspected.decision());
+    assertTrue(inspected.recheck().stream().anyMatch(s -> s.contains("reacquisition")));
+    assertTrue(inspected.unknownOperations().isEmpty());
+    var resumed = service.resume("A", saved.taskId(), AgentRunContext.RequestSource.SHELL);
+    var persisted = repository.get("A", saved.taskId());
+    assertEquals(
+        PersistentCheckpoint.OperationStatus.RETRYABLE, persisted.operations().getFirst().status());
+    assertTrue(repository.diagnostics("A", saved.taskId()).isEmpty());
+    assertDoesNotThrow(
+        () ->
+            bus.publishBoundary(
+                new AgentEventFactory(Clock.systemUTC())
+                    .toolStarted("review", "reviewStatus", "review")
+                    .withOwnership(new AgentRunContext(resumed.runId(), "session", root, "A"))));
+  }
+
+  /** 読み取りと変更が混在する中断でも、変更操作の結果不明は解消しない。 */
+  @Test
+  void retryableReadDoesNotClearUnknownWrite() {
+    var events = new AgentEventFactory(Clock.systemUTC());
+    bus.publishBoundary(events.toolStarted("read", "readMultiFile", "read").withOwnership(owner));
+    bus.publishBoundary(events.toolStarted("write", "deploy", "write").withOwnership(owner));
+    service.finish(owner, "INTERRUPTED");
+    assertEquals(
+        List.of(
+            PersistentCheckpoint.OperationStatus.RETRYABLE,
+            PersistentCheckpoint.OperationStatus.UNKNOWN),
+        state().operations().stream().map(PersistentCheckpoint.Operation::status).toList());
+    var check = service.inspect("A", state().taskId());
+    assertEquals("CONFIRMATION_REQUIRED", check.decision());
+    assertEquals("deploy", check.unknownOperations().getFirst().toolName());
+    var resumed = service.resume("A", state().taskId(), AgentRunContext.RequestSource.SHELL);
+    var context = new AgentRunContext(resumed.runId(), "session", root, "A");
+    assertThrows(
+        IllegalStateException.class,
+        () ->
+            bus.publishBoundary(
+                events.toolStarted("write-again", "deploy", "write").withOwnership(context)));
+    assertDoesNotThrow(
+        () ->
+            bus.publishBoundary(
+                events.toolStarted("read-again", "readMultiFile", "read").withOwnership(context)));
+  }
+
   /** 重複の有無イベント一覧および結果変更前計画更新について、確認済み根拠を保持することを確認する。 */
   @Test
   void duplicateEventsAndResultBeforePlanUpdatePreserveConfirmedEvidence() {

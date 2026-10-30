@@ -68,6 +68,29 @@ class ResumeOverviewRepositoryTest {
         .get(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
   }
 
+  /** 再取得可能状態を正規のヘッドとして投影し、旧読み取り UNKNOWN も変更不明と表示しない。 */
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"RETRYABLE", "UNKNOWN", "STARTED"})
+  void interruptedReadOverviewNeedsNoSideEffectConfirmation(String status) {
+    var saved = save("read", "INTERRUPTED", 0);
+    var fields = repo.fields(saved);
+    fields.put(
+        "operations",
+        List.of(
+            new PersistentCheckpoint.Operation(
+                "read",
+                "readMultiFile",
+                PersistentCheckpoint.OperationStatus.valueOf(status),
+                "event",
+                "run")));
+    repo.save(repo.fields(fields), saved.revision(), "read-" + status);
+    var candidate = repo.overviewSelection("A", Instant.EPOCH).latest();
+    assertNotNull(candidate);
+    assertFalse(candidate.toString().contains("結果不明"));
+    assertFalse(candidate.toString().contains("破損"));
+    assertTrue(repo.diagnostics("A", saved.taskId()).isEmpty());
+  }
+
   /** 検証用に、後から参照できるよう、指定された情報を保存する。 */
   PersistentCheckpoint save(String task, String status, long revision) {
     var state = PersistentCheckpoint.initial(task, "A", "session", "run", directory, "request");

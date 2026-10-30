@@ -357,7 +357,9 @@ public class PersistentCheckpointService implements AutoCloseable {
             // large file hashing.
             fields.put("status", status);
             if (!"COMPLETED".equals(status)) fields.put("interruptionReason", status);
-            fields.put("operations", unknown(repository.fields(fields).operations()));
+            fields.put(
+                "operations",
+                CheckpointOperationRecovery.interrupted(repository.fields(fields).operations()));
           });
     } finally {
       synchronized (this) {
@@ -368,22 +370,6 @@ public class PersistentCheckpointService implements AutoCloseable {
         transientEvents.remove(context.runId());
       }
     }
-  }
-
-  /** 確定できない結果を、判定不能の情報として表す。 */
-  private List<Operation> unknown(List<Operation> operations) {
-    return operations.stream()
-        .map(
-            o ->
-                o.status() == OperationStatus.STARTED
-                    ? new Operation(
-                        o.toolCallId(),
-                        o.toolName(),
-                        OperationStatus.UNKNOWN,
-                        o.eventId(),
-                        o.runId())
-                    : o)
-        .toList();
   }
 
   /** 後から参照できるよう、現在を保存する。 */
@@ -454,12 +440,16 @@ public class PersistentCheckpointService implements AutoCloseable {
 
   /** 処理を継続できる状態に戻すため、表示内容を復旧する。 */
   private PersistentCheckpoint recoverView(PersistentCheckpoint state) {
-    if (!"RUNNING".equals(state.status()) || repository.leased(state.projectId(), state.taskId()))
-      return state;
+    boolean running = "RUNNING".equals(state.status());
+    if (running && repository.leased(state.projectId(), state.taskId())) return state;
+    var operations = CheckpointOperationRecovery.interrupted(state.operations());
+    if (!running && operations.equals(state.operations())) return state;
     var fields = repository.fields(state);
-    fields.put("status", "INTERRUPTED");
-    fields.put("interruptionReason", "Execution owner lost");
-    fields.put("operations", unknown(state.operations()));
+    if (running) {
+      fields.put("status", "INTERRUPTED");
+      fields.put("interruptionReason", "Execution owner lost");
+    }
+    fields.put("operations", operations);
     return repository.fields(fields);
   }
 
@@ -1153,6 +1143,17 @@ public class PersistentCheckpointService implements AutoCloseable {
     essentials.put("taskId", state.taskId());
     essentials.put("currentStep", bounded(Objects.toString(state.currentStep(), ""), 64));
     essentials.put("unknownOperationCount", unknown.size());
+    var retryable =
+        state.operations().stream().filter(o -> o.status() == OperationStatus.RETRYABLE).toList();
+    essentials.put("retryableReadCount", retryable.size());
+    essentials.put(
+        "retryableReads",
+        retryable.stream().limit(3).map(o -> bounded(o.operationKey(), 128)).toList());
+    if (!retryable.isEmpty())
+      essentials.put(
+          "retryableReadHint",
+          "Interrupted reads have no confirmed result. Reacquire needed content with current source"
+              + " version checks; do not count the old reads as successful or delivered.");
     essentials.put("nextAction", bounded(Objects.toString(state.nextAction(), ""), 160));
     essentials.put(
         "reconciliationNextAction", check == null ? "" : bounded(check.nextAction(), 160));

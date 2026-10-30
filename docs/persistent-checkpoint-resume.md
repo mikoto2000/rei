@@ -2,6 +2,8 @@
 
 長時間のチャット作業を中断したあと、保存した実行情報を照合して新しい Run で継続できます。タスク ID は継続し、Run ID は毎回変わります。起動時の自動 Resume はありません。
 
+ファイル参照（`readMultiFile`、`readFile`、`readPdfFile`、`readBinaryFile`、`findFile`、`listFile`、`grepMultiQuery`、`searchAndRead`、`searchFilePage`）の実行結果が中断で未確定になった場合は、`RETRYABLE`（再取得可能）として保存します。旧チェックポイントにある同じ参照の `UNKNOWN` も表示・照合・再開時に変換します。必要な本文は現在の版を確認して再取得し、以前の操作を成功・配信済み・レビュー済みとは扱いません。これらの参照の中断だけでは、副作用の結果確認を要求するガードは作動しません。書き込みや未分類のツールの結果不明は、従来どおり `UNKNOWN` として個別照合が必要です。
+
 ## Shell
 
 | 操作 | コマンド |

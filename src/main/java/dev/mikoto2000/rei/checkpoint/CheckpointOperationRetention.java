@@ -18,7 +18,7 @@ final class CheckpointOperationRetention {
   /** ユーティリティ型の生成を禁止する。 */
   private CheckpointOperationRetention() {}
 
-  /** 古い成功記録だけを作業用一覧から外す。以前の不変リビジョンとイベント再生防止キーは変更しない。 未確定・失敗操作、直近の操作、現行証拠が参照する操作は必ず保持する。 */
+  /** 古い成功・再取得可能記録を作業用一覧から外す。結果不明・失敗操作、直近の操作、現行証拠が参照する操作は必ず保持する。 */
   static List<Operation> retain(List<Operation> operations, List<Evidence> evidence) {
     int excess = operations.size() - LIMIT;
     if (excess <= 0) return List.copyOf(operations);
@@ -28,7 +28,8 @@ final class CheckpointOperationRetention {
       var operation = operations.get(index);
       if (excess > 0
           && index < recentStart
-          && operation.status() == OperationStatus.SUCCEEDED
+          && (operation.status() == OperationStatus.SUCCEEDED
+              || operation.status() == OperationStatus.RETRYABLE)
           && evidence.stream().noneMatch(item -> references(item, operation))) {
         excess--;
       } else {
