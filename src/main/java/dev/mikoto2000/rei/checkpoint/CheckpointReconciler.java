@@ -114,7 +114,7 @@ public class CheckpointReconciler {
     if ("ABANDONED".equals(saved.status())) blockers.add("Task abandoned; history retained");
     if ("RUNNING".equals(saved.status()) && !leased)
       recheck.add("Execution owner lost: interrupted, awaiting reconciliation");
-    var currentGit = git(root);
+    var currentGit = saved.git().containsKey("format") ? git(root) : legacyGit(root);
     if (!saved.git().equals(currentGit)) changed.add("Git branch/HEAD/work tree changed");
     else usable.add("Git snapshot matches (unavailable Git is not proof of clean work tree)");
     for (var file : saved.files().entrySet()) {
@@ -270,6 +270,36 @@ public class CheckpointReconciler {
 
   /** 作業の中断と再開で用いるGitの情報を返す。 */
   public static Map<String, String> git(Path root) {
+    String status =
+        readGit(
+            root,
+            "status",
+            "--porcelain=v2",
+            "--branch",
+            "--no-ahead-behind",
+            "--untracked-files=normal");
+    if (status.equals("unavailable") || status.equals("oversized:recheck"))
+      return Map.of("format", "porcelain-v2", "branch", status, "head", status, "workTree", status);
+    String branch = "unavailable", head = "unavailable";
+    var changes = new ArrayList<String>();
+    for (String line : status.lines().toList()) {
+      if (line.startsWith("# branch.oid ")) head = line.substring(13);
+      else if (line.startsWith("# branch.head ")) branch = line.substring(14);
+      else if (!line.startsWith("# ")) changes.add(line);
+    }
+    return Map.of(
+        "format",
+        "porcelain-v2",
+        "branch",
+        branch,
+        "head",
+        head,
+        "workTree",
+        String.join("\n", changes));
+  }
+
+  /** Older persisted snapshots use porcelain v1; compare them without a format-only change. */
+  private static Map<String, String> legacyGit(Path root) {
     active();
     var result = new LinkedHashMap<String, String>();
     result.put("branch", readGit(root, "rev-parse", "--abbrev-ref", "HEAD"));

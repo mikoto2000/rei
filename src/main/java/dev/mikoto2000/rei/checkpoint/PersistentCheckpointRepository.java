@@ -73,11 +73,7 @@ public class PersistentCheckpointRepository {
     db.sql(
             "INSERT OR IGNORE INTO checkpoint_event_keys(project,task,event) SELECT project,task,event FROM checkpoint_revisions")
         .update();
-    initializeHistoryUsage();
-  }
-
-  /** Bootstrap once; triggers keep accounting atomic with every writer, including older clients. */
-  private void initializeHistoryUsage() {
+    // Bootstrap once; triggers account atomically for every writer.
     transaction.executeWithoutResult(
         tx -> {
           db.sql(
