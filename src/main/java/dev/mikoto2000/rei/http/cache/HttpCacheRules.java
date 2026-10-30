@@ -33,14 +33,18 @@ final class HttpCacheRules {
   /** 取得した情報の再利用において、要求対象の条件に該当するか判定する。 */
   static boolean requestEligible(
       HttpResponseCache.Request request, SensitiveInfoDetector sensitive) {
-    boolean searchPost = request.namespace() == HttpResponseCache.Namespace.SEARCH
-        && "POST".equals(request.method())
-        && "application/json".equalsIgnoreCase(request.headers().get("content-type"));
+    boolean searchPost =
+        request.namespace() == HttpResponseCache.Namespace.SEARCH
+            && "POST".equals(request.method())
+            && "application/json".equalsIgnoreCase(request.headers().get("content-type"));
     if ("POST".equals(request.method()) && !searchPost) return false;
     if (searchPost && sensitive.containsSensitiveInfo(request.body())) return false;
     if (request.policy().allowPrivateOrigin()
-        || request.headers().keySet().stream().anyMatch(name -> !HEADERS.contains(name)
-            && !(searchPost && Set.of("authorization", "content-type").contains(name))))
+        || request.headers().keySet().stream()
+            .anyMatch(
+                name ->
+                    !HEADERS.contains(name)
+                        && !(searchPost && Set.of("authorization", "content-type").contains(name))))
       return false;
     if (restricted(request.headers().get("cache-control"))) return false;
     String host = request.uri().getHost();

@@ -44,8 +44,15 @@ public final class WebSearchMetrics {
 
   /** Record only bounded API states, never response text or error messages. */
   public void openAiStatus(String status) {
-    registry.counter("rei.web.search.openai.responses", "status",
-        Set.of("completed", "failed", "incomplete", "in_progress", "queued", "cancelled").contains(status) ? status : "invalid").increment();
+    registry
+        .counter(
+            "rei.web.search.openai.responses",
+            "status",
+            Set.of("completed", "failed", "incomplete", "in_progress", "queued", "cancelled")
+                    .contains(status)
+                ? status
+                : "invalid")
+        .increment();
   }
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
@@ -99,6 +106,8 @@ public final class WebSearchMetrics {
 
       /** 処理を継続できなかった理由を、失敗情報として表す。 */
       public void failure(dev.mikoto2000.rei.http.HttpFetchException.Code code) {
+        if ("openai".equals(provider))
+          add("openai_error_" + code.name().toLowerCase(java.util.Locale.ROOT), 1);
         if (code == dev.mikoto2000.rei.http.HttpFetchException.Code.CONNECT_TIMEOUT
             || code == dev.mikoto2000.rei.http.HttpFetchException.Code.READ_TIMEOUT
             || code == dev.mikoto2000.rei.http.HttpFetchException.Code.TOTAL_TIMEOUT)

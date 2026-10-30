@@ -48,8 +48,14 @@ public class WebSearchProperties {
         maxWireBytes,
         maxDecodedBytes,
         java.time.Duration.ofSeconds(connectTimeoutSeconds),
-        java.time.Duration.ofSeconds(provider != null && provider.getTimeoutSeconds() != null ? provider.getTimeoutSeconds() : readTimeoutSeconds),
-        java.time.Duration.ofSeconds(provider != null && provider.getTimeoutSeconds() != null ? provider.getTimeoutSeconds() : timeoutSeconds),
+        java.time.Duration.ofSeconds(
+            provider != null && provider.getTimeoutSeconds() != null
+                ? provider.getTimeoutSeconds()
+                : readTimeoutSeconds),
+        java.time.Duration.ofSeconds(
+            provider != null && provider.getTimeoutSeconds() != null
+                ? provider.getTimeoutSeconds()
+                : timeoutSeconds),
         maxRedirects,
         null,
         provider == null ? null : java.net.URI.create(provider.getBaseUrl()),
@@ -180,7 +186,8 @@ public class WebSearchProperties {
     /** Resolve the default Responses endpoint only for the explicitly selected provider. */
     public String getBaseUrl() {
       return baseUrl == null && "openai".equalsIgnoreCase(name)
-          ? "https://api.openai.com/v1/responses" : baseUrl;
+          ? "https://api.openai.com/v1/responses"
+          : baseUrl;
     }
 
     /** 許可非公開ネットワーク。 */

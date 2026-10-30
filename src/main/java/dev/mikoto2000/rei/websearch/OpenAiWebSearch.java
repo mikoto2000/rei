@@ -1,6 +1,5 @@
 package dev.mikoto2000.rei.websearch;
 
-import dev.mikoto2000.rei.http.PublicNetworkPolicy;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -21,10 +20,11 @@ final class OpenAiWebSearch {
 
   /** Deterministic JSON also supplies the POST cache identity. */
   String request(WebSearchProperties.ProviderProperties provider, String query) {
-    if (provider.getModel() == null || !provider.getModel().matches("[A-Za-z0-9._:-]{1,100}")
+    if (provider.getModel() == null
+        || !provider.getModel().matches("[A-Za-z0-9._:-]{1,100}")
         || !Set.of("low", "medium", "high").contains(provider.getSearchContextSize())
-        || provider.getMaxUrls() < 1 || provider.getMaxUrls() > 100)
-      throw failure("CONFIGURATION");
+        || provider.getMaxUrls() < 1
+        || provider.getMaxUrls() > 100) throw failure("CONFIGURATION");
     var tool = new LinkedHashMap<String, Object>();
     tool.put("type", "web_search");
     tool.put("search_context_size", provider.getSearchContextSize());
@@ -44,8 +44,11 @@ final class OpenAiWebSearch {
     return mapper.writeValueAsString(body);
   }
 
-  /** Only structured URL sources/citations are candidates; generated prose is never page content. */
-  List<WebSearchResult> parse(WebSearchProperties.ProviderProperties provider, String body, int limit) {
+  /**
+   * Only structured URL sources/citations are candidates; generated prose is never page content.
+   */
+  List<WebSearchResult> parse(
+      WebSearchProperties.ProviderProperties provider, String body, int limit) {
     JsonNode root;
     try {
       root = mapper.readTree(body);
@@ -64,10 +67,12 @@ final class OpenAiWebSearch {
     for (JsonNode item : output) {
       if (!"web_search_call".equals(item.path("type").asString(""))) continue;
       calls++;
-      if (!"completed".equals(item.path("status").asString(""))) throw failure("TOOL_NOT_COMPLETED");
+      if (!"completed".equals(item.path("status").asString("")))
+        throw failure("TOOL_NOT_COMPLETED");
       JsonNode action = item.path("action");
       String type = action.path("type").asString("");
-      if (!Set.of("search", "open_page", "find_in_page").contains(type)) throw failure("INVALID_RESPONSE");
+      if (!Set.of("search", "open_page", "find_in_page").contains(type))
+        throw failure("INVALID_RESPONSE");
       if ("search".equals(type)) {
         JsonNode sources = action.path("sources");
         if (!sources.isArray()) throw failure("MISSING_SOURCES");
@@ -82,13 +87,18 @@ final class OpenAiWebSearch {
           if ("url_citation".equals(annotation.path("type").asString("")))
             add(provider, candidates, annotation);
     }
-    return new ArrayList<>(candidates.values()).subList(0, Math.min(candidates.size(), Math.min(limit, provider.getMaxUrls())));
+    return new ArrayList<>(candidates.values())
+        .subList(0, Math.min(candidates.size(), Math.min(limit, provider.getMaxUrls())));
   }
 
   /** API-reported tokens only; called for network responses, never on cache replay. */
   void recordUsage(String body) {
     JsonNode root;
-    try { root = mapper.readTree(body); } catch (RuntimeException invalid) { return; }
+    try {
+      root = mapper.readTree(body);
+    } catch (RuntimeException invalid) {
+      return;
+    }
     if (root == null) return;
     for (String field : List.of("input_tokens", "output_tokens", "total_tokens")) {
       var value = root.path("usage").path(field);
@@ -100,20 +110,19 @@ final class OpenAiWebSearch {
         WebSearchMetrics.OBSERVED.add("openai_web_search_calls", 1);
   }
 
-  private void add(WebSearchProperties.ProviderProperties provider, Map<String, WebSearchResult> candidates, JsonNode source) {
+  private void add(
+      WebSearchProperties.ProviderProperties provider,
+      Map<String, WebSearchResult> candidates,
+      JsonNode source) {
     String raw = source.path("url").asString("");
     if (raw.isBlank()) return; // Non-URL feeds (oai-weather etc.) are not fetchable pages.
     WebSearchMetrics.OBSERVED.add("openai_received_urls", 1);
-    String url = WebSearchSelection.normalizeUrl(raw);
+    String url = WebSearchSelection.normalizePublicUrl(raw);
     if (url == null) return;
-    try {
-      PublicNetworkPolicy.validate(URI.create(url));
-    } catch (RuntimeException invalid) {
-      return;
-    }
     String host = URI.create(url).getHost().toLowerCase(Locale.ROOT);
     var allowed = domains(provider.getAllowedDomains());
-    if ((!allowed.isEmpty() && !matches(host, allowed)) || matches(host, domains(provider.getBlockedDomains()))) return;
+    if ((!allowed.isEmpty() && !matches(host, allowed))
+        || matches(host, domains(provider.getBlockedDomains()))) return;
     String title = source.path("title").asString("");
     var result = new WebSearchResult(title, url, "", null);
     candidates.merge(url, result, (old, next) -> old.title().isBlank() ? next : old);
@@ -125,15 +134,27 @@ final class OpenAiWebSearch {
 
   private static List<String> domains(List<String> values) {
     if (values == null || values.size() > 100) throw failure("DOMAIN_CONFIGURATION");
-    return values.stream().map(value -> {
-      try {
-        String domain = java.net.IDN.toASCII(value, java.net.IDN.USE_STD3_ASCII_RULES).toLowerCase(Locale.ROOT);
-        if (domain.isBlank() || domain.length() > 253 || domain.startsWith(".") || domain.endsWith(".")) throw failure("DOMAIN_CONFIGURATION");
-        return domain;
-      } catch (RuntimeException invalid) {
-        throw failure("DOMAIN_CONFIGURATION");
-      }
-    }).distinct().sorted().toList();
+    return values.stream()
+        .map(
+            value -> {
+              try {
+                String domain =
+                    java.net
+                        .IDN
+                        .toASCII(value, java.net.IDN.USE_STD3_ASCII_RULES)
+                        .toLowerCase(Locale.ROOT);
+                if (domain.isBlank()
+                    || domain.length() > 253
+                    || domain.startsWith(".")
+                    || domain.endsWith(".")) throw failure("DOMAIN_CONFIGURATION");
+                return domain;
+              } catch (RuntimeException invalid) {
+                throw failure("DOMAIN_CONFIGURATION");
+              }
+            })
+        .distinct()
+        .sorted()
+        .toList();
   }
 
   static IllegalStateException failure(String code) {

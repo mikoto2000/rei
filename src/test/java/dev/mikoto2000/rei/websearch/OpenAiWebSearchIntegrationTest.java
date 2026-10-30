@@ -255,10 +255,11 @@ class OpenAiWebSearchIntegrationTest {
     }
   }
 
-  @Test void invalidCredentialCannotAppearInHeaderValidationFailure() {
+  @Test
+  void invalidCredentialCannotAppearInHeaderValidationFailure() {
     var p = provider("openai");
     p.setApiKey("test-secret\ninvalid");
-    var error = assertThrows(RuntimeException.class, () -> service(p).search("spring",1));
+    var error = assertThrows(RuntimeException.class, () -> service(p).search("spring", 1));
     assertFalse(error.toString().contains("test-secret"));
     assertTrue(calls.isEmpty());
   }

@@ -82,8 +82,13 @@ public final class HttpResponseCache implements AutoCloseable {
       String method,
       String body) {
     /** Preserve all existing GET callers. */
-    public Request(URI uri, Map<String, String> headers, HttpFetchPolicy policy,
-        Namespace namespace, boolean forceRefresh, String variant) {
+    public Request(
+        URI uri,
+        Map<String, String> headers,
+        HttpFetchPolicy policy,
+        Namespace namespace,
+        boolean forceRefresh,
+        String variant) {
       this(uri, headers, policy, namespace, forceRefresh, variant, "GET", "");
     }
 
@@ -135,7 +140,8 @@ public final class HttpResponseCache implements AutoCloseable {
   private static Object canonicalValue(tools.jackson.databind.JsonNode node) {
     if (node.isObject()) {
       var sorted = new TreeMap<String, Object>();
-      node.properties().forEach(entry -> sorted.put(entry.getKey(), canonicalValue(entry.getValue())));
+      node.properties()
+          .forEach(entry -> sorted.put(entry.getKey(), canonicalValue(entry.getValue())));
       return sorted;
     }
     if (node.isArray()) {
@@ -146,12 +152,24 @@ public final class HttpResponseCache implements AutoCloseable {
     return node;
   }
 
-  private static SafeHttpFetcher.Response transfer(SafeHttpFetcher fetcher, Request request,
-      URI uri, Map<String, String> headers, HttpFetchPolicy policy, FetchOperation operation,
+  private static SafeHttpFetcher.Response transfer(
+      SafeHttpFetcher fetcher,
+      Request request,
+      URI uri,
+      Map<String, String> headers,
+      HttpFetchPolicy policy,
+      FetchOperation operation,
       HttpFetchObserver observer) {
-    if ("GET".equals(request.method())) return fetcher.fetch(uri, headers, policy, operation, observer);
-    return fetcher.fetch(uri, request.method(), request.body().getBytes(StandardCharsets.UTF_8),
-        headers, policy, operation, observer);
+    if ("GET".equals(request.method()))
+      return fetcher.fetch(uri, headers, policy, operation, observer);
+    return fetcher.fetch(
+        uri,
+        request.method(),
+        request.body().getBytes(StandardCharsets.UTF_8),
+        headers,
+        policy,
+        operation,
+        observer);
   }
 
   /**
@@ -269,6 +287,15 @@ public final class HttpResponseCache implements AutoCloseable {
                 new ThreadPoolExecutor.AbortPolicy());
   }
 
+  /** Remove an application-invalid response without exposing credentials or request contents. */
+  public void invalidate(Request request, SafeHttpFetcher fetcher) {
+    String transport = transports.get(fetcher);
+    if (transport == null) return;
+    synchronized (mutex) {
+      entries.remove(key(request, request.headers(), transport, false));
+    }
+  }
+
   /** 後続の処理に必要な情報を、取得先から読み込む。 */
   public SafeHttpFetcher.Response fetch(
       Request request, FetchOperation caller, HttpFetchObserver observer, SafeHttpFetcher fetcher) {
@@ -280,14 +307,18 @@ public final class HttpResponseCache implements AutoCloseable {
               request.policy(),
               request.namespace(),
               true,
-              request.variant(), request.method(), request.body());
+              request.variant(),
+              request.method(),
+              request.body());
     FetchOperation waiter = caller.withTimeout(request.policy().totalTimeout());
     waiter.check();
     request.policy().validate(request.uri());
     if (closed.get()) throw new HttpFetchException(HttpFetchException.Code.FETCH_REJECTED);
     if (!enabled || !HttpCacheRules.requestEligible(request, sensitive)) {
       event(request.namespace(), "bypass");
-      return transfer(fetcher, request,
+      return transfer(
+          fetcher,
+          request,
           request.uri(),
           HttpCacheRules.conditions(request, null, request.forceRefresh()),
           request.policy(),
@@ -355,7 +386,9 @@ public final class HttpResponseCache implements AutoCloseable {
       } catch (HttpFetchException failure) {
         if (owner || failure.code() != HttpFetchException.Code.REQUEST_BUDGET) throw failure;
         event(request.namespace(), "unshared_retry");
-        return transfer(fetcher, request,
+        return transfer(
+            fetcher,
+            request,
             request.uri(),
             HttpCacheRules.conditions(request, null, request.forceRefresh()),
             request.policy(),
@@ -364,7 +397,9 @@ public final class HttpResponseCache implements AutoCloseable {
       }
       if (!owner && !loaded.shareable()) {
         event(request.namespace(), "unshared_retry");
-        return transfer(fetcher, request,
+        return transfer(
+            fetcher,
+            request,
             request.uri(),
             HttpCacheRules.conditions(request, null, request.forceRefresh()),
             request.policy(),
@@ -483,8 +518,14 @@ public final class HttpResponseCache implements AutoCloseable {
         var transfer = TransferScope.enter(flight.transferBudget)) {
       event(request.namespace(), "load");
       var response =
-          transfer(flight.fetcher, request,
-              request.uri(), flight.headers, request.policy(), operation, flight.observer);
+          transfer(
+              flight.fetcher,
+              request,
+              request.uri(),
+              flight.headers,
+              request.policy(),
+              operation,
+              flight.observer);
       Instant received = clock.instant();
       if (response.status() == 304) {
         event(request.namespace(), "revalidation");

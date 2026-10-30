@@ -104,12 +104,25 @@ public class SafeHttpFetcher {
 
   /** POST uses the existing bounded transport without redirects or automatic retries. */
   public Response fetch(
-      URI uri, String method, byte[] body, Map<String, String> headers,
-      HttpFetchPolicy policy, FetchOperation operation, HttpFetchObserver observer) {
-    if ("GET".equals(method) && body == null) return fetch(uri, headers, policy, operation, observer);
+      URI uri,
+      String method,
+      byte[] body,
+      Map<String, String> headers,
+      HttpFetchPolicy policy,
+      FetchOperation operation,
+      HttpFetchObserver observer) {
+    if ("GET".equals(method) && body == null)
+      return fetch(uri, headers, policy, operation, observer);
     try {
-      return exchange(uri, method, body, headers, policy,
-          operation.withTimeout(policy.totalTimeout()), observer, false);
+      return exchange(
+          uri,
+          method,
+          body,
+          headers,
+          policy,
+          operation.withTimeout(policy.totalTimeout()),
+          observer,
+          false);
     } catch (CancellationException cancelled) {
       observer.cancellation();
       throw cancelled;
