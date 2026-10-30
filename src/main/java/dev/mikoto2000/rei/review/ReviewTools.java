@@ -651,7 +651,11 @@ public final class ReviewTools {
   }
 
   public record PageAssessment(
-      String path, int offset, int nextOffset, String assessment, List<PageFinding> findings) {}
+      String path, int offset, int nextOffset, String assessment, List<PageFinding> findings) {
+    public PageAssessment {
+      findings = findings == null ? null : List.copyOf(findings);
+    }
+  }
 
   @Tool(
       description =

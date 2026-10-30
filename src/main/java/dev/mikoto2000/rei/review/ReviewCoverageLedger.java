@@ -524,7 +524,11 @@ public final class ReviewCoverageLedger {
     return update(id, scope, job -> applyReview(job, range, assessment, findings));
   }
 
-  public record Assessment(Range range, String assessment, List<Finding> findings) {}
+  public record Assessment(Range range, String assessment, List<Finding> findings) {
+    public Assessment {
+      findings = findings == null ? null : List.copyOf(findings);
+    }
+  }
 
   /** Validate every assessment inside one transaction; failures save none. */
   public Job reviewedBatch(String id, Scope scope, List<Assessment> assessments) {
