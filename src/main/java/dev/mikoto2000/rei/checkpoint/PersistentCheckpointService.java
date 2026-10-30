@@ -954,9 +954,15 @@ public class PersistentCheckpointService implements AutoCloseable {
         var current = repository.get(cached.projectId(), cached.taskId());
         var fields = repository.fields(current);
         mutation.accept(fields);
+        var candidate = repository.fields(fields);
+        if (!requirePersistent && candidate.equals(current)) {
+          active.computeIfPresent(run, (id, previous) -> current);
+          return current;
+        }
         try {
-          var saved = repository.save(repository.fields(fields), current.revision(), event);
+          var saved = repository.save(candidate, current.revision(), event);
           active.computeIfPresent(run, (id, previous) -> saved);
+          if (saved.revision() == current.revision()) return saved;
           next = saved;
           break;
         } catch (ConcurrentModificationException conflict) {
