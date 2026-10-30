@@ -103,6 +103,10 @@ public class SafeHttpFetcher {
   }
 
   /** POST uses the existing bounded transport without redirects or automatic retries. */
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      justification =
+          "Preserve classified HTTP failures and cancellation controls, as in the existing exchange method.")
   public Response fetch(
       URI uri,
       String method,

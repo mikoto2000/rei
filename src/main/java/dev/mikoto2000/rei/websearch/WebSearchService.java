@@ -187,6 +187,10 @@ public class WebSearchService {
   }
 
   /** Submit a Responses search using the shared bounded transport and search budget. */
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      justification =
+          "Evict invalid responses and rethrow the original failure so cancellation and provider semantics survive.")
   private List<WebSearchResult> searchOpenAi(ProviderProperties provider, String query, int limit) {
     String key = provider.getApiKey();
     if (key == null || key.isBlank()) key = properties.getOpenaiApiKey();
