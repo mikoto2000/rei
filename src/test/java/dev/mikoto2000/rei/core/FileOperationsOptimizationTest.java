@@ -190,6 +190,28 @@ class FileOperationsOptimizationTest {
 
   /** 継続入力原因を伝えることを確認する。 */
   @Test
+  void shortBatchedRangesDoNotForceAnExtraReadForAnEarlierFile() throws Exception {
+    Files.writeString(root.resolve("large.txt"), "x\n".repeat(1000));
+    var requests = new ArrayList<Tools.ReadFileRequest>();
+    requests.add(new Tools.ReadFileRequest("large.txt", 1, 1000));
+    for (int index = 0; index < 5; index++) {
+      String path = "small" + index + ".txt";
+      Files.writeString(root.resolve(path), "small\nignored\n");
+      requests.add(new Tools.ReadFileRequest(path, 1, 1));
+    }
+
+    var results = tools().readMultiFile(requests, root);
+
+    assertEquals(1000, results.getFirst().content().size());
+    assertEquals(1005, results.stream().mapToInt(result -> result.content().size()).sum());
+    for (var result : results) {
+      assertNull(result.error());
+      assertFalse(result.truncated());
+      assertNull(result.nextRead());
+    }
+  }
+
+  @Test
   void totalLineBudgetLeavesAUsefulPageForEveryFileAndReportsItsContinuationCause()
       throws Exception {
     var requests = new ArrayList<Tools.ReadFileRequest>();
