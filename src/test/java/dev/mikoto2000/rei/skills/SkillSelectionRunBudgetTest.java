@@ -81,13 +81,14 @@ class SkillSelectionRunBudgetTest {
   @Test
   void advisorPassesRunBudgetAndExplicitSelectionNeedsNoHelperCall() {
     var model = mock(ChatModel.class);
-    when(model.call(org.mockito.Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
+    when(model.stream(org.mockito.Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
         .thenReturn(
-            new org.springframework.ai.chat.model.ChatResponse(
-                List.of(
-                    new org.springframework.ai.chat.model.Generation(
-                        new org.springframework.ai.chat.messages.AssistantMessage(
-                            "[\"sample\"]")))));
+            reactor.core.publisher.Flux.just(
+                new org.springframework.ai.chat.model.ChatResponse(
+                    List.of(
+                        new org.springframework.ai.chat.model.Generation(
+                            new org.springframework.ai.chat.messages.AssistantMessage(
+                                "[\"sample\"]"))))));
     var repository = new InMemoryAgentSkillRepository(List.of(skill));
     var properties = new AgentSkillsProperties();
     properties.setEnabled(true);
@@ -123,8 +124,8 @@ class SkillSelectionRunBudgetTest {
     assertThat(budget.remainingLlmCalls()).isZero();
     assertThatThrownBy(() -> advisor.before(implicit, null))
         .isInstanceOf(ExecutionStoppedException.class);
-    verify(model, times(1))
-        .call(org.mockito.Mockito.any(org.springframework.ai.chat.prompt.Prompt.class));
+    verify(model, times(1)).stream(
+        org.mockito.Mockito.any(org.springframework.ai.chat.prompt.Prompt.class));
   }
 
   /** スキルの利用の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
@@ -146,13 +147,14 @@ class SkillSelectionRunBudgetTest {
   @Test
   void helperConsumesSharedBudgetAndStopsBeforeSecondModelCall() {
     var model = mock(ChatModel.class);
-    when(model.call(org.mockito.Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
+    when(model.stream(org.mockito.Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
         .thenReturn(
-            new org.springframework.ai.chat.model.ChatResponse(
-                List.of(
-                    new org.springframework.ai.chat.model.Generation(
-                        new org.springframework.ai.chat.messages.AssistantMessage(
-                            "[\"sample\"]")))));
+            reactor.core.publisher.Flux.just(
+                new org.springframework.ai.chat.model.ChatResponse(
+                    List.of(
+                        new org.springframework.ai.chat.model.Generation(
+                            new org.springframework.ai.chat.messages.AssistantMessage(
+                                "[\"sample\"]"))))));
     var parent =
         new OutputLimitRunBudget.LlmCallReservation() {
           /** 検証に使う残量。 */
@@ -179,15 +181,15 @@ class SkillSelectionRunBudgetTest {
     assertThatThrownBy(
             () -> selector.select("request", Set.of(), List.of(skill), run::consumeNextLlmCall))
         .isInstanceOf(ExecutionStoppedException.class);
-    verify(model, times(1))
-        .call(org.mockito.Mockito.any(org.springframework.ai.chat.prompt.Prompt.class));
+    verify(model, times(1)).stream(
+        org.mockito.Mockito.any(org.springframework.ai.chat.prompt.Prompt.class));
   }
 
   /** スキルの利用で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void emptyCandidatesDoNotConsumeAndFailedAttemptIsStillCharged() {
     var model = mock(ChatModel.class);
-    when(model.call(org.mockito.Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
+    when(model.stream(org.mockito.Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
         .thenThrow(new IllegalStateException("provider failed"));
     var budget = new OutputLimitRunBudget(0, 1);
     var run = context(budget);
@@ -198,7 +200,7 @@ class SkillSelectionRunBudgetTest {
     assertThat(selector.select("request", Set.of(), List.of(skill), run::consumeNextLlmCall))
         .isEmpty();
     assertThat(budget.remainingLlmCalls()).isZero();
-    verify(model, times(1))
-        .call(org.mockito.Mockito.any(org.springframework.ai.chat.prompt.Prompt.class));
+    verify(model, times(1)).stream(
+        org.mockito.Mockito.any(org.springframework.ai.chat.prompt.Prompt.class));
   }
 }

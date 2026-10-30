@@ -110,7 +110,7 @@ public class AgentSkillSelectionService {
     List<SkillCandidate> candidates = List.of();
     Long candidateDurationMs = null;
     Long selectorDurationMs = null;
-    if (remaining > 0) {
+    if (remaining > 0 && (explicitSkills.isEmpty() || properties.isImplicitWithExplicit())) {
       Set<String> explicitNames =
           explicitSkills.stream()
               .map(AgentSkill::name)
@@ -131,19 +131,22 @@ public class AgentSkillSelectionService {
           repository == null || candidateSelector == null
               ? null
               : candidates.stream().map(SkillCandidate::skill).toList();
-      implicitSkills =
-          distinctAndLimit(
-              beforeModelCall == null
-                  ? implicitSelector.select(
-                      explicit.sanitizedPrompt(), explicitNames, providedCandidates)
-                  : implicitSelector.select(
-                      explicit.sanitizedPrompt(),
-                      explicitNames,
-                      providedCandidates,
-                      beforeModelCall),
-              remaining);
-      selectorDurationMs =
-          Math.max(0L, (nanoTime.getAsLong() - selectorStartedAtNanos) / 1_000_000L);
+      // An evaluated empty candidate set must not invoke custom selectors or reserve a call.
+      if (providedCandidates == null || !providedCandidates.isEmpty()) {
+        implicitSkills =
+            distinctAndLimit(
+                beforeModelCall == null
+                    ? implicitSelector.select(
+                        explicit.sanitizedPrompt(), explicitNames, providedCandidates)
+                    : implicitSelector.select(
+                        explicit.sanitizedPrompt(),
+                        explicitNames,
+                        providedCandidates,
+                        beforeModelCall),
+                remaining);
+        selectorDurationMs =
+            Math.max(0L, (nanoTime.getAsLong() - selectorStartedAtNanos) / 1_000_000L);
+      }
     }
 
     return new AgentSkillSelection(

@@ -30,17 +30,31 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
   /** 保存と検索の窓口。 */
   private final AgentSkillRepository repository;
 
+  private final java.time.Duration selectorTimeout;
+
   /** スキルの利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public AgentSkillImplicitSelector(ChatModel chatModel, AgentSkillRepository repository) {
     this(new FixedLlmModelProvider(chatModel), repository);
   }
 
   /** 指定された値や利用先を使って、AgentSkillImplicitSelectorを初期化する。 */
-  @Autowired
   public AgentSkillImplicitSelector(
       LlmModelProvider modelProvider, AgentSkillRepository repository) {
+    this(modelProvider, repository, new AgentSkillsProperties());
+  }
+
+  @Autowired
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      justification =
+          "The shared Spring model provider is intentional; only the immutable timeout is retained from configuration.")
+  public AgentSkillImplicitSelector(
+      LlmModelProvider modelProvider,
+      AgentSkillRepository repository,
+      AgentSkillsProperties properties) {
     this.modelProvider = modelProvider;
     this.repository = repository;
+    this.selectorTimeout = properties.getSelectorTimeout();
   }
 
   /** 指定された条件に応じて、利用する対象を選ぶ。 */
@@ -88,14 +102,25 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
           modelProvider
               .chatOptions(LlmFeature.AGENT_SKILLS, null)
               .mutate()
+              .streamUsage(true)
               .toolCallbacks(List.of())
               .toolChoice("none")
               .build();
       dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
-      response =
-          model.call(
-              new org.springframework.ai.chat.prompt.Prompt(
-                  buildSelectionPrompt(prompt, candidates), options));
+      var request =
+          new org.springframework.ai.chat.prompt.Prompt(
+              buildSelectionPrompt(prompt, candidates), options);
+      var aggregate =
+          new java.util.concurrent.atomic.AtomicReference<
+              org.springframework.ai.chat.model.ChatResponse>();
+      // Timeout the completion Mono, not each chunk: periodic thinking must not reset the deadline.
+      // Cancelling block() also cancels the underlying HTTP stream on Run interruption.
+      new org.springframework.ai.chat.model.MessageAggregator()
+          .aggregate(reactor.core.publisher.Flux.defer(() -> model.stream(request)), aggregate::set)
+          .then()
+          .timeout(selectorTimeout)
+          .block();
+      response = aggregate.get();
     } catch (Exception error) {
       dev.mikoto2000.rei.core.chat.RunCancellation.propagate(error);
       if (budget != null) budget.recordTotalTokens(null);

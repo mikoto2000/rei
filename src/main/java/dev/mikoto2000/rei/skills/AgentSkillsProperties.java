@@ -22,6 +22,33 @@ public class AgentSkillsProperties {
   /** 最大選択中。 */
   private int maxSelected = 3;
 
+  /** 明示指定に暗黙選択を追加する互換設定。 */
+  private boolean implicitWithExplicit;
+
+  /** 暗黙選択のモデル応答完了までの上限。 */
+  private java.time.Duration selectorTimeout = java.time.Duration.ofSeconds(30);
+
+  public boolean isImplicitWithExplicit() {
+    return implicitWithExplicit;
+  }
+
+  public void setImplicitWithExplicit(boolean implicitWithExplicit) {
+    this.implicitWithExplicit = implicitWithExplicit;
+  }
+
+  public java.time.Duration getSelectorTimeout() {
+    return selectorTimeout;
+  }
+
+  public void setSelectorTimeout(java.time.Duration selectorTimeout) {
+    if (selectorTimeout == null
+        || selectorTimeout.isZero()
+        || selectorTimeout.isNegative()
+        || selectorTimeout.compareTo(java.time.Duration.ofMinutes(10)) > 0)
+      throw new IllegalArgumentException("selector-timeout must be positive and <= 10 minutes");
+    this.selectorTimeout = selectorTimeout;
+  }
+
   /** スキルの利用において、有効状態かどうかを判定する。 */
   public boolean isEnabled() {
     return enabled;

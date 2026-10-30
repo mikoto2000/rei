@@ -18,11 +18,11 @@ class AgentSkillSelectionServiceTest {
     AgentSkillsProperties properties = new AgentSkillsProperties();
     AgentSkillExplicitSelector explicitSelector = Mockito.mock(AgentSkillExplicitSelector.class);
     AgentSkillImplicitSelection implicitSelector = Mockito.mock(AgentSkillImplicitSelection.class);
-    when(explicitSelector.select("hello"))
+    when(explicitSelector.select("implicit"))
         .thenReturn(
-            new AgentSkillExplicitSelector.ExplicitSelection(List.of(), List.of(), "hello"));
+            new AgentSkillExplicitSelector.ExplicitSelection(List.of(), List.of(), "implicit"));
     AgentSkill candidate = skill("implicit");
-    when(implicitSelector.select("hello", Set.of(), List.of(candidate)))
+    when(implicitSelector.select("implicit", Set.of(), List.of(candidate)))
         .thenReturn(List.of(candidate));
     java.util.concurrent.atomic.AtomicLong nanos = new java.util.concurrent.atomic.AtomicLong();
     AgentSkillSelectionService service =
@@ -34,7 +34,7 @@ class AgentSkillSelectionServiceTest {
             new SkillCandidateSelector(),
             () -> nanos.getAndAdd(23_000_000L));
 
-    AgentSkillSelection selection = service.select("hello");
+    AgentSkillSelection selection = service.select("implicit");
 
     assertThat(selection.selectorDurationMs()).isEqualTo(23L);
   }
@@ -98,8 +98,65 @@ class AgentSkillSelectionServiceTest {
 
     AgentSkillSelection selection = service.select("@skill:explicit do it");
 
-    assertThat(selection.selectedSkills()).containsExactly(explicit, implicit);
+    assertThat(selection.selectedSkills()).containsExactly(explicit);
     assertThat(selection.sanitizedPrompt()).isEqualTo("do it");
+    assertThat(selection.selectorDurationMs()).isNull();
+  }
+
+  @Test
+  void explicitSelectionSkipsCandidateSearchSelectorAndBudgetReservation() {
+    AgentSkill explicit = skill("explicit");
+    var repository = Mockito.mock(AgentSkillRepository.class);
+    var candidates = Mockito.mock(SkillCandidateSelector.class);
+    var implicit = Mockito.mock(AgentSkillImplicitSelection.class);
+    var reservation = Mockito.mock(Runnable.class);
+    var service =
+        new AgentSkillSelectionService(
+            new AgentSkillsProperties(),
+            new AgentSkillExplicitSelector(new InMemoryAgentSkillRepository(List.of(explicit))),
+            implicit,
+            repository,
+            candidates,
+            System::nanoTime);
+
+    assertThat(service.select("@skill:explicit do it", reservation).selectedSkills())
+        .containsExactly(explicit);
+
+    Mockito.verifyNoInteractions(repository, candidates, implicit, reservation);
+  }
+
+  @Test
+  void canOptIntoAdditionalImplicitSkillsWithExplicitSelection() {
+    AgentSkill explicit = skill("explicit");
+    AgentSkill implicit = skill("implicit");
+    var properties = new AgentSkillsProperties();
+    properties.setImplicitWithExplicit(true);
+    var service =
+        new AgentSkillSelectionService(
+            properties,
+            new AgentSkillExplicitSelector(new InMemoryAgentSkillRepository(List.of(explicit))),
+            (prompt, excluded, candidates) -> List.of(implicit));
+
+    assertThat(service.select("@skill:explicit do it").selectedSkills())
+        .containsExactly(explicit, implicit);
+  }
+
+  @Test
+  void emptyCandidatesSkipCustomSelectorAndBudgetReservation() {
+    var repository = new InMemoryAgentSkillRepository(List.of(skill("unrelated")));
+    var implicit = Mockito.mock(AgentSkillImplicitSelection.class);
+    var reservation = Mockito.mock(Runnable.class);
+    var service =
+        new AgentSkillSelectionService(
+            new AgentSkillsProperties(),
+            new AgentSkillExplicitSelector(repository),
+            implicit,
+            repository,
+            new SkillCandidateSelector(),
+            System::nanoTime);
+
+    assertThat(service.select("hello", reservation).selectedSkills()).isEmpty();
+    Mockito.verifyNoInteractions(implicit, reservation);
   }
 
   /** 重複の有無を取り除くことを確認する。 */

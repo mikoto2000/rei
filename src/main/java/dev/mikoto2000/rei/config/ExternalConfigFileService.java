@@ -394,6 +394,8 @@ public class ExternalConfigFileService {
             directories:
               - ${rei.data-dir}/skills
             max-selected: 3
+            implicit-with-explicit: ${REI_SKILLS_IMPLICIT_WITH_EXPLICIT:false}
+            selector-timeout: ${REI_SKILLS_SELECTOR_TIMEOUT:30s}
             semantic:
               enabled: ${REI_SKILLS_SEMANTIC_ENABLED:false}
               max-skills: ${REI_SKILLS_SEMANTIC_MAX_SKILLS:64}

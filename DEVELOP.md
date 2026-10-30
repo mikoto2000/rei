@@ -1,5 +1,8 @@
 # DEVELOP
 
+明示指定時の暗黙選択省略・モデル完了待ち上限・比較方法は
+[スキル選択の待ち時間](docs/skill-selection-latency.md)を参照してください。
+
 ロングランタスクの対象網羅性・永続結果・復旧の設計と進捗は [実行基盤](docs/durable-task-execution.md)、
 TDDとPhase別の検証記録は [実装記録](docs/implementation-report-durable-task-execution.md) を参照してください。
 
