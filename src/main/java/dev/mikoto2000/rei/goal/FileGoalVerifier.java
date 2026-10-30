@@ -21,6 +21,13 @@ public class FileGoalVerifier {
   /** 完了を判定する窓口。 */
   private GoalCompletionGate completionGate;
 
+  private java.util.function.BiFunction<String, String, String> durableVerification = (project, goal) -> "";
+
+  /** Host-wired additional predicate; models cannot replace the persisted task gate. */
+  public void setDurableVerification(java.util.function.BiFunction<String, String, String> verification) {
+    durableVerification = java.util.Objects.requireNonNull(verification);
+  }
+
   /** 目標の達成管理で使用する完了を判定する窓口を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setCompletionGate(GoalCompletionGate gate) {
@@ -98,6 +105,12 @@ public class FileGoalVerifier {
 
   /** 要求された条件を満たすか判断するため、観測を確認する。 */
   private Verification verifyObserved(GoalRepository.Goal goal) {
+    try {
+      String blocker = durableVerification.apply(goal.projectId(), goal.id());
+      if (!blocker.isEmpty()) return new Verification(false, blocker);
+    } catch (RuntimeException unavailable) {
+      return new Verification(false, "durable_verification_unavailable");
+    }
     if (completionGate != null && completionGate.required(goal) && goal.completion() == null)
       return new Verification(false, "completion_definition_missing");
     if (completionGate == null && goal.completion() != null)

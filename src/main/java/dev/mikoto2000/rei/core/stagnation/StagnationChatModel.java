@@ -583,7 +583,8 @@ public class StagnationChatModel implements ChatModel {
               } catch (RuntimeException error) {
                 if (!decorated) context.failDurableTool(durableCall, name, error);
                 context.recordFailure(name, input, error);
-                var rejected = dev.mikoto2000.rei.review.ReviewResultRejectedException.find(error);
+                var rejected =
+                    dev.mikoto2000.rei.toolcontract.ToolResultRejectedException.find(error);
                 if (rejected != null
                     && java.util.Set.of(
                             "submitReviewResult", "submitReviewPage", "dismissReviewFinding")

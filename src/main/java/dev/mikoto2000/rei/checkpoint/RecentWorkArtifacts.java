@@ -1,6 +1,5 @@
 package dev.mikoto2000.rei.checkpoint;
 
-import dev.mikoto2000.rei.core.contextbudget.RawToolResultStore;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,10 +14,13 @@ import java.util.Objects;
 final class RecentWorkArtifacts {
   private RecentWorkArtifacts() {}
 
-  static String describe(PersistentCheckpoint state, RawToolResultStore raw, int budget) {
+  static String describe(
+      PersistentCheckpoint state,
+      java.util.function.BiFunction<String, String, ?> rawReader,
+      int budget) {
     var json = new com.fasterxml.jackson.databind.ObjectMapper();
     var excerpts = new ArrayList<Map<String, Object>>();
-    if (raw == null || budget < 2) return "[]";
+    if (rawReader == null || budget < 2) return "[]";
     var seen = new java.util.HashSet<Path>();
     var operations = state.operations();
     int inspected = 0;
@@ -41,7 +43,8 @@ final class RecentWorkArtifacts {
       if (reference.isEmpty()) continue;
       try {
         Map<?, ?> stored =
-            json.convertValue(raw.read(state.sessionId(), reference.get().summary()), Map.class);
+            json.convertValue(
+                rawReader.apply(state.sessionId(), reference.get().summary()), Map.class);
         if (!operation.toolName().equals(stored.get("toolName"))
             || !operation.toolCallId().equals(stored.get("toolCallId"))
             || !(stored.get("rawResult") instanceof String body)

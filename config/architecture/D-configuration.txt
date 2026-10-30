@@ -227,8 +227,13 @@ dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mik
 dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.conversation.ConversationTurnStore
 dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.core.Tools
 dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.core.working.WorkingSet
+dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.durable.DurableTaskStore
+dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.durable.DurableTaskStore$Scope
 dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.event.AgentEventFactory
 dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.event.AgentEventPublisher
+dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.goal.FileGoalVerifier
+dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.goal.GoalRepository
+dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.goal.GoalRepository$Goal
 dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.llm.LlmModelProvider
 dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.review.ReviewCoverageLedger
 dev.mikoto2000.rei.core.contextbudget.ContextCompressionConfiguration -> dev.mikoto2000.rei.review.ReviewTools

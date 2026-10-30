@@ -84,6 +84,11 @@ public record FetchOperation(Runnable cancellationCheck, long deadlineNanos) {
     }
   }
 
+  /** Safe fixed diagnostic code without exposing transport exception types to callers. */
+  public static String diagnosticCode(Throwable failure, String fallback) {
+    return failure instanceof HttpFetchException http ? http.code().name() : fallback;
+  }
+
   /** 得られた情報を分類し、後続の判断で扱い分けられるようにする。 */
   public static RuntimeException classify(Throwable failure) {
     propagateControls(failure);

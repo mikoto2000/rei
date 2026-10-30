@@ -46,6 +46,7 @@ class SecretaryAutonomyMigrationTest {
               "secretary_model_budget")) sql.execute("DROP TABLE " + table);
       sql.execute("DELETE FROM storage_migrations WHERE version>=14");
       sql.execute("DROP TABLE reading_state");
+      StorageSchemaFixture.removeDurableSchema(sql);
       sql.execute("PRAGMA user_version=13");
     }
     try (var migrations = new StorageMigrationCoordinator(root)) {

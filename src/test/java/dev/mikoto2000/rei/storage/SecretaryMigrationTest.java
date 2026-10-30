@@ -47,6 +47,7 @@ class SecretaryMigrationTest {
       sql.execute("DROP TABLE secretary_suggestion_history");
       sql.execute("DELETE FROM storage_migrations WHERE version>=11");
       sql.execute("DROP TABLE reading_state");
+      StorageSchemaFixture.removeDurableSchema(sql);
       sql.execute("PRAGMA user_version=10");
       sql.execute("INSERT INTO review_participants VALUES('job','project','conversation','run')");
     }

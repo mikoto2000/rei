@@ -131,9 +131,7 @@ public class WebSearchService {
             e.getClass().getSimpleName(),
             e instanceof WebSearchHttpException
                 ? "HTTP_ERROR"
-                : e instanceof dev.mikoto2000.rei.http.HttpFetchException http
-                    ? http.code().name()
-                    : "PROVIDER_ERROR",
+                : dev.mikoto2000.rei.http.FetchOperation.diagnosticCode(e, "PROVIDER_ERROR"),
             e instanceof WebSearchHttpException http ? http.status() : null);
         if (firstError == null) {
           firstError = e;

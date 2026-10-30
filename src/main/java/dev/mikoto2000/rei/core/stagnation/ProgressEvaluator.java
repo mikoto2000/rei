@@ -42,6 +42,10 @@ public class ProgressEvaluator {
           "readPdfFile",
           "readBinaryFile",
           "findFile",
+          "beginRepositoryReview",
+          "scanReviewSnapshot",
+          "reviewTaskStatus",
+          "listReviewTargets",
           "listFile",
           "grepMultiQuery",
           "searchAndRead",
@@ -110,6 +114,7 @@ public class ProgressEvaluator {
   static boolean acquisitionTool(String name) {
     return READ_TOOLS.contains(name)
         || name.equals("readReviewFile")
+        || name.equals("readReviewWorkItem")
         || name.equals("readRawToolResult");
   }
 
@@ -145,7 +150,7 @@ public class ProgressEvaluator {
                   entry ->
                       !entry.getKey().matches("[0-9a-f]{64}")
                           || entry.getValue() < 1
-                          || entry.getValue() > 20000))
+                          || entry.getValue() > 1000000))
         throw new IllegalArgumentException("Invalid scan coverage");
       if (restorationReads < 0
           || restorationReads > 8
@@ -367,6 +372,25 @@ public class ProgressEvaluator {
                           "Plan step started (completion still requires verification)",
                           s.id())));
     JsonNode output = parse(result);
+    if (name.equals("scanReviewSnapshot") && output != null) {
+      String task = output.path("id").asText(), snapshot = output.path("snapshot").asText();
+      int revision = output.path("revision").asInt(-1);
+      String key = digest("durable-scan:" + task + ":" + snapshot);
+      if (!task.isBlank()
+          && !snapshot.isBlank()
+          && output.path("errors").asInt(-1) == 0
+          && Set.of("SCANNING", "VALIDATING", "SEALED")
+              .contains(output.path("enumeration").asText())
+          && revision > 0
+          && revision <= 1000000
+          && (scanCoverage.containsKey(key) || scanCoverage.size() < 256)
+          && revision > scanCoverage.getOrDefault(key, 0)) {
+        scanCoverage.put(key, revision);
+        evidence.add(
+            ProgressEvidence.acquiredRange("Durable target enumeration advanced", task, snapshot));
+      }
+      return List.copyOf(evidence);
+    }
     if (name.equals("checkpointShow") || name.equals("checkpointInspect")) {
       restoreCheckpoint(name, arguments, output, evidence);
       return List.copyOf(evidence);
@@ -389,7 +413,10 @@ public class ProgressEvaluator {
               "Stage conditions independently verified; host retains completion authority",
               output.path("stageId").asText(),
               digest(canonical(output.path("observation")))));
-    if (name.equals("readReviewFile") && output != null && !failed(output) && output.has("range")) {
+    if ((name.equals("readReviewFile") || name.equals("readReviewWorkItem"))
+        && output != null
+        && !failed(output)
+        && output.has("range")) {
       var range = output.path("range");
       var span = range.path("span");
       readContentObserved =
@@ -417,6 +444,25 @@ public class ProgressEvaluator {
             evidence);
       else if (observed.status() == InformationLedger.Status.UNKNOWN)
         unknown(name, "LEDGER_CAPACITY_OR_HISTORY", evidence);
+      return List.copyOf(evidence);
+    }
+    if (name.equals("submitReviewWorkItem")
+        && output != null
+        && !failed(output)
+        && output.path("body").hasNonNull("work")
+        && output.path("sha256").asText().matches("[0-9a-f]{64}")) {
+      var body = output.path("body");
+      if (rememberProgress(
+          revisions,
+          "durable-result:" + body.path("work").asText() + ":" + output.path("sha256").asText(),
+          body.path("path").asText(),
+          evidence))
+        evidence.add(
+            new ProgressEvidence(
+                ProgressEvent.STATE_CHANGED,
+                "Durable review result committed",
+                body.path("path").asText(),
+                body.path("version").asText()));
       return List.copyOf(evidence);
     }
     if (name.equals("dismissReviewFinding") && output != null && output.has("changed")) {

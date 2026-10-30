@@ -1122,7 +1122,9 @@ public class PersistentCheckpointService implements AutoCloseable {
     int outcomeBudget = Math.max(2, Math.min(budget / 4, budget - text.length() - 64));
     text.append(
             "recentWorkArtifacts (current tails; saved claims are not proof of review completion): ")
-        .append(RecentWorkArtifacts.describe(state, rawResults, outcomeBudget))
+        .append(
+            RecentWorkArtifacts.describe(
+                state, rawResults == null ? null : rawResults::read, outcomeBudget))
         .append('\n');
     int inventoryBudget = Math.max(2, Math.min(budget / 5, budget - text.length() - 32));
     String inventory = confirmedFileInventory(state, inventoryBudget);

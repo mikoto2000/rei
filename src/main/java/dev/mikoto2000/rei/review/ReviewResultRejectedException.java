@@ -1,7 +1,8 @@
 package dev.mikoto2000.rei.review;
 
 /** A review submission was validated but no assessment was accepted. */
-public final class ReviewResultRejectedException extends IllegalArgumentException {
+public final class ReviewResultRejectedException
+    extends dev.mikoto2000.rei.toolcontract.ToolResultRejectedException {
   public ReviewResultRejectedException(String guidance) {
     super("REVIEW_RESULT_INVALID: " + guidance);
   }

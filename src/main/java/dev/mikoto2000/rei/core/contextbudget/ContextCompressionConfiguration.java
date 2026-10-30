@@ -58,6 +58,27 @@ public class ContextCompressionConfiguration {
     return new dev.mikoto2000.rei.review.ReviewTools(ledger, raw, files::getObject, estimator);
   }
 
+  @Bean
+  public org.springframework.beans.factory.SmartInitializingSingleton durableGoalAssociation(
+      dev.mikoto2000.rei.review.ReviewCoverageLedger ledger,
+      ObjectProvider<dev.mikoto2000.rei.goal.GoalRepository> goals) {
+    return () -> ledger.setTaskGoalResolver((scope, run) -> {
+      var repository = goals.getIfAvailable();
+      return repository == null ? null : repository.taskOrigin(scope.project(), scope.root(), scope.session(), run)
+          .map(dev.mikoto2000.rei.goal.GoalRepository.Goal::id).orElse(null);
+    });
+  }
+
+  @Bean
+  public org.springframework.beans.factory.SmartInitializingSingleton durableGoalVerification(
+      ObjectProvider<dev.mikoto2000.rei.goal.FileGoalVerifier> verifiers,
+      dev.mikoto2000.rei.review.ReviewCoverageLedger ledger) {
+    return () -> {
+      var verifier = verifiers.getIfAvailable();
+      if (verifier != null) verifier.setDurableVerification(ledger.durableTasks()::verifyGoal);
+    };
+  }
+
   /** モデルへ渡す文脈の管理で用いる文脈トークン概算を返す。 */
   @Bean
   public TokenEstimator contextTokenEstimator() {
