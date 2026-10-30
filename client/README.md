@@ -1,5 +1,11 @@
 # Rei Client — Live Activity / Session History
 
+本文・思考の差分は全件をRust内の状態へ反映し、画面への全文スナップショット通知を
+連続差分の間は約33msごとにまとめます。入力が止まっても末尾の表示を通知し、
+完了・失敗・承認や操作結果などの状態変更は即時に反映します。再接続のcursorと
+45秒の受信待ち期限は画面通知とは独立して管理します。終端確認だけのための本文コピーも
+省略します。最終本文・タイムライン・通知回数の契約はRustのstreamingテストで確認します。
+
 Tauri 2 + React + TypeScript + Rust の Run / Conversation クライアントです。Windows を主な検証対象とし、共通コアとレスポンシブ UI を Android / iOS と共有します。
 
 Web API Phase 1〜4 に対応しています。接続設定、Workspace の各操作、Run / SSE / cancel と既知の制限は [Web API 対応ガイド](../docs/native-web-api.md) を参照してください。

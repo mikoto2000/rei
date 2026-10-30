@@ -125,29 +125,65 @@ impl RunManager {
             .ok_or(AppError::RunNotFound)
     }
     pub fn all(&self) -> Vec<RunView> {
+        self.views(false)
+    }
+    pub fn active(&self) -> Vec<RunView> {
+        self.views(true)
+    }
+    fn views(&self, active_only: bool) -> Vec<RunView> {
         let runs = self.runs.lock().unwrap();
-        let mut ordered = runs.values().collect::<Vec<_>>();
+        let mut ordered = runs
+            .values()
+            .filter(|p| !active_only || !p.status.terminal())
+            .collect::<Vec<_>>();
         ordered.sort_by_key(|p| p.registered_order);
         ordered.into_iter().map(RunView::from).collect()
     }
-    pub fn active(&self) -> Vec<RunView> {
-        self.all()
-            .into_iter()
-            .filter(|p| !p.status.terminal())
-            .collect()
+    fn terminal(&self, key: &Key) -> Result<bool> {
+        self.runs
+            .lock()
+            .unwrap()
+            .get(key)
+            .map(|p| p.status.terminal())
+            .ok_or(AppError::RunNotFound)
     }
     fn update(&self, key: &Key, f: impl FnOnce(&mut Projection) -> Result<()>) -> Result<()> {
+        self.update_projection(key, true, f)
+    }
+    fn update_projection(
+        &self,
+        key: &Key,
+        emit: bool,
+        f: impl FnOnce(&mut Projection) -> Result<()>,
+    ) -> Result<()> {
         let mut runs = self.runs.lock().unwrap();
         let p = runs.get_mut(key).ok_or(AppError::RunNotFound)?;
         f(p)?;
         p.revision += 1;
+        if !emit && !p.status.terminal() {
+            return Ok(());
+        }
         let view = RunView::from(&*p);
         drop(runs);
+        self.notify(key, view);
+        Ok(())
+    }
+    fn emit_current(&self, key: &Key) -> Result<()> {
+        let view = self
+            .runs
+            .lock()
+            .unwrap()
+            .get(key)
+            .map(RunView::from)
+            .ok_or(AppError::RunNotFound)?;
+        self.notify(key, view);
+        Ok(())
+    }
+    fn notify(&self, key: &Key, view: RunView) {
         if view.status.terminal() && self.notified.lock().unwrap().insert(key.clone()) {
             let _ = self.notifications.notify(&view);
         }
         self.observer.changed(view);
-        Ok(())
     }
     pub async fn refresh(
         &self,
@@ -185,7 +221,7 @@ impl RunManager {
                 p.recover(receipt.snapshot)
             }
         })?;
-        if self.get(server, run)?.status.terminal() {
+        if self.terminal(&(server.into(), run.into()))? {
             self.unsubscribe(server, run)?;
         }
         Ok(())
@@ -228,10 +264,7 @@ impl RunManager {
         let mut attempt = 0usize;
         let mut gap = false;
         loop {
-            if self
-                .get(&key.0, &key.1)
-                .map_or(true, |p| p.status.terminal())
-            {
+            if self.terminal(&key).unwrap_or(true) {
                 break;
             }
             if gap {
@@ -269,48 +302,71 @@ impl RunManager {
                             Ok(())
                         });
                         let mut parser = SseParser::default();
+                        let mut ui_dirty = false;
+                        let mut ui_deadline =
+                            tokio::time::Instant::now() + Duration::from_millis(33);
+                        let mut receive_deadline =
+                            tokio::time::Instant::now() + Duration::from_secs(45);
                         loop {
-                            if self
-                                .get(&key.0, &key.1)
-                                .map_or(true, |p| p.status.terminal())
-                            {
+                            if self.terminal(&key).unwrap_or(true) {
                                 return;
                             }
-                            match tokio::time::timeout(Duration::from_secs(45), stream.next()).await
-                            {
-                                Ok(Some(Ok(bytes))) => match parser.push(&bytes) {
-                                    Ok(frames) => {
-                                        for frame in frames {
-                                            if self
-                                                .update(&key, |p| {
-                                                    p.apply(frame)?;
-                                                    Ok(())
-                                                })
-                                                .is_err()
-                                            {
-                                                gap = true;
+                            let received = tokio::select! {
+                                received = tokio::time::timeout_at(receive_deadline, stream.next()) => received,
+                                _ = tokio::time::sleep_until(ui_deadline), if ui_dirty => {
+                                    let _ = self.emit_current(&key);
+                                    ui_dirty = false;
+                                    ui_deadline = tokio::time::Instant::now() + Duration::from_millis(33);
+                                    continue;
+                                }
+                            };
+                            match received {
+                                Ok(Some(Ok(bytes))) => {
+                                    receive_deadline =
+                                        tokio::time::Instant::now() + Duration::from_secs(45);
+                                    match parser.push(&bytes) {
+                                        Ok(frames) => {
+                                            for frame in frames {
+                                                let coalesce = matches!(
+                                                    frame.event.as_str(),
+                                                    "message.delta" | "thinking.delta"
+                                                );
+                                                if self
+                                                    .update_projection(&key, !coalesce, |p| {
+                                                        p.apply(frame)?;
+                                                        Ok(())
+                                                    })
+                                                    .is_err()
+                                                {
+                                                    gap = true;
+                                                    break;
+                                                }
+                                                ui_dirty = coalesce;
+                                                if !coalesce {
+                                                    ui_deadline = tokio::time::Instant::now()
+                                                        + Duration::from_millis(33);
+                                                }
+                                            }
+                                            if gap {
                                                 break;
                                             }
+                                            if self
+                                                .runs
+                                                .lock()
+                                                .unwrap()
+                                                .get(&key)
+                                                .and_then(|p| p.last_sequence)
+                                                != last
+                                            {
+                                                attempt = 0;
+                                            }
                                         }
-                                        if gap {
+                                        Err(_) => {
+                                            gap = true;
                                             break;
                                         }
-                                        if self
-                                            .runs
-                                            .lock()
-                                            .unwrap()
-                                            .get(&key)
-                                            .and_then(|p| p.last_sequence)
-                                            != last
-                                        {
-                                            attempt = 0;
-                                        }
                                     }
-                                    Err(_) => {
-                                        gap = true;
-                                        break;
-                                    }
-                                },
+                                }
                                 _ => break,
                             }
                         }
@@ -332,10 +388,7 @@ impl RunManager {
                     Err(_) => {}
                 }
             }
-            if self
-                .get(&key.0, &key.1)
-                .map_or(true, |p| p.status.terminal())
-            {
+            if self.terminal(&key).unwrap_or(true) {
                 break;
             }
             let _ = self.update(&key, |p| {

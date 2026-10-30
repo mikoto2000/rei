@@ -265,9 +265,14 @@ async fn authentication_failure_closes_stream_without_reconnect_loop() {
 #[derive(Default)]
 struct Observer {
     notices: Mutex<Vec<RunStatus>>,
+    views: Mutex<Vec<RunView>>,
+    changed: tokio::sync::Notify,
 }
 impl RunObserver for Observer {
-    fn changed(&self, _: RunView) {}
+    fn changed(&self, view: RunView) {
+        self.views.lock().unwrap().push(view);
+        self.changed.notify_one();
+    }
 }
 impl NotificationPort for Observer {
     fn notify(&self, run: &RunView) -> Result<()> {
@@ -275,6 +280,170 @@ impl NotificationPort for Observer {
         Err(AppError::Cancelled)
     }
 }
+struct BufferedStream {
+    frames: String,
+    hold_open: bool,
+}
+#[async_trait]
+impl ReiClient for BufferedStream {
+    async fn health(&self) -> Result<()> {
+        Ok(())
+    }
+    async fn projects(&self) -> Result<Vec<Project>> {
+        Ok(vec![])
+    }
+    async fn chat(&self, _: &str, _: Option<&str>, _: &str) -> Result<ChatReceipt> {
+        Err(AppError::InvalidInput)
+    }
+    async fn run(&self, _: &str) -> Result<RunSnapshot> {
+        Ok(RunSnapshot {
+            run_id: "r".into(),
+            session_id: "s".into(),
+            project_id: "p".into(),
+            turn_id: "t".into(),
+            status: RunStatus::Running,
+            failure: None,
+        })
+    }
+    async fn cancel(&self, run: &str) -> Result<RunSnapshot> {
+        let mut snapshot = self.run(run).await?;
+        snapshot.status = RunStatus::Cancelled;
+        Ok(snapshot)
+    }
+    async fn events(&self, _: &str, _: Option<u64>) -> Result<ByteStream> {
+        use futures_util::StreamExt;
+        let first = futures_util::stream::once(std::future::ready(Ok::<Vec<u8>, AppError>(
+            self.frames.as_bytes().to_vec(),
+        )));
+        if self.hold_open {
+            Ok(Box::pin(first.chain(futures_util::stream::pending())))
+        } else {
+            Ok(Box::pin(first))
+        }
+    }
+}
+
+fn collecting_manager() -> (Arc<RunManager>, Arc<Observer>) {
+    let observer = Arc::new(Observer::default());
+    let manager = Arc::new(RunManager::new(
+        observer.clone(),
+        observer.clone(),
+        Duration::from_millis(1),
+    ));
+    manager
+        .register(Projection::new(
+            "server",
+            "conversation",
+            "p",
+            ChatReceipt {
+                run_id: "r".into(),
+                session_id: "s".into(),
+                turn_id: "t".into(),
+            },
+            "hello",
+        ))
+        .unwrap();
+    (manager, observer)
+}
+
+#[tokio::test]
+async fn burst_deltas_keep_exact_text_with_fewer_ui_snapshots() {
+    let (manager, observer) = collecting_manager();
+    let mut frames = live_frame("agent.run.started", 1, json!({}));
+    frames.push_str(&live_frame(
+        "message.started",
+        2,
+        json!({"messageId":"m","role":"assistant"}),
+    ));
+    for sequence in 3..103 {
+        frames.push_str(&live_frame(
+            "message.delta",
+            sequence,
+            json!({"messageId":"m","delta":"x"}),
+        ));
+    }
+    frames.push_str(&live_frame("agent.run.completed", 103, json!({})));
+    manager
+        .subscribe(
+            "server",
+            "r",
+            Arc::new(BufferedStream {
+                frames,
+                hold_open: false,
+            }),
+        )
+        .unwrap();
+    let final_view = completed(&manager).await;
+    assert_eq!(final_view.assistant_text, "x".repeat(100));
+    assert_eq!(final_view.last_sequence.as_deref(), Some("103"));
+    let views = observer.views.lock().unwrap();
+    println!("100 delta events -> {} UI snapshots", views.len());
+    assert!(
+        views.len() < 20,
+        "received {} full snapshots for 100 deltas",
+        views.len()
+    );
+    assert_eq!(views.last().unwrap().assistant_text, "x".repeat(100));
+    assert_eq!(
+        *observer.notices.lock().unwrap(),
+        vec![RunStatus::Completed]
+    );
+}
+
+#[tokio::test]
+async fn partial_output_flushes_while_stream_is_stalled_and_cancel_stays_immediate() {
+    let (manager, observer) = collecting_manager();
+    let frames = format!(
+        "{}{}{}",
+        live_frame("agent.run.started", 1, json!({})),
+        live_frame(
+            "message.started",
+            2,
+            json!({"messageId":"m","role":"assistant"})
+        ),
+        live_frame(
+            "message.delta",
+            3,
+            json!({"messageId":"m","delta":"visible"})
+        )
+    );
+    let api = Arc::new(BufferedStream {
+        frames,
+        hold_open: true,
+    });
+    manager.subscribe("server", "r", api.clone()).unwrap();
+    tokio::time::timeout(Duration::from_secs(3), async {
+        loop {
+            if observer
+                .views
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|view| view.assistant_text == "visible")
+            {
+                break;
+            }
+            observer.changed.notified().await;
+        }
+    })
+    .await
+    .unwrap();
+    assert_eq!(
+        manager.get("server", "r").unwrap().last_sequence.as_deref(),
+        Some("3")
+    );
+    manager.cancel("server", "r", api).await.unwrap();
+    assert_eq!(
+        manager.get("server", "r").unwrap().status,
+        RunStatus::Cancelled
+    );
+    assert!(manager.active().is_empty());
+    assert_eq!(
+        *observer.notices.lock().unwrap(),
+        vec![RunStatus::Cancelled]
+    );
+}
+
 async fn fixture(
     gap: bool,
 ) -> (
