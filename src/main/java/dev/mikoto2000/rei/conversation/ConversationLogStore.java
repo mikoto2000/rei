@@ -44,6 +44,24 @@ public class ConversationLogStore {
   /** 文脈発生順序一覧。 */
   private final java.util.Map<String, Long> contextSequences = new java.util.HashMap<>();
 
+  private static final int NOTIFICATION_INDEX_FILES = 1024;
+  private static final int NOTIFICATION_INDEX_CHARACTERS = 1024 * 1024;
+  private final java.util.LinkedHashMap<Path, NotificationFileIndex> notificationIndexes =
+      new java.util.LinkedHashMap<>(16, 0.75f, true);
+  private int notificationIndexCharacters;
+
+  private record NotificationFileStamp(long bytes, String modified, String created, String key) {}
+
+  private record NotificationFileIndex(
+      NotificationFileStamp stamp,
+      java.util.Map<String, ConversationLogEntry> entries,
+      boolean complete,
+      int characters) {
+    private NotificationFileIndex {
+      entries = java.util.Map.copyOf(entries);
+    }
+  }
+
   /** 会話履歴と受付記録の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ConversationLogStore() {
     this(null, Clock.systemDefaultZone(), new ObjectMapper().registerModule(new JavaTimeModule()));
@@ -126,22 +144,86 @@ public class ConversationLogStore {
         // Fail closed on unreadable history: never mistake an I/O failure for an absent id.
         try (var files = Files.list(location)) {
           for (var file :
-              files.filter(p -> p.getFileName().toString().endsWith(".jsonl")).sorted().toList())
-            try (var lines = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-              String line;
-              while ((line = lines.readLine()) != null) {
-                if (line.isBlank()) continue;
-                var entry = objectMapper.readValue(line, ConversationLogEntry.class);
-                if (BEHAVIOR_NOTIFICATION.equals(entry.source())
-                    && sourceId.equals(entry.sourceId())) return java.util.Optional.of(entry);
-              }
-            }
+              files.filter(p -> p.getFileName().toString().endsWith(".jsonl")).sorted().toList()) {
+            var found = notificationInFile(file, sourceId);
+            if (found.isPresent()) return found;
+          }
         } catch (IOException e) {
           throw new IllegalStateException("Cannot inspect notification history", e);
         }
       }
       return java.util.Optional.empty();
     }
+  }
+
+  /** Derived index only; the append-only JSONL remains the identity source across restarts. */
+  private java.util.Optional<ConversationLogEntry> notificationInFile(Path file, String sourceId)
+      throws IOException {
+    var attributes = Files.readAttributes(file, java.nio.file.attribute.BasicFileAttributes.class);
+    var stamp =
+        new NotificationFileStamp(
+            attributes.size(),
+            attributes.lastModifiedTime().toString(),
+            attributes.creationTime().toString(),
+            java.util.Objects.toString(attributes.fileKey(), null));
+    var cached = notificationIndexes.get(file);
+    if (sourceId != null && cached != null && cached.stamp().equals(stamp)) {
+      var found = cached.entries().get(sourceId);
+      if (found != null || cached.complete()) {
+        // A cache hit must still fail closed when history is no longer readable.
+        try (var readable = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+          return java.util.Optional.ofNullable(found);
+        }
+      }
+    }
+    var entries = new java.util.LinkedHashMap<String, ConversationLogEntry>();
+    boolean complete = true;
+    boolean retain = true;
+    int characters = 0;
+    ConversationLogEntry found = null;
+    try (var lines = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+      String line;
+      while ((line = lines.readLine()) != null) {
+        if (line.isBlank()) continue;
+        var entry = objectMapper.readValue(line, ConversationLogEntry.class);
+        if (!BEHAVIOR_NOTIFICATION.equals(entry.source())) continue;
+        if (retain && entry.sourceId() != null && !entries.containsKey(entry.sourceId())) {
+          if (entries.size() >= 1024
+              || line.length() > NOTIFICATION_INDEX_CHARACTERS - characters) {
+            retain = false;
+            entries.clear();
+            characters = 0;
+          } else {
+            entries.put(entry.sourceId(), entry);
+            characters += line.length();
+          }
+        }
+        if (sourceId.equals(entry.sourceId())) {
+          found = entry;
+          // Preserve the early-match contract even when a later line is malformed.
+          complete = false;
+          break;
+        }
+      }
+    }
+    cacheNotificationFile(
+        file, retain ? new NotificationFileIndex(stamp, entries, complete, characters) : null);
+    return java.util.Optional.ofNullable(found);
+  }
+
+  /** All access is serialized by writeLock, including the existing duplicate-check/append pair. */
+  private void cacheNotificationFile(Path file, NotificationFileIndex index) {
+    var previous = notificationIndexes.remove(file);
+    if (previous != null) notificationIndexCharacters -= previous.characters();
+    if (index == null) return;
+    while (notificationIndexes.size() >= NOTIFICATION_INDEX_FILES
+        || notificationIndexCharacters + index.characters() > NOTIFICATION_INDEX_CHARACTERS) {
+      var oldest = notificationIndexes.entrySet().iterator();
+      notificationIndexCharacters -= oldest.next().getValue().characters();
+      oldest.remove();
+    }
+    notificationIndexes.put(file, index);
+    notificationIndexCharacters += index.characters();
   }
 
   /** 既存の記録へ経緯を残すため、通知を追記する。 */
