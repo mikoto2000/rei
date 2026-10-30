@@ -100,13 +100,30 @@ public class WebSearchService {
     List<ProviderProperties> providers = configuredProviders();
     Map<String, WebSearchResult> resultsByUrl = new LinkedHashMap<>();
     Exception firstError = null;
+    String searchId = java.util.UUID.randomUUID().toString();
+    int attempted = 0;
+    String stopReason = "PROVIDERS_EXHAUSTED";
 
     // 検索回数の予算を守りながら複数の検索先を利用し、必要な情報が集まれば追加検索を終える。
     for (ProviderProperties provider : providers) {
-      if (SearchRequestBudget.exhausted()) break;
+      if (SearchRequestBudget.exhausted()) {
+        stopReason = "REQUEST_BUDGET";
+        break;
+      }
       dev.mikoto2000.rei.http.FetchScope.current().check();
+      var attempt = new ProviderAttempt();
+      long providerStarted = System.nanoTime();
+      attempted++;
+      log.info(
+          "Web search provider started; searchId={}, provider={}, attempt={}, providersCount={}, limit={}",
+          searchId,
+          providerLogName(provider),
+          attempted,
+          providers.size(),
+          clampedLimit);
       try {
-        for (WebSearchResult result : searchWithProvider(provider, query, clampedLimit)) {
+        var results = searchWithProvider(provider, query, clampedLimit, attempt);
+        for (WebSearchResult result : results) {
           WebSearchMetrics.OBSERVED.add("results", 1);
           if (resultsByUrl.containsKey(result.url()))
             WebSearchMetrics.OBSERVED.add("duplicate_urls", 1);
@@ -120,28 +137,71 @@ public class WebSearchService {
                       ? replacement
                       : existing);
         }
-        if (WebSearchSelection.sufficient(
-            query, new ArrayList<>(resultsByUrl.values()), clampedLimit)) break;
+        boolean sufficient =
+            WebSearchSelection.sufficient(
+                query, new ArrayList<>(resultsByUrl.values()), clampedLimit);
+        log.info(
+            "Web search provider completed; searchId={}, provider={}, results={}, totalUniqueResults={},"
+                + " httpStatus={}, networkRequest={}, durationMs={}, sufficient={}",
+            searchId,
+            providerLogName(provider),
+            results.size(),
+            resultsByUrl.size(),
+            attempt.httpStatus,
+            attempt.networkRequest,
+            java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - providerStarted),
+            sufficient);
+        if (sufficient) {
+          stopReason = "SUFFICIENT_RESULTS";
+          break;
+        }
       } catch (IOException | InterruptedException | RuntimeException e) {
         // 中断や取得制限は継続させず、通常の検索先の障害だけを次の候補で補う。
-        dev.mikoto2000.rei.http.FetchOperation.propagateControls(e);
+        try {
+          dev.mikoto2000.rei.http.FetchOperation.propagateControls(e);
+        } catch (RuntimeException stopped) {
+          log.info(
+              "Web search provider stopped; searchId={}, provider={}, reason=EXECUTION_STOPPED,"
+                  + " httpStatus={}, networkRequest={}, durationMs={}",
+              searchId,
+              providerLogName(provider),
+              attempt.httpStatus,
+              attempt.networkRequest,
+              java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
+                  System.nanoTime() - providerStarted));
+          throw stopped;
+        }
         log.warn(
-            "Web search provider failed; provider={}, causeType={}, code={}, httpStatus={}",
+            "Web search provider failed; searchId={}, provider={}, causeType={}, code={}, httpStatus={},"
+                + " networkRequest={}, durationMs={}",
+            searchId,
             providerLogName(provider),
             e.getClass().getSimpleName(),
             e instanceof WebSearchHttpException
                 ? "HTTP_ERROR"
-                : e instanceof WebSearchResponseException response
-                    ? response.diagnosticCode()
-                    : dev.mikoto2000.rei.http.FetchOperation.diagnosticCode(e, "PROVIDER_ERROR"),
-            e instanceof dev.mikoto2000.rei.toolcontract.ExternalReadFailure failure
-                ? failure.httpStatus()
-                : null);
+                : e instanceof dev.mikoto2000.rei.http.HttpFetchException http
+                    ? http.code().name()
+                    : e instanceof dev.mikoto2000.rei.toolcontract.ExternalReadFailure failure
+                        ? failure.diagnosticCode()
+                        : dev.mikoto2000.rei.http.FetchOperation.diagnosticCode(
+                            e, "PROVIDER_ERROR"),
+            attempt.httpStatus,
+            attempt.networkRequest,
+            java.util.concurrent.TimeUnit.NANOSECONDS.toMillis(
+                System.nanoTime() - providerStarted));
         if (firstError == null) {
           firstError = e;
         }
       }
     }
+
+    log.info(
+        "Web search finished; searchId={}, attemptedProviders={}, skippedProviders={}, results={}, reason={}",
+        searchId,
+        attempted,
+        providers.size() - attempted,
+        resultsByUrl.size(),
+        stopReason);
 
     // 一部の検索先が失敗しても、得られた候補があれば調査を継続できるようにする。
     if (!resultsByUrl.isEmpty()) {
@@ -186,13 +246,13 @@ public class WebSearchService {
 
   /** 依頼に関連する情報を得るため、付き提供元を検索する。 */
   private List<WebSearchResult> searchWithProvider(
-      ProviderProperties provider, String query, int limit)
+      ProviderProperties provider, String query, int limit, ProviderAttempt attempt)
       throws IOException, InterruptedException {
     String providerName = provider.getName().trim().toLowerCase();
     return switch (providerName) {
-      case "duckduckgo" -> searchDuckDuckGo(provider, query, limit);
-      case "brave" -> searchBrave(provider, query, limit);
-      case "openai" -> searchOpenAi(provider, query, limit);
+      case "duckduckgo" -> searchDuckDuckGo(provider, query, limit, attempt);
+      case "brave" -> searchBrave(provider, query, limit, attempt);
+      case "openai" -> searchOpenAi(provider, query, limit, attempt);
       default ->
           throw new IllegalStateException("Unsupported web search provider: " + provider.getName());
     };
@@ -203,7 +263,8 @@ public class WebSearchService {
       value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
       justification =
           "Evict invalid responses and rethrow the original failure so cancellation and provider semantics survive.")
-  private List<WebSearchResult> searchOpenAi(ProviderProperties provider, String query, int limit) {
+  private List<WebSearchResult> searchOpenAi(
+      ProviderProperties provider, String query, int limit, ProviderAttempt attempt) {
     String key = provider.getApiKey();
     if (key == null || key.isBlank()) key = properties.getOpenaiApiKey();
     if (key == null || key.isBlank()) throw OpenAiWebSearch.failure("API_KEY_NOT_CONFIGURED");
@@ -221,7 +282,7 @@ public class WebSearchService {
     long started = System.nanoTime();
     var sent = new java.util.concurrent.atomic.AtomicBoolean();
     try {
-      var response = send(request, provider, limit, body, sent);
+      var response = send(request, provider, limit, body, sent, attempt);
       if (response.status() != 200) throw OpenAiWebSearch.failure("HTTP_" + response.status());
       String json = new String(response.body(), StandardCharsets.UTF_8);
       if (sent.get()) openai.recordUsage(json);
@@ -241,7 +302,8 @@ public class WebSearchService {
   }
 
   /** 依頼に関連する情報を得るため、Braveを検索する。 */
-  private List<WebSearchResult> searchBrave(ProviderProperties provider, String query, int limit)
+  private List<WebSearchResult> searchBrave(
+      ProviderProperties provider, String query, int limit, ProviderAttempt attempt)
       throws IOException, InterruptedException {
     if (provider.getApiKey() == null || provider.getApiKey().isBlank()) {
       throw new IllegalStateException("Web search API key is not configured for provider brave.");
@@ -258,20 +320,17 @@ public class WebSearchService {
             .GET()
             .build();
 
-    var response = send(request, provider, limit);
+    var response = send(request, provider, limit, attempt);
     if (response.status() >= 400) {
       throw new WebSearchHttpException(response.status());
     }
 
-    return observeResults(
-        provider,
-        response.status(),
-        parseBraveResults(new String(response.body(), StandardCharsets.UTF_8), limit));
+    return parseBraveResults(new String(response.body(), StandardCharsets.UTF_8), limit);
   }
 
   /** 依頼に関連する情報を得るため、DuckDuckGoを検索する。 */
   private List<WebSearchResult> searchDuckDuckGo(
-      ProviderProperties provider, String query, int limit)
+      ProviderProperties provider, String query, int limit, ProviderAttempt attempt)
       throws IOException, InterruptedException {
     String encodedQuery = URLEncoder.encode(query, StandardCharsets.UTF_8);
     URI uri = URI.create(provider.getBaseUrl() + "?q=" + encodedQuery);
@@ -284,7 +343,7 @@ public class WebSearchService {
             .GET()
             .build();
 
-    var response = send(request, provider, limit);
+    var response = send(request, provider, limit, attempt);
     if (response.status() >= 400) {
       throw new WebSearchHttpException(response.status());
     }
@@ -297,26 +356,20 @@ public class WebSearchService {
       cache.invalidate(cacheRequest(request, provider, limit, ""), fetcher);
       throw new WebSearchResponseException(response.status());
     }
-    return observeResults(provider, response.status(), parseDuckDuckGoResults(html, limit));
+    return parseDuckDuckGoResults(html, limit);
   }
 
-  /** 空の結果とHTTP障害を区別し、本文を残さずに検索先の状態を記録する。 */
-  private List<WebSearchResult> observeResults(
-      ProviderProperties provider, int status, List<WebSearchResult> results) {
-    if (results.isEmpty()) {
-      log.info(
-          "Web search provider returned no results; provider={}, code=NO_RESULTS, httpStatus={}",
-          providerLogName(provider),
-          status);
-    }
-    return results;
+  /** 検索先の通信状況だけを保持し、検索語・本文・認証情報は保持しない。 */
+  private static final class ProviderAttempt {
+    private volatile Integer httpStatus;
+    private volatile boolean networkRequest;
   }
 
   /** 設定に含まれる任意の文字列をログへ出さず、対応する検索先だけを識別する。 */
   private String providerLogName(ProviderProperties provider) {
     String name = provider.getName().trim().toLowerCase(java.util.Locale.ROOT);
     return switch (name) {
-      case "brave", "duckduckgo" -> name;
+      case "brave", "duckduckgo", "openai" -> name;
       default -> "unsupported";
     };
   }
@@ -348,8 +401,9 @@ public class WebSearchService {
 
   /** Web上の情報の調査で用いる送信を返す。 */
   private dev.mikoto2000.rei.http.SafeHttpFetcher.Response send(
-      HttpRequest request, ProviderProperties provider, int limit) {
-    return send(request, provider, limit, "", new java.util.concurrent.atomic.AtomicBoolean());
+      HttpRequest request, ProviderProperties provider, int limit, ProviderAttempt attempt) {
+    return send(
+        request, provider, limit, "", new java.util.concurrent.atomic.AtomicBoolean(), attempt);
   }
 
   private dev.mikoto2000.rei.http.SafeHttpFetcher.Response send(
@@ -357,7 +411,8 @@ public class WebSearchService {
       ProviderProperties provider,
       int limit,
       String body,
-      java.util.concurrent.atomic.AtomicBoolean sent) {
+      java.util.concurrent.atomic.AtomicBoolean sent,
+      ProviderAttempt attempt) {
     var observed =
         WebSearchMetrics.OBSERVED.http(
             provider.getName().trim().toLowerCase(java.util.Locale.ROOT));
@@ -368,11 +423,13 @@ public class WebSearchService {
           public void request(boolean redirect) {
             gate.run();
             sent.set(true);
+            attempt.networkRequest = true;
             observed.request(redirect);
           }
 
           /** 対象の現在の状態を、照会用の情報として返す。 */
           public void status(int status) {
+            attempt.httpStatus = status;
             observed.status(status);
           }
 
@@ -391,11 +448,14 @@ public class WebSearchService {
             observed.cancellation();
           }
         };
-    return cache.fetch(
-        cacheRequest(request, provider, limit, body),
-        dev.mikoto2000.rei.http.FetchScope.current(),
-        observer,
-        fetcher);
+    var response =
+        cache.fetch(
+            cacheRequest(request, provider, limit, body),
+            dev.mikoto2000.rei.http.FetchScope.current(),
+            observer,
+            fetcher);
+    attempt.httpStatus = response.status();
+    return response;
   }
 
   /** Use identical request identity for loading and removing invalid 200 responses. */

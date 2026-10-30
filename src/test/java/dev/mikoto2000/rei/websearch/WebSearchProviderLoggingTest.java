@@ -71,13 +71,11 @@ class WebSearchProviderLoggingTest {
             """));
 
     assertEquals(1, service().search("PRIVATE_QUERY", 1).size());
-    assertEquals(1, appender.list.size());
-    assertEquals(Level.WARN, appender.list.getFirst().getLevel());
-    assertEquals(
-        "Web search provider failed; provider=brave, causeType=WebSearchHttpException,"
-            + " code=HTTP_ERROR, httpStatus="
-            + status,
-        appender.list.getFirst().getFormattedMessage());
+    assertEquals(1, diagnostics().size());
+    assertEquals(Level.WARN, diagnostics().getFirst().getLevel());
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("provider=brave"));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("code=HTTP_ERROR"));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("httpStatus=" + status));
     assertSafeLogs();
   }
 
@@ -93,8 +91,8 @@ class WebSearchProviderLoggingTest {
     assertSame(
         failure,
         assertThrows(HttpFetchException.class, () -> service().search("PRIVATE_QUERY", 1)));
-    assertTrue(appender.list.getFirst().getFormattedMessage().contains("provider=duckduckgo"));
-    assertTrue(appender.list.getFirst().getFormattedMessage().contains("code=" + code.name()));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("provider=duckduckgo"));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("code=" + code.name()));
     assertSafeLogs();
   }
 
@@ -106,12 +104,10 @@ class WebSearchProviderLoggingTest {
         .thenReturn(response(status, "<html>PRIVATE_BODY</html>"));
 
     assertTrue(service().search("PRIVATE_QUERY", 1).isEmpty());
-    assertEquals(Level.INFO, appender.list.getFirst().getLevel());
-    assertEquals(
-        "Web search provider returned no results; provider=duckduckgo, code=NO_RESULTS,"
-            + " httpStatus="
-            + status,
-        appender.list.getFirst().getFormattedMessage());
+    assertEquals(Level.INFO, diagnostics().getFirst().getLevel());
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("provider=duckduckgo"));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("results=0"));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("httpStatus=" + status));
     assertSafeLogs();
   }
 
@@ -128,10 +124,10 @@ class WebSearchProviderLoggingTest {
                 """));
 
     assertEquals(1, service().search("PRIVATE_QUERY", 1).size());
-    assertEquals(1, appender.list.size());
-    assertEquals(Level.WARN, appender.list.getFirst().getLevel());
-    assertTrue(appender.list.getFirst().getFormattedMessage().contains("code=BOT_CHALLENGE"));
-    assertTrue(appender.list.getFirst().getFormattedMessage().contains("httpStatus=202"));
+    assertEquals(1, diagnostics().size());
+    assertEquals(Level.WARN, diagnostics().getFirst().getLevel());
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("code=BOT_CHALLENGE"));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("httpStatus=202"));
     assertSafeLogs();
   }
 
@@ -151,7 +147,7 @@ class WebSearchProviderLoggingTest {
 
     assertEquals(200, failure.httpStatus());
     assertEquals("BOT_CHALLENGE", failure.diagnosticCode());
-    assertTrue(appender.list.getFirst().getFormattedMessage().contains("code=BOT_CHALLENGE"));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("code=BOT_CHALLENGE"));
     assertSafeLogs();
   }
 
@@ -164,11 +160,11 @@ class WebSearchProviderLoggingTest {
     var failure =
         assertThrows(WebSearchHttpException.class, () -> service().search("PRIVATE_QUERY", 1));
     assertEquals(429, failure.status());
-    assertEquals(2, appender.list.size());
-    assertTrue(appender.list.get(0).getFormattedMessage().contains("provider=duckduckgo"));
-    assertTrue(appender.list.get(0).getFormattedMessage().contains("httpStatus=429"));
-    assertTrue(appender.list.get(1).getFormattedMessage().contains("provider=brave"));
-    assertTrue(appender.list.get(1).getFormattedMessage().contains("httpStatus=402"));
+    assertEquals(2, diagnostics().size());
+    assertTrue(diagnostics().get(0).getFormattedMessage().contains("provider=duckduckgo"));
+    assertTrue(diagnostics().get(0).getFormattedMessage().contains("httpStatus=429"));
+    assertTrue(diagnostics().get(1).getFormattedMessage().contains("provider=brave"));
+    assertTrue(diagnostics().get(1).getFormattedMessage().contains("httpStatus=402"));
     assertSafeLogs();
   }
 
@@ -179,8 +175,8 @@ class WebSearchProviderLoggingTest {
         .thenReturn(response(200, "PRIVATE_INVALID_JSON"));
 
     assertThrows(Exception.class, () -> service().search("PRIVATE_QUERY", 1));
-    assertEquals(1, appender.list.size());
-    assertTrue(appender.list.getFirst().getFormattedMessage().contains("provider=brave"));
+    assertEquals(1, diagnostics().size());
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("provider=brave"));
     assertSafeLogs();
   }
 
@@ -191,7 +187,7 @@ class WebSearchProviderLoggingTest {
         .thenThrow(new CancellationException("PRIVATE_CANCEL"));
 
     assertThrows(CancellationException.class, () -> service().search("PRIVATE_QUERY", 1));
-    assertTrue(appender.list.isEmpty());
+    assertTrue(diagnostics().isEmpty());
     verify(fetcher, times(1)).fetch(any(), any(), any(), any(), any());
   }
 
@@ -200,8 +196,126 @@ class WebSearchProviderLoggingTest {
     properties.setProviders(List.of(provider("PRIVATE_PROVIDER\nforged log")));
 
     assertThrows(IllegalStateException.class, () -> service().search("PRIVATE_QUERY", 1));
-    assertTrue(appender.list.getFirst().getFormattedMessage().contains("provider=unsupported"));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("provider=unsupported"));
     assertSafeLogs();
+  }
+
+  @Test
+  void recordsSuccessfulFallbackAndCorrelatesAttemptsWithoutSearchText() throws Exception {
+    properties.setProviders(List.of(provider("duckduckgo"), provider("brave")));
+    when(fetcher.fetch(any(), any(), any(), any(), any()))
+        .thenReturn(
+            response(202, "<html>PRIVATE_BODY</html>"),
+            response(
+                200,
+                "{\"web\":{\"results\":[{\"title\":\"PRIVATE_QUERY\",\"url\":\"https://example.com/\"}]}}"));
+
+    assertEquals(1, service().search("PRIVATE_QUERY", 1).size());
+    var messages = appender.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
+    assertEquals(5, messages.size());
+    String searchId = messages.getFirst().split("searchId=")[1].split(",")[0];
+    assertTrue(messages.stream().allMatch(message -> message.contains("searchId=" + searchId)));
+    assertTrue(messages.get(0).contains("provider=duckduckgo, attempt=1"));
+    assertTrue(messages.get(1).contains("results=0, totalUniqueResults=0, httpStatus=202"));
+    assertTrue(messages.get(2).contains("provider=brave, attempt=2"));
+    assertTrue(messages.get(3).contains("results=1, totalUniqueResults=1, httpStatus=200"));
+    assertTrue(messages.get(3).contains("durationMs="));
+    assertTrue(messages.getLast().contains("attemptedProviders=2, skippedProviders=0, results=1"));
+    assertSafeLogs();
+  }
+
+  @Test
+  void recordsProvidersSkippedBecauseResultsAreSufficient() throws Exception {
+    properties.setProviders(List.of(provider("brave"), provider("duckduckgo")));
+    when(fetcher.fetch(any(), any(), any(), any(), any()))
+        .thenReturn(
+            response(
+                200,
+                "{\"web\":{\"results\":[{\"title\":\"PRIVATE_QUERY\",\"url\":\"https://example.com/\"}]}}"));
+    service().search("PRIVATE_QUERY", 1);
+    assertTrue(
+        appender
+            .list
+            .getLast()
+            .getFormattedMessage()
+            .contains(
+                "attemptedProviders=1, skippedProviders=1, results=1, reason=SUFFICIENT_RESULTS"));
+    verify(fetcher, times(1)).fetch(any(), any(), any(), any(), any());
+    assertSafeLogs();
+  }
+
+  @Test
+  void recordsProvidersSkippedWhenRequestBudgetIsExhausted() throws Exception {
+    properties.setMaxSearchApiCalls(1);
+    properties.setProviders(List.of(provider("brave"), provider("duckduckgo")));
+    when(fetcher.fetch(any(), any(), any(), any(), any()))
+        .thenAnswer(
+            invocation -> {
+              invocation
+                  .getArgument(4, dev.mikoto2000.rei.http.HttpFetchObserver.class)
+                  .request(false);
+              return response(402, "PRIVATE_BODY");
+            });
+    assertThrows(WebSearchHttpException.class, () -> service().search("PRIVATE_QUERY", 1));
+    assertTrue(
+        appender
+            .list
+            .getLast()
+            .getFormattedMessage()
+            .contains(
+                "attemptedProviders=1, skippedProviders=1, results=0, reason=REQUEST_BUDGET"));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("networkRequest=true"));
+    assertSafeLogs();
+  }
+
+  @Test
+  void identifiesOpenAiAndReportsMissingKeyWithoutSendingRequest() {
+    var provider = provider("openai");
+    provider.setApiKey("");
+    properties.setProviders(List.of(provider));
+    assertThrows(IllegalStateException.class, () -> service().search("PRIVATE_QUERY", 1));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("provider=openai"));
+    assertTrue(
+        diagnostics().getFirst().getFormattedMessage().contains("code=API_KEY_NOT_CONFIGURED"));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("networkRequest=false"));
+    org.mockito.Mockito.verifyNoInteractions(fetcher);
+    assertSafeLogs();
+  }
+
+  @ParameterizedTest
+  @ValueSource(ints = {401, 429, 500})
+  void reportsOpenAiHttpStatusAndDiagnosticCode(int status) {
+    properties.setProviders(List.of(provider("openai")));
+    when(fetcher.fetch(any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(response(status, "PRIVATE_BODY"));
+    assertThrows(IllegalStateException.class, () -> service().search("PRIVATE_QUERY", 1));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("provider=openai"));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("code=HTTP_" + status));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("httpStatus=" + status));
+    assertSafeLogs();
+  }
+
+  @Test
+  void reportsOpenAiParsingCodeWithoutLoggingResponseBody() {
+    properties.setProviders(List.of(provider("openai")));
+    when(fetcher.fetch(any(), any(), any(), any(), any(), any(), any()))
+        .thenReturn(response(200, "PRIVATE_INVALID_JSON"));
+    assertThrows(IllegalStateException.class, () -> service().search("PRIVATE_QUERY", 1));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("code=INVALID_JSON"));
+    assertTrue(diagnostics().getFirst().getFormattedMessage().contains("httpStatus=200"));
+    assertSafeLogs();
+  }
+
+  private List<ILoggingEvent> diagnostics() {
+    return appender.list.stream()
+        .filter(
+            event -> {
+              String message = event.getFormattedMessage();
+              return message.startsWith("Web search provider failed;")
+                  || message.startsWith("Web search provider completed;")
+                      && message.contains("results=0,");
+            })
+        .toList();
   }
 
   private WebSearchService service() {

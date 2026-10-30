@@ -159,6 +159,6 @@ final class OpenAiWebSearch {
 
   static IllegalStateException failure(String code) {
     WebSearchMetrics.OBSERVED.add("openai_error_" + code.toLowerCase(Locale.ROOT), 1);
-    return new IllegalStateException("OpenAI web search: " + code);
+    return new OpenAiWebSearchException(code);
   }
 }

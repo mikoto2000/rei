@@ -125,3 +125,25 @@ Checkstyle と SpotBugs は現行 CI と同じレポート生成・新規指摘�
 終了コード0（14分18秒）を確認した。成功6276件、既存の環境依存スキップ5件である。
 全テストの選択・アサーション・CI タイムアウト・静的解析基準は変更していない。
 GitHub Actions の結果とマージ情報は PR に記載する。
+
+
+## 検索先ごとの実行ログ
+
+`WebSearchService` は通常の INFO ログで各検索先の開始 (`provider started`) と完了
+(`provider completed`) を記録する。同じ検索条件でのフォールバックは共通の `searchId` で追跡できる。
+並行したツール呼び出しや追加の検索条件には別の ID を付ける。
+
+- 開始: 検索先名、試行順、設定された検索先数、要求件数。
+- 完了: 結果件数、URL 重複排除後の累積件数、HTTP ステータス、通信の有無、所要時間、充足判定。
+- 失敗 (`provider failed`, WARN): 検索先名、例外の種類、固定の診断コード、HTTP ステータス、通信の有無、所要時間。
+- 実行中止 (`provider stopped`, INFO): 中止を検索先の障害として扱わず、そのまま呼び出し元へ伝播する。
+- 全体終了 (`Web search finished`): 試行数、未試行数、結果件数、終了理由。
+  `SUFFICIENT_RESULTS` は充足による終了、`REQUEST_BUDGET` は検索回数上限、
+  `PROVIDERS_EXHAUSTED` は全検索先を試行済みであることを示す。
+
+`networkRequest=false` はキャッシュ等で通信を行わなかった場合と送信前の設定エラーを含む。
+HTTP 応答を取得できなければ `httpStatus=null` を記録する。
+OpenAI の検索先名は `openai` と表示し、`API_KEY_NOT_CONFIGURED`、`HTTP_401`、
+`INVALID_JSON`、`RESPONSE_NOT_COMPLETED` などの固定コードで失敗理由を区別する。
+検索語、結果 URL、本文、認証情報、例外メッセージやスタックトレースはこれらのログに出さない。
+検索順序・フォールバック・最初のエラーを返す動作は変更しない。
