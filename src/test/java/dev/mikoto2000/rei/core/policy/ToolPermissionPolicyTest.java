@@ -21,7 +21,13 @@ class ToolPermissionPolicyTest {
   @Test
   void durableReviewToolsUseExistingReadOnlyReviewPermission() {
     var policy = policy(Set.of(ActionCapability.READ), Set.of());
-    for (var name : List.of("listReviewTasks", "resumeRepositoryReview", "claimReviewWorkItem", "readReviewWorkItem", "submitReviewWorkItem"))
+    for (var name :
+        List.of(
+            "listReviewTasks",
+            "resumeRepositoryReview",
+            "claimReviewWorkItem",
+            "readReviewWorkItem",
+            "submitReviewWorkItem"))
       assertEquals(PermissionDecision.AUTO_APPROVE, policy.evaluate(name), name);
   }
 
@@ -165,7 +171,13 @@ class ToolPermissionPolicyTest {
             policy(Set.of(ActionCapability.READ), Set.of()),
             new AgentEventFactory(Clock.systemUTC()),
             events::add);
-    assertThrows(ToolPermissionException.class, () -> guard.check("applyTextDiff", null));
+    assertThrows(
+        ToolPermissionException.class,
+        () ->
+            guard.check(
+                "applyTextDiff",
+                "{\"pathStr\":\"a.txt\",\"oldText\":\"old\",\"newText\":\"new\"}",
+                null));
     assertEquals(1, events.size());
     var failure = (ToolFailedPayload) events.getFirst().payload();
     assertEquals("PermissionRequired", failure.error().errorType());

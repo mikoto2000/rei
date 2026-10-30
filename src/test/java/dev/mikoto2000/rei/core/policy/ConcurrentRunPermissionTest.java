@@ -65,7 +65,9 @@ class ConcurrentRunPermissionTest {
     assertThatCode(
             () ->
                 guard.check(
-                    "applyTextDiff", "{}", new AgentRunContext("r", "s", Path.of("."), "p")))
+                    "applyTextDiff",
+                    "{\"pathStr\":\"a.txt\",\"oldText\":\"old\",\"newText\":\"new\"}",
+                    new AgentRunContext("r", "s", Path.of("."), "p")))
         .doesNotThrowAnyException();
   }
 }

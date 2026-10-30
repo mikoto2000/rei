@@ -71,7 +71,10 @@ class ToolApprovalExecutionTest {
                         .toolCalls(
                             List.of(
                                 new AssistantMessage.ToolCall(
-                                    "call", "function", "writeMultiFile", "{}")))
+                                    "call",
+                                    "function",
+                                    "writeMultiFile",
+                                    "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}")))
                         .build()
                     : new AssistantMessage("done");
             return Flux.just(new ChatResponse(List.of(new Generation(message))));

@@ -102,7 +102,12 @@ class FullAutoToolPermissionTest {
         new ToolPermissionGuard(
             policy, new AgentEventFactory(Clock.systemUTC()), event -> fail("Unexpected approval"));
     var voice = new AgentRunContext("run", "session", Path.of("."), "project").asVoiceInput();
-    assertDoesNotThrow(() -> guard.check("writeMultiFile", "{}", voice));
+    assertDoesNotThrow(
+        () ->
+            guard.check(
+                "writeMultiFile",
+                "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}",
+                voice));
   }
 
   /** ツール利用の権限制御の操作が、指定された権限・承認条件に従うことを確認する。 */
@@ -132,7 +137,13 @@ class FullAutoToolPermissionTest {
       var owner =
           new AgentRunContext(
               "run", "session", Path.of("."), "project", AgentRunContext.RequestSource.SHELL, mode);
-      assertThrows(ToolPermissionException.class, () -> guard.check("writeMultiFile", "{}", owner));
+      assertThrows(
+          ToolPermissionException.class,
+          () ->
+              guard.check(
+                  "writeMultiFile",
+                  "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}",
+                  owner));
     }
     var mcp =
         new AgentRunContext(

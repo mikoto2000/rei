@@ -3527,7 +3527,11 @@ public class Tools {
    * @param append 追記
    * @param charset 文字コード
    */
-  public record WriteFileRequest(String path, String content, Boolean append, String charset) {}
+  public record WriteFileRequest(
+      String path,
+      String content,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Boolean append,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String charset) {}
 
   /**
    * 1 ファイルの書き込み結果。
@@ -3840,7 +3844,11 @@ public class Tools {
   @param charset 読み書き文字コード。null または空の場合は UTF-8、UTF-8 で読めない場合は CP932
   @return 適用結果
   """)
-  TextDiffApplyResult applyTextDiff(String pathStr, String oldText, String newText, String charset)
+  TextDiffApplyResult applyTextDiff(
+      String pathStr,
+      String oldText,
+      String newText,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) String charset)
       throws IOException {
     IO.println(String.format("applyTextDiff を実行するよ: %s", pathStr));
     if (oldText == null || oldText.isEmpty()) {

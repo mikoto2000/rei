@@ -183,8 +183,19 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
         || ShellFileReadArguments.supports(tool)
         || ProcessWaitArguments.supports(tool)
         || FindFileArguments.supports(tool)
+        || TextEditArguments.supports(tool)
         || dev.mikoto2000.rei.websearch.WebSearchArguments.supports(tool)
         || RawToolResultArguments.supports(tool);
+  }
+
+  /** 登録された入力契約も含めて、実行前の引数補正を扱えるか判定する。 */
+  public static boolean supportsArgumentCorrection(String tool, String schema) {
+    return supportsArgumentCorrection(tool) || ToolSchemaArguments.supports(schema);
+  }
+
+  /** 専用の編集契約がないツールは、登録された必須項目を検証する。 */
+  public static void validateSchemaArguments(String tool, String schema, String input) {
+    if (!TextEditArguments.supports(tool)) ToolSchemaArguments.validate(tool, schema, input);
   }
 
   /** 承認や実行より前に、設定不要の検証とWeb検索件数の検証を共通で行う。 */
@@ -193,6 +204,7 @@ public class ToolPermissionPolicy implements dev.mikoto2000.rei.secretary.Secret
     ShellFileReadArguments.validate(tool, input);
     ProcessWaitArguments.validate(tool, input);
     FindFileArguments.validate(tool, input);
+    TextEditArguments.validate(tool, input);
     RawToolResultArguments.validate(tool, input);
     dev.mikoto2000.rei.core.taskstate.TaskStateArguments.validate(tool, input);
   }

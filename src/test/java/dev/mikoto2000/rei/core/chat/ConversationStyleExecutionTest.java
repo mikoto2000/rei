@@ -180,7 +180,11 @@ class ConversationStyleExecutionTest {
             e -> {});
     guard.setApprovals(approvals);
     var service =
-        service("writeMultiFile", "{\"content\":\"approved fixture\"}", "作業を実行して検証しました", guard);
+        service(
+            "writeMultiFile",
+            "{\"files\":[{\"path\":\"result.txt\",\"content\":\"approved fixture\"}]}",
+            "作業を実行して検証しました",
+            guard);
     assertThat(
             service
                 .execute(

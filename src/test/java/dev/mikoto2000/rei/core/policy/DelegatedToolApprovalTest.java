@@ -84,11 +84,18 @@ class DelegatedToolApprovalTest {
           ToolPermissionException.class,
           () -> guard.checkDelegated("readMultiFile", "{}", wrong, parent));
     }
-    var write = repository.request("writeMultiFile", "{}", parent);
+    var write =
+        repository.request(
+            "writeMultiFile", "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}", parent);
     repository.decide("project", write.id(), true);
     assertThrows(
         ToolPermissionException.class,
-        () -> guard.checkDelegated("writeMultiFile", "{}", child, parent));
+        () ->
+            guard.checkDelegated(
+                "writeMultiFile",
+                "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}",
+                child,
+                parent));
     assertEquals("APPROVED", repository.get("project", request.id()).status());
     assertEquals("APPROVED", repository.get("project", write.id()).status());
   }

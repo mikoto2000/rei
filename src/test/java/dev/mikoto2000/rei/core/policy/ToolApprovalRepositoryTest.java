@@ -167,7 +167,11 @@ class ToolApprovalRepositoryTest {
     guard.setApprovals(repository);
     assertThrows(
         ToolPermissionException.class,
-        () -> guard.check("writeMultiFile", "{}", owner("p", "s", "r")));
+        () ->
+            guard.check(
+                "writeMultiFile",
+                "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}",
+                owner("p", "s", "r")));
     var request = repository.list("p").getFirst();
     repository.decide("p", request.id(), true);
     var denying =
@@ -183,12 +187,25 @@ class ToolApprovalRepositoryTest {
     denying.setApprovals(repository);
     assertThrows(
         ToolPermissionException.class,
-        () -> denying.check("writeMultiFile", "{}", owner("p", "s", "r2")));
+        () ->
+            denying.check(
+                "writeMultiFile",
+                "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}",
+                owner("p", "s", "r2")));
     assertEquals("APPROVED", repository.get("p", request.id()).status());
-    assertDoesNotThrow(() -> guard.check("writeMultiFile", "{}", owner("p", "s", "r2")));
+    assertDoesNotThrow(
+        () ->
+            guard.check(
+                "writeMultiFile",
+                "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}",
+                owner("p", "s", "r2")));
     assertThrows(
         ToolPermissionException.class,
-        () -> guard.check("writeMultiFile", "{}", owner("p", "s", "r2")));
+        () ->
+            guard.check(
+                "writeMultiFile",
+                "{\"files\":[{\"path\":\"a.txt\",\"content\":\"fixture\"}]}",
+                owner("p", "s", "r2")));
   }
 
   @Test

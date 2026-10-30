@@ -128,7 +128,9 @@ public final class ToolLoopSupport {
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext context) {
     if (!context.hasApprovalContinuation()
         && response.getResult().getOutput().getToolCalls().stream()
-            .noneMatch(call -> context.supportsArgumentCorrection(call.name())))
+            .noneMatch(
+                call ->
+                    context.supportsArgumentCorrection(call.name(), schema(prompt, call.name()))))
       return execute(prompt, response);
     if (response.getResults().size() != 1)
       throw new IllegalArgumentException(
@@ -142,6 +144,16 @@ public final class ToolLoopSupport {
             java.util.List.of()),
         context,
         false);
+  }
+
+  private String schema(Prompt prompt, String name) {
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)
+        || options.getToolCallbacks() == null) return null;
+    return options.getToolCallbacks().stream()
+        .filter(callback -> callback.getToolDefinition().name().equals(name))
+        .map(callback -> callback.getToolDefinition().inputSchema())
+        .findFirst()
+        .orElse(null);
   }
 
   /** 保存済みのツール呼び出しについて、成功済みの結果を引き継ぎながら残りを実行する。 */
@@ -188,7 +200,10 @@ public final class ToolLoopSupport {
       context.checkActive();
       if (replay) context.checkApprovalContinuationExecution();
       try {
-        context.validateToolArguments(call.name(), call.arguments());
+        context.validateToolArguments(
+            call.name(),
+            call.arguments(),
+            callbacks.get(call.name()).getToolDefinition().inputSchema());
       } catch (dev.mikoto2000.rei.core.policy.InvalidToolArgumentsException invalid) {
         // 引数を直せば実行できる場合は、修正の案内を返す。実行済みの兄弟呼び出しはやり直させない。
         completed.add(

@@ -501,7 +501,7 @@ class ExhaustedResumeRecoveryTest {
                               return call(
                                   calls.incrementAndGet(),
                                   "writeMultiFile",
-                                  "{\"files\":[{\"path\":\"review.md\"}]}");
+                                  "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
                             }))
                     .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
@@ -660,7 +660,10 @@ class ExhaustedResumeRecoveryTest {
               }
               assertThat(reads.get()).isEqualTo((commits.get() + 1) * 8);
               assertThat(p.getContents()).contains("consolidated partial assessment");
-              return call(n, "writeMultiFile", "{\"files\":[{\"path\":\"review.md\"}]}");
+              return call(
+                  n,
+                  "writeMultiFile",
+                  "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
             });
     new StagnationChatModel(delegate)
         .stream(
@@ -726,7 +729,10 @@ class ExhaustedResumeRecoveryTest {
                             .orElseThrow();
                     assertThat(response.getResponses().getLast().responseData())
                         .contains("Resume work unit requires a consolidated outcome");
-                    return call(n, "writeMultiFile", "{\"files\":[{\"path\":\"review.md\"}]}");
+                    return call(
+                        n,
+                        "writeMultiFile",
+                        "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
                   }
                   assertThat(names(p)).contains("readMultiFile");
                   return new AssistantMessage("Unit result saved.");
@@ -863,7 +869,10 @@ class ExhaustedResumeRecoveryTest {
                   if (n == 3) {
                     assertThat(choice).isEqualTo("required");
                     assertThat(names(p)).doesNotContain("readMultiFile").contains("writeMultiFile");
-                    return call(n, "writeMultiFile", "{\"files\":[{\"path\":\"review.md\"}]}");
+                    return call(
+                        n,
+                        "writeMultiFile",
+                        "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
                   }
                   assertThat(choice).isEqualTo("auto");
                   assertThat(c.hasPendingResumeContentWork()).isFalse();
@@ -913,7 +922,10 @@ class ExhaustedResumeRecoveryTest {
                   }
                   if (n <= textReplies) return new AssistantMessage("I will save the assessment.");
                   if (n == textReplies + 1)
-                    return call(n, "writeMultiFile", "{\"files\":[{\"path\":\"review.md\"}]}");
+                    return call(
+                        n,
+                        "writeMultiFile",
+                        "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
                   assertThat(c.hasPendingResumeContentWork()).isFalse();
                   return new AssistantMessage("Assessment saved.");
                 }))
@@ -990,7 +1002,10 @@ class ExhaustedResumeRecoveryTest {
           String finish;
           if (turn == 1 || turn == 3) {
             String name = turn == 1 ? "readMultiFile" : "writeMultiFile";
-            String args = turn == 1 ? "{}" : "{\"files\":[{\"path\":\"review.md\"}]}";
+            String args =
+                turn == 1
+                    ? "{}"
+                    : "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}";
             delta =
                 Map.of(
                     "role",
@@ -1241,7 +1256,10 @@ class ExhaustedResumeRecoveryTest {
                 assertThat(names(p)).doesNotContain("readMultiFile").contains("writeMultiFile");
                 assertThat(p.getContents())
                     .contains("No verified work followed the delivered content");
-                return call(n, "writeMultiFile", "{\"files\":[{\"path\":\"review.md\"}]}");
+                return call(
+                    n,
+                    "writeMultiFile",
+                    "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
               }
               assertThat(p.getContents())
                   .doesNotContain("No verified work followed the delivered content");
@@ -1413,7 +1431,10 @@ class ExhaustedResumeRecoveryTest {
               assertThat(p.getContents())
                   .contains("partial assessment", "Do not invent")
                   .doesNotContain("This boundary applies again after each subsequent content read");
-              return call(n, "writeMultiFile", "{\"files\":[{\"path\":\"review.md\"}]}");
+              return call(
+                  n,
+                  "writeMultiFile",
+                  "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
             });
     new StagnationChatModel(delegate)
         .stream(
@@ -1476,7 +1497,11 @@ class ExhaustedResumeRecoveryTest {
                               int n = calls.incrementAndGet();
                               assertThat(names(p)).doesNotContain("readMultiFile");
                               return call(
-                                  n, n == 1 ? "writeMultiFile" : "checkpointAnnotate", "{}");
+                                  n,
+                                  n == 1 ? "writeMultiFile" : "checkpointAnnotate",
+                                  n == 1
+                                      ? "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}"
+                                      : "{}");
                             }))
                     .stream(
                             new Prompt(
@@ -1507,7 +1532,7 @@ class ExhaustedResumeRecoveryTest {
                                                 "write",
                                                 "function",
                                                 "writeMultiFile",
-                                                "{\"files\":[{\"path\":\"review.md\"}]}"),
+                                                "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}"),
                                             new AssistantMessage.ToolCall(
                                                 "read", "function", "readMultiFile", "{}")))
                                     .build();
@@ -1621,7 +1646,10 @@ class ExhaustedResumeRecoveryTest {
                             : "{}");
                   if (n == 2) {
                     assertThat(names(p)).contains(reader, "readMultiFile");
-                    return call(n, "writeMultiFile", "{\"files\":[{\"path\":\"review.md\"}]}");
+                    return call(
+                        n,
+                        "writeMultiFile",
+                        "{\"files\":[{\"path\":\"review.md\",\"content\":\"fixture assessment\"}]}");
                   }
                   assertThat(names(p)).contains(reader, "readMultiFile");
                   return new AssistantMessage("Partial evidence used");

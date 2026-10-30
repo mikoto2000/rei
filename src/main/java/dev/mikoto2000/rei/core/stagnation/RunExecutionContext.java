@@ -673,6 +673,19 @@ public class RunExecutionContext {
     return dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.supportsArgumentCorrection(name);
   }
 
+  /** 登録された入力契約を含めて補正経路を選ぶ。 */
+  public boolean supportsArgumentCorrection(String name, String schema) {
+    return dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.supportsArgumentCorrection(
+        name, schema);
+  }
+
+  /** 実行と承認に進む前に、専用契約と登録された入力契約を検証する。 */
+  public void validateToolArguments(String name, String input, String schema) {
+    validateToolArguments(name, input);
+    dev.mikoto2000.rei.core.policy.ToolPermissionPolicy.validateSchemaArguments(
+        name, schema, input);
+  }
+
   /** 実行の停滞への対処に関するレポートツール権限失敗情報を処理する。 */
   public void reportToolPermissionFailure(
       String callId, String name, dev.mikoto2000.rei.chatgpt.ChatGptException error) {
