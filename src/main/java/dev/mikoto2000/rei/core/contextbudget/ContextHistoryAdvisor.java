@@ -91,7 +91,9 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
             ? java.util.List.<dev.mikoto2000.rei.conversation.ConversationLogEntry>of()
             : logs.readConversation(id);
     if (!logEntries.isEmpty()) {
-      String historyKey = id + "/log";
+      String historyKey = id;
+      if (request.prompt().getOptions()
+          instanceof org.springframework.ai.model.tool.ToolCallingChatOptions) historyKey += "/log";
       if (!cancelled.generation().isEmpty())
         historyKey += "/after-cancel/" + cancelled.generation();
       long through = summaries.read(historyKey).throughSequence();

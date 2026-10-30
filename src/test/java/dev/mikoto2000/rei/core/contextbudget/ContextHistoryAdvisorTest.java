@@ -50,7 +50,10 @@ class ContextHistoryAdvisorTest {
     var result =
         advisor.before(
             ChatClientRequest.builder()
-                .prompt(new Prompt(new UserMessage("current")))
+                .prompt(
+                    new Prompt(
+                        java.util.List.of(new UserMessage("current")),
+                        org.springframework.ai.openai.OpenAiChatOptions.builder().build()))
                 .context(Map.of(ChatMemory.CONVERSATION_ID, "chat"))
                 .build(),
             null);
