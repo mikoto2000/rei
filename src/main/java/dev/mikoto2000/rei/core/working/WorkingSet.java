@@ -53,6 +53,45 @@ public class WorkingSet {
   /** 保存パス。 */
   private Path storagePath;
 
+  private static final class BatchState {
+    int depth;
+    boolean dirty;
+  }
+
+  private final ThreadLocal<BatchState> persistenceBatch = new ThreadLocal<>();
+
+  /** Defer disk snapshots on this thread only; memory, events and eviction remain immediate. */
+  public PersistenceBatch batchPersistence() {
+    var state = persistenceBatch.get();
+    if (state == null) {
+      state = new BatchState();
+      persistenceBatch.set(state);
+    }
+    state.depth++;
+    return new PersistenceBatch(state);
+  }
+
+  public final class PersistenceBatch implements AutoCloseable {
+    private final BatchState state;
+    private boolean closed;
+
+    private PersistenceBatch(BatchState state) {
+      this.state = state;
+    }
+
+    @Override
+    public void close() {
+      if (closed) return;
+      if (persistenceBatch.get() != state)
+        throw new IllegalStateException("Working Set batch must close on its owning thread");
+      closed = true;
+      if (--state.depth == 0) {
+        persistenceBatch.remove();
+        if (state.dirty) persistNow();
+      }
+    }
+  }
+
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final com.fasterxml.jackson.databind.ObjectMapper mapper =
       new com.fasterxml.jackson.databind.ObjectMapper()
@@ -77,7 +116,13 @@ public class WorkingSet {
   }
 
   /** 後の処理へ引き継げるよう、作業中集合を永続化する。 */
-  private synchronized void persist() {
+  private void persist() {
+    var state = persistenceBatch.get();
+    if (state != null) state.dirty = true;
+    else persistNow();
+  }
+
+  private synchronized void persistNow() {
     if (storagePath == null) return;
     try {
       java.nio.file.Files.createDirectories(storagePath.getParent());
