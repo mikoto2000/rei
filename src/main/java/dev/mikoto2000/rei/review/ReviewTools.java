@@ -84,7 +84,6 @@ public final class ReviewTools {
 
   private final dev.mikoto2000.rei.durable.DurableTaskStore tasks;
 
-
   /** 変更内容のレビューを利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ReviewTools(
       ReviewCoverageLedger ledger, RawToolResultStore raw, Tools files, TokenEstimator estimator) {
@@ -104,18 +103,22 @@ public final class ReviewTools {
     this.tasks = ledger.durableTasks();
   }
 
-  private static dev.mikoto2000.rei.durable.DurableTaskStore.Scope taskScope(AgentRunContext owner) {
+  private static dev.mikoto2000.rei.durable.DurableTaskStore.Scope taskScope(
+      AgentRunContext owner) {
     scope(owner);
     return new dev.mikoto2000.rei.durable.DurableTaskStore.Scope(
         owner.projectId(), owner.conversationId(), owner.projectRoot().toString());
   }
 
-  @Tool(description = "Begin a durable whole-repository review. COMMIT captures the immutable HEAD tree; WORKTREE preserves current contents including uncommitted files. Omitted mode prefers COMMIT at a Git root. Exclusions are explicit glob patterns with recorded reasons. Continue scanReviewSnapshot until SEALED; enumeration and processing are distinct. The owning Run and Goal cannot finish while required work remains.")
+  @Tool(
+      description =
+          "Begin a durable whole-repository review. COMMIT captures the immutable HEAD tree; WORKTREE preserves current contents including uncommitted files. Omitted mode prefers COMMIT at a Git root. Exclusions are explicit glob patterns with recorded reasons. Continue scanReviewSnapshot until SEALED; enumeration and processing are distinct. The owning Run and Goal cannot finish while required work remains.")
   public dev.mikoto2000.rei.durable.DurableTaskStore.Task beginRepositoryReview(
       @org.springframework.ai.tool.annotation.ToolParam(required = false) String snapshotMode,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) List<String> excludes,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer maxFiles,
-      @org.springframework.ai.tool.annotation.ToolParam(required = false) Long maxBytes) throws java.io.IOException {
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Long maxBytes)
+      throws java.io.IOException {
     var owner = AgentRunScope.current();
     var capturedScope = taskScope(owner);
     String mode = snapshotMode == null ? "AUTO" : snapshotMode;
@@ -129,31 +132,50 @@ public final class ReviewTools {
         mode = "WORKTREE";
       }
     }
-    return tasks.beginForRun(capturedScope, owner.runId(), ledger.goalForTask(capturedScope, owner.runId()), mode, reference,
-        excludes == null ? List.of("target/**", "node_modules/**", ".rei/**", ".worktrees/**") : excludes,
-        maxFiles == null ? 100000 : maxFiles, maxBytes == null ? 2L * 1024 * 1024 * 1024 : maxBytes);
+    return tasks.beginForRun(
+        capturedScope,
+        owner.runId(),
+        ledger.goalForTask(capturedScope, owner.runId()),
+        mode,
+        reference,
+        excludes == null
+            ? List.of("target/**", "node_modules/**", ".rei/**", ".worktrees/**")
+            : excludes,
+        maxFiles == null ? 100000 : maxFiles,
+        maxBytes == null ? 2L * 1024 * 1024 * 1024 : maxBytes);
   }
 
-  @Tool(description = "Capture the next bounded page of a durable review Snapshot. maxEntries defaults to 128 and is 1..1000. Continue until enumeration is SEALED. FAILED includes an explicit error or capacity reason; never claim complete enumeration in that state.")
-  public dev.mikoto2000.rei.durable.DurableTaskStore.Task scanReviewSnapshot(String taskId,
+  @Tool(
+      description =
+          "Capture the next bounded page of a durable review Snapshot. maxEntries defaults to 128 and is 1..1000. Continue until enumeration is SEALED. FAILED includes an explicit error or capacity reason; never claim complete enumeration in that state.")
+  public dev.mikoto2000.rei.durable.DurableTaskStore.Task scanReviewSnapshot(
+      String taskId,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer maxEntries) {
     return new dev.mikoto2000.rei.durable.SnapshotEnumerator(tasks)
         .step(taskScope(AgentRunScope.current()), taskId, maxEntries == null ? 128 : maxEntries);
   }
 
-  @Tool(description = "Inspect durable review identity, frozen Snapshot ID, enumeration status, errors, exclusion count and unscanned directories. SEALED only proves target enumeration, not completed review.")
+  @Tool(
+      description =
+          "Inspect durable review identity, frozen Snapshot ID, enumeration status, errors, exclusion count and unscanned directories. SEALED only proves target enumeration, not completed review.")
   public dev.mikoto2000.rei.durable.DurableTaskStore.Task reviewTaskStatus(String taskId) {
     return tasks.status(taskScope(AgentRunScope.current()), taskId);
   }
 
-  @Tool(description = "Discover durable repository review Tasks owned by this Project, session and root, even when Checkpoints are missing. Pass nextCursor as afterTask. limit 1..1000, default 100.")
-  public dev.mikoto2000.rei.durable.DurableTaskStore.Page<dev.mikoto2000.rei.durable.DurableTaskStore.Task> listReviewTasks(
-      @org.springframework.ai.tool.annotation.ToolParam(required = false) String afterTask,
-      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) {
+  @Tool(
+      description =
+          "Discover durable repository review Tasks owned by this Project, session and root, even when Checkpoints are missing. Pass nextCursor as afterTask. limit 1..1000, default 100.")
+  public dev.mikoto2000.rei.durable.DurableTaskStore.Page<
+          dev.mikoto2000.rei.durable.DurableTaskStore.Task>
+      listReviewTasks(
+          @org.springframework.ai.tool.annotation.ToolParam(required = false) String afterTask,
+          @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) {
     return tasks.tasks(taskScope(AgentRunScope.current()), afterTask, limit == null ? 100 : limit);
   }
 
-  @Tool(description = "Explicitly resume a durable review Task in this Run without a Checkpoint. Preserves results, recovers unfinished read-only review work and retires old Run authority. Cancelled or failed Tasks cannot be resumed implicitly.")
+  @Tool(
+      description =
+          "Explicitly resume a durable review Task in this Run without a Checkpoint. Preserves results, recovers unfinished read-only review work and retires old Run authority. Cancelled or failed Tasks cannot be resumed implicitly.")
   public dev.mikoto2000.rei.durable.DurableTaskStore.Task resumeRepositoryReview(String taskId) {
     var owner = AgentRunScope.current();
     return workItems().resume(taskScope(owner), taskId, owner.runId());
@@ -163,55 +185,95 @@ public final class ReviewTools {
     return new dev.mikoto2000.rei.durable.WorkItemStore(tasks);
   }
 
-  @Tool(description = "Claim one pending frozen review range. tokenBudget 256..2048 includes serialized source metadata. Already committed ranges are never returned. Read with readReviewWorkItem and then submitReviewWorkItem; a claim is not review completion.")
-  public dev.mikoto2000.rei.durable.WorkItemStore.Claim claimReviewWorkItem(String taskId, int tokenBudget) {
-    if (tokenBudget < 256 || tokenBudget > 2048) throw new IllegalArgumentException("INVALID_TOKEN_BUDGET");
+  @Tool(
+      description =
+          "Claim one pending frozen review range. tokenBudget 256..2048 includes serialized source metadata. Already committed ranges are never returned. Read with readReviewWorkItem and then submitReviewWorkItem; a claim is not review completion.")
+  public dev.mikoto2000.rei.durable.WorkItemStore.Claim claimReviewWorkItem(
+      String taskId, int tokenBudget) {
+    if (tokenBudget < 256 || tokenBudget > 2048)
+      throw new IllegalArgumentException("INVALID_TOKEN_BUDGET");
     var owner = AgentRunScope.current();
-    return workItems().claim(taskScope(owner), taskId, owner.runId(), (item, source) -> {
-      int low = item.start(), high = Math.min(item.end(), item.start() + tokenBudget * 4);
-      while (low < high) {
-        int middle = low + (high - low + 1) / 2;
-        if (estimate(durablePage(item, "0".repeat(36), source, middle)) <= tokenBudget) low = middle;
-        else high = middle - 1;
-      }
-      if (low > item.start() && low < source.length() && Character.isHighSurrogate(source.charAt(low - 1)) && Character.isLowSurrogate(source.charAt(low))) low--;
-      if (low == item.start() && low < item.end() || estimate(durablePage(item, "0".repeat(36), source, low)) > tokenBudget)
-        throw new IllegalArgumentException("REVIEW_PAGE_BUDGET_TOO_SMALL");
-      return low;
-    });
+    return workItems()
+        .claim(
+            taskScope(owner),
+            taskId,
+            owner.runId(),
+            (item, source) -> {
+              int low = item.start(), high = Math.min(item.end(), item.start() + tokenBudget * 4);
+              while (low < high) {
+                int middle = low + (high - low + 1) / 2;
+                if (estimate(durablePage(item, "0".repeat(36), source, middle)) <= tokenBudget)
+                  low = middle;
+                else high = middle - 1;
+              }
+              if (low > item.start()
+                  && low < source.length()
+                  && Character.isHighSurrogate(source.charAt(low - 1))
+                  && Character.isLowSurrogate(source.charAt(low))) low--;
+              if (low == item.start() && low < item.end()
+                  || estimate(durablePage(item, "0".repeat(36), source, low)) > tokenBudget)
+                throw new IllegalArgumentException("REVIEW_PAGE_BUDGET_TOO_SMALL");
+              return low;
+            });
   }
 
   @ResultDelivery(ResultDelivery.Kind.FILE_CONTENT)
-  @Tool(description = "Read the exact frozen range of the current claim. Reading does not mark it delivered; trusted host model-delivery confirmation is required before submitReviewWorkItem.")
+  @Tool(
+      description =
+          "Read the exact frozen range of the current claim. Reading does not mark it delivered; trusted host model-delivery confirmation is required before submitReviewWorkItem.")
   public Page readReviewWorkItem(String workItemId, String attempt) {
     var owner = AgentRunScope.current();
     var work = workItems();
     var claim = work.current(taskScope(owner), workItemId, owner.runId(), attempt);
-    if (!claim.item().state().equals("RUNNING")) throw new IllegalArgumentException("WORK_NOT_RUNNING");
-    return durablePage(claim.item(), attempt, work.source(taskScope(owner), claim.item()), claim.item().end());
+    if (!claim.item().state().equals("RUNNING"))
+      throw new IllegalArgumentException("WORK_NOT_RUNNING");
+    return durablePage(
+        claim.item(), attempt, work.source(taskScope(owner), claim.item()), claim.item().end());
   }
 
-  @Tool(description = "Commit an assessment and optional structured findings for a delivered frozen claim. Findings use absolute UTF-16 start/end and exact evidence quotes. Saves atomically, rejects conflicting replay, and never equates reading with reviewing.")
-  public dev.mikoto2000.rei.durable.WorkItemStore.Result submitReviewWorkItem(String workItemId, String attempt,
-      String assessment, List<dev.mikoto2000.rei.durable.WorkItemStore.Finding> findings) {
+  @Tool(
+      description =
+          "Commit an assessment and optional structured findings for a delivered frozen claim. Findings use absolute UTF-16 start/end and exact evidence quotes. Saves atomically, rejects conflicting replay, and never equates reading with reviewing.")
+  public dev.mikoto2000.rei.durable.WorkItemStore.Result submitReviewWorkItem(
+      String workItemId,
+      String attempt,
+      String assessment,
+      List<dev.mikoto2000.rei.durable.WorkItemStore.Finding> findings) {
     var owner = AgentRunScope.current();
     var work = workItems();
-    return work.commit(taskScope(owner), work.current(taskScope(owner), workItemId, owner.runId(), attempt), assessment, findings);
+    return work.commit(
+        taskScope(owner),
+        work.current(taskScope(owner), workItemId, owner.runId(), attempt),
+        assessment,
+        findings);
   }
 
-  private Page durablePage(dev.mikoto2000.rei.durable.WorkItemStore.Item item, String attempt, String source, int end) {
+  private Page durablePage(
+      dev.mikoto2000.rei.durable.WorkItemStore.Item item, String attempt, String source, int end) {
     int[] from = position(source, item.start()), to = position(source, end);
-    return page("durable:" + item.id() + ":" + attempt,
-        new Target(item.path(), item.version(), position(source, source.length())[0],
-            List.of(new Span(item.start(), end, from[0], to[0], from[1], to[1]))), source, item.start(), end);
+    return page(
+        "durable:" + item.id() + ":" + attempt,
+        new Target(
+            item.path(),
+            item.version(),
+            position(source, source.length())[0],
+            List.of(new Span(item.start(), end, from[0], to[0], from[1], to[1]))),
+        source,
+        item.start(),
+        end);
   }
 
-  @Tool(description = "Page frozen review targets, exclusions and source errors. Pass nextCursor unchanged as afterPath; null starts at the beginning. limit is 1..1000, default 100. Reading a page never completes work.")
-  public dev.mikoto2000.rei.durable.DurableTaskStore.Page<dev.mikoto2000.rei.durable.DurableTaskStore.FileEntry> listReviewTargets(
-      String taskId,
-      @org.springframework.ai.tool.annotation.ToolParam(required = false) String afterPath,
-      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) {
-    return tasks.files(taskScope(AgentRunScope.current()), taskId, afterPath, limit == null ? 100 : limit);
+  @Tool(
+      description =
+          "Page frozen review targets, exclusions and source errors. Pass nextCursor unchanged as afterPath; null starts at the beginning. limit is 1..1000, default 100. Reading a page never completes work.")
+  public dev.mikoto2000.rei.durable.DurableTaskStore.Page<
+          dev.mikoto2000.rei.durable.DurableTaskStore.FileEntry>
+      listReviewTargets(
+          String taskId,
+          @org.springframework.ai.tool.annotation.ToolParam(required = false) String afterPath,
+          @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer limit) {
+    return tasks.files(
+        taskScope(AgentRunScope.current()), taskId, afterPath, limit == null ? 100 : limit);
   }
 
   /** 変更内容のレビューで用いる対象範囲を返す。 */
@@ -364,7 +426,17 @@ public final class ReviewTools {
     var scope = scope(owner);
     var job = reviewStatus(reviewJobId);
     if ("STALE_VERSION".equals(job.status())) throw new IllegalStateException("STALE_VERSION");
-    var source = files.get().reviewSnapshot(range.path());
+    var source = readSource(range.path());
+    return submitVerifiedReviewResult(reviewJobId, scope, range, assessment, findings, source);
+  }
+
+  private Job submitVerifiedReviewResult(
+      String reviewJobId,
+      Scope scope,
+      Range range,
+      String assessment,
+      List<Finding> findings,
+      Source source) {
     if (!range.version().equals(source.version())
         || range.span().end() > source.text().length()
         || !hash(source.text().substring(range.span().start(), range.span().end()))
@@ -474,7 +546,9 @@ public final class ReviewTools {
       List<PageFinding> findings)
       throws java.io.IOException {
     try {
-      var job = reviewStatus(reviewJobId);
+      if (path == null) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+      var validated = validateSources(reviewJobId, java.util.Set.of(path));
+      var job = validated.job();
       if (job.status().equals("STALE_VERSION"))
         throw new ReviewResultRejectedException(
             "No assessment was accepted: source version changed. Use restartReview, then read the new page.");
@@ -492,7 +566,7 @@ public final class ReviewTools {
         throw new ReviewResultRejectedException(
             "No assessment was accepted. Use the exact path, offset and nextOffset of one delivered readReviewFile page. Re-read that page if necessary.");
       var range = matching.getFirst().range();
-      var source = files.get().reviewSnapshot(path).text();
+      var source = validated.snapshots().get(path).text();
       if (findings == null) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
       var located = new ArrayList<Finding>();
       for (var finding : findings) {
@@ -520,7 +594,15 @@ public final class ReviewTools {
                 finding.assessment(),
                 "VERIFIED"));
       }
-      var saved = submitReviewResult(reviewJobId, range, assessment, located);
+      verifyUnchanged(reviewJobId, validated, path);
+      var saved =
+          submitVerifiedReviewResult(
+              reviewJobId,
+              scope(AgentRunScope.current()),
+              range,
+              assessment,
+              located,
+              validated.snapshots().get(path));
       var entry =
           saved.ranges().stream().filter(e -> e.range().equals(range)).findFirst().orElseThrow();
       var acceptedFindings =
@@ -560,20 +642,72 @@ public final class ReviewTools {
       description =
           "Inspect persisted review coverage and findings. Revalidates each current source version. COMPLETE only means verified range coverage; semantic review quality requires human judgment. Unreviewed/stale/failed ranges remain visible.")
   public Job reviewStatus(String reviewJobId) throws java.io.IOException {
+    return validateSources(reviewJobId, java.util.Set.of()).job();
+  }
+
+  private record Source(String version, String text) {}
+
+  private Source readSource(String path) throws java.io.IOException {
+    var snapshot = files.get().reviewSnapshot(path);
+    return new Source(snapshot.version(), snapshot.text());
+  }
+
+  private record Validated(Job job, Map<String, Source> snapshots) {
+    private Validated {
+      snapshots = Map.copyOf(snapshots);
+    }
+  }
+
+  /** Decode only requested evidence, retaining fresh byte-hash checks for every target. */
+  private Validated validateSources(String reviewJobId, java.util.Set<String> decoded)
+      throws java.io.IOException {
     var scope = scope(AgentRunScope.current());
     var job = ledger.get(reviewJobId, scope);
+    var snapshots = new LinkedHashMap<String, Source>();
     for (var target : job.targets()) {
-      Tools.ReviewSnapshot snapshot;
+      String version;
       try {
-        snapshot = files.get().reviewSnapshot(target.path());
+        if (decoded.contains(target.path())) {
+          var snapshot = readSource(target.path());
+          snapshots.put(target.path(), snapshot);
+          version = snapshot.version();
+        } else version = files.get().reviewVersion(target.path());
       } catch (java.io.IOException missing) {
         job = ledger.invalidate(reviewJobId, scope, target.path(), "unavailable");
         continue;
       }
-      if (!target.version().equals(snapshot.version()))
-        job = ledger.invalidate(reviewJobId, scope, target.path(), snapshot.version());
+      if (!target.version().equals(version))
+        job = ledger.invalidate(reviewJobId, scope, target.path(), version);
     }
-    return job;
+    return new Validated(job, snapshots);
+  }
+
+  /** Recheck current ownership and all source hashes immediately before accepting evidence. */
+  private void verifyUnchanged(String id, Validated prior, String lastPath)
+      throws java.io.IOException {
+    var scope = scope(AgentRunScope.current());
+    var job = ledger.get(id, scope);
+    boolean changed = "STALE_VERSION".equals(job.status());
+    for (var target :
+        job.targets().stream()
+            .sorted(Comparator.comparing(t -> t.path().equals(lastPath)))
+            .toList()) {
+      String version;
+      try {
+        version = files.get().reviewVersion(target.path());
+      } catch (java.io.IOException missing) {
+        ledger.invalidate(id, scope, target.path(), "unavailable");
+        changed = true;
+        continue;
+      }
+      if (!target.version().equals(version)) {
+        ledger.invalidate(id, scope, target.path(), version);
+        changed = true;
+      }
+      var snapshot = prior.snapshots().get(target.path());
+      if (snapshot != null && !snapshot.version().equals(version)) changed = true;
+    }
+    if (changed) throw new IllegalStateException("STALE_VERSION");
   }
 
   /** Coverage-free, paginated access to preserved candidate findings. */
@@ -622,7 +756,8 @@ public final class ReviewTools {
         throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
       if (page.reviewJobId().startsWith("durable:")) {
         confirmDurable(owner, page);
-      } else grouped.computeIfAbsent(page.reviewJobId(), ignored -> new ArrayList<>()).add(page.range());
+      } else
+        grouped.computeIfAbsent(page.reviewJobId(), ignored -> new ArrayList<>()).add(page.range());
     }
     grouped.forEach((job, ranges) -> ledger.delivered(job, scope(owner), ranges));
   }
@@ -635,12 +770,15 @@ public final class ReviewTools {
     try {
       claim = work.current(taskScope(owner), receipt[1], owner.runId(), receipt[2]);
     } catch (IllegalArgumentException stale) {
-      if ("STALE_CLAIM".equals(stale.getMessage()) || "TASK_RUN_NOT_BOUND".equals(stale.getMessage())) return;
+      if ("STALE_CLAIM".equals(stale.getMessage())
+          || "TASK_RUN_NOT_BOUND".equals(stale.getMessage())) return;
       throw stale;
     }
     var item = claim.item();
-    if (!page.range().path().equals(item.path()) || !page.range().version().equals(item.version())
-        || page.range().span().start() != item.start() || page.range().span().end() != item.end())
+    if (!page.range().path().equals(item.path())
+        || !page.range().version().equals(item.version())
+        || page.range().span().start() != item.start()
+        || page.range().span().end() != item.end())
       throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
     work.delivered(taskScope(owner), claim, page.range().contentHash());
   }
