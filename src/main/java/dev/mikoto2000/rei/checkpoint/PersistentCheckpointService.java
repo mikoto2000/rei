@@ -1001,10 +1001,13 @@ public class PersistentCheckpointService implements AutoCloseable {
       if (TaskState.STATUS_BLOCKED.equals(task.status())) fields.put("blockers", task.pending());
     }
     var files = new LinkedHashMap<>(repository.fields(fields).files());
+    var capturedFiles = new java.util.HashSet<Path>();
     var set = working.getIfAvailable();
     if (set != null)
-      for (var file : set.getFiles())
-        files.put(file.path(), CheckpointReconciler.fingerprint(Path.of(file.path())));
+      for (var file : set.getFiles()) {
+        var path = Path.of(file.path()).toAbsolutePath().normalize();
+        if (capturedFiles.add(path)) files.put(file.path(), CheckpointReconciler.fingerprint(path));
+      }
     var checkpoint = legacy.getIfAvailable();
     if (checkpoint != null)
       checkpoint
@@ -1014,7 +1017,8 @@ public class PersistentCheckpointService implements AutoCloseable {
                 if (c.workingFiles() != null)
                   for (String path : c.workingFiles()) {
                     Path resolved = context.projectRoot().resolve(path).normalize();
-                    files.put(resolved.toString(), CheckpointReconciler.fingerprint(resolved));
+                    if (capturedFiles.add(resolved.toAbsolutePath().normalize()))
+                      files.put(resolved.toString(), CheckpointReconciler.fingerprint(resolved));
                   }
                 if (c.resumeHint() != null
                     && Objects.equals(checkpoint.ownerRunId(), context.runId()))
