@@ -199,11 +199,12 @@ public final class ReviewTools {
             taskId,
             owner.runId(),
             (item, source) -> {
+              var positions = new SourcePositions(source);
               int low = item.start(), high = Math.min(item.end(), item.start() + tokenBudget * 4);
               while (low < high) {
                 int middle = low + (high - low + 1) / 2;
-                if (estimate(durablePage(item, "0".repeat(36), source, middle)) <= tokenBudget)
-                  low = middle;
+                if (estimate(durablePage(item, "0".repeat(36), source, middle, positions))
+                    <= tokenBudget) low = middle;
                 else high = middle - 1;
               }
               if (low > item.start()
@@ -211,7 +212,8 @@ public final class ReviewTools {
                   && Character.isHighSurrogate(source.charAt(low - 1))
                   && Character.isLowSurrogate(source.charAt(low))) low--;
               if (low == item.start() && low < item.end()
-                  || estimate(durablePage(item, "0".repeat(36), source, low)) > tokenBudget)
+                  || estimate(durablePage(item, "0".repeat(36), source, low, positions))
+                      > tokenBudget)
                 throw new IllegalArgumentException("REVIEW_PAGE_BUDGET_TOO_SMALL");
               return low;
             });
@@ -250,17 +252,28 @@ public final class ReviewTools {
 
   private Page durablePage(
       dev.mikoto2000.rei.durable.WorkItemStore.Item item, String attempt, String source, int end) {
-    int[] from = position(source, item.start()), to = position(source, end);
-    return page(
+    return durablePage(item, attempt, source, end, new SourcePositions(source));
+  }
+
+  private Page durablePage(
+      dev.mikoto2000.rei.durable.WorkItemStore.Item item,
+      String attempt,
+      String source,
+      int end,
+      SourcePositions positions) {
+    int[] from = positions.at(item.start()), to = positions.at(end);
+    return pageAt(
         "durable:" + item.id() + ":" + attempt,
         new Target(
             item.path(),
             item.version(),
-            position(source, source.length())[0],
+            positions.at(source.length())[0],
             List.of(new Span(item.start(), end, from[0], to[0], from[1], to[1]))),
         source,
         item.start(),
-        end);
+        end,
+        from,
+        to);
   }
 
   @Tool(
@@ -383,7 +396,9 @@ public final class ReviewTools {
             && Character.isHighSurrogate(source.charAt(offset - 1))
             && Character.isLowSurrogate(source.charAt(offset)))
       throw new IllegalArgumentException("INVALID_CURSOR");
-    var page = sizedPage(reviewJobId, target, source, offset, tokenBudget, null);
+    var page =
+        sizedPage(
+            reviewJobId, target, source, new SourcePositions(source), offset, tokenBudget, null);
     ledger.fetched(reviewJobId, scope, page.range());
     return page;
   }
@@ -427,7 +442,9 @@ public final class ReviewTools {
                   estimate(pages) + (totalTokenBudget - estimate(pages)) / (count - i));
       Page page;
       try {
-        page = sizedPage(reviewJobId, target, source.text(), offset, allowance, pages);
+        page =
+            sizedPage(
+                reviewJobId, target, source.text(), source.positions(), offset, allowance, pages);
       } catch (IllegalStateException insufficient) {
         if (pages.isEmpty()) throw insufficient;
         break;
@@ -446,6 +463,7 @@ public final class ReviewTools {
       String reviewJobId,
       Target target,
       String source,
+      SourcePositions positions,
       int offset,
       int tokenBudget,
       List<Page> prefix) {
@@ -453,15 +471,17 @@ public final class ReviewTools {
     if (maxEnd > offset
         && maxEnd < source.length()
         && Character.isLowSurrogate(source.charAt(maxEnd))) maxEnd--;
+    int[] from = positions.at(offset);
     int low = 0, high = source.codePointCount(offset, maxEnd);
     while (low < high) {
       int middle = low + (high - low + 1) / 2;
-      var candidate =
-          page(reviewJobId, target, source, offset, source.offsetByCodePoints(offset, middle));
+      int end = source.offsetByCodePoints(offset, middle);
+      var candidate = pageAt(reviewJobId, target, source, offset, end, from, positions.at(end));
       if (estimatePages(prefix, candidate) <= tokenBudget) low = middle;
       else high = middle - 1;
     }
-    var page = page(reviewJobId, target, source, offset, source.offsetByCodePoints(offset, low));
+    int end = source.offsetByCodePoints(offset, low);
+    var page = pageAt(reviewJobId, target, source, offset, end, from, positions.at(end));
     if (estimatePages(prefix, page) > tokenBudget || low == 0 && offset < source.length())
       throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT");
     return page;
@@ -528,8 +548,8 @@ public final class ReviewTools {
           || finding.location().end() > range.span().end()
           || finding.location().end() > source.text().length())
         throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
-      int[] from = position(source.text(), finding.location().start()),
-          to = position(source.text(), finding.location().end());
+      int[] from = source.positions().at(finding.location().start()),
+          to = source.positions().at(finding.location().end());
       if (finding.location().startLine() != from[0]
           || finding.location().endLine() != to[0]
           || finding.location().startOffset() != from[1]
@@ -725,8 +745,8 @@ public final class ReviewTools {
         throw new ReviewResultRejectedException(
             "No assessment was accepted. Each evidence quote must match exactly once inside this delivered page; supply a longer unique quote if needed.");
       int end = start + quote.length();
-      var from = position(source, start);
-      var to = position(source, end);
+      var from = snapshot.positions().at(start);
+      var to = snapshot.positions().at(end);
       located.add(
           new Finding(
               finding.id(),
@@ -780,7 +800,30 @@ public final class ReviewTools {
     return validateSources(reviewJobId, java.util.Set.of()).job();
   }
 
-  private record Source(String version, String text) {}
+  /** Operation-local decoded text; build coordinates only when a page or quote needs them. */
+  private static final class Source {
+    private final String version;
+    private final String text;
+    private SourcePositions positions;
+
+    private Source(String version, String text) {
+      this.version = version;
+      this.text = text;
+    }
+
+    private String version() {
+      return version;
+    }
+
+    private String text() {
+      return text;
+    }
+
+    private SourcePositions positions() {
+      if (positions == null) positions = new SourcePositions(text);
+      return positions;
+    }
+  }
 
   private Source readSource(String path) throws java.io.IOException {
     var snapshot = files.get().reviewSnapshot(path);
@@ -1050,9 +1093,8 @@ public final class ReviewTools {
     if (!pages.isEmpty()) confirmed(owner, pages);
   }
 
-  /** 変更内容のレビューで用いるページを返す。 */
-  private Page page(String job, Target target, String source, int start, int end) {
-    int[] from = position(source, start), to = position(source, end);
+  private Page pageAt(
+      String job, Target target, String source, int start, int end, int[] from, int[] to) {
     String body = source.substring(start, end);
     return new Page(
         job,
