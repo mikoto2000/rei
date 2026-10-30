@@ -266,7 +266,8 @@ public class RunExecutionContext {
               && (!reviewPagePending
                   || !reviewPageReadKey.matches("readReview(File|Pages):[0-9a-f]{64}"))
           || reviewPageReadArguments != null
-              && (reviewPageReadArguments.length() > 4096
+              && (reviewPageReadKey == null
+                  || reviewPageReadArguments.length() > 4096
                   || !ProgressEvaluator.actionKey(
                           reviewPageReadKey.split(":", 2)[0], reviewPageReadArguments)
                       .equals(reviewPageReadKey))
