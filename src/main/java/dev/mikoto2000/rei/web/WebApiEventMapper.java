@@ -82,6 +82,31 @@ public final class WebApiEventMapper {
           case WORKING_SET_SEARCH_COMPLETED ->
               "searchId durationMs hitCount candidateCount selectedCount alreadyPresentCount workingSetSizeBefore workingSetSizeAfter";
           case WORKING_SET_CONTEXT_INJECTED -> "itemCount contextCharacters";
+          case DEPENDENCY_FAILED, DEPENDENCY_CANCELLED -> "dependencyId state";
+          case TASK_FAILED -> "taskId error";
+          case WORK_CONTEXT_UPDATED, WORK_CONTEXT_UPDATE_FAILED -> "status revision";
+          case COMPUTER_USE_PROGRESS -> "step phase action target x y confidence reason";
+          case EXECUTION_STARTED, EXECUTION_COMPLETED, EXECUTION_FAILED, EXECUTION_CANCELLED ->
+              "executionId executionType status request output";
+          case HISTORY_SEARCH_COMPLETED ->
+              "scope currentProjectHitCount crossProjectHitCount searchedProjectCount";
+          case CONTEXT_INJECTED -> "source itemCount contextCharacters";
+          case CONTEXT_BUDGET_EVALUATED -> "totalTokens inputBudget included dropped";
+          case CONTEXT_BUDGET_TRIMMED -> "dropped";
+          case FILE_SUMMARY_SAVED -> "path summaryCharacters";
+          case FILE_SUMMARY_INVALIDATED, FILE_SUMMARY_STALE_SKIPPED, FILE_CREATED, FILE_DELETED ->
+              "path";
+          case FILE_MODIFIED -> "path addedLines removedLines";
+          case BACKGROUND_PROCESS_STARTED -> "processId pid";
+          case BACKGROUND_PROCESS_COMPLETED, BACKGROUND_PROCESS_KILLED ->
+              "processId exitCode elapsedSeconds";
+          case BACKGROUND_PROCESS_FAILED -> "processId error";
+          case DELEGATION_STARTED, DELEGATION_COMPLETED, DELEGATION_FAILED, DELEGATION_CANCELLED ->
+              "agent summary";
+          case TOPIC_CANDIDATES_REFRESHED -> "candidateCount topics";
+          case TOPIC_SPOKEN -> "candidateId messageId";
+          case TOPIC_SPEAK_SKIPPED, TOPIC_AUTO_SPEAK_SUPPRESSED -> "candidateId reason";
+          case TOPIC_GENERATION_FAILED -> "stage errorSummary";
           default -> "";
         };
     return names.isEmpty() ? Set.of() : Set.of(names.split(" "));

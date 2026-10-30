@@ -54,7 +54,7 @@ class RunEventOutputTest {
         "agent.run.failed",
         BackendClient.JSON.readTree(
             "{\"error\":{\"message\":null,\"errorType\":\"IOException\",\"code\":null}}"));
-    assertEquals(List.of("[agent.run.failed] 原因: IOException"), lines);
+    assertEquals(List.of("[agent] failed: IOException"), lines);
   }
 
   /** 軽量CLIでの対話で、秘密情報の保護と利用範囲が契約に従うことを確認する。 */
@@ -65,8 +65,7 @@ class RunEventOutputTest {
         BackendClient.JSON.readTree(
             "{\"error\":{\"message\":\"approval denied token=hidden\",\"code\":\"approval_denied\"}}"));
     assertEquals(
-        List.of("[agent.run.cancelled] 原因: [approval_denied] approval denied token=[REDACTED]"),
-        lines);
+        List.of("[agent] cancelled: [approval_denied] approval denied token=[REDACTED]"), lines);
   }
 
   /** 空白のツール失敗情報引き続きについて、例外種別を伝えることを確認する。 */
@@ -76,7 +75,7 @@ class RunEventOutputTest {
         "tool.failed",
         BackendClient.JSON.readTree(
             "{\"toolName\":\"readFile\",\"error\":{\"message\":\"\",\"errorType\":\"AccessDeniedException\"}}"));
-    assertEquals(List.of("✗ readFile: AccessDeniedException"), lines);
+    assertEquals(List.of("  ✗ readFile: AccessDeniedException"), lines);
   }
 
   /** 軽量CLIでの対話の操作が、指定された権限・承認条件に従うことを確認する。 */
@@ -87,7 +86,7 @@ class RunEventOutputTest {
         BackendClient.JSON.readTree(
             "{\"toolName\":\"delegateTask\",\"error\":{\"message\":\"PERMISSION_DENIED (ACCOUNT_REQUIRED: accountRef を指定してください。)\"}}"));
     assertEquals(
-        List.of("✗ delegateTask: PERMISSION_DENIED (ACCOUNT_REQUIRED: accountRef を指定してください。)"),
+        List.of("  ✗ delegateTask: PERMISSION_DENIED (ACCOUNT_REQUIRED: accountRef を指定してください。)"),
         lines);
   }
 
@@ -99,7 +98,9 @@ class RunEventOutputTest {
         BackendClient.JSON.readTree(
             "{\"agentId\":\"reviewer\",\"status\":\"FAILED\",\"subAgentRunId\":\"child\",\"failureReason\":\"SEND_LIMIT: 資料を分割してください。\"}"));
     assertEquals(
-        List.of("[subagent] reviewer FAILED [child]", "[subagent] 原因: SEND_LIMIT: 資料を分割してください。"),
+        List.of(
+            "[subagent] reviewer failed (0.0 s) [child]",
+            "[subagent] 原因: SEND_LIMIT: 資料を分割してください。"),
         lines);
   }
 
@@ -119,6 +120,42 @@ class RunEventOutputTest {
 
   /** 検証に使う記録日時。 */
   private final java.time.Instant timestamp = java.time.Instant.parse("2026-10-12T11:34:56Z");
+
+  @Test
+  void runToolAndLlmProgressUseReadableShellLinesWithMetrics() throws Exception {
+    output.accept("agent.run.started", BackendClient.JSON.createObjectNode());
+    output.accept(
+        "llm.request.started",
+        BackendClient.JSON.readTree("{\"requestId\":\"r\",\"feature\":\"chat\"}"));
+    output.accept("llm.response.first_token", BackendClient.JSON.readTree("{\"durationMs\":123}"));
+    event("message.delta", "m", "確認します。");
+    output.accept(
+        "llm.response.completed",
+        BackendClient.JSON.readTree("{\"requestId\":\"r\",\"durationMs\":600}"));
+    output.accept(
+        "tool.started",
+        BackendClient.JSON.readTree(
+            "{\"toolName\":\"readFile\",\"argumentsSummary\":\"a.txt\\n line=1\"}"));
+    output.accept(
+        "tool.completed",
+        BackendClient.JSON.readTree("{\"toolName\":\"readFile\",\"duration\":25}"));
+    output.accept("checkpoint.saved", BackendClient.JSON.createObjectNode());
+    output.accept(
+        "agent.run.completed",
+        BackendClient.JSON.readTree(
+            "{\"duration\":2500,\"completionTokens\":30,\"timeToFirstTokenMillis\":123.0,\"outputTokensPerSecond\":20.0,\"endToEndTokensPerSecond\":12.0}"));
+    assertEquals(
+        List.of(
+            "[agent] running",
+            "[llm] request sent (chat)",
+            "[llm] first token (123 ms)",
+            "確認します。",
+            "[llm] response received (chat, 600 ms)",
+            "  → readFile a.txt line=1",
+            "  ✓ readFile (25 ms)",
+            "[agent] completed (2.5 s, 30 tokens, TTFT 123.0 ms, output 20.0 tok/s, end-to-end 12.0 tok/s)"),
+        lines);
+  }
 
   /** 検証で使用するイベントを、指定された条件に合わせて用意する。 */
   private void event(String type, String id, String text) throws Exception {
@@ -202,12 +239,7 @@ class RunEventOutputTest {
     output.accept("task.started", BackendClient.JSON.readTree("{\"taskId\":\"task\"}"));
     event("message.delta", "m", "続き");
     event("message.completed", "m", "途中続き");
-    assertEquals(
-        List.of(
-            "途中続き",
-            "llm.request.started: {\"feature\":\"chat\"}",
-            "task.started: {\"taskId\":\"task\"}"),
-        lines);
+    assertEquals(List.of("途中続き", "[llm] request sent (chat)"), lines);
   }
 
   /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
@@ -226,8 +258,8 @@ class RunEventOutputTest {
     assertEquals(
         List.of(
             "現実的な使い方だと思うよ。",
-            "llm.response.completed: {\"durationMs\":72342}",
-            "stagnation.updated: {\"consecutiveNoProgressIterations\":1}"),
+            "[llm] response received (, 72342 ms)",
+            "[stagnation] no progress: 1/0"),
         lines);
   }
 
@@ -239,7 +271,7 @@ class RunEventOutputTest {
     assertEquals(List.of("最初の行"), lines);
     event("message.delta", "m", "次の行");
     event("message.completed", "m", "最初の行\n次の行");
-    assertEquals(List.of("最初の行", "次の行", "stagnation.updated: {}"), lines);
+    assertEquals(List.of("最初の行", "次の行", "[stagnation] no progress: 0/0"), lines);
   }
 
   /** 軽量CLIでの対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
@@ -250,7 +282,7 @@ class RunEventOutputTest {
     output.accept("agent.run.cancelled", BackendClient.JSON.createObjectNode());
     event("message.completed", "next", "次の回答");
     assertEquals(
-        List.of("途中", "stagnation.updated: {}", "[agent.run.cancelled] 原因: 原因の詳細がありません。", "次の回答"),
+        List.of("途中", "[stagnation] no progress: 0/0", "[agent] cancelled: 原因の詳細がありません。", "次の回答"),
         lines);
   }
 
@@ -278,7 +310,7 @@ class RunEventOutputTest {
     output.accept("llm.response.completed", BackendClient.JSON.createObjectNode());
     output.flush();
     output.flush();
-    assertEquals(List.of("未完了", "llm.response.completed: {}"), lines);
+    assertEquals(List.of("未完了", "[llm] response received (, 0 ms)"), lines);
   }
 
   /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
@@ -287,6 +319,6 @@ class RunEventOutputTest {
     event("message.delta", "m", "確認します。");
     output.accept("llm.response.completed", BackendClient.JSON.createObjectNode());
     output.accept("tool.started", BackendClient.JSON.createObjectNode());
-    assertEquals(List.of("確認します。", "llm.response.completed: {}", "tool.started: {}"), lines);
+    assertEquals(List.of("確認します。", "[llm] response received (, 0 ms)", "  → "), lines);
   }
 }

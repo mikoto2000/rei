@@ -58,7 +58,19 @@ public final class TerminalClient implements AutoCloseable {
   private volatile String project, session;
 
   /** プロジェクト名前／実行。 */
-  private String projectName = "none", run;
+  private volatile String projectName = "none";
+
+  private String run;
+
+  /** Backend 全体の実行数。未取得・切断時は不明とする。 */
+  private volatile String runningCount = "?";
+
+  private final ScheduledExecutorService statusUpdates =
+      Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
+
+  private volatile boolean normalPrompt;
+
+  private static final String REFRESH_PROMPT = "rei-client-status";
 
   /** 現在モデル。 */
   private String currentModel = "unknown";
@@ -142,6 +154,28 @@ public final class TerminalClient implements AutoCloseable {
     menuReader.setHistory(memory);
     menuReader.setCompleter(this::complete);
     reader = menuReader;
+    reader
+        .getWidgets()
+        .put(
+            REFRESH_PROMPT,
+            () -> {
+              if (normalPrompt && reader instanceof org.jline.reader.impl.LineReaderImpl impl) {
+                impl.setPrompt(buildPrompt(java.time.LocalTime.now()));
+                impl.redisplay();
+              }
+              return true;
+            });
+    var priorInit = reader.getWidgets().get(LineReader.CALLBACK_INIT);
+    reader
+        .getWidgets()
+        .put(
+            LineReader.CALLBACK_INIT,
+            () -> {
+              if (priorInit != null) priorInit.apply();
+              if (normalPrompt && reader instanceof org.jline.reader.impl.LineReaderImpl impl)
+                impl.setPrompt(buildPrompt(java.time.LocalTime.now()));
+              return true;
+            });
     reader.setVariable(LineReader.HISTORY_SIZE, 1000);
     reader.setVariable(LineReader.HISTORY_FILE_SIZE, 1000);
     reader.setOpt(LineReader.Option.BRACKETED_PASTE);
@@ -308,13 +342,16 @@ public final class TerminalClient implements AutoCloseable {
               + dev.mikoto2000.rei.event.FailureMessages.describe(error));
     }
     out("Connected. /help lists commands. Ctrl+C detaches output; /cancel RUN_ID cancels a Run.");
+    statusUpdates.scheduleWithFixedDelay(this::refreshRunStatus, 0, 1, TimeUnit.SECONDS);
     while (true) {
       String line;
       try {
         approvalMenu.enabled(true);
+        normalPrompt = true;
         try {
           line = reader.readLine(buildPrompt(java.time.LocalTime.now()));
         } finally {
+          normalPrompt = false;
           approvalMenu.enabled(false);
         }
       } catch (UserInterruptException interrupt) {
@@ -338,17 +375,19 @@ public final class TerminalClient implements AutoCloseable {
               throw new IllegalArgumentException("Input capacity exceeded");
             paste.append(part).append('\n');
           }
+          printUserInput(paste.toString(), false);
           send(paste.toString());
           continue;
         }
         var message = new StringBuilder(line);
-        while (message.toString().endsWith("\\")) {
+        while (!line.stripLeading().startsWith("/") && message.toString().endsWith("\\")) {
           message.setLength(message.length() - 1);
           message.append('\n').append(reader.readLine("...> "));
           if (message.length() > 16384)
             throw new IllegalArgumentException("Input capacity exceeded");
         }
         history.record(message.toString());
+        printUserInput(message.toString());
         if (message.toString().stripLeading().startsWith("/")) command(message.toString().strip());
         else send(message.toString());
       } catch (BackendClient.UncertainAcceptanceException uncertain) {
@@ -1112,13 +1151,13 @@ public final class TerminalClient implements AutoCloseable {
                           if (!attached || generation != subscriptionGeneration.get()) return;
                           try {
                             var value = BackendClient.JSON.readTree(event.data());
-                            if (!id.equals(value.path("runId").asText()))
+                            boolean shutdown =
+                                event.type().equals("application.shutdown.started")
+                                    && value.path("runId").isNull();
+                            if (!id.equals(value.path("runId").asText()) && !shutdown)
                               throw new IllegalArgumentException("Event Run identity mismatch");
                             sequence.set(event.sequence());
-                            eventOutput.accept(
-                                event.type(),
-                                value.path("payload"),
-                                java.time.Instant.parse(value.path("timestamp").asText()));
+                            eventOutput.acceptEvent(event.type(), value);
                             if (event.type().equals("attention.required")
                                 && value
                                     .path("payload")
@@ -1136,10 +1175,11 @@ public final class TerminalClient implements AutoCloseable {
                                     match.group(1));
                             }
                             if (Set.of(
-                                    "agent.run.completed",
-                                    "agent.run.failed",
-                                    "agent.run.cancelled")
-                                .contains(event.type())) attached = false;
+                                        "agent.run.completed",
+                                        "agent.run.failed",
+                                        "agent.run.cancelled")
+                                    .contains(event.type())
+                                || shutdown) attached = false;
                           } catch (IOException invalid) {
                             throw new IllegalArgumentException("Malformed Run event");
                           }
@@ -1259,10 +1299,56 @@ public final class TerminalClient implements AutoCloseable {
 
   /** 利用先に渡せるよう、プロンプトを組み立てる。 */
   String buildPrompt(java.time.LocalTime time) {
-    return time.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
+    String name = safeOutput(projectName).replaceAll("[\\p{Cntrl}\\s]+", " ").strip();
+    if (name.codePointCount(0, name.length()) > 80)
+      name = name.substring(0, name.offsetByCodePoints(0, 77)) + "...";
+    return "["
+        + name
+        + "] ["
+        + runningCount
+        + " running]\n"
+        + time.format(java.time.format.DateTimeFormatter.ofPattern("HH:mm"))
         + " "
         + safeOutput(currentModel)
         + "> ";
+  }
+
+  /** 通常入力・コマンド・貼り付けで Shell と同じ入力枠を使う。 */
+  void printUserInput(String input) {
+    printUserInput(input, true);
+  }
+
+  private void printUserInput(String input, boolean commandInput) {
+    String root = input.stripLeading().split("\\s+", 2)[0];
+    if (commandInput && Set.of("/project", "/sh").contains(root)) return;
+    var frame =
+        dev.mikoto2000.rei.ui.shell.UserInputFrame.format(
+            safeOutput(input), java.time.LocalTime.now());
+    reader.printAbove(frame);
+  }
+
+  /** HTTP は JLine の入力ロック外で行い、表示だけを widget 内で更新する。 */
+  void refreshRunStatus() {
+    String count = "?";
+    try {
+      var value = backend.get("/api/v1/runs/active").path("count");
+      if (value.isIntegralNumber() && value.canConvertToInt() && value.asInt() >= 0)
+        count = value.asText();
+    } catch (InterruptedException interrupted) {
+      Thread.currentThread().interrupt();
+      return;
+    } catch (IOException | RuntimeException unavailable) {
+      // 接続断や旧 Backend では古い件数を表示し続けない。
+    }
+    boolean changed = !runningCount.equals(count);
+    runningCount = count;
+    if (changed && normalPrompt && reader.isReading()) {
+      try {
+        reader.callWidget(REFRESH_PROMPT);
+      } catch (IllegalStateException endedRead) {
+        // 入力完了と更新が競合した場合は次のプロンプトで反映する。
+      }
+    }
   }
 
   /** 軽量CLIでの対話で用いる安全性出力を返す。 */
@@ -1288,6 +1374,7 @@ public final class TerminalClient implements AutoCloseable {
   /** 軽量CLIでの対話で利用した資源や登録を解放し、利用を終了する。 */
   @Override
   public void close() throws IOException {
+    statusUpdates.shutdownNow();
     approvalMenu.close();
     attached = false;
     backend.detach();

@@ -31,6 +31,9 @@ public final class ActiveRunController {
    */
   public record Text(String text) {}
 
+  /** 一覧と同じスナップショットから得た実行数。 */
+  public record ActiveRuns(String text, int count) {}
+
   /**
    * Web APIによる操作で受け渡すキャンセルを表す。
    *
@@ -59,13 +62,14 @@ public final class ActiveRunController {
 
   /** 条件に合う対象を一覧にして、呼び出し元が参照できるようにする。 */
   @GetMapping("/api/v1/runs/active")
-  public Text list() {
+  public ActiveRuns list() {
     var rows = display.rows();
-    return new Text(
+    return new ActiveRuns(
         "Active Executions\n"
             + (rows.isEmpty()
                 ? "No active runs."
-                : "PROJECT  TYPE  STATUS  ELAPSED  REQUEST\n" + String.join("\n", rows)));
+                : "PROJECT  TYPE  STATUS  ELAPSED  REQUEST\n" + String.join("\n", rows)),
+        rows.size());
   }
 
   /** 対象の実行をキャンセルする。 */

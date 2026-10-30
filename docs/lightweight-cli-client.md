@@ -100,6 +100,18 @@ receipt 照会期間は7日。期限後は410で再実行しない。key hash �
 
 ## CLI の入力・コマンド
 
+プロンプトは従来 Shell と同じく `[プロジェクト名] [N running]` と時刻・モデル名の2行で表示する。
+Run 数は選択中の Session に限定せず Backend 全体の active executions を約1秒間隔で取得し、入力待ち中にも更新する。
+取得失敗時や件数フィールドのない旧 Backend では `? running` と表示する。
+通常入力、`/chat` などのコマンド、複数行入力、`/paste` は Shell と共通の時刻付き User 枠で表示する。
+Shell と同じく `/project` と `/sh` の入力枠は省略する。
+Run・LLM・ツール・Skill 選択・Subagent に加え、ファイル変更、Working Set、コンテキスト予算、
+進捗・停滞、バックグラウンド処理、話題通知なども Shell の表記に揃える。
+Shell の既定 summary 設定で非表示になる監査イベントは CLI でも表示しない。イベントの JSON fallback は使用しない。
+話題通知の抑制はイベントの発生時刻を使い、再接続・遅延表示でも30分の間隔を保つ。
+API が非公開とする内部根拠・検索語・任意の例外詳細などの公開範囲は維持し、公開される項目で通知を表示する。
+Receipt と Run ID の受付表示は維持する。
+
 JLine の入力編集、履歴、prompt、completion、末尾 `\` の複数行入力と `/paste`（単独 `.` で完了）を用意した。Tab は cached Project/Session ID と共通 `core.completion` の client-local path 補完を使う。Tab 中に HTTP / Storage 読み取りを実行しない。Shell と同じ純粋 tokenizer とパス補完を共有する。Root 宣言の引数・options・排他 group・alias・既定動作は起動時に取得したメタデータに保持し、Tab はキャッシュだけを使用する。
 
 全コマンドの詳細は [対応表](lightweight-cli-command-matrix.md)。`/help COMMAND [SUBCOMMAND]` で Picocli 形式のヘルプを表示する。裸の親コマンドは既存 Shell と同じくヘルプを表示し、既定動作を持つコマンドはその動作を実行する。

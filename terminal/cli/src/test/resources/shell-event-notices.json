@@ -1,0 +1,875 @@
+[
+  {
+    "type": "memory.auto-sleep.stopped",
+    "payloadType": "MemoryLifecyclePayload",
+    "payload": {
+      "status": "stopped"
+    },
+    "lines": [
+      "stopped"
+    ],
+    "requiredFields": [
+      "status"
+    ]
+  },
+  {
+    "type": "dependency.failed",
+    "payloadType": "DependencyStatusPayload",
+    "payload": {
+      "dependencyId": "d1",
+      "state": "FAILED"
+    },
+    "lines": [
+      "[dependency] d1 FAILED 理由: 原因の詳細がありません。"
+    ],
+    "requiredFields": [
+      "dependencyId",
+      "state"
+    ]
+  },
+  {
+    "type": "dependency.cancelled",
+    "payloadType": "DependencyStatusPayload",
+    "payload": {
+      "dependencyId": "d1",
+      "state": "FAILED"
+    },
+    "lines": [
+      "[dependency] d1 FAILED 理由: 原因の詳細がありません。"
+    ],
+    "requiredFields": [
+      "dependencyId",
+      "state"
+    ]
+  },
+  {
+    "type": "memory.sleep.failed",
+    "payloadType": "MemoryLifecyclePayload",
+    "payload": {
+      "status": "FAILED",
+      "sleepRunId": "sleep1"
+    },
+    "lines": [
+      "[memory.sleep] FAILED (sleep1)"
+    ],
+    "requiredFields": [
+      "status",
+      "sleepRunId"
+    ]
+  },
+  {
+    "type": "task.failed",
+    "payloadType": "TaskFailedPayload",
+    "payload": {
+      "taskId": "t1",
+      "error": {
+        "message": "Operation failed."
+      }
+    },
+    "lines": [
+      "[task] failed t1: Operation failed."
+    ],
+    "requiredFields": [
+      "taskId",
+      "error"
+    ]
+  },
+  {
+    "type": "goal.updated",
+    "payloadType": "GoalLifecyclePayload",
+    "payload": {
+      "goalId": "g1",
+      "status": "RUNNING",
+      "attempts": 1,
+      "maxRuns": 5,
+      "llmCallsUsed": 3,
+      "maxLlmCalls": 20
+    },
+    "lines": [
+      "[goal] g1 RUNNING runs=1/5 llm=3/20"
+    ],
+    "requiredFields": [
+      "goalId",
+      "status",
+      "attempts",
+      "maxRuns",
+      "llmCallsUsed",
+      "maxLlmCalls"
+    ]
+  },
+  {
+    "type": "work_context.updated",
+    "payloadType": "WorkContextPayload",
+    "payload": {
+      "status": "UPDATED",
+      "revision": 7
+    },
+    "lines": [
+      "[work_context.updated] UPDATED revision=7"
+    ],
+    "requiredFields": [
+      "status",
+      "revision"
+    ]
+  },
+  {
+    "type": "work_context.update.failed",
+    "payloadType": "WorkContextPayload",
+    "payload": {
+      "status": "UPDATED",
+      "revision": 7
+    },
+    "lines": [
+      "[work_context.update.failed] UPDATED revision=7"
+    ],
+    "requiredFields": [
+      "status",
+      "revision"
+    ]
+  },
+  {
+    "type": "application.shutdown.started",
+    "payloadType": "ApplicationShutdownStartedPayload",
+    "payload": {
+      "reason": "shutdown"
+    },
+    "lines": [
+      "[application] グレースフルシャットダウンを開始します。"
+    ],
+    "requiredFields": [
+      "reason"
+    ]
+  },
+  {
+    "type": "computer_use.progress",
+    "payloadType": "ComputerUseProgressPayload",
+    "payload": {
+      "step": 2,
+      "phase": "click",
+      "action": "click",
+      "target": "button",
+      "x": 10,
+      "y": 20,
+      "confidence": 0.8,
+      "reason": "ready"
+    },
+    "lines": [
+      "[computer_use] step=2 click click button (10,20) confidence=0.8 ready"
+    ],
+    "requiredFields": [
+      "step",
+      "phase",
+      "action",
+      "target",
+      "x",
+      "y",
+      "confidence",
+      "reason"
+    ]
+  },
+  {
+    "type": "execution.started",
+    "payloadType": "BackgroundExecutionPayload",
+    "payload": {
+      "executionType": "SUMMARIZE",
+      "executionId": "exec1",
+      "status": "RUNNING",
+      "request": "summarize page",
+      "output": "report"
+    },
+    "lines": [
+      "[summarize.started] project1 (exec1)",
+      "Source / request: summarize page",
+      "report"
+    ],
+    "requiredFields": [
+      "executionType",
+      "executionId",
+      "status",
+      "request",
+      "output"
+    ]
+  },
+  {
+    "type": "execution.completed",
+    "payloadType": "BackgroundExecutionPayload",
+    "payload": {
+      "executionType": "SUMMARIZE",
+      "executionId": "exec1",
+      "status": "COMPLETED",
+      "request": "summarize page",
+      "output": "report"
+    },
+    "lines": [
+      "[summarize.completed] project1 (exec1)",
+      "Source / request: summarize page",
+      "report"
+    ],
+    "requiredFields": [
+      "executionType",
+      "executionId",
+      "status",
+      "request",
+      "output"
+    ]
+  },
+  {
+    "type": "execution.failed",
+    "payloadType": "BackgroundExecutionPayload",
+    "payload": {
+      "executionType": "SUMMARIZE",
+      "executionId": "exec1",
+      "status": "TIMED_OUT",
+      "request": "summarize page",
+      "output": "report"
+    },
+    "lines": [
+      "[summarize.failed] project1 (exec1)",
+      "Source / request: summarize page",
+      "Status: TIMED_OUT",
+      "report"
+    ],
+    "requiredFields": [
+      "executionType",
+      "executionId",
+      "status",
+      "request",
+      "output"
+    ]
+  },
+  {
+    "type": "execution.cancelled",
+    "payloadType": "BackgroundExecutionPayload",
+    "payload": {
+      "executionType": "SUMMARIZE",
+      "executionId": "exec1",
+      "status": "CANCELLED",
+      "request": "summarize page",
+      "output": "report"
+    },
+    "lines": [
+      "[summarize.cancelled] project1 (exec1)",
+      "Source / request: summarize page",
+      "report"
+    ],
+    "requiredFields": [
+      "executionType",
+      "executionId",
+      "status",
+      "request",
+      "output"
+    ]
+  },
+  {
+    "type": "history.search.completed",
+    "payloadType": "HistorySearchCompletedPayload",
+    "payload": {
+      "scope": "all",
+      "currentProjectHitCount": 2,
+      "crossProjectHitCount": 3,
+      "searchedProjectCount": 4
+    },
+    "lines": [
+      "[history.search] scope=all currentHits=2 crossProjectHits=3 projectsSearched=4"
+    ],
+    "requiredFields": [
+      "scope",
+      "currentProjectHitCount",
+      "crossProjectHitCount",
+      "searchedProjectCount"
+    ]
+  },
+  {
+    "type": "user.intervention.received",
+    "payloadType": "UserInterventionPayload",
+    "payload": {},
+    "lines": [
+      "[user] guidance queued"
+    ],
+    "requiredFields": []
+  },
+  {
+    "type": "user.intervention.applied",
+    "payloadType": "UserInterventionPayload",
+    "payload": {},
+    "lines": [
+      "[user] guidance applied"
+    ],
+    "requiredFields": []
+  },
+  {
+    "type": "stagnation.updated",
+    "payloadType": "ExecutionProgressPayload",
+    "payload": {
+      "consecutiveNoProgressIterations": 2,
+      "threshold": 4,
+      "stagnationReplanCount": 1,
+      "maxStagnationReplans": 3
+    },
+    "lines": [
+      "[stagnation] no progress: 2/4"
+    ],
+    "requiredFields": [
+      "consecutiveNoProgressIterations",
+      "threshold",
+      "stagnationReplanCount",
+      "maxStagnationReplans"
+    ]
+  },
+  {
+    "type": "stagnation.detected",
+    "payloadType": "ExecutionProgressPayload",
+    "payload": {
+      "consecutiveNoProgressIterations": 2,
+      "threshold": 4,
+      "stagnationReplanCount": 1,
+      "maxStagnationReplans": 3
+    },
+    "lines": [
+      "[stagnation] threshold reached"
+    ],
+    "requiredFields": [
+      "consecutiveNoProgressIterations",
+      "threshold",
+      "stagnationReplanCount",
+      "maxStagnationReplans"
+    ]
+  },
+  {
+    "type": "stagnation.replan_requested",
+    "payloadType": "ExecutionProgressPayload",
+    "payload": {
+      "consecutiveNoProgressIterations": 2,
+      "threshold": 4,
+      "stagnationReplanCount": 1,
+      "maxStagnationReplans": 3
+    },
+    "lines": [
+      "[stagnation] replanning (1/3)"
+    ],
+    "requiredFields": [
+      "consecutiveNoProgressIterations",
+      "threshold",
+      "stagnationReplanCount",
+      "maxStagnationReplans"
+    ]
+  },
+  {
+    "type": "stagnation.recovered",
+    "payloadType": "ExecutionProgressPayload",
+    "payload": {
+      "consecutiveNoProgressIterations": 2,
+      "threshold": 4,
+      "stagnationReplanCount": 1,
+      "maxStagnationReplans": 3
+    },
+    "lines": [
+      "[stagnation] recovered: meaningful progress detected"
+    ],
+    "requiredFields": [
+      "consecutiveNoProgressIterations",
+      "threshold",
+      "stagnationReplanCount",
+      "maxStagnationReplans"
+    ]
+  },
+  {
+    "type": "stagnation.stopped",
+    "payloadType": "ExecutionProgressPayload",
+    "payload": {
+      "consecutiveNoProgressIterations": 2,
+      "threshold": 4,
+      "stagnationReplanCount": 1,
+      "maxStagnationReplans": 3
+    },
+    "lines": [
+      "[stagnation] repeated after replanning -> stopped (STAGNATED)"
+    ],
+    "requiredFields": [
+      "consecutiveNoProgressIterations",
+      "threshold",
+      "stagnationReplanCount",
+      "maxStagnationReplans"
+    ]
+  },
+  {
+    "type": "stagnation.updated",
+    "payloadType": "ExecutionProgressPayload",
+    "payload": {
+      "reason": "waiting_for_dependency"
+    },
+    "lines": [
+      "[waiting] awaiting dependency"
+    ],
+    "requiredFields": [
+      "reason"
+    ]
+  },
+  {
+    "type": "memory.consolidation.suggested",
+    "payloadType": "MemoryConsolidationSuggestedPayload",
+    "payload": {},
+    "lines": [
+      "[memory] 記憶整理を実行することをお勧めします。/memory consolidate を実行してください。"
+    ],
+    "requiredFields": []
+  },
+  {
+    "type": "working_set.item.added",
+    "payloadType": "WorkingSetItemAddedPayload",
+    "payload": {
+      "itemId": "f1",
+      "identifier": "src/main.java",
+      "path": "src/main.java"
+    },
+    "lines": [
+      "[working-set] + main.java"
+    ],
+    "requiredFields": [
+      "itemId",
+      "identifier",
+      "path"
+    ]
+  },
+  {
+    "type": "working_set.item.removed",
+    "payloadType": "WorkingSetItemRemovedPayload",
+    "payload": {
+      "itemId": "f1"
+    },
+    "lines": [
+      "[working-set] - f1"
+    ],
+    "requiredFields": [
+      "itemId"
+    ]
+  },
+  {
+    "type": "working_set.search.started",
+    "payloadType": "WorkingSetSearchStartedPayload",
+    "payload": {},
+    "lines": [
+      "[working-set] → search \"\""
+    ],
+    "requiredFields": []
+  },
+  {
+    "type": "working_set.search.completed",
+    "payloadType": "WorkingSetSearchCompletedPayload",
+    "payload": {
+      "hitCount": 8,
+      "candidateCount": 5,
+      "selectedCount": 2,
+      "alreadyPresentCount": 1,
+      "durationMs": 45
+    },
+    "lines": [
+      "[working-set] ✓ 8 hits → 5 candidates → 2 selected, 1 already present (45 ms)"
+    ],
+    "requiredFields": [
+      "hitCount",
+      "candidateCount",
+      "selectedCount",
+      "alreadyPresentCount",
+      "durationMs"
+    ]
+  },
+  {
+    "type": "working_set.context.injected",
+    "payloadType": "WorkingSetContextInjectedPayload",
+    "payload": {
+      "itemCount": 2,
+      "contextCharacters": 250
+    },
+    "lines": [
+      "[working-set] injected 2 items into context (250 chars)"
+    ],
+    "requiredFields": [
+      "itemCount",
+      "contextCharacters"
+    ]
+  },
+  {
+    "type": "context.injected",
+    "payloadType": "ContextInjectedPayload",
+    "payload": {
+      "source": "WORKING_SET",
+      "itemCount": 2,
+      "contextCharacters": 250
+    },
+    "lines": [
+      "[context] injected working_set, 2 items (250 chars)"
+    ],
+    "requiredFields": [
+      "source",
+      "itemCount",
+      "contextCharacters"
+    ]
+  },
+  {
+    "type": "context.budget.evaluated",
+    "payloadType": "ContextBudgetEvaluatedPayload",
+    "payload": {
+      "totalTokens": 900,
+      "inputBudget": 1000,
+      "included": [
+        "history",
+        "memory"
+      ],
+      "dropped": [
+        "file"
+      ]
+    },
+    "lines": [
+      "[context] budget evaluated: 900/1000 tokens, included 2, dropped 1"
+    ],
+    "requiredFields": [
+      "totalTokens",
+      "inputBudget",
+      "included",
+      "dropped"
+    ]
+  },
+  {
+    "type": "context.budget.trimmed",
+    "payloadType": "ContextBudgetTrimmedPayload",
+    "payload": {
+      "dropped": [
+        "file",
+        "memory"
+      ]
+    },
+    "lines": [
+      "[context] budget trimmed: dropped file, memory"
+    ],
+    "requiredFields": [
+      "dropped"
+    ]
+  },
+  {
+    "type": "file_summary.saved",
+    "payloadType": "FileSummarySavedPayload",
+    "payload": {
+      "path": "C:\\src\\main.java",
+      "summaryCharacters": 120
+    },
+    "lines": [
+      "[file-summary] saved main.java (120 chars)"
+    ],
+    "requiredFields": [
+      "path",
+      "summaryCharacters"
+    ]
+  },
+  {
+    "type": "file_summary.invalidated",
+    "payloadType": "FileSummaryInvalidatedPayload",
+    "payload": {
+      "path": "src/main.java"
+    },
+    "lines": [
+      "[file-summary] invalidated main.java"
+    ],
+    "requiredFields": [
+      "path"
+    ]
+  },
+  {
+    "type": "file_summary.stale_skipped",
+    "payloadType": "FileSummaryStaleSkippedPayload",
+    "payload": {
+      "path": "src/main.java"
+    },
+    "lines": [
+      "[file-summary] skipped stale main.java"
+    ],
+    "requiredFields": [
+      "path"
+    ]
+  },
+  {
+    "type": "file.created",
+    "payloadType": "FileCreatedPayload",
+    "payload": {
+      "path": "src/main.java"
+    },
+    "lines": [
+      "[file] created main.java"
+    ],
+    "requiredFields": [
+      "path"
+    ]
+  },
+  {
+    "type": "file.deleted",
+    "payloadType": "FileDeletedPayload",
+    "payload": {
+      "path": "src/main.java"
+    },
+    "lines": [
+      "[file] deleted main.java"
+    ],
+    "requiredFields": [
+      "path"
+    ]
+  },
+  {
+    "type": "file.modified",
+    "payloadType": "FileModifiedPayload",
+    "payload": {
+      "path": "src/main.java",
+      "addedLines": 3,
+      "removedLines": 1
+    },
+    "lines": [
+      "[file] modified main.java (+3/-1)"
+    ],
+    "requiredFields": [
+      "path",
+      "addedLines",
+      "removedLines"
+    ]
+  },
+  {
+    "type": "background_process.started",
+    "payloadType": "BackgroundProcessStartedPayload",
+    "payload": {
+      "processId": "p1",
+      "pid": 123
+    },
+    "lines": [
+      "[process] started p1 pid=123"
+    ],
+    "requiredFields": [
+      "processId",
+      "pid"
+    ]
+  },
+  {
+    "type": "background_process.completed",
+    "payloadType": "BackgroundProcessCompletedPayload",
+    "payload": {
+      "processId": "p1",
+      "exitCode": 0,
+      "elapsedSeconds": 1.25
+    },
+    "lines": [
+      "[process] completed p1 exit=0 (1.3 s)"
+    ],
+    "requiredFields": [
+      "processId",
+      "exitCode",
+      "elapsedSeconds"
+    ]
+  },
+  {
+    "type": "background_process.killed",
+    "payloadType": "BackgroundProcessKilledPayload",
+    "payload": {
+      "processId": "p1",
+      "exitCode": 0,
+      "elapsedSeconds": 1.25
+    },
+    "lines": [
+      "[process] killed p1 exit=0 (1.3 s)"
+    ],
+    "requiredFields": [
+      "processId",
+      "exitCode",
+      "elapsedSeconds"
+    ]
+  },
+  {
+    "type": "background_process.failed",
+    "payloadType": "BackgroundProcessFailedPayload",
+    "payload": {
+      "processId": "p1",
+      "error": {
+        "message": "Operation failed."
+      }
+    },
+    "lines": [
+      "[process] failed p1: Operation failed."
+    ],
+    "requiredFields": [
+      "processId",
+      "error"
+    ]
+  },
+  {
+    "type": "delegation.started",
+    "payloadType": "ExternalAgentLifecyclePayload",
+    "payload": {
+      "agent": "codex",
+      "summary": "delegated task"
+    },
+    "lines": [
+      "[delegation] codex started: delegated task"
+    ],
+    "requiredFields": [
+      "agent",
+      "summary"
+    ]
+  },
+  {
+    "type": "delegation.completed",
+    "payloadType": "ExternalAgentLifecyclePayload",
+    "payload": {
+      "agent": "codex",
+      "summary": "delegated task"
+    },
+    "lines": [
+      "[delegation] codex completed: delegated task"
+    ],
+    "requiredFields": [
+      "agent",
+      "summary"
+    ]
+  },
+  {
+    "type": "delegation.failed",
+    "payloadType": "ExternalAgentLifecyclePayload",
+    "payload": {
+      "agent": "codex",
+      "summary": "delegated task"
+    },
+    "lines": [
+      "[delegation] codex failed: delegated task"
+    ],
+    "requiredFields": [
+      "agent",
+      "summary"
+    ]
+  },
+  {
+    "type": "delegation.cancelled",
+    "payloadType": "ExternalAgentLifecyclePayload",
+    "payload": {
+      "agent": "codex",
+      "summary": "delegated task"
+    },
+    "lines": [
+      "[delegation] codex cancelled: delegated task"
+    ],
+    "requiredFields": [
+      "agent",
+      "summary"
+    ]
+  },
+  {
+    "type": "topic.candidates.refreshed",
+    "payloadType": "TopicCandidatesRefreshedPayload",
+    "payload": {
+      "candidateCount": 2,
+      "topics": [
+        "first",
+        "second"
+      ]
+    },
+    "lines": [
+      "[topic] candidates refreshed: 2",
+      "        - first",
+      "        - second"
+    ],
+    "requiredFields": [
+      "candidateCount",
+      "topics"
+    ]
+  },
+  {
+    "type": "topic.spoken",
+    "payloadType": "TopicSpokenPayload",
+    "payload": {
+      "candidateId": "topic1",
+      "messageId": "m1"
+    },
+    "lines": [
+      "[topic] spoken: topic1 -> m1"
+    ],
+    "requiredFields": [
+      "candidateId",
+      "messageId"
+    ]
+  },
+  {
+    "type": "topic.speak.skipped",
+    "payloadType": "TopicSpeakSkippedPayload",
+    "payload": {
+      "reason": "COOLDOWN"
+    },
+    "lines": [],
+    "requiredFields": [
+      "reason"
+    ]
+  },
+  {
+    "type": "topic.auto_speak.suppressed",
+    "payloadType": "TopicAutoSpeakSuppressedPayload",
+    "payload": {
+      "reason": "busy"
+    },
+    "lines": [
+      "[topic] auto speak suppressed: busy"
+    ],
+    "requiredFields": [
+      "reason"
+    ]
+  },
+  {
+    "type": "topic.generation.failed",
+    "payloadType": "TopicGenerationFailedPayload",
+    "payload": {
+      "stage": "RANKING",
+      "errorSummary": "timeout"
+    },
+    "lines": [
+      "[topic] generation failed: RANKING timeout"
+    ],
+    "requiredFields": [
+      "stage",
+      "errorSummary"
+    ]
+  },
+  {
+    "type": "task.created",
+    "payloadType": "TaskCreatedPayload",
+    "payload": {},
+    "lines": [],
+    "requiredFields": []
+  },
+  {
+    "type": "task.started",
+    "payloadType": "TaskStartedPayload",
+    "payload": {},
+    "lines": [],
+    "requiredFields": []
+  },
+  {
+    "type": "task.completed",
+    "payloadType": "TaskCompletedPayload",
+    "payload": {},
+    "lines": [],
+    "requiredFields": []
+  },
+  {
+    "type": "checkpoint.saved",
+    "payloadType": "CheckpointSavedPayload",
+    "payload": {},
+    "lines": [],
+    "requiredFields": []
+  },
+  {
+    "type": "context.snapshot.updated",
+    "payloadType": "ContextSnapshotUpdatedPayload",
+    "payload": {},
+    "lines": [],
+    "requiredFields": []
+  },
+  {
+    "type": "topic.generation.started",
+    "payloadType": "TopicGenerationStartedPayload",
+    "payload": {},
+    "lines": [],
+    "requiredFields": []
+  }
+]

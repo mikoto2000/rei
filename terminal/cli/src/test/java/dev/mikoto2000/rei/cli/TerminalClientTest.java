@@ -15,6 +15,127 @@ class TerminalClientTest {
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  @Test
+  void sseDisplaysFileChangesAndGlobalShutdownWithoutJson() throws Exception {
+    var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    var requests = new java.util.concurrent.atomic.AtomicInteger();
+    var output = new ByteArrayOutputStream();
+    server.createContext(
+        "/api/v1/runs/run/events",
+        exchange -> {
+          requests.incrementAndGet();
+          String body =
+              "id: 1\nevent: file.modified\ndata: {\"runId\":\"run\",\"projectId\":\"p\",\"timestamp\":\"2026-10-30T00:00:00Z\",\"payload\":{\"path\":\"src/main.java\",\"addedLines\":3,\"removedLines\":1}}\n\n"
+                  + "id: 2\nevent: application.shutdown.started\ndata: {\"runId\":null,\"timestamp\":\"2026-10-30T00:00:01Z\",\"payload\":{}}\n\n";
+          var bytes = body.getBytes(java.nio.charset.StandardCharsets.UTF_8);
+          exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+          exchange.sendResponseHeaders(200, bytes.length);
+          exchange.getResponseBody().write(bytes);
+          exchange.close();
+        });
+    server.start();
+    try (var backend =
+            new BackendClient(
+                URI.create("http://127.0.0.1:" + server.getAddress().getPort()), "fixture");
+        var client =
+            new TerminalClient(
+                backend,
+                directory,
+                true,
+                TerminalBuilder.builder()
+                    .system(false)
+                    .dumb(true)
+                    .streams(new ByteArrayInputStream(new byte[0]), output)
+                    .build())) {
+      client.command("/watch run");
+      long deadline = System.nanoTime() + java.util.concurrent.TimeUnit.SECONDS.toNanos(5);
+      while (!output.toString(java.nio.charset.StandardCharsets.UTF_8).contains("グレースフルシャットダウン")
+          && System.nanoTime() < deadline) Thread.sleep(10);
+      String text = output.toString(java.nio.charset.StandardCharsets.UTF_8);
+      assertTrue(text.contains("[file] modified main.java (+3/-1)"));
+      assertTrue(text.contains("[application] グレースフルシャットダウンを開始します。"));
+      assertFalse(text.contains("Event Run identity mismatch"));
+      assertFalse(text.contains("\"path\""));
+      assertEquals(1, requests.get());
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void promptShowsSelectedProjectAndGlobalCountAndClearsStaleCounts() throws Exception {
+    var server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+    var response = new java.util.concurrent.atomic.AtomicReference<>("{\"count\":3}");
+    var requests = new java.util.concurrent.atomic.AtomicInteger();
+    server.createContext(
+        "/api/v1/runs/active",
+        exchange -> {
+          requests.incrementAndGet();
+          var bytes = response.get().getBytes(java.nio.charset.StandardCharsets.UTF_8);
+          exchange.sendResponseHeaders(200, bytes.length);
+          exchange.getResponseBody().write(bytes);
+          exchange.close();
+        });
+    server.start();
+    try (var backend =
+            new BackendClient(
+                URI.create("http://127.0.0.1:" + server.getAddress().getPort()), "fixture");
+        var client =
+            new TerminalClient(
+                backend,
+                directory,
+                true,
+                TerminalBuilder.builder()
+                    .system(false)
+                    .dumb(true)
+                    .streams(new ByteArrayInputStream(new byte[0]), new ByteArrayOutputStream())
+                    .build())) {
+      client.refreshRunStatus();
+      assertEquals(
+          "[none] [3 running]\n12:34 unknown> ",
+          client.buildPrompt(java.time.LocalTime.of(12, 34)));
+      client.buildPrompt(java.time.LocalTime.NOON);
+      assertEquals(1, requests.get(), "Prompt rendering never performs HTTP");
+      response.set("{\"count\":0}");
+      client.refreshRunStatus();
+      assertTrue(client.buildPrompt(java.time.LocalTime.NOON).contains("[0 running]"));
+      response.set("{\"text\":\"old backend\"}");
+      client.refreshRunStatus();
+      assertTrue(client.buildPrompt(java.time.LocalTime.NOON).contains("[? running]"));
+    } finally {
+      server.stop(0);
+    }
+  }
+
+  @Test
+  void userFramesUseShellLayoutForMultilineAndHideProjectAndShellCommands() throws Exception {
+    var output = new ByteArrayOutputStream();
+    try (var backend = new BackendClient(URI.create("http://127.0.0.1:1"), "fixture");
+        var client =
+            new TerminalClient(
+                backend,
+                directory,
+                true,
+                TerminalBuilder.builder()
+                    .system(false)
+                    .dumb(true)
+                    .streams(new ByteArrayInputStream(new byte[0]), output)
+                    .build())) {
+      client.printUserInput("こんにちは\n続き");
+      String text = output.toString(java.nio.charset.StandardCharsets.UTF_8);
+      assertTrue(text.contains("┌ User ("));
+      assertTrue(text.contains("こんにちは"));
+      assertTrue(text.contains("続き"));
+      assertTrue(text.contains("└"));
+      output.reset();
+      client.printUserInput("/project cd C:\\work\\");
+      client.printUserInput("/sh");
+      assertEquals("", output.toString());
+      client.printUserInput("/chat 質問");
+      assertTrue(output.toString(java.nio.charset.StandardCharsets.UTF_8).contains("/chat 質問"));
+    }
+  }
+
   /** 軽量CLIでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void commandTokenizationOmitsEmptyQuotedArgumentsLikeExistingShell() {
@@ -105,14 +226,16 @@ class TerminalClientTest {
       client.command("/models");
       assertTrue(output.toString().contains("* chosen"));
       assertFalse(output.toString().contains("currentModel"));
-      assertEquals("20:34 chosen> ", client.buildPrompt(java.time.LocalTime.of(20, 34)));
+      assertEquals(
+          "[none] [? running]\n20:34 chosen> ", client.buildPrompt(java.time.LocalTime.of(20, 34)));
       assertEquals(
           java.util.List.of("other"),
           client.completionValues(java.util.List.of("/model", "o"), 1, "o"));
       output.reset();
       client.command("/model chosen");
       assertTrue(output.toString().contains("current model: chosen"));
-      assertEquals("09:05 chosen> ", client.buildPrompt(java.time.LocalTime.of(9, 5)));
+      assertEquals(
+          "[none] [? running]\n09:05 chosen> ", client.buildPrompt(java.time.LocalTime.of(9, 5)));
     } finally {
       server.stop(0);
     }
@@ -163,6 +286,7 @@ class TerminalClientTest {
                     .build())) {
       client.selectInitialProject(null);
       assertEquals("cwd", client.projectId());
+      assertTrue(client.buildPrompt(java.time.LocalTime.NOON).startsWith("[Current] ["));
       assertEquals(Path.of("").toAbsolutePath().normalize().toString(), registered.get());
     } finally {
       server.stop(0);

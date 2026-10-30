@@ -31,13 +31,20 @@ final class RunEventOutput {
   /** 活動中。 */
   private String active;
 
+  private final java.util.Map<String, String> llmFeatures = new java.util.HashMap<>();
+
+  private final RunEventNotices shellNotices;
+
+  private String projectId;
+
   /**
    * 軽量CLIでの対話で受け渡す通知を表す。
    *
    * @param type 種別
    * @param payload 通知内容
    */
-  private record Notice(String type, JsonNode payload) {}
+  private record Notice(
+      String type, JsonNode payload, java.time.Instant timestamp, String project) {}
 
   /** 案内の回数。 */
   private final List<Notice> notices = new ArrayList<>();
@@ -53,6 +60,12 @@ final class RunEventOutput {
   RunEventOutput(Consumer<String> output, Consumer<String> approvalOutput) {
     this.output = output;
     this.approvalOutput = approvalOutput;
+    this.shellNotices = new RunEventNotices(output);
+  }
+
+  void acceptEvent(String type, JsonNode event) {
+    projectId = event.path("projectId").asText(null);
+    accept(type, event.path("payload"), java.time.Instant.parse(event.path("timestamp").asText()));
   }
 
   /** 要求を後続の処理へ引き渡すため、実行イベント出力を受け付ける。 */
@@ -94,35 +107,215 @@ final class RunEventOutput {
         // The content itself is displayed by delta/completed events.
       } else {
         flush();
-        output.accept(type + ": " + payload);
       }
       return;
     }
     if (active != null
         && !type.startsWith("tool.")
         && !type.equals("attention.required")
-        && !Set.of("agent.run.completed", "agent.run.failed", "agent.run.cancelled")
+        && !Set.of(
+                "agent.run.completed",
+                "agent.run.failed",
+                "agent.run.cancelled",
+                "application.shutdown.started")
             .contains(type)) {
-      notices.add(new Notice(type, payload.deepCopy()));
+      notices.add(new Notice(type, payload.deepCopy(), timestamp, projectId));
       return;
     }
     flush();
-    renderNotice(type, payload);
+    renderNotice(type, payload, timestamp, projectId);
   }
 
   /** 利用者が内容を確認できるよう、通知を表示する。 */
-  private void renderNotice(String type, JsonNode payload) {
-    if (Set.of(
-            "agent.run.failed",
-            "agent.run.cancelled",
-            "llm.request.failed",
-            "skill.selection.failed",
-            "skill.routing.failed",
-            "background_process.failed",
-            "task.failed")
-        .contains(type)) {
-      output.accept("[" + type + "] 原因: " + errorReason(payload.path("error")));
-      return;
+  private void renderNotice(
+      String type, JsonNode payload, java.time.Instant timestamp, String project) {
+    switch (type) {
+      case "checkpoint.saved",
+          "checkpoint.reconciled",
+          "checkpoint.resumed",
+          "checkpoint.revision.saved" -> {
+        return;
+      }
+      case "agent.run.started" -> {
+        output.accept("[agent] running");
+        return;
+      }
+      case "agent.run.completed" -> {
+        output.accept(
+            "[agent] completed ("
+                + seconds(payload.path("duration"))
+                + " s, "
+                + (payload.hasNonNull("completionTokens")
+                    ? payload.path("completionTokens").asText() + " tokens"
+                    : "tokens unavailable")
+                + ", "
+                + metric(payload, "timeToFirstTokenMillis", "TTFT ", " ms", "TTFT unavailable")
+                + ", "
+                + metric(
+                    payload,
+                    "outputTokensPerSecond",
+                    "output ",
+                    " tok/s",
+                    "output speed unavailable")
+                + ", "
+                + metric(
+                    payload,
+                    "endToEndTokensPerSecond",
+                    "end-to-end ",
+                    " tok/s",
+                    "end-to-end speed unavailable")
+                + ")");
+        llmFeatures.clear();
+        return;
+      }
+      case "agent.run.failed", "agent.run.cancelled" -> {
+        boolean cancelled =
+            type.endsWith("cancelled")
+                || payload.path("error").path("code").asText().equals("cancelled");
+        output.accept(
+            "[agent] "
+                + (cancelled ? "cancelled: " : "failed: ")
+                + errorReason(payload.path("error")));
+        llmFeatures.clear();
+        return;
+      }
+      case "llm.request.started" -> {
+        llmFeatures.put(payload.path("requestId").asText(), payload.path("feature").asText());
+        output.accept("[llm] request sent (" + payload.path("feature").asText() + ")");
+        return;
+      }
+      case "llm.request.failed" -> {
+        llmFeatures.remove(payload.path("requestId").asText());
+        output.accept(
+            "[llm] request failed ("
+                + payload.path("durationMs").asLong()
+                + " ms): "
+                + errorReason(payload.path("error")));
+        return;
+      }
+      case "llm.response.first_token" -> {
+        output.accept("[llm] first token (" + payload.path("durationMs").asLong() + " ms)");
+        return;
+      }
+      case "llm.response.completed" -> {
+        String id = payload.path("requestId").asText();
+        String feature = llmFeatures.remove(id);
+        output.accept(
+            "[llm] response received ("
+                + (feature == null ? id : feature)
+                + ", "
+                + payload.path("durationMs").asLong()
+                + " ms)");
+        return;
+      }
+      case "tool.started" -> {
+        String arguments =
+            payload.path("argumentsSummary").asText("").replaceAll("[\\p{Cntrl}\\s]+", " ").strip();
+        output.accept(
+            "  → "
+                + payload.path("toolName").asText()
+                + (arguments.isBlank() ? "" : " " + arguments));
+        return;
+      }
+      case "tool.completed" -> {
+        output.accept(
+            "  ✓ "
+                + payload.path("toolName").asText()
+                + " ("
+                + payload.path("duration").asLong()
+                + " ms)");
+        return;
+      }
+      case "skill.selection.started" -> {
+        output.accept("[skill] selecting");
+        return;
+      }
+      case "skill.selection.completed" -> {
+        payload.path("warnings").forEach(warning -> output.accept(warning.asText()));
+        var names = new ArrayList<String>();
+        payload
+            .path("explicitSkillNames")
+            .forEach(name -> names.add(name.asText() + " (explicit)"));
+        payload
+            .path("implicitSkillNames")
+            .forEach(name -> names.add(name.asText() + " (implicit)"));
+        output.accept("[skill] selected: " + (names.isEmpty() ? "none" : String.join(", ", names)));
+        return;
+      }
+      case "skill.selection.failed" -> {
+        output.accept("[skill] selection failed: " + errorReason(payload.path("error")));
+        return;
+      }
+      case "skill.routing.started" -> {
+        int invocation = payload.path("routingInvocation").asInt();
+        output.accept(
+            "[skill] selecting from "
+                + payload.path("candidateCount").asInt()
+                + " skills..."
+                + (invocation > 1 ? " (#" + invocation + ")" : ""));
+        return;
+      }
+      case "skill.routing.completed" -> {
+        payload.path("warnings").forEach(warning -> output.accept(warning.asText()));
+        String selection =
+            payload.hasNonNull("selectedSkill")
+                ? payload.path("selectedSkill").asText() + " selected"
+                : "no skill selected";
+        output.accept(
+            "[skill] "
+                + selection
+                + " from "
+                + payload.path("candidateCount").asInt()
+                + " skills ("
+                + duration(payload.path("durationMs").asLong())
+                + (payload.hasNonNull("selectorDurationMs")
+                    ? ", selector " + duration(payload.path("selectorDurationMs").asLong())
+                    : "")
+                + ")");
+        return;
+      }
+      case "skill.routing.failed" -> {
+        output.accept(
+            "[skill] selection failed after "
+                + duration(payload.path("durationMs").asLong())
+                + ": "
+                + errorReason(payload.path("error")).replaceAll("\\s+", " ").strip());
+        return;
+      }
+      case "skill.candidates.evaluated" -> {
+        boolean selected = payload.path("selected").asBoolean();
+        output.accept(
+            "[skill-candidate] "
+                + payload.path("totalSkillCount").asInt()
+                + " -> "
+                + payload.path("candidateCount").asInt()
+                + " skills ("
+                + payload.path("durationMs").asLong()
+                + "ms), actual="
+                + (selected ? payload.path("actualSelectedSkill").asText() : "none")
+                + ", top5="
+                + (!selected ? "n/a" : payload.path("top5Hit").asBoolean() ? "hit" : "miss"));
+        return;
+      }
+      case "subagent.started", "subagent.completed", "subagent.failed", "subagent.cancelled" -> {
+        output.accept(
+            "[subagent] "
+                + payload.path("agentId").asText()
+                + " "
+                + payload.path("status").asText().toLowerCase(java.util.Locale.ROOT)
+                + " ("
+                + seconds(payload.path("duration"))
+                + " s) ["
+                + payload.path("subAgentRunId").asText()
+                + "]");
+        if (payload.hasNonNull("failureReason"))
+          output.accept(
+              "[subagent] 原因: "
+                  + dev.mikoto2000.rei.event.CredentialRedactor.redact(
+                      payload.path("failureReason").asText()));
+        return;
+      }
+      default -> {}
     }
     if (Set.of("context.compression.failed", "context.compression.skipped").contains(type)) {
       String state = type.endsWith(".failed") ? "failed" : "skipped";
@@ -139,34 +332,9 @@ final class RunEventOutput {
               + suffix);
       return;
     }
-    if ("goal.updated".equals(type) && payload.hasNonNull("reason")) {
-      output.accept(
-          "[goal] "
-              + payload.path("goalId").asText()
-              + " "
-              + payload.path("status").asText()
-              + " 理由: "
-              + dev.mikoto2000.rei.event.FailureMessages.text(payload.path("reason").asText()));
-      return;
-    }
     if ("tool.failed".equals(type)) {
       output.accept(
-          "✗ " + payload.path("toolName").asText() + ": " + errorReason(payload.path("error")));
-      return;
-    }
-    if ("subagent.failed".equals(type)) {
-      output.accept(
-          "[subagent] "
-              + payload.path("agentId").asText()
-              + " "
-              + payload.path("status").asText()
-              + " ["
-              + payload.path("subAgentRunId").asText()
-              + "]");
-      output.accept(
-          "[subagent] 原因: "
-              + dev.mikoto2000.rei.event.FailureMessages.text(
-                  payload.path("failureReason").asText()));
+          "  ✗ " + payload.path("toolName").asText() + ": " + errorReason(payload.path("error")));
       return;
     }
     if ("attention.required".equals(type)) {
@@ -174,17 +342,42 @@ final class RunEventOutput {
         approvalOutput.accept(payload.path("message").asText());
         return;
       }
-      output.accept("[attention] " + payload.path("kind").asText());
-      payload.path("message").asText().lines().forEach(output);
+      output.accept(
+          "[attention] "
+              + payload.path("kind").asText()
+              + ": "
+              + payload.path("message").asText()
+              + " (/attention show "
+              + payload.path("attentionId").asText("null")
+              + ")");
       return;
     }
-    output.accept(type + ": " + payload);
+    shellNotices.accept(type, payload, timestamp, project);
+  }
+
+  private static String seconds(JsonNode duration) {
+    return String.format(java.util.Locale.ROOT, "%.1f", duration.asLong() / 1_000d);
+  }
+
+  private static String duration(long millis) {
+    return millis < 1_000
+        ? millis + "ms"
+        : String.format(java.util.Locale.ROOT, "%.2fs", millis / 1_000d);
+  }
+
+  private static String metric(
+      JsonNode payload, String field, String prefix, String suffix, String fallback) {
+    return payload.hasNonNull(field)
+        ? prefix
+            + String.format(java.util.Locale.ROOT, "%.1f", payload.path(field).asDouble())
+            + suffix
+        : fallback;
   }
 
   /** 軽量CLIでの対話で用いるエラー理由を返す。 */
-  private static String errorReason(JsonNode error) {
+  static String errorReason(JsonNode error) {
     String message = error.path("message").asText("");
-    if (message.isBlank()) message = error.path("errorType").asText("");
+    if (message.isBlank()) message = error.path("errorType").asText(error.path("type").asText(""));
     String code = error.path("code").asText("");
     if (!code.isBlank()) message = "[" + code + "] " + message;
     return dev.mikoto2000.rei.event.FailureMessages.text(message);
@@ -208,7 +401,8 @@ final class RunEventOutput {
       pending.setLength(0);
     }
     active = null;
-    for (var notice : notices) renderNotice(notice.type(), notice.payload());
+    for (var notice : notices)
+      renderNotice(notice.type(), notice.payload(), notice.timestamp(), notice.project());
     notices.clear();
   }
 }
