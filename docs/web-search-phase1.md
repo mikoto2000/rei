@@ -26,6 +26,16 @@ additional_search_failed と assessment=unknown、本文障害はページの fe
 失敗イベントのメッセージに残す。402 は `payment_required` として契約・請求設定・利用枠の確認を案内する。
 応答本文・URL・認証情報・例外ラッパーのメッセージは結果に含めない。
 
+各 provider の例外は `WebSearchService` の WARN ログに `provider`、`causeType`、
+`code`、`httpStatus` を記録する。後続 provider が成功した場合にも、先行 provider の障害を残す。
+HTTP エラーは `HTTP_ERROR` とステータス、通信・取得制限は `HttpFetchException.Code`、
+その他は `PROVIDER_ERROR` と例外型で区別する。中断・キャンセルは provider 障害として記録しない。
+例外メッセージ・スタック・検索語・URL・応答本文・認証情報はログに含めず、未対応の provider 名は
+`unsupported` に置き換える。
+正常な HTTP 応答から候補を抽出できなかった場合は、INFO に `code=NO_RESULTS` と
+provider・HTTP ステータスを記録する。これは障害と断定せず、検索結果0件や HTML 形式の違い、
+確認画面などの可能性を調べる手掛かりにする。検索順序・フォールバックの動作は変更しない。
+
 `WebSearchServiceTest` で Brave / DuckDuckGo の HTTP ステータス保持、
 `FailureDiagnosticsTest` と `ToolEventCallbackDecoratorTest` で分類・失敗通知・中断の伝播、
 `ToolLoopSupportTest` で実際の検索ツールコールが 402 になっても後続のローカル修正が実行されることを検証する。

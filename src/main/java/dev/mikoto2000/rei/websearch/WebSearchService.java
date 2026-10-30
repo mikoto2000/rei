@@ -125,6 +125,16 @@ public class WebSearchService {
       } catch (IOException | InterruptedException | RuntimeException e) {
         // 中断や取得制限は継続させず、通常の検索先の障害だけを次の候補で補う。
         dev.mikoto2000.rei.http.FetchOperation.propagateControls(e);
+        log.warn(
+            "Web search provider failed; provider={}, causeType={}, code={}, httpStatus={}",
+            providerLogName(provider),
+            e.getClass().getSimpleName(),
+            e instanceof WebSearchHttpException
+                ? "HTTP_ERROR"
+                : e instanceof dev.mikoto2000.rei.http.HttpFetchException http
+                    ? http.code().name()
+                    : "PROVIDER_ERROR",
+            e instanceof WebSearchHttpException http ? http.status() : null);
         if (firstError == null) {
           firstError = e;
         }
@@ -208,7 +218,10 @@ public class WebSearchService {
       throw new WebSearchHttpException(response.status());
     }
 
-    return parseBraveResults(new String(response.body(), StandardCharsets.UTF_8), limit);
+    return observeResults(
+        provider,
+        response.status(),
+        parseBraveResults(new String(response.body(), StandardCharsets.UTF_8), limit));
   }
 
   /** 依頼に関連する情報を得るため、DuckDuckGoを検索する。 */
@@ -231,7 +244,31 @@ public class WebSearchService {
       throw new WebSearchHttpException(response.status());
     }
 
-    return parseDuckDuckGoResults(new String(response.body(), StandardCharsets.UTF_8), limit);
+    return observeResults(
+        provider,
+        response.status(),
+        parseDuckDuckGoResults(new String(response.body(), StandardCharsets.UTF_8), limit));
+  }
+
+  /** 空の結果とHTTP障害を区別し、本文を残さずに検索先の状態を記録する。 */
+  private List<WebSearchResult> observeResults(
+      ProviderProperties provider, int status, List<WebSearchResult> results) {
+    if (results.isEmpty()) {
+      log.info(
+          "Web search provider returned no results; provider={}, code=NO_RESULTS, httpStatus={}",
+          providerLogName(provider),
+          status);
+    }
+    return results;
+  }
+
+  /** 設定に含まれる任意の文字列をログへ出さず、対応する検索先だけを識別する。 */
+  private String providerLogName(ProviderProperties provider) {
+    String name = provider.getName().trim().toLowerCase(java.util.Locale.ROOT);
+    return switch (name) {
+      case "brave", "duckduckgo" -> name;
+      default -> "unsupported";
+    };
   }
 
   /** 入力を機能内で扱えるよう、Brave結果一覧を解釈する。 */
