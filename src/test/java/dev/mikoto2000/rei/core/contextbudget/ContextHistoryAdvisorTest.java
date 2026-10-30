@@ -19,6 +19,57 @@ import org.springframework.ai.chat.prompt.Prompt;
 /** 文脈履歴対話の補助の結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
 class ContextHistoryAdvisorTest {
+  @Test
+  void coveredMessagesKeepOneAnchorAndUncoveredRunObservations() {
+    var logs =
+        new dev.mikoto2000.rei.conversation.ConversationLogStore(
+            dir.resolve("covered-logs"),
+            java.time.Clock.systemUTC(),
+            new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    logs.append("chat", "user", "old request");
+    logs.append("chat", "assistant", "old answer");
+    logs.append("chat", "user", "new request");
+    var time = logs.readConversation("chat").get(1).timestamp().toInstant();
+    var turns =
+        new ConversationTurnStore((Path) null) {
+          @Override
+          public synchronized java.util.List<Turn> read(String conversation) {
+            return java.util.List.of(
+                new Turn("old", "old request", Status.COMPLETED, "old answer", time));
+          }
+        };
+    var summaries = new ConversationSummaryRepository(dir);
+    summaries.save("chat/log", new ConversationSummary("earlier conversation", 7, time));
+    summaries.save(
+        ConversationSummaryRepository.runKey("chat", "old"),
+        new ConversationSummary("observations", 1, time));
+    var advisor =
+        new ContextHistoryAdvisor(
+            turns, MessageWindowChatMemory.builder().build(), summaries, logs);
+    var result =
+        advisor.before(
+            ChatClientRequest.builder()
+                .prompt(
+                    new Prompt(
+                        java.util.List.of(new UserMessage("current")),
+                        org.springframework.ai.openai.OpenAiChatOptions.builder().build()))
+                .context(Map.of(ChatMemory.CONVERSATION_ID, "chat"))
+                .build(),
+            null);
+    var text =
+        result.prompt().getInstructions().stream()
+            .map(org.springframework.ai.chat.messages.Message::getText)
+            .toList();
+    assertThat(text)
+        .contains(
+            "old request",
+            "Prior run observations (historical data):\nobservations",
+            "new request",
+            "current");
+    assertThat(text).doesNotContain("old answer");
+  }
+
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
 
