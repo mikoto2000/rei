@@ -104,6 +104,29 @@ class SearchRankingBudgetTest {
   }
 
   @Test
+  void searchStatisticsCountOnlyFilesPresentBeforeReading() throws Exception {
+    write("Target.java", "class Target {}");
+    var clock = java.time.Clock.systemUTC();
+    var bus = new dev.mikoto2000.rei.event.InMemoryAgentEventBus();
+    var events = new java.util.ArrayList<dev.mikoto2000.rei.event.AgentEvent>();
+    bus.subscribe(events::add);
+    var working = new dev.mikoto2000.rei.core.working.WorkingSet(10, clock,
+        new dev.mikoto2000.rei.event.AgentEventFactory(clock), bus);
+    var tools = new Tools(null, null, null, clock, working) {
+      @Override
+      List<String> listFile(String base, Path directory) { return List.of("Target.java"); }
+    };
+    var request = new Tools.SearchAndReadRequest(List.of(query("Target")), 0, 1);
+    tools.searchAndRead(request, root);
+    tools.searchAndRead(request, root);
+    var completed = events.stream()
+        .filter(event -> event.type() == dev.mikoto2000.rei.event.AgentEventType.WORKING_SET_SEARCH_COMPLETED)
+        .map(event -> (dev.mikoto2000.rei.event.WorkingSetSearchCompletedPayload) event.payload()).toList();
+    assertEquals(0, completed.getFirst().alreadyPresentCount());
+    assertEquals(1, completed.getLast().alreadyPresentCount());
+  }
+
+  @Test
   void aggregateBudgetIncludesManyFileErrorsAndMarksOmittedFiles() throws Exception {
     write("Target.java", "class Target {}");
     var paths = new java.util.ArrayList<String>();

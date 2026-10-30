@@ -2191,6 +2191,10 @@ public class Tools {
         int byteShare = (byteLimit - 16) / Math.max(1, selectedCount),
             tokenShare = (tokenLimit - 16) / Math.max(1, selectedCount),
             lineShare = lineLimit / Math.max(1, selectedCount);
+        var alreadyPresentPaths = fileMatches.keySet().stream().limit(selectedCount)
+            .filter(path -> workingSet.contains(resolveProjectPath(path, workingDirectory)))
+            .collect(Collectors.toSet());
+
         // 3. ファイルを選び、ヒット行の前後を読み込む
         List<SearchAndReadResult> fileResults = new ArrayList<>();
         int totalLines = 0;
@@ -2267,8 +2271,7 @@ public class Tools {
         int alreadyPresentCount =
             fileResults.stream()
                 .filter(item -> item.error() == null)
-                .map(item -> resolveProjectPath(item.path(), workingDirectory))
-                .mapToInt(path -> workingSet.contains(path) ? 1 : 0)
+                .mapToInt(item -> alreadyPresentPaths.contains(item.path()) ? 1 : 0)
                 .sum();
         workingSet.completeSearch(
             searchObservation, hitCount, fileMatches.size(), selectedCount, alreadyPresentCount);
