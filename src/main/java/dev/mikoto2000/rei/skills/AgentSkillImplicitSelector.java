@@ -30,7 +30,7 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
   /** 保存と検索の窓口。 */
   private final AgentSkillRepository repository;
 
-  private final AgentSkillsProperties properties;
+  private final java.time.Duration selectorTimeout;
 
   /** スキルの利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public AgentSkillImplicitSelector(ChatModel chatModel, AgentSkillRepository repository) {
@@ -44,13 +44,17 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
   }
 
   @Autowired
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      justification =
+          "The shared Spring model provider is intentional; only the immutable timeout is retained from configuration.")
   public AgentSkillImplicitSelector(
       LlmModelProvider modelProvider,
       AgentSkillRepository repository,
       AgentSkillsProperties properties) {
     this.modelProvider = modelProvider;
     this.repository = repository;
-    this.properties = properties;
+    this.selectorTimeout = properties.getSelectorTimeout();
   }
 
   /** 指定された条件に応じて、利用する対象を選ぶ。 */
@@ -114,7 +118,7 @@ public class AgentSkillImplicitSelector implements AgentSkillImplicitSelection {
       new org.springframework.ai.chat.model.MessageAggregator()
           .aggregate(reactor.core.publisher.Flux.defer(() -> model.stream(request)), aggregate::set)
           .then()
-          .timeout(properties.getSelectorTimeout())
+          .timeout(selectorTimeout)
           .block();
       response = aggregate.get();
     } catch (Exception error) {
