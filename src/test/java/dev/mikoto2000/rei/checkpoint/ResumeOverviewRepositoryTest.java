@@ -36,6 +36,38 @@ class ResumeOverviewRepositoryTest {
     repo = new PersistentCheckpointRepository(ds, new CheckpointProperties());
   }
 
+  @Test
+  void structuredTaskStateAndLegacyHeadsRemainOnTheSqlProjectionPath() throws Exception {
+    var saved = save("structured", "INTERRUPTED", 0);
+    var fields = repo.fields(saved);
+    fields.put(
+        "taskState",
+        new dev.mikoto2000.rei.context.TaskStateSnapshot(
+            "review docs",
+            "IN_PROGRESS",
+            List.of("introduction reviewed"),
+            List.of("repair examples")));
+    repo.save(repo.fields(fields), saved.revision(), "structured-task-state");
+    save("legacy", "INTERRUPTED", 0);
+    try (var c =
+            java.sql.DriverManager.getConnection(
+                "jdbc:sqlite:" + directory.resolve("overview.db"));
+        var s = c.createStatement()) {
+      s.executeUpdate(
+          "UPDATE checkpoint_revisions SET snapshot=json_remove(snapshot,'$.taskState') WHERE task='legacy'");
+    }
+    var projected = org.mockito.Mockito.spy(repo);
+    var candidates = projected.overviewCandidates("A", Instant.EPOCH);
+    assertEquals(
+        Set.of("structured", "legacy"),
+        candidates.stream()
+            .map(ResumeOverview.Candidate::taskId)
+            .collect(java.util.stream.Collectors.toSet()));
+    assertTrue(candidates.stream().noneMatch(ResumeOverview.Candidate::fallback));
+    org.mockito.Mockito.verify(projected, org.mockito.Mockito.never())
+        .get(org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.anyString());
+  }
+
   /** 検証用に、後から参照できるよう、指定された情報を保存する。 */
   PersistentCheckpoint save(String task, String status, long revision) {
     var state = PersistentCheckpoint.initial(task, "A", "session", "run", directory, "request");
