@@ -36,43 +36,72 @@ public interface TokenEstimator {
    */
   static TokenEstimator tokenizerAware() {
     TokenEstimator heuristic = conservative();
+    return boundedCache(
+        value -> {
+          if (value == null || value.isEmpty()) return 0;
+          // A giant unbroken word can make BPE merging expensive. One token per encoded byte
+          // is a conservative upper bound for the bundled byte-pair tokenizers.
+          if (value.length() > 32768)
+            return (int)
+                Math.min(
+                    Integer.MAX_VALUE,
+                    value
+                        .codePoints()
+                        .mapToLong(
+                            c ->
+                                c == '"' || c == '\\' || c == '\b' || c == '\t' || c == '\n'
+                                        || c == '\f' || c == '\r'
+                                    ? 2
+                                    : c < 32 || c >= 0xD800 && c <= 0xDFFF
+                                        ? 6
+                                        : c < 128 ? 1 : c < 2048 ? 2 : c < 65536 ? 3 : 4)
+                        .sum());
+          try {
+            String encoded = TokenizerHolder.JSON.writeValueAsString(value);
+            String wire = encoded.substring(1, encoded.length() - 1);
+            if (wire.length() > 32768)
+              return wire.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
+            long units =
+                wire.codePoints()
+                    .mapToLong(c -> c < 128 ? 1 : c < 2048 ? 8 : c < 65536 ? 12 : 16)
+                    .sum();
+            int estimate = (int) Math.min(Integer.MAX_VALUE, (units + 3) / 4);
+            estimate = Math.max(estimate, heuristic.text(wire));
+            estimate = Math.max(estimate, TokenizerHolder.CL.countTokensOrdinary(value));
+            estimate = Math.max(estimate, TokenizerHolder.O.countTokensOrdinary(value));
+            estimate = Math.max(estimate, TokenizerHolder.CL.countTokensOrdinary(wire));
+            return Math.max(estimate, TokenizerHolder.O.countTokensOrdinary(wire));
+          } catch (java.io.IOException invalid) {
+            throw new IllegalArgumentException("Cannot estimate serialized text", invalid);
+          }
+        });
+  }
+
+  /** Reuses deterministic counts without retaining more than 1 Mi UTF-16 units or 1,024 texts. */
+  static TokenEstimator boundedCache(TokenEstimator delegate) {
+    java.util.Objects.requireNonNull(delegate);
+    var cache = new java.util.LinkedHashMap<String, Integer>(16, 0.75f, true);
+    int[] retained = {0};
     return value -> {
-      if (value == null || value.isEmpty()) return 0;
-      // A giant unbroken word can make BPE merging expensive. One token per encoded byte
-      // is a conservative upper bound for the bundled byte-pair tokenizers.
-      if (value.length() > 32768)
-        return (int)
-            Math.min(
-                Integer.MAX_VALUE,
-                value
-                    .codePoints()
-                    .mapToLong(
-                        c ->
-                            c == '"' || c == '\\' || c == '\b' || c == '\t' || c == '\n'
-                                    || c == '\f' || c == '\r'
-                                ? 2
-                                : c < 32 || c >= 0xD800 && c <= 0xDFFF
-                                    ? 6
-                                    : c < 128 ? 1 : c < 2048 ? 2 : c < 65536 ? 3 : 4)
-                    .sum());
-      try {
-        String encoded = TokenizerHolder.JSON.writeValueAsString(value);
-        String wire = encoded.substring(1, encoded.length() - 1);
-        if (wire.length() > 32768)
-          return wire.getBytes(java.nio.charset.StandardCharsets.UTF_8).length;
-        long units =
-            wire.codePoints()
-                .mapToLong(c -> c < 128 ? 1 : c < 2048 ? 8 : c < 65536 ? 12 : 16)
-                .sum();
-        int estimate = (int) Math.min(Integer.MAX_VALUE, (units + 3) / 4);
-        estimate = Math.max(estimate, heuristic.text(wire));
-        estimate = Math.max(estimate, TokenizerHolder.CL.countTokensOrdinary(value));
-        estimate = Math.max(estimate, TokenizerHolder.O.countTokensOrdinary(value));
-        estimate = Math.max(estimate, TokenizerHolder.CL.countTokensOrdinary(wire));
-        return Math.max(estimate, TokenizerHolder.O.countTokensOrdinary(wire));
-      } catch (java.io.IOException invalid) {
-        throw new IllegalArgumentException("Cannot estimate serialized text", invalid);
+      if (value == null || value.length() > 32768) return delegate.text(value);
+      synchronized (cache) {
+        Integer known = cache.get(value);
+        if (known != null) return known;
       }
+      // Expensive tokenization does not hold the shared cache monitor.
+      int estimate = delegate.text(value);
+      synchronized (cache) {
+        Integer known = cache.get(value);
+        if (known != null) return known;
+        while (cache.size() >= 1024 || retained[0] + value.length() > 1024 * 1024) {
+          var oldest = cache.keySet().iterator();
+          retained[0] -= oldest.next().length();
+          oldest.remove();
+        }
+        cache.put(value, estimate);
+        retained[0] += value.length();
+      }
+      return estimate;
     };
   }
 
