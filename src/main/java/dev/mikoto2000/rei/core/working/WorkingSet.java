@@ -125,7 +125,8 @@ public class WorkingSet {
   private synchronized void persistNow() {
     if (storagePath == null) return;
     try {
-      java.nio.file.Files.createDirectories(storagePath.getParent());
+      var parent = storagePath.getParent();
+      if (parent != null) java.nio.file.Files.createDirectories(parent);
       Path temporary = storagePath.resolveSibling(storagePath.getFileName() + ".tmp");
       java.nio.file.Files.writeString(temporary, mapper.writeValueAsString(getFiles()));
       try {
