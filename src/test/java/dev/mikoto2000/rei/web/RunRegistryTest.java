@@ -20,6 +20,21 @@ import org.junit.jupiter.api.Test;
 
 /** 実行登録台帳の結果と状態の契約を検証するテスト。 */
 class RunRegistryTest {
+  @Test
+  void streamStatusKeepsCancellationAndExactRetentionBoundary() {
+    var clock = new MutableClock();
+    var registry = new RunRegistry(clock);
+    registry.register(context("run"));
+    registry.transition("run", RunStatus.RUNNING, null);
+    assertThat(registry.streamStatus("run")).isEqualTo(RunStatus.RUNNING);
+    registry.transition("run", RunStatus.CANCELLED, null);
+    assertThat(registry.streamStatus("run")).isEqualTo(RunStatus.CANCELLED);
+    clock.now = clock.now.plus(RunRegistry.RETENTION).minusNanos(1);
+    assertThat(registry.streamStatus("run")).isEqualTo(RunStatus.CANCELLED);
+    clock.now = clock.now.plusNanos(1);
+    assertThatThrownBy(() -> registry.streamStatus("run")).isInstanceOf(RunNotFoundException.class);
+  }
+
   /** 検証条件を再現するための変更可能な時刻の取得元。 */
   static class MutableClock extends Clock {
     /** 日時や期限の条件を再現するために使う検証時刻。 */

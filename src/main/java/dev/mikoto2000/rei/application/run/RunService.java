@@ -86,6 +86,13 @@ public class RunService implements AutoCloseable {
     }
   }
 
+  /** Per-frame lookup without scanning unrelated runs or their replay histories. */
+  public RunStatus streamStatus(String runId) {
+    synchronized (monitor()) {
+      return registry.streamStatus(runId);
+    }
+  }
+
   /** 実行の受付と状態管理において、復元済みに該当するか判定する。 */
   public boolean restored(String runId) {
     synchronized (monitor()) {
