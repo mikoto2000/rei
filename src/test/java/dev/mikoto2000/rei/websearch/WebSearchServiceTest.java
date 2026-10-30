@@ -24,6 +24,35 @@ class WebSearchServiceTest {
   /** 検証に使うサーバー。 */
   private HttpServer server;
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"brave,402", "duckduckgo,429"})
+  void searchPreservesHttpStatusWithoutProviderBody(String providerName, int status)
+      throws Exception {
+    server = HttpServer.create(new InetSocketAddress(0), 0);
+    server.createContext(
+        "/search",
+        exchange -> {
+          byte[] body = "PRIVATE_PROVIDER_BODY".getBytes(StandardCharsets.UTF_8);
+          exchange.sendResponseHeaders(status, body.length);
+          try (var output = exchange.getResponseBody()) {
+            output.write(body);
+          }
+        });
+    server.start();
+    var properties = new WebSearchProperties();
+    properties.setEnabled(true);
+    properties.setProviders(
+        List.of(
+            provider(
+                providerName,
+                "http://localhost:" + server.getAddress().getPort() + "/search",
+                "PRIVATE_KEY")));
+    var service = new WebSearchService(properties, new JsonMapper());
+    var failure = assertThrows(WebSearchHttpException.class, () -> service.search("query", 1));
+    assertEquals(status, failure.status());
+    assertTrue(!failure.getMessage().contains("PRIVATE"));
+  }
+
   /** 次の検証へ状態を持ち越さないよう、利用した資源と保存先を片付ける。 */
   @AfterEach
   void tearDown() {

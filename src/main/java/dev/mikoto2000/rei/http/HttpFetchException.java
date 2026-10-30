@@ -5,7 +5,8 @@ package dev.mikoto2000.rei.http;
  *
  * <p>Fetch failures never contain a URL, body or credential in their public message.
  */
-public class HttpFetchException extends IllegalStateException {
+public class HttpFetchException extends IllegalStateException
+    implements dev.mikoto2000.rei.toolcontract.ExternalReadFailure {
   /** 外部情報の取得におけるコードの選択肢。 */
   public enum Code {
     /** URL否定許可。 */
@@ -58,5 +59,23 @@ public class HttpFetchException extends IllegalStateException {
   /** 外部情報の取得で用いるコードを返す。 */
   public Code code() {
     return code;
+  }
+
+  @Override
+  public String diagnosticCode() {
+    return switch (code) {
+      case CONNECT_TIMEOUT, READ_TIMEOUT, TOTAL_TIMEOUT -> "timeout";
+      case NETWORK_ERROR -> "connection_failed";
+      default -> "fetch_failed";
+    };
+  }
+
+  @Override
+  public String diagnosticMessage() {
+    return switch (code) {
+      case CONNECT_TIMEOUT, READ_TIMEOUT, TOTAL_TIMEOUT -> "外部情報の取得がタイムアウトしました。接続先の稼働状況を確認してください。";
+      case NETWORK_ERROR -> "外部情報の取得に失敗しました。接続先とネットワークを確認してください。";
+      default -> dev.mikoto2000.rei.toolcontract.ExternalReadFailure.super.diagnosticMessage();
+    };
   }
 }

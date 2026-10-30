@@ -148,6 +148,20 @@ class SessionHistoryCommandTest extends ProjectClientTestSupport {
         .doesNotContain("question b");
   }
 
+  /** 長いユーザー本文と応答本文を末尾まで表示することを確認する。 */
+  @Test
+  void showDisplaysFullUserAndAssistantMessages() {
+    add("session", "title", now);
+    String question = "質問\n".repeat(1000) + "質問の末尾";
+    String answer = "回答\n".repeat(1000) + "回答の末尾";
+    var context = new AgentRunContext("run", "session", temp);
+    turns.start(context, question, now);
+    turns.finish(context, ConversationTurnStore.Status.COMPLETED, answer);
+    assertThat(run("show", "session"))
+        .contains(question, answer)
+        .doesNotContain("(truncated)");
+  }
+
   /** 会話履歴と受付記録の管理で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
   void invalidOptionsAndUnknownSessionAreReportedAndMessagesAreSafeForTerminal() {

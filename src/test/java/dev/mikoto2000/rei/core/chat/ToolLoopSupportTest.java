@@ -17,6 +17,91 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 
 /** ツール繰り返し補助の結果と状態の契約を検証するテスト。 */
 class ToolLoopSupportTest {
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"webSearch", "webSearchAndRead"})
+  void searchHttpFailureDoesNotAbortLocalFix(String searchTool) throws Exception {
+    var search = org.mockito.Mockito.mock(dev.mikoto2000.rei.websearch.WebSearchService.class);
+    var read = org.mockito.Mockito.mock(dev.mikoto2000.rei.websearch.WebSearchAndReadService.class);
+    org.mockito.Mockito.when(search.search("query", 1))
+        .thenThrow(new dev.mikoto2000.rei.websearch.WebSearchHttpException(402));
+    org.mockito.Mockito.when(read.searchAndRead(org.mockito.ArgumentMatchers.any()))
+        .thenThrow(new dev.mikoto2000.rei.websearch.WebSearchHttpException(402));
+    var fixed = new java.util.concurrent.atomic.AtomicBoolean();
+    ToolCallback local =
+        new ToolCallback() {
+          public ToolDefinition getToolDefinition() {
+            return ToolDefinition.builder()
+                .name("applyTextDiff")
+                .description("local fix")
+                .inputSchema("{}")
+                .build();
+          }
+
+          public String call(String input) {
+            fixed.set(true);
+            return "fixed";
+          }
+        };
+    var events = new java.util.ArrayList<dev.mikoto2000.rei.event.AgentEvent>();
+    var factory = new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC());
+    var provider =
+        org.springframework.ai.tool.method.MethodToolCallbackProvider.builder()
+            .toolObjects(new dev.mikoto2000.rei.websearch.WebSearchTools(search, read))
+            .build();
+    var callbacks =
+        new java.util.ArrayList<ToolCallback>(
+            List.of(
+                new dev.mikoto2000.rei.event.ToolEventCallbackProvider(
+                        provider, factory, events::add)
+                    .getToolCallbacks()));
+    callbacks.add(
+        new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(local, factory, events::add));
+    var prompt =
+        new Prompt(
+            "review and fix",
+            OpenAiChatOptions.builder()
+                .toolCallbacks(callbacks)
+                .toolContext(Map.of("toolCallId", "test-call"))
+                .build());
+    var response =
+        new ChatResponse(
+            List.of(
+                new org.springframework.ai.chat.model.Generation(
+                    org.springframework.ai.chat.messages.AssistantMessage.builder()
+                        .content("")
+                        .toolCalls(
+                            List.of(
+                                new org.springframework.ai.chat.messages.AssistantMessage.ToolCall(
+                                    "search",
+                                    "function",
+                                    searchTool,
+                                    searchTool.equals("webSearch")
+                                        ? "{\"query\":\"query\",\"limit\":1}"
+                                        : "{\"request\":{\"query\":\"query\",\"maxResults\":1,\"readTop\":0}}"),
+                                new org.springframework.ai.chat.messages.AssistantMessage.ToolCall(
+                                    "fix", "function", "applyTextDiff", "{}")))
+                        .build())));
+    var result = new ToolLoopSupport().execute(prompt, response);
+    var feedback =
+        (org.springframework.ai.chat.messages.ToolResponseMessage)
+            result.conversationHistory().getLast();
+    assertThat(feedback.getResponses()).hasSize(2);
+    var failure =
+        new tools.jackson.databind.json.JsonMapper()
+            .readTree(feedback.getResponses().getFirst().responseData());
+    assertThat(failure.path("success").asBoolean()).isFalse();
+    assertThat(failure.path("httpStatus").asInt()).isEqualTo(402);
+    assertThat(failure.path("error").asText()).isEqualTo("payment_required");
+    assertThat(fixed).isTrue();
+    assertThat(feedback.getResponses().getLast().responseData()).isEqualTo("fixed");
+    assertThat(events.stream().map(dev.mikoto2000.rei.event.AgentEvent::type).toList())
+        .containsExactly(
+            dev.mikoto2000.rei.event.AgentEventType.TOOL_STARTED,
+            dev.mikoto2000.rei.event.AgentEventType.TOOL_FAILED,
+            dev.mikoto2000.rei.event.AgentEventType.TOOL_STARTED,
+            dev.mikoto2000.rei.event.AgentEventType.TOOL_COMPLETED);
+  }
+
   /** 会話の実行の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void missingFileDoesNotAbortRemainingToolCalls(

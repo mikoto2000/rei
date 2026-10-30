@@ -11,9 +11,12 @@ import dev.mikoto2000.rei.event.ErrorInformation;
 public final class FailureDiagnostics {
   /** Unwrap only trusted typed failures, never arbitrary exception messages. */
   public static String toolFailureResult(Throwable error) {
-    for (int i = 0; error != null && i < 16; i++, error = error.getCause())
+    for (int i = 0; error != null && i < 16; i++, error = error.getCause()) {
+      if (error instanceof dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException denied)
+        return denied.result();
       if (error instanceof dev.mikoto2000.rei.toolcontract.StructuredToolFailure)
         return error.getMessage();
+    }
     return null;
   }
 
@@ -59,6 +62,12 @@ public final class FailureDiagnostics {
           || reactor.core.Exceptions.isCancel(cause))
         return diagnostic("cancelled", "処理が中断されました。保存済みの状態を確認してください。");
     for (var cause : causes) {
+      if (cause instanceof dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException denied)
+        return diagnostic(denied.code(), denied.diagnosticMessage());
+      if (cause instanceof dev.mikoto2000.rei.toolcontract.ExternalReadFailure external)
+        return external.httpStatus() != null
+            ? http(external.httpStatus())
+            : diagnostic(external.diagnosticCode(), external.diagnosticMessage());
       if (cause instanceof dev.mikoto2000.rei.toolcontract.StructuredToolFailure failure)
         return diagnostic(failure.code(), "編集条件を確認し、新しい提案を作成してください。自動再送はできません。");
       if (cause instanceof dev.mikoto2000.rei.core.contextbudget.RawResultPageException page)
@@ -151,6 +160,10 @@ public final class FailureDiagnostics {
       case 401 -> {
         code = "authentication_failed";
         guidance = "認証に失敗しました。利用する接続先と認証設定を確認してください。";
+      }
+      case 402 -> {
+        code = "payment_required";
+        guidance = "接続先から支払い要求が返されました。契約・請求設定・利用枠を確認してください。";
       }
       case 403 -> {
         code = "permission_denied";

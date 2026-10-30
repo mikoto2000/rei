@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.llm;
 
 import java.io.IOException;
+import java.time.Duration;
 import java.util.concurrent.TimeUnit;
 import okhttp3.Interceptor;
 import okhttp3.Response;
@@ -11,8 +12,26 @@ import okhttp3.Response;
  * <p>Keep chat requests alive while receiving data, but bound network read inactivity.
  */
 final class ChatStreamTimeoutInterceptor implements Interceptor {
-  /** 読み取りタイムアウトのミリ秒数。 */
-  static final int READ_TIMEOUT_MILLIS = 120_000;
+  /** 初回応答や推論中の無通信を許容する既定時間。 */
+  static final Duration DEFAULT_READ_TIMEOUT = Duration.ofMinutes(5);
+
+  private final int readTimeoutMillis;
+
+  ChatStreamTimeoutInterceptor() {
+    this(DEFAULT_READ_TIMEOUT);
+  }
+
+  ChatStreamTimeoutInterceptor(Duration readTimeout) {
+    this.readTimeoutMillis = validatedReadTimeoutMillis(readTimeout);
+  }
+
+  static int validatedReadTimeoutMillis(Duration timeout) {
+    if (timeout == null
+        || timeout.compareTo(Duration.ofMillis(1)) < 0
+        || timeout.compareTo(Duration.ofHours(1)) > 0)
+      throw new IllegalArgumentException("rei.llm.read-timeout must be between 1ms and 1h");
+    return Math.toIntExact(timeout.toMillis());
+  }
 
   /** 用途に応じたモデル利用で用いるinterceptを返す。 */
   @Override
@@ -30,7 +49,7 @@ final class ChatStreamTimeoutInterceptor implements Interceptor {
     }
     timeout.clearTimeout().clearDeadline();
     return chain
-        .withReadTimeout(READ_TIMEOUT_MILLIS, TimeUnit.MILLISECONDS)
+        .withReadTimeout(readTimeoutMillis, TimeUnit.MILLISECONDS)
         .proceed(chain.request());
   }
 }

@@ -44,8 +44,13 @@ public class OpenAiSdkConfiguration {
   OpenAiHttpClientBuilderCustomizer reiOpenAiHttpClientCustomizer(Environment environment) {
     String embeddingPath =
         environment.getProperty("spring.ai.openai.embedding.embeddings-path", "/v1/embeddings");
+    var readTimeout =
+        org.springframework.boot.context.properties.bind.Binder.get(environment)
+            .bind("rei.llm.read-timeout", java.time.Duration.class)
+            .orElse(ChatStreamTimeoutInterceptor.DEFAULT_READ_TIMEOUT);
+    var timeoutInterceptor = new ChatStreamTimeoutInterceptor(readTimeout);
     return builder -> {
-      builder.interceptor(new ChatStreamTimeoutInterceptor());
+      builder.interceptor(timeoutInterceptor);
       builder.interceptor(new ShowUiSdkRequestInterceptor());
       if (embeddingPath != null
           && !embeddingPath.isBlank()

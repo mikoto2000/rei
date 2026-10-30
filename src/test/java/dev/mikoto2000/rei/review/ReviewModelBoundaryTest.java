@@ -33,6 +33,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
@@ -46,6 +47,144 @@ import reactor.core.publisher.Flux;
 class ReviewModelBoundaryTest {
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void actualMethodAndEventWrappersReturnARejectedSubmissionForCorrection(boolean legacy)
+      throws Exception {
+    Files.writeString(dir.resolve("lesson.md"), "本文🙂\n確認する内容\n");
+    try (var migration = new StorageMigrationCoordinator(dir.resolve("data"))) {
+      migration.prepare();
+    }
+    var ledger = new ReviewCoverageLedger(new StorageDatabase(dir.resolve("data")));
+    var raw = new RawToolResultStore(dir.resolve("data"));
+    var estimator = TokenEstimator.conservative();
+    var reviews = new ReviewTools(ledger, raw, new Tools(), estimator);
+    var owner = new AgentRunContext("run", "chat", dir, "project");
+    ReviewCoverageLedger.Job job;
+    ReviewTools.Page page;
+    try (var scope = AgentRunScope.open(owner)) {
+      job = reviews.beginReview(List.of("lesson.md"), "correctness", "v1");
+      page =
+          reviews.readReviewFile(job.id(), "lesson.md", job.targets().getFirst().version(), 0, 512);
+    }
+    var assembler =
+        new ContextAssembler(
+            new ContextCompressionProperties(),
+            estimator,
+            new ConversationSummaryRepository(dir.resolve("data")),
+            new ToolResultCompressor(raw, estimator, 8000, 2000),
+            (old, messages, budget, prompt) -> "stored review state",
+            null,
+            null);
+    assembler.setReviewTools(reviews);
+    var events = new AgentEventFactory(Clock.systemUTC());
+    var execution =
+        new RunExecutionContext(
+            "run",
+            new OutputLimitRunBudget(2, 10),
+            new ProgressEvaluator(dir),
+            events,
+            event -> {});
+    execution.setRunContext(owner);
+    execution.beginContextRestoration();
+    var callbacks =
+        java.util.Arrays.stream(DeliveryToolRegistration.provider(reviews).getToolCallbacks())
+            .<org.springframework.ai.tool.ToolCallback>map(
+                t ->
+                    new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(t, events, event -> {}))
+            .toList();
+    var options =
+        OpenAiChatOptions.builder()
+            .toolCallbacks(callbacks)
+            .toolContext(Map.of(RunExecutionContext.KEY, execution))
+            .build();
+    var model = mock(ChatModel.class);
+    var invocations = new AtomicInteger();
+    when(model.stream(any(Prompt.class)))
+        .thenAnswer(
+            invocation -> {
+              int n = invocations.incrementAndGet();
+              String name;
+              Map<String, Object> args;
+              if (n == 1) {
+                name = "readReviewFile";
+                args =
+                    Map.of(
+                        "reviewJobId",
+                        job.id(),
+                        "path",
+                        "lesson.md",
+                        "expectedVersion",
+                        page.range().version(),
+                        "offset",
+                        0,
+                        "tokenBudget",
+                        512);
+              } else if (n == 2 && legacy) {
+                name = "submitReviewResult";
+                var wrong =
+                    new ReviewCoverageLedger.Range(
+                        page.range().path(),
+                        page.range().version(),
+                        page.range().span(),
+                        "0".repeat(64));
+                args =
+                    Map.of(
+                        "reviewJobId",
+                        job.id(),
+                        "range",
+                        wrong,
+                        "assessment",
+                        "checked",
+                        "findings",
+                        List.of());
+              } else if (n <= 3) {
+                if (n == 3) {
+                  assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
+                      .contains("REVIEW_RESULT_INVALID", "accepted");
+                  assertThat(ledger.get(job.id(), ReviewTools.scope(owner)).ranges())
+                      .noneMatch(e -> e.reviewed());
+                }
+                name = "submitReviewPage";
+                args =
+                    Map.of(
+                        "reviewJobId",
+                        job.id(),
+                        "path",
+                        "lesson.md",
+                        "offset",
+                        0,
+                        "nextOffset",
+                        page.nextOffset() + (n == 2 ? 1 : 0),
+                        "assessment",
+                        "checked",
+                        "findings",
+                        List.of());
+              } else
+                return Flux.just(
+                    new ChatResponse(
+                        List.of(new Generation(new AssistantMessage("Review complete.")))));
+              return Flux.just(
+                  new ChatResponse(
+                      List.of(
+                          new Generation(
+                              AssistantMessage.builder()
+                                  .toolCalls(
+                                      List.of(
+                                          new AssistantMessage.ToolCall(
+                                              "call-" + n,
+                                              "function",
+                                              name,
+                                              StorageDatabase.JSON.writeValueAsString(args))))
+                                  .build()))));
+            });
+    new StagnationChatModel(model, assembler)
+        .stream(new Prompt(new UserMessage("review"), options)).blockLast();
+    assertThat(invocations).hasValue(4);
+    assertThat(ledger.get(job.id(), ReviewTools.scope(owner)).status()).isEqualTo("COMPLETE");
+    assertThat(execution.progressSnapshot().budget().argumentCorrections()).isEqualTo(1);
+  }
 
   /** 変更内容のレビューで、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @ParameterizedTest
@@ -99,17 +238,19 @@ class ReviewModelBoundaryTest {
     var calls = new AtomicInteger();
     String args =
         StorageDatabase.JSON.writeValueAsString(
-            durable ? Map.of("workItemId", claim.item().id(), "attempt", claim.attempt()) : Map.of(
-                "reviewJobId",
-                job.id(),
-                "path",
-                "lesson.md",
-                "expectedVersion",
-                job.targets().getFirst().version(),
-                "offset",
-                0,
-                "tokenBudget",
-                256));
+            durable
+                ? Map.of("workItemId", claim.item().id(), "attempt", claim.attempt())
+                : Map.of(
+                    "reviewJobId",
+                    job.id(),
+                    "path",
+                    "lesson.md",
+                    "expectedVersion",
+                    job.targets().getFirst().version(),
+                    "offset",
+                    0,
+                    "tokenBudget",
+                    256));
     when(model.stream(any(Prompt.class)))
         .thenAnswer(
             invocation -> {
@@ -122,7 +263,10 @@ class ReviewModelBoundaryTest {
                                     .toolCalls(
                                         List.of(
                                             new AssistantMessage.ToolCall(
-                                                "read", "function", durable ? "readReviewWorkItem" : "readReviewFile", args)))
+                                                "read",
+                                                "function",
+                                                durable ? "readReviewWorkItem" : "readReviewFile",
+                                                args)))
                                     .build()))));
               return transportFailure
                   ? Flux.error(new IllegalStateException("transport"))
@@ -135,10 +279,13 @@ class ReviewModelBoundaryTest {
                     .stream(new Prompt(new UserMessage("review"), options)).blockLast())
         .hasMessageContaining(transportFailure ? "transport" : "REVIEW_PARTIAL");
     if (durable) {
-      var scope = new dev.mikoto2000.rei.durable.DurableTaskStore.Scope("project", "chat", repository.toString());
+      var scope =
+          new dev.mikoto2000.rei.durable.DurableTaskStore.Scope(
+              "project", "chat", repository.toString());
       var work = new dev.mikoto2000.rei.durable.WorkItemStore(ledger.durableTasks());
       assertThat(work.deliveredHash(scope, claim).isEmpty()).isEqualTo(transportFailure);
-      assertThat(ledger.durableTasks().status(scope, claim.item().task()).state()).isEqualTo("ACTIVE");
+      assertThat(ledger.durableTasks().status(scope, claim.item().task()).state())
+          .isEqualTo("ACTIVE");
     } else {
       var saved = ledger.get(job.id(), ReviewTools.scope(owner));
       assertThat(saved.ranges().getFirst().delivered()).isEqualTo(!transportFailure);

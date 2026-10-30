@@ -34,6 +34,50 @@ class LegacyReviewResumeTest {
   }
 
   @Test
+  void historicalReaderCannotDismissFindingsAfterWriteAuthorityMovesToResumedRun()
+      throws Exception {
+    var fixture = new LongRunFixture(directory);
+    String id = fixture.create(6);
+    var ledger = fixture.reopen();
+    var span = new ReviewCoverageLedger.Span(0, 6, 1, 1, 0, 6);
+    var range = new ReviewCoverageLedger.Range("fixture.java", "snapshot-v1", span, "hash");
+    ledger.fetched(id, fixture.scope(), range);
+    ledger.delivered(id, fixture.scope(), List.of(range));
+    ledger.reviewed(
+        id,
+        fixture.scope(),
+        range,
+        "checked",
+        List.of(
+            new ReviewCoverageLedger.Finding(
+                "F1",
+                "P2",
+                "fixture.java",
+                "snapshot-v1",
+                span,
+                "source",
+                "candidate",
+                "VERIFIED")));
+    var resumed = new ReviewCoverageLedger.Scope("project", "session", "new-run");
+    ledger.resume(id, fixture.scope(), resumed);
+
+    assertThatThrownBy(
+            () ->
+                ledger.dismissFindingTransition(
+                    id, fixture.scope(), "F1", "fixture.java", null, "counterevidence"))
+        .isInstanceOf(dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException.class)
+        .hasMessageContaining("REVIEW_ACCESS_DENIED");
+    assertThat(ledger.get(id, fixture.scope()).findings().getFirst().verificationStatus())
+        .isEqualTo("VERIFIED");
+
+    var result =
+        ledger.dismissFindingTransition(id, resumed, "F1", "fixture.java", null, "counterevidence");
+    assertThat(result.changed()).isTrue();
+    assertThat(ledger.get(id, fixture.scope()).findings().getFirst().verificationStatus())
+        .isEqualTo("DISMISSED");
+  }
+
+  @Test
   void retiredRunCanReadHistoryButCannotPublishLateCoverage() throws Exception {
     var fixture = new LongRunFixture(directory);
     String id = fixture.create(6);
@@ -41,7 +85,9 @@ class LegacyReviewResumeTest {
     fixture.reopen().resume(id, fixture.scope(), resumed);
     assertThatThrownBy(() -> fixture.review(id, 0, 3)).hasMessageContaining("REVIEW_ACCESS_DENIED");
     assertThat(fixture.reopen().get(id, fixture.scope()).ranges()).isEmpty();
-    var range = new ReviewCoverageLedger.Range("fixture.java", "snapshot-v1", new ReviewCoverageLedger.Span(0, 6, 1, 1, 0, 6), "hash");
+    var range =
+        new ReviewCoverageLedger.Range(
+            "fixture.java", "snapshot-v1", new ReviewCoverageLedger.Span(0, 6, 1, 1, 0, 6), "hash");
     var ledger = fixture.reopen();
     ledger.fetched(id, resumed, range);
     ledger.delivered(id, resumed, List.of(range));

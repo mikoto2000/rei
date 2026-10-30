@@ -24,6 +24,139 @@ import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
 /** ツールイベント完了時の処理Decoratorの結果と状態の契約を検証するテスト。 */
 class ToolEventCallbackDecoratorTest {
+  @Test
+  void cancellationWrappingAccessDenialStillStopsExecution() {
+    var callback = delegate("reviewStatus", "unused");
+    var cancelled = new java.util.concurrent.CancellationException();
+    cancelled.initCause(
+        new dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException(
+            "REVIEW_ACCESS_DENIED", "Not allowed", "Start an authorized review"));
+    var failure = new IllegalStateException("cancelled", cancelled);
+    when(callback.call("input")).thenThrow(failure);
+    assertSame(
+        failure,
+        assertThrows(
+            RuntimeException.class,
+            () -> new ToolEventCallbackDecorator(callback, factory, bus).call("input")));
+  }
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({
+    "webSearch,401,authentication_failed", "webSearchAndRead,402,payment_required",
+    "webSearch,429,rate_limited", "webSearchAndRead,503,provider_unavailable"
+  })
+  void searchHttpFailureReturnsModelResultAndAllowsNextLocalTool(
+      String toolName, int status, String code) {
+    bus.subscribe(received::add);
+    var callback = delegate(toolName, "unused");
+    when(callback.call(eq("input"), any(ToolContext.class)))
+        .thenThrow(
+            new IllegalStateException(
+                "PRIVATE_WRAPPER",
+                new dev.mikoto2000.rei.websearch.WebSearchHttpException(status)));
+    var context = new ToolContext(java.util.Map.of("toolCallId", "search-call"));
+    String result = new ToolEventCallbackDecorator(callback, factory, bus).call("input", context);
+    var json = new tools.jackson.databind.json.JsonMapper().readTree(result);
+    assertTrue(!json.path("success").asBoolean());
+    assertEquals(code, json.path("error").asText());
+    assertEquals(status, json.path("httpStatus").asInt());
+    assertTrue(json.path("message").asText().contains("HTTP " + status));
+    assertTrue(json.path("guidance").asText().contains("ローカル"));
+    assertTrue(dev.mikoto2000.rei.core.stagnation.ProgressEvaluator.failedResult(result));
+    assertTrue(!result.contains("PRIVATE"));
+    assertEquals("search-call", received.get(1).correlationId());
+    var failed = (ToolFailedPayload) received.get(1).payload();
+    assertEquals(code, failed.error().code());
+    assertTrue(failed.error().message().contains("HTTP " + status));
+    assertTrue(!failed.error().message().contains("PRIVATE"));
+    assertEquals(
+        "fixed",
+        new ToolEventCallbackDecorator(delegate("applyTextDiff", "fixed"), factory, bus)
+            .call("input"));
+    assertEquals(
+        List.of(
+            AgentEventType.TOOL_STARTED,
+            AgentEventType.TOOL_FAILED,
+            AgentEventType.TOOL_STARTED,
+            AgentEventType.TOOL_COMPLETED),
+        received.stream().map(AgentEvent::type).toList());
+  }
+
+  @Test
+  void searchNetworkFailureReturnsSafeFailure() {
+    var callback = delegate("webSearchAndRead", "unused");
+    for (var failure :
+        List.of(
+            new java.io.UncheckedIOException(new java.io.IOException("PRIVATE_URL")),
+            new dev.mikoto2000.rei.http.HttpFetchException(
+                dev.mikoto2000.rei.http.HttpFetchException.Code.TOTAL_TIMEOUT),
+            new dev.mikoto2000.rei.http.HttpFetchException(
+                dev.mikoto2000.rei.http.HttpFetchException.Code.NETWORK_ERROR))) {
+      org.mockito.Mockito.doThrow(failure).when(callback).call("input");
+      String result = new ToolEventCallbackDecorator(callback, factory, bus).call("input");
+      assertTrue(dev.mikoto2000.rei.core.stagnation.ProgressEvaluator.failedResult(result));
+      assertTrue(!result.contains("PRIVATE"));
+      assertTrue(!result.contains("invalid_state"));
+    }
+  }
+
+  @Test
+  void searchCancellationAndProgrammingErrorsStillPropagate() {
+    var callback = delegate("webSearchAndRead", "unused");
+    for (var failure :
+        List.of(
+            new IllegalStateException("internal bug"),
+            new IllegalArgumentException("invalid request"),
+            new java.io.UncheckedIOException(
+                new java.io.IOException(
+                    new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
+                        dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason
+                            .LLM_CALL_BUDGET_EXCEEDED))),
+            new IllegalStateException(new java.util.concurrent.CancellationException()),
+            new IllegalStateException(new InterruptedException()),
+            new java.io.UncheckedIOException(
+                new java.io.IOException(new java.util.concurrent.CancellationException())))) {
+      org.mockito.Mockito.doThrow(failure).when(callback).call("input");
+      assertSame(
+          failure,
+          assertThrows(
+              RuntimeException.class,
+              () -> new ToolEventCallbackDecorator(callback, factory, bus).call("input")));
+    }
+  }
+
+  @Test
+  void interruptedSearchDoesNotReturnRecoverableFailure() {
+    var callback = delegate("webSearch", "unused");
+    var failure = new dev.mikoto2000.rei.websearch.WebSearchHttpException(402);
+    when(callback.call("input"))
+        .thenAnswer(
+            invocation -> {
+              Thread.currentThread().interrupt();
+              throw failure;
+            });
+    try {
+      assertSame(
+          failure,
+          assertThrows(
+              RuntimeException.class,
+              () -> new ToolEventCallbackDecorator(callback, factory, bus).call("input")));
+    } finally {
+      Thread.interrupted();
+    }
+  }
+
+  @Test
+  void httpFailureInUnrelatedToolStillPropagates() {
+    var callback = delegate("updateTaskState", "unused");
+    var failure = new dev.mikoto2000.rei.websearch.WebSearchHttpException(402);
+    when(callback.call("input")).thenThrow(failure);
+    assertSame(
+        failure,
+        assertThrows(
+            RuntimeException.class,
+            () -> new ToolEventCallbackDecorator(callback, factory, bus).call("input")));
+  }
 
   /** 日時や期限の条件を再現するために使う検証時刻。 */
   private final Clock clock =

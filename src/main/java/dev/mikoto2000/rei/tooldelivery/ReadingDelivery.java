@@ -15,7 +15,9 @@ import org.springframework.ai.chat.prompt.Prompt;
 public final class ReadingDelivery {
   public record Notice(String state, boolean suppressed, List<SourceEvidence> evidence) {
     public Notice {
-      evidence = List.copyOf(evidence);
+      // This is a prompt-facing sample, not the restoration ledger. Repeating all old
+      // references can consume nearly the whole shared page budget before any source fits.
+      evidence = evidence.stream().limit(2).toList();
     }
   }
 
@@ -241,9 +243,12 @@ public final class ReadingDelivery {
                     ? "STALE"
                     : "UNAVAILABLE";
     boolean suppress = suppressRequested && exact && state.equals("AVAILABLE");
+    int start = result.path("startLine").asInt();
+    int end = result.path("endLine").asInt(start + result.path("content").size() - 1);
     var evidence =
         previous.stream()
             .filter(e -> e.path().equals(path) && e.version().equals(version))
+            .filter(e -> e.start() <= end && (long) e.start() + e.hashes().size() > start)
             .map(
                 e ->
                     new SourceEvidence(
@@ -254,7 +259,7 @@ public final class ReadingDelivery {
                         null,
                         "file-read",
                         e.ref()))
-            .limit(8)
+            .limit(2)
             .toList();
     if (suppress) ReadingMetrics.add("suppressedBodyBytes", result.path("returnedBytes").asInt());
     return new Notice(state, suppress, evidence);

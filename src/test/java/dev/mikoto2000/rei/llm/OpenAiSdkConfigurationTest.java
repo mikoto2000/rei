@@ -40,6 +40,7 @@ class OpenAiSdkConfigurationTest {
   @Test
   void boundConnectionOptionsKeepLegacyWirePathsAndConfiguredModels() {
     runner()
+        .withPropertyValues("rei.llm.read-timeout=8m")
         .run(
             context -> {
               assertThat(context).hasNotFailed();
@@ -62,6 +63,7 @@ class OpenAiSdkConfigurationTest {
                   .contains("\"model\":\"local-chat\"");
               assertThat(context.getBean(Requests.class).bodies.get(1))
                   .contains("\"model\":\"local-image\"");
+              assertThat(context.getBean(Requests.class).readTimeouts.getFirst()).isEqualTo(480_000);
             });
   }
 
@@ -92,6 +94,8 @@ class OpenAiSdkConfigurationTest {
 
     /** 検証に使うbodies。 */
     final List<String> bodies = new ArrayList<>();
+
+    final List<Integer> readTimeouts = new ArrayList<>();
   }
 
   /** 検証対象に必要な依存先と設定を組み立てるテスト用構成。 */
@@ -111,6 +115,7 @@ class OpenAiSdkConfigurationTest {
           builder.interceptor(
               chain -> {
                 var request = chain.request();
+                requests.readTimeouts.add(chain.readTimeoutMillis());
                 requests.urls.add(request.url().toString());
                 var buffer = new okio.Buffer();
                 request.body().writeTo(buffer);

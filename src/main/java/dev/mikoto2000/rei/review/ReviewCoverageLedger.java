@@ -186,11 +186,15 @@ public final class ReviewCoverageLedger {
   /** データベース。 */
   private final StorageDatabase database;
 
-  private java.util.function.BiFunction<dev.mikoto2000.rei.durable.DurableTaskStore.Scope, String, String>
+  private java.util.function.BiFunction<
+          dev.mikoto2000.rei.durable.DurableTaskStore.Scope, String, String>
       taskGoalResolver = (scope, run) -> null;
 
   /** Startup-only host association; no model-supplied Goal identity is trusted. */
-  public void setTaskGoalResolver(java.util.function.BiFunction<dev.mikoto2000.rei.durable.DurableTaskStore.Scope, String, String> resolver) {
+  public void setTaskGoalResolver(
+      java.util.function.BiFunction<
+              dev.mikoto2000.rei.durable.DurableTaskStore.Scope, String, String>
+          resolver) {
     taskGoalResolver = Objects.requireNonNull(resolver);
   }
 
@@ -354,7 +358,7 @@ public final class ReviewCoverageLedger {
         parent,
         job -> {
           if (!job.owner().equals(parent) || !parent.project().equals(child.project()))
-            throw new IllegalArgumentException("REVIEW_ACCESS_DENIED");
+            throw accessDenied();
           if (job.participants().contains(child)) return job;
           var participants = new ArrayList<>(job.participants());
           participants.add(child);
@@ -383,8 +387,7 @@ public final class ReviewCoverageLedger {
    */
   public Job resume(String id, Scope previous, Scope resumed) {
     if (!previous.project().equals(resumed.project())
-        || !previous.conversation().equals(resumed.conversation()))
-      throw new IllegalArgumentException("REVIEW_ACCESS_DENIED");
+        || !previous.conversation().equals(resumed.conversation())) throw accessDenied();
     return update(
         id,
         previous,
@@ -442,7 +445,8 @@ public final class ReviewCoverageLedger {
               job.findings().stream()
                   .map(
                       finding ->
-                          versions.get(finding.path()).equals(finding.version())
+                          finding.verificationStatus().equals("DISMISSED")
+                                  || versions.get(finding.path()).equals(finding.version())
                               ? finding
                               : new Finding(
                                   finding.id(),
@@ -554,6 +558,55 @@ public final class ReviewCoverageLedger {
         });
   }
 
+  /** Preserve source evidence and the original claim when corroboration refutes a finding. */
+  public Job dismissFinding(
+      String id, Scope scope, String findingId, String path, String evidence, String reason) {
+    return dismissFindingTransition(id, scope, findingId, path, evidence, reason).job();
+  }
+
+  public record FindingTransition(Job job, boolean changed) {}
+
+  /** Report the committed transition, including idempotent calls, from the same transaction. */
+  public FindingTransition dismissFindingTransition(
+      String id, Scope scope, String findingId, String path, String evidence, String reason) {
+    require(reason);
+    if (reason.length() > 4096) throw invalid();
+    var transitioned = new java.util.concurrent.atomic.AtomicBoolean();
+    var result =
+        update(
+            id,
+            scope,
+            job -> {
+              transitioned.set(false);
+              var matches =
+                  job.findings().stream()
+                      .filter(
+                          f ->
+                              f.id().equals(findingId)
+                                  && f.path().equals(path)
+                                  && (evidence == null || f.evidence().equals(evidence)))
+                      .toList();
+              if (matches.size() != 1) throw invalid();
+              var old = matches.getFirst();
+              if (old.verificationStatus().equals("DISMISSED")) return job;
+              var findings = new ArrayList<>(job.findings());
+              findings.set(
+                  findings.indexOf(old),
+                  new Finding(
+                      old.id(),
+                      old.severity(),
+                      old.path(),
+                      old.version(),
+                      old.location(),
+                      old.evidence(),
+                      old.assessment() + "\nDismissal after corroboration: " + reason,
+                      "DISMISSED"));
+              transitioned.set(true);
+              return copy(job, job.ranges(), findings, job.status());
+            });
+    return new FindingTransition(result, transitioned.get());
+  }
+
   /** 変更内容のレビューで用いるキャッシュの無効化を返す。 */
   public Job invalidate(String id, Scope scope, String path, String actualVersion) {
     return update(
@@ -577,7 +630,24 @@ public final class ReviewCoverageLedger {
                                   entry.assessment())
                               : entry)
                   .toList();
-          return copy(job, entries, job.findings(), "STALE_VERSION");
+          var findings =
+              job.findings().stream()
+                  .map(
+                      finding ->
+                          finding.path().equals(path)
+                                  && !finding.verificationStatus().equals("DISMISSED")
+                              ? new Finding(
+                                  finding.id(),
+                                  finding.severity(),
+                                  finding.path(),
+                                  finding.version(),
+                                  finding.location(),
+                                  finding.evidence(),
+                                  finding.assessment(),
+                                  "STALE")
+                              : finding)
+                  .toList();
+          return copy(job, entries, findings, "STALE_VERSION");
         });
   }
 
@@ -608,8 +678,7 @@ public final class ReviewCoverageLedger {
           var old = read(db, id, scope);
           var changed = operation.apply(old);
           if (changed.equals(old)) return old;
-          if (!old.participants().contains(scope))
-            throw new IllegalArgumentException("REVIEW_ACCESS_DENIED");
+          if (!old.participants().contains(scope)) throw accessDenied();
           var next =
               new Job(
                   old.id(),
@@ -639,19 +708,29 @@ public final class ReviewCoverageLedger {
         if (!rows.next()) throw new IllegalArgumentException("REVIEW_JOB_NOT_FOUND");
         var job = StorageDatabase.JSON.readValue(rows.getString(1), Job.class);
         if (!job.participants().contains(scope)) {
-          try (var history = db.prepareStatement("SELECT 1 FROM review_participants WHERE job=? AND project=? AND conversation=? AND run=?")) {
+          try (var history =
+              db.prepareStatement(
+                  "SELECT 1 FROM review_participants WHERE job=? AND project=? AND conversation=? AND run=?")) {
             history.setString(1, id);
             history.setString(2, scope.project());
             history.setString(3, scope.conversation());
             history.setString(4, scope.run());
             try (var allowed = history.executeQuery()) {
-              if (!allowed.next()) throw new IllegalArgumentException("REVIEW_ACCESS_DENIED");
+              if (!allowed.next()) throw accessDenied();
             }
           }
         }
         return job;
       }
     }
+  }
+
+  /** 所有者情報を開示せず、正規の再開または新規レビューへ誘導する。 */
+  private static dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException accessDenied() {
+    return new dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException(
+        "REVIEW_ACCESS_DENIED",
+        "このレビューへの操作は、現在のProject・会話・Runに対して許可されていません。",
+        "同じreviewJobIdで再試行しないでください。checkpointShowは参照権限を引き継ぎません。過去の作業を引き継ぐ必要がある場合は、利用者が再開可能な対象タスクの再開を明示的に依頼した場合にのみcheckpointResumeを使ってください。これは新しいRunを予約する操作であり、現在のRunへ権限を追加する操作ではありません。現在の依頼を新たに進める場合は、現在のProject内の対象ファイルと評価基準でbeginReviewを実行し、新しいIDを使ってください。履歴のIDやRun情報を書き換えて権限を回避せず、独立したローカル作業は継続してください。拒否されたレビューの内容や完了状態を確認済みと扱わないでください。");
   }
 
   /** 指定された内容を書き込み先へ反映する。 */

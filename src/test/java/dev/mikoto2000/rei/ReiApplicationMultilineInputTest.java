@@ -24,6 +24,25 @@ import picocli.CommandLine;
 /** れいアプリケーションMultiline入力の結果と状態の契約を検証するテスト。 */
 class ReiApplicationMultilineInputTest {
 
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"dumb", "dumb-color"})
+  @org.junit.jupiter.api.Timeout(5)
+  void pipedResumeLineIsAcceptedInsteadOfBecomingMultilineText(String type) throws Exception {
+    String command = "/resume ca74f54d-9953-4223-a536-5d6927ca184c";
+    try (var terminal =
+        new org.jline.terminal.impl.DumbTerminal(
+            "pipe",
+            type,
+            new java.io.ByteArrayInputStream(
+                (command + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8)),
+            new java.io.ByteArrayOutputStream(),
+            java.nio.charset.StandardCharsets.UTF_8)) {
+      var reader = org.jline.reader.LineReaderBuilder.builder().terminal(terminal).build();
+      newApp().configureMultilineKeyBinding(reader);
+      assertEquals(command, reader.readLine(""));
+    }
+  }
+
   /** 単一行形式を返すことを確認する。 */
   @Test
   void readPossiblyMultilineInput_returnsSingleLineAsIs() {
