@@ -122,7 +122,7 @@ public class ResumeCommand implements Callable<Integer> {
   }
 
   /** 作業の中断と再開に必要な一覧タスク一覧を扱う。 */
-  @Command(name = "list")
+  @Command(name = "list", description = "現在 Project の保存済みタスクと状態を一覧表示します")
   public static class ListTasks implements Callable<Integer> {
     /** 親。 */
     @ParentCommand ResumeCommand parent;
@@ -144,7 +144,7 @@ public class ResumeCommand implements Callable<Integer> {
   }
 
   /** 作業の中断と再開に必要な概要を扱う。 */
-  @Command(name = "overview")
+  @Command(name = "overview", description = "現在 Project の中断作業と再開案内を表示します")
   public static class Overview implements Callable<Integer> {
     /** 親。 */
     @ParentCommand ResumeCommand parent;
@@ -161,7 +161,7 @@ public class ResumeCommand implements Callable<Integer> {
   }
 
   /** 作業の中断と再開に必要な表示を扱う。 */
-  @Command(name = "show")
+  @Command(name = "show", description = "指定タスクのチェックポイントと再開可否を表示します")
   public static class Show implements Callable<Integer> {
     /** 親。 */
     @ParentCommand ResumeCommand parent;
@@ -181,7 +181,7 @@ public class ResumeCommand implements Callable<Integer> {
   }
 
   /** 作業の中断と再開に必要なAbandonを扱う。 */
-  @Command(name = "abandon")
+  @Command(name = "abandon", description = "指定した保存済みタスクの再開を取りやめます")
   public static class Abandon implements Callable<Integer> {
     /** 親。 */
     @ParentCommand ResumeCommand parent;

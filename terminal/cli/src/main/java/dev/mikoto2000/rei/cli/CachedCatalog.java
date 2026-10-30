@@ -45,13 +45,7 @@ final class CachedCatalog {
         || words.stream()
             .noneMatch(word -> Set.of("-h", "--help", "-V", "--version").contains(word)))
       return null;
-    var root = picocli.CommandLine.Model.CommandSpec.create().name("");
-    for (var command : catalog.commands())
-      root.addSubcommand(
-          command.name(),
-          new picocli.CommandLine(dev.mikoto2000.rei.application.cli.CliGrammar.describe(command)));
-    var line = new picocli.CommandLine(root);
-    markHelp(line);
+    var line = ClientHelpCatalog.create(catalog);
     var arguments = new ArrayList<>(words);
     arguments.set(0, arguments.getFirst().replaceFirst("^/", ""));
     try {
@@ -68,25 +62,16 @@ final class CachedCatalog {
     }
   }
 
-  /** 後続の判断に現在の状態を反映するため、使い方の状態を記録する。 */
-  private static void markHelp(picocli.CommandLine line) {
-    for (var option : new ArrayList<>(line.getCommandSpec().options())) {
-      boolean help = java.util.Arrays.asList(option.names()).contains("--help"),
-          version = java.util.Arrays.asList(option.names()).contains("--version");
-      if (help || version) {
-        line.getCommandSpec().remove(option);
-        line.getCommandSpec()
-            .addOption(option.toBuilder().usageHelp(help).versionHelp(version).build());
-      }
-    }
-    new java.util.HashSet<>(line.getSubcommands().values()).forEach(CachedCatalog::markHelp);
-  }
-
   /** 同じ意味の指定を共通に扱えるよう、表記や形式をそろえる。 */
   List<String> normalize(List<String> words) {
     if (words.isEmpty() || words.contains("--")) return words;
     var command = find(catalog.commands(), words.getFirst().replaceFirst("^/", ""));
-    if (command == null || !command.commands().isEmpty() || command.options().isEmpty())
+    if (command == null
+        || !command.commands().isEmpty()
+        || command.options().stream()
+            .allMatch(
+                option ->
+                    option.names().contains("--help") || option.names().contains("--version")))
       return words;
     var line =
         new picocli.CommandLine(dev.mikoto2000.rei.application.cli.CliGrammar.describe(command));
@@ -260,32 +245,14 @@ final class CachedCatalog {
 
   /** 軽量CLIでの対話で用いる使い方を返す。 */
   String help(List<String> path) {
-    List<CliCatalog.Command> commands = catalog.commands();
-    CliCatalog.Command selected = null;
+    var line = ClientHelpCatalog.create(catalog);
     for (String name : path) {
-      selected = find(commands, name.replaceFirst("^/", ""));
-      if (selected == null) return "";
-      commands = selected.commands();
+      line = line.getSubcommands().get(name.replaceFirst("^/", ""));
+      if (line == null) return "";
     }
     var text = new StringBuilder();
-    if (selected == null) {
-      for (var command : commands)
-        text.append('/')
-            .append(command.name())
-            .append("  ")
-            .append(command.description())
-            .append('\n');
-      return text.toString();
-    }
-    var root = picocli.CommandLine.Model.CommandSpec.create().name("");
-    for (var command : catalog.commands())
-      root.addSubcommand(
-          command.name(),
-          new picocli.CommandLine(dev.mikoto2000.rei.application.cli.CliGrammar.describe(command)));
-    var line = new picocli.CommandLine(root);
-    for (String name : path) line = line.getSubcommands().get(name.replaceFirst("^/", ""));
     text.append(line.getUsageMessage(picocli.CommandLine.Help.Ansi.OFF));
-    if (path.getFirst().replaceFirst("^/", "").equals("voice"))
+    if (!path.isEmpty() && path.getFirst().replaceFirst("^/", "").equals("voice"))
       text.append("Voice is unavailable in this CLI. Use the existing Shell.\n");
     return text.toString();
   }

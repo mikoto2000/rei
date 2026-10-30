@@ -148,7 +148,7 @@ public class WorkCommand implements Callable<Integer> {
   }
 
   /** 作業文脈の引き継ぎに必要な表示を扱う。 */
-  @Command(name = "show")
+  @Command(name = "show", description = "現在の作業文脈を表示します")
   public static class Show implements Callable<Integer> {
     /** 親。 */
     @ParentCommand WorkCommand parent;
@@ -160,7 +160,7 @@ public class WorkCommand implements Callable<Integer> {
   }
 
   /** 作業文脈の引き継ぎに必要な更新を扱う。 */
-  @Command(name = "update")
+  @Command(name = "update", description = "現在の作業文脈を更新します")
   public static class Update implements Callable<Integer> {
     /** 親。 */
     @ParentCommand WorkCommand parent;
@@ -172,7 +172,7 @@ public class WorkCommand implements Callable<Integer> {
   }
 
   /** 作業文脈の引き継ぎに必要な履歴を扱う。 */
-  @Command(name = "history")
+  @Command(name = "history", description = "作業文脈の更新履歴を表示します")
   public static class History implements Callable<Integer> {
     /** 親。 */
     @ParentCommand WorkCommand parent;

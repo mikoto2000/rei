@@ -113,5 +113,21 @@ public class RootCommand {
     if (!embeddingEnabled) {
       command.getCommandSpec().removeSubcommand("embed");
     }
+    var builtins =
+        java.util.Map.of(
+            "exit", "れいを終了します。実行中の処理の扱いは終了時の案内に従ってください。",
+            "quit", "れいを終了します。/exit の別名です。",
+            "help", "利用可能なコマンドの役割と使い方を表示します。",
+            "version", "れいのバージョンを表示します。",
+            "paste", "複数行のメッセージを入力します。単独の . の行で入力を終了します。");
+    builtins.forEach(
+        (name, description) -> {
+          if (!command.getSubcommands().containsKey(name)) {
+            var builtin = picocli.CommandLine.Model.CommandSpec.create().name(name);
+            builtin.usageMessage().description(description);
+            command.addSubcommand(name, builtin);
+          }
+        });
+    dev.mikoto2000.rei.application.cli.CommandHelp.install(command);
   }
 }

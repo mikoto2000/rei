@@ -275,7 +275,7 @@ public class SubAgentCommand implements Callable<Integer> {
   }
 
   /** 補助エージェントへの委譲のうち、一覧の操作を利用者コマンドとして受け付ける。 */
-  @Command(name = "list")
+  @Command(name = "list", description = "登録済み SubAgent を一覧表示します")
   public static class ListCommand implements Callable<Integer> {
     /** 親。 */
     @ParentCommand SubAgentCommand parent;
@@ -287,7 +287,7 @@ public class SubAgentCommand implements Callable<Integer> {
   }
 
   /** 補助エージェントへの委譲のうち、表示の操作を利用者コマンドとして受け付ける。 */
-  @Command(name = "show")
+  @Command(name = "show", description = "指定 SubAgent の設定と利用可能なツールを表示します")
   public static class ShowCommand implements Callable<Integer> {
     /** 親。 */
     @ParentCommand SubAgentCommand parent;
@@ -331,7 +331,7 @@ public class SubAgentCommand implements Callable<Integer> {
   }
 
   /** 補助エージェントへの委譲のうち、再読み込みの操作を利用者コマンドとして受け付ける。 */
-  @Command(name = "reload")
+  @Command(name = "reload", description = "SubAgent の設定ファイルを再読み込みします")
   public static class ReloadCommand implements Callable<Integer> {
     /** 親。 */
     @ParentCommand SubAgentCommand parent;
@@ -348,7 +348,7 @@ public class SubAgentCommand implements Callable<Integer> {
   }
 
   /** 補助エージェントへの委譲のうち、検証の操作を利用者コマンドとして受け付ける。 */
-  @Command(name = "validate")
+  @Command(name = "validate", description = "指定した SubAgent 設定ファイルを検証します")
   public static class ValidateCommand implements Callable<Integer> {
     /** 親。 */
     @ParentCommand SubAgentCommand parent;
@@ -375,7 +375,7 @@ public class SubAgentCommand implements Callable<Integer> {
   }
 
   /** 補助エージェントへの委譲のうち、初期化の操作を利用者コマンドとして受け付ける。 */
-  @Command(name = "init")
+  @Command(name = "init", description = "指定 ID の SubAgent 設定ファイルの雛形を作成します")
   public static class InitCommand implements Callable<Integer> {
     /** 親。 */
     @ParentCommand SubAgentCommand parent;

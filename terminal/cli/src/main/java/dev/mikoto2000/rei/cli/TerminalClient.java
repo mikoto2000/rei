@@ -127,6 +127,15 @@ public final class TerminalClient implements AutoCloseable {
           .sorted()
           .toList();
 
+  /** Backend の Shell 定義には含まれない、クライアント固有の操作名。 */
+  private static final Map<String, List<String>> LOCAL_ACTIONS =
+      Map.of(
+          "/project", List.of("select", "register"),
+          "/session", List.of("select"),
+          "/history", List.of("off", "on"),
+          "/input-history", List.of("off", "on"),
+          "/run-mode", List.of("exclusive", "read-only", "conversation"));
+
   /** 軽量CLIでの対話を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public TerminalClient(BackendClient backend, Path historyDirectory, boolean noHistory)
       throws IOException {
@@ -153,6 +162,20 @@ public final class TerminalClient implements AutoCloseable {
     menuReader.setParser(commandParser());
     menuReader.setHistory(memory);
     menuReader.setCompleter(this::complete);
+    // 候補生成と同じ prefix で JLine も照合する。置換範囲は元の単語全体を維持する。
+    menuReader.setCompletionMatcher(
+        new org.jline.reader.impl.CompletionMatcherImpl() {
+          @Override
+          public void compile(
+              Map<LineReader.Option, Boolean> options,
+              boolean prefix,
+              CompletingParsedLine line,
+              boolean caseInsensitive,
+              int errors,
+              String originalGroupName) {
+            super.compile(options, true, line, caseInsensitive, errors, originalGroupName);
+          }
+        });
     reader = menuReader;
     reader
         .getWidgets()
@@ -243,9 +266,10 @@ public final class TerminalClient implements AutoCloseable {
 
   /** 処理の完了を記録し、後続の処理へ結果を引き渡す。 */
   private void complete(LineReader input, ParsedLine line, List<Candidate> candidates) {
-    List<String> values = completionValues(line.words(), line.wordIndex(), line.word());
+    String prefix = line.word().substring(0, Math.min(line.wordCursor(), line.word().length()));
+    List<String> values = completionValues(line.words(), line.wordIndex(), prefix);
     for (String value : values)
-      if (value.startsWith(line.word())) {
+      if (value.startsWith(prefix)) {
         var candidate = catalog.presentation(line.words(), line.wordIndex(), value);
         candidates.add(
             new Candidate(
@@ -257,9 +281,10 @@ public final class TerminalClient implements AutoCloseable {
                 null,
                 candidate.appendSpace()));
       }
-    Set<String> types = catalog.pathTypes(line.words(), line.wordIndex(), line.word());
+    Set<String> types = catalog.pathTypes(line.words(), line.wordIndex(), prefix);
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-    if (line.words().size() > 1
+    if (line.wordIndex() == 2
+        && line.words().size() > 1
         && line.words().getFirst().equals("/project")
         && Set.of("register", "add", "cd").contains(line.words().get(1)))
       types = Set.of("directory");
@@ -271,7 +296,7 @@ public final class TerminalClient implements AutoCloseable {
               line.words(),
               line.wordIndex(),
               line.wordIndex() - 1,
-              line.word(),
+              prefix,
               List.of(),
               types,
               List.of(),
@@ -293,6 +318,8 @@ public final class TerminalClient implements AutoCloseable {
   List<String> completionValues(List<String> words, int wordIndex, String prefix) {
     var values = new LinkedHashSet<>(catalog.complete(words, wordIndex, prefix));
     if (wordIndex == 0) values.addAll(COMMANDS);
+    if (wordIndex == 1 && !words.isEmpty())
+      values.addAll(LOCAL_ACTIONS.getOrDefault(words.getFirst(), List.of()));
     if (wordIndex == 1 && !words.isEmpty() && words.getFirst().equals("/model"))
       values.addAll(modelIds);
     String type = catalog.candidateType(words, wordIndex);

@@ -9,6 +9,7 @@
     <include>dev/mikoto2000/rei/checkpoint/ResumeOverview.java</include>
     <include>dev/mikoto2000/rei/application/cli/CliCatalog.java</include>
     <include>dev/mikoto2000/rei/application/cli/CliGrammar.java</include>
+    <include>dev/mikoto2000/rei/application/cli/CommandHelp.java</include>
     <include>dev/mikoto2000/rei/application/cli/ActivityRequest.java</include>
     <include>dev/mikoto2000/rei/image/ImageSize.java</include>
     <include>dev/mikoto2000/rei/paper/PaperCommandRequest.java</include><include>dev/mikoto2000/rei/paper/PaperSearchQuery.java</include><include>dev/mikoto2000/rei/paper/PaperException.java</include>

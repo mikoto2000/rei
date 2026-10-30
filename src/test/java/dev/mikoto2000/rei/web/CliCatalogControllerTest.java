@@ -8,6 +8,28 @@ import org.junit.jupiter.api.Test;
 
 /** 軽量CLI利用可能な項目受付窓口の結果と状態の契約を検証するテスト。 */
 class CliCatalogControllerTest {
+  /** 実行用の固定操作名定義とカタログの候補が一致することを確認する。 */
+  @Test
+  void fixedActionChoicesMatchTheirDefinitionsThroughoutTheCommandTree() throws Exception {
+    var catalog = new CliCatalogController().catalog();
+    for (var command : catalog.commands()) compareActionChoices(command);
+  }
+
+  private static void compareActionChoices(
+      dev.mikoto2000.rei.application.cli.CliCatalog.Command command) throws Exception {
+    for (var parameter : command.parameters()) {
+      if (parameter.candidateType().isEmpty()) continue;
+      var type = Class.forName(parameter.candidateType());
+      if (!dev.mikoto2000.rei.core.completion.FirstArgumentCandidates.class.isAssignableFrom(type))
+        continue;
+      var candidates = (Iterable<?>) type.getDeclaredConstructor().newInstance();
+      var expected = new java.util.ArrayList<String>();
+      candidates.forEach(value -> expected.add(value.toString()));
+      assertEquals(expected, parameter.choices(), command.name());
+    }
+    for (var child : command.commands()) compareActionChoices(child);
+  }
+
   /** Web APIによる操作で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void declaredHelpMatchesPicocliForEveryDirectShellGrammar() {
@@ -32,7 +54,8 @@ class CliCatalogControllerTest {
               .findFirst()
               .orElseThrow();
       compareHelp(
-          new picocli.CommandLine(type, factory),
+          dev.mikoto2000.rei.application.cli.CommandHelp.install(
+              new picocli.CommandLine(type, factory)),
           new picocli.CommandLine(dev.mikoto2000.rei.application.cli.CliGrammar.describe(command)),
           failures,
           !name.equals("voice"));
@@ -67,6 +90,7 @@ class CliCatalogControllerTest {
       assertNull(spec.userObject());
       assertTrue(
           new picocli.CommandLine(spec).getUsageMessage().contains(command.name()), command.name());
+      verifyCatalogHelp(new picocli.CommandLine(spec));
     }
     var session =
         catalog.commands().stream()
@@ -77,6 +101,18 @@ class CliCatalogControllerTest {
         new picocli.CommandLine(new dev.mikoto2000.rei.ui.shell.SessionCommand()).getUsageMessage(),
         new picocli.CommandLine(dev.mikoto2000.rei.application.cli.CliGrammar.describe(session))
             .getUsageMessage());
+  }
+
+  private static void verifyCatalogHelp(picocli.CommandLine line) {
+    var output = new java.io.StringWriter();
+    line.setOut(new java.io.PrintWriter(output));
+    line.setErr(new java.io.PrintWriter(output));
+    assertEquals(0, line.execute("--help"), line.getCommandName() + "\n" + output);
+    assertTrue(output.toString().contains("Usage:"));
+    assertTrue(
+        line.getCommandSpec().usageMessage().description().length > 0, line.getCommandName());
+    for (var child : new java.util.HashSet<>(line.getSubcommands().values()))
+      verifyCatalogHelp(child);
   }
 
   /** Web APIによる操作で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */

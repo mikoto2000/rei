@@ -131,7 +131,7 @@ public class SleepCommand implements Callable<Integer> {
   }
 
   /** 長期記憶の活用に必要な事前確認を扱う。 */
-  @Command(name = "preview")
+  @Command(name = "preview", description = "記憶の整理内容を、適用前に確認します")
   public static class Preview implements Callable<Integer> {
     /** 親。 */
     @ParentCommand SleepCommand parent;
@@ -143,7 +143,7 @@ public class SleepCommand implements Callable<Integer> {
   }
 
   /** 長期記憶の活用に必要な状態を扱う。 */
-  @Command(name = "status")
+  @Command(name = "status", description = "記憶の整理処理の現在の状態を表示します")
   public static class Status implements Callable<Integer> {
     /** 親。 */
     @ParentCommand SleepCommand parent;
@@ -155,7 +155,7 @@ public class SleepCommand implements Callable<Integer> {
   }
 
   /** 長期記憶の活用に必要な履歴を扱う。 */
-  @Command(name = "history")
+  @Command(name = "history", description = "記憶の整理処理の実行履歴を表示します")
   public static class History implements Callable<Integer> {
     /** 親。 */
     @ParentCommand SleepCommand parent;
@@ -201,6 +201,7 @@ public class SleepCommand implements Callable<Integer> {
   /** 長期記憶の活用に必要な自動を扱う。 */
   @Command(
       name = "auto",
+      description = "現在の Session の自動記憶整理を管理します",
       subcommands = {AutoStatus.class, AutoResume.class})
   public static class Auto {
     /** 親。 */
@@ -208,7 +209,7 @@ public class SleepCommand implements Callable<Integer> {
   }
 
   /** 長期記憶の活用に必要な自動状態を扱う。 */
-  @Command(name = "status")
+  @Command(name = "status", description = "現在の Session の自動記憶整理の状態を表示します")
   public static class AutoStatus implements Callable<Integer> {
     /** 自動。 */
     @ParentCommand Auto auto;
@@ -222,7 +223,7 @@ public class SleepCommand implements Callable<Integer> {
   }
 
   /** 長期記憶の活用に必要な自動再開を扱う。 */
-  @Command(name = "resume")
+  @Command(name = "resume", description = "現在の Session の自動記憶整理を再開します")
   public static class AutoResume implements Callable<Integer> {
     /** 自動。 */
     @ParentCommand Auto auto;

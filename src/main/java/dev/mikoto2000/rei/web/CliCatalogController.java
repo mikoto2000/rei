@@ -172,11 +172,6 @@ public final class CliCatalogController {
           && positional.index().equals("0")
           && label.contains("|")
           && label.matches("[a-z-]+(?:\\|[a-z-]+)+")) choices = List.of(label.split("\\|"));
-      if (element instanceof Field field
-          && field.getDeclaringClass()
-              == dev.mikoto2000.rei.llm.capture.LlmCaptureCommand.Capture.class)
-        choices =
-            List.of("next", "status", "off", "list", "show", "raw", "export", "delete", "clear");
       parameters.add(
           new CliCatalog.Parameter(
               positional.index(),
@@ -205,6 +200,20 @@ public final class CliCatalogController {
 
   /** Web APIによる操作で用いるdeclared選択肢を返す。 */
   private static List<String> declaredChoices(Class<?> type) {
+    // 固定操作名の metadata だけを生成する。コマンドや動的 Provider は生成しない。
+    if (dev.mikoto2000.rei.core.completion.FirstArgumentCandidates.class.isAssignableFrom(type)) {
+      try {
+        var candidates =
+            (dev.mikoto2000.rei.core.completion.FirstArgumentCandidates)
+                type.getDeclaredConstructor().newInstance();
+        var values = new ArrayList<String>();
+        candidates.forEach(values::add);
+        return List.copyOf(values);
+      } catch (ReflectiveOperationException invalid) {
+        throw new IllegalStateException(
+            "Cannot read fixed completion choices: " + type.getName(), invalid);
+      }
+    }
     if (type == dev.mikoto2000.rei.activity.ActivityCommand.ActionCandidates.class)
       return List.of("today", "yesterday", "pause", "resume");
     if (type == dev.mikoto2000.rei.activity.ActivityCommand.SummaryCommand.DateCandidates.class)
@@ -239,6 +248,11 @@ public final class CliCatalogController {
 
   /** Web APIによる操作に関する使い方を処理する。 */
   private static void help(Command command, List<CliCatalog.Option> options) {
+    if (!command.mixinStandardHelpOptions()) {
+      options.add(
+          new CliCatalog.Option(
+              List.of("--help"), "このコマンドの役割と使い方を表示します。", null, "0", false, List.of()));
+    }
     if (command.mixinStandardHelpOptions()) {
       options.add(
           new CliCatalog.Option(

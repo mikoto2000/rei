@@ -40,6 +40,7 @@ public final class CliGrammar {
     }
     for (var child : command.commands())
       spec.addSubcommand(child.name(), new CommandLine(describe(child)));
+    CommandHelp.install(new CommandLine(spec));
     return spec;
   }
 

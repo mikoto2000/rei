@@ -103,20 +103,20 @@ public final class ChatGptCommand {
   }
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
-  @Command(name = "status")
+  @Command(name = "status", description = "ChatGPT アカウントのログイン状態を表示します")
   public int status() {
     return execute(() -> require(oauth).status().forEach(this::out));
   }
 
   /** ChatGPTとの連携で用いるモデル一覧を返す。 */
-  @Command(name = "models")
+  @Command(name = "models", description = "指定アカウントの ChatGPT 利用枠で使えるモデルを一覧表示します")
   public int models(@Option(names = "--account", defaultValue = "default") String account) {
     return execute(
         () -> require(client).models(account, true).forEach(m -> out(m.id() + " | " + m.name())));
   }
 
   /** ChatGPTとの連携で用いるログアウトを返す。 */
-  @Command(name = "logout")
+  @Command(name = "logout", description = "指定アカウントからログアウトし、保存済み認証情報を削除します")
   public int logout(@Option(names = "--account", defaultValue = "default") String account) {
     return execute(
         () -> {
