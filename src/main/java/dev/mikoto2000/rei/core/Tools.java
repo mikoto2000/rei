@@ -2882,7 +2882,7 @@ public class Tools {
         int remainingRequests = files.size() - index;
         int byteBudget = budget.remaining() / remainingRequests;
         TextReadBudget fileBudget = new TextReadBudget(byteBudget);
-        int lineBudget = (MAX_READ_TOTAL_LINES - totalLines) / remainingRequests;
+        int lineBudget = readLineBudget(files, index, MAX_READ_TOTAL_LINES - totalLines);
         try {
           ReadFileResult result =
               MarkdownSectionReads.selected(request)
@@ -2940,6 +2940,24 @@ public class Tools {
               : new FileResultTokenPager(deliveryEstimator)
                   .page(results, files, deliveryProperties.getPageMaxTokens()));
     }
+  }
+
+  /** 短い明示範囲の未使用枠を利用し、バッチ内の不要な継続読み取りを減らす。 */
+  private static int readLineBudget(List<ReadFileRequest> files, int index, int remaining) {
+    int fairShare = remaining / (files.size() - index);
+    int reserved = 0;
+    for (int next = index + 1; next < files.size(); next++) {
+      var request = files.get(next);
+      long required = fairShare;
+      if (request.symbol() == null
+          && !MarkdownSectionReads.selected(request)
+          && request.endLine() != null) {
+        long start = request.startLine() == null ? 1 : request.startLine();
+        required = Math.max(0L, (long) request.endLine() - start + 1);
+      }
+      reserved += (int) Math.min(fairShare, required);
+    }
+    return remaining - reserved;
   }
 
   /** 1 ファイルの読み込みを実行する。 */
