@@ -92,4 +92,76 @@ class OpenAiWebSearchIntegrationTest {
     assertThrows(IllegalStateException.class, () -> service(p).search("spring",2));
     assertTrue(calls.isEmpty());
   }
+
+  @Test void configuredEnvironmentKeyIsIndependentOfChatCredentials() throws Exception {
+    properties.setOpenaiApiKey("environment-key");
+    var p = provider("openai");
+    p.setApiKey("");
+    service(p).search("spring", 1);
+    assertEquals("Bearer environment-key", requestHeaders.get("authorization"));
+  }
+
+  @Test void apiUsageIsMeasuredOnceAcrossCacheHits() throws Exception {
+    var registry = new io.micrometer.core.instrument.simple.SimpleMeterRegistry();
+    io.micrometer.core.instrument.Metrics.addRegistry(registry);
+    response = EMPTY.substring(0, EMPTY.length()-1) + ",\"usage\":{\"input_tokens\":11,\"output_tokens\":7,\"total_tokens\":18}}";
+    var cacheProperties = new dev.mikoto2000.rei.http.cache.HttpCacheProperties();
+    try (var cache = new dev.mikoto2000.rei.http.cache.HttpResponseCache(cacheProperties, java.time.Clock.systemUTC(), new dev.mikoto2000.rei.memory.util.SensitiveInfoDetector())) {
+      properties.setEnabled(true);
+      properties.setProviders(List.of(provider("openai")));
+      var service = new WebSearchService(properties, new JsonMapper(), fetcher, cache);
+      service.search("spring", 2);
+      service.search("spring", 2);
+      assertEquals(List.of("openai"), calls);
+      assertEquals(11, registry.get("rei.web.search.events").tag("event", "openai_actual_input_tokens").counter().count());
+      assertEquals(18, registry.get("rei.web.search.events").tag("event", "openai_actual_total_tokens").counter().count());
+      assertEquals(1, registry.get("rei.web.search.events").tag("event", "openai_web_search_calls").counter().count());
+    } finally {
+      io.micrometer.core.instrument.Metrics.removeRegistry(registry);
+      registry.close();
+    }
+  }
+
+  @Test void candidatesAreFetchedAndPageFailuresRemainVisible() throws Exception {
+    response = EMPTY.replace("\"sources\":[]", "\"sources\":[{\"url\":\"https://example.com/a\",\"title\":\"spring\"}]");
+    var search = service(provider("openai"));
+    var pages = org.mockito.Mockito.mock(dev.mikoto2000.rei.urlfetch.UrlContentFetchService.class);
+    org.mockito.Mockito.when(pages.fetch(org.mockito.ArgumentMatchers.eq("https://example.com/a"), org.mockito.ArgumentMatchers.any(HttpFetchPolicy.class)))
+        .thenReturn(dev.mikoto2000.rei.urlfetch.UrlContentFetchResult.failure("NETWORK_ERROR", "Page unavailable"));
+    var pipeline = new WebSearchAndReadService(search, pages, new WebPageExtractor(), properties);
+    var result = pipeline.searchAndRead(new WebSearchAndReadRequest("spring", 1, 1));
+    org.mockito.Mockito.verify(pages).fetch(org.mockito.ArgumentMatchers.eq("https://example.com/a"), org.mockito.ArgumentMatchers.any(HttpFetchPolicy.class));
+    assertEquals("failed", result.results().getFirst().fetchStatus());
+    assertFalse(String.valueOf(result.results().getFirst().content()).contains("generated answer"));
+  }
+
+  @Test void parserFailuresNeverLogResponseOrCredentials() {
+    var logger = (ch.qos.logback.classic.Logger) org.slf4j.LoggerFactory.getLogger(WebSearchService.class);
+    var appender = new ch.qos.logback.core.read.ListAppender<ch.qos.logback.classic.spi.ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      response = "{test-secret malformed response";
+      var failure = assertThrows(IllegalStateException.class, () -> service(provider("openai")).search("spring", 1));
+      assertFalse(failure.toString().contains("test-secret"));
+      assertEquals(null, failure.getCause());
+      assertTrue(appender.list.stream().noneMatch(event -> event.getFormattedMessage().contains("test-secret")));
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
+  }
+
+  @Test void failed200ResponseIsNotReusedAfterRecovery() throws Exception {
+    response = "{\"status\":\"failed\",\"output\":[]}";
+    try (var cache = new dev.mikoto2000.rei.http.cache.HttpResponseCache(new dev.mikoto2000.rei.http.cache.HttpCacheProperties(), java.time.Clock.systemUTC(), new dev.mikoto2000.rei.memory.util.SensitiveInfoDetector())) {
+      properties.setEnabled(true);
+      properties.setProviders(List.of(provider("openai")));
+      var service = new WebSearchService(properties, new JsonMapper(), fetcher, cache);
+      assertThrows(IllegalStateException.class, () -> service.search("spring", 2));
+      response = EMPTY;
+      assertTrue(service.search("spring", 2).isEmpty());
+      assertEquals(2, calls.size());
+    }
+  }
 }
