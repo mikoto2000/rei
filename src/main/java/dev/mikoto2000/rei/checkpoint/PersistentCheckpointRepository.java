@@ -57,9 +57,20 @@ public class PersistentCheckpointRepository {
   public PersistentCheckpointRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source,
       CheckpointProperties settings) {
+    this(initialize(source), source, settings);
+  }
+
+  private PersistentCheckpointRepository(
+      JdbcClient initialized, DataSource source, CheckpointProperties settings) {
     this.settings = settings;
-    db = JdbcClient.create(source);
+    db = initialized;
     transaction = new TransactionTemplate(new DataSourceTransactionManager(source));
+  }
+
+  /** Finish fallible migration before constructing the repository instance. */
+  private static JdbcClient initialize(DataSource source) {
+    var db = JdbcClient.create(source);
+    var transaction = new TransactionTemplate(new DataSourceTransactionManager(source));
     // An update obtains SQLite's writer lock before reads, avoiding read-to-write upgrade races.
     db.sql(
             "CREATE TABLE IF NOT EXISTS checkpoint_heads(project TEXT NOT NULL,task TEXT NOT NULL,revision INTEGER NOT NULL DEFAULT 0,owner TEXT,lease_run TEXT,PRIMARY KEY(project,task))")
@@ -98,6 +109,7 @@ public class PersistentCheckpointRepository {
                   "CREATE TRIGGER IF NOT EXISTS checkpoint_keys_delete AFTER DELETE ON checkpoint_event_keys BEGIN UPDATE checkpoint_history_usage SET keys=keys-1 WHERE id=1; END")
               .update();
         });
+    return db;
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
