@@ -24,6 +24,55 @@ import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
 /** ツールイベント完了時の処理Decoratorの結果と状態の契約を検証するテスト。 */
 class ToolEventCallbackDecoratorTest {
+
+  @Test
+  void fileSearchBudgetFailureAllowsNarrowerSearchAndPublishesSafeDiagnostic() {
+    bus.subscribe(received::add);
+    var callback = delegate("searchAndRead", "unused");
+    when(callback.call("broad"))
+        .thenThrow(
+            new IllegalStateException(
+                "PRIVATE_WRAPPER",
+                new dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException()));
+    when(callback.call("narrow")).thenReturn("[{\"path\":\"Target.java\"}]");
+    var decorated = new ToolEventCallbackDecorator(callback, factory, bus);
+    String result = decorated.call("broad");
+    var json = new tools.jackson.databind.json.JsonMapper().readTree(result);
+    assertEquals("file_result_budget_exceeded", json.path("error").asText());
+    assertTrue(json.path("guidance").asText().contains("baseDir"));
+    assertTrue(dev.mikoto2000.rei.core.stagnation.ProgressEvaluator.failedResult(result));
+    assertTrue(!result.contains("PRIVATE"));
+    assertTrue(decorated.call("narrow").contains("Target.java"));
+    var failed = (ToolFailedPayload) received.get(1).payload();
+    assertEquals("file_result_budget_exceeded", failed.error().code());
+    assertTrue(failed.error().message().contains("出力上限"));
+    assertEquals(
+        List.of(
+            AgentEventType.TOOL_STARTED,
+            AgentEventType.TOOL_FAILED,
+            AgentEventType.TOOL_STARTED,
+            AgentEventType.TOOL_COMPLETED),
+        received.stream().map(AgentEvent::type).toList());
+  }
+
+  @Test
+  void fileSearchRecoveryDoesNotSwallowCancellationOrUnrelatedIoFailures() {
+    var callback = delegate("searchAndRead", "unused");
+    var cancelled = new java.util.concurrent.CancellationException();
+    cancelled.initCause(new dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException());
+    for (var failure :
+        List.of(
+            new IllegalStateException(cancelled),
+            new java.io.UncheckedIOException(new java.io.IOException("disk failure")))) {
+      org.mockito.Mockito.doThrow(failure).when(callback).call("input");
+      assertSame(
+          failure,
+          assertThrows(
+              RuntimeException.class,
+              () -> new ToolEventCallbackDecorator(callback, factory, bus).call("input")));
+    }
+  }
+
   @Test
   void cancellationWrappingAccessDenialStillStopsExecution() {
     var callback = delegate("reviewStatus", "unused");

@@ -13,6 +13,163 @@ import org.junit.jupiter.api.io.TempDir;
 
 /** 検索順位付け予算の結果と状態の契約を検証するテスト。 */
 class SearchRankingBudgetTest {
+
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(booleans = {false, true})
+  void realToolDispatchRetainsFailureHistoryAndContinuesInTheSameRun(boolean resumable)
+      throws Exception {
+    write("Target.java", "class Target {}");
+    var projects = org.mockito.Mockito.mock(dev.mikoto2000.rei.core.project.ProjectService.class);
+    org.mockito.Mockito.when(projects.currentProject()).thenReturn(root);
+    var tools = new Tools(projects);
+    write("A.java", "class A {}");
+    write("B.java", "class B {}");
+    var events = new java.util.ArrayList<dev.mikoto2000.rei.event.AgentEvent>();
+    var factory = new dev.mikoto2000.rei.event.AgentEventFactory(java.time.Clock.systemUTC());
+    var context =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+            "budget-run",
+            new dev.mikoto2000.rei.llm.OutputLimitRunBudget(2, 20),
+            new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(root, null),
+            factory,
+            events::add);
+    var provider =
+        org.springframework.ai.tool.method.MethodToolCallbackProvider.builder()
+            .toolObjects(tools)
+            .build();
+    var callback =
+        java.util.Arrays.stream(provider.getToolCallbacks())
+            .filter(tool -> tool.getToolDefinition().name().equals("searchAndRead"))
+            .findFirst()
+            .orElseThrow();
+    var options =
+        org.springframework.ai.model.tool.ToolCallingChatOptions.builder()
+            .toolCallbacks(
+                new dev.mikoto2000.rei.event.ToolEventCallbackDecorator(
+                    callback, factory, events::add))
+            .toolContext(
+                java.util.Map.of(
+                    dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, context))
+            .build();
+    var prompt = new org.springframework.ai.chat.prompt.Prompt("Find Target", options);
+    var loop = new dev.mikoto2000.rei.core.chat.ToolLoopSupport();
+    var failed =
+        resumable
+            ? loop.executeResumable(prompt, searchCall("broad", 3), context)
+            : loop.execute(prompt, searchCall("broad", 3));
+    String feedback =
+        ((org.springframework.ai.chat.messages.ToolResponseMessage)
+                failed.conversationHistory().getLast())
+            .getResponses()
+            .getFirst()
+            .responseData();
+    assertTrue(feedback.contains("file_result_budget_exceeded"));
+    assertFalse(failed.returnDirect());
+    var next = new org.springframework.ai.chat.prompt.Prompt(failed.conversationHistory(), options);
+    var success =
+        resumable
+            ? loop.executeResumable(next, searchCall("narrow", 1), context)
+            : loop.execute(next, searchCall("narrow", 1));
+    String output =
+        ((org.springframework.ai.chat.messages.ToolResponseMessage)
+                success.conversationHistory().getLast())
+            .getResponses()
+            .getFirst()
+            .responseData();
+    assertTrue(output.contains("Target.java"));
+    assertFalse(dev.mikoto2000.rei.core.stagnation.ProgressEvaluator.failedResult(output));
+    assertTrue(success.conversationHistory().containsAll(failed.conversationHistory()));
+    assertEquals(
+        List.of(
+            dev.mikoto2000.rei.event.AgentEventType.TOOL_STARTED,
+            dev.mikoto2000.rei.event.AgentEventType.TOOL_FAILED,
+            dev.mikoto2000.rei.event.AgentEventType.TOOL_STARTED,
+            dev.mikoto2000.rei.event.AgentEventType.TOOL_COMPLETED),
+        events.stream().map(dev.mikoto2000.rei.event.AgentEvent::type).toList());
+  }
+
+  private org.springframework.ai.chat.model.ChatResponse searchCall(String id, int maxFiles) {
+    String args = "{\"request\":{\"queries\":[{\"pattern\":\"class\",\"baseDir\":\".\",\"fixedString\":true,"
+        + "\"includeGlob\":\"" + (maxFiles == 1 ? "Target.java" : "*.java") + "\"}],"
+        + "\"maxFiles\":" + maxFiles + ",\"contextLines\":0,\"maxBytes\":768,\"maxTokens\":1000}}";
+    return new org.springframework.ai.chat.model.ChatResponse(
+        List.of(
+            new org.springframework.ai.chat.model.Generation(
+                org.springframework.ai.chat.messages.AssistantMessage.builder()
+                    .toolCalls(
+                        List.of(
+                            new org.springframework.ai.chat.messages.AssistantMessage.ToolCall(
+                                id, "function", "searchAndRead", args)))
+                    .build())));
+  }
+
+  @Test
+  void aggregateBudgetIncludesManyFileErrorsAndMarksOmittedFiles() throws Exception {
+    write("Target.java", "class Target {}");
+    var paths = new java.util.ArrayList<String>();
+    paths.add("Target.java");
+    for (int i = 0; i < 32; i++) paths.add("missing-" + i + "-" + "x".repeat(100) + ".txt");
+    var result =
+        tools(paths)
+            .searchAndRead(
+                new Tools.SearchAndReadRequest(
+                    List.of(query("Target")), 0, 2, 2048, 1000, 100, List.of()),
+                root);
+    assertEquals("Target.java", result.getFirst().path());
+    assertFalse(result.getFirst().sections().isEmpty());
+    assertTrue(result.getFirst().filesTruncated());
+    assertTrue(FileResultBudget.fits(result, 2048, 1000));
+    assertTrue(result.size() < paths.size());
+  }
+
+  @Test
+  void aggregateShrinksContentAndRetainsVersionBoundContinuation() throws Exception {
+    var source =
+        new Tools.SearchAndReadResult(
+            "a.txt",
+            List.of(new Tools.SearchMatch(0, 1, "hit" + "日本語".repeat(500))),
+            List.of(new Tools.ReadSection(1, 1, List.of("hit" + "日本語".repeat(500)), false)),
+            null,
+            false,
+            false,
+            "version",
+            null);
+    var result = SearchResultBudget.fitAll(List.of(source), 2048, 600, java.util.Map.of());
+    assertTrue(FileResultBudget.fits(result, 2048, 600));
+    assertTrue(result.getFirst().truncated());
+    assertEquals("version", result.getFirst().nextRead().expectedVersion());
+    assertTrue(result.getFirst().nextRead().offset() >= 0);
+  }
+
+  @Test
+  void impossibleMetadataHasTypedFailureInsteadOfAnEmptySuccessfulSearch() {
+    var result =
+        new Tools.SearchAndReadResult("x".repeat(2000), List.of(), List.of(), null, false, false);
+    assertThrows(
+        dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException.class,
+        () -> SearchResultBudget.fitAll(List.of(result), 256, 256, java.util.Map.of()));
+  }
+
+  @Test
+  void tinyPerFileBudgetIsRecoverableAndANarrowerSearchSucceeds() throws Exception {
+    write("Target.java", "class Target {}");
+    var tools = tools(List.of("Target.java"));
+    assertThrows(
+        dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException.class,
+        () ->
+            tools.searchAndRead(
+                new Tools.SearchAndReadRequest(
+                    List.of(query("Target")), 0, 1, 256, 256, 100, List.of()),
+                root));
+    assertEquals(
+        "Target.java",
+        tools
+            .searchAndRead(
+                new Tools.SearchAndReadRequest(List.of(query("class Target")), 0, 1), root)
+            .getFirst()
+            .path());
+  }
+
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 

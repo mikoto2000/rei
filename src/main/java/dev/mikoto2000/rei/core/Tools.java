@@ -2068,6 +2068,8 @@ public class Tools {
       includeGlob/excludeGlob are relative to baseDir; patterns without a slash match file names at any depth.
       **/ includes zero directories. Use / as separator (backslash accepted), e.g. **/*.{java,xml}.
       Glob matching is case-sensitive on every platform.
+      Results may be truncated to the whole-response budget. If filesTruncated or truncated is true,
+      narrow baseDir/includeGlob/pattern or reduce maxFiles/contextLines; use nextRead for retained file continuations.
       @param contextLines ヒット行の前後何行を取得するか。デフォルト 25。
       @param maxFiles 読み込む最大ファイル数。デフォルト 8。
       @return ファイルごとの検索結果と読み込んだコンテキスト。
@@ -2227,6 +2229,8 @@ public class Tools {
             }
             totalLines += fileResult.totalLines();
             fileResults.add(fileResult);
+          } catch (dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException e) {
+            throw e;
           } catch (IllegalArgumentException | IOException e) {
             fileResults.add(
                 new SearchAndReadResult(
@@ -2265,7 +2269,14 @@ public class Tools {
                 .mapToInt(
                     result -> (int) result.matches().stream().filter(GrepMatch::matched).count())
                 .sum();
-        FileResultBudget.require(fileResults, byteLimit, tokenLimit);
+        fileResults = SearchResultBudget.fitAll(fileResults, byteLimit, tokenLimit, fileCharsets);
+        selectedCount = (int) fileResults.stream().filter(item -> item.error() == null).count();
+        alreadyPresentCount =
+            fileResults.stream()
+                .filter(item -> item.error() == null)
+                .map(item -> resolveProjectPath(item.path(), workingDirectory))
+                .mapToInt(path -> workingSet.contains(path) ? 1 : 0)
+                .sum();
         workingSet.completeSearch(
             searchObservation, hitCount, fileMatches.size(), selectedCount, alreadyPresentCount);
         return boundedFileResult(

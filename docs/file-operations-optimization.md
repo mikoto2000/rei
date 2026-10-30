@@ -200,3 +200,9 @@ Phase 1 の編集ケースは未測定。最終編集入力97.9%減 / 出力95.8
 署名境界の最終修正後、別出力先の `verify -Pintegration` は全 Java suite と Spring Boot package まで exit 0。Java は3,804件、failure 0 / error 0 / skip 1（3,803成功）。既存 DocumentRendererProcessTest の real PlantUML case は `rei.test.plantuml.jar` 未設定の assumption skip。live profile は既存設定で除外。新テストの skip / disable は追加していない。Client は25 files / 99 tests成功、typecheck＋Vite build＋ESLint成功。Native は120 tests成功、`cargo check --locked --features native` 成功。UI 変更がないため browser E2E / 実 Native window E2E は実行していない。
 
 通常 target の Spring Boot repackage は既存 JAR rename 失敗で終了した。実行中の Rei JAR process が存在するため停止・削除せず、検証専用 POM で build.directory / finalName だけを一時的に変更して別出力先の verify を行った。source / dependencies / compiler / plugin 設定は同じで、最終 source の全テストと再コンパイル、package を完了した。一時 POM は削除した。成功 artifact は `target/file-operations-package/rei-file-operations-verify.jar`、ログは `target/file-operations-isolated-verify.log`。通常 target の verify 全体を成功と読み替えない。Java 専用 lint plugin は既存 POM にないため compile、path / atomic Apply / schema / bounds の差分レビューと `git diff --check` を実施した。
+
+## 検索結果の出力上限と続行
+
+`searchAndRead` はファイルごとの予算に加え、エラー項目・配列・省略情報を含むJSON全体を予算内に縮小する。順位の低い結果から本文を減らし、必要ならファイルを省略して `filesTruncated=true` を返す。残したファイルの本文省略には版に結び付いた `nextRead` を維持する。検索の完全性が必要な場合は `baseDir`・`includeGlob`・検索語で対象を絞る。
+
+必須メタデータさえ収まらない場合は `file_result_budget_exceeded` を返す。結果なしの検索成功として扱わず、`success=false` と検索条件の絞り込み案内をモデルへ返して同じRunで続行できる。キャンセル・実行制御の停止や無関係なI/O障害は握りつぶさない。APIの失敗イベントにもこのコードに対応する固定の原因と対処方法を表示する。例外本文・内部パスは公開しない。

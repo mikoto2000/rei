@@ -28,8 +28,7 @@ final class FileResultBudget {
   /** 条件を満たさない操作を拒否するため、ファイル結果予算の前提条件を確認する。 */
   static void require(Object value, int bytes, int tokens) throws IOException {
     if (!fits(value, bytes, tokens))
-      throw new IOException(
-          "File result metadata exceeds byte/token budget; narrow the request or increase its budget");
+      throw new dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException();
   }
 
   /** 残っている予算に収めるため、ファイル結果予算を利用可能な量に整える。 */
@@ -40,8 +39,7 @@ final class FileResultBudget {
       if (next.equals(value)) break;
       value = next;
     }
-    throw new IOException(
-        "File result metadata exceeds byte/token budget; narrow the request or increase its budget");
+    throw new dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException();
   }
 
   /** 共通の実行基盤で用いるhalfを返す。 */
