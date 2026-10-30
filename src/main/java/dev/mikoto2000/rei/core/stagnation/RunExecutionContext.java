@@ -263,10 +263,13 @@ public class RunExecutionContext {
           || commitAttempts > RESUME_BATCH_COMMIT_LIMIT
           || commitAttempted != (commitAttempts > 0)
           || reviewPageReadKey != null
-              && (!reviewPagePending || !reviewPageReadKey.matches("readReviewFile:[0-9a-f]{64}"))
+              && (!reviewPagePending
+                  || !reviewPageReadKey.matches("readReview(File|Pages):[0-9a-f]{64}"))
           || reviewPageReadArguments != null
-              && (reviewPageReadArguments.length() > 4096
-                  || !ProgressEvaluator.actionKey("readReviewFile", reviewPageReadArguments)
+              && (reviewPageReadKey == null
+                  || reviewPageReadArguments.length() > 4096
+                  || !ProgressEvaluator.actionKey(
+                          reviewPageReadKey.split(":", 2)[0], reviewPageReadArguments)
                       .equals(reviewPageReadKey))
           || contentReads == 0 && (commitRequested || commitAttempted || reviewPagePending))
         throw new IllegalArgumentException("Invalid resume batch");
@@ -491,7 +494,8 @@ public class RunExecutionContext {
   public synchronized boolean resumeAcquisitionBlocked(String name, String arguments) {
     // Exact edit baselines and proposed diffs are necessary to turn the assessed unit into
     // an applied repair. They are not broad source reacquisition.
-    if (needsResumeContentWork() && name.equals("readReviewFile"))
+    if (needsResumeContentWork()
+        && (name.equals("readReviewFile") || name.equals("readReviewPages")))
       return resumeReviewPagePending
           && (arguments == null
               || resumeReviewPageReadKey != null
@@ -509,7 +513,8 @@ public class RunExecutionContext {
 
   /** A saved page may need exact redelivery after prompt eviction or a process restart. */
   public synchronized boolean resumeToolHidden(String name) {
-    return !name.equals("readReviewFile") && resumeAcquisitionBlocked(name);
+    return !(name.equals("readReviewFile") || name.equals("readReviewPages"))
+        && resumeAcquisitionBlocked(name);
   }
 
   public synchronized String resumeBatchFeedback() {
@@ -1281,7 +1286,7 @@ public class RunExecutionContext {
     if (depletedResume() && evaluator.readContentObserved()) {
       resumeBatchReads = Math.min(RESUME_BATCH_READ_LIMIT, resumeBatchReads + 1);
       resumeBatchReadInIteration = true;
-      if (name.equals("readReviewFile")) {
+      if ((name.equals("readReviewFile") || name.equals("readReviewPages"))) {
         resumeReviewPagePending = true;
         resumeReviewPageReadKey = ProgressEvaluator.actionKey(name, arguments);
         resumeReviewPageReadArguments =

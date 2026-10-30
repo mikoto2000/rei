@@ -383,6 +383,72 @@ public final class ReviewTools {
             && Character.isHighSurrogate(source.charAt(offset - 1))
             && Character.isLowSurrogate(source.charAt(offset)))
       throw new IllegalArgumentException("INVALID_CURSOR");
+    var page = sizedPage(reviewJobId, target, source, offset, tokenBudget, null);
+    ledger.fetched(reviewJobId, scope, page.range());
+    return page;
+  }
+
+  @ResultDelivery(value = ResultDelivery.Kind.FILE_CONTENT, reviewPages = true)
+  @Tool(
+      description =
+          "Read up to 4 adjacent review pages from one immutable decoded source. maxPages 1..4; totalTokenBudget 512..2048 bounds the ENTIRE serialized result. Start at offset 0, then follow the last nextOffset while truncated. Reading is not delivery or assessment. Prefer submitReviewPages for the delivered batch.")
+  public List<Page> readReviewPages(
+      String reviewJobId,
+      String path,
+      String expectedVersion,
+      int offset,
+      int maxPages,
+      int totalTokenBudget)
+      throws java.io.IOException {
+    if (maxPages < 1 || maxPages > 4 || totalTokenBudget < 512 || totalTokenBudget > 2048)
+      throw new IllegalArgumentException("CONTEXT_BUDGET_INSUFFICIENT");
+    var scope = scope(AgentRunScope.current());
+    var job = ledger.get(reviewJobId, scope);
+    var target =
+        job.targets().stream()
+            .filter(t -> t.path().equals(path))
+            .findFirst()
+            .orElseThrow(() -> new IllegalArgumentException("REVIEW_RESULT_INVALID"));
+    if (!target.version().equals(expectedVersion)) throw new IllegalStateException("STALE_VERSION");
+    var source = readSource(path);
+    if (!target.version().equals(source.version())) {
+      ledger.invalidate(reviewJobId, scope, path, source.version());
+      throw new IllegalStateException("STALE_VERSION");
+    }
+    if (!boundary(source.text(), offset)) throw new IllegalArgumentException("INVALID_CURSOR");
+    int count = Math.min(maxPages, Math.max(1, (totalTokenBudget - 64) / 256));
+    var pages = new ArrayList<Page>();
+    for (int i = 0; i < count; i++) {
+      int allowance =
+          i == count - 1
+              ? totalTokenBudget
+              : Math.min(
+                  totalTokenBudget,
+                  estimate(pages) + (totalTokenBudget - estimate(pages)) / (count - i));
+      Page page;
+      try {
+        page = sizedPage(reviewJobId, target, source.text(), offset, allowance, pages);
+      } catch (IllegalStateException insufficient) {
+        if (pages.isEmpty()) throw insufficient;
+        break;
+      }
+      pages.add(page);
+      offset = page.nextOffset();
+      if (!page.truncated()) break;
+    }
+    if (estimate(pages) > totalTokenBudget)
+      throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT");
+    for (var page : pages) ledger.fetched(reviewJobId, scope, page.range());
+    return List.copyOf(pages);
+  }
+
+  private Page sizedPage(
+      String reviewJobId,
+      Target target,
+      String source,
+      int offset,
+      int tokenBudget,
+      List<Page> prefix) {
     int maxEnd = Math.min(source.length(), offset + tokenBudget * 4);
     if (maxEnd > offset
         && maxEnd < source.length()
@@ -392,14 +458,20 @@ public final class ReviewTools {
       int middle = low + (high - low + 1) / 2;
       var candidate =
           page(reviewJobId, target, source, offset, source.offsetByCodePoints(offset, middle));
-      if (estimate(candidate) <= tokenBudget) low = middle;
+      if (estimatePages(prefix, candidate) <= tokenBudget) low = middle;
       else high = middle - 1;
     }
     var page = page(reviewJobId, target, source, offset, source.offsetByCodePoints(offset, low));
-    if (estimate(page) > tokenBudget || low == 0 && offset < source.length())
+    if (estimatePages(prefix, page) > tokenBudget || low == 0 && offset < source.length())
       throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT");
-    ledger.fetched(reviewJobId, scope, page.range());
     return page;
+  }
+
+  private int estimatePages(List<Page> prefix, Page page) {
+    if (prefix == null) return estimate(page);
+    var pages = new ArrayList<>(prefix);
+    pages.add(page);
+    return estimate(pages);
   }
 
   /** 依頼を実行経路へ渡すため、レビュー結果を受け付ける。 */
@@ -437,6 +509,11 @@ public final class ReviewTools {
       String assessment,
       List<Finding> findings,
       Source source) {
+    validateEvidence(range, findings, source);
+    return ledger.reviewed(reviewJobId, scope, range, assessment, findings);
+  }
+
+  private void validateEvidence(Range range, List<Finding> findings, Source source) {
     if (!range.version().equals(source.version())
         || range.span().end() > source.text().length()
         || !hash(source.text().substring(range.span().start(), range.span().end()))
@@ -466,7 +543,6 @@ public final class ReviewTools {
               .equals(finding.evidence()))
         throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
     }
-    return ledger.reviewed(reviewJobId, scope, range, assessment, findings);
   }
 
   public record PageFinding(String id, String severity, String evidence, String assessment) {}
@@ -552,48 +628,11 @@ public final class ReviewTools {
       if (job.status().equals("STALE_VERSION"))
         throw new ReviewResultRejectedException(
             "No assessment was accepted: source version changed. Use restartReview, then read the new page.");
-      var matching =
-          job.ranges().stream()
-              .filter(
-                  e ->
-                      e.delivered()
-                          && !e.stale()
-                          && e.range().path().equals(path)
-                          && e.range().span().start() == offset
-                          && e.range().span().end() == nextOffset)
-              .toList();
-      if (matching.size() != 1)
-        throw new ReviewResultRejectedException(
-            "No assessment was accepted. Use the exact path, offset and nextOffset of one delivered readReviewFile page. Re-read that page if necessary.");
-      var range = matching.getFirst().range();
-      var source = validated.snapshots().get(path).text();
-      if (findings == null) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
-      var located = new ArrayList<Finding>();
-      for (var finding : findings) {
-        String quote = finding.evidence();
-        if (quote == null || quote.isBlank())
-          throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
-        int start = source.indexOf(quote, offset);
-        int other = start < 0 ? -1 : source.indexOf(quote, start + 1);
-        if (start < offset
-            || start + quote.length() > nextOffset
-            || other >= 0 && other + quote.length() <= nextOffset)
-          throw new ReviewResultRejectedException(
-              "No assessment was accepted. Each evidence quote must match exactly once inside this delivered page; supply a longer unique quote if needed.");
-        int end = start + quote.length();
-        var from = position(source, start);
-        var to = position(source, end);
-        located.add(
-            new Finding(
-                finding.id(),
-                finding.severity(),
-                path,
-                range.version(),
-                new Span(start, end, from[0], to[0], from[1], to[1]),
-                quote,
-                finding.assessment(),
-                "VERIFIED"));
-      }
+      var prepared =
+          prepareAssessment(
+              job, path, offset, nextOffset, assessment, findings, validated.snapshots().get(path));
+      var range = prepared.range();
+      var located = prepared.findings();
       verifyUnchanged(reviewJobId, validated, path);
       var saved =
           submitVerifiedReviewResult(
@@ -603,38 +642,134 @@ public final class ReviewTools {
               assessment,
               located,
               validated.snapshots().get(path));
-      var entry =
-          saved.ranges().stream().filter(e -> e.range().equals(range)).findFirst().orElseThrow();
-      var acceptedFindings =
-          saved.findings().stream()
-              .filter(
-                  f ->
-                      located.stream()
-                          .anyMatch(
-                              l ->
-                                  l.path().equals(f.path())
-                                      && l.version().equals(f.version())
-                                      && l.location().equals(f.location())
-                                      && l.evidence().equals(f.evidence())))
-              .toList();
-      return new PageSubmission(
-          saved.id(),
-          saved.status(),
-          true,
-          List.of(
-              new VerifiedRange(entry.range(), entry.delivered(), entry.reviewed(), entry.stale())),
-          acceptedFindings,
-          (int)
-              saved.ranges().stream()
-                  .filter(e -> e.reviewed() && e.delivered() && !e.stale())
-                  .count(),
-          saved.targets().size(),
-          saved.revision());
+      return submission(saved, range, located);
     } catch (IllegalArgumentException invalid) {
       if (!"REVIEW_RESULT_INVALID".equals(invalid.getMessage())) throw invalid;
       throw new ReviewResultRejectedException(
           "No assessment was accepted. Use an owned delivered page, nonempty assessment, and findings=[] or exact unique evidence quotes.");
     }
+  }
+
+  public record PageAssessment(
+      String path, int offset, int nextOffset, String assessment, List<PageFinding> findings) {
+    public PageAssessment {
+      findings = findings == null ? null : List.copyOf(findings);
+    }
+  }
+
+  @Tool(
+      description =
+          "Atomically assess 1..4 delivered review pages. Copy each exact path/offset/nextOffset and supply a nonempty assessment and findings (or []). All pages must be owned, delivered, unchanged and have exact unique evidence. One invalid page rejects the whole batch; retries are idempotent. No source files change.")
+  public List<PageSubmission> submitReviewPages(String reviewJobId, List<PageAssessment> pages)
+      throws java.io.IOException {
+    if (pages == null
+        || pages.isEmpty()
+        || pages.size() > 4
+        || pages.stream().anyMatch(p -> p == null || p.path() == null))
+      throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+    var paths =
+        pages.stream().map(PageAssessment::path).collect(java.util.stream.Collectors.toSet());
+    var validated = validateSources(reviewJobId, paths);
+    if (validated.job().status().equals("STALE_VERSION"))
+      throw new IllegalStateException("STALE_VERSION");
+    var prepared = new ArrayList<ReviewCoverageLedger.Assessment>();
+    for (var page : pages)
+      prepared.add(
+          prepareAssessment(
+              validated.job(),
+              page.path(),
+              page.offset(),
+              page.nextOffset(),
+              page.assessment(),
+              page.findings(),
+              validated.snapshots().get(page.path())));
+    verifyUnchanged(reviewJobId, validated, pages.getLast().path());
+    var saved = ledger.reviewedBatch(reviewJobId, scope(AgentRunScope.current()), prepared);
+    return prepared.stream().map(p -> submission(saved, p.range(), p.findings())).toList();
+  }
+
+  private ReviewCoverageLedger.Assessment prepareAssessment(
+      Job job,
+      String path,
+      int offset,
+      int nextOffset,
+      String assessment,
+      List<PageFinding> findings,
+      Source snapshot) {
+    var matching =
+        job.ranges().stream()
+            .filter(
+                e ->
+                    e.delivered()
+                        && !e.stale()
+                        && e.range().path().equals(path)
+                        && e.range().span().start() == offset
+                        && e.range().span().end() == nextOffset)
+            .toList();
+    if (matching.size() != 1)
+      throw new ReviewResultRejectedException(
+          "No assessment was accepted. Use the exact path, offset and nextOffset of one delivered readReviewFile page. Re-read that page if necessary.");
+    var range = matching.getFirst().range();
+    var source = snapshot.text();
+    if (findings == null) throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+    var located = new ArrayList<Finding>();
+    for (var finding : findings) {
+      String quote = finding.evidence();
+      if (quote == null || quote.isBlank())
+        throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+      int start = source.indexOf(quote, offset);
+      int other = start < 0 ? -1 : source.indexOf(quote, start + 1);
+      if (start < offset
+          || start + quote.length() > nextOffset
+          || other >= 0 && other + quote.length() <= nextOffset)
+        throw new ReviewResultRejectedException(
+            "No assessment was accepted. Each evidence quote must match exactly once inside this delivered page; supply a longer unique quote if needed.");
+      int end = start + quote.length();
+      var from = position(source, start);
+      var to = position(source, end);
+      located.add(
+          new Finding(
+              finding.id(),
+              finding.severity(),
+              path,
+              range.version(),
+              new Span(start, end, from[0], to[0], from[1], to[1]),
+              quote,
+              finding.assessment(),
+              "VERIFIED"));
+    }
+    validateEvidence(range, located, snapshot);
+    return new ReviewCoverageLedger.Assessment(range, assessment, List.copyOf(located));
+  }
+
+  private PageSubmission submission(Job saved, Range range, List<Finding> located) {
+    var entry =
+        saved.ranges().stream().filter(e -> e.range().equals(range)).findFirst().orElseThrow();
+    var acceptedFindings =
+        saved.findings().stream()
+            .filter(
+                f ->
+                    located.stream()
+                        .anyMatch(
+                            l ->
+                                l.path().equals(f.path())
+                                    && l.version().equals(f.version())
+                                    && l.location().equals(f.location())
+                                    && l.evidence().equals(f.evidence())))
+            .toList();
+    return new PageSubmission(
+        saved.id(),
+        saved.status(),
+        true,
+        List.of(
+            new VerifiedRange(entry.range(), entry.delivered(), entry.reviewed(), entry.stale())),
+        acceptedFindings,
+        (int)
+            saved.ranges().stream()
+                .filter(e -> e.reviewed() && e.delivered() && !e.stale())
+                .count(),
+        saved.targets().size(),
+        saved.revision());
   }
 
   /** 変更内容のレビューで用いるレビュー状態を返す。 */
@@ -784,28 +919,39 @@ public final class ReviewTools {
   }
 
   /** 受信した内容を利用できるよう、ページを復元する。 */
-  private static Page decodePage(String result) throws java.io.IOException {
+  private static List<Page> decodePages(String result) throws java.io.IOException {
     var tree = StorageDatabase.JSON.readTree(result);
     if (tree.has("output")) {
       if (!tree.path("output").isTextual()
           || tree.path("truncated").asBoolean(true)
           || !hash(tree.path("output").asText()).equals(tree.path("outputSha256").asText()))
         throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
-      result = tree.path("output").asText();
+      tree = StorageDatabase.JSON.readTree(tree.path("output").asText());
     }
-    var page = StorageDatabase.JSON.readValue(result, Page.class);
-    if (page.reviewJobId() == null
-        || page.range() == null
-        || page.content() == null
-        || !hash(page.content()).equals(page.range().contentHash()))
-      throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
-    return page;
+    var nodes = new ArrayList<com.fasterxml.jackson.databind.JsonNode>();
+    if (tree.isArray()) {
+      if (tree.isEmpty() || tree.size() > 4)
+        throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+      tree.forEach(nodes::add);
+    } else nodes.add(tree);
+    var pages = new ArrayList<Page>();
+    for (var node : nodes) {
+      var page = StorageDatabase.JSON.treeToValue(node, Page.class);
+      if (page == null
+          || page.reviewJobId() == null
+          || page.range() == null
+          || page.content() == null
+          || !hash(page.content()).equals(page.range().contentHash()))
+        throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+      pages.add(page);
+    }
+    return List.copyOf(pages);
   }
 
   /** 変更内容のレビューで用いる受付記録を返す。 */
   public static Receipt receipt(String result) {
     try {
-      var page = decodePage(result);
+      var page = decodePages(result).getFirst();
       return new Receipt(page.reviewJobId(), page.range(), hash(result));
     } catch (java.io.IOException invalid) {
       throw new IllegalArgumentException("REVIEW_RESULT_INVALID", invalid);
@@ -895,7 +1041,7 @@ public final class ReviewTools {
                   instanceof dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.ReceiptValue receipt
               && hash(response.responseData()).equals(receipt.serializedHash())) {
             try {
-              pages.add(decodePage(response.responseData()));
+              pages.addAll(decodePages(response.responseData()));
             } catch (java.io.IOException invalid) {
               throw new IllegalArgumentException("REVIEW_RESULT_INVALID", invalid);
             }
@@ -922,7 +1068,7 @@ public final class ReviewTools {
   }
 
   /** 利用量や必要量を判断するため、レビューツール一覧を概算する。 */
-  private int estimate(Page page) {
+  private int estimate(Object page) {
     try {
       String wire = StorageDatabase.JSON.writeValueAsString(page);
       var owner = AgentRunScope.current();
@@ -933,7 +1079,7 @@ public final class ReviewTools {
                     "evidenceId",
                     "00000000-0000-0000-0000-000000000000",
                     "tool",
-                    "readReviewFile",
+                    page instanceof List<?> ? "readReviewPages" : "readReviewFile",
                     "inputSha256",
                     "0".repeat(64),
                     "outputSha256",

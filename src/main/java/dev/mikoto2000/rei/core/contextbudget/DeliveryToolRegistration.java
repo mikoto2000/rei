@@ -43,8 +43,8 @@ public final class DeliveryToolRegistration {
         var tool = method.getAnnotation(Tool.class);
         if (delivery != null && tool != null) {
           String name = tool.name().isBlank() ? method.getName() : tool.name();
-          if (method.getReturnType() == dev.mikoto2000.rei.review.ReviewTools.Page.class)
-            reviewPages.add(name);
+          if (method.getReturnType() == dev.mikoto2000.rei.review.ReviewTools.Page.class
+              || delivery.reviewPages()) reviewPages.add(name);
           if (policies.putIfAbsent(name, delivery.value()) != null)
             throw new IllegalArgumentException("Duplicate delivery tool registration: " + name);
         }
