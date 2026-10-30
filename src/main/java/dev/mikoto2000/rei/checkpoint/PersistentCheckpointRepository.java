@@ -54,6 +54,7 @@ public class PersistentCheckpointRepository {
           + ProcessHandle.current().info().startInstant().orElseThrow();
 
   /** 指定された値や利用先を使って、PersistentCheckpointRepositoryを初期化する。 */
+  @org.springframework.beans.factory.annotation.Autowired
   public PersistentCheckpointRepository(
       @Qualifier("memoryConsolidationDataSource") DataSource source,
       CheckpointProperties settings) {
