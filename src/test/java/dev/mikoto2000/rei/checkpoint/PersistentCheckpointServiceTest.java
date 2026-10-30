@@ -94,6 +94,58 @@ class PersistentCheckpointServiceTest {
 
   /** 作業の中断と再開で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
+  void unchangedAutomaticSnapshotsDoNotCreateRevisionsOrSaveNotifications() {
+    var before = state();
+    var saves = new ArrayList<AgentEvent>();
+    bus.subscribe(
+        event -> {
+          if (event.type() == AgentEventType.CHECKPOINT_REVISION_SAVED) saves.add(event);
+        });
+    var events = new AgentEventFactory(Clock.systemUTC());
+
+    for (int index = 0; index < 3; index++)
+      bus.publish(events.checkpointSaved(before.taskId(), "automatic", 0).withOwnership(owner));
+
+    assertEquals(before, state());
+    assertTrue(saves.isEmpty());
+  }
+
+  @Test
+  void repeatedProgressSnapshotIsSkippedButChangedProgressIsSaved() {
+    var ledger = new dev.mikoto2000.rei.core.stagnation.InformationLedger();
+    var progress =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState(
+            ledger.snapshot(),
+            new dev.mikoto2000.rei.llm.OutputLimitRunBudget.Snapshot(0, 4, 0, false),
+            0,
+            0);
+    service.preserveResults(owner, List.of(), progress);
+    var saved = state();
+
+    service.preserveResults(owner, List.of(), progress);
+    assertEquals(saved, state());
+
+    ledger.observeRange("changed.txt", "v1", 1, 2);
+    var changed =
+        new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState(
+            ledger.snapshot(),
+            new dev.mikoto2000.rei.llm.OutputLimitRunBudget.Snapshot(0, 3, 0, false),
+            0,
+            0);
+    service.preserveResults(owner, List.of(), changed);
+    assertEquals(saved.revision() + 1, state().revision());
+    assertEquals(changed, state().progress());
+  }
+
+  @Test
+  void explicitSaveStillCreatesADurableRevisionWithoutStateChanges() {
+    long before = state().revision();
+    service.saveCurrent("A", "session");
+    service.saveCurrent("A", "session");
+    assertEquals(before + 2, state().revision());
+  }
+
+  @Test
   void reviewJobReferencesAndVerifiedCoverageSurviveResume() throws Exception {
     Path data = root.resolve("review-data");
     try (var migration = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(data)) {
