@@ -15,6 +15,10 @@ public class WebSearchProperties {
   /** 有効状態。 */
   private boolean enabled = false;
 
+  /** OpenAI search credentials are independent of chat authentication. */
+  @org.springframework.beans.factory.annotation.Value("${OPENAI_API_KEY:}")
+  private String openaiApiKey = "";
+
   /** タイムアウトの秒数。 */
   private int timeoutSeconds = 10;
 
@@ -44,8 +48,8 @@ public class WebSearchProperties {
         maxWireBytes,
         maxDecodedBytes,
         java.time.Duration.ofSeconds(connectTimeoutSeconds),
-        java.time.Duration.ofSeconds(readTimeoutSeconds),
-        java.time.Duration.ofSeconds(timeoutSeconds),
+        java.time.Duration.ofSeconds(provider != null && provider.getTimeoutSeconds() != null ? provider.getTimeoutSeconds() : readTimeoutSeconds),
+        java.time.Duration.ofSeconds(provider != null && provider.getTimeoutSeconds() != null ? provider.getTimeoutSeconds() : timeoutSeconds),
         maxRedirects,
         null,
         provider == null ? null : java.net.URI.create(provider.getBaseUrl()),

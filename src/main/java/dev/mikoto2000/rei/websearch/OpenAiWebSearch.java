@@ -21,7 +21,7 @@ final class OpenAiWebSearch {
 
   /** Deterministic JSON also supplies the POST cache identity. */
   String request(WebSearchProperties.ProviderProperties provider, String query) {
-    if (provider.getModel() == null || provider.getModel().isBlank()
+    if (provider.getModel() == null || !provider.getModel().matches("[A-Za-z0-9._:-]{1,100}")
         || !Set.of("low", "medium", "high").contains(provider.getSearchContextSize())
         || provider.getMaxUrls() < 1 || provider.getMaxUrls() > 100)
       throw failure("CONFIGURATION");
@@ -83,6 +83,21 @@ final class OpenAiWebSearch {
             add(provider, candidates, annotation);
     }
     return new ArrayList<>(candidates.values()).subList(0, Math.min(candidates.size(), Math.min(limit, provider.getMaxUrls())));
+  }
+
+  /** API-reported tokens only; called for network responses, never on cache replay. */
+  void recordUsage(String body) {
+    JsonNode root;
+    try { root = mapper.readTree(body); } catch (RuntimeException invalid) { return; }
+    if (root == null) return;
+    for (String field : List.of("input_tokens", "output_tokens", "total_tokens")) {
+      var value = root.path("usage").path(field);
+      if (value.isIntegralNumber() && value.asLong(-1) >= 0)
+        WebSearchMetrics.OBSERVED.add("openai_actual_" + field, value.asLong());
+    }
+    for (JsonNode item : root.path("output"))
+      if ("web_search_call".equals(item.path("type").asString("")))
+        WebSearchMetrics.OBSERVED.add("openai_web_search_calls", 1);
   }
 
   private void add(WebSearchProperties.ProviderProperties provider, Map<String, WebSearchResult> candidates, JsonNode source) {

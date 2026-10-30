@@ -102,6 +102,25 @@ public class SafeHttpFetcher {
     }
   }
 
+  /** POST uses the existing bounded transport without redirects or automatic retries. */
+  public Response fetch(
+      URI uri, String method, byte[] body, Map<String, String> headers,
+      HttpFetchPolicy policy, FetchOperation operation, HttpFetchObserver observer) {
+    if ("GET".equals(method) && body == null) return fetch(uri, headers, policy, operation, observer);
+    try {
+      return exchange(uri, method, body, headers, policy,
+          operation.withTimeout(policy.totalTimeout()), observer, false);
+    } catch (CancellationException cancelled) {
+      observer.cancellation();
+      throw cancelled;
+    } catch (RuntimeException failed) {
+      FetchOperation.propagateControls(failed);
+      var safe = FetchOperation.classify(failed);
+      if (safe instanceof HttpFetchException http) observer.failure(http.code());
+      throw safe;
+    }
+  }
+
   /** 外部情報の取得で用いる実際に使うポートを返す。 */
   private static int effectivePort(URI uri) {
     return uri.getPort() >= 0
