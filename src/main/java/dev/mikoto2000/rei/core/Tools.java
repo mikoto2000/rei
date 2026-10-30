@@ -2191,9 +2191,11 @@ public class Tools {
         int byteShare = (byteLimit - 16) / Math.max(1, selectedCount),
             tokenShare = (tokenLimit - 16) / Math.max(1, selectedCount),
             lineShare = lineLimit / Math.max(1, selectedCount);
-        var alreadyPresentPaths = fileMatches.keySet().stream().limit(selectedCount)
-            .filter(path -> workingSet.contains(resolveProjectPath(path, workingDirectory)))
-            .collect(Collectors.toSet());
+        var alreadyPresentPaths =
+            fileMatches.keySet().stream()
+                .limit(selectedCount)
+                .filter(path -> workingSet.contains(resolveProjectPath(path, workingDirectory)))
+                .collect(Collectors.toSet());
 
         // 3. ファイルを選び、ヒット行の前後を読み込む
         List<SearchAndReadResult> fileResults = new ArrayList<>();
@@ -2860,7 +2862,8 @@ public class Tools {
   /** 必要な内容を参照できるよう、複数ファイルを読み取る。 */
   List<ReadFileResult> readMultiFile(
       List<ReadFileRequest> files, java.nio.file.Path workingDirectory) throws IOException {
-    try (var measurement = ReadingMetrics.operation("read", readingStateStore)) {
+    try (var measurement = ReadingMetrics.operation("read", readingStateStore);
+        var workingSetBatch = workingSet.batchPersistence()) {
       if (files == null || files.isEmpty()) {
         throw new IllegalArgumentException("files must not be empty");
       }
