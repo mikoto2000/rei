@@ -232,7 +232,7 @@ public final class SseBridge implements AutoCloseable {
     /** Web APIによる操作において、書き込みイベントに該当するか判定する。 */
     private boolean writeEvent(AgentEvent event) throws Exception {
       boolean shuttingDown = event.type() == AgentEventType.APPLICATION_SHUTDOWN_STARTED;
-      boolean cancelled = !shuttingDown && runs.get(runId).status() == RunStatus.CANCELLED;
+      boolean cancelled = !shuttingDown && runs.streamStatus(runId) == RunStatus.CANCELLED;
       var dto = WebApiEventMapper.from(event, cancelled, apiKey);
       sink.event(dto);
       if (shuttingDown

@@ -18,6 +18,43 @@ import org.junit.jupiter.api.Test;
 
 /** イベント配信連携の結果と状態の契約を検証するテスト。 */
 class SseBridgeTest {
+  @Test
+  void streamingDoesNotScanUnrelatedTerminalRuns() throws Exception {
+    var reads = new java.util.concurrent.atomic.AtomicInteger();
+    var clock =
+        new RunRegistryTest.MutableClock() {
+          @Override
+          public java.time.Instant instant() {
+            reads.incrementAndGet();
+            return super.instant();
+          }
+        };
+    var registry = new RunRegistry(clock);
+    registry.register(RunRegistryTest.context("run"));
+    registry.transition("run", RunStatus.RUNNING, null);
+    for (int i = 0; i < 100; i++) {
+      String id = "old-" + i;
+      registry.register(RunRegistryTest.context(id));
+      registry.transition(id, RunStatus.RUNNING, null);
+      registry.transition(id, RunStatus.COMPLETED, null);
+    }
+    var bus = new InMemoryAgentEventBus();
+    var factory = new AgentEventFactory(Clock.systemUTC());
+    var sink = new Sink();
+    try (var bridge = new SseBridge(bus, new RunService(registry), "")) {
+      bridge.connect("run", sink);
+      reads.set(0);
+      for (int i = 0; i < 100; i++)
+        bus.publish(
+            factory.messageDelta("message", "x").withOwnership(RunRegistryTest.context("run")));
+      bus.publish(factory.runCompleted("run", 1));
+      assertThat(sink.ended.await(5, TimeUnit.SECONDS)).isTrue();
+      assertThat(sink.error).isNull();
+      assertThat(sink.events).hasSize(101);
+      assertThat(reads).hasValue(0);
+    }
+  }
+
   /** Web APIによる操作で、再送や重複を、受付と実行の規則に従って扱うことを確認する。 */
   @Test
   void recoveredUnknownRunReturnsReplayGapSoClientsFetchItsStatus() {

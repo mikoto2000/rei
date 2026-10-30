@@ -390,6 +390,15 @@ public final class RunRegistry implements AutoCloseable {
     return snapshot;
   }
 
+  /** Streaming checks only its target; normal lookups still perform global retention cleanup. */
+  public synchronized RunStatus streamStatus(String runId) {
+    var snapshot = get(runId);
+    if (snapshot.completedAt() != null
+        && !clock.instant().isBefore(snapshot.completedAt().plus(RETENTION)))
+      throw new RunNotFoundException();
+    return snapshot.status();
+  }
+
   /** 実行の受付と状態管理において、状態の遷移に該当するか判定する。 */
   public synchronized boolean transition(String runId, RunStatus next, RunFailure failure) {
     var current = get(runId);
