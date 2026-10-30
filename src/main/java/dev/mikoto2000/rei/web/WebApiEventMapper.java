@@ -106,6 +106,17 @@ public final class WebApiEventMapper {
           if (fields(event.type()).contains(name) && name.equals("error") && value != null) {
             // Internal exception messages may contain arbitrary credentials, paths or stack traces.
             if (value instanceof Map<?, ?> error
+                && dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException.CODE.equals(
+                    error.get("code")))
+              payload.put(
+                  name,
+                  Map.of(
+                      "type",
+                          dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException.CODE,
+                      "message",
+                          dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException
+                              .MESSAGE));
+            else if (value instanceof Map<?, ?> error
                 && "ContextHardLimit".equals(error.get("errorType")))
               payload.put(
                   name,

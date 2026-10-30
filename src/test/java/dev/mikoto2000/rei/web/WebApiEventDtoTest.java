@@ -12,6 +12,22 @@ import org.junit.jupiter.api.Test;
 
 /** WebAPIイベントDtoの結果と状態の契約を検証するテスト。 */
 class WebApiEventDtoTest {
+
+  @Test
+  void fileBudgetFailuresExposeOnlyFixedCauseAndRecoveryGuidance() {
+    var factory = new AgentEventFactory(Clock.systemUTC());
+    var error =
+        new ErrorInformation("PRIVATE_CLASS", "PRIVATE_PATH secret", "file_result_budget_exceeded");
+    for (var event :
+        java.util.List.of(
+            factory.toolFailed("call", "searchAndRead", error), factory.runFailed("run", error))) {
+      var dto = WebApiEventDto.from(event, false, "secret");
+      assertThat(dto.payload().toString())
+          .contains("file_result_budget_exceeded", "出力上限", "baseDir", "再試行")
+          .doesNotContain("Operation failed.", "PRIVATE", "secret");
+    }
+  }
+
   /** 既知の実行停止理由だけを固定メッセージに変換し、内部の詳細を公開しない。 */
   @Test
   void runBudgetAndStagnationStopsExposeSafeSpecificDiagnostics() {

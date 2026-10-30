@@ -15,6 +15,48 @@ final class SearchResultBudget {
     return FileResultBudget.fit(result, bytes, tokens, value -> smaller(value, charset));
   }
 
+  /** Bound the entire serialized list, including errors, separators and truncation metadata. */
+  static List<Tools.SearchAndReadResult> fitAll(
+      List<Tools.SearchAndReadResult> results,
+      int bytes,
+      int tokens,
+      java.util.Map<String, String> charsets)
+      throws IOException {
+    var bounded = new java.util.ArrayList<>(results);
+    while (!FileResultBudget.fits(bounded, bytes, tokens)) {
+      if (bounded.isEmpty()) {
+        FileResultBudget.require(bounded, bytes, tokens);
+        break;
+      }
+      int last = bounded.size() - 1;
+      var value = bounded.get(last);
+      var reduced = smaller(value, charsets.get(value.path()));
+      if (!value.equals(reduced)) {
+        bounded.set(last, reduced);
+      } else if (bounded.size() > 1) {
+        bounded.remove(last);
+        bounded.replaceAll(
+            item ->
+                new Tools.SearchAndReadResult(
+                    item.path(),
+                    item.matches(),
+                    item.sections(),
+                    item.error(),
+                    item.truncated(),
+                    true,
+                    item.version(),
+                    item.nextRead(),
+                    item.score(),
+                    item.matchedBy(),
+                    item.omittedMatches()));
+      } else {
+        // Never report an empty successful search when even one result cannot fit.
+        FileResultBudget.require(bounded, bytes, tokens);
+      }
+    }
+    return List.copyOf(bounded);
+  }
+
   /** 共通の実行基盤で用いる複製を返す。 */
   private static Tools.SearchAndReadResult copy(
       Tools.SearchAndReadResult value,

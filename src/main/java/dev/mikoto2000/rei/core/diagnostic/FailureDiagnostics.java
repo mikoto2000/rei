@@ -62,6 +62,10 @@ public final class FailureDiagnostics {
           || reactor.core.Exceptions.isCancel(cause))
         return diagnostic("cancelled", "処理が中断されました。保存済みの状態を確認してください。");
     for (var cause : causes) {
+      if (cause instanceof dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException)
+        return diagnostic(
+            dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException.CODE,
+            dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException.MESSAGE);
       if (cause instanceof dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException denied)
         return diagnostic(denied.code(), denied.diagnosticMessage());
       if (cause instanceof dev.mikoto2000.rei.toolcontract.ExternalReadFailure external)

@@ -167,6 +167,18 @@ public class ToolEventCallbackDecorator
 
   /** 検索先の障害は失敗結果として返し、独立したローカル作業を続行できるようにする。 */
   private String searchFailureResult(String toolName, RuntimeException error) {
+    if (java.util.Set.of("searchAndRead", "grepMultiQuery", "searchFilePage").contains(toolName)
+        && !Thread.currentThread().isInterrupted()
+        && !dev.mikoto2000.rei.core.stagnation.RunExecutionContext.isControlFailure(error)
+        && dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.classify(error)
+            .code()
+            .equals(dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException.CODE)) {
+      return """
+          {"success":false,"error":"file_result_budget_exceeded","message":"%s","guidance":"検索結果は取得できていません。同じ条件を繰り返さず、baseDir・includeGlob・検索語を絞り、maxFiles・contextLinesを減らして再試行してください。既知のパスはreadMultiFileで確認できます。"}
+          """
+          .stripTrailing()
+          .formatted(dev.mikoto2000.rei.toolcontract.FileResultBudgetExceededException.MESSAGE);
+    }
     if (!java.util.Set.of("webSearch", "webSearchAndRead").contains(toolName)
         || Thread.currentThread().isInterrupted()
         || dev.mikoto2000.rei.core.stagnation.RunExecutionContext.isControlFailure(error))
@@ -186,6 +198,7 @@ public class ToolEventCallbackDecorator
     return """
         {"success":false,"error":"%s","httpStatus":%s,"message":"%s","guidance":"検索結果は取得できていません。同じ検索の再試行を繰り返さず、既知の公式URLを取得するか、外部確認が不要なローカルのレビュー・修正を続けてください。外部確認が必要な項目は未確認として記録し、推測で確定しないでください。"}
         """
+        .stripTrailing()
         .formatted(diagnostic.code(), status, diagnostic.message());
   }
 
