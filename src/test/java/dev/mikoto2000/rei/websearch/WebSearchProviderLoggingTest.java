@@ -61,7 +61,11 @@ class WebSearchProviderLoggingTest {
   void logsHttpFailureEvenWhenFallbackSucceeds(int status) throws Exception {
     properties.setProviders(List.of(provider("brave"), provider("duckduckgo")));
     when(fetcher.fetch(any(), any(), any(), any(), any()))
-        .thenReturn(response(status, "PRIVATE_BODY"), response(200, """
+        .thenReturn(
+            response(status, "PRIVATE_BODY"),
+            response(
+                200,
+                """
             <div class="result"><a class="result__a" href="https://example.com/">
             Search result</a></div>
             """));
@@ -71,21 +75,24 @@ class WebSearchProviderLoggingTest {
     assertEquals(Level.WARN, appender.list.getFirst().getLevel());
     assertEquals(
         "Web search provider failed; provider=brave, causeType=WebSearchHttpException,"
-            + " code=HTTP_ERROR, httpStatus=" + status,
+            + " code=HTTP_ERROR, httpStatus="
+            + status,
         appender.list.getFirst().getFormattedMessage());
     assertSafeLogs();
   }
 
   @ParameterizedTest
-  @EnumSource(value = HttpFetchException.Code.class,
+  @EnumSource(
+      value = HttpFetchException.Code.class,
       names = {"NETWORK_ERROR", "CONNECT_TIMEOUT", "READ_TIMEOUT", "URL_NOT_ALLOWED"})
   void logsSafeTransportCodeWithoutNestedCause(HttpFetchException.Code code) {
     properties.setProviders(List.of(provider("duckduckgo")));
     var failure = new HttpFetchException(code, new IllegalStateException("PRIVATE_CAUSE"));
     when(fetcher.fetch(any(), any(), any(), any(), any())).thenThrow(failure);
 
-    assertSame(failure, assertThrows(HttpFetchException.class,
-        () -> service().search("PRIVATE_QUERY", 1)));
+    assertSame(
+        failure,
+        assertThrows(HttpFetchException.class, () -> service().search("PRIVATE_QUERY", 1)));
     assertTrue(appender.list.getFirst().getFormattedMessage().contains("provider=duckduckgo"));
     assertTrue(appender.list.getFirst().getFormattedMessage().contains("code=" + code.name()));
     assertSafeLogs();
@@ -102,8 +109,49 @@ class WebSearchProviderLoggingTest {
     assertEquals(Level.INFO, appender.list.getFirst().getLevel());
     assertEquals(
         "Web search provider returned no results; provider=duckduckgo, code=NO_RESULTS,"
-            + " httpStatus=" + status,
+            + " httpStatus="
+            + status,
         appender.list.getFirst().getFormattedMessage());
+    assertSafeLogs();
+  }
+
+  @Test
+  void fallsBackWhenDuckDuckGoReturnsChallengeInsteadOfResults() throws Exception {
+    properties.setProviders(List.of(provider("duckduckgo"), provider("brave")));
+    when(fetcher.fetch(any(), any(), any(), any(), any()))
+        .thenReturn(
+            response(202, "<form id='challenge-form'>PRIVATE_BODY</form>"),
+            response(
+                200,
+                """
+                {"web":{"results":[{"title":"Result","url":"https://example.com/"}]}}
+                """));
+
+    assertEquals(1, service().search("PRIVATE_QUERY", 1).size());
+    assertEquals(1, appender.list.size());
+    assertEquals(Level.WARN, appender.list.getFirst().getLevel());
+    assertTrue(appender.list.getFirst().getFormattedMessage().contains("code=BOT_CHALLENGE"));
+    assertTrue(appender.list.getFirst().getFormattedMessage().contains("httpStatus=202"));
+    assertSafeLogs();
+  }
+
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "<form id='challenge-form'>PRIVATE_BODY</form>",
+        "<form action='//duckduckgo.com/anomaly.js?PRIVATE_TOKEN'>PRIVATE_BODY</form>",
+        "<div class='anomaly-modal'>PRIVATE_BODY</div>"
+      })
+  void reportsChallengeEvenWithSuccessfulHttpStatus(String html) {
+    properties.setProviders(List.of(provider("duckduckgo")));
+    when(fetcher.fetch(any(), any(), any(), any(), any())).thenReturn(response(200, html));
+
+    var failure =
+        assertThrows(WebSearchResponseException.class, () -> service().search("PRIVATE_QUERY", 1));
+
+    assertEquals(200, failure.httpStatus());
+    assertEquals("BOT_CHALLENGE", failure.diagnosticCode());
+    assertTrue(appender.list.getFirst().getFormattedMessage().contains("code=BOT_CHALLENGE"));
     assertSafeLogs();
   }
 
@@ -113,8 +161,8 @@ class WebSearchProviderLoggingTest {
     when(fetcher.fetch(any(), any(), any(), any(), any()))
         .thenReturn(response(429, "PRIVATE_BODY"), response(402, "PRIVATE_BODY"));
 
-    var failure = assertThrows(WebSearchHttpException.class,
-        () -> service().search("PRIVATE_QUERY", 1));
+    var failure =
+        assertThrows(WebSearchHttpException.class, () -> service().search("PRIVATE_QUERY", 1));
     assertEquals(429, failure.status());
     assertEquals(2, appender.list.size());
     assertTrue(appender.list.get(0).getFormattedMessage().contains("provider=duckduckgo"));
@@ -169,7 +217,10 @@ class WebSearchProviderLoggingTest {
   }
 
   private SafeHttpFetcher.Response response(int status, String body) {
-    return new SafeHttpFetcher.Response(status, Map.of(), body.getBytes(StandardCharsets.UTF_8),
+    return new SafeHttpFetcher.Response(
+        status,
+        Map.of(),
+        body.getBytes(StandardCharsets.UTF_8),
         URI.create("https://example.com/PRIVATE_URL"));
   }
 

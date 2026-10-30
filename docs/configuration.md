@@ -329,6 +329,11 @@ Rei の停止中は更新されません。
 
 Web 検索は `providers` 配列で設定します。既定では DuckDuckGo のみ有効です。
 
+DuckDuckGo がボット確認ページを返した場合は、検索結果ゼロ件とは区別して
+`code=BOT_CHALLENGE` を WARN ログに記録します。確認ページはキャッシュから除去し、
+設定された後続のプロバイダーがあれば検索を続けます。プロバイダーが DuckDuckGo のみの場合は
+検索失敗として通知します。
+
 DuckDuckGo だけ使う場合:
 
 ```bash

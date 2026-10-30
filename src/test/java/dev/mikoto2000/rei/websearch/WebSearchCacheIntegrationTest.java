@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.websearch;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyMap;
@@ -25,6 +26,39 @@ import tools.jackson.databind.json.JsonMapper;
 
 /** Web検索キャッシュ外部連携の結果と状態の契約を検証するテスト。 */
 class WebSearchCacheIntegrationTest {
+  /** HTTP 200 の認証ページを検索キャッシュから除き、次の検索で再取得する。 */
+  @Test
+  void challengeIsEvictedFromSearchCache() throws Exception {
+    var properties = new WebSearchProperties();
+    properties.setEnabled(true);
+    var raw = mock(SafeHttpFetcher.class);
+    var requests = new AtomicInteger();
+    doAnswer(
+            invocation -> {
+              ((HttpFetchObserver) invocation.getArgument(4)).request(false);
+              String html =
+                  requests.incrementAndGet() == 1
+                      ? "<form id='challenge-form'></form>"
+                      : "<div class='result'><a class='result__a' href='https://example.com/'>Result</a></div>";
+              return new SafeHttpFetcher.Response(
+                  200,
+                  Map.of("content-type", "text/html"),
+                  html.getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                  invocation.getArgument(0));
+            })
+        .when(raw)
+        .fetch(any(), anyMap(), any(), any(), any());
+    try (var cache =
+        new HttpResponseCache(
+            new HttpCacheProperties(), Clock.systemUTC(), new SensitiveInfoDetector())) {
+      var service = new WebSearchService(properties, new JsonMapper(), raw, cache);
+      assertThrows(WebSearchResponseException.class, () -> service.search("topic", 1));
+      assertEquals(1, service.search("topic", 1).size());
+      assertEquals(1, service.search("topic", 1).size());
+      assertEquals(2, requests.get());
+    }
+  }
+
   /** 付随情報について、完全一致の検索条件を再利用することを確認する。 */
   @Test
   void metadataReusesExactQueryAndLatestAlwaysRevalidates() throws Exception {

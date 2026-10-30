@@ -131,8 +131,12 @@ public class WebSearchService {
             e.getClass().getSimpleName(),
             e instanceof WebSearchHttpException
                 ? "HTTP_ERROR"
-                : dev.mikoto2000.rei.http.FetchOperation.diagnosticCode(e, "PROVIDER_ERROR"),
-            e instanceof WebSearchHttpException http ? http.status() : null);
+                : e instanceof WebSearchResponseException response
+                    ? response.diagnosticCode()
+                    : dev.mikoto2000.rei.http.FetchOperation.diagnosticCode(e, "PROVIDER_ERROR"),
+            e instanceof dev.mikoto2000.rei.toolcontract.ExternalReadFailure failure
+                ? failure.httpStatus()
+                : null);
         if (firstError == null) {
           firstError = e;
         }
@@ -285,10 +289,15 @@ public class WebSearchService {
       throw new WebSearchHttpException(response.status());
     }
 
-    return observeResults(
-        provider,
-        response.status(),
-        parseDuckDuckGoResults(new String(response.body(), StandardCharsets.UTF_8), limit));
+    String html = new String(response.body(), StandardCharsets.UTF_8);
+    Document document = Jsoup.parse(html);
+    if (document.selectFirst("form#challenge-form, form[action*=/anomaly.js], .anomaly-modal")
+        != null) {
+      // HTTP 200 の制限ページもキャッシュに残さず、次の検索先へフォールバックする。
+      cache.invalidate(cacheRequest(request, provider, limit, ""), fetcher);
+      throw new WebSearchResponseException(response.status());
+    }
+    return observeResults(provider, response.status(), parseDuckDuckGoResults(html, limit));
   }
 
   /** 空の結果とHTTP障害を区別し、本文を残さずに検索先の状態を記録する。 */
