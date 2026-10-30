@@ -155,6 +155,30 @@ public class WebSearchProperties {
     /** APIキー。 */
     private String apiKey = "";
 
+    /** Responses search model; independently configured from the chat LLM. */
+    private String model = "gpt-4.1-mini";
+
+    /** Search context budget supported by web_search. */
+    private String searchContextSize = "medium";
+
+    /** Maximum structured URLs adopted from this provider. */
+    private int maxUrls = 20;
+
+    /** Optional per-provider total/read timeout, in seconds. */
+    private Integer timeoutSeconds;
+
+    /** Allowed search domains, including their subdomains. */
+    private List<String> allowedDomains = new ArrayList<>();
+
+    /** Blocked search domains, including their subdomains. */
+    private List<String> blockedDomains = new ArrayList<>();
+
+    /** Resolve the default Responses endpoint only for the explicitly selected provider. */
+    public String getBaseUrl() {
+      return baseUrl == null && "openai".equalsIgnoreCase(name)
+          ? "https://api.openai.com/v1/responses" : baseUrl;
+    }
+
     /** 許可非公開ネットワーク。 */
     private boolean allowPrivateNetwork = false;
   }

@@ -38,8 +38,14 @@ public final class WebSearchMetrics {
         .counter(
             "rei.web.search.providers",
             "provider",
-            Set.of("duckduckgo", "brave").contains(provider) ? provider : "other")
+            Set.of("duckduckgo", "brave", "openai").contains(provider) ? provider : "other")
         .increment();
+  }
+
+  /** Record only bounded API states, never response text or error messages. */
+  public void openAiStatus(String status) {
+    registry.counter("rei.web.search.openai.responses", "status",
+        Set.of("completed", "failed", "incomplete", "in_progress", "queued", "cancelled").contains(status) ? status : "invalid").increment();
   }
 
   /** 対象の現在の状態を、照会用の情報として返す。 */
