@@ -111,6 +111,7 @@ class StreamingPersistenceTest {
           probe.active.set(false);
         }
         assertThat(probe.commits.get()).isEqualTo(20);
+        assertThat(probe.sequenceStatements.get()).isEqualTo(20);
         assertThat(probe.transactions.get()).isEqualTo(20);
         assertThat(io.forces.sum()).isEqualTo(21);
         assertThat(displayed).hasSize(20);
@@ -135,6 +136,64 @@ class StreamingPersistenceTest {
           .extracting(AgentEvent::id)
           .containsExactlyElementsOf(displayed.stream().map(AgentEvent::id).toList());
       assertThat(restarted.getBean(ManagedActivityLog.class).read(PROJECT)).hasSize(20);
+    }
+  }
+
+  @Test
+  void sequenceOverflowDoesNotPersistOrDeliverAnotherChunk() {
+    var bus = new InMemoryAgentEventBus();
+    var displayed = new ArrayList<AgentEvent>();
+    bus.subscribe(displayed::add);
+    try (var context = context(root, bus)) {
+      bus.publish(event("good", PROJECT, false));
+      new StorageDatabase(root)
+          .transaction(
+              db -> {
+                try (var statement =
+                    db.prepareStatement(
+                        "UPDATE event_sequences SET sequence=? WHERE project_id=?")) {
+                  statement.setLong(1, Long.MAX_VALUE);
+                  statement.setString(2, PROJECT);
+                  statement.executeUpdate();
+                }
+                return null;
+              });
+
+      assertThatThrownBy(() -> bus.publish(event("overflow", PROJECT, true)))
+          .isInstanceOf(ArithmeticException.class);
+      assertThat(displayed).extracting(AgentEvent::id).containsExactly("good");
+      var store = context.getBean(ProjectAgentEventStore.class);
+      assertThat(store.lastSequence(PROJECT)).isEqualTo(Long.MAX_VALUE);
+      assertThat(store.findEvent(PROJECT, "overflow")).isEmpty();
+      assertThat(context.getBean(ManagedActivityLog.class).read(PROJECT)).hasSize(1);
+    }
+  }
+
+  @Test
+  void concurrentProjectsKeepGaplessIndependentSequences() throws Exception {
+    try (var context = context(root, new InMemoryAgentEventBus());
+        var executor = java.util.concurrent.Executors.newFixedThreadPool(4)) {
+      var store = context.getBean(ProjectAgentEventStore.class);
+      String other = UUID.randomUUID().toString();
+      var futures = new ArrayList<java.util.concurrent.Future<?>>();
+      for (int worker = 0; worker < 4; worker++) {
+        int owner = worker;
+        String project = worker % 2 == 0 ? PROJECT : other;
+        futures.add(
+            executor.submit(
+                () -> {
+                  for (int index = 0; index < 20; index++)
+                    store.append(event(owner + "-" + index, project, false));
+                }));
+      }
+      for (var future : futures) future.get(20, java.util.concurrent.TimeUnit.SECONDS);
+      for (String project : java.util.List.of(PROJECT, other)) {
+        assertThat(store.lastSequence(project)).isEqualTo(40);
+        assertThat(store.readAfter(project, 0, 100))
+            .extracting(AgentEvent::sequence)
+            .containsExactlyElementsOf(
+                java.util.stream.LongStream.rangeClosed(1, 40).boxed().toList());
+      }
     }
   }
 

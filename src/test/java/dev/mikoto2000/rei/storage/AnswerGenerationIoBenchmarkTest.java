@@ -108,6 +108,7 @@ class AnswerGenerationIoBenchmarkTest {
     /** 検証に使うtransactions、変更履歴、opens。 */
     final AtomicLong transactions = new AtomicLong(),
         commits = new AtomicLong(),
+        sequenceStatements = new AtomicLong(),
         opens = new AtomicLong();
 
     /** 検証条件に必要な値を受け取り、Probeを用意する。 */
@@ -128,6 +129,11 @@ class AnswerGenerationIoBenchmarkTest {
                 try {
                   Object result = method.invoke(connection, args);
                   if (active.get()) {
+                    if (method.getName().equals("prepareStatement")
+                        && args != null
+                        && args.length > 0
+                        && args[0] instanceof String sql
+                        && sql.contains("event_sequences")) sequenceStatements.incrementAndGet();
                     if (method.getName().equals("commit")) commits.incrementAndGet();
                     if (method.getName().equals("setAutoCommit") && Boolean.FALSE.equals(args[0]))
                       transactions.incrementAndGet();
@@ -315,6 +321,7 @@ class AnswerGenerationIoBenchmarkTest {
               var applicationIo = new StorageIoObservation();
               probe.transactions.set(0);
               probe.commits.set(0);
+              probe.sequenceStatements.set(0);
               probe.opens.set(0);
               var sampler = new WindowsDiskSampler();
               var before = io();
@@ -369,6 +376,7 @@ class AnswerGenerationIoBenchmarkTest {
               row.put("persistenceCalls", runs * count * (coordinated ? 1 : 2));
               row.put("transactions", probe.transactions.get());
               row.put("commits", probe.commits.get());
+              row.put("sequenceStatements", probe.sequenceStatements.get());
               row.put("connectionOpens", probe.opens.get());
               row.put("explicitForceCalls", applicationIo.forces.sum());
               row.put("activityWrites", applicationIo.writes.sum());
