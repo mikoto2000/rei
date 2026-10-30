@@ -7,6 +7,7 @@ import dev.mikoto2000.rei.checkpoint.PersistentCheckpoint.Evidence;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpoint.Operation;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpoint.OperationStatus;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpoint.ProcessRef;
+import dev.mikoto2000.rei.context.TaskStateSnapshot;
 import dev.mikoto2000.rei.core.actionplan.ActionPlan;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
@@ -1077,7 +1078,7 @@ public class PersistentCheckpointService implements AutoCloseable {
   public record ModelHandoff(String text, boolean hasFileInventory) {}
 
   /** Older checkpoints retain claims and plan steps even without the new structured snapshot. */
-  private TaskState.Snapshot savedTaskState(PersistentCheckpoint state) {
+  private TaskStateSnapshot savedTaskState(PersistentCheckpoint state) {
     if (state.taskState() != null) return state.taskState();
     var completed = new java.util.LinkedHashSet<String>();
     state.evidence().stream()
@@ -1093,7 +1094,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     if (state.nextAction() != null && !state.nextAction().isBlank())
       pending.add(state.nextAction());
     pending.removeAll(completed);
-    return new TaskState.Snapshot(
+    return new TaskStateSnapshot(
         state.request(),
         state.blockers().isEmpty() ? TaskState.STATUS_IN_PROGRESS : TaskState.STATUS_BLOCKED,
         List.copyOf(completed),

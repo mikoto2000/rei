@@ -71,7 +71,7 @@ public record PersistentCheckpoint(
     dev.mikoto2000.rei.core.chat.AgentRunContext.Mode mode,
     boolean voiceInput,
     dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState progress,
-    dev.mikoto2000.rei.core.taskstate.TaskState.Snapshot taskState) {
+    dev.mikoto2000.rei.context.TaskStateSnapshot taskState) {
   /** Compatibility constructor for checkpoints without structured task progress. */
   public PersistentCheckpoint(
       int schemaVersion,

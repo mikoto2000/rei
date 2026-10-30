@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core.taskstate;
 
+import dev.mikoto2000.rei.context.TaskStateSnapshot;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -80,21 +81,13 @@ public class TaskState {
     return List.copyOf(pending);
   }
 
-  /** Saved assistant progress, distinct from independently verified tool results. */
-  public record Snapshot(String goal, String status, List<String> completed, List<String> pending) {
-    public Snapshot {
-      completed = List.copyOf(completed);
-      pending = List.copyOf(pending);
-    }
-  }
-
   /** Capture the exact working state for a later Run. */
-  public Snapshot snapshot() {
-    return new Snapshot(goal, status, completed, pending);
+  public TaskStateSnapshot snapshot() {
+    return new TaskStateSnapshot(goal, status, completed, pending);
   }
 
   /** Restore saved work and bind its automatic context to the new Run. */
-  public void restore(Snapshot saved) {
+  public void restore(TaskStateSnapshot saved) {
     reset();
     start(saved.goal());
     status = saved.status();
