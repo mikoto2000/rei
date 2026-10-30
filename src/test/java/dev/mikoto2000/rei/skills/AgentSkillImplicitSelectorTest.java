@@ -13,13 +13,94 @@ import org.springframework.ai.chat.model.ChatModel;
 /** エージェントスキル暗黙の対象の選択条件の結果と状態の契約を検証するテスト。 */
 class AgentSkillImplicitSelectorTest {
 
+  @Test
+  void aggregatesSplitSelectionBeforeParsing() {
+    var skill = skill("skill-a");
+    var model = Mockito.mock(ChatModel.class);
+    when(model.stream(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(reactor.core.publisher.Flux.just(response("[\"skill-"), response("a\"]")));
+
+    var selector =
+        new AgentSkillImplicitSelector(model, new InMemoryAgentSkillRepository(List.of(skill)));
+
+    assertThat(selector.select("request", Set.of(), List.of(skill))).containsExactly(skill);
+  }
+
+  @Test
+  void totalDeadlineCancelsEvenWhenChunksKeepArriving() {
+    var cancelled = new java.util.concurrent.atomic.AtomicBoolean();
+    var model = Mockito.mock(ChatModel.class);
+    when(model.stream(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(
+            reactor.core.publisher.Flux.interval(java.time.Duration.ofMillis(10))
+                .map(index -> response(" "))
+                .doOnCancel(() -> cancelled.set(true)));
+    var properties = new AgentSkillsProperties();
+    properties.setSelectorTimeout(java.time.Duration.ofMillis(100));
+    var selector =
+        new AgentSkillImplicitSelector(
+            new dev.mikoto2000.rei.llm.LlmModelProvider(
+                model, new dev.mikoto2000.rei.llm.LlmProperties()),
+            new InMemoryAgentSkillRepository(List.of(skill("a"))),
+            properties);
+
+    org.junit.jupiter.api.Assertions.assertTimeoutPreemptively(
+        java.time.Duration.ofSeconds(3),
+        () -> assertThat(selector.select("request", Set.of(), List.of(skill("a")))).isEmpty());
+    assertThat(cancelled).isTrue();
+  }
+
+  @Test
+  void timeoutCannotBypassUnknownUsagePolicy() {
+    var model = Mockito.mock(ChatModel.class);
+    when(model.stream(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(reactor.core.publisher.Flux.never());
+    var properties = new AgentSkillsProperties();
+    properties.setSelectorTimeout(java.time.Duration.ofMillis(30));
+    var selector =
+        new AgentSkillImplicitSelector(
+            new dev.mikoto2000.rei.llm.LlmModelProvider(
+                model, new dev.mikoto2000.rei.llm.LlmProperties()),
+            new InMemoryAgentSkillRepository(List.of(skill("a"))),
+            properties);
+    var budget = Mockito.mock(dev.mikoto2000.rei.llm.ModelCallBudget.class);
+    when(budget.tokenLimitEnabled()).thenReturn(true);
+    Mockito.doThrow(
+            new dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException(
+                dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.Reason
+                    .TOKEN_USAGE_UNKNOWN))
+        .when(budget)
+        .recordTotalTokens(null);
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> selector.select("request", Set.of(), List.of(skill("a")), budget))
+        .hasMessage("TOKEN_USAGE_UNKNOWN");
+    Mockito.verify(budget).run();
+    Mockito.verify(budget).recordTotalTokens(null);
+  }
+
+  @Test
+  void cancellationIsNotAnEmptySelectionFallback() {
+    var model = Mockito.mock(ChatModel.class);
+    when(model.stream(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(
+            reactor.core.publisher.Flux.error(new java.util.concurrent.CancellationException()));
+    var selector =
+        new AgentSkillImplicitSelector(
+            model, new InMemoryAgentSkillRepository(List.of(skill("a"))));
+
+    org.assertj.core.api.Assertions.assertThatThrownBy(
+            () -> selector.select("request", Set.of(), List.of(skill("a"))))
+        .isInstanceOf(java.util.concurrent.CancellationException.class);
+  }
+
   /** スキルの利用で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sendsOnlySkillMetadataAndUserRequestOnNormalPath() {
     AgentSkill skill = skill("skill-a");
     ChatModel model = Mockito.mock(ChatModel.class);
-    when(model.call(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
-        .thenReturn(response("[\"skill-a\"]"));
+    when(model.stream(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(reactor.core.publisher.Flux.just(response("[\"skill-a\"]")));
     var selector =
         new AgentSkillImplicitSelector(model, new InMemoryAgentSkillRepository(List.of(skill)));
 
@@ -27,7 +108,7 @@ class AgentSkillImplicitSelectorTest {
 
     var prompt =
         org.mockito.ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
-    Mockito.verify(model).call(prompt.capture());
+    Mockito.verify(model).stream(prompt.capture());
     assertSelectionPrompt(prompt.getValue().getContents(), skill);
     assertThat(prompt.getValue().getContents().indexOf("Skills:"))
         .isLessThan(prompt.getValue().getContents().indexOf("User request:"));
@@ -45,8 +126,8 @@ class AgentSkillImplicitSelectorTest {
             List.of(
                 new org.springframework.ai.chat.model.Generation(
                     new org.springframework.ai.chat.messages.AssistantMessage("[\"skill-a\"]"))));
-    when(model.call(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
-        .thenReturn(response);
+    when(model.stream(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(reactor.core.publisher.Flux.just(response));
     var budget = Mockito.mock(dev.mikoto2000.rei.llm.ModelCallBudget.class);
     when(budget.tokenLimitEnabled()).thenReturn(true);
     var selector =
@@ -57,7 +138,7 @@ class AgentSkillImplicitSelectorTest {
 
     var prompt =
         org.mockito.ArgumentCaptor.forClass(org.springframework.ai.chat.prompt.Prompt.class);
-    Mockito.verify(model).call(prompt.capture());
+    Mockito.verify(model).stream(prompt.capture());
     assertSelectionPrompt(prompt.getValue().getContents(), skill);
     Mockito.verify(budget).run();
     Mockito.verify(budget).recordTotalTokens(response.getMetadata().getUsage().getTotalTokens());
@@ -84,7 +165,7 @@ class AgentSkillImplicitSelectorTest {
   @Test
   void wrappedInterruptionTerminatesSelectionAndRestoresInterrupt() {
     var model = Mockito.mock(ChatModel.class);
-    when(model.call(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
+    when(model.stream(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
         .thenThrow(new RuntimeException(new InterruptedException("cancelled")));
     var selector =
         new AgentSkillImplicitSelector(
@@ -158,8 +239,8 @@ class AgentSkillImplicitSelectorTest {
   /** {@code selector} の条件を再現するための補助情報を返す。 */
   private AgentSkillImplicitSelector selector(String llmResponse, AgentSkill... skills) {
     ChatModel chatModel = Mockito.mock(ChatModel.class);
-    when(chatModel.call(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
-        .thenReturn(response(llmResponse));
+    when(chatModel.stream(Mockito.any(org.springframework.ai.chat.prompt.Prompt.class)))
+        .thenReturn(reactor.core.publisher.Flux.just(response(llmResponse)));
     return new AgentSkillImplicitSelector(
         chatModel, new InMemoryAgentSkillRepository(List.of(skills)));
   }

@@ -63,11 +63,12 @@ class SkillSelectionTokenLimitTest {
                               .body(
                                   okhttp3.ResponseBody.create(
                                       """
-                  {"id":"skill-selection","object":"chat.completion","created":0,"model":"skill-model",
-                   "choices":[{"index":0,"finish_reason":"stop","message":{"role":"assistant","content":"[\\\"sample\\\"]"}}],
-                   "usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}
+                  data: {"id":"skill-selection","object":"chat.completion.chunk","created":0,"model":"skill-model","choices":[{"index":0,"finish_reason":"stop","delta":{"role":"assistant","content":"[\\\"sample\\\"]"}}],"usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}
+
+                  data: [DONE]
+
                   """,
-                                      okhttp3.MediaType.get("application/json")))
+                                      okhttp3.MediaType.get("text/event-stream")))
                               .build();
                         }))
             .build();
@@ -118,11 +119,12 @@ class SkillSelectionTokenLimitTest {
   @Test
   void usageBearingSkillResponseSharesRunLimitAndCannotFallbackOnExhaustion() {
     var model = mock(ChatModel.class);
-    when(model.call(any(Prompt.class)))
+    when(model.stream(any(Prompt.class)))
         .thenReturn(
-            new ChatResponse(
-                List.of(new Generation(new AssistantMessage("[\"sample\"]"))),
-                ChatResponseMetadata.builder().usage(new DefaultUsage(1, 2)).build()));
+            reactor.core.publisher.Flux.just(
+                new ChatResponse(
+                    List.of(new Generation(new AssistantMessage("[\"sample\"]"))),
+                    ChatResponseMetadata.builder().usage(new DefaultUsage(1, 2)).build())));
     var skill =
         new AgentSkill(
             "sample",
@@ -147,8 +149,10 @@ class SkillSelectionTokenLimitTest {
   @Test
   void missingSkillUsageStopsInsteadOfReturningEmptySelection() {
     var model = mock(ChatModel.class);
-    when(model.call(any(Prompt.class)))
-        .thenReturn(new ChatResponse(List.of(new Generation(new AssistantMessage("[]")))));
+    when(model.stream(any(Prompt.class)))
+        .thenReturn(
+            reactor.core.publisher.Flux.just(
+                new ChatResponse(List.of(new Generation(new AssistantMessage("[]"))))));
     var skill =
         new AgentSkill(
             "sample",
