@@ -141,7 +141,7 @@ Maven Wrapper から起動する場合は `./mvnw spring-boot:run -Dspring-boot.
 | 実行中の処理を確認する | `/runs` |
 | 選択中プロジェクトの AI の実行を中止する | `/cancel` |
 
-`/search` は Web と登録済み文書を検索して回答します。文書の埋め込みが無効な場合は Web 検索だけを使います。`/models` は接続先がモデル一覧の取得に対応している場合に利用できます。
+`/search` は Web と登録済み文書を検索して回答します。OpenAI 検索プロバイダの追加設定は [Web 検索設定](docs/web-search-optimization.md#openai-responses-api-を検索プロバイダとして追加する) を参照してください。文書の埋め込みが無効な場合は Web 検索だけを使います。`/models` は接続先がモデル一覧の取得に対応している場合に利用できます。
 
 ### 作業中の追加入力とプロジェクト切り替え
 

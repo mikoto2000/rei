@@ -349,6 +349,18 @@ public final class WebSearchSelection {
     }
   }
 
+  /** Normalize a fetchable public candidate; DNS/peer checks still run on page retrieval. */
+  static String normalizePublicUrl(String value) {
+    String normalized = normalizeUrl(value);
+    if (normalized == null) return null;
+    try {
+      PublicNetworkPolicy.validate(URI.create(normalized));
+      return normalized;
+    } catch (RuntimeException invalid) {
+      return null;
+    }
+  }
+
   /** 同じ意味の指定を共通に扱えるよう、参照先のURLの表記をそろえる。 */
   public static String normalizeUrl(String value) {
     try {

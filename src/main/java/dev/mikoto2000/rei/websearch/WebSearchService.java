@@ -180,9 +180,52 @@ public class WebSearchService {
     return switch (providerName) {
       case "duckduckgo" -> searchDuckDuckGo(provider, query, limit);
       case "brave" -> searchBrave(provider, query, limit);
+      case "openai" -> searchOpenAi(provider, query, limit);
       default ->
           throw new IllegalStateException("Unsupported web search provider: " + provider.getName());
     };
+  }
+
+  /** Submit a Responses search using the shared bounded transport and search budget. */
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      justification =
+          "Evict invalid responses and rethrow the original failure so cancellation and provider semantics survive.")
+  private List<WebSearchResult> searchOpenAi(ProviderProperties provider, String query, int limit) {
+    String key = provider.getApiKey();
+    if (key == null || key.isBlank()) key = properties.getOpenaiApiKey();
+    if (key == null || key.isBlank()) throw OpenAiWebSearch.failure("API_KEY_NOT_CONFIGURED");
+    if (key.chars().anyMatch(character -> character <= 32 || character >= 127))
+      throw OpenAiWebSearch.failure("API_KEY_INVALID");
+    var openai = new OpenAiWebSearch(objectMapper);
+    String body = openai.request(provider, query);
+    var request =
+        HttpRequest.newBuilder(URI.create(provider.getBaseUrl()))
+            .header("Accept", "application/json")
+            .header("Content-Type", "application/json")
+            .header("Authorization", "Bearer " + key)
+            .POST(HttpRequest.BodyPublishers.ofString(body))
+            .build();
+    long started = System.nanoTime();
+    var sent = new java.util.concurrent.atomic.AtomicBoolean();
+    try {
+      var response = send(request, provider, limit, body, sent);
+      if (response.status() != 200) throw OpenAiWebSearch.failure("HTTP_" + response.status());
+      String json = new String(response.body(), StandardCharsets.UTF_8);
+      if (sent.get()) openai.recordUsage(json);
+      var results = openai.parse(provider, json, limit);
+      WebSearchMetrics.OBSERVED.add("openai_adopted_urls", results.size());
+      return results;
+    } catch (RuntimeException failure) {
+      cache.invalidate(cacheRequest(request, provider, limit, body), fetcher);
+      throw failure;
+    } finally {
+      WebSearchMetrics.OBSERVED.duration("openai", System.nanoTime() - started);
+      log.debug(
+          "OpenAI web search completed; model={}, networkRequest={}",
+          provider.getModel(),
+          sent.get());
+    }
   }
 
   /** 依頼に関連する情報を得るため、Braveを検索する。 */
@@ -262,8 +305,15 @@ public class WebSearchService {
   /** Web上の情報の調査で用いる送信を返す。 */
   private dev.mikoto2000.rei.http.SafeHttpFetcher.Response send(
       HttpRequest request, ProviderProperties provider, int limit) {
-    Map<String, String> headers = new LinkedHashMap<>();
-    request.headers().map().forEach((name, values) -> headers.put(name, String.join(",", values)));
+    return send(request, provider, limit, "", new java.util.concurrent.atomic.AtomicBoolean());
+  }
+
+  private dev.mikoto2000.rei.http.SafeHttpFetcher.Response send(
+      HttpRequest request,
+      ProviderProperties provider,
+      int limit,
+      String body,
+      java.util.concurrent.atomic.AtomicBoolean sent) {
     var observed =
         WebSearchMetrics.OBSERVED.http(
             provider.getName().trim().toLowerCase(java.util.Locale.ROOT));
@@ -273,6 +323,7 @@ public class WebSearchService {
           /** Web上の情報の調査に関する要求を処理する。 */
           public void request(boolean redirect) {
             gate.run();
+            sent.set(true);
             observed.request(redirect);
           }
 
@@ -297,16 +348,30 @@ public class WebSearchService {
           }
         };
     return cache.fetch(
-        new dev.mikoto2000.rei.http.cache.HttpResponseCache.Request(
-            request.uri(),
-            headers,
-            properties.fetchPolicy(provider),
-            dev.mikoto2000.rei.http.cache.HttpResponseCache.Namespace.SEARCH,
-            dev.mikoto2000.rei.http.FetchScope.forceRefresh(),
-            provider.getName().trim().toLowerCase(java.util.Locale.ROOT) + ":" + limit),
+        cacheRequest(request, provider, limit, body),
         dev.mikoto2000.rei.http.FetchScope.current(),
         observer,
         fetcher);
+  }
+
+  /** Use identical request identity for loading and removing invalid 200 responses. */
+  private dev.mikoto2000.rei.http.cache.HttpResponseCache.Request cacheRequest(
+      HttpRequest request, ProviderProperties provider, int limit, String body) {
+    Map<String, String> headers = new LinkedHashMap<>();
+    request.headers().map().forEach((name, values) -> headers.put(name, String.join(",", values)));
+    return new dev.mikoto2000.rei.http.cache.HttpResponseCache.Request(
+        request.uri(),
+        headers,
+        properties.fetchPolicy(provider),
+        dev.mikoto2000.rei.http.cache.HttpResponseCache.Namespace.SEARCH,
+        dev.mikoto2000.rei.http.FetchScope.forceRefresh(),
+        provider.getName().trim().toLowerCase(java.util.Locale.ROOT)
+            + ":"
+            + limit
+            + ":"
+            + provider.getMaxUrls(),
+        request.method(),
+        body);
   }
 
   /** 入力を機能内で扱えるよう、DuckDuckGo結果一覧を解釈する。 */
