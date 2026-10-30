@@ -521,41 +521,56 @@ public final class ReviewCoverageLedger {
   /** 変更内容のレビューで用いるレビュー済みの内容を返す。 */
   public Job reviewed(
       String id, Scope scope, Range range, String assessment, List<Finding> findings) {
-    require(assessment);
-    // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
-    if (assessment.length() > 16384 || findings == null || findings.size() > 100) throw invalid();
+    return update(id, scope, job -> applyReview(job, range, assessment, findings));
+  }
+
+  public record Assessment(Range range, String assessment, List<Finding> findings) {}
+
+  /** Validate every assessment inside one transaction; failures save none. */
+  public Job reviewedBatch(String id, Scope scope, List<Assessment> assessments) {
+    if (assessments == null || assessments.isEmpty() || assessments.size() > 4) throw invalid();
+    if (assessments.stream().map(Assessment::range).distinct().count() != assessments.size())
+      throw invalid();
     return update(
         id,
         scope,
         job -> {
-          validateTarget(job, range);
-          var entries = new ArrayList<>(job.ranges());
-          int index = find(entries, range);
-          if (index < 0 || !entries.get(index).delivered() || entries.get(index).stale())
-            throw invalid();
-          var saved = new ArrayList<>(job.findings());
-          for (var finding : findings) {
-            if (!finding.path().equals(range.path())
-                || !finding.version().equals(range.version())
-                || !contains(range.span(), finding.location())
-                || !"VERIFIED".equals(finding.verificationStatus())) throw invalid();
-            if (saved.stream()
-                .noneMatch(
-                    old ->
-                        old.path().equals(finding.path())
-                            && old.version().equals(finding.version())
-                            && old.location().equals(finding.location())
-                            && old.evidence().equals(finding.evidence())
-                            && old.assessment().equals(finding.assessment()))) saved.add(finding);
-          }
-          if (saved.size() > 2000)
-            throw new IllegalStateException("Review finding capacity exceeded");
-          var old = entries.get(index);
-          if (old.reviewed() && saved.equals(job.findings())) return job;
-          entries.set(index, new Entry(range, true, true, false, assessment));
-          String status = complete(job.targets(), entries) ? "COMPLETE" : "REVIEW_PARTIAL";
-          return copy(job, entries, saved, status);
+          for (var assessment : assessments)
+            job =
+                applyReview(
+                    job, assessment.range(), assessment.assessment(), assessment.findings());
+          return job;
         });
+  }
+
+  private Job applyReview(Job job, Range range, String assessment, List<Finding> findings) {
+    require(assessment);
+    if (assessment.length() > 16384 || findings == null || findings.size() > 100) throw invalid();
+    validateTarget(job, range);
+    var entries = new ArrayList<>(job.ranges());
+    int index = find(entries, range);
+    if (index < 0 || !entries.get(index).delivered() || entries.get(index).stale()) throw invalid();
+    var saved = new ArrayList<>(job.findings());
+    for (var finding : findings) {
+      if (!finding.path().equals(range.path())
+          || !finding.version().equals(range.version())
+          || !contains(range.span(), finding.location())
+          || !"VERIFIED".equals(finding.verificationStatus())) throw invalid();
+      if (saved.stream()
+          .noneMatch(
+              old ->
+                  old.path().equals(finding.path())
+                      && old.version().equals(finding.version())
+                      && old.location().equals(finding.location())
+                      && old.evidence().equals(finding.evidence())
+                      && old.assessment().equals(finding.assessment()))) saved.add(finding);
+    }
+    if (saved.size() > 2000) throw new IllegalStateException("Review finding capacity exceeded");
+    var old = entries.get(index);
+    if (old.reviewed() && saved.equals(job.findings())) return job;
+    entries.set(index, new Entry(range, true, true, false, assessment));
+    String status = complete(job.targets(), entries) ? "COMPLETE" : "REVIEW_PARTIAL";
+    return copy(job, entries, saved, status);
   }
 
   /** Preserve source evidence and the original claim when corroboration refutes a finding. */

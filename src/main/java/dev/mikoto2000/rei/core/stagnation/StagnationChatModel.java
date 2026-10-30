@@ -141,7 +141,7 @@ public class StagnationChatModel implements ChatModel {
           if (context.isResumedContext() && hasReviewProtocol(prompt)) {
             feedback +=
                 " For review work, persist each assessed source range with beginReview, readReviewFile"
-                    + " and a delivered-page assessment. Prefer submitReviewPage when available: copy only"
+                    + " and a delivered-page assessment. Prefer readReviewPages and submitReviewPages for bounded batches; otherwise submitReviewPage: copy only"
                     + " the delivered path/offset/nextOffset and cite unique exact evidence quotes; the server"
                     + " supplies hashes and source coordinates. The legacy submitReviewResult requires the"
                     + " exact unchanged Range object. A matching quote proves presence, not that a defect exists."
@@ -590,6 +590,7 @@ public class StagnationChatModel implements ChatModel {
                     && java.util.Set.of(
                             "submitReviewResult",
                             "submitReviewPage",
+                            "submitReviewPages",
                             "dismissReviewFinding",
                             "restartReview")
                         .contains(name))

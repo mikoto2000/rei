@@ -16,6 +16,9 @@ public @interface ResultDelivery {
   /** 後続の処理で使う値を返す。 */
   Kind value();
 
+  /** Server registration for a bounded list of review pages. */
+  boolean reviewPages() default false;
+
   /** モデルへ渡す文脈の管理における種類の選択肢。 */
   enum Kind implements dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.PolicyValue {
     /** ファイル内容。 */

@@ -114,6 +114,7 @@ public class ProgressEvaluator {
   static boolean acquisitionTool(String name) {
     return READ_TOOLS.contains(name)
         || name.equals("readReviewFile")
+        || name.equals("readReviewPages")
         || name.equals("readReviewWorkItem")
         || name.equals("readRawToolResult");
   }
@@ -334,6 +335,24 @@ public class ProgressEvaluator {
       String name, String arguments, String result, Snapshot before) {
     readObservations.clear();
     readContentObserved = false;
+    if (name.equals("readReviewPages") || name.equals("submitReviewPages")) {
+      var batch = parse(result);
+      if (batch != null && batch.isArray() && !batch.isEmpty() && batch.size() <= 4) {
+        var combined = new ArrayList<ProgressEvidence>();
+        boolean content = false;
+        for (var page : batch) {
+          combined.addAll(
+              afterTool(
+                  name.equals("readReviewPages") ? "readReviewFile" : "submitReviewPage",
+                  arguments,
+                  page.toString(),
+                  before));
+          content |= readContentObserved;
+        }
+        readContentObserved = content;
+        return List.copyOf(combined);
+      }
+    }
     List<ProgressEvidence> evidence = new ArrayList<>();
     before
         .files()
