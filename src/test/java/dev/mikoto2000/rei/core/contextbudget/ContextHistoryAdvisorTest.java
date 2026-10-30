@@ -24,6 +24,82 @@ class ContextHistoryAdvisorTest {
 
   /** モデルへ渡す文脈の管理で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
+  void constructsCancellationPolicyFromTheAlreadyReadHistory() {
+    var reads = new java.util.concurrent.atomic.AtomicInteger();
+    var turns =
+        new ConversationTurnStore((Path) null) {
+          @Override
+          public synchronized java.util.List<Turn> read(String conversation) {
+            reads.incrementAndGet();
+            return java.util.List.of();
+          }
+        };
+    var advisor =
+        new ContextHistoryAdvisor(
+            turns,
+            MessageWindowChatMemory.builder().build(),
+            new ConversationSummaryRepository(dir));
+    advisor.before(
+        ChatClientRequest.builder()
+            .prompt(new Prompt(new UserMessage("current")))
+            .context(Map.of(ChatMemory.CONVERSATION_ID, "chat"))
+            .build(),
+        null);
+    assertThat(reads).hasValue(1);
+  }
+
+  @Test
+  void summaryLookupKeepsTheFirstTurnOnTimestampTiesAndExcludesFutureTurns() {
+    var start = java.time.Instant.EPOCH;
+    var rows =
+        java.util.List.of(
+            new ConversationTurnStore.Turn(
+                "first", "request", ConversationTurnStore.Status.COMPLETED, "answer", start),
+            new ConversationTurnStore.Turn(
+                "second", "request", ConversationTurnStore.Status.COMPLETED, "other", start),
+            new ConversationTurnStore.Turn(
+                "future",
+                "request",
+                ConversationTurnStore.Status.COMPLETED,
+                "answer",
+                start.plusSeconds(10)));
+    var turns =
+        new ConversationTurnStore((Path) null) {
+          @Override
+          public synchronized java.util.List<Turn> read(String conversation) {
+            return rows;
+          }
+        };
+    var logs =
+        new dev.mikoto2000.rei.conversation.ConversationLogStore(
+            dir.resolve("logs"),
+            java.time.Clock.fixed(start.plusSeconds(1), java.time.ZoneOffset.UTC),
+            new com.fasterxml.jackson.databind.ObjectMapper()
+                .registerModule(new com.fasterxml.jackson.datatype.jsr310.JavaTimeModule()));
+    logs.append("chat", "assistant", "answer");
+    var summaries = new ConversationSummaryRepository(dir);
+    for (var row : rows)
+      summaries.save(
+          ConversationSummaryRepository.runKey("chat", row.runId()),
+          new ConversationSummary(row.runId() + " observations", 1, start));
+    var advisor =
+        new ContextHistoryAdvisor(
+            turns, MessageWindowChatMemory.builder().build(), summaries, logs);
+    var result =
+        advisor
+            .before(
+                ChatClientRequest.builder()
+                    .prompt(new Prompt(new UserMessage("current")))
+                    .context(Map.of(ChatMemory.CONVERSATION_ID, "chat"))
+                    .build(),
+                null)
+            .prompt();
+    assertThat(result.getContents())
+        .contains("first observations")
+        .doesNotContain("second observations", "future observations");
+  }
+
+  @Test
   void includesInterventionsAndAuxiliaryResultsFromPersistentLog() {
     var logs =
         new dev.mikoto2000.rei.conversation.ConversationLogStore(

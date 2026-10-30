@@ -58,6 +58,23 @@ public record CancelledTaskHistory(
     return runIds.contains(runId);
   }
 
+  /** Builds one reusable time index for a batch of history entries; ties retain the first owner. */
+  public java.util.function.Predicate<Instant> indexedTimestampFilter() {
+    if (runIds.isEmpty()) return timestamp -> false;
+    var timeline = new java.util.TreeMap<Instant, Attempt>();
+    boolean unknownHidden = false;
+    for (var attempt : attempts) {
+      if (attempt.startedAt() != null) timeline.putIfAbsent(attempt.startedAt(), attempt);
+      else if (hides(attempt.runId())) unknownHidden = true;
+    }
+    boolean fallback = unknownHidden;
+    return timestamp -> {
+      if (timestamp == null) return true;
+      var owner = timeline.floorEntry(timestamp);
+      return owner == null ? fallback : hides(owner.getValue().runId());
+    };
+  }
+
   public boolean hides(Instant timestamp) {
     if (runIds.isEmpty()) return false;
     if (timestamp == null) return true;
