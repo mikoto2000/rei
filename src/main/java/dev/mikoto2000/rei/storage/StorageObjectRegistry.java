@@ -406,6 +406,7 @@ public final class StorageObjectRegistry {
     } catch (IllegalArgumentException unknown) {
       eventScope = null;
     }
+    var references = new java.util.LinkedHashSet<String>();
     for (var evidence : state.evidence()) {
       if ("RAW_RESULT_REFERENCE".equals(evidence.origin())) {
         UUID.fromString(evidence.summary());
@@ -413,32 +414,53 @@ public final class StorageObjectRegistry {
             base.resolve("state/context/results")
                 .resolve(key(state.sessionId()))
                 .resolve(evidence.summary() + ".json");
-        addReference(db, id(root, body), "CHECKPOINT", owner);
+        references.add(id(root, body));
       }
       if (evidence.eventId() != null)
-        addReference(
-            db,
+        references.add(
             eventScope == null
                 ? "storage:unknown-checkpoint-event-owner"
-                : "event:" + eventScope + ":" + evidence.eventId(),
-            "CHECKPOINT",
-            owner);
+                : "event:" + eventScope + ":" + evidence.eventId());
     }
     for (var operation : state.operations())
       if (operation.eventId() != null)
-        addReference(
-            db,
+        references.add(
             eventScope == null
                 ? "storage:unknown-checkpoint-event-owner"
-                : "event:" + eventScope + ":" + operation.eventId(),
-            "CHECKPOINT",
-            owner);
+                : "event:" + eventScope + ":" + operation.eventId());
     for (String name : state.files().keySet()) {
       Path file = Path.of(name);
-      if (!file.isAbsolute())
-        addReference(db, "storage:unknown-checkpoint-path", "CHECKPOINT", owner);
-      else if (file.normalize().startsWith(root))
-        addReference(db, id(root, file), "CHECKPOINT", owner);
+      if (!file.isAbsolute()) references.add("storage:unknown-checkpoint-path");
+      else if (file.normalize().startsWith(root)) references.add(id(root, file));
+    }
+    addCheckpointReferences(db, references, owner);
+  }
+
+  /** Same transaction and protection rules, with one prepare per SQL statement per checkpoint. */
+  private static void addCheckpointReferences(
+      Connection db, java.util.Set<String> references, String owner) throws SQLException {
+    if (references.isEmpty()) return;
+    if (owner.isBlank() || owner.length() > 4096)
+      throw new IllegalArgumentException("Invalid object reference");
+    try (var status = db.prepareStatement("SELECT * FROM stored_objects WHERE id=?");
+        var insert =
+            db.prepareStatement(
+                "INSERT OR IGNORE INTO object_references VALUES(?,'CHECKPOINT',?)");
+        var update =
+            db.prepareStatement("UPDATE stored_objects SET revision=revision+1 WHERE id=?")) {
+      for (String id : references) {
+        status.setString(1, id);
+        try (var rows = status.executeQuery()) {
+          if (rows.next() && !"AVAILABLE".equals(row(rows).status()))
+            throw new IllegalStateException("Body is unavailable; reference not admitted");
+        }
+        insert.setString(1, id);
+        insert.setString(2, owner);
+        if (insert.executeUpdate() > 0) {
+          update.setString(1, id);
+          update.executeUpdate();
+        }
+      }
     }
   }
 
