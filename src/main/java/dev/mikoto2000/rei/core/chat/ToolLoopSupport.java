@@ -14,6 +14,15 @@ import org.springframework.ai.model.tool.ToolExecutionResult;
  * <p>Shared Spring AI tool dispatch boundary for explicit application-owned loops.
  */
 public final class ToolLoopSupport {
+  /** Capture delivered evidence at the existing tool-loop boundary, without replaying tools. */
+  public String captureOutputLimitHandoff(
+      java.util.List<org.springframework.ai.chat.messages.Message> delivered,
+      String partial,
+      String review,
+      String previous) {
+    return OutputLimitHandoff.capture(delivered, partial, review, previous);
+  }
+
   /**
    * モデルに暗黙のツール権限が付いていないことを確認し、依頼ごとの明示的な登録だけを許す。
    *
@@ -224,16 +233,22 @@ public final class ToolLoopSupport {
     }
   }
 
+  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      justification =
+          "Preserve the original callback failure after checking approval suspension; wrapping would change cancellation and tool failure semantics.")
   private ToolExecutionResult executePendingWithinBudget(
       Prompt prompt,
       RunContinuation.PendingTools pending,
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext context,
       boolean replay) {
-    var options = (ToolCallingChatOptions) prompt.getOptions();
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options))
+      throw new IllegalArgumentException("Pending tools require explicit tool options");
+    var toolCallbacks = options.getToolCallbacks();
+    if (toolCallbacks == null)
+      throw new IllegalArgumentException("Pending tools require explicit callbacks");
     var callbacks = new java.util.HashMap<String, org.springframework.ai.tool.ToolCallback>();
-    options
-        .getToolCallbacks()
-        .forEach(callback -> callbacks.put(callback.getToolDefinition().name(), callback));
+    toolCallbacks.forEach(callback -> callbacks.put(callback.getToolDefinition().name(), callback));
     // 再開時も、今回許可されたツールだけを使い、同じ呼び出しを重複して実行しない。
     var ids = new java.util.HashSet<String>();
     for (var call : pending.calls())

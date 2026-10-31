@@ -43,7 +43,26 @@ public class PersistentAgentScheduler
                     entry.task().id(),
                     entry.task().action(),
                     entry.status(),
-                    "scheduled"))
+                    "scheduled; execution success does not verify the whole work",
+                    dev.mikoto2000.rei.secretary.SecretaryContext.Reliability.FACT,
+                    java.util.List.of(),
+                    new dev.mikoto2000.rei.secretary.SecretaryContext.Observation(
+                        "scheduler:" + entry.task().id(),
+                        null,
+                        entry.status().equals("CANCELLED")
+                            ? "CANCELLED"
+                            : java.util.Set.of("PENDING", "SCHEDULED").contains(entry.status())
+                                ? "PENDING"
+                                : entry.status().equals("RUNNING")
+                                    ? "IN_PROGRESS"
+                                    : entry.status().equals("WAITING_EVENT")
+                                        ? "WAITING"
+                                        : "UNKNOWN",
+                        !java.util.Set.of("COMPLETED", "FAILED", "UNKNOWN")
+                            .contains(entry.status()),
+                        null,
+                        entry.task().executeAt().atZone(zone).toLocalDate(),
+                        "SCHEDULE")))
         .toList();
   }
 

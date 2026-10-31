@@ -9,7 +9,8 @@ import java.util.Set;
  *
  * <p>Fixed action choices for commands that parse their first positional argument themselves.
  */
-public abstract class FirstArgumentCandidates implements CompletionMetadata {
+public abstract class FirstArgumentCandidates
+    implements CompletionMetadata, dev.mikoto2000.rei.application.cli.CliCatalog.FixedChoices {
   /** 値一覧。 */
   private final List<String> values;
 

@@ -1658,9 +1658,34 @@ public final class SecretaryConnections
   @Override
   public List<Item> context(String project, LocalDate date, ZoneId zone) {
     identifier(project, 128);
+    var calendars =
+        list(project).stream()
+            .filter(
+                c ->
+                    c.config().enabled()
+                        && c.config().service() == SecretaryProvider.Service.CALENDAR)
+            .toList();
     return database.read(
         db -> {
           var values = new ArrayList<Item>();
+          boolean covered =
+              !calendars.isEmpty()
+                  && calendars.stream()
+                      .allMatch(
+                          c ->
+                              c.state().equals("CURRENT")
+                                  && c.next().isAfter(clock.instant())
+                                  && !date.isBefore(
+                                      c.updated().atZone(zone).toLocalDate().minusDays(1))
+                                  && date.isBefore(
+                                      c.updated().atZone(zone).toLocalDate().plusDays(30)));
+          values.add(
+              new Item(
+                  "calendar-coverage",
+                  "coverage",
+                  "登録済み私用カレンダー",
+                  covered ? "AVAILABLE" : "UNKNOWN",
+                  "Cached opt-in coverage only; work agenda remains unknown"));
           try (var q =
               db.prepareStatement(
                   "SELECT i.connection,i.id,i.record FROM secretary_external_items i JOIN secretary_connections c ON c.id=i.connection WHERE i.project=? AND c.state<>'DISABLED' AND (c.service='CALENDAR' OR (i.updated>=? AND i.updated<?)) ORDER BY i.updated DESC,i.id LIMIT 256")) {
@@ -1689,7 +1714,15 @@ public final class SecretaryConnections
                         item.status(),
                         "External body omitted; use an explicit connection read for details. External assertions are unverified.",
                         Reliability.UNKNOWN,
-                        List.of(reference(r.getString(1), r.getString(2)))));
+                        List.of(reference(r.getString(1), r.getString(2))),
+                        new Observation(
+                            "external:" + reference(r.getString(1), r.getString(2)),
+                            item.occurred(),
+                            "UNKNOWN",
+                            false,
+                            null,
+                            item.due(),
+                            item.kind())));
               }
             }
           }

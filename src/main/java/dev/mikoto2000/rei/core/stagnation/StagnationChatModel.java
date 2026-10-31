@@ -362,7 +362,7 @@ public class StagnationChatModel implements ChatModel {
                               context.progressVersion());
                         }
                         context.setOutputLimitHandoff(
-                            dev.mikoto2000.rei.core.chat.OutputLimitHandoff.capture(
+                            tools.captureOutputLimitHandoff(
                                 (sent.get() == null ? invocationPrompt : sent.get())
                                     .getInstructions(),
                                 generation.getOutput().getText(),

@@ -440,6 +440,10 @@ class SecretaryGlobalBriefingsTest {
       cli.setOut(new java.io.PrintWriter(text));
       cli.setErr(new java.io.PrintWriter(text));
       assertEquals(0, cli.execute("briefing"));
+      assertTrue(text.toString().contains("朝ミーティング"));
+      assertTrue(!text.toString().contains("\"context\""));
+      text.getBuffer().setLength(0);
+      assertEquals(0, cli.execute("briefing", "--json"));
       assertTrue(text.toString().contains("projects"));
       var mvc =
           org.springframework.test.web.servlet.setup.MockMvcBuilders.standaloneSetup(

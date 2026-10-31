@@ -48,7 +48,7 @@ public final class ToolUsagePolicy {
       """;
 
   public static final String INSTRUCTIONS =
-      "Common tool usage policy:\n" + BATCHING + FILE_READS + HTTP_APIS;
+      String.join("", "Common tool usage policy:\n", BATCHING, FILE_READS, HTTP_APIS);
 
   /** 既存の記録へ経緯を残すため、終点を追記する。 */
   public static String appendTo(String prompt) {

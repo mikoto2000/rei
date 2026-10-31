@@ -31,7 +31,15 @@ public final class SecretaryHeldAttention implements SecretaryContext {
                     "HELD",
                     "Persisted held notice; content is not independently verified.",
                     Reliability.UNKNOWN,
-                    List.of("attention:" + i.id())))
+                    List.of("attention:" + i.id()),
+                    new Observation(
+                        "attention:" + i.id(),
+                        i.createdAt(),
+                        "WAITING",
+                        true,
+                        null,
+                        null,
+                        "ATTENTION")))
         .toList();
   }
 }

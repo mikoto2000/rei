@@ -44,11 +44,31 @@ public final class SecretaryGlobalBriefings {
       Map<String, SecretaryFollowups.Report> projects,
       List<String> unavailable,
       boolean partial,
-      List<String> cautions) {
+      List<String> cautions,
+      SecretaryMeeting.View meeting) {
+    public Report(
+        LocalDate date,
+        String zone,
+        boolean review,
+        Map<String, SecretaryFollowups.Report> projects,
+        List<String> unavailable,
+        boolean partial,
+        List<String> cautions) {
+      this(date, zone, review, projects, unavailable, partial, cautions, null);
+    }
+
     public Report {
       projects = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(projects));
       unavailable = List.copyOf(unavailable);
       cautions = List.copyOf(cautions);
+      if (meeting == null)
+        meeting =
+            SecretaryMeeting.aggregate(
+                date,
+                zone,
+                review,
+                projects.values().stream().map(SecretaryFollowups.Report::meeting).toList(),
+                partial);
     }
   }
 
@@ -136,6 +156,28 @@ public final class SecretaryGlobalBriefings {
     return properties.enabled();
   }
 
+  /** One explicit decision across the combined project scope. IDs include their owning project. */
+  public synchronized SecretaryMeeting.Decision confirmMeeting(
+      LocalDate requested, boolean review, String key, List<String> selected) {
+    var date =
+        requested == null ? clock.instant().atZone(ZoneId.of(zone())).toLocalDate() : requested;
+    var configuration = settings();
+    return new SecretaryMeetingDecisions(snapshots, clock)
+        .confirm(
+            SecretaryNotifications.GLOBAL_SCOPE,
+            members(configuration, null),
+            date,
+            review,
+            key,
+            selected,
+            () ->
+                report(date, review).meeting().sections().values().stream()
+                    .flatMap(List::stream)
+                    .filter(SecretaryMeeting::selectable)
+                    .map(w -> w.projectId() + "::" + w.id())
+                    .collect(java.util.stream.Collectors.toSet()));
+  }
+
   public Report report(LocalDate requested, boolean review) {
     var settings = settings();
     return report(requested, review, settings, members(settings, null));
@@ -186,7 +228,8 @@ public final class SecretaryGlobalBriefings {
               value.partial(),
               value.evidence(),
               value.cautions(),
-              value.held());
+              value.held(),
+              value.meeting());
         });
     return aggregate(date, zone.getId(), review, values, unavailable);
   }

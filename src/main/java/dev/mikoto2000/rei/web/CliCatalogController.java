@@ -201,11 +201,9 @@ public final class CliCatalogController {
   /** Web APIによる操作で用いるdeclared選択肢を返す。 */
   private static List<String> declaredChoices(Class<?> type) {
     // 固定操作名の metadata だけを生成する。コマンドや動的 Provider は生成しない。
-    if (dev.mikoto2000.rei.core.completion.FirstArgumentCandidates.class.isAssignableFrom(type)) {
+    if (CliCatalog.FixedChoices.class.isAssignableFrom(type)) {
       try {
-        var candidates =
-            (dev.mikoto2000.rei.core.completion.FirstArgumentCandidates)
-                type.getDeclaredConstructor().newInstance();
+        var candidates = (CliCatalog.FixedChoices) type.getDeclaredConstructor().newInstance();
         var values = new ArrayList<String>();
         candidates.forEach(values::add);
         return List.copyOf(values);

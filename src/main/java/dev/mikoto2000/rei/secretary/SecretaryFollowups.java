@@ -66,7 +66,8 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
       boolean partial,
       List<SecretaryContext.Item> evidence,
       List<String> cautions,
-      List<Delivery> held) {
+      List<Delivery> held,
+      SecretaryMeeting.View meeting) {
     public Report(
         LocalDate date,
         String zone,
@@ -77,6 +78,19 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
       this(date, zone, review, sections, context, partial, List.of(), List.of(), List.of());
     }
 
+    public Report(
+        LocalDate date,
+        String zone,
+        boolean review,
+        Map<String, List<SecretaryTask>> sections,
+        List<SecretaryContext.Item> context,
+        boolean partial,
+        List<SecretaryContext.Item> evidence,
+        List<String> cautions,
+        List<Delivery> held) {
+      this(date, zone, review, sections, context, partial, evidence, cautions, held, null);
+    }
+
     public Report {
       var copy = new LinkedHashMap<String, List<SecretaryTask>>();
       sections.forEach((key, value) -> copy.put(key, List.copyOf(value)));
@@ -85,6 +99,22 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
       evidence = List.copyOf(evidence);
       cautions = List.copyOf(cautions);
       held = List.copyOf(held);
+      if (meeting == null)
+        meeting =
+            SecretaryMeeting.project(
+                sections.values().stream()
+                    .flatMap(List::stream)
+                    .map(SecretaryTask::projectId)
+                    .findFirst()
+                    .orElse(""),
+                date,
+                ZoneId.of(zone),
+                review,
+                sections,
+                context,
+                partial,
+                List.of(),
+                List.of());
     }
   }
 
@@ -418,8 +448,144 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
     if (partial) cautions.add("一部の情報源を取得できないか、表示上限に達しました。取得済みの情報だけを表示します。");
     if (life != null && !life.settings().zone().equals(zone.getId()))
       cautions.add("レポートのタイムゾーンと生活制約のタイムゾーンが異なります。通知は生活制約を優先します。");
+    for (var task : tasks) {
+      if (!active(task)) continue;
+      var ids =
+          task.references().stream()
+              .filter(r -> r.startsWith("dependency:") || r.startsWith("completion:dependency:"))
+              .toList();
+      if (ids.isEmpty()) continue;
+      String state = "UNKNOWN";
+      boolean verified = false;
+      try {
+        var facts =
+            ids.stream()
+                .map(
+                    r ->
+                        dependencies == null
+                            ? java.util.Optional.<SecretaryDependencies.Fact>empty()
+                            : dependencies.fact(
+                                project, r.substring(r.lastIndexOf("dependency:") + 11)))
+                .toList();
+        if (facts.stream().allMatch(java.util.Optional::isPresent)) {
+          verified = true;
+          boolean complete =
+              facts.stream().allMatch(f -> f.orElseThrow().state().equals("COMPLETED"));
+          state =
+              complete
+                  ? (ids.stream().anyMatch(r -> r.startsWith("completion:"))
+                      ? "COMPLETED"
+                      : "PENDING")
+                  : facts.stream()
+                          .anyMatch(
+                              f ->
+                                  java.util.Set.of("FAILED", "BLOCKED", "CANCELLED")
+                                      .contains(f.orElseThrow().state()))
+                      ? "BLOCKED"
+                      : "WAITING";
+        }
+      } catch (RuntimeException unavailable) {
+        partial = true;
+      }
+      information.add(
+          new SecretaryContext.Item(
+              "secretary-current-state",
+              task.id(),
+              task.title(),
+              state,
+              "Read current dependency store; ledger and scheduler unchanged",
+              SecretaryContext.Reliability.FACT,
+              ids,
+              new SecretaryContext.Observation(
+                  "secretary-task:" + task.id(), null, state, verified, null, task.due(), "TASK")));
+    }
+    for (var delivery : held) {
+      var notice = delivery.notice();
+      information.add(
+          new SecretaryContext.Item(
+              "secretary-held-notice",
+              notice.id(),
+              notice.message(),
+              "HELD",
+              "Persisted notification waiting for delivery; not task completion",
+              SecretaryContext.Reliability.UNKNOWN,
+              List.of(),
+              new SecretaryContext.Observation(
+                  "secretary-notice:" + notice.id(),
+                  notice.created(),
+                  "WAITING",
+                  true,
+                  null,
+                  null,
+                  "ATTENTION")));
+    }
+    var meetingTasks = new LinkedHashMap<>(sections);
+    meetingTasks.put("ledger-state", tasks);
+    var prior =
+        new SecretaryMeetingDecisions(snapshots, clock)
+            .forProject(project, date.minusDays(1), true);
+    var decided = new SecretaryMeetingDecisions(snapshots, clock).forProject(project, date, review);
+    var meeting =
+        SecretaryMeeting.project(
+            project,
+            date,
+            zone,
+            review,
+            meetingTasks,
+            information,
+            partial,
+            prior == null ? List.of() : prior.selected(),
+            decided == null ? List.of() : decided.selected());
+    if (decided != null) {
+      var selectedSections = new LinkedHashMap<>(meeting.sections());
+      selectedSections.put(review ? "carryover" : "priorities", meeting.sections().get("decided"));
+      meeting =
+          SecretaryMeeting.view(
+              date, zone.getId(), review, selectedSections, meeting.scheduleStatus(), true);
+    }
     return new Report(
-        date, zone.getId(), review, sections, information, partial, evidence, cautions, held);
+        date,
+        zone.getId(),
+        review,
+        sections,
+        information,
+        partial,
+        evidence,
+        cautions,
+        held,
+        meeting);
+  }
+
+  /** Explicit decision receipt, with no task, schedule or execution mutation. */
+  public synchronized SecretaryMeeting.Decision confirmMeeting(
+      String project, LocalDate requested, boolean review, String key, List<String> selected) {
+    required(project);
+    var zone = ZoneId.of(settings(project).zone());
+    var date = requested == null ? clock.instant().atZone(zone).toLocalDate() : requested;
+    var selection =
+        selected == null
+            ? null
+            : selected.stream()
+                .map(
+                    v ->
+                        v != null && v.startsWith(project + "::")
+                            ? v.substring(project.length() + 2)
+                            : v)
+                .toList();
+    return new SecretaryMeetingDecisions(snapshots, clock)
+        .confirm(
+            project,
+            List.of(project),
+            date,
+            review,
+            key,
+            selection,
+            () ->
+                report(project, date, review).meeting().sections().values().stream()
+                    .flatMap(List::stream)
+                    .filter(SecretaryMeeting::selectable)
+                    .map(SecretaryMeeting.Work::id)
+                    .collect(java.util.stream.Collectors.toSet()));
   }
 
   /** Explicit generation does not publish a notice or invoke a model. */

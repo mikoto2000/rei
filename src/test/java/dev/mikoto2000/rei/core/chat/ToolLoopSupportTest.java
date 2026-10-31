@@ -313,4 +313,46 @@ class ToolLoopSupportTest {
       }
     };
   }
+
+  @Test
+  void pendingToolsRejectMissingExplicitCallbacksBeforeExecution() {
+    var pending = new RunContinuation.PendingTools("", List.of(), List.of());
+    var context =
+        org.mockito.Mockito.mock(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.class);
+    assertThatThrownBy(
+            () -> new ToolLoopSupport().executePending(new Prompt("resume"), pending, context))
+        .isInstanceOf(IllegalArgumentException.class);
+    org.mockito.Mockito.verifyNoInteractions(context);
+  }
+
+  @Test
+  void pendingToolsPreserveTheOriginalCallbackFailure() {
+    var failure = new IllegalStateException("callback failed");
+    var callback = org.mockito.Mockito.mock(ToolCallback.class);
+    org.mockito.Mockito.when(callback.getToolDefinition())
+        .thenReturn(
+            ToolDefinition.builder()
+                .name("fail")
+                .description("failure fixture")
+                .inputSchema("{}")
+                .build());
+    org.mockito.Mockito.when(
+            callback.call(
+                org.mockito.ArgumentMatchers.anyString(), org.mockito.ArgumentMatchers.any()))
+        .thenThrow(failure);
+    var prompt = new Prompt("resume", OpenAiChatOptions.builder().toolCallbacks(callback).build());
+    var pending =
+        new RunContinuation.PendingTools(
+            "",
+            List.of(
+                new org.springframework.ai.chat.messages.AssistantMessage.ToolCall(
+                    "id", "function", "fail", "{}")),
+            List.of());
+    var context =
+        org.mockito.Mockito.mock(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.class);
+    assertThat(
+            org.assertj.core.api.Assertions.catchThrowable(
+                () -> new ToolLoopSupport().executePending(prompt, pending, context)))
+        .isSameAs(failure);
+  }
 }

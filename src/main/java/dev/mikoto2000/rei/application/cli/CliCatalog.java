@@ -10,6 +10,9 @@ import java.util.List;
  * @param commands コマンド一覧
  */
 public record CliCatalog(List<Command> commands) {
+  /** Pure declared choices. Implementations must not consult services or execute commands. */
+  public interface FixedChoices extends Iterable<String> {}
+
   /** 受け取った情報からCliCatalogを作成する。 */
   public CliCatalog {
     commands = List.copyOf(commands);

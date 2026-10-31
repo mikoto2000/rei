@@ -88,7 +88,9 @@ public class OutputLimitReplanner {
 
   /** 利用先に渡せるよう、プロンプトを組み立てる。 */
   private String buildPrompt(OutputLimitReplanRequest request) {
-    return """
+    return String.join(
+        "",
+        """
         You are a planner for an AI agent.
         Do not execute the task.
         Split the current goal into smaller semantic subgoals that can fit within one output limit.
@@ -104,39 +106,32 @@ public class OutputLimitReplanner {
         }
 
         Original user request:
-        %s
+        """,
+        safe(request.originalUserRequest()),
+        "\n\nCurrent goal:\n",
+        safe(request.currentGoal()),
+        "\n\nProgress so far:\n",
+        safe(request.progressSoFar()),
+        "\n\nPartial output generated before limit:\n",
+        safe(request.partialOutput()),
+        """
 
-        Current goal:
-        %s
-
-        Progress so far:
-        %s
-
-        Partial output generated before limit:
-        %s
 
         Trigger:
         finish_reason == length
 
         Max output tokens per call:
-        %d
-
-        Remaining execution budget:
-        replanCount=%d
-        maxReplansPerGoal=%d
-        remainingLlmCalls=%d
-        maxSubgoalsPerReplan=%d
-        """
-        .formatted(
-            safe(request.originalUserRequest()),
-            safe(request.currentGoal()),
-            safe(request.progressSoFar()),
-            safe(request.partialOutput()),
-            properties.getMaxOutputTokens(),
-            request.replanCount(),
-            request.maxReplansPerGoal(),
-            request.remainingLlmCalls(),
-            properties.getOutputLimit().getMaxSubgoalsPerReplan());
+        """,
+        String.valueOf(properties.getMaxOutputTokens()),
+        "\n\nRemaining execution budget:\nreplanCount=",
+        String.valueOf(request.replanCount()),
+        "\nmaxReplansPerGoal=",
+        String.valueOf(request.maxReplansPerGoal()),
+        "\nremainingLlmCalls=",
+        String.valueOf(request.remainingLlmCalls()),
+        "\nmaxSubgoalsPerReplan=",
+        String.valueOf(properties.getOutputLimit().getMaxSubgoalsPerReplan()),
+        "\n");
   }
 
   /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */

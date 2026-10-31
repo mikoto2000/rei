@@ -21,12 +21,13 @@ public final class FileReadContext implements AutoCloseable {
 
   private FileReadContext(Prompt prompt, int calls, String assistant) {
     previous = CURRENT.get();
-    this.prompt =
+    var context =
         prompt.getOptions()
-                    instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-                && options.getToolContext() != null
-                && options.getToolContext().get(Projection.class.getName())
-                    instanceof Projection projection
+                instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
+            ? options.getToolContext()
+            : null;
+    this.prompt =
+        context != null && context.get(Projection.class.getName()) instanceof Projection projection
             ? projection.prompt()
             : prompt;
     this.calls = Math.max(1, calls);
