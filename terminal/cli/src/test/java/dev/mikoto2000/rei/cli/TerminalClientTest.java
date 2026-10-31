@@ -100,7 +100,10 @@ class TerminalClientTest {
       client.refreshRunStatus();
       assertEquals(
           "全体進捗: 1 / 3 工程完了\n✓ 調査\n○ 実装\n○ 検証\n[none] [3 running]\n12:34 unknown> ",
-          client.buildPrompt(java.time.LocalTime.of(12, 34)));
+          client.buildPrompt(java.time.LocalTime.of(12, 34), true));
+      assertEquals(
+          "[none] [3 running]\n12:34 unknown> ",
+          client.buildPrompt(java.time.LocalTime.of(12, 34), false));
       response.set("{\"count\":0}");
       client.refreshRunStatus();
       assertTrue(client.buildPrompt(java.time.LocalTime.NOON).contains("[0 running]"));

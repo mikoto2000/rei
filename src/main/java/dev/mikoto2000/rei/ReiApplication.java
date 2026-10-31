@@ -752,8 +752,14 @@ public class ReiApplication {
 
   /** 利用先に渡せるよう、プロンプトを組み立てる。 */
   String buildPrompt() {
+    return buildPrompt(System.getenv("REI_DEBUG") != null);
+  }
+
+  String buildPrompt(boolean debugEnabled) {
     var progress =
-        activeRunDisplay == null ? java.util.List.<String>of() : activeRunDisplay.progressRows();
+        !debugEnabled || activeRunDisplay == null
+            ? java.util.List.<String>of()
+            : activeRunDisplay.progressRows();
     return (progress.isEmpty() ? "" : String.join("\n", progress).replace("%", "%%") + "\n")
         + (activeRunDisplay == null ? "" : activeRunDisplay.promptStatus() + "\n")
         + now().format(PROMPT_TIME_FORMATTER)
