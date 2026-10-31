@@ -38,6 +38,7 @@ class JLineCompletionInputTest {
     var command =
         new CommandLine(CommandSpec.create())
             .addSubcommand("project", new ProjectCommand())
+            .addSubcommand("secretary", new dev.mikoto2000.rei.secretary.SecretaryCommand())
             .addSubcommand("approval", new dev.mikoto2000.rei.core.policy.ApprovalCommand());
     try (var terminal =
         new org.jline.terminal.impl.DumbTerminal(
@@ -58,6 +59,15 @@ class JLineCompletionInputTest {
       reader.runMacro(input + "\n");
       return reader.readLine("");
     }
+  }
+
+  /** 実際のTab入力で秘書操作を確定し、次の引数へ進めることを確認する。 */
+  @Test
+  void tabCompletesSecretaryAction() throws Exception {
+    assertThat(tab("/secretary life-con")).isEqualTo("/secretary life-configure ");
+    assertThat(tab("/secretary --project project-id work-ver"))
+        .isEqualTo("/secretary --project project-id work-verify ");
+    assertThat(tab("/secretary show task-id ")).isEqualTo("/secretary show task-id ");
   }
 
   /** ターミナルでの対話の操作が、指定された権限・承認条件に従うことを確認する。 */
@@ -145,6 +155,7 @@ class JLineCompletionInputTest {
     var command =
         new CommandLine(CommandSpec.create())
             .addSubcommand("project", new ProjectCommand())
+            .addSubcommand("secretary", new dev.mikoto2000.rei.secretary.SecretaryCommand())
             .addSubcommand("approval", new dev.mikoto2000.rei.core.policy.ApprovalCommand());
     try (var terminal =
         new org.jline.terminal.impl.DumbTerminal(

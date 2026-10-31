@@ -71,7 +71,8 @@ class ContextCompletionTest {
             new RepairCommand(),
             new dev.mikoto2000.rei.reflection.ReflectionCommand(),
             new dev.mikoto2000.rei.temporal.TimerCommand(),
-            new dev.mikoto2000.rei.dot.DotCommand());
+            new dev.mikoto2000.rei.dot.DotCommand(),
+            new dev.mikoto2000.rei.secretary.SecretaryCommand());
     var expected =
         List.of(
             "list show approve deny",
@@ -82,7 +83,8 @@ class ContextCompletionTest {
             "show apply",
             "list show collect runs run collect-run promote lessons lesson lesson-observe lesson-observe-correction lesson-propose lesson-validate lesson-counterexample lesson-correct lesson-forget",
             "list show activate cancel history reconcile",
-            "request requests status result cancel verify resume");
+            "request requests status result cancel verify resume",
+            "list show sources history related extract add update approve done cancel settings configure briefing review briefing-generate review-generate briefing-history briefing-show briefing-clear briefing-settings briefing-check briefing-notifications notifications check followup-status meeting-confirm life-settings life-status life-configure connection-list connection-configure connection-show connection-auth connection-authorize connection-disconnect connection-poll connection-items connection-history connection-read connection-task external-prepare external-list external-show external-history external-execute external-verify external-cancel autonomy-settings autonomy-status autonomy-check autonomy-configure work-list work-show work-history work-add work-start work-cancel work-suspend work-resume work-verify work-mode orchestrator-settings orchestrator-configure orchestrator-status suggest release suggestions preparation suggestion suggestion-history feedback");
     for (int i = 0; i < commands.size(); i++) {
       var child = new CommandLine(commands.get(i));
       String prefix = "/" + child.getCommandName() + " ";
@@ -106,6 +108,25 @@ class ContextCompletionTest {
     assertThat(values(cmd, "/llm capture ex")).containsExactly("export");
     assertThat(values(cmd, "/llm capture show ")).isEmpty();
     assertThat(values(cmd, "/llm capture export id ")).isEmpty();
+  }
+
+  /** 秘書操作の補完がオプションやカーソル位置に従い、IDや本文へ漏れないことを確認する。 */
+  @Test
+  void secretaryActionsRespectOptionsCursorAndArgumentBoundaries() {
+    var cmd =
+        command().addSubcommand("secretary", new dev.mikoto2000.rei.secretary.SecretaryCommand());
+    assertThat(values(cmd, "/secretary life-con")).containsExactly("life-configure");
+    assertThat(values(cmd, "/secretary --project project-id connection-au"))
+        .containsExactly("connection-auth", "connection-authorize");
+    assertThat(values(cmd, "/secretary --json work-ver")).containsExactly("work-verify");
+    String line = "/secretary briefing-gen --project project-id";
+    assertThat(complete(cmd, line, line.indexOf(" --project")))
+        .extracting(Candidate::value)
+        .containsExactly("briefing-generate");
+    assertThat(values(cmd, "/secretary --project ")).isEmpty();
+    assertThat(values(cmd, "/secretary add --title ")).isEmpty();
+    assertThat(values(cmd, "/secretary show task-id ")).isEmpty();
+    assertThat(values(cmd, "/secretary show task-id --revis")).containsExactly("--revision");
   }
 
   /** ターミナルでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
