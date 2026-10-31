@@ -73,6 +73,41 @@ class ReviewPageBatchTest {
   }
 
   @Test
+  void fourFetchedPagesUseOneRevisionAndRemainUndelivered() throws Exception {
+    try (var scope = AgentRunScope.open(owner)) {
+      var job = begin();
+      var pages = read(job, 2048);
+      assertThat(pages).hasSize(4);
+      var saved = ledger.get(job.id(), job.owner());
+      assertThat(saved.revision()).isEqualTo(job.revision() + 1);
+      assertThat(saved.ranges()).hasSize(4).noneMatch(e -> e.delivered() || e.reviewed());
+      ledger.fetchedBatch(
+          job.id(), job.owner(), pages.stream().map(ReviewTools.Page::range).toList());
+      assertThat(ledger.get(job.id(), job.owner())).isEqualTo(saved);
+    }
+  }
+
+  @Test
+  void invalidLastFetchRollsBackEveryRange() throws Exception {
+    try (var scope = AgentRunScope.open(owner)) {
+      var job = begin();
+      var span = new ReviewCoverageLedger.Span(0, 1, 1, 1, 0, 1);
+      var valid =
+          new ReviewCoverageLedger.Range(
+              "source.md", job.targets().getFirst().version(), span, ReviewTools.hash("本"));
+      var invalid =
+          new ReviewCoverageLedger.Range(
+              "outside.md", job.targets().getFirst().version(), span, ReviewTools.hash("本"));
+      assertThatThrownBy(() -> ledger.fetchedBatch(job.id(), job.owner(), List.of(valid, invalid)))
+          .isInstanceOf(IllegalArgumentException.class);
+      assertThat(ledger.get(job.id(), job.owner())).isEqualTo(job);
+      var saved = ledger.fetchedBatch(job.id(), job.owner(), List.of(valid, valid));
+      assertThat(saved.revision()).isEqualTo(job.revision() + 1);
+      assertThat(saved.ranges()).hasSize(1);
+    }
+  }
+
+  @Test
   void batchUsesOneSnapshotAndRespectsWholeWireBudgetAndUnicode() throws Exception {
     try (var scope = AgentRunScope.open(owner)) {
       var job = begin();

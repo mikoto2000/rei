@@ -455,7 +455,7 @@ public final class ReviewTools {
     }
     if (estimate(pages) > totalTokenBudget)
       throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT");
-    for (var page : pages) ledger.fetched(reviewJobId, scope, page.range());
+    ledger.fetchedBatch(reviewJobId, scope, pages.stream().map(Page::range).toList());
     return List.copyOf(pages);
   }
 

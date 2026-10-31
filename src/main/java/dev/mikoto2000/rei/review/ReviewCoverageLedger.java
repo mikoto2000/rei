@@ -476,22 +476,34 @@ public final class ReviewCoverageLedger {
 
   /** 変更内容のレビューで用いる取得を返す。 */
   public Job fetched(String id, Scope scope, Range range) {
+    return update(id, scope, job -> applyFetched(job, range));
+  }
+
+  /** Fetching a bounded page batch is one atomic ledger revision, never delivery or review. */
+  public Job fetchedBatch(String id, Scope scope, List<Range> ranges) {
+    if (ranges == null || ranges.isEmpty() || ranges.size() > 4) throw invalid();
+    var captured = List.copyOf(ranges);
     return update(
         id,
         scope,
         job -> {
-          validateTarget(job, range);
-          for (var entry : job.ranges())
-            if (!entry.stale() && sameLocation(entry.range(), range)) {
-              if (!entry.range().equals(range)) throw invalid();
-              return job;
-            }
-          if (job.ranges().size() >= 10000)
-            throw new IllegalStateException("Review range capacity exceeded");
-          var entries = new ArrayList<>(job.ranges());
-          entries.add(new Entry(range, false, false, false, null));
-          return copy(job, entries, job.findings(), "REVIEW_PARTIAL");
+          for (var range : captured) job = applyFetched(job, range);
+          return job;
         });
+  }
+
+  private Job applyFetched(Job job, Range range) {
+    validateTarget(job, range);
+    for (var entry : job.ranges())
+      if (!entry.stale() && sameLocation(entry.range(), range)) {
+        if (!entry.range().equals(range)) throw invalid();
+        return job;
+      }
+    if (job.ranges().size() >= 10000)
+      throw new IllegalStateException("Review range capacity exceeded");
+    var entries = new ArrayList<>(job.ranges());
+    entries.add(new Entry(range, false, false, false, null));
+    return copy(job, entries, job.findings(), "REVIEW_PARTIAL");
   }
 
   /**
