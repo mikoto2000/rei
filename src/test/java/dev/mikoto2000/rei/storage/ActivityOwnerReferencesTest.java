@@ -117,7 +117,7 @@ class ActivityOwnerReferencesTest {
             Map.of()));
     assertThatThrownBy(() -> log.closeSegment(null)).isInstanceOf(IllegalArgumentException.class);
     assertThat(
-            registry.database.read(
+            registry.database.<Integer>read(
                 db -> {
                   try (var q = db.createStatement();
                       var rows =
