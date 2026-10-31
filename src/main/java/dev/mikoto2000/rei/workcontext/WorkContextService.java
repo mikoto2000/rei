@@ -72,6 +72,10 @@ public class WorkContextService {
   private final java.util.concurrent.ConcurrentHashMap<String, Object> locks =
       new java.util.concurrent.ConcurrentHashMap<>();
 
+  /** Serialize competing extractions without preventing explicit user edits. */
+  private final java.util.concurrent.ConcurrentHashMap<String, Object> extractionLocks =
+      new java.util.concurrent.ConcurrentHashMap<>();
+
   /** 指定された値や利用先を使って、WorkContextServiceを初期化する。 */
   public WorkContextService(
       WorkContextRepository repository,
@@ -146,6 +150,21 @@ public class WorkContextService {
 
   /** 指定された変更を、管理中の情報へ反映する。 */
   public Optional<WorkContext> update(String sessionId, String onlyRun, boolean includeRunning) {
+    return updateSelected(sessionId, onlyRun, includeRunning, null);
+  }
+
+  /** Combine queued terminal runs from one session without admitting unrelated work. */
+  public Optional<WorkContext> updateRuns(String sessionId, java.util.Set<String> runIds) {
+    if (runIds == null || runIds.isEmpty() || runIds.size() > properties.maxTurns())
+      throw new IllegalArgumentException("Invalid Work Context run batch");
+    return updateSelected(sessionId, null, false, java.util.Set.copyOf(runIds));
+  }
+
+  private Optional<WorkContext> updateSelected(
+      String sessionId,
+      String onlyRun,
+      boolean includeRunning,
+      java.util.Set<String> requestedRuns) {
     if (sessionId == null || sessionId.isBlank())
       throw new IllegalArgumentException("Session を選択して会話を開始してください。");
     var session =
@@ -155,11 +174,23 @@ public class WorkContextService {
     var project = project(session.projectId());
     if (!java.nio.file.Files.isDirectory(project.root()))
       throw new IllegalArgumentException("Project directory does not exist");
-    synchronized (locks.computeIfAbsent(project.id(), id -> new Object())) {
+    synchronized (extractionLocks.computeIfAbsent(project.id(), id -> new Object())) {
       WorkContextRepository.checkCancellation();
       var old = repository.current(project.id()).orElse(null);
       var selected = new ArrayList<ConversationTurnStore.Turn>();
-      var history = turns.read(sessionId);
+      var history =
+          onlyRun != null && !includeRunning
+              ? turns.findRun(sessionId, onlyRun).stream().toList()
+              : requestedRuns != null
+                  ? requestedRuns.stream()
+                      .map(run -> turns.findRun(sessionId, run))
+                      .flatMap(Optional::stream)
+                      .sorted(
+                          java.util.Comparator.comparing(
+                              ConversationTurnStore.Turn::createdAt,
+                              java.util.Comparator.nullsFirst(java.util.Comparator.naturalOrder())))
+                      .toList()
+                  : turns.read(sessionId);
       String latestRun =
           history.stream()
               .filter(t -> t.source() == null)
@@ -334,32 +365,39 @@ public class WorkContextService {
                   })
               .toList();
       WorkContextRepository.checkCancellation();
-      var metadata = selected.getLast().metadata();
-      var snapshot =
-          metadata.containsKey("workContext.gitCapturedAt")
-              ? new GitState(
-                  metadata.get("workContext.directory"),
-                  metadata.get("workContext.branch"),
-                  metadata.get("workContext.commit"),
-                  Instant.parse(metadata.get("workContext.gitCapturedAt")))
-              : git.capture(project.root(), now);
-      var next = merger.merge(project.id(), old, null, candidates, evidence, snapshot, now);
-      var processed = new HashSet<>(next.processedRuns());
-      selected.stream()
-          .filter(t -> t.status() != ConversationTurnStore.Status.RUNNING)
-          .map(ConversationTurnStore.Turn::runId)
-          .forEach(processed::add);
-      next =
-          new WorkContext(
-              next.projectId(),
-              next.revision(),
-              next.createdAt(),
-              next.updatedAt(),
-              next.git(),
-              next.items(),
-              processed);
-      repository.save(next, old == null ? 0 : old.revision());
-      return Optional.of(next);
+      synchronized (locks.computeIfAbsent(project.id(), id -> new Object())) {
+        long expected = old == null ? 0 : old.revision();
+        long current = repository.current(project.id()).map(WorkContext::revision).orElse(0L);
+        if (current != expected)
+          throw new ConcurrentModificationException(
+              "Work Context changed during extraction; retry with current revision");
+        var metadata = selected.getLast().metadata();
+        var snapshot =
+            metadata.containsKey("workContext.gitCapturedAt")
+                ? new GitState(
+                    metadata.get("workContext.directory"),
+                    metadata.get("workContext.branch"),
+                    metadata.get("workContext.commit"),
+                    Instant.parse(metadata.get("workContext.gitCapturedAt")))
+                : git.capture(project.root(), now);
+        var next = merger.merge(project.id(), old, null, candidates, evidence, snapshot, now);
+        var processed = new HashSet<>(next.processedRuns());
+        selected.stream()
+            .filter(t -> t.status() != ConversationTurnStore.Status.RUNNING)
+            .map(ConversationTurnStore.Turn::runId)
+            .forEach(processed::add);
+        next =
+            new WorkContext(
+                next.projectId(),
+                next.revision(),
+                next.createdAt(),
+                next.updatedAt(),
+                next.git(),
+                next.items(),
+                processed);
+        repository.save(next, old == null ? 0 : old.revision());
+        return Optional.of(next);
+      }
     }
   }
 

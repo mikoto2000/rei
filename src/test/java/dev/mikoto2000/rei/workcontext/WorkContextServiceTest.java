@@ -120,6 +120,85 @@ class WorkContextServiceTest {
             Clock.systemUTC());
   }
 
+  @Test
+  void blockedExtractionDoesNotBlockUserEditAndCannotOverwriteItsRevision() throws Exception {
+    var old = service.update("session-a", "run-a").orElseThrow();
+    var run = new AgentRunContext("later", "session-a", a.root(), a.id());
+    turns.start(run, "new work");
+    turns.finish(run, ConversationTurnStore.Status.COMPLETED, "finished later");
+    var entered = new java.util.concurrent.CountDownLatch(1);
+    var release = new java.util.concurrent.CountDownLatch(1);
+    doAnswer(
+            call -> {
+              entered.countDown();
+              if (!release.await(5, java.util.concurrent.TimeUnit.SECONDS))
+                throw new IllegalStateException("timeout");
+              return List.of();
+            })
+        .when(extractor)
+        .extract(anyList(), anyList(), anyString());
+    try (var executor = java.util.concurrent.Executors.newVirtualThreadPerTaskExecutor()) {
+      var update = executor.submit(() -> service.update("session-a", "later"));
+      assertTrue(entered.await(5, java.util.concurrent.TimeUnit.SECONDS));
+      try {
+        var now = Instant.now();
+        var evidence =
+            new Evidence(
+                "user-edit",
+                Origin.USER,
+                "session-a",
+                "later",
+                "later",
+                null,
+                null,
+                null,
+                now,
+                now,
+                "explicit correction");
+        var edited =
+            executor
+                .submit(
+                    () ->
+                        service.edit(
+                            a.id(),
+                            old.revision(),
+                            old.items().getFirst().id(),
+                            "STATUS",
+                            null,
+                            "user verified",
+                            Status.COMPLETED,
+                            evidence))
+                .get(2, java.util.concurrent.TimeUnit.SECONDS);
+        release.countDown();
+        var error =
+            assertThrows(
+                java.util.concurrent.ExecutionException.class,
+                () -> update.get(5, java.util.concurrent.TimeUnit.SECONDS));
+        assertTrue(error.getCause() instanceof ConcurrentModificationException);
+        assertEquals(edited, service.current(a.id()).orElseThrow());
+        assertFalse(edited.processedRuns().contains("later"));
+      } finally {
+        release.countDown();
+      }
+    }
+  }
+
+  @Test
+  void explicitRunBatchProcessesOnlyItsRequestedEvidenceOnce() {
+    var later = new AgentRunContext("run-batch", "session-a", a.root(), a.id());
+    turns.start(later, "batch request");
+    turns.finish(later, ConversationTurnStore.Status.COMPLETED, "batch result");
+    var unrelated = new AgentRunContext("unrelated", "session-a", a.root(), a.id());
+    turns.start(unrelated, "unrelated request");
+    turns.finish(unrelated, ConversationTurnStore.Status.COMPLETED, "unrelated result");
+    var result =
+        service.updateRuns("session-a", java.util.Set.of("run-a", "run-batch")).orElseThrow();
+    assertTrue(result.processedRuns().containsAll(List.of("run-a", "run-batch")));
+    assertFalse(result.processedRuns().contains("unrelated"));
+    service.updateRuns("session-a", java.util.Set.of("run-a", "run-batch"));
+    verify(extractor, times(1)).extract(anyList(), anyList(), anyString());
+  }
+
   /** 作業文脈の引き継ぎで、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void sessionOwnershipWinsOverChangedUiProjectAndRepeatedRunsSkipLlm() {

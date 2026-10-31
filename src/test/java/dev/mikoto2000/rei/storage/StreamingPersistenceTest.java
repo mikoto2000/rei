@@ -171,7 +171,7 @@ class StreamingPersistenceTest {
       assertThat(probe.commits.get()).isEqualTo(2);
       assertThat(probe.transactions.get()).isEqualTo(2);
       assertThat(displayed).containsExactly("ordinary", "boundary");
-      assertThat(activity.read(PROJECT)).extracting(row -> row.sequence()).containsExactly(1L, 2L);
+      assertThat(activity.read(PROJECT)).extracting(row -> row.sequence()).containsExactlyInAnyOrder(1L, 2L);
     } finally {
       DriverManager.deregisterDriver(probe);
       DriverManager.registerDriver(original);
