@@ -31,6 +31,8 @@ public final class ActiveRunPrompt implements AutoCloseable {
   /** 通常プロンプト。 */
   private volatile boolean normalPrompt;
 
+  private AutoCloseable progressSubscription = () -> {};
+
   /** 指定された値や利用先を使って、ActiveRunPromptを初期化する。 */
   public ActiveRunPrompt(LineReader reader, ConversationInputRouter runs, Supplier<String> prompt) {
     this.reader = reader;
@@ -52,14 +54,23 @@ public final class ActiveRunPrompt implements AutoCloseable {
         .put(
             LineReader.CALLBACK_INIT,
             () -> {
-              if (priorInit != null) priorInit.apply();
+              boolean initialized = priorInit == null || priorInit.apply();
               // Read the latest count after readLine initializes, closing the pre-read start/finish
               // race.
               if (normalPrompt && reader instanceof LineReaderImpl impl)
                 impl.setPrompt(prompt.get());
-              return true;
+              return initialized;
             });
     subscription = runs == null ? () -> {} : runs.onChange(this::refresh);
+  }
+
+  public ActiveRunPrompt(
+      LineReader reader,
+      ConversationInputRouter runs,
+      Supplier<String> prompt,
+      ActiveRunDisplay display) {
+    this(reader, runs, prompt);
+    if (display != null) progressSubscription = display.onProgressChange(this::refresh);
   }
 
   /** 必要な内容を参照できるよう、行を読み取る。 */
@@ -85,6 +96,11 @@ public final class ActiveRunPrompt implements AutoCloseable {
   /** ターミナルでの対話で利用した資源や登録を解放し、利用を終了する。 */
   public void close() {
     subscription.close();
+    try {
+      progressSubscription.close();
+    } catch (Exception error) {
+      throw new IllegalStateException("Could not unsubscribe task progress", error);
+    }
     reader.getWidgets().remove(REFRESH);
     if (priorInit == null) reader.getWidgets().remove(LineReader.CALLBACK_INIT);
     else reader.getWidgets().put(LineReader.CALLBACK_INIT, priorInit);

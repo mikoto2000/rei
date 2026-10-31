@@ -32,7 +32,11 @@ public final class ActiveRunController {
   public record Text(String text) {}
 
   /** 一覧と同じスナップショットから得た実行数。 */
-  public record ActiveRuns(String text, int count) {}
+  public record ActiveRuns(String text, int count, java.util.List<String> progress) {
+    public ActiveRuns {
+      progress = java.util.List.copyOf(progress);
+    }
+  }
 
   /**
    * Web APIによる操作で受け渡すキャンセルを表す。
@@ -69,7 +73,8 @@ public final class ActiveRunController {
             + (rows.isEmpty()
                 ? "No active runs."
                 : "PROJECT  TYPE  STATUS  ELAPSED  REQUEST\n" + String.join("\n", rows)),
-        rows.size());
+        rows.size(),
+        display.progressRows());
   }
 
   /** 対象の実行をキャンセルする。 */

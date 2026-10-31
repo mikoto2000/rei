@@ -65,6 +65,8 @@ public final class TerminalClient implements AutoCloseable {
   /** Backend 全体の実行数。未取得・切断時は不明とする。 */
   private volatile String runningCount = "?";
 
+  private volatile List<String> taskProgress = List.of();
+
   private final ScheduledExecutorService statusUpdates =
       Executors.newSingleThreadScheduledExecutor(Thread.ofVirtual().factory());
 
@@ -1329,7 +1331,9 @@ public final class TerminalClient implements AutoCloseable {
     String name = safeOutput(projectName).replaceAll("[\\p{Cntrl}\\s]+", " ").strip();
     if (name.codePointCount(0, name.length()) > 80)
       name = name.substring(0, name.offsetByCodePoints(0, 77)) + "...";
-    return "["
+    var progress = taskProgress;
+    return (progress.isEmpty() ? "" : String.join("\n", progress).replace("%", "%%") + "\n")
+        + "["
         + name
         + "] ["
         + runningCount
@@ -1357,18 +1361,29 @@ public final class TerminalClient implements AutoCloseable {
   /** HTTP は JLine の入力ロック外で行い、表示だけを widget 内で更新する。 */
   void refreshRunStatus() {
     String count = "?";
+    List<String> progress = List.of();
     try {
-      var value = backend.get("/api/v1/runs/active").path("count");
+      var response = backend.get("/api/v1/runs/active");
+      var value = response.path("count");
       if (value.isIntegralNumber() && value.canConvertToInt() && value.asInt() >= 0)
         count = value.asText();
+      if (response.path("progress").isArray()) {
+        var lines = new ArrayList<String>();
+        for (var line : response.path("progress")) {
+          if (line.isTextual())
+            lines.add(safeOutput(line.asText()).replaceAll("[\\p{Cntrl}\\s]+", " "));
+        }
+        progress = List.copyOf(lines);
+      }
     } catch (InterruptedException interrupted) {
       Thread.currentThread().interrupt();
       return;
     } catch (IOException | RuntimeException unavailable) {
       // 接続断や旧 Backend では古い件数を表示し続けない。
     }
-    boolean changed = !runningCount.equals(count);
+    boolean changed = !runningCount.equals(count) || !taskProgress.equals(progress);
     runningCount = count;
+    taskProgress = progress;
     if (changed && normalPrompt && reader.isReading()) {
       try {
         reader.callWidget(REFRESH_PROMPT);

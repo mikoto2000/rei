@@ -82,6 +82,12 @@ public final class ConversationInputRouter {
     cleanupObservers.add(Objects.requireNonNull(observer));
   }
 
+  /** Run 終了時に、入力欄向け進捗の寿命も終了する。 */
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  public void setTaskProgress(dev.mikoto2000.rei.context.TaskProgressStore progress) {
+    onCleanup(context -> progress.remove(context.runId()));
+  }
+
   /** 実行先。 */
   private final Executor executor;
 

@@ -399,7 +399,8 @@ public class ReiApplication {
                   try (var scope = client.open()) {
                     return buildPrompt();
                   }
-                })) {
+                },
+                activeRunDisplay)) {
       startVoiceAutomatically(
           cmd,
           terminal,
@@ -751,7 +752,10 @@ public class ReiApplication {
 
   /** 利用先に渡せるよう、プロンプトを組み立てる。 */
   String buildPrompt() {
-    return (activeRunDisplay == null ? "" : activeRunDisplay.promptStatus() + "\n")
+    var progress =
+        activeRunDisplay == null ? java.util.List.<String>of() : activeRunDisplay.progressRows();
+    return (progress.isEmpty() ? "" : String.join("\n", progress).replace("%", "%%") + "\n")
+        + (activeRunDisplay == null ? "" : activeRunDisplay.promptStatus() + "\n")
         + now().format(PROMPT_TIME_FORMATTER)
         + " "
         + currentModelHolder.get()
