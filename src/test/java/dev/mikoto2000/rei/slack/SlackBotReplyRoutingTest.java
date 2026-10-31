@@ -24,8 +24,8 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
-import dev.mikoto2000.rei.event.AgentEventBus;
 import dev.mikoto2000.rei.event.AgentEventFactory;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.util.HashMap;
@@ -98,7 +98,7 @@ class SlackBotReplyRoutingTest {
     var runs =
         new RunService(
             registry,
-            mock(AgentEventBus.class),
+            new InMemoryAgentEventBus(),
             new AgentEventFactory(clock),
             new CommandCancellationService(),
             router::cancelQueued);
@@ -217,7 +217,7 @@ class SlackBotReplyRoutingTest {
     var runs =
         new RunService(
             registry,
-            mock(AgentEventBus.class),
+            new InMemoryAgentEventBus(),
             new AgentEventFactory(clock),
             new CommandCancellationService(),
             router::cancelQueued);
