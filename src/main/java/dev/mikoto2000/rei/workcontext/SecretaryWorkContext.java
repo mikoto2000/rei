@@ -17,6 +17,24 @@ public final class SecretaryWorkContext implements SecretaryContext {
     this.contexts = contexts;
   }
 
+  private static SecretaryContext.Observation observation(WorkContext.Item item) {
+    var runs =
+        item.evidence().stream()
+            .map(WorkContext.Evidence::runId)
+            .filter(java.util.Objects::nonNull)
+            .distinct()
+            .toList();
+    String id = runs.size() == 1 ? "run:" + runs.getFirst() : "work-context:" + item.id();
+    return new SecretaryContext.Observation(
+        id,
+        item.updatedAt(),
+        "UNKNOWN",
+        false,
+        item.kind() == WorkContext.Kind.NEXT_ACTION ? item.text() : null,
+        null,
+        item.kind().name());
+  }
+
   @Override
   public List<Item> context(String project, LocalDate date, ZoneId zone) {
     return contexts
@@ -54,7 +72,8 @@ public final class SecretaryWorkContext implements SecretaryContext {
                                 i.evidence().stream()
                                     .limit(32)
                                     .map(e -> "work-evidence:" + e.id())
-                                    .toList()))
+                                    .toList(),
+                                observation(i)))
                     .toList())
         .orElse(List.of());
   }
