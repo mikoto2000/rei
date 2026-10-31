@@ -31,6 +31,109 @@ class ActivityVisionFailureLoggingTest {
             .build());
   }
 
+  private static com.openai.errors.BadRequestException providerFailure(
+      String code, String param, String type, String message) {
+    return com.openai.errors.BadRequestException.builder()
+        .headers(com.openai.core.http.Headers.builder().build())
+        .error(
+            com.openai.models.ErrorObject.builder()
+                .code(code)
+                .param(param)
+                .type(type)
+                .message(message)
+                .build())
+        .build();
+  }
+
+  @Test
+  void providerDiagnosticsUseOnlyFixedVocabularyEvenWhenMessagesEchoSecrets() {
+    var error =
+        providerFailure(
+            "invalid_json_schema",
+            "response_format",
+            "invalid_request_error",
+            "Invalid schema for response_format '" + PRIVATE + "': 'maxLength' is not permitted.");
+    var details = ActivityVisionFailure.details(new IllegalStateException(PRIVATE, error));
+    assertThat(details.provider())
+        .isEqualTo(
+            new ActivityProviderDiagnostic(
+                "invalid_json_schema",
+                "response_format",
+                "invalid_request_error",
+                "invalid_json_schema_maxLength"));
+    assertThat(details.toString()).doesNotContain("PRIVATE", "forged_log_entry");
+    var malicious = ActivityVisionFailure.details(sdkFailure()).provider();
+    assertThat(malicious)
+        .isEqualTo(
+            new ActivityProviderDiagnostic("redacted", "redacted", "redacted", "unclassified"));
+    assertThat(
+            ActivityVisionFailure.details(
+                    providerFailure(
+                        "secret_with_no_spaces", "messages[0].secret", "secret", "x".repeat(9000)))
+                .provider())
+        .isEqualTo(new ActivityProviderDiagnostic("redacted", "redacted", "redacted", "redacted"));
+  }
+
+  @Test
+  void missingAndMalformedProviderBodiesDoNotBreakFailureReporting() {
+    assertThat(ActivityProviderDiagnostic.from((com.fasterxml.jackson.databind.JsonNode) null))
+        .isEqualTo(ActivityProviderDiagnostic.unavailable());
+    assertThat(
+            ActivityProviderDiagnostic.from(
+                new com.fasterxml.jackson.databind.ObjectMapper()
+                    .createObjectNode()
+                    .put("error", PRIVATE)))
+        .isEqualTo(ActivityProviderDiagnostic.unavailable());
+    assertThat(
+            ActivityVisionFailure.details(
+                    com.openai.errors.BadRequestException.builder()
+                        .headers(com.openai.core.http.Headers.builder().build())
+                        .build())
+                .provider())
+        .isEqualTo(ActivityProviderDiagnostic.unavailable());
+  }
+
+  @Test
+  void pipelineLogsSafeProviderReasonWithoutRawMessage() throws Exception {
+    var fixture = new ActivityVisionQueueTest.Fixture();
+    when(fixture.extractor.extract(any(), any()))
+        .thenThrow(
+            providerFailure(
+                "unsupported_parameter",
+                "max_completion_tokens",
+                "invalid_request_error",
+                "Unsupported parameter: max_completion_tokens " + PRIVATE));
+    var logger = (Logger) LoggerFactory.getLogger(ActivityEvidencePipeline.class);
+    var appender = new ListAppender<ILoggingEvent>();
+    appender.start();
+    logger.addAppender(appender);
+    try {
+      fixture.pipeline.tick();
+      fixture.run();
+      var failure =
+          appender.list.stream()
+              .filter(e -> e.getFormattedMessage().startsWith("Activity Vision failure:"))
+              .findFirst()
+              .orElseThrow();
+      assertThat(failure.getFormattedMessage())
+          .contains(
+              "provider_code=unsupported_parameter", "provider_param=max_completion_tokens",
+              "provider_type=invalid_request_error", "provider_hint=unsupported_parameter");
+      assertThat(appender.list)
+          .allSatisfy(
+              event -> {
+                assertThat(event.getFormattedMessage())
+                    .doesNotContain("PRIVATE", "forged_log_entry");
+                assertThat(event.getThrowableProxy()).isNull();
+                assertThat(java.util.Arrays.toString(event.getArgumentArray()))
+                    .doesNotContain("PRIVATE", "forged_log_entry");
+              });
+    } finally {
+      logger.detachAppender(appender);
+      appender.stop();
+    }
+  }
+
   @Test
   void sdkAndSpringStatusesAreFoundInsideWrappedFailures() {
     var rest =

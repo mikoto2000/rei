@@ -903,7 +903,7 @@ final class ActivityEvidencePipeline {
       }
       var failureDetails = ActivityVisionFailure.details(e);
       log.warn(
-          "Activity Vision failure: scope={} reason={} evidence_retained=true observation_id={} stage={} error_type={} cause_types={} http_status={} cause_chain_truncated={}",
+          "Activity Vision failure: scope={} reason={} evidence_retained=true observation_id={} stage={} error_type={} cause_types={} http_status={} cause_chain_truncated={} provider_code={} provider_param={} provider_type={} provider_hint={}",
           background ? "background" : "foreground",
           kind,
           original.id(),
@@ -911,7 +911,11 @@ final class ActivityEvidencePipeline {
           failureDetails.errorType(),
           failureDetails.causes(),
           failureDetails.httpStatus(),
-          failureDetails.truncated());
+          failureDetails.truncated(),
+          failureDetails.provider().code(),
+          failureDetails.provider().param(),
+          failureDetails.provider().type(),
+          failureDetails.provider().hint());
       synchronized (this) {
         if (allowed(work.generation) && lifeAllowed(work.record.capturedAt()))
           try {

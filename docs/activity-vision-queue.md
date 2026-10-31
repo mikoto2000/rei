@@ -68,6 +68,15 @@ HTTP層の再送回数とは区別する。背景は既存の別カウンター�
 原因連鎖は重複を除いて最大16段とし、HTTPステータスはOpenAI SDKとSpringの例外から取得する。
 HTTP応答が確認できなければ `null`。例外メッセージ、stack trace、HTTP本文・ヘッダー、
 URL、画像・プロンプトは記録しない。reasonの分類や再試行・保存の動作は変更しない。
+OpenAI SDKのHTTPエラーには `provider_code`・`provider_param`・`provider_type` と
+`provider_hint` を追加する。code/param/typeは実装内の許可リストに完全一致した値だけを出し、
+未知の値は `redacted`、未取得は `unavailable` とする。message本文は出さず、
+8,192文字以下の本文を既知の原因に分類した固定名だけをhintに出す。
+例: `provider_code=invalid_json_schema provider_param=response_format
+provider_type=invalid_request_error provider_hint=invalid_json_schema_maxLength`。
+hintは本文の文字列パターンによる分類であり、未知の原因は `unclassified`。
+エラーに含まれるタイトル・スキーマ名・値・URL・APIキーなどの自由文字列は記録しない。
+SpringのHTTP例外や読み取れないSDK応答ではprovider項目は `unavailable` となる。
 既存の `Activity vision timing` の `status` と併せて、`request_failed` か応答解析段階の
 失敗かを区別する。モデルの正常応答後に保存が失敗した場合は `stage=persist` となる。
 

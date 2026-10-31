@@ -13,7 +13,11 @@ enum ActivityVisionFailure {
 
   /** 本文や例外メッセージを含まない、最大16段の失敗診断。 */
   record Details(
-      String errorType, java.util.List<String> causes, Integer httpStatus, boolean truncated) {
+      String errorType,
+      java.util.List<String> causes,
+      Integer httpStatus,
+      boolean truncated,
+      ActivityProviderDiagnostic provider) {
     Details {
       causes = java.util.List.copyOf(causes);
     }
@@ -25,13 +29,15 @@ enum ActivityVisionFailure {
     var seen =
         java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<Throwable, Boolean>());
     Integer status = null;
+    var provider = ActivityProviderDiagnostic.unavailable();
     var current = error;
     while (current != null && causes.size() < 16 && seen.add(current)) {
       causes.add(current.getClass().getName());
       if (status == null) {
-        if (current instanceof com.openai.errors.OpenAIServiceException response)
+        if (current instanceof com.openai.errors.OpenAIServiceException response) {
           status = response.statusCode();
-        else if (current
+          provider = ActivityProviderDiagnostic.from(response);
+        } else if (current
             instanceof
             org.springframework.web.reactive.function.client.WebClientResponseException response)
           status = response.getStatusCode().value();
@@ -42,7 +48,11 @@ enum ActivityVisionFailure {
       current = current.getCause();
     }
     return new Details(
-        error == null ? "none" : error.getClass().getName(), causes, status, current != null);
+        error == null ? "none" : error.getClass().getName(),
+        causes,
+        status,
+        current != null,
+        provider);
   }
 
   /** 得られた情報を分類し、後続の判断で扱い分けられるようにする。 */
