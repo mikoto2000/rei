@@ -48,7 +48,7 @@ class WindowsPtyTest {
                               new dev.mikoto2000.rei.application.cli.CliCatalog.Command(
                                   "search",
                                   List.of(),
-                                  "Search fixture description",
+                                  "Search command description",
                                   List.of(),
                                   List.of(),
                                   List.of()))))
@@ -86,7 +86,7 @@ class WindowsPtyTest {
       pty.await("Connected.");
       pty.send("/\t");
       pty.await("command");
-      pty.await("Search fixture description");
+      pty.await("Search command description");
       pty.send("\u0003");
       Thread.sleep(100);
       pty.send("/sh\r");
@@ -115,7 +115,7 @@ class WindowsPtyTest {
       Thread.sleep(100);
       offset = pty.output().length();
       pty.send("/help\r");
-      pty.awaitAfter("/search", offset);
+      pty.awaitAfter("Search command description", offset);
       pty.send("/exit\r");
       assertEquals(0, pty.exitCode());
     } finally {
