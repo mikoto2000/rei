@@ -15,6 +15,48 @@ public interface AgentEventBus {
    */
   Subscription subscribe(AgentEventListener listener);
 
+  /** Display-only listener; durable state and execution-control listeners use subscribe. */
+  default Subscription subscribeObserver(AgentEventListener listener) {
+    return subscribe(listener);
+  }
+
+  /** Atomically register display-only live events beyond a replay snapshot. */
+  default ReplaySubscription subscribeObserver(
+      String runId, long fromSequence, AgentEventListener listener) {
+    return subscribe(runId, fromSequence, listener);
+  }
+
+  /** Opt in to explicitly selected global display events at the same replay boundary. */
+  default ReplaySubscription subscribeObserver(
+      String runId,
+      long fromSequence,
+      AgentEventListener listener,
+      java.util.function.Predicate<AgentEvent> global) {
+    return withReplaySnapshot(
+        () -> {
+          var replay = subscribeObserver(runId, fromSequence, listener);
+          try {
+            var extra =
+                subscribeObserver(
+                    event -> {
+                      if (global.test(event) && event.sequence() > replay.latestSequence())
+                        listener.onEvent(event);
+                    });
+            return new ReplaySubscription(
+                replay.replay(),
+                () -> {
+                  replay.subscription().unsubscribe();
+                  extra.unsubscribe();
+                },
+                replay.latestSequence(),
+                replay.terminalSequence());
+          } catch (RuntimeException | Error failure) {
+            replay.subscription().unsubscribe();
+            throw failure;
+          }
+        });
+  }
+
   /** Read run state and register replay against the same publication boundary. */
   default <T> T withReplaySnapshot(java.util.function.Supplier<T> action) {
     synchronized (this) {

@@ -27,10 +27,10 @@ import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.chat.ProjectRunQueue;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.event.AgentEvent;
-import dev.mikoto2000.rei.event.AgentEventBus;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.ErrorInformation;
+import dev.mikoto2000.rei.event.InMemoryAgentEventBus;
 import dev.mikoto2000.rei.event.MessageCompletedPayload;
 import dev.mikoto2000.rei.event.ToolFailedPayload;
 import java.nio.file.Path;
@@ -109,7 +109,7 @@ class SlackRuntimeTest {
     runs =
         new RunService(
             registry,
-            mock(AgentEventBus.class),
+            new InMemoryAgentEventBus(),
             new AgentEventFactory(Clock.systemUTC()),
             new dev.mikoto2000.rei.core.service.CommandCancellationService(),
             router::cancelQueued);
