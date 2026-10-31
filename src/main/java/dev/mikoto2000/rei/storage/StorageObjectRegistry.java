@@ -527,6 +527,37 @@ public final class StorageObjectRegistry {
     }
   }
 
+  /** One object restoration and fixed SQL preparation count for a segment's distinct owners. */
+  static void addReferences(Connection db, String id, java.util.Collection<Reference> references)
+      throws SQLException {
+    var distinct = new java.util.LinkedHashSet<>(references);
+    if (distinct.isEmpty()) return;
+    for (var reference : distinct)
+      if (reference.kind() == null
+          || reference.kind().isBlank()
+          || reference.owner() == null
+          || reference.owner().isBlank()
+          || reference.kind().length() > 128
+          || reference.owner().length() > 4096)
+        throw new IllegalArgumentException("Invalid object reference");
+    var object = find(db, id);
+    if (object.isPresent() && !object.get().status().equals("AVAILABLE"))
+      throw new IllegalStateException("Body is unavailable; reference not admitted");
+    try (var insert = db.prepareStatement("INSERT OR IGNORE INTO object_references VALUES(?,?,?)");
+        var update =
+            db.prepareStatement("UPDATE stored_objects SET revision=revision+1 WHERE id=?")) {
+      for (var reference : distinct) {
+        insert.setString(1, id);
+        insert.setString(2, reference.kind());
+        insert.setString(3, reference.owner());
+        if (insert.executeUpdate() > 0) {
+          update.setString(1, id);
+          update.executeUpdate();
+        }
+      }
+    }
+  }
+
   /** データ保存の共通処理に関するpinを処理する。 */
   public void pin(String id, boolean value) {
     flag(id, "pinned", value);
