@@ -183,7 +183,6 @@ business: dev.mikoto2000.rei.web.CliCatalogController -> dev.mikoto2000.rei.acti
 business: dev.mikoto2000.rei.web.CliCatalogController -> dev.mikoto2000.rei.activity.ActivityCommand$SummaryCommand$DateCandidates
 business: dev.mikoto2000.rei.web.CliCatalogController -> dev.mikoto2000.rei.doctor.DoctorRequest
 business: dev.mikoto2000.rei.web.CliCatalogController -> dev.mikoto2000.rei.externalagent.BeginnerReviewRequest
-business: dev.mikoto2000.rei.web.CliCatalogController -> dev.mikoto2000.rei.llm.capture.LlmCaptureCommand$Capture
 business: dev.mikoto2000.rei.web.CliCatalogController -> dev.mikoto2000.rei.paper.PaperCommandRequest
 business: dev.mikoto2000.rei.web.CliCatalogController -> dev.mikoto2000.rei.ui.shell.RootCommand
 business: dev.mikoto2000.rei.web.DailyPlanningController -> dev.mikoto2000.rei.planning.DailyPlanningService
@@ -391,7 +390,6 @@ business: dev.mikoto2000.rei.web.SseBridge -> dev.mikoto2000.rei.event.AgentEven
 business: dev.mikoto2000.rei.web.SseBridge -> dev.mikoto2000.rei.event.AgentEventType
 business: dev.mikoto2000.rei.web.SseBridge -> dev.mikoto2000.rei.event.ReplayGapException
 business: dev.mikoto2000.rei.web.SseBridge$Connection -> dev.mikoto2000.rei.application.run.RunService
-business: dev.mikoto2000.rei.web.SseBridge$Connection -> dev.mikoto2000.rei.application.run.RunSnapshot
 business: dev.mikoto2000.rei.web.SseBridge$Connection -> dev.mikoto2000.rei.application.run.RunStatus
 business: dev.mikoto2000.rei.web.SseBridge$Connection -> dev.mikoto2000.rei.event.AgentEvent
 business: dev.mikoto2000.rei.web.SseBridge$Connection -> dev.mikoto2000.rei.event.AgentEventBus$Subscription
