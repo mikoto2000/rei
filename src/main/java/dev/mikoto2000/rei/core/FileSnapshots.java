@@ -92,6 +92,19 @@ final class FileSnapshots {
   /** 条件ごとに列挙した対象情報。 */
   private final Map<List<String>, List<String>> inventories = new HashMap<>();
 
+  private final Map<String, List<String>> baseInventories = new HashMap<>();
+
+  /** Share enumeration before glob filtering; selected-inventory budgets stay unchanged. */
+  synchronized List<String> baseInventory(String base, Inventory loader)
+      throws IOException, InterruptedException {
+    var cached = baseInventories.get(base);
+    if (cached != null) return cached;
+    var paths = loader.list().stream().distinct().sorted().toList();
+    // Large legacy inventories may still be narrowed by a glob; do not retain them in the cache.
+    if (paths.size() <= 20000) baseInventories.put(base, paths);
+    return paths;
+  }
+
   /** 共通の実行基盤に必要な保有情報を扱う。 */
   @FunctionalInterface
   interface Inventory {

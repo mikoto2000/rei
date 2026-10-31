@@ -78,7 +78,11 @@ final class SearchScanBatch {
                     Objects.toString(query.includeGlob(), ""),
                     Objects.toString(query.excludeGlob(), "")),
                 () ->
-                    tools.listFile(query.baseDir(), root).stream()
+                    snapshots
+                        .baseInventory(
+                            root.resolve(query.baseDir()).toAbsolutePath().normalize().toString(),
+                            () -> tools.listFile(query.baseDir(), root))
+                        .stream()
                         .filter(path -> tools.matchesGlob(path, include, exclude, root, globBase))
                         .toList());
         paths.addAll(candidates);
