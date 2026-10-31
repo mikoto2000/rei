@@ -103,6 +103,7 @@ final class PagedFileSearch {
       if (!root.toRealPath().equals(owner.projectRoot().toRealPath()))
         throw ReadingProblem.fail("INVALID_CURSOR");
       State state;
+      List<Prepared> prepared;
       if (input.cursor() == null) {
         validate(input, root);
         state = new State();
@@ -115,7 +116,8 @@ final class PagedFileSearch {
                 null,
                 null,
                 null);
-        state.inventory = inventory(input.queries(), root);
+        prepared = prepare(state.request.queries(), root);
+        state.inventory = inventory(prepared, root);
       } else {
         if (!input.cursor().matches("(?:RESULT|SCAN):[0-9a-f-]{36}"))
           throw ReadingProblem.fail("INVALID_CURSOR");
@@ -125,6 +127,7 @@ final class PagedFileSearch {
               store.load(owner, "search_inventory", state.inventoryId, Manifest.class).files();
         if (input.queries() != null && !input.queries().equals(state.request.queries()))
           throw ReadingProblem.fail("INVALID_CURSOR");
+        prepared = prepare(state.request.queries(), root);
         ReadingMetrics.add("continuations", 1);
         for (var stamp : state.inventory)
           if (!stamp.equals(stamp(root, stamp.path()))) throw ReadingProblem.fail("FILE_CHANGED");
@@ -156,7 +159,7 @@ final class PagedFileSearch {
         if (state.ranges.isEmpty()) {
           ReadingMetrics.add("scannedFiles", 1);
           scanned++;
-          scan(state, lines, root, item.path());
+          scan(state, lines, root, item.path(), prepared);
         }
         if (!state.ranges.isEmpty()) {
           var sections = new ArrayList<Tools.ReadSection>();
@@ -183,7 +186,7 @@ final class PagedFileSearch {
               candidate =
                   new Tools.SearchAndReadResult(
                       item.path(),
-                      matches(state, pending, lines, root, item.path()),
+                      matches(pending, lines, root, item.path(), prepared),
                       pending,
                       null,
                       true,
@@ -282,20 +285,20 @@ final class PagedFileSearch {
   }
 
   private List<Tools.SearchMatch> matches(
-      State state, List<Tools.ReadSection> sections, List<String> lines, Path root, String path) {
+      List<Tools.ReadSection> sections,
+      List<String> lines,
+      Path root,
+      String path,
+      List<Prepared> prepared) {
     var result = new ArrayList<Tools.SearchMatch>();
-    for (int q = 0; q < state.request.queries().size(); q++) {
-      var query = state.request.queries().get(q);
+    for (int q = 0; q < prepared.size(); q++) {
+      var query = prepared.get(q);
       if (!applies(query, path, root)) continue;
-      var pattern =
-          tools.compileGrepPattern(
-              query.pattern(),
-              Boolean.TRUE.equals(query.ignoreCase()),
-              Boolean.TRUE.equals(query.fixedString()));
+      var pattern = query.pattern();
       for (var section : sections)
         for (int line = section.startLine(); line <= section.endLine(); line++)
           if (BoundedRegex.find(pattern, lines.get(line - 1))
-              != Boolean.TRUE.equals(query.invertMatch()))
+              != Boolean.TRUE.equals(query.query().invertMatch()))
             result.add(new Tools.SearchMatch(q, line, ""));
     }
     return List.copyOf(result);
@@ -371,18 +374,36 @@ final class PagedFileSearch {
     return List.copyOf(ranges);
   }
 
-  private void scan(State state, List<String> lines, Path root, String path) {
-    var applicable =
-        state.request.queries().stream().filter(query -> applies(query, path, root)).toList();
-    var patterns =
-        applicable.stream()
-            .map(
-                query ->
-                    tools.compileGrepPattern(
-                        query.pattern(),
-                        Boolean.TRUE.equals(query.ignoreCase()),
-                        Boolean.TRUE.equals(query.fixedString())))
-            .toList();
+  private record Prepared(
+      Tools.GrepQuery query,
+      Path base,
+      boolean file,
+      SearchGlob include,
+      SearchGlob exclude,
+      java.util.regex.Pattern pattern) {}
+
+  private List<Prepared> prepare(List<Tools.GrepQuery> queries, Path root) throws IOException {
+    var prepared = new ArrayList<Prepared>();
+    for (var query : queries) {
+      Path base = FileSnapshots.resolveInventoryPath(root, Path.of(query.baseDir()));
+      prepared.add(
+          new Prepared(
+              query,
+              base,
+              Files.isRegularFile(base),
+              SearchGlob.compile(query.includeGlob()),
+              SearchGlob.compile(query.excludeGlob()),
+              tools.compileGrepPattern(
+                  query.pattern(),
+                  Boolean.TRUE.equals(query.ignoreCase()),
+                  Boolean.TRUE.equals(query.fixedString()))));
+    }
+    return List.copyOf(prepared);
+  }
+
+  private void scan(
+      State state, List<String> lines, Path root, String path, List<Prepared> prepared) {
+    var applicable = prepared.stream().filter(query -> applies(query, path, root)).toList();
     var ranges = new ArrayList<Range>();
     int context = state.request.contextLines();
     int line = state.scanLine;
@@ -391,8 +412,8 @@ final class PagedFileSearch {
       boolean hit = false;
       for (int q = 0; q < applicable.size(); q++)
         hit |=
-            BoundedRegex.find(patterns.get(q), lines.get(line))
-                != Boolean.TRUE.equals(applicable.get(q).invertMatch());
+            BoundedRegex.find(applicable.get(q).pattern(), lines.get(line))
+                != Boolean.TRUE.equals(applicable.get(q).query().invertMatch());
       if (!hit) continue;
       int start = Math.max(0, line - context), end = Math.min(lines.size(), line + context + 1);
       if (!ranges.isEmpty() && start <= ranges.getLast().end()) {
@@ -407,28 +428,25 @@ final class PagedFileSearch {
     state.ranges = List.copyOf(ranges);
   }
 
-  private boolean applies(Tools.GrepQuery query, String path, Path root) {
-    Path base = root.resolve(query.baseDir()).normalize();
+  private boolean applies(Prepared query, String path, Path root) {
+    Path base = query.base();
     Path candidate = root.resolve(path).normalize();
-    if (Files.isRegularFile(base)) {
+    if (query.file()) {
       if (!candidate.equals(base)) return false;
       base = base.getParent();
     } else if (!candidate.startsWith(base)) return false;
     if (base == null) throw ReadingProblem.fail("INVALID_ARGUMENT");
-    return tools.matchesGlob(
-        path,
-        SearchGlob.compile(query.includeGlob()),
-        SearchGlob.compile(query.excludeGlob()),
-        root,
-        base);
+    return tools.matchesGlob(path, query.include(), query.exclude(), root, base);
   }
 
-  private List<Stamp> inventory(List<Tools.GrepQuery> queries, Path root)
+  private List<Stamp> inventory(List<Prepared> queries, Path root)
       throws IOException, InterruptedException {
     var paths = new TreeSet<String>();
+    var inventories = new java.util.HashMap<Path, List<String>>();
     for (var query : queries) {
-      var base = FileSnapshots.resolveInventoryPath(root, Path.of(query.baseDir()));
-      var listed = tools.gitLsFiles(List.of(query.baseDir()), root);
+      var base = query.base();
+      var listed = inventories.get(base);
+      if (listed == null) listed = tools.gitLsFiles(List.of(query.query().baseDir()), root);
       if (listed == null) {
         try (var stream = Files.walk(base, 20)) {
           listed =
@@ -441,6 +459,7 @@ final class PagedFileSearch {
                   .toList();
         }
       }
+      if (listed.size() <= 20000) inventories.putIfAbsent(base, List.copyOf(listed));
       for (String path : listed)
         if (applies(query, path, root)) {
           try {
@@ -480,10 +499,6 @@ final class PagedFileSearch {
           || !Objects.equals(charset, query.charset()))
         throw ReadingProblem.fail("INVALID_ARGUMENT");
       FileSnapshots.resolveInventoryPath(root, Path.of(query.baseDir()));
-      tools.compileGrepPattern(
-          query.pattern(),
-          Boolean.TRUE.equals(query.ignoreCase()),
-          Boolean.TRUE.equals(query.fixedString()));
     }
   }
 
