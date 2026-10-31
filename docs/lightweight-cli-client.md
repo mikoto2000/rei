@@ -138,11 +138,11 @@ Goal create は現在選択した registered Project/Session を Backend で検�
 
 ## 入力履歴と秘密
 
-入力履歴は `${user.home}/.rei-cli/history/cli-UUID.history`。Backend データディレクトリとは別で、各 CLI が自身のファイルだけを exclusive lock して書く。起動時は最新の終了済みファイル一つから安全な行だけ読む。他の動作中 CLI の履歴を読み書き・merge しない。最大1,000行・1MiB、owner-only ACL / 600。過去ファイルの自動掃除は未実装。
+入力履歴は Shell と同じくプロジェクトごとに切り替わり、↑・↓ キーで現在のプロジェクトの入力を呼び出す。保存先は `${user.home}/.rei-cli/history/projects/<Project ID の UTF-8 十六進表記>/cli-UUID.history`。プロジェクト未選択時と旧版の履歴は従来の `history/cli-UUID.history` に残し、プロジェクト別の履歴へ混ぜない。Backend データディレクトリとは別で、各 CLI が自身のファイルだけを exclusive lock して書く。起動・切替時は対象プロジェクトの最新の終了済みファイル一つから安全な行だけ読む。他の動作中 CLI の履歴を読み書き・merge しない。最大1,000行・1MiB、owner-only ACL / 600。過去ファイルの自動掃除は未実装。
 
 `--no-history` または `/input-history off` で入力履歴を保存しない。認証用 `REI_API_KEY` の実値、Bearer / Authorization / api-key / password / secret などの行と複数行は除外し、同じ規則を JLine の memory history にも適用する。任意の文章が秘密かどうかを完全に推定はできないので、機密入力時は明示 off にする。API key は metadata や client 設定に保存せず、CLI 出力でも既知の key を redact する。
 
-履歴の削除は全 CLI を閉じてから、`$env:USERPROFILE\.rei-cli\history` にある対象 `cli-UUID.history` を確認して削除する。Backend の `.storage` や SQLite ファイルを削除しない。履歴を git・ログ収集に含めない。
+履歴の削除は全 CLI を閉じてから、`$env:USERPROFILE\.rei-cli\history` 配下にある対象 `cli-UUID.history` を確認して削除する。Backend の `.storage` や SQLite ファイルを削除しない。履歴を git・ログ収集に含めない。
 
 ## 接続失敗への対処
 

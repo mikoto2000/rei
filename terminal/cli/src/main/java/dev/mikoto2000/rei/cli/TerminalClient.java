@@ -37,7 +37,10 @@ public final class TerminalClient implements AutoCloseable {
   private final LineReader reader;
 
   /** 履歴。 */
-  private final ClientHistory history;
+  private ClientHistory history;
+
+  /** プロジェクト別の入力履歴の保存先。 */
+  private final Path historyDirectory;
 
   /** 逐次データ一覧。 */
   private final ExecutorService streams = Executors.newVirtualThreadPerTaskExecutor();
@@ -148,18 +151,12 @@ public final class TerminalClient implements AutoCloseable {
   TerminalClient(BackendClient backend, Path historyDirectory, boolean noHistory, Terminal terminal)
       throws IOException {
     this.backend = backend;
+    this.historyDirectory = historyDirectory;
     history = new ClientHistory(historyDirectory);
     recordHistory = !noHistory;
     history.enabled(recordHistory);
     this.terminal = terminal;
-    var memory =
-        new DefaultHistory() {
-          /** 新たな対象を登録し、後から利用できるようにする。 */
-          @Override
-          public void add(java.time.Instant time, String line) {
-            if (recordHistory && history.accepts(line)) super.add(time, line);
-          }
-        };
+    var memory = inputHistory();
     var menuReader = new ApprovalMenuLineReader(terminal);
     menuReader.setParser(commandParser());
     menuReader.setHistory(memory);
@@ -216,6 +213,38 @@ public final class TerminalClient implements AutoCloseable {
           backend.detach();
           attached = false;
         });
+  }
+
+  /** Shell と同じ JLine の履歴操作を使い、保存対象の制限も適用する。 */
+  private DefaultHistory inputHistory() {
+    return new DefaultHistory() {
+      @Override
+      public void add(java.time.Instant time, String line) {
+        if (recordHistory && history.accepts(line)) super.add(time, line);
+      }
+    };
+  }
+
+  /** プロジェクトの切替時に、保存先と ↑/↓ で参照する履歴を一緒に切り替える。 */
+  private void switchInputHistory(String id) throws IOException {
+    if (id.equals(project)) return;
+    // Backend の ID をファイルパスとして解釈しない。
+    String key =
+        java.util.HexFormat.of().formatHex(id.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+    var next = new ClientHistory(historyDirectory.resolve("projects").resolve(key));
+    next.enabled(recordHistory);
+    try {
+      history.close();
+    } catch (IOException error) {
+      next.close();
+      throw error;
+    }
+    history = next;
+    var memory = inputHistory();
+    memory.attach(reader);
+    if (recordHistory)
+      for (String line : history.entries()) memory.add(java.time.Instant.now(), line);
+    ((org.jline.reader.impl.LineReaderImpl) reader).setHistory(memory);
   }
 
   /** 軽量CLIでの対話で用いる待機中承認一覧を返す。 */
@@ -495,6 +524,7 @@ public final class TerminalClient implements AutoCloseable {
     for (var value : backend.get("/api/v1/projects"))
       if (id.equals(value.path("id").asText())) match = value;
     if (match == null) throw new IllegalArgumentException("Unknown registered Project ID");
+    switchInputHistory(id);
     project = id;
     projectName = match.path("name").asText();
     projectDirectory =
