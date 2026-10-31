@@ -850,6 +850,19 @@ public class RunExecutionContext {
 
   private List<org.springframework.ai.chat.messages.Message> lastCheckpointMessages = List.of();
 
+  /** 同一 Run の出力上限分割に渡す有界な配信済み根拠。予算や進捗とは独立する。 */
+  private String outputLimitHandoff = "";
+
+  /** 後続の分割タスクへ、直前に配信した根拠を渡す。 */
+  public synchronized void setOutputLimitHandoff(String handoff) {
+    outputLimitHandoff = handoff;
+  }
+
+  /** 同一 Run 内の分割タスクだけが使う参考データを返す。 */
+  public synchronized String outputLimitHandoff() {
+    return outputLimitHandoff;
+  }
+
   /** 実行の停滞への対処で使用するツールの結果一覧再開用の記録を設定する。 */
   public synchronized void setToolResultsCheckpoint(
       java.util.function.Consumer<List<org.springframework.ai.chat.messages.Message>> observer) {

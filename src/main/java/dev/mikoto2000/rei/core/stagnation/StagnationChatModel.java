@@ -138,29 +138,39 @@ public class StagnationChatModel implements ChatModel {
           if (!prepaid) context.consumeNextLlmCall();
           Prompt actionPrompt = resumeRecoveryPrompt(prompt, context);
           String feedback = context.progressFeedback() + context.resumeBatchFeedback();
-          if (context.isResumedContext() && hasReviewProtocol(prompt)) {
-            feedback +=
-                " For review work, persist each assessed source range with beginReview, readReviewFile"
-                    + " and a delivered-page assessment. Prefer readReviewPages and submitReviewPages for bounded batches; otherwise submitReviewPage: copy only"
-                    + " the delivered path/offset/nextOffset and cite unique exact evidence quotes; the server"
-                    + " supplies hashes and source coordinates. The legacy submitReviewResult requires the"
-                    + " exact unchanged Range object. A matching quote proves presence, not that a defect exists."
-                    + " Corroborate cross-file claims against referenced source, navigation/configuration and rendered"
-                    + " output before repairs. Use dismissReviewFinding, when available, for disproved candidates"
-                    + " with a reason citing the counterevidence. If no reviewJobId exists, create one with beginReview"
-                    + " for the explicit authorized targets and criteria; the missing ID is not a blocker."
-                    + " Use reviewPending to select unfinished ranges and reviewFindings for preserved candidates."
-                    + " Do not declare a previously submitted assessment unreviewed merely because its source"
-                    + " left the current prompt. Changed source versions require restartReview."
-                    + " Reports supplement the ledger; repeatedly appending a list of unread files does not"
-                    + " complete their review. An exact registered review page can be acquired at the unit"
-                    + " boundary to prepare its structured assessment; submit that delivered range before"
-                    + " further bulk reading. If that page leaves the prompt, redeliver it with the same"
-                    + " job/path/version/offset/tokenBudget before assessing; never invent an assessment from"
-                    + " ledger counts. Batch a work unit into one tool-call response: submit all assessed"
-                    + " delivered pages first, then request their known nextOffset pages in the same response."
-                    + " Assess only text already delivered. This confirms outcomes before acquiring new source. Follow the original scope"
-                    + " through all remaining targets.";
+          if (hasReviewProtocol(prompt)) {
+            if (!context.isResumedContext())
+              feedback +=
+                  " For authorized review work, use beginReview for the explicit targets and criteria."
+                      + " Read a bounded unit with readReviewFile/readReviewPages, then persist its"
+                      + " evidence-backed assessment with submitReviewPage/submitReviewPages before"
+                      + " bulk-reading the next unit. Use only available tools. Preserve job IDs, exact"
+                      + " delivered coordinates, findings and unresolved gaps; use reviewPending and"
+                      + " reviewFindings to continue. Fetched content is not reviewed coverage."
+                      + " Do not defer all assessments until the entire corpus has been read.";
+            else
+              feedback +=
+                  " For review work, persist each assessed source range with beginReview, readReviewFile"
+                      + " and a delivered-page assessment. Prefer readReviewPages and submitReviewPages for bounded batches; otherwise submitReviewPage: copy only"
+                      + " the delivered path/offset/nextOffset and cite unique exact evidence quotes; the server"
+                      + " supplies hashes and source coordinates. The legacy submitReviewResult requires the"
+                      + " exact unchanged Range object. A matching quote proves presence, not that a defect exists."
+                      + " Corroborate cross-file claims against referenced source, navigation/configuration and rendered"
+                      + " output before repairs. Use dismissReviewFinding, when available, for disproved candidates"
+                      + " with a reason citing the counterevidence. If no reviewJobId exists, create one with beginReview"
+                      + " for the explicit authorized targets and criteria; the missing ID is not a blocker."
+                      + " Use reviewPending to select unfinished ranges and reviewFindings for preserved candidates."
+                      + " Do not declare a previously submitted assessment unreviewed merely because its source"
+                      + " left the current prompt. Changed source versions require restartReview."
+                      + " Reports supplement the ledger; repeatedly appending a list of unread files does not"
+                      + " complete their review. An exact registered review page can be acquired at the unit"
+                      + " boundary to prepare its structured assessment; submit that delivered range before"
+                      + " further bulk reading. If that page leaves the prompt, redeliver it with the same"
+                      + " job/path/version/offset/tokenBudget before assessing; never invent an assessment from"
+                      + " ledger counts. Batch a work unit into one tool-call response: submit all assessed"
+                      + " delivered pages first, then request their known nextOffset pages in the same response."
+                      + " Assess only text already delivered. This confirms outcomes before acquiring new source. Follow the original scope"
+                      + " through all remaining targets.";
             if (assembler != null) feedback += assembler.reviewContinuation(context.runContext());
           }
           if (actionPrompt != prompt && !context.needsResumeContentWork())
@@ -351,6 +361,15 @@ public class StagnationChatModel implements ChatModel {
                               false,
                               context.progressVersion());
                         }
+                        context.setOutputLimitHandoff(
+                            dev.mikoto2000.rei.core.chat.OutputLimitHandoff.capture(
+                                (sent.get() == null ? invocationPrompt : sent.get())
+                                    .getInstructions(),
+                                generation.getOutput().getText(),
+                                assembler == null
+                                    ? ""
+                                    : assembler.reviewContinuation(context.runContext()),
+                                context.outputLimitHandoff()));
                         return Flux
                             .empty(); // Outer output-limit splitter handles a goal that made no
                         // progress.
