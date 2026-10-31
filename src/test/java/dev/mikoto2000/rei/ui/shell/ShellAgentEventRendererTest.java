@@ -18,6 +18,15 @@ import org.junit.jupiter.api.Test;
 
 /** シェルエージェントイベント表示への変換の結果と状態の契約を検証するテスト。 */
 class ShellAgentEventRendererTest {
+  @Test
+  void displaysFileReadPageMetadataWithCallIdWithoutShorteningIt() {
+    var output = new RecordingOutput();
+    var renderer = new ShellAgentEventRenderer(output);
+    String summary = "[readMultiFile] " + "page-metadata ".repeat(30);
+    renderer.onEvent(events.toolCompleted("read-1", "readMultiFile", 12, summary));
+    assertEquals("  ✓ readMultiFile (12 ms)\n    call=read-1 " + summary + "\n", output.text());
+  }
+
   /** ターミナルでの対話の中断時に、実行状態と後続の処理が中断の契約に従うことを確認する。 */
   @Test
   void checkpointNotificationsStaySilentAndDoNotInterruptAnswerStreams() {

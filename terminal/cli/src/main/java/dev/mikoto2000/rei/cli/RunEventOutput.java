@@ -224,6 +224,13 @@ final class RunEventOutput {
                 + " ("
                 + payload.path("duration").asLong()
                 + " ms)");
+        if (payload.path("toolName").asText().equals("readMultiFile")
+            && payload.path("resultSummary").asText("").startsWith("[readMultiFile] "))
+          output.accept(
+              "    call="
+                  + payload.path("toolCallId").asText()
+                  + " "
+                  + payload.path("resultSummary").asText().replaceAll("[\\p{Cntrl}]+", " "));
         return;
       }
       case "skill.selection.started" -> {

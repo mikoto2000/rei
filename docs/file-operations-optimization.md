@@ -1,5 +1,29 @@
 # ファイル操作の改善
 
+## 読み取りページの診断ログ（2026-10-31）
+
+`readMultiFile` の `tool.completed.resultSummary` は、本文を含めず、配列内の
+要求と返却ページを `index` で対応付けます。Shell と軽量 CLI は完了行の直後に
+`call=<toolCallId> [readMultiFile] [...]` を表示します。通常の120文字要約では
+後続ファイルが消えるため、このメタデータには120文字の切り詰めを適用しません。
+
+- `request`: path、startLine/endLine、offset、expectedVersion と選択条件。
+  通常の行読み取りで未指定の startLine は1、endLine は末尾、offset は0です。
+- `returned`: path、実際の startLine/endLine、lineCount、version、returnedBytes、
+  truncated、truncationReason、errorPresent。本文0行の場合は返却範囲を null にします。
+- `nextRead`: 次の要求の範囲・offset・expectedVersion と選択条件。
+  同じ行の途中から続く場合も offset で区別できます。
+
+同じ path/version について、前回の nextRead と次回の request を比較すると
+続き読みを追えます。同じ返却範囲・offset の再取得は重複読みの候補です。
+版の変更やシンボル・節の選択条件も併せて確認し、行範囲だけで重複と断定しません。
+自動的な既読判定や本文の配送完了判定は変更しません。
+
+本文、任意のエラー文、未知のフィールドは出力しません。不正なJSONや要求・結果の
+件数不一致では `metadata unavailable` を表示し、本文へフォールバックしません。
+既存の `logs/activity.jsonl` は resultSummary を文字数に置き換える方針を維持するため、
+この診断にはターミナル出力または元のイベントを使用します。
+
 ## 会話履歴の再構築（2026-10-31）
 
 会話JSONLの変更のないファイルは復元済みレコードを再利用します。最大1024ファイル・

@@ -160,7 +160,13 @@ public class ToolEventCallbackDecorator
       long duration = Duration.ofNanos(System.nanoTime() - startedAtNanos).toMillis();
       // Storage failure after the side effect must leave STARTED, never falsely record FAILED.
       eventPublisher.publishBoundary(
-          eventFactory.toolCompleted(toolCallId, toolName, duration, summarize(result)));
+          eventFactory.toolCompleted(
+              toolCallId,
+              toolName,
+              duration,
+              toolName.equals("readMultiFile")
+                  ? ReadMultiFileLogSummary.summarize(toolInput, result)
+                  : summarize(result)));
       return result;
     }
   }

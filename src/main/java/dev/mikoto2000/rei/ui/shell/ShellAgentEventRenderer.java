@@ -612,6 +612,10 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         beforeTool();
         ToolCompletedPayload payload = (ToolCompletedPayload) event.payload();
         output.println("  ✓ " + payload.toolName() + " (" + payload.duration() + " ms)");
+        if (payload.toolName().equals("readMultiFile")
+            && payload.resultSummary() != null
+            && payload.resultSummary().startsWith("[readMultiFile] "))
+          output.println("    call=" + payload.toolCallId() + " " + payload.resultSummary());
       }
       case TOOL_FAILED -> {
         beforeTool();

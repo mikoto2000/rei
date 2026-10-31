@@ -26,6 +26,65 @@ import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 class ToolEventCallbackDecoratorTest {
 
   @Test
+  void fileReadDiagnosticsKeepPagesAndVersionsWithoutSourceText() throws Exception {
+    bus.subscribe(received::add);
+    String input =
+        """
+        {"files":[{"path":"docs/教材.md","startLine":20,"endLine":80,"offset":7,
+          "expectedVersion":"v1"},{"path":"docs/empty.md"}]}
+        """;
+    String result =
+        """
+        [{"path":"docs/教材.md","startLine":20,"endLine":22,"version":"v1",
+          "content":["PRIVATE SOURCE","more","partial"],"truncated":true,
+          "truncationReason":"RESULT_TOKEN_BUDGET","returnedBytes":40,
+          "nextRead":{"path":"docs/教材.md","startLine":22,"endLine":80,
+            "offset":9,"expectedVersion":"v1"}},
+         {"path":"docs/empty.md","startLine":99,"endLine":200,"content":[],
+          "truncated":false,"version":"v2"}]
+        """;
+    var callback = delegate("readMultiFile", result);
+    when(callback.call(input)).thenReturn(result);
+    assertEquals(result, new ToolEventCallbackDecorator(callback, factory, bus).call(input));
+    var completed = (ToolCompletedPayload) received.get(1).payload();
+    String summary = completed.resultSummary();
+    assertTrue(!summary.contains("PRIVATE SOURCE"));
+    var pages =
+        new com.fasterxml.jackson.databind.ObjectMapper()
+            .readTree(summary.substring("[readMultiFile] ".length()));
+    var page = pages.get(0);
+    assertEquals("docs/教材.md", page.path("request").path("path").asText());
+    assertEquals(20, page.path("request").path("startLine").asInt());
+    assertEquals(80, page.path("request").path("endLine").asInt());
+    assertEquals(7, page.path("request").path("offset").asInt());
+    assertEquals("v1", page.path("returned").path("version").asText());
+    assertEquals(22, page.path("returned").path("endLine").asInt());
+    assertEquals(3, page.path("returned").path("lineCount").asInt());
+    assertEquals("RESULT_TOKEN_BUDGET", page.path("returned").path("truncationReason").asText());
+    assertEquals(22, page.path("nextRead").path("startLine").asInt());
+    assertEquals(9, page.path("nextRead").path("offset").asInt());
+    assertEquals("v1", page.path("nextRead").path("expectedVersion").asText());
+    assertTrue(pages.get(1).path("returned").path("startLine").isNull());
+    assertEquals(0, pages.get(1).path("returned").path("lineCount").asInt());
+  }
+
+  @Test
+  void fileReadDiagnosticsDoNotFallBackToRawResultsOrErrors() {
+    assertEquals(
+        "[readMultiFile] metadata unavailable",
+        ReadMultiFileLogSummary.summarize("{}", "PRIVATE SOURCE"));
+    assertEquals(
+        "[readMultiFile] metadata unavailable",
+        ReadMultiFileLogSummary.summarize("{\"files\":[{},{}]}", "[]"));
+    String summary =
+        ReadMultiFileLogSummary.summarize(
+            "{\"files\":[{\"path\":\"docs/a.md\"}]}",
+            "[{\"path\":\"docs/a.md\",\"error\":\"PRIVATE ERROR\",\"content\":null}]");
+    assertTrue(summary.contains("\"errorPresent\":true"));
+    assertTrue(!summary.contains("PRIVATE ERROR"));
+  }
+
+  @Test
   void fileSearchBudgetFailureAllowsNarrowerSearchAndPublishesSafeDiagnostic() {
     bus.subscribe(received::add);
     var callback = delegate("searchAndRead", "unused");
@@ -383,7 +442,7 @@ class ToolEventCallbackDecoratorTest {
   @Test
   void completedDoesNotContainFullResult() {
     bus.subscribe(received::add);
-    ToolCallback delegate = delegate("readMultiFile", "2 files");
+    ToolCallback delegate = delegate("readFile", "2 files");
     ToolCallback decorated = new ToolEventCallbackDecorator(delegate, factory, bus);
 
     decorated.call("input");

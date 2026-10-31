@@ -8,6 +8,20 @@ import org.junit.jupiter.api.Test;
 
 /** 実行イベント出力の結果と状態の契約を検証するテスト。 */
 class RunEventOutputTest {
+  @Test
+  void displaysFileReadPageMetadataWithCallIdWithoutShorteningIt() {
+    String summary = "[readMultiFile] " + "page-metadata ".repeat(30);
+    output.accept(
+        "tool.completed",
+        BackendClient.JSON
+            .createObjectNode()
+            .put("toolName", "readMultiFile")
+            .put("toolCallId", "read-1")
+            .put("duration", 12)
+            .put("resultSummary", summary));
+    assertEquals(List.of("  ✓ readMultiFile (12 ms)", "    call=read-1 " + summary), lines);
+  }
+
   /** 軽量CLIでの対話で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void compressionDetailsAndCooldownDoNotSplitAnswerChunks() throws Exception {
