@@ -55,4 +55,15 @@ class FileReadContextTest {
       assertThat(budget(properties)).isLessThan(one / 2);
     }
   }
+
+  @Test
+  void capturesNullableToolContextOnceForTheReadScope() {
+    var options =
+        org.mockito.Mockito.mock(org.springframework.ai.model.tool.ToolCallingChatOptions.class);
+    org.mockito.Mockito.when(options.getToolContext()).thenReturn(java.util.Map.of(), null);
+    try (var scope = FileReadContext.open(new Prompt("read", options), 1, "")) {
+      assertThat(FileReadContext.active()).isTrue();
+    }
+    org.mockito.Mockito.verify(options).getToolContext();
+  }
 }

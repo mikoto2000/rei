@@ -64,26 +64,30 @@ public class ContextBudgetManager {
       ContextCompressionProperties properties,
       TokenEstimator estimator,
       org.springframework.ai.chat.prompt.Prompt prompt) {
+    var promptOptions = prompt.getOptions();
     int completion = properties.getCompletionReserve();
-    if (prompt.getOptions() != null && prompt.getOptions().getMaxTokens() != null)
-      completion = Math.max(completion, prompt.getOptions().getMaxTokens());
-    if (prompt.getOptions() instanceof org.springframework.ai.openai.OpenAiChatOptions options
-        && options.getMaxCompletionTokens() != null)
-      completion = Math.max(completion, options.getMaxCompletionTokens());
+    Integer maxTokens = promptOptions == null ? null : promptOptions.getMaxTokens();
+    if (maxTokens != null) completion = Math.max(completion, maxTokens);
+    if (promptOptions instanceof org.springframework.ai.openai.OpenAiChatOptions options) {
+      Integer maxCompletionTokens = options.getMaxCompletionTokens();
+      if (maxCompletionTokens != null) completion = Math.max(completion, maxCompletionTokens);
+    }
     int schema = 0;
-    if (prompt.getOptions()
-            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-        && options.getToolCallbacks() != null)
-      for (var callback : options.getToolCallbacks())
-        schema +=
-            estimator.text(callback.getToolDefinition().inputSchema())
-                + estimator.text(callback.getToolDefinition().description())
-                + 16;
+    if (promptOptions instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options) {
+      var callbacks = options.getToolCallbacks();
+      if (callbacks != null)
+        for (var callback : callbacks) {
+          var definition = callback.getToolDefinition();
+          schema +=
+              estimator.text(definition.inputSchema())
+                  + estimator.text(definition.description())
+                  + 16;
+        }
+    }
     return Math.min(
         properties.getHardLimit(),
         new ContextBudgetManager(
-                properties.contextLimit(
-                    prompt.getOptions() == null ? null : prompt.getOptions().getModel()),
+                properties.contextLimit(promptOptions == null ? null : promptOptions.getModel()),
                 completion,
                 properties.getSafetyMargin() + Math.max(properties.getToolReserve(), schema))
             .inputBudget());

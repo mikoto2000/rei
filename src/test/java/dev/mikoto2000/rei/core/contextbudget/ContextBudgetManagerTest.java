@@ -204,4 +204,18 @@ class ContextBudgetManagerTest {
     assertTrue(payload.dropped().contains("CONVERSATION_HISTORY"));
     assertEquals(AgentEventType.CONTEXT_BUDGET_TRIMMED, events.get(1).type());
   }
+
+  @Test
+  void capturesNullableOptionsOnceWhenCalculatingInputLimit() {
+    var options = org.mockito.Mockito.mock(org.springframework.ai.chat.prompt.ChatOptions.class);
+    org.mockito.Mockito.when(options.getMaxTokens()).thenReturn(8000, null);
+    var prompt = org.mockito.Mockito.mock(org.springframework.ai.chat.prompt.Prompt.class);
+    org.mockito.Mockito.when(prompt.getOptions()).thenReturn(options, null);
+    assertTrue(
+        ContextBudgetManager.inputLimit(
+                new ContextCompressionProperties(), TokenEstimator.conservative(), prompt)
+            > 0);
+    org.mockito.Mockito.verify(prompt).getOptions();
+    org.mockito.Mockito.verify(options).getMaxTokens();
+  }
 }

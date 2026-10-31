@@ -234,4 +234,18 @@ class OutputLimitHandoffTest {
                 .build());
     return callback;
   }
+
+  @Test
+  void capturesOneNullableTextSnapshotPerDeliveredMessage() {
+    var assistant = mock(AssistantMessage.class);
+    when(assistant.getMetadata()).thenReturn(Map.of());
+    when(assistant.getText()).thenReturn("saved note", null);
+    var system = mock(SystemMessage.class);
+    when(system.getMetadata()).thenReturn(Map.of());
+    when(system.getText()).thenReturn(null);
+    assertThat(OutputLimitHandoff.capture(List.of(assistant, system), "", ""))
+        .contains("saved note");
+    verify(assistant).getText();
+    verify(system).getText();
+  }
 }

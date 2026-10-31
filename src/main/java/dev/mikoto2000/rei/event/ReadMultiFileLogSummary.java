@@ -18,10 +18,16 @@ final class ReadMultiFileLogSummary {
   /** 不正な結果でも診断の失敗でツール呼び出しを失敗させない。本文へのフォールバックはしない。 */
   static String summarize(String input, String output) {
     try {
-      JsonNode requests = JSON.readTree(input).path("files");
+      JsonNode parsed = JSON.readTree(input);
+      JsonNode requests =
+          parsed == null
+              ? com.fasterxml.jackson.databind.node.MissingNode.getInstance()
+              : parsed.path("files");
       JsonNode results = JSON.readTree(output);
-      if (!requests.isArray() || !results.isArray() || requests.size() != results.size())
-        return "[readMultiFile] metadata unavailable";
+      if (results == null
+          || !requests.isArray()
+          || !results.isArray()
+          || requests.size() != results.size()) return "[readMultiFile] metadata unavailable";
       var pages = JSON.createArrayNode();
       for (int index = 0; index < Math.min(results.size(), 20); index++) {
         JsonNode result = results.get(index);
@@ -50,7 +56,7 @@ final class ReadMultiFileLogSummary {
       }
       if (results.size() > 20) pages.addObject().put("omittedFiles", results.size() - 20);
       return "[readMultiFile] " + CredentialRedactor.redact(JSON.writeValueAsString(pages));
-    } catch (Exception ignored) {
+    } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException ignored) {
       return "[readMultiFile] metadata unavailable";
     }
   }

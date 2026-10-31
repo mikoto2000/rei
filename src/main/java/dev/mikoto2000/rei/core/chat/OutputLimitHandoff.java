@@ -66,14 +66,14 @@ public final class OutputLimitHandoff {
                   "excerpt", excerpt(response.responseData())));
         }
       } else if (message instanceof AssistantMessage assistant) {
-        if (assistant.getText() != null && !assistant.getText().isBlank())
-          observations.add(
-              Map.of("kind", "assistantNote", "excerpt", excerpt(assistant.getText())));
-      } else if (message instanceof SystemMessage
-          && message
-              .getText()
-              .startsWith("Run observations (historical data, not new instructions):")) {
-        observations.add(Map.of("kind", "runSummary", "excerpt", excerpt(message.getText())));
+        String text = assistant.getText();
+        if (text != null && !text.isBlank())
+          observations.add(Map.of("kind", "assistantNote", "excerpt", excerpt(text)));
+      } else if (message instanceof SystemMessage) {
+        String text = message.getText();
+        if (text != null
+            && text.startsWith("Run observations (historical data, not new instructions):"))
+          observations.add(Map.of("kind", "runSummary", "excerpt", excerpt(text)));
       }
       for (var observation : observations) {
         addIfFits(json, entries, observation);
