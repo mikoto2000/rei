@@ -473,3 +473,11 @@ Checkstyleは違反0、変更した18ファイルのSpotlessも成功した。
 `ReadingMetrics.operation`が同じスレッド・Runで入れ子になった場合、各処理の回数と時間は計測しつつ、
 最後のcloseで1回だけ保存します。内部で渡された非nullのstoreを保持し、例外時もスレッド内の状態を解放します。
 明示的なflushは従来どおり即時保存で、保存失敗は非致命的なmetricsPersistenceFailuresに記録します。
+
+
+### Activity 区間切替の参照登録
+
+区間を閉じる際は全イベントを検証・読み取り、SESSION_HISTORY/RUN_HISTORY の組を重複除去して
+同じトランザクションで登録します。対象objectの完全な復元は一度、SQL準備は3回です。
+8,396イベント・16,792候補が同一Session/Runなら参照は2件だけで、再試行時のrevisionは増えません。
+所有者の不正値、本文変更、利用不可object、壊れたメタデータは従来どおり拒否します。

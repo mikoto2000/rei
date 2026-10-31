@@ -162,24 +162,17 @@ public final class ManagedActivityLog {
         registry.clock.instant(),
         true,
         List.of());
-    // Every Session/Run association is retained conservatively, including unknown owners.
+    // Keep all owner associations, but register each distinct pair only once per segment.
+    var owners = new java.util.LinkedHashSet<StorageObjectRegistry.Reference>();
     forEachFile(
         file,
         entry -> {
-          try {
-            if (entry.sessionId() != null)
-              StorageObjectRegistry.addReference(
-                  db,
-                  StorageObjectRegistry.id(registry.root, file),
-                  "SESSION_HISTORY",
-                  entry.sessionId());
-            if (entry.runId() != null)
-              StorageObjectRegistry.addReference(
-                  db, StorageObjectRegistry.id(registry.root, file), "RUN_HISTORY", entry.runId());
-          } catch (Exception error) {
-            throw new IllegalStateException("Cannot protect Activity owner", error);
-          }
+          if (entry.sessionId() != null)
+            owners.add(new StorageObjectRegistry.Reference("SESSION_HISTORY", entry.sessionId()));
+          if (entry.runId() != null)
+            owners.add(new StorageObjectRegistry.Reference("RUN_HISTORY", entry.runId()));
         });
+    StorageObjectRegistry.addReferences(db, StorageObjectRegistry.id(registry.root, file), owners);
     try (var update =
         db.prepareStatement("UPDATE activity_segments SET state='CLOSED',updated=? WHERE id=?")) {
       update.setString(1, registry.clock.instant().toString());
