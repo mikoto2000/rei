@@ -37,6 +37,35 @@ class InMemoryAgentEventBusTest {
         List.of("agent.run.failed"), displayed.stream().map(e -> e.type().value()).toList());
   }
 
+  @Test
+  void boundaryPersistenceReentryRetainsSequenceAndFailureClearsQueuedEvents() {
+    var bus = new InMemoryAgentEventBus();
+    var received = new ArrayList<AgentEvent>();
+    bus.subscribe(received::add);
+    var persistence =
+        bus.subscribePersistence(
+            e -> {
+              if (e.type() == AgentEventType.AGENT_RUN_STARTED)
+                bus.publish(event("message.started"));
+            });
+    bus.publishBoundary(event("agent.run.started"));
+    assertEquals(List.of(1L, 2L), received.stream().map(AgentEvent::sequence).toList());
+    persistence.unsubscribe();
+    persistence =
+        bus.subscribePersistence(
+            e -> {
+              bus.publish(event("message.completed"));
+              throw new IllegalStateException("failed");
+            });
+    org.junit.jupiter.api.Assertions.assertThrows(
+        IllegalStateException.class, () -> bus.publishBoundary(event("agent.run.failed")));
+    persistence.unsubscribe();
+    bus.publish(event("agent.run.completed"));
+    assertEquals(
+        List.of("agent.run.started", "message.started", "agent.run.completed"),
+        received.stream().map(e -> e.type().value()).toList());
+  }
+
   /** 日時や期限の条件を再現するために使う検証時刻。 */
   private final Clock clock =
       Clock.fixed(Instant.parse("2026-08-16T16:30:20Z"), ZoneId.of("Asia/Tokyo"));

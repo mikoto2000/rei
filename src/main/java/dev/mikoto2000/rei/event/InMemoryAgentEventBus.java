@@ -44,19 +44,35 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
 
   /** 実行状況を利用先で把握できるよう、境界を通知する。 */
   @Override
-  public void publishBoundary(AgentEvent event) {
-    for (var listener : boundaryListeners) listener.onEvent(event);
-    publish(event);
+  public synchronized void publishBoundary(AgentEvent event) {
+    java.util.Objects.requireNonNull(event, "event must not be null");
+    var sequenced = withSequence(event);
+    // Reserve its delivery position before persistence callbacks can reenter.
+    pending.addLast(new Pending(sequenced, true));
+    boolean active = dispatching;
+    dispatching = true;
+    try {
+      for (var listener : persistenceListeners) listener.onEvent(sequenced);
+      for (var listener : boundaryListeners) listener.onEvent(sequenced);
+    } catch (RuntimeException | Error failure) {
+      pending.clear();
+      throw failure;
+    } finally {
+      dispatching = active;
+    }
+    drain();
   }
 
   /** 発生順序。 */
   private final AtomicLong sequence = new AtomicLong(0L);
 
   /** 待機中。 */
-  private final java.util.ArrayDeque<AgentEvent> pending = new java.util.ArrayDeque<>();
+  private final java.util.ArrayDeque<Pending> pending = new java.util.ArrayDeque<>();
 
   /** 実行先への引き渡し中かどうか。 */
   private boolean dispatching;
+
+  private record Pending(AgentEvent event, boolean persisted) {}
 
   /** 再送。 */
   private final ReplayBuffer replay;
@@ -138,13 +154,23 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
     if (event == null) {
       throw new IllegalArgumentException("event must not be null");
     }
-    pending.addLast(withSequence(event));
+    enqueue(withSequence(event), false);
+  }
+
+  private void enqueue(AgentEvent event, boolean persisted) {
+    pending.addLast(new Pending(event, persisted));
+    drain();
+  }
+
+  private void drain() {
     if (dispatching) return;
     dispatching = true;
     try {
       while (!pending.isEmpty()) {
-        AgentEvent sequenced = pending.removeFirst();
-        for (var listener : persistenceListeners) listener.onEvent(sequenced);
+        var next = pending.removeFirst();
+        AgentEvent sequenced = next.event();
+        if (!next.persisted())
+          for (var listener : persistenceListeners) listener.onEvent(sequenced);
         replay.append(sequenced);
         for (AgentEventListener listener : listeners) {
           try {

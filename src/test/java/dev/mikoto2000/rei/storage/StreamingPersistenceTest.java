@@ -140,6 +140,90 @@ class StreamingPersistenceTest {
   }
 
   @Test
+  void ordinaryAndReentrantBoundaryEventsUseOneCommitBeforeDelivery() throws Exception {
+    var bus = new InMemoryAgentEventBus();
+    var displayed = new ArrayList<String>();
+    Class.forName("org.sqlite.JDBC");
+    var original = DriverManager.getDriver("jdbc:sqlite:");
+    var probe = new AnswerGenerationIoBenchmarkTest.Probe(original);
+    DriverManager.deregisterDriver(original);
+    DriverManager.registerDriver(probe);
+    try (var context = context(root, bus)) {
+      var store = context.getBean(ProjectAgentEventStore.class);
+      var activity = context.getBean(ManagedActivityLog.class);
+      bus.subscribe(
+          e -> {
+            assertThat(store.findEvent(PROJECT, e.id())).isPresent();
+            assertThat(activity.read(PROJECT)).anyMatch(row -> row.id().equals(e.id()));
+            displayed.add(e.id());
+            if (e.id().equals("ordinary")) {
+              bus.publishBoundary(checkpoint("boundary"));
+              assertThat(store.findEvent(PROJECT, "boundary")).isPresent();
+              assertThat(activity.read(PROJECT)).anyMatch(row -> row.id().equals("boundary"));
+            }
+          });
+      probe.active.set(true);
+      try {
+        bus.publish(checkpoint("ordinary"));
+      } finally {
+        probe.active.set(false);
+      }
+      assertThat(probe.commits.get()).isEqualTo(2);
+      assertThat(probe.transactions.get()).isEqualTo(2);
+      assertThat(displayed).containsExactly("ordinary", "boundary");
+      assertThat(activity.read(PROJECT)).extracting(row -> row.sequence()).containsExactly(1L, 2L);
+    } finally {
+      DriverManager.deregisterDriver(probe);
+      DriverManager.registerDriver(original);
+    }
+  }
+
+  private static AgentEvent checkpoint(String id) {
+    return new AgentEvent(
+        id,
+        0,
+        Instant.EPOCH,
+        AgentEventType.CHECKPOINT_REVISION_SAVED,
+        1,
+        "session",
+        null,
+        "run",
+        null,
+        null,
+        new dev.mikoto2000.rei.event.CheckpointLifecyclePayload("task", 2, null, null, "saved"),
+        PROJECT);
+  }
+
+  @Test
+  void failedNonDeltaBoundaryDoesNotDeliverOrReplayOrCommitEvent() {
+    var bus = new InMemoryAgentEventBus();
+    var displayed = new ArrayList<AgentEvent>();
+    bus.subscribe(displayed::add);
+    try (var context = context(root, bus)) {
+      new StorageDatabase(root)
+          .transaction(
+              db -> {
+                try (var sql = db.createStatement()) {
+                  sql.execute(
+                      "CREATE TRIGGER fail_activity BEFORE UPDATE ON activity_segments BEGIN SELECT RAISE(ABORT,'failure'); END");
+                }
+                return null;
+              });
+      assertThatThrownBy(() -> bus.publishBoundary(checkpoint("failed")))
+          .isInstanceOf(IllegalStateException.class);
+      assertThat(context.getBean(ProjectAgentEventStore.class).findEvent(PROJECT, "failed"))
+          .isEmpty();
+      assertThat(displayed).isEmpty();
+      var replay = bus.subscribe("run", 0, ignored -> {});
+      try {
+        assertThat(replay.replay()).isEmpty();
+      } finally {
+        replay.subscription().unsubscribe();
+      }
+    }
+  }
+
+  @Test
   void sequenceOverflowDoesNotPersistOrDeliverAnotherChunk() {
     var bus = new InMemoryAgentEventBus();
     var displayed = new ArrayList<AgentEvent>();
