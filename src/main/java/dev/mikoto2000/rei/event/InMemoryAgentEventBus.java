@@ -96,6 +96,13 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
     return new InMemoryAgentEventBus(replay);
   }
 
+  @Override
+  public <T> T withReplaySnapshot(java.util.function.Supplier<T> action) {
+    synchronized (eventLock) {
+      return action.get();
+    }
+  }
+
   /** 実行状況の通知で用いる購読を返す。 */
   @Override
   public ReplaySubscription subscribe(

@@ -15,6 +15,13 @@ public interface AgentEventBus {
    */
   Subscription subscribe(AgentEventListener listener);
 
+  /** Read run state and register replay against the same publication boundary. */
+  default <T> T withReplaySnapshot(java.util.function.Supplier<T> action) {
+    synchronized (this) {
+      return action.get();
+    }
+  }
+
   /** 永続化を完了してからreplayと通常購読者へ渡す。失敗は発行元へ伝える。 */
   default Subscription subscribePersistence(AgentEventListener listener) {
     throw new UnsupportedOperationException(
