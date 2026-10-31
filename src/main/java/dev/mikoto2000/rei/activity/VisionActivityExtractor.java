@@ -181,7 +181,7 @@ public final class VisionActivityExtractor implements ActivityExtractor {
               : new ActivityOutputParser().parse(output, monitors);
       status = "success";
       return result;
-    } catch (Exception error) {
+    } catch (RuntimeException error) {
       failure = ActivityVisionFailure.details(error);
       throw error;
     } finally {
