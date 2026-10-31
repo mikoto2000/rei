@@ -62,6 +62,15 @@ HTTP層の再送回数とは区別する。背景は既存の別カウンター�
 `Activity vision observation timing` は元IDと各時刻、待機・実行・保存遅延を記録する。
 タイトル・画像内容・API応答はログへ出さない。保存されたTimingから原観測を追跡できる。
 
+`Activity Vision failure` は既存の `scope`・`reason` に加え、`observation_id`、
+`stage`（prepare/extract/merge/persist）、`error_type`、`cause_types`、`http_status`、
+`cause_chain_truncated` を出す。`OTHER` でもSDK・接続・HTTP例外の型を追跡できる。
+原因連鎖は重複を除いて最大16段とし、HTTPステータスはOpenAI SDKとSpringの例外から取得する。
+HTTP応答が確認できなければ `null`。例外メッセージ、stack trace、HTTP本文・ヘッダー、
+URL、画像・プロンプトは記録しない。reasonの分類や再試行・保存の動作は変更しない。
+既存の `Activity vision timing` の `status` と併せて、`request_failed` か応答解析段階の
+失敗かを区別する。モデルの正常応答後に保存が失敗した場合は `stage=persist` となる。
+
 `ActivityVisionQueueTest` はフェイクClockと実際の候補ワーカーで容量、置換、
 開始間隔（終了からではない）、重複、失敗復旧、遅い結果、文脈変化、旧JSONを検証する。
 5分間に同一メタデータを15秒ごとに21回与える比較では、
