@@ -51,6 +51,7 @@ try {
     $zero = Get-Content "$root/zero/summary.json" -Raw | ConvertFrom-Json
     Assert ($zero.Tests -eq 0 -and $zero.SuiteSeconds -eq 0 -and $null -eq $zero.TestCountTimePearson) 'Zero duration and undefined correlation'
     Assert ($zero.Providers.Failsafe.Tests -eq 0 -and $zero.Providers.Failsafe.SuiteSeconds -eq 0) 'Absent provider has zero totals'
+    Assert ($null -eq $zero.WallSeconds) 'Unmeasured wall time must not be reported as zero'
     foreach ($duration in @('0.999','1','5','10','30')) {
         "<testsuite name='Boundary$duration' tests='0' failures='0' errors='0' skipped='0' time='$duration'/>" |
             Set-Content "$root/empty/TEST-$duration.xml"

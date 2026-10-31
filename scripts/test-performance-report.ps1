@@ -58,7 +58,7 @@ function Totals($rows) {
     return $result
 }
 $summary = Totals $classes
-$summary.WallSeconds = $WallSeconds
+$summary.WallSeconds = if ($PSBoundParameters.ContainsKey('WallSeconds')) { $WallSeconds } else { $null }
 $summary.Providers = [ordered]@{}
 foreach ($provider in @('Surefire','Failsafe')) { $summary.Providers[$provider] = Totals @($classes | Where-Object Provider -eq $provider) }
 foreach ($n in @(10,20,50,100)) {
