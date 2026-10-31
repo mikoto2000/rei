@@ -222,7 +222,7 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
 
   @Spec picocli.CommandLine.Model.CommandSpec spec;
 
-  @Parameters(index = "0", defaultValue = "list")
+  @Parameters(index = "0", defaultValue = "list", completionCandidates = ActionCandidates.class)
   String action;
 
   @Parameters(index = "1", arity = "0..1")
@@ -530,6 +530,88 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
     } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException error) {
       spec.commandLine().getErr().println("[error] " + error.getClass().getSimpleName());
       return 2;
+    }
+  }
+
+  /** 秘書の最初の位置引数で利用できる操作名を提供する。 */
+  public static final class ActionCandidates implements Iterable<String> {
+    /** 台帳やサービスを参照せず、固定の操作名を返す。 */
+    @Override
+    public java.util.Iterator<String> iterator() {
+      return List.of(
+              "list",
+              "show",
+              "sources",
+              "history",
+              "related",
+              "extract",
+              "add",
+              "update",
+              "approve",
+              "done",
+              "cancel",
+              "settings",
+              "configure",
+              "briefing",
+              "review",
+              "briefing-generate",
+              "review-generate",
+              "briefing-history",
+              "briefing-show",
+              "briefing-clear",
+              "briefing-settings",
+              "briefing-check",
+              "briefing-notifications",
+              "notifications",
+              "check",
+              "followup-status",
+              "meeting-confirm",
+              "life-settings",
+              "life-status",
+              "life-configure",
+              "connection-list",
+              "connection-configure",
+              "connection-show",
+              "connection-auth",
+              "connection-authorize",
+              "connection-disconnect",
+              "connection-poll",
+              "connection-items",
+              "connection-history",
+              "connection-read",
+              "connection-task",
+              "external-prepare",
+              "external-list",
+              "external-show",
+              "external-history",
+              "external-execute",
+              "external-verify",
+              "external-cancel",
+              "autonomy-settings",
+              "autonomy-status",
+              "autonomy-check",
+              "autonomy-configure",
+              "work-list",
+              "work-show",
+              "work-history",
+              "work-add",
+              "work-start",
+              "work-cancel",
+              "work-suspend",
+              "work-resume",
+              "work-verify",
+              "work-mode",
+              "orchestrator-settings",
+              "orchestrator-configure",
+              "orchestrator-status",
+              "suggest",
+              "release",
+              "suggestions",
+              "preparation",
+              "suggestion",
+              "suggestion-history",
+              "feedback")
+          .iterator();
     }
   }
 

@@ -169,3 +169,23 @@ ID、本文、後続引数には操作名を表示しない。補完時にはサ
 /embed と /embed add の文書引数はファイル・ディレクトリ、
 /feed import-opml はファイルを補完する。
 自由入力の本文、URL、未定義の動的 ID・モデル名は固定候補を生成しない。
+
+## Secretary の操作名補完と横展開確認（2026-11-01）
+
+`/secretary` は操作名を最初の位置引数として解釈するため、
+`SecretaryCommand.ActionCandidates` に全72操作を定義する。
+台帳、生活設定、ミーティング・ブリーフィング、接続・外部操作、
+自律作業、提案・フィードバックの各操作を同じ定義から補完する。
+`--project` などのオプションを操作名の前に指定した場合も補完し、
+ID、タイトル、その他の値には操作名候補を出さない。
+候補生成にはサービスの初期化・台帳読取り・操作実行を必要としない。
+操作名は単独の index `0` に定義されているため、picocli 標準の `Iterable<String>` 候補を使用する。
+補完専用の core 依存を追加せず、既存のパッケージ依存関係を維持する。
+
+横展開として、同じ形式の `/approval`、`/attention`、`/goal`、`/dependency`、
+`/document`、`/repair`、`/reflection`、`/timer`、`/dot` と `/llm capture` の
+補完定義を確認した。`ContextCompletionTest` の共通回帰テストに `/secretary` を加え、
+全操作の候補・prefix 絞込み・後続引数への候補漏れを検証する。
+`JLineCompletionInputTest` では実際の Tab による補完・空白追加も確認する。
+実サブコマンド形式のコマンドは引き続き live `CommandSpec` を参照する。
+`@Unmatched` で別の要求 parser に転送する `/paper` などはこの位置引数形式には含まれない。
