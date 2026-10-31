@@ -119,34 +119,39 @@ public final class SseBridge implements AutoCloseable {
 
   /** Web APIによる操作で用いる接続を返す。 */
   public Connection connect(String runId, Long lastEventId, Sink sink) {
-    Connection connection;
-    synchronized (bus) {
-      var run = runs.get(runId);
-      if (run.status() == RunStatus.UNKNOWN) throw new ReplayGapException();
-      connection = new Connection(runId, sink);
-      var replay =
-          bus.subscribe(
-              runId,
-              lastEventId == null ? 0 : lastEventId,
-              event -> connection.offer(new Frame(event)));
-      // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
-      if (run.status().isTerminal() && runs.restored(runId) && replay.terminalSequence() == null) {
-        replay.subscription().unsubscribe();
-        throw new ReplayGapException();
-      }
-      connection.subscription = replay.subscription();
-      connection.replay = replay.replay();
-      connection.alreadyComplete =
-          run.status().isTerminal()
-              && replay.terminalSequence() != null
-              && lastEventId != null
-              && lastEventId >= replay.terminalSequence();
-      connections.add(connection);
-      if (shutdownEvent != null) {
-        connection.offer(new Frame(shutdownEvent));
-        shutdownDelivery = CompletableFuture.allOf(shutdownDelivery, connection.deliveryComplete);
-      }
-    }
+    var connection =
+        bus.withReplaySnapshot(
+            () -> {
+              var run = runs.get(runId);
+              if (run.status() == RunStatus.UNKNOWN) throw new ReplayGapException();
+              var registered = new Connection(runId, sink);
+              var replay =
+                  bus.subscribe(
+                      runId,
+                      lastEventId == null ? 0 : lastEventId,
+                      event -> registered.offer(new Frame(event)));
+              // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
+              if (run.status().isTerminal()
+                  && runs.restored(runId)
+                  && replay.terminalSequence() == null) {
+                replay.subscription().unsubscribe();
+                throw new ReplayGapException();
+              }
+              registered.subscription = replay.subscription();
+              registered.replay = replay.replay();
+              registered.alreadyComplete =
+                  run.status().isTerminal()
+                      && replay.terminalSequence() != null
+                      && lastEventId != null
+                      && lastEventId >= replay.terminalSequence();
+              connections.add(registered);
+              if (shutdownEvent != null) {
+                registered.offer(new Frame(shutdownEvent));
+                shutdownDelivery =
+                    CompletableFuture.allOf(shutdownDelivery, registered.deliveryComplete);
+              }
+              return registered;
+            });
     connection.start();
     return connection;
   }
