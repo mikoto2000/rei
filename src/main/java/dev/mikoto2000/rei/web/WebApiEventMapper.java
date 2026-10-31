@@ -150,6 +150,16 @@ public final class WebApiEventMapper {
                       "context_hard_limit",
                       "message",
                       "CONTEXT_HARD_LIMIT: context remains too large after compression."));
+            else if ((event.type() == AgentEventType.LLM_REQUEST_FAILED
+                    || event.type() == AgentEventType.AGENT_RUN_FAILED)
+                && value instanceof Map<?, ?> error
+                && "timeout".equals(error.get("code")))
+              // Only the known code selects this fixed public message; never forward error text.
+              payload.put(
+                  name,
+                  Map.of(
+                      "type", "timeout",
+                      "message", "応答待ちがタイムアウトしました。接続先とタイムアウト設定を確認し、実行結果を確認してから再開してください。"));
             else if (event.type() == AgentEventType.AGENT_RUN_FAILED
                 && value instanceof Map<?, ?> error)
               payload.put(name, runStopError(error.get("errorType")));
