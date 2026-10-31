@@ -54,9 +54,22 @@ public final class SecretaryMeeting {
       boolean review,
       String key,
       Instant saved,
-      List<String> selected) {
+      List<String> selected,
+      List<String> projects) {
+    public Decision(
+        String id,
+        String projectId,
+        LocalDate date,
+        boolean review,
+        String key,
+        Instant saved,
+        List<String> selected) {
+      this(id, projectId, date, review, key, saved, selected, List.of(projectId));
+    }
+
     public Decision {
       selected = List.copyOf(selected);
+      projects = projects == null ? List.of(projectId) : List.copyOf(projects);
     }
   }
 
@@ -66,6 +79,11 @@ public final class SecretaryMeeting {
         .thenComparing(Work::updated, Comparator.nullsLast(Comparator.naturalOrder()))
         .thenComparing(Work::projectId)
         .thenComparing(Work::id);
+  }
+
+  static boolean notice(Work w) {
+    return w.evidence().stream()
+        .anyMatch(i -> i.observation() != null && "ATTENTION".equals(i.observation().kind()));
   }
 
   static boolean ongoing(Work w) {
@@ -79,6 +97,7 @@ public final class SecretaryMeeting {
   static boolean actionable(SecretaryContext.Item item) {
     String kind = item.observation() == null ? item.status() : item.observation().kind();
     return Set.of(
+            "ATTENTION",
             "CURRENT_WORK",
             "PENDING",
             "BLOCKER",
@@ -285,10 +304,11 @@ public final class SecretaryMeeting {
                                 i.observation() != null
                                     && Set.of("SCHEDULE", "CALENDAR")
                                         .contains(i.observation().kind())))
+            .filter(w -> !notice(w))
             .filter(w -> on(w, date, zone) && !Set.of("COMPLETED", "CANCELLED").contains(w.state()))
             .limit(3)
             .toList());
-    result.put("unfinished", active.stream().limit(3).toList());
+    result.put("unfinished", active.stream().filter(w -> !notice(w)).limit(3).toList());
     result.put(
         "waiting",
         active.stream()
@@ -297,6 +317,7 @@ public final class SecretaryMeeting {
             .toList());
     var ranked =
         active.stream()
+            .filter(w -> !notice(w))
             .sorted(
                 Comparator.<Work>comparingInt(
                         w ->
@@ -418,7 +439,7 @@ public final class SecretaryMeeting {
         if (sections.getOrDefault(review ? "carryover" : "priorities", List.of()).contains(w))
           text.append(review ? " [引き継ぎ候補]" : " [優先候補]");
         if (w.nextAction() != null) text.append(" → ").append(shortText(w.nextAction()));
-        text.append(" {選択ID: ").append(shortText(w.id())).append("}\n");
+        text.append(" {選択ID: ").append(shortText(w.projectId() + "::" + w.id())).append("}\n");
       }
     }
     if (review

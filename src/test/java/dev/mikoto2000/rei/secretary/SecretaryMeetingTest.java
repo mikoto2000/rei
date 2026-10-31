@@ -199,42 +199,113 @@ class SecretaryMeetingTest {
     assertEquals(3, result.sections().get("carryover").size());
     assertTrue(result.text().length() < 5000);
   }
-  @Test void currentGoalStateOverridesHistoricalRunAndCancellationAndResumeAreDistinct() {
-    var old=context("old","run:r","BLOCKER","UNKNOWN",false,now.plusSeconds(5));
-    var current=new SecretaryContext.Item("goal","g","全体のレビュー","IN_PROGRESS","canonical",
-        SecretaryContext.Reliability.FACT,List.of("run:r"),
-        new SecretaryContext.Observation("goal:g",now,"IN_PROGRESS",true,null,null,"GOAL"));
-    var result=view(List.of(old,current));
-    assertEquals(1,result.sections().get("unfinished").size());
-    assertEquals("IN_PROGRESS",result.sections().get("unfinished").getFirst().state());
+
+  @Test
+  void currentGoalStateOverridesHistoricalRunAndCancellationAndResumeAreDistinct() {
+    var old = context("old", "run:r", "BLOCKER", "UNKNOWN", false, now.plusSeconds(5));
+    var current =
+        new SecretaryContext.Item(
+            "goal",
+            "g",
+            "全体のレビュー",
+            "IN_PROGRESS",
+            "canonical",
+            SecretaryContext.Reliability.FACT,
+            List.of("run:r"),
+            new SecretaryContext.Observation(
+                "goal:g", now, "IN_PROGRESS", true, null, null, "GOAL"));
+    var result = view(List.of(old, current));
+    assertEquals(1, result.sections().get("unfinished").size());
+    assertEquals("IN_PROGRESS", result.sections().get("unfinished").getFirst().state());
     assertTrue(result.sections().get("waiting").isEmpty());
-    var cancelled=new SecretaryContext.Item("goal","g","全体のレビュー","CANCELLED","canonical",
-        SecretaryContext.Reliability.FACT,List.of("run:r"),
-        new SecretaryContext.Observation("goal:g",now,"CANCELLED",true,null,null,"GOAL"));
-    assertTrue(view(List.of(old,cancelled)).sections().get("carryover").isEmpty());
+    var cancelled =
+        new SecretaryContext.Item(
+            "goal",
+            "g",
+            "全体のレビュー",
+            "CANCELLED",
+            "canonical",
+            SecretaryContext.Reliability.FACT,
+            List.of("run:r"),
+            new SecretaryContext.Observation("goal:g", now, "CANCELLED", true, null, null, "GOAL"));
+    assertTrue(view(List.of(old, cancelled)).sections().get("carryover").isEmpty());
   }
-  @Test void calendarIsAnAgendaItemRatherThanProgressOrAutomaticallyPlacedWork() {
-    var event=new SecretaryContext.Item("external-untrusted","event","予定","CONFIRMED","cached",
-        SecretaryContext.Reliability.UNKNOWN,List.of(),
-        new SecretaryContext.Observation("external:event",now,"UNKNOWN",false,null,date,"CALENDAR"));
-    var result=view(List.of(event));
-    assertEquals(1,result.sections().get("schedule").size());
+
+  @Test
+  void calendarIsAnAgendaItemRatherThanProgressOrAutomaticallyPlacedWork() {
+    var event =
+        new SecretaryContext.Item(
+            "external-untrusted",
+            "event",
+            "予定",
+            "CONFIRMED",
+            "cached",
+            SecretaryContext.Reliability.UNKNOWN,
+            List.of(),
+            new SecretaryContext.Observation(
+                "external:event", now, "UNKNOWN", false, null, date, "CALENDAR"));
+    var result = view(List.of(event));
+    assertEquals(1, result.sections().get("schedule").size());
     assertTrue(result.sections().get("progress").isEmpty());
     assertTrue(result.sections().get("carryover").isEmpty());
   }
-  @Test void multiProjectAggregationRetainsAtMostThreePrioritiesAndPrefersExplicitHandoff() {
-    var tasks=new java.util.ArrayList<SecretaryTask>();
-    for(int i=0;i<4;i++) tasks.add(new SecretaryTask("t"+i,"p","作業"+i,
-        SecretaryTask.Intent.TODO,SecretaryTask.Status.OPEN,null,3,List.of(),List.of(),"EXPLICIT",0,now,now));
-    var first=SecretaryMeeting.project("p",date,zone,false,Map.of("unfinished",tasks),List.of(),false,
-        List.of("secretary-task:t3"),List.of());
-    var global=SecretaryMeeting.aggregate(date,zone.getId(),false,List.of(first),false);
-    assertEquals("secretary-task:t3",global.sections().get("priorities").getFirst().id());
-    assertEquals(3,global.sections().get("priorities").size());
-  }
-  @Test void textEscapesControlsWithoutCorruptingIdsOrTitles() {
-    assertEquals("run:control",SecretaryMeeting.shortText("run:control"));
-    assertEquals("a b",SecretaryMeeting.shortText("a\nb"));
+
+  @Test
+  void multiProjectAggregationRetainsAtMostThreePrioritiesAndPrefersExplicitHandoff() {
+    var tasks = new java.util.ArrayList<SecretaryTask>();
+    for (int i = 0; i < 4; i++)
+      tasks.add(
+          new SecretaryTask(
+              "t" + i,
+              "p",
+              "作業" + i,
+              SecretaryTask.Intent.TODO,
+              SecretaryTask.Status.OPEN,
+              null,
+              3,
+              List.of(),
+              List.of(),
+              "EXPLICIT",
+              0,
+              now,
+              now));
+    var first =
+        SecretaryMeeting.project(
+            "p",
+            date,
+            zone,
+            false,
+            Map.of("unfinished", tasks),
+            List.of(),
+            false,
+            List.of("secretary-task:t3"),
+            List.of());
+    var global = SecretaryMeeting.aggregate(date, zone.getId(), false, List.of(first), false);
+    assertEquals("secretary-task:t3", global.sections().get("priorities").getFirst().id());
+    assertEquals(3, global.sections().get("priorities").size());
   }
 
+  @Test
+  void textEscapesControlsWithoutCorruptingIdsOrTitles() {
+    assertEquals("run:control", SecretaryMeeting.shortText("run:control"));
+    assertEquals("a b", SecretaryMeeting.shortText("a\nb"));
+  }
+
+  @Test
+  void heldNotificationsAppearAsWaitingWithoutBecomingWorkPriorities() {
+    var notice =
+        new SecretaryContext.Item(
+            "attention",
+            "n",
+            "確認が必要",
+            "HELD",
+            "held notice",
+            SecretaryContext.Reliability.UNKNOWN,
+            List.of(),
+            new SecretaryContext.Observation(
+                "attention:n", now, "WAITING", true, null, null, "ATTENTION"));
+    var result = view(List.of(notice));
+    assertEquals(1, result.sections().get("waiting").size());
+    assertTrue(result.sections().get("carryover").isEmpty());
+  }
 }
