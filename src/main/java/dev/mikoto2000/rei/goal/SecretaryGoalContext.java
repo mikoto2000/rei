@@ -38,7 +38,7 @@ public final class SecretaryGoalContext implements SecretaryContext {
                       .max(java.util.Comparator.naturalOrder())
                       .orElse(null);
               var refs =
-                  goal.currentRunId() == null
+                  goal.currentRunId() == null || goal.currentRunId().isBlank()
                       ? List.<String>of()
                       : List.of("run:" + goal.currentRunId());
               return new Item(

@@ -259,4 +259,59 @@ class SecretaryMeetingPersistenceTest {
       assertFalse(followups.report("new", null, false).meeting().confirmed());
     }
   }
+
+  @Test
+  void absentRunIdsNeverMergeIndependentSavedWork() {
+    var repository =
+        new dev.mikoto2000.rei.workcontext.WorkContextRepository(
+            new org.springframework.jdbc.datasource.DriverManagerDataSource(
+                "jdbc:sqlite:" + root.resolve("work.db")));
+    var items =
+        java.util.stream.Stream.of("one", "two")
+            .map(
+                id ->
+                    new dev.mikoto2000.rei.workcontext.WorkContext.Item(
+                        id,
+                        dev.mikoto2000.rei.workcontext.WorkContext.Kind.PENDING,
+                        "別々の作業",
+                        "saved",
+                        dev.mikoto2000.rei.workcontext.WorkContext.Status.OPEN,
+                        List.of(
+                            new dev.mikoto2000.rei.workcontext.WorkContext.Evidence(
+                                id,
+                                dev.mikoto2000.rei.workcontext.WorkContext.Origin.USER,
+                                null,
+                                null,
+                                "",
+                                null,
+                                null,
+                                null,
+                                clock.instant(),
+                                clock.instant(),
+                                "registered")),
+                        clock.instant(),
+                        clock.instant(),
+                        false,
+                        null))
+            .toList();
+    repository.save(
+        new dev.mikoto2000.rei.workcontext.WorkContext(
+            "p", 1, clock.instant(), clock.instant(), null, items, java.util.Set.of()),
+        0);
+    var context =
+        new dev.mikoto2000.rei.workcontext.SecretaryWorkContext(repository)
+            .context("p", LocalDate.of(2026, 10, 31), clock.getZone());
+    var view =
+        SecretaryMeeting.project(
+            "p",
+            LocalDate.of(2026, 10, 31),
+            clock.getZone(),
+            true,
+            java.util.Map.of(),
+            context,
+            false,
+            List.of(),
+            List.of());
+    assertEquals(2, view.sections().get("unfinished").size());
+  }
 }

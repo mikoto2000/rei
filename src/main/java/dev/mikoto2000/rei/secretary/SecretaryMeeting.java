@@ -405,7 +405,7 @@ public final class SecretaryMeeting {
             "completed",
             "今日完了した作業",
             "progress",
-            "今日進展した作業",
+            "今日記録された進展・更新",
             "unfinished",
             "未完了・中断",
             "waiting",
@@ -444,10 +444,13 @@ public final class SecretaryMeeting {
             .append(w.state())
             .append("]");
         if (!w.verified()) text.append(" 状態未検証/").append(w.reliability());
+        if (sections.getOrDefault("handoff", List.of()).contains(w)) text.append(" [前日引き継ぎ]");
         if (sections.getOrDefault(review ? "carryover" : "priorities", List.of()).contains(w))
           text.append(review ? " [引き継ぎ候補]" : " [優先候補]");
         if (w.nextAction() != null) text.append(" → ").append(shortText(w.nextAction()));
-        text.append(" {選択ID: ").append(shortText(w.projectId() + "::" + w.id())).append("}\n");
+        text.append(ongoing(w) ? " {選択ID: " : " {参照ID: ")
+            .append(shortText(w.projectId() + "::" + w.id()))
+            .append("}\n");
       }
     }
     if (review

@@ -21,7 +21,7 @@ public final class SecretaryWorkContext implements SecretaryContext {
     var runs =
         item.evidence().stream()
             .map(WorkContext.Evidence::runId)
-            .filter(java.util.Objects::nonNull)
+            .filter(id -> id != null && !id.isBlank())
             .distinct()
             .toList();
     String id = runs.size() == 1 ? "run:" + runs.getFirst() : "work-context:" + item.id();
