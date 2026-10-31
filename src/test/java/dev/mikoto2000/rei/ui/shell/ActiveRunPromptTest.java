@@ -37,6 +37,7 @@ class ActiveRunPromptTest {
     when(display.onProgressChange(org.mockito.ArgumentMatchers.any()))
         .thenAnswer(call -> store.onChange(call.getArgument(0)));
     var buffer = new BufferImpl();
+    when(reader.getBuffer()).thenReturn(buffer);
     when(reader.readLine(anyString()))
         .thenAnswer(
             call -> {

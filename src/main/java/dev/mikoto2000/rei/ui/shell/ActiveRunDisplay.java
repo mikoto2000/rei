@@ -20,15 +20,20 @@ public class ActiveRunDisplay {
   /** 期限や記録日時の判定に使う時刻の取得元。 */
   private final Clock clock;
 
-  private dev.mikoto2000.rei.context.TaskProgressStore progress;
+  private java.util.function.Function<String, dev.mikoto2000.rei.context.TaskStateSnapshot>
+      progress = runId -> null;
+  private java.util.function.Function<Runnable, AutoCloseable> progressChanges =
+      listener -> () -> {};
 
+  /** 表示側には記録ストアの変更操作を渡さず、読み取りと購読だけを接続する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
-  public void setProgress(dev.mikoto2000.rei.context.TaskProgressStore progress) {
-    this.progress = progress;
+  public void bindProgress(dev.mikoto2000.rei.context.TaskProgressStore store) {
+    progress = store::get;
+    progressChanges = store::onChange;
   }
 
   public AutoCloseable onProgressChange(Runnable listener) {
-    return progress == null ? () -> {} : progress.onChange(listener);
+    return progressChanges.apply(listener);
   }
 
   /** 各 Run の工程を全て表示する。完了済みの過去 Run は入力欄に残さない。 */
@@ -36,7 +41,7 @@ public class ActiveRunDisplay {
     var rows = new java.util.ArrayList<String>();
     for (var run : runs.activeExecutions()) {
       if (run.type() != dev.mikoto2000.rei.core.execution.ExecutionType.AGENT) continue;
-      var state = progress == null ? null : progress.get(run.id());
+      var state = progress.apply(run.id());
       String identity = projectName(run.projectId()) + " / Run " + run.id();
       if (state == null || state.completed().isEmpty() && state.pending().isEmpty()) {
         rows.add("全体進捗 [" + identity + "]: 工程を確認中");

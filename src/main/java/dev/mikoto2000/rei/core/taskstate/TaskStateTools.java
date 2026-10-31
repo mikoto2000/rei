@@ -17,11 +17,17 @@ public class TaskStateTools {
   /** タスク状態。 */
   private final TaskState taskState;
 
-  private TaskProgressStore progress;
+  @FunctionalInterface
+  private interface ProgressRecorder {
+    void record(
+        String runId, String goal, String status, List<String> completed, List<String> pending);
+  }
+
+  private ProgressRecorder progress = (runId, goal, status, completed, pending) -> {};
 
   @org.springframework.beans.factory.annotation.Autowired(required = false)
   public void setProgress(TaskProgressStore progress) {
-    this.progress = progress;
+    this.progress = progress::record;
   }
 
   /** 指定された値や利用先を使って、TaskStateToolsを初期化する。 */
@@ -100,14 +106,12 @@ public class TaskStateTools {
         return "不正な status です: " + status;
       }
     }
-    if (progress != null) {
-      progress.record(
-          dev.mikoto2000.rei.context.RunIdentity.currentRunId(),
-          taskState.goal(),
-          taskState.status(),
-          completed,
-          pending);
-    }
+    progress.record(
+        dev.mikoto2000.rei.context.RunIdentity.currentRunId(),
+        taskState.goal(),
+        taskState.status(),
+        completed,
+        pending);
     return "updated";
   }
 

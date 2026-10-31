@@ -30,7 +30,7 @@ class ActiveRunDisplayTest extends dev.mikoto2000.rei.core.project.ProjectClient
     var router = new ConversationInputRouter(tasks::add, (c, p, q) -> {});
     var display = new ActiveRunDisplay(router, projects, Clock.systemUTC());
     var progress = new dev.mikoto2000.rei.context.TaskProgressStore();
-    display.setProgress(progress);
+    display.bindProgress(progress);
     router.setTaskProgress(progress);
     router.submit(a.root(), a.conversationId("chat:main"), "依頼 A");
     router.submit(b.root(), b.conversationId("chat:main"), "依頼 B");
