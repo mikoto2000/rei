@@ -773,6 +773,7 @@ final class ActivityEvidencePipeline {
       original = work.record;
     }
     String source = background ? "VISION_BACKGROUND" : "VISION_FOREGROUND";
+    String stage = "prepare";
     try (var ignored =
         org.slf4j.MDC.putCloseable("activityScope", background ? "background" : "foreground")) {
       var image =
@@ -806,8 +807,10 @@ final class ActivityEvidencePipeline {
         }
       }
       recordAttempt(work, background, apiStarted);
+      stage = "extract";
       var result = extractor.extract(image, original.foreground());
       apiCompleted = clock.instant();
+      stage = "merge";
       synchronized (this) {
         if ((!allowed(work.generation)
             || (!lifeAllowed(work.record.capturedAt())
@@ -867,6 +870,7 @@ final class ActivityEvidencePipeline {
                 merged.confidence(),
                 detection,
                 merged.screenshotReferences());
+        stage = "persist";
         store.replace(updated);
         work.record = updated;
         supplementSaved = true;
@@ -897,10 +901,17 @@ final class ActivityEvidencePipeline {
         case VALIDATION -> validationFailures.increment();
         default -> {}
       }
+      var failureDetails = ActivityVisionFailure.details(e);
       log.warn(
-          "Activity Vision failure: scope={} reason={} evidence_retained=true",
+          "Activity Vision failure: scope={} reason={} evidence_retained=true observation_id={} stage={} error_type={} cause_types={} http_status={} cause_chain_truncated={}",
           background ? "background" : "foreground",
-          kind);
+          kind,
+          original.id(),
+          stage,
+          failureDetails.errorType(),
+          failureDetails.causes(),
+          failureDetails.httpStatus(),
+          failureDetails.truncated());
       synchronized (this) {
         if (allowed(work.generation) && lifeAllowed(work.record.capturedAt()))
           try {
