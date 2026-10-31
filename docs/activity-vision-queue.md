@@ -68,8 +68,8 @@ HTTP層の再送回数とは区別する。背景は既存の別カウンター�
 原因連鎖は重複を除いて最大16段とし、HTTPステータスはOpenAI SDKとSpringの例外から取得する。
 HTTP応答が確認できなければ `null`。例外メッセージ、stack trace、HTTP本文・ヘッダー、
 URL、画像・プロンプトは記録しない。reasonの分類や再試行・保存の動作は変更しない。
-`Activity vision timing` にも同じ例外診断を付け、`request_failed` か応答解析段階の失敗かを
-区別できる。成功時は `error_type=none`、`cause_types=[]`、`http_status=null` となる。
+既存の `Activity vision timing` の `status` と併せて、`request_failed` か応答解析段階の
+失敗かを区別する。モデルの正常応答後に保存が失敗した場合は `stage=persist` となる。
 
 `ActivityVisionQueueTest` はフェイクClockと実際の候補ワーカーで容量、置換、
 開始間隔（終了からではない）、重複、失敗復旧、遅い結果、文脈変化、旧JSONを検証する。

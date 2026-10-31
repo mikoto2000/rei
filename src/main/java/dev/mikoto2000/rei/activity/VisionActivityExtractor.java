@@ -72,7 +72,6 @@ public final class VisionActivityExtractor implements ActivityExtractor {
     int outputChars = 0;
     Integer inputTokens = null, outputTokens = null, reasoningTokens = null;
     String status = "input_failed";
-    var failure = ActivityVisionFailure.details(null);
     try {
       var media = new ArrayList<Media>();
       var monitors = new ArrayList<String>();
@@ -181,13 +180,10 @@ public final class VisionActivityExtractor implements ActivityExtractor {
               : new ActivityOutputParser().parse(output, monitors);
       status = "success";
       return result;
-    } catch (RuntimeException error) {
-      failure = ActivityVisionFailure.details(error);
-      throw error;
     } finally {
       long ended = System.nanoTime();
       log.info(
-          "Activity vision timing: status={} scope={} input_prepare_ms={} llm_roundtrip_ms={} output_parse_ms={} total_ms={} images={} pixels={} png_bytes={} output_chars={} input_tokens={} output_tokens={} reasoning_tokens={} max_output_tokens={} error_type={} cause_types={} http_status={} cause_chain_truncated={}",
+          "Activity vision timing: status={} scope={} input_prepare_ms={} llm_roundtrip_ms={} output_parse_ms={} total_ms={} images={} pixels={} png_bytes={} output_chars={} input_tokens={} output_tokens={} reasoning_tokens={} max_output_tokens={}",
           status,
           org.slf4j.MDC.get("activityScope"),
           ms((requestStarted == 0 ? ended : requestStarted) - started),
@@ -201,11 +197,7 @@ public final class VisionActivityExtractor implements ActivityExtractor {
           inputTokens,
           outputTokens,
           reasoningTokens,
-          maxOutputTokens,
-          failure.errorType(),
-          failure.causes(),
-          failure.httpStatus(),
-          failure.truncated());
+          maxOutputTokens);
     }
   }
 

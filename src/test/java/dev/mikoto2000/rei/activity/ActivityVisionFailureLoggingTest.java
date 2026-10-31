@@ -1,9 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -13,9 +11,6 @@ import ch.qos.logback.core.read.ListAppender;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.slf4j.LoggerFactory;
-import org.springframework.ai.chat.model.ChatModel;
-import org.springframework.ai.chat.prompt.Prompt;
-import org.springframework.ai.openai.OpenAiChatOptions;
 
 /** Vision失敗の原因メタデータを記録し、要求・応答・例外本文を出さないことを検証する。 */
 class ActivityVisionFailureLoggingTest {
@@ -139,32 +134,26 @@ class ActivityVisionFailureLoggingTest {
   }
 
   @Test
-  void extractorRethrowsOriginalFailureAndReportsItsRequestStage() {
-    var model = mock(ChatModel.class);
-    var error = sdkFailure();
-    when(model.call(any(Prompt.class))).thenThrow(error);
-    var logger = (Logger) LoggerFactory.getLogger(VisionActivityExtractor.class);
+  void persistenceFailureIsDistinguishedFromModelFailure() throws Exception {
+    var fixture = new ActivityVisionQueueTest.Fixture();
+    org.mockito.Mockito.doThrow(
+            new java.io.UncheckedIOException(new java.nio.file.AccessDeniedException(PRIVATE)))
+        .when(fixture.store)
+        .replace(any());
+    var logger = (Logger) LoggerFactory.getLogger(ActivityEvidencePipeline.class);
     var appender = new ListAppender<ILoggingEvent>();
     appender.start();
     logger.addAppender(appender);
     try {
-      var extractor =
-          new VisionActivityExtractor(() -> model, () -> OpenAiChatOptions.builder().build());
-      assertThatThrownBy(
-              () ->
-                  extractor.extract(
-                      ActivityCaptureTest.screen(20),
-                      new ForegroundWindow("Firefox", 1, PRIVATE, "1")))
-          .isSameAs(error);
-      assertThat(appender.list).hasSize(1);
-      var event = appender.list.getFirst();
+      fixture.pipeline.tick();
+      fixture.run();
+      var event =
+          appender.list.stream()
+              .filter(e -> e.getFormattedMessage().startsWith("Activity Vision failure:"))
+              .findFirst()
+              .orElseThrow();
       assertThat(event.getFormattedMessage())
-          .contains(
-              "status=request_failed",
-              "http_status=400",
-              "com.openai.errors.BadRequestException",
-              "output_chars=0",
-              "output_parse_ms=0");
+          .contains("stage=persist", "http_status=null", "java.nio.file.AccessDeniedException");
       assertThat(event.getFormattedMessage()).doesNotContain("PRIVATE", "forged_log_entry");
       assertThat(event.getThrowableProxy()).isNull();
     } finally {
