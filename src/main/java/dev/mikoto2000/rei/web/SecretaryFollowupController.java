@@ -52,7 +52,11 @@ public class SecretaryFollowupController {
 
   public record MeetingConfirm(
       String projectId, LocalDate date, Boolean review, String key, List<String> selected)
-      implements StrictApiRequest {}
+      implements StrictApiRequest {
+    public MeetingConfirm {
+      selected = selected == null ? null : List.copyOf(selected);
+    }
+  }
 
   @PostMapping("/meetings/confirm")
   public dev.mikoto2000.rei.secretary.SecretaryMeeting.Decision confirmMeeting(

@@ -146,8 +146,12 @@ public final class SecretaryMeeting {
                       t.due(),
                       t.priority(),
                       null,
-                      true,
-                      SecretaryContext.Reliability.USER_REGISTERED,
+                      t.status() != SecretaryTask.Status.CANDIDATE,
+                      t.status() == SecretaryTask.Status.CANDIDATE
+                          ? t.origin().equals("EXTERNAL")
+                              ? SecretaryContext.Reliability.UNKNOWN
+                              : SecretaryContext.Reliability.INFERENCE
+                          : SecretaryContext.Reliability.USER_REGISTERED,
                       List.of()));
             });
     var aliases = new HashMap<String, String>();
@@ -283,6 +287,10 @@ public final class SecretaryMeeting {
                                     && Set.of("SCHEDULE", "CALENDAR")
                                         .contains(i.observation().kind())))
             .filter(SecretaryMeeting::ongoing)
+            .filter(
+                w ->
+                    w.evidence().stream()
+                        .noneMatch(i -> Set.of("CANCELLED", "CANCELED").contains(i.status())))
             .limit(3)
             .toList());
     result.put("today", active.stream().filter(w -> date.equals(w.due())).limit(3).toList());

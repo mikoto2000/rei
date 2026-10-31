@@ -308,4 +308,53 @@ class SecretaryMeetingTest {
     assertEquals(1, result.sections().get("waiting").size());
     assertTrue(result.sections().get("carryover").isEmpty());
   }
+
+  @Test
+  void unapprovedLedgerCandidatesKeepTheirUnverifiedOrigin() {
+    var candidate =
+        new SecretaryTask(
+            "c",
+            "p",
+            "提案",
+            SecretaryTask.Intent.TODO,
+            SecretaryTask.Status.CANDIDATE,
+            null,
+            3,
+            List.of(),
+            List.of(),
+            "CONVERSATION",
+            0,
+            now,
+            now);
+    var result =
+        SecretaryMeeting.project(
+            "p",
+            date,
+            zone,
+            false,
+            Map.of("candidate", List.of(candidate)),
+            List.of(),
+            false,
+            List.of(),
+            List.of());
+    var work = result.sections().get("priorities").getFirst();
+    assertFalse(work.verified());
+    assertEquals(SecretaryContext.Reliability.INFERENCE, work.reliability());
+  }
+
+  @Test
+  void cancelledCalendarEntriesAreNotShownAsTodaysAgenda() {
+    var event =
+        new SecretaryContext.Item(
+            "external-untrusted",
+            "event",
+            "取消された予定",
+            "CANCELLED",
+            "cached",
+            SecretaryContext.Reliability.UNKNOWN,
+            List.of(),
+            new SecretaryContext.Observation(
+                "external:event", now, "UNKNOWN", false, null, date, "CALENDAR"));
+    assertTrue(view(List.of(event)).sections().get("schedule").isEmpty());
+  }
 }
