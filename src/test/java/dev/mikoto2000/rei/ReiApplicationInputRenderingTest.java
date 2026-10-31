@@ -29,7 +29,8 @@ class ReiApplicationInputRenderingTest {
     org.springframework.test.util.ReflectionTestUtils.setField(app, "activeRunDisplay", display);
     assertEquals(
         "全体進捗: 1 / 2 工程完了\n  ✓ 調査\n  ○ 検証 100%%\n[rei] [1 running]\n09:42 test-model> ",
-        app.buildPrompt());
+        app.buildPrompt(true));
+    assertEquals("[rei] [1 running]\n09:42 test-model> ", app.buildPrompt(false));
   }
 
   /** れいの起動で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */

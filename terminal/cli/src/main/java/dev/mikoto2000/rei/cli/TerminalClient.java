@@ -1328,10 +1328,14 @@ public final class TerminalClient implements AutoCloseable {
 
   /** 利用先に渡せるよう、プロンプトを組み立てる。 */
   String buildPrompt(java.time.LocalTime time) {
+    return buildPrompt(time, System.getenv("REI_DEBUG") != null);
+  }
+
+  String buildPrompt(java.time.LocalTime time, boolean debugEnabled) {
     String name = safeOutput(projectName).replaceAll("[\\p{Cntrl}\\s]+", " ").strip();
     if (name.codePointCount(0, name.length()) > 80)
       name = name.substring(0, name.offsetByCodePoints(0, 77)) + "...";
-    var progress = taskProgress;
+    var progress = debugEnabled ? taskProgress : List.<String>of();
     return (progress.isEmpty() ? "" : String.join("\n", progress).replace("%", "%%") + "\n")
         + "["
         + name
