@@ -1,7 +1,7 @@
 package dev.mikoto2000.rei.web;
 
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -32,6 +32,9 @@ class ActiveRunControllerTest {
     when(display.rows()).thenReturn(List.of("One  CHAT  RUNNING  00:02  request"));
     assertTrue(controller.list().text().contains("PROJECT  TYPE  STATUS  ELAPSED  REQUEST"));
     assertEquals(1, controller.list().count());
+    when(display.progressRows())
+        .thenReturn(List.of("全体進捗: 1 / 3 工程完了", "  ✓ 調査", "  ○ 実装", "  ○ 検証"));
+    assertEquals(display.progressRows(), controller.list().progress());
     when(display.rows()).thenReturn(List.of());
     var empty = controller.list();
     assertEquals(0, empty.count());

@@ -96,9 +96,15 @@ class TerminalClientTest {
           client.buildPrompt(java.time.LocalTime.of(12, 34)));
       client.buildPrompt(java.time.LocalTime.NOON);
       assertEquals(1, requests.get(), "Prompt rendering never performs HTTP");
+      response.set("{\"count\":3,\"progress\":[\"全体進捗: 1 / 3 工程完了\",\"✓ 調査\",\"○ 実装\",\"○ 検証\"]}");
+      client.refreshRunStatus();
+      assertEquals(
+          "全体進捗: 1 / 3 工程完了\n✓ 調査\n○ 実装\n○ 検証\n[none] [3 running]\n12:34 unknown> ",
+          client.buildPrompt(java.time.LocalTime.of(12, 34)));
       response.set("{\"count\":0}");
       client.refreshRunStatus();
       assertTrue(client.buildPrompt(java.time.LocalTime.NOON).contains("[0 running]"));
+      assertFalse(client.buildPrompt(java.time.LocalTime.NOON).contains("全体進捗"));
       response.set("{\"text\":\"old backend\"}");
       client.refreshRunStatus();
       assertTrue(client.buildPrompt(java.time.LocalTime.NOON).contains("[? running]"));

@@ -20,6 +20,45 @@ class ActiveRunDisplayTest extends dev.mikoto2000.rei.core.project.ProjectClient
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temp;
 
+  @Test
+  void progressListsEveryRecordedStepPerRunAndDisappearsAfterCleanup() throws Exception {
+    var registry = new ProjectRegistry(temp.resolve("projects.json"));
+    var a = registry.resolve(Files.createDirectory(temp.resolve("A")));
+    var b = registry.resolve(Files.createDirectory(temp.resolve("B")));
+    var projects = connect(new ProjectService(a.root(), registry));
+    var tasks = new ArrayList<Runnable>();
+    var router = new ConversationInputRouter(tasks::add, (c, p, q) -> {});
+    var display = new ActiveRunDisplay(router, projects, Clock.systemUTC());
+    var progress = new dev.mikoto2000.rei.context.TaskProgressStore();
+    display.setProgress(progress);
+    router.setTaskProgress(progress);
+    router.submit(a.root(), a.conversationId("chat:main"), "依頼 A");
+    router.submit(b.root(), b.conversationId("chat:main"), "依頼 B");
+    var run =
+        router.activeRuns().stream()
+            .filter(r -> r.projectId().equals(a.id()))
+            .findFirst()
+            .orElseThrow();
+    progress.update(
+        run.runId(),
+        new dev.mikoto2000.rei.context.TaskStateSnapshot(
+            "調査して修正", "BLOCKED", java.util.List.of("調査"), java.util.List.of("実装\n次の行", "検証")));
+    assertThat(String.join("\n", display.progressRows()))
+        .contains(
+            "全体進捗 [A / Run " + run.runId(),
+            "1 / 3 工程完了（進行不能）",
+            "✓ 調査",
+            "○ 実装 次の行",
+            "○ 検証",
+            "全体進捗 [B / Run",
+            "工程を確認中");
+    tasks.getFirst().run();
+    assertThat(progress.get(run.runId())).isNull();
+    assertThat(String.join("\n", display.progressRows())).doesNotContain("依頼 A", "調査して修正");
+    tasks.get(1).run();
+    assertThat(display.progressRows()).isEmpty();
+  }
+
   /** ターミナルでの対話で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void includesEveryExecutionTypeInRowsAndPrompt() throws Exception {

@@ -19,6 +19,19 @@ import picocli.CommandLine;
 /** れいアプリケーション入力表示の結果と状態の契約を検証するテスト。 */
 class ReiApplicationInputRenderingTest {
 
+  @Test
+  void overallProgressAppearsImmediatelyAboveProjectAndRunCount() {
+    var app = newAppWithFixedTime("test-model", LocalTime.of(9, 42));
+    var display = Mockito.mock(dev.mikoto2000.rei.ui.shell.ActiveRunDisplay.class);
+    when(display.progressRows())
+        .thenReturn(java.util.List.of("全体進捗: 1 / 2 工程完了", "  ✓ 調査", "  ○ 検証 100%"));
+    when(display.promptStatus()).thenReturn("[rei] [1 running]");
+    org.springframework.test.util.ReflectionTestUtils.setField(app, "activeRunDisplay", display);
+    assertEquals(
+        "全体進捗: 1 / 2 工程完了\n  ✓ 調査\n  ○ 検証 100%%\n[rei] [1 running]\n09:42 test-model> ",
+        app.buildPrompt());
+  }
+
   /** れいの起動で、入力や保存形式を契約に従って解釈し、情報を受け渡すことを確認する。 */
   @Test
   void buildPromptPrefixesTimeIn24HourFormat() {
