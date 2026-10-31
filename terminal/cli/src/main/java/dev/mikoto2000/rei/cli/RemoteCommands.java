@@ -1745,6 +1745,7 @@ public final class RemoteCommands {
       case "feedback" -> allowed.addAll(Set.of("--revision", "--reaction", "--delay-seconds"));
       case "orchestrator-configure" ->
           allowed.addAll(Set.of("--snoozed-until", "--minimum-seconds", "--repeat-seconds"));
+      case "meeting-confirm" -> allowed.addAll(Set.of("--date", "--key", "--select"));
       case "briefing", "review" -> allowed.add("--date");
       case "briefing-generate", "review-generate" -> allowed.addAll(Set.of("--date", "--key"));
       case "briefing-history" -> allowed.add("--limit");
@@ -1777,6 +1778,8 @@ public final class RemoteCommands {
             allowed,
             action.equals("configure")
                 ? Set.of("--watch-enabled", "--notifications")
+                : action.equals("meeting-confirm") ? Set.of("--review")
+                : Set.of("briefing", "review", "briefing-generate", "review-generate", "briefing-show").contains(action) ? Set.of("--json")
                 : action.equals("orchestrator-configure")
                     ? Set.of("--proposals-enabled", "--stopped")
                     : Set.of());
@@ -1796,6 +1799,18 @@ public final class RemoteCommands {
       if (action.equals("briefing-check")) return post("/api/v1/secretary/briefings/check", Map.of());
       int limit = Integer.parseInt(options.getOrDefault("--limit", "20")); if (limit < 1 || limit > 100) throw invalid();
       return query("/api/v1/secretary/briefings" + (action.equals("briefing-notifications") ? "/notifications" : ""), Map.of("limit", limit));
+    }
+    if (action.equals("meeting-confirm")) {
+      String key = options.get("--key");
+      if (key == null || key.isBlank() || key.length() > 128) throw invalid();
+      var selected = options.containsKey("--select") ? List.of(options.get("--select").split(",", -1)) : List.<String>of();
+      if (selected.size() > 3 || selected.stream().anyMatch(String::isBlank) || new HashSet<>(selected).size() != selected.size()) throw invalid();
+      var body = new LinkedHashMap<String, Object>();
+      if (options.containsKey("--project")) body.put("projectId", options.get("--project"));
+      body.put("review", options.containsKey("--review"));
+      body.put("key", key); body.put("selected", selected);
+      if (options.containsKey("--date")) body.put("date", java.time.LocalDate.parse(options.get("--date")).toString());
+      return post("/api/v1/secretary/meetings/confirm", body);
     }
     String project = options.getOrDefault("--project", selectedProject);
     if (project == null || project.isBlank())

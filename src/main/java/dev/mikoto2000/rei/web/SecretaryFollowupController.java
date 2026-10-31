@@ -50,6 +50,30 @@ public class SecretaryFollowupController {
   public record Generate(String projectId, LocalDate date, Boolean review, String key)
       implements StrictApiRequest {}
 
+  public record MeetingConfirm(
+      String projectId, LocalDate date, Boolean review, String key, List<String> selected)
+      implements StrictApiRequest {}
+
+  @PostMapping("/meetings/confirm")
+  public dev.mikoto2000.rei.secretary.SecretaryMeeting.Decision confirmMeeting(
+      @RequestBody MeetingConfirm request) {
+    if (request.projectId() == null)
+      return service()
+          .globalBriefings()
+          .confirmMeeting(
+              request.date(),
+              Boolean.TRUE.equals(request.review()),
+              request.key(),
+              request.selected());
+    return service()
+        .confirmMeeting(
+            request.projectId(),
+            request.date(),
+            Boolean.TRUE.equals(request.review()),
+            request.key(),
+            request.selected());
+  }
+
   @PostMapping("/briefings/generate")
   public Object generate(@RequestBody Generate request) {
     if (request.projectId() == null)

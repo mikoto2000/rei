@@ -65,6 +65,24 @@ class SecretaryAuthenticationTest {
         assertEquals(
             200, send(client, port, "/api/v1/secretary/briefing", null, true).statusCode());
         assertEquals(
+            401,
+            send(
+                    client,
+                    port,
+                    "/api/v1/secretary/meetings/confirm",
+                    "{\"review\":true,\"key\":\"unauthenticated\",\"selected\":[]}",
+                    false)
+                .statusCode());
+        assertEquals(
+            200,
+            send(
+                    client,
+                    port,
+                    "/api/v1/secretary/meetings/confirm",
+                    "{\"review\":true,\"key\":\"finish\",\"selected\":[]}",
+                    true)
+                .statusCode());
+        assertEquals(
             200,
             send(client, port, "/api/v1/secretary/briefings/settings", null, true).statusCode());
         assertEquals(

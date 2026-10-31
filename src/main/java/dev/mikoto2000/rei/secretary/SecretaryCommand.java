@@ -58,6 +58,15 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
     this.followups = followups;
   }
 
+  @Option(names = "--json", description = "Show structured meeting details")
+  boolean json;
+
+  @Option(names = "--select", split = ",")
+  List<String> selected = List.of();
+
+  @Option(names = "--review")
+  boolean meetingReview;
+
   @Option(names = "--date")
   LocalDate reportDate;
 
@@ -266,6 +275,17 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
     this.ledgers = ledgers;
   }
 
+  private void printResult(Object result)
+      throws com.fasterxml.jackson.core.JsonProcessingException {
+    com.fasterxml.jackson.databind.JsonNode tree = SecretaryJson.JSON.valueToTree(result);
+    var meeting = tree.has("report") ? tree.path("report").path("meeting") : tree.path("meeting");
+    if (!json && meeting.path("text").isTextual())
+      spec.commandLine().getOut().println(meeting.path("text").asText());
+    else if (!json && result instanceof SecretaryMeeting.Decision)
+      spec.commandLine().getOut().println("方針を保存しました。ミーティングを終了します。");
+    else spec.commandLine().getOut().println(SecretaryJson.JSON.writeValueAsString(result));
+  }
+
   @Override
   public Integer call() {
     try {
@@ -281,11 +301,12 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
                           lifeJson, dev.mikoto2000.rei.life.LifeContext.Settings.class));
               default -> throw new IllegalArgumentException("Unknown life operation");
             };
-        spec.commandLine().getOut().println(SecretaryJson.JSON.writeValueAsString(result));
+        printResult(result);
         return 0;
       }
       if (project == null
           && java.util.Set.of(
+                  "meeting-confirm",
                   "briefing",
                   "review",
                   "briefing-generate",
@@ -300,6 +321,10 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
         var service = followups();
         Object result =
             switch (action) {
+              case "meeting-confirm" ->
+                  service
+                      .globalBriefings()
+                      .confirmMeeting(reportDate, meetingReview, key, selected);
               case "briefing", "review" ->
                   service.globalBriefings().report(reportDate, action.equals("review"));
               case "briefing-generate", "review-generate" ->
@@ -316,7 +341,7 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
                   service.history(SecretaryNotifications.GLOBAL_SCOPE, limit);
               default -> throw new IllegalArgumentException("Unknown global operation");
             };
-        spec.commandLine().getOut().println(SecretaryJson.JSON.writeValueAsString(result));
+        printResult(result);
         return 0;
       }
       if (project == null || project.isBlank())
@@ -456,6 +481,20 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
                             repeatSeconds,
                             notificationPriority,
                             destination));
+            case "meeting-confirm" ->
+                followups()
+                    .confirmMeeting(
+                        project,
+                        reportDate,
+                        meetingReview,
+                        key,
+                        selected.stream()
+                            .map(
+                                v ->
+                                    v.startsWith(project + "::")
+                                        ? v.substring(project.length() + 2)
+                                        : v)
+                            .toList());
             case "briefing" -> followups().report(project, reportDate, false);
             case "review" -> followups().report(project, reportDate, true);
             case "briefing-generate", "review-generate" ->
@@ -486,7 +525,7 @@ public class SecretaryCommand implements java.util.concurrent.Callable<Integer> 
                 throw new IllegalArgumentException(
                     "Use list|show|sources|history|related|extract|add|update|approve|done|cancel");
           };
-      spec.commandLine().getOut().println(SecretaryJson.JSON.writeValueAsString(result));
+      printResult(result);
       return 0;
     } catch (com.fasterxml.jackson.core.JsonProcessingException | RuntimeException error) {
       spec.commandLine().getErr().println("[error] " + error.getClass().getSimpleName());
