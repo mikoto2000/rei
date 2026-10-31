@@ -349,7 +349,7 @@ class SecretaryMeetingTest {
             "external-untrusted",
             "event",
             "取消された予定",
-            "CANCELLED",
+            "cancelled",
             "cached",
             SecretaryContext.Reliability.UNKNOWN,
             List.of(),

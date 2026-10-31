@@ -314,4 +314,31 @@ class SecretaryMeetingPersistenceTest {
             List.of());
     assertEquals(2, view.sections().get("unfinished").size());
   }
+
+  @Test
+  void agendaEntriesRemainReferencesAndCannotBeConfirmedAsWork() {
+    var beans = new DefaultListableBeanFactory();
+    beans.registerSingleton(
+        "agenda",
+        (SecretaryContext)
+            (p, d, z) ->
+                List.of(
+                    new SecretaryContext.Item(
+                        "scheduler",
+                        "scheduled",
+                        "登録済み予定",
+                        "PENDING",
+                        "registered",
+                        SecretaryContext.Reliability.FACT,
+                        List.of(),
+                        new SecretaryContext.Observation(
+                            "scheduler:scheduled", null, "PENDING", true, null, d, "SCHEDULE"))));
+    try (var service = service()) {
+      service.setContexts(beans.getBeanProvider(SecretaryContext.class));
+      assertFalse(service.report("p", null, false).meeting().sections().get("schedule").isEmpty());
+      assertThrows(
+          IllegalArgumentException.class,
+          () -> service.confirmMeeting("p", null, false, "agenda", List.of("scheduler:scheduled")));
+    }
+  }
 }

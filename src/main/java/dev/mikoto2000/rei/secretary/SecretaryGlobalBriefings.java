@@ -173,7 +173,7 @@ public final class SecretaryGlobalBriefings {
             () ->
                 report(date, review).meeting().sections().values().stream()
                     .flatMap(List::stream)
-                    .filter(SecretaryMeeting::ongoing)
+                    .filter(SecretaryMeeting::selectable)
                     .map(w -> w.projectId() + "::" + w.id())
                     .collect(java.util.stream.Collectors.toSet()));
   }

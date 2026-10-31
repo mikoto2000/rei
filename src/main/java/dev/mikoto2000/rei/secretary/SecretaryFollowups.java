@@ -583,7 +583,7 @@ public final class SecretaryFollowups implements SecretaryTick, SecretaryReports
             () ->
                 report(project, date, review).meeting().sections().values().stream()
                     .flatMap(List::stream)
-                    .filter(SecretaryMeeting::ongoing)
+                    .filter(SecretaryMeeting::selectable)
                     .map(SecretaryMeeting.Work::id)
                     .collect(java.util.stream.Collectors.toSet()));
   }

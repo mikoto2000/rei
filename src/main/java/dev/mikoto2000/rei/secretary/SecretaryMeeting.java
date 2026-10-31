@@ -86,6 +86,19 @@ public final class SecretaryMeeting {
         .anyMatch(i -> i.observation() != null && "ATTENTION".equals(i.observation().kind()));
   }
 
+  static boolean scheduled(Work w) {
+    return w.evidence().stream()
+        .anyMatch(
+            i ->
+                "scheduler".equals(i.source())
+                    || i.observation() != null
+                        && Set.of("SCHEDULE", "CALENDAR").contains(i.observation().kind()));
+  }
+
+  static boolean selectable(Work w) {
+    return ongoing(w) && !scheduled(w);
+  }
+
   static boolean ongoing(Work w) {
     return !Set.of("COMPLETED", "CANCELLED").contains(w.state());
   }
@@ -253,14 +266,7 @@ public final class SecretaryMeeting {
     var active =
         all.stream()
             .filter(SecretaryMeeting::ongoing)
-            .filter(
-                w ->
-                    w.evidence().stream()
-                        .noneMatch(
-                            i ->
-                                i.observation() != null
-                                    && Set.of("SCHEDULE", "CALENDAR")
-                                        .contains(i.observation().kind())))
+            .filter(w -> !scheduled(w))
             .filter(
                 w ->
                     w.evidence().isEmpty()
@@ -278,19 +284,17 @@ public final class SecretaryMeeting {
     result.put(
         "schedule",
         all.stream()
-            .filter(
-                w ->
-                    w.evidence().stream()
-                        .anyMatch(
-                            i ->
-                                i.observation() != null
-                                    && Set.of("SCHEDULE", "CALENDAR")
-                                        .contains(i.observation().kind())))
+            .filter(SecretaryMeeting::scheduled)
             .filter(SecretaryMeeting::ongoing)
             .filter(
                 w ->
                     w.evidence().stream()
-                        .noneMatch(i -> Set.of("CANCELLED", "CANCELED").contains(i.status())))
+                        .noneMatch(
+                            i ->
+                                Set.of("CANCELLED", "CANCELED")
+                                    .contains(
+                                        String.valueOf(i.status())
+                                            .toUpperCase(java.util.Locale.ROOT))))
             .limit(3)
             .toList());
     result.put("today", active.stream().filter(w -> date.equals(w.due())).limit(3).toList());
@@ -304,14 +308,7 @@ public final class SecretaryMeeting {
     result.put(
         "progress",
         all.stream()
-            .filter(
-                w ->
-                    w.evidence().stream()
-                        .noneMatch(
-                            i ->
-                                i.observation() != null
-                                    && Set.of("SCHEDULE", "CALENDAR")
-                                        .contains(i.observation().kind())))
+            .filter(w -> !scheduled(w))
             .filter(w -> !notice(w))
             .filter(w -> on(w, date, zone) && !Set.of("COMPLETED", "CANCELLED").contains(w.state()))
             .limit(3)
@@ -448,7 +445,7 @@ public final class SecretaryMeeting {
         if (sections.getOrDefault(review ? "carryover" : "priorities", List.of()).contains(w))
           text.append(review ? " [引き継ぎ候補]" : " [優先候補]");
         if (w.nextAction() != null) text.append(" → ").append(shortText(w.nextAction()));
-        text.append(ongoing(w) ? " {選択ID: " : " {参照ID: ")
+        text.append(selectable(w) ? " {選択ID: " : " {参照ID: ")
             .append(shortText(w.projectId() + "::" + w.id()))
             .append("}\n");
       }
