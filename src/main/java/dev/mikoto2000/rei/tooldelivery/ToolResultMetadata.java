@@ -15,7 +15,23 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
  * @param receipts 実際に渡したレビュー本文の確認用ハッシュ
  */
 public record ToolResultMetadata(
-    Map<String, String> policies, Map<String, Page> pages, Map<String, Receipt> receipts) {
+    Map<String, String> policies,
+    Map<String, Page> pages,
+    Map<String, Receipt> receipts,
+    @com.fasterxml.jackson.annotation.JsonInclude(
+            com.fasterxml.jackson.annotation.JsonInclude.Include.NON_EMPTY)
+        Map<String, FileReadBudget> fileReadBudgets) {
+  public interface FileReadBudgetValue {
+    int tokens();
+  }
+
+  public record FileReadBudget(int tokens) implements FileReadBudgetValue {}
+
+  public ToolResultMetadata(
+      Map<String, String> policies, Map<String, Page> pages, Map<String, Receipt> receipts) {
+    this(policies, pages, receipts, Map.of());
+  }
+
   /** 配信方式が保存処理へ公開する名前。 */
   public interface PolicyValue {
     /** 登録済みの配信方式名を返す。 */
@@ -56,6 +72,7 @@ public record ToolResultMetadata(
     policies = policies == null ? Map.of() : Map.copyOf(policies);
     pages = pages == null ? Map.of() : Map.copyOf(pages);
     receipts = receipts == null ? Map.of() : Map.copyOf(receipts);
+    fileReadBudgets = fileReadBudgets == null ? Map.of() : Map.copyOf(fileReadBudgets);
   }
 
   /** 実際の応答に対応する型付き配信情報だけを取得する。 */
@@ -71,8 +88,14 @@ public record ToolResultMetadata(
     var receipts = new HashMap<String, Receipt>();
     selected(metadata.get("rei.reviewReceipts"), ReceiptValue.class, ids)
         .forEach((id, value) -> receipts.put(id, new Receipt(value.serializedHash())));
+    var fileBudgets = new HashMap<String, FileReadBudget>();
+    selected(metadata.get("rei.fileReadBudgets"), FileReadBudgetValue.class, ids)
+        .forEach((id, value) -> fileBudgets.put(id, new FileReadBudget(value.tokens())));
     return new ToolResultMetadata(
-        policies, selected(metadata.get("rei.losslessPages"), Page.class, ids), receipts);
+        policies,
+        selected(metadata.get("rei.losslessPages"), Page.class, ids),
+        receipts,
+        fileBudgets);
   }
 
   /** 配信処理が認識する契約型のまま属性を復元する。 */
@@ -84,6 +107,7 @@ public record ToolResultMetadata(
       metadata.put("rei.deliveryPolicies", Map.copyOf(restoredPolicies));
     if (!pages.isEmpty()) metadata.put("rei.losslessPages", pages);
     if (!receipts.isEmpty()) metadata.put("rei.reviewReceipts", receipts);
+    if (!fileReadBudgets.isEmpty()) metadata.put("rei.fileReadBudgets", fileReadBudgets);
     return Map.copyOf(metadata);
   }
 

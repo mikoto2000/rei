@@ -62,11 +62,17 @@ public class ContextCompressionConfiguration {
   public org.springframework.beans.factory.SmartInitializingSingleton durableGoalAssociation(
       dev.mikoto2000.rei.review.ReviewCoverageLedger ledger,
       ObjectProvider<dev.mikoto2000.rei.goal.GoalRepository> goals) {
-    return () -> ledger.setTaskGoalResolver((scope, run) -> {
-      var repository = goals.getIfAvailable();
-      return repository == null ? null : repository.taskOrigin(scope.project(), scope.root(), scope.session(), run)
-          .map(dev.mikoto2000.rei.goal.GoalRepository.Goal::id).orElse(null);
-    });
+    return () ->
+        ledger.setTaskGoalResolver(
+            (scope, run) -> {
+              var repository = goals.getIfAvailable();
+              return repository == null
+                  ? null
+                  : repository
+                      .taskOrigin(scope.project(), scope.root(), scope.session(), run)
+                      .map(dev.mikoto2000.rei.goal.GoalRepository.Goal::id)
+                      .orElse(null);
+            });
   }
 
   @Bean
@@ -83,6 +89,12 @@ public class ContextCompressionConfiguration {
   @Bean
   public TokenEstimator contextTokenEstimator() {
     return TokenEstimator.tokenizerAware();
+  }
+
+  @Bean
+  public java.util.function.ToIntFunction<org.springframework.ai.chat.prompt.Prompt>
+      fileReadInputLimit(ContextCompressionProperties properties, TokenEstimator estimator) {
+    return prompt -> ContextBudgetManager.inputLimit(properties, estimator, prompt);
   }
 
   /** モデルへ渡す文脈の管理で用いる会話要約保存と検索の窓口を返す。 */

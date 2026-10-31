@@ -430,7 +430,10 @@ public final class BoundedToolLoop {
                                           () -> {
                                             try (var scope = AgentRunScope.open(owner)) {
                                               checkActive.run();
-                                              return tools.execute(prompt, response);
+                                              return tools.execute(
+                                                  dev.mikoto2000.rei.tooldelivery.FileReadContext
+                                                      .withProjection(prompt, projected),
+                                                  response);
                                             }
                                           })
                                       .subscribeOn(Schedulers.boundedElastic())

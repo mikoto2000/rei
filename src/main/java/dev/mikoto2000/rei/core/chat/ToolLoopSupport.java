@@ -53,9 +53,25 @@ public final class ToolLoopSupport {
 
   /** 要求された処理を実行する。 */
   public ToolExecutionResult execute(Prompt prompt, ChatResponse response) {
-    try (var lease = RunCancellation.enterChild(prompt)) {
+    response = inheritFileContinuations(prompt, response);
+    try (var lease = RunCancellation.enterChild(prompt);
+        var readBudget = dev.mikoto2000.rei.tooldelivery.FileReadContext.open(prompt, response)) {
       return deliveryMetadata(prompt, manager.executeToolCalls(prompt, response));
     }
+  }
+
+  private ChatResponse inheritFileContinuations(Prompt prompt, ChatResponse response) {
+    var generations =
+        response.getResults().stream()
+            .map(
+                generation -> {
+                  var output = generation.getOutput();
+                  var calls = FileReadContinuation.inherit(prompt, output.getToolCalls());
+                  return new org.springframework.ai.chat.model.Generation(
+                      output.mutate().toolCalls(calls).build(), generation.getMetadata());
+                })
+            .toList();
+    return new ChatResponse(generations, response.getMetadata());
   }
 
   /** 会話の実行で用いる配信付随情報を返す。 */
@@ -108,6 +124,17 @@ public final class ToolLoopSupport {
           }
       var metadata = new java.util.HashMap<>(message.getMetadata());
       metadata.put("rei.deliveryPolicies", java.util.Map.copyOf(calls));
+      var readGrant = dev.mikoto2000.rei.tooldelivery.FileReadContext.grant();
+      if (readGrant != null) {
+        var grants =
+            new java.util.HashMap<String, dev.mikoto2000.rei.tooldelivery.FileReadContext.Grant>();
+        for (var response : message.getResponses())
+          if (response.name().equals("readMultiFile")
+              && calls.get(response.id())
+                  == dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.FILE_CONTENT)
+            grants.put(response.id(), readGrant);
+        if (!grants.isEmpty()) metadata.put("rei.fileReadBudgets", java.util.Map.copyOf(grants));
+      }
       if (!receipts.isEmpty()) metadata.put("rei.reviewReceipts", java.util.Map.copyOf(receipts));
       history.set(
           history.size() - 1,
@@ -190,6 +217,18 @@ public final class ToolLoopSupport {
       RunContinuation.PendingTools pending,
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext context,
       boolean replay) {
+    try (var readBudget =
+        dev.mikoto2000.rei.tooldelivery.FileReadContext.open(
+            prompt, pending.calls().size(), pending.text() + pending.calls())) {
+      return executePendingWithinBudget(prompt, pending, context, replay);
+    }
+  }
+
+  private ToolExecutionResult executePendingWithinBudget(
+      Prompt prompt,
+      RunContinuation.PendingTools pending,
+      dev.mikoto2000.rei.core.stagnation.RunExecutionContext context,
+      boolean replay) {
     var options = (ToolCallingChatOptions) prompt.getOptions();
     var callbacks = new java.util.HashMap<String, org.springframework.ai.tool.ToolCallback>();
     options
@@ -214,6 +253,13 @@ public final class ToolLoopSupport {
       if (!completed.get(i).id().equals(pending.calls().get(i).id())
           || !completed.get(i).name().equals(pending.calls().get(i).name()))
         throw new IllegalArgumentException("Saved Tool prefix mismatch");
+    var calls = new java.util.ArrayList<>(pending.calls().subList(0, completed.size()));
+    calls.addAll(
+        FileReadContinuation.inherit(
+            prompt, pending.calls().subList(completed.size(), pending.calls().size())));
+    pending =
+        new RunContinuation.PendingTools(
+            pending.text(), calls, pending.completed(), pending.argumentCorrections());
     // 承認待ちに入る前に成功した呼び出しは再実行せず、未完了の続きだけを処理する。
     for (int i = completed.size(); i < pending.calls().size(); i++) {
       var call = pending.calls().get(i);

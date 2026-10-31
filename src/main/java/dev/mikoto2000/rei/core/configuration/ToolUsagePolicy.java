@@ -21,7 +21,14 @@ public final class ToolUsagePolicy {
   /** ファイルREADS。 */
   public static final String FILE_READS =
       """
-      Read file contents with readMultiFile, including a single file. Do not use runCommand with
+      Read file contents with readMultiFile, including a single file.
+      Choose files[].purpose autonomously from the user's objective, without asking about batching:
+      FULL for exhaustive reviews and cross-file comparisons (batch whole paths, omit artificial
+      line chunks); OVERVIEW for orientation; TARGETED for a local question or fix (use ranges or
+      selectors). AUTO defaults to bulk for whole files and paging for ranges. The server fits bulk
+      source to the remaining context budget and returns nextRead when it cannot all fit. Group files
+      with the same purpose. Never treat a partial page or overview as an exhaustive review.
+      Do not use runCommand with
       Get-Content, gc, cat, type or other shell file readers. Shell is for builds, tests, Git and
       development commands without a dedicated tool. A truncated result is a page, not a failed read:
       pass the returned nextRead unchanged (including expectedVersion and offset) in the next files array.

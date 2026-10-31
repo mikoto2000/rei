@@ -66,9 +66,10 @@ application.yamlのrei.tool-result-delivery:
 
 | 設定 | 既定値 |
 |---|---:|
-| page-target-tokens | 2048 |
+| page-target-tokens | 8000 |
 | page-min-tokens | 256 |
-| page-max-tokens | 4096 |
+| page-max-tokens | 16000 |
+| bulk-max-tokens | 64000（全文取得でも入力残量以下） |
 | page-safety-tokens | 0（既存context安全4000に追加する余白） |
 | raw-result-max-bytes | 16777216 |
 | raw-store-max-bytes | 268435456 |

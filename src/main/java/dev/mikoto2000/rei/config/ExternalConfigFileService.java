@@ -154,9 +154,10 @@ public class ExternalConfigFileService {
             enabled: ${REI_PAPER_ENABLED:true}
             open-alex-api-key: ${REI_PAPER_OPEN_ALEX_API_KEY:}
           tool-result-delivery:
-            page-target-tokens: ${REI_RESULT_PAGE_TARGET:2048}
+            page-target-tokens: ${REI_RESULT_PAGE_TARGET:8000}
             page-min-tokens: ${REI_RESULT_PAGE_MIN:256}
-            page-max-tokens: ${REI_RESULT_PAGE_MAX:4096}
+            page-max-tokens: ${REI_RESULT_PAGE_MAX:16000}
+            bulk-max-tokens: ${REI_RESULT_BULK_MAX:64000}
             page-safety-tokens: ${REI_RESULT_PAGE_SAFETY:0}
             raw-result-max-bytes: ${REI_RAW_RESULT_MAX_BYTES:16777216}
             raw-store-max-bytes: ${REI_RAW_STORE_MAX_BYTES:268435456}

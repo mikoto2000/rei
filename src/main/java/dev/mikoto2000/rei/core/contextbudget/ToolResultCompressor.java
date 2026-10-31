@@ -81,7 +81,7 @@ public class ToolResultCompressor {
           responses.add(response);
           continue;
         }
-        if (estimator.text(raw) <= delivery.getPageMaxTokens()) {
+        if (estimator.text(raw) <= fileReadLimit(tool, response)) {
           responses.add(response);
           continue;
         }
@@ -136,6 +136,17 @@ public class ToolResultCompressor {
     return changed
         ? ToolResponseMessage.builder().responses(responses).metadata(metadata).build()
         : message;
+  }
+
+  private int fileReadLimit(ToolResponseMessage tool, ToolResponseMessage.ToolResponse response) {
+    if (response.name().equals("readMultiFile")
+        && policy(tool, response.id()) == ResultDelivery.Kind.FILE_CONTENT
+        && tool.getMetadata().get("rei.fileReadBudgets") instanceof Map<?, ?> grants
+        && grants.get(response.id())
+            instanceof dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.FileReadBudgetValue grant)
+      return Math.max(
+          delivery.getPageMaxTokens(), Math.min(delivery.getBulkMaxTokens(), grant.tokens()));
+    return delivery.getPageMaxTokens();
   }
 
   /**

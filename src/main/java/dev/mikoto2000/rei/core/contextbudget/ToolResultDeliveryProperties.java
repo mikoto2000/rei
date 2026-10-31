@@ -10,13 +10,16 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 @ConfigurationProperties("rei.tool-result-delivery")
 public class ToolResultDeliveryProperties {
   /** ページ対象トークン数。 */
-  private int pageTargetTokens = 2048;
+  private int pageTargetTokens = 8000;
 
   /** ページ最小トークン数。 */
   private int pageMinTokens = 256;
 
   /** ページトークン数の上限。 */
-  private int pageMaxTokens = 4096;
+  private int pageMaxTokens = 16000;
+
+  /** 全文取得でも現在の入力残量を超えない、追加の上限。 */
+  private int bulkMaxTokens = 64000;
 
   // ContextAssembler already reserves 4000 model tokens; this is additional optional page headroom.
   /** ページSafetyトークン数。 */
@@ -51,6 +54,8 @@ public class ToolResultDeliveryProperties {
         || pageTargetTokens < pageMinTokens
         || pageMaxTokens < pageTargetTokens
         || pageMaxTokens > 16000
+        || bulkMaxTokens < pageMaxTokens
+        || bulkMaxTokens > 1_000_000
         || pageSafetyTokens < 0
         || rawResultMaxBytes < 1
         || rawStoreMaxBytes < 1

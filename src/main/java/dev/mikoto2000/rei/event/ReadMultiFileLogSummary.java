@@ -10,7 +10,7 @@ final class ReadMultiFileLogSummary {
   private static final String[] REQUEST_FIELDS = {
     "path", "startLine", "endLine", "offset", "expectedVersion", "charset",
     "symbol", "symbolOffset", "section", "sectionId", "headingLevel", "includeChildren",
-    "includeBody", "includeJavadoc", "includeOwnerOverview", "contextLines", "unreadOnly"
+    "includeBody", "includeJavadoc", "includeOwnerOverview", "contextLines", "unreadOnly", "purpose"
   };
 
   private ReadMultiFileLogSummary() {}
@@ -27,6 +27,11 @@ final class ReadMultiFileLogSummary {
         JsonNode result = results.get(index);
         var page = pages.addObject();
         page.put("index", index);
+        var decision = dev.mikoto2000.rei.tooldelivery.FileReadContext.decision();
+        if (decision != null) {
+          page.put("readMode", decision.mode());
+          page.put("tokenBudget", decision.tokens());
+        }
         page.set("request", request(requests.get(index)));
         var returned = page.putObject("returned");
         copy(result, returned, "path", "version", "truncated", "truncationReason", "returnedBytes");

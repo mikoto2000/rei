@@ -36,6 +36,13 @@ final class TextReadBudget {
     remaining = Math.max(0, Math.min(MAX_BYTES, bytes));
   }
 
+  /** 全文取得も有限のsource予算に収める。通常ツールの64KiB上限は変更しない。 */
+  static TextReadBudget bulk(int bytes) {
+    var budget = new TextReadBudget();
+    budget.remaining = Math.max(0, Math.min(512 * 1024, bytes));
+    return budget;
+  }
+
   /** 共通の実行基盤で用いる残量を返す。 */
   int remaining() {
     return remaining;

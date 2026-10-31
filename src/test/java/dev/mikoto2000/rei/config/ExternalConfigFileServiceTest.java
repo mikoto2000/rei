@@ -53,6 +53,9 @@ class ExternalConfigFileServiceTest {
     assertTrue(Files.exists(created));
     assertTrue(Files.exists(service.additionalSystemPromptFilePath()));
     String content = Files.readString(created);
+    assertTrue(content.contains("page-target-tokens: ${REI_RESULT_PAGE_TARGET:8000}"));
+    assertTrue(content.contains("page-max-tokens: ${REI_RESULT_PAGE_MAX:16000}"));
+    assertTrue(content.contains("bulk-max-tokens: ${REI_RESULT_BULK_MAX:64000}"));
     assertTrue(content.contains("enabled: ${REI_ATTENTION_DELIVERY_ENABLED:false}"));
     assertTrue(
         content.contains("retry-cooldown-seconds: ${REI_CONTEXT_RETRY_COOLDOWN_SECONDS:120}"));

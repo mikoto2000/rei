@@ -135,6 +135,7 @@ final class FileResultTokenPager {
       if (MarkdownSectionReads.selected(request))
         next =
             MarkdownSectionReads.continueRequest(request, next, result.selection().selected().id());
+      next = next.withPurpose(request.purpose());
       int bytes =
           content.stream().mapToInt(line -> line.getBytes(StandardCharsets.UTF_8).length + 1).sum();
       output.add(

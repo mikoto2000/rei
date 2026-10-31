@@ -30,7 +30,7 @@ class DeliveryPolicyTest {
   /** モデルへ渡す文脈の管理で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   void trustedFileResultHasExactContiguousPageAndContinuation() throws Exception {
-    String raw = "日本語🙂\"\\\n".repeat(1000);
+    String raw = "日本語🙂\"\\\n".repeat(10000);
     var store = new RawToolResultStore(dir);
     var compressor = new ToolResultCompressor(store, estimator, 100, 70);
     var output =

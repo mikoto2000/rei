@@ -268,7 +268,15 @@ public class StagnationChatModel implements ChatModel {
                                     try {
                                       context.planTools(generation.getOutput().getToolCalls());
                                       var toolResult =
-                                          tools.executeResumable(actionPrompt, result, context);
+                                          tools.executeResumable(
+                                              dev.mikoto2000.rei.tooldelivery.FileReadContext
+                                                  .withProjection(
+                                                      actionPrompt,
+                                                      sent.get() == null
+                                                          ? invocationPrompt
+                                                          : sent.get()),
+                                              result,
+                                              context);
                                       var history =
                                           withoutResumeWorkReminder(
                                               toolResult.conversationHistory());
@@ -586,7 +594,8 @@ public class StagnationChatModel implements ChatModel {
                 context.recordFailure(name, input, error);
                 var rejected =
                     dev.mikoto2000.rei.toolcontract.ToolResultRejectedException.find(error);
-                if (rejected instanceof dev.mikoto2000.rei.toolcontract.ToolReadRejectedException read
+                if (rejected
+                        instanceof dev.mikoto2000.rei.toolcontract.ToolReadRejectedException read
                     && java.util.Set.of("readReviewPages", "readRawToolResult").contains(name))
                   return context.toolReadCorrection(read.code(), read.getMessage());
                 if (rejected != null

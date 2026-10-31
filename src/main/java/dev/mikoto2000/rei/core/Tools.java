@@ -121,6 +121,16 @@ public class Tools {
   private dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties deliveryProperties =
       new dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties();
 
+  private java.util.function.ToIntFunction<org.springframework.ai.chat.prompt.Prompt>
+      readInputLimit;
+
+  @Autowired(required = false)
+  public void configureReadContext(
+      @org.springframework.beans.factory.annotation.Qualifier("fileReadInputLimit")
+          java.util.function.ToIntFunction<org.springframework.ai.chat.prompt.Prompt> inputLimit) {
+    readInputLimit = inputLimit;
+  }
+
   /** 共通の実行基盤に関する設定配信を処理する。 */
   @Autowired
   public void configureDelivery(
@@ -2727,6 +2737,11 @@ public class Tools {
       description =
           """
       Read one or more known file paths or line ranges in a single call.
+      Choose files[].purpose from the task: FULL for exhaustive review/comparison of entire files,
+      OVERVIEW for orientation, TARGETED for a local question/fix. AUTO (default) uses bulk for
+      whole-file requests and paging for explicit ranges/selectors. FULL/AUTO bulk reads are bounded
+      by the current prompt's remaining input budget; if all source fits it is returned together,
+      otherwise a contiguous prefix and nextRead are returned. Keep purpose on continuations.
       For Markdown, use section, sectionPath (array), sectionId or headingLevel. includeChildren defaults true.
       Duplicate headings return selection.candidates; choose a sectionId and expectedVersion. contextLines applies.
       unreadOnly:true suppresses only confirmed complete explicit ranges; uncertain or compressed source is returned.
@@ -2881,17 +2896,57 @@ public class Tools {
       for (var request : files)
         if (request == null || request.path() != null && request.path().length() > 1024)
           throw new IllegalArgumentException("File request/path limit exceeded");
+      boolean whole =
+          files.stream()
+              .allMatch(
+                  request ->
+                      request.symbol() == null
+                          && !MarkdownSectionReads.selected(request)
+                          && (request.purpose() == ReadPurpose.FULL
+                              || (request.purpose() == null
+                                      || request.purpose() == ReadPurpose.AUTO)
+                                  && request.startLine() == null
+                                  && request.endLine() == null
+                                  && request.offset() == null));
+      int bulkTokens =
+          whole && readInputLimit != null
+              ? dev.mikoto2000.rei.tooldelivery.FileReadContext.bulkBudget(
+                  deliveryProperties.getBulkMaxTokens(),
+                  readInputLimit,
+                  prompt ->
+                      prompt.getInstructions().stream().mapToLong(deliveryEstimator::message).sum(),
+                  deliveryEstimator::text)
+              : 0;
+      if (whole
+          && readInputLimit != null
+          && dev.mikoto2000.rei.tooldelivery.FileReadContext.active()
+          && bulkTokens < deliveryProperties.getPageMinTokens())
+        throw new IOException(
+            "CONTEXT_BUDGET_INSUFFICIENT: no room for a file page; reduce the active prompt");
+      boolean bulk = bulkTokens > deliveryProperties.getPageMaxTokens();
+      int resultTokens = bulkTokens > 0 ? bulkTokens : deliveryProperties.getPageMaxTokens();
+      if (!whole && files.stream().anyMatch(request -> request.purpose() == ReadPurpose.OVERVIEW))
+        resultTokens = Math.min(resultTokens, deliveryProperties.getPageTargetTokens());
+      int totalLineLimit = bulk ? 100_000 : MAX_READ_TOTAL_LINES;
+      dev.mikoto2000.rei.tooldelivery.FileReadContext.selected(
+          bulk ? "BULK" : "PAGED", resultTokens);
+      if (whole && bulkTokens > 0)
+        files = files.stream().map(request -> request.withPurpose(ReadPurpose.FULL)).toList();
+      if (bulk) {
+        dev.mikoto2000.rei.tooldelivery.FileReadContext.used(resultTokens);
+      }
       List<ReadFileResult> results = new ArrayList<>();
       FileSnapshots snapshots = newSnapshots();
-      TextReadBudget budget = new TextReadBudget();
+      TextReadBudget budget = bulk ? TextReadBudget.bulk(512 * 1024) : new TextReadBudget();
       int totalLines = 0;
       for (int index = 0; index < files.size(); index++) {
         ReadFileRequest request = files.get(index);
         if (request.expectedVersion() != null) ReadingMetrics.add("continuations", 1);
         int remainingRequests = files.size() - index;
         int byteBudget = budget.remaining() / remainingRequests;
-        TextReadBudget fileBudget = new TextReadBudget(byteBudget);
-        int lineBudget = readLineBudget(files, index, MAX_READ_TOTAL_LINES - totalLines);
+        TextReadBudget fileBudget =
+            bulk ? TextReadBudget.bulk(byteBudget) : new TextReadBudget(byteBudget);
+        int lineBudget = readLineBudget(files, index, totalLineLimit - totalLines);
         try {
           ReadFileResult result =
               MarkdownSectionReads.selected(request)
@@ -2911,11 +2966,16 @@ public class Tools {
                                   / files.size()
                               - 16)
                       : readSingleFile(
-                          request, workingDirectory, snapshots, fileBudget, lineBudget);
+                          request,
+                          workingDirectory,
+                          snapshots,
+                          fileBudget,
+                          lineBudget,
+                          bulk ? 100_000 : MAX_READ_LINES_PER_FILE);
           if (request.symbol() != null && result.error() == null)
             workingSet.recordRead(workingDirectory.resolve(result.path()));
           if (readingDelivery != null) result = applyReadingDelivery(request, result);
-          int remaining = MAX_READ_TOTAL_LINES - totalLines;
+          int remaining = totalLineLimit - totalLines;
           if (result.content().size() > remaining) {
             result =
                 new ReadFileResult(
@@ -2946,8 +3006,7 @@ public class Tools {
       return boundedFileResult(
           dev.mikoto2000.rei.core.chat.AgentRunScope.current() == null
               ? results
-              : new FileResultTokenPager(deliveryEstimator)
-                  .page(results, files, deliveryProperties.getPageMaxTokens()));
+              : new FileResultTokenPager(deliveryEstimator).page(results, files, resultTokens));
     }
   }
 
@@ -2988,6 +3047,18 @@ public class Tools {
       TextReadBudget budget,
       int lineBudget)
       throws IOException {
+    return readSingleFile(
+        request, workingDirectory, snapshots, budget, lineBudget, MAX_READ_LINES_PER_FILE);
+  }
+
+  private ReadFileResult readSingleFile(
+      ReadFileRequest request,
+      java.nio.file.Path workingDirectory,
+      FileSnapshots snapshots,
+      TextReadBudget budget,
+      int lineBudget,
+      int perFileLineLimit)
+      throws IOException {
     if (request.path() == null || request.path().isBlank()) {
       throw new IllegalArgumentException("path must not be blank");
     }
@@ -3015,19 +3086,20 @@ public class Tools {
     int toIndex = endLine == null ? lines.size() : Math.min(endLine, lines.size());
     if (toIndex < fromIndex)
       throw new IllegalArgumentException("endLine must not precede startLine");
-    int maxLines = Math.min(MAX_READ_LINES_PER_FILE, Math.max(0, lineBudget));
+    int maxLines = Math.min(perFileLineLimit, Math.max(0, lineBudget));
     var slice =
         budget.take(
             lines, fromIndex, toIndex, request.offset() == null ? 0 : request.offset(), maxLines);
     var next =
         slice.truncated()
             ? new ReadFileRequest(
-                request.path(),
-                slice.nextLine(),
-                endLine,
-                snapshot.version(),
-                slice.nextOffset(),
-                request.charset())
+                    request.path(),
+                    slice.nextLine(),
+                    endLine,
+                    snapshot.version(),
+                    slice.nextOffset(),
+                    request.charset())
+                .withPurpose(request.purpose())
             : null;
     String reason =
         slice.truncated()
@@ -3049,6 +3121,14 @@ public class Tools {
         List.of(),
         List.of(),
         reason);
+  }
+
+  /** 依頼の目的に応じたファイル取得方針。 */
+  public enum ReadPurpose {
+    AUTO,
+    FULL,
+    OVERVIEW,
+    TARGETED
   }
 
   /**
@@ -3104,9 +3184,77 @@ public class Tools {
       @com.fasterxml.jackson.annotation.JsonInclude(
               com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
           @org.springframework.ai.tool.annotation.ToolParam(required = false)
-          Boolean includeChildren) {
+          Boolean includeChildren,
+      @com.fasterxml.jackson.annotation.JsonInclude(
+              com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+          @org.springframework.ai.tool.annotation.ToolParam(required = false)
+          ReadPurpose purpose) {
     public ReadFileRequest {
       sectionPath = sectionPath == null ? null : List.copyOf(sectionPath);
+    }
+
+    public ReadFileRequest(
+        String path,
+        Integer startLine,
+        Integer endLine,
+        String expectedVersion,
+        Integer offset,
+        String charset,
+        String symbol,
+        Boolean includeBody,
+        Boolean includeJavadoc,
+        Integer contextLines,
+        Boolean includeOwnerOverview,
+        Integer symbolOffset,
+        Boolean unreadOnly,
+        List<String> sectionPath,
+        String section,
+        String sectionId,
+        Integer headingLevel,
+        Boolean includeChildren) {
+      this(
+          path,
+          startLine,
+          endLine,
+          expectedVersion,
+          offset,
+          charset,
+          symbol,
+          includeBody,
+          includeJavadoc,
+          contextLines,
+          includeOwnerOverview,
+          symbolOffset,
+          unreadOnly,
+          sectionPath,
+          section,
+          sectionId,
+          headingLevel,
+          includeChildren,
+          null);
+    }
+
+    public ReadFileRequest withPurpose(ReadPurpose value) {
+      return new ReadFileRequest(
+          path,
+          startLine,
+          endLine,
+          expectedVersion,
+          offset,
+          charset,
+          symbol,
+          includeBody,
+          includeJavadoc,
+          contextLines,
+          includeOwnerOverview,
+          symbolOffset,
+          unreadOnly,
+          sectionPath,
+          section,
+          sectionId,
+          headingLevel,
+          includeChildren,
+          value);
     }
 
     public ReadFileRequest(
@@ -3719,7 +3867,7 @@ public class Tools {
   @Tool(
       name = "readPdfFile",
       description =
-          "Read a lossless PDF text page with original page number and source version. Optional page defaults to 1, offset to 0, tokenBudget to 2048. Continue with nextPage/nextOffset while truncated; expectedVersion must match across pages. Scanned PDFs require OCR and cannot prove visual coverage.")
+          "Read a lossless PDF text page with original page number and source version. Optional page defaults to 1, offset to 0, tokenBudget to the configured page target (default 8000). Continue with nextPage/nextOffset while truncated; expectedVersion must match across pages. Scanned PDFs require OCR and cannot prove visual coverage.")
   public PdfPage readPdfPage(
       String pathStr,
       @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer page,

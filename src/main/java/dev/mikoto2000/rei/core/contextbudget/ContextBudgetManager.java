@@ -59,6 +59,36 @@ public class ContextBudgetManager {
     return modelContextLimit - outputReserve - safetyMargin;
   }
 
+  /** 最終送信と取得計画が共有する、回答・schema予約後の入力上限。 */
+  public static int inputLimit(
+      ContextCompressionProperties properties,
+      TokenEstimator estimator,
+      org.springframework.ai.chat.prompt.Prompt prompt) {
+    int completion = properties.getCompletionReserve();
+    if (prompt.getOptions() != null && prompt.getOptions().getMaxTokens() != null)
+      completion = Math.max(completion, prompt.getOptions().getMaxTokens());
+    if (prompt.getOptions() instanceof org.springframework.ai.openai.OpenAiChatOptions options
+        && options.getMaxCompletionTokens() != null)
+      completion = Math.max(completion, options.getMaxCompletionTokens());
+    int schema = 0;
+    if (prompt.getOptions()
+            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
+        && options.getToolCallbacks() != null)
+      for (var callback : options.getToolCallbacks())
+        schema +=
+            estimator.text(callback.getToolDefinition().inputSchema())
+                + estimator.text(callback.getToolDefinition().description())
+                + 16;
+    return Math.min(
+        properties.getHardLimit(),
+        new ContextBudgetManager(
+                properties.contextLimit(
+                    prompt.getOptions() == null ? null : prompt.getOptions().getModel()),
+                completion,
+                properties.getSafetyMargin() + Math.max(properties.getToolReserve(), schema))
+            .inputBudget());
+  }
+
   /** 利用量や必要量を判断するため、メッセージ一覧を概算する。 */
   public static long estimateMessages(
       java.util.List<org.springframework.ai.chat.messages.Message> messages,
