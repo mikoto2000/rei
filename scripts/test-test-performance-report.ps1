@@ -25,6 +25,9 @@ try {
     Assert ($summary.SuiteSeconds -eq 3.75 -and $summary.WallSeconds -eq 2) 'Suite sum differs from parallel wall time'
     Assert ($summary.Providers.Surefire.Tests -eq 4 -and $summary.Providers.Failsafe.SuiteSeconds -eq 2.5) 'Provider totals'
     Assert ($summary.Top20SuitePercent -eq 100 -and $summary.Buckets.'1-5s' -eq 2) 'Distribution'
+    Assert ([Math]::Abs($summary.TestCountTimePearson + 1) -lt 0.000001) 'Pearson correlation'
+    $classRows = @(Import-Csv "$root/result/classes.csv")
+    Assert ([Math]::Abs([double]$classRows[0].SuitePercent - 200/3) -lt 0.000001) 'Suite percentage denominator'
     $methods = @(Import-Csv "$root/result/methods.csv")
     Assert (($methods | Where-Object Method -eq 'parameter[1]: 日本語').Seconds -eq '0.125') 'Decimal and parameter identity'
     Assert (($methods | Where-Object Method -eq 'failure').Result -eq 'Failed') 'Failure result'
@@ -38,6 +41,23 @@ try {
     Reject @("$root/surefire-reports")
     '' | Set-Content "$root/surefire-reports/TEST-invalid.xml"
     Reject @("$root/surefire-reports")
+    '<!DOCTYPE testsuite [<!ENTITY secret SYSTEM "file:///missing">]><testsuite name="unsafe" tests="0" failures="0" errors="0" skipped="0" time="0"/>' |
+        Set-Content "$root/surefire-reports/TEST-invalid.xml"
+    Reject @("$root/surefire-reports")
+    Remove-Item -LiteralPath "$root/surefire-reports/TEST-invalid.xml"
+    '<testsuite name="Zero" tests="0" failures="0" errors="0" skipped="0" time="0"/>' |
+        Set-Content "$root/empty/TEST-zero.xml"
+    & "$PSScriptRoot/test-performance-report.ps1" -Reports "$root/empty" -Output "$root/zero" | Out-Null
+    $zero = Get-Content "$root/zero/summary.json" -Raw | ConvertFrom-Json
+    Assert ($zero.Tests -eq 0 -and $zero.SuiteSeconds -eq 0 -and $null -eq $zero.TestCountTimePearson) 'Zero duration and undefined correlation'
+    Assert ($zero.Providers.Failsafe.Tests -eq 0 -and $zero.Providers.Failsafe.SuiteSeconds -eq 0) 'Absent provider has zero totals'
+    foreach ($duration in @('0.999','1','5','10','30')) {
+        "<testsuite name='Boundary$duration' tests='0' failures='0' errors='0' skipped='0' time='$duration'/>" |
+            Set-Content "$root/empty/TEST-$duration.xml"
+    }
+    & "$PSScriptRoot/test-performance-report.ps1" -Reports "$root/empty" -Output "$root/bounds" | Out-Null
+    $bounds = Get-Content "$root/bounds/summary.json" -Raw | ConvertFrom-Json
+    Assert ($bounds.Buckets.'<1s' -eq 2 -and $bounds.Buckets.'1-5s' -eq 1 -and $bounds.Buckets.'5-10s' -eq 1 -and $bounds.Buckets.'10-30s' -eq 1 -and $bounds.Buckets.'>=30s' -eq 1) 'Bucket boundaries'
     Write-Output 'PASS: Surefire/Failsafe, outcomes, decimals, identity, distribution, parallel wall, empty, malformed, duplicates'
 } finally {
     $resolved = [IO.Path]::GetFullPath($root)
