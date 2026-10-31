@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.toolcontract.ToolReadRejectedException;
 import org.springframework.ai.tool.annotation.Tool;
 import org.springframework.ai.tool.annotation.ToolParam;
 
@@ -57,8 +58,7 @@ public class RawToolResultTools {
           int limit) {
     var owner = AgentRunScope.current();
     if (owner == null) throw new IllegalStateException("A run is required");
-    if (offset < 0 || limit < 1 || limit > 16000)
-      throw new IllegalArgumentException("INVALID_CURSOR");
+    if (offset < 0 || limit < 1 || limit > 16000) throw invalidCursor();
     var result = store.read(owner.conversationId(), rawResultRef);
     return pageText(rawResultRef, result, offset, limit, pageTokens);
   }
@@ -66,12 +66,12 @@ public class RawToolResultTools {
   /** モデルへ渡す文脈の管理で用いるページテキストを返す。 */
   String pageText(String ref, RawToolResultStore.Result result, int offset, int limit, int budget) {
     String raw = result.rawResult();
-    if (offset > raw.length()
+    if (offset < 0
+        || offset > raw.length()
         || offset > 0
             && offset < raw.length()
             && Character.isHighSurrogate(raw.charAt(offset - 1))
-            && Character.isLowSurrogate(raw.charAt(offset)))
-      throw new IllegalArgumentException("INVALID_CURSOR");
+            && Character.isLowSurrogate(raw.charAt(offset))) throw invalidCursor();
     int end = (int) Math.min(raw.length(), (long) offset + limit);
     if (end > offset
         && end < raw.length()
@@ -88,6 +88,12 @@ public class RawToolResultTools {
     if (estimator.text(encoded) > budget || low == 0 && offset < raw.length())
       throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT");
     return encoded;
+  }
+
+  private static ToolReadRejectedException invalidCursor() {
+    return new ToolReadRejectedException(
+        "INVALID_CURSOR",
+        "No content was returned. Keep the same rawResultRef; use offset=0 initially or copy the previous page's numeric nextOffset while hasMore=true. The offset must be within the saved text at a UTF-16 code point boundary, and limit must be 1..16000. Do not invent offsets or continue after hasMore=false.");
   }
 
   /** モデルへ渡す文脈の管理で用いる安全性ヘッダーを返す。 */

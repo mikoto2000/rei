@@ -135,6 +135,90 @@ class RawToolResultArgumentRepairTest {
 
   /** 会話の実行で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
   @ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"true,99", "false,99", "true,2", "false,2"})
+  void runtimeCursorRejectionReturnsGuidanceAndTheModelRetries(boolean guarded, int offset) {
+    var store = mock(RawToolResultStore.class);
+    when(store.read("session", REF))
+        .thenReturn(new RawToolResultStore.Result("runCommand", "result", "a🙂end"));
+    var calls = new AtomicInteger();
+    var fixture =
+        fixture(
+            store,
+            guarded,
+            false,
+            calls,
+            (prompt, invocation) -> {
+              if (invocation == 1)
+                return response(
+                    toolCall(
+                        "invalid-cursor",
+                        "readRawToolResult",
+                        "{\"rawResultRef\":\""
+                            + REF
+                            + "\",\"offset\":"
+                            + offset
+                            + ",\"limit\":16000}"));
+              var message = latestToolMessage(prompt);
+              if (invocation == 2) {
+                var correction = correction(message);
+                assertThat(correction.path("error").asText()).isEqualTo("INVALID_CURSOR");
+                assertThat(correction.path("accepted").asBoolean(true)).isFalse();
+                assertThat(correction.path("validationExecuted").asBoolean()).isTrue();
+                assertThat(correction.path("guidance").asText())
+                    .contains("offset=0", "nextOffset", "UTF-16");
+                assertThat(correction.path("correctionsRemaining").asInt()).isEqualTo(1);
+                assertDelivery(message, "invalid-cursor", ResultDelivery.Kind.GENERAL);
+                return response(
+                    toolCall(
+                        "corrected-cursor",
+                        "readRawToolResult",
+                        "{\"rawResultRef\":\"" + REF + "\",\"offset\":0,\"limit\":16000}"));
+              }
+              assertThat(invocation).isEqualTo(3);
+              assertThat(message.getResponses().getLast().responseData())
+                  .contains("a🙂end", "hasMore: false");
+              assertDelivery(message, "corrected-cursor", ResultDelivery.Kind.RAW_RESULT_PAGE);
+              return new ChatResponse(
+                  List.of(new Generation(new AssistantMessage("Read complete."))));
+            });
+    assertThat(fixture.execute().success()).isTrue();
+    assertThat(calls).hasValue(3);
+    verify(store, times(2)).read("session", REF);
+    assertThat(fixture.events().stream().filter(e -> e.type() == AgentEventType.AGENT_RUN_FAILED))
+        .isEmpty();
+    verifyNoInteractions(fixture.approvals());
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void repeatedRuntimeCursorRejectionsUseTheExistingCorrectionLimit(boolean guarded) {
+    var store = mock(RawToolResultStore.class);
+    when(store.read("session", REF))
+        .thenReturn(new RawToolResultStore.Result("runCommand", "result", "text"));
+    var calls = new AtomicInteger();
+    var fixture =
+        fixture(
+            store,
+            guarded,
+            false,
+            calls,
+            (prompt, invocation) -> {
+              assertThat(invocation).isLessThanOrEqualTo(3);
+              if (invocation > 1)
+                assertThat(
+                        correction(latestToolMessage(prompt)).path("correctionsRemaining").asInt())
+                    .isEqualTo(3 - invocation);
+              return response(toolCall("invalid-cursor-" + invocation, "readRawToolResult", VALID));
+            });
+    var result = fixture.execute();
+    assertThat(result.stopCode()).isEqualTo("tool_argument_repair_exhausted");
+    assertThat(calls).hasValue(3);
+    verify(store, times(3)).read("session", REF);
+    verifyNoInteractions(fixture.approvals());
+  }
+
+  /** 会話の実行で、使用量と受付量が、設定された予算・上限に従うことを確認する。 */
+  @ParameterizedTest
   @ValueSource(booleans = {true, false})
   void repeatedIncorrectCursorsStopAtTheExistingCorrectionLimit(boolean guarded) {
     var store = mock(RawToolResultStore.class);

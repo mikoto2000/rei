@@ -49,7 +49,22 @@ class ReviewModelBoundaryTest {
   @TempDir Path dir;
 
   @ParameterizedTest
-  @ValueSource(strings = {"page", "legacy", "restart"})
+  @ValueSource(
+      strings = {
+        "page",
+        "legacy",
+        "restart",
+        "batch-limit",
+        "batch-empty",
+        "batch-duplicate",
+        "batch-assessment",
+        "batch-findings",
+        "work-item",
+        "read-count-low",
+        "read-count-high",
+        "read-budget-low",
+        "read-budget-high"
+      })
   void actualMethodAndEventWrappersReturnARejectedOperationForCorrection(String operation)
       throws Exception {
     Files.writeString(dir.resolve("lesson.md"), "本文🙂\n確認する内容\n");
@@ -63,10 +78,21 @@ class ReviewModelBoundaryTest {
     var owner = new AgentRunContext("run", "chat", dir, "project");
     ReviewCoverageLedger.Job job;
     ReviewTools.Page page;
+    dev.mikoto2000.rei.durable.WorkItemStore.Claim claim;
     try (var scope = AgentRunScope.open(owner)) {
-      job = reviews.beginReview(List.of("lesson.md"), "correctness", "v1");
-      page =
-          reviews.readReviewFile(job.id(), "lesson.md", job.targets().getFirst().version(), 0, 512);
+      if (operation.equals("work-item")) {
+        var task = reviews.beginRepositoryReview("WORKTREE", List.of("data/**"), 100, 1048576L);
+        reviews.scanReviewSnapshot(task.id(), 100);
+        claim = reviews.claimReviewWorkItem(task.id(), 1024);
+        job = null;
+        page = null;
+      } else {
+        job = reviews.beginReview(List.of("lesson.md"), "correctness", "v1");
+        page =
+            reviews.readReviewFile(
+                job.id(), "lesson.md", job.targets().getFirst().version(), 0, 512);
+        claim = null;
+      }
     }
     var assembler =
         new ContextAssembler(
@@ -107,7 +133,72 @@ class ReviewModelBoundaryTest {
               int n = invocations.incrementAndGet();
               String name;
               Map<String, Object> args;
-              if (n == 1) {
+              if (operation.startsWith("read-") && n <= 2) {
+                if (n == 2) {
+                  var prompt = (Prompt) invocation.getArgument(0);
+                  var message =
+                      (org.springframework.ai.chat.messages.ToolResponseMessage)
+                          prompt.getInstructions().getLast();
+                  var correction =
+                      tools.jackson.databind.json.JsonMapper.builder()
+                          .build()
+                          .readTree(message.getResponses().getLast().responseData());
+                  assertThat(correction.path("error").asText())
+                      .isEqualTo("INVALID_REVIEW_READ_ARGUMENTS");
+                  assertThat(correction.path("accepted").asBoolean(true)).isFalse();
+                  assertThat(correction.path("guidance").asText()).contains("1..4", "512..2048");
+                  assertThat(message.getMetadata()).doesNotContainKey("rei.reviewReceipts");
+                  assertThat(
+                          ((Map<?, ?>) message.getMetadata().get("rei.deliveryPolicies"))
+                              .get("call-1"))
+                      .isEqualTo(dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.GENERAL);
+                  assertThat(ledger.get(job.id(), ReviewTools.scope(owner)).ranges())
+                      .noneMatch(e -> e.delivered() || e.reviewed());
+                }
+                name = "readReviewPages";
+                args =
+                    Map.of(
+                        "reviewJobId",
+                        job.id(),
+                        "path",
+                        "lesson.md",
+                        "expectedVersion",
+                        page.range().version(),
+                        "offset",
+                        0,
+                        "maxPages",
+                        n == 1
+                            ? (operation.equals("read-count-low")
+                                ? 0
+                                : operation.equals("read-count-high") ? 5 : 1)
+                            : 1,
+                        "totalTokenBudget",
+                        n == 1
+                            ? (operation.equals("read-budget-low")
+                                ? 511
+                                : operation.equals("read-budget-high") ? 2049 : 1024)
+                            : 1024);
+              } else if (operation.equals("work-item") && n <= 3) {
+                if (n == 1) {
+                  name = "readReviewWorkItem";
+                  args = Map.of("workItemId", claim.item().id(), "attempt", claim.attempt());
+                } else {
+                  if (n == 3)
+                    assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
+                        .contains("REVIEW_RESULT_INVALID", "accepted", "workItemId");
+                  name = "submitReviewWorkItem";
+                  args =
+                      Map.of(
+                          "workItemId",
+                          claim.item().id(),
+                          "attempt",
+                          claim.attempt(),
+                          "assessment",
+                          n == 2 ? "" : "checked",
+                          "findings",
+                          List.of());
+                }
+              } else if (n == 1) {
                 name = "readReviewFile";
                 args =
                     Map.of(
@@ -121,6 +212,25 @@ class ReviewModelBoundaryTest {
                         0,
                         "tokenBudget",
                         512);
+              } else if (n == 2 && operation.startsWith("batch-")) {
+                name = "submitReviewPages";
+                var input =
+                    new ReviewTools.PageAssessment(
+                        "lesson.md",
+                        0,
+                        page.nextOffset(),
+                        operation.equals("batch-assessment") ? "" : "checked",
+                        operation.equals("batch-findings")
+                            ? List.of(new ReviewTools.PageFinding("finding", "P2", "", "issue"))
+                            : List.of());
+                List<ReviewTools.PageAssessment> pages =
+                    switch (operation) {
+                      case "batch-limit" -> java.util.Collections.nCopies(5, input);
+                      case "batch-empty" -> List.of();
+                      case "batch-duplicate" -> List.of(input, input);
+                      default -> List.of(input);
+                    };
+                args = Map.of("reviewJobId", job.id(), "pages", pages);
               } else if (n == 2 && operation.equals("restart")) {
                 name = "restartReview";
                 args = Map.of("reviewJobId", job.id());
@@ -143,12 +253,15 @@ class ReviewModelBoundaryTest {
                         "findings",
                         List.of());
               } else if (n <= 3) {
-                if (n == 3) {
+                if (n == 3 && !operation.startsWith("read-")) {
                   assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
                       .contains("REVIEW_RESULT_INVALID", "accepted");
                   if (operation.equals("restart"))
                     assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
                         .contains("No restart was performed", "reviewPending", "submitReviewPage");
+                  if (operation.equals("batch-limit"))
+                    assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
+                        .contains("1..4", "Split larger batches");
                   assertThat(ledger.get(job.id(), ReviewTools.scope(owner)).ranges())
                       .noneMatch(e -> e.reviewed());
                 }
@@ -167,6 +280,17 @@ class ReviewModelBoundaryTest {
                         "checked",
                         "findings",
                         List.of());
+                if (operation.startsWith("batch-")) {
+                  name = "submitReviewPages";
+                  args =
+                      Map.of(
+                          "reviewJobId",
+                          job.id(),
+                          "pages",
+                          List.of(
+                              new ReviewTools.PageAssessment(
+                                  "lesson.md", 0, page.nextOffset(), "checked", List.of())));
+                }
               } else
                 return Flux.just(
                     new ChatResponse(
@@ -188,7 +312,13 @@ class ReviewModelBoundaryTest {
     new StagnationChatModel(model, assembler)
         .stream(new Prompt(new UserMessage("review"), options)).blockLast();
     assertThat(invocations).hasValue(4);
-    assertThat(ledger.get(job.id(), ReviewTools.scope(owner)).status()).isEqualTo("COMPLETE");
+    if (operation.equals("work-item")) {
+      var scope =
+          new dev.mikoto2000.rei.durable.DurableTaskStore.Scope("project", "chat", dir.toString());
+      assertThat(ledger.durableTasks().status(scope, claim.item().task()).state())
+          .isEqualTo("COMPLETE");
+    } else
+      assertThat(ledger.get(job.id(), ReviewTools.scope(owner)).status()).isEqualTo("COMPLETE");
     assertThat(execution.progressSnapshot().budget().argumentCorrections()).isEqualTo(1);
   }
 

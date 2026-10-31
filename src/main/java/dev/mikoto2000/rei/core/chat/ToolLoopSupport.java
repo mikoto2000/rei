@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core.chat;
 
+import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
@@ -87,7 +88,7 @@ public final class ToolLoopSupport {
       for (var response : message.getResponses())
         calls.put(
             response.id(),
-            argumentCorrections.contains(response.id())
+            argumentCorrections.contains(response.id()) || rejectedRead(response)
                 ? dev.mikoto2000.rei.core.contextbudget.ResultDelivery.Kind.GENERAL
                 : policies.getOrDefault(
                     response.name(),
@@ -119,6 +120,24 @@ public final class ToolLoopSupport {
         .conversationHistory(history)
         .returnDirect(result.returnDirect())
         .build();
+  }
+
+  private static boolean rejectedRead(ToolResponseMessage.ToolResponse response) {
+    if (!java.util.Set.of("readReviewPages", "readRawToolResult").contains(response.name()))
+      return false;
+    try {
+      var result =
+          tools.jackson.databind.json.JsonMapper.builder()
+              .build()
+              .readTree(response.responseData());
+      return result.isObject()
+          && result.path("error").isTextual()
+          && result.path("accepted").isBoolean()
+          && !result.path("accepted").asBoolean()
+          && result.path("validationExecuted").asBoolean(false);
+    } catch (RuntimeException malformed) {
+      return false;
+    }
   }
 
   /** 承認による中断や引数の修正を扱える実行経路を選び、未完了のツール呼び出しを進める。 */

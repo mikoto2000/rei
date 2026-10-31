@@ -13,6 +13,7 @@ import dev.mikoto2000.rei.review.ReviewCoverageLedger.Scope;
 import dev.mikoto2000.rei.review.ReviewCoverageLedger.Span;
 import dev.mikoto2000.rei.review.ReviewCoverageLedger.Target;
 import dev.mikoto2000.rei.storage.StorageDatabase;
+import dev.mikoto2000.rei.toolcontract.ToolReadRejectedException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -243,11 +244,20 @@ public final class ReviewTools {
       List<dev.mikoto2000.rei.durable.WorkItemStore.Finding> findings) {
     var owner = AgentRunScope.current();
     var work = workItems();
-    return work.commit(
-        taskScope(owner),
-        work.current(taskScope(owner), workItemId, owner.runId(), attempt),
-        assessment,
-        findings);
+    try {
+      return work.commit(
+          taskScope(owner),
+          work.current(taskScope(owner), workItemId, owner.runId(), attempt),
+          assessment,
+          findings);
+    } catch (IllegalArgumentException invalid) {
+      if (!"REVIEW_RESULT_INVALID".equals(invalid.getMessage())) throw invalid;
+      throw new ReviewResultRejectedException(
+          "No assessment was accepted. Keep the current workItemId and attempt; provide an"
+              + " assessment of 1..16384 characters and findings=[] or at most 100 findings with"
+              + " unique IDs, valid absolute UTF-16 coordinates and exact source evidence inside"
+              + " the delivered claim.");
+    }
   }
 
   private Page durablePage(
@@ -416,7 +426,9 @@ public final class ReviewTools {
       int totalTokenBudget)
       throws java.io.IOException {
     if (maxPages < 1 || maxPages > 4 || totalTokenBudget < 512 || totalTokenBudget > 2048)
-      throw new IllegalArgumentException("CONTEXT_BUDGET_INSUFFICIENT");
+      throw new ToolReadRejectedException(
+          "INVALID_REVIEW_READ_ARGUMENTS",
+          "No pages were fetched or delivered. Keep reviewJobId/path/expectedVersion/offset unchanged; set maxPages to 1..4 and totalTokenBudget to 512..2048 for the entire batch. Split larger requests into bounded reads, following the returned nextOffset.");
     var scope = scope(AgentRunScope.current());
     var job = ledger.get(reviewJobId, scope);
     var target =
@@ -430,7 +442,10 @@ public final class ReviewTools {
       ledger.invalidate(reviewJobId, scope, path, source.version());
       throw new IllegalStateException("STALE_VERSION");
     }
-    if (!boundary(source.text(), offset)) throw new IllegalArgumentException("INVALID_CURSOR");
+    if (!boundary(source.text(), offset))
+      throw new ToolReadRejectedException(
+          "INVALID_CURSOR",
+          "No pages were fetched or delivered. Keep the review identity unchanged; use offset=0 initially or the last returned nextOffset at a UTF-16 code point boundary within the source.");
     int count = Math.min(maxPages, Math.max(1, (totalTokenBudget - 64) / 256));
     var pages = new ArrayList<Page>();
     for (int i = 0; i < count; i++) {
@@ -686,12 +701,30 @@ public final class ReviewTools {
         || pages.isEmpty()
         || pages.size() > 4
         || pages.stream().anyMatch(p -> p == null || p.path() == null))
-      throw new IllegalArgumentException("REVIEW_RESULT_INVALID");
+      throw new ReviewResultRejectedException(
+          "No assessment was accepted. Submit 1..4 pages per call with nonnull paths. Split larger"
+              + " batches into calls of at most 4 pages; preserve saved assessments.");
+    try {
+      return submitExactReviewPages(reviewJobId, pages);
+    } catch (IllegalArgumentException invalid) {
+      if (!"REVIEW_RESULT_INVALID".equals(invalid.getMessage())) throw invalid;
+      throw new ReviewResultRejectedException(
+          "No assessment was accepted; the entire batch was rejected. Submit 1..4 distinct"
+              + " delivered pages with their exact path/offset/nextOffset, a nonempty assessment of"
+              + " at most 16384 characters, and findings=[] or valid findings with exact unique"
+              + " evidence quotes. Correct the rejected batch and preserve saved assessments.");
+    }
+  }
+
+  private List<PageSubmission> submitExactReviewPages(
+      String reviewJobId, List<PageAssessment> pages) throws java.io.IOException {
     var paths =
         pages.stream().map(PageAssessment::path).collect(java.util.stream.Collectors.toSet());
     var validated = validateSources(reviewJobId, paths);
     if (validated.job().status().equals("STALE_VERSION"))
-      throw new IllegalStateException("STALE_VERSION");
+      throw new ReviewResultRejectedException(
+          "No assessment was accepted: source version changed. Use restartReview, then read the new"
+              + " pages.");
     var prepared = new ArrayList<ReviewCoverageLedger.Assessment>();
     for (var page : pages)
       prepared.add(

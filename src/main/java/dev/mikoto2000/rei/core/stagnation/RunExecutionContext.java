@@ -753,6 +753,21 @@ public class RunExecutionContext {
 
   /** A rejected ledger submission ran validation but accepted no assessment. */
   public String reviewSubmissionCorrection(String guidance) {
+    return rejectedOperationCorrection(
+        "REVIEW_RESULT_INVALID",
+        guidance,
+        "Correct only this rejected review operation. Preserve successful sibling calls and saved assessments. Follow the operation-specific guidance; do not invent evidence, hashes or coordinates.");
+  }
+
+  /** A read rejected its arguments and returned no source content. */
+  public String toolReadCorrection(String code, String guidance) {
+    return rejectedOperationCorrection(
+        code,
+        guidance,
+        "Correct only this rejected read and issue a new tool call. Preserve successful sibling calls and saved assessments. No source content was returned; do not treat this correction as a delivered page or invent source content or cursor values.");
+  }
+
+  private String rejectedOperationCorrection(String code, String guidance, String instruction) {
     if (!budget.tryCorrectArguments())
       throw new ExecutionStoppedException(TOOL_ARGUMENT_REPAIR_EXHAUSTED);
     return tools.jackson.databind.json.JsonMapper.builder()
@@ -760,7 +775,7 @@ public class RunExecutionContext {
         .writeValueAsString(
             java.util.Map.of(
                 "error",
-                "REVIEW_RESULT_INVALID",
+                code,
                 "accepted",
                 false,
                 "validationExecuted",
@@ -768,7 +783,7 @@ public class RunExecutionContext {
                 "guidance",
                 dev.mikoto2000.rei.event.CredentialRedactor.redact(guidance),
                 "instruction",
-                "Correct only this rejected review operation. Preserve successful sibling calls and saved assessments. Follow the operation-specific guidance; do not invent evidence, hashes or coordinates.",
+                instruction,
                 "correctionsRemaining",
                 budget.remainingArgumentCorrections()));
   }

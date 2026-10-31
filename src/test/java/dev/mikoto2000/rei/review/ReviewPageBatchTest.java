@@ -73,6 +73,29 @@ class ReviewPageBatchTest {
   }
 
   @Test
+  void invalidReadBoundsReturnCorrectionWithoutFetchingAnyPages() throws Exception {
+    try (var scope = AgentRunScope.open(owner)) {
+      var job = begin();
+      for (var bounds :
+          List.of(
+              new int[] {0, 1024}, new int[] {5, 1024}, new int[] {1, 511}, new int[] {1, 2049})) {
+        assertThatThrownBy(
+                () ->
+                    tools.readReviewPages(
+                        job.id(),
+                        "source.md",
+                        job.targets().getFirst().version(),
+                        0,
+                        bounds[0],
+                        bounds[1]))
+            .isInstanceOf(dev.mikoto2000.rei.toolcontract.ToolReadRejectedException.class)
+            .hasMessageContaining("1..4", "512..2048");
+        assertThat(ledger.get(job.id(), job.owner())).isEqualTo(job);
+      }
+    }
+  }
+
+  @Test
   void fourFetchedPagesUseOneRevisionAndRemainUndelivered() throws Exception {
     try (var scope = AgentRunScope.open(owner)) {
       var job = begin();
@@ -208,6 +231,34 @@ class ReviewPageBatchTest {
   }
 
   @Test
+  void oversizedBatchSavesNothingAndCanBeRetriedInGroupsOfFour() throws Exception {
+    try (var scope = AgentRunScope.open(owner)) {
+      var job = begin();
+      var pages = new ArrayList<>(read(job, 2048));
+      var last = pages.getLast();
+      pages.addAll(
+          tools.readReviewPages(
+              job.id(), "source.md", last.range().version(), last.nextOffset(), 1, 1024));
+      assertThat(pages).hasSize(5);
+      tools.confirmed(owner, pages);
+      var before = ledger.get(job.id(), job.owner());
+      var inputs = pages.stream().map(p -> assessment(p, "reviewed")).toList();
+      assertThatThrownBy(() -> tools.submitReviewPages(job.id(), inputs))
+          .isInstanceOf(ReviewResultRejectedException.class)
+          .hasMessageContaining("1..4", "Split larger batches");
+      assertThat(ledger.get(job.id(), job.owner())).isEqualTo(before);
+      assertThat(tools.submitReviewPages(job.id(), inputs.subList(0, 4)))
+          .hasSize(4)
+          .allMatch(ReviewTools.PageSubmission::accepted);
+      assertThat(tools.submitReviewPages(job.id(), inputs.subList(4, 5)))
+          .hasSize(1)
+          .allMatch(ReviewTools.PageSubmission::accepted);
+      assertThat(ledger.get(job.id(), job.owner()).ranges())
+          .allMatch(ReviewCoverageLedger.Entry::reviewed);
+    }
+  }
+
+  @Test
   void batchAssessmentIsAtomicAndIdempotent() throws Exception {
     try (var scope = AgentRunScope.open(owner)) {
       var job = begin();
@@ -217,7 +268,7 @@ class ReviewPageBatchTest {
       var inputs = new ArrayList<>(pages.stream().map(p -> assessment(p, "reviewed")).toList());
       inputs.set(1, assessment(pages.get(1), ""));
       assertThatThrownBy(() -> tools.submitReviewPages(job.id(), inputs))
-          .isInstanceOf(IllegalArgumentException.class);
+          .isInstanceOf(ReviewResultRejectedException.class);
       assertThat(ledger.get(job.id(), job.owner())).isEqualTo(before);
       inputs.set(1, assessment(pages.get(1), "reviewed"));
       snapshots = 0;
@@ -229,7 +280,7 @@ class ReviewPageBatchTest {
       assertThat(ledger.get(job.id(), job.owner()).revision()).isEqualTo(before.revision() + 1);
       var duplicate = List.of(inputs.getFirst(), inputs.getFirst());
       assertThatThrownBy(() -> tools.submitReviewPages(job.id(), duplicate))
-          .isInstanceOf(IllegalArgumentException.class);
+          .isInstanceOf(ReviewResultRejectedException.class);
     }
   }
 
@@ -243,12 +294,12 @@ class ReviewPageBatchTest {
       try (var foreign =
           AgentRunScope.open(new AgentRunContext("other", "other-chat", root, "project"))) {
         assertThatThrownBy(() -> tools.submitReviewPages(job.id(), inputs))
-            .isInstanceOf(IllegalArgumentException.class);
+            .isInstanceOf(dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException.class);
       }
       Files.writeString(root.resolve("source.md"), "changed");
       assertThatThrownBy(() -> tools.submitReviewPages(job.id(), inputs))
-          .isInstanceOf(IllegalStateException.class)
-          .hasMessageContaining("STALE_VERSION");
+          .isInstanceOf(ReviewResultRejectedException.class)
+          .hasMessageContaining("restartReview");
       assertThat(ledger.get(job.id(), job.owner()).ranges())
           .noneMatch(ReviewCoverageLedger.Entry::reviewed);
     }
