@@ -21,6 +21,7 @@ try {
     & "$PSScriptRoot/test-performance-report.ps1" -Reports @("$root/surefire-reports","$root/failsafe-reports") -Output "$root/result" -WallSeconds 2 | Out-Null
     $summary = Get-Content "$root/result/summary.json" -Raw | ConvertFrom-Json
     Assert ($summary.Tests -eq 5 -and $summary.Classes -eq 2) 'Test/class totals'
+    Assert ($summary.ExecutedClasses -eq 2) 'Classes with executed cases'
     Assert ($summary.Failures -eq 1 -and $summary.Errors -eq 1 -and $summary.Skipped -eq 1 -and $summary.Passed -eq 2) 'Result totals'
     Assert ($summary.SuiteSeconds -eq 3.75 -and $summary.WallSeconds -eq 2) 'Suite sum differs from parallel wall time'
     Assert ($summary.Providers.Surefire.Tests -eq 4 -and $summary.Providers.Failsafe.SuiteSeconds -eq 2.5) 'Provider totals'
@@ -52,6 +53,13 @@ try {
     Assert ($zero.Tests -eq 0 -and $zero.SuiteSeconds -eq 0 -and $null -eq $zero.TestCountTimePearson) 'Zero duration and undefined correlation'
     Assert ($zero.Providers.Failsafe.Tests -eq 0 -and $zero.Providers.Failsafe.SuiteSeconds -eq 0) 'Absent provider has zero totals'
     Assert ($null -eq $zero.WallSeconds) 'Unmeasured wall time must not be reported as zero'
+    Assert ($zero.Classes -eq 1 -and $zero.ExecutedClasses -eq 0) 'Reported suite differs from executed class'
+    New-Item -ItemType Directory "$root/skiponly" | Out-Null
+    '<testsuite name="Skipped" tests="1" failures="0" errors="0" skipped="1" time="0"><testcase name="disabled" time="0"><skipped/></testcase></testsuite>' |
+        Set-Content "$root/skiponly/TEST-skipped.xml"
+    & "$PSScriptRoot/test-performance-report.ps1" -Reports "$root/skiponly" -Output "$root/skip-result" | Out-Null
+    $skipOnly = Get-Content "$root/skip-result/summary.json" -Raw | ConvertFrom-Json
+    Assert ($skipOnly.Tests -eq 1 -and $skipOnly.Classes -eq 1 -and $skipOnly.ExecutedClasses -eq 0) 'All-skipped class was not executed'
     foreach ($duration in @('0.999','1','5','10','30')) {
         "<testsuite name='Boundary$duration' tests='0' failures='0' errors='0' skipped='0' time='$duration'/>" |
             Set-Content "$root/empty/TEST-$duration.xml"

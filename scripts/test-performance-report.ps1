@@ -52,7 +52,10 @@ $classes = @($classes | Sort-Object TotalSeconds -Descending)
 $total = ($classes | Measure-Object TotalSeconds -Sum).Sum
 foreach ($row in $classes) { if ($total) { $row.SuitePercent = 100 * $row.TotalSeconds / $total } }
 function Totals($rows) {
-    $result = [ordered]@{Classes=@($rows).Count}
+    $result = [ordered]@{
+        Classes=@($rows).Count
+        ExecutedClasses=@($rows | Where-Object { $_.Tests -gt $_.Skipped }).Count
+    }
     foreach ($key in @('Tests','Passed','Failures','Errors','Skipped')) { $result[$key] = [long](($rows | Measure-Object $key -Sum).Sum) }
     $result.SuiteSeconds = [double](($rows | Measure-Object TotalSeconds -Sum).Sum)
     return $result
