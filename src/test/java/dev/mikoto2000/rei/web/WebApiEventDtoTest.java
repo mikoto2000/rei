@@ -14,6 +14,30 @@ import org.junit.jupiter.api.Test;
 class WebApiEventDtoTest {
 
   @Test
+  void llmAndRunTimeoutsExposeFixedRecoveryGuidanceWithoutInternalDetails() {
+    var factory = new AgentEventFactory(Clock.systemUTC());
+    var failure =
+        new IllegalStateException(
+            "PRIVATE_PATH credential=secret", new java.net.SocketTimeoutException("secret"));
+    for (var event :
+        java.util.List.of(
+            factory.llmRequestFailed("run", "request", 301015, failure),
+            factory.runFailed(
+                "run",
+                new ErrorInformation("IllegalStateException", "PRIVATE_PATH secret", "timeout")))) {
+      var dto = WebApiEventDto.from(event, false, "");
+      assertThat(dto.payload().get("error").toString())
+          .contains("type=timeout", "タイムアウト", "接続先", "再開")
+          .doesNotContain("Operation failed.", "PRIVATE", "secret", "Exception");
+    }
+    var tool =
+        factory.toolFailed("call", "read", new ErrorInformation("Private", "secret", "timeout"));
+    assertThat(WebApiEventDto.from(tool, false, "").payload().get("error").toString())
+        .contains("type=operation_failed")
+        .doesNotContain("secret");
+  }
+
+  @Test
   void fileBudgetFailuresExposeOnlyFixedCauseAndRecoveryGuidance() {
     var factory = new AgentEventFactory(Clock.systemUTC());
     var error =
