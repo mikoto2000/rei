@@ -38,19 +38,22 @@ public class RunService implements AutoCloseable {
 
   /** 通知に応じて状態や表示を更新するため、待機中キャンセルを受け付ける。 */
   public void onQueuedCancellation(String runId, Runnable cancelled) {
-    synchronized (monitor()) {
-      if (registry.get(runId).status() != RunStatus.QUEUED
-          || queuedCancellation.putIfAbsent(runId, java.util.Objects.requireNonNull(cancelled))
-              != null)
-        throw new IllegalStateException("Queued cancellation already registered or Run started");
-    }
+    runAtomically(
+        () -> {
+          if (registry.get(runId).status() != RunStatus.QUEUED
+              || queuedCancellation.putIfAbsent(runId, java.util.Objects.requireNonNull(cancelled))
+                  != null)
+            throw new IllegalStateException(
+                "Queued cancellation already registered or Run started");
+        });
   }
 
   /** 実行の受付と状態管理に関する記憶の削除待機中キャンセルを処理する。 */
   public void forgetQueuedCancellation(String runId) {
-    synchronized (monitor()) {
-      queuedCancellation.remove(runId);
-    }
+    runAtomically(
+        () -> {
+          queuedCancellation.remove(runId);
+        });
   }
 
   /** 実行の受付と状態管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
@@ -74,42 +77,57 @@ public class RunService implements AutoCloseable {
   }
 
   /** 実行の受付と状態管理で用いる排他制御を返す。 */
-  private Object monitor() {
-    return bus == null ? registry : bus;
+  private <T> T atomically(java.util.function.Supplier<T> action) {
+    if (bus != null) return bus.withReplaySnapshot(action);
+    synchronized (registry) {
+      return action.get();
+    }
+  }
+
+  private void runAtomically(Runnable action) {
+    atomically(
+        () -> {
+          action.run();
+          return null;
+        });
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
   public RunSnapshot get(String runId) {
-    synchronized (monitor()) {
-      purgeExpired();
-      return registry.get(runId);
-    }
+    return atomically(
+        () -> {
+          purgeExpired();
+          return registry.get(runId);
+        });
   }
 
   /** Per-frame lookup without scanning unrelated runs or their replay histories. */
   public RunStatus streamStatus(String runId) {
-    synchronized (monitor()) {
-      return registry.streamStatus(runId);
-    }
+    return atomically(
+        () -> {
+          return registry.streamStatus(runId);
+        });
   }
 
   /** 実行の受付と状態管理において、復元済みに該当するか判定する。 */
   public boolean restored(String runId) {
-    synchronized (monitor()) {
-      return registry.restored(runId);
-    }
+    return atomically(
+        () -> {
+          return registry.restored(runId);
+        });
   }
 
   /** 実行の受付と状態管理に関する保持期限を過ぎた情報の削除期限切れを処理する。 */
   public void purgeExpired() {
-    synchronized (monitor()) {
-      var expired = registry.purgeExpired();
-      expired.forEach(queuedCancellation::remove);
-      if (bus != null) {
-        expired.forEach(bus::purgeRun);
-        bus.purgeExpired(registry.runIds());
-      }
-    }
+    runAtomically(
+        () -> {
+          var expired = registry.purgeExpired();
+          expired.forEach(queuedCancellation::remove);
+          if (bus != null) {
+            expired.forEach(bus::purgeRun);
+            bus.purgeExpired(registry.runIds());
+          }
+        });
   }
 
   /**
@@ -126,66 +144,78 @@ public class RunService implements AutoCloseable {
    * <p>Pending input cancellation must never turn into cancellation of already executing work.
    */
   public CancellationResult cancelQueuedOnly(String runId) {
-    Runnable notify;
+    var notify = new java.util.concurrent.atomic.AtomicReference<Runnable>();
     CancellationResult result;
-    synchronized (monitor()) {
-      purgeExpired();
-      var current = registry.get(runId);
-      if (current.status() != RunStatus.QUEUED || !cancelQueued.test(runId))
-        return new CancellationResult(false, current);
-      registry.transition(runId, RunStatus.CANCELLED, null);
-      cancellation.forgetPendingCancellation(runId);
-      notify = queuedCancellation.remove(runId);
-      bus.publish(
-          events
-              .runCancelled(
-                  runId,
-                  new ErrorInformation(
-                      "CancellationException", "ユーザーの要求により待機中の依頼を取り消しました。", "user_cancelled"))
-              .withOwnership(current.context()));
-      result = new CancellationResult(true, registry.get(runId));
-    }
-    notifyCancellation(notify);
+    result =
+        atomically(
+            () -> {
+              purgeExpired();
+              var current = registry.get(runId);
+              if (current.status() != RunStatus.QUEUED || !cancelQueued.test(runId))
+                return new CancellationResult(false, current);
+              registry.transition(runId, RunStatus.CANCELLED, null);
+              cancellation.forgetPendingCancellation(runId);
+              notify.set(queuedCancellation.remove(runId));
+              bus.publish(
+                  events
+                      .runCancelled(
+                          runId,
+                          new ErrorInformation(
+                              "CancellationException",
+                              "ユーザーの要求により待機中の依頼を取り消しました。",
+                              "user_cancelled"))
+                      .withOwnership(current.context()));
+              return new CancellationResult(true, registry.get(runId));
+            });
+    notifyCancellation(notify.get());
     return result;
   }
 
   /** 対象の実行をキャンセルする。 */
   public CancellationResult cancel(String runId) {
-    Runnable notify = null;
-    CommandCancellationService.CancellationRequest request = null;
+    var notify = new java.util.concurrent.atomic.AtomicReference<Runnable>();
+    var request =
+        new java.util.concurrent.atomic.AtomicReference<
+            CommandCancellationService.CancellationRequest>();
     CancellationResult result;
-    synchronized (monitor()) {
-      purgeExpired();
-      var current = registry.get(runId);
-      if (current.status().isWaiting() && !registry.claimWaiting(current.context()))
-        return new CancellationResult(false, current);
-      boolean queuedRemoved = current.status() == RunStatus.QUEUED && cancelQueued.test(runId);
-      if (!current.status().isTerminal()
-          && (current.status() == RunStatus.RUNNING
-              || current.status() == RunStatus.QUEUED && !queuedRemoved
-              || executing.contains(runId))) {
-        request = cancellation.requestRun(runId);
-        result = new CancellationResult(request.accepted(), registry.get(runId));
-      } else {
-        if (!registry.transition(runId, RunStatus.CANCELLED, null) && !queuedRemoved)
-          return new CancellationResult(false, current);
-        if (current.status() == RunStatus.QUEUED) {
-          cancellation.forgetPendingCancellation(runId);
-          notify = queuedCancellation.remove(runId);
-        } else request = cancellation.requestRun(runId);
-        bus.publish(
-            events
-                .runCancelled(
-                    runId,
-                    new ErrorInformation(
-                        "CancellationException", "ユーザーの要求により実行を停止しました。", "user_cancelled"))
-                .withOwnership(current.context()));
-        result = new CancellationResult(true, registry.get(runId));
-      }
-    }
+    result =
+        atomically(
+            () -> {
+              CancellationResult outcome;
+              purgeExpired();
+              var current = registry.get(runId);
+              if (current.status().isWaiting() && !registry.claimWaiting(current.context()))
+                return new CancellationResult(false, current);
+              boolean queuedRemoved =
+                  current.status() == RunStatus.QUEUED && cancelQueued.test(runId);
+              if (!current.status().isTerminal()
+                  && (current.status() == RunStatus.RUNNING
+                      || current.status() == RunStatus.QUEUED && !queuedRemoved
+                      || executing.contains(runId))) {
+                request.set(cancellation.requestRun(runId));
+                outcome = new CancellationResult(request.get().accepted(), registry.get(runId));
+              } else {
+                if (!registry.transition(runId, RunStatus.CANCELLED, null) && !queuedRemoved)
+                  return new CancellationResult(false, current);
+                if (current.status() == RunStatus.QUEUED) {
+                  cancellation.forgetPendingCancellation(runId);
+                  notify.set(queuedCancellation.remove(runId));
+                } else request.set(cancellation.requestRun(runId));
+                bus.publish(
+                    events
+                        .runCancelled(
+                            runId,
+                            new ErrorInformation(
+                                "CancellationException", "ユーザーの要求により実行を停止しました。", "user_cancelled"))
+                        .withOwnership(current.context()));
+                outcome = new CancellationResult(true, registry.get(runId));
+              }
+
+              return outcome;
+            });
     // 子の停止や dispose はブロックやイベント発行を伴い得る。共有 monitor を保持しない。
-    if (request != null) request.dispatch().run();
-    notifyCancellation(notify);
+    if (request.get() != null) request.get().dispatch().run();
+    notifyCancellation(notify.get());
     return result;
   }
 
@@ -206,24 +236,29 @@ public class RunService implements AutoCloseable {
    * <p>Invoked inside the project executor, and returns only after runner cleanup.
    */
   public void execute(AgentRunContext context, Runnable runner) {
-    Runnable skipped;
+    var skipped = new java.util.concurrent.atomic.AtomicReference<Runnable>();
     boolean started;
-    synchronized (monitor()) {
-      skipped = queuedCancellation.remove(context.runId());
-      boolean stopped = cancellation.diagnostic(context.runId()).requestedAt() != null;
-      if (stopped && registry.transition(context.runId(), RunStatus.CANCELLED, null))
-        bus.publish(events.runCancelled(context.runId(), null).withOwnership(context));
-      started = !stopped && registry.transition(context.runId(), RunStatus.RUNNING, null);
-      if (started) {
-        executing.add(context.runId());
-        registry.beginExecution(context.runId());
-      }
-      if (!started) {
-        cancellation.forgetPendingCancellation(context.runId());
-      }
-    }
+    started =
+        atomically(
+            () -> {
+              skipped.set(queuedCancellation.remove(context.runId()));
+              boolean stopped = cancellation.diagnostic(context.runId()).requestedAt() != null;
+              if (stopped && registry.transition(context.runId(), RunStatus.CANCELLED, null))
+                bus.publish(events.runCancelled(context.runId(), null).withOwnership(context));
+              boolean admitted =
+                  !stopped && registry.transition(context.runId(), RunStatus.RUNNING, null);
+              if (admitted) {
+                executing.add(context.runId());
+                registry.beginExecution(context.runId());
+              }
+              if (!admitted) {
+                cancellation.forgetPendingCancellation(context.runId());
+              }
+
+              return admitted;
+            });
     if (!started) {
-      notifyCancellation(skipped);
+      notifyCancellation(skipped.get());
       return;
     }
     String failure = "Runner ended without a terminal event";
@@ -234,29 +269,32 @@ public class RunService implements AutoCloseable {
     } finally {
       try {
         cancellation.completeResources(context.runId());
-        synchronized (monitor()) {
-          executing.remove(context.runId());
-          var terminal = terminalEvents.remove(context.runId());
-          var stop = cancellation.diagnostic(context.runId());
-          if (stop.requestedAt() != null) {
-            if (registry.transition(context.runId(), RunStatus.CANCELLED, null))
-              bus.publish(
-                  events
-                      .runCancelled(
-                          context.runId(),
-                          new ErrorInformation(
-                              "CancellationException",
-                              "ユーザーの停止要求後、実行と後片付けが終了しました。",
-                              "user_cancelled"))
-                      .withOwnership(context));
-          } else if (stop.failure() != null) {
-            fail(context, "Run resource cleanup failed: " + stop.failure());
-          } else {
-            if (terminal != null) onEvent(terminal);
-            if (!registry.get(context.runId()).status().isWaiting()) fail(context, failure);
-          }
-          cancellation.forgetPendingCancellation(context.runId());
-        }
+        String completedFailure = failure;
+        runAtomically(
+            () -> {
+              executing.remove(context.runId());
+              var terminal = terminalEvents.remove(context.runId());
+              var stop = cancellation.diagnostic(context.runId());
+              if (stop.requestedAt() != null) {
+                if (registry.transition(context.runId(), RunStatus.CANCELLED, null))
+                  bus.publish(
+                      events
+                          .runCancelled(
+                              context.runId(),
+                              new ErrorInformation(
+                                  "CancellationException",
+                                  "ユーザーの停止要求後、実行と後片付けが終了しました。",
+                                  "user_cancelled"))
+                          .withOwnership(context));
+              } else if (stop.failure() != null) {
+                fail(context, "Run resource cleanup failed: " + stop.failure());
+              } else {
+                if (terminal != null) onEvent(terminal);
+                if (!registry.get(context.runId()).status().isWaiting())
+                  fail(context, completedFailure);
+              }
+              cancellation.forgetPendingCancellation(context.runId());
+            });
       } finally {
         registry.endExecution(context.runId());
       }
@@ -270,15 +308,17 @@ public class RunService implements AutoCloseable {
 
   /** 実行の受付と状態管理に関するfailを処理する。 */
   private void fail(AgentRunContext context, String message) {
-    synchronized (monitor()) {
-      var failure = new RunFailure("ExecutionFailure", message);
-      if (registry.transition(context.runId(), RunStatus.FAILED, failure))
-        bus.publish(
-            events
-                .runFailed(
-                    context.runId(), new ErrorInformation(failure.type(), failure.message(), null))
-                .withOwnership(context));
-    }
+    runAtomically(
+        () -> {
+          var failure = new RunFailure("ExecutionFailure", message);
+          if (registry.transition(context.runId(), RunStatus.FAILED, failure))
+            bus.publish(
+                events
+                    .runFailed(
+                        context.runId(),
+                        new ErrorInformation(failure.type(), failure.message(), null))
+                    .withOwnership(context));
+        });
   }
 
   /**
@@ -291,30 +331,33 @@ public class RunService implements AutoCloseable {
     // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
     if (!terminal.isTerminal()) throw new IllegalArgumentException("Terminal state required");
     cancellation.completeResources(context.runId());
-    synchronized (monitor()) {
-      if (cancellation.diagnostic(context.runId()).requestedAt() != null)
-        terminal = RunStatus.CANCELLED;
-      var failure =
-          terminal == RunStatus.UNKNOWN
-              ? new RunFailure(
-                  "UnknownOutcome",
-                  "Application Run outcome unknown; inspect saved child checkpoint")
-              : terminal == RunStatus.FAILED
-                  ? new RunFailure("ExecutionFailure", "Application Run failed")
-                  : null;
-      if (registry.transition(context.runId(), terminal, failure)) {
-        var event =
-            switch (terminal) {
-              case COMPLETED -> events.runCompleted(context.runId(), 0);
-              case CANCELLED -> events.runCancelled(context.runId(), null);
-              default ->
-                  events.runFailed(
-                      context.runId(),
-                      new ErrorInformation(failure.type(), failure.message(), null));
-            };
-        bus.publish(event.withOwnership(context));
-      }
-    }
+    runAtomically(
+        () -> {
+          var effectiveTerminal =
+              cancellation.diagnostic(context.runId()).requestedAt() != null
+                  ? RunStatus.CANCELLED
+                  : terminal;
+          var failure =
+              effectiveTerminal == RunStatus.UNKNOWN
+                  ? new RunFailure(
+                      "UnknownOutcome",
+                      "Application Run outcome unknown; inspect saved child checkpoint")
+                  : effectiveTerminal == RunStatus.FAILED
+                      ? new RunFailure("ExecutionFailure", "Application Run failed")
+                      : null;
+          if (registry.transition(context.runId(), effectiveTerminal, failure)) {
+            var event =
+                switch (effectiveTerminal) {
+                  case COMPLETED -> events.runCompleted(context.runId(), 0);
+                  case CANCELLED -> events.runCancelled(context.runId(), null);
+                  default ->
+                      events.runFailed(
+                          context.runId(),
+                          new ErrorInformation(failure.type(), failure.message(), null));
+                };
+            bus.publish(event.withOwnership(context));
+          }
+        });
   }
 
   /** 通知に応じて状態や表示を更新するため、イベントを受け付ける。 */
@@ -328,34 +371,37 @@ public class RunService implements AutoCloseable {
           default -> null;
         };
     if (status == null) return;
-    synchronized (monitor()) {
-      if (executing.contains(event.runId())) {
-        terminalEvents.putIfAbsent(event.runId(), event);
-        return;
-      }
-      try {
-        // Do not expose arbitrary exception messages (which may contain credentials) through status
-        // polling.
-        registry.transition(
-            event.runId(),
-            status,
-            status == RunStatus.FAILED
-                ? new RunFailure("ExecutionFailure", "Agent run failed")
-                : null);
-      } catch (RunNotFoundException ignored) {
-        /* CLI and auxiliary runs need no Web registry entry. */
-      }
-    }
+    runAtomically(
+        () -> {
+          if (executing.contains(event.runId())) {
+            terminalEvents.putIfAbsent(event.runId(), event);
+            return;
+          }
+          try {
+            // Do not expose arbitrary exception messages (which may contain credentials) through
+            // status
+            // polling.
+            registry.transition(
+                event.runId(),
+                status,
+                status == RunStatus.FAILED
+                    ? new RunFailure("ExecutionFailure", "Agent run failed")
+                    : null);
+          } catch (RunNotFoundException ignored) {
+            /* CLI and auxiliary runs need no Web registry entry. */
+          }
+        });
   }
 
   /** 実行の受付と状態管理で利用した資源や登録を解放し、利用を終了する。 */
   @Override
   public void close() {
     if (subscription != null) subscription.unsubscribe();
-    synchronized (monitor()) {
-      queuedCancellation.clear();
-      terminalEvents.clear();
-      executing.clear();
-    }
+    runAtomically(
+        () -> {
+          queuedCancellation.clear();
+          terminalEvents.clear();
+          executing.clear();
+        });
   }
 }

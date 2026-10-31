@@ -2,7 +2,7 @@ package dev.mikoto2000.rei.event;
 
 import org.springframework.stereotype.Component;
 
-/** ストリームの履歴と診断情報を同じCOMMITで確定し、通常配送より先に完了させる。 */
+/** イベントの履歴と診断情報を同じCOMMITで確定し、通常配送より先に完了させる。 */
 @Component
 public final class StreamingEventPersistence implements AutoCloseable {
   private final ProjectAgentEventStore events;
@@ -33,9 +33,7 @@ public final class StreamingEventPersistence implements AutoCloseable {
         && subscription != null
         && events instanceof SqliteProjectAgentEventStore
         && profile.hasManagedLog()
-        && event.projectId() != null
-        && (event.type() == AgentEventType.MESSAGE_DELTA
-            || event.type() == AgentEventType.THINKING_DELTA);
+        && event.projectId() != null;
   }
 
   private void persist(AgentEvent event) {

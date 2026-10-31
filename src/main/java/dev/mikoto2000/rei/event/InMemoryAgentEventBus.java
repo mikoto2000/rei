@@ -45,18 +45,38 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
   /** 実行状況を利用先で把握できるよう、境界を通知する。 */
   @Override
   public void publishBoundary(AgentEvent event) {
-    for (var listener : boundaryListeners) listener.onEvent(event);
-    publish(event);
+    synchronized (eventLock) {
+      java.util.Objects.requireNonNull(event, "event must not be null");
+      var sequenced = withSequence(event);
+      // Reserve its delivery position before persistence callbacks can reenter.
+      pending.addLast(new Pending(sequenced, true));
+      boolean active = dispatching;
+      dispatching = true;
+      try {
+        for (var listener : persistenceListeners) listener.onEvent(sequenced);
+        for (var listener : boundaryListeners) listener.onEvent(sequenced);
+      } catch (RuntimeException | Error failure) {
+        pending.clear();
+        throw failure;
+      } finally {
+        dispatching = active;
+      }
+      drain();
+    }
   }
 
   /** 発生順序。 */
   private final AtomicLong sequence = new AtomicLong(0L);
 
+  private final Object eventLock = new Object();
+
   /** 待機中。 */
-  private final java.util.ArrayDeque<AgentEvent> pending = new java.util.ArrayDeque<>();
+  private final java.util.ArrayDeque<Pending> pending = new java.util.ArrayDeque<>();
 
   /** 実行先への引き渡し中かどうか。 */
   private boolean dispatching;
+
+  private record Pending(AgentEvent event, boolean persisted) {}
 
   /** 再送。 */
   private final ReplayBuffer replay;
@@ -76,37 +96,52 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
     return new InMemoryAgentEventBus(replay);
   }
 
+  @Override
+  public <T> T withReplaySnapshot(java.util.function.Supplier<T> action) {
+    synchronized (eventLock) {
+      return action.get();
+    }
+  }
+
   /** 実行状況の通知で用いる購読を返す。 */
   @Override
-  public synchronized ReplaySubscription subscribe(
+  public ReplaySubscription subscribe(
       String runId, long fromSequence, AgentEventListener listener) {
-    var snapshot = replay.snapshot(runId, fromSequence);
-    var subscription =
-        subscribe(
-            event -> {
-              if (runId.equals(event.runId()) && event.sequence() > snapshot.latestSequence())
-                listener.onEvent(event);
-            });
-    return new ReplaySubscription(
-        snapshot.events(), subscription, snapshot.latestSequence(), snapshot.terminalSequence());
+    synchronized (eventLock) {
+      var snapshot = replay.snapshot(runId, fromSequence);
+      var subscription =
+          subscribe(
+              event -> {
+                if (runId.equals(event.runId()) && event.sequence() > snapshot.latestSequence())
+                  listener.onEvent(event);
+              });
+      return new ReplaySubscription(
+          snapshot.events(), subscription, snapshot.latestSequence(), snapshot.terminalSequence());
+    }
   }
 
   /** 実行状況の通知に関する保持期限を過ぎた情報の削除実行を処理する。 */
   @Override
-  public synchronized void purgeRun(String runId) {
-    replay.purgeRun(runId);
+  public void purgeRun(String runId) {
+    synchronized (eventLock) {
+      replay.purgeRun(runId);
+    }
   }
 
   /** 実行状況の通知に関する保持期限を過ぎた情報の削除期限切れを処理する。 */
   @Override
-  public synchronized void purgeExpired() {
-    replay.purgeExpired();
+  public void purgeExpired() {
+    synchronized (eventLock) {
+      replay.purgeExpired();
+    }
   }
 
   /** 実行状況の通知に関する保持期限を過ぎた情報の削除期限切れを処理する。 */
   @Override
-  public synchronized void purgeExpired(java.util.Set<String> protectedRuns) {
-    replay.purgeExpired(protectedRuns);
+  public void purgeExpired(java.util.Set<String> protectedRuns) {
+    synchronized (eventLock) {
+      replay.purgeExpired(protectedRuns);
+    }
   }
 
   /** 実行状況の通知で用いる購読を返す。 */
@@ -134,17 +169,29 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
 
   /** 状態や結果を購読先へ通知する。 */
   @Override
-  public synchronized void publish(AgentEvent event) {
-    if (event == null) {
-      throw new IllegalArgumentException("event must not be null");
+  public void publish(AgentEvent event) {
+    synchronized (eventLock) {
+      if (event == null) {
+        throw new IllegalArgumentException("event must not be null");
+      }
+      enqueue(withSequence(event), false);
     }
-    pending.addLast(withSequence(event));
+  }
+
+  private void enqueue(AgentEvent event, boolean persisted) {
+    pending.addLast(new Pending(event, persisted));
+    drain();
+  }
+
+  private void drain() {
     if (dispatching) return;
     dispatching = true;
     try {
       while (!pending.isEmpty()) {
-        AgentEvent sequenced = pending.removeFirst();
-        for (var listener : persistenceListeners) listener.onEvent(sequenced);
+        var next = pending.removeFirst();
+        AgentEvent sequenced = next.event();
+        if (!next.persisted())
+          for (var listener : persistenceListeners) listener.onEvent(sequenced);
         replay.append(sequenced);
         for (AgentEventListener listener : listeners) {
           try {
