@@ -47,22 +47,23 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
   public void publishBoundary(AgentEvent event) {
     synchronized (eventLock) {
       java.util.Objects.requireNonNull(event, "event must not be null");
+      var targets = reserveObservers();
       var sequenced = withSequence(event);
-      // Reserve its delivery position before persistence callbacks can reenter.
-      pending.addLast(new Pending(sequenced, true));
+      pending.addLast(new Pending(sequenced, true, targets));
       boolean active = dispatching;
       dispatching = true;
       try {
         for (var listener : persistenceListeners) listener.onEvent(sequenced);
         for (var listener : boundaryListeners) listener.onEvent(sequenced);
       } catch (RuntimeException | Error failure) {
-        pending.clear();
+        clearPending();
         throw failure;
       } finally {
         dispatching = active;
       }
       drain();
     }
+    dispatchObservers();
   }
 
   /** 発生順序。 */
@@ -76,7 +77,18 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
   /** 実行先への引き渡し中かどうか。 */
   private boolean dispatching;
 
-  private record Pending(AgentEvent event, boolean persisted) {}
+  private record Pending(AgentEvent event, boolean persisted, List<AgentEventListener> observers) {
+    private Pending {
+      observers = List.copyOf(observers);
+    }
+  }
+
+  private final List<AgentEventListener> observers = new CopyOnWriteArrayList<>();
+  private final java.util.ArrayDeque<Pending> observerQueue = new java.util.ArrayDeque<>();
+  private final int observerCapacity;
+  private int observerReservations;
+  private Thread observerDispatcher;
+  private int snapshotDepth;
 
   /** 再送。 */
   private final ReplayBuffer replay;
@@ -88,7 +100,22 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
 
   /** 指定された値や利用先を使って、InMemoryAgentEventBusを初期化する。 */
   private InMemoryAgentEventBus(ReplayBuffer replay) {
+    this(replay, 1024);
+  }
+
+  InMemoryAgentEventBus(int observerCapacity) {
+    this(new ReplayBuffer(10_000, java.time.Clock.systemUTC()), checkedCapacity(observerCapacity));
+  }
+
+  private InMemoryAgentEventBus(ReplayBuffer replay, int observerCapacity) {
     this.replay = replay;
+    this.observerCapacity = observerCapacity;
+  }
+
+  private static int checkedCapacity(int capacity) {
+    if (capacity < 1 || capacity > 65536)
+      throw new IllegalArgumentException("Invalid observer backlog capacity");
+    return capacity;
   }
 
   /** 指定された再送一時保持領域を反映した情報を作成する。 */
@@ -98,8 +125,17 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
 
   @Override
   public <T> T withReplaySnapshot(java.util.function.Supplier<T> action) {
-    synchronized (eventLock) {
-      return action.get();
+    try {
+      synchronized (eventLock) {
+        snapshotDepth++;
+        try {
+          return action.get();
+        } finally {
+          snapshotDepth--;
+        }
+      }
+    } finally {
+      dispatchObservers();
     }
   }
 
@@ -167,6 +203,114 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
     };
   }
 
+  @Override
+  public Subscription subscribeObserver(AgentEventListener listener) {
+    java.util.Objects.requireNonNull(listener);
+    var active = new java.util.concurrent.atomic.AtomicBoolean(true);
+    AgentEventListener guarded =
+        event -> {
+          if (active.get()) listener.onEvent(event);
+        };
+    observers.add(guarded);
+    return () -> {
+      active.set(false);
+      observers.remove(guarded);
+    };
+  }
+
+  @Override
+  public ReplaySubscription subscribeObserver(
+      String runId, long fromSequence, AgentEventListener listener) {
+    return subscribeObserver(runId, fromSequence, listener, event -> false);
+  }
+
+  @Override
+  public ReplaySubscription subscribeObserver(
+      String runId,
+      long fromSequence,
+      AgentEventListener listener,
+      java.util.function.Predicate<AgentEvent> global) {
+    synchronized (eventLock) {
+      var snapshot = replay.snapshot(runId, fromSequence);
+      var subscription =
+          subscribeObserver(
+              event -> {
+                if ((runId.equals(event.runId()) || global.test(event))
+                    && event.sequence() > snapshot.latestSequence()) listener.onEvent(event);
+              });
+      return new ReplaySubscription(
+          snapshot.events(), subscription, snapshot.latestSequence(), snapshot.terminalSequence());
+    }
+  }
+
+  /**
+   * Bounded backpressure releases the state monitor; reentry fails explicitly before persistence.
+   */
+  private List<AgentEventListener> reserveObservers() {
+    if (observers.isEmpty()) return List.of();
+    boolean interrupted = Thread.interrupted();
+    try {
+      while (observerReservations >= observerCapacity) {
+        if (dispatching || snapshotDepth > 0 || observerDispatcher == Thread.currentThread())
+          throw new java.util.concurrent.RejectedExecutionException(
+              "Event observer backlog full during reentry");
+        try {
+          eventLock.wait();
+        } catch (InterruptedException cancelled) {
+          interrupted = true;
+        }
+      }
+      var captured = List.copyOf(observers);
+      if (!captured.isEmpty()) observerReservations++;
+      return captured;
+    } finally {
+      if (interrupted) Thread.currentThread().interrupt();
+    }
+  }
+
+  private void clearPending() {
+    pending.clear();
+    observerReservations = observerQueue.size();
+    eventLock.notifyAll();
+  }
+
+  /** One publisher drains display observers, outside the monitor, in admission order. */
+  private void dispatchObservers() {
+    if (Thread.holdsLock(eventLock)) return;
+    var caller = Thread.currentThread();
+    synchronized (eventLock) {
+      if (observerDispatcher != null || observerQueue.isEmpty()) return;
+      observerDispatcher = caller;
+    }
+    try {
+      while (true) {
+        Pending next;
+        synchronized (eventLock) {
+          next = observerQueue.pollFirst();
+          if (next == null) {
+            observerDispatcher = null;
+            eventLock.notifyAll();
+            return;
+          }
+          observerReservations--;
+          eventLock.notifyAll();
+        }
+        for (var listener : next.observers()) {
+          try {
+            listener.onEvent(next.event());
+          } catch (RuntimeException error) {
+            log.warn("Event observer failed: type={}", next.event().type(), error);
+          }
+        }
+      }
+    } finally {
+      synchronized (eventLock) {
+        if (observerDispatcher == caller) observerDispatcher = null;
+        eventLock.notifyAll();
+      }
+    }
+  }
+
   /** 状態や結果を購読先へ通知する。 */
   @Override
   public void publish(AgentEvent event) {
@@ -174,12 +318,14 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
       if (event == null) {
         throw new IllegalArgumentException("event must not be null");
       }
-      enqueue(withSequence(event), false);
+      var targets = reserveObservers();
+      enqueue(withSequence(event), false, targets);
     }
+    dispatchObservers();
   }
 
-  private void enqueue(AgentEvent event, boolean persisted) {
-    pending.addLast(new Pending(event, persisted));
+  private void enqueue(AgentEvent event, boolean persisted, List<AgentEventListener> targets) {
+    pending.addLast(new Pending(event, persisted, targets));
     drain();
   }
 
@@ -204,10 +350,11 @@ public class InMemoryAgentEventBus implements AgentEventBus, AgentEventPublisher
                 e);
           }
         }
+        if (!next.observers().isEmpty()) observerQueue.addLast(next);
       }
     } catch (RuntimeException | Error failure) {
       // 保存できなかったイベントや再入で待機したイベントを次のpublishへ持ち越さない。
-      pending.clear();
+      clearPending();
       throw failure;
     } finally {
       dispatching = false;

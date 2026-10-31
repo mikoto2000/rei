@@ -108,7 +108,7 @@ public final class SseBridge implements AutoCloseable {
                       active.stream()
                           .map(connection -> connection.deliveryComplete)
                           .toArray(CompletableFuture[]::new));
-              active.forEach(connection -> connection.offer(new Frame(event)));
+              // Live observers offer shutdown after all earlier queued run frames.
             });
   }
 
@@ -126,10 +126,11 @@ public final class SseBridge implements AutoCloseable {
               if (run.status() == RunStatus.UNKNOWN) throw new ReplayGapException();
               var registered = new Connection(runId, sink);
               var replay =
-                  bus.subscribe(
+                  bus.subscribeObserver(
                       runId,
                       lastEventId == null ? 0 : lastEventId,
-                      event -> registered.offer(new Frame(event)));
+                      event -> registered.offer(new Frame(event)),
+                      event -> event.type() == AgentEventType.APPLICATION_SHUTDOWN_STARTED);
               // 終了済みの実行について、現在の状態に応じた扱いを選ぶ。
               if (run.status().isTerminal()
                   && runs.restored(runId)

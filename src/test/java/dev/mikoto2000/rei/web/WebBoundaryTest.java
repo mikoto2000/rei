@@ -37,7 +37,15 @@ class WebBoundaryTest {
     /** {@code subscribe} の条件を再現するための補助情報を返す。 */
     @Override
     public Subscription subscribe(AgentEventListener listener) {
-      var actual = super.subscribe(listener);
+      return track(super.subscribe(listener));
+    }
+
+    @Override
+    public Subscription subscribeObserver(AgentEventListener listener) {
+      return track(super.subscribeObserver(listener));
+    }
+
+    private Subscription track(Subscription actual) {
       subscriptions.incrementAndGet();
       var removed = new java.util.concurrent.atomic.AtomicBoolean();
       return () -> {
