@@ -5,6 +5,7 @@ import java.net.URI;
 import java.net.UnknownHostException;
 import java.util.Locale;
 import java.util.Set;
+import java.util.regex.Pattern;
 
 /**
  * 公開ネットワークの判断基準をまとめる。
@@ -12,6 +13,9 @@ import java.util.Set;
  * <p>Conservative public HTTP destinations; DNS and actual peers are also checked by the transport.
  */
 public final class PublicNetworkPolicy {
+  /** DNS名に紛れ込むlegacy IPv4の数値要素を識別する。 */
+  private static final Pattern NUMERIC_HOST_WORD = Pattern.compile("(?:0[xX][0-9a-fA-F]+|[0-9]+)");
+
   /** 外部から直接インスタンス化させないためのコンストラクター。 */
   private PublicNetworkPolicy() {}
 
@@ -23,10 +27,31 @@ public final class PublicNetworkPolicy {
         || !Set.of("http", "https").contains(uri.getScheme().toLowerCase(Locale.ROOT))
         || uri.getHost() == null
         || uri.getHost().contains("%")
+        || ambiguousIpv4(uri.getHost())
         || uri.getUserInfo() != null
         || uri.getPort() == 0
         || uri.getPort() > 65535)
       throw new HttpFetchException(HttpFetchException.Code.URL_NOT_ALLOWED);
+  }
+
+  /**
+   * URLパーサーやresolverによって解釈が異なる数値IPv4表記を拒否する。
+   *
+   * @param host URIが返すホスト名
+   * @return 数値だけのホストが正規のドット4要素decimal表記でない場合はtrue
+   */
+  private static boolean ambiguousIpv4(String host) {
+    boolean terminalDot = host.endsWith(".");
+    String name = terminalDot ? host.substring(0, host.length() - 1) : host;
+    String[] words = name.split("\\.", -1);
+    for (String word : words) {
+      if (!NUMERIC_HOST_WORD.matcher(word).matches()) return false;
+    }
+    if (terminalDot || !io.netty.util.NetUtil.isValidIpV4Address(host)) return true;
+    for (String word : words) {
+      if (word.length() > 1 && word.charAt(0) == '0') return true;
+    }
+    return false;
   }
 
   /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
