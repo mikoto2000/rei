@@ -29,6 +29,8 @@ import java.io.PrintStream;
 import java.time.Clock;
 import java.util.List;
 import java.util.function.Consumer;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
@@ -46,6 +48,27 @@ import reactor.core.publisher.Flux;
 
 /** チャットコマンドの結果と状態の契約を検証するテスト。 */
 class ChatCommandTest {
+  /** 標準出力の表示契約と診断ログを混同しないため、元のログレベルを保存する。 */
+  private ch.qos.logback.classic.Level previousDiagnosticLevel;
+
+  /** Spring起動済みの他テストに依存せず、表示のassertionを検証する。 */
+  @BeforeEach
+  void isolateDiagnosticLogging() {
+    var root =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+    previousDiagnosticLevel = root.getLevel();
+    root.setLevel(ch.qos.logback.classic.Level.WARN);
+  }
+
+  /** 他クラスにログ設定を持ち越さない。 */
+  @AfterEach
+  void restoreDiagnosticLogging() {
+    var root =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+    root.setLevel(previousDiagnosticLevel);
+  }
 
   /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
@@ -563,7 +586,7 @@ class ChatCommandTest {
       System.setOut(originalOut);
     }
 
-    assertTrue(output.text().contains("[memory] 記憶整理を実行することをお勧めします。"));
+    assertTrue(output.text().contains("[memory] 記憶整理を実行することをお勧めします。"), output.text());
     assertTrue(directOut.toString().isBlank());
   }
 
