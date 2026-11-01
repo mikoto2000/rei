@@ -22,7 +22,22 @@ import org.junit.jupiter.api.io.TempDir;
 
 /** Self変更差分レビューGitの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
+@org.junit.jupiter.api.extension.ExtendWith(
+    dev.mikoto2000.rei.testsupport.FixtureTimingExtension.class)
 class SelfPatchReviewGitTest {
+  /** The suite owns an immutable seed outside every mutable test repository. */
+  @TempDir static Path seedDirectory;
+
+  /** Native Git history reused only through independent file copies. */
+  static Path seedRepository;
+
+  /** Pays native Git initialization once without sharing writable repositories. */
+  @org.junit.jupiter.api.BeforeAll
+  static void prepareSeedRepository() throws Exception {
+    seedRepository = Files.createDirectory(seedDirectory.resolve("repository"));
+    initializeRepository(seedRepository);
+  }
+
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
@@ -32,16 +47,26 @@ class SelfPatchReviewGitTest {
   /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void repository() throws Exception {
-    git("init", "--quiet");
-    git("config", "core.autocrlf", "false");
+    copyRepository(seedRepository, root);
+  }
+
+  /** Initializes the unchanged native repository seed. */
+  static void initializeRepository(Path root) throws Exception {
+    git(root, "init", "--quiet");
+    git(root, "config", "core.autocrlf", "false");
     Files.writeString(root.resolve(".gitignore"), "build/\n");
     Files.writeString(root.resolve("A.txt"), "before\n");
-    git("add", "--", ".gitignore", "A.txt");
-    git("commit", "--quiet", "--no-gpg-sign", "-m", "fixture");
+    git(root, "add", "--", ".gitignore", "A.txt");
+    git(root, "commit", "--quiet", "--no-gpg-sign", "-m", "fixture");
   }
 
   /** {@code git} の条件を再現するため、検証用の操作や状態を扱う。 */
   void git(String... arguments) throws Exception {
+    git(root, arguments);
+  }
+
+  /** Runs fixture commands with the original timeout, configuration and exit assertions. */
+  static String git(Path root, String... arguments) throws Exception {
     var command =
         new ArrayList<String>(
             List.of(
@@ -62,7 +87,11 @@ class SelfPatchReviewGitTest {
       process.destroyForcibly();
       fail("fixture git timed out");
     }
-    assertEquals(0, process.exitValue(), new String(process.getInputStream().readNBytes(4096)));
+    String output =
+        new String(
+            process.getInputStream().readNBytes(4096), java.nio.charset.StandardCharsets.UTF_8);
+    assertEquals(0, process.exitValue(), output);
+    return output;
   }
 
   /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
@@ -404,5 +433,23 @@ class SelfPatchReviewGitTest {
     assertTrue(result.initialTest().timedOut());
     assertNull(result.review());
     assertNull(result.finalTest());
+  }
+
+  /** Copies must be independent before the seed can be safely reused. */
+  static void copyRepository(Path source, Path destination) throws Exception {
+    try (var entries = Files.walk(source)) {
+      for (var entry : entries.toList()) {
+        Path target = destination.resolve(source.relativize(entry));
+        if (Files.isDirectory(entry, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+          Files.createDirectories(target);
+        } else {
+          if (!Files.isRegularFile(entry, java.nio.file.LinkOption.NOFOLLOW_LINKS))
+            throw new java.io.IOException("Fixture seed must contain only regular files");
+          Files.copy(entry, target, java.nio.file.StandardCopyOption.COPY_ATTRIBUTES);
+        }
+      }
+    }
+    // A new file identity must not make a later read-only review refresh the copied index.
+    git(destination, "update-index", "--refresh");
   }
 }

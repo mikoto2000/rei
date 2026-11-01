@@ -31,6 +31,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 /** 保存イベント移行の結果と状態の契約を検証するテスト。 */
 @Tag("integration")
+@org.junit.jupiter.api.extension.ExtendWith(
+    dev.mikoto2000.rei.testsupport.FixtureTimingExtension.class)
 class StorageEventMigrationTest {
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
@@ -342,25 +344,29 @@ class StorageEventMigrationTest {
   /** データ保存の共通処理で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void hundredThousandEventsMigrateInSixtyFourMiBWithoutChangingSource() throws Exception {
-    Files.createDirectories(source().getParent());
-    try (var output = Files.newBufferedWriter(source())) {
-      for (int i = 1; i <= 100000; i++) {
-        var fact =
-            new AgentEvent(
-                "event-" + i,
-                i,
-                now,
-                AgentEventType.AGENT_RUN_COMPLETED,
-                1,
-                "session",
-                null,
-                "run-" + i,
-                null,
-                null,
-                new AgentRunCompletedPayload("run-" + i, 1),
-                project);
-        output.write(EventJsonCodec.mapper().writeValueAsString(fact));
-        output.newLine();
+    try (var timing =
+        dev.mikoto2000.rei.testsupport.FixtureTimingExtension.phase("event-jsonl-fixture")) {
+      Files.createDirectories(source().getParent());
+      try (var output = Files.newBufferedWriter(source())) {
+        var mapper = EventJsonCodec.mapper();
+        for (int i = 1; i <= 100000; i++) {
+          var fact =
+              new AgentEvent(
+                  "event-" + i,
+                  i,
+                  now,
+                  AgentEventType.AGENT_RUN_COMPLETED,
+                  1,
+                  "session",
+                  null,
+                  "run-" + i,
+                  null,
+                  null,
+                  new AgentRunCompletedPayload("run-" + i, 1),
+                  project);
+          output.write(mapper.writeValueAsString(fact));
+          output.newLine();
+        }
       }
     }
     String hash = StorageBackup.hash(source());

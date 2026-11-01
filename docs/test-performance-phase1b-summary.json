@@ -1,0 +1,454 @@
+{
+  "BaselineCommit": "07d2e625340cb9f9adb48b22f86c6f6a33d02b02",
+  "CommonProbeCommit": "3949179d192d41caf10292922d24d9e768e168db",
+  "CodeCommit": "ec7eda2bf8abfbb7dded5d3d03c6048fb5c7c3f9",
+  "BeforeMedianSeconds": 131.3991029,
+  "AfterMedianSeconds": 94.1443969,
+  "WallReductionPercent": 28.35232903252949,
+  "AllThirtyCaseIdentitiesPreserved": true,
+  "Runs": [
+    {
+      "Label": "p1b-before-target1",
+      "Scope": "before",
+      "Seconds": 135.9369807,
+      "SuiteSeconds": 129.382,
+      "Cases": 30,
+      "Phases": [
+        {
+          "Class": "dev.mikoto2000.rei.application.task.TaskSourcePaginationTest",
+          "Cases": 2,
+          "BeforeEachSeconds": 0.000656,
+          "InlineFixtureSeconds": 25.497093,
+          "BeforeAllSeconds": 0.0,
+          "PreparationSeconds": 25.497749,
+          "MethodSeconds": 42.9229375,
+          "RemainingMethodSeconds": 17.4258445,
+          "CleanupSeconds": 0.0193726
+        },
+        {
+          "Class": "dev.mikoto2000.rei.core.SelfPatchReviewGitTest",
+          "Cases": 12,
+          "BeforeEachSeconds": 4.624165,
+          "InlineFixtureSeconds": 0.0,
+          "BeforeAllSeconds": 0.0,
+          "PreparationSeconds": 4.624165,
+          "MethodSeconds": 43.1984989,
+          "RemainingMethodSeconds": 43.1984989,
+          "CleanupSeconds": 0.4626727
+        },
+        {
+          "Class": "dev.mikoto2000.rei.storage.StorageEventMigrationTest",
+          "Cases": 16,
+          "BeforeEachSeconds": 0.0005677,
+          "InlineFixtureSeconds": 14.2305831,
+          "BeforeAllSeconds": 0.0,
+          "PreparationSeconds": 14.2311508,
+          "MethodSeconds": 37.6030249,
+          "RemainingMethodSeconds": 23.3724418,
+          "CleanupSeconds": 0.379804
+        }
+      ]
+    },
+    {
+      "Label": "p1b-before-target2",
+      "Scope": "before",
+      "Seconds": 130.92967,
+      "SuiteSeconds": 124.96300000000001,
+      "Cases": 30,
+      "Phases": [
+        {
+          "Class": "dev.mikoto2000.rei.application.task.TaskSourcePaginationTest",
+          "Cases": 2,
+          "BeforeEachSeconds": 0.0004,
+          "InlineFixtureSeconds": 25.3237433,
+          "BeforeAllSeconds": 0.0,
+          "PreparationSeconds": 25.3241433,
+          "MethodSeconds": 42.6934658,
+          "RemainingMethodSeconds": 17.3697225,
+          "CleanupSeconds": 0.0146653
+        },
+        {
+          "Class": "dev.mikoto2000.rei.core.SelfPatchReviewGitTest",
+          "Cases": 12,
+          "BeforeEachSeconds": 4.2047539,
+          "InlineFixtureSeconds": 0.0,
+          "BeforeAllSeconds": 0.0,
+          "PreparationSeconds": 4.2047539,
+          "MethodSeconds": 41.2015631,
+          "RemainingMethodSeconds": 41.2015631,
+          "CleanupSeconds": 0.4219971
+        },
+        {
+          "Class": "dev.mikoto2000.rei.storage.StorageEventMigrationTest",
+          "Cases": 16,
+          "BeforeEachSeconds": 0.0004002,
+          "InlineFixtureSeconds": 14.7758554,
+          "BeforeAllSeconds": 0.0,
+          "PreparationSeconds": 14.7762556,
+          "MethodSeconds": 35.962219,
+          "RemainingMethodSeconds": 21.1863636,
+          "CleanupSeconds": 0.3230285
+        }
+      ]
+    },
+    {
+      "Label": "p1b-before-target3",
+      "Scope": "before",
+      "Seconds": 131.3991029,
+      "SuiteSeconds": 125.447,
+      "Cases": 30,
+      "Phases": [
+        {
+          "Class": "dev.mikoto2000.rei.application.task.TaskSourcePaginationTest",
+          "Cases": 2,
+          "BeforeEachSeconds": 0.00041,
+          "InlineFixtureSeconds": 25.2946232,
+          "BeforeAllSeconds": 0.0,
+          "PreparationSeconds": 25.2950332,
+          "MethodSeconds": 41.3851939,
+          "RemainingMethodSeconds": 16.0905707,
+          "CleanupSeconds": 0.017948
+        },
+        {
+          "Class": "dev.mikoto2000.rei.core.SelfPatchReviewGitTest",
+          "Cases": 12,
+          "BeforeEachSeconds": 4.3991805,
+          "InlineFixtureSeconds": 0.0,
+          "BeforeAllSeconds": 0.0,
+          "PreparationSeconds": 4.3991805,
+          "MethodSeconds": 41.0117539,
+          "RemainingMethodSeconds": 41.0117539,
+          "CleanupSeconds": 0.4823699
+        },
+        {
+          "Class": "dev.mikoto2000.rei.storage.StorageEventMigrationTest",
+          "Cases": 16,
+          "BeforeEachSeconds": 0.0004854,
+          "InlineFixtureSeconds": 14.4147538,
+          "BeforeAllSeconds": 0.0,
+          "PreparationSeconds": 14.4152392,
+          "MethodSeconds": 37.5954167,
+          "RemainingMethodSeconds": 23.1806629,
+          "CleanupSeconds": 0.3776269
+        }
+      ]
+    },
+    {
+      "Label": "p1b-after-target1",
+      "Scope": "after",
+      "Seconds": 92.9657425,
+      "SuiteSeconds": 87.237,
+      "Cases": 30,
+      "Phases": [
+        {
+          "Class": "dev.mikoto2000.rei.application.task.TaskSourcePaginationTest",
+          "Cases": 2,
+          "BeforeEachSeconds": 0.0003881,
+          "InlineFixtureSeconds": 2.3630083,
+          "BeforeAllSeconds": 0.0,
+          "PreparationSeconds": 2.3633964,
+          "MethodSeconds": 19.9495136,
+          "RemainingMethodSeconds": 17.5865053,
+          "CleanupSeconds": 0.0166067
+        },
+        {
+          "Class": "dev.mikoto2000.rei.core.SelfPatchReviewGitTest",
+          "Cases": 12,
+          "BeforeEachSeconds": 1.4105814,
+          "InlineFixtureSeconds": 0.0,
+          "BeforeAllSeconds": 0.3865466,
+          "PreparationSeconds": 1.797128,
+          "MethodSeconds": 41.8476537,
+          "RemainingMethodSeconds": 41.8476537,
+          "CleanupSeconds": 0.4681505
+        },
+        {
+          "Class": "dev.mikoto2000.rei.storage.StorageEventMigrationTest",
+          "Cases": 16,
+          "BeforeEachSeconds": 0.0003106,
+          "InlineFixtureSeconds": 0.3183563,
+          "BeforeAllSeconds": 0.0,
+          "PreparationSeconds": 0.3186669,
+          "MethodSeconds": 22.612739,
+          "RemainingMethodSeconds": 22.2943827,
+          "CleanupSeconds": 0.3051537
+        }
+      ]
+    },
+    {
+      "Label": "p1b-after-target2",
+      "Scope": "after",
+      "Seconds": 94.1443969,
+      "SuiteSeconds": 88.697,
+      "Cases": 30,
+      "Phases": [
+        {
+          "Class": "dev.mikoto2000.rei.application.task.TaskSourcePaginationTest",
+          "Cases": 2,
+          "BeforeEachSeconds": 0.000459,
+          "InlineFixtureSeconds": 2.2346044,
+          "BeforeAllSeconds": 0.0,
+          "PreparationSeconds": 2.2350634,
+          "MethodSeconds": 20.6872131,
+          "RemainingMethodSeconds": 18.4526087,
+          "CleanupSeconds": 0.0128471
+        },
+        {
+          "Class": "dev.mikoto2000.rei.core.SelfPatchReviewGitTest",
+          "Cases": 12,
+          "BeforeEachSeconds": 1.5572759,
+          "InlineFixtureSeconds": 0.0,
+          "BeforeAllSeconds": 0.3696443,
+          "PreparationSeconds": 1.9269202,
+          "MethodSeconds": 42.3598272,
+          "RemainingMethodSeconds": 42.3598272,
+          "CleanupSeconds": 0.4597144
+        },
+        {
+          "Class": "dev.mikoto2000.rei.storage.StorageEventMigrationTest",
+          "Cases": 16,
+          "BeforeEachSeconds": 0.0003288,
+          "InlineFixtureSeconds": 0.3574592,
+          "BeforeAllSeconds": 0.0,
+          "PreparationSeconds": 0.357788,
+          "MethodSeconds": 22.7445153,
+          "RemainingMethodSeconds": 22.3870561,
+          "CleanupSeconds": 0.3144006
+        }
+      ]
+    },
+    {
+      "Label": "p1b-after-target3",
+      "Scope": "after",
+      "Seconds": 94.1622687,
+      "SuiteSeconds": 88.283,
+      "Cases": 30,
+      "Phases": [
+        {
+          "Class": "dev.mikoto2000.rei.application.task.TaskSourcePaginationTest",
+          "Cases": 2,
+          "BeforeEachSeconds": 0.0004899,
+          "InlineFixtureSeconds": 2.0916213,
+          "BeforeAllSeconds": 0.0,
+          "PreparationSeconds": 2.0921112,
+          "MethodSeconds": 21.1222957,
+          "RemainingMethodSeconds": 19.0306744,
+          "CleanupSeconds": 0.0181948
+        },
+        {
+          "Class": "dev.mikoto2000.rei.core.SelfPatchReviewGitTest",
+          "Cases": 12,
+          "BeforeEachSeconds": 1.3546675,
+          "InlineFixtureSeconds": 0.0,
+          "BeforeAllSeconds": 0.3367987,
+          "PreparationSeconds": 1.6914662,
+          "MethodSeconds": 42.1132284,
+          "RemainingMethodSeconds": 42.1132284,
+          "CleanupSeconds": 0.4601897
+        },
+        {
+          "Class": "dev.mikoto2000.rei.storage.StorageEventMigrationTest",
+          "Cases": 16,
+          "BeforeEachSeconds": 0.000404,
+          "InlineFixtureSeconds": 0.2313732,
+          "BeforeAllSeconds": 0.0,
+          "PreparationSeconds": 0.2317772,
+          "MethodSeconds": 22.3785334,
+          "RemainingMethodSeconds": 22.1471602,
+          "CleanupSeconds": 0.3052526
+        }
+      ]
+    }
+  ],
+  "ClassMedians": [
+    {
+      "Class": "dev.mikoto2000.rei.application.task.TaskSourcePaginationTest",
+      "before": {
+        "Cases": 2,
+        "PreparationSeconds": 25.3241433,
+        "RemainingMethodSeconds": 17.3697225,
+        "CleanupSeconds": 0.017948,
+        "BeforeAllSeconds": 0.0,
+        "SuiteSeconds": 42.765
+      },
+      "after": {
+        "Cases": 2,
+        "PreparationSeconds": 2.2350634,
+        "RemainingMethodSeconds": 18.4526087,
+        "CleanupSeconds": 0.0166067,
+        "BeforeAllSeconds": 0.0,
+        "SuiteSeconds": 20.769
+      },
+      "PreparationReductionPercent": 91.17417962170511
+    },
+    {
+      "Class": "dev.mikoto2000.rei.storage.StorageEventMigrationTest",
+      "before": {
+        "Cases": 16,
+        "PreparationSeconds": 14.4152392,
+        "RemainingMethodSeconds": 23.1806629,
+        "CleanupSeconds": 0.3776269,
+        "BeforeAllSeconds": 0.0,
+        "SuiteSeconds": 38.053
+      },
+      "after": {
+        "Cases": 16,
+        "PreparationSeconds": 0.3186669,
+        "RemainingMethodSeconds": 22.2943827,
+        "CleanupSeconds": 0.3052526,
+        "BeforeAllSeconds": 0.0,
+        "SuiteSeconds": 22.993
+      },
+      "PreparationReductionPercent": 97.7893748721145
+    },
+    {
+      "Class": "dev.mikoto2000.rei.core.SelfPatchReviewGitTest",
+      "before": {
+        "Cases": 12,
+        "PreparationSeconds": 4.3991805,
+        "RemainingMethodSeconds": 41.2015631,
+        "CleanupSeconds": 0.4626727,
+        "BeforeAllSeconds": 0.0,
+        "SuiteSeconds": 45.923
+      },
+      "after": {
+        "Cases": 12,
+        "PreparationSeconds": 1.797128,
+        "RemainingMethodSeconds": 42.1132284,
+        "CleanupSeconds": 0.4601897,
+        "BeforeAllSeconds": 0.3696443,
+        "SuiteSeconds": 44.321
+      },
+      "PreparationReductionPercent": 59.148573239947766
+    }
+  ],
+  "TargetIdentities": [
+    "dev.mikoto2000.rei.application.task.TaskSourcePaginationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.application.task.TaskSourcePaginationTest]/[method:paginationIncludesRetainedTerminalSourcesBeyondTheirExistingRecentListWindow()]",
+    "dev.mikoto2000.rei.application.task.TaskSourcePaginationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.application.task.TaskSourcePaginationTest]/[method:retainedGoalsSchedulesAndCheckpointsAreNotTruncatedToRecentSourceWindows()]",
+    "dev.mikoto2000.rei.core.SelfPatchReviewGitTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.core.SelfPatchReviewGitTest]/[method:binarySecretsOversizedFilesAndSubdirectoryRootsFailClosedBeforeTests()]",
+    "dev.mikoto2000.rei.core.SelfPatchReviewGitTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.core.SelfPatchReviewGitTest]/[method:diagnosedRepairConnectsRealFailureReportApprovalApplyAndRealShellVerification()]",
+    "dev.mikoto2000.rei.core.SelfPatchReviewGitTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.core.SelfPatchReviewGitTest]/[method:noPatchAndTooManyFilesDoNotStartTests()]",
+    "dev.mikoto2000.rei.core.SelfPatchReviewGitTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.core.SelfPatchReviewGitTest]/[method:realCommandsRunTwiceOnTheSamePatchAndIgnoredOutputsDoNotInvalidateIt()]",
+    "dev.mikoto2000.rei.core.SelfPatchReviewGitTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.core.SelfPatchReviewGitTest]/[method:realTestTimeoutStopsTheCycleBeforeReviewAndFinalTest()]",
+    "dev.mikoto2000.rei.core.SelfPatchReviewGitTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.core.SelfPatchReviewGitTest]/[method:repositoryExternalDiffAndFsmonitorConfigurationAreNotExecuted()]",
+    "dev.mikoto2000.rei.core.SelfPatchReviewGitTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.core.SelfPatchReviewGitTest]/[method:requirementReviewUsesRealGitMaterialAndFreshRealCommandReportWithoutChangingIndex()]",
+    "dev.mikoto2000.rei.core.SelfPatchReviewGitTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.core.SelfPatchReviewGitTest]/[method:savedChangeSetRepairsRealGitFindingThenRunsFinalRealShellTest()]",
+    "dev.mikoto2000.rei.core.SelfPatchReviewGitTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.core.SelfPatchReviewGitTest]/[method:stagingAndDeletionRefreshTheFingerprint()]",
+    "dev.mikoto2000.rei.core.SelfPatchReviewGitTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.core.SelfPatchReviewGitTest]/[method:successfulExitWithTruncatedRealLogsCannotVerify()]",
+    "dev.mikoto2000.rei.core.SelfPatchReviewGitTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.core.SelfPatchReviewGitTest]/[method:trackedWhitespaceRequiresFixAndACompleteNewCycleAfterFix()]",
+    "dev.mikoto2000.rei.core.SelfPatchReviewGitTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.core.SelfPatchReviewGitTest]/[method:untrackedConflictMarkersAreReviewedWithoutAddingFilesToTheIndex()]",
+    "dev.mikoto2000.rei.storage.StorageEventMigrationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.storage.StorageEventMigrationTest]/[method:byteCursorAtUnicodeBoundaryMapsToSequenceAndKeepsGenerationCas()]",
+    "dev.mikoto2000.rei.storage.StorageEventMigrationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.storage.StorageEventMigrationTest]/[method:globalInventoryIncludesProjectEventRowsWithoutPlanningAcrossScopes()]",
+    "dev.mikoto2000.rei.storage.StorageEventMigrationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.storage.StorageEventMigrationTest]/[method:hundredThousandEventsMigrateInSixtyFourMiBWithoutChangingSource()]",
+    "dev.mikoto2000.rei.storage.StorageEventMigrationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.storage.StorageEventMigrationTest]/[method:importPreservesTypedFactsIdsSequenceTimestampAndOriginalBytesAndNewWritesUseOnlySqlite()]",
+    "dev.mikoto2000.rei.storage.StorageEventMigrationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.storage.StorageEventMigrationTest]/[method:incompleteCorruptAndDuplicateSourcesStopStartupWithoutLosingBytes()]",
+    "dev.mikoto2000.rei.storage.StorageEventMigrationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.storage.StorageEventMigrationTest]/[method:killedSchemaThreeUpgradeRetriesEventsAndCursorExactlyOnce()]",
+    "dev.mikoto2000.rei.storage.StorageEventMigrationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.storage.StorageEventMigrationTest]/[method:multipleStoreInstancesSerializeProjectSequenceAllocation()]",
+    "dev.mikoto2000.rei.storage.StorageEventMigrationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.storage.StorageEventMigrationTest]/[method:oversizedLegacyFactIsPreservedInHistoryButDoesNotBecomeANewSchedulerReplay()]",
+    "dev.mikoto2000.rei.storage.StorageEventMigrationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.storage.StorageEventMigrationTest]/[method:productionBeansReplayOnlyTheUnprocessedSuffixAndKeepSchedulerDuplicateSuppression()]",
+    "dev.mikoto2000.rei.storage.StorageEventMigrationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.storage.StorageEventMigrationTest]/[test-template:ambiguousCursorsAndUnverifiedRecordsNeverBecomeSuccessfulImports(java.lang.String)]/[test-template-invocation:#1]",
+    "dev.mikoto2000.rei.storage.StorageEventMigrationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.storage.StorageEventMigrationTest]/[test-template:ambiguousCursorsAndUnverifiedRecordsNeverBecomeSuccessfulImports(java.lang.String)]/[test-template-invocation:#2]",
+    "dev.mikoto2000.rei.storage.StorageEventMigrationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.storage.StorageEventMigrationTest]/[test-template:ambiguousCursorsAndUnverifiedRecordsNeverBecomeSuccessfulImports(java.lang.String)]/[test-template-invocation:#3]",
+    "dev.mikoto2000.rei.storage.StorageEventMigrationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.storage.StorageEventMigrationTest]/[test-template:ambiguousCursorsAndUnverifiedRecordsNeverBecomeSuccessfulImports(java.lang.String)]/[test-template-invocation:#4]",
+    "dev.mikoto2000.rei.storage.StorageEventMigrationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.storage.StorageEventMigrationTest]/[test-template:ambiguousCursorsAndUnverifiedRecordsNeverBecomeSuccessfulImports(java.lang.String)]/[test-template-invocation:#5]",
+    "dev.mikoto2000.rei.storage.StorageEventMigrationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.storage.StorageEventMigrationTest]/[test-template:ambiguousCursorsAndUnverifiedRecordsNeverBecomeSuccessfulImports(java.lang.String)]/[test-template-invocation:#6]",
+    "dev.mikoto2000.rei.storage.StorageEventMigrationTest#[engine:junit-jupiter]/[class:dev.mikoto2000.rei.storage.StorageEventMigrationTest]/[test-template:ambiguousCursorsAndUnverifiedRecordsNeverBecomeSuccessfulImports(java.lang.String)]/[test-template-invocation:#7]"
+  ],
+  "FullValidation": {
+    "Before": 7210,
+    "After": 7214,
+    "Fast": 4255,
+    "OriginalFullRetained": true,
+    "OriginalTargetThirtyRetained": true,
+    "BeforeIdentitySha256": "ff8b3d401a1eaf0fb8e7d78fcee47ebec292adc72b129649c0c804ecb458f013",
+    "AfterIdentitySha256": "009cfa50c4b72f05fb82f38792b74f5f9d8c09e2f216dbd19a05aafa66a4fea3",
+    "Added": [
+      "dev.mikoto2000.rei.application.task.TaskSourceFixtureTest::fixturePopulationCommitsAndRollsBackWithoutLeakingTransaction",
+      "dev.mikoto2000.rei.core.GitFixtureIsolationTest::copiedRepositoriesKeepHistoryConfigurationIndexAndWorktreeIndependent",
+      "dev.mikoto2000.rei.testsupport.FixtureTimingExtensionTest::disabledProbeDoesNotObserveOrChangeTheTestLifecycle",
+      "dev.mikoto2000.rei.testsupport.FixtureTimingExtensionTest::measuresInlineFixtureWithinMethodAndCleanupThroughResultNotification"
+    ],
+    "Skips": [
+      {
+        "Identity": "dev.mikoto2000.rei.chatgpt.WindowsPlanAppServerProcessTest::nativeProcessHasDeadlineEvenWhenNoRpcIsSent",
+        "Reason": "Environment variable [REI_TEST_WINDOWS_CODEX] does not exist"
+      },
+      {
+        "Identity": "dev.mikoto2000.rei.chatgpt.WindowsPlanAppServerProcessTest::startsNativeRestrictedThreadThenDeletesOwnHome",
+        "Reason": "Environment variable [REI_TEST_WINDOWS_CODEX] does not exist"
+      },
+      {
+        "Identity": "dev.mikoto2000.rei.chatgpt.WslPlanAppServerProcessTest::startsRestrictedThreadWithoutTurnThenClosesNativeProcessAndDeletesOwnHome",
+        "Reason": "Environment variable [REI_TEST_WSL_CODEX] does not exist"
+      },
+      {
+        "Identity": "dev.mikoto2000.rei.core.DocumentRendererProcessTest::realPlantUmlErrorAndPngAreVerifiedAndDeliveredThroughExistingStore",
+        "Reason": "Assumption failed: PlantUML jar not configured; use -Drei.test.plantuml.jar=/absolute/plantuml.jar"
+      },
+      {
+        "Identity": "dev.mikoto2000.rei.core.StructuredHttpBenchmarkTest::compareShellAndStructuredApiAgainstIdenticalFixture",
+        "Reason": "System property [httpapi.benchmark] does not exist"
+      },
+      {
+        "Identity": "dev.mikoto2000.rei.storage.AnswerGenerationIoBenchmarkTest::measure",
+        "Reason": "System property [rei.io.benchmark] does not exist"
+      },
+      {
+        "Identity": "dev.mikoto2000.rei.storage.StorageReadReuseTest::measureRepeatedReads",
+        "Reason": "System property [rei.io.read-benchmark] does not exist"
+      },
+      {
+        "Identity": "dev.mikoto2000.rei.temporal.holiday.OfficialHolidayCsvTest::validatesDownloadedOfficialCsv",
+        "Reason": "System property [holiday.csv] does not exist"
+      }
+    ]
+  },
+  "RegressionRuns": [
+    {
+      "Label": "p1b-before-full",
+      "Seconds": 962.8670305,
+      "Tests": 7210,
+      "Passed": 7202,
+      "Skipped": 8,
+      "Suites": 1266,
+      "ExecutedSuites": 1261,
+      "SuiteSeconds": 857.2309999999956
+    },
+    {
+      "Label": "p1b-after-full",
+      "Seconds": 1002.9453672,
+      "Tests": 7214,
+      "Passed": 7206,
+      "Skipped": 8,
+      "Suites": 1269,
+      "ExecutedSuites": 1264,
+      "SuiteSeconds": 973.6399999999954
+    },
+    {
+      "Label": "p1b-after-fast",
+      "Seconds": 191.6713268,
+      "Tests": 4255,
+      "Passed": 4254,
+      "Skipped": 1,
+      "Suites": 800,
+      "ExecutedSuites": 799,
+      "SuiteSeconds": 182.23399999999938
+    }
+  ],
+  "ProbeDisabledInOrdinaryRuns": true,
+  "ExcludedRuns": [
+    {
+      "Label": "p1b-probe-red",
+      "Reason": "Missing measurement API; compiler Red; no executed testcases"
+    },
+    {
+      "Label": "p1b-fixture-contracts-red",
+      "Reason": "Two intended contract failures; no errors or skips"
+    },
+    {
+      "Label": "p1b-related-green",
+      "Reason": "Four existing index-invariance assertions detected copied stat-cache mismatch"
+    }
+  ],
+  "IdentityDigestPolicy": "SHA-256 of ordinal-sorted qualified XML suite::testcase names, UTF-8, LF joined, no trailing LF; parameter/dynamic identities retained"
+}
