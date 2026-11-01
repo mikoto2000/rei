@@ -89,4 +89,51 @@ class PublicNetworkPolicyTest {
   void permitsPublicHttpUrisWithoutResolvingThem(String value) {
     assertDoesNotThrow(() -> PublicNetworkPolicy.validate(URI.create(value)));
   }
+
+  /** 数値ホストの解釈差やprivate表記をDNSへ渡す前に拒否する。 */
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "http://2130706433/a",
+        "http://0177.0.0.1/a",
+        "http://0x7f000001/a",
+        "http://0X7F000001/a",
+        "http://127.1/a",
+        "http://127.0.1/a",
+        "http://127.000.0.1/a",
+        "http://0x7f.0.0.1/a",
+        "http://127.0.0.1./a",
+        "http://8.8.8.8./a",
+        "http://008.008.008.008/a",
+        "http://134744072/a",
+        "http://0x08080808/a",
+        "http://4294967296/a",
+        "http://999.999.999.999/a",
+        "http://1.2.3.4.5/a",
+        "http://0x7f000001./a",
+        "http://LOCALHOST./a",
+        "http://nested.LOCALHOST./a",
+        "http://[0:0:0:0:0:0:0:1]/a",
+        "http://[::ffff:127.0.0.1]/a",
+        "http://[::ffff:7f00:1]/a"
+      })
+  void rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String value) {
+    var failure =
+        assertThrows(
+            HttpFetchException.class, () -> PublicNetworkPolicy.validate(URI.create(value)));
+    org.junit.jupiter.api.Assertions.assertEquals(
+        HttpFetchException.Code.URL_NOT_ALLOWED, failure.code());
+  }
+
+  /** 正規の公開IPと通常のDNS名は、大文字・末尾ドットを含めて維持する。 */
+  @ParameterizedTest
+  @ValueSource(
+      strings = {
+        "https://ExAmPlE.OrG./a?x=1", "https://0xface.example/a",
+        "https://assets123.example/a", "https://8.8.8.8:443/a",
+        "https://[2001:4860:4860:0:0:0:0:8888]/a", "https://[::ffff:8.8.8.8]/a"
+      })
+  void preservesCanonicalPublicAndDnsHostnames(String value) {
+    assertDoesNotThrow(() -> PublicNetworkPolicy.validate(URI.create(value)));
+  }
 }

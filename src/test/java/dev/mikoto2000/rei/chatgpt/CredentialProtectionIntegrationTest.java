@@ -43,6 +43,7 @@ class CredentialProtectionIntegrationTest {
 
   /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void fileLockSerializesSeparateProcesses() throws Exception {
     var store = new ProtectedCredentialStore(root, ProtectedCredentialStoreTest.TEST_PROTECTION);
     store.locked(

@@ -202,6 +202,7 @@ class TestReportCollectionDiagnosisTest {
 
   /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void linkedOutsideDirectoryIsRejectedWithoutReadingItsReport() throws Exception {
     Files.writeString(
         outside.resolve("TEST-private.xml"),

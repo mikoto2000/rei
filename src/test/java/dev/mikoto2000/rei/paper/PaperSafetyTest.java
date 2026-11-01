@@ -46,9 +46,13 @@ class PaperSafetyTest {
         "file:///a"
       })
   void transportRejectsPrivateTargets(String url) {
-    assertThrows(
-        PaperException.class,
-        () -> new SafePaperHttpClient(config).get(URI.create(url), "application/pdf", 1000, op));
+    URI uri = URI.create(url);
+    var failure =
+        assertThrows(
+            PaperException.class,
+            () -> new SafePaperHttpClient(config).get(uri, "application/pdf", 1000, op));
+    assertEquals(PaperException.Code.PDF_DOWNLOAD_FAILED, failure.code(), failure.getMessage());
+    assertThrows(PaperException.class, () -> SafePaperHttpClient.validateUri(uri));
   }
 
   /** 論文の調査と整理で、指定した条件に対する結果と状態の変化を確認する。 */

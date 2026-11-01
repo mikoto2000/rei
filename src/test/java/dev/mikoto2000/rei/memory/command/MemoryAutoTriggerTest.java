@@ -18,6 +18,8 @@ import java.io.PrintStream;
 import java.time.Clock;
 import java.util.Optional;
 import java.util.function.Consumer;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 import org.springframework.ai.chat.client.ChatClient;
@@ -31,6 +33,27 @@ import reactor.core.publisher.Flux;
 
 /** 記憶自動実行条件の結果と状態の契約を検証するテスト。 */
 class MemoryAutoTriggerTest {
+  /** 標準出力の表示契約と診断ログを混同しないため、元のログレベルを保存する。 */
+  private ch.qos.logback.classic.Level previousDiagnosticLevel;
+
+  /** Spring起動済みの他テストに依存せず、表示のassertionを検証する。 */
+  @BeforeEach
+  void isolateDiagnosticLogging() {
+    var root =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+    previousDiagnosticLevel = root.getLevel();
+    root.setLevel(ch.qos.logback.classic.Level.WARN);
+  }
+
+  /** 他クラスにログ設定を持ち越さない。 */
+  @AfterEach
+  void restoreDiagnosticLogging() {
+    var root =
+        (ch.qos.logback.classic.Logger)
+            org.slf4j.LoggerFactory.getLogger(org.slf4j.Logger.ROOT_LOGGER_NAME);
+    root.setLevel(previousDiagnosticLevel);
+  }
 
   /** 長期記憶の活用で、状態の変化と結果を、通知・表示の契約に従って伝えることを確認する。 */
   @Test
@@ -70,7 +93,7 @@ class MemoryAutoTriggerTest {
       System.setOut(originalOut);
     }
 
-    assertTrue(output.text().contains("/memory consolidate"));
+    assertTrue(output.text().contains("/memory consolidate"), output.text());
     assertTrue(directOut.toString().isBlank());
   }
 

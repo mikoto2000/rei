@@ -494,6 +494,7 @@ class FileOperationsOptimizationTest {
 
   /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void directoryLinksCannotAliasTheReadingBoundary() throws Exception {
     var directory = Files.createDirectory(root.resolve("real"));
     Files.writeString(directory.resolve("a.txt"), "secret");

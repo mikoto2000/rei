@@ -28,6 +28,7 @@ import org.springframework.ai.chat.model.Generation;
 import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 
+@org.junit.jupiter.api.Tag("integration")
 class ReviewPageBatchTest {
   @TempDir Path root;
   ReviewTools tools;

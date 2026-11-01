@@ -1,0 +1,42 @@
+[
+  {
+    "Method": "nativeProcessHasDeadlineEvenWhenNoRpcIsSent",
+    "Suite": "dev.mikoto2000.rei.chatgpt.WindowsPlanAppServerProcessTest",
+    "Reason": "Environment variable [REI_TEST_WINDOWS_CODEX] does not exist"
+  },
+  {
+    "Method": "startsNativeRestrictedThreadThenDeletesOwnHome",
+    "Suite": "dev.mikoto2000.rei.chatgpt.WindowsPlanAppServerProcessTest",
+    "Reason": "Environment variable [REI_TEST_WINDOWS_CODEX] does not exist"
+  },
+  {
+    "Method": "startsRestrictedThreadWithoutTurnThenClosesNativeProcessAndDeletesOwnHome",
+    "Suite": "dev.mikoto2000.rei.chatgpt.WslPlanAppServerProcessTest",
+    "Reason": "Environment variable [REI_TEST_WSL_CODEX] does not exist"
+  },
+  {
+    "Method": "realPlantUmlErrorAndPngAreVerifiedAndDeliveredThroughExistingStore",
+    "Suite": "dev.mikoto2000.rei.core.DocumentRendererProcessTest",
+    "Reason": "Assumption failed: PlantUML jar not configured; use -Drei.test.plantuml.jar=/absolute/plantuml.jar"
+  },
+  {
+    "Method": "compareShellAndStructuredApiAgainstIdenticalFixture",
+    "Suite": "dev.mikoto2000.rei.core.StructuredHttpBenchmarkTest",
+    "Reason": "System property [httpapi.benchmark] does not exist"
+  },
+  {
+    "Method": "measure",
+    "Suite": "dev.mikoto2000.rei.storage.AnswerGenerationIoBenchmarkTest",
+    "Reason": "System property [rei.io.benchmark] does not exist"
+  },
+  {
+    "Method": "measureRepeatedReads",
+    "Suite": "dev.mikoto2000.rei.storage.StorageReadReuseTest",
+    "Reason": "System property [rei.io.read-benchmark] does not exist"
+  },
+  {
+    "Method": "validatesDownloadedOfficialCsv",
+    "Suite": "dev.mikoto2000.rei.temporal.holiday.OfficialHolidayCsvTest",
+    "Reason": "System property [holiday.csv] does not exist"
+  }
+]

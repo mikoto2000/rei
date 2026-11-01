@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /** An independent patch consumer validates generated hunks, ranges and newline markers. */
+@org.junit.jupiter.api.Tag("integration")
 class TextDiffContractTest {
   @TempDir Path root;
 

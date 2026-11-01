@@ -69,6 +69,7 @@ class SearchPreparationReuseTest {
   }
 
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void pagedSearchPreparesFiltersOnceForAllFiles() throws Exception {
     Files.writeString(root.resolve("one.md"), "needle md");
     Files.writeString(root.resolve("two.txt"), "needle txt");

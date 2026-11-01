@@ -153,6 +153,7 @@ class BackendEndpointTest {
 
   /** 起動環境の準備で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void actualSecondJvmCannotOwnOrMigrateSameStorageAndCrashReleasesLock() throws Exception {
     var command = workerCommand();
     var first = new ProcessBuilder(command).redirectError(ProcessBuilder.Redirect.INHERIT).start();
@@ -190,6 +191,7 @@ class BackendEndpointTest {
 
   /** 起動環境の準備で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void simultaneousJvmCandidatesLeaveExactlyOneOwner() throws Exception {
     var command = workerCommand();
     var candidates = new java.util.ArrayList<Process>();

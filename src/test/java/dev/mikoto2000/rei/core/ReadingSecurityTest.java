@@ -114,6 +114,7 @@ class ReadingSecurityTest {
   }
 
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void aValidCursorCannotCrossRunsAndExpirationIsDistinct() throws Exception {
     Files.writeString(root.resolve("a.txt"), "hit\nno\nhit\n");
     Path data = root.resolve("data");

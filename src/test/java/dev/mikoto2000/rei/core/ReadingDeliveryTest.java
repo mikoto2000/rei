@@ -22,6 +22,7 @@ import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
 
+@org.junit.jupiter.api.Tag("integration")
 class ReadingDeliveryTest {
   @TempDir Path root;
 

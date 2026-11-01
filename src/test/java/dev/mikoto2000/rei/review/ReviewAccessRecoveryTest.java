@@ -37,6 +37,7 @@ import org.springframework.ai.chat.prompt.Prompt;
 import org.springframework.ai.openai.OpenAiChatOptions;
 import org.springframework.ai.tool.method.MethodToolCallbackProvider;
 
+@org.junit.jupiter.api.Tag("integration")
 class ReviewAccessRecoveryTest {
   @TempDir Path dir;
   ReviewCoverageLedger ledger;

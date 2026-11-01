@@ -51,6 +51,7 @@ class SystemShellServiceTest {
 
   @Test
   @org.junit.jupiter.api.condition.EnabledOnOs(org.junit.jupiter.api.condition.OS.WINDOWS)
+  @org.junit.jupiter.api.Tag("integration")
   void nativePowershellPreservesQuotedCommandsAndUnicode() throws Exception {
     var service = new SystemShellService();
     String script =
