@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /** Large inventories and denied files must retain explicit coverage state. */
+@org.junit.jupiter.api.Tag("integration")
 class SnapshotScaleTest {
   @TempDir Path temporary;
 

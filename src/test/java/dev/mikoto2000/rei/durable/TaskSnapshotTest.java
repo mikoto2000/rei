@@ -12,6 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /** Snapshot completeness is decided by persisted enumeration, never a model assertion. */
+@org.junit.jupiter.api.Tag("integration")
 class TaskSnapshotTest {
   @TempDir Path temporary;
 

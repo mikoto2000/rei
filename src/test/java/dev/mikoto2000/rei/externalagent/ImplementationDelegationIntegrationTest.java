@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.io.TempDir;
 
 /** 実装委譲外部連携の結果と状態の契約を検証するテスト。 */
+@org.junit.jupiter.api.Tag("integration")
 class ImplementationDelegationIntegrationTest {
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path temporary;

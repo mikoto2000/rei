@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 /** Fixed Git trees must remain readable when HEAD and the working tree change. */
+@org.junit.jupiter.api.Tag("integration")
 class GitSnapshotTest {
   @TempDir Path temporary;
 

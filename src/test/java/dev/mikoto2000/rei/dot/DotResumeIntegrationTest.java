@@ -44,6 +44,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.springframework.beans.factory.support.StaticListableBeanFactory;
 
 /** 状態表示再開外部連携の結果と状態の契約を検証するテスト。 */
+@org.junit.jupiter.api.Tag("integration")
 class DotResumeIntegrationTest {
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;

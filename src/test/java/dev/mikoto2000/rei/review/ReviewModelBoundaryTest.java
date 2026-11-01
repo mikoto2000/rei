@@ -44,6 +44,7 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 import reactor.core.publisher.Flux;
 
 /** レビューモデル境界条件の結果と状態の契約を検証するテスト。 */
+@org.junit.jupiter.api.Tag("integration")
 class ReviewModelBoundaryTest {
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path dir;
