@@ -22,6 +22,8 @@ import org.junit.jupiter.api.io.TempDir;
 
 /** Self変更差分レビューGitの結果と状態の契約を検証するテスト。 */
 @org.junit.jupiter.api.Tag("integration")
+@org.junit.jupiter.api.extension.ExtendWith(
+    dev.mikoto2000.rei.testsupport.FixtureTimingExtension.class)
 class SelfPatchReviewGitTest {
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
