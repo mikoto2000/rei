@@ -46,6 +46,10 @@ try {
         Set-Content "$root/surefire-reports/TEST-invalid.xml"
     Reject @("$root/surefire-reports")
     Remove-Item -LiteralPath "$root/surefire-reports/TEST-invalid.xml"
+    '<testsuite name="BadDecimal" tests="0" failures="0" errors="0" skipped="0" time="0,125"/>' |
+        Set-Content "$root/empty/TEST-invalid-decimal.xml"
+    Reject @("$root/empty")
+    Remove-Item -LiteralPath "$root/empty/TEST-invalid-decimal.xml"
     '<testsuite name="Zero" tests="0" failures="0" errors="0" skipped="0" time="0"/>' |
         Set-Content "$root/empty/TEST-zero.xml"
     & "$PSScriptRoot/test-performance-report.ps1" -Reports "$root/empty" -Output "$root/zero" | Out-Null

@@ -21,11 +21,11 @@ $classes = @(foreach ($file in $files) {
     if ($suite.LocalName -ne 'testsuite' -or !$suite.GetAttribute('name')) { throw "Expected named testsuite: $($file.Name)" }
     $name = $suite.GetAttribute('name')
     if (!$seen.Add("${provider}:$name")) { throw "Duplicate suite (use separate output per run): ${provider}:$name" }
-    $seconds = [double]::Parse($suite.GetAttribute('time'), $culture)
+    $seconds = [double]::Parse($suite.GetAttribute('time'), [Globalization.NumberStyles]::Float, $culture)
     if (![double]::IsFinite($seconds) -or $seconds -lt 0) { throw 'Invalid suite duration' }
     $times = [Collections.Generic.List[double]]::new()
     foreach ($case in $suite.SelectNodes('testcase')) {
-        $time = [double]::Parse($case.GetAttribute('time'), $culture)
+        $time = [double]::Parse($case.GetAttribute('time'), [Globalization.NumberStyles]::Float, $culture)
         if (![double]::IsFinite($time) -or $time -lt 0) { throw 'Invalid testcase duration' }
         $times.Add($time)
         $result = if ($case.SelectSingleNode('error')) { 'Error' } elseif ($case.SelectSingleNode('failure')) { 'Failed' } elseif ($case.SelectSingleNode('skipped')) { 'Skipped' } else { 'Passed' }

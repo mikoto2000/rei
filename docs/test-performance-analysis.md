@@ -392,7 +392,7 @@ Failsafeを導入した場合は `-Dit.test=...` と `verify` の対応も別に
 
 今回の集計テストはRed（旧実装では複数入力を解析できず失敗）→Greenで追加。
 Surefire / Failsafe、小数秒、parameter/dynamicの識別名、failure/error/skip、空ディレクトリ、
-不正/空XML、DOCTYPE拒否、重複、0秒、相関未定義、並列wallとの差を検証する。
+不正/空XML、不正な小数表記、DOCTYPE拒否、重複、0秒、相関未定義、並列wallとの差を検証する。
 CIのJava workflowにも同じ契約テストを追加した。測定専用ログ設定はtarget配下に分離し、
 通常のアプリ/テスト用logbackやPOMは変更していない。
 
