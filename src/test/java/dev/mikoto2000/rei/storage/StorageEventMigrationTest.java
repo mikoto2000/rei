@@ -348,6 +348,7 @@ class StorageEventMigrationTest {
         dev.mikoto2000.rei.testsupport.FixtureTimingExtension.phase("event-jsonl-fixture")) {
       Files.createDirectories(source().getParent());
       try (var output = Files.newBufferedWriter(source())) {
+        var mapper = EventJsonCodec.mapper();
         for (int i = 1; i <= 100000; i++) {
           var fact =
               new AgentEvent(
@@ -363,7 +364,7 @@ class StorageEventMigrationTest {
                   null,
                   new AgentRunCompletedPayload("run-" + i, 1),
                   project);
-          output.write(EventJsonCodec.mapper().writeValueAsString(fact));
+          output.write(mapper.writeValueAsString(fact));
           output.newLine();
         }
       }
