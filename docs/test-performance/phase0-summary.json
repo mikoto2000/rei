@@ -1,0 +1,181 @@
+{
+  "SourceCommit": "01a6d1dd2f6ecc63ccd7224c8265448e8e5b8071",
+  "Command": "mvnw.cmd test -Pfull -B (Maven logger timestamps enabled)",
+  "Runs": [
+    {
+      "Run": 1,
+      "WallSeconds": 981.1683654,
+      "MavenTotal": "16:18 min",
+      "SurefirePhaseSeconds": 976.729,
+      "FinishedAt": "2026-11-01T08:46:31+09:00",
+      "Summary": {
+        "Classes": 1264,
+        "ExecutedClasses": 1259,
+        "Tests": 7168,
+        "Passed": 7160,
+        "Failures": 0,
+        "Errors": 0,
+        "Skipped": 8,
+        "SuiteSeconds": 971.7979999999953,
+        "WallSeconds": 981.1683654,
+        "Providers": {
+          "Surefire": {
+            "Classes": 1264,
+            "ExecutedClasses": 1259,
+            "Tests": 7168,
+            "Passed": 7160,
+            "Failures": 0,
+            "Errors": 0,
+            "Skipped": 8,
+            "SuiteSeconds": 971.7979999999953
+          },
+          "Failsafe": {
+            "Classes": 0,
+            "ExecutedClasses": 0,
+            "Tests": 0,
+            "Passed": 0,
+            "Failures": 0,
+            "Errors": 0,
+            "Skipped": 0,
+            "SuiteSeconds": 0.0
+          }
+        },
+        "Top10SuitePercent": 31.465489741695443,
+        "Top20SuitePercent": 45.38772460943551,
+        "Top50SuitePercent": 62.885908388369074,
+        "Top100SuitePercent": 75.90209076371873,
+        "Buckets": {
+          "<1s": 1105,
+          "1-5s": 124,
+          "5-10s": 15,
+          "10-30s": 13,
+          ">=30s": 7
+        },
+        "TestCountTimePearson": 0.2645268753338107,
+        "TimingNote": "SuiteSeconds sums XML suite durations; it is not wall-clock or Maven test-phase time, including when tests run in parallel. Inputs must belong to a single run. Duplicate provider/suite identities are rejected; testcase names and repeated invocations are preserved. Directory name failsafe-reports identifies Failsafe; other directories are Surefire."
+      }
+    },
+    {
+      "Run": 2,
+      "WallSeconds": 864.5423999,
+      "MavenTotal": "14:22 min",
+      "SurefirePhaseSeconds": 860.76,
+      "FinishedAt": "2026-11-01T09:01:45+09:00",
+      "Summary": {
+        "Classes": 1264,
+        "ExecutedClasses": 1259,
+        "Tests": 7168,
+        "Passed": 7160,
+        "Failures": 0,
+        "Errors": 0,
+        "Skipped": 8,
+        "SuiteSeconds": 856.6569999999936,
+        "WallSeconds": 864.5423999,
+        "Providers": {
+          "Surefire": {
+            "Classes": 1264,
+            "ExecutedClasses": 1259,
+            "Tests": 7168,
+            "Passed": 7160,
+            "Failures": 0,
+            "Errors": 0,
+            "Skipped": 8,
+            "SuiteSeconds": 856.6569999999936
+          },
+          "Failsafe": {
+            "Classes": 0,
+            "ExecutedClasses": 0,
+            "Tests": 0,
+            "Passed": 0,
+            "Failures": 0,
+            "Errors": 0,
+            "Skipped": 0,
+            "SuiteSeconds": 0.0
+          }
+        },
+        "Top10SuitePercent": 31.16416488746395,
+        "Top20SuitePercent": 45.47887894454875,
+        "Top50SuitePercent": 62.92880347677124,
+        "Top100SuitePercent": 76.21405066438555,
+        "Buckets": {
+          "<1s": 1113,
+          "1-5s": 117,
+          "5-10s": 17,
+          "10-30s": 14,
+          ">=30s": 3
+        },
+        "TestCountTimePearson": 0.27097037552192377,
+        "TimingNote": "SuiteSeconds sums XML suite durations; it is not wall-clock or Maven test-phase time, including when tests run in parallel. Inputs must belong to a single run. Duplicate provider/suite identities are rejected; testcase names and repeated invocations are preserved. Directory name failsafe-reports identifies Failsafe; other directories are Surefire."
+      }
+    },
+    {
+      "Run": 3,
+      "WallSeconds": 807.9997584,
+      "MavenTotal": "13:25 min",
+      "SurefirePhaseSeconds": 804.046,
+      "FinishedAt": "2026-11-01T09:15:54+09:00",
+      "Summary": {
+        "Classes": 1264,
+        "ExecutedClasses": 1259,
+        "Tests": 7168,
+        "Passed": 7160,
+        "Failures": 0,
+        "Errors": 0,
+        "Skipped": 8,
+        "SuiteSeconds": 799.9159999999958,
+        "WallSeconds": 807.9997584,
+        "Providers": {
+          "Surefire": {
+            "Classes": 1264,
+            "ExecutedClasses": 1259,
+            "Tests": 7168,
+            "Passed": 7160,
+            "Failures": 0,
+            "Errors": 0,
+            "Skipped": 8,
+            "SuiteSeconds": 799.9159999999958
+          },
+          "Failsafe": {
+            "Classes": 0,
+            "ExecutedClasses": 0,
+            "Tests": 0,
+            "Passed": 0,
+            "Failures": 0,
+            "Errors": 0,
+            "Skipped": 0,
+            "SuiteSeconds": 0.0
+          }
+        },
+        "Top10SuitePercent": 31.224403562374214,
+        "Top20SuitePercent": 45.53940663769719,
+        "Top50SuitePercent": 62.861350441796716,
+        "Top100SuitePercent": 76.11774236294853,
+        "Buckets": {
+          "<1s": 1116,
+          "1-5s": 117,
+          "5-10s": 15,
+          "10-30s": 13,
+          ">=30s": 3
+        },
+        "TestCountTimePearson": 0.25730326591026653,
+        "TimingNote": "SuiteSeconds sums XML suite durations; it is not wall-clock or Maven test-phase time, including when tests run in parallel. Inputs must belong to a single run. Duplicate provider/suite identities are rejected; testcase names and repeated invocations are preserved. Directory name failsafe-reports identifies Failsafe; other directories are Surefire."
+      }
+    }
+  ],
+  "ContextDiagnostic": {
+    "Tests": 6,
+    "Passed": 6,
+    "Failures": 0,
+    "Errors": 0,
+    "Skipped": 0,
+    "WallSeconds": 17.2724802,
+    "MavenSeconds": 15.159,
+    "SuiteSeconds": 12.236,
+    "Size": 3,
+    "MaxSize": 32,
+    "Hits": 69,
+    "Misses": 3,
+    "FailureCount": 0,
+    "Scope": "Separate JVM; only ReiApplicationTests,ComputerUseApplicationTest,SubAgentIntegrationTest. Cache lookups are not test counts. Not part of the three full runs."
+  }
+}

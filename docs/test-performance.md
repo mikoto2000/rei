@@ -1,5 +1,8 @@
 # Java テスト性能レポート
 
+現在の規模の再計測と改善候補は [2026-11-01 Phase 0 分析](test-performance-analysis.md) を参照。
+本書の数値は2026-10-04時点の履歴として保持する。
+
 測定日: 2026-10-04（Asia/Tokyo）。ブランチ: `codex/test-performance-improvement`。
 
 ## 1. 現状と測定条件
