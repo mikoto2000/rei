@@ -1,0 +1,572 @@
+{
+  "CodeCommit": "d6a33fc16123dd90ad2b37c3cdbf8d61feedb55f",
+  "BaselineCommit": "a26f7e56a349b873a14798e64f502d4d6ba74cfb",
+  "CommonLoggingFixtureCommit": "b1aec743",
+  "Runs": [
+    {
+      "Label": "p1a-before-fast-stable1",
+      "Seconds": 410.2649115,
+      "Tests": 4412,
+      "Passed": 4408,
+      "Skipped": 4,
+      "Suites": 835,
+      "ExecutedSuites": 832,
+      "SuiteSeconds": 382.08899999999875
+    },
+    {
+      "Label": "p1a-before-fast-stable2",
+      "Seconds": 380.0669039,
+      "Tests": 4412,
+      "Passed": 4408,
+      "Skipped": 4,
+      "Suites": 835,
+      "ExecutedSuites": 832,
+      "SuiteSeconds": 371.0629999999982
+    },
+    {
+      "Label": "p1a-before-fast-stable3",
+      "Seconds": 438.1839845,
+      "Tests": 4412,
+      "Passed": 4408,
+      "Skipped": 4,
+      "Suites": 835,
+      "ExecutedSuites": 832,
+      "SuiteSeconds": 428.284999999998
+    },
+    {
+      "Label": "p1a-after-fast1",
+      "Seconds": 222.7338094,
+      "Tests": 4253,
+      "Passed": 4252,
+      "Skipped": 1,
+      "Suites": 799,
+      "ExecutedSuites": 798,
+      "SuiteSeconds": 196.29699999999931
+    },
+    {
+      "Label": "p1a-after-fast2",
+      "Seconds": 193.0204793,
+      "Tests": 4253,
+      "Passed": 4252,
+      "Skipped": 1,
+      "Suites": 799,
+      "ExecutedSuites": 798,
+      "SuiteSeconds": 183.5769999999996
+    },
+    {
+      "Label": "p1a-after-fast3",
+      "Seconds": 192.8637386,
+      "Tests": 4253,
+      "Passed": 4252,
+      "Skipped": 1,
+      "Suites": 799,
+      "ExecutedSuites": 798,
+      "SuiteSeconds": 181.60799999999935
+    },
+    {
+      "Label": "p1a-after-integration",
+      "Seconds": 990.9943914,
+      "Tests": 2957,
+      "Passed": 2950,
+      "Skipped": 7,
+      "Suites": 487,
+      "ExecutedSuites": 483,
+      "SuiteSeconds": 981.0100000000004
+    },
+    {
+      "Label": "p1a-after-full",
+      "Seconds": 957.4942707,
+      "Tests": 7210,
+      "Passed": 7202,
+      "Skipped": 8,
+      "Suites": 1266,
+      "ExecutedSuites": 1261,
+      "SuiteSeconds": 924.2719999999954
+    }
+  ],
+  "BeforeFastMedianSeconds": 410.2649115,
+  "AfterFastMedianSeconds": 193.0204793,
+  "FastReductionPercent": 52.95223308415933,
+  "MovedFromFastCases": 199,
+  "PaperCaseSeconds": {
+    "Before": [
+      26.912,
+      30.004,
+      26.964
+    ],
+    "After": [
+      0.002,
+      0.004,
+      0.007
+    ],
+    "BeforeMedian": 26.964,
+    "AfterMedian": 0.004
+  },
+  "Partition": {
+    "Fast": 4253,
+    "Integration": 2957,
+    "Full": 7210,
+    "Before": 7170,
+    "Added": [
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::preservesCanonicalPublicAndDnsHostnames(String)[1]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::preservesCanonicalPublicAndDnsHostnames(String)[2]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::preservesCanonicalPublicAndDnsHostnames(String)[3]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::preservesCanonicalPublicAndDnsHostnames(String)[4]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::preservesCanonicalPublicAndDnsHostnames(String)[5]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::preservesCanonicalPublicAndDnsHostnames(String)[6]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[1]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[10]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[11]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[12]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[13]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[14]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[15]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[16]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[17]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[18]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[19]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[2]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[20]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[21]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[22]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[3]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[4]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[5]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[6]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[7]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[8]",
+      "dev.mikoto2000.rei.http.PublicNetworkPolicyTest::rejectsAmbiguousOrPrivateHostSpellingsBeforeResolution(String)[9]",
+      "dev.mikoto2000.rei.http.PublicNetworkRedirectPolicyTest::refusesUnsafeRedirectBeforeASecondExchange(String)[1]",
+      "dev.mikoto2000.rei.http.PublicNetworkRedirectPolicyTest::refusesUnsafeRedirectBeforeASecondExchange(String)[10]",
+      "dev.mikoto2000.rei.http.PublicNetworkRedirectPolicyTest::refusesUnsafeRedirectBeforeASecondExchange(String)[11]",
+      "dev.mikoto2000.rei.http.PublicNetworkRedirectPolicyTest::refusesUnsafeRedirectBeforeASecondExchange(String)[2]",
+      "dev.mikoto2000.rei.http.PublicNetworkRedirectPolicyTest::refusesUnsafeRedirectBeforeASecondExchange(String)[3]",
+      "dev.mikoto2000.rei.http.PublicNetworkRedirectPolicyTest::refusesUnsafeRedirectBeforeASecondExchange(String)[4]",
+      "dev.mikoto2000.rei.http.PublicNetworkRedirectPolicyTest::refusesUnsafeRedirectBeforeASecondExchange(String)[5]",
+      "dev.mikoto2000.rei.http.PublicNetworkRedirectPolicyTest::refusesUnsafeRedirectBeforeASecondExchange(String)[6]",
+      "dev.mikoto2000.rei.http.PublicNetworkRedirectPolicyTest::refusesUnsafeRedirectBeforeASecondExchange(String)[7]",
+      "dev.mikoto2000.rei.http.PublicNetworkRedirectPolicyTest::refusesUnsafeRedirectBeforeASecondExchange(String)[8]",
+      "dev.mikoto2000.rei.http.PublicNetworkRedirectPolicyTest::refusesUnsafeRedirectBeforeASecondExchange(String)[9]",
+      "dev.mikoto2000.rei.paper.PaperRedirectPolicyTest::numericLoopbackRedirectNeverReachesASecondExchange"
+    ],
+    "Skips": {
+      "Fast": [
+        {
+          "Suite": "dev.mikoto2000.rei.temporal.holiday.OfficialHolidayCsvTest",
+          "Method": "validatesDownloadedOfficialCsv",
+          "Result": "Skipped",
+          "Reason": "System property [holiday.csv] does not exist"
+        }
+      ],
+      "Integration": [
+        {
+          "Suite": "dev.mikoto2000.rei.chatgpt.WindowsPlanAppServerProcessTest",
+          "Method": "nativeProcessHasDeadlineEvenWhenNoRpcIsSent",
+          "Result": "Skipped",
+          "Reason": "Environment variable [REI_TEST_WINDOWS_CODEX] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.chatgpt.WindowsPlanAppServerProcessTest",
+          "Method": "startsNativeRestrictedThreadThenDeletesOwnHome",
+          "Result": "Skipped",
+          "Reason": "Environment variable [REI_TEST_WINDOWS_CODEX] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.chatgpt.WslPlanAppServerProcessTest",
+          "Method": "startsRestrictedThreadWithoutTurnThenClosesNativeProcessAndDeletesOwnHome",
+          "Result": "Skipped",
+          "Reason": "Environment variable [REI_TEST_WSL_CODEX] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.core.DocumentRendererProcessTest",
+          "Method": "realPlantUmlErrorAndPngAreVerifiedAndDeliveredThroughExistingStore",
+          "Result": "Skipped",
+          "Reason": "Assumption failed: PlantUML jar not configured; use -Drei.test.plantuml.jar=/absolute/plantuml.jar"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.core.StructuredHttpBenchmarkTest",
+          "Method": "compareShellAndStructuredApiAgainstIdenticalFixture",
+          "Result": "Skipped",
+          "Reason": "System property [httpapi.benchmark] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.storage.AnswerGenerationIoBenchmarkTest",
+          "Method": "measure",
+          "Result": "Skipped",
+          "Reason": "System property [rei.io.benchmark] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.storage.StorageReadReuseTest",
+          "Method": "measureRepeatedReads",
+          "Result": "Skipped",
+          "Reason": "System property [rei.io.read-benchmark] does not exist"
+        }
+      ],
+      "Full": [
+        {
+          "Suite": "dev.mikoto2000.rei.chatgpt.WindowsPlanAppServerProcessTest",
+          "Method": "nativeProcessHasDeadlineEvenWhenNoRpcIsSent",
+          "Result": "Skipped",
+          "Reason": "Environment variable [REI_TEST_WINDOWS_CODEX] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.chatgpt.WindowsPlanAppServerProcessTest",
+          "Method": "startsNativeRestrictedThreadThenDeletesOwnHome",
+          "Result": "Skipped",
+          "Reason": "Environment variable [REI_TEST_WINDOWS_CODEX] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.chatgpt.WslPlanAppServerProcessTest",
+          "Method": "startsRestrictedThreadWithoutTurnThenClosesNativeProcessAndDeletesOwnHome",
+          "Result": "Skipped",
+          "Reason": "Environment variable [REI_TEST_WSL_CODEX] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.core.DocumentRendererProcessTest",
+          "Method": "realPlantUmlErrorAndPngAreVerifiedAndDeliveredThroughExistingStore",
+          "Result": "Skipped",
+          "Reason": "Assumption failed: PlantUML jar not configured; use -Drei.test.plantuml.jar=/absolute/plantuml.jar"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.core.StructuredHttpBenchmarkTest",
+          "Method": "compareShellAndStructuredApiAgainstIdenticalFixture",
+          "Result": "Skipped",
+          "Reason": "System property [httpapi.benchmark] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.storage.AnswerGenerationIoBenchmarkTest",
+          "Method": "measure",
+          "Result": "Skipped",
+          "Reason": "System property [rei.io.benchmark] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.storage.StorageReadReuseTest",
+          "Method": "measureRepeatedReads",
+          "Result": "Skipped",
+          "Reason": "System property [rei.io.read-benchmark] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.temporal.holiday.OfficialHolidayCsvTest",
+          "Method": "validatesDownloadedOfficialCsv",
+          "Result": "Skipped",
+          "Reason": "System property [holiday.csv] does not exist"
+        }
+      ],
+      "Before": [
+        {
+          "Suite": "dev.mikoto2000.rei.chatgpt.WindowsPlanAppServerProcessTest",
+          "Method": "nativeProcessHasDeadlineEvenWhenNoRpcIsSent",
+          "Result": "Skipped",
+          "Reason": "Environment variable [REI_TEST_WINDOWS_CODEX] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.chatgpt.WindowsPlanAppServerProcessTest",
+          "Method": "startsNativeRestrictedThreadThenDeletesOwnHome",
+          "Result": "Skipped",
+          "Reason": "Environment variable [REI_TEST_WINDOWS_CODEX] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.chatgpt.WslPlanAppServerProcessTest",
+          "Method": "startsRestrictedThreadWithoutTurnThenClosesNativeProcessAndDeletesOwnHome",
+          "Result": "Skipped",
+          "Reason": "Environment variable [REI_TEST_WSL_CODEX] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.core.DocumentRendererProcessTest",
+          "Method": "realPlantUmlErrorAndPngAreVerifiedAndDeliveredThroughExistingStore",
+          "Result": "Skipped",
+          "Reason": "Assumption failed: PlantUML jar not configured; use -Drei.test.plantuml.jar=/absolute/plantuml.jar"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.core.StructuredHttpBenchmarkTest",
+          "Method": "compareShellAndStructuredApiAgainstIdenticalFixture",
+          "Result": "Skipped",
+          "Reason": "System property [httpapi.benchmark] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.storage.AnswerGenerationIoBenchmarkTest",
+          "Method": "measure",
+          "Result": "Skipped",
+          "Reason": "System property [rei.io.benchmark] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.storage.StorageReadReuseTest",
+          "Method": "measureRepeatedReads",
+          "Result": "Skipped",
+          "Reason": "System property [rei.io.read-benchmark] does not exist"
+        },
+        {
+          "Suite": "dev.mikoto2000.rei.temporal.holiday.OfficialHolidayCsvTest",
+          "Method": "validatesDownloadedOfficialCsv",
+          "Result": "Skipped",
+          "Reason": "System property [holiday.csv] does not exist"
+        }
+      ]
+    },
+    "IdentityPolicy": "Qualified suite + exact XML testcase name, including parameter/dynamic identifiers. Duplicate identities are rejected, never collapsed. Skipped identities remain in every set comparison."
+  },
+  "TopFastSuites": [
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.ui.shell.CommandHelpTest",
+      "Tests": "1",
+      "Passed": "1",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "23.202",
+      "SuitePercent": "12.638838198685049",
+      "AverageSeconds": "23.202",
+      "MaxSeconds": "23.202"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.voice.VoiceInputCoordinatorTest",
+      "Tests": "26",
+      "Passed": "26",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "9.391",
+      "SuitePercent": "5.115564585977557",
+      "AverageSeconds": "0.3606923076923077",
+      "MaxSeconds": "5.046"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.architecture.PackageArchitectureTest",
+      "Tests": "1",
+      "Passed": "1",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "5.223",
+      "SuitePercent": "2.845127657604172",
+      "AverageSeconds": "5.222",
+      "MaxSeconds": "5.222"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.core.configuration.AiConfigurationTest",
+      "Tests": "14",
+      "Passed": "14",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "3.584",
+      "SuitePercent": "1.952314287737575",
+      "AverageSeconds": "0.2554285714285714",
+      "MaxSeconds": "2.221"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.subagent.ChatGptSubAgentPartitionTest",
+      "Tests": "12",
+      "Passed": "12",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "3.521",
+      "SuitePercent": "1.9179962631484375",
+      "AverageSeconds": "0.2930833333333333",
+      "MaxSeconds": "0.66"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.web.CliCatalogControllerTest",
+      "Tests": "4",
+      "Passed": "4",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "3.373",
+      "SuitePercent": "1.8373761418914174",
+      "AverageSeconds": "0.843",
+      "MaxSeconds": "3.204"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.voice.VoiceHealthLifecycleTest",
+      "Tests": "4",
+      "Passed": "4",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "3.29",
+      "SuitePercent": "1.792163506321602",
+      "AverageSeconds": "0.822",
+      "MaxSeconds": "2.46"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.event.EventPageTest",
+      "Tests": "3",
+      "Passed": "3",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "3.016",
+      "SuitePercent": "1.6429073358863076",
+      "AverageSeconds": "1.0053333333333334",
+      "MaxSeconds": "2.859"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.core.TestReportCollectionDiagnosisTest",
+      "Tests": "7",
+      "Passed": "7",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "2.997",
+      "SuitePercent": "1.632557455454663",
+      "AverageSeconds": "0.428",
+      "MaxSeconds": "2.566"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.checkpoint.ResumeOverviewRepositoryTest",
+      "Tests": "15",
+      "Passed": "15",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "2.959",
+      "SuitePercent": "1.611857694591374",
+      "AverageSeconds": "0.1968666666666667",
+      "MaxSeconds": "1.478"
+    }
+  ],
+  "TopFullSuites": [
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.application.task.TaskSourcePaginationTest",
+      "Tests": "2",
+      "Passed": "2",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "44.324",
+      "SuitePercent": "4.795558017553298",
+      "AverageSeconds": "22.162000000000003",
+      "MaxSeconds": "37.773"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.storage.StorageEventMigrationTest",
+      "Tests": "16",
+      "Passed": "16",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "39.288",
+      "SuitePercent": "4.2506967645888",
+      "AverageSeconds": "2.4548125",
+      "MaxSeconds": "29.281"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.core.SelfPatchReviewGitTest",
+      "Tests": "12",
+      "Passed": "12",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "36.693",
+      "SuitePercent": "3.969935257153758",
+      "AverageSeconds": "3.0575833333333335",
+      "MaxSeconds": "7.08"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.core.PagedFileSearchTest",
+      "Tests": "3",
+      "Passed": "3",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "28.336",
+      "SuitePercent": "3.0657641906278825",
+      "AverageSeconds": "9.445333333333334",
+      "MaxSeconds": "26.501"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.externalagent.IsolatedImplementationServiceTest",
+      "Tests": "5",
+      "Passed": "5",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "27.076",
+      "SuitePercent": "2.9294406841276306",
+      "AverageSeconds": "5.4152000000000005",
+      "MaxSeconds": "6.255"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.core.ToolsTest",
+      "Tests": "113",
+      "Passed": "113",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "26.423",
+      "SuitePercent": "2.8587904859175794",
+      "AverageSeconds": "0.23364601769911503",
+      "MaxSeconds": "2.094"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.externalagent.SpecificationDelegationIntegrationTest",
+      "Tests": "7",
+      "Passed": "7",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "23.643",
+      "SuitePercent": "2.5580132255440087",
+      "AverageSeconds": "3.377142857142857",
+      "MaxSeconds": "5.883"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.checkpoint.PersistentCheckpointServiceTest",
+      "Tests": "62",
+      "Passed": "62",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "20.781",
+      "SuitePercent": "2.248364117922008",
+      "AverageSeconds": "0.33459677419354844",
+      "MaxSeconds": "0.744"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.storage.StorageMigrationCoordinatorTest",
+      "Tests": "27",
+      "Passed": "27",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "19.246",
+      "SuitePercent": "2.0822874651617806",
+      "AverageSeconds": "0.7120370370370369",
+      "MaxSeconds": "2.226"
+    },
+    {
+      "Provider": "Surefire",
+      "Class": "dev.mikoto2000.rei.review.ReviewToolsTest",
+      "Tests": "19",
+      "Passed": "19",
+      "Failures": "0",
+      "Errors": "0",
+      "Skipped": "0",
+      "TotalSeconds": "18.256",
+      "SuitePercent": "1.9751761386258688",
+      "AverageSeconds": "0.9603157894736843",
+      "MaxSeconds": "13.632"
+    }
+  ]
+}
