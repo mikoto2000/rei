@@ -34,16 +34,26 @@ class SelfPatchReviewGitTest {
   /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void repository() throws Exception {
-    git("init", "--quiet");
-    git("config", "core.autocrlf", "false");
+    initializeRepository(root);
+  }
+
+  /** Initializes the unchanged native repository seed. */
+  static void initializeRepository(Path root) throws Exception {
+    git(root, "init", "--quiet");
+    git(root, "config", "core.autocrlf", "false");
     Files.writeString(root.resolve(".gitignore"), "build/\n");
     Files.writeString(root.resolve("A.txt"), "before\n");
-    git("add", "--", ".gitignore", "A.txt");
-    git("commit", "--quiet", "--no-gpg-sign", "-m", "fixture");
+    git(root, "add", "--", ".gitignore", "A.txt");
+    git(root, "commit", "--quiet", "--no-gpg-sign", "-m", "fixture");
   }
 
   /** {@code git} の条件を再現するため、検証用の操作や状態を扱う。 */
   void git(String... arguments) throws Exception {
+    git(root, arguments);
+  }
+
+  /** Runs fixture commands with the original timeout, configuration and exit assertions. */
+  static void git(Path root, String... arguments) throws Exception {
     var command =
         new ArrayList<String>(
             List.of(
@@ -407,4 +417,7 @@ class SelfPatchReviewGitTest {
     assertNull(result.review());
     assertNull(result.finalTest());
   }
+
+  /** Copies must be independent before the seed can be safely reused. */
+  static void copyRepository(Path source, Path destination) throws Exception {}
 }

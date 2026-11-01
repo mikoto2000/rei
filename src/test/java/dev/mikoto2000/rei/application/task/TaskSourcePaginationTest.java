@@ -130,4 +130,9 @@ class TaskSourcePaginationTest {
   /** A committed source fixture and its unmodified pagination service. */
   private record TaskFixture(
       dev.mikoto2000.rei.core.project.ProjectContext project, TaskManagerService tasks) {}
+
+  /** Populates rows using the existing individual-commit behavior before batching is introduced. */
+  static void populate(javax.sql.DataSource data, Runnable seed) {
+    seed.run();
+  }
 }
