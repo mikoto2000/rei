@@ -1,8 +1,8 @@
 package dev.mikoto2000.rei.core;
 
 import static dev.mikoto2000.rei.core.SelfPatchReviewGitTest.copyRepository;
-import static dev.mikoto2000.rei.core.SelfPatchReviewGitTest.initializeRepository;
 import static dev.mikoto2000.rei.core.SelfPatchReviewGitTest.git;
+import static dev.mikoto2000.rei.core.SelfPatchReviewGitTest.initializeRepository;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -19,6 +19,7 @@ import org.junit.jupiter.api.io.TempDir;
 class GitFixtureIsolationTest {
   /** Contains a seed and two independently mutated copies. */
   @TempDir Path root;
+
   /** Copied repositories share no mutable history, index, configuration or worktree files. */
   @Test
   void copiedRepositoriesKeepHistoryConfigurationIndexAndWorktreeIndependent() throws Exception {
@@ -33,8 +34,10 @@ class GitFixtureIsolationTest {
     byte[] sourceIndex = Files.readAllBytes(source.resolve(".git/index"));
     byte[] sourceConfig = Files.readAllBytes(source.resolve(".git/config"));
     byte[] sourceHead = Files.readAllBytes(source.resolve(".git/refs/heads/" + branch(source)));
-    assertArrayEquals(sourceIndex, Files.readAllBytes(first.resolve(".git/index")));
-    assertArrayEquals(sourceIndex, Files.readAllBytes(second.resolve(".git/index")));
+    byte[] secondIndex = Files.readAllBytes(second.resolve(".git/index"));
+    String staged = git(source, "ls-files", "--stage");
+    assertEquals(staged, git(first, "ls-files", "--stage"));
+    assertEquals(staged, git(second, "ls-files", "--stage"));
     git(first, "config", "fixture.changed", "first");
     Files.writeString(first.resolve("A.txt"), "first change\n");
     git(first, "add", "--", "A.txt");
@@ -42,20 +45,22 @@ class GitFixtureIsolationTest {
     assertEquals("before\n", Files.readString(second.resolve("A.txt")));
     assertEquals("before\n", Files.readString(source.resolve("A.txt")));
     assertArrayEquals(sourceIndex, Files.readAllBytes(source.resolve(".git/index")));
-    assertArrayEquals(sourceIndex, Files.readAllBytes(second.resolve(".git/index")));
+    assertArrayEquals(secondIndex, Files.readAllBytes(second.resolve(".git/index")));
     assertArrayEquals(sourceConfig, Files.readAllBytes(source.resolve(".git/config")));
     assertArrayEquals(sourceConfig, Files.readAllBytes(second.resolve(".git/config")));
-    assertArrayEquals(sourceHead,
-        Files.readAllBytes(second.resolve(".git/refs/heads/" + branch(second))));
-    assertArrayEquals(sourceHead,
-        Files.readAllBytes(source.resolve(".git/refs/heads/" + branch(source))));
-    assertNotEquals(Files.readString(first.resolve(".git/refs/heads/" + branch(first))),
+    assertArrayEquals(
+        sourceHead, Files.readAllBytes(second.resolve(".git/refs/heads/" + branch(second))));
+    assertArrayEquals(
+        sourceHead, Files.readAllBytes(source.resolve(".git/refs/heads/" + branch(source))));
+    assertNotEquals(
+        Files.readString(first.resolve(".git/refs/heads/" + branch(first))),
         Files.readString(second.resolve(".git/refs/heads/" + branch(second))));
   }
 
   /** Returns the controlled seed's local branch without consulting external configuration. */
   private static String branch(Path repository) throws Exception {
-    return Files.readString(repository.resolve(".git/HEAD")).trim().substring("ref: refs/heads/".length());
+    return Files.readString(repository.resolve(".git/HEAD"))
+        .trim()
+        .substring("ref: refs/heads/".length());
   }
-
 }

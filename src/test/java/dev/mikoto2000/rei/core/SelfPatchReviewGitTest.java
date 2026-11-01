@@ -25,6 +25,19 @@ import org.junit.jupiter.api.io.TempDir;
 @org.junit.jupiter.api.extension.ExtendWith(
     dev.mikoto2000.rei.testsupport.FixtureTimingExtension.class)
 class SelfPatchReviewGitTest {
+  /** The suite owns an immutable seed outside every mutable test repository. */
+  @TempDir static Path seedDirectory;
+
+  /** Native Git history reused only through independent file copies. */
+  static Path seedRepository;
+
+  /** Pays native Git initialization once without sharing writable repositories. */
+  @org.junit.jupiter.api.BeforeAll
+  static void prepareSeedRepository() throws Exception {
+    seedRepository = Files.createDirectory(seedDirectory.resolve("repository"));
+    initializeRepository(seedRepository);
+  }
+
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path root;
 
@@ -34,7 +47,7 @@ class SelfPatchReviewGitTest {
   /** 各検証を独立した状態で始められるよう、依存先と検証データを準備する。 */
   @BeforeEach
   void repository() throws Exception {
-    initializeRepository(root);
+    copyRepository(seedRepository, root);
   }
 
   /** Initializes the unchanged native repository seed. */
@@ -53,7 +66,7 @@ class SelfPatchReviewGitTest {
   }
 
   /** Runs fixture commands with the original timeout, configuration and exit assertions. */
-  static void git(Path root, String... arguments) throws Exception {
+  static String git(Path root, String... arguments) throws Exception {
     var command =
         new ArrayList<String>(
             List.of(
@@ -74,7 +87,11 @@ class SelfPatchReviewGitTest {
       process.destroyForcibly();
       fail("fixture git timed out");
     }
-    assertEquals(0, process.exitValue(), new String(process.getInputStream().readNBytes(4096)));
+    String output =
+        new String(
+            process.getInputStream().readNBytes(4096), java.nio.charset.StandardCharsets.UTF_8);
+    assertEquals(0, process.exitValue(), output);
+    return output;
   }
 
   /** 検証で使用するサービスを、指定された条件に合わせて用意する。 */
@@ -419,5 +436,20 @@ class SelfPatchReviewGitTest {
   }
 
   /** Copies must be independent before the seed can be safely reused. */
-  static void copyRepository(Path source, Path destination) throws Exception {}
+  static void copyRepository(Path source, Path destination) throws Exception {
+    try (var entries = Files.walk(source)) {
+      for (var entry : entries.toList()) {
+        Path target = destination.resolve(source.relativize(entry));
+        if (Files.isDirectory(entry, java.nio.file.LinkOption.NOFOLLOW_LINKS)) {
+          Files.createDirectories(target);
+        } else {
+          if (!Files.isRegularFile(entry, java.nio.file.LinkOption.NOFOLLOW_LINKS))
+            throw new java.io.IOException("Fixture seed must contain only regular files");
+          Files.copy(entry, target, java.nio.file.StandardCopyOption.COPY_ATTRIBUTES);
+        }
+      }
+    }
+    // A new file identity must not make a later read-only review refresh the copied index.
+    git(destination, "update-index", "--refresh");
+  }
 }
