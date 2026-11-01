@@ -23,6 +23,7 @@ class ReviewEvidenceValidationTest {
 
   /** 変更内容のレビューで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void fabricatedLineCoordinatesCannotBecomeVerifiedFindings() throws Exception {
     Files.writeString(dir.resolve("source.md"), "first\nwrong fact\n");
     try (var migration = new StorageMigrationCoordinator(dir.resolve("data"))) {
@@ -59,6 +60,7 @@ class ReviewEvidenceValidationTest {
   /** 変更内容のレビューで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   @org.junit.jupiter.api.condition.EnabledOnOs(org.junit.jupiter.api.condition.OS.WINDOWS)
+  @org.junit.jupiter.api.Tag("integration")
   void windowsCaseAliasesCannotCreateTwoTargetsForOneFile() throws Exception {
     Files.writeString(dir.resolve("MixedCase.md"), "source");
     try (var migration = new StorageMigrationCoordinator(dir.resolve("data"))) {
@@ -79,6 +81,7 @@ class ReviewEvidenceValidationTest {
 
   /** 変更内容のレビューで、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void findingsCannotSplitASurrogatePair() throws Exception {
     Files.writeString(dir.resolve("source.md"), "abc🙂def");
     try (var migration = new StorageMigrationCoordinator(dir.resolve("data"))) {

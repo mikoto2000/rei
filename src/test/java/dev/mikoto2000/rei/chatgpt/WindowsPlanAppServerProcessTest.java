@@ -32,6 +32,7 @@ class WindowsPlanAppServerProcessTest {
   /** ChatGPTとの連携で、時刻や期限に応じて、待機・実行・保存の扱いを切り替えることを確認する。 */
   @Test
   @EnabledIfEnvironmentVariable(named = "REI_TEST_WINDOWS_CODEX", matches = "(?i)[A-Z]:.+")
+  @org.junit.jupiter.api.Tag("integration")
   void nativeProcessHasDeadlineEvenWhenNoRpcIsSent() throws Exception {
     var launcher =
         new WindowsPlanAppServerLauncher(
@@ -61,6 +62,7 @@ class WindowsPlanAppServerProcessTest {
   /** ChatGPTとの連携で、指定した条件に対する結果と状態の変化を確認する。 */
   @Test
   @EnabledIfEnvironmentVariable(named = "REI_TEST_WINDOWS_CODEX", matches = "(?i)[A-Z]:.+")
+  @org.junit.jupiter.api.Tag("integration")
   void startsNativeRestrictedThreadThenDeletesOwnHome() throws Exception {
     var launcher =
         new WindowsPlanAppServerLauncher(

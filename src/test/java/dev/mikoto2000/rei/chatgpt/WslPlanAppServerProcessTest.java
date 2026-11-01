@@ -30,6 +30,7 @@ class WslPlanAppServerProcessTest {
   /** ChatGPTとの連携で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   @EnabledIfEnvironmentVariable(named = "REI_TEST_WSL_CODEX", matches = "/.+")
+  @org.junit.jupiter.api.Tag("integration")
   void startsRestrictedThreadWithoutTurnThenClosesNativeProcessAndDeletesOwnHome()
       throws Exception {
     var settings =

@@ -21,6 +21,7 @@ import org.junit.jupiter.api.io.TempDir;
 class GitChangeTestImpactTest {
   /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void quotedPathAndHeaderLikeAddedTextCannotRedirectLineEvidence() throws Exception {
     var fake =
         new ExternalAgentProcessRunner() {
@@ -53,6 +54,7 @@ class GitChangeTestImpactTest {
 
   /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void gitCoverageObservesCurrentChangedLinesWithoutExecutingTests() throws Exception {
     init();
     write("A.java", "class A {\n int value;\n}\n");
@@ -129,6 +131,7 @@ class GitChangeTestImpactTest {
 
   /** 共通の実行基盤で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void collectsStagedUnstagedDeletedAndUntrackedPathsWithoutChangingIndex() throws Exception {
     init();
     write("A.java", "class A { int x; }");
@@ -153,6 +156,7 @@ class GitChangeTestImpactTest {
 
   /** 未変更の保存と検索の窓口について、空の観測内容を返すことを確認する。 */
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void cleanRepositoryReturnsEmptyObservationAndExcludedPathsAreNotExposed() throws Exception {
     init();
     var service = new ChangeTestImpactService(new RepositoryMapService());
@@ -168,6 +172,7 @@ class GitChangeTestImpactTest {
 
   /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void renameIncludesOldAndNewAndTooManyChangesAreRejected() throws Exception {
     init();
     git("mv", "A.java", "Renamed.java");
@@ -179,6 +184,7 @@ class GitChangeTestImpactTest {
 
   /** 共通の実行基盤で、異常条件を所定の失敗として扱い、結果を呼び出し元へ伝えることを確認する。 */
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void nonRepositoryAndNestedRootAreRejected() throws Exception {
     var service = new ChangeTestImpactService(new RepositoryMapService());
     assertThrows(java.io.IOException.class, () -> service.analyzeGit(root, 20));
@@ -189,6 +195,7 @@ class GitChangeTestImpactTest {
 
   /** 共通の実行基盤で、条件が変わっても、引き継ぐべき情報や状態を保持することを確認する。 */
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void stagedChangeIsRetainedWhenWorktreeMatchesHeadAndIgnoredFilesStayExcluded() throws Exception {
     init();
     write("A.java", "class A { int staged; }");
@@ -273,6 +280,7 @@ class GitChangeTestImpactTest {
 
   /** 共通の実行基盤の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void omittedToolArgumentUsesCapturedProjectAndRetainsReadPermission() throws Exception {
     init();
     write("A.java", "class A { int changed; }");

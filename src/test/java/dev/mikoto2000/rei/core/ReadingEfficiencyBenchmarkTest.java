@@ -158,6 +158,7 @@ class ReadingEfficiencyBenchmarkTest {
   }
 
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void resultCursorAvoidsNativeReadOfTheGapWithIdenticalTokenBudgets() throws Exception {
     Files.writeString(root.resolve("gap.txt"), "hit\n" + "irrelevant\n".repeat(998) + "hit\n");
     var reader = tools("gap.txt");

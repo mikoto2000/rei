@@ -16,6 +16,7 @@ import org.junit.jupiter.api.io.TempDir;
 class CheckpointReconcilerTest {
   /** 作業の中断と再開で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
+  @org.junit.jupiter.api.Tag("integration")
   void readingGitBaselineDoesNotExecuteRepositoryConfiguredFsmonitor() throws Exception {
     Path repository = Files.createDirectory(root.resolve("git-fixture"));
     var init = new ProcessBuilder("git", "init", "--quiet", repository.toString()).start();
