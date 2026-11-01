@@ -3,7 +3,7 @@ param(
     [Parameter(Mandatory)][string]$Integration,
     [Parameter(Mandatory)][string]$Full,
     [string]$Before = '',
-    [string]$ExpectedSkips = '',
+    [string]$ExpectedSkips = "$PSScriptRoot/../config/test-expected-skips.json",
     [string]$Output = 'target/test-performance/partition.json'
 )
 $ErrorActionPreference = 'Stop'

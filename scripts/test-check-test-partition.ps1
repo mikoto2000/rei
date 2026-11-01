@@ -39,6 +39,16 @@ try {
     Reset; '<testsuite name="Fixture" tests="1" failures="0" errors="1" skipped="0"><testcase name="dynamic[2]"><error/></testcase></testsuite>' |
         Set-Content "$probe/integration/TEST-Fixture.xml"; Reject 'error'
     Reset; Suite fast @($a,$a,$skip); Reject 'duplicate invocation identity'
+    Reset
+    $newSkip='<testcase name="parameter[1]"><skipped message="Newly unavailable"/></testcase>'
+    @(@{Suite='Fixture';Method='optional';Reason='Fixture unavailable'},@{Suite='Fixture';Method='parameter[1]';Reason='Newly unavailable'}) |
+        ConvertTo-Json | Set-Content "$probe/skips.json"
+    Suite fast @($newSkip,$skip); Suite full @($newSkip,$b,$skip)
+    Reject 'previously passing test became skipped even if allowlisted'
+    Reset
+    '<testsuite name="Fixture" tests="2" failures="0" errors="0" skipped="0"><testcase name="dynamic[2]"/></testsuite>' |
+        Set-Content "$probe/integration/TEST-Fixture.xml"
+    Reject 'incomplete testcase inventory'
     Reset; Suite fast @($a,$skip,'<testcase name="newSecurity[1]"/>'); Suite full @($a,$b,$skip,'<testcase name="newSecurity[1]"/>')
     Check | Out-Null
     $result = Get-Content "$probe/result.json" -Raw | ConvertFrom-Json
