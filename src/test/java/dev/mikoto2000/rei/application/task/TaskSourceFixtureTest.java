@@ -14,6 +14,7 @@ import org.sqlite.SQLiteDataSource;
 class TaskSourceFixtureTest {
   /** An independent on-disk database for this contract. */
   @TempDir Path root;
+
   /** Fixture writes commit before fresh readers, and failed preparation leaves no partial rows. */
   @Test
   void fixturePopulationCommitsAndRollsBackWithoutLeakingTransaction() throws Exception {
@@ -30,10 +31,13 @@ class TaskSourceFixtureTest {
       assertThat(rows.next()).isFalse();
     }
     org.assertj.core.api.Assertions.assertThatThrownBy(
-            () -> populate(data, () -> {
-              jdbc.sql("INSERT INTO fixture_rows VALUES('rolled-back')").update();
-              throw new IllegalStateException("failed fixture");
-            }))
+            () ->
+                populate(
+                    data,
+                    () -> {
+                      jdbc.sql("INSERT INTO fixture_rows VALUES('rolled-back')").update();
+                      throw new IllegalStateException("failed fixture");
+                    }))
         .isInstanceOf(IllegalStateException.class)
         .hasMessage("failed fixture");
     try (var connection = data.getConnection();
@@ -42,8 +46,9 @@ class TaskSourceFixtureTest {
       assertThat(rows.next()).isTrue();
       assertThat(rows.getInt(1)).isEqualTo(1);
     }
-    assertThat(org.springframework.transaction.support.TransactionSynchronizationManager
-        .isActualTransactionActive()).isFalse();
+    assertThat(
+            org.springframework.transaction.support.TransactionSynchronizationManager
+                .isActualTransactionActive())
+        .isFalse();
   }
-
 }

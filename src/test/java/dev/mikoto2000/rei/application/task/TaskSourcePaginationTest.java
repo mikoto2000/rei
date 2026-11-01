@@ -70,30 +70,38 @@ class TaskSourcePaginationTest {
       var owner = new AgentRunContext("owner", "session", root, project.id());
       var goals = new dev.mikoto2000.rei.goal.GoalRepository(data, clock);
       var schedules = new dev.mikoto2000.rei.temporal.PersistentAgentScheduler(data, clock);
-      for (int i = 0; i < 270; i++) {
-        var goal = goals.create(owner, "objective", "output.txt", "b".repeat(64), 1, 1);
-        goals.verifiedWithoutRun(project.id(), goal.id());
-        try (var binding = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
-          var schedule = schedules.scheduleAfter(Duration.ofMinutes(5), "action", "session");
-          schedules.cancel(project.id(), schedule.id());
-        }
-      }
+      populate(
+          data,
+          () -> {
+            for (int i = 0; i < 270; i++) {
+              var goal = goals.create(owner, "objective", "output.txt", "b".repeat(64), 1, 1);
+              goals.verifiedWithoutRun(project.id(), goal.id());
+              try (var binding = dev.mikoto2000.rei.core.chat.AgentRunScope.open(owner)) {
+                var schedule = schedules.scheduleAfter(Duration.ofMinutes(5), "action", "session");
+                schedules.cancel(project.id(), schedule.id());
+              }
+            }
+          });
       var checkpoints =
           new dev.mikoto2000.rei.checkpoint.PersistentCheckpointRepository(
               data, new dev.mikoto2000.rei.checkpoint.CheckpointProperties());
-      for (int i = 0; i < 1005; i++) {
-        var checkpoint =
-            dev.mikoto2000.rei.checkpoint.PersistentCheckpoint.initial(
-                String.format("task-%04d", i),
-                project.id(),
-                "session",
-                String.format("original-%04d", i),
-                root,
-                "request");
-        var fields = checkpoints.fields(checkpoint);
-        fields.put("status", "COMPLETED");
-        checkpoints.save(checkpoints.fields(fields), 0, "start");
-      }
+      populate(
+          data,
+          () -> {
+            for (int i = 0; i < 1005; i++) {
+              var checkpoint =
+                  dev.mikoto2000.rei.checkpoint.PersistentCheckpoint.initial(
+                      String.format("task-%04d", i),
+                      project.id(),
+                      "session",
+                      String.format("original-%04d", i),
+                      root,
+                      "request");
+              var fields = checkpoints.fields(checkpoint);
+              fields.put("status", "COMPLETED");
+              checkpoints.save(checkpoints.fields(fields), 0, "start");
+            }
+          });
       var tasks =
           new TaskManagerService(
               projects, new RunRegistry(clock), checkpoints, goals, null, schedules);
@@ -112,15 +120,19 @@ class TaskSourcePaginationTest {
       var clock = Clock.systemUTC();
       var dependencies = new PersistentDependencyRepository(data, clock);
       var owner = new AgentRunContext("run", "session", root, project.id());
-      for (int i = 0; i < 270; i++) {
-        var created =
-            dependencies.create(
-                owner,
-                new DependencySpec(DependencySpec.Kind.USER_ANSWER, "question", null),
-                Duration.ofMinutes(5),
-                List.of());
-        dependencies.cancel(project.id(), created.id());
-      }
+      populate(
+          data,
+          () -> {
+            for (int i = 0; i < 270; i++) {
+              var created =
+                  dependencies.create(
+                      owner,
+                      new DependencySpec(DependencySpec.Kind.USER_ANSWER, "question", null),
+                      Duration.ofMinutes(5),
+                      List.of());
+              dependencies.cancel(project.id(), created.id());
+            }
+          });
       var tasks =
           new TaskManagerService(projects, new RunRegistry(clock), null, null, dependencies, null);
       return new TaskFixture(project, tasks);
@@ -131,8 +143,10 @@ class TaskSourcePaginationTest {
   private record TaskFixture(
       dev.mikoto2000.rei.core.project.ProjectContext project, TaskManagerService tasks) {}
 
-  /** Populates rows using the existing individual-commit behavior before batching is introduced. */
+  /** Commits fixture preparation before the tested pagination, rolling back a failed batch. */
   static void populate(javax.sql.DataSource data, Runnable seed) {
-    seed.run();
+    new org.springframework.transaction.support.TransactionTemplate(
+            new org.springframework.jdbc.datasource.DataSourceTransactionManager(data))
+        .executeWithoutResult(status -> seed.run());
   }
 }
