@@ -171,6 +171,15 @@ public final class WebApiEventMapper {
                       "message",
                           dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics
                               .CONNECTION_LOST_MESSAGE));
+            else if ((event.type() == AgentEventType.LLM_REQUEST_FAILED
+                    || event.type() == AgentEventType.AGENT_RUN_FAILED)
+                && value instanceof Map<?, ?> error
+                && "connection_failed".equals(error.get("code")))
+              payload.put(
+                  name,
+                  Map.of(
+                      "type", "connection_failed",
+                      "message", "接続先へ接続できませんでした。サービスの起動・URL・プロキシ・ネットワークを確認してください。"));
             else if (event.type() == AgentEventType.AGENT_RUN_FAILED
                 && value instanceof Map<?, ?> error)
               payload.put(name, runStopError(error.get("errorType")));

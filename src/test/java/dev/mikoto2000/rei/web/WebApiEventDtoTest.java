@@ -13,6 +13,28 @@ import org.junit.jupiter.api.Test;
 /** WebAPIイベントDtoの結果と状態の契約を検証するテスト。 */
 class WebApiEventDtoTest {
   @Test
+  void llmAndRunConnectionFailuresExposeFixedMessageWithoutInternalDetails() {
+    var factory = new AgentEventFactory(Clock.systemUTC());
+    for (var cause : java.util.List.of(
+        new java.net.ConnectException("Connection refused PRIVATE_HOST secret"),
+        new java.net.NoRouteToHostException("PRIVATE_HOST secret"))) {
+      var failure = new IllegalStateException("PRIVATE_WRAPPER", cause);
+      for (var event : java.util.List.of(
+          factory.llmRequestFailed("run", "request", 2026, failure),
+          factory.runFailed("run", dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(failure)),
+          factory.runFailed("run", new ErrorInformation("PRIVATE_CLASS", "PRIVATE_HOST secret", "connection_failed")))) {
+        assertThat(WebApiEventDto.from(event, false, "").payload().get("error").toString())
+            .contains("type=connection_failed", "接続先へ接続できませんでした", "ネットワーク")
+            .doesNotContain("Operation failed.", "PRIVATE", "secret", "Exception");
+      }
+    }
+    var tool = factory.toolFailed("call", "read", new ErrorInformation("Private", "secret", "connection_failed"));
+    assertThat(WebApiEventDto.from(tool, false, "").payload().get("error").toString())
+        .contains("type=operation_failed")
+        .doesNotContain("secret");
+  }
+
+  @Test
   void llmAndRunConnectionLossExposeFixedMessageWithoutInternalDetails() {
     var factory = new AgentEventFactory(Clock.systemUTC());
     var failure =
