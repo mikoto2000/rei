@@ -40,6 +40,7 @@ public final class ReviewTools {
    * @param nextOffset 次開始位置
    * @param truncated 省略の有無
    * @param content 内容
+   * @param reviewed 現在の台帳で同じ版の範囲が評価済みと確認できたか
    */
   public record Page(
       String reviewJobId,
@@ -47,7 +48,13 @@ public final class ReviewTools {
       int offset,
       int nextOffset,
       boolean truncated,
-      String content) {
+      String content,
+      boolean reviewed) {
+    public Page(String reviewJobId, Range range, int offset, int nextOffset,
+        boolean truncated, String content) {
+      this(reviewJobId, range, offset, nextOffset, truncated, content, false);
+    }
+
     @com.fasterxml.jackson.annotation.JsonIgnore
     public dev.mikoto2000.rei.tooldelivery.SourceEvidence evidence() {
       return new dev.mikoto2000.rei.tooldelivery.SourceEvidence(
@@ -378,7 +385,7 @@ public final class ReviewTools {
   @ResultDelivery(ResultDelivery.Kind.FILE_CONTENT)
   @Tool(
       description =
-          "Read an exact decoded review page. Pass reviewJobId, path, expectedVersion, UTF-16 offset, and tokenBudget 256..2048. Start at offset 0 and follow nextOffset while truncated. A version change invalidates the job. Prefer submitReviewPage with this page's offset/nextOffset; the server preserves exact hashes and coordinates. Batch related assessments first and reads at their known nextOffset afterwards in one tool-call response.")
+          "Read an exact decoded review page. Pass reviewJobId, path, expectedVersion, UTF-16 offset, and tokenBudget 256..2048. Start at offset 0 and follow nextOffset while truncated. A version change invalidates the job. reviewed=true confirms existing saved assessment coverage; use reviewPending for the next unfinished range instead of resubmitting it. Otherwise prefer submitReviewPage with this page's offset/nextOffset; the server preserves exact hashes and coordinates. Batch related assessments first and reads at their known nextOffset afterwards in one tool-call response.")
   public Page readReviewFile(
       String reviewJobId, String path, String expectedVersion, int offset, int tokenBudget)
       throws java.io.IOException {
@@ -410,13 +417,13 @@ public final class ReviewTools {
         sizedPage(
             reviewJobId, target, source, new SourcePositions(source), offset, tokenBudget, null);
     ledger.fetched(reviewJobId, scope, page.range());
-    return page;
+    return withReviewedCoverage(job, page);
   }
 
   @ResultDelivery(value = ResultDelivery.Kind.FILE_CONTENT, reviewPages = true)
   @Tool(
       description =
-          "Read up to 4 adjacent review pages from one immutable decoded source. maxPages 1..4; totalTokenBudget 512..2048 bounds the ENTIRE serialized result. Start at offset 0, then follow the last nextOffset while truncated. Reading is not delivery or assessment. Prefer submitReviewPages for the delivered batch.")
+          "Read up to 4 adjacent review pages from one immutable decoded source. maxPages 1..4; totalTokenBudget 512..2048 bounds the ENTIRE serialized result. Start at offset 0, then follow the last nextOffset while truncated. Reading creates no assessment. reviewed=true confirms existing saved coverage; use reviewPending for unfinished ranges. Prefer submitReviewPages for delivered unassessed pages.")
   public List<Page> readReviewPages(
       String reviewJobId,
       String path,
@@ -464,7 +471,7 @@ public final class ReviewTools {
         if (pages.isEmpty()) throw insufficient;
         break;
       }
-      pages.add(page);
+      pages.add(withReviewedCoverage(job, page));
       offset = page.nextOffset();
       if (!page.truncated()) break;
     }
@@ -472,6 +479,26 @@ public final class ReviewTools {
       throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT");
     ledger.fetchedBatch(reviewJobId, scope, pages.stream().map(Page::range).toList());
     return List.copyOf(pages);
+  }
+
+  /** Fresh source validation plus saved assessments, rather than read history, proves coverage. */
+  private Page withReviewedCoverage(Job job, Page page) {
+    if ((!job.status().equals("REVIEW_PARTIAL") && !job.status().equals("COMPLETE"))
+        || page.nextOffset() <= page.offset()) return page;
+    int covered = page.offset();
+    for (var range : job.ranges().stream()
+        .filter(e -> e.reviewed() && e.delivered() && !e.stale())
+        .map(e -> e.range())
+        .filter(r -> r.path().equals(page.range().path())
+            && r.version().equals(page.range().version()))
+        .sorted(Comparator.comparingInt(r -> r.span().start())).toList()) {
+      if (range.span().start() > covered) break;
+      covered = Math.max(covered, range.span().end());
+      if (covered >= page.nextOffset())
+        return new Page(page.reviewJobId(), page.range(), page.offset(), page.nextOffset(),
+            page.truncated(), page.content(), true);
+    }
+    return page;
   }
 
   private Page sizedPage(
@@ -592,18 +619,20 @@ public final class ReviewTools {
   @Tool(
       description =
           "Dismiss one owned review finding only after corroborating metadata, referenced source or rendered output disproves the alleged defect. "
-              + "Provide its findingId, path and a nonempty reason citing that counterevidence. Optional evidence quote disambiguates repeated IDs. "
+              + "Provide its findingId, path and a nonempty reason citing that counterevidence. Optional evidence must be the ORIGINAL finding quote from reviewFindings, not counterevidence; omit it when findingId/path are unique. "
               + "Preserves original quote/assessment and records DISMISSED plus the reason. Does not modify source files or mark unread ranges reviewed. Repeated dismissal is idempotent.")
   public FindingDisposition dismissReviewFinding(
       String reviewJobId,
       String findingId,
       String path,
       String reason,
-      @org.springframework.ai.tool.annotation.ToolParam(required = false) String evidence) {
+      @org.springframework.ai.tool.annotation.ToolParam(required = false,
+          description = "Optional exact ORIGINAL finding.evidence from reviewFindings; omit or leave blank for a unique findingId/path. Put counterevidence in reason, not here.") String evidence) {
+    String originalEvidence = evidence == null || evidence.isBlank() ? null : evidence;
     try {
       var transition =
           ledger.dismissFindingTransition(
-              reviewJobId, scope(AgentRunScope.current()), findingId, path, evidence, reason);
+              reviewJobId, scope(AgentRunScope.current()), findingId, path, originalEvidence, reason);
       var job = transition.job();
       return new FindingDisposition(
           job.id(),
@@ -613,14 +642,14 @@ public final class ReviewTools {
                   f ->
                       f.id().equals(findingId)
                           && f.path().equals(path)
-                          && (evidence == null || f.evidence().equals(evidence)))
+                          && (originalEvidence == null || f.evidence().equals(originalEvidence)))
               .toList(),
           job.revision(),
           transition.changed());
     } catch (IllegalArgumentException invalid) {
       if (!"REVIEW_RESULT_INVALID".equals(invalid.getMessage())) throw invalid;
       throw new ReviewResultRejectedException(
-          "No finding was dismissed. Use an existing owned findingId/path, its exact evidence quote if needed, and a corroborated reason of 1..4096 characters.");
+          "No finding was dismissed. Copy findingId and path from reviewFindings. Omit optional evidence for a unique ID/path, or copy the exact ORIGINAL finding.evidence to disambiguate. Put the counterevidence disproving the finding in reason (1..4096 characters), not in evidence. Do not change saved coverage or invent a finding.");
     }
   }
 

@@ -14,6 +14,8 @@ public class ExecutionStoppedException extends RuntimeException {
     LLM_CALL_BUDGET_EXCEEDED,
     /** 計画の見直し予算上限超過。 */
     REPLAN_BUDGET_EXCEEDED,
+    /** 再開後の部分成果保存の試行枠を消費済み。 */
+    RESUME_BATCH_COMMIT_EXHAUSTED,
     /** 文脈厳しい条件上限。 */
     CONTEXT_HARD_LIMIT,
     /** レビュー部分的な結果。 */

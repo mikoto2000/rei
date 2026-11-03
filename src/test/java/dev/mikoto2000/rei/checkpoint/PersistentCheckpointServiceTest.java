@@ -194,6 +194,240 @@ class PersistentCheckpointServiceTest {
   }
 
   /** 進捗について、再開用の記録再開の後も対象の情報が残ることを確認する。 */
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.CsvSource({"shell,false", "client-http,false", "shell,true", "client-http,true"})
+  void explicitResumeCanFinishTheSameReviewAfterCommitAttemptsAreExhausted(
+      String entry, boolean alreadyAssessed)
+      throws Exception {
+    Path data = root.resolve("review-data");
+    try (var migration = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(data)) {
+      migration.prepare();
+    }
+    var ledger = new dev.mikoto2000.rei.review.ReviewCoverageLedger(
+        new dev.mikoto2000.rei.storage.StorageDatabase(data));
+    service.setReviewLedger(ledger);
+    var tools = new dev.mikoto2000.rei.review.ReviewTools(
+        ledger, new dev.mikoto2000.rei.core.contextbudget.RawToolResultStore(data),
+        new dev.mikoto2000.rei.core.Tools(),
+        dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative());
+    java.nio.file.Files.writeString(root.resolve("assessed.md"), "previously assessed\n");
+    java.nio.file.Files.writeString(root.resolve("pending.md"), "pending assessment\n");
+    java.nio.file.Files.writeString(root.resolve("remaining.md"), "unfinished next target\n");
+    dev.mikoto2000.rei.review.ReviewCoverageLedger.Job job;
+    dev.mikoto2000.rei.review.ReviewTools.Page pending;
+    try (var scope = AgentRunScope.open(owner)) {
+      job = tools.beginReview(List.of("assessed.md", "pending.md", "remaining.md"), "correctness", "v1");
+      var first = tools.readReviewFile(job.id(), "assessed.md",
+          job.targets().getFirst().version(), 0, 512);
+      tools.confirmed(owner, List.of(first));
+      tools.submitReviewPage(job.id(), "assessed.md", first.offset(), first.nextOffset(),
+          "Saved assessment before stopping", List.of());
+      pending = tools.readReviewFile(job.id(), "pending.md",
+          job.targets().stream().filter(t -> t.path().equals("pending.md")).findFirst().orElseThrow().version(), 0, 512);
+      tools.confirmed(owner, List.of(pending));
+      if (alreadyAssessed)
+        tools.submitReviewPage(job.id(), "pending.md", pending.offset(), pending.nextOffset(),
+            "Previously saved pending-page assessment", List.of());
+    }
+    var json = new com.fasterxml.jackson.databind.ObjectMapper();
+    String arguments = json.writeValueAsString(Map.of("reviewJobId", job.id(),
+        "path", "pending.md", "version", pending.range().version(), "offset", 0,
+        "tokenBudget", 512));
+    var saved = exhaustedProgress();
+    var fields = (com.fasterxml.jackson.databind.node.ObjectNode) json.valueToTree(saved);
+    if (alreadyAssessed) {
+      var information = new dev.mikoto2000.rei.core.stagnation.InformationLedger();
+      information.restore(saved.information());
+      information.observeRange("review-chars:pending.md", pending.range().version(),
+          pending.offset() + 1, pending.nextOffset() + 1);
+      information.observeRange("reviewed:" + job.id() + ":pending.md", pending.range().version(),
+          pending.offset() + 1, pending.nextOffset() + 1);
+      fields.set("information", json.valueToTree(information.snapshot()));
+    }
+    ((com.fasterxml.jackson.databind.node.ObjectNode) fields.path("continuity")).set("resumeBatch",
+        json.valueToTree(new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ResumeBatch(
+            8, true, true, 4, true,
+            dev.mikoto2000.rei.core.stagnation.ProgressEvaluator.actionKey("readReviewFile", arguments),
+            arguments)));
+    saved = json.treeToValue(fields,
+        dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState.class);
+    service.preserveResults(owner, List.of(), saved);
+    service.finish(owner, "FAILED");
+    var stopped = state();
+    var resumed = explicitResume(entry, stopped.taskId());
+    var next = new AgentRunContext(resumed.runId(), "session", root, "A");
+    service.start(next, "resume");
+    assertEquals(stopped.taskId(), state().taskId());
+    assertEquals(4, stopped.progress().continuity().resumeBatch().commitAttempts());
+    var restored = service.progress(next);
+    assertEquals(saved.budget().forExplicitResume(), restored.budget());
+    assertEquals(0, restored.continuity().resumeBatch().commitAttempts());
+    assertEquals(arguments, restored.continuity().resumeBatch().reviewPageReadArguments());
+    assertTrue(restored.continuity().resumeBatch().reviewPagePending());
+    assertEquals(8, restored.continuity().resumeBatch().contentReads());
+    var execution = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(
+        resumed.runId(), new dev.mikoto2000.rei.llm.OutputLimitRunBudget(2, 100),
+        new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(root),
+        new AgentEventFactory(Clock.systemUTC()), event -> {});
+    execution.setRunContext(next);
+    execution.restoreProgress(restored);
+    execution.beginContextRestoration();
+    assertTrue(execution.needsResumeContentWork());
+    assertTrue(execution.resumeAcquisitionBlocked("readMultiFile"));
+    assertFalse(execution.resumeAcquisitionBlocked("readReviewFile", arguments));
+    try (var scope = AgentRunScope.open(next)) {
+      execution.beginIteration();
+      var before = execution.evaluator().beforeTool("readReviewFile", arguments);
+      var page = tools.readReviewFile(job.id(), "pending.md", pending.range().version(), 0, 512);
+      tools.confirmed(next, List.of(page));
+      execution.recordTool("readReviewFile", arguments, json.writeValueAsString(page), before);
+      execution.endIteration();
+      assertNull(execution.requestReplan());
+      execution.beginIteration();
+      before = execution.evaluator().beforeTool("submitReviewPage", "{}");
+      var receipt = tools.submitReviewPage(job.id(), "pending.md", page.offset(), page.nextOffset(),
+          "Assessment saved after resuming the same task", List.of());
+      execution.recordTool("submitReviewPage", "{}", json.writeValueAsString(receipt), before);
+      execution.endIteration();
+      assertFalse(execution.hasPendingResumeContentWork());
+      if (alreadyAssessed) {
+        assertEquals(0, execution.progressVersion());
+        assertEquals(2, execution.detector().stagnationCount());
+      }
+      assertFalse(execution.resumeAcquisitionBlocked("readReviewFile", "{\"path\":\"remaining.md\"}"));
+      execution.beginIteration();
+      before = execution.evaluator().beforeTool("readReviewFile", "{}");
+      var remaining = tools.readReviewFile(job.id(), "remaining.md",
+          job.targets().stream().filter(t -> t.path().equals("remaining.md")).findFirst().orElseThrow().version(), 0, 512);
+      tools.confirmed(next, List.of(remaining));
+      execution.recordTool("readReviewFile", "{}", json.writeValueAsString(remaining), before);
+      execution.endIteration();
+      assertNull(execution.requestReplan());
+      execution.beginIteration();
+      before = execution.evaluator().beforeTool("submitReviewPage", "{}");
+      receipt = tools.submitReviewPage(job.id(), "remaining.md", remaining.offset(), remaining.nextOffset(),
+          "Reviewed the next unfinished target", List.of());
+      execution.recordTool("submitReviewPage", "{}", json.writeValueAsString(receipt), before);
+      execution.endIteration();
+    }
+    assertFalse(execution.hasPendingResumeContentWork());
+    assertEquals(saved.budget().forExplicitResume(), execution.budgetSnapshot());
+    var complete = ledger.get(job.id(), dev.mikoto2000.rei.review.ReviewTools.scope(next));
+    assertEquals("COMPLETE", complete.status());
+    assertEquals(3, complete.ranges().size());
+    assertTrue(complete.ranges().stream().allMatch(r -> r.reviewed() && !r.stale()));
+    assertTrue(complete.ranges().stream()
+        .anyMatch(r -> r.assessment().equals("Saved assessment before stopping")));
+    service.preserveResults(next, List.of(), execution.progressSnapshot());
+    assertEquals(stopped.taskId(), state().taskId());
+    assertTrue(state().evidence().stream().anyMatch(e ->
+        e.origin().equals("REVIEW_JOB_REFERENCE") && e.summary().equals(job.id())));
+  }
+
+  /** 進捗について、再開用の記録再開の後も対象の情報が残ることを確認する。 */
+  @org.junit.jupiter.params.ParameterizedTest
+  @org.junit.jupiter.params.provider.ValueSource(strings = {"shell", "client-http"})
+  void completedReviewCanResumeAndCorrectARejectedFindingDismissal(String entry) throws Exception {
+    Path data = root.resolve("repair-review-data");
+    try (var migration = new dev.mikoto2000.rei.storage.StorageMigrationCoordinator(data)) {
+      migration.prepare();
+    }
+    var ledger = new dev.mikoto2000.rei.review.ReviewCoverageLedger(
+        new dev.mikoto2000.rei.storage.StorageDatabase(data));
+    service.setReviewLedger(ledger);
+    var tools = new dev.mikoto2000.rei.review.ReviewTools(ledger,
+        new dev.mikoto2000.rei.core.contextbudget.RawToolResultStore(data),
+        new dev.mikoto2000.rei.core.Tools(), dev.mikoto2000.rei.core.contextbudget.TokenEstimator.conservative());
+    java.nio.file.Files.writeString(root.resolve("lesson.md"), "original evidence\ncounterevidence\n");
+    dev.mikoto2000.rei.review.ReviewCoverageLedger.Job job;
+    try (var scope = AgentRunScope.open(owner)) {
+      job = tools.beginReview(List.of("lesson.md"), "correctness", "v1");
+      var page = tools.readReviewFile(job.id(), "lesson.md", job.targets().getFirst().version(), 0, 512);
+      tools.confirmed(owner, List.of(page));
+      tools.submitReviewPage(job.id(), "lesson.md", page.offset(), page.nextOffset(), "reviewed",
+          List.of(new dev.mikoto2000.rei.review.ReviewTools.PageFinding(
+              "SEC1-01", "P2", "original evidence", "original candidate")));
+    }
+    var before = ledger.get(job.id(), dev.mikoto2000.rei.review.ReviewTools.scope(owner));
+    assertEquals("COMPLETE", before.status());
+    var json = new com.fasterxml.jackson.databind.ObjectMapper();
+    var fields = (com.fasterxml.jackson.databind.node.ObjectNode) json.valueToTree(exhaustedProgress());
+    ((com.fasterxml.jackson.databind.node.ObjectNode) fields.path("budget"))
+        .put("argumentCorrections", 5).put("llmCalls", 262);
+    var progress = json.treeToValue(fields,
+        dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState.class);
+    service.preserveResults(owner, List.of(), progress);
+    service.finish(owner, "FAILED");
+    String task = state().taskId();
+    var resumed = explicitResume(entry, task);
+    var next = new AgentRunContext(resumed.runId(), "session", root, "A");
+    service.start(next, "resume");
+    var budget = new dev.mikoto2000.rei.llm.OutputLimitRunBudget(2, 1000);
+    var execution = new dev.mikoto2000.rei.core.stagnation.RunExecutionContext(resumed.runId(),
+        budget, new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(root),
+        new AgentEventFactory(Clock.systemUTC()), event -> {});
+    execution.setRunContext(next);
+    execution.restoreProgress(service.progress(next));
+    execution.beginContextRestoration();
+    assertEquals(5, budget.snapshot().argumentCorrections());
+    assertEquals(5, budget.snapshot().argumentCorrectionBaseline());
+    assertEquals(5, budget.remainingArgumentCorrections());
+    var calls = new java.util.concurrent.atomic.AtomicInteger();
+    var model = new org.springframework.ai.chat.model.ChatModel() {
+      public org.springframework.ai.chat.model.ChatResponse call(org.springframework.ai.chat.prompt.Prompt p) {
+        throw new UnsupportedOperationException();
+      }
+
+      public reactor.core.publisher.Flux<org.springframework.ai.chat.model.ChatResponse> stream(
+          org.springframework.ai.chat.prompt.Prompt p) {
+        int n = calls.incrementAndGet();
+        org.springframework.ai.chat.messages.AssistantMessage reply;
+        if (n <= 2) {
+          if (n == 2) {
+            assertTrue(p.getInstructions().toString().contains("ORIGINAL"));
+            assertTrue(p.getInstructions().toString().contains("REVIEW_RESULT_INVALID"));
+            assertEquals("VERIFIED", ledger.get(job.id(),
+                dev.mikoto2000.rei.review.ReviewTools.scope(next)).findings().getFirst().verificationStatus());
+          }
+          var arguments = new java.util.LinkedHashMap<String, Object>();
+          arguments.put("reviewJobId", job.id());
+          arguments.put("findingId", "SEC1-01");
+          arguments.put("path", "lesson.md");
+          arguments.put("reason", "counterevidence disproves the candidate");
+          if (n == 1) arguments.put("evidence", "counterevidence");
+          try {
+            reply = org.springframework.ai.chat.messages.AssistantMessage.builder()
+                .toolCalls(List.of(new org.springframework.ai.chat.messages.AssistantMessage.ToolCall(
+                    "dismiss-" + n, "function", "dismissReviewFinding", json.writeValueAsString(arguments))))
+                .build();
+          } catch (java.io.IOException error) { throw new IllegalStateException(error); }
+        } else reply = new org.springframework.ai.chat.messages.AssistantMessage("Finding resolved; report can continue.");
+        return reactor.core.publisher.Flux.just(new org.springframework.ai.chat.model.ChatResponse(
+            List.of(new org.springframework.ai.chat.model.Generation(reply))));
+      }
+    };
+    var options = org.springframework.ai.model.tool.ToolCallingChatOptions.builder()
+        .toolCallbacks(java.util.Arrays.asList(org.springframework.ai.support.ToolCallbacks.from(tools)))
+        .toolContext(Map.of(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY, execution)).build();
+    new dev.mikoto2000.rei.core.stagnation.StagnationChatModel(model)
+        .stream(new org.springframework.ai.chat.prompt.Prompt(List.of(
+            new org.springframework.ai.chat.messages.UserMessage("Continue the same review and resolve the disproved finding")), options))
+        .blockLast();
+    assertEquals(3, calls.get());
+    var after = ledger.get(job.id(), dev.mikoto2000.rei.review.ReviewTools.scope(next));
+    assertEquals("COMPLETE", after.status());
+    assertEquals(before.ranges(), after.ranges());
+    assertEquals("DISMISSED", after.findings().getFirst().verificationStatus());
+    assertEquals("original evidence", after.findings().getFirst().evidence());
+    assertEquals(6, budget.snapshot().argumentCorrections());
+    assertEquals(4, budget.remainingArgumentCorrections());
+    assertEquals(progress.budget().llmCalls() + 2, budget.snapshot().llmCalls());
+    assertEquals(progress.budget().stagnationReplans(), budget.snapshot().stagnationReplans());
+    assertEquals(progress.budget().totalTokens(), budget.snapshot().totalTokens());
+    service.preserveResults(next, List.of(), execution.progressSnapshot());
+    assertEquals(task, state().taskId());
+  }
+
   @Test
   void progressSurvivesCheckpointResumeAndStaysIsolated() {
     var ledger = new dev.mikoto2000.rei.core.stagnation.InformationLedger();
@@ -287,7 +521,7 @@ class PersistentCheckpointServiceTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(strings = {"shell", "client-http"})
-  void explicitResumeResetsOnlyConsecutiveStagnationAndCanTryFourIterationsAgain(String entry)
+  void explicitResumeRenewsLocalRetryWindowsAndPreservesSharedCounters(String entry)
       throws Exception {
     var saved = exhaustedProgress();
     service.preserveResults(owner, List.of(), saved);
@@ -298,7 +532,7 @@ class PersistentCheckpointServiceTest {
     var restored = service.progress(nextOwner);
     assertEquals(0, restored.continuity().detector().stagnationCount());
     assertFalse(restored.continuity().detector().replanRequested());
-    assertPreservedExceptConsecutiveStagnation(saved, restored);
+    assertPreservedExceptExplicitRetryWindows(saved, restored);
     assertEquals(7, previous.progress().continuity().detector().stagnationCount());
     assertEquals(previous.plan(), state().plan());
     assertEquals(previous.files(), state().files());
@@ -324,14 +558,14 @@ class PersistentCheckpointServiceTest {
                 dev.mikoto2000.rei.core.stagnation.ExecutionStoppedException.class,
                 execution::requestReplan)
             .reason());
-    assertEquals(saved.budget(), execution.budgetSnapshot());
+    assertEquals(saved.budget().forExplicitResume(), execution.budgetSnapshot());
     service.preserveResults(nextOwner, List.of(), execution.progressSnapshot());
     service.finish(nextOwner, "FAILED");
     var second = explicitResume(entry, previous.taskId());
     var secondProgress =
         service.progress(new AgentRunContext(second.runId(), "session", root, "A"));
     assertEquals(0, secondProgress.continuity().detector().stagnationCount());
-    assertEquals(saved.budget(), secondProgress.budget());
+    assertEquals(saved.budget().forExplicitResume(), secondProgress.budget());
     assertEquals(8, secondProgress.continuity().evaluator().restorationReads());
   }
 
@@ -360,7 +594,7 @@ class PersistentCheckpointServiceTest {
     service.finish(owner, "FAILED");
     var resumed = service.resumeForShell("A", state().taskId(), session -> {});
     assertEquals(
-        saved, service.progress(new AgentRunContext(resumed.runId(), "session", root, "A")));
+        saved.forExplicitResume(), service.progress(new AgentRunContext(resumed.runId(), "session", root, "A")));
   }
 
   private PersistentCheckpointService.ResumeResult explicitResume(String entry, String task)
@@ -426,7 +660,7 @@ class PersistentCheckpointServiceTest {
             "STEP_STALLED"));
   }
 
-  private void assertPreservedExceptConsecutiveStagnation(
+  private void assertPreservedExceptExplicitRetryWindows(
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState expected,
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState actual) {
     var c = expected.continuity();
@@ -434,7 +668,7 @@ class PersistentCheckpointServiceTest {
     assertEquals(
         new dev.mikoto2000.rei.core.stagnation.RunExecutionContext.ProgressState(
             expected.information(),
-            expected.budget(),
+            expected.budget().forExplicitResume(),
             expected.acquisitionOnlyIterations(),
             expected.unknownIterations(),
             expected.unknownReplanNotices(),
@@ -862,8 +1096,9 @@ class PersistentCheckpointServiceTest {
 
   /** 旧 UNKNOWN と所有権喪失時の STARTED を、永続化・再開の両経路で救済する。 */
   @org.junit.jupiter.params.ParameterizedTest
-  @org.junit.jupiter.params.provider.ValueSource(strings = {"STARTED", "UNKNOWN"})
-  void savedInterruptedReadsRecoverWithoutConfirmation(String status) {
+  @org.junit.jupiter.params.provider.CsvSource({"STARTED,readMultiFile", "UNKNOWN,readMultiFile",
+      "STARTED,readReviewPages", "UNKNOWN,readReviewPages", "UNKNOWN,readNextReviewWorkItem"})
+  void savedInterruptedReadsRecoverWithoutConfirmation(String status, String readTool) {
     service.finish(owner, "INTERRUPTED");
     var saved = state();
     var fields = repository.fields(saved);
@@ -873,7 +1108,7 @@ class PersistentCheckpointServiceTest {
         List.of(
             new PersistentCheckpoint.Operation(
                 "read",
-                "readMultiFile",
+                readTool,
                 PersistentCheckpoint.OperationStatus.valueOf(status),
                 "event",
                 "run")));

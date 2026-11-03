@@ -82,6 +82,7 @@ public record GoalRepairDiagnosis(
           "token_budget_exhausted",
           "llm_call_budget_exceeded",
           "replan_budget_exceeded",
+          "resume_batch_commit_exhausted",
           "repair_reserve_reached" ->
           new GoalRepairDiagnosis(Kind.BUDGET_INSUFFICIENT, false, true, value);
       case "human_cancelled", "run_cancelled", "verification_cancelled" ->

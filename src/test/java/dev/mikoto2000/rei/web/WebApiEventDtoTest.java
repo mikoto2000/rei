@@ -77,6 +77,8 @@ class WebApiEventDtoTest {
     var cases =
         java.util.Map.of(
             "ReplanBudgetExceeded", "replan_budget_exceeded",
+            "ResumeBatchCommitExhausted", "resume_batch_commit_exhausted",
+            "ToolArgumentRepairExhausted", "tool_argument_repair_exhausted",
             "Stagnated", "stagnated",
             "LlmCallBudgetExceeded", "llm_call_budget_exceeded");
     cases.forEach(

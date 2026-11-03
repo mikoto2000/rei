@@ -239,6 +239,33 @@ class ChatExecutionFailureDiagnosticsTest {
   }
 
   @Test
+  void exhaustedResumeCommitExposesItsOwnCauseAndRecovery() {
+    var result =
+        service(
+                new ExecutionStoppedException(
+                    ExecutionStoppedException.Reason.RESUME_BATCH_COMMIT_EXHAUSTED,
+                    "PRIVATE_PATH secret"))
+            .execute(owner, "work", new UserInterventionQueue());
+    assertThat(result.stopCode()).isEqualTo("resume_batch_commit_exhausted");
+    var dto = dev.mikoto2000.rei.web.WebApiEventDto.from(terminals().getFirst(), false, "");
+    assertThat(dto.payload().get("error").toString())
+        .contains("type=resume_batch_commit_exhausted", "部分成果保存", "/resume", "同じタスク", "再試行")
+        .doesNotContain("再計画回数", "PRIVATE_PATH", "secret");
+  }
+
+  @Test
+  void repairExhaustionHasSafeSpecificResumeGuidanceInsteadOfOperationFailed() {
+    var result = service(new ExecutionStoppedException(
+        ExecutionStoppedException.Reason.TOOL_ARGUMENT_REPAIR_EXHAUSTED))
+        .execute(owner, "work", new UserInterventionQueue());
+    assertThat(result.stopCode()).isEqualTo("tool_argument_repair_exhausted");
+    var dto = dev.mikoto2000.rei.web.WebApiEventDto.from(terminals().getFirst(), false, "");
+    assertThat(dto.payload().get("error").toString())
+        .contains("tool_argument_repair_exhausted", "/resume", "同じタスク", "修正枠")
+        .doesNotContain("Operation failed.");
+  }
+
+  @Test
   void detailedStagnationStopKeepsPublicBudgetErrorType() {
     var result =
         service(

@@ -21,6 +21,7 @@ public class OutputLimitRunBudget {
    * @param usageUnknown 使用状況不明
    * @param stagnationReplans 停滞計画の見直し回数
    * @param argumentCorrections 引数補正一覧
+   * @param argumentCorrectionBaseline 明示再開時の累積補正回数の基準値
    */
   public record Snapshot(
       int replans,
@@ -28,7 +29,19 @@ public class OutputLimitRunBudget {
       long totalTokens,
       boolean usageUnknown,
       int stagnationReplans,
-      int argumentCorrections) {
+      int argumentCorrections,
+      int argumentCorrectionBaseline) {
+    public Snapshot(int replans, int llmCalls, long totalTokens, boolean usageUnknown,
+        int stagnationReplans, int argumentCorrections) {
+      this(replans, llmCalls, totalTokens, usageUnknown, stagnationReplans, argumentCorrections, 0);
+    }
+
+    /** Only an explicit human resume starts a fresh bounded repair window. */
+    public Snapshot forExplicitResume() {
+      return new Snapshot(replans, llmCalls, totalTokens, usageUnknown,
+          stagnationReplans, argumentCorrections, argumentCorrections);
+    }
+
     /** 用途に応じたモデル利用を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Snapshot(
         int replans, int llmCalls, long totalTokens, boolean usageUnknown, int stagnationReplans) {
@@ -43,10 +56,12 @@ public class OutputLimitRunBudget {
 
   /** 引数補正一覧。 */
   private int argumentCorrections;
+  private int argumentCorrectionBaseline;
 
   /** 用途に応じたモデル利用で判断に用いる試行Correct引数の条件を確認する。 */
   public synchronized boolean tryCorrectArguments() {
-    if (argumentCorrections >= maxArgumentCorrections) return false;
+    if (argumentCorrections == Integer.MAX_VALUE
+        || argumentCorrections - argumentCorrectionBaseline >= maxArgumentCorrections) return false;
     argumentCorrections++;
     return true;
   }
@@ -58,13 +73,14 @@ public class OutputLimitRunBudget {
 
   /** 用途に応じたモデル利用で用いる残量引数補正一覧を返す。 */
   public synchronized int remainingArgumentCorrections() {
-    return Math.max(0, maxArgumentCorrections - argumentCorrections);
+    return Math.max(0, maxArgumentCorrections - (argumentCorrections - argumentCorrectionBaseline));
   }
 
   /** 現在の状態を、後から参照できる記録として取り出す。 */
   public synchronized Snapshot snapshot() {
     return new Snapshot(
-        replans, llmCalls, totalTokens, usageUnknown, stagnationReplans, argumentCorrections);
+        replans, llmCalls, totalTokens, usageUnknown, stagnationReplans, argumentCorrections,
+        argumentCorrectionBaseline);
   }
 
   /** 保存済みの記録から、利用する状態を復元する。 */
@@ -74,9 +90,12 @@ public class OutputLimitRunBudget {
         || saved.stagnationReplans() < 0
         || saved.llmCalls() < 0
         || saved.totalTokens() < 0
-        || saved.argumentCorrections() < 0)
+        || saved.argumentCorrections() < 0
+        || saved.argumentCorrectionBaseline() < 0
+        || saved.argumentCorrectionBaseline() > saved.argumentCorrections())
       throw new IllegalArgumentException("Invalid saved Run budget");
     argumentCorrections = Math.max(argumentCorrections, saved.argumentCorrections());
+    argumentCorrectionBaseline = Math.max(argumentCorrectionBaseline, saved.argumentCorrectionBaseline());
     stagnationReplans = Math.max(stagnationReplans, saved.stagnationReplans());
     replans = Math.max(replans, saved.replans());
     llmCalls = Math.max(llmCalls, saved.llmCalls());

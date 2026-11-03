@@ -208,6 +208,16 @@ public final class WebApiEventMapper {
               "replan_budget_exceeded",
               "message",
               "実行全体の再計画回数の上限に達しました。進捗による停滞カウンターのリセット後も、消費済みの再計画回数は保持されます。依頼の範囲や手順を見直して新しい実行を開始してください。");
+      case "ResumeBatchCommitExhausted" ->
+          Map.of(
+              "type",
+              "resume_batch_commit_exhausted",
+              "message",
+              "再開後の部分成果保存の試行枠を使い切りました。保存済みレビュー記録と未完了範囲を確認し、/resume で同じタスクの保存処理を再試行できます。共有の呼び出し・トークン・再計画予算は引き継ぎます。");
+      case "ToolArgumentRepairExhausted" ->
+          Map.of(
+              "type", "tool_argument_repair_exhausted",
+              "message", "ツール引数の修正回数が上限に達しました。直前の引数エラーを確認し、/resume で同じタスクを再開できます。明示再開で修正枠を更新し、累積使用量とモデル呼び出し・トークンの上限は保持します。");
       case "Stagnated" ->
           Map.of(
               "type", "stagnated",

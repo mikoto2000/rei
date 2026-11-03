@@ -41,6 +41,32 @@ import org.springframework.ai.tool.definition.ToolDefinition;
 import reactor.core.publisher.Flux;
 
 class ExhaustedResumeRecoveryTest {
+  @Test
+  void durableReviewRecoveryRequiresCommitForTheExactPendingWorkId() throws Exception {
+    var c = context(0, 2, 8, true);
+    fillResumeBatch(c);
+    String page = identifiedPage();
+    // Use parsed JSON so this fixture is independent of the legacy job identifier.
+    try {
+      var node = (ObjectNode) new ObjectMapper().readTree(page);
+      node.put("reviewJobId", "durable:work:attempt");
+      page = node.toString();
+    } catch (Exception invalid) { throw new AssertionError(invalid); }
+    c.beginIteration();
+    c.recordTool("readNextReviewWorkItem", "{}", page, c.evaluator().beforeTool("readNextReviewWorkItem", "{}"));
+    c.endIteration();
+    assertThat(c.hasPendingResumeContentWork()).isTrue();
+    assertThat(c.resumeAcquisitionBlocked("readNextReviewWorkItem", "{\"taskId\":\"another\"}")).isTrue();
+    String receipt = "{\"body\":{\"work\":\"wrong\",\"path\":\"docs/intro.md\"},\"sha256\":\"" + "a".repeat(64) + "\"}";
+    c.beginIteration();
+    c.recordTool("submitReviewWorkItem", "{}", receipt, c.evaluator().beforeTool("submitReviewWorkItem", "{}"));
+    c.endIteration();
+    assertThat(c.hasPendingResumeContentWork()).isTrue();
+    c.beginIteration();
+    c.recordTool("submitReviewWorkItem", "{}", receipt.replace("wrong", "work"), c.evaluator().beforeTool("submitReviewWorkItem", "{}"));
+    c.endIteration();
+    assertThat(c.hasPendingResumeContentWork()).isFalse();
+  }
   @TempDir Path root;
   private static final String PAGE =
       "[{\"path\":\"docs/intro.md\",\"version\":\"v1\",\"startLine\":1,\"content\":[\"known\"],\"error\":null}]";
@@ -127,6 +153,18 @@ class ExhaustedResumeRecoveryTest {
 
   private String reviewedPage() {
     return "{\"id\":\"job\",\"ranges\":[{\"range\":{\"path\":\"docs/intro.md\",\"version\":\"v1\",\"span\":{\"start\":0,\"end\":5}},\"reviewed\":true,\"delivered\":true,\"stale\":false}]}";
+  }
+
+  private String identifiedPage() {
+    return registeredPage()
+        .replace("\"range\":", "\"reviewJobId\":\"job\",\"range\":")
+        .replace("\"span\":", "\"contentHash\":\"hash1\",\"span\":");
+  }
+
+  private String acceptedReceipt() {
+    return reviewedPage()
+        .replace("\"id\":\"job\"", "\"id\":\"job\",\"accepted\":true")
+        .replace("\"span\":", "\"contentHash\":\"hash1\",\"span\":");
   }
 
   @ParameterizedTest
@@ -505,7 +543,7 @@ class ExhaustedResumeRecoveryTest {
                             }))
                     .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
-        .hasMessageContaining("REPLAN_BUDGET_EXCEEDED");
+        .hasMessageContaining("RESUME_BATCH_COMMIT_EXHAUSTED");
     assertThat(calls).hasValue(4);
     assertThat(c.hasPendingResumeContentWork()).isTrue();
   }
@@ -586,7 +624,7 @@ class ExhaustedResumeRecoveryTest {
     c.beginContextRestoration();
     assertThat(c.needsResumeContentWork()).isTrue();
     assertThat(c.progressSnapshot().continuity().resumeBatch().commitAttempted())
-        .isEqualTo(attempted);
+        .isFalse();
 
     var old = (ObjectNode) json.valueToTree(saved);
     ((ObjectNode) old.path("continuity")).remove("resumeBatch");
@@ -937,7 +975,7 @@ class ExhaustedResumeRecoveryTest {
   }
 
   @Test
-  void spentCommitAttemptsAreCheckpointedBeforeTheCallAndCannotBeRestoredByResume()
+  void spentCommitAttemptsSurviveAutomaticResume()
       throws Exception {
     var c = context(0, 2, 8, true);
     fillResumeBatch(c);
@@ -955,14 +993,15 @@ class ExhaustedResumeRecoveryTest {
                             }))
                     .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
-        .hasMessageContaining("REPLAN_BUDGET_EXCEEDED");
+        .hasMessageContaining("RESUME_BATCH_COMMIT_EXHAUSTED")
+        .hasMessageContaining("/resume")
+        .hasMessageContaining("同じタスク");
     assertThat(calls).hasValue(4);
     assertThat(saved.get().continuity().resumeBatch().commitAttempts()).isEqualTo(4);
     var json = new ObjectMapper();
     var restored =
         json.readValue(
-                json.writeValueAsString(saved.get()), RunExecutionContext.ProgressState.class)
-            .forExplicitResume();
+                json.writeValueAsString(saved.get()), RunExecutionContext.ProgressState.class);
     var next = context(0, 2, 8, false);
     next.restoreProgress(restored);
     next.beginContextRestoration();
@@ -977,9 +1016,437 @@ class ExhaustedResumeRecoveryTest {
                             }))
                     .stream(prompt(next, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
-        .hasMessageContaining("REPLAN_BUDGET_EXCEEDED");
+        .hasMessageContaining("RESUME_BATCH_COMMIT_EXHAUSTED")
+        .hasMessageContaining("/resume")
+        .hasMessageContaining("同じタスク");
     assertThat(retried).hasValue(0);
     assertThat(next.budgetSnapshot()).isEqualTo(restored.budget());
+  }
+
+  @Test
+  void explicitResumeCanAssessPendingPagesAndContinueTheNextReviewUnit() throws Exception {
+    var c = context(0, 2, 8, true);
+    fillResumeBatch(c);
+    var json = new ObjectMapper();
+    var saved = (ObjectNode) json.valueToTree(c.progressSnapshot());
+    ((ObjectNode) saved.path("continuity").path("resumeBatch"))
+        .put("commitAttempted", true)
+        .put("commitAttempts", 4)
+        .put("reviewPagePending", true)
+        .put("reviewPageReadKey", ProgressEvaluator.actionKey("readReviewFile", "{}"))
+        .put("reviewPageReadArguments", "{}");
+    var exhausted = json.treeToValue(saved, RunExecutionContext.ProgressState.class);
+    var resumed = context(0, 2, 8, false);
+    resumed.restoreProgress(exhausted.forExplicitResume());
+    resumed.beginContextRestoration();
+    assertThat(resumed.budgetSnapshot()).isEqualTo(exhausted.budget());
+    assertThat(resumed.resumeAcquisitionBlocked("readMultiFile")).isTrue();
+    assertThat(resumed.resumeAcquisitionBlocked("readReviewFile", "{\"offset\":5}")).isTrue();
+    assertThat(resumed.resumeAcquisitionBlocked("readReviewFile", "{}")).isFalse();
+    var initial = prompt(resumed, true, "resume", new AtomicInteger());
+    var options = (ToolCallingChatOptions) initial.getOptions();
+    var callbacks = new ArrayList<>(options.getToolCallbacks());
+    var reads = new AtomicInteger();
+    var submissions = new AtomicInteger();
+    callbacks.add(
+        tool(
+            "readReviewFile",
+            () -> reads.incrementAndGet() == 1
+                ? registeredPage()
+                : registeredPage().replace("\"start\":0,\"end\":5", "\"start\":5,\"end\":10")));
+    callbacks.add(
+        tool(
+            "submitReviewPage",
+            () -> submissions.incrementAndGet() == 1
+                ? reviewedPage()
+                : reviewedPage().replace("\"start\":0,\"end\":5", "\"start\":5,\"end\":10")));
+    var calls = new AtomicInteger();
+    new StagnationChatModel(
+            model(
+                p -> {
+                  int n = calls.incrementAndGet();
+                  if (n == 1) return call(n, "readReviewFile", "{}");
+                  if (n == 2) return call(n, "submitReviewPage", "{}");
+                  if (n == 3) {
+                    assertThat(resumed.hasPendingResumeContentWork()).isFalse();
+                    assertThat(names(p)).contains("readMultiFile");
+                    return call(n, "readReviewFile", "{\"offset\":5}");
+                  }
+                  if (n == 4) return call(n, "submitReviewPage", "{}");
+                  return new AssistantMessage("Both units assessed.");
+                }))
+        .stream(new Prompt(initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
+        .blockLast();
+    assertThat(calls).hasValue(5);
+    assertThat(reads).hasValue(2);
+    assertThat(submissions).hasValue(2);
+    assertThat(resumed.hasPendingResumeContentWork()).isFalse();
+    assertThat(resumed.budgetSnapshot().stagnationReplans()).isEqualTo(2);
+    assertThat(resumed.budgetSnapshot().llmCalls()).isGreaterThan(exhausted.budget().llmCalls());
+  }
+
+  @ParameterizedTest
+  @CsvSource({"submitReviewPage,false", "submitReviewPage,true",
+      "submitReviewPages,false", "submitReviewPages,true", "submitReviewResult,true"})
+  void anAlreadyAssessedPageReleasesItsObligationWithoutClaimingNewProgress(
+      String submission, boolean restart) throws Exception {
+    var c = context(0, 2, 8, true);
+    String page = identifiedPage();
+    String receipt = acceptedReceipt();
+    c.beginIteration();
+    c.recordTool("readReviewFile", "{}", page, c.evaluator().beforeTool("readReviewFile", "{}"));
+    c.recordTool("submitReviewPage", "{}", receipt,
+        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    c.endIteration();
+    fillResumeBatch(c);
+    c.beginIteration();
+    c.recordTool("readReviewFile", "{}", page, c.evaluator().beforeTool("readReviewFile", "{}"));
+    c.endIteration();
+    assertThat(c.needsResumeContentWork()).isTrue();
+    if (restart) {
+      var json = new ObjectMapper();
+      var saved = json.readValue(json.writeValueAsString(c.progressSnapshot()),
+          RunExecutionContext.ProgressState.class);
+      c = context(0, 2, 8, false);
+      c.restoreProgress(saved);
+      c.beginContextRestoration();
+    }
+    var budget = c.budgetSnapshot();
+    long progress = c.progressVersion();
+    int stagnant = c.detector().stagnationCount();
+    c.beginIteration();
+    c.recordTool(submission, "{}", submission.equals("submitReviewPages") ? "[" + receipt + "]" : receipt,
+        c.evaluator().beforeTool(submission, "{}"));
+    c.endIteration();
+    assertThat(c.hasPendingResumeContentWork()).isFalse();
+    assertThat(c.resumeAcquisitionBlocked("readReviewFile", "{\"offset\":5}")).isFalse();
+    assertThat(c.progressVersion()).isEqualTo(progress);
+    assertThat(c.detector().stagnationCount()).isEqualTo(stagnant + 1);
+    assertThat(c.budgetSnapshot()).isEqualTo(budget);
+    assertThat(c.resumeBatchFeedback()).contains("already assessed", "next unfinished range");
+    assertThat(c.requestReplan()).isNull();
+    readPage(c, 20);
+    assertThat(c.hasPendingResumeContentWork()).isTrue();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"rejected", "stale", "undelivered", "unreviewed", "job", "path", "version", "hash", "span"})
+  void unrelatedOrUnconfirmedReceiptsCannotReleaseThePendingPage(String change) throws Exception {
+    var c = context(0, 2, 8, true);
+    String page = identifiedPage();
+    String receipt = acceptedReceipt();
+    var json = new ObjectMapper();
+    var altered = (ObjectNode) json.readTree(receipt);
+    var entry = (ObjectNode) altered.path("ranges").get(0);
+    var range = (ObjectNode) entry.path("range");
+    switch (change) {
+      case "rejected" -> altered.put("accepted", false);
+      case "stale" -> entry.put("stale", true);
+      case "undelivered" -> entry.put("delivered", false);
+      case "unreviewed" -> entry.put("reviewed", false);
+      case "job" -> altered.put("id", "other");
+      case "path" -> range.put("path", "other.md");
+      case "version" -> range.put("version", "v2");
+      case "hash" -> range.put("contentHash", "other");
+      case "span" -> ((ObjectNode) range.path("span")).put("end", 4);
+      default -> throw new AssertionError(change);
+    }
+    // Seed both receipts to isolate obligation matching from new-work detection.
+    c.evaluator().afterTool("submitReviewPage", "{}", receipt,
+        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    c.evaluator().afterTool("submitReviewPage", "{}", altered.toString(),
+        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    fillResumeBatch(c);
+    c.beginIteration();
+    c.recordTool("readReviewFile", "{}", page, c.evaluator().beforeTool("readReviewFile", "{}"));
+    c.endIteration();
+    c.beginIteration();
+    c.recordTool("submitReviewPage", "{}", altered.toString(),
+        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    c.endIteration();
+    assertThat(c.hasPendingResumeContentWork()).isTrue();
+    assertThat(c.resumeAcquisitionBlocked("readReviewFile", "{\"offset\":5}")).isTrue();
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"LLM_CALL_BUDGET_EXCEEDED", "TOKEN_BUDGET_EXCEEDED"})
+  void explicitResumeRenewsLocalCommitAttemptsButStillHonorsSharedLimits(String reason)
+      throws Exception {
+    var c = context(0, 2, 8, true);
+    fillResumeBatch(c);
+    var json = new ObjectMapper();
+    var saved = (ObjectNode) json.valueToTree(c.progressSnapshot());
+    ((ObjectNode) saved.path("continuity").path("resumeBatch"))
+        .put("commitAttempted", true)
+        .put("commitAttempts", 4);
+    ((ObjectNode) saved.path("budget"))
+        .put("llmCalls", reason.startsWith("LLM") ? 1000 : 20)
+        .put("argumentCorrections", 5)
+        .put("totalTokens", reason.startsWith("TOKEN") ? 1000 : 200);
+    var restored =
+        json.treeToValue(saved, RunExecutionContext.ProgressState.class).forExplicitResume();
+    var next =
+        new RunExecutionContext(
+            "resume", new OutputLimitRunBudget(2, 1000, null, 1000), new ProgressEvaluator(root),
+            new AgentEventFactory(Clock.systemUTC()), event -> {});
+    next.restoreProgress(restored);
+    assertThat(next.progressSnapshot().continuity().resumeBatch().commitAttempts()).isZero();
+    assertThatThrownBy(next::consumeNextLlmCall)
+        .isInstanceOf(ExecutionStoppedException.class)
+        .hasMessageContaining(reason);
+    assertThat(next.budgetSnapshot()).isEqualTo(restored.budget());
+  }
+
+  @Test
+  void replayedAssessmentAllowsTheNextReadInTheSameToolResponse() throws Exception {
+    var c = context(0, 2, 8, true);
+    c.evaluator().afterTool("readReviewFile", "{}", identifiedPage(),
+        c.evaluator().beforeTool("readReviewFile", "{}"));
+    c.evaluator().afterTool("submitReviewPage", "{}", acceptedReceipt(),
+        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    fillResumeBatch(c);
+    var json = new ObjectMapper();
+    var legacy = (ObjectNode) json.valueToTree(c.progressSnapshot());
+    var batch = (ObjectNode) legacy.path("continuity").path("resumeBatch");
+    batch.put("reviewPagePending", true)
+        .put("reviewPageReadKey", ProgressEvaluator.actionKey("readReviewFile", "{}"))
+        .put("reviewPageReadArguments", "{}");
+    batch.remove("reviewPageKeys");
+    c.restoreProgress(json.treeToValue(legacy, RunExecutionContext.ProgressState.class).forExplicitResume());
+    c.beginContextRestoration();
+    long progress = c.progressVersion();
+    var initial = prompt(c, true, "resume", new AtomicInteger());
+    var options = (ToolCallingChatOptions) initial.getOptions();
+    var callbacks = new ArrayList<>(options.getToolCallbacks());
+    var reads = new AtomicInteger();
+    callbacks.add(tool("readReviewFile", this::identifiedPage));
+    callbacks.add(tool("submitReviewPage", this::acceptedReceipt));
+    callbacks.add(tool("readReviewPages", () -> {
+      assertThat(c.hasPendingResumeContentWork()).isFalse();
+      assertThat(c.progressVersion()).isEqualTo(progress);
+      reads.incrementAndGet();
+      return "[" + identifiedPage().replace("docs/intro.md", "docs/next.md") + "]";
+    }));
+    callbacks.add(tool("submitReviewPages", () ->
+        "[" + acceptedReceipt().replace("docs/intro.md", "docs/next.md") + "]"));
+    var calls = new AtomicInteger();
+    new StagnationChatModel(model(p -> {
+      int n = calls.incrementAndGet();
+      if (n == 1) {
+        assertThat(p.getContents()).contains("even if the page text is visible");
+        return call(n, "readReviewFile", "{}");
+      }
+      if (n == 2) {
+        assertThat(p.getContents()).doesNotContain("exact delivered-page identity is missing");
+        return AssistantMessage.builder().toolCalls(List.of(
+          new AssistantMessage.ToolCall("save", "function", "submitReviewPage", "{}"),
+          new AssistantMessage.ToolCall("next", "function", "readReviewPages", "{}"))).build();
+      }
+      if (n == 3) {
+        assertThat(reads).hasValue(1);
+        return call(n, "submitReviewPages", "{}");
+      }
+      return new AssistantMessage("Continued the next unit.");
+    })).stream(new Prompt(initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
+        .blockLast();
+    assertThat(calls).hasValue(4);
+    assertThat(c.hasPendingResumeContentWork()).isFalse();
+    assertThat(c.progressVersion()).isEqualTo(progress + 2);
+    assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {false, true})
+  void repeatedSavedPagesStillStopWithoutNewProgressOrRefundedBudgets(boolean serverReviewed) throws Exception {
+    var c = context(0, 2, 8, true);
+    c.evaluator().afterTool("readReviewFile", "{}", identifiedPage(),
+        c.evaluator().beforeTool("readReviewFile", "{}"));
+    c.evaluator().afterTool("submitReviewPage", "{}", acceptedReceipt(),
+        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    fillResumeBatch(c);
+    long progress = c.progressVersion();
+    var initial = prompt(c, true, "resume", new AtomicInteger());
+    var options = (ToolCallingChatOptions) initial.getOptions();
+    var callbacks = new ArrayList<>(options.getToolCallbacks());
+    callbacks.add(tool("readReviewFile", () -> serverReviewed
+        ? identifiedPage().replace("\"reviewJobId\":", "\"reviewed\":true,\"reviewJobId\":")
+        : identifiedPage()));
+    callbacks.add(tool("submitReviewPage", this::acceptedReceipt));
+    var calls = new AtomicInteger();
+    assertThatThrownBy(() -> new StagnationChatModel(model(p -> {
+      int n = calls.incrementAndGet();
+      return call(n, n % 2 == 1 ? "readReviewFile" : "submitReviewPage", "{}");
+    })).stream(new Prompt(initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
+        .blockLast())
+        .isInstanceOf(ExecutionStoppedException.class);
+    assertThat(calls).hasValue(serverReviewed ? 4 : 6);
+    assertThat(c.detector().stagnationCount()).isEqualTo(serverReviewed ? 4 : 6);
+    assertThat(c.progressVersion()).isEqualTo(progress);
+    assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
+  }
+
+  @Test
+  void aReceiptOnTheLastAttemptCanReachTheNextBudgetedAction() throws Exception {
+    var c = context(0, 2, 8, true);
+    c.evaluator().afterTool("readReviewFile", "{}", identifiedPage(),
+        c.evaluator().beforeTool("readReviewFile", "{}"));
+    c.evaluator().afterTool("submitReviewPage", "{}", acceptedReceipt(),
+        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    fillResumeBatch(c);
+    long progress = c.progressVersion();
+    var checkpoint = new java.util.concurrent.atomic.AtomicReference<RunExecutionContext.ProgressState>();
+    c.setToolResultsCheckpoint(messages -> checkpoint.set(c.progressSnapshot()));
+    var initial = prompt(c, true, "resume", new AtomicInteger());
+    var options = (ToolCallingChatOptions) initial.getOptions();
+    var callbacks = new ArrayList<>(options.getToolCallbacks());
+    var reads = new AtomicInteger();
+    callbacks.add(tool("readReviewFile", this::identifiedPage));
+    callbacks.add(tool("submitReviewPage", this::acceptedReceipt));
+    callbacks.add(tool("checkpointAnnotate", () -> "{\"recorded\":true}"));
+    callbacks.add(tool("readReviewPages", () -> {
+      assertThat(c.detector().stagnationCount()).isEqualTo(4);
+      assertThat(checkpoint.get().continuity().resumeBatch().reconciliationHandoffUsed()).isTrue();
+      assertThat(c.progressVersion()).isEqualTo(progress);
+      reads.incrementAndGet();
+      return "[" + identifiedPage().replace("docs/intro.md", "docs/next.md") + "]";
+    }));
+    callbacks.add(tool("submitReviewPages", () ->
+        "[" + acceptedReceipt().replace("docs/intro.md", "docs/next.md") + "]"));
+    var calls = new AtomicInteger();
+    new StagnationChatModel(model(p -> {
+      int n = calls.incrementAndGet();
+      if (n == 1) return call(n, "readReviewFile", "{}");
+      if (n == 2) return call(n, "readReviewPages", "{}"); // blocked before assessment
+      if (n == 3) return call(n, "checkpointAnnotate", "{}");
+      if (n == 4) return call(n, "submitReviewPage", "{}");
+      if (n == 5) return call(n, "readReviewPages", "{}");
+      if (n == 6) return call(n, "submitReviewPages", "{}");
+      return new AssistantMessage("The next unfinished range was assessed.");
+    })).stream(new Prompt(initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
+        .blockLast();
+    assertThat(calls).hasValue(7);
+    assertThat(reads).hasValue(1);
+    assertThat(c.progressVersion()).isEqualTo(progress + 2);
+    assertThat(c.hasPendingResumeContentWork()).isFalse();
+    assertThat(c.progressSnapshot().continuity().resumeBatch().reconciliationHandoffUsed()).isFalse();
+    assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"readReviewFile", "readReviewPages"})
+  void freshServerCoverageClearsTheOldPendingUnitWithoutResubmission(String reader) throws Exception {
+    var c = context(0, 2, 8, true);
+    c.evaluator().afterTool("readReviewFile", "{}", identifiedPage(),
+        c.evaluator().beforeTool("readReviewFile", "{}"));
+    c.evaluator().afterTool("submitReviewPage", "{}", acceptedReceipt(),
+        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    fillResumeBatch(c);
+    long progress = c.progressVersion();
+    var initial = prompt(c, true, "resume", new AtomicInteger());
+    var options = (ToolCallingChatOptions) initial.getOptions();
+    var callbacks = new ArrayList<>(options.getToolCallbacks());
+    String covered = identifiedPage().replace("\"reviewJobId\":", "\"reviewed\":true,\"reviewJobId\":");
+    var reads = new AtomicInteger();
+    callbacks.add(tool(reader, () -> {
+      String page = covered;
+      if (reads.incrementAndGet() == 2) {
+        assertThat(c.hasPendingResumeContentWork()).isFalse();
+        assertThat(c.progressVersion()).isEqualTo(progress);
+        page = identifiedPage().replace("docs/intro.md", "docs/next.md");
+      }
+      return reader.equals("readReviewPages") ? "[" + page + "]" : page;
+    }));
+    callbacks.add(tool("submitReviewPage", () -> acceptedReceipt().replace("docs/intro.md", "docs/next.md")));
+    var calls = new AtomicInteger();
+    new StagnationChatModel(model(p -> {
+      int n = calls.incrementAndGet();
+      if (n == 1) return call(n, reader, "{}");
+      if (n == 2) return call(n, reader, "{}");
+      if (n == 3) return call(n, "submitReviewPage", "{}");
+      return new AssistantMessage("Continued without re-assessing saved coverage.");
+    })).stream(new Prompt(initial.getInstructions(), options.mutate().toolCallbacks(callbacks).build()))
+        .blockLast();
+    assertThat(calls).hasValue(4);
+    assertThat(c.progressVersion()).isEqualTo(progress + 2);
+    assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = {"none", "LLM_CALL_BUDGET_EXCEEDED", "TOKEN_BUDGET_EXCEEDED"})
+  void aSpentReconciliationHandoffSurvivesRestartAndKeepsHardLimits(String limit) throws Exception {
+    var c = context(0, 2, 8, true);
+    c.evaluator().afterTool("readReviewFile", "{}", identifiedPage(),
+        c.evaluator().beforeTool("readReviewFile", "{}"));
+    c.evaluator().afterTool("submitReviewPage", "{}", acceptedReceipt(),
+        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    fillResumeBatch(c);
+    for (int i = 1; i <= 4; i++) {
+      c.beginIteration();
+      String name = i == 1 ? "readReviewFile" : i == 4 ? "submitReviewPage" : "reviewPending";
+      String result = i == 1 ? identifiedPage() : i == 4 ? acceptedReceipt() : "{}";
+      c.recordTool(name, "{}", result, c.evaluator().beforeTool(name, "{}"));
+      c.endIteration();
+      assertThat(c.requestReplan()).isNull();
+    }
+    assertThat(c.detector().stagnationCount()).isEqualTo(4);
+    assertThat(c.progressSnapshot().continuity().resumeBatch().reconciliationHandoffUsed()).isTrue();
+    var json = new ObjectMapper();
+    var saved = (ObjectNode) json.valueToTree(c.progressSnapshot());
+    ((ObjectNode) saved.path("budget"))
+        .put("llmCalls", limit.startsWith("LLM") ? 1000 : 20)
+        .put("totalTokens", limit.startsWith("TOKEN") ? 1000 : 200);
+    var state = json.treeToValue(saved, RunExecutionContext.ProgressState.class);
+    var next = new RunExecutionContext("resume", new OutputLimitRunBudget(2, 1000, null, 1000),
+        new ProgressEvaluator(root), new AgentEventFactory(Clock.systemUTC()), event -> {});
+    next.setRunContext(new AgentRunContext("resume", "conversation", root, "project"));
+    next.restoreProgress(state);
+    next.beginContextRestoration();
+    if (!limit.equals("none")) {
+      assertThatThrownBy(next::consumeNextLlmCall)
+          .isInstanceOf(ExecutionStoppedException.class).hasMessageContaining(limit);
+      assertThat(next.budgetSnapshot()).isEqualTo(state.budget());
+      return;
+    }
+    next.consumeNextLlmCall();
+    next.beginIteration();
+    next.recordTool("readReviewFile", "{}", identifiedPage(), next.evaluator().beforeTool("readReviewFile", "{}"));
+    next.endIteration();
+    assertThat(next.requestReplan()).isNull();
+    next.beginIteration();
+    next.recordTool("submitReviewPage", "{}", acceptedReceipt(), next.evaluator().beforeTool("submitReviewPage", "{}"));
+    next.endIteration();
+    assertThatThrownBy(next::requestReplan).isInstanceOf(ExecutionStoppedException.class);
+    assertThat(next.detector().stagnationCount()).isEqualTo(6);
+    assertThat(next.budgetSnapshot().llmCalls()).isEqualTo(state.budget().llmCalls() + 1);
+  }
+
+  @Test
+  void aDuplicateBatchNeedsReceiptsForEveryDeliveredPageEvenAfterRestart() throws Exception {
+    var c = context(0, 2, 8, true);
+    String page2 = identifiedPage().replace("docs/intro.md", "docs/next.md");
+    String receipt2 = acceptedReceipt().replace("docs/intro.md", "docs/next.md");
+    String pages = "[" + identifiedPage() + "," + page2 + "]";
+    c.evaluator().afterTool("submitReviewPages", "{}", "[" + acceptedReceipt() + "," + receipt2 + "]",
+        c.evaluator().beforeTool("submitReviewPages", "{}"));
+    fillResumeBatch(c);
+    c.beginIteration();
+    c.recordTool("readReviewPages", "{}", pages, c.evaluator().beforeTool("readReviewPages", "{}"));
+    c.endIteration();
+    c.beginIteration();
+    c.recordTool("submitReviewPage", "{}", acceptedReceipt(),
+        c.evaluator().beforeTool("submitReviewPage", "{}"));
+    c.endIteration();
+    assertThat(c.hasPendingResumeContentWork()).isTrue();
+    assertThat(c.progressSnapshot().continuity().resumeBatch().reviewPageKeys()).hasSize(1);
+    var json = new ObjectMapper();
+    var saved = json.readValue(json.writeValueAsString(c.progressSnapshot()),
+        RunExecutionContext.ProgressState.class);
+    c.restoreProgress(saved);
+    c.beginIteration();
+    c.recordTool("submitReviewPage", "{}", receipt2, c.evaluator().beforeTool("submitReviewPage", "{}"));
+    c.endIteration();
+    assertThat(c.hasPendingResumeContentWork()).isFalse();
+    assertThat(c.budgetSnapshot()).isEqualTo(saved.budget());
   }
 
   @Test
@@ -1293,7 +1760,7 @@ class ExhaustedResumeRecoveryTest {
                             }))
                     .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
-        .hasMessageContaining("REPLAN_BUDGET_EXCEEDED");
+        .hasMessageContaining("RESUME_BATCH_COMMIT_EXHAUSTED");
     assertThat(calls).hasValue(6);
     assertThat(c.detector().stagnationCount()).isEqualTo(6);
     assertThat(root.resolve("review.md")).doesNotExist();
@@ -1347,7 +1814,7 @@ class ExhaustedResumeRecoveryTest {
                 new StagnationChatModel(delegate)
                     .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
-        .hasMessageContaining("REPLAN_BUDGET_EXCEEDED");
+        .hasMessageContaining("RESUME_BATCH_COMMIT_EXHAUSTED");
     assertThat(calls).hasValue(6);
     assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
   }
@@ -1509,7 +1976,7 @@ class ExhaustedResumeRecoveryTest {
                                 options.mutate().toolCallbacks(callbacks).build()))
                         .blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
-        .hasMessageContaining("REPLAN_BUDGET_EXCEEDED");
+        .hasMessageContaining("RESUME_BATCH_COMMIT_EXHAUSTED");
     assertThat(c.detector().stagnationCount()).isEqualTo(4);
     assertThat(calls).hasValue(4);
     assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
@@ -1545,7 +2012,7 @@ class ExhaustedResumeRecoveryTest {
                             }))
                     .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
-        .hasMessageContaining("REPLAN_BUDGET_EXCEEDED");
+        .hasMessageContaining("RESUME_BATCH_COMMIT_EXHAUSTED");
     assertThat(c.detector().stagnationCount()).isEqualTo(5);
     assertThat(c.needsResumeContentWork()).isTrue();
   }
@@ -1710,7 +2177,7 @@ class ExhaustedResumeRecoveryTest {
                                     : new AssistantMessage("No outcome can be confirmed")))
                     .stream(prompt(c, true, "resume", new AtomicInteger())).blockLast())
         .isInstanceOf(ExecutionStoppedException.class)
-        .hasMessageContaining("REPLAN_BUDGET_EXCEEDED");
+        .hasMessageContaining("RESUME_BATCH_COMMIT_EXHAUSTED");
     assertThat(c.detector().stagnationCount()).isEqualTo(19);
     assertThat(c.budgetSnapshot().stagnationReplans()).isEqualTo(2);
     assertThat(c.progressSnapshot().continuity().evaluator().restorationReads()).isEqualTo(8);

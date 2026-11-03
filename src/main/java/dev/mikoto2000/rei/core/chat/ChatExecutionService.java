@@ -934,9 +934,8 @@ public class ChatExecutionService {
               "ツール引数の修正上限（"
                   + llmProperties.getOutputLimit().getMaxToolArgumentCorrectionsPerRun()
                   + "回）に達しました。"
-                  + "直前の引数エラーと委譲設定を確認してください。さらに修正を試す場合は application.yaml の "
-                  + "rei.llm.output-limit.max-tool-argument-corrections-per-run を増やして Rei を再起動し、"
-                  + "/resume list でタスクを確認して /resume <taskId> で再開してください。消費済み回数は引き継ぎます。",
+                  + "直前の引数エラーを確認し、/resume <taskId> で同じタスクを再開できます。"
+                  + "明示再開で修正枠を更新し、累積使用量とモデル呼び出し・トークンの上限は保持します。",
               "tool_argument_repair_exhausted");
       case TOKEN_BUDGET_EXCEEDED ->
           new ErrorInformation(
@@ -949,6 +948,11 @@ public class ChatExecutionService {
       case REPLAN_BUDGET_EXCEEDED ->
           new ErrorInformation(
               "ReplanBudgetExceeded", "replan hard budget exceeded", "replan_budget_exceeded");
+      case RESUME_BATCH_COMMIT_EXHAUSTED ->
+          new ErrorInformation(
+              "ResumeBatchCommitExhausted",
+              "再開後の部分成果保存の試行枠を使い切りました。保存済みレビュー記録と未完了範囲を確認し、/resume で同じタスクの保存処理を再試行できます。共有の呼び出し・トークン・再計画予算は引き継ぎます。",
+              "resume_batch_commit_exhausted");
       case REVIEW_PARTIAL ->
           new ErrorInformation(
               "ReviewPartial",
@@ -1770,6 +1774,8 @@ public class ChatExecutionService {
     TOKEN_USAGE_UNKNOWN,
     /** 計画の見直し予算上限超過。 */
     REPLAN_BUDGET_EXCEEDED,
+    /** 再開後の部分成果保存の試行枠を消費済み。 */
+    RESUME_BATCH_COMMIT_EXHAUSTED,
     /** レビュー部分的な結果。 */
     REVIEW_PARTIAL,
     /** 出力上限。 */

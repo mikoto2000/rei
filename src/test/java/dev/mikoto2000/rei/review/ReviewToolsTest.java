@@ -25,7 +25,7 @@ class ReviewToolsTest {
 
   @org.junit.jupiter.params.ParameterizedTest
   @org.junit.jupiter.params.provider.ValueSource(
-      strings = {"valid", "unknown", "wrongPath", "wrongQuote", "blank", "foreign"})
+      strings = {"valid", "blankEvidence", "emptyEvidence", "unknown", "wrongPath", "wrongQuote", "blank", "foreign"})
   void corroboratedDismissalPreservesEvidenceCoverageAndIsScopedAndIdempotent(String kind)
       throws Exception {
     Files.writeString(dir.resolve("lesson.md"), "source evidence\n");
@@ -63,7 +63,7 @@ class ReviewToolsTest {
                   kind.equals("wrongPath") ? "other.md" : "lesson.md",
                   kind.equals("blank") ? " " : reason,
                   kind.equals("wrongQuote") ? "invented" : null);
-      if (kind.equals("valid")) {
+      if (List.of("valid", "blankEvidence", "emptyEvidence").contains(kind)) {
         var progress = new dev.mikoto2000.rei.core.stagnation.ProgressEvaluator(dir);
         var fullHistory = new java.util.HashSet<String>();
         for (int i = 0; i < 1024; i++) fullHistory.add(String.format("%064x", i));
@@ -71,7 +71,9 @@ class ReviewToolsTest {
             new dev.mikoto2000.rei.core.stagnation.InformationLedger.State(
                 List.of(), fullHistory, false));
         var beforeDismissal = progress.beforeTool("dismissReviewFinding", "{}");
-        var result = tools.dismissReviewFinding(job.id(), "F1", "lesson.md", reason, null);
+        String optionalEvidence = kind.equals("blankEvidence") ? " \t\n "
+            : kind.equals("emptyEvidence") ? "" : null;
+        var result = tools.dismissReviewFinding(job.id(), "F1", "lesson.md", reason, optionalEvidence);
         assertThat(result.changed()).isTrue();
         String receipt = StorageDatabase.JSON.writeValueAsString(result);
         assertThat(progress.afterTool("dismissReviewFinding", "{}", receipt, beforeDismissal))
@@ -338,6 +340,51 @@ class ReviewToolsTest {
   }
 
   /** 変更内容のレビューで、指定した条件に対する結果と状態の変化を確認する。 */
+  @Test
+  void pageCoverageComesFromCurrentAssessmentsAndCanJoinAdjacentReviewedRanges() throws Exception {
+    String source = "first line\nsecond line\n";
+    Files.writeString(dir.resolve("lesson.md"), source);
+    Files.writeString(dir.resolve("remaining.md"), "unfinished\n");
+    try (var migration = new StorageMigrationCoordinator(dir.resolve("data"))) {
+      migration.prepare();
+    }
+    var ledger = new ReviewCoverageLedger(new StorageDatabase(dir.resolve("data")));
+    var tools = new ReviewTools(ledger, new RawToolResultStore(dir.resolve("data")),
+        new Tools(), TokenEstimator.conservative());
+    var owner = new AgentRunContext("run", "chat", dir, "project");
+    try (var scope = AgentRunScope.open(owner)) {
+      var job = tools.beginReview(List.of("lesson.md", "remaining.md"), "correctness", "v1");
+      String version = job.targets().getFirst().version();
+      var page = tools.readReviewFile(job.id(), "lesson.md", version, 0, 512);
+      tools.confirmed(owner, List.of(page));
+      assertThat(page.reviewed()).isFalse();
+      int middle = source.indexOf('\n') + 1;
+      var first = new ReviewCoverageLedger.Range("lesson.md", version,
+          new ReviewCoverageLedger.Span(0, middle, 1, 2, 0, 0), ReviewTools.hash(source.substring(0, middle)));
+      var last = new ReviewCoverageLedger.Range("lesson.md", version,
+          new ReviewCoverageLedger.Span(middle, source.length(), 2, 3, 0, 0), ReviewTools.hash(source.substring(middle)));
+      var actor = ReviewTools.scope(owner);
+      ledger.fetched(job.id(), actor, first);
+      ledger.delivered(job.id(), actor, List.of(first));
+      ledger.reviewed(job.id(), actor, first, "first saved assessment", List.of());
+      assertThat(tools.readReviewFile(job.id(), "lesson.md", version, 0, 512).reviewed()).isFalse();
+      ledger.fetched(job.id(), actor, last);
+      ledger.delivered(job.id(), actor, List.of(last));
+      ledger.reviewed(job.id(), actor, last, "second saved assessment", List.of());
+      long revision = ledger.get(job.id(), actor).revision();
+      assertThat(tools.readReviewFile(job.id(), "lesson.md", version, 0, 512).reviewed()).isTrue();
+      assertThat(tools.readReviewPages(job.id(), "lesson.md", version, 0, 4, 1024))
+          .allMatch(ReviewTools.Page::reviewed);
+      assertThat(ledger.get(job.id(), actor).revision()).isEqualTo(revision);
+      assertThat(tools.reviewStatus(job.id()).status()).isEqualTo("REVIEW_PARTIAL");
+      var other = tools.beginReview(List.of("lesson.md"), "style", "v1");
+      assertThat(tools.readReviewFile(other.id(), "lesson.md", version, 0, 512).reviewed()).isFalse();
+      Files.writeString(dir.resolve("lesson.md"), source + "changed");
+      assertThatThrownBy(() -> tools.readReviewFile(job.id(), "lesson.md", version, 0, 512))
+          .hasMessageContaining("STALE_VERSION");
+    }
+  }
+
   @Test
   void allExactSourcePagesMustBeConfirmedAndReviewedBeforeCompletion() throws Exception {
     String source = "\uFEFF教材🙂\r\n" + "中間の矛盾\\\"\n".repeat(100);

@@ -150,6 +150,44 @@ class OutputLimitRunBudgetTest {
 
   /** 用途に応じたモデル利用で、保存した情報を、再起動や復元後の処理へ正しく引き継ぐことを確認する。 */
   @Test
+  void explicitResumeRenewsOnlyRepairAllowanceAndKeepsCumulativeAuditCounters() throws Exception {
+    var saved = new OutputLimitRunBudget.Snapshot(2, 262, 400, false, 2, 5);
+    var resumed = saved.forExplicitResume();
+    assertThat(resumed.argumentCorrections()).isEqualTo(5);
+    assertThat(resumed.argumentCorrectionBaseline()).isEqualTo(5);
+    assertThat(resumed.llmCalls()).isEqualTo(262);
+    assertThat(resumed.totalTokens()).isEqualTo(400);
+    assertThat(resumed.replans()).isEqualTo(2);
+    assertThat(resumed.stagnationReplans()).isEqualTo(2);
+    var budget = new OutputLimitRunBudget(2, 1000);
+    budget.restore(resumed);
+    for (int i = 0; i < 5; i++) assertThat(budget.tryCorrectArguments()).isTrue();
+    assertThat(budget.tryCorrectArguments()).isFalse();
+    assertThat(budget.snapshot().argumentCorrections()).isEqualTo(10);
+    var json = new com.fasterxml.jackson.databind.ObjectMapper();
+    var restarted = new OutputLimitRunBudget(2, 1000);
+    restarted.restore(json.readValue(json.writeValueAsString(budget.snapshot()), OutputLimitRunBudget.Snapshot.class));
+    assertThat(restarted.tryCorrectArguments()).isFalse();
+    restarted.restore(resumed);
+    assertThat(restarted.tryCorrectArguments()).isFalse();
+    restarted.restore(restarted.snapshot().forExplicitResume());
+    assertThat(restarted.remainingArgumentCorrections()).isEqualTo(5);
+    assertThat(restarted.snapshot().argumentCorrections()).isEqualTo(10);
+  }
+
+  @Test
+  void invalidRepairBaselinesAreRejectedAndExplicitResumeCannotBypassZeroLimit() {
+    var budget = new OutputLimitRunBudget(2, 1000);
+    assertThatThrownBy(() -> budget.restore(new OutputLimitRunBudget.Snapshot(0, 0, 0, false, 0, 5, 6)))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> budget.restore(new OutputLimitRunBudget.Snapshot(0, 0, 0, false, 0, 5, -1)))
+        .isInstanceOf(IllegalArgumentException.class);
+    var disabled = new OutputLimitRunBudget(2, 1000, null, 0, 0);
+    disabled.restore(new OutputLimitRunBudget.Snapshot(0, 0, 0, false, 0, 5).forExplicitResume());
+    assertThat(disabled.tryCorrectArguments()).isFalse();
+  }
+
+  @Test
   void oldCheckpointJsonWithoutCorrectionCountRestoresWithNoUsage() throws Exception {
     // Match the Jackson 2 mapper used by PersistentCheckpointRepository for saved snapshots.
     var snapshot =

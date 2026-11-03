@@ -771,7 +771,7 @@ public class PersistentCheckpointService implements AutoCloseable {
   /** 作業の中断と再開において、参照専用に該当するか判定する。 */
   private boolean readOnly(String tool) {
     // Explicit allowlist; guessing from substrings can mistake deleteTarget/sendReader for a read.
-    return Set.of(
+    return CheckpointOperationRecovery.RETRYABLE_READS.contains(tool) || Set.of(
             "checkpointList",
             "checkpointShow",
             "checkpointInspect",

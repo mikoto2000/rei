@@ -155,7 +155,7 @@ class ChatExecutionArgumentCorrectionLimitTest {
             new UserInterventionQueue());
     assertThat(result.stopCode()).isEqualTo("tool_argument_repair_exhausted");
     assertThat(result.errorMessage())
-        .contains(limit + "回", "rei.llm.output-limit.max-tool-argument-corrections-per-run");
+        .contains(limit + "回", "/resume <taskId>", "同じタスク", "累積使用量");
     assertThat(calls).hasValue(limit + 1);
     assertThat(effects).hasValue(0);
     // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。

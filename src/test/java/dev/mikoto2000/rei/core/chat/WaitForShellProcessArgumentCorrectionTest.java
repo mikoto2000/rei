@@ -133,7 +133,7 @@ class WaitForShellProcessArgumentCorrectionTest {
     assertThat(result.status()).isEqualTo(ChatExecutionResult.Status.FAILED);
     assertThat(result.stopCode()).isEqualTo("tool_argument_repair_exhausted");
     assertThat(result.errorMessage())
-        .contains("2回", "rei.llm.output-limit.max-tool-argument-corrections-per-run");
+        .contains("2回", "/resume <taskId>", "同じタスク", "累積使用量");
     assertThat(calls).hasValue(3);
     assertThat(remaining).containsExactly(1, 0);
     assertThat(invalidArgumentEvents(fixture.events())).hasSize(2);
