@@ -23,8 +23,10 @@ final class SemanticReviewSplitter {
       boolean wasFenced = fence != 0;
       if (!wasFenced && position > start && position <= maximum) safe = position;
       if (run >= 3) {
-        if (fence == 0) { fence = marker; fenceLength = run; }
-        else if (marker == fence && run >= fenceLength && text.substring(run).isBlank()) fence = 0;
+        if (fence == 0) {
+          fence = marker;
+          fenceLength = run;
+        } else if (marker == fence && run >= fenceLength && text.substring(run).isBlank()) fence = 0;
       }
       if (!wasFenced && fence == 0 && position >= floor && position > start
           && text.matches("#{1,6}\\s+.*")) heading = position;
