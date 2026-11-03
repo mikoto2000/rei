@@ -802,7 +802,6 @@ business: dev.mikoto2000.rei.ui.shell.SessionCompletionCandidates -> dev.mikoto2
 business: dev.mikoto2000.rei.ui.shell.SessionCompletionCandidates$CurrentProject -> dev.mikoto2000.rei.core.project.ProjectContext
 business: dev.mikoto2000.rei.ui.shell.SessionCompletionCandidates$CurrentProject -> dev.mikoto2000.rei.core.project.ProjectService
 business: dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer -> dev.mikoto2000.rei.core.execution.ExecutionType
-business: dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer -> dev.mikoto2000.rei.core.stagnation.ProgressEvidence
 business: dev.mikoto2000.rei.ui.shell.ShellCompletionParser -> dev.mikoto2000.rei.core.command.UserInputParser
 business: dev.mikoto2000.rei.ui.shell.ShellCompletionParser -> dev.mikoto2000.rei.core.command.UserInputParser$Token
 business: dev.mikoto2000.rei.ui.shell.ShellCompletionParser -> dev.mikoto2000.rei.core.completion.PathFragment

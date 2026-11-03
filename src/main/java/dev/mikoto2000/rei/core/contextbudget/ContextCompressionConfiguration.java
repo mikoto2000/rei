@@ -56,7 +56,10 @@ public class ContextCompressionConfiguration {
       ObjectProvider<dev.mikoto2000.rei.core.Tools> files,
       TokenEstimator estimator, ContextCompressionProperties context, ToolResultDeliveryProperties delivery) {
     var reviews = new dev.mikoto2000.rei.review.ReviewTools(ledger, raw, files::getObject, estimator);
-    reviews.configureReading(context, delivery.getReviewMaxTokens());
+    context.validate();
+    reviews.configureReading(
+        prompt -> ContextBudgetManager.inputLimit(context, estimator, prompt),
+        delivery.getReviewMaxTokens());
     return reviews;
   }
 

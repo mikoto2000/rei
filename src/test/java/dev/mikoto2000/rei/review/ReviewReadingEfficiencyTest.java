@@ -75,7 +75,9 @@ class ReviewReadingEfficiencyTest {
     context.setModelContextLimit(800000);
     context.setHardLimit(760000);
     context.setThreshold(680000);
-    reviews.configureReading(context, 100000);
+    reviews.configureReading(
+        prompt -> ContextBudgetManager.inputLimit(context, TokenEstimator.conservative(), prompt),
+        100000);
     var owner = new AgentRunContext("run", "session", root, "project");
     try (var active = AgentRunScope.open(owner)) {
       var task = reviews.beginRepositoryReview("WORKTREE", List.of(), 100, 1048576L);

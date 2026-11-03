@@ -104,16 +104,17 @@ public final class ReviewTools {
 
   private final dev.mikoto2000.rei.durable.DurableTaskStore tasks;
 
-  private dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties readingContext =
-      new dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties();
+  // Production wiring supplies model-specific limits; retain the standalone default hard limit.
+  private java.util.function.ToIntFunction<org.springframework.ai.chat.prompt.Prompt> readingInputLimit =
+      prompt -> 85000;
   private int reviewMaxTokens = 100000;
   private static final org.slf4j.Logger METRICS = org.slf4j.LoggerFactory.getLogger("rei.review.metrics");
 
   public void configureReading(
-      dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties context, int maximum) {
-    context.validate();
+      java.util.function.ToIntFunction<org.springframework.ai.chat.prompt.Prompt> inputLimit,
+      int maximum) {
     if (maximum < 256 || maximum > 100000) throw new IllegalArgumentException("INVALID_REVIEW_BUDGET");
-    readingContext = context;
+    readingInputLimit = java.util.Objects.requireNonNull(inputLimit);
     reviewMaxTokens = maximum;
   }
 
@@ -123,11 +124,11 @@ public final class ReviewTools {
           "Use tokenBudget=null for the host-selected review budget, or 256.." + reviewMaxTokens + ".");
     int limit = requested == null ? reviewMaxTokens : requested;
     if (!dev.mikoto2000.rei.tooldelivery.FileReadContext.active())
-      return Math.min(limit, Math.min(800000, dev.mikoto2000.rei.core.contextbudget.ContextBudgetManager.inputLimit(
-          readingContext, estimator, new org.springframework.ai.chat.prompt.Prompt(""))) / 8);
+      return Math.min(limit, Math.min(800000, readingInputLimit.applyAsInt(
+          new org.springframework.ai.chat.prompt.Prompt(""))) / 8);
     return dev.mikoto2000.rei.tooldelivery.FileReadContext.bulkBudget(
         limit,
-        prompt -> Math.min(800000, dev.mikoto2000.rei.core.contextbudget.ContextBudgetManager.inputLimit(readingContext, estimator, prompt)),
+        prompt -> Math.min(800000, readingInputLimit.applyAsInt(prompt)),
         prompt -> prompt.getInstructions().stream().mapToLong(estimator::message).sum(), estimator::text, 8);
   }
 

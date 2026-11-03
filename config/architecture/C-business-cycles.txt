@@ -2569,7 +2569,6 @@ dev.mikoto2000.rei.ui.shell.SessionCompletionCandidates$CurrentProject -> dev.mi
 dev.mikoto2000.rei.ui.shell.SessionCompletionCandidates$CurrentProject -> dev.mikoto2000.rei.core.project.ProjectContext
 dev.mikoto2000.rei.ui.shell.SessionCompletionCandidates$CurrentProject -> dev.mikoto2000.rei.core.project.ProjectService
 dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer -> dev.mikoto2000.rei.core.execution.ExecutionType
-dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer -> dev.mikoto2000.rei.core.stagnation.ProgressEvidence
 dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer -> dev.mikoto2000.rei.event.AgentEvent
 dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer -> dev.mikoto2000.rei.event.AgentEventListener
 dev.mikoto2000.rei.ui.shell.ShellAgentEventRenderer -> dev.mikoto2000.rei.event.AgentEventType
