@@ -9,6 +9,10 @@ import dev.mikoto2000.rei.event.ErrorInformation;
  * exposed.
  */
 public final class FailureDiagnostics {
+  /** 通信接続の喪失時に表示する固定メッセージ。 */
+  public static final String CONNECTION_LOST_MESSAGE =
+      "通信接続が切断された、または利用できなくなりました。ネットワークと接続先の稼働状況を確認し、実行結果を確認してから再開してください。";
+
   /** Unwrap only trusted typed failures, never arbitrary exception messages. */
   public static String toolFailureResult(Throwable error) {
     for (int i = 0; error != null && i < 16; i++, error = error.getCause()) {
@@ -117,6 +121,9 @@ public final class FailureDiagnostics {
       if (cause instanceof javax.net.ssl.SSLException)
         return diagnostic("tls_failure", "TLS 接続に失敗しました。証明書・接続先・プロキシ設定を確認してください。");
     }
+    for (var cause : causes)
+      if (cause instanceof java.net.SocketException)
+        return diagnostic("connection_lost", CONNECTION_LOST_MESSAGE);
     for (var cause : causes) {
       if (cause instanceof tools.jackson.core.JacksonException
           || cause instanceof com.fasterxml.jackson.core.JsonProcessingException

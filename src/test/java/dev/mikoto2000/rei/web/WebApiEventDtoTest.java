@@ -12,6 +12,24 @@ import org.junit.jupiter.api.Test;
 
 /** WebAPIイベントDtoの結果と状態の契約を検証するテスト。 */
 class WebApiEventDtoTest {
+  @Test
+  void llmAndRunConnectionLossExposeFixedMessageWithoutInternalDetails() {
+    var factory = new AgentEventFactory(Clock.systemUTC());
+    var failure =
+        new IllegalStateException("PRIVATE_WRAPPER", new java.net.SocketException("Connection reset secret"));
+    for (var event : java.util.List.of(
+        factory.llmRequestFailed("run", "request", 26662, failure),
+        factory.runFailed("run", dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics.safeError(failure)),
+        factory.runFailed("run", new ErrorInformation("PRIVATE_CLASS", "PRIVATE_PATH secret", "connection_lost")))) {
+      assertThat(WebApiEventDto.from(event, false, "").payload().get("error").toString())
+          .contains("type=connection_lost", "接続が切断", "ネットワーク", "再開")
+          .doesNotContain("Operation failed.", "PRIVATE", "secret", "Exception");
+    }
+    var tool = factory.toolFailed("call", "read", new ErrorInformation("Private", "secret", "connection_lost"));
+    assertThat(WebApiEventDto.from(tool, false, "").payload().get("error").toString())
+        .contains("type=operation_failed")
+        .doesNotContain("secret");
+  }
 
   @Test
   void llmAndRunTimeoutsExposeFixedRecoveryGuidanceWithoutInternalDetails() {

@@ -9,6 +9,19 @@ import org.junit.jupiter.api.Test;
 /** 実行イベント出力の結果と状態の契約を検証するテスト。 */
 class RunEventOutputTest {
   @Test
+  void displaysConnectionLossForLlmAndRunFailures() {
+    var error = BackendClient.JSON.createObjectNode()
+        .put("type", "connection_lost")
+        .put("message", "通信接続が切断された、または利用できなくなりました。");
+    output.accept("llm.request.failed", BackendClient.JSON.createObjectNode()
+        .put("durationMs", 26662).set("error", error));
+    output.accept("agent.run.failed", BackendClient.JSON.createObjectNode().set("error", error));
+    assertEquals(List.of(
+        "[llm] request failed (26662 ms): 通信接続が切断された、または利用できなくなりました。",
+        "[agent] failed: 通信接続が切断された、または利用できなくなりました。"), lines);
+  }
+
+  @Test
   void displaysFileReadPageMetadataWithCallIdWithoutShorteningIt() {
     String summary = "[readMultiFile] " + "page-metadata ".repeat(30);
     output.accept(

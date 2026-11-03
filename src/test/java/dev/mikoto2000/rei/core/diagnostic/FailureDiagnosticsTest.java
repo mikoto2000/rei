@@ -11,6 +11,24 @@ import org.junit.jupiter.params.provider.CsvSource;
 /** 失敗情報診断情報の結果と状態の契約を検証するテスト。 */
 class FailureDiagnosticsTest {
   @Test
+  void nestedSocketFailuresReportConnectionLossWithoutExposingExceptionText() {
+    for (var message : java.util.List.of("Connection reset PRIVATE", "Network is unreachable PRIVATE")) {
+      var failure = new IllegalStateException("PRIVATE_WRAPPER", new java.net.SocketException(message));
+      var diagnostic = FailureDiagnostics.classify(failure);
+      assertEquals("connection_lost", diagnostic.code());
+      assertTrue(diagnostic.message().contains("接続が切断"));
+      assertFalse(diagnostic.message().contains("PRIVATE"));
+    }
+    assertEquals(
+        "connection_failed",
+        FailureDiagnostics.classify(new java.net.ConnectException("PRIVATE")).code());
+    assertEquals(
+        "timeout",
+        FailureDiagnostics.classify(new java.net.SocketTimeoutException("PRIVATE")).code());
+    assertEquals("io_failure", FailureDiagnostics.classify(new java.io.IOException("PRIVATE")).code());
+  }
+
+  @Test
   void typedAccessDenialReturnsSafeReasonAndGuidanceWithoutTrustingExceptionMessages() {
     var denied =
         new dev.mikoto2000.rei.toolcontract.ToolAccessDeniedException(

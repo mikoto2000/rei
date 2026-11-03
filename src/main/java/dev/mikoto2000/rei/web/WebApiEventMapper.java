@@ -160,6 +160,17 @@ public final class WebApiEventMapper {
                   Map.of(
                       "type", "timeout",
                       "message", "応答待ちがタイムアウトしました。接続先とタイムアウト設定を確認し、実行結果を確認してから再開してください。"));
+            else if ((event.type() == AgentEventType.LLM_REQUEST_FAILED
+                    || event.type() == AgentEventType.AGENT_RUN_FAILED)
+                && value instanceof Map<?, ?> error
+                && "connection_lost".equals(error.get("code")))
+              payload.put(
+                  name,
+                  Map.of(
+                      "type", "connection_lost",
+                      "message",
+                          dev.mikoto2000.rei.core.diagnostic.FailureDiagnostics
+                              .CONNECTION_LOST_MESSAGE));
             else if (event.type() == AgentEventType.AGENT_RUN_FAILED
                 && value instanceof Map<?, ?> error)
               payload.put(name, runStopError(error.get("errorType")));
