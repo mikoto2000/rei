@@ -61,6 +61,7 @@ class ReviewModelBoundaryTest {
         "batch-assessment",
         "batch-findings",
         "work-item",
+        "next-work-item",
         "read-count-low",
         "read-count-high",
         "read-budget-low",
@@ -81,7 +82,7 @@ class ReviewModelBoundaryTest {
     ReviewTools.Page page;
     dev.mikoto2000.rei.durable.WorkItemStore.Claim claim;
     try (var scope = AgentRunScope.open(owner)) {
-      if (operation.equals("work-item")) {
+      if (operation.equals("work-item") || operation.equals("next-work-item")) {
         var task = reviews.beginRepositoryReview("WORKTREE", List.of("data/**"), 100, 1048576L);
         reviews.scanReviewSnapshot(task.id(), 100);
         claim = reviews.claimReviewWorkItem(task.id(), 1024);
@@ -179,10 +180,11 @@ class ReviewModelBoundaryTest {
                                 ? 511
                                 : operation.equals("read-budget-high") ? 2049 : 1024)
                             : 1024);
-              } else if (operation.equals("work-item") && n <= 3) {
+              } else if ((operation.equals("work-item") || operation.equals("next-work-item")) && n <= 3) {
                 if (n == 1) {
-                  name = "readReviewWorkItem";
-                  args = Map.of("workItemId", claim.item().id(), "attempt", claim.attempt());
+                  name = operation.equals("next-work-item") ? "readNextReviewWorkItem" : "readReviewWorkItem";
+                  args = operation.equals("next-work-item") ? Map.of("taskId", claim.item().task())
+                      : Map.of("workItemId", claim.item().id(), "attempt", claim.attempt());
                 } else {
                   if (n == 3)
                     assertThat(((Prompt) invocation.getArgument(0)).getInstructions().toString())
@@ -313,7 +315,7 @@ class ReviewModelBoundaryTest {
     new StagnationChatModel(model, assembler)
         .stream(new Prompt(new UserMessage("review"), options)).blockLast();
     assertThat(invocations).hasValue(4);
-    if (operation.equals("work-item")) {
+    if (operation.equals("work-item") || operation.equals("next-work-item")) {
       var scope =
           new dev.mikoto2000.rei.durable.DurableTaskStore.Scope("project", "chat", dir.toString());
       assertThat(ledger.durableTasks().status(scope, claim.item().task()).state())

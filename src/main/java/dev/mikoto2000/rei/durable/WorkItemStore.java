@@ -18,7 +18,10 @@ public final class WorkItemStore {
 
   public record Claim(Item item, String run, String attempt) {}
 
-  public record Finding(String id, String severity, int start, int end, String evidence, String assessment) {}
+  public record Finding(String id, String severity,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer start,
+      @org.springframework.ai.tool.annotation.ToolParam(required = false) Integer end,
+      String evidence, String assessment) {}
 
   public record ReviewResult(String work, String snapshot, String path, int start, int end,
       String version, String criterion, String assessment, List<Finding> findings) {
@@ -27,7 +30,12 @@ public final class WorkItemStore {
     }
   }
 
-  public record Result(ReviewResult body, String sha256) {}
+  public record Result(ReviewResult body, String sha256,
+      @com.fasterxml.jackson.annotation.JsonInclude(com.fasterxml.jackson.annotation.JsonInclude.Include.NON_NULL)
+      java.util.Map<String, Object> legacyReceipt) {
+    public Result { legacyReceipt = legacyReceipt == null ? null : java.util.Map.copyOf(legacyReceipt); }
+    public Result(ReviewResult body, String sha256) { this(body, sha256, null); }
+  }
 
   private static final com.fasterxml.jackson.databind.ObjectMapper JSON = com.fasterxml.jackson.databind.json.JsonMapper.builder()
       .enable(com.fasterxml.jackson.databind.MapperFeature.SORT_PROPERTIES_ALPHABETICALLY).build();
@@ -135,6 +143,18 @@ public final class WorkItemStore {
     });
   }
 
+  /** Recover an unfinished acquisition after a lost tool response without claiming new work. */
+  public Claim running(DurableTaskStore.Scope scope, String task, String run) {
+    return store.read(db -> {
+      requireRun(db, scope, task, run, true);
+      try (var query = DurableTaskStore.statement(db,
+          "SELECT w.id,w.active_attempt FROM durable_work w JOIN durable_item_attempts a ON a.id=w.active_attempt WHERE w.task=? AND w.state='RUNNING' AND a.run=? AND a.state='ACTIVE' ORDER BY w.path,w.start LIMIT 1", task, run);
+          var rows = query.executeQuery()) {
+        return rows.next() ? new Claim(item(db, rows.getString(1)), run, rows.getString(2)) : null;
+      }
+    });
+  }
+
   public void delivered(DurableTaskStore.Scope scope, Claim claim, String contentHash) {
     store.write(db -> {
       store.status(db, scope, claim.item().task());
@@ -225,6 +245,7 @@ public final class WorkItemStore {
           || finding.severity() == null || finding.severity().isBlank() || finding.severity().length() > 64
           || finding.evidence() == null || finding.evidence().isBlank() || finding.evidence().length() > 16384
           || finding.assessment() == null || finding.assessment().isBlank() || finding.assessment().length() > 16384
+          || finding.start() == null || finding.end() == null
           || finding.start() < item.start() || finding.end() > item.end() || finding.end() <= finding.start()
           || !boundary(source, finding.start()) || !boundary(source, finding.end())
           || !source.substring(finding.start(), finding.end()).contains(finding.evidence()))

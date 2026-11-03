@@ -166,9 +166,15 @@ Checkpoint IDや元Runの生存は必要ない。`resumeRepositoryReview(taskId)
 
 対象がSEALEDになった後は、次の手順で処理する。
 
-1. `claimReviewWorkItem(taskId, tokenBudget)`で未完了の範囲を1件取得する。予算は256〜2,048。
+1. 通常は `readNextReviewWorkItem(taskId, tokenBudget=null)` で未完了範囲の確保と原文取得を1回で行う。
+   ホストは有効な入力上限の1/8・現在の空き文脈・同じ応答のツール数から予算を決める。
+   `rei.tool-result-delivery.review-max-tokens` の既定上限は100,000推定トークン。
+   個別に確保する場合は `claimReviewWorkItem(taskId, tokenBudget)` を使用できる（256〜設定上限、未指定は自動）。
+   小さいファイルは全文、長いファイルは見出し・段落・コードフェンス外の行境界で区切り、
+   1つのブロックが予算を超える場合のみ文字境界で分割する。原文の省略や要約はしない。
    既存TokenEstimatorでメタデータを含むページを概算し、原文のUTF-16境界を保って残りを永続登録する。
-2. `readReviewWorkItem(workItemId, attempt)`で固定原文を取得する。返すPageには既存の
+2. 個別にclaimした場合は `readReviewWorkItem(workItemId, attempt)` で固定原文を取得する。
+   `readNextReviewWorkItem` を使った場合は既に取得済みなので、この追加呼び出しは不要。返すPageには既存の
    ResultDeliveryを付け、ToolResponseを含むモデル呼び出しが成功した後にホストが配信を確認する。
    取得・配信・レビュー完了は別々であり、モデルの自然文の「完了」では確定しない。
 3. `submitReviewWorkItem(workItemId, attempt, assessment, findings)`で評価を提出する。

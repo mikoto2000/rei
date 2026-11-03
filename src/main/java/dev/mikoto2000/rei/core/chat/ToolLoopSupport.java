@@ -159,7 +159,7 @@ public final class ToolLoopSupport {
   }
 
   private static boolean rejectedRead(ToolResponseMessage.ToolResponse response) {
-    if (!java.util.Set.of("readReviewPages", "readRawToolResult").contains(response.name()))
+    if (!java.util.Set.of("readReviewPages", "readRawToolResult", "claimReviewWorkItem", "readNextReviewWorkItem").contains(response.name()))
       return false;
     try {
       var result =

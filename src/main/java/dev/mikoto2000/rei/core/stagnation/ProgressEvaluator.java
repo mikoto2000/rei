@@ -116,6 +116,7 @@ public class ProgressEvaluator {
         || name.equals("readReviewFile")
         || name.equals("readReviewPages")
         || name.equals("readReviewWorkItem")
+        || name.equals("readNextReviewWorkItem")
         || name.equals("readRawToolResult");
   }
 
@@ -432,7 +433,7 @@ public class ProgressEvaluator {
               "Stage conditions independently verified; host retains completion authority",
               output.path("stageId").asText(),
               digest(canonical(output.path("observation")))));
-    if ((name.equals("readReviewFile") || name.equals("readReviewWorkItem"))
+    if ((name.equals("readReviewFile") || name.equals("readReviewWorkItem") || name.equals("readNextReviewWorkItem"))
         && output != null
         && !failed(output)
         && output.has("range")) {

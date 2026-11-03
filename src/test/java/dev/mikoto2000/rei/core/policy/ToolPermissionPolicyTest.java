@@ -27,6 +27,7 @@ class ToolPermissionPolicyTest {
             "resumeRepositoryReview",
             "claimReviewWorkItem",
             "readReviewWorkItem",
+            "readNextReviewWorkItem",
             "submitReviewWorkItem"))
       assertEquals(PermissionDecision.AUTO_APPROVE, policy.evaluate(name), name);
   }

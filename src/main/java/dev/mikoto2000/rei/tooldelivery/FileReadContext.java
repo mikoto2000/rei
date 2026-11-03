@@ -82,14 +82,26 @@ public final class FileReadContext implements AutoCloseable {
       java.util.function.ToIntFunction<Prompt> inputLimit,
       java.util.function.ToLongFunction<Prompt> promptCost,
       java.util.function.ToIntFunction<String> textCost) {
+    return bulkBudget(maximum, inputLimit, promptCost, textCost, 1);
+  }
+
+  /** Also caps each unit to a fraction of the effective model input window. */
+  public static int bulkBudget(
+      int maximum,
+      java.util.function.ToIntFunction<Prompt> inputLimit,
+      java.util.function.ToLongFunction<Prompt> promptCost,
+      java.util.function.ToIntFunction<String> textCost,
+      int windowDivisor) {
+    if (windowDivisor < 1) throw new IllegalArgumentException("INVALID_WINDOW_DIVISOR");
     var current = CURRENT.get();
     if (current == null) return 0;
+    int capacity = inputLimit.applyAsInt(current.prompt);
     long available =
-        inputLimit.applyAsInt(current.prompt)
+        capacity
             - promptCost.applyAsLong(current.prompt)
             - textCost.applyAsInt(current.assistant)
             - 512L * current.calls;
-    return (int) Math.max(0, Math.min(maximum, available / current.calls));
+    return (int) Math.max(0, Math.min(Math.min(maximum, capacity / windowDivisor), available / current.calls));
   }
 
   public static void used(int tokens) {

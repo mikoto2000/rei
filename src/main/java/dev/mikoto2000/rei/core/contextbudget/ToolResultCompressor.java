@@ -75,7 +75,10 @@ public class ToolResultCompressor {
       if (lossless(policy)) {
         if (tool.getMetadata().get("rei.reviewReceipts") instanceof Map<?, ?> receipts
             && receipts.containsKey(response.id())) {
-          if (estimator.text(raw) > delivery.getPageMaxTokens())
+          int reviewLimit = response.name().equals("readNextReviewWorkItem")
+                  || response.name().equals("readReviewWorkItem")
+              ? delivery.getReviewMaxTokens() : delivery.getPageMaxTokens();
+          if (estimator.text(raw) > reviewLimit)
             throw new IllegalStateException(
                 "CONTEXT_BUDGET_INSUFFICIENT: reduce readReviewFile tokenBudget");
           responses.add(response);

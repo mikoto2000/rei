@@ -139,6 +139,19 @@ public class StagnationChatModel implements ChatModel {
           Prompt actionPrompt = resumeRecoveryPrompt(prompt, context);
           String feedback = context.progressFeedback() + context.resumeBatchFeedback();
           if (hasReviewProtocol(prompt)) {
+            feedback += " For a new whole-repository review prefer beginRepositoryReview, scanReviewSnapshot"
+                + " until SEALED, then readNextReviewWorkItem with tokenBudget omitted. It claims and reads"
+                + " one semantic unit with a host-selected budget up to 100000 estimated tokens, bounded"
+                + " by 1/8 of effective model input capacity and current free context. Assess the whole"
+                + " delivered unit with submitReviewWorkItem(workItemId,attempt,assessment,findings)."
+                + " Preserve existing durable task IDs; use listReviewTasks/resumeRepositoryReview when"
+                + " resuming. Do not create a second legacy job for the same durable task. Submit assessed"
+                + " units first and read the next unit in the same tool-call response. Read cross-file"
+                + " dependencies when necessary to corroborate findings. Existing legacy jobs must be"
+                + " completed through their original ledger. Prefer readNextReviewWorkItem(taskId='legacy:'"
+                + " + reviewJobId) and submitReviewWorkItem using the returned workItemId/attempt; this"
+                + " continues pending semantic units without losing saved legacy assessments. The following legacy guidance applies ONLY"
+                + " to explicit-target reviews or existing legacy jobs.";
             if (!context.isResumedContext())
               feedback +=
                   " For authorized review work, use beginReview for the explicit targets and criteria."
@@ -615,7 +628,7 @@ public class StagnationChatModel implements ChatModel {
                     dev.mikoto2000.rei.toolcontract.ToolResultRejectedException.find(error);
                 if (rejected
                         instanceof dev.mikoto2000.rei.toolcontract.ToolReadRejectedException read
-                    && java.util.Set.of("readReviewPages", "readRawToolResult").contains(name))
+                    && java.util.Set.of("readReviewPages", "readRawToolResult", "claimReviewWorkItem", "readNextReviewWorkItem").contains(name))
                   return context.toolReadCorrection(read.code(), read.getMessage());
                 if (rejected != null
                     && java.util.Set.of(

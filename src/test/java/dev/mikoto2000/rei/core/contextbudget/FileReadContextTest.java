@@ -10,6 +10,19 @@ import org.springframework.ai.openai.OpenAiChatOptions;
 class FileReadContextTest {
   private final TokenEstimator estimator = TokenEstimator.conservative();
 
+  @Test
+  void reviewFractionHonorsWindowAndDividesActualFreeSpaceAmongSiblingCalls() {
+    try (var scope = FileReadContext.open(new Prompt("x".repeat(700000)), 2, "")) {
+      assertThat(FileReadContext.bulkBudget(100000, p -> 800000,
+          p -> 700000L, s -> 0, 8)).isEqualTo(49488);
+    }
+    try (var scope = FileReadContext.open(new Prompt("small"), 1, "")) {
+      assertThat(FileReadContext.bulkBudget(100000, p -> 800000, p -> 0L, s -> 0, 8)).isEqualTo(100000);
+      assertThat(FileReadContext.bulkBudget(100000, p -> 32000, p -> 0L, s -> 0, 8)).isEqualTo(4000);
+      assertThat(FileReadContext.bulkBudget(100000, p -> 32000, p -> 32000L, s -> 0, 8)).isZero();
+    }
+  }
+
   private int budget(ContextCompressionProperties properties) {
     return FileReadContext.bulkBudget(
         64000,

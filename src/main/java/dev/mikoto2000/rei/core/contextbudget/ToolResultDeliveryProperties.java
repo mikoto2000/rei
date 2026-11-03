@@ -21,6 +21,9 @@ public class ToolResultDeliveryProperties {
   /** 全文取得でも現在の入力残量を超えない、追加の上限。 */
   private int bulkMaxTokens = 64000;
 
+  /** Exact review units have their own cap; ordinary file pages retain their existing limit. */
+  private int reviewMaxTokens = 100000;
+
   // ContextAssembler already reserves 4000 model tokens; this is additional optional page headroom.
   /** ページSafetyトークン数。 */
   private int pageSafetyTokens;
@@ -56,6 +59,7 @@ public class ToolResultDeliveryProperties {
         || pageMaxTokens > 16000
         || bulkMaxTokens < pageMaxTokens
         || bulkMaxTokens > 1_000_000
+        || reviewMaxTokens < 256 || reviewMaxTokens > 100000
         || pageSafetyTokens < 0
         || rawResultMaxBytes < 1
         || rawStoreMaxBytes < 1
