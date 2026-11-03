@@ -110,8 +110,7 @@ final class RunEventNotices {
                   + number(p, "searchedProjectCount"));
       case "user.intervention.received" -> line("[user] guidance queued");
       case "user.intervention.applied" -> line("[user] guidance applied");
-      case "progress.detected",
-          "stagnation.updated",
+      case "stagnation.updated",
           "stagnation.detected",
           "stagnation.replan_requested",
           "stagnation.recovered",
@@ -119,16 +118,6 @@ final class RunEventNotices {
         String reason = p.path("reason").asText("");
         line(
             switch (type) {
-              case "progress.detected" ->
-                  p.hasNonNull("evidence")
-                      ? "[progress] "
-                          + text(p.path("evidence"), "kind")
-                          + ": "
-                          + text(p.path("evidence"), "description")
-                          + " ("
-                          + text(p.path("evidence"), "source")
-                          + ")"
-                      : "[progress] meaningful progress detected";
               case "stagnation.updated" ->
                   reason.equals("waiting_for_dependency")
                       ? "[waiting] awaiting dependency"

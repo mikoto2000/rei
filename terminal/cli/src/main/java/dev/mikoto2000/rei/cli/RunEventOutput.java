@@ -75,6 +75,7 @@ final class RunEventOutput {
 
   /** 要求を後続の処理へ引き渡すため、実行イベント出力を受け付ける。 */
   void accept(String type, JsonNode payload, java.time.Instant timestamp) {
+    if (type.equals("progress.detected")) return;
     boolean thinking = type.startsWith("thinking.");
     if (thinking || type.startsWith("message.")) {
       String key =

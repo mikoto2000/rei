@@ -8,6 +8,25 @@ import org.junit.jupiter.api.Test;
 
 class RunEventNoticesTest {
   @Test
+  void progressIsQuietWithOrWithoutEvidence() throws Exception {
+    var lines = new ArrayList<String>();
+    var output = new RunEventOutput(lines::add);
+    output.accept("progress.detected", BackendClient.JSON.createObjectNode());
+    output.accept(
+        "progress.detected",
+        BackendClient.JSON.readTree(
+            """
+            {"evidence":{"kind":"NEW_INFORMATION","description":"New lines fetched","source":"docs/a.md"}}
+            """));
+    output.flush();
+    assertTrue(lines.isEmpty());
+    output.accept(
+        "stagnation.updated",
+        BackendClient.JSON.readTree("{\"consecutiveNoProgressIterations\":1,\"threshold\":4}"));
+    assertEquals(java.util.List.of("[stagnation] no progress: 1/4"), lines);
+  }
+
+  @Test
   void noDefinedEventFallsBackToRawJson() {
     for (var type : dev.mikoto2000.rei.event.AgentEventType.values()) {
       var lines = new ArrayList<String>();
@@ -59,6 +78,7 @@ class RunEventNoticesTest {
         BackendClient.JSON.readTree("{\"reason\":\"busy\"}"),
         start.plusSeconds(10));
     output.accept("task.started", BackendClient.JSON.readTree("{\"internal\":\"private\"}"), start);
+    output.accept("progress.detected", BackendClient.JSON.createObjectNode(), start);
     output.accept(
         "message.completed",
         BackendClient.JSON.readTree("{\"messageId\":\"m\",\"text\":\"回答\"}"),

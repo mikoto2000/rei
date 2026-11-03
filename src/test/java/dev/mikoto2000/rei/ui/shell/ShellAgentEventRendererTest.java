@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mikoto2000.rei.event.AgentEventFactory;
@@ -382,15 +383,18 @@ class ShellAgentEventRendererTest {
             1,
             2,
             "stagnation");
+    renderer.onEvent(
+        events.executionProgress(
+            dev.mikoto2000.rei.event.AgentEventType.PROGRESS_DETECTED, "run", payload));
+    assertEquals("", output.text());
     for (var type :
         java.util.List.of(
-            dev.mikoto2000.rei.event.AgentEventType.PROGRESS_DETECTED,
             dev.mikoto2000.rei.event.AgentEventType.STAGNATION_REPLAN_REQUESTED,
             dev.mikoto2000.rei.event.AgentEventType.STAGNATION_RECOVERED,
             dev.mikoto2000.rei.event.AgentEventType.STAGNATION_STOPPED)) {
       renderer.onEvent(events.executionProgress(type, "run", payload));
     }
-    assertTrue(output.text().contains("[progress] STATE_CHANGED"));
+    assertFalse(output.text().contains("[progress]"));
     assertTrue(output.text().contains("replanning (1/2)"));
     assertTrue(output.text().contains("recovered"));
     assertTrue(output.text().contains("STAGNATED"));

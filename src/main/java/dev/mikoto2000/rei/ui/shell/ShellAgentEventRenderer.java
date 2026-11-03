@@ -139,9 +139,10 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
   /** 通知に応じて状態や表示を更新するため、イベントを受け付ける。 */
   @Override
   public synchronized void onEvent(AgentEvent event) {
-    // Checkpoint bookkeeping must not interrupt answer/thinking streams, including child runs.
+    // Progress and checkpoint bookkeeping must not interrupt answer/thinking streams.
     switch (event.type()) {
-      case CHECKPOINT_SAVED,
+      case PROGRESS_DETECTED,
+          CHECKPOINT_SAVED,
           CHECKPOINT_RECONCILED,
           CHECKPOINT_RESUMED,
           CHECKPOINT_REVISION_SAVED -> {
@@ -443,8 +444,7 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
                 ? "[user] guidance queued"
                 : "[user] guidance applied");
       }
-      case PROGRESS_DETECTED,
-          STAGNATION_UPDATED,
+      case STAGNATION_UPDATED,
           STAGNATION_DETECTED,
           STAGNATION_REPLAN_REQUESTED,
           STAGNATION_RECOVERED,
@@ -454,14 +454,6 @@ public final class ShellAgentEventRenderer implements AgentEventListener {
         var payload = (dev.mikoto2000.rei.event.ExecutionProgressPayload) event.payload();
         String text =
             switch (event.type()) {
-              case PROGRESS_DETECTED ->
-                  "[progress] "
-                      + payload.evidence().kind()
-                      + ": "
-                      + payload.evidence().description()
-                      + " ("
-                      + payload.evidence().source()
-                      + ")";
               case STAGNATION_UPDATED ->
                   "waiting_for_dependency".equals(payload.reason())
                       ? "[waiting] awaiting dependency"
