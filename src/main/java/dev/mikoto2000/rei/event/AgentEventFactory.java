@@ -311,11 +311,16 @@ public class AgentEventFactory {
 
   /** 実行状況の通知で用いる言語モデル応答完了を返す。 */
   public AgentEvent llmResponseCompleted(String runId, String requestId, long durationMs) {
+    return llmResponseCompleted(runId, requestId, durationMs, null, null, null);
+  }
+
+  public AgentEvent llmResponseCompleted(String runId, String requestId, long durationMs,
+      Long firstResponseMillis, Integer promptTokens, Integer completionTokens) {
     return newEvent(
         AgentEventType.LLM_RESPONSE_COMPLETED,
         runId,
         requestId,
-        new LlmResponseCompletedPayload(requestId, durationMs));
+        new LlmResponseCompletedPayload(requestId, durationMs, firstResponseMillis, promptTokens, completionTokens));
   }
 
   // ---- Message ----

@@ -25,6 +25,33 @@ import reactor.core.publisher.Flux;
 /** エージェントイベント応答生成に使うモデルの結果と状態の契約を検証するテスト。 */
 class AgentEventChatModelTest {
 
+  @Test
+  void completionMetricsKeepCumulativeUsageAndDistinguishMissingUsage() {
+    var delegate = mock(ChatModel.class);
+    var prompt = new Prompt("review");
+    var usage = org.springframework.ai.chat.model.ChatResponse.builder()
+        .metadata(org.springframework.ai.chat.metadata.ChatResponseMetadata.builder()
+            .usage(new org.springframework.ai.chat.metadata.DefaultUsage(123, 45)).build())
+        .generations(List.of()).build();
+    var empty = org.springframework.ai.chat.model.ChatResponse.builder().generations(List.of()).build();
+    when(delegate.stream(prompt)).thenReturn(Flux.just(usage, usage, empty));
+    when(delegate.call(prompt)).thenReturn(empty);
+    List<AgentEvent> events = new ArrayList<>();
+    var bus = new InMemoryAgentEventBus();
+    bus.subscribe(events::add);
+    var model = new AgentEventChatModel(LlmFeature.CHAT, delegate, new AgentEventFactory(Clock.systemUTC()), bus);
+    model.stream(prompt).blockLast();
+    var completed = (dev.mikoto2000.rei.event.LlmResponseCompletedPayload) events.getLast().payload();
+    assertThat(completed.promptTokens()).isEqualTo(123);
+    assertThat(completed.completionTokens()).isEqualTo(45);
+    assertThat(completed.firstResponseMillis()).isNotNull().isLessThanOrEqualTo(completed.durationMs());
+    model.call(prompt);
+    completed = (dev.mikoto2000.rei.event.LlmResponseCompletedPayload) events.getLast().payload();
+    assertThat(completed.promptTokens()).isNull();
+    assertThat(completed.completionTokens()).isNull();
+    assertThat(completed.firstResponseMillis()).isNull();
+  }
+
   /** 作業状況呼び出し回数について、応答一覧を返すことを確認する。 */
   @Test
   void activityCallsReturnResponsesAndPropagateErrorsWithoutNotifications() {

@@ -40,3 +40,28 @@ reviewStatus等の状態確認も、結果不明の外部変更を繰り返さ�
 新しい本文の評価はその本文がモデルに配送された後に行う。配送ハッシュ・所有権・attemptの検査は維持する。
 全文配送済みのレビュー単位は通常の16,000トークンのファイルページ制限で再分割しない。
 最終プロンプトの総量検査は引き続き有効。
+
+## 計測と比較
+
+アプリログの `rei.review.metrics` に本文を含まない `review_read` / `review_submit` を記録する。
+run/task/work/attempt、本文UTF-16文字数、serialized推定トークン数、提出の成功・拒否理由を確認できる。
+同じwork IDへの提出の再試行は、集計で重複したレビュー完了として数えない。
+
+既存の `llm.response.completed` イベントには、プロバイダーが報告したpromptTokens / completionTokensと
+firstResponseMillisを追加した。ストリームで繰り返される累積usageを加算せず、最大報告値を保持する。
+報告がないusageはnull。同期要求のfirstResponseMillisもnull。
+firstResponseMillisは最初のチャンク到着時間であり、空のチャンクやmetadataのみのチャンクも含む。
+サーバーのキュー待ち・prefillはこのクライアント計測だけでは区別できない。
+
+```powershell
+python scripts/analyze-review-performance.py --events <profile-jsonl> --review-log <rei.log> --run <run-id>
+# 再開を含める場合は --run を繰り返す。
+```
+
+比較する指標はレビュー完了文字数あたりのLLM要求数、取得回数、再取得量、拒否回数、
+要求時間中央値、初回チャンク到着時間、usage報告率。
+要求時間の合計は並列処理で重なるため、実経過時間とは別に扱う。
+同じsnapshot・レビュー基準で比較し、指摘の正しさや見落としも別途確認する。
+`ReviewReadingEfficiencyTest` は同じ教材を2,048予算と0.8M向け自動予算で読み、
+原文の完全性・配送確認・完了判定を維持したまま必要な取得単位数が減ることを検証する。
+実LLMの速度・指摘品質の改善率を保証するベンチマークではない。

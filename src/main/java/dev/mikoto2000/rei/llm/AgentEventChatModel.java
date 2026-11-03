@@ -70,9 +70,12 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
         .publish(eventFactory.llmRequestStarted(null, requestId, observedFeature(prompt)));
     try {
       ChatResponse response = delegate.call(prompt);
+      var metrics = new ResponseMetrics();
+      metrics.observe(response);
       publisher(prompt)
           .publish(
-              eventFactory.llmResponseCompleted(null, requestId, elapsedMillis(startedAtNanos)));
+              eventFactory.llmResponseCompleted(null, requestId, elapsedMillis(startedAtNanos),
+                  null, metrics.promptTokens, metrics.completionTokens));
       observeUsage(measured, response);
       if (measured != null)
         measured.finish(dev.mikoto2000.rei.timing.TimingRecorder.Status.SUCCESS);
@@ -97,6 +100,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
               context.getOrDefault(dev.mikoto2000.rei.timing.TimingAttempt.KEY, null);
           var measured = measurement(prompt, requestId, trace);
           long startedAtNanos = System.nanoTime();
+          var metrics = new ResponseMetrics();
           java.util.concurrent.atomic.AtomicBoolean firstTokenPublished =
               new java.util.concurrent.atomic.AtomicBoolean();
           publisher(prompt)
@@ -104,9 +108,11 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
           return Flux.defer(() -> delegate.stream(prompt))
               .doOnNext(
                   response -> {
+                    metrics.observe(response);
                     observeChunk(prompt, measured, response);
                     // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
                     if (firstTokenPublished.compareAndSet(false, true)) {
+                      metrics.firstResponseMillis = elapsedMillis(startedAtNanos);
                       publisher(prompt)
                           .publish(
                               eventFactory.llmResponseFirstToken(
@@ -120,7 +126,8 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
                     publisher(prompt)
                         .publish(
                             eventFactory.llmResponseCompleted(
-                                null, requestId, elapsedMillis(startedAtNanos)));
+                                null, requestId, elapsedMillis(startedAtNanos), metrics.firstResponseMillis,
+                                metrics.promptTokens, metrics.completionTokens));
                   })
               .doOnError(
                   error -> {
@@ -146,6 +153,22 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
   @Override
   public ChatOptions getOptions() {
     return delegate.getOptions();
+  }
+
+  /** Providers report cumulative usage snapshots; never sum repeated streaming snapshots. */
+  private static final class ResponseMetrics {
+    Long firstResponseMillis;
+    Integer promptTokens, completionTokens;
+
+    void observe(ChatResponse response) {
+      if (response == null || response.getMetadata() == null) return;
+      var usage = response.getMetadata().getUsage();
+      if (usage == null || usage instanceof org.springframework.ai.chat.metadata.EmptyUsage) return;
+      if (usage.getPromptTokens() != null)
+        promptTokens = Math.max(promptTokens == null ? 0 : promptTokens, usage.getPromptTokens());
+      if (usage.getCompletionTokens() != null)
+        completionTokens = Math.max(completionTokens == null ? 0 : completionTokens, usage.getCompletionTokens());
+    }
   }
 
   /** 用途に応じたモデル利用で用いる所有者を返す。 */

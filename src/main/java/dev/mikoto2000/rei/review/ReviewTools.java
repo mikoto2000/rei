@@ -107,6 +107,7 @@ public final class ReviewTools {
   private dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties readingContext =
       new dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties();
   private int reviewMaxTokens = 100000;
+  private static final org.slf4j.Logger METRICS = org.slf4j.LoggerFactory.getLogger("rei.review.metrics");
 
   public void configureReading(
       dev.mikoto2000.rei.core.contextbudget.ContextCompressionProperties context, int maximum) {
@@ -311,6 +312,9 @@ public final class ReviewTools {
         source.positions().at(next.start()), source.positions().at(end));
     if (estimate(page) > budget) throw new IllegalStateException("CONTEXT_BUDGET_INSUFFICIENT");
     ledger.fetched(id, scope(AgentRunScope.current()), page.range());
+    METRICS.info("review_read run={} task={} work={} attempt={} chars={} estimatedTokens={}",
+        AgentRunScope.current().runId(), "legacy:" + id, page.workItemId(), page.attempt(),
+        page.content().length(), estimate(page));
     return page;
   }
 
@@ -348,8 +352,11 @@ public final class ReviewTools {
     var claim = work.current(taskScope(owner), workItemId, owner.runId(), attempt);
     if (!claim.item().state().equals("RUNNING"))
       throw new IllegalArgumentException("WORK_NOT_RUNNING");
-    return durablePage(
+    var page = durablePage(
         claim.item(), attempt, work.source(taskScope(owner), claim.item()), claim.item().end());
+    METRICS.info("review_read run={} task={} work={} attempt={} chars={} estimatedTokens={}",
+        owner.runId(), claim.item().task(), workItemId, attempt, page.content().length(), estimate(page));
+    return page;
   }
 
   @Tool(
@@ -369,10 +376,14 @@ public final class ReviewTools {
           work.current(taskScope(owner), workItemId, owner.runId(), attempt),
           assessment,
           findings);
+      METRICS.info("review_submit run={} work={} attempt={} outcome=accepted chars={} findings={}",
+          owner.runId(), workItemId, attempt, result.body().end() - result.body().start(), result.body().findings().size());
       return result;
     } catch (java.io.IOException error) {
       throw new java.io.UncheckedIOException(error);
     } catch (IllegalArgumentException invalid) {
+      METRICS.info("review_submit run={} work={} attempt={} outcome=rejected reason={}",
+          owner.runId(), workItemId, attempt, invalid.getMessage());
       if (!"REVIEW_RESULT_INVALID".equals(invalid.getMessage())) throw invalid;
       throw new ReviewResultRejectedException(
           "No assessment was accepted. Keep the current workItemId and attempt; provide an"
