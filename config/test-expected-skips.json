@@ -25,6 +25,11 @@
     "Reason": "System property [httpapi.benchmark] does not exist"
   },
   {
+    "Method": "searchResumeMeasuresInventoryVerificationByCursor",
+    "Suite": "dev.mikoto2000.rei.core.ReadingEfficiencyBenchmarkTest",
+    "Reason": "System property [rei.benchmark.search-resume] does not exist"
+  },
+  {
     "Method": "measure",
     "Suite": "dev.mikoto2000.rei.storage.AnswerGenerationIoBenchmarkTest",
     "Reason": "System property [rei.io.benchmark] does not exist"
