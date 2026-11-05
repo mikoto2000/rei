@@ -2300,6 +2300,7 @@ public class Tools {
 
   private ReadingStateStore readingStateStore;
   private ReadingDelivery readingDelivery;
+  private final ContinuationLines continuationLines = new ContinuationLines();
 
   @Autowired
   void setReadingDelivery(ReadingDelivery delivery) {
@@ -2478,6 +2479,7 @@ public class Tools {
   List<String> snapshotLines(FileSnapshots.Snapshot snapshot, String charset) throws IOException {
     ReadingMetrics.add("decodes", 1);
     byte[] bytes = snapshot.bytes();
+    long decodeStarted = System.nanoTime();
     ResolvedTextFile decoded;
     if (charset != null && !charset.isBlank())
       decoded =
@@ -2495,9 +2497,13 @@ public class Tools {
         }
       }
     }
+    ReadingMetrics.add("sourceDecodeNanos", System.nanoTime() - decodeStarted);
     if (decoded.content().indexOf(0) >= 0) throw new IOException("Binary file is unsupported");
     ReadingMetrics.add("lineSplits", 1);
-    return decoded.content().lines().toList();
+    long splitStarted = System.nanoTime();
+    var lines = decoded.content().lines().toList();
+    ReadingMetrics.add("sourceLineSplitNanos", System.nanoTime() - splitStarted);
+    return lines;
   }
 
   /**
@@ -3074,9 +3080,7 @@ public class Tools {
     var snapshot = snapshots.get(workingDirectory, path);
     if (request.expectedVersion() != null && !request.expectedVersion().equals(snapshot.version()))
       throw new IOException("STALE_VERSION: File version mismatch; search/read again");
-    List<String> lines =
-        snapshots.lines(
-            snapshot, request.charset(), () -> snapshotLines(snapshot, request.charset()));
+    List<String> lines = verifiedReadLines(workingDirectory, request, snapshots, snapshot);
     workingSet.recordRead(path);
     int fromIndex = startLine == null ? 0 : startLine - 1;
     if (fromIndex >= lines.size()) {
@@ -3121,6 +3125,37 @@ public class Tools {
         List.of(),
         List.of(),
         reason);
+  }
+
+  /** Reuse rows only after the caller has validated the path and expected source version. */
+  List<String> verifiedReadLines(
+      java.nio.file.Path root,
+      ReadFileRequest request,
+      FileSnapshots snapshots,
+      FileSnapshots.Snapshot snapshot)
+      throws IOException {
+    return snapshots.lines(
+        snapshot,
+        request.charset(),
+        () -> {
+          var key =
+              new ContinuationLines.Key(
+                  dev.mikoto2000.rei.core.chat.AgentRunScope.current(),
+                  root.toAbsolutePath().normalize(),
+                  snapshot.path(),
+                  snapshot.version(),
+                  request.charset());
+          if (snapshot.version().equals(request.expectedVersion())) {
+            var cached = continuationLines.get(key);
+            if (cached != null) {
+              ReadingMetrics.add("continuationLineCacheHits", 1);
+              return cached;
+            }
+          }
+          var lines = snapshotLines(snapshot, request.charset());
+          continuationLines.put(key, lines);
+          return lines;
+        });
   }
 
   /** 依頼の目的に応じたファイル取得方針。 */

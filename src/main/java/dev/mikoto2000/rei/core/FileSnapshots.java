@@ -162,7 +162,9 @@ final class FileSnapshots {
     if (before.size() > MAX_FILE_BYTES || before.size() > MAX_REQUEST_BYTES - bytes)
       throw new IOException("Snapshot byte limit reached");
     ReadingMetrics.add("physicalReads", 1);
+    long readStarted = System.nanoTime();
     var content = reader.read(path);
+    ReadingMetrics.add("sourceReadNanos", System.nanoTime() - readStarted);
     var after = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
     RunCancellation.propagate(null);
     if (!before.lastModifiedTime().equals(after.lastModifiedTime())
@@ -173,7 +175,10 @@ final class FileSnapshots {
       throw new IOException("File changed during snapshot read; retry the request");
     if (content.length > MAX_FILE_BYTES || content.length > MAX_REQUEST_BYTES - bytes)
       throw new IOException("Snapshot byte limit reached");
-    var snapshot = new Snapshot(path, hash(content), content);
+    long hashStarted = System.nanoTime();
+    String version = hash(content);
+    ReadingMetrics.add("sourceHashNanos", System.nanoTime() - hashStarted);
+    var snapshot = new Snapshot(path, version, content);
     files.put(path, snapshot);
     bytes += content.length;
     return snapshot;
@@ -189,9 +194,44 @@ final class FileSnapshots {
 
   /** 指定や設定に応じた対象を利用するため、保有情報パスを確定する。 */
   static Path resolveInventoryPath(Path directory, Path input) throws IOException {
+    var root = directory.toRealPath();
+    var path = inventoryPath(root, input);
+    var cursor = root;
+    for (var part : root.relativize(path)) {
+      cursor = cursor.resolve(part);
+      if (Files.isSymbolicLink(cursor)
+          || Files.exists(cursor, LinkOption.NOFOLLOW_LINKS) && !cursor.toRealPath().equals(cursor))
+        throw new IOException("Linked or aliased paths are unsupported");
+    }
+    if (Files.exists(path, LinkOption.NOFOLLOW_LINKS) && !path.toRealPath().startsWith(root))
+      throw new IOException("Outside Project path");
+    return path;
+  }
+
+  /**
+   * Validate an existing inventory entry against a canonical root and read its stamp attributes.
+   */
+  static BasicFileAttributes verifiedInventoryAttributes(Path root, Path input) throws IOException {
+    var path = inventoryPath(root, input);
+    var relative = root.relativize(path);
+    var cursor = root;
+    for (int i = 0; i < relative.getNameCount() - 1; i++) {
+      cursor = cursor.resolve(relative.getName(i));
+      if (Files.isSymbolicLink(cursor) || !cursor.toRealPath().equals(cursor))
+        throw new IOException("Linked or aliased paths are unsupported");
+    }
+    // Equality also proves the final resolved path stays inside the canonical root.
+    if (!path.toRealPath().equals(path))
+      throw new IOException("Linked or aliased paths are unsupported");
+    var attrs = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+    if (attrs.isSymbolicLink()) throw new IOException("Linked or aliased paths are unsupported");
+    if (!attrs.isRegularFile()) throw new NoSuchFileException(path.toString());
+    return attrs;
+  }
+
+  private static Path inventoryPath(Path root, Path input) throws IOException {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (input.toString().length() > 1024) throw new IOException("Path exceeds 1024 characters");
-    var root = directory.toRealPath();
     var path = (input.isAbsolute() ? input : root.resolve(input)).normalize();
     if (!path.startsWith(root) || RepositoryMapService.sensitive(root.relativize(path)))
       throw new IOException("Excluded or outside Project path");
@@ -208,15 +248,6 @@ final class FileSnapshots {
           || mcpPrivate(captured.relativize(path)))
         throw new IOException("MCP excludes private or outside Project paths");
     }
-    var cursor = root;
-    for (var part : root.relativize(path)) {
-      cursor = cursor.resolve(part);
-      if (Files.isSymbolicLink(cursor)
-          || Files.exists(cursor, LinkOption.NOFOLLOW_LINKS) && !cursor.toRealPath().equals(cursor))
-        throw new IOException("Linked or aliased paths are unsupported");
-    }
-    if (Files.exists(path, LinkOption.NOFOLLOW_LINKS) && !path.toRealPath().startsWith(root))
-      throw new IOException("Outside Project path");
     return path;
   }
 

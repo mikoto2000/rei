@@ -2,10 +2,12 @@ package dev.mikoto2000.rei.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import dev.mikoto2000.rei.storage.ReadingBenchmarkDatabase;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.storage.StorageMigrationCoordinator;
 import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
@@ -18,6 +20,50 @@ import org.junit.jupiter.api.io.TempDir;
 @org.junit.jupiter.api.Tag("integration")
 class PagedFileSearchTest {
   @TempDir Path root;
+
+  @Test
+  void changeToAnUnscannedCandidateInvalidatesBothCursorKinds() throws Exception {
+    Files.writeString(root.resolve("a.txt"), "hit\nhit\n");
+    Files.writeString(root.resolve("b.txt"), "miss\n");
+    Path last = root.resolve("z.txt");
+    Files.writeString(last, "miss\n");
+    var database = ReadingBenchmarkDatabase.prepare(root.resolve("data"));
+    var search =
+        new PagedFileSearch(
+            new Tools() {
+              @Override
+              List<String> gitLsFiles(List<String> pathSpecs, Path directory) {
+                return List.of("a.txt", "b.txt", "z.txt");
+              }
+            },
+            ReadingTestStores.store(database));
+    var owner = new AgentRunContext("changed-candidate", "chat", root, "project");
+    try (var lease = ReadingBenchmarkDatabase.keepOpen(database);
+        var scope = AgentRunScope.open(owner)) {
+      var result = cursorFor(search, "hit");
+      var scan = cursorFor(search, "absent");
+      assertNotNull(result.resultCursor());
+      assertNotNull(scan.scanCursor());
+      Files.writeString(last, "modified without becoming a hit\n");
+      for (String cursor : List.of(result.resultCursor(), scan.scanCursor())) {
+        var stale =
+            search.read(new PagedFileSearch.Request(null, null, 1024, 4096, 1, 1, cursor), root);
+        assertEquals("FILE_CHANGED", stale.error().code());
+        assertTrue(stale.files().isEmpty());
+        assertNull(stale.resultCursor());
+        assertNull(stale.scanCursor());
+      }
+    }
+  }
+
+  private PagedFileSearch.Page cursorFor(PagedFileSearch search, String pattern) {
+    var query =
+        new Tools.GrepQuery(pattern, ".", false, true, false, false, 0, 0, null, true, null, null);
+    var page =
+        search.read(new PagedFileSearch.Request(List.of(query), 0, 1024, 4096, 1, 1, null), root);
+    assertNull(page.error());
+    return page;
+  }
 
   @Test
   void distantHitsResumeWithoutInterveningSourceAndSurviveStoreRecreation() throws Exception {

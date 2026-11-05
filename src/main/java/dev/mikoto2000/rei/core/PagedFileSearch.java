@@ -100,7 +100,8 @@ final class PagedFileSearch {
       int maxLines = value(input.maxLines(), 1000, 1, 5000);
       var owner = ReadingRuntime.current();
       ReadingStateStore.scope(owner);
-      if (!root.toRealPath().equals(owner.projectRoot().toRealPath()))
+      var realRoot = root.toRealPath();
+      if (!realRoot.equals(owner.projectRoot().toRealPath()))
         throw ReadingProblem.fail("INVALID_CURSOR");
       State state;
       List<Prepared> prepared;
@@ -129,8 +130,15 @@ final class PagedFileSearch {
           throw ReadingProblem.fail("INVALID_CURSOR");
         prepared = prepare(state.request.queries(), root);
         ReadingMetrics.add("continuations", 1);
-        for (var stamp : state.inventory)
-          if (!stamp.equals(stamp(root, stamp.path()))) throw ReadingProblem.fail("FILE_CHANGED");
+        long verificationStarted = System.nanoTime();
+        for (var stamp : state.inventory) {
+          var attrs = FileSnapshots.verifiedInventoryAttributes(realRoot, Path.of(stamp.path()));
+          if (!stamp.equals(stamp(stamp.path(), attrs))) throw ReadingProblem.fail("FILE_CHANGED");
+        }
+        if (!realRoot.equals(root.toRealPath())) throw ReadingProblem.fail("FILE_CHANGED");
+        ReadingMetrics.add(
+            "resumeInventoryVerificationNanos", System.nanoTime() - verificationStarted);
+        ReadingMetrics.add("resumeVerifiedCandidates", state.inventory.size());
       }
       int scanned = 0, readBytes = 0;
       while (state.file < state.inventory.size()) {
@@ -479,6 +487,10 @@ final class PagedFileSearch {
   private static Stamp stamp(Path root, String relative) throws IOException {
     var path = FileSnapshots.resolve(root, Path.of(relative));
     var attrs = Files.readAttributes(path, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+    return stamp(relative, attrs);
+  }
+
+  private static Stamp stamp(String relative, BasicFileAttributes attrs) {
     return new Stamp(
         relative,
         attrs.size(),
