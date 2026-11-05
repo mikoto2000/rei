@@ -545,8 +545,9 @@ public class TextChangeSetService {
     var changes =
         List.of(
             new TextDocumentTransaction.Change(saved.path(), saved.baseline(), saved.proposed()));
-    var page = preview ? TextDiff.page(changes, 0, TextWriteLimits.diffBytes()) : null;
-    var summaries = TextDiff.summaries(changes);
+    var diff = preview ? TextDiff.preview(changes, 0, TextWriteLimits.diffBytes()) : null;
+    var page = diff == null ? null : diff.page();
+    var summaries = diff == null ? TextDiff.summaries(changes) : diff.summaries();
     boolean matching = saved.proposedHash().equals(current);
     return new View(
         saved.id(),
