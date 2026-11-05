@@ -34,8 +34,9 @@ class WebResearchResilienceTest {
   }
 
   private WebSearchResult result(int index) {
+    // 初回検索の候補数は満たすが、本文で不足する streams の手掛かりはない。
     return new WebSearchResult(
-        "Java streams", "https://site" + index + ".com/page", "Java streams", null);
+        "Java guide", "https://site" + index + ".com/page", "Java reference", null);
   }
 
   private List<WebSearchResult> candidates() {

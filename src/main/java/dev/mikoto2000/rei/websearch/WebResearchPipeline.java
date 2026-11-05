@@ -118,18 +118,36 @@ final class WebResearchPipeline {
     WebRetrievalAssessment assessment =
         WebRetrievalAssessment.unknown(
             maximumReads == 0 ? "body_not_requested" : "no_readable_verified_body");
+    List<WebSearchPage> evidence = List.of();
     var scope = WebResearchScope.enter(properties);
     try (scope;
         var extraction = WebExtractionScope.enter(query)) {
       add(query, candidates, WebSearchSelection.search(search, planner, query, limit, properties));
       boolean first = true;
+      boolean triedUnreadBeforeSearch = false;
       // 根拠が十分になるか本文取得の予算に達するまで、追加調査を行う。
       while (attempts < maximumReads && !"sufficient".equals(assessment.status())) {
         FetchScope.current().check();
         var previousKeys = Set.copyOf(candidates.keySet());
-        if (!first
-            && WebResearchScope.queryCount() < properties.getMaxSearchQueries()
-            && !SearchRequestBudget.exhausted()) {
+        var pending = unread(query, candidates, attempted);
+        int remainingReads = maximumReads - attempts;
+        boolean canSearchAgain =
+            WebResearchScope.queryCount() < properties.getMaxSearchQueries()
+                && !SearchRequestBudget.exhausted();
+        int parallelReads = Math.min(remainingReads, properties.getFetchParallelism());
+        // 可能なら、並列取得でも不足した場合に追加検索の候補を読む枠を1件残す。
+        if (canSearchAgain && remainingReads > 2)
+          parallelReads = Math.min(parallelReads, remainingReads - 1);
+        var independent = assessment.independentCandidates(query, evidence, pending, parallelReads);
+        var promising =
+            first || triedUnreadBeforeSearch || !independent.isEmpty()
+                ? null
+                : assessment.promisingCandidate(query, evidence, pending);
+        boolean supplement =
+            !first
+                && canSearchAgain
+                && (triedUnreadBeforeSearch || (promising == null && independent.isEmpty()));
+        if (supplement) {
           try {
             add(
                 query,
@@ -148,26 +166,23 @@ final class WebResearchPipeline {
                     .contains(http.code())) throw http;
             WebSearchSelection.recordSearchFailure(failed);
           }
+          pending =
+              unread(query, candidates, attempted).stream()
+                  .sorted(
+                      Comparator.comparing(
+                          candidate ->
+                              previousKeys.contains(
+                                  WebSearchSelection.normalizeUrl(candidate.result().url()))))
+                  .toList();
+          independent = assessment.independentCandidates(query, evidence, pending, parallelReads);
         }
-        // 確認済みのURLを再取得せず、新たに見つかった候補を優先して調べる。
-        var pending =
-            WebSearchSelection.choose(
-                    query, new ArrayList<>(candidates.values()), candidates.size())
-                .stream()
-                .filter(
-                    candidate ->
-                        !attempted.contains(
-                            WebSearchSelection.normalizeUrl(candidate.result().url())))
-                .sorted(
-                    Comparator.comparing(
-                        candidate ->
-                            previousKeys.contains(
-                                WebSearchSelection.normalizeUrl(candidate.result().url()))))
-                .toList();
         if (pending.isEmpty()) break;
-        int window =
-            Math.min(maximumReads - attempts, first ? properties.getInitialPageFetches() : 1);
-        var selected = pending.stream().limit(window).toList();
+        int window = Math.min(remainingReads, first ? properties.getInitialPageFetches() : 1);
+        var selected =
+            !independent.isEmpty()
+                ? independent
+                : promising == null ? pending.stream().limit(window).toList() : List.of(promising);
+        triedUnreadBeforeSearch = !supplement && (promising != null || !independent.isEmpty());
         first = false;
         for (var candidate : selected)
           attempted.add(WebSearchSelection.normalizeUrl(candidate.result().url()));
@@ -189,12 +204,11 @@ final class WebResearchPipeline {
         }
         if (outcomes.stream().anyMatch(outcome -> "TRANSFER_BUDGET".equals(outcome.errorType())))
           throw new HttpFetchException(HttpFetchException.Code.TRANSFER_BUDGET);
-        assessment =
-            WebRetrievalAssessment.assess(
-                query,
-                adapter.deduplicate(new ArrayList<>(loaded.values())).stream()
-                    .map(adapter::evidence)
-                    .toList());
+        evidence =
+            adapter.deduplicate(new ArrayList<>(loaded.values())).stream()
+                .map(adapter::evidence)
+                .toList();
+        assessment = WebRetrievalAssessment.assess(query, evidence);
       }
       if (scope.searchFailed()) omissions.add("additional_search_failed");
       var rows = new ArrayList<T>();
@@ -241,6 +255,17 @@ final class WebResearchPipeline {
           scope.totalQueries(),
           attempts);
     }
+  }
+
+  /** 未読候補を既存の順位と出典の多様性に従って並べる。 */
+  private static List<WebSearchSelection.Candidate> unread(
+      String query, Map<String, WebSearchSelection.Candidate> candidates, Set<String> attempted) {
+    return WebSearchSelection.choose(query, new ArrayList<>(candidates.values()), candidates.size())
+        .stream()
+        .filter(
+            candidate ->
+                !attempted.contains(WebSearchSelection.normalizeUrl(candidate.result().url())))
+        .toList();
   }
 
   /** 新たな対象を登録し、後から利用できるようにする。 */

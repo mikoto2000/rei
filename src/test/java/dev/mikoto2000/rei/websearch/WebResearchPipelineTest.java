@@ -11,11 +11,104 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /** Web調査処理の連携の結果と状態の契約を検証するテスト。 */
 class WebResearchPipelineTest {
+  @Test
+  void readsIndependentUnreadSourcesConcurrentlyWithinRemainingBudget() throws Exception {
+    var search = mock(WebSearchService.class);
+    var properties = new WebSearchProperties();
+    properties.setInitialPageFetches(1);
+    String query = "compare Java streams sources";
+    var first = result("one.com");
+    var second = result("two.com");
+    var third = result("three.com");
+    when(search.search(query, 5))
+        .thenReturn(
+            List.of(first, result("other.one.com"), second, third, result("four.com")));
+    var started = new CountDownLatch(2);
+    Set<String> fetched = ConcurrentHashMap.newKeySet();
+
+    try (var batch = new WebFetchBatch(3, 2, 4)) {
+      var research =
+          WebResearchPipeline.run(
+              search,
+              new WebSearchQueryPlanner(),
+              properties,
+              batch,
+              query,
+              5,
+              3,
+              candidate -> {
+                var result = candidate.result();
+                fetched.add(result.url());
+                if (result.equals(first)) return page(result, "Java streams support map.");
+                started.countDown();
+                assertTrue(started.await(3, TimeUnit.SECONDS), "Independent reads must overlap");
+                return page(result, "Java streams filtering on " + result.url());
+              },
+              WebResearchPipeline.PAGES);
+      assertEquals(Set.of(first.url(), second.url(), third.url()), fetched);
+      assertEquals(3, research.pageAttempts());
+      assertEquals("sufficient", research.assessment().status());
+      assertEquals(1, research.queries());
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = {true, false})
+  void readsPromisingCandidateBeforeSearchingAgain(boolean fillsGap) throws Exception {
+    var search = mock(WebSearchService.class);
+    var planner = mock(WebSearchQueryPlanner.class);
+    var properties = new WebSearchProperties();
+    String query = "Java streams";
+    String supplemental = query + " reference";
+    var unread = result("unread.example");
+    var replacement = result("replacement.example");
+    var unreadReads = new AtomicInteger();
+    when(planner.plan(query)).thenReturn(List.of(query, supplemental));
+    when(search.search(query, 3))
+        .thenReturn(List.of(result("one.example"), result("two.example"), unread));
+    when(search.search(supplemental, 3))
+        .thenAnswer(
+            invocation -> {
+              assertEquals(1, unreadReads.get());
+              return List.of(replacement);
+            });
+
+    try (var batch = new WebFetchBatch(2, 2, 4)) {
+      var research =
+          WebResearchPipeline.run(
+              search,
+              planner,
+              properties,
+              batch,
+              query,
+              3,
+              4,
+              candidate -> {
+                var result = candidate.result();
+                if (result.equals(unread)) unreadReads.incrementAndGet();
+                if (result.equals(replacement) || (result.equals(unread) && fillsGap))
+                  return page(result, "Java streams support map and filter.");
+                return page(result, "Java overview without details.");
+              },
+              WebResearchPipeline.PAGES);
+      assertEquals(1, unreadReads.get());
+      assertEquals("sufficient", research.assessment().status());
+      assertEquals(fillsGap ? 1 : 2, research.queries());
+      verify(search, times(fillsGap ? 0 : 1)).search(supplemental, 3);
+    }
+  }
+
   /** 既に取得根拠を保持することを確認する。 */
   @Test
   void supplementalProviderOutageRetainsAlreadyFetchedEvidence() throws Exception {

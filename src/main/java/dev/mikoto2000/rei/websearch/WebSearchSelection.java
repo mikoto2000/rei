@@ -242,7 +242,7 @@ public final class WebSearchSelection {
   }
 
   /** Web上の情報の調査において、有効なキャッシュに該当するか判定する。 */
-  private static boolean fresh(String value) {
+  static boolean fresh(String value) {
     if (value == null) return false;
     try {
       LocalDate day = LocalDate.parse(value.substring(0, Math.min(10, value.length())));

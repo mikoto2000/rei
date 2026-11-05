@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.websearch;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -40,13 +41,7 @@ public record WebRetrievalAssessment(
 
   /** Web上の情報の調査で用いる評価を返す。 */
   public static WebRetrievalAssessment assess(String query, List<WebSearchPage> pages) {
-    var bodies = new LinkedHashMap<String, WebSearchPage>();
-    for (var page : pages)
-      if ("success".equals(page.fetchStatus())
-          && page.content() != null
-          && !page.content().isBlank()
-          && page.fingerprint() != null) bodies.putIfAbsent(page.fingerprint(), page);
-    var readable = List.copyOf(bodies.values());
+    var readable = readableBodies(pages);
     int independent =
         (int)
             readable.stream()
@@ -61,12 +56,7 @@ public record WebRetrievalAssessment(
     if (terms.isEmpty()) {
       reasons.add("query_terms_unknown");
       unknown = true;
-    } else if (terms.stream()
-        .anyMatch(
-            term ->
-                readable.stream()
-                    .noneMatch(page -> WebQueryTerms.frequency(page.content(), term) > 0)))
-      reasons.add("topics_missing");
+    } else if (!missingTerms(terms, readable).isEmpty()) reasons.add("topics_missing");
     String lower = Objects.toString(query, "").toLowerCase(Locale.ROOT);
     if (lower.matches("(?s).*(official|公式|documentation|reference|\\bdocs\\b|\\bapi\\b).*")
         && readable.stream().noneMatch(page -> WebSearchSelection.official(query, actualUrl(page))))
@@ -82,7 +72,7 @@ public record WebRetrievalAssessment(
       unknown = true;
       if (readable.stream().allMatch(page -> page.publishedAt() == null))
         reasons.add("publication_date_unknown");
-      else if (readable.stream().noneMatch(page -> recentPublication(page.publishedAt())))
+      else if (readable.stream().noneMatch(page -> WebSearchSelection.fresh(page.publishedAt())))
         reasons.add("publication_date_stale_or_invalid");
     }
     if (lower.matches("(?s).*(\\bvs\\b|compar|比較|複数|sources).*") && independent < 2)
@@ -101,6 +91,83 @@ public record WebRetrievalAssessment(
         independent);
   }
 
+  /** 不足理由に対応する手掛かりがある未読候補を、既存の順位順に選ぶ。 */
+  WebSearchSelection.Candidate promisingCandidate(
+      String query, List<WebSearchPage> pages, List<WebSearchSelection.Candidate> candidates) {
+    var readable = readableBodies(pages);
+    var missingTopics =
+        reasons.contains("topics_missing")
+            ? missingTerms(WebQueryTerms.of(query), readable)
+            : List.<String>of();
+    var domains =
+        readable.stream().map(page -> WebSearchSelection.domain(actualUrl(page))).toList();
+    for (var candidate : candidates) {
+      var result = candidate.result();
+      var domain = WebSearchSelection.domain(result.url());
+      if (reasons.contains("official_source_missing")
+              && WebSearchSelection.official(query, result.url())
+          || reasons.contains("version_mismatch")
+              && WebSearchSelection.matchesVersion(query, result)
+          || reasons.contains("independent_sources_missing")
+              && domain != null
+              && !domains.contains(domain)
+          || (reasons.contains("publication_date_unknown")
+                  || reasons.contains("publication_date_stale_or_invalid"))
+              && WebSearchSelection.fresh(result.publishedAt())
+          || reasons.contains("no_readable_verified_body")
+              && WebSearchSelection.relevance(query, result) >= 0.5
+          || missingTopics.stream()
+              .anyMatch(
+                  term ->
+                      WebQueryTerms.frequency(result.title(), term) > 0
+                          || WebQueryTerms.frequency(result.snippet(), term) > 0)) return candidate;
+    }
+    return null;
+  }
+
+  /** 取得済みの根拠とも互いにも出典が異なる、関連性の高い未読候補を選ぶ。 */
+  List<WebSearchSelection.Candidate> independentCandidates(
+      String query,
+      List<WebSearchPage> pages,
+      List<WebSearchSelection.Candidate> candidates,
+      int limit) {
+    if (limit < 2 || !reasons.contains("independent_sources_missing")) return List.of();
+    var domains = new HashSet<String>();
+    for (var page : readableBodies(pages)) domains.add(WebSearchSelection.domain(actualUrl(page)));
+    var selected = new ArrayList<WebSearchSelection.Candidate>();
+    for (var candidate : candidates) {
+      var result = candidate.result();
+      String domain = WebSearchSelection.domain(result.url());
+      if (domain != null
+          && WebSearchSelection.relevance(query, result) >= 0.5
+          && WebSearchSelection.matchesVersion(query, result)
+          && domains.add(domain)) {
+        selected.add(candidate);
+        if (selected.size() == limit) break;
+      }
+    }
+    return selected.size() < 2 ? List.of() : List.copyOf(selected);
+  }
+
+  private static List<WebSearchPage> readableBodies(List<WebSearchPage> pages) {
+    var bodies = new LinkedHashMap<String, WebSearchPage>();
+    for (var page : pages)
+      if ("success".equals(page.fetchStatus())
+          && page.content() != null
+          && !page.content().isBlank()
+          && page.fingerprint() != null) bodies.putIfAbsent(page.fingerprint(), page);
+    return List.copyOf(bodies.values());
+  }
+
+  private static List<String> missingTerms(List<String> terms, List<WebSearchPage> readable) {
+    return terms.stream()
+        .filter(
+            term ->
+                readable.stream()
+                    .noneMatch(page -> WebQueryTerms.frequency(page.content(), term) > 0))
+        .toList();
+  }
+
   /** Web上の情報の調査で用いる実際のURLを返す。 */
   static String actualUrl(WebSearchPage page) {
     return page.aliases().stream()
@@ -108,17 +175,5 @@ public record WebRetrievalAssessment(
         .reduce((first, last) -> last)
         .map(WebSourceAlias::url)
         .orElse(page.url());
-  }
-
-  /** Web上の情報の調査において、直近公開情報に該当するか判定する。 */
-  private static boolean recentPublication(String date) {
-    if (date == null) return false;
-    try {
-      var publication = java.time.LocalDate.parse(date.substring(0, Math.min(10, date.length())));
-      var today = java.time.LocalDate.now(java.time.ZoneOffset.UTC);
-      return !publication.isBefore(today.minusDays(30)) && !publication.isAfter(today.plusDays(1));
-    } catch (RuntimeException invalid) {
-      return false;
-    }
   }
 }
