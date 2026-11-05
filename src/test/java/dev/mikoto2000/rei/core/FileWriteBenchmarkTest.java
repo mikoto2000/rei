@@ -135,7 +135,7 @@ class FileWriteBenchmarkTest {
       String status = "UNSUPPORTED";
       int calls = 1, output = 0, diff = 0;
       try (var recording = new Recording()) {
-        recording.enable("jdk.FileRead").withThreshold(java.time.Duration.ZERO);
+        recording.enable("jdk.FileRead").withThreshold(java.time.Duration.ZERO).withStackTrace();
         recording.enable("jdk.FileWrite").withThreshold(java.time.Duration.ZERO);
         recording.start();
         started = System.nanoTime();
@@ -178,6 +178,7 @@ class FileWriteBenchmarkTest {
         Path trace = root.resolve("io.jfr");
         recording.dump(trace);
         long reads = 0, writes = 0, readBytes = 0, writeBytes = 0;
+        var applyReads = new LinkedHashMap<String, List<Long>>();
         for (var event : RecordingFile.readAllEvents(trace)) {
           String type = event.getEventType().getName();
           if (!type.equals("jdk.FileRead") && !type.equals("jdk.FileWrite")) continue;
@@ -188,11 +189,30 @@ class FileWriteBenchmarkTest {
           if (type.equals("jdk.FileRead")) {
             reads++;
             readBytes += Math.max(0, event.getLong("bytesRead"));
+            if (event.getStackTrace() != null) {
+              var frames = event.getStackTrace().getFrames();
+              String applyClass =
+                  batch
+                      ? TextDocumentChangeSetService.class.getName()
+                      : TextChangeSetService.class.getName();
+              for (int i = 1; i < frames.size(); i++) {
+                var method = frames.get(i).getMethod();
+                if (!method.getType().getName().equals(applyClass)
+                    || !method.getName().equals("apply")) continue;
+                var caller = frames.get(i - 1);
+                String site = frames.get(i).getLineNumber() + " " + caller.getMethod().getName();
+                applyReads
+                    .computeIfAbsent(site, key -> new ArrayList<>())
+                    .add(event.getDuration().toNanos());
+                break;
+              }
+            }
           } else {
             writes++;
             writeBytes += event.getLong("bytesWritten");
           }
         }
+        row.put("applyFileReadNanosByCallSite", applyReads);
         row.put("fileReadEvents", reads);
         row.put("fileWriteEvents", writes);
         row.put("readBytes", readBytes);

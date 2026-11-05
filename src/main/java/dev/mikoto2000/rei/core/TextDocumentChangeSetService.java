@@ -632,9 +632,10 @@ public final class TextDocumentChangeSetService {
 
   private View view(Row row, boolean preview) throws IOException {
     var files = new ArrayList<FileView>();
-    var page =
-        preview ? TextDiff.page(row.saved().changes(), 0, TextWriteLimits.diffBytes()) : null;
-    var summaries = TextDiff.summaries(row.saved().changes());
+    var diff =
+        preview ? TextDiff.preview(row.saved().changes(), 0, TextWriteLimits.diffBytes()) : null;
+    var page = diff == null ? null : diff.page();
+    var summaries = diff == null ? TextDiff.summaries(row.saved().changes()) : diff.summaries();
     Path root = Path.of(row.saved().root());
     for (var change : row.saved().changes()) {
       var current = TextDocumentTransaction.fingerprint(root, change.path());

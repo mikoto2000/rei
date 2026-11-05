@@ -429,31 +429,33 @@ public class Tools {
           "保存複数file案の正確なid/proposalSha256と全baseline一致を確認し、一回だけlogical transactionでApplyします。全fileの再検証後だけAPPLIED。通常失敗はrollback、外部編集/結果不明はUNKNOWNを保持し自動再送しません。EXCLUSIVE/LOCAL_WRITE/DESTRUCTIVEが必要です。簡潔な結果のcurrentMatches、新SHA、changesの変更範囲は保存bytesの確認です。直後の全文再読は不要ですが構文/意味/testの検証は別途必要です。失敗時はerror.codeとstagingを確認してください。")
   TextDocumentChangeSetService.View applyTextDocumentChangeSet(String id, String proposalSha256)
       throws IOException {
-    return changeSets()
-        .applyDocuments(
-            diagnosedOwner(),
-            id,
-            proposalSha256,
-            changes -> {
-              for (var change : changes) {
-                var path = diagnosedOwner().projectRoot().resolve(change.path());
-                if (change.after() == null) {
-                  workingSet.remove(path);
-                  recentChanges.record(path.toString(), RecentChanges.OP_DELETE, "deleted");
-                  fileSummaryCache.invalidate(path.toString());
-                  relatedFileGraph.removeRelationsFor(path.toString());
-                  searchResultCache.clear();
-                  publishFileDeleted(path);
-                } else if (change.before() == null) {
-                  workingSet.recordEdit(path);
-                  recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
-                  fileSummaryCache.invalidate(path.toString());
-                  relatedFileGraph.removeRelationsFor(path.toString());
-                  searchResultCache.clear();
-                  publishFileCreated(path);
-                } else recordTextEdit(path);
-              }
-            });
+    try (var workingSetBatch = workingSet.batchPersistence()) {
+      return changeSets()
+          .applyDocuments(
+              diagnosedOwner(),
+              id,
+              proposalSha256,
+              changes -> {
+                for (var change : changes) {
+                  var path = diagnosedOwner().projectRoot().resolve(change.path());
+                  if (change.after() == null) {
+                    workingSet.remove(path);
+                    recentChanges.record(path.toString(), RecentChanges.OP_DELETE, "deleted");
+                    fileSummaryCache.invalidate(path.toString());
+                    relatedFileGraph.removeRelationsFor(path.toString());
+                    searchResultCache.clear();
+                    publishFileDeleted(path);
+                  } else if (change.before() == null) {
+                    workingSet.recordEdit(path);
+                    recentChanges.record(path.toString(), RecentChanges.OP_CREATE, "created");
+                    fileSummaryCache.invalidate(path.toString());
+                    relatedFileGraph.removeRelationsFor(path.toString());
+                    searchResultCache.clear();
+                    publishFileCreated(path);
+                  } else recordTextEdit(path);
+                }
+              });
+    }
   }
 
   /** 共通の実行基盤で用いる取り消しテキスト文書変更集合を返す。 */
@@ -3641,12 +3643,14 @@ public class Tools {
       validated.add(request);
     }
     List<WriteFileResult> results = new ArrayList<>();
-    for (WriteFileRequest request : validated) {
-      try {
-        writeSingleFile(request, workingDirectory);
-        results.add(new WriteFileResult(request.path(), true, null));
-      } catch (IOException e) {
-        results.add(new WriteFileResult(request.path(), false, e.getMessage()));
+    try (var workingSetBatch = workingSet.batchPersistence()) {
+      for (WriteFileRequest request : validated) {
+        try {
+          writeSingleFile(request, workingDirectory);
+          results.add(new WriteFileResult(request.path(), true, null));
+        } catch (IOException e) {
+          results.add(new WriteFileResult(request.path(), false, e.getMessage()));
+        }
       }
     }
     return results;

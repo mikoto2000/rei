@@ -42,6 +42,8 @@ public final class TextDiff {
 
   public record Page(String diff, Info info) {}
 
+  record Preview(Page page, List<FileSummary> summaries) {}
+
   private record Row(char kind, String text) {}
 
   private record Hunk(String path, int index, int start, int end) {}
@@ -54,6 +56,10 @@ public final class TextDiff {
   }
 
   public static Page page(List<TextDocumentTransaction.Change> changes, int offset, int maxBytes) {
+    return preview(changes, offset, maxBytes).page();
+  }
+
+  static Preview preview(List<TextDocumentTransaction.Change> changes, int offset, int maxBytes) {
     if (maxBytes < 256 || maxBytes > 65536)
       throw new IllegalArgumentException("diff maxBytes must be 256..65536");
     var rendered = render(changes, true);
@@ -86,18 +92,20 @@ public final class TextDiff {
       if (last > 0) omissions.add(new Omission(change.path(), first, last));
     }
     boolean truncated = offset > 0 || end < full.length();
-    return new Page(
-        full.substring(offset, end),
-        new Info(
-            total,
-            bytes,
-            truncated,
-            end < full.length() ? end : -1,
-            total - bytes,
-            List.copyOf(omissions),
-            truncated
-                ? "Use getTextChangeSetDiff or getTextDocumentChangeSetDiff with id, proposalSha256, nextOffset as offset and maxBytes. Inspection can retrieve the preview again. Review all needed pages before Apply."
-                : ""));
+    var page =
+        new Page(
+            full.substring(offset, end),
+            new Info(
+                total,
+                bytes,
+                truncated,
+                end < full.length() ? end : -1,
+                total - bytes,
+                List.copyOf(omissions),
+                truncated
+                    ? "Use getTextChangeSetDiff or getTextDocumentChangeSetDiff with id, proposalSha256, nextOffset as offset and maxBytes. Inspection can retrieve the preview again. Review all needed pages before Apply."
+                    : ""));
+    return new Preview(page, rendered.summaries());
   }
 
   private static Rendered render(
