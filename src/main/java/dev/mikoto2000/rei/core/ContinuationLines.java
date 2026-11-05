@@ -1,6 +1,6 @@
 package dev.mikoto2000.rei.core;
 
-import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import dev.mikoto2000.rei.tooldelivery.ReadingRun;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -10,7 +10,7 @@ final class ContinuationLines {
   private static final int MAX_ENTRIES = 32;
   private static final long MAX_ESTIMATED_BYTES = 8L * 1024 * 1024;
 
-  record Key(AgentRunContext run, Path root, Path path, String version, String charset) {}
+  record Key(ReadingRun run, Path root, Path path, String version, String charset) {}
 
   private record Entry(List<String> lines, long estimatedBytes) {}
 
