@@ -477,7 +477,9 @@ public class TextChangeSetService {
   private static String read(Path file) throws IOException {
     if (Files.size(file) > TextWriteLimits.fileBytes())
       throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", file.toString(), null, List.of(), null);
-    var bytes = new FileSnapshots().get(file.getParent(), file).bytes();
+    var parent = file.getParent();
+    if (parent == null) throw new IOException("Text file must have a parent directory");
+    var bytes = new FileSnapshots().get(parent, file).bytes();
     if (bytes.length > TextWriteLimits.fileBytes())
       throw TextEditEngine.failure("SIZE_LIMIT_EXCEEDED", file.toString(), null, List.of(), null);
     for (byte value : bytes)

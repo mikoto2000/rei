@@ -1,20 +1,26 @@
 package dev.mikoto2000.rei.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
 import dev.mikoto2000.rei.core.contextbudget.ToolResultDeliveryProperties;
+import dev.mikoto2000.rei.storage.ReadingBenchmarkDatabase;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.storage.StorageMigrationCoordinator;
 import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.io.TempDir;
 
 /** Deterministic work/payload comparisons, without wall-clock pass thresholds or model calls. */
@@ -121,6 +127,221 @@ class ReadingEfficiencyBenchmarkTest {
       assertEquals(1L, ReadingMetrics.snapshot(owner).get("scannedFiles"));
       report("distinct-queries", ReadingMetrics.snapshot(owner));
     }
+  }
+
+  @Test
+  @EnabledIfSystemProperty(named = "rei.benchmark.search-resume", matches = "true")
+  void searchResumeMeasuresInventoryVerificationByCursor() throws Exception {
+    int warmups = 1;
+    int repetitions = 3;
+    var sizes = new ArrayList<>(List.of(10, 100, 1_000, 5_000));
+    if (Boolean.getBoolean("rei.benchmark.search-resume.include-max")) sizes.add(20_000);
+    var paths = new ArrayList<String>();
+    Files.createDirectory(root.resolve("sources"));
+    for (int i = 0; i < sizes.getLast(); i++) {
+      String path = String.format(Locale.ROOT, "sources/%05d.txt", i);
+      Files.writeString(root.resolve(path), i == 0 ? "hit\nhit\nhit\n" : "miss\n");
+      paths.add(path);
+    }
+    var cases = new ArrayList<Map<String, Object>>();
+    var database = ReadingBenchmarkDatabase.prepare(root.resolve("data"));
+    try (var lease = ReadingBenchmarkDatabase.keepOpen(database)) {
+      for (int size : sizes) {
+        var candidates = List.copyOf(paths.subList(0, size));
+        var reader =
+            new Tools() {
+              @Override
+              List<String> gitLsFiles(List<String> pathSpecs, Path directory) {
+                return candidates;
+              }
+            };
+        var search = new PagedFileSearch(reader, ReadingTestStores.store(database));
+        var owner = new AgentRunContext("search-resume-" + size, "chat", root);
+        var samples = new LinkedHashMap<String, List<Map<String, Long>>>();
+        samples.put("RESULT", new ArrayList<>());
+        samples.put("SCAN", new ArrayList<>());
+        try (var scope = AgentRunScope.open(owner)) {
+          var result = search.read(searchResumeRequest(query("hit", "sources"), null), root);
+          var scan = search.read(searchResumeRequest(query("absent", "sources"), null), root);
+          assertNull(result.error());
+          assertNull(scan.error());
+          assertEquals(size, result.progress().total());
+          assertEquals(size, scan.progress().total());
+          assertTrue(result.resultCursor() != null && result.resultCursor().startsWith("RESULT:"));
+          assertTrue(scan.scanCursor() != null && scan.scanCursor().startsWith("SCAN:"));
+          var kinds = List.of("RESULT", "SCAN");
+          var cursors = List.of(result.resultCursor(), scan.scanCursor());
+          for (int iteration = 0; iteration < warmups + repetitions; iteration++) {
+            for (int turn = 0; turn < kinds.size(); turn++) {
+              int variant = (iteration + turn) % kinds.size();
+              var sample = searchResumeSample(search, owner, cursors.get(variant), size);
+              if (iteration >= warmups) samples.get(kinds.get(variant)).add(sample);
+            }
+          }
+        }
+        cases.add(Map.of("candidates", size, "samples", samples));
+        System.out.println("Search resume benchmark completed " + size + " candidates");
+      }
+    }
+    report(
+        "search-resume",
+        Map.of(
+            "warmupsPerCursor", warmups,
+            "samplesPerCursor", repetitions,
+            "scanLimit", 1,
+            "maxLines", 1,
+            "cases", cases));
+  }
+
+  private static PagedFileSearch.Request searchResumeRequest(Tools.GrepQuery query, String cursor) {
+    return new PagedFileSearch.Request(
+        query == null ? null : List.of(query), 0, 1024, 4096, 1, 1, cursor);
+  }
+
+  private Map<String, Long> searchResumeSample(
+      PagedFileSearch search, AgentRunContext owner, String cursor, int size) {
+    var request = searchResumeRequest(null, cursor);
+    var before = ReadingMetrics.snapshot(owner);
+    long started = System.nanoTime();
+    var page = search.read(request, root);
+    long total = System.nanoTime() - started;
+    var after = ReadingMetrics.snapshot(owner);
+    assertNull(page.error());
+    assertEquals(size, page.progress().total());
+    assertEquals(size, metricDelta(before, after, "resumeVerifiedCandidates"));
+    long verification = metricDelta(before, after, "resumeInventoryVerificationNanos");
+    assertTrue(verification > 0 && verification <= total);
+    long scanned = metricDelta(before, after, "scannedFiles");
+    if (cursor.startsWith("RESULT:")) {
+      assertEquals(0, scanned);
+      assertEquals(2, page.files().getFirst().sections().getFirst().startLine());
+    } else {
+      assertEquals(1, scanned);
+      assertTrue(page.files().isEmpty());
+      assertEquals("FILE_ENUMERATION_LIMIT", page.progress().stopReason());
+    }
+    return Map.of("totalNanos", total, "verificationNanos", verification, "scannedFiles", scanned);
+  }
+
+  private static long metricDelta(Map<String, Long> before, Map<String, Long> after, String name) {
+    return after.getOrDefault(name, 0L) - before.getOrDefault(name, 0L);
+  }
+
+  @Test
+  void nextReadMeasuresRepeatedSourceWork() throws Exception {
+    String name = "continuation.txt";
+    var source =
+        java.util.stream.IntStream.rangeClosed(1, 8000)
+            .mapToObj(i -> i + " UTF-8 fixture line with Japanese text 日本語")
+            .toList();
+    Path file = root.resolve(name);
+    Files.writeString(file, String.join("\n", source) + "\n");
+    var withoutCache =
+        new Tools() {
+          @Override
+          List<String> verifiedReadLines(
+              Path root,
+              ReadFileRequest request,
+              FileSnapshots snapshots,
+              FileSnapshots.Snapshot snapshot)
+              throws java.io.IOException {
+            return snapshots.lines(
+                snapshot, request.charset(), () -> snapshotLines(snapshot, request.charset()));
+          }
+        };
+    var withCache = new Tools();
+    var readers = List.of(withoutCache, withCache);
+    var properties = new ToolResultDeliveryProperties();
+    properties.setPageMaxTokens(512);
+    properties.setPageTargetTokens(512);
+    for (var reader : readers) reader.configureDelivery(TokenEstimator.conservative(), properties);
+    int warmups = 3;
+    int repetitions = 7;
+    int requestedLines = 320;
+    var expected = source.subList(0, requestedLines);
+    var samples = List.of(new ArrayList<Map<String, Long>>(), new ArrayList<Map<String, Long>>());
+    for (int iteration = 0; iteration < warmups + repetitions; iteration++) {
+      for (int turn = 0; turn < readers.size(); turn++) {
+        int variant = (iteration + turn) % readers.size();
+        var owner = new AgentRunContext("next-read-" + iteration + "-" + variant, "chat", root);
+        var sample = nextReadSample(readers.get(variant), owner, name, expected, variant == 1);
+        if (iteration >= warmups) samples.get(variant).add(sample);
+      }
+    }
+    assertEquals(
+        samples.getFirst().stream().map(sample -> sample.get("toolCalls")).toList(),
+        samples.getLast().stream().map(sample -> sample.get("toolCalls")).toList());
+    report(
+        "next-read",
+        Map.of(
+            "fileBytes",
+            Files.size(file),
+            "fileLines",
+            source.size(),
+            "requestedLines",
+            requestedLines,
+            "pageTargetTokens",
+            512,
+            "warmupChains",
+            warmups,
+            "modelCalls",
+            0,
+            "beforeSamples",
+            samples.getFirst(),
+            "samples",
+            samples.getLast()));
+  }
+
+  private Map<String, Long> nextReadSample(
+      Tools reader, AgentRunContext owner, String name, List<String> expected, boolean cached)
+      throws java.io.IOException {
+    var pages = new ArrayList<Tools.ReadFileResult>();
+    var next = new Tools.ReadFileRequest(name, 1, expected.size());
+    long elapsed;
+    try (var scope = AgentRunScope.open(owner)) {
+      long started = System.nanoTime();
+      while (next != null && pages.size() < expected.size()) {
+        var page = reader.readMultiFile(List.of(next), root).getFirst();
+        pages.add(page);
+        next = page.nextRead();
+      }
+      elapsed = System.nanoTime() - started;
+    }
+    assertNull(next);
+    var returned = new ArrayList<String>();
+    var line = new StringBuilder();
+    for (var page : pages) {
+      assertNull(page.error());
+      for (int i = 0; i < page.content().size(); i++) {
+        line.append(page.content().get(i));
+        if (i == page.content().size() - 1
+            && page.nextRead() != null
+            && page.nextRead().offset() > 0) break;
+        returned.add(line.toString());
+        line.setLength(0);
+      }
+    }
+    assertEquals(expected, returned);
+    long calls = pages.size();
+    assertTrue(calls > 1);
+    var metrics = ReadingMetrics.snapshot(owner);
+    long hits = metrics.getOrDefault("continuationLineCacheHits", 0L);
+    assertEquals(calls, metrics.get("physicalReads"));
+    assertEquals(calls - 1, metrics.get("continuations"));
+    assertEquals(cached ? calls - 1 : 0, hits);
+    assertEquals(calls - hits, metrics.get("decodes"));
+    assertEquals(calls - hits, metrics.get("lineSplits"));
+    return Map.of(
+        "chainNanos", elapsed,
+        "toolCalls", calls,
+        "physicalReads", metrics.get("physicalReads"),
+        "decodes", metrics.get("decodes"),
+        "lineSplits", metrics.get("lineSplits"),
+        "continuationLineCacheHits", hits,
+        "sourceReadNanos", metrics.get("sourceReadNanos"),
+        "sourceHashNanos", metrics.get("sourceHashNanos"),
+        "sourceDecodeNanos", metrics.get("sourceDecodeNanos"),
+        "sourceLineSplitNanos", metrics.get("sourceLineSplitNanos"));
   }
 
   @Test

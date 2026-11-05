@@ -508,6 +508,10 @@ class FileOperationsOptimizationTest {
       assertEquals(0, process.exitValue(), new String(process.getInputStream().readAllBytes()));
     } else Files.createSymbolicLink(link, directory);
     try {
+      assertThrows(
+          java.io.IOException.class,
+          () ->
+              FileSnapshots.verifiedInventoryAttributes(root.toRealPath(), Path.of("alias/a.txt")));
       assertNotNull(
           tools()
               .readMultiFile(List.of(new Tools.ReadFileRequest("alias/a.txt", null, null)), root)

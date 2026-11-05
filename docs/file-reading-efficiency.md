@@ -155,6 +155,53 @@ one-line source budget; continuation uses the native reader versus the result cu
 Markdown compares the same 200-section document and source budgets. Distinct-query scans
 are measured separately. Timing is reported diagnostically, never as a pass threshold.
 
+`ReadingEfficiencyBenchmarkTest.nextReadMeasuresRepeatedSourceWork` follows the returned
+`nextRead` until all 320 requested lines of an 8,000-line UTF-8 file arrive. It uses a
+512-token page target, runs three warmup chains, and writes seven measured chains to
+`target/reading-benchmark/next-read.json`. Each sample sums elapsed nanoseconds across
+the initial read and its continuations. Source read time covers opening, reading and
+closing the stream. Hash time covers SHA-256 and hex formatting. Decode time includes
+charset selection and BOM handling. Line splitting has its own counter. Path checks,
+file attribute checks, binary detection, and result paging are outside those timers.
+The fixture is reused across chains, so the measurements include OS caching effects.
+
+Plain-text and Markdown section continuations in `readMultiFile` reuse decoded rows
+after resolving the path, reading a fresh snapshot, and matching its SHA-256 to the
+cursor's expected version. Reuse is keyed by run, read root, resolved path, content hash,
+and requested charset. The in-memory LRU holds up to 32 entries and 8 MiB of estimated
+row storage per tool instance. Oversized or evicted entries are decoded on demand.
+The benchmark records source reads, decodes, line splits, and cache hits alongside timing.
+On Windows with Java 25, both runs used 17 tool calls and 17 source reads per chain.
+Decodes and line splits each dropped from 17 to 1, with 16 cache hits. Median cumulative
+decode time fell from 11.71 ms to 0.80 ms and line splitting from 7.55 ms to 0.62 ms.
+Source read and hash medians were 6.33 and 3.75 ms before, and 6.85 and 4.05 ms after.
+The stage timers exclude cache access. The benchmark also records `chainNanos` from
+the first tool call through receipt of the final page. This includes cache access,
+cursor handling, and page generation inside the tool. Result assertions run afterward.
+`beforeSamples` uses the original request-local decoding path and `samples` uses the
+continuation cache. Both use the same fixture and tool configuration in one JVM, with
+alternating execution order and three warmup chains per variant.
+
+`ReadingEfficiencyBenchmarkTest.searchResumeMeasuresInventoryVerificationByCursor`
+is enabled with `-Drei.benchmark.search-resume=true` and writes
+`target/reading-benchmark/search-resume.json`. It compares 10, 100, 1,000, and 5,000
+real file paths. Add `-Drei.benchmark.search-resume.include-max=true` to include 20,000
+candidates. For each size, the benchmark generates one cursor of each kind and
+replays each cursor three times after one warmup pair, alternating the order. A
+`RESULT` resume emits one pending hit line. A `SCAN` resume scans one file with no
+hits. Both reload and save cursor state through SQLite. Initial file creation and
+inventory enumeration are outside the measured resume. The verification timer wraps
+the full path and attribute comparison loop, and the total timer wraps
+`PagedFileSearch.read`. Timing reflects a warmed local filesystem.
+
+Resume shares the canonical project root across the inventory and checks that root
+again after verification. Each candidate still receives its own ancestor and leaf
+checks, including canonical paths and link rejection. One no-follow attribute read
+checks the leaf type and supplies the stamp fields. The comparison still uses size,
+modification time, and file key, with SHA-256 verification for a pending source.
+In the 5,000-candidate Windows sandbox fixture, median verification fell from 26.93 s
+to 12.24 s for `RESULT` and from 27.43 s to 12.33 s for `SCAN`.
+
 The seven requested scenarios map to: repeated-line and distinct-query benchmarks; the
 distant-hit benchmark; the 1030-file cursor fixture; `ReadingDeliveryTest`'s compression and
 raw restoration; `MarkdownSectionReadTest`'s hierarchy/long-section fixtures; and persisted

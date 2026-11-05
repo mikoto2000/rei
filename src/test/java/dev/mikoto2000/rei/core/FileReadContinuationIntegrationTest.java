@@ -152,8 +152,13 @@ class FileReadContinuationIntegrationTest {
       assertThat(latestPage.path("truncated").asBoolean()).isFalse();
       assertThat(delivered.toString()).isEqualTo(source);
 
-      // Reuse the original page history after an external edit: inherited version must reject it.
-      Files.writeString(root.resolve("a.md"), "changed source");
+      // Same size and mtime, but the inherited SHA-256 must reject the edited source.
+      Path file = root.resolve("a.md");
+      var modified = Files.getLastModifiedTime(file);
+      byte[] changed = Files.readAllBytes(file);
+      changed[0] ^= 1;
+      Files.write(file, changed);
+      Files.setLastModifiedTime(file, modified);
       var stale = execute(route, loop, prompt, call("stale", args), context);
       assertThat(page(stale).path("error").asText()).contains("STALE_VERSION");
       assertThat(page(stale).path("content")).isEmpty();

@@ -61,9 +61,7 @@ final class MarkdownSectionReads {
     var snapshot = snapshots.get(root, Path.of(request.path()));
     if (request.expectedVersion() != null && !request.expectedVersion().equals(snapshot.version()))
       throw ReadingProblem.fail("FILE_CHANGED");
-    var lines =
-        snapshots.lines(
-            snapshot, request.charset(), () -> tools.snapshotLines(snapshot, request.charset()));
+    var lines = tools.verifiedReadLines(root, request, snapshots, snapshot);
     var sections = index(lines);
     var found =
         sections.stream()
