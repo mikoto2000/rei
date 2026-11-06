@@ -40,7 +40,7 @@ final class PatchSemanticReviewer {
   SemanticPatchReviewService.Verdict judge(
       SemanticPatchReviewService.Input input, RunExecutionContext run, long deadline)
       throws IOException {
-    if (run == null || run.runContext() == null || run.sharedLlmReservation() == null)
+    if (run == null || run.runContext() == null)
       throw new IllegalArgumentException("Captured Run and shared model budget required");
     var unknownRequirements = new TreeMap<String, String>();
     input

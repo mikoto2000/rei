@@ -452,7 +452,6 @@ public final class SemanticPatchReviewService {
                 if (!semanticEnabled
                     || run == null
                     || !owner.equals(run.runContext())
-                    || run.sharedLlmReservation() == null
                     || run.sharedLlmReservation().remaining() < 1) status = "SEMANTIC_UNAVAILABLE";
                 else {
                   run.checkActive();

@@ -36,7 +36,7 @@ public final class FailureDiagnostics {
    * @param code コード
    * @param message メッセージ
    */
-  public record Diagnostic(String code, String message) {
+  public record Diagnostic(String code, String message) implements java.io.Serializable {
     /** 実行上の問題の診断で用いる表示を返す。 */
     public String display() {
       return code + ": " + message;
