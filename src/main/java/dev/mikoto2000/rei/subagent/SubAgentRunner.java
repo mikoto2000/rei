@@ -967,6 +967,10 @@ public final class SubAgentRunner {
           }
 
           /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
+          @SuppressFBWarnings(
+              value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+              matchType = SuppressMatchType.EXACT,
+              justification = "Preserves the original tool failure after recording unsuccessful durable completion.")
           public String call(String input, ToolContext context) {
             try (var scope = AgentRunScope.open(owner);
                 var lease = cancellation.enterChild(owner.runId());

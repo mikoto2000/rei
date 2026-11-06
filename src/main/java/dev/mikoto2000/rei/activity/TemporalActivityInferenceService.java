@@ -180,6 +180,10 @@ public final class TemporalActivityInferenceService {
   }
 
   /** 作業状況の把握に関する定期確認を処理する。 */
+  @SuppressFBWarnings(
+      value = "REC_CATCH_EXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Retains base activity records when the configured inference model reports a checked failure.")
   public synchronized void tick() {
     if (!p.isEnabled() || !p.getTemporal().isEnabled() || paused.getAsBoolean()) return;
     var now = clock.instant();

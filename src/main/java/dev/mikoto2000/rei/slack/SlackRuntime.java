@@ -192,6 +192,10 @@ public final class SlackRuntime {
   }
 
   /** Slackとの連携に関する実行先への引き渡しを処理する。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves uncertain dispatch failures after updating the run and its Slack receipt.")
   private void dispatch(SlackMessage m) {
     String text = m.text().replace("<@" + self + ">", "").strip();
     String command =

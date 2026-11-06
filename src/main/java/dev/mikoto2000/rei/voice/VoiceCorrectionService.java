@@ -300,6 +300,10 @@ public final class VoiceCorrectionService implements AutoCloseable {
   }
 
   /** 音声による対話で用いるcorrect内部を返す。 */
+  @SuppressFBWarnings(
+      value = "REC_CATCH_EXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Records checked failures from the configured voice correction model in the worker.")
   private CompletionStage<VoiceCorrectionValidator.Decision> correctInternal(
       ConversationInput input,
       String asrOriginal,
