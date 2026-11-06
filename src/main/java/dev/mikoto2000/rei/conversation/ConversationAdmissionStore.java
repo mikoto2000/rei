@@ -137,11 +137,12 @@ public final class ConversationAdmissionStore implements AutoCloseable {
     this.database = new StorageDatabase(root);
     this.clock = clock;
     OPEN.add(instance);
+    boolean recovered = false;
     try {
       recover();
-    } catch (RuntimeException error) {
-      OPEN.remove(instance);
-      throw error;
+      recovered = true;
+    } finally {
+      if (!recovered) OPEN.remove(instance);
     }
   }
 
