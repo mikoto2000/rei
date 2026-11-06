@@ -7,6 +7,7 @@ import dev.mikoto2000.rei.core.process.BackgroundProcessManager;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -91,6 +92,17 @@ public class CheckpointReconciler {
       List<Operation> unknownOperations,
       List<String> blockers,
       String nextAction) {
+    public Result {
+      usable = usable == null ? null : Collections.unmodifiableList(new ArrayList<>(usable));
+      changed = changed == null ? null : Collections.unmodifiableList(new ArrayList<>(changed));
+      recheck = recheck == null ? null : Collections.unmodifiableList(new ArrayList<>(recheck));
+      unknownOperations =
+          unknownOperations == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(unknownOperations));
+      blockers = blockers == null ? null : Collections.unmodifiableList(new ArrayList<>(blockers));
+    }
+
     /** 作業の中断と再開において、自動再開安全性に該当するか判定する。 */
     public boolean automaticResumeSafe() {
       return decision.equals("CONTINUE")
