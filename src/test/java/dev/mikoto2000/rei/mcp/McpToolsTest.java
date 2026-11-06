@@ -196,6 +196,14 @@ class McpToolsTest {
                 "shell-session")));
   }
 
+  @Test
+  void contextLookupRejectsFloatingPointRevisionOverflow() {
+    error(
+        "INVALID_ARGUMENT",
+        tools.call(
+            "rei_context_get", Map.of("project_id", project.id(), "revision", 0x1.0p63)));
+  }
+
   /** MCPによる機能の提供の操作が、指定された権限・承認条件に従うことを確認する。 */
   @Test
   void exactlyOneLookupKeyAndNoAuthorityEscalation() {
