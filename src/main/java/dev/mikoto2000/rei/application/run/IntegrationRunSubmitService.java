@@ -78,12 +78,20 @@ public final class IntegrationRunSubmitService {
   private final GoogleCalendarService calendar;
 
   /** タスク一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared task service for the same account and task state.")
   private final TaskService tasks;
 
   /** 作業状況。 */
   private dev.mikoto2000.rei.activity.ActivityCommand activity;
 
   /** Blueskyへの投稿を依頼する窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured Bluesky account service when submitting reply runs.")
   private dev.mikoto2000.rei.bluesky.BlueskyPostService bluesky;
 
   /** 関心一覧。 */
@@ -105,6 +113,10 @@ public final class IntegrationRunSubmitService {
   private dev.mikoto2000.rei.workcontext.WorkContextService work;
 
   /** 埋め込み表現。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared asynchronous ingestion service for vector document runs.")
   private dev.mikoto2000.rei.vectordocument.AsyncVectorDocumentService embeddings;
 
   private org.springframework.beans.factory.ObjectProvider<

@@ -24,6 +24,10 @@ public class SessionController {
   private final SessionQueryService sessions;
 
   /** 受付から終了までの管理。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Ends sessions through the same lifecycle service that owns session state.")
   private dev.mikoto2000.rei.application.session.SessionLifecycle lifecycle;
 
   /** プロジェクト一覧。 */

@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.core.taskstate;
 
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -20,6 +22,10 @@ import org.springframework.stereotype.Component;
 public class TaskStateAdvisor implements BaseAdvisor {
 
   /** タスク状態。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Renders the current task state for the owning run.")
   private final TaskState taskState;
 
   /** イベント一覧。 */

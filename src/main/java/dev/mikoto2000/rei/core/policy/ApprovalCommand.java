@@ -30,6 +30,10 @@ public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
   private final ProjectService projects;
 
   /** 継続入力一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared continuation lifecycle when listing and deciding approvals.")
   private ApprovalContinuationService continuations;
 
   /** ツール利用の権限制御で使用する継続入力一覧を設定する。 */

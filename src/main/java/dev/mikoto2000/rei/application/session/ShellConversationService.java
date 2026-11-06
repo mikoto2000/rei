@@ -16,6 +16,10 @@ public final class ShellConversationService {
   private final dev.mikoto2000.rei.application.input.ConversationInputGateway gateway;
 
   /** 取得記録一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared capture lifecycle when admitting a shell conversation.")
   private dev.mikoto2000.rei.llm.capture.CaptureStore captures;
 
   /** 会話の継続管理で使用する取得記録一覧を設定する。 */

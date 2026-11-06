@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.subagent;
 
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -29,6 +31,10 @@ import org.springframework.stereotype.Component;
 @Component
 public final class ParallelSubAgentDelegator implements AutoCloseable {
   /** 独立した予算設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured standalone limits when starting delegated work.")
   private SubAgentProperties standaloneBudgetProperties = new SubAgentProperties();
 
   /** 補助エージェントへの委譲で使用する独立した予算設定を設定する。 */

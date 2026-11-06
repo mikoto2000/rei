@@ -35,6 +35,10 @@ public class ToolResultCompressor {
   private final int threshold, tokens;
 
   /** 配信。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the configured output limits when retaining and delivering tool results.")
   private ToolResultDeliveryProperties delivery = new ToolResultDeliveryProperties();
 
   /** モデルへ渡す文脈の管理で使用する配信設定を設定する。 */
