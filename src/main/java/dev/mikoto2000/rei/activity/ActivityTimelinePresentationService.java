@@ -3,22 +3,32 @@ package dev.mikoto2000.rei.activity;
 import dev.mikoto2000.rei.activity.behavior.BehaviorSeverity;
 import dev.mikoto2000.rei.activity.behavior.BehaviorStateStore;
 import dev.mikoto2000.rei.activity.behavior.BehaviorTimelineEvent;
+import java.time.Instant;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.BiFunction;
 
 /**
  * 作業状況の把握で受け渡す作業状況時系列の記録Presentationサービスを表す。
  *
  * <p>Bulk reads followed by a stable timestamp merge. Does not evaluate, notify or re-extract.
- *
- * @param timeline 時系列の記録
- * @param behavior 作業習慣
  */
-public record ActivityTimelinePresentationService(
-    ActivityTimeline timeline, BehaviorStateStore behavior) {
+public final class ActivityTimelinePresentationService {
+  /** 作業状況の時系列を読む窓口。 */
+  private final ActivityTimeline timeline;
+
+  /** 指定した期間の作業習慣を読む操作。 */
+  private final BiFunction<Instant, Instant, List<BehaviorTimelineEvent>> behaviorEvents;
+
+  /** 時系列と作業習慣の読み取り先を受け取る。 */
+  public ActivityTimelinePresentationService(ActivityTimeline timeline, BehaviorStateStore behavior) {
+    this.timeline = timeline;
+    behaviorEvents = behavior == null ? (from, to) -> List.of() : behavior::findEventsBetween;
+  }
+
   /** 作業状況の把握で用いる項目一覧を返す。 */
   public List<ActivityTimelineEntry> entries(String day, boolean verbose) {
     var date = timeline.date(day);
@@ -30,16 +40,15 @@ public record ActivityTimelinePresentationService(
     timeline
         .workInferences(day, null)
         .forEach(r -> entries.add(new ActivityTimelineEntry.WorkInferenceEntry(r)));
-    if (behavior != null)
-      behavior
-          .findEventsBetween(
-              date.atStartOfDay(zone).toInstant(), date.plusDays(1).atStartOfDay(zone).toInstant())
-          .stream()
-          .filter(
-              e ->
-                  e.severity() != BehaviorSeverity.NONE
-                      && (verbose || e.outcome() == BehaviorTimelineEvent.Outcome.EMITTED))
-          .forEach(e -> entries.add(new ActivityTimelineEntry.BehaviorEntry(e)));
+    behaviorEvents
+        .apply(
+            date.atStartOfDay(zone).toInstant(), date.plusDays(1).atStartOfDay(zone).toInstant())
+        .stream()
+        .filter(
+            e ->
+                e.severity() != BehaviorSeverity.NONE
+                    && (verbose || e.outcome() == BehaviorTimelineEvent.Outcome.EMITTED))
+        .forEach(e -> entries.add(new ActivityTimelineEntry.BehaviorEntry(e)));
     entries.sort(Comparator.comparing(ActivityTimelineEntry::timestamp));
     return List.copyOf(entries);
   }
