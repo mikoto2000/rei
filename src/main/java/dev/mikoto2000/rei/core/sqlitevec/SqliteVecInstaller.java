@@ -143,8 +143,9 @@ public class SqliteVecInstaller {
         if (entry.isDirectory()) {
           continue;
         }
-        Path outputPath =
-            installDir.resolve(Path.of(entry.getName()).getFileName().toString()).normalize();
+        Path name = Path.of(entry.getName()).getFileName();
+        if (name == null) throw new IOException("sqlite-vec archive entry has no file name");
+        Path outputPath = installDir.resolve(name).normalize();
         if (!outputPath.startsWith(installDir.normalize())) {
           throw new IOException("sqlite-vec archive に不正な entry があります: " + entry.getName());
         }

@@ -157,9 +157,14 @@ final class HeuristicSourceIndex {
     return marker < 0 ? "." : path.substring(0, marker);
   }
 
+  /** ファイル名がないパスには空文字列を返す。 */
+  static String fileName(String path) {
+    return Objects.toString(Path.of(path).getFileName(), "");
+  }
+
   /** 共通の実行基盤において、検証に該当するか判定する。 */
   static boolean test(String path) {
-    String name = Path.of(path).getFileName().toString();
+    String name = fileName(path);
     return path.contains("/test/")
         || path.startsWith("test/")
         || path.contains("/tests/")
@@ -180,7 +185,7 @@ final class HeuristicSourceIndex {
     int bytes = 0, count = 0;
     for (String path : paths) {
       RunCancellation.propagate(null);
-      String name = Path.of(path).getFileName().toString();
+      String name = fileName(path);
       if (!Set.of("pom.xml", "package.json", "Cargo.toml", "go.mod", "pyproject.toml", "setup.py")
           .contains(name)) continue;
       if (++count > 64 || System.nanoTime() - deadline >= 0) {
@@ -211,8 +216,8 @@ final class HeuristicSourceIndex {
         warnings.add("Unreadable build metadata omitted");
         continue;
       }
-      String parent =
-          relative.getParent() == null ? "." : relative.getParent().toString().replace('\\', '/');
+      Path relativeParent = relative.getParent();
+      String parent = relativeParent == null ? "." : relativeParent.toString().replace('\\', '/');
       String identity = "";
       if (name.equals("go.mod")) {
         var match =
@@ -673,9 +678,7 @@ final class HeuristicSourceIndex {
       }
       if (test(file.path())) {
         String base =
-            Path.of(file.path())
-                .getFileName()
-                .toString()
+            fileName(file.path())
                 .replaceFirst("\\.(test|spec)(\\.[cm]?[jt]sx?)$", "$2")
                 .replaceFirst("_test\\.go$", ".go")
                 .replaceFirst("^test_", "");
@@ -685,7 +688,7 @@ final class HeuristicSourceIndex {
                     candidate ->
                         !test(candidate.path())
                             && candidate.module().equals(file.module())
-                            && Path.of(candidate.path()).getFileName().toString().equals(base))
+                            && fileName(candidate.path()).equals(base))
                 .toList();
         if (matches.size() == 1)
           result.add(
@@ -713,7 +716,7 @@ final class HeuristicSourceIndex {
     if (imported.startsWith("mod:")) {
       String folder =
           Set.of("lib.rs", "main.rs", "mod.rs")
-                  .contains(Path.of(file.path()).getFileName().toString())
+                  .contains(fileName(file.path()))
               ? parent(file.path())
               : file.path().replaceFirst("\\.rs$", "");
       base = join(folder, imported.substring(4));

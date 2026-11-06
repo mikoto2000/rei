@@ -475,7 +475,7 @@ public class VectorDocumentService {
 
   /** 検索対象文書の管理で用いるファイル種別を返す。 */
   private String fileType(Path path) {
-    String fileName = path.getFileName().toString();
+    String fileName = java.util.Objects.toString(path.getFileName(), "");
     int dot = fileName.lastIndexOf('.');
     if (dot < 0 || dot == fileName.length() - 1) {
       return "unknown";
@@ -485,7 +485,7 @@ public class VectorDocumentService {
 
   /** 検索対象文書の管理で用いるタイトルを返す。 */
   private String title(Path path) {
-    String fileName = path.getFileName().toString();
+    String fileName = java.util.Objects.toString(path.getFileName(), "");
     int dot = fileName.lastIndexOf('.');
     return dot > 0 ? fileName.substring(0, dot) : fileName;
   }

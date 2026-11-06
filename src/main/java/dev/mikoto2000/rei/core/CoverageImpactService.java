@@ -697,7 +697,7 @@ public final class CoverageImpactService {
                   file ->
                       file.language().equals("JAVA")
                           && file.packageName().replace('.', '/').equals(row.packageName())
-                          && Path.of(file.path()).getFileName().toString().equals(row.source()))
+                          && HeuristicSourceIndex.fileName(file.path()).equals(row.source()))
               .toList();
       var local =
           candidates.stream()

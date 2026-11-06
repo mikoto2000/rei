@@ -211,10 +211,11 @@ public final class TestReportCollectionDiagnosisService {
         warnings.add("A report discovery directory was unavailable or changed");
         continue;
       }
-      children.sort(Comparator.comparing(p -> p.getFileName().toString()));
+      children.sort(Comparator.comparing(p -> Objects.toString(p.getFileName(), "")));
       for (var child : children) {
-        String name = child.getFileName().toString();
-        if (excluded(child.getFileName())) continue;
+        Path fileName = child.getFileName();
+        if (fileName == null || excluded(fileName)) continue;
+        String name = fileName.toString();
         if (Files.isSymbolicLink(child)) {
           warnings.add("Symbolic paths excluded from discovery");
           continue;

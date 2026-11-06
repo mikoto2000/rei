@@ -372,7 +372,7 @@ public final class ChangeTestImpactService {
       if (!modules.contains(file.module())
           || !isTest(file.path())
           || !file.path().endsWith(".java")) continue;
-      String name = Path.of(file.path()).getFileName().toString();
+      String name = HeuristicSourceIndex.fileName(file.path());
       String reason = null;
       if (file.path().contains("/it/")
           || file.path().startsWith("it/")
@@ -402,7 +402,7 @@ public final class ChangeTestImpactService {
 
   /** 共通の実行基盤において、構築機能の構成に該当するか判定する。 */
   private static boolean buildConfiguration(String path) {
-    String name = Path.of(path).getFileName().toString();
+    String name = HeuristicSourceIndex.fileName(path);
     return Set.of(
                 "pom.xml",
                 "build.gradle",

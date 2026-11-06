@@ -566,8 +566,10 @@ public final class DocumentRendererService {
 
     /** 共通の実行基盤に関する後片付け一時的なを処理する。 */
     private static void cleanupTemporary(Path directory) throws IOException {
+      Path name = directory.getFileName();
       if (!directory.isAbsolute()
-          || !directory.getFileName().toString().startsWith("rei-renderer-")
+          || name == null
+          || !name.toString().startsWith("rei-renderer-")
           || !directory.toRealPath().equals(directory))
         throw new IOException("Renderer temporary boundary changed");
       try (var paths = Files.walk(directory)) {
