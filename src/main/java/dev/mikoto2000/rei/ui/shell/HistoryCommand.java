@@ -8,6 +8,7 @@ import dev.mikoto2000.rei.conversation.HistoryFormatter;
 import dev.mikoto2000.rei.conversation.HistorySearchScope;
 import dev.mikoto2000.rei.conversation.HistoryShellService;
 import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.output.CommandOutput;
 import java.io.PrintWriter;
 import java.util.concurrent.Callable;
 import java.util.function.Consumer;
@@ -57,7 +58,7 @@ public class HistoryCommand implements Callable<Integer> {
   String projectId;
 
   /** ターミナルへの表示先。 */
-  private PrintWriter shellOutput;
+  private CommandOutput shellOutput;
 
   /** 仕様。 */
   @Spec private CommandSpec spec;
@@ -80,7 +81,7 @@ public class HistoryCommand implements Callable<Integer> {
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(PrintWriter output) {
-    shellOutput = output;
+    shellOutput = CommandOutput.from(output);
   }
 
   /** ターミナルでの対話で用いるレポートを返す。 */
@@ -124,8 +125,8 @@ public class HistoryCommand implements Callable<Integer> {
   }
 
   /** ターミナルでの対話で用いる出力を返す。 */
-  private PrintWriter output() {
-    return shellOutput == null ? spec.commandLine().getOut() : shellOutput;
+  private CommandOutput output() {
+    return shellOutput == null ? CommandOutput.from(spec.commandLine().getOut()) : shellOutput;
   }
 
   /** 要求された処理を実行する。 */

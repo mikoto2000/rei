@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.llm.capture;
 
+import dev.mikoto2000.rei.output.CommandOutput;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -41,7 +42,7 @@ public final class LlmCaptureCommand implements Runnable {
   private final Runnable ensureConversation;
 
   /** ターミナルへの表示先。 */
-  private PrintWriter shellOutput;
+  private CommandOutput shellOutput;
 
   /** 確認。 */
   private Predicate<String> confirmation = prompt -> false;
@@ -83,7 +84,7 @@ public final class LlmCaptureCommand implements Runnable {
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(PrintWriter output) {
-    shellOutput = output;
+    shellOutput = CommandOutput.from(output);
   }
 
   /** モデル応答の記録で使用する確認を設定する。 */
@@ -150,8 +151,8 @@ public final class LlmCaptureCommand implements Runnable {
   }
 
   /** モデル応答の記録で用いる出力先を返す。 */
-  private PrintWriter out() {
-    return shellOutput == null ? spec.commandLine().getOut() : shellOutput;
+  private CommandOutput out() {
+    return shellOutput == null ? CommandOutput.from(spec.commandLine().getOut()) : shellOutput;
   }
 
   /** LLM リクエストの記録を操作しますを行う。 */

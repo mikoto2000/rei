@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.memory.command;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.memory.service.SleepService;
+import dev.mikoto2000.rei.output.CommandOutput;
 import java.util.concurrent.Callable;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -51,7 +52,7 @@ public class SleepCommand implements Callable<Integer> {
   @Spec CommandSpec spec;
 
   /** ターミナルへの表示先。 */
-  private java.io.PrintWriter shellOutput;
+  private CommandOutput shellOutput;
 
   /**
    * 長期記憶の活用を利用するため、指定を補って共通の初期化へ引き渡す。
@@ -77,12 +78,12 @@ public class SleepCommand implements Callable<Integer> {
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
-    shellOutput = output;
+    shellOutput = CommandOutput.from(output);
   }
 
   /** 長期記憶の活用で用いる出力先を返す。 */
-  private java.io.PrintWriter out() {
-    return shellOutput == null ? spec.commandLine().getOut() : shellOutput;
+  private CommandOutput out() {
+    return shellOutput == null ? CommandOutput.from(spec.commandLine().getOut()) : shellOutput;
   }
 
   /** 現在 Session の未処理 Turn から長期記憶を整理しますを行う。 */

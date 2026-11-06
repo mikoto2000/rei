@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.goal;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.output.CommandOutput;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -131,7 +132,7 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
   int maxCalls;
 
   /** 出力。 */
-  private java.io.PrintWriter output;
+  private CommandOutput output;
 
   /** 目標の達成管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public GoalCommand() {
@@ -148,13 +149,13 @@ public class GoalCommand implements java.util.concurrent.Callable<Integer> {
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
-    this.output = output;
+    this.output = CommandOutput.from(output);
   }
 
   /** ファイルの達成目標を保存し、独立した検証と上限付きの対話計画を行いますを行う。 */
   @Override
   public Integer call() {
-    var writer = output == null ? spec.commandLine().getOut() : output;
+    var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
       var project = projects.currentContext();
       Object result =

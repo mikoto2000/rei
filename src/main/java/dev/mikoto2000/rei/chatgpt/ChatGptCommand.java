@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.chatgpt;
 
+import dev.mikoto2000.rei.output.CommandOutput;
 import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -61,16 +62,16 @@ public final class ChatGptCommand {
   }
 
   /** ターミナルへの表示先。 */
-  private java.io.PrintWriter shellOutput;
+  private CommandOutput shellOutput;
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
-    shellOutput = output;
+    shellOutput = CommandOutput.from(output);
   }
 
   /** ChatGPTとの連携で用いる出力を返す。 */
-  private java.io.PrintWriter output() {
-    return shellOutput == null ? spec.commandLine().getOut() : shellOutput;
+  private CommandOutput output() {
+    return shellOutput == null ? CommandOutput.from(spec.commandLine().getOut()) : shellOutput;
   }
 
   /** 仕様。 */

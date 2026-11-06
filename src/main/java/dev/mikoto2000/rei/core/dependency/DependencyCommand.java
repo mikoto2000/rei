@@ -4,6 +4,7 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.policy.ToolPermissionGuard;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.event.CredentialRedactor;
+import dev.mikoto2000.rei.output.CommandOutput;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -47,7 +48,7 @@ public class DependencyCommand implements java.util.concurrent.Callable<Integer>
   String value;
 
   /** 出力。 */
-  private java.io.PrintWriter output;
+  private CommandOutput output;
 
   /** 外部条件の待機を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public DependencyCommand() {
@@ -69,13 +70,13 @@ public class DependencyCommand implements java.util.concurrent.Callable<Integer>
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
-    this.output = output;
+    this.output = CommandOutput.from(output);
   }
 
   /** 保存された依存関係の監視を確認・キャンセル・回答しますを行う。 */
   @Override
   public Integer call() {
-    var writer = output == null ? spec.commandLine().getOut() : output;
+    var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     try {
       var project = projects.currentContext();
       Object result;

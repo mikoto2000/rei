@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.checkpoint;
 
 import dev.mikoto2000.rei.core.project.ProjectService;
+import dev.mikoto2000.rei.output.CommandOutput;
 import java.util.concurrent.Callable;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
@@ -38,7 +39,7 @@ public class ResumeCommand implements Callable<Integer> {
   String task;
 
   /** 出力。 */
-  private java.io.PrintWriter output;
+  private CommandOutput output;
 
   /** 概要。 */
   private ResumeOverviewService overview;
@@ -72,12 +73,12 @@ public class ResumeCommand implements Callable<Integer> {
 
   /** 利用者へ結果を案内するターミナルの出力先を設定する。 */
   public void setShellOutput(java.io.PrintWriter output) {
-    this.output = output;
+    this.output = CommandOutput.from(output);
   }
 
   /** 利用者に結果を伝えるため、再開コマンドを出力する。 */
   int print(java.util.function.Supplier<Object> action) {
-    var writer = output == null ? spec.commandLine().getOut() : output;
+    var writer = output == null ? CommandOutput.from(spec.commandLine().getOut()) : output;
     cancellation.begin(Thread.currentThread());
     try {
       CheckpointReconciler.active();
