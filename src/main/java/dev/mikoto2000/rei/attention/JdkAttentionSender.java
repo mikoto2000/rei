@@ -6,7 +6,9 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.springframework.stereotype.Component;
 
 /**
@@ -25,7 +27,8 @@ public class JdkAttentionSender {
           .build();
 
   /** 注意の管理で用いる送信を返す。 */
-  public int send(AttentionDeliveryProperties properties, String id, String json) throws Exception {
+  public int send(AttentionDeliveryProperties properties, String id, String json)
+      throws InterruptedException, ExecutionException, TimeoutException {
     if (json.getBytes(java.nio.charset.StandardCharsets.UTF_8).length > 4096)
       throw new IllegalArgumentException("Notification metadata is too large");
     var builder =
