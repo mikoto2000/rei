@@ -174,11 +174,11 @@ public final class CoverageImpactService {
       String path, int line, Boolean covered, String test, String report, Instant modified) {}
 
   /** 対応表一覧。 */
-  private final RepositoryMapService maps;
+  private final RepositoryMapService.SnapshotReader snapshots;
 
   /** 指定された値や利用先を使って、CoverageImpactServiceを初期化する。 */
   public CoverageImpactService(RepositoryMapService maps) {
-    this.maps = maps;
+    snapshots = directory -> maps.snapshot(directory);
   }
 
   /** 共通の実行基盤で用いる存在しないを返す。 */
@@ -194,11 +194,11 @@ public final class CoverageImpactService {
   /** 共通の実行基盤で用いる分析を返す。 */
   public Result analyze(Path directory, List<Range> ranges, List<String> reports)
       throws IOException {
-    return analyze(maps.snapshot(directory), ranges, reports);
+    return analyze(snapshots.read(directory), ranges, reports);
   }
 
   /** 共通の実行基盤で用いる分析を返す。 */
-  Result analyze(RepositoryMapService.View view, List<Range> ranges, List<String> reportPaths)
+  static Result analyze(RepositoryMapService.View view, List<Range> ranges, List<String> reportPaths)
       throws IOException {
     RunCancellation.propagate(null);
     Path root = Path.of(view.root()).toRealPath();
