@@ -30,10 +30,10 @@ public final class SseBridge implements AutoCloseable {
   /** Web APIによる操作に必要な出力先を扱う。 */
   public interface Sink {
     /** Web APIによる操作に関するイベントを処理する。 */
-    void event(WebApiEventDto event) throws Exception;
+    void event(WebApiEventDto event) throws IOException, InterruptedException;
 
     /** Web APIによる操作に関する生存確認を処理する。 */
-    void heartbeat() throws Exception;
+    void heartbeat() throws IOException;
 
     /** 処理の完了を記録し、後続の処理へ結果を引き渡す。 */
     void complete(Throwable error);
@@ -230,13 +230,13 @@ public final class SseBridge implements AutoCloseable {
           }
           if (writeEvent(frame.event())) return;
         }
-      } catch (Exception error) {
+      } catch (IOException | InterruptedException | RuntimeException error) {
         finish(error);
       }
     }
 
     /** Web APIによる操作において、書き込みイベントに該当するか判定する。 */
-    private boolean writeEvent(AgentEvent event) throws Exception {
+    private boolean writeEvent(AgentEvent event) throws IOException, InterruptedException {
       boolean shuttingDown = event.type() == AgentEventType.APPLICATION_SHUTDOWN_STARTED;
       boolean cancelled = !shuttingDown && runs.streamStatus(runId) == RunStatus.CANCELLED;
       var dto = WebApiEventMapper.from(event, cancelled, apiKey);
