@@ -141,11 +141,11 @@ public final class ChangeTestImpactService {
   }
 
   /** 対応表一覧。 */
-  private final RepositoryMapService maps;
+  private final RepositoryMapService.SnapshotReader snapshots;
 
   /** 指定された値や利用先を使って、ChangeTestImpactServiceを初期化する。 */
   public ChangeTestImpactService(RepositoryMapService maps) {
-    this.maps = maps;
+    snapshots = directory -> maps.snapshot(directory);
   }
 
   /** 共通の実行基盤で用いる分析Gitを返す。 */
@@ -257,7 +257,7 @@ public final class ChangeTestImpactService {
         throw new IllegalArgumentException("Changed paths must be project relative");
       changes.add(path.toString().replace('\\', '/'));
     }
-    var snapshot = maps.snapshot(root);
+    var snapshot = snapshots.read(root);
     var warnings = new ArrayList<>(snapshot.warnings());
     if (ranges == null || reports == null)
       throw new IllegalArgumentException("Coverage selections must be lists");
@@ -266,7 +266,7 @@ public final class ChangeTestImpactService {
         throw new IllegalArgumentException("Coverage ranges must select changed paths");
     var coverage =
         coverageRequested
-            ? new CoverageImpactService(maps).analyze(snapshot, ranges, reports)
+            ? CoverageImpactService.analyze(snapshot, ranges, reports)
             : CoverageImpactService.absent();
     if (coverageRequested) warnings.addAll(coverage.warnings());
     Set<String> indexed = new HashSet<>();

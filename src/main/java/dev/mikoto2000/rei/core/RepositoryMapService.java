@@ -353,6 +353,12 @@ public final class RepositoryMapService {
     return build(directory, query, limit, false);
   }
 
+  /** 影響分析で利用するリポジトリの読み取り操作。 */
+  @FunctionalInterface
+  interface SnapshotReader {
+    View read(Path directory) throws IOException;
+  }
+
   /** 現在の状態を、後から参照できる記録として取り出す。 */
   synchronized View snapshot(Path directory) throws IOException {
     return build(directory, "", 100, true);

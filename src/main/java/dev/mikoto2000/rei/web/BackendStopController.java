@@ -21,13 +21,13 @@ public final class BackendStopController {
   /** 起動単位の識別子。 */
   private final BackendInstance instance;
 
-  /** 文脈。 */
-  private final ConfigurableApplicationContext context;
+  /** アプリケーションを停止する操作。 */
+  private final Runnable stopApplication;
 
   /** 指定された値や利用先を使って、BackendStopControllerを初期化する。 */
   public BackendStopController(BackendInstance instance, ConfigurableApplicationContext context) {
     this.instance = instance;
-    this.context = context;
+    stopApplication = () -> context.close();
   }
 
   /**
@@ -47,7 +47,7 @@ public final class BackendStopController {
         || !current.storageId().equals(request.storageId()))
       throw new dev.mikoto2000.rei.application.state.OperationConflictException();
     var result = new DeferredResult<ResponseEntity<Void>>(10000L);
-    result.onCompletion(() -> Thread.startVirtualThread(context::close));
+    result.onCompletion(() -> Thread.startVirtualThread(stopApplication));
     result.setResult(ResponseEntity.accepted().build());
     return result;
   }
