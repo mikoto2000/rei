@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.llm;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /** 出力上限計画の見直しの入力を解釈し、機能内で扱える情報へ整える。 */
@@ -36,27 +37,27 @@ public class OutputLimitReplanParser {
 
   /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
   private OutputLimitReplanPlan validate(PlannerPlan plan, int maxSubgoals) {
-    if (plan == null || plan.subgoals == null || plan.subgoals.isEmpty()) {
+    if (plan == null || plan.subgoals() == null || plan.subgoals().isEmpty()) {
       throw new IllegalArgumentException("Planner subgoals must not be empty");
     }
     int limit = Math.max(1, maxSubgoals);
     List<OutputLimitReplanSubgoal> subgoals = new ArrayList<>();
-    for (PlannerSubgoal subgoal : plan.subgoals) {
+    for (PlannerSubgoal subgoal : plan.subgoals()) {
       if (subgoals.size() >= limit) {
         break;
       }
-      String goal = trimToNull(subgoal == null ? null : subgoal.goal);
+      String goal = trimToNull(subgoal == null ? null : subgoal.goal());
       if (goal == null) {
         throw new IllegalArgumentException("Planner subgoal goal must not be blank");
       }
-      String id = trimToNull(subgoal.id);
+      String id = trimToNull(subgoal.id());
       subgoals.add(
           new OutputLimitReplanSubgoal(id == null ? "subgoal-" + (subgoals.size() + 1) : id, goal));
     }
     if (subgoals.isEmpty()) {
       throw new IllegalArgumentException("Planner subgoals must not be empty");
     }
-    String finalGoal = trimToNull(plan.finalGoal);
+    String finalGoal = trimToNull(plan.finalGoal());
     return new OutputLimitReplanPlan(subgoals, finalGoal == null ? "サブゴールの結果を統合する" : finalGoal);
   }
 
@@ -95,21 +96,13 @@ public class OutputLimitReplanParser {
 
   /** 用途に応じたモデル利用に必要な計画の作成計画を扱う。 */
   @JsonIgnoreProperties(ignoreUnknown = true)
-  private static class PlannerPlan {
-    /** 小さな目標。 */
-    public List<PlannerSubgoal> subgoals;
-
-    /** 最終目標。 */
-    public String finalGoal;
+  private record PlannerPlan(List<PlannerSubgoal> subgoals, String finalGoal) {
+    private PlannerPlan {
+      subgoals = subgoals == null ? null : Collections.unmodifiableList(new ArrayList<>(subgoals));
+    }
   }
 
   /** 用途に応じたモデル利用に必要な計画の作成Subgoalを扱う。 */
   @JsonIgnoreProperties(ignoreUnknown = true)
-  private static class PlannerSubgoal {
-    /** 識別子。 */
-    public String id;
-
-    /** 目標。 */
-    public String goal;
-  }
+  private record PlannerSubgoal(String id, String goal) {}
 }
