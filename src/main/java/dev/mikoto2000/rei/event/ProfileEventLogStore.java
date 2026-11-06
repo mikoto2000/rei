@@ -265,7 +265,12 @@ public class ProfileEventLogStore implements AgentEventListener {
       Instant first,
       Instant last,
       Map<String, Long> countsByType,
-      Map<String, DurationStats> durationsByType) {}
+      Map<String, DurationStats> durationsByType) {
+    public ProfileSummary {
+      countsByType = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(countsByType));
+      durationsByType = java.util.Collections.unmodifiableMap(new LinkedHashMap<>(durationsByType));
+    }
+  }
 
   /**
    * 実行状況の通知で受け渡す利用者情報集計区分を表す。
@@ -290,7 +295,7 @@ public class ProfileEventLogStore implements AgentEventListener {
     private long maxMillis = Long.MIN_VALUE;
 
     /** 新たな対象を登録し、後から利用できるようにする。 */
-    void add(long millis) {
+    private void add(long millis) {
       count++;
       totalMillis += millis;
       minMillis = Math.min(minMillis, millis);
