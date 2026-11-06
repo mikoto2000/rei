@@ -2,9 +2,11 @@ package dev.mikoto2000.rei.externalagent;
 
 import static dev.mikoto2000.rei.externalagent.ExternalAgentResult.Status;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.InvalidPathException;
@@ -366,7 +368,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
               default -> "";
             };
         if (!message.isBlank()) diagnostic = message;
-      } catch (Exception ignored) {
+      } catch (JsonProcessingException | RuntimeException ignored) {
       }
     }
     return ExternalAgentDelegationService.bounded(
@@ -428,7 +430,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
           if (event.path("type").asText().equals("item.completed")
               && event.path("item").path("type").asText().equals("agent_message"))
             finalText = event.path("item").path("text").asText();
-        } catch (Exception ignored) {
+        } catch (JsonProcessingException | RuntimeException ignored) {
         }
       }
       JsonNode review = mapper.readTree(finalText);
@@ -484,7 +486,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
               : null,
           proposal,
           null);
-    } catch (Exception error) {
+    } catch (JsonProcessingException | RuntimeException error) {
       if (fixProposal)
         return new ExternalAgentResult(
             Status.FAILED,
@@ -553,7 +555,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
           null,
           null,
           review.report());
-    } catch (Exception invalid) {
+    } catch (IOException | RuntimeException invalid) {
       return new ExternalAgentResult(
           Status.FAILED,
           "Invalid or incomplete structured material review; no automatic retry",
@@ -610,7 +612,7 @@ public class CodexExternalAgentExecutor implements ExternalAgentExecutor {
           null,
           null,
           proposal);
-    } catch (Exception invalid) {
+    } catch (JsonProcessingException | RuntimeException invalid) {
       return new ExternalAgentResult(
           Status.FAILED,
           "Could not parse a complete structured implementation proposal",

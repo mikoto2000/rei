@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.externalagent;
 
 import com.fasterxml.jackson.core.JsonFactory;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.StreamReadConstraints;
 import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
@@ -63,7 +64,7 @@ final class CodexTokenUsage {
         }
       }
       return completed ? total : null;
-    } catch (Exception invalid) {
+    } catch (JsonProcessingException | RuntimeException invalid) {
       return null;
     }
   }
