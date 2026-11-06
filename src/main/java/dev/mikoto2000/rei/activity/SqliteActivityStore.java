@@ -110,18 +110,19 @@ public final class SqliteActivityStore implements ActivityStore {
             s.executeBatch();
           }
           c.commit();
-        } catch (Exception e) {
+        } catch (SQLException | JsonProcessingException | RuntimeException e) {
           c.rollback();
           throw e;
         }
       }
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Activity persistence failed", e);
     }
   }
 
   /** 作業状況の把握で用いる記録一覧を返す。 */
-  private List<ActivityRecord> records(Connection c, Instant start, Instant end) throws SQLException, JsonProcessingException {
+  private List<ActivityRecord> records(Connection c, Instant start, Instant end)
+      throws SQLException, JsonProcessingException {
     var records = new ArrayList<ActivityRecord>();
     try (var s =
         c.prepareStatement(
@@ -178,7 +179,7 @@ public final class SqliteActivityStore implements ActivityStore {
         }
         return List.copyOf(result);
       }
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Activity query failed", e);
     }
   }
@@ -225,7 +226,7 @@ public final class SqliteActivityStore implements ActivityStore {
       return overlaps(candidates, start);
     } catch (ActivityQueryLimitException limit) {
       throw limit;
-    } catch (Exception error) {
+    } catch (SQLException | JsonProcessingException | RuntimeException error) {
       throw new IllegalStateException("Bounded Activity evidence query failed", error);
     }
   }
@@ -265,7 +266,7 @@ public final class SqliteActivityStore implements ActivityStore {
             start.atZone(policy.zone()).toLocalDate().atStartOfDay(policy.zone()).toInstant();
         return overlaps(records(c, lower, end), start);
       }
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Activity evidence query failed", e);
     }
   }
@@ -303,7 +304,7 @@ public final class SqliteActivityStore implements ActivityStore {
       return List.copyOf(result);
     } catch (ActivityQueryLimitException e) {
       throw e;
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Recent observation query failed", e);
     }
   }

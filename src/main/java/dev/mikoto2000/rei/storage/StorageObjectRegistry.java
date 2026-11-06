@@ -188,7 +188,7 @@ public final class StorageObjectRegistry {
       Instant created,
       boolean verified,
       List<Reference> references)
-      throws Exception {
+      throws IOException, SQLException, NoSuchAlgorithmException {
     file = file.toAbsolutePath().normalize();
     if (!file.startsWith(root) || file.equals(root))
       throw new IllegalArgumentException("Object is outside storage root");
@@ -396,7 +396,7 @@ public final class StorageObjectRegistry {
   /** データ保存の共通処理に関する保護再開用の記録を処理する。 */
   static void protectCheckpoint(
       Connection db, Path root, dev.mikoto2000.rei.checkpoint.PersistentCheckpoint state)
-      throws Exception {
+      throws SQLException, NoSuchAlgorithmException {
     String owner = state.projectId() + ":" + state.taskId() + ":" + state.revision();
     String project = ProjectStorage.projectId(state.sessionId());
     Path base = project == null ? root : root.resolve("projects").resolve(project);
@@ -600,7 +600,7 @@ public final class StorageObjectRegistry {
   }
 
   /** データ保存の共通処理で用いる保護理由を返す。 */
-  Optional<String> protectionReason(Connection db, StoredObject object) throws Exception {
+  Optional<String> protectionReason(Connection db, StoredObject object) throws SQLException {
     if (!object.originVerified()) return Optional.of("unverified-origin");
     if (!object.status().equals("AVAILABLE")) return Optional.of("unavailable");
     return protectionWithoutStatus(db, object);
