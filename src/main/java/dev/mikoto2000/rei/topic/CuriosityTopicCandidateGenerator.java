@@ -9,6 +9,10 @@ import java.util.UUID;
 /** 情報への関心話題候補の内容を生成する。 */
 public class CuriosityTopicCandidateGenerator implements TopicCandidateGenerator {
   /** 実行待ち。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared queue for pending and consumed curiosity items.")
   private final CuriosityQueue queue;
 
   /** この機能の動作設定。 */

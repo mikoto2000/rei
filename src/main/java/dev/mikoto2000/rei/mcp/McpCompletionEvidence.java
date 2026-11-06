@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.artifact.ArtifactStore;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.reflection.GoalReflectionRepository;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +25,10 @@ public final class McpCompletionEvidence {
   private final GoalReflectionRepository reflections;
 
   /** 成果物一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared artifact store for publication or lookup.")
   private final ArtifactStore artifacts;
 
   /** 指定された値や利用先を使って、McpCompletionEvidenceを初期化する。 */

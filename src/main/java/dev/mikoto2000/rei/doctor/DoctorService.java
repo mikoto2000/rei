@@ -73,6 +73,10 @@ public class DoctorService {
   private final VoiceModelManifest manifest;
 
   /** 現在モデル。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the current application model selection.")
   private dev.mikoto2000.rei.core.service.ModelHolderService currentModel;
 
   /** 実行環境の診断で使用する現在モデルを設定する。 */

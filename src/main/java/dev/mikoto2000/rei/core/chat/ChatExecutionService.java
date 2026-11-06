@@ -389,6 +389,10 @@ public class ChatExecutionService {
   }
 
   /** 要求取得記録一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the same capture lifecycle across request admission and completion.")
   private dev.mikoto2000.rei.llm.capture.CaptureStore requestCaptures;
 
   /** 会話の実行で使用する要求取得記録一覧を設定する。 */

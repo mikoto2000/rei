@@ -65,6 +65,10 @@ public class AttentionDeliveryService {
   private final AttentionRepository inbox;
 
   /** 配信する通知の記録先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared delivery outbox for durable claims and transitions.")
   private final AttentionDeliveryRepository outbox;
 
   /** 通知の連携先。 */

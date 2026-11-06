@@ -6,6 +6,7 @@ import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.PROTOCOL;
 import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.ROUTE_UNAVAILABLE;
 import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TIMEOUT;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -163,7 +164,7 @@ public final class WindowsPlanAppServerLauncher implements PlanAppServerClient.L
     } catch (ChatGptException e) {
       remove(home);
       throw e;
-    } catch (Exception e) {
+    } catch (IOException | InterruptedException | RuntimeException e) {
       remove(home);
       throw ChatGptException.of(ROUTE_UNAVAILABLE);
     }

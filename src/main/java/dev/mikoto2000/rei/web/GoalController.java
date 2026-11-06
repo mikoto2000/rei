@@ -54,6 +54,10 @@ public class GoalController {
   private dev.mikoto2000.rei.core.project.ProjectRegistry projects;
 
   /** 会話一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Validates sessions against the shared lifecycle state.")
   private dev.mikoto2000.rei.application.session.SessionLifecycle sessions;
 
   /** Web APIによる操作に関する設定Creationを処理する。 */

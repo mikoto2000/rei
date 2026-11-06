@@ -40,6 +40,10 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
   private final ConversationTurnStore turns;
 
   /** 記憶。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared conversation memory for the current history.")
   private final ChatMemory memory;
 
   /** 要約一覧。 */

@@ -42,6 +42,10 @@ public class DependencySourceProbe implements DependencyProbe {
   }
 
   /** GitHubの利用設定または連携情報の保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the common repository for accepted GitHub facts.")
   private dev.mikoto2000.rei.github.GitHubFactRepository github;
 
   /** 外部条件の待機で使用するGit連携先事実一覧を設定する。 */

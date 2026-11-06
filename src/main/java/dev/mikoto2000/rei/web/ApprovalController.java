@@ -31,6 +31,10 @@ public class ApprovalController {
   private final ToolApprovalRepository repository;
 
   /** 継続入力一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared coordinator for pending approval continuations.")
   private dev.mikoto2000.rei.core.policy.ApprovalContinuationService continuations;
 
   /** Web APIによる操作で使用する継続入力一覧を設定する。 */

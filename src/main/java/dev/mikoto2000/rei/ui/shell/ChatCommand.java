@@ -12,6 +12,8 @@ import dev.mikoto2000.rei.llm.LlmProperties;
 import dev.mikoto2000.rei.llm.OutputLimitReplanner;
 import dev.mikoto2000.rei.memory.service.MemoryConsolidatorService;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Optional;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -25,12 +27,20 @@ import picocli.CommandLine.Parameters;
 public class ChatCommand implements Runnable {
 
   /** チャット実行サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Runs operations through the shared chat execution service.")
   private final ChatExecutionService chatExecutionService;
 
   /** チャット応答読み上げの案内。 */
   private final ChatResponseNarrator chatResponseNarrator;
 
   /** 会話一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shell service for its current conversation and run state.")
   private dev.mikoto2000.rei.application.session.ShellConversationService conversations;
 
   /** ターミナルでの対話で使用するシェル会話一覧を設定する。 */
