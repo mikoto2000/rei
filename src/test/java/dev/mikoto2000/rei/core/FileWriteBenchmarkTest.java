@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.core;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.project.ProjectContext;
@@ -17,6 +18,7 @@ import jdk.jfr.Recording;
 import jdk.jfr.consumer.RecordingFile;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfSystemProperty;
 import org.junit.jupiter.api.io.TempDir;
 
 /** Reproducible tool-payload and source/staging I/O measurements; no inferred LLM usage. */
@@ -248,5 +250,69 @@ class FileWriteBenchmarkTest {
         Path.of(System.getProperty("fileWrite.output", "target/file-write-benchmark.json"));
     Files.createDirectories(output.toAbsolutePath().getParent());
     json.writerWithDefaultPrettyPrinter().writeValue(output.toFile(), rows);
+  }
+
+  @Test
+  @EnabledIfSystemProperty(named = "fileWrite.largeDocumentSamples", matches = "[1-9][0-9]*")
+  void measureLargeDocumentApply() throws Exception {
+    int samples = Integer.getInteger("fileWrite.largeDocumentSamples");
+
+    Path root = Files.createDirectory(temporary.resolve("large-document")).toRealPath();
+    String before = "before\n" + "unchanged document line\n".repeat(8000);
+    String after = "after\n" + "unchanged document line\n".repeat(8000);
+    var operations = new ArrayList<TextDocumentChangeSetService.Operation>();
+    for (int file = 0; file < 16; file++) {
+      operations.add(
+          new TextDocumentChangeSetService.Operation(
+              "UPDATE",
+              "file-" + file + ".txt",
+              null,
+              null,
+              null,
+              TextDocumentTransaction.hash(before),
+              List.of(new TextChangeSetService.Edit("before\n", "after\n"))));
+    }
+
+    var dataSource =
+        new org.springframework.jdbc.datasource.DriverManagerDataSource(
+            "jdbc:sqlite:" + root.resolve("db"));
+    var service =
+        new TextDocumentChangeSetService(
+            new TextChangeSetRepository(dataSource), Clock.systemUTC());
+    var jdbc = org.springframework.jdbc.core.simple.JdbcClient.create(dataSource);
+    var owner =
+        new AgentRunContext("large-document", "session", root, UUID.randomUUID().toString());
+    var request = new TextDocumentChangeSetService.Request(operations);
+    var elapsed = new ArrayList<Long>();
+    long payloadBytes = 0;
+    for (int sample = -2; sample < samples; sample++) {
+      for (var op : operations) Files.writeString(root.resolve(op.path()), before);
+      var proposal = service.propose(owner, request);
+      if (sample == 0) {
+        payloadBytes =
+            jdbc.sql(
+                    "SELECT length(CAST(payload AS BLOB)) FROM text_document_change_sets WHERE id=?")
+                .param(proposal.id())
+                .query(Long.class)
+                .single();
+      }
+      long started = System.nanoTime();
+      var receipt = service.apply(owner, proposal.id(), proposal.proposalSha256());
+      long duration = System.nanoTime() - started;
+      assertEquals("APPLIED", receipt.status());
+      assertTrue(receipt.currentMatches());
+      assertEquals("CLEANED", receipt.phase());
+      for (var op : operations) assertEquals(after, Files.readString(root.resolve(op.path())));
+      if (sample >= 0) elapsed.add(duration);
+    }
+
+    Path output =
+        Path.of(System.getProperty("fileWrite.output", "target/file-write-large-document.json"));
+    Files.createDirectories(output.toAbsolutePath().getParent());
+    json.writerWithDefaultPrettyPrinter()
+        .writeValue(
+            output.toFile(),
+            Map.of(
+                "files", operations.size(), "payloadBytes", payloadBytes, "applyNanos", elapsed));
   }
 }

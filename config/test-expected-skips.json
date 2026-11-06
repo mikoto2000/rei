@@ -25,6 +25,11 @@
     "Reason": "System property [httpapi.benchmark] does not exist"
   },
   {
+    "Method": "measureLargeDocumentApply",
+    "Suite": "dev.mikoto2000.rei.core.FileWriteBenchmarkTest",
+    "Reason": "System property [fileWrite.largeDocumentSamples] does not exist"
+  },
+  {
     "Method": "searchResumeMeasuresInventoryVerificationByCursor",
     "Suite": "dev.mikoto2000.rei.core.ReadingEfficiencyBenchmarkTest",
     "Reason": "System property [rei.benchmark.search-resume] does not exist"
