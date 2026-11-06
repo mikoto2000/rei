@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.subagent.SubAgentResultParser;
 import dev.mikoto2000.rei.subagent.SubAgentResultSchema;
 import java.nio.file.Path;
 import org.springframework.stereotype.Component;
+import java.util.ArrayList;
+import java.util.Collections;
 
 /** 論文の調査と整理に必要な論文要約検証の窓口を扱う。 */
 @Component
@@ -22,7 +24,11 @@ public class PaperSummaryValidator {
    * @param content 内容
    * @param evidence 根拠
    */
-  public record Validated(PaperSummary.Content content, java.util.List<PaperEvidence> evidence) {}
+  public record Validated(PaperSummary.Content content, java.util.List<PaperEvidence> evidence) {
+    public Validated {
+      evidence = evidence == null ? null : Collections.unmodifiableList(new ArrayList<>(evidence));
+    }
+  }
 
   /** 論文の調査と整理で用いるデータ形式を返す。 */
   public String schema() {

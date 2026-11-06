@@ -14,6 +14,7 @@ import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import dev.mikoto2000.rei.workcontext.WorkContextService;
 import io.modelcontextprotocol.spec.McpSchema;
+import java.math.BigDecimal;
 import java.nio.charset.StandardCharsets;
 import java.time.Clock;
 import java.time.Duration;
@@ -249,11 +250,19 @@ public final class McpTools {
       Map<String, Object> a, String key, long fallback, long min, long max) {
     if (!a.containsKey(key)) return fallback;
     Object value = a.get(key);
-    if (!(value instanceof Number n)
-        || n.doubleValue() != n.longValue()
-        || n.longValue() < min
-        || n.longValue() > max) throw new McpError("INVALID_ARGUMENT");
-    return n.longValue();
+    if (!(value instanceof Number n)) throw new McpError("INVALID_ARGUMENT");
+    long parsed;
+    try {
+      BigDecimal exact =
+          n instanceof Double || n instanceof Float
+              ? new BigDecimal(n.doubleValue())
+              : new BigDecimal(n.toString());
+      parsed = exact.longValueExact();
+    } catch (NumberFormatException | ArithmeticException failure) {
+      throw new McpError("INVALID_ARGUMENT");
+    }
+    if (parsed < min || parsed > max) throw new McpError("INVALID_ARGUMENT");
+    return parsed;
   }
 
   /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */

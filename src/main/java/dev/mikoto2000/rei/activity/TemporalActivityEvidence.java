@@ -7,6 +7,7 @@ import java.security.MessageDigest;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.HexFormat;
@@ -36,6 +37,18 @@ public record TemporalActivityEvidence(
     List<String> observationIds,
     List<WorkActivityInference.Execution> executions,
     String fingerprint) {
+  public TemporalActivityEvidence {
+    groups = groups == null ? null : Collections.unmodifiableList(new ArrayList<>(groups));
+    observationIds =
+        observationIds == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(observationIds));
+    executions =
+        executions == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(executions));
+  }
+
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private static final ObjectMapper JSON = new ObjectMapper().registerModule(new JavaTimeModule());
 
@@ -75,7 +88,11 @@ public record TemporalActivityEvidence(
       String visionState,
       String continuity,
       List<ActivityRecord.Activity> desktop,
-      ActivityEvidence.InputReference input) {}
+      ActivityEvidence.InputReference input) {
+    public Facts {
+      desktop = desktop == null ? null : Collections.unmodifiableList(new ArrayList<>(desktop));
+    }
+  }
 
   /**
    * 作業状況の把握で受け渡すグループを表す。
@@ -86,6 +103,13 @@ public record TemporalActivityEvidence(
    * @param facts 事実一覧
    */
   public record Group(Instant first, Instant last, List<String> observationIds, Facts facts) {
+    public Group {
+      observationIds =
+          observationIds == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(observationIds));
+    }
+
     /** 作業状況の把握で用いる所属プロジェクトの識別子を返す。 */
     public String projectId() {
       return facts.projectId();

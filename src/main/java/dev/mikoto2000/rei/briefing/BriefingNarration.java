@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.briefing;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -10,4 +12,15 @@ import java.util.List;
  * @param nextActions 次操作一覧
  */
 public record BriefingNarration(
-    String overview, List<String> cautionPoints, List<String> nextActions) {}
+    String overview, List<String> cautionPoints, List<String> nextActions) {
+  public BriefingNarration {
+    cautionPoints =
+        cautionPoints == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(cautionPoints));
+    nextActions =
+        nextActions == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(nextActions));
+  }
+}

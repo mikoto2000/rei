@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.dot;
 
 import dev.mikoto2000.rei.event.CredentialRedactor;
+import java.math.BigDecimal;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -31,11 +32,15 @@ public final class DotPayload {
   /** 利用者の状態表示で用いる整数を返す。 */
   public static int integer(Object value, int fallback, int min, int max) {
     if (value == null) return fallback;
-    if (!(value instanceof Number n)
-        || n.doubleValue() != n.longValue()
-        || n.longValue() < min
-        || n.longValue() > max) throw new DotException("INVALID_ARGUMENT");
-    return n.intValue();
+    if (!(value instanceof Number n)) throw new DotException("INVALID_ARGUMENT");
+    int parsed;
+    try {
+      parsed = new BigDecimal(n.toString()).intValueExact();
+    } catch (NumberFormatException | ArithmeticException failure) {
+      throw new DotException("INVALID_ARGUMENT");
+    }
+    if (parsed < min || parsed > max) throw new DotException("INVALID_ARGUMENT");
+    return parsed;
   }
 
   /** 利用先の制約に合わせて、指定された値を扱える形に整える。 */

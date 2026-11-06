@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -59,7 +60,19 @@ public final class ChangeTestImpactService {
       List<String> reasons,
       List<String> affectedModules,
       List<IntegrationCandidate> integrationCandidates,
-      boolean partial) {}
+      boolean partial) {
+    public RegressionAssessment {
+      reasons = reasons == null ? null : Collections.unmodifiableList(new ArrayList<>(reasons));
+      affectedModules =
+          affectedModules == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(affectedModules));
+      integrationCandidates =
+          integrationCandidates == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(integrationCandidates));
+    }
+  }
 
   /**
    * 共通の実行基盤で受け渡す結果を表す。
@@ -86,6 +99,22 @@ public final class ChangeTestImpactService {
       List<Candidate> candidates,
       RegressionAssessment regressionAssessment,
       CoverageImpactService.Result coverage) {
+    public Result {
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+      changedFiles =
+          changedFiles == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(changedFiles));
+      unindexedChanges =
+          unindexedChanges == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(unindexedChanges));
+      candidates =
+          candidates == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(candidates));
+    }
+
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Result(
         String root,
