@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.vectorstore;
 
 import dev.mikoto2000.rei.vectordocument.VectorDocumentEntry;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentRepository;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.util.ArrayList;
@@ -25,12 +27,20 @@ public final class SqliteVectorStore
     implements VectorStore, VectorDocumentRepository, RetrievalCandidates {
 
   /** データ取得元。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the configured source for both SQL connections and the native client API.")
   private final DataSource dataSource;
 
   /** 埋め込み表現モデル。 */
   private final EmbeddingModel embeddingModel;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Jackson 3 mappers retain their configuration after construction.")
   private final JsonMapper objectMapper;
 
   /** 埋め込み表現次元数。 */
