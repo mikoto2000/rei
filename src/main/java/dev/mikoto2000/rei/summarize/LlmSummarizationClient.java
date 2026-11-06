@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.summarize;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -15,6 +17,10 @@ import org.springframework.stereotype.Component;
 public class LlmSummarizationClient implements SummarizationClient {
 
   /** モデル提供元。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured application model provider for model and option selection.")
   private final LlmModelProvider modelProvider;
 
   /** モデル保持先サービス。 */

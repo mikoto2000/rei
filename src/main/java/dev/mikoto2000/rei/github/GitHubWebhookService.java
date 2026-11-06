@@ -7,6 +7,8 @@ import dev.mikoto2000.rei.attention.AttentionRepository;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -64,6 +66,10 @@ public final class GitHubWebhookService {
   private final ProjectRegistry projects;
 
   /** 会話一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared lifecycle service so session validation and submission use the same session state.")
   private final SessionLifecycle sessions;
 
   /** 事実一覧。 */

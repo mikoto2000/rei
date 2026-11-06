@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.doctor;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import static dev.mikoto2000.rei.doctor.DoctorResult.Status.ERROR;
 import static dev.mikoto2000.rei.doctor.DoctorResult.Status.NOT_APPLICABLE;
 import static dev.mikoto2000.rei.doctor.DoctorResult.Status.NOT_CONFIGURED;
@@ -94,6 +96,10 @@ public class DoctorActiveService {
   private final Environment environment;
 
   /** モデル一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured application model provider for model and option selection.")
   private final LlmModelProvider models;
 
   /** 選択中モデル。 */

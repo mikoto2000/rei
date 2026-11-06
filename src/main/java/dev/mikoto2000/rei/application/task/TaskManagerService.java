@@ -45,6 +45,10 @@ public final class TaskManagerService {
   private final ProjectRegistry projects;
 
   /** 実行一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared run registry so participants observe the same run lifecycle.")
   private final RunRegistry runs;
 
   /** 再開用の記録一覧。 */

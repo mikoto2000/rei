@@ -42,15 +42,27 @@ public final class SlackRuntime {
   private final ProjectRegistry projects;
 
   /** 会話一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared lifecycle service so session validation and submission use the same session state.")
   private final SessionLifecycle sessions;
 
   /** 登録台帳。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared run registry so participants observe the same run lifecycle.")
   private final RunRegistry registry;
 
   /** 実行一覧。 */
   private final RunService runs;
 
   /** 入力の振り分け。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared input router so all operations use the same queue and active runs.")
   private final ConversationInputRouter router;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */

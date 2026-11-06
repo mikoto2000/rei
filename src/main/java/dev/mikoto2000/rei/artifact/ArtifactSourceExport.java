@@ -32,6 +32,10 @@ public final class ArtifactSourceExport {
   private final ProjectRegistry projects;
 
   /** 会話一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared lifecycle service so session validation and submission use the same session state.")
   private final SessionLifecycle sessions;
 
   /** 変更一覧。 */

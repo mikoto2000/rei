@@ -9,6 +9,8 @@ import dev.mikoto2000.rei.llm.OutputLimitDetector;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
 import dev.mikoto2000.rei.memory.model.LongTermMemory;
 import dev.mikoto2000.rei.memory.model.MemoryCandidate;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -27,6 +29,10 @@ import org.springframework.stereotype.Service;
 @Service
 public class LlmMemoryProcessor implements MemoryCandidateExtractor, MemoryResolutionModel {
   /** モデル一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured application model provider for model and option selection.")
   private final LlmModelProvider models;
 
   /** この機能の動作設定。 */

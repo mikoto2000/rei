@@ -36,6 +36,10 @@ public class ResumeCommand implements Callable<Integer> {
   private final ProjectService projects;
 
   /** キャンセル。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final dev.mikoto2000.rei.core.service.CommandCancellationService cancellation;
 
   /** 仕様。 */

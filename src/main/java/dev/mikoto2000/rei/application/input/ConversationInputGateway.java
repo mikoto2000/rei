@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.application.input;
 import dev.mikoto2000.rei.application.session.SessionLifecycle;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -31,12 +33,20 @@ public final class ConversationInputGateway {
   private record Accepted(ConversationInput input, AgentRunContext context, Instant acceptedAt) {}
 
   /** 受付から終了までの管理。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared lifecycle service so session validation and submission use the same session state.")
   private final SessionLifecycle lifecycle;
 
   /** 実行先への引き渡し。 */
   private final BiConsumer<AgentRunContext, String> dispatch;
 
   /** 入力の振り分け。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared input router so all operations use the same queue and active runs.")
   private final ConversationInputRouter router;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */

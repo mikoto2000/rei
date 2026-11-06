@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.subagent;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.BUSY;
 import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.CANCELLED;
 import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.CONSENT_REQUIRED;
@@ -352,6 +354,10 @@ public final class ChatGptSubAgentBackend {
   private final ToolPermissionGuard permissions;
 
   /** キャンセル。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final CommandCancellationService cancellation;
 
   /** イベント一覧。 */
@@ -364,6 +370,10 @@ public final class ChatGptSubAgentBackend {
   private final Clock clock;
 
   /** 実行一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared run registry so participants observe the same run lifecycle.")
   private final RunRegistry runs;
 
   /** 受付。 */
