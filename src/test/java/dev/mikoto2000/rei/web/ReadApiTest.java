@@ -64,12 +64,13 @@ class ReadApiTest {
             "instructions");
     when(skills.findAll()).thenReturn(List.of(skill));
     when(skills.findByName("test")).thenReturn(Optional.of(skill));
+    var searches = mock(SearchKnowledgeService.class);
     var service =
         new ReadQueryService(
             feeds,
             skills,
             mock(ProfileEventLogStore.class),
-            mock(SearchKnowledgeService.class),
+            searches,
             mock(BriefingService.class));
     var mvc =
         MockMvcBuilders.standaloneSetup(new ReadController(service))
@@ -90,6 +91,6 @@ class ReadApiTest {
     mvc.perform(post("/api/v1/search").contentType("application/json").content("{\"query\":\" \"}"))
         .andExpect(status().isBadRequest());
     // 追加の処理を依頼していないことも確認し、想定外の副作用を防ぐ。
-    verifyNoInteractions(service.searches());
+    verifyNoInteractions(searches);
   }
 }
