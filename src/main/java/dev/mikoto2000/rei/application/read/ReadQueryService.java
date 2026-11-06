@@ -12,6 +12,7 @@ import dev.mikoto2000.rei.skills.AgentSkill;
 import dev.mikoto2000.rei.skills.AgentSkillRepository;
 import java.io.IOException;
 import java.util.List;
+import java.util.function.Supplier;
 import org.springframework.stereotype.Service;
 
 /**
@@ -19,28 +20,46 @@ import org.springframework.stereotype.Service;
  *
  * <p>Read adapter over the same services and repository ports used by the shell. All data here is
  * global.
- *
- * @param feeds フィード一覧
- * @param skills スキル一覧
- * @param profiles 利用者情報一覧
- * @param searches 検索の記録
- * @param briefings 日次案内の記録
  */
 @Service
-public record ReadQueryService(
-    FeedService feeds,
-    AgentSkillRepository skills,
-    ProfileEventLogStore profiles,
-    SearchKnowledgeService searches,
-    BriefingService briefings) {
+public final class ReadQueryService {
+  /** フィード一覧を読み取る操作。 */
+  private final Supplier<List<Feed>> feeds;
+
+  /** スキルの保存先。 */
+  private final AgentSkillRepository skills;
+
+  /** 利用者情報の読み取り窓口。 */
+  private final ProfileQueryService profiles;
+
+  /** 検索の窓口。 */
+  private final SearchKnowledgeService searches;
+
+  /** 日次案内の窓口。 */
+  private final BriefingService briefings;
+
+  /** 照会で使用する読み取り先を受け取る。 */
+  public ReadQueryService(
+      FeedService feeds,
+      AgentSkillRepository skills,
+      ProfileEventLogStore profiles,
+      SearchKnowledgeService searches,
+      BriefingService briefings) {
+    this.feeds = () -> feeds.list();
+    this.skills = skills;
+    this.profiles = new ProfileQueryService(profiles);
+    this.searches = searches;
+    this.briefings = briefings;
+  }
+
   /** 情報の照会で用いるフィード一覧一覧を返す。 */
   public List<Feed> feedsList() {
-    return feeds.list();
+    return feeds.get();
   }
 
   /** 情報の照会で用いるフィードを返す。 */
   public Feed feed(long id) {
-    return feeds.list().stream()
+    return feeds.get().stream()
         .filter(f -> f.id() == id)
         .findFirst()
         .orElseThrow(() -> new ResourceNotFoundException("Feed"));
@@ -60,7 +79,7 @@ public record ReadQueryService(
 
   /** 情報の照会で用いる利用者情報を返す。 */
   public ProfileEventLogStore.ProfileSummary profile() {
-    return new ProfileQueryService(profiles).summary();
+    return profiles.summary();
   }
 
   /** 情報の照会で用いる日次案内を返す。 */
