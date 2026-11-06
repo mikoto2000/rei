@@ -347,19 +347,12 @@ public class ExternalAgentDelegationService implements AutoCloseable {
           || owner.projectId() == null
           || owner.mode() != dev.mikoto2000.rei.core.chat.AgentRunContext.Mode.EXCLUSIVE)
         return ExternalAgentResult.rejected("Exclusive current Project required");
-      run.checkToolPermission(
-          codex ? "requestCodexImplementation" : "requestClaudeCodeImplementation", target);
+      run.checkToolPermission("requestClaudeCodeImplementation", target);
       Path parentRoot = owner.projectRoot().toRealPath();
       String relativeTarget =
           parentRoot.relativize(ExternalAgentRequest.resolveTarget(parentRoot, target)).toString();
-      String recipe =
-          codex
-              ? modelBudgetProperties.getImplementationTestCommand()
-              : claudeProperties.getImplementationTestCommand();
-      int seconds =
-          codex
-              ? modelBudgetProperties.getImplementationTestTimeoutSeconds()
-              : claudeProperties.getImplementationTestTimeoutSeconds();
+      String recipe = claudeProperties.getImplementationTestCommand();
+      int seconds = claudeProperties.getImplementationTestTimeoutSeconds();
       if (recipe == null
           || recipe.isBlank()
           || recipe.length() > 4096
