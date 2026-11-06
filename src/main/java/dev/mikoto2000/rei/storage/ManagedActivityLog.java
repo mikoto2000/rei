@@ -12,7 +12,9 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -81,7 +83,7 @@ public final class ManagedActivityLog {
   }
 
   /** データ保存の共通処理で用いるパスを返す。 */
-  private Path path(Segment segment) throws Exception {
+  private Path path(Segment segment) throws IOException {
     Path file = registry.root.resolve(segment.path()).normalize();
     if (!directory(segment.scope()).equals(file.getParent())
         || !StorageBackup.fileName(file).equals(segment.id() + ".jsonl"))
@@ -91,7 +93,7 @@ public final class ManagedActivityLog {
   }
 
   /** 必要な対象を利用できるよう、管理対象作業状況ログの利用を開始する。 */
-  private static Segment open(Connection db, String scope) throws Exception {
+  private static Segment open(Connection db, String scope) throws SQLException {
     try (var query =
         db.prepareStatement("SELECT * FROM activity_segments WHERE scope=? AND state='OPEN'")) {
       query.setString(1, scope);
@@ -119,7 +121,7 @@ public final class ManagedActivityLog {
   }
 
   /** データ保存の共通処理で用いるchainを返す。 */
-  private static String chain(String previous, byte[] record) throws Exception {
+  private static String chain(String previous, byte[] record) throws NoSuchAlgorithmException {
     var digest = java.security.MessageDigest.getInstance("SHA-256");
     digest.update(HexFormat.of().parseHex(previous));
     return HexFormat.of().formatHex(digest.digest(record));
@@ -364,7 +366,7 @@ public final class ManagedActivityLog {
 
   /** データ保存の共通処理に関する対象各対象ファイルを処理する。 */
   private static void forEachFile(
-      Path file, java.util.function.Consumer<ProfileEventLogEntry> consumer) throws Exception {
+      Path file, java.util.function.Consumer<ProfileEventLogEntry> consumer) throws IOException {
     var mapper =
         StorageDatabase.JSON
             .copy()

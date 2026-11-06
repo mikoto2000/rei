@@ -1,7 +1,9 @@
 package dev.mikoto2000.rei.activity;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Instant;
 import javax.sql.DataSource;
 
@@ -26,7 +28,7 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
   }
 
   /** 作業状況の把握に関する初期化を処理する。 */
-  private synchronized void initialize() throws Exception {
+  private synchronized void initialize() throws SQLException, JsonProcessingException {
     if (initialized) return;
     try (var c = source.getConnection();
         var s = c.createStatement()) {
@@ -47,7 +49,7 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
   }
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
-  private Snapshot read(Connection c) throws Exception {
+  private Snapshot read(Connection c) throws SQLException, JsonProcessingException {
     try (var s = c.createStatement();
         var r =
             s.executeQuery(

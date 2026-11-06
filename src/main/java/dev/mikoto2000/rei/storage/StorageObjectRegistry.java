@@ -1,11 +1,13 @@
 package dev.mikoto2000.rei.storage;
 
 import dev.mikoto2000.rei.core.project.ProjectStorage;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -166,7 +168,7 @@ public final class StorageObjectRegistry {
   }
 
   /** データ保存の共通処理で用いる識別子を返す。 */
-  static String id(Path root, Path file) throws Exception {
+  static String id(Path root, Path file) throws NoSuchAlgorithmException {
     String path = root.relativize(file.toAbsolutePath().normalize()).toString().replace('\\', '/');
     if (System.getProperty("os.name").startsWith("Windows")) path = path.toLowerCase(Locale.ROOT);
     return HexFormat.of()
@@ -605,7 +607,7 @@ public final class StorageObjectRegistry {
   }
 
   /** データ保存の共通処理で用いる保護なし状態を返す。 */
-  Optional<String> protectionWithoutStatus(Connection db, StoredObject object) throws Exception {
+  Optional<String> protectionWithoutStatus(Connection db, StoredObject object) throws SQLException {
     if (!object.originVerified()) return Optional.of("unverified-origin");
     if (object.pinned()) return Optional.of("pinned");
     if (object.legalHold()) return Optional.of("legal-hold");
@@ -650,7 +652,7 @@ public final class StorageObjectRegistry {
   }
 
   /** データ保存の共通処理において、変更なしに該当するか判定する。 */
-  boolean unchanged(StoredObject object) throws Exception {
+  boolean unchanged(StoredObject object) throws IOException {
     if (object.kind().equals("EVENT"))
       return database.read(
           db -> {

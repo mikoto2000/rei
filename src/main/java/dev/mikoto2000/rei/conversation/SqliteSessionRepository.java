@@ -1,11 +1,13 @@
 package dev.mikoto2000.rei.conversation;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.application.session.CursorKey;
 import dev.mikoto2000.rei.application.session.SessionMetadata;
 import dev.mikoto2000.rei.application.session.SessionRepository;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import java.nio.file.Path;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -54,7 +56,7 @@ public final class SqliteSessionRepository implements SessionRepository {
   }
 
   /** 会話履歴と受付記録の管理で用いる前回を返す。 */
-  private static Previous previous(Connection connection, String id) throws Exception {
+  private static Previous previous(Connection connection, String id) throws SQLException, JsonProcessingException {
     try (var query =
         connection.prepareStatement("SELECT record,revision FROM sessions WHERE session_id=?")) {
       query.setString(1, id);
@@ -114,7 +116,7 @@ public final class SqliteSessionRepository implements SessionRepository {
   /** 会話履歴と受付記録の管理に関する登録を処理する。 */
   public static void put(
       Connection connection, SessionMetadata metadata, long revision, Long importOrder)
-      throws Exception {
+      throws SQLException, JsonProcessingException {
     try (var write =
         connection.prepareStatement(
             "INSERT INTO sessions(session_id,project_id,created_seconds,created_nanos,updated_seconds,updated_nanos,id_order,record,revision,import_order) VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(session_id) DO UPDATE SET updated_seconds=excluded.updated_seconds,updated_nanos=excluded.updated_nanos,record=excluded.record,revision=excluded.revision")) {

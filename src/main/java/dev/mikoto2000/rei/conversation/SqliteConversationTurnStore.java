@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.conversation;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.application.session.CursorKey;
 import dev.mikoto2000.rei.application.session.SessionTurn;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
@@ -145,7 +146,7 @@ public final class SqliteConversationTurnStore extends ConversationTurnStore {
 
   /** 会話履歴と受付記録の管理に関する登録を処理する。 */
   public static void put(Connection connection, String scope, String key, long ordinal, Turn turn)
-      throws Exception {
+      throws SQLException, JsonProcessingException {
     try (var write =
         connection.prepareStatement(
             "INSERT INTO turns(project_id,conversation_key,ordinal,run_id,run_order,created_seconds,created_nanos,status,source,source_id,record) VALUES(?,?,?,?,?,?,?,?,?,?,?) ON CONFLICT(project_id,conversation_key,ordinal) DO UPDATE SET status=excluded.status,record=excluded.record")) {

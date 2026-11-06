@@ -1,7 +1,9 @@
 package dev.mikoto2000.rei.storage;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.storage.StorageObjectRegistry.StoredObject;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -300,7 +302,7 @@ public final class RetentionPlanner {
 
   /** 現在の状態を、後から参照できる記録として取り出す。 */
   private static String snapshot(
-      String policy, long version, String scope, List<StoredObject> candidates) throws Exception {
+      String policy, long version, String scope, List<StoredObject> candidates) throws NoSuchAlgorithmException, JsonProcessingException {
     var digest = MessageDigest.getInstance("SHA-256");
     digest.update(
         StorageDatabase.JSON.writeValueAsBytes(List.of(policy, version, scope, candidates)));
@@ -313,7 +315,7 @@ public final class RetentionPlanner {
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
-  static Plan get(Connection db, String id) throws Exception {
+  static Plan get(Connection db, String id) throws SQLException, JsonProcessingException {
     Plan metadata;
     try (var query = db.prepareStatement("SELECT record FROM retention_plans WHERE id=?")) {
       query.setString(1, id);

@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.activity.behavior;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import java.sql.SQLException;
 import javax.sql.DataSource;
 
 /**
@@ -25,7 +26,7 @@ public final class SqliteBehaviorStateStore implements BehaviorStateStore {
   }
 
   /** 作業習慣の支援に関する初期化を処理する。 */
-  private void initialize() throws Exception {
+  private void initialize() throws SQLException {
     if (initialized) return;
     try (var c = dataSource.getConnection();
         var s = c.createStatement()) {

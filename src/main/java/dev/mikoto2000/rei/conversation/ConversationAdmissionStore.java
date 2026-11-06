@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.conversation;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.application.run.IdempotencyConflictException;
 import dev.mikoto2000.rei.application.run.IdempotencyExpiredException;
 import dev.mikoto2000.rei.application.run.ResourceNotFoundException;
@@ -235,7 +236,7 @@ public final class ConversationAdmissionStore implements AutoCloseable {
   }
 
   /** 現在の状態を、後から参照できる記録として取り出す。 */
-  private Optional<RunSnapshot> snapshot(Connection db, String id) throws Exception {
+  private Optional<RunSnapshot> snapshot(Connection db, String id) throws SQLException, JsonProcessingException {
     try (var query =
         db.prepareStatement(
             "SELECT context,status,started,completed FROM conversation_admissions WHERE run_id=?")) {

@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.activity;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.sql.Connection;
@@ -120,7 +121,7 @@ public final class SqliteActivityStore implements ActivityStore {
   }
 
   /** 作業状況の把握で用いる記録一覧を返す。 */
-  private List<ActivityRecord> records(Connection c, Instant start, Instant end) throws Exception {
+  private List<ActivityRecord> records(Connection c, Instant start, Instant end) throws SQLException, JsonProcessingException {
     var records = new ArrayList<ActivityRecord>();
     try (var s =
         c.prepareStatement(

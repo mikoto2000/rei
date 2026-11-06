@@ -1,11 +1,14 @@
 package dev.mikoto2000.rei.storage;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.storage.StorageObjectRegistry.StoredObject;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -94,7 +97,7 @@ public final class RetentionExecutor {
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
-  private static Execution get(Connection db, String id) throws Exception {
+  private static Execution get(Connection db, String id) throws SQLException {
     UUID.fromString(id);
     try (var query = db.prepareStatement("SELECT * FROM retention_executions WHERE id=?")) {
       query.setString(1, id);
@@ -127,7 +130,7 @@ public final class RetentionExecutor {
   }
 
   /** データ保存の共通処理で用いる項目一覧を返す。 */
-  private static List<Item> items(Connection db, String id) throws Exception {
+  private static List<Item> items(Connection db, String id) throws SQLException, JsonProcessingException {
     var result = new ArrayList<Item>();
     try (var query =
         db.prepareStatement(
@@ -176,7 +179,7 @@ public final class RetentionExecutor {
   }
 
   /** データ保存の共通処理で用いるquarantineを返す。 */
-  private Path quarantine(String execution, Item item) throws Exception {
+  private Path quarantine(String execution, Item item) throws IOException {
     Path expected =
         registry
             .root
@@ -190,7 +193,7 @@ public final class RetentionExecutor {
   }
 
   /** 要求された条件を満たすことを確認する。 */
-  private static void verify(Path file, StoredObject object) throws Exception {
+  private static void verify(Path file, StoredObject object) throws IOException {
     StorageBackup.requireSafePath(file);
     if (!Files.isRegularFile(file, LinkOption.NOFOLLOW_LINKS)
         || Files.size(file) != object.size()
@@ -209,7 +212,7 @@ public final class RetentionExecutor {
   }
 
   /** データ保存の共通処理に関するmoveを処理する。 */
-  private static void move(Path source, Path target) throws Exception {
+  private static void move(Path source, Path target) throws IOException {
     StorageBackup.requireSafePath(source);
     StorageBackup.requireSafePath(target);
     Files.createDirectories(StorageBackup.requireParent(target));
@@ -219,7 +222,7 @@ public final class RetentionExecutor {
   }
 
   /** データ保存の共通処理に関する実行状態を処理する。 */
-  private void executionState(Connection db, String id, String state) throws Exception {
+  private void executionState(Connection db, String id, String state) throws SQLException {
     try (var query =
         db.prepareStatement("UPDATE retention_executions SET status=?,updated=? WHERE id=?")) {
       query.setString(1, state);
@@ -232,7 +235,7 @@ public final class RetentionExecutor {
   /** データ保存の共通処理に関する項目状態を処理する。 */
   private void itemState(
       Connection db, String id, Item item, String state, String objectStatus, Instant quarantined)
-      throws Exception {
+      throws SQLException {
     try (var query =
         db.prepareStatement(
             "UPDATE retention_execution_items SET state=?,quarantined=COALESCE(?,quarantined) WHERE execution_id=? AND object_id=?")) {

@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.storage;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import java.sql.Connection;
 import java.sql.SQLException;
 
@@ -10,7 +11,7 @@ import java.sql.SQLException;
  */
 final class ReviewRuntimeMigration {
   /** 指定された内容を、現在の対象へ反映する。 */
-  static void apply(Connection db) throws Exception {
+  static void apply(Connection db) throws SQLException, JsonProcessingException {
     try (var sql = db.createStatement()) {
       sql.execute(
           "CREATE TABLE review_participants(job TEXT NOT NULL,project TEXT NOT NULL,conversation TEXT NOT NULL,run TEXT NOT NULL,PRIMARY KEY(job,project,conversation,run))");

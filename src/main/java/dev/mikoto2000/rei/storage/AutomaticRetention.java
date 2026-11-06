@@ -1,7 +1,10 @@
 package dev.mikoto2000.rei.storage;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -57,7 +60,7 @@ public final class AutomaticRetention {
   /** 内容の同一性を照合するためのハッシュ値を求める。 */
   private static String hash(
       RetentionPlanner.Policy policy, String scope, int objects, long bytes, long interval)
-      throws Exception {
+      throws NoSuchAlgorithmException, JsonProcessingException {
     return HexFormat.of()
         .formatHex(
             MessageDigest.getInstance("SHA-256")
@@ -119,7 +122,7 @@ public final class AutomaticRetention {
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
-  private static Consent get(Connection db, String id) throws Exception {
+  private static Consent get(Connection db, String id) throws SQLException, JsonProcessingException {
     UUID.fromString(id);
     try (var query =
         db.prepareStatement("SELECT record FROM retention_automatic_consents WHERE id=?")) {

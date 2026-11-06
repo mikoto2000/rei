@@ -1,7 +1,9 @@
 package dev.mikoto2000.rei.activity;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -153,7 +155,7 @@ public final class ClassificationTelemetryRepository {
   }
 
   /** 作業状況の把握に関する初期化を処理する。 */
-  private void initialize() throws Exception {
+  private void initialize() throws SQLException {
     if (initialized) return;
     try (var c = ds.getConnection();
         var s = c.createStatement()) {
@@ -361,7 +363,7 @@ public final class ClassificationTelemetryRepository {
 
   /** 作業状況の把握で用いるmembersを返す。 */
   private List<Row> members(java.sql.Connection c, String kind, String key, Instant since)
-      throws Exception {
+      throws SQLException, JsonProcessingException {
     var rows = new ArrayList<Row>();
     try (var s =
         switch (kind) {
