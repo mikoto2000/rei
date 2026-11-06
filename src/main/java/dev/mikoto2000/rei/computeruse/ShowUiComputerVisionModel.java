@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.computeruse;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
@@ -172,6 +174,10 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
   }
 
   /** 画面操作の支援で用いる場所の特定を返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original model failure after writing the diagnostic evidence.")
   private double[] locate(
       ComputerObservation observation,
       DisplayCapture original,

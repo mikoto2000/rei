@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.core.chat;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -300,6 +302,10 @@ public final class ProjectRunQueue {
   }
 
   /** 予約した作業を実行先へ渡し、今回の受付に関係する拒否を呼び出し元へ伝える。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Propagates the first dispatch failure after attempting all ready entries.")
   private void dispatchAll(List<Job> selected, Job submitting) {
     RuntimeException failure = null;
     for (var job : selected)
@@ -315,6 +321,10 @@ public final class ProjectRunQueue {
   }
 
   /** 予約がまだ有効な作業だけを開始し、完了または拒否の後に実行枠を解放する。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the dispatch failure after rejecting and completing the queue entry.")
   private void dispatch(Job job) {
     try {
       if (!isReserved(job)) {

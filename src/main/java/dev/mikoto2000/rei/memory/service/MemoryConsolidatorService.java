@@ -228,6 +228,10 @@ public class MemoryConsolidatorService {
   }
 
   /** 長期記憶の保存と検索の要求を実行し、呼び出し元へ結果を返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original model failure after settling token accounting.")
   private String call(String prompt, String conversation, ModelCallBudget budget) {
     budget.run();
     boolean invoked = false, reported = false;

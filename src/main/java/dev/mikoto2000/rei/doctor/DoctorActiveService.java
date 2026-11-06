@@ -219,6 +219,10 @@ public class DoctorActiveService {
       OpenAiChatOptions inferenceOptions) {}
 
   /** 実行環境の診断で用いる活動中を返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the execution stop signal after checking for cancellation.")
   public Report active(RunExecutionContext run, DoctorRequest request) {
     run.checkActive();
     if (!environment.getProperty("rei.doctor.enabled", Boolean.class, true))
@@ -422,6 +426,10 @@ public class DoctorActiveService {
   }
 
   /** 実行環境の診断で用いる推定を返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original inference failure when it is not classified as a timeout.")
   private DoctorResult inference(
       RunExecutionContext run, OpenAiChatOptions captured, Duration timeout) {
     var model = models.subAgentChatModel();

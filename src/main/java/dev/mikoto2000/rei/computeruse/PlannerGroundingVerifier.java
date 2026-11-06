@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.computeruse;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -290,6 +292,10 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
   }
 
   /** 画面操作の支援の要求を実行し、呼び出し元へ結果を返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original model failure after writing the diagnostic evidence.")
   private String call(ComputerObservation observation, String stage, String text, byte[]... images)
       throws IOException {
     var requestOptions =

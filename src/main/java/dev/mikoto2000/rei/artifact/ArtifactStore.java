@@ -203,6 +203,10 @@ public final class ArtifactStore implements dev.mikoto2000.rei.secretary.Secreta
   }
 
   /** 実行状況を利用先で把握できるよう、自分が所有する対象を通知する。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Retains the original publish failure after recording an uncertain artifact state.")
   private Artifact publishOwned(
       ProjectContext project,
       String session,

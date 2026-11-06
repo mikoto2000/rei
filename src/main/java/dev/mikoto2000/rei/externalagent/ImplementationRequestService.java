@@ -369,6 +369,10 @@ public class ImplementationRequestService {
   }
 
   /** 要求された処理を実行する。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original execution failure after recording the uncertain outcome.")
   public Outcome execute(RunExecutionContext run, String id, int version, String hash) {
     var owner = owner(run);
     run.checkActive();

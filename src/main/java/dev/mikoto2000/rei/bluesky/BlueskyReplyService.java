@@ -204,7 +204,7 @@ public class BlueskyReplyService {
           candidates.size(),
           replied,
           skipped);
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       log.warn("Bluesky reply failed for handle={}: {}", user.getHandle(), e.getMessage(), e);
     }
   }

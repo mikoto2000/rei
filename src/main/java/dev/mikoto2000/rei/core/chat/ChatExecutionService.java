@@ -541,6 +541,10 @@ public class ChatExecutionService {
   }
 
   /** 依頼された操作を進めるため、入力先対象範囲を実行する。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the execution failure type while recording run and checkpoint outcomes.")
   private ChatExecutionResult executeInScope(
       AgentRunContext context,
       String promptText,

@@ -132,6 +132,10 @@ public class SleepService {
   }
 
   /** 長期記憶の保存と検索で用いる待機を返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the execution failure and attaches a secondary audit failure to it.")
   public Report sleep(
       String session,
       String project,

@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.slack;
 
 import com.slack.api.Slack;
 import com.slack.api.SlackConfig;
+import com.slack.api.methods.SlackApiException;
 import com.slack.api.socket_mode.SocketModeClient;
 import com.slack.api.util.http.SlackHttpClient;
 import dev.mikoto2000.rei.application.run.RunRegistry;
@@ -11,6 +12,7 @@ import dev.mikoto2000.rei.application.session.SessionRepository;
 import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.event.AgentEventBus;
+import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
 import java.nio.channels.OverlappingFileLockException;
@@ -188,7 +190,7 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
                         && identity.getProfile() != null
                     ? identity.getProfile().getBotId()
                     : null;
-              } catch (Exception unavailable) {
+              } catch (IOException | SlackApiException | RuntimeException unavailable) {
                 return null;
               }
             });
@@ -230,7 +232,7 @@ final class SlackSdkConnection implements SlackSocketLifecycle.Connection {
       socket.connect();
       if (collaboration != null) collaboration.enableRequests();
       return connection;
-    } catch (Exception error) {
+    } catch (IOException | SlackApiException | RuntimeException error) {
       connection.close();
       if (error instanceof SlackSetupException setup) throw setup;
       throw new SlackSetupException(
