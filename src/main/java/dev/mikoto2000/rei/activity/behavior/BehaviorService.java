@@ -146,6 +146,10 @@ public final class BehaviorService {
   }
 
   /** 作業習慣の支援に関する定期確認を処理する。 */
+  @SuppressFBWarnings(
+      value = "REC_CATCH_EXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Isolates checked failures from the configured message generator in a scheduled evaluation.")
   public void tick() {
     // 複数の経路から同じ処理が求められても、状態の切り替えは一度だけ行う。
     if (!running.compareAndSet(false, true)) return;
