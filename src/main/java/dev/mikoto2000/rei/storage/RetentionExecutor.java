@@ -262,6 +262,10 @@ public final class RetentionExecutor {
   }
 
   /** 指定された内容を、現在の対象へ反映する。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves unchecked apply failures while wrapping checked quarantine failures.")
   public Execution apply(String planId) {
     return registry.serialized(
         () -> {
@@ -386,6 +390,10 @@ public final class RetentionExecutor {
   }
 
   /** 保存済みの記録から、利用する状態を復元する。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves unchecked restore failures while wrapping checked storage failures.")
   public Execution restore(String id) {
     return registry.serialized(
         () -> {
@@ -527,6 +535,10 @@ public final class RetentionExecutor {
   }
 
   /** データ保存の共通処理で用いる保持期限を過ぎた情報の削除を返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves unchecked purge failures while wrapping checked storage failures.")
   public Execution purge(String id) {
     return registry.serialized(
         () -> {

@@ -423,7 +423,9 @@ public class BeginnerReviewService {
             reviewed.add(chapter.file());
           }
           chapter.explained().forEach(e -> known.add(e.value()));
-        } catch (ExecutionStoppedException | BoundedToolLoop.SharedBudgetExceeded error) {
+        } catch (ExecutionStoppedException error) {
+          throw error;
+        } catch (BoundedToolLoop.SharedBudgetExceeded error) {
           throw error;
         } catch (java.io.IOException | RuntimeException error) {
           RunCancellation.propagate(error);

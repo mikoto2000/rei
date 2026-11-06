@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.storage;
 
 import dev.mikoto2000.rei.event.ProfileEventLogEntry;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.BufferedInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -279,6 +281,10 @@ public final class ManagedActivityLog {
    *
    * <p>Bounded materializing compatibility API; never returns a silently incomplete list.
    */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves unchecked read failures and wraps checked failures at the log boundary.")
   public List<ProfileEventLogEntry> read(String supplied) {
     String scope = scope(supplied);
     return registry.serialized(

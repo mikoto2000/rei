@@ -375,10 +375,7 @@ public final class ConversationInputRouter {
               admissions.transition(
                   context.runId(), dev.mikoto2000.rei.application.run.RunStatus.FAILED);
             try {
-              lifecycle.accept(
-                  () -> {
-                    throw error;
-                  });
+              lifecycle.accept(rethrowDispatchFailure(error));
             } finally {
               forget(slot);
             }
@@ -466,10 +463,7 @@ public final class ConversationInputRouter {
                       context.runId(), dev.mikoto2000.rei.application.run.RunStatus.FAILED);
                 if (requestCaptures != null) requestCaptures.startFailed(context.runId());
                 try {
-                  lifecycle.accept(
-                      () -> {
-                        throw error;
-                      });
+                  lifecycle.accept(rethrowDispatchFailure(error));
                 } finally {
                   agentSlots.remove(context.runId());
                   forget(slot);
@@ -536,4 +530,15 @@ public final class ConversationInputRouter {
             .warn("Active run display listener failed", error);
       }
   }
+  /** ライフサイクルの境界で元のディスパッチ失敗を伝える。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Passes the original dispatch failure through the lifecycle callback.")
+  private static Runnable rethrowDispatchFailure(RuntimeException error) {
+    return () -> {
+      throw error;
+    };
+  }
+
 }

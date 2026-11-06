@@ -124,6 +124,10 @@ public final class ConversationInputGateway {
   }
 
   /** 依頼を受け付け、実行を担当する処理へ引き渡す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original dispatch failure after rolling back the accepted input.")
   public synchronized AgentRunContext submit(
       ConversationInput input,
       AgentRunContext.Mode mode,

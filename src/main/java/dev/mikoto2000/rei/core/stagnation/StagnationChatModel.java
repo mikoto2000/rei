@@ -585,6 +585,10 @@ public class StagnationChatModel implements ChatModel {
           }
 
           /** 実行の停滞への対処の要求を実行し、呼び出し元へ結果を返す。 */
+          @SuppressFBWarnings(
+              value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+              matchType = SuppressMatchType.EXACT,
+              justification = "Preserves the original tool failure when it cannot be handled as a review correction.")
           public String call(String input, ToolContext toolContext) {
             try (var scope =
                 dev.mikoto2000.rei.core.chat.AgentRunScope.open(context.runContext())) {
