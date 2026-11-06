@@ -280,10 +280,11 @@ class SafeHttpFetcherTest {
             out.write(bytes.toByteArray());
           }
         });
-    assertEquals(4096, get("/gzip", policy(128, 4096, 2, 2000, 1000)).body().length);
+    // Allow decompressor startup on shared CI runners.
+    assertEquals(4096, get("/gzip", policy(128, 4096, 2, 8000, 4000)).body().length);
     assertEquals(
         HttpFetchException.Code.DECODED_LIMIT,
-        assertThrows(HttpFetchException.class, () -> get("/gzip", policy(128, 64, 2, 2000, 1000)))
+        assertThrows(HttpFetchException.class, () -> get("/gzip", policy(128, 64, 2, 8000, 4000)))
             .code());
   }
 
