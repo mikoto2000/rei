@@ -38,8 +38,8 @@ public final class RobotComputerInput implements ComputerInput {
               g ->
                   g.id().equals(observed.id())
                       && g.bounds().equals(observed.bounds())
-                      && g.scaleX() == observed.scaleX()
-                      && g.scaleY() == observed.scaleY()
+                      && Double.compare(g.scaleX(), observed.scaleX()) == 0
+                      && Double.compare(g.scaleY(), observed.scaleY()) == 0
                       && g.primary() == observed.primary()))
         throw new IllegalArgumentException("Display changed since observation");
     }
