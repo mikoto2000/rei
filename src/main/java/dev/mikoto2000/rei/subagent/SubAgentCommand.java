@@ -286,6 +286,11 @@ public class SubAgentCommand implements Callable<Integer> {
     }
   }
 
+  private static SubAgentCommand requireParent(SubAgentCommand command) {
+    if (command == null) throw new IllegalStateException("Missing parent command");
+    return command;
+  }
+
   /** 補助エージェントへの委譲のうち、表示の操作を利用者コマンドとして受け付ける。 */
   @Command(name = "show", description = "指定 SubAgent の設定と利用可能なツールを表示します")
   public static class ShowCommand implements Callable<Integer> {
@@ -298,14 +303,15 @@ public class SubAgentCommand implements Callable<Integer> {
 
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      return parent.execute(
+      return requireParent(parent).execute(
           () -> {
+            var command = requireParent(parent);
             var d =
-                parent
+                command
                     .registry
                     .findById(id)
                     .orElseThrow(() -> new IllegalArgumentException("Unknown SubAgent: " + id));
-            parent.out(
+            command.out(
                 "id: "
                     + d.id()
                     + "\nname: "
@@ -315,7 +321,7 @@ public class SubAgentCommand implements Callable<Integer> {
                     + "\nrequested tools: "
                     + d.requestedTools()
                     + "\neffective tools: "
-                    + parent.policy.effectiveTools(d.requestedTools())
+                    + command.policy.effectiveTools(d.requestedTools())
                     + "\nmodel: "
                     + (d.model() == null ? "(current chat model)" : d.model())
                     + "\nmaxSteps: "
@@ -338,11 +344,12 @@ public class SubAgentCommand implements Callable<Integer> {
 
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      return parent.execute(
+      return requireParent(parent).execute(
           () -> {
-            var errors = parent.registry.reload();
+            var command = requireParent(parent);
+            var errors = command.registry.reload();
             if (!errors.isEmpty()) throw new IllegalArgumentException(String.join("\n", errors));
-            parent.out("SubAgents reloaded: " + parent.registry.list().size());
+            command.out("SubAgents reloaded: " + command.registry.list().size());
           });
     }
   }
@@ -359,17 +366,18 @@ public class SubAgentCommand implements Callable<Integer> {
 
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      return parent.execute(
+      return requireParent(parent).execute(
           () -> {
-            var d = parent.loader.load(file);
-            parent.out(
+            var command = requireParent(parent);
+            var d = command.loader.load(file);
+            command.out(
                 "valid: "
                     + d.id()
                     + "\nprompt: valid\nmaxSteps: "
                     + d.maxSteps()
                     + "\ntimeout: "
                     + d.timeout());
-            for (String tool : d.requestedTools()) parent.out(tool + ": allowed");
+            for (String tool : d.requestedTools()) command.out(tool + ": allowed");
           });
     }
   }
@@ -386,11 +394,12 @@ public class SubAgentCommand implements Callable<Integer> {
 
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      return parent.execute(
+      return requireParent(parent).execute(
           () -> {
-            if (!id.matches("[a-z][a-z0-9-]{0,63}"))
+            var command = requireParent(parent);
+            if (id == null || !id.matches("[a-z][a-z0-9-]{0,63}"))
               throw new IllegalArgumentException("id: expected [a-z][a-z0-9-]{0,63}");
-            Path directory = parent.registry.directory();
+            Path directory = command.registry.directory();
             Files.createDirectories(directory);
             Path target = directory.resolve(id + ".yaml").normalize();
             if (!target.getParent().equals(directory))
@@ -409,7 +418,7 @@ public class SubAgentCommand implements Callable<Integer> {
           """
                     .formatted(id, id, id.equals("reviewer") ? "30m" : "120s"),
                 StandardOpenOption.CREATE_NEW);
-            parent.out("Created: " + target + " (edit, validate, then reload)");
+            command.out("Created: " + target + " (edit, validate, then reload)");
           });
     }
   }

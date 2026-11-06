@@ -785,6 +785,8 @@ public final class StorageCommand {
     /** 件数・容量・前回との差分を表示しますを行う。 */
     @Override
     public Integer call() {
+      var command = parent;
+      if (command == null) throw new IllegalStateException("Missing parent command");
       if (project != null && !project.equals("current")) {
         spec.commandLine().getErr().println("Use /storage status [--project current]");
         return 2;
@@ -796,9 +798,9 @@ public final class StorageCommand {
             .println("No current project; select a project before measuring its storage.");
         return 2;
       }
-      var root = parent.planner == null ? ReiDataDirectory.current() : parent.planner.root();
+      var root = command.planner == null ? ReiDataDirectory.current() : command.planner.root();
       var report =
-          parent.inventory.measure(
+          command.inventory.measure(
               project == null ? root : root.resolve("projects").resolve(context.id()));
       var out = spec.commandLine().getOut();
       out.println("storage: " + report.root());
@@ -819,10 +821,10 @@ public final class StorageCommand {
           "delta_bytes=%s bytes_per_second=%s complete=%s%n",
           report.deltaBytes(), report.bytesPerSecond(), report.complete());
       report.unknown().forEach(reason -> out.println("unknown: " + reason));
-      if (parent.planner != null)
+      if (command.planner != null)
         try {
           var managed =
-              project == null ? parent.planner.statusAll() : parent.planner.status(context.id());
+              project == null ? command.planner.statusAll() : command.planner.status(context.id());
           out.println(
               "managed metadata scope="
                   + (project == null ? "all" : context.id())
@@ -845,9 +847,9 @@ public final class StorageCommand {
               "unknown: managed metadata could not be read: "
                   + dev.mikoto2000.rei.event.FailureMessages.describe(error));
         }
-      if (parent.maintenance != null)
+      if (command.maintenance != null)
         try {
-          var database = parent.maintenance.status();
+          var database = command.maintenance.status();
           out.printf(
               "storage.db physical_bytes=%d wal_bytes=%d free_pages=%d estimated_used_page_bytes=%d temporary_bytes=%d usable_disk_bytes=%d%n",
               database.databaseBytes(),

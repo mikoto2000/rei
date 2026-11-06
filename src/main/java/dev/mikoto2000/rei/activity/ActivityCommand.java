@@ -351,10 +351,12 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
     /** 指定日の活動サマリーを表示します（省略時は今日）を行う。 */
     @Override
     public Integer call() {
+      var command = parent;
+      if (command == null) throw new IllegalStateException("Missing parent command");
       try {
         org.slf4j.LoggerFactory.getLogger(SummaryCommand.class)
             .debug("[summary-trace] command date={} handler=ActivityCommand.SummaryCommand", date);
-        spec.commandLine().getOut().println(parent.timeline.trendSummary(date));
+        spec.commandLine().getOut().println(command.timeline.trendSummary(date));
         return 0;
       } catch (java.time.DateTimeException e) {
         spec.commandLine().getErr().println(e.getMessage());
@@ -614,14 +616,16 @@ public class ActivityCommand implements java.util.concurrent.Callable<Integer> {
     /** 選択中のプロジェクトに保存された活動・作業コンテキストの参照情報を表示しますを行う。 */
     @Override
     public Integer call() {
+      var command = parent;
+      if (command == null) throw new IllegalStateException("Missing parent command");
       try {
-        var project = parent.projects.currentContext();
+        var project = command.projects.currentContext();
         if (project == null) throw new IllegalArgumentException("Select a Project");
-        var links = parent.workLinks.links(project.id(), date);
+        var links = command.workLinks.links(project.id(), date);
         spec.commandLine()
             .getOut()
             .println(
-                dev.mikoto2000.rei.event.CredentialRedactor.redact(parent.workLinks.format(links)));
+                dev.mikoto2000.rei.event.CredentialRedactor.redact(command.workLinks.format(links)));
         return 0;
       } catch (java.time.DateTimeException | IllegalArgumentException e) {
         spec.commandLine()
