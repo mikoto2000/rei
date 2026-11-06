@@ -197,16 +197,16 @@ public record SemanticSessionPolicy(
       if (s.roles().primary() != null) votes.merge(s.roles().primary(), s.seconds(), Long::sum);
     Activity primary = null;
     long best = -1;
-    for (var candidate : votes.keySet()) {
+    for (var entry : votes.entrySet()) {
       long total =
           votes.entrySet().stream()
-              .filter(e -> ActivityRolePolicy.sameContext(candidate, e.getKey()))
+              .filter(e -> ActivityRolePolicy.sameContext(entry.getKey(), e.getKey()))
               .mapToLong(Map.Entry::getValue)
               .sum();
       if (total > best
-          || (total == best && votes.get(candidate) > votes.getOrDefault(primary, 0L))) {
+          || (total == best && entry.getValue() > votes.getOrDefault(primary, 0L))) {
         best = total;
-        primary = candidate;
+        primary = entry.getKey();
       }
     }
     var secondary = new LinkedHashSet<Activity>();
