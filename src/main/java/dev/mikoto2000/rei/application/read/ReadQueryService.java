@@ -78,6 +78,10 @@ public record ReadQueryService(
         || threshold != null && (!Double.isFinite(threshold) || threshold < 0 || threshold > 1))
       throw new IllegalArgumentException("Invalid search");
     return searches.search(
-        query, vectorTopK == null ? 3 : vectorTopK, webTopK == null ? 5 : webTopK, threshold, null);
+        query,
+        vectorTopK == null ? Integer.valueOf(3) : vectorTopK,
+        webTopK == null ? Integer.valueOf(5) : webTopK,
+        threshold,
+        null);
   }
 }

@@ -245,7 +245,7 @@ public class LlmProperties {
     /** 用途に応じたモデル利用で参照する最大ツール引数補正一覧ごとの実行を返す。 */
     public Integer getMaxToolArgumentCorrectionsPerRun() {
       return maxToolArgumentCorrectionsPerRun == null
-          ? OutputLimitRunBudget.DEFAULT_MAX_ARGUMENT_CORRECTIONS
+          ? Integer.valueOf(OutputLimitRunBudget.DEFAULT_MAX_ARGUMENT_CORRECTIONS)
           : maxToolArgumentCorrectionsPerRun;
     }
 
