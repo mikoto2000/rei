@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.voice;
 
 import java.io.IOException;
+import java.net.URISyntaxException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -43,7 +44,7 @@ public final class IsolatedVoiceBackendFactory implements VoiceBackendFactory, A
   /** 要求された処理を開始する。 */
   private VoiceWorkerProcess start(
       String role, Path root, VoiceSettings settings, VoiceInferenceOptions options)
-      throws Exception {
+      throws IOException, URISyntaxException {
     var arguments = new ArrayList<String>();
     arguments.add(Path.of(System.getProperty("java.home"), "bin", "java.exe").toString());
     arguments.add("--enable-native-access=ALL-UNNAMED");
@@ -100,7 +101,7 @@ public final class IsolatedVoiceBackendFactory implements VoiceBackendFactory, A
   }
 
   /** 必要な対象を利用できるよう、独立した音声バックエンド生成元の利用を開始する。 */
-  public VoiceBackend open(VoiceSettings settings) throws Exception {
+  public VoiceBackend open(VoiceSettings settings) throws IOException, URISyntaxException {
     synchronized (this) {
       if (closed) throw new IOException("Voice worker factory closed");
     }
@@ -134,7 +135,7 @@ public final class IsolatedVoiceBackendFactory implements VoiceBackendFactory, A
               release(decoder);
             }
           });
-    } catch (Exception | LinkageError failure) {
+    } catch (IOException | URISyntaxException | RuntimeException | LinkageError failure) {
       if (recognizer != null) release(recognizer);
       release(vad);
       throw failure;

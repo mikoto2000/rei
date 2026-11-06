@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.voice;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
@@ -67,7 +68,8 @@ public final class VoiceCorrectionLlm {
   }
 
   /** 音声による対話の要求を実行し、呼び出し元へ結果を返す。 */
-  public String call(String original, VoiceCorrectionContext.Snapshot context) throws Exception {
+  public String call(String original, VoiceCorrectionContext.Snapshot context)
+      throws JsonProcessingException {
     var base = models.chatOptions(LlmFeature.VOICE_CORRECTION, null);
     var builder =
         base.mutate()
