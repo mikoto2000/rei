@@ -25,6 +25,31 @@ import javax.sql.DataSource;
  * <p>Metadata only, separate from ActivityRecord. Observation IDs make enrichment idempotent.
  */
 public final class ClassificationTelemetryRepository {
+  private static final String EXPIRED_UNKNOWN_FILTER =
+      """
+       WHERE unknown_key IS NOT NULL AND (
+         at<? OR unknown_key NOT IN (
+           SELECT unknown_key FROM activity_classification_telemetry
+           WHERE unknown_key IS NOT NULL GROUP BY unknown_key
+           ORDER BY MAX(at) DESC, unknown_key LIMIT ?
+         )
+       )
+      """;
+  private static final String EXPIRED_UNCERTAIN_FILTER =
+      """
+       WHERE uncertain_key IS NOT NULL AND (
+         at<? OR uncertain_key NOT IN (
+           SELECT uncertain_key FROM activity_classification_telemetry
+           WHERE uncertain_key IS NOT NULL GROUP BY uncertain_key
+           ORDER BY MAX(at) DESC, uncertain_key LIMIT ?
+         )
+       )
+      """;
+  private static final String EXPIRED_UNKNOWN_KEYS =
+      " FROM activity_classification_telemetry" + EXPIRED_UNKNOWN_FILTER;
+  private static final String EXPIRED_UNCERTAIN_KEYS =
+      " FROM activity_classification_telemetry" + EXPIRED_UNCERTAIN_FILTER;
+
   /**
    * 作業状況の把握で受け渡す行を表す。
    *
@@ -229,36 +254,19 @@ public final class ClassificationTelemetryRepository {
           s.executeUpdate();
         }
         for (String kind : List.of("unknown", "uncertain")) {
+          boolean unknownKind = kind.equals("unknown");
           var p =
-              kind.equals("unknown")
+              unknownKind
                   ? settings.getUnknownRegistry()
                   : settings.getEntertainmentRegistry();
-          String column = kind + "_key";
-          String expired =
-              "at<? OR "
-                  + column
-                  + " NOT IN (SELECT "
-                  + column
-                  + " FROM activity_classification_telemetry WHERE "
-                  + column
-                  + " IS NOT NULL GROUP BY "
-                  + column
-                  + " ORDER BY MAX(at) DESC,"
-                  + column
-                  + " LIMIT ?)";
           long cutoff =
               p.isEnabled()
                   ? now.minus(Duration.ofDays(p.getRetentionDays())).toEpochMilli()
                   : Long.MAX_VALUE;
           try (var s =
-              c.prepareStatement(
-                  "SELECT DISTINCT "
-                      + column
-                      + " FROM activity_classification_telemetry WHERE "
-                      + column
-                      + " IS NOT NULL AND ("
-                      + expired
-                      + ")")) {
+              unknownKind
+                  ? c.prepareStatement("SELECT DISTINCT unknown_key" + EXPIRED_UNKNOWN_KEYS)
+                  : c.prepareStatement("SELECT DISTINCT uncertain_key" + EXPIRED_UNCERTAIN_KEYS)) {
             s.setLong(1, cutoff);
             s.setInt(2, p.getMaxEntries());
             try (var rs = s.executeQuery()) {
@@ -266,14 +274,13 @@ public final class ClassificationTelemetryRepository {
             }
           }
           try (var s =
-              c.prepareStatement(
-                  "UPDATE activity_classification_telemetry SET "
-                      + column
-                      + "=NULL WHERE "
-                      + column
-                      + " IS NOT NULL AND ("
-                      + expired
-                      + ")")) {
+              unknownKind
+                  ? c.prepareStatement(
+                      "UPDATE activity_classification_telemetry SET unknown_key=NULL"
+                          + EXPIRED_UNKNOWN_FILTER)
+                  : c.prepareStatement(
+                      "UPDATE activity_classification_telemetry SET uncertain_key=NULL"
+                          + EXPIRED_UNCERTAIN_FILTER)) {
             s.setLong(1, cutoff);
             s.setInt(2, p.getMaxEntries());
             s.executeUpdate();
@@ -357,10 +364,13 @@ public final class ClassificationTelemetryRepository {
       throws Exception {
     var rows = new ArrayList<Row>();
     try (var s =
-        c.prepareStatement(
-            "SELECT payload FROM activity_classification_telemetry WHERE "
-                + kind
-                + "_key=? AND at>=? ORDER BY at,id")) {
+        switch (kind) {
+          case "unknown" -> c.prepareStatement(
+              "SELECT payload FROM activity_classification_telemetry WHERE unknown_key=? AND at>=? ORDER BY at,id");
+          case "uncertain" -> c.prepareStatement(
+              "SELECT payload FROM activity_classification_telemetry WHERE uncertain_key=? AND at>=? ORDER BY at,id");
+          default -> throw new IllegalArgumentException("Unknown registry");
+        }) {
       s.setString(1, key);
       s.setLong(2, since.toEpochMilli());
       try (var rs = s.executeQuery()) {
