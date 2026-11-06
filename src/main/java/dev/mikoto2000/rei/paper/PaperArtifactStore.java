@@ -124,6 +124,7 @@ public class PaperArtifactStore {
     try {
       for (String kind : List.of("originals", "extracted", "translations")) {
         Path parent = path(id, kind, "pdf").getParent();
+        if (parent == null) throw new IOException("Artifact directory unavailable");
         if (!Files.exists(parent)) continue;
         try (var paths = Files.newDirectoryStream(parent, id + ".*")) {
           for (Path p : paths) {

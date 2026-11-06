@@ -93,7 +93,8 @@ public final class ReiPaths {
    * @throws Exception ディレクトリ作成に失敗した場合
    */
   public static void ensureParentDirectoryExists(Path filePath) throws Exception {
-    Files.createDirectories(filePath.getParent());
+    var parent = filePath.getParent();
+    if (parent != null) Files.createDirectories(parent);
   }
 
   /** データ保存先の利用で用いる作業ディレクトリを返す。 */

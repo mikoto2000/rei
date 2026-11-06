@@ -294,7 +294,7 @@ public final class VoiceModelManager implements AutoCloseable {
           throw new InsufficientStorageException(required);
         token.check();
         Path target = VoiceModelManifest.assetPath(stage, asset.path());
-        Files.createDirectories(target.getParent());
+        createParentDirectories(target);
         IOException last = null;
         final long prior = completed;
         for (int attempt = 1; attempt <= 3; attempt++) {
@@ -333,13 +333,13 @@ public final class VoiceModelManager implements AutoCloseable {
         token.check();
         if (closed) throw new InterruptedIOException("Voice manager closed");
         Path active = VoiceModelManifest.assetPath(root, "managed/" + manifest.id());
-        Files.createDirectories(active.getParent());
+        createParentDirectories(active);
         Path backup = null;
         if (Files.exists(active, LinkOption.NOFOLLOW_LINKS)) {
           backup =
               VoiceModelManifest.assetPath(
                   root, "retained/" + manifest.id() + "-" + UUID.randomUUID());
-          Files.createDirectories(backup.getParent());
+          createParentDirectories(backup);
           Files.move(active, backup, StandardCopyOption.ATOMIC_MOVE);
         }
         try {
@@ -417,5 +417,11 @@ public final class VoiceModelManager implements AutoCloseable {
     synchronized (this) {
       if (!busy) update(State.CLOSED, status.bytes(), "", 0, "");
     }
+  }
+
+  private static void createParentDirectories(Path path) throws IOException {
+    var parent = path.getParent();
+    if (parent == null) throw new IOException("Voice model path has no parent");
+    Files.createDirectories(parent);
   }
 }

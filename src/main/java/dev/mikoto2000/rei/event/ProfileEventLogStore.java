@@ -107,7 +107,8 @@ public class ProfileEventLogStore implements AgentEventListener {
                 .resolve("logs/activity.jsonl");
     synchronized (writeLock) {
       try {
-        Files.createDirectories(file.getParent());
+        var parent = file.getParent();
+        if (parent != null) Files.createDirectories(parent);
         Files.writeString(
             file,
             objectMapper.writeValueAsString(entry) + System.lineSeparator(),

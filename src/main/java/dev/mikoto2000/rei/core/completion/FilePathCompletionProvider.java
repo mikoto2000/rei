@@ -55,7 +55,12 @@ public final class FilePathCompletionProvider implements CompletionProvider {
   public static List<Entry> listDirectory(Path parent) throws IOException {
     try (var children = Files.list(parent)) {
       return children
-          .map(path -> new Entry(path.getFileName().toString(), Files.isDirectory(path)))
+          .map(
+              path ->
+                  new Entry(
+                      java.util.Objects.requireNonNull(path.getFileName(), "Directory entry name")
+                          .toString(),
+                      Files.isDirectory(path)))
           .toList();
     }
   }

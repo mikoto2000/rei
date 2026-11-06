@@ -53,7 +53,9 @@ public final class FileScreenshotStore implements ScreenshotStore {
     if (!Files.isDirectory(root, LinkOption.NOFOLLOW_LINKS)) return;
     try (var files = Files.newDirectoryStream(root, "*.png")) {
       for (var path : files) {
-        String name = path.getFileName().toString();
+        var fileName = path.getFileName();
+        if (fileName == null) continue;
+        String name = fileName.toString();
         if (name.matches("[0-9]+_[0-9a-f-]{36}_[0-9]+\\.png")
             && !Files.isSymbolicLink(path)
             && Long.parseLong(name.substring(0, name.indexOf('_'))) < before.toEpochMilli())

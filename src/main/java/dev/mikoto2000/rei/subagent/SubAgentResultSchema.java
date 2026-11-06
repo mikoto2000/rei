@@ -93,7 +93,9 @@ public final class SubAgentResultSchema {
       return SubAgentResultSchema.class.getResourceAsStream(resource);
     }
     if (!safeRelative(location)) throw invalid();
-    Path root = definition.toAbsolutePath().normalize().getParent().toRealPath();
+    Path parent = definition.toAbsolutePath().normalize().getParent();
+    if (parent == null) throw invalid();
+    Path root = parent.toRealPath();
     Path target = root.resolve(location).toRealPath();
     if (!target.startsWith(root) || !Files.isRegularFile(target)) throw invalid();
     return Files.newInputStream(target);

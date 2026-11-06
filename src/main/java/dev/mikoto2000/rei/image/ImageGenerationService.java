@@ -106,9 +106,8 @@ public class ImageGenerationService {
       }
       byte[] bytes = Base64.getDecoder().decode(base64);
       Path outputPath = outputPathResolver.resolve(request.outputPath());
-      if (outputPath.getParent() != null) {
-        Files.createDirectories(outputPath.getParent());
-      }
+      var parent = outputPath.getParent();
+      if (parent != null) Files.createDirectories(parent);
       Files.write(outputPath, bytes);
       String outputFilename =
           java.util.Objects.requireNonNull(outputPath.getFileName(), "Image filename required")
