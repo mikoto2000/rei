@@ -158,7 +158,9 @@ public final class PromptCacheMetrics {
     int n = values.size();
     if (n == 0) return new Distribution(0, null, null, null, null);
     double median =
-        n % 2 == 1 ? values.get(n / 2) : values.get(n / 2 - 1) / 2d + values.get(n / 2) / 2d;
+        n % 2 == 1
+            ? values.get(n / 2).doubleValue()
+            : values.get(n / 2 - 1) / 2d + values.get(n / 2) / 2d;
     return new Distribution(
         n,
         values.getFirst(),
