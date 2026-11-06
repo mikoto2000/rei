@@ -1105,7 +1105,7 @@ public class RunExecutionContext {
   private String lastToolName = "";
 
   /** 進捗の更新番号。 */
-  private volatile long progressVersion;
+  private long progressVersion;
 
   /** 情報の取得限定繰り返し回数。 */
   private int acquisitionOnlyIterations;
@@ -1229,11 +1229,12 @@ public class RunExecutionContext {
   public synchronized List<org.springframework.ai.chat.messages.Message> applyInterventions() {
     if (cancelled) return List.of();
     if (interventions == null) return List.of();
+    var onApplied = interventionApplied;
     return interventions.drainEntries().stream()
         .map(
             entry -> {
               setUserRequest(entry.text());
-              interventionApplied.accept(entry.text());
+              onApplied.accept(entry.text());
               publisher.publish(
                   factory
                       .intervention(runId, entry.id(), entry.text(), true)
@@ -1339,7 +1340,7 @@ public class RunExecutionContext {
   }
 
   /** 実行の停滞への対処で用いる進捗の更新番号を返す。 */
-  public long progressVersion() {
+  public synchronized long progressVersion() {
     return progressVersion;
   }
 

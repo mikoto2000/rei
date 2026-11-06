@@ -236,7 +236,8 @@ public final class ConversationAdmissionStore implements AutoCloseable {
   }
 
   /** 現在の状態を、後から参照できる記録として取り出す。 */
-  private Optional<RunSnapshot> snapshot(Connection db, String id) throws SQLException, JsonProcessingException {
+  private Optional<RunSnapshot> snapshot(Connection db, String id)
+      throws SQLException, JsonProcessingException {
     try (var query =
         db.prepareStatement(
             "SELECT context,status,started,completed FROM conversation_admissions WHERE run_id=?")) {
@@ -435,7 +436,8 @@ public final class ConversationAdmissionStore implements AutoCloseable {
   }
 
   /** 競合する処理と利用範囲を調整するため、会話受付保存先を確保する。 */
-  private void reserve(Connection db, AgentRunContext context) throws Exception {
+  private void reserve(Connection db, AgentRunContext context)
+      throws SQLException, JsonProcessingException {
     var existing = snapshot(db, context.runId());
     if (existing.isPresent()) {
       if (!existing.get().context().equals(context))

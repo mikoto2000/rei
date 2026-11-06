@@ -175,7 +175,7 @@ public final class ClassificationTelemetryRepository {
 
   /** 後から参照できるよう、指定された情報を保存する。 */
   public synchronized void save(Row row, ActivityProperties.Classification settings, Instant now)
-      throws Exception {
+      throws SQLException, JsonProcessingException {
     initialize();
     String unknown =
         !row.diagnostics().classificationUsable() && settings.getUnknownRegistry().isEnabled()
@@ -312,7 +312,7 @@ public final class ClassificationTelemetryRepository {
         for (var kind : dirty.entrySet())
           for (String key : kind.getValue()) refresh(c, kind.getKey(), key);
         c.commit();
-      } catch (Exception e) {
+      } catch (SQLException | JsonProcessingException | RuntimeException e) {
         c.rollback();
         throw e;
       }
@@ -320,7 +320,7 @@ public final class ClassificationTelemetryRepository {
   }
 
   /** 作業状況の把握で用いる行一覧を返す。 */
-  public synchronized List<Row> rows(Instant since) throws Exception {
+  public synchronized List<Row> rows(Instant since) throws SQLException, JsonProcessingException {
     initialize();
     try (var c = ds.getConnection();
         var s =
@@ -336,7 +336,8 @@ public final class ClassificationTelemetryRepository {
   }
 
   /** 作業状況の把握で用いる候補一覧を返す。 */
-  public synchronized List<Candidate> candidates(String kind, Instant since) throws Exception {
+  public synchronized List<Candidate> candidates(String kind, Instant since)
+      throws SQLException, JsonProcessingException {
     if (!Set.of("unknown", "uncertain").contains(kind))
       throw new IllegalArgumentException("Unknown registry");
     initialize();
@@ -383,7 +384,8 @@ public final class ClassificationTelemetryRepository {
   }
 
   /** 作業状況の把握に関する再確認を処理する。 */
-  private void refresh(java.sql.Connection c, String kind, String key) throws Exception {
+  private void refresh(java.sql.Connection c, String kind, String key)
+      throws SQLException, JsonProcessingException {
     var candidate = aggregate(key, members(c, kind, key, Instant.EPOCH), kind);
     if (candidate == null) {
       try (var s =

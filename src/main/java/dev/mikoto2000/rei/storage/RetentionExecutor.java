@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
 import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -130,7 +131,8 @@ public final class RetentionExecutor {
   }
 
   /** データ保存の共通処理で用いる項目一覧を返す。 */
-  private static List<Item> items(Connection db, String id) throws SQLException, JsonProcessingException {
+  private static List<Item> items(Connection db, String id)
+      throws SQLException, JsonProcessingException {
     var result = new ArrayList<Item>();
     try (var query =
         db.prepareStatement(
@@ -156,7 +158,7 @@ public final class RetentionExecutor {
   }
 
   /** データ保存の共通処理で用いる元のを返す。 */
-  private Path original(StoredObject object) throws Exception {
+  private Path original(StoredObject object) throws IOException, NoSuchAlgorithmException {
     if (!object.kind().equals("ACTIVITY_RAW"))
       throw new IllegalStateException("This collector has no complete reference proof");
     Path path = registry.root.resolve(object.relativePath()).normalize();
@@ -202,7 +204,7 @@ public final class RetentionExecutor {
   }
 
   /** データ保存の共通処理に関する保護を処理する。 */
-  private void protect(Connection db, Item item) throws Exception {
+  private void protect(Connection db, Item item) throws SQLException {
     var current = StorageObjectRegistry.find(db, item.objectId()).orElseThrow();
     if (!current.relativePath().equals(item.original().relativePath())
         || current.size() != item.original().size()
@@ -440,7 +442,8 @@ public final class RetentionExecutor {
   }
 
   /** データ保存の共通処理で用いる保持期限を過ぎた情報の削除状態の記録を返す。 */
-  private String purgeSnapshot(Connection db, String id, boolean verifyBodies) throws Exception {
+  private String purgeSnapshot(Connection db, String id, boolean verifyBodies)
+      throws IOException, SQLException, NoSuchAlgorithmException {
     var digest = MessageDigest.getInstance("SHA-256");
     digest.update(id.getBytes(java.nio.charset.StandardCharsets.UTF_8));
     var plan = RetentionPlanner.get(db, get(db, id).planId());

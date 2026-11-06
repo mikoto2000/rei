@@ -122,7 +122,8 @@ public final class AutomaticRetention {
   }
 
   /** 指定された対象の情報を、呼び出し元が参照できる形で返す。 */
-  private static Consent get(Connection db, String id) throws SQLException, JsonProcessingException {
+  private static Consent get(Connection db, String id)
+      throws SQLException, JsonProcessingException {
     UUID.fromString(id);
     try (var query =
         db.prepareStatement("SELECT record FROM retention_automatic_consents WHERE id=?")) {
@@ -135,7 +136,8 @@ public final class AutomaticRetention {
   }
 
   /** 利用条件に合わない指定を受け付けないよう、入力内容を検証する。 */
-  private static void validate(Connection db, Consent consent) throws Exception {
+  private static void validate(Connection db, Consent consent)
+      throws SQLException, NoSuchAlgorithmException, JsonProcessingException {
     var policy = RetentionPlanner.policy(db, consent.policy().id());
     // The automatic flag is operational state; consent binds all deletion conditions.
     var expected =
