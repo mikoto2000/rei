@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.activity;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -100,7 +101,8 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
 
   /** 指定された内容を書き込み先へ反映する。 */
   @Override
-  public DailySummary write(DailySummaryAggregate aggregate) throws Exception {
+  public DailySummary write(DailySummaryAggregate aggregate)
+      throws JsonProcessingException {
     String input = structuredInput(aggregate);
     log.debug("[summary-trace] llm-input {}", input);
     log.debug(
@@ -114,7 +116,8 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
   }
 
   /** 作業状況の把握で用いる項目に整理した内容入力を返す。 */
-  static String structuredInput(DailySummaryAggregate aggregate) throws Exception {
+  static String structuredInput(DailySummaryAggregate aggregate)
+      throws JsonProcessingException {
     var structured = JSON.valueToTree(aggregate);
     // Work labels come exclusively from final candidates, not pre-consolidation project/block
     // lists.
@@ -153,7 +156,8 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
   }
 
   /** 作業状況の把握で用いる要求を返す。 */
-  private DailySummary request(DailySummaryAggregate aggregate, String input) throws Exception {
+  private DailySummary request(DailySummaryAggregate aggregate, String input)
+      throws JsonProcessingException {
     var format = new ResponseFormat();
     format.setType(ResponseFormat.Type.JSON_SCHEMA);
     format.setJsonSchema(SCHEMA);
@@ -205,7 +209,8 @@ public final class LlmDailySummaryWriter implements DailySummaryWriter {
   }
 
   /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
-  static DailySummary parse(String output, DailySummaryAggregate aggregate) throws Exception {
+  static DailySummary parse(String output, DailySummaryAggregate aggregate)
+      throws JsonProcessingException {
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (output == null || output.length() > 8000)
       throw new IllegalArgumentException("Invalid summary response");

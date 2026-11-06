@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.slack;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -205,7 +206,7 @@ public final class SlackStore {
   }
 
   /** Slackとの連携で用いる受付記録を返す。 */
-  private Receipt receipt(ResultSet r) throws Exception {
+  private Receipt receipt(ResultSet r) throws SQLException, JsonProcessingException {
     return new Receipt(
         json.readValue(r.getString("payload"), SlackMessage.class),
         r.getString("state"),

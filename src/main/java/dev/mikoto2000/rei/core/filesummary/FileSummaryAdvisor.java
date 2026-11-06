@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.core.filesummary;
 
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
+import java.io.IOException;
+import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -101,13 +103,13 @@ public class FileSummaryAdvisor implements BaseAdvisor {
         return null;
       }
       return sha256(p);
-    } catch (Exception e) {
+    } catch (IOException | NoSuchAlgorithmException | RuntimeException e) {
       return null;
     }
   }
 
   /** ファイル内容の要約で用いる内容の同一性を照合するSHA-256ハッシュを返す。 */
-  private String sha256(java.nio.file.Path path) throws Exception {
+  private String sha256(java.nio.file.Path path) throws IOException, NoSuchAlgorithmException {
     java.security.MessageDigest digest = java.security.MessageDigest.getInstance("SHA-256");
     byte[] bytes = java.nio.file.Files.readAllBytes(path);
     byte[] hash = digest.digest(bytes);
