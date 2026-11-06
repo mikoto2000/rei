@@ -130,6 +130,56 @@ class ReadingEfficiencyBenchmarkTest {
   }
 
   @Test
+  @EnabledIfSystemProperty(named = "rei.benchmark.search-initial", matches = "true")
+  void searchInitialMeasuresTimeToFirstPageByCandidateCount() throws Exception {
+    int warmups = 1;
+    int repetitions = 3;
+    var sizes = List.of(10, 100, 1_000, 5_000);
+    var paths = new ArrayList<String>();
+    Files.createDirectory(root.resolve("sources"));
+    for (int i = 0; i < sizes.getLast(); i++) {
+      String path = String.format(Locale.ROOT, "sources/%05d.txt", i);
+      Files.writeString(root.resolve(path), i == 0 ? "hit\nhit\n" : "miss\n");
+      paths.add(path);
+    }
+    var database = ReadingBenchmarkDatabase.prepare(root.resolve("data"));
+    var cases = new ArrayList<Map<String, Object>>();
+    try (var lease = ReadingBenchmarkDatabase.keepOpen(database)) {
+      for (int size : sizes) {
+        var candidates = List.copyOf(paths.subList(0, size));
+        var reader =
+            new Tools() {
+              @Override
+              List<String> gitLsFiles(List<String> pathSpecs, Path directory) {
+                return candidates;
+              }
+            };
+        var search = new PagedFileSearch(reader, ReadingTestStores.store(database));
+        var request = searchResumeRequest(query("hit", "sources"), null);
+        var samples = new ArrayList<Long>();
+        for (int i = 0; i < warmups + repetitions; i++) {
+          var owner = new AgentRunContext("search-initial-" + size + "-" + i, "chat", root);
+          try (var scope = AgentRunScope.open(owner)) {
+            long started = System.nanoTime();
+            var page = search.read(request, root);
+            long elapsed = System.nanoTime() - started;
+            assertNull(page.error());
+            assertEquals(size, page.progress().total());
+            assertTrue(page.resultCursor() != null && page.resultCursor().startsWith("RESULT:"));
+            assertEquals(candidates.getFirst(), page.files().getFirst().path());
+            if (i >= warmups) samples.add(elapsed);
+          }
+        }
+        cases.add(Map.of("candidates", size, "totalNanos", samples));
+        System.out.println("Initial search benchmark completed " + size + " candidates");
+      }
+    }
+    report(
+        "search-initial",
+        Map.of("warmups", warmups, "samplesPerSize", repetitions, "scanLimit", 1, "cases", cases));
+  }
+
+  @Test
   @EnabledIfSystemProperty(named = "rei.benchmark.search-resume", matches = "true")
   void searchResumeMeasuresInventoryVerificationByCursor() throws Exception {
     int warmups = 1;

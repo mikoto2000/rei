@@ -212,6 +212,17 @@ At 5,000 candidates on the Windows sandbox, median resume times at parallelism
 1, 2, and 4 were 9.84 s, 6.86 s, and 6.15 s for `RESULT`, and 10.60 s, 8.34 s,
 and 4.66 s for `SCAN`.
 
+Initial search records the stamp when a path passes candidate validation. The
+inventory still uses sorted, unique paths and skips paths rejected by the existing
+project and MCP checks. `-Drei.benchmark.search-initial=true` enables the first-page
+benchmark, which measures from the initial search call through SQLite cursor
+persistence and the returned page. It uses 10, 100, 1,000, and 5,000 real files, a
+fixed candidate listing, one warmup, and three measured calls per size. File
+creation and Git listing are outside the timed work. Results are written to
+`target/reading-benchmark/search-initial.json`.
+On Windows with Java 25, the median at 5,000 candidates fell from 34.15 s to
+20.64 s after removing the repeated path validation.
+
 The seven requested scenarios map to: repeated-line and distinct-query benchmarks; the
 distant-hit benchmark; the 1030-file cursor fixture; `ReadingDeliveryTest`'s compression and
 raw restoration; `MarkdownSectionReadTest`'s hierarchy/long-section fixtures; and persisted
