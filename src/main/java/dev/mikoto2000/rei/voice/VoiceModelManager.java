@@ -359,7 +359,7 @@ public final class VoiceModelManager implements AutoCloseable {
       Thread.currentThread().interrupt();
       result = State.CANCELLED;
       failure = "cancelled";
-    } catch (Exception error) {
+    } catch (IOException | RuntimeException error) {
       result = token.cancelled() ? State.CANCELLED : State.FAILED;
       failure =
           token.cancelled()

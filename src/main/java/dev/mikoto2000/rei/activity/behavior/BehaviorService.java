@@ -238,7 +238,7 @@ public final class BehaviorService {
               reason,
               a.continuousEntertainmentSeconds(),
               a.windows()));
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       log.warn("Behavior timeline history unavailable; delivery policy unchanged");
     }
   }

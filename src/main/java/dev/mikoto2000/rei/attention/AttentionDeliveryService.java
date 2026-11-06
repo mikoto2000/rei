@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.attention;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.core.policy.PermissionDecision;
 import dev.mikoto2000.rei.core.policy.ToolPermissionPolicy;
 import dev.mikoto2000.rei.event.AgentEvent;
@@ -278,7 +279,7 @@ public class AttentionDeliveryService {
                       attention.kind(),
                       "createdAt",
                       attention.createdAt().toString()));
-    } catch (Exception error) {
+    } catch (JsonProcessingException | RuntimeException error) {
       outbox.skip(item, "BLOCKED", "invalid_metadata");
       return;
     }

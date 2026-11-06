@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.activity;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
 import dev.mikoto2000.rei.llm.ModelCallBudgetScope;
 import dev.mikoto2000.rei.llm.OutputLimitDetector;
@@ -167,7 +168,7 @@ public final class LlmTemporalActivityModel implements TemporalActivityInference
         throw new IllegalArgumentException("Invalid temporal schema");
       return new TemporalActivityInferenceService.Outcome(
           root.get("activity").asText(), root.get("confidence").asDouble(), budget.totalTokens());
-    } catch (Exception e) {
+    } catch (JsonProcessingException | RuntimeException e) {
       throw new TemporalActivityInferenceService.ModelFailure(budget.totalTokens(), false, e);
     }
   }

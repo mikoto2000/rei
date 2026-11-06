@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.interest;
 import dev.mikoto2000.rei.search.SearchKnowledgeResult;
 import dev.mikoto2000.rei.search.SearchKnowledgeService;
 import dev.mikoto2000.rei.websearch.WebSearchPage;
+import java.io.IOException;
 import java.util.List;
 import java.util.function.Consumer;
 import lombok.RequiredArgsConstructor;
@@ -114,7 +115,7 @@ public class InterestDiscoveryJob {
                 pages.stream().map(WebSearchPage::url).toList());
         savedUpdates.add(saved);
         progressListener.accept(prefix + " を追加しました: " + candidate.topic());
-      } catch (Exception e) {
+      } catch (IOException | InterruptedException | RuntimeException e) {
         // 定期ジョブ全体を止めない
         progressListener.accept(prefix + " の処理に失敗しました: " + candidate.topic());
       }

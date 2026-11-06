@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.computeruse.CapturedScreen;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -42,7 +43,7 @@ public final class FileScreenshotStore implements ScreenshotStore {
         }
       }
       return List.copyOf(references);
-    } catch (Exception e) {
+    } catch (IOException | RuntimeException e) {
       for (var name : references) Files.deleteIfExists(root.resolve(name));
       throw e;
     }
