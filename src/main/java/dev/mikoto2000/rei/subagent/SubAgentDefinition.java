@@ -229,11 +229,8 @@ public record SubAgentDefinition(
     if (maxSteps <= 0) throw new IllegalArgumentException("maxSteps: must be positive");
     if (timeout == null || timeout.isNegative() || timeout.isZero())
       throw new IllegalArgumentException("timeout: must be positive");
-    try {
-      timeout.toNanos();
-    } catch (ArithmeticException e) {
+    if (timeout.compareTo(Duration.ofNanos(Long.MAX_VALUE)) > 0)
       throw new IllegalArgumentException("timeout: too large");
-    }
     requestedTools = List.copyOf(requestedTools);
     evidenceTools = List.copyOf(evidenceTools);
     if (semanticValidation && evidenceTools.isEmpty())
