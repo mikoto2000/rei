@@ -18,6 +18,7 @@ import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.messages.UserMessage;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 
 /**
  * モデルへ渡す文脈の管理に必要な文脈文脈の組み立てを扱う。
@@ -222,9 +223,7 @@ public class ContextAssembler {
     }
     String runKey = ConversationSummaryRepository.runKey(conversation, run);
     String historyKey = conversation;
-    if (raw.getOptions() instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-        && options.getToolContext() != null
-        && "log".equals(options.getToolContext().get("rei.historySource"))) historyKey += "/log";
+    if ("log".equals(toolContext(raw).get("rei.historySource"))) historyKey += "/log";
     // Never reuse a rolling summary that may still contain an archived cancelled task.
     var generation =
         raw.getInstructions().stream()
@@ -323,8 +322,10 @@ public class ContextAssembler {
     long before =
         estimator.text(segment.summary.summary())
             + prefix.stream().mapToLong(e -> estimator.message(e.message())).sum();
+    var options = raw.getOptions();
+    String model = options == null ? null : options.getModel();
     String configuration =
-        Objects.toString(raw.getOptions() == null ? null : raw.getOptions().getModel(), "")
+        Objects.toString(model, "")
             + "|"
             + properties.getSummaryTokens()
             + "|"
@@ -338,8 +339,7 @@ public class ContextAssembler {
             + "|"
             + properties.getRetryCooldownSeconds()
             + "|"
-            + properties.contextLimit(
-                raw.getOptions() == null ? null : raw.getOptions().getModel());
+            + properties.contextLimit(model);
     var retry = compressionRetries.decision(segment.retryKey, configuration);
     if (!retry.allowed()) {
       if (retry.announce())
@@ -367,7 +367,7 @@ public class ContextAssembler {
       // The summarizer itself must not exceed its input budget. Process a bounded prefix per
       // request.
       long max =
-          properties.contextLimit(raw.getOptions() == null ? null : raw.getOptions().getModel())
+          properties.contextLimit(model)
               - properties.getSummaryTokens()
               - properties.getSafetyMargin()
               - 2048L;
@@ -634,10 +634,7 @@ public class ContextAssembler {
 
   /** モデルへ渡す文脈の管理で用いる発生順序開始位置を返す。 */
   private long sequenceOffset(Prompt prompt) {
-    if (prompt.getOptions()
-            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-        && options.getToolContext() != null
-        && options.getToolContext().get("rei.contextSequenceOffset") instanceof Number n)
+    if (toolContext(prompt).get("rei.contextSequenceOffset") instanceof Number n)
       return n.longValue();
     return 0;
   }
@@ -654,10 +651,7 @@ public class ContextAssembler {
 
   /** モデルへ渡す文脈の管理で用いる実行を返す。 */
   static dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution(Prompt prompt) {
-    if (prompt.getOptions()
-            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-        && options.getToolContext() != null
-        && options.getToolContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+    if (toolContext(prompt).get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
             instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)
       return execution;
     return null;
@@ -692,5 +686,12 @@ public class ContextAssembler {
             .contextCompression(
                 type, new ContextCompressionPayload(before, after, count, through, reason, details))
             .withOwnership(execution == null ? null : execution.runContext()));
+  }
+
+  private static Map<String, Object> toolContext(Prompt prompt) {
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options))
+      return Map.of();
+    var context = options.getToolContext();
+    return context == null ? Map.of() : context;
   }
 }

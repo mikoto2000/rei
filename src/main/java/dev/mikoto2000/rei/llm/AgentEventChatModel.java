@@ -2,11 +2,13 @@ package dev.mikoto2000.rei.llm;
 
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.ai.chat.model.ChatModel;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
 import org.springframework.ai.chat.prompt.Prompt;
+import org.springframework.ai.model.tool.ToolCallingChatOptions;
 import reactor.core.publisher.Flux;
 
 /**
@@ -173,28 +175,20 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
 
   /** 用途に応じたモデル利用で用いる所有者を返す。 */
   private dev.mikoto2000.rei.core.chat.AgentRunContext owner(Prompt prompt) {
-    if (prompt.getOptions()
-            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-        && options.getToolContext() != null) {
-      var values = options.getToolContext();
-      if (values.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
-          instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext run)
-        return run.runContext();
-      if (values.get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName())
-          instanceof dev.mikoto2000.rei.core.chat.AgentRunContext run) return run;
-    }
+    var values = toolContext(prompt);
+    if (values.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+        instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext run)
+      return run.runContext();
+    if (values.get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName())
+        instanceof dev.mikoto2000.rei.core.chat.AgentRunContext run) return run;
     return dev.mikoto2000.rei.core.chat.AgentRunScope.current();
   }
 
   /** 用途に応じたモデル利用で判断に用いるキャンセル済みの条件を確認する。 */
   private boolean cancelled(Prompt prompt) {
     return Thread.currentThread().isInterrupted()
-        || prompt.getOptions()
-                instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-            && options.getToolContext() != null
-            && options
-                    .getToolContext()
-                    .get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+        || toolContext(prompt)
+                .get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
                 instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext run
             && run.isCancelled();
   }
@@ -230,10 +224,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
   /** 用途に応じたモデル利用で用いる観測機能を返す。 */
   private String observedFeature(Prompt prompt) {
     if (LlmFeature.CHAT.equals(feature)
-        && prompt.getOptions()
-            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-        && options.getToolContext() != null
-        && "context-summary".equals(options.getToolContext().get("rei.modelCallPurpose")))
+        && "context-summary".equals(toolContext(prompt).get("rei.modelCallPurpose")))
       return "context-summary";
     return feature;
   }
@@ -298,20 +289,13 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
   /** 用途に応じたモデル利用で用いる通知先を返す。 */
   private AgentEventPublisher publisher(Prompt prompt) {
     dev.mikoto2000.rei.core.chat.AgentRunContext owner = null;
-    if (prompt.getOptions()
-            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-        && options.getToolContext() != null
-        && options.getToolContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+    var toolContext = toolContext(prompt);
+    if (toolContext.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
             instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)
       owner = execution.runContext();
     var captured = owner;
     if (captured == null
-        && prompt.getOptions()
-            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-        && options.getToolContext() != null
-        && options
-                .getToolContext()
-                .get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName())
+        && toolContext.get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName())
             instanceof dev.mikoto2000.rei.core.chat.AgentRunContext context) {
       return event -> eventPublisher.publish(event.withOwnership(context));
     }
@@ -321,5 +305,12 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
   /** 用途に応じたモデル利用で用いる経過時間ミリ秒数を返す。 */
   private long elapsedMillis(long startedAtNanos) {
     return (System.nanoTime() - startedAtNanos) / 1_000_000L;
+  }
+
+  private static Map<String, Object> toolContext(Prompt prompt) {
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options))
+      return Map.of();
+    var context = options.getToolContext();
+    return context == null ? Map.of() : context;
   }
 }

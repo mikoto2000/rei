@@ -43,9 +43,9 @@ public final class ToolLoopSupport {
    * <p>SDK extra-body parameters must not bypass Rei's explicit callback/permission boundary.
    */
   public static void requireNoRawTools(ChatOptions options) {
-    if (options instanceof org.springframework.ai.openai.OpenAiChatOptions openAi
-        && openAi.getExtraBody() != null) {
-      Object rawTools = openAi.getExtraBody().get("tools");
+    if (options instanceof org.springframework.ai.openai.OpenAiChatOptions openAi) {
+      var extraBody = openAi.getExtraBody();
+      Object rawTools = extraBody == null ? null : extraBody.get("tools");
       if (rawTools != null
           && !(rawTools instanceof java.util.Collection<?> tools && tools.isEmpty())) {
         throw new IllegalArgumentException("Model must not carry raw default tools");

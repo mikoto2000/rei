@@ -31,12 +31,12 @@ public final class StableToolDefinitions {
 
   /** 用途に応じたモデル利用で用いるプロンプトを返す。 */
   public static Prompt prompt(Prompt prompt) {
-    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)
-        || options.getToolCallbacks() == null
-        || options.getToolCallbacks().isEmpty()) return prompt;
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return prompt;
+    var configuredCallbacks = options.getToolCallbacks();
+    if (configuredCallbacks == null || configuredCallbacks.isEmpty()) return prompt;
     return new Prompt(
         prompt.getInstructions(),
-        options.mutate().toolCallbacks(callbacks(options.getToolCallbacks())).build());
+        options.mutate().toolCallbacks(callbacks(configuredCallbacks)).build());
   }
 
   /** 用途に応じたモデル利用で用いる完了時の処理一覧を返す。 */

@@ -528,14 +528,17 @@ public class StagnationChatModel implements ChatModel {
 
   /** 実行の停滞への対処で用いる準備を返す。 */
   private Prompt prepare(Prompt prompt, RunExecutionContext context) {
-    ToolCallingChatOptions options = (ToolCallingChatOptions) prompt.getOptions();
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options))
+      throw new IllegalArgumentException("Missing tool options for the controlled model");
     dev.mikoto2000.rei.core.chat.ToolLoopSupport.requireNoRawTools(options);
+    var configuredContext = options.getToolContext();
     var toolContext = new HashMap<String, Object>();
-    if (options.getToolContext() != null) toolContext.putAll(options.getToolContext());
+    if (configuredContext != null) toolContext.putAll(configuredContext);
     toolContext.put("rei.contextSequenceOffset", context.nextContextSegment());
     List<ToolCallback> callbacks = new ArrayList<>();
-    if (options.getToolCallbacks() != null)
-      for (ToolCallback callback : options.getToolCallbacks())
+    var configuredCallbacks = options.getToolCallbacks();
+    if (configuredCallbacks != null)
+      for (ToolCallback callback : configuredCallbacks)
         callbacks.add(observe(callback, context));
     var resumed = context.takeResumeMessages();
     var instructions = new ArrayList<Message>();
@@ -652,10 +655,10 @@ public class StagnationChatModel implements ChatModel {
 
   /** 実行の停滞への対処で用いる文脈を返す。 */
   private RunExecutionContext context(Prompt prompt) {
-    if (prompt.getOptions() instanceof ToolCallingChatOptions options
-        && options.getToolContext() != null
-        && options.getToolContext().get(RunExecutionContext.KEY)
-            instanceof RunExecutionContext context) return context;
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return null;
+    var values = options.getToolContext();
+    if (values != null && values.get(RunExecutionContext.KEY) instanceof RunExecutionContext context)
+      return context;
     return null;
   }
 }
