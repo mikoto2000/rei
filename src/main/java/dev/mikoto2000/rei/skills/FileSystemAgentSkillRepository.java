@@ -106,7 +106,7 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
               skillFile.getParent(),
               skillFile,
               parsed.instructions()));
-    } catch (Exception e) {
+    } catch (IOException | RuntimeException e) {
       log.warn("Failed to load Agent Skill: {}", skillFile, e);
       return Optional.empty();
     }

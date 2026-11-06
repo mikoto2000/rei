@@ -79,7 +79,7 @@ public final class SubAgentResultSchema {
       if (bytes.length > MAX_SCHEMA_BYTES) throw invalid();
       return new SubAgentResultSchema(
           new SubAgentResultParser().parse(new String(bytes, StandardCharsets.UTF_8)));
-    } catch (Exception error) {
+    } catch (IOException | RuntimeException error) {
       // Library errors can contain arbitrary schema values or reference locations.
       throw invalid();
     }

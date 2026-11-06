@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.activity;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaRegistry;
 import com.networknt.schema.SpecificationVersion;
@@ -268,7 +269,7 @@ public final class ClassificationRuleSuggestions {
       return new Proposal(compiled, confidence, rationale, yaml);
     } catch (Failure e) {
       throw e;
-    } catch (Exception e) {
+    } catch (JsonProcessingException | RuntimeException e) {
       throw new IllegalArgumentException("Proposal validation failed", e);
     }
   }
@@ -310,7 +311,7 @@ public final class ClassificationRuleSuggestions {
         OperationalRules.CATEGORIES.stream().sorted().forEach(values::add);
       }
       return mapper.writeValueAsString(root);
-    } catch (Exception e) {
+    } catch (JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Proposal schema unavailable", e);
     }
   }

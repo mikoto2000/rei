@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.ui.shell.sound;
 
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
@@ -101,7 +102,7 @@ public class SoundNotificationService {
             exitCode);
         fallbackToConsole(message);
       }
-    } catch (Exception e) {
+    } catch (IOException | InterruptedException | RuntimeException e) {
       log.warn(
           "Sound notification command failed: {}. Falling back to console output.", e.getMessage());
       if (process != null) {
