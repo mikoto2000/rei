@@ -94,7 +94,7 @@ public final class SlackAgentService implements RunContinuation {
   private dev.mikoto2000.rei.core.dependency.DependencyObservationService observations;
 
   /** Slackとの連携に関する依存条件一覧を処理する。 */
-  public void dependencies(
+  public synchronized void dependencies(
       dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository dependencies,
       dev.mikoto2000.rei.core.dependency.DependencyObservationService observations) {
     this.dependencies = dependencies;

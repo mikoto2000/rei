@@ -31,7 +31,7 @@ public class ProjectShellActivity implements AgentEventListener {
 
   /** ターミナルでの対話で使用する再開概要を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired
-  public void setResumeOverview(dev.mikoto2000.rei.checkpoint.ResumeOverviewService service) {
+  public synchronized void setResumeOverview(dev.mikoto2000.rei.checkpoint.ResumeOverviewService service) {
     resumeOverview = service;
   }
 
@@ -97,7 +97,7 @@ public class ProjectShellActivity implements AgentEventListener {
 
   /** ターミナルでの対話で使用する活動中実行一覧を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
-  public void setActiveRuns(ActiveRunDisplay activeRuns) {
+  public synchronized void setActiveRuns(ActiveRunDisplay activeRuns) {
     this.activeRuns = activeRuns;
   }
 
@@ -273,7 +273,8 @@ public class ProjectShellActivity implements AgentEventListener {
   }
 
   /** ターミナルでの対話で用いる表示への変換対象を返す。 */
-  private ShellAgentEventRenderer rendererFor(String projectId) {
+  private synchronized ShellAgentEventRenderer rendererFor(String projectId) {
+    var rendererOptions = options;
     return renderers.computeIfAbsent(
         projectId,
         id ->
@@ -305,6 +306,6 @@ public class ProjectShellActivity implements AgentEventListener {
                     if (id.equals(visibleProject)) output.approvalRequired(message);
                   }
                 },
-                options));
+                rendererOptions));
   }
 }

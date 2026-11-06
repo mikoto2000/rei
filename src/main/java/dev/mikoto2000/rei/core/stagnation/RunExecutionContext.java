@@ -1105,7 +1105,7 @@ public class RunExecutionContext {
   private String lastToolName = "";
 
   /** 進捗の更新番号。 */
-  private long progressVersion;
+  private volatile long progressVersion;
 
   /** 情報の取得限定繰り返し回数。 */
   private int acquisitionOnlyIterations;
@@ -1218,7 +1218,7 @@ public class RunExecutionContext {
   private java.util.function.Consumer<String> interventionApplied = text -> {};
 
   /** 実行の停滞への対処で使用する追加入力一覧を設定する。 */
-  public void setInterventions(
+  public synchronized void setInterventions(
       dev.mikoto2000.rei.core.chat.UserInterventionQueue queue,
       java.util.function.Consumer<String> applied) {
     this.interventions = queue;
@@ -1232,7 +1232,7 @@ public class RunExecutionContext {
     return interventions.drainEntries().stream()
         .map(
             entry -> {
-              userRequest = entry.text();
+              setUserRequest(entry.text());
               interventionApplied.accept(entry.text());
               publisher.publish(
                   factory

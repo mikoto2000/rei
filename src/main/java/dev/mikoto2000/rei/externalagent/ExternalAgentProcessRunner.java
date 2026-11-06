@@ -148,13 +148,7 @@ public class ExternalAgentProcessRunner {
       }
       if (interrupted) Thread.currentThread().interrupt();
     }
-    return new Output(
-        status,
-        capture.text(false),
-        capture.text(true),
-        exit,
-        Duration.ofNanos(System.nanoTime() - start).toMillis(),
-        capture.truncated);
+    return capture.snapshot(status, exit, start);
   }
 
   /**
@@ -340,9 +334,15 @@ public class ExternalAgentProcessRunner {
       truncated |= keep < size;
     }
 
-    /** 表示や受け渡しに用いるテキストを返す。 */
-    synchronized String text(boolean err) {
-      return (err ? stderr : stdout).toString(StandardCharsets.UTF_8);
+    /** 標準出力、標準エラー出力、省略状態を同時に取得する。 */
+    synchronized Output snapshot(Status status, Integer exit, long start) {
+      return new Output(
+          status,
+          stdout.toString(StandardCharsets.UTF_8),
+          stderr.toString(StandardCharsets.UTF_8),
+          exit,
+          Duration.ofNanos(System.nanoTime() - start).toMillis(),
+          truncated);
     }
   }
 }
