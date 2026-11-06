@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.llm;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.ai.chat.model.ChatResponse;
@@ -79,6 +80,7 @@ public class OutputLimitReplanner {
       var usage = response == null ? null : response.getMetadata().getUsage();
       usageRecorder.accept(usage == null ? null : usage.getTotalTokens());
     }
+    Objects.requireNonNull(response, "Replan model returned no response");
     String text = response.getResult().getOutput().getText();
     OutputLimitReplanPlan plan =
         parser.parse(text, properties.getOutputLimit().getMaxSubgoalsPerReplan());
