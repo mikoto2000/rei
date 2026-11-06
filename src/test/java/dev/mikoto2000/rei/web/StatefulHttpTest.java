@@ -27,29 +27,47 @@ class StatefulHttpTest {
   @Configuration(proxyBeanMethods = false)
   @Import({BackgroundRunHttpTest.Config.class, StatefulController.class, ReadController.class})
   static class Config {
+    private org.sqlite.SQLiteDataSource operationDataSource(String directory) {
+      var data = new org.sqlite.SQLiteDataSource();
+      data.setUrl("jdbc:sqlite:" + Path.of(directory).resolve("operations.db"));
+      return data;
+    }
+
+    @Bean
+    FeedService feeds(
+        @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
+      return new FeedService(operationDataSource(directory));
+    }
+
+    @Bean
+    AgentSkillRepository skills() {
+      return mock(AgentSkillRepository.class);
+    }
+
     /** {@code operations} の条件を再現するための補助情報を返す。 */
     @Bean
     StatefulOperationService operations(
-        @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory) {
-      var data = new org.sqlite.SQLiteDataSource();
-      data.setUrl("jdbc:sqlite:" + Path.of(directory).resolve("operations.db"));
+        @org.springframework.beans.factory.annotation.Value("${rei.data-dir}") String directory,
+        FeedService feeds,
+        AgentSkillRepository skills) {
+      var data = operationDataSource(directory);
       return new StatefulOperationService(
-          new FeedService(data),
+          feeds,
           new ReminderService(data),
           new InterestUpdateService(data),
           new MemoryService(
               data,
               new MemoryProperties(
                   true, 20, 80, 10, 3, 2000, 60, new MemoryProperties.ExpiryDefaults(30, 365))),
-          mock(AgentSkillRepository.class));
+          skills);
     }
 
     /** {@code queries} の条件を再現するための補助情報を返す。 */
     @Bean
-    ReadQueryService queries(StatefulOperationService ops) {
+    ReadQueryService queries(FeedService feeds, AgentSkillRepository skills) {
       return new ReadQueryService(
-          ops.feeds(),
-          ops.skills(),
+          feeds,
+          skills,
           mock(dev.mikoto2000.rei.event.ProfileEventLogStore.class),
           mock(dev.mikoto2000.rei.search.SearchKnowledgeService.class),
           mock(dev.mikoto2000.rei.briefing.BriefingService.class));
