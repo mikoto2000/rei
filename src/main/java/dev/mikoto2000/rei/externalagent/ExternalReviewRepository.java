@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.externalagent;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -209,7 +210,7 @@ public class ExternalReviewRepository {
     if (json != null)
       try {
         result = mapper.readValue(json, ExternalAgentResult.class);
-      } catch (Exception error) {
+      } catch (JsonProcessingException | RuntimeException error) {
         throw new IllegalStateException("Stored review is invalid");
       }
     Long completed = rs.getObject("completed") == null ? null : rs.getLong("completed");

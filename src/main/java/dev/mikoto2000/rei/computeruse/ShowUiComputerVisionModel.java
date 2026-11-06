@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.computeruse;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.awt.RenderingHints;
@@ -293,7 +294,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
           throw new IllegalArgumentException();
       }
       return point;
-    } catch (Exception error) {
+    } catch (JsonProcessingException | RuntimeException error) {
       throw new InvalidComputerDecision(
           "ShowUI must return exactly two normalized numbers: [x, y]");
     }

@@ -10,6 +10,7 @@ import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.TRANSPORT;
 import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.USAGE_LIMIT;
 import static dev.mikoto2000.rei.chatgpt.ChatGptException.Code.USAGE_UNAVAILABLE;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -359,7 +360,7 @@ public final class PlanSseAssembler {
           source);
     } catch (ChatGptException e) {
       throw e;
-    } catch (Exception e) {
+    } catch (JsonProcessingException | RuntimeException e) {
       throw ChatGptException.of(PROTOCOL);
     }
   }

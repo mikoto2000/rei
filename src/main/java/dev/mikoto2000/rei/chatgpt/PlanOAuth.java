@@ -97,7 +97,7 @@ public final class PlanOAuth {
             || issuedAt.isAfter(Instant.now().plusSeconds(5))
             || jwt.getExpiresAt() == null) throw new IllegalArgumentException();
         return new Identity(subject, jwt.getClaimAsString("email"));
-      } catch (Exception e) {
+      } catch (RuntimeException e) {
         throw ChatGptException.of(AUTH_INVALID);
       }
     }

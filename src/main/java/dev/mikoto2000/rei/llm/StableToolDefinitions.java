@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.llm;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -53,7 +54,7 @@ public final class StableToolDefinitions {
     String schema = original.inputSchema();
     try {
       schema = MAPPER.writeValueAsString(ordered(MAPPER.readTree(schema)));
-    } catch (Exception invalid) {
+    } catch (JsonProcessingException | RuntimeException invalid) {
       return callback;
     }
     if (schema.equals(original.inputSchema())) return callback;

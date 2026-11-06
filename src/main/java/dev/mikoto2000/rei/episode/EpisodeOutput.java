@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.episode;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -42,7 +43,7 @@ public final class EpisodeOutput {
       return List.copyOf(result);
     } catch (IllegalArgumentException e) {
       throw e;
-    } catch (Exception e) {
+    } catch (IOException | RuntimeException e) {
       throw new IllegalArgumentException("Invalid episode output", e);
     }
   }

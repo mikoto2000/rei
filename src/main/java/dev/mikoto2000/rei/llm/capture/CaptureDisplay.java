@@ -5,6 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.databind.node.TextNode;
+import java.io.IOException;
 
 /**
  * モデル応答の記録に必要な取得記録表示を扱う。
@@ -34,7 +35,7 @@ final class CaptureDisplay {
           + escape(model)
           + "\n"
           + escape(JSON.writerWithDefaultPrettyPrinter().writeValueAsString(tree));
-    } catch (Exception unsupported) {
+    } catch (IOException | RuntimeException unsupported) {
       return "JSON表示を省略しました（非JSON、深さまたは表示要素数の上限）。原本は変更していません。";
     }
   }

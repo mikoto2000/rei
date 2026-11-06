@@ -4,6 +4,7 @@ import com.networknt.schema.Schema;
 import com.networknt.schema.SchemaRegistry;
 import com.networknt.schema.SchemaRegistryConfig;
 import com.networknt.schema.SpecificationVersion;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -89,7 +90,7 @@ public final class ActivityOutputParser {
           node.get("confidence").asDouble());
     } catch (InvalidOutput e) {
       throw e;
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       throw new InvalidOutput(List.of(new ResultError("/", "invalid_json")));
     }
   }
@@ -99,7 +100,7 @@ public final class ActivityOutputParser {
     try (var stream =
         ActivityOutputParser.class.getResourceAsStream("/activity/extraction.schema.json")) {
       return new String(Objects.requireNonNull(stream).readAllBytes(), StandardCharsets.UTF_8);
-    } catch (Exception e) {
+    } catch (IOException | RuntimeException e) {
       throw new IllegalStateException("Activity schema unavailable");
     }
   }

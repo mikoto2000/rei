@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core.stagnation;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.core.actionplan.ActionPlan;
@@ -1319,7 +1320,7 @@ public class ProgressEvaluator {
   private static JsonNode parse(String value) {
     try {
       return value == null ? null : JSON.readTree(value);
-    } catch (Exception e) {
+    } catch (JsonProcessingException | RuntimeException e) {
       return null;
     }
   }
