@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
@@ -304,7 +305,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
   @FunctionalInterface
   private interface DiagnosticWrite {
     /** 指定された内容を書き込み先へ反映する。 */
-    void write(java.nio.file.Path directory) throws Exception;
+    void write(java.nio.file.Path directory) throws IOException;
   }
 
   /** 後から参照できるよう、診断情報を保存する。 */
@@ -315,7 +316,7 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
           java.nio.file.Files.createDirectories(
               observation.diagnosticRun().resolve("step-%03d".formatted(observation.step())));
       write.write(directory);
-    } catch (Exception error) {
+    } catch (IOException | RuntimeException error) {
       log.warn("Could not save grounding diagnostics: step={}", observation.step(), error);
     }
   }
