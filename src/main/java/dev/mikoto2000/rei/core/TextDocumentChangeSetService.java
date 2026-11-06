@@ -550,11 +550,19 @@ public final class TextDocumentChangeSetService {
   /** 共通の実行基盤に関するjournalを処理する。 */
   private void journal(String id, String phase, List<TextDocumentTransaction.Stage> stages)
       throws IOException {
-    if (db.sql(
-                "UPDATE text_document_change_sets SET phase=?,stages=?,heartbeat=? WHERE id=? AND status IN ('APPLYING','ROLLING_BACK','APPLIED','ROLLED_BACK','STALE')")
-            .params(phase, encode(stages), clock.instant().toString(), id)
-            .update()
-        != 1) throw new IOException("Document journal unavailable");
+    // STAGING already persisted the complete list, including the rollback files.
+    var update =
+        switch (phase) {
+          case "PUBLISHING", "VERIFIED" ->
+              db.sql(
+                      "UPDATE text_document_change_sets SET phase=?,heartbeat=? WHERE id=? AND status='APPLYING' AND phase IN ('STAGING','PUBLISHING')")
+                  .params(phase, clock.instant().toString(), id);
+          default ->
+              db.sql(
+                      "UPDATE text_document_change_sets SET phase=?,stages=?,heartbeat=? WHERE id=? AND status IN ('APPLYING','ROLLING_BACK','APPLIED','ROLLED_BACK','STALE')")
+                  .params(phase, encode(stages), clock.instant().toString(), id);
+        };
+    if (update.update() != 1) throw new IOException("Document journal unavailable");
   }
 
   /** 終了時に必要な状態を反映し、処理を完了させる。 */
