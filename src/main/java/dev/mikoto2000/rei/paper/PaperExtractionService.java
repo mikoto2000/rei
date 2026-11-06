@@ -97,7 +97,9 @@ public class PaperExtractionService {
               sections.size());
       return new StructuredPaper(
           title, StructuredPaper.Availability.FULL_TEXT, sections, references, List.of());
-    } catch (PaperException | java.util.concurrent.CancellationException e) {
+    } catch (PaperException e) {
+      throw e;
+    } catch (java.util.concurrent.CancellationException e) {
       throw e;
     } catch (IOException | RuntimeException e) {
       throw new PaperException(PaperException.Code.PDF_PARSE_FAILED, "PDF の解析に失敗しました", e);
