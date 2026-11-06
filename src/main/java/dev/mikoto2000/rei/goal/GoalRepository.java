@@ -1124,11 +1124,11 @@ public class GoalRepository {
     var goal = get(project, id);
     if (goal.status().equals("RUNNING")) {
       String phase =
-          db.sql("SELECT completion_phase FROM agent_goals WHERE project=? AND id=?")
+          db.sql("SELECT COALESCE(completion_phase, 'RUNNING') FROM agent_goals WHERE project=? AND id=?")
               .params(project, id)
               .query(String.class)
               .single();
-      return phase != null && Set.of("VERIFYING", "REPAIRING").contains(phase) ? phase : "RUNNING";
+      return Set.of("VERIFYING", "REPAIRING").contains(phase) ? phase : "RUNNING";
     }
     return switch (goal.status()) {
       case "WAITING_APPROVAL", "PAUSED" -> "WAITING";

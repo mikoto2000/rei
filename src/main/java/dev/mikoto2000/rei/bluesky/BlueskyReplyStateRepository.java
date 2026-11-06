@@ -57,7 +57,7 @@ public class BlueskyReplyStateRepository {
             .param(postUri)
             .query(Integer.class)
             .single();
-    return count != null && count > 0;
+    return count > 0;
   }
 
   /** 後続の判断に現在の状態を反映するため、Repliedの状態を記録する。 */

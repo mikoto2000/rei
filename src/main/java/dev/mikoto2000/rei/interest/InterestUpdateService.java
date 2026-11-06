@@ -29,7 +29,7 @@ public class InterestUpdateService {
             .param(searchQuery)
             .query(Integer.class)
             .single();
-    return count != null && count > 0;
+    return count > 0;
   }
 
   /** 関心の管理において、存在別話題範囲内時間数に該当するか判定する。 */
@@ -45,7 +45,7 @@ public class InterestUpdateService {
             .params(topic, cutoff.toString())
             .query(Integer.class)
             .single();
-    return count != null && count > 0;
+    return count > 0;
   }
 
   /** 利用可能な対象を確認できるよう、直近検索検索条件一覧を一覧にする。 */

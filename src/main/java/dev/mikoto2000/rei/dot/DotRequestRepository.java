@@ -9,7 +9,6 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.LinkedHashMap;
@@ -18,7 +17,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
-import java.util.TreeSet;
 import java.util.UUID;
 
 /**
@@ -314,19 +312,18 @@ public class DotRequestRepository {
     return read(
         c -> {
           var out = new ArrayList<Map<String, Object>>();
-          var slots = String.join(",", Collections.nCopies(projects.size(), "?"));
           try (var s =
               c.prepareStatement(
-                  "SELECT id,project,publication,status,created,expires FROM dot_requests WHERE"
-                      + " project IN ("
-                      + slots
-                      + ") AND status=? AND id>? AND publication IS NOT NULL AND published=1 ORDER"
-                      + " BY id LIMIT ?")) {
-            int index = 1;
-            for (String p : new TreeSet<>(projects)) s.setString(index++, p);
-            s.setString(index++, status);
-            s.setString(index++, after == null ? "" : after);
-            s.setInt(index, limit);
+                  """
+                  SELECT id,project,publication,status,created,expires FROM dot_requests
+                  WHERE project IN (SELECT value FROM json_each(?))
+                    AND status=? AND id>? AND publication IS NOT NULL AND published=1
+                  ORDER BY id LIMIT ?
+                  """)) {
+            s.setString(1, StorageDatabase.JSON.writeValueAsString(projects));
+            s.setString(2, status);
+            s.setString(3, after == null ? "" : after);
+            s.setInt(4, limit);
             try (var r = s.executeQuery()) {
               while (r.next())
                 out.add(

@@ -780,10 +780,11 @@ public final class ReviewCoverageLedger {
       }
     }
     try (var query =
-        db.prepareStatement(
-            insert
-                ? "INSERT INTO review_jobs(project,conversation,updated,record,id) VALUES(?,?,?,?,?)"
-                : "UPDATE review_jobs SET project=?,conversation=?,updated=?,record=? WHERE id=?")) {
+        insert
+            ? db.prepareStatement(
+                "INSERT INTO review_jobs(project,conversation,updated,record,id) VALUES(?,?,?,?,?)")
+            : db.prepareStatement(
+                "UPDATE review_jobs SET project=?,conversation=?,updated=?,record=? WHERE id=?")) {
       query.setString(1, job.owner().project());
       query.setString(2, job.owner().conversation());
       query.setString(3, job.updatedAt().toString());

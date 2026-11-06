@@ -43,7 +43,7 @@ public class CheckpointException extends IllegalStateException {
       long maxBytes,
       List<String> settingNames,
       long protectedRevisions,
-      long protectedBytes) {
+      long protectedBytes) implements java.io.Serializable {
     /** 受け取った情報からCapacityDetailを作成する。 */
     public CapacityDetail {
       settingNames = List.copyOf(settingNames);

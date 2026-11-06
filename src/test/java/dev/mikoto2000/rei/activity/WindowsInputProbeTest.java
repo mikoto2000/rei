@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import com.sun.jna.platform.win32.WinUser.LASTINPUTINFO;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledOnOs;
 import org.junit.jupiter.api.condition.OS;
@@ -14,7 +15,7 @@ class WindowsInputProbeTest {
   @Test
   @EnabledOnOs(OS.WINDOWS)
   void nativeReadDoesNotRequirePowerShellOrCapture() {
-    assertEquals(8, new WindowsInputProbe.LastInput().cbSize);
+    assertEquals(8, new LASTINPUTINFO().cbSize);
     var sample = WindowsInputProbe.read();
     assertNotNull(sample);
     assertTrue(sample.lastInput() >= 0 && sample.lastInput() <= 0xffffffffL);

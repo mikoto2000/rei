@@ -130,9 +130,6 @@ public class GoogleOAuthService implements dev.mikoto2000.rei.secretary.Secretar
       }
       credential = stored;
     }
-    if (credential == null) {
-      return false;
-    }
     String refreshToken = credential.getRefreshToken();
     if (refreshToken == null || refreshToken.isBlank()) {
       return false;
