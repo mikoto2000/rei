@@ -286,6 +286,11 @@ public class SubAgentCommand implements Callable<Integer> {
     }
   }
 
+  private static SubAgentCommand requireParent(SubAgentCommand command) {
+    if (command == null) throw new IllegalStateException("Missing parent command");
+    return command;
+  }
+
   /** 補助エージェントへの委譲のうち、表示の操作を利用者コマンドとして受け付ける。 */
   @Command(name = "show", description = "指定 SubAgent の設定と利用可能なツールを表示します")
   public static class ShowCommand implements Callable<Integer> {
@@ -298,10 +303,9 @@ public class SubAgentCommand implements Callable<Integer> {
 
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      var command = parent;
-      if (command == null) throw new IllegalStateException("Missing parent command");
-      return command.execute(
+      return requireParent(parent).execute(
           () -> {
+            var command = requireParent(parent);
             var d =
                 command
                     .registry
@@ -340,10 +344,9 @@ public class SubAgentCommand implements Callable<Integer> {
 
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      var command = parent;
-      if (command == null) throw new IllegalStateException("Missing parent command");
-      return command.execute(
+      return requireParent(parent).execute(
           () -> {
+            var command = requireParent(parent);
             var errors = command.registry.reload();
             if (!errors.isEmpty()) throw new IllegalArgumentException(String.join("\n", errors));
             command.out("SubAgents reloaded: " + command.registry.list().size());
@@ -363,10 +366,9 @@ public class SubAgentCommand implements Callable<Integer> {
 
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      var command = parent;
-      if (command == null) throw new IllegalStateException("Missing parent command");
-      return command.execute(
+      return requireParent(parent).execute(
           () -> {
+            var command = requireParent(parent);
             var d = command.loader.load(file);
             command.out(
                 "valid: "
@@ -392,10 +394,9 @@ public class SubAgentCommand implements Callable<Integer> {
 
     /** 補助エージェントへの委譲の要求を実行し、呼び出し元へ結果を返す。 */
     public Integer call() {
-      var command = parent;
-      if (command == null) throw new IllegalStateException("Missing parent command");
-      return command.execute(
+      return requireParent(parent).execute(
           () -> {
+            var command = requireParent(parent);
             if (id == null || !id.matches("[a-z][a-z0-9-]{0,63}"))
               throw new IllegalArgumentException("id: expected [a-z][a-z0-9-]{0,63}");
             Path directory = command.registry.directory();
