@@ -90,7 +90,9 @@ class FallbackChatModel implements ChatModel {
   private ChatOptions fallbackOptionsWithoutPrimaryModel(ChatOptions options) {
     String fallbackModel = fallback.getOptions() == null ? null : fallback.getOptions().getModel();
     if (options instanceof OpenAiChatOptions openAiOptions && fallbackModel != null) {
-      return openAiOptions.mutate().model(fallbackModel).build();
+      var builder = openAiOptions.mutate();
+      builder.model(fallbackModel);
+      return builder.build();
     }
     if (options instanceof org.springframework.ai.model.tool.ToolCallingChatOptions toolOptions) {
       return org.springframework.ai.model.tool.ToolCallingChatOptions.builder()
