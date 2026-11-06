@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.llm;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import org.springframework.boot.context.properties.ConfigurationProperties;
@@ -46,6 +48,10 @@ public class LlmProperties {
   }
 
   /** 用途に応じたモデル利用で参照する出力上限を返す。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Spring JavaBean binding and programmatic setup populate the nested output limits.")
   public OutputLimit getOutputLimit() {
     return outputLimit;
   }
@@ -56,6 +62,10 @@ public class LlmProperties {
   }
 
   /** 用途に応じたモデル利用で参照するFeaturesを返す。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP",
+      matchType = SuppressMatchType.EXACT,
+      justification = "The JavaBean settings map supports binding and programmatic feature configuration.")
   public Map<String, Server> getFeatures() {
     return features;
   }

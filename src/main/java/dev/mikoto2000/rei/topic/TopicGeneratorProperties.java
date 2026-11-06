@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.topic;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 
@@ -94,16 +96,28 @@ public class TopicGeneratorProperties {
   }
 
   /** 話題の管理で参照する操作がない状態実行条件を返す。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Spring populates this getter-only nested idle trigger settings bean.")
   public IdleTrigger getIdleTrigger() {
     return idleTrigger;
   }
 
   /** 話題の管理で参照する情報への関心を返す。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Spring populates this getter-only nested curiosity settings bean.")
   public Curiosity getCuriosity() {
     return curiosity;
   }
 
   /** 話題の管理で参照する利用先の検出を返す。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Spring populates this getter-only nested discovery settings bean.")
   public Discovery getDiscovery() {
     return discovery;
   }
