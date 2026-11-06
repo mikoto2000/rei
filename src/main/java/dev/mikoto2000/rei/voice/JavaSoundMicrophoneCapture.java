@@ -32,7 +32,7 @@ public final class JavaSoundMicrophoneCapture implements MicrophoneCaptureServic
           int offset = 0, empty = 0;
           while (offset < bytes.length && !closed.get()) {
             int count = pcm.read(bytes, offset, bytes.length - offset);
-            if (count < 0) return null;
+            if (count < 0) return new float[0];
             if (count == 0) {
               if (++empty >= 3) throw new IOException("Microphone stopped producing frames");
               continue;
@@ -40,7 +40,7 @@ public final class JavaSoundMicrophoneCapture implements MicrophoneCaptureServic
             offset += count;
             empty = 0;
           }
-          return offset == bytes.length && !closed.get() ? VoicePcm.decode(bytes) : null;
+          return offset == bytes.length && !closed.get() ? VoicePcm.decode(bytes) : new float[0];
         }
 
         /** 音声による対話で利用した資源や登録を解放し、利用を終了する。 */
