@@ -44,6 +44,14 @@ class SubAgentEvidenceTest {
         quote);
   }
 
+  @Test
+  void missingToolInputDoesNotRecordEvidence() {
+    var ledger = new SubAgentEvidence();
+    assertThrows(
+        IllegalArgumentException.class, () -> ledger.capture("readMultiFile", null, "output"));
+    assertEquals("{}", ledger.semanticSnapshot());
+  }
+
   /** 成功について、観測必須ツール一覧を必要とすることを確認する。 */
   @Test
   void successRequiresObservedRequiredToolsAndMatchingQuotes() {
