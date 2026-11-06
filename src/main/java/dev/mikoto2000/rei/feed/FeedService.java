@@ -261,7 +261,7 @@ public class FeedService {
             .param(url)
             .query(Long.class)
             .single();
-    return count != null && count > 0;
+    return count > 0;
   }
 
   /** フィードの購読と収集で用いる対応表フィードを返す。 */
