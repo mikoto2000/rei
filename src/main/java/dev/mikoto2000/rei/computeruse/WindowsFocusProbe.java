@@ -100,16 +100,18 @@ final class WindowsFocusProbe implements Supplier<String> {
       return unknown("probe_exception", e.getClass().getSimpleName() + ": " + e.getMessage());
     } finally {
       if (process != null && process.isAlive()) process.destroyForcibly();
-      if (output != null)
-        try {
-          Files.deleteIfExists(output);
-        } catch (Exception ignored) {
-        }
-      if (errors != null)
-        try {
-          Files.deleteIfExists(errors);
-        } catch (Exception ignored) {
-        }
+      deleteProbeFile(output);
+      deleteProbeFile(errors);
+    }
+  }
+
+  private static void deleteProbeFile(java.nio.file.Path file) {
+    if (file == null) return;
+    try {
+      Files.deleteIfExists(file);
+    } catch (Exception failure) {
+      org.slf4j.LoggerFactory.getLogger(WindowsFocusProbe.class)
+          .warn("Could not remove temporary focus probe file ({})", failure.getClass().getSimpleName());
     }
   }
 

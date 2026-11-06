@@ -153,7 +153,9 @@ final class AppServerProcessSession implements PlanAppServerRpc.Session {
             .get(500, TimeUnit.MILLISECONDS);
       } catch (InterruptedException e) {
         interrupted = true;
-      } catch (Exception ignored) {
+      } catch (Exception failure) {
+        org.slf4j.LoggerFactory.getLogger(AppServerProcessSession.class)
+            .debug("App server shutdown wait failed ({})", failure.getClass().getSimpleName());
       }
       cleanup.run();
       if (interrupted) Thread.currentThread().interrupt();
