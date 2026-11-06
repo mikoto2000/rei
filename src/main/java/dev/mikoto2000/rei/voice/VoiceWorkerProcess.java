@@ -28,6 +28,9 @@ import java.util.concurrent.atomic.AtomicLong;
  * stopped.
  */
 public final class VoiceWorkerProcess implements AutoCloseable {
+  /** ワーカープロセスへの要求を直列化するロック。 */
+  private final Object requestLock = new Object();
+
   /** MAGIC／形式のバージョン／最大サンプル一覧／最大テキストバイト数。 */
   public static final int MAGIC = 0x52454956,
       VERSION = 1,
@@ -111,40 +114,44 @@ public final class VoiceWorkerProcess implements AutoCloseable {
   }
 
   /** 音声による対話で用いるprobabilityを返す。 */
-  public synchronized float probability(float[] frame) throws IOException {
-    VoicePcm.validateFrame(frame);
-    float[] copy = frame.clone();
-    return exchange(
-        () -> {
-          write(1, copy);
-          if (input.readInt() != 1) throw new IOException("Invalid VAD response");
-          float value = input.readFloat();
-          if (!Float.isFinite(value) || value < 0 || value > 1)
-            throw new IOException("Invalid VAD probability");
-          return value;
-        },
-        requestTimeout);
+  public float probability(float[] frame) throws IOException {
+    synchronized (requestLock) {
+      VoicePcm.validateFrame(frame);
+      float[] copy = frame.clone();
+      return exchange(
+          () -> {
+            write(1, copy);
+            if (input.readInt() != 1) throw new IOException("Invalid VAD response");
+            float value = input.readFloat();
+            if (!Float.isFinite(value) || value < 0 || value > 1)
+              throw new IOException("Invalid VAD probability");
+            return value;
+          },
+          requestTimeout);
+    }
   }
 
   /** 音声による対話で用いるrecognizeを返す。 */
-  public synchronized String recognize(float[] samples) throws IOException {
-    if (samples == null || samples.length < 1 || samples.length > MAX_SAMPLES)
-      throw new IllegalArgumentException("Invalid worker sample count");
-    float[] copy = samples.clone();
-    for (float sample : copy)
-      if (!Float.isFinite(sample) || Math.abs(sample) > 1)
-        throw new IllegalArgumentException("Invalid worker PCM");
-    return exchange(
-        () -> {
-          write(2, copy);
-          if (input.readInt() != 2) throw new IOException("Invalid ASR response");
-          int size = input.readInt();
-          if (size < 0 || size > MAX_TEXT_BYTES) throw new IOException("Invalid ASR response size");
-          byte[] bytes = new byte[size];
-          input.readFully(bytes);
-          return StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString();
-        },
-        requestTimeout);
+  public String recognize(float[] samples) throws IOException {
+    synchronized (requestLock) {
+      if (samples == null || samples.length < 1 || samples.length > MAX_SAMPLES)
+        throw new IllegalArgumentException("Invalid worker sample count");
+      float[] copy = samples.clone();
+      for (float sample : copy)
+        if (!Float.isFinite(sample) || Math.abs(sample) > 1)
+          throw new IllegalArgumentException("Invalid worker PCM");
+      return exchange(
+          () -> {
+            write(2, copy);
+            if (input.readInt() != 2) throw new IOException("Invalid ASR response");
+            int size = input.readInt();
+            if (size < 0 || size > MAX_TEXT_BYTES) throw new IOException("Invalid ASR response size");
+            byte[] bytes = new byte[size];
+            input.readFully(bytes);
+            return StandardCharsets.UTF_8.newDecoder().decode(ByteBuffer.wrap(bytes)).toString();
+          },
+          requestTimeout);
+    }
   }
 
   /** 指定された内容を書き込み先へ反映する。 */
