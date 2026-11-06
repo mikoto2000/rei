@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.web;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -10,6 +12,17 @@ import java.util.List;
  * @param webResults Web結果一覧
  */
 public record SearchResponse(String query, List<VectorHit> vectorResults, List<WebHit> webResults) {
+  public SearchResponse {
+    vectorResults =
+        vectorResults == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(vectorResults));
+    webResults =
+        webResults == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(webResults));
+  }
+
   /**
    * Web APIによる操作で受け渡すベクトル検索結果を表す。
    *
