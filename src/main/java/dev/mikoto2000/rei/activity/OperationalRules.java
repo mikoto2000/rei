@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.activity;
 
+import dev.mikoto2000.rei.json.JsonObjectSnapshot;
 import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -91,6 +92,13 @@ public final class OperationalRules {
       Map<String, String> match,
       Map<String, Object> classify,
       Map<String, Pattern> compiled) {
+    /** ルールを読み込んだ時点の条件と分類を保持する。 */
+    public Rule {
+      match = match == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(match));
+      classify = classify == null ? null : Collections.unmodifiableMap(JsonObjectSnapshot.copy(classify));
+      compiled = compiled == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(compiled));
+    }
+
     /** 指定された条件と対象が一致するかを判定する。 */
     boolean matches(
         String process, String title, String service, String app, String content, String category) {

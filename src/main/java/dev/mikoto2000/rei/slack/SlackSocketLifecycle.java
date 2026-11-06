@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.slack;
 
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -48,7 +50,8 @@ public final class SlackSocketLifecycle implements SmartLifecycle, AutoCloseable
   public SlackSocketLifecycle(
       SlackProperties settings, Map<String, String> environment, Supplier<Connection> factory) {
     this.settings = settings;
-    this.environment = environment;
+    this.environment =
+        environment == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(environment));
     this.factory = factory;
   }
 

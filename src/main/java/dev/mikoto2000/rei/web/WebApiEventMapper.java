@@ -4,7 +4,6 @@ import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.event.ExecutionProgressPayload;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -205,7 +204,7 @@ public final class WebApiEventMapper {
         safeText(event.projectId(), apiKey),
         safeText(event.correlationId(), apiKey),
         safeText(event.parentEventId(), apiKey),
-        Collections.unmodifiableMap(payload));
+        payload);
   }
 
   /** 既知の停止理由は固定文で公開し、例外に含まれる任意のメッセージは公開しない。 */
