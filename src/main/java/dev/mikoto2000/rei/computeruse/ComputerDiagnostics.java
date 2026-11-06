@@ -71,8 +71,8 @@ public final class ComputerDiagnostics {
     item.put("bounds", Map.of("x", b.x, "y", b.y, "width", b.width, "height", b.height));
     item.put("scaleX", g.scaleX());
     item.put("scaleY", g.scaleY());
-    item.put("imageWidth", display.image().getWidth());
-    item.put("imageHeight", display.image().getHeight());
+    item.put("imageWidth", display.imageWidth());
+    item.put("imageHeight", display.imageHeight());
     return item;
   }
 

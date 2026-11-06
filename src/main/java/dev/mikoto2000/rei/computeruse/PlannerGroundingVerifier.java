@@ -77,9 +77,9 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
         || point[0] > 1
         || point[1] < 0
         || point[1] > 1) throw new InvalidComputerDecision("Invalid verification point");
-    int x = Math.min(display.image().getWidth() - 1, (int) (point[0] * display.image().getWidth()));
+    int x = Math.min(display.imageWidth() - 1, (int) (point[0] * display.imageWidth()));
     int y =
-        Math.min(display.image().getHeight() - 1, (int) (point[1] * display.image().getHeight()));
+        Math.min(display.imageHeight() - 1, (int) (point[1] * display.imageHeight()));
     var desktop = display.desktopPoint(new ComputerAction.Target(x, y, target));
     String state;
     // UIA uses physical screen coordinates. Do not silently mix them with scaled AWT coordinates.

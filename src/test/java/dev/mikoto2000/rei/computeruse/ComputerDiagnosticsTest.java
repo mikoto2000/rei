@@ -18,6 +18,20 @@ class ComputerDiagnosticsTest {
   /** 保存や復元を既存データから独立して検証するための一時ディレクトリ。 */
   @TempDir Path directory;
 
+  /** 切り出し画像が元の画素や返却した画素の書き換えから独立することを確認する。 */
+  @Test
+  void snapshotsPixelsFromSubimages() {
+    var parent = new java.awt.image.BufferedImage(6, 6, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+    var image = parent.getSubimage(2, 2, 3, 3);
+    image.setRGB(0, 0, 0xff123456);
+    var bounds = new java.awt.Rectangle(0, 0, 3, 3);
+    var capture = new DisplayCapture(new ScreenGeometry(bounds, bounds, true), image);
+
+    image.setRGB(0, 0, 0xff000000);
+    capture.image().setRGB(0, 0, 0xffffffff);
+    assertEquals(0xff123456, capture.image().getRGB(0, 0));
+  }
+
   /** 画面操作の支援で、実施してはいけない操作や影響が、指定された条件で発生しないことを確認する。 */
   @Test
   void storesOriginalImagesOverlayAndMappedCoordinatesWithoutChangingModelImage() throws Exception {

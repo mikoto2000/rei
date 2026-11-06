@@ -201,7 +201,7 @@ public final class BoundedToolLoop {
               timing != null && timing.enabled()
                   ? (previous == null
                       ? new dev.mikoto2000.rei.timing.TimingAttempt(
-                          UUID.randomUUID().toString(), 1, new AtomicReference<>())
+                          UUID.randomUUID().toString(), 1)
                       : previous)
                   : null;
           if (remaining.getAndDecrement() <= 0) return Mono.error(new MaxStepsExceeded());
@@ -292,7 +292,7 @@ public final class BoundedToolLoop {
                                       ? context
                                       : null;
                           if (owner != null) {
-                            String parent = trace.physicalSpan().get();
+                            String parent = trace.physicalSpan();
                             var span =
                                 timing.startSpan(
                                     owner.runId(),

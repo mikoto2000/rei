@@ -208,7 +208,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
     if (timing == null || !timing.enabled()) return null;
     var owner = owner(prompt);
     if (owner == null) return null;
-    if (trace != null) trace.physicalSpan().set(request);
+    if (trace != null) trace.setPhysicalSpan(request);
     var span =
         timing.startSpanWithId(
             owner.runId(),

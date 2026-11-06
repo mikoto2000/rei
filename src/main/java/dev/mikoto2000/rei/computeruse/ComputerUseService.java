@@ -174,9 +174,9 @@ public final class ComputerUseService {
                             "displayId="
                                 + d.geometry().id()
                                 + " image="
-                                + d.image().getWidth()
+                                + d.imageWidth()
                                 + "x"
-                                + d.image().getHeight()
+                                + d.imageHeight()
                                 + " scale="
                                 + d.geometry().scaleX()
                                 + ","

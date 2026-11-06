@@ -61,7 +61,7 @@ public class AgentSkillsProperties {
 
   /** スキルの利用で参照するディレクトリ一覧を返す。 */
   public List<String> getDirectories() {
-    return directories;
+    return java.util.Collections.unmodifiableList(new ArrayList<>(directories));
   }
 
   /** スキルの利用で使用するディレクトリ一覧を設定する。 */

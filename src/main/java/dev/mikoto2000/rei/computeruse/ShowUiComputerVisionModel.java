@@ -214,8 +214,8 @@ public final class ShowUiComputerVisionModel implements ComputerVisionModel {
           details.put("cropTop", top);
           details.put("cropWidth", region.getWidth());
           details.put("cropHeight", region.getHeight());
-          details.put("sourceWidth", original.image().getWidth());
-          details.put("sourceHeight", original.image().getHeight());
+          details.put("sourceWidth", original.imageWidth());
+          details.put("sourceHeight", original.imageHeight());
           details.put("sentWidth", image.getWidth());
           details.put("sentHeight", image.getHeight());
           details.put("targetDescription", target.description());

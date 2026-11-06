@@ -170,9 +170,9 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
                   "height",
                   crop.getHeight(),
                   "sourceWidth",
-                  display.image().getWidth(),
+                  display.imageWidth(),
                   "sourceHeight",
-                  display.image().getHeight()));
+                  display.imageHeight()));
     } catch (Exception error) {
       org.slf4j.LoggerFactory.getLogger(SpringAiComputerVisionModel.class)
           .warn("Could not save refinement diagnostics: {}", error.getClass().getSimpleName());
@@ -197,9 +197,9 @@ public final class SpringAiComputerVisionModel implements ComputerVisionModel {
           .append(": displayId=")
           .append(display.geometry().id())
           .append("; ")
-          .append(display.image().getWidth())
+          .append(display.imageWidth())
           .append("x")
-          .append(display.image().getHeight())
+          .append(display.imageHeight())
           .append(" pixels; primary=")
           .append(display.geometry().primary());
     }
