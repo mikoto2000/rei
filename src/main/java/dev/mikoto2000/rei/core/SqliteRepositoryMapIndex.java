@@ -6,6 +6,7 @@ import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
+import dev.mikoto2000.rei.jdbc.SqlConnectionFactory;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.security.MessageDigest;
@@ -19,7 +20,6 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Set;
 import javax.sql.DataSource;
 
@@ -75,17 +75,17 @@ public final class SqliteRepositoryMapIndex {
               .getBytes(StandardCharsets.UTF_8));
 
   /** データ。 */
-  private final DataSource data;
+  private final SqlConnectionFactory connections;
 
   /** 指定された値や利用先を使って、SqliteRepositoryMapIndexを初期化する。 */
   public SqliteRepositoryMapIndex(DataSource data) {
-    this.data = Objects.requireNonNull(data);
+    connections = data::getConnection;
   }
 
   /** 保存された情報を読み込み、現在の処理で使える形にする。 */
   public Map<String, Entry> load(Path root) {
     RunCancellation.propagate(null);
-    try (var connection = data.getConnection()) {
+    try (var connection = connections.open()) {
       initialize(connection);
       try (var statement =
           connection.prepareStatement(
@@ -151,7 +151,7 @@ public final class SqliteRepositoryMapIndex {
       }
     }
     RunCancellation.propagate(null);
-    try (var connection = data.getConnection()) {
+    try (var connection = connections.open()) {
       initialize(connection);
       connection.setAutoCommit(false);
       try {

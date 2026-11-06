@@ -2,6 +2,7 @@ package dev.mikoto2000.rei.activity;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import dev.mikoto2000.rei.jdbc.SqlConnectionFactory;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Instant;
@@ -14,7 +15,7 @@ import javax.sql.DataSource;
  */
 public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
   /** 取得元。 */
-  private final DataSource source;
+  private final SqlConnectionFactory connections;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper mapper = new ObjectMapper();
@@ -24,13 +25,13 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
 
   /** 指定された値や利用先を使って、SqlitePeriodCoachingStoreを初期化する。 */
   public SqlitePeriodCoachingStore(DataSource source) {
-    this.source = source;
+    connections = source::getConnection;
   }
 
   /** 作業状況の把握に関する初期化を処理する。 */
   private synchronized void initialize() throws SQLException, JsonProcessingException {
     if (initialized) return;
-    try (var c = source.getConnection();
+    try (var c = connections.open();
         var s = c.createStatement()) {
       s.execute(
           "CREATE TABLE IF NOT EXISTS activity_period_coaching_settings (id INTEGER PRIMARY KEY CHECK(id=1), revision INTEGER NOT NULL, payload TEXT NOT NULL)");
@@ -65,7 +66,7 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
   public Snapshot load() {
     try {
       initialize();
-      try (var c = source.getConnection()) {
+      try (var c = connections.open()) {
         return read(c);
       }
     } catch (SQLException | JsonProcessingException | RuntimeException e) {
@@ -83,7 +84,7 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
   private <T> T transaction(Operation<T> operation) {
     try {
       initialize();
-      try (var c = source.getConnection();
+      try (var c = connections.open();
           var s = c.createStatement()) {
         s.execute("PRAGMA busy_timeout=5000");
         s.execute("BEGIN IMMEDIATE");

@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.activity;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import dev.mikoto2000.rei.jdbc.SqlConnectionFactory;
 import java.sql.Connection;
 import java.sql.SQLException;
 import java.time.Duration;
@@ -18,7 +19,7 @@ import javax.sql.DataSource;
  */
 public final class SqliteActivityStore implements ActivityStore {
   /** データ取得元。 */
-  private final DataSource dataSource;
+  private final SqlConnectionFactory connections;
 
   /** 判断基準。 */
   private final SessionMergePolicy policy;
@@ -31,14 +32,14 @@ public final class SqliteActivityStore implements ActivityStore {
 
   /** 指定された値や利用先を使って、SqliteActivityStoreを初期化する。 */
   public SqliteActivityStore(DataSource dataSource, SessionMergePolicy policy) {
-    this.dataSource = dataSource;
+    connections = dataSource::getConnection;
     this.policy = policy;
   }
 
   /** 作業状況の把握に関する初期化を処理する。 */
   private synchronized void initialize() throws SQLException {
     if (initialized) return;
-    try (var connection = dataSource.getConnection();
+    try (var connection = connections.open();
         var s = connection.createStatement()) {
       s.execute(
           "CREATE TABLE IF NOT EXISTS activity_records (id TEXT PRIMARY KEY, captured_at INTEGER NOT NULL, payload TEXT NOT NULL)");
@@ -68,7 +69,7 @@ public final class SqliteActivityStore implements ActivityStore {
   private void persist(ActivityRecord record, boolean replace) {
     try {
       initialize();
-      try (var c = dataSource.getConnection()) {
+      try (var c = connections.open()) {
         c.setAutoCommit(false);
         try {
           try (var s =
@@ -142,7 +143,7 @@ public final class SqliteActivityStore implements ActivityStore {
     if (!start.isBefore(end)) throw new IllegalArgumentException("start must precede end");
     try {
       initialize();
-      try (var c = dataSource.getConnection();
+      try (var c = connections.open();
           var s =
               c.prepareStatement(
                   "SELECT payload FROM activity_sessions WHERE started_at<? AND ended_at>? ORDER BY started_at,id")) {
@@ -200,7 +201,7 @@ public final class SqliteActivityStore implements ActivityStore {
       var candidates = new ArrayList<ActivityRecord>();
       long bytes = 0;
       var lower = start.atZone(policy.zone()).toLocalDate().atStartOfDay(policy.zone()).toInstant();
-      try (var c = dataSource.getConnection();
+      try (var c = connections.open();
           var statement =
               c.prepareStatement(
                   "SELECT payload FROM activity_records WHERE captured_at>=? AND captured_at<? ORDER BY captured_at,id LIMIT ?")) {
@@ -259,7 +260,7 @@ public final class SqliteActivityStore implements ActivityStore {
     if (!start.isBefore(end)) throw new IllegalArgumentException("start must precede end");
     try {
       initialize();
-      try (var c = dataSource.getConnection()) {
+      try (var c = connections.open()) {
         // Estimates cannot cross the journal midnight, so only this day's preceding observations
         // can overlap.
         var lower =
@@ -281,7 +282,7 @@ public final class SqliteActivityStore implements ActivityStore {
       initialize();
       var result = new ArrayList<ActivityRecord>();
       long bytes = 0;
-      try (var c = dataSource.getConnection();
+      try (var c = connections.open();
           var s =
               c.prepareStatement(
                   "SELECT payload FROM activity_records WHERE captured_at>=? AND captured_at<? ORDER BY captured_at,id LIMIT ?")) {

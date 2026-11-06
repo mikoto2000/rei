@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.activity.behavior;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import dev.mikoto2000.rei.jdbc.SqlConnectionFactory;
 import java.sql.SQLException;
 import javax.sql.DataSource;
 
@@ -13,7 +14,7 @@ import javax.sql.DataSource;
  */
 public final class SqliteBehaviorStateStore implements BehaviorStateStore {
   /** データ取得元。 */
-  private final DataSource dataSource;
+  private final SqlConnectionFactory connections;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper mapper = new ObjectMapper().registerModule(new JavaTimeModule());
@@ -23,13 +24,13 @@ public final class SqliteBehaviorStateStore implements BehaviorStateStore {
 
   /** 指定された値や利用先を使って、SqliteBehaviorStateStoreを初期化する。 */
   public SqliteBehaviorStateStore(DataSource dataSource) {
-    this.dataSource = dataSource;
+    connections = dataSource::getConnection;
   }
 
   /** 作業習慣の支援に関する初期化を処理する。 */
   private void initialize() throws SQLException {
     if (initialized) return;
-    try (var c = dataSource.getConnection();
+    try (var c = connections.open();
         var s = c.createStatement()) {
       s.execute(
           "CREATE TABLE IF NOT EXISTS activity_behavior_state (id INTEGER PRIMARY KEY CHECK(id=1), payload TEXT NOT NULL)");
@@ -48,7 +49,7 @@ public final class SqliteBehaviorStateStore implements BehaviorStateStore {
   public synchronized BehaviorState load() {
     try {
       initialize();
-      try (var c = dataSource.getConnection();
+      try (var c = connections.open();
           var s = c.createStatement();
           var r = s.executeQuery("SELECT payload FROM activity_behavior_state WHERE id=1")) {
         return r.next()
@@ -65,7 +66,7 @@ public final class SqliteBehaviorStateStore implements BehaviorStateStore {
   public synchronized void save(BehaviorState state, BehaviorAssessment assessment) {
     try {
       initialize();
-      try (var c = dataSource.getConnection()) {
+      try (var c = connections.open()) {
         c.setAutoCommit(false);
         try {
           try (var s =
@@ -99,7 +100,7 @@ public final class SqliteBehaviorStateStore implements BehaviorStateStore {
   public synchronized void appendEvent(BehaviorTimelineEvent event) {
     try {
       initialize();
-      try (var c = dataSource.getConnection();
+      try (var c = connections.open();
           var s =
               c.prepareStatement(
                   "INSERT INTO activity_behavior_events(id,occurred_at,payload) VALUES(?,?,?)")) {
@@ -119,7 +120,7 @@ public final class SqliteBehaviorStateStore implements BehaviorStateStore {
       java.time.Instant start, java.time.Instant end) {
     try {
       // A timeline read must not create tables or reinterpret old reservations as deliveries.
-      try (var c = dataSource.getConnection()) {
+      try (var c = connections.open()) {
         try (var s = c.createStatement();
             var r =
                 s.executeQuery(
