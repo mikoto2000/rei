@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core.chat;
 
+import java.util.Map;
 import org.springframework.ai.chat.messages.ToolResponseMessage;
 import org.springframework.ai.chat.model.ChatResponse;
 import org.springframework.ai.chat.prompt.ChatOptions;
@@ -43,14 +44,21 @@ public final class ToolLoopSupport {
    * <p>SDK extra-body parameters must not bypass Rei's explicit callback/permission boundary.
    */
   public static void requireNoRawTools(ChatOptions options) {
-    if (options instanceof org.springframework.ai.openai.OpenAiChatOptions openAi
-        && openAi.getExtraBody() != null) {
-      Object rawTools = openAi.getExtraBody().get("tools");
+    if (options instanceof org.springframework.ai.openai.OpenAiChatOptions openAi) {
+      var extraBody = openAi.getExtraBody();
+      Object rawTools = extraBody == null ? null : extraBody.get("tools");
       if (rawTools != null
           && !(rawTools instanceof java.util.Collection<?> tools && tools.isEmpty())) {
         throw new IllegalArgumentException("Model must not carry raw default tools");
       }
     }
+  }
+
+  /** プロンプトからツールの付随情報を取り出し、設定がなければ空のマップを返す。 */
+  public static Map<String, Object> toolContext(Prompt prompt) {
+    if (!(prompt.getOptions() instanceof ToolCallingChatOptions options)) return Map.of();
+    var context = options.getToolContext();
+    return context == null ? Map.of() : context;
   }
 
   // 実行回数と時間は、れいが保持する予算で制限する。

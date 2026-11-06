@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.llm;
 
+import dev.mikoto2000.rei.core.chat.ToolLoopSupport;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import java.util.UUID;
@@ -173,28 +174,20 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
 
   /** 用途に応じたモデル利用で用いる所有者を返す。 */
   private dev.mikoto2000.rei.core.chat.AgentRunContext owner(Prompt prompt) {
-    if (prompt.getOptions()
-            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-        && options.getToolContext() != null) {
-      var values = options.getToolContext();
-      if (values.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
-          instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext run)
-        return run.runContext();
-      if (values.get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName())
-          instanceof dev.mikoto2000.rei.core.chat.AgentRunContext run) return run;
-    }
+    var values = ToolLoopSupport.toolContext(prompt);
+    if (values.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+        instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext run)
+      return run.runContext();
+    if (values.get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName())
+        instanceof dev.mikoto2000.rei.core.chat.AgentRunContext run) return run;
     return dev.mikoto2000.rei.core.chat.AgentRunScope.current();
   }
 
   /** 用途に応じたモデル利用で判断に用いるキャンセル済みの条件を確認する。 */
   private boolean cancelled(Prompt prompt) {
     return Thread.currentThread().isInterrupted()
-        || prompt.getOptions()
-                instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-            && options.getToolContext() != null
-            && options
-                    .getToolContext()
-                    .get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+        || ToolLoopSupport.toolContext(prompt)
+                .get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
                 instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext run
             && run.isCancelled();
   }
@@ -230,10 +223,7 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
   /** 用途に応じたモデル利用で用いる観測機能を返す。 */
   private String observedFeature(Prompt prompt) {
     if (LlmFeature.CHAT.equals(feature)
-        && prompt.getOptions()
-            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-        && options.getToolContext() != null
-        && "context-summary".equals(options.getToolContext().get("rei.modelCallPurpose")))
+        && "context-summary".equals(ToolLoopSupport.toolContext(prompt).get("rei.modelCallPurpose")))
       return "context-summary";
     return feature;
   }
@@ -298,20 +288,13 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
   /** 用途に応じたモデル利用で用いる通知先を返す。 */
   private AgentEventPublisher publisher(Prompt prompt) {
     dev.mikoto2000.rei.core.chat.AgentRunContext owner = null;
-    if (prompt.getOptions()
-            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-        && options.getToolContext() != null
-        && options.getToolContext().get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
+    var toolContext = ToolLoopSupport.toolContext(prompt);
+    if (toolContext.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY)
             instanceof dev.mikoto2000.rei.core.stagnation.RunExecutionContext execution)
       owner = execution.runContext();
     var captured = owner;
     if (captured == null
-        && prompt.getOptions()
-            instanceof org.springframework.ai.model.tool.ToolCallingChatOptions options
-        && options.getToolContext() != null
-        && options
-                .getToolContext()
-                .get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName())
+        && toolContext.get(dev.mikoto2000.rei.core.chat.AgentRunContext.class.getName())
             instanceof dev.mikoto2000.rei.core.chat.AgentRunContext context) {
       return event -> eventPublisher.publish(event.withOwnership(context));
     }
