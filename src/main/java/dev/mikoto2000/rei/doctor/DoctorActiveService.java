@@ -39,6 +39,7 @@ import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.Function;
 import org.springframework.ai.chat.messages.AssistantMessage;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -114,13 +115,10 @@ public class DoctorActiveService {
   private final ModelHolderService selectedModel;
 
   /** HTTP通信。 */
-  private final ConnectivityProbe connectivityProbe;
+  private final Function<ConnectivityRequest, JavaHttpDependencyProbe.Connectivity> connectivityProbe;
 
-  /** 接続性の診断に必要なHTTP操作。 */
-  @FunctionalInterface
-  private interface ConnectivityProbe {
-    JavaHttpDependencyProbe.Connectivity check(String endpoint, Duration timeout, Runnable checkActive);
-  }
+  /** 接続性の診断に必要な入力。 */
+  private record ConnectivityRequest(String endpoint, Duration timeout, Runnable checkActive) {}
 
   /** Codexの設定または実行の窓口。 */
   @SuppressFBWarnings(
@@ -195,8 +193,8 @@ public class DoctorActiveService {
     this.environment = environment;
     this.models = models;
     this.selectedModel = selectedModel;
-    this.connectivityProbe = (endpoint, timeout, checkActive) ->
-        http.connectivity(endpoint, timeout, checkActive);
+    this.connectivityProbe =
+        request -> http.connectivity(request.endpoint(), request.timeout(), request.checkActive());
     this.codex = codex;
     this.claude = claude;
     this.voice = voice;
@@ -394,8 +392,9 @@ public class DoctorActiveService {
           "Unsupported URL or embedded credentials",
           "Use an HTTP(S) endpoint without userinfo, query or fragment");
     var observed =
-        connectivityProbe.check(
-            OpenAiCompatibleEndpoint.baseUrl(endpoint) + "/models", timeout, run::checkActive);
+        connectivityProbe.apply(
+            new ConnectivityRequest(
+                OpenAiCompatibleEndpoint.baseUrl(endpoint) + "/models", timeout, run::checkActive));
     return switch (observed.reason()) {
       case RESPONSE ->
           result(
