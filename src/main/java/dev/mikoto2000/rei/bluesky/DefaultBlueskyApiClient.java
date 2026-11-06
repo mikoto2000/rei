@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.net.URI;
 import java.net.URLEncoder;
 import java.net.http.HttpClient;
@@ -116,12 +117,12 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
         return new AuthResult(false, null, null);
       }
       return new AuthResult(true, accessJwt, did);
-    } catch (IOException | InterruptedException e) {
-      if (e instanceof InterruptedException) {
-        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
-        Thread.currentThread().interrupt();
-      }
-      throw new RuntimeException("Bluesky authentication request failed", e);
+    } catch (IOException e) {
+      throw new UncheckedIOException("Bluesky authentication request failed", e);
+    } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("Bluesky authentication request failed", e);
     }
   }
 
@@ -155,12 +156,12 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
         return new PostResult(false, null);
       }
       return new PostResult(true, postUri);
-    } catch (IOException | InterruptedException e) {
-      if (e instanceof InterruptedException) {
-        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
-        Thread.currentThread().interrupt();
-      }
-      throw new RuntimeException("Bluesky post request failed", e);
+    } catch (IOException e) {
+      throw new UncheckedIOException("Bluesky post request failed", e);
+    } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("Bluesky post request failed", e);
     }
   }
 
@@ -177,12 +178,12 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
       }
       JsonNode body = objectMapper.readTree(response.body());
       return textOrNull(body, "did");
-    } catch (IOException | InterruptedException e) {
-      if (e instanceof InterruptedException) {
-        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
-        Thread.currentThread().interrupt();
-      }
-      throw new RuntimeException("Bluesky resolveHandle request failed", e);
+    } catch (IOException e) {
+      throw new UncheckedIOException("Bluesky resolveHandle request failed", e);
+    } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("Bluesky resolveHandle request failed", e);
     }
   }
 
@@ -257,12 +258,12 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
                 rootCid));
       }
       return posts;
-    } catch (IOException | InterruptedException e) {
-      if (e instanceof InterruptedException) {
-        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
-        Thread.currentThread().interrupt();
-      }
-      throw new RuntimeException("Bluesky getAuthorFeed request failed", e);
+    } catch (IOException e) {
+      throw new UncheckedIOException("Bluesky getAuthorFeed request failed", e);
+    } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("Bluesky getAuthorFeed request failed", e);
     }
   }
 
@@ -294,12 +295,12 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
       JsonNode body = objectMapper.readTree(response.body());
       String postUri = textOrNull(body, "uri");
       return new PostResult(postUri != null && !postUri.isBlank(), postUri);
-    } catch (IOException | InterruptedException e) {
-      if (e instanceof InterruptedException) {
-        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
-        Thread.currentThread().interrupt();
-      }
-      throw new RuntimeException("Bluesky reply request failed", e);
+    } catch (IOException e) {
+      throw new UncheckedIOException("Bluesky reply request failed", e);
+    } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("Bluesky reply request failed", e);
     }
   }
 
@@ -347,12 +348,12 @@ public class DefaultBlueskyApiClient implements BlueskyApiClient {
         }
       }
       return new ReplyTarget(parentUri, parentCid, rootUri, rootCid, targetText);
-    } catch (IOException | InterruptedException e) {
-      if (e instanceof InterruptedException) {
-        // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
-        Thread.currentThread().interrupt();
-      }
-      throw new RuntimeException("Bluesky resolveReplyTarget request failed", e);
+    } catch (IOException e) {
+      throw new UncheckedIOException("Bluesky resolveReplyTarget request failed", e);
+    } catch (InterruptedException e) {
+      // 中断の事実を呼び出し元にも伝え、終了やキャンセルの判断を引き継ぐ。
+      Thread.currentThread().interrupt();
+      throw new IllegalStateException("Bluesky resolveReplyTarget request failed", e);
     }
   }
 

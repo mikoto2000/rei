@@ -96,7 +96,7 @@ public class ScheduleCommand {
         googleCalendarService.authorize();
         out().println("Google Calendar の認可が完了しました");
       } catch (Exception e) {
-        throw new RuntimeException("Google Calendar の認可に失敗しました", e);
+        throw new IllegalStateException("Google Calendar の認可に失敗しました", e);
       }
     }
   }
@@ -117,7 +117,7 @@ public class ScheduleCommand {
         googleCalendarService.refreshToken();
         out().println("Google Calendar のトークンを更新しました");
       } catch (Exception e) {
-        throw new RuntimeException("Google Calendar のトークン更新に失敗しました", e);
+        throw new IllegalStateException("Google Calendar のトークン更新に失敗しました", e);
       }
     }
   }
@@ -173,7 +173,7 @@ public class ScheduleCommand {
 
         events.forEach(this::printEvent);
       } catch (Exception e) {
-        throw new RuntimeException("Google Calendar の予定一覧取得に失敗しました", e);
+        throw new IllegalStateException("Google Calendar の予定一覧取得に失敗しました", e);
       }
     }
 

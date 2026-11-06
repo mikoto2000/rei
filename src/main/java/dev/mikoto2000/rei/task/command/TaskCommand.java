@@ -95,7 +95,7 @@ public class TaskCommand {
         taskService.authorize();
         out().println("Google Tasks の認可が完了しました");
       } catch (Exception e) {
-        throw new RuntimeException("Google Tasks の認可に失敗しました", e);
+        throw new IllegalStateException("Google Tasks の認可に失敗しました", e);
       }
     }
   }

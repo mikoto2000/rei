@@ -43,7 +43,7 @@ public class BriefingCommand {
       try {
         print(briefingService.today());
       } catch (Exception e) {
-        throw new RuntimeException("日次ブリーフィングの生成に失敗しました", e);
+        throw new IllegalStateException("日次ブリーフィングの生成に失敗しました", e);
       }
     }
 
