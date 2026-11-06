@@ -119,10 +119,9 @@ public record StatefulOperationService(
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (urls == null || urls.size() > 20) throw new IllegalArgumentException("Invalid sources");
     urls.forEach(StatefulOperationService::url);
-    synchronized (interests) {
-      if (interests.existsBySearchQuery(query)) throw new OperationConflictException();
-      return interests.save(topic, reason, query, summary, List.copyOf(urls));
-    }
+    return interests
+        .saveIfNewQuery(topic, reason, query, summary, List.copyOf(urls))
+        .orElseThrow(OperationConflictException::new);
   }
 
   /** 状態変更の調整で用いる記憶一覧一覧を返す。 */
