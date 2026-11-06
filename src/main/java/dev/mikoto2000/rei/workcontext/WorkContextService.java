@@ -62,6 +62,10 @@ public class WorkContextService {
   private final ConversationTurnStore turns;
 
   /** イベント一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common project event stream for ordered reads.")
   private final ProjectAgentEventStore events;
 
   /** 情報の抽出。 */

@@ -43,6 +43,10 @@ public class BlueskyReplyTextGenerator {
       Pattern.compile("[A-Za-z_$][A-Za-z0-9_.$-]*\\s*\\(\\s*\\{.*}\\s*\\)\\s*;?", Pattern.DOTALL);
 
   /** モデルへ対話を依頼する窓口提供元。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the application provider for the configured chat clients.")
   private final LlmChatClientProvider chatClientProvider;
 
   /** モデル保持先サービス。 */

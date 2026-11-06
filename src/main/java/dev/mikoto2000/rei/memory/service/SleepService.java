@@ -30,6 +30,10 @@ public class SleepService {
   private static final Set<String> RUNNING = ConcurrentHashMap.newKeySet();
 
   /** 保存と検索の窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common repository for persisted memory and its transaction boundaries.")
   private final MemoryRepository repository;
 
   /** やり取り一覧。 */

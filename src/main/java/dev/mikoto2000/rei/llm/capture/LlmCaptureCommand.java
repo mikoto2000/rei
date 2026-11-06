@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.llm.capture;
 
 import dev.mikoto2000.rei.output.CommandOutput;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
@@ -30,6 +32,10 @@ import picocli.CommandLine.Spec;
     mixinStandardHelpOptions = true)
 public final class LlmCaptureCommand implements Runnable {
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared capture store and its active capture sessions.")
   private final CaptureStore store;
 
   /** クライアント。 */

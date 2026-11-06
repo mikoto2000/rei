@@ -6,6 +6,8 @@ import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.core.datasource.ReiDataDirectory;
 import dev.mikoto2000.rei.core.project.ProjectStorage;
 import dev.mikoto2000.rei.event.CredentialRedactor;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -55,6 +57,10 @@ public final class VoiceCorrectionContext {
   }
 
   /** 履歴。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common conversation log and its shared indexing state.")
   private final ConversationLogStore history;
 
   /** データ。 */

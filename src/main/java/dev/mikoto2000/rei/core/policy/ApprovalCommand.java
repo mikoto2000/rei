@@ -15,6 +15,10 @@ import picocli.CommandLine.Spec;
 @Command(name = "approval", description = "ツールの一回限りの実行承認を確認・判断します")
 public class ApprovalCommand implements java.util.concurrent.Callable<Integer> {
   /** 保存と検索の窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common approval state to coordinate requests and decisions.")
   private final ToolApprovalRepository repository;
 
   /** プロジェクト一覧。 */

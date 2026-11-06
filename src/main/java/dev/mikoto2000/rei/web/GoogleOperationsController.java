@@ -6,6 +6,8 @@ import dev.mikoto2000.rei.googlecalendar.GoogleCalendarService;
 import dev.mikoto2000.rei.googlecalendar.command.ScheduleCommand;
 import dev.mikoto2000.rei.task.TaskService;
 import dev.mikoto2000.rei.task.command.TaskCommand;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.time.LocalDate;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -34,6 +36,10 @@ public final class GoogleOperationsController {
   private final TaskService tasks;
 
   /** 実行一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Submits operations through the shared integration run entry point.")
   private final IntegrationRunSubmitService runs;
 
   /**

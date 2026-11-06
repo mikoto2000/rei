@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.application.run.IntegrationRunSubmitService;
 import dev.mikoto2000.rei.reminder.ReminderService;
 import dev.mikoto2000.rei.reminder.command.ReminderCommand;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
@@ -24,6 +26,10 @@ public final class UtilityCommandsController {
   private final ReminderService reminders;
 
   /** 実行一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Submits operations through the shared integration run entry point.")
   private final IntegrationRunSubmitService runs;
 
   /** 指定された値や利用先を使って、UtilityCommandsControllerを初期化する。 */

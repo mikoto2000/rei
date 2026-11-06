@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.feed;
 
 import dev.mikoto2000.rei.websearch.WebSearchPage;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
@@ -24,6 +26,10 @@ public class FeedSummaryService {
   private static final int MAX_FEED_CONTENT_LENGTH = 2000;
 
   /** フィードサービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads briefing items through the shared feed service.")
   private final FeedService feedService;
 
   /** フィード記事ページ情報の取得元。 */

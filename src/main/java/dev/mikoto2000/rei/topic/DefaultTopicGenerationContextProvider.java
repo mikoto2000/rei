@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.topic;
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.core.working.FileReference;
 import dev.mikoto2000.rei.core.working.WorkingSet;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import org.springframework.stereotype.Component;
 
@@ -10,6 +12,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class DefaultTopicGenerationContextProvider implements TopicGenerationContextProvider {
   /** 会話ログ保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common conversation log and its shared indexing state.")
   private final ConversationLogStore conversationLogStore;
 
   /** 作業中集合。 */

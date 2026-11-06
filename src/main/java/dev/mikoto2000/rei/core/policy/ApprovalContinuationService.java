@@ -10,6 +10,8 @@ import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.chat.RunContinuation;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -40,6 +42,10 @@ import org.springframework.transaction.support.TransactionTemplate;
 @Primary
 public class ApprovalContinuationService implements RunContinuation {
   /** 承認一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common approval state to coordinate requests and decisions.")
   private final ToolApprovalRepository approvals;
 
   /** 保存先。 */

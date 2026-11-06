@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.application.run.IntegrationRunSubmitService;
 import dev.mikoto2000.rei.feed.FeedOpmlImportService;
 import dev.mikoto2000.rei.feed.FeedService;
 import dev.mikoto2000.rei.feed.command.FeedCommand;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.OffsetDateTime;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -31,6 +33,10 @@ public final class FeedCommandsController {
   private final FeedOpmlImportService imports;
 
   /** 実行一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Submits operations through the shared integration run entry point.")
   private final IntegrationRunSubmitService runs;
 
   /** 指定された値や利用先を使って、FeedCommandsControllerを初期化する。 */

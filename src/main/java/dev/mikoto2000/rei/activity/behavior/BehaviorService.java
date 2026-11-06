@@ -7,6 +7,8 @@ import dev.mikoto2000.rei.topic.AgentActivityTracker;
 import dev.mikoto2000.rei.topic.AgentMessage;
 import dev.mikoto2000.rei.topic.AgentMessagePublisher;
 import dev.mikoto2000.rei.topic.MessageOrigin;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.Map;
@@ -35,6 +37,10 @@ public final class BehaviorService {
   private final ActivityCapture capture;
 
   /** 時系列の記録。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common timeline store for activity observations.")
   private final ActivityStore timeline;
 
   /** 状態の保存先。 */

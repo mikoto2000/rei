@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.conversation;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
@@ -41,6 +43,10 @@ public class ConversationHistorySearchService {
   private final JdbcClient jdbcClient;
 
   /** 会話ログ保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common conversation log and its shared indexing state.")
   private final ConversationLogStore conversationLogStore;
 
   /** プロジェクト関連情報の取得。 */

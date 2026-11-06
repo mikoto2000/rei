@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.checkpoint.CheckpointHistoryReport;
 import dev.mikoto2000.rei.checkpoint.PersistentCheckpointService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -21,6 +23,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/checkpoints/history")
 public final class CheckpointHistoryController {
   /** サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared checkpoint service for save, inspect, and resume operations.")
   private final PersistentCheckpointService service;
 
   /** 指定された値や利用先を使って、CheckpointHistoryControllerを初期化する。 */

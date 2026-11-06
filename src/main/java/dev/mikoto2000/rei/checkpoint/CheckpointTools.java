@@ -17,6 +17,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class CheckpointTools {
   /** サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared checkpoint service for save, inspect, and resume operations.")
   private final PersistentCheckpointService service;
 
   /** やり取り一覧。 */

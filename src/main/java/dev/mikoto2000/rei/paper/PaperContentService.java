@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.paper;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,6 +25,10 @@ public class PaperContentService {
   private final PaperProperties config;
 
   /** 保存と検索の窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared paper repository for the library and its artifacts.")
   private final PaperRepository repository;
 
   /** 提供元一覧。 */

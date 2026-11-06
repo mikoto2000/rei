@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.core.contextbudget;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -61,6 +63,10 @@ public final class RawToolResultStore {
   private final Path base;
 
   /** 登録台帳。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared storage registry to coordinate object references and retention.")
   private final dev.mikoto2000.rei.storage.StorageObjectRegistry registry;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */

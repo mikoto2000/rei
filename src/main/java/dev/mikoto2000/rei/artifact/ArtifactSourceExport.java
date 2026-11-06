@@ -21,6 +21,10 @@ import java.util.HexFormat;
  */
 public final class ArtifactSourceExport {
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared artifact store for publication and retrieval.")
   private final ArtifactStore store;
 
   /** プロジェクト一覧。 */

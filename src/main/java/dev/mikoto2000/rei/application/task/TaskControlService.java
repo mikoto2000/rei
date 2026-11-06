@@ -24,6 +24,10 @@ public final class TaskControlService {
   private final TaskManagerService tasks;
 
   /** 会話の実行を受け付ける窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Submits operations through the shared chat run entry point.")
   private final ChatSubmitService chats;
 
   /** 実行一覧。 */
@@ -44,6 +48,10 @@ public final class TaskControlService {
   private final ConversationInputRouter inputs;
 
   /** 再開用の記録一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared checkpoint service for save, inspect, and resume operations.")
   private final PersistentCheckpointService checkpoints;
 
   /** 目標一覧。 */
