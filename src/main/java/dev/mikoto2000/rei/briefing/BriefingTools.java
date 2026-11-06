@@ -16,7 +16,7 @@ public class BriefingTools {
   @Tool(
       name = "dailyBriefing",
       description = "今日の日次ブリーフィングを返します。予定、未完了タスク、関連文書、注意点、次アクションをまとめて確認できます。")
-  DailyBriefing dailyBriefing() throws Exception {
+  DailyBriefing dailyBriefing() throws java.io.IOException, java.security.GeneralSecurityException {
     IO.println("今日の日次ブリーフィングを取得するよ");
     return briefingService.today();
   }

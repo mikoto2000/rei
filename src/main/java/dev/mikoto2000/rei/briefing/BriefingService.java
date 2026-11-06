@@ -48,12 +48,12 @@ public class BriefingService {
   private final FeedProperties feedProperties;
 
   /** 日次情報の案内で用いる今日を返す。 */
-  public DailyBriefing today() throws Exception {
+  public DailyBriefing today() throws java.io.IOException, java.security.GeneralSecurityException {
     return briefingFor(LocalDate.now(googleCalendarService.zoneId()));
   }
 
   /** 日次情報の案内で用いる日次案内対象を返す。 */
-  public DailyBriefing briefingFor(LocalDate date) throws Exception {
+  public DailyBriefing briefingFor(LocalDate date) throws java.io.IOException, java.security.GeneralSecurityException {
     List<GoogleCalendarEventSummary> events = googleCalendarService.listEventsForDate(date);
     List<Task> openTasks = taskService.listOpen();
     List<Task> overdueTasks =

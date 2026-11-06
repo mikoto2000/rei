@@ -46,7 +46,7 @@ public final class GoogleTokenRefreshJob {
       if (service.refreshIfExpiring(advance)) {
         log.debug("Google access token refreshed");
       }
-    } catch (Exception e) {
+    } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {
       // OAuth exception bodies can contain credentials; do not log their contents.
       log.warn(
           "Google token refresh failed ({}); will retry on the next check. If this persists, run schedule auth or task auth.",

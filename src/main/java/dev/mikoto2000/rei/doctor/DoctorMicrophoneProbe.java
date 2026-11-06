@@ -40,7 +40,7 @@ public class DoctorMicrophoneProbe implements AutoCloseable {
   @FunctionalInterface
   public interface Acquisition {
     /** 実行環境の診断に関する確保を処理する。 */
-    void acquire(AudioDevice device) throws Exception;
+    void acquire(AudioDevice device) throws javax.sound.sampled.LineUnavailableException;
   }
 
   /** 利用可能な音声機器を管理する窓口。 */

@@ -42,7 +42,7 @@ public class BriefingCommand {
     public void run() {
       try {
         print(briefingService.today());
-      } catch (Exception e) {
+      } catch (java.io.IOException | java.security.GeneralSecurityException | RuntimeException e) {
         throw new IllegalStateException("日次ブリーフィングの生成に失敗しました", e);
       }
     }

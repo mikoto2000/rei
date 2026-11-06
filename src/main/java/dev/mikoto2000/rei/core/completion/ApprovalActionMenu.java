@@ -70,6 +70,10 @@ public final class ApprovalActionMenu implements AutoCloseable {
   @FunctionalInterface
   public interface PendingSource {
     /** 後続の処理で判断できるよう、未完了の対象を返す。 */
+    @SuppressFBWarnings(
+        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
+        matchType = SuppressMatchType.EXACT,
+        justification = "The polling callback may report a checked source failure or interruption to the shell.")
     List<String> pending(Owner owner) throws Exception;
   }
 

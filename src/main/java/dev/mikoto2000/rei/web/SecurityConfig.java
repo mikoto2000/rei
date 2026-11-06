@@ -21,8 +21,7 @@ public class SecurityConfig {
   /** Web APIによる操作で用いるAPISecurityを返す。 */
   @Bean
   SecurityFilterChain apiSecurity(
-      HttpSecurity http, ApiKeyProperties key, org.springframework.core.env.Environment environment)
-      throws Exception {
+      HttpSecurity http, ApiKeyProperties key, org.springframework.core.env.Environment environment) {
     boolean github = environment.getProperty("rei.github.webhook.enabled", Boolean.class, false);
     return http.csrf(csrf -> csrf.disable())
         .httpBasic(basic -> basic.disable())

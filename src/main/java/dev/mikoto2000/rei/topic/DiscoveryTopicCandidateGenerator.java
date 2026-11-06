@@ -60,7 +60,7 @@ public class DiscoveryTopicCandidateGenerator implements TopicCandidateGenerator
           candidates.add(toCandidate(item, context.currentTime()));
           seenRepository.markSeen(item.source(), item.externalId());
         }
-      } catch (Exception e) {
+      } catch (java.io.IOException | InterruptedException | RuntimeException e) {
         log.warn("Discovery source failed: {}", source.getClass().getSimpleName());
       }
     }

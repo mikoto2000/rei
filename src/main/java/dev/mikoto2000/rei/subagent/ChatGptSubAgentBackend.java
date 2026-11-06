@@ -969,7 +969,7 @@ public final class ChatGptSubAgentBackend {
               + (e.decision() == dev.mikoto2000.rei.core.policy.PermissionDecision.REQUIRE_APPROVAL
                   ? "資料の読取または外部送信に承認が必要です。/approval list で要求内容を確認してください。"
                   : "資料の読取または外部送信が禁止されています。rei.tool-permission と現在の Run の権限を確認してください。");
-    } catch (Exception e) {
+    } catch (java.io.IOException | RuntimeException e) {
       state = submitted.get() ? State.OUTCOME_UNKNOWN : State.FAILED;
       error = submitted.get() ? TRANSPORT : PREPARATION_FAILED;
       diagnostic =
@@ -1255,7 +1255,7 @@ public final class ChatGptSubAgentBackend {
   }
 
   /** 必要な内容を参照できるよう、取得元一覧を読み取る。 */
-  private List<Source> readSources(AgentRunContext owner, List<String> paths) throws Exception {
+  private List<Source> readSources(AgentRunContext owner, List<String> paths) {
     Path root;
     try {
       root = owner.projectRoot().toRealPath();
