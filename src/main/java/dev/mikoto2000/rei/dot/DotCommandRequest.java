@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.dot;
 
+import dev.mikoto2000.rei.json.JsonObjectSnapshot;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -20,6 +21,11 @@ import java.util.Set;
  */
 public record DotCommandRequest(
     String action, String requestId, String projectId, Map<String, Object> payload) {
+  /** 通知や要求の内容を、受け取った時点の状態で保持する。 */
+  public DotCommandRequest {
+    payload = payload == null ? null : Collections.unmodifiableMap(JsonObjectSnapshot.copy(payload));
+  }
+
   /** 受け取った入力を解釈し、機能内で扱える情報へ変換する。 */
   public static DotCommandRequest parse(List<String> words) {
     if (words == null || words.isEmpty())
@@ -111,6 +117,6 @@ public record DotCommandRequest(
         action,
         action.equals("request") || action.equals("requests") ? null : arguments.getFirst(),
         project,
-        Collections.unmodifiableMap(values));
+        values);
   }
 }
