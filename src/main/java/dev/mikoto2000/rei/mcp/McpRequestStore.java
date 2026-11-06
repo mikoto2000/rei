@@ -24,6 +24,11 @@ import java.util.UUID;
  * <p>Owned durable index only; canonical Run state comes from the existing admission store.
  */
 public final class McpRequestStore {
+  private static final String REQUEST_ROW =
+      "SELECT request_hash,fingerprint,project_id,session_id,run_id,created_at,expires_at,"
+          + "result_json,result_expires_at,terminal_state,total_criteria,criteria_json,"
+          + "admission_error,state_updated_at FROM mcp_requests WHERE principal='local-mcp'";
+
   /**
    * MCPによる機能の提供で受け渡す要求を表す。
    *
@@ -141,10 +146,11 @@ public final class McpRequestStore {
     return db.read(
         c -> {
           try (var q =
-              c.prepareStatement(
-                  "SELECT request_hash,fingerprint,project_id,session_id,run_id,created_at,expires_at,result_json,result_expires_at,terminal_state,total_criteria,criteria_json,admission_error,state_updated_at FROM mcp_requests WHERE principal='local-mcp' AND "
-                      + column
-                      + "=?")) {
+              switch (column) {
+                case "request_hash" -> c.prepareStatement(REQUEST_ROW + " AND request_hash=?");
+                case "run_id" -> c.prepareStatement(REQUEST_ROW + " AND run_id=?");
+                default -> throw new IllegalArgumentException("Unknown MCP request column");
+              }) {
             q.setString(1, value);
             try (var rows = q.executeQuery()) {
               return rows.next()
