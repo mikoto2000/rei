@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.voice;
 
 import dev.mikoto2000.rei.application.input.ConversationInput;
 import dev.mikoto2000.rei.event.CredentialRedactor;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -34,6 +36,10 @@ public final class VoiceCorrectionService implements AutoCloseable {
   @FunctionalInterface
   public interface Llm {
     /** 音声による対話の要求を実行し、呼び出し元へ結果を返す。 */
+    @SuppressFBWarnings(
+        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
+        matchType = SuppressMatchType.EXACT,
+        justification = "The configured correction callback can report a checked model or transport failure.")
     String call(String raw, VoiceCorrectionContext.Snapshot context) throws Exception;
   }
 

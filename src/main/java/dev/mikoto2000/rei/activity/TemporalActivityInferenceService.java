@@ -27,6 +27,10 @@ public final class TemporalActivityInferenceService {
   @FunctionalInterface
   public interface Model {
     /** 作業状況の把握で用いる推定を返す。 */
+    @SuppressFBWarnings(
+        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
+        matchType = SuppressMatchType.EXACT,
+        justification = "The configured inference callback can report its own checked model or transport failure.")
     Outcome infer(String input, int maxOutputTokens, int timeoutSeconds, long maxTotalTokens)
         throws Exception;
   }

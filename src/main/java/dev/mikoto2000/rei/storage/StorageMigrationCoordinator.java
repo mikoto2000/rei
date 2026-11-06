@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.storage;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.channels.FileChannel;
 import java.nio.channels.FileLock;
@@ -49,6 +51,10 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
   @FunctionalInterface
   interface Checkpoint {
     /** データ保存の共通処理に関するreachedを処理する。 */
+    @SuppressFBWarnings(
+        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
+        matchType = SuppressMatchType.EXACT,
+        justification = "A checkpoint callback can abort migration with an arbitrary checked failure so rollback can preserve its cause.")
     void reached(Stage stage, Path backup) throws Exception;
   }
 

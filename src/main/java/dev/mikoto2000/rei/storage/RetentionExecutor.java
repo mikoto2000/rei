@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.storage;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.storage.StorageObjectRegistry.StoredObject;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -67,6 +69,10 @@ public final class RetentionExecutor {
   @FunctionalInterface
   interface Checkpoint {
     /** データ保存の共通処理に関するreachedを処理する。 */
+    @SuppressFBWarnings(
+        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
+        matchType = SuppressMatchType.EXACT,
+        justification = "A checkpoint callback can abort a retention transition with a checked failure.")
     void reached(String stage, String execution) throws Exception;
   }
 

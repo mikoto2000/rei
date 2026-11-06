@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Instant;
 import java.util.List;
 
@@ -11,6 +13,10 @@ import java.util.List;
 @FunctionalInterface
 public interface ActivityEvidenceSource {
   /** 判断に必要な情報を集め、後続の処理へ渡す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "An evidence adapter may report a checked collection failure for the pipeline to isolate.")
   Contribution collect(Instant at) throws Exception;
 
   /**

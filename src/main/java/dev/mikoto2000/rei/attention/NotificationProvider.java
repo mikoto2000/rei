@@ -1,5 +1,8 @@
 package dev.mikoto2000.rei.attention;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
+
 /**
  * 通知を用途や設定に応じて提供する窓口。
  *
@@ -45,5 +48,9 @@ public interface NotificationProvider {
   }
 
   /** 注意の管理で用いるdeliverを返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Notification transports expose different checked delivery failures to the common outbox.")
   Receipt deliver(String id, String metadata) throws Exception;
 }
