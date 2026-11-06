@@ -216,7 +216,12 @@ public record PersistentCheckpoint(
         || status == null) throw new IllegalArgumentException("Invalid checkpoint identity/schema");
     instructions = List.copyOf(instructions);
     acceptanceCriteria = List.copyOf(acceptanceCriteria);
-    plan = plan.stream().map(Map::copyOf).toList();
+    plan =
+        List.copyOf(
+            plan.stream()
+                .map(dev.mikoto2000.rei.json.JsonObjectSnapshot::copy)
+                .map(Map::copyOf)
+                .toList());
     evidence = List.copyOf(evidence);
     operations = List.copyOf(operations);
     files = Map.copyOf(files);

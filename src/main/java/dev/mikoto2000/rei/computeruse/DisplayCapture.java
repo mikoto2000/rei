@@ -14,6 +14,28 @@ public record DisplayCapture(ScreenGeometry geometry, BufferedImage image) {
   public DisplayCapture {
     if (geometry == null || image == null)
       throw new IllegalArgumentException("Invalid display capture");
+    image = copyImage(image);
+  }
+
+  /** 保持している画面を変更できないよう、画像の独立したコピーを返す。 */
+  @Override
+  public BufferedImage image() {
+    return copyImage(image);
+  }
+
+  int imageWidth() {
+    return image.getWidth();
+  }
+
+  int imageHeight() {
+    return image.getHeight();
+  }
+
+  private static BufferedImage copyImage(BufferedImage source) {
+    var model = source.getColorModel();
+    var raster = model.createCompatibleWritableRaster(source.getWidth(), source.getHeight());
+    source.copyData(raster);
+    return new BufferedImage(model, raster, source.isAlphaPremultiplied(), null);
   }
 
   /** 画面操作の支援で用いるデスクトップPointを返す。 */
