@@ -9,6 +9,8 @@ import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.CredentialRedactor;
 import dev.mikoto2000.rei.event.ExternalAgentLifecyclePayload;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -199,6 +201,10 @@ public class ExternalAgentDelegationService implements AutoCloseable {
   private final ExternalAgentExecutor executor;
 
   /** キャンセル。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final CommandCancellationService cancellation;
 
   /** イベント一覧。 */

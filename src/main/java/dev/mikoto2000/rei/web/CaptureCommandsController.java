@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.application.session.SessionLifecycle;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.llm.capture.CaptureStore;
 import dev.mikoto2000.rei.llm.capture.LlmCaptureCommand;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -29,6 +31,10 @@ public final class CaptureCommandsController {
   private final ProjectRegistry projects;
 
   /** 会話一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared lifecycle service so session validation and submission use the same session state.")
   private final SessionLifecycle sessions;
 
   /** 指定された値や利用先を使って、CaptureCommandsControllerを初期化する。 */

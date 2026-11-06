@@ -13,6 +13,8 @@ import dev.mikoto2000.rei.search.SearchKnowledgeService;
 import dev.mikoto2000.rei.vectordocument.VectorDocumentSearchResult;
 import dev.mikoto2000.rei.websearch.WebSearchContext;
 import dev.mikoto2000.rei.websearch.WebSearchPage;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -50,12 +52,20 @@ public class SearchCommand implements Runnable {
   private final ModelHolderService currentModelHolder;
 
   /** モデル提供元。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured application model provider for model and option selection.")
   private final LlmModelProvider modelProvider;
 
   /** 検索知識サービス。 */
   private final SearchKnowledgeService searchKnowledgeService;
 
   /** キャンセルサービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final CommandCancellationService cancellationService;
 
   /** 出力。 */

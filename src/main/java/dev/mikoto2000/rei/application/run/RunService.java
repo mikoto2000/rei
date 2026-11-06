@@ -6,11 +6,17 @@ import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventBus;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.ErrorInformation;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.function.Predicate;
 
 /** 実行のユースケースを実現する。 */
 public class RunService implements AutoCloseable {
   /** 登録台帳。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared run registry so participants observe the same run lifecycle.")
   private final RunRegistry registry;
 
   /** 通知の連携先。 */
@@ -20,6 +26,10 @@ public class RunService implements AutoCloseable {
   private final AgentEventFactory events;
 
   /** キャンセル。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final CommandCancellationService cancellation;
 
   /** キャンセル待機中。 */

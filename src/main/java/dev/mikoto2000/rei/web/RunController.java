@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.application.run.RunService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -19,6 +21,10 @@ public class RunController {
   private final RunService runs;
 
   /** 入力一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared input router so all operations use the same queue and active runs.")
   private final dev.mikoto2000.rei.core.chat.ConversationInputRouter inputs;
 
   /** 並行有効状態。 */

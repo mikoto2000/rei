@@ -14,6 +14,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class ActiveRunDisplay {
   /** 実行一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared input router so all operations use the same queue and active runs.")
   private final ConversationInputRouter runs;
 
   /** プロジェクト一覧。 */

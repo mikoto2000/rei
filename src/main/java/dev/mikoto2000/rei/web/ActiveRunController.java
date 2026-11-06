@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.core.project.ProjectRegistry;
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
 import dev.mikoto2000.rei.ui.shell.ActiveRunDisplay;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +21,10 @@ public final class ActiveRunController {
   private final ActiveRunDisplay display;
 
   /** キャンセル。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final CommandCancellationService cancellation;
 
   /** プロジェクト一覧。 */

@@ -121,12 +121,20 @@ public final class ShellConversationService {
   private final ProjectService projects;
 
   /** 受付から終了までの管理。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared lifecycle service so session validation and submission use the same session state.")
   private final SessionLifecycle lifecycle;
 
   /** 並行有効状態。 */
   private final boolean concurrentEnabled;
 
   /** 入力一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared input router so all operations use the same queue and active runs.")
   private final dev.mikoto2000.rei.core.chat.ConversationInputRouter inputs;
 
   /** 会話の継続管理を利用するため、指定を補って共通の初期化へ引き渡す。 */

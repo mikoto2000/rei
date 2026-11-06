@@ -10,6 +10,8 @@ import dev.mikoto2000.rei.core.chat.ConversationInputRouter;
 import dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository;
 import dev.mikoto2000.rei.goal.GoalLoopService;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Objects;
 
 /**
@@ -28,9 +30,17 @@ public final class TaskControlService {
   private final RunService runs;
 
   /** 登録台帳。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared run registry so participants observe the same run lifecycle.")
   private final RunRegistry registry;
 
   /** 入力一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared input router so all operations use the same queue and active runs.")
   private final ConversationInputRouter inputs;
 
   /** 再開用の記録一覧。 */

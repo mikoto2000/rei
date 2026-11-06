@@ -7,6 +7,8 @@ import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
 import dev.mikoto2000.rei.llm.OutputLimitDetector;
 import dev.mikoto2000.rei.workcontext.WorkContext.Evidence;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -25,6 +27,10 @@ import org.springframework.stereotype.Service;
 @Service
 public class LlmWorkContextExtractor implements WorkContextExtractor {
   /** モデル一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured application model provider for model and option selection.")
   private final LlmModelProvider models;
 
   /** この機能の動作設定。 */

@@ -12,6 +12,8 @@ import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.event.AgentEvent;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -41,12 +43,20 @@ public final class SlackAgentService implements RunContinuation {
   private final SlackAgentContinuationStore continuations;
 
   /** 登録台帳。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared run registry so participants observe the same run lifecycle.")
   private final RunRegistry registry;
 
   /** 実行一覧。 */
   private final RunService runs;
 
   /** 入力の振り分け。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared input router so all operations use the same queue and active runs.")
   private final ConversationInputRouter router;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */

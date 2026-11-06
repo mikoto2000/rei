@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.core.service.CommandCancellationService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 
@@ -9,6 +11,10 @@ import picocli.CommandLine.Command;
 @Command(name = "cancel", description = "実行中の Agent をキャンセルします")
 public class CancelCommand implements Runnable {
   /** キャンセル。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final CommandCancellationService cancellation;
 
   /** ターミナルでの対話を利用するため、指定を補って共通の初期化へ引き渡す。 */

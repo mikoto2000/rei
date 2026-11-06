@@ -9,6 +9,8 @@ import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import dev.mikoto2000.rei.event.AgentEventType;
 import dev.mikoto2000.rei.event.ToolEventCallbackDecorator;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
@@ -358,6 +360,10 @@ public final class SubAgentRunner {
   private final Supplier<List<ToolCallback>> toolFactory;
 
   /** キャンセル。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final CommandCancellationService cancellation;
 
   /** イベント一覧。 */

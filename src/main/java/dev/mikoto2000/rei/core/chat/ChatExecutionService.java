@@ -34,6 +34,8 @@ import dev.mikoto2000.rei.skills.AgentSkillAdvisor;
 import dev.mikoto2000.rei.skills.SkillRoutingRunContext;
 import dev.mikoto2000.rei.topic.AgentActivityTracker;
 import dev.mikoto2000.rei.topic.TopicOrchestrator;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.util.Locale;
 import java.util.Map;
@@ -154,12 +156,20 @@ public class ChatExecutionService {
   private final ModelHolderService currentModelHolder;
 
   /** モデル提供元。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured application model provider for model and option selection.")
   private final LlmModelProvider modelProvider;
 
   /** 言語モデル設定。 */
   private final LlmProperties llmProperties;
 
   /** キャンセルサービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final CommandCancellationService cancellationService;
 
   /** 記憶Consolidatorサービス。 */

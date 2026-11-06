@@ -65,12 +65,20 @@ public class GoalChatGateway
   private final SessionRepository sessions;
 
   /** 入力の振り分け。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared input router so all operations use the same queue and active runs.")
   private final ConversationInputRouter router;
 
   /** チャット。 */
   private final ChatExecutionService chat;
 
   /** キャンセル。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared cancellation coordinator so commands and their observers see the same cancellation state.")
   private final CommandCancellationService cancellation;
 
   /** イベント一覧。 */

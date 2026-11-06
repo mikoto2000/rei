@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.paper;
 
 import dev.mikoto2000.rei.llm.LlmModelProvider;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import org.springframework.ai.chat.messages.SystemMessage;
 import org.springframework.ai.chat.messages.UserMessage;
@@ -11,6 +13,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class SpringPaperLanguageModel implements PaperLanguageModel {
   /** 提供元。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured application model provider for model and option selection.")
   private final LlmModelProvider provider;
 
   /** 設定。 */
