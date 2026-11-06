@@ -24,6 +24,10 @@ public final class ActivityCapture implements AutoCloseable {
       org.slf4j.LoggerFactory.getLogger(ActivityCapture.class);
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the configured activity capture or coaching policy when work is admitted.")
   private final ActivityProperties properties;
 
   /** 観測。 */

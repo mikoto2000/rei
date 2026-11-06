@@ -60,6 +60,10 @@ public final class GitHubWebhookService {
   private final GitHubWebhookDecoder decoder;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared webhook security and delivery policy for incoming requests.")
   private final GitHubWebhookProperties properties;
 
   /** プロジェクト一覧。 */

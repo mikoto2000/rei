@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.llm;
 
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import io.micrometer.observation.ObservationRegistry;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
@@ -80,6 +82,10 @@ public class LlmModelProvider implements dev.mikoto2000.rei.secretary.SecretaryP
   private final ChatModel defaultChatModel;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the current model feature settings, endpoints, and output limits.")
   private final LlmProperties properties;
 
   /** 実行状況の通知を生成する窓口。 */

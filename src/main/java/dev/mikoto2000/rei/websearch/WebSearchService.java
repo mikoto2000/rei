@@ -31,6 +31,10 @@ public class WebSearchService {
   private static final Logger log = LoggerFactory.getLogger(WebSearchService.class);
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the current shared search provider, extraction, and request policy.")
   private final WebSearchProperties properties;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
