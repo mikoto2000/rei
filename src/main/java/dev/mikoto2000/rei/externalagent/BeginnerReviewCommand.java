@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.externalagent;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Spec;
@@ -14,6 +16,10 @@ import picocli.CommandLine.Unmatched;
 @Command(name = "material-review", description = "初学者視点の静的教材レビュー: beginner --root DIR --entry PAGE")
 public class BeginnerReviewCommand implements java.util.concurrent.Callable<Integer> {
   /** 会話一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Shares the shell session and routes operations for its selected conversation.")
   private final dev.mikoto2000.rei.application.session.ShellConversationService conversations;
 
   /** 引数。 */

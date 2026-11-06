@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.voice;
 
 import dev.mikoto2000.rei.application.input.ConversationTarget;
 import dev.mikoto2000.rei.application.session.ShellConversationService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.UUID;
 import java.util.function.IntSupplier;
 import org.springframework.stereotype.Component;
@@ -34,6 +36,10 @@ public class VoiceCommand {
   private final VoiceProperties properties;
 
   /** シェル。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Shares the shell session and routes operations for its selected conversation.")
   private final ShellConversationService shell;
 
   /** モデル一覧。 */

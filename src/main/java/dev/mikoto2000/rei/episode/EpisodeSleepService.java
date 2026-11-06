@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.episode;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -18,6 +20,10 @@ public class EpisodeSleepService {
   private final EpisodeRepository repository;
 
   /** やり取り一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared persistent turn store for history and run lookups.")
   private final ConversationTurnStore turns;
 
   /** 記録された経験を整理する処理の窓口。 */

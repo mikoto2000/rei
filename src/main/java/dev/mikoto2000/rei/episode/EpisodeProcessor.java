@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.episode;
 
 import dev.mikoto2000.rei.conversation.ConversationTurnStore.Turn;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -18,6 +20,10 @@ public class EpisodeProcessor {
   private final EpisodeExtractor extractor;
 
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared persistent turn store for history and run lookups.")
   private final dev.mikoto2000.rei.conversation.ConversationTurnStore store;
 
   /** イベント一覧。 */

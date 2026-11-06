@@ -21,6 +21,10 @@ import picocli.CommandLine.Spec;
     subcommands = {NewConversationCommand.class, ResumeConversationCommand.class})
 public final class SessionCommand implements java.util.concurrent.Callable<Integer> {
   /** 会話一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Shares the shell session and routes operations for its selected conversation.")
   private final ShellConversationService conversations;
 
   /** 会話一覧。 */

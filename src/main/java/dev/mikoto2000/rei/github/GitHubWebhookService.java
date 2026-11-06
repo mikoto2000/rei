@@ -76,6 +76,10 @@ public final class GitHubWebhookService {
   private final GitHubFactRepository facts;
 
   /** 実行予定の管理。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared persistent schedule and claim state.")
   private final PersistentAgentScheduler scheduler;
 
   /** 受信した案内や確認待ち情報の保存先。 */

@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.application.input.ConversationInput;
 import dev.mikoto2000.rei.application.input.ConversationTarget;
 import dev.mikoto2000.rei.application.session.ShellConversationService;
 import dev.mikoto2000.rei.core.project.ProjectClient;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -30,6 +32,10 @@ public final class VoiceDeliveryService {
   private volatile Binding binding;
 
   /** シェル。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Shares the shell session and routes operations for its selected conversation.")
   private final ShellConversationService shell;
 
   /** 受信した案内や確認待ち情報の保存先。 */

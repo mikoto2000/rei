@@ -8,6 +8,8 @@ import dev.mikoto2000.rei.workcontext.WorkContext.Evidence;
 import dev.mikoto2000.rei.workcontext.WorkContext.Item;
 import dev.mikoto2000.rei.workcontext.WorkContext.Origin;
 import dev.mikoto2000.rei.workcontext.WorkContext.Status;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -23,6 +25,10 @@ public class WorkContextTools {
   private final WorkContextService service;
 
   /** やり取り一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared persistent turn store for history and run lookups.")
   private final ConversationTurnStore turns;
 
   /** 指定された値や利用先を使って、WorkContextToolsを初期化する。 */

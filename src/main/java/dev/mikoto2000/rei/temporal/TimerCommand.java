@@ -15,6 +15,10 @@ import picocli.CommandLine.Spec;
 @Command(name = "timer", description = "保存された継続実行の予定を確認・有効化します")
 public class TimerCommand implements java.util.concurrent.Callable<Integer> {
   /** 実行予定の管理。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared persistent schedule and claim state.")
   private final PersistentAgentScheduler scheduler;
 
   /** プロジェクト一覧。 */

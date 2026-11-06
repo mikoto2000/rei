@@ -9,6 +9,8 @@ import dev.mikoto2000.rei.core.chat.RunContinuation;
 import dev.mikoto2000.rei.core.chat.UserInterventionQueue;
 import dev.mikoto2000.rei.core.policy.ToolPermissionProperties;
 import dev.mikoto2000.rei.core.project.ProjectService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -65,6 +67,10 @@ public class AgentScheduleDispatcher {
   }
 
   /** 予約されたエージェント実行を管理する窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared persistent schedule and claim state.")
   private final PersistentAgentScheduler schedules;
 
   /** この機能の動作設定。 */

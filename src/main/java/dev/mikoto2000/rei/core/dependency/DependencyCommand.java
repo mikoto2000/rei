@@ -33,6 +33,10 @@ public class DependencyCommand implements java.util.concurrent.Callable<Integer>
   private final ProjectService projects;
 
   /** 利用条件の確認。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common guard for the current tool authorization policy.")
   private final ToolPermissionGuard guard;
 
   /** 仕様。 */

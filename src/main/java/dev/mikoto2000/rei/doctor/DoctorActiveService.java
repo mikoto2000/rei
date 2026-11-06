@@ -103,6 +103,10 @@ public class DoctorActiveService {
   private final LlmModelProvider models;
 
   /** 選択中モデル。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the model selection shared by commands and the API.")
   private final ModelHolderService selectedModel;
 
   /** HTTP通信。 */

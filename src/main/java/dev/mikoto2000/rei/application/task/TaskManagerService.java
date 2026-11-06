@@ -52,6 +52,10 @@ public final class TaskManagerService {
   private final RunRegistry runs;
 
   /** 再開用の記録一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared repository for checkpoint state and lease coordination.")
   private final PersistentCheckpointRepository checkpoints;
 
   /** 目標一覧。 */
@@ -61,6 +65,10 @@ public final class TaskManagerService {
   private final PersistentDependencyRepository dependencies;
 
   /** 予約されたエージェント実行を管理する窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared persistent schedule and claim state.")
   private final PersistentAgentScheduler schedules;
 
   /** 続きの取得位置一覧。 */

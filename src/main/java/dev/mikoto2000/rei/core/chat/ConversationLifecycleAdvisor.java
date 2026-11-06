@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.core.chat;
 
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -17,6 +19,10 @@ import org.springframework.ai.chat.prompt.Prompt;
  */
 public final class ConversationLifecycleAdvisor implements BaseAdvisor {
   /** やり取り一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared persistent turn store for history and run lookups.")
   private final ConversationTurnStore turns;
 
   /** 会話の識別子。 */
