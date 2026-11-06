@@ -9,6 +9,8 @@ import dev.mikoto2000.rei.memory.model.MemoryCandidate;
 import dev.mikoto2000.rei.memory.model.MemoryScope;
 import dev.mikoto2000.rei.memory.model.MemoryType;
 import dev.mikoto2000.rei.memory.service.MemoryRepository;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.HexFormat;
@@ -40,6 +42,10 @@ public class VerifiedReflectionMemoryService {
   private final GoalReflectionRepository reflections;
 
   /** 記憶一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common repository for persisted memory and its transaction boundaries.")
   private final MemoryRepository memories;
 
   /** 確認の窓口。 */

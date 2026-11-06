@@ -20,6 +20,10 @@ import picocli.CommandLine.Spec;
     subcommands = {CheckpointCommand.Status.class, CheckpointCommand.Cleanup.class})
 public class CheckpointCommand implements Callable<Integer> {
   /** サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared checkpoint service for save, inspect, and resume operations.")
   private final PersistentCheckpointService service;
 
   /** プロジェクト一覧。 */

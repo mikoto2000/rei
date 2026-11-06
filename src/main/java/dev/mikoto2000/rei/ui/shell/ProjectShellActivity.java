@@ -58,6 +58,10 @@ public class ProjectShellActivity implements AgentEventListener {
   private final ProjectService projects;
 
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common project event stream for ordered reads.")
   private final ProjectAgentEventStore store;
 
   /** 状態一覧。 */

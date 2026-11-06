@@ -150,6 +150,10 @@ public class ChatExecutionService {
   private static final Logger log = LoggerFactory.getLogger(ChatExecutionService.class);
 
   /** モデルへ対話を依頼する窓口提供元。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the application provider for the configured chat clients.")
   private final LlmChatClientProvider chatClientProvider;
 
   /** 現在モデル保持先。 */

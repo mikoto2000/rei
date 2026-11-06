@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.llm.capture;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import okhttp3.Interceptor;
 import okhttp3.Response;
@@ -11,6 +13,10 @@ import okhttp3.Response;
  */
 public final class CaptureInterceptor implements Interceptor {
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared capture store and its active capture sessions.")
   private final CaptureStore store;
 
   /** 関連するモデル呼び出しの記録。 */

@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.storage;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.storage.StorageObjectRegistry.StoredObject;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -115,6 +117,10 @@ public final class RetentionPlanner {
       Instant created) {}
 
   /** 登録台帳。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared storage registry to coordinate object references and retention.")
   private final StorageObjectRegistry registry;
 
   /** 指定された値や利用先を使って、RetentionPlannerを初期化する。 */

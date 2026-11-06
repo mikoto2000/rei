@@ -60,6 +60,10 @@ public final class McpTools {
   private final WorkContextService contexts;
 
   /** 会話の実行を受け付ける窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Submits operations through the shared chat run entry point.")
   private final ChatSubmitService chats;
 
   /** 実行一覧。 */
@@ -81,6 +85,10 @@ public final class McpTools {
   private final McpCursor cursors;
 
   /** 承認一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common approval state to coordinate requests and decisions.")
   private final dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvals;
 
   /** 指定された値や利用先を使って、McpToolsを初期化する。 */

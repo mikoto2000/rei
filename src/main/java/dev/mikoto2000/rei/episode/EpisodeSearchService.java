@@ -43,6 +43,10 @@ public class EpisodeSearchService {
   private final EpisodeRepository episodes;
 
   /** 記憶一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common repository for persisted memory and its transaction boundaries.")
   private final MemoryRepository memories;
 
   /** 履歴。 */

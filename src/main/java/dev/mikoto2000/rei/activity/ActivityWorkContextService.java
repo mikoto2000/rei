@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.workcontext.WorkContext;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -106,6 +108,10 @@ public final class ActivityWorkContextService {
   }
 
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common timeline store for activity observations.")
   private final ActivityStore store;
 
   /** 文脈一覧。 */

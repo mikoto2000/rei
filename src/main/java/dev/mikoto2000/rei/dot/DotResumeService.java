@@ -50,6 +50,10 @@ public final class DotResumeService {
   private final PersistentCheckpointRepository checkpoints;
 
   /** 再開用の記録サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared checkpoint service for save, inspect, and resume operations.")
   private final PersistentCheckpointService checkpointService;
 
   /** 予約されたエージェント実行を管理する窓口。 */

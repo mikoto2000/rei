@@ -5,6 +5,8 @@ import dev.mikoto2000.rei.bluesky.BlueskyReplyConversationRepository;
 import dev.mikoto2000.rei.bluesky.command.BskyCommand;
 import dev.mikoto2000.rei.interest.InterestUpdateService;
 import dev.mikoto2000.rei.interest.command.InterestCommand;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.http.ResponseEntity;
@@ -29,6 +31,10 @@ public final class SocialCommandsController {
   private final InterestUpdateService interests;
 
   /** 実行一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Submits operations through the shared integration run entry point.")
   private final IntegrationRunSubmitService runs;
 
   /** 指定された値や利用先を使って、SocialCommandsControllerを初期化する。 */

@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.topic;
 
 import dev.mikoto2000.rei.feed.FeedService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.OffsetDateTime;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnBean;
@@ -11,6 +13,10 @@ import org.springframework.stereotype.Component;
 @ConditionalOnBean(FeedService.class)
 public class FeedDiscoverySource implements DiscoverySource {
   /** フィードサービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads briefing items through the shared feed service.")
   private final FeedService feedService;
 
   /** 指定された値や利用先を使って、FeedDiscoverySourceを初期化する。 */

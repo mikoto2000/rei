@@ -27,6 +27,10 @@ public class HistoryShellService {
   private final ProjectService projects;
 
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common conversation log and its shared indexing state.")
   private final ConversationLogStore store;
 
   /** 検索。 */

@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -84,6 +86,10 @@ public final class TemporalActivityInferenceService {
   private final ActivityProperties p;
 
   /** 記録一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common timeline store for activity observations.")
   private final ActivityStore records;
 
   /** 保存先。 */

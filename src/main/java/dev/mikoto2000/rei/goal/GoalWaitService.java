@@ -55,6 +55,10 @@ public class GoalWaitService {
   private final PersistentAgentScheduler schedules;
 
   /** 再開用の記録一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared checkpoint service for save, inspect, and resume operations.")
   private final PersistentCheckpointService checkpoints;
 
   /** 再開用の記録保存と検索の窓口。 */

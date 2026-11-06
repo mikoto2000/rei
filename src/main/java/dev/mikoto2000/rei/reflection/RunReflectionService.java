@@ -12,6 +12,8 @@ import dev.mikoto2000.rei.event.TaskCreatedPayload;
 import dev.mikoto2000.rei.event.TaskFailedPayload;
 import dev.mikoto2000.rei.event.ToolCompletedPayload;
 import dev.mikoto2000.rei.event.ToolFailedPayload;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,10 @@ public class RunReflectionService {
   private final AgentEventBus bus;
 
   /** 履歴。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common project event stream for ordered reads.")
   private final ProjectAgentEventStore history;
 
   /** 購読。 */

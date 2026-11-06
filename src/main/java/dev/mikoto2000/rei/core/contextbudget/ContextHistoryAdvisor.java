@@ -46,6 +46,10 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
   private final ConversationSummaryRepository summaries;
 
   /** ログ一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common conversation log and its shared indexing state.")
   private final dev.mikoto2000.rei.conversation.ConversationLogStore logs;
 
   /** モデルへ渡す文脈の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */

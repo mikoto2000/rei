@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.checkpoint;
 
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import org.springframework.ai.chat.client.ChatClientRequest;
 import org.springframework.ai.chat.client.ChatClientResponse;
@@ -20,6 +22,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class ResumeContextAdvisor implements BaseAdvisor {
   /** サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared checkpoint service for save, inspect, and resume operations.")
   private final PersistentCheckpointService service;
 
   /** 指定された値や利用先を使って、ResumeContextAdvisorを初期化する。 */

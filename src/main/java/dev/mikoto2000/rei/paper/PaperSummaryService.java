@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.paper;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -8,6 +10,10 @@ import org.springframework.stereotype.Service;
 @Service
 public class PaperSummaryService {
   /** リポジトリ。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared paper repository for the library and its artifacts.")
   private final PaperRepository repo;
 
   /** 内容。 */

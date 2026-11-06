@@ -25,6 +25,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/llm/capture")
 public final class CaptureCommandsController {
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared capture store and its active capture sessions.")
   private final CaptureStore store;
 
   /** プロジェクト一覧。 */

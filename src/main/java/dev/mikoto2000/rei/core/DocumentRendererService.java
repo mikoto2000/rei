@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.artifact.Artifact;
 import dev.mikoto2000.rei.artifact.ArtifactStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -135,6 +137,10 @@ public final class DocumentRendererService {
   private final Renderer renderer;
 
   /** 成果物一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared artifact store for publication and retrieval.")
   private final ArtifactStore artifacts;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */

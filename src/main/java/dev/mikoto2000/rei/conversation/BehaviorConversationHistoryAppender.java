@@ -31,6 +31,10 @@ public final class BehaviorConversationHistoryAppender {
   public record Destination(String conversationId, String projectId, boolean alreadyRecorded) {}
 
   /** ログ一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common conversation log and its shared indexing state.")
   private final ConversationLogStore logs;
 
   /** やり取り一覧。 */

@@ -5,6 +5,8 @@ import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.doctor.DoctorActiveService;
 import dev.mikoto2000.rei.doctor.DoctorRequest;
 import dev.mikoto2000.rei.doctor.DoctorService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -33,6 +35,10 @@ public final class DoctorController {
   private final DoctorActiveService active;
 
   /** チャット。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Submits operations through the shared chat run entry point.")
   private final ChatSubmitService chat;
 
   /**

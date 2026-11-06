@@ -22,6 +22,10 @@ public final class AgentEventTriggerService implements AutoCloseable {
   private final PersistentAgentScheduler schedules;
 
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common project event stream for ordered reads.")
   private final ProjectAgentEventStore store;
 
   /** 購読。 */

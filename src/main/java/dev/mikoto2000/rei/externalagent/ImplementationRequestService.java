@@ -6,6 +6,8 @@ import dev.mikoto2000.rei.core.policy.PermissionDecision;
 import dev.mikoto2000.rei.core.policy.ToolApprovalRepository;
 import dev.mikoto2000.rei.core.policy.ToolPermissionPolicy;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
@@ -127,6 +129,10 @@ public class ImplementationRequestService {
   private final ImplementationRequestRepository requests;
 
   /** 承認一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common approval state to coordinate requests and decisions.")
   private final ToolApprovalRepository approvals;
 
   /** 判断基準。 */

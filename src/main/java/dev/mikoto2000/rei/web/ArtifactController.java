@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.application.session.HistoryPage;
 import dev.mikoto2000.rei.artifact.Artifact;
 import dev.mikoto2000.rei.artifact.ArtifactSourceExport;
 import dev.mikoto2000.rei.artifact.ArtifactStore;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -31,6 +33,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/artifacts")
 public class ArtifactController {
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared artifact store for publication and retrieval.")
   private final ArtifactStore store;
 
   /** 指定された値や利用先を使って、ArtifactControllerを初期化する。 */

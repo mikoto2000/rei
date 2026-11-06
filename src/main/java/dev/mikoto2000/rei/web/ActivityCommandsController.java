@@ -44,6 +44,10 @@ public final class ActivityCommandsController {
   private final ProjectService projects;
 
   /** 実行一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Submits operations through the shared integration run entry point.")
   private final IntegrationRunSubmitService runs;
 
   /**
