@@ -70,6 +70,10 @@ public final class BackgroundRunSubmitService {
   private final ImageGenerationService images;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound ImageProperties shared by consumers of these settings.")
   private final ImageProperties properties;
 
   /** 状態一覧。 */

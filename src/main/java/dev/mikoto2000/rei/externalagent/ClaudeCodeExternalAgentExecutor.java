@@ -10,6 +10,8 @@ import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -46,6 +48,10 @@ public final class ClaudeCodeExternalAgentExecutor implements ExternalAgentExecu
           .enable(DeserializationFeature.FAIL_ON_TRAILING_TOKENS);
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound ClaudeCodeProperties shared by consumers of these settings.")
   private final ClaudeCodeProperties properties;
 
   /** 実行の担当。 */

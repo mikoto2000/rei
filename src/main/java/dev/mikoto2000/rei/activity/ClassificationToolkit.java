@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.activity;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.sql.SQLException;
 import java.time.Clock;
 import java.time.Duration;
@@ -26,6 +28,10 @@ public final class ClassificationToolkit {
       org.slf4j.LoggerFactory.getLogger(ClassificationToolkit.class);
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound ActivityProperties shared by consumers of these settings.")
   private final ActivityProperties p;
 
   /** 規則一覧。 */

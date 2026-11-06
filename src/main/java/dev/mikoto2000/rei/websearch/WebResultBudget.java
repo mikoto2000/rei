@@ -6,6 +6,8 @@ import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.http.FetchScope;
 import dev.mikoto2000.rei.http.HttpFetchException;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -22,9 +24,17 @@ import org.springframework.stereotype.Component;
 @Component
 public final class WebResultBudget {
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound WebSearchProperties shared by consumers of these settings.")
   private final WebSearchProperties properties;
 
   /** 文脈。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound ContextCompressionProperties shared by consumers of these settings.")
   private final ContextCompressionProperties context;
 
   /** 管理。 */

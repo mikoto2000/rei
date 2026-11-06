@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.ui.shell.sound;
 
 import dev.mikoto2000.rei.topic.AgentMessage;
 import dev.mikoto2000.rei.topic.MessageOrigin;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.concurrent.Executor;
 import java.util.concurrent.RejectedExecutionException;
 import org.springframework.beans.factory.annotation.Qualifier;
@@ -22,6 +24,10 @@ public class AgentMessageNarrator {
   private final ChatResponseNarrator narrator;
 
   /** 設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound SoundNotificationProperties shared by consumers of these settings.")
   private final SoundNotificationProperties settings;
 
   /** 実行先。 */

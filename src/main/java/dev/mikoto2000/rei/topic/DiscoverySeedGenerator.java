@@ -1,11 +1,17 @@
 package dev.mikoto2000.rei.topic;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.LinkedHashSet;
 import java.util.List;
 
 /** 利用先の検出生成の初期値の内容を生成する。 */
 public class DiscoverySeedGenerator {
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound TopicGeneratorProperties shared by consumers of these settings.")
   private final TopicGeneratorProperties properties;
 
   /** 指定された値や利用先を使って、DiscoverySeedGeneratorを初期化する。 */

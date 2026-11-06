@@ -64,6 +64,10 @@ public class PersistentCheckpointService implements AutoCloseable {
   private final CheckpointReconciler reconciler;
 
   /** 設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound CheckpointProperties shared by consumers of these settings.")
   private final CheckpointProperties settings;
 
   /** 通知の連携先。 */

@@ -104,6 +104,10 @@ public final class SubAgentConsensusService {
   public record Judged(Comparison comparison, SubAgentResult judge) {}
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound SubAgentProperties shared by consumers of these settings.")
   private final SubAgentProperties properties;
 
   /** 保存と検索の窓口。 */

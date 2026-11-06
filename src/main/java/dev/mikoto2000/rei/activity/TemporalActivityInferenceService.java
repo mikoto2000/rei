@@ -83,6 +83,10 @@ public final class TemporalActivityInferenceService {
       long inputChars) {}
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound ActivityProperties shared by consumers of these settings.")
   private final ActivityProperties p;
 
   /** 記録一覧。 */

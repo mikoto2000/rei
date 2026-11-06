@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.image;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.ai.image.Image;
 import org.springframework.ai.image.ImageGeneration;
 import org.springframework.ai.image.ImageModel;
@@ -17,6 +19,10 @@ public class OpenAiImageGenerationClient implements ImageGenerationClient {
   private final ImageModelProvider imageModelProvider;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound ImageProperties shared by consumers of these settings.")
   private final ImageProperties properties;
 
   /** 画像の生成を利用するため、指定を補って共通の初期化へ引き渡す。 */

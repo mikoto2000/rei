@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.websearch;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +22,10 @@ public class WebSearchOrchestrator {
   private final WebSearchAggregator webSearchAggregator;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound WebSearchProperties shared by consumers of these settings.")
   private final WebSearchProperties properties;
 
   /** まとめた処理。 */

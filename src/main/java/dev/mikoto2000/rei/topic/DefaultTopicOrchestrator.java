@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.topic;
 
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 import java.time.Instant;
 import java.util.List;
@@ -48,6 +50,10 @@ public class DefaultTopicOrchestrator implements TopicOrchestrator {
   private final AgentMessagePublisher messagePublisher;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound TopicGeneratorProperties shared by consumers of these settings.")
   private final TopicGeneratorProperties properties;
 
   /** 実行状況の通知を生成する窓口。 */

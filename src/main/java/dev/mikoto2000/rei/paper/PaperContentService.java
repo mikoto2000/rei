@@ -26,6 +26,10 @@ public class PaperContentService {
   private final PaperExtractionService extraction;
 
   /** 設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound PaperProperties shared by consumers of these settings.")
   private final PaperProperties config;
 
   /** 保存と検索の窓口。 */

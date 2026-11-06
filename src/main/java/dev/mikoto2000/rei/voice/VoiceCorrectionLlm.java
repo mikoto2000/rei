@@ -50,6 +50,10 @@ public final class VoiceCorrectionLlm {
   private final LlmModelProvider models;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound VoiceCorrectionProperties shared by consumers of these settings.")
   private final VoiceCorrectionProperties properties;
 
   /** 指定された値や利用先を使って、VoiceCorrectionLlmを初期化する。 */

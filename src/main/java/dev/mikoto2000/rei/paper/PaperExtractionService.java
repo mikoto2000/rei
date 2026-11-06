@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.paper;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.io.Writer;
 import java.util.ArrayList;
@@ -12,6 +14,10 @@ import org.springframework.stereotype.Service;
 @Service
 public class PaperExtractionService {
   /** 設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound PaperProperties shared by consumers of these settings.")
   private final PaperProperties config;
 
   /** 見出し。 */

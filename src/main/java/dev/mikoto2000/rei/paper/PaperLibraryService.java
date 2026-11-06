@@ -28,6 +28,10 @@ public class PaperLibraryService {
   private final PaperSessionReferences refs;
 
   /** 設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound PaperProperties shared by consumers of these settings.")
   private final PaperProperties config;
 
   /** 指定された値や利用先を使って、PaperLibraryServiceを初期化する。 */

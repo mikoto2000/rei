@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.interest;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
@@ -14,6 +16,10 @@ public class InterestPropertiesLogger implements ApplicationRunner {
   private static final Logger log = LoggerFactory.getLogger(InterestPropertiesLogger.class);
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound InterestProperties shared by consumers of these settings.")
   private final InterestProperties properties;
 
   /** 指定された値や利用先を使って、InterestPropertiesLoggerを初期化する。 */

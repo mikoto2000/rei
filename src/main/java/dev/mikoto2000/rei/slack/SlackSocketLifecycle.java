@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.slack;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -23,6 +25,10 @@ public final class SlackSocketLifecycle implements SmartLifecycle, AutoCloseable
   }
 
   /** 設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound SlackProperties shared by consumers of these settings.")
   private final SlackProperties settings;
 
   /** 実行環境。 */

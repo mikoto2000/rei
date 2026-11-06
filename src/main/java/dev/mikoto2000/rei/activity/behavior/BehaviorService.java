@@ -31,6 +31,10 @@ public final class BehaviorService {
   private final BehaviorProperties config;
 
   /** 作業状況。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound ActivityProperties shared by consumers of these settings.")
   private final ActivityProperties activity;
 
   /** 取得記録。 */

@@ -40,6 +40,10 @@ public class ResumeOverviewService {
   private final ProjectService projects;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound ResumeOverviewProperties shared by consumers of these settings.")
   private final ResumeOverviewProperties properties;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */

@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.skills;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,6 +26,10 @@ public class FileSystemAgentSkillRepository implements AgentSkillRepository {
   private static final String SKILL_FILE_NAME = "SKILL.md";
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound AgentSkillsProperties shared by consumers of these settings.")
   private final AgentSkillsProperties properties;
 
   /** キャッシュ。 */

@@ -60,6 +60,10 @@ public class BlueskyReplyTextGenerator {
   private final LlmModelProvider modelProvider;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound BlueskyProperties shared by consumers of these settings.")
   private final BlueskyProperties properties;
 
   /** Blueskyとの連携を利用するため、指定を補って共通の初期化へ引き渡す。 */

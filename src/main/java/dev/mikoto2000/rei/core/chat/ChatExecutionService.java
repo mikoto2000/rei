@@ -171,6 +171,10 @@ public class ChatExecutionService {
   private final LlmModelProvider modelProvider;
 
   /** 言語モデル設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound LlmProperties shared by consumers of these settings.")
   private final LlmProperties llmProperties;
 
   /** キャンセルサービス。 */

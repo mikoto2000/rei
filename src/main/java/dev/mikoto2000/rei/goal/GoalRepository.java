@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.goal;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
@@ -276,6 +278,10 @@ public class GoalRepository {
   private final Clock clock;
 
   /** この機能の動作設定。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the application-bound LlmProperties shared by consumers of these settings.")
   private final dev.mikoto2000.rei.llm.LlmProperties properties;
 
   /** 目標の達成管理で用いる一括反映を返す。 */
