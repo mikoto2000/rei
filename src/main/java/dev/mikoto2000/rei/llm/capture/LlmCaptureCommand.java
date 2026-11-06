@@ -157,7 +157,9 @@ public final class LlmCaptureCommand implements Runnable {
 
   /** LLM リクエストの記録を操作しますを行う。 */
   public void run() {
-    spec.commandLine().usage(out());
+    var output = out();
+    output.print(spec.commandLine().getUsageMessage());
+    output.flush();
   }
 
   /** 次のCLI依頼のHTTP本文をJVMメモリへ記録を行うための利用者コマンド。 */
