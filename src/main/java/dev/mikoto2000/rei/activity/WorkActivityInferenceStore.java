@@ -1,7 +1,9 @@
 package dev.mikoto2000.rei.activity;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,7 +32,7 @@ public class WorkActivityInferenceStore {
   }
 
   /** 作業状況の把握に関する初期化を処理する。 */
-  private synchronized void initialize() throws Exception {
+  private synchronized void initialize() throws SQLException {
     if (initialized) return;
     try (var c = ds.getConnection();
         var s = c.createStatement()) {
@@ -59,7 +61,7 @@ public class WorkActivityInferenceStore {
         s.setString(3, payload);
         s.executeUpdate();
       }
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Temporal inference persistence failed", e);
     }
   }
@@ -75,7 +77,7 @@ public class WorkActivityInferenceStore {
                   "SELECT payload FROM activity_work_inferences ORDER BY window_end DESC,id DESC LIMIT 1")) {
         return r.next() ? Optional.of(decode(r.getString(1))) : Optional.empty();
       }
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Temporal inference query failed", e);
     }
   }
@@ -106,13 +108,13 @@ public class WorkActivityInferenceStore {
       }
       Collections.reverse(result);
       return List.copyOf(result);
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw new IllegalStateException("Temporal inference query failed", e);
     }
   }
 
   /** 受け取った形式の内容を復元し、後続の処理で利用できるようにする。 */
-  private WorkActivityInference decode(String value) throws Exception {
+  private WorkActivityInference decode(String value) throws JsonProcessingException {
     if (value == null || value.length() > 65536)
       throw new IllegalArgumentException("Inference payload too large");
     return json.readValue(value, WorkActivityInference.class);

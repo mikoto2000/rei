@@ -1,7 +1,9 @@
 package dev.mikoto2000.rei.activity;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Instant;
 import javax.sql.DataSource;
 
@@ -26,7 +28,7 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
   }
 
   /** 作業状況の把握に関する初期化を処理する。 */
-  private synchronized void initialize() throws Exception {
+  private synchronized void initialize() throws SQLException, JsonProcessingException {
     if (initialized) return;
     try (var c = source.getConnection();
         var s = c.createStatement()) {
@@ -47,7 +49,7 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
   }
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
-  private Snapshot read(Connection c) throws Exception {
+  private Snapshot read(Connection c) throws SQLException, JsonProcessingException {
     try (var s = c.createStatement();
         var r =
             s.executeQuery(
@@ -66,7 +68,7 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
       try (var c = source.getConnection()) {
         return read(c);
       }
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw failure(e);
     }
   }
@@ -74,7 +76,7 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
   /** 作業状況の把握に必要な操作を扱う。 */
   private interface Operation<T> {
     /** 指定された内容を、現在の対象へ反映する。 */
-    T apply(Connection c) throws Exception;
+    T apply(Connection c) throws SQLException, JsonProcessingException;
   }
 
   /** 作業状況の把握で用いる一連の更新を返す。 */
@@ -89,18 +91,19 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
           var value = operation.apply(c);
           s.execute("COMMIT");
           return value;
-        } catch (Exception e) {
+        } catch (SQLException | JsonProcessingException | RuntimeException e) {
           s.execute("ROLLBACK");
           throw e;
         }
       }
-    } catch (Exception e) {
+    } catch (SQLException | JsonProcessingException | RuntimeException e) {
       throw failure(e);
     }
   }
 
   /** 指定された内容を書き込み先へ反映する。 */
-  private Snapshot write(Connection c, PeriodCoaching.Settings settings) throws Exception {
+  private Snapshot write(Connection c, PeriodCoaching.Settings settings)
+      throws SQLException, JsonProcessingException {
     if (read(c).revision() == Long.MAX_VALUE)
       throw new java.util.ConcurrentModificationException("Coaching revision exhausted");
     try (var s =
@@ -125,7 +128,8 @@ public final class SqlitePeriodCoachingStore implements PeriodCoachingStore {
   }
 
   /** 作業状況の把握で用いる期待する内容を返す。 */
-  private Snapshot expected(Connection c, long revision) throws Exception {
+  private Snapshot expected(Connection c, long revision)
+      throws SQLException, JsonProcessingException {
     var snapshot = read(c);
     if (revision < 0 || snapshot.revision() != revision || revision == Long.MAX_VALUE)
       throw new java.util.ConcurrentModificationException("Coaching settings changed");

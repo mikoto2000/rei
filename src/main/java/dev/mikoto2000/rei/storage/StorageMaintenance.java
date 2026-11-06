@@ -1,8 +1,10 @@
 package dev.mikoto2000.rei.storage;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.sql.Connection;
+import java.sql.SQLException;
 import java.time.Duration;
 
 /**
@@ -53,14 +55,14 @@ public final class StorageMaintenance {
   }
 
   /** データ保存の共通処理で用いる大きさを返す。 */
-  private long size(String name) throws Exception {
+  private long size(String name) throws IOException {
     var path = registry.root.resolve(name);
     StorageBackup.requireSafePath(path);
     return Files.exists(path, LinkOption.NOFOLLOW_LINKS) ? Files.size(path) : 0;
   }
 
   /** データ保存の共通処理で用いるpragmaを返す。 */
-  private static long pragma(Connection db, String name) throws Exception {
+  private static long pragma(Connection db, String name) throws SQLException {
     try (var query = db.createStatement();
         var rows =
             switch (name) {
@@ -96,7 +98,7 @@ public final class StorageMaintenance {
   }
 
   /** データ保存の共通処理で用いる再開用の記録を返す。 */
-  private static Checkpoint checkpoint(Connection db) throws Exception {
+  private static Checkpoint checkpoint(Connection db) throws SQLException {
     try (var query = db.createStatement();
         var rows = query.executeQuery("PRAGMA wal_checkpoint(PASSIVE)")) {
       rows.next();

@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.review;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.storage.StorageDatabase;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -731,7 +733,8 @@ public final class ReviewCoverageLedger {
   }
 
   /** 指定された対象の内容を読み取り、後続の処理で参照できるようにする。 */
-  private Job read(java.sql.Connection db, String id, Scope scope) throws Exception {
+  private Job read(java.sql.Connection db, String id, Scope scope)
+      throws SQLException, JsonProcessingException {
     UUID.fromString(id);
     try (var query = db.prepareStatement("SELECT record FROM review_jobs WHERE id=?")) {
       query.setString(1, id);
@@ -765,7 +768,8 @@ public final class ReviewCoverageLedger {
   }
 
   /** 指定された内容を書き込み先へ反映する。 */
-  private void write(java.sql.Connection db, Job job, boolean insert) throws Exception {
+  private void write(java.sql.Connection db, Job job, boolean insert)
+      throws SQLException, JsonProcessingException {
     byte[] encoded = StorageDatabase.JSON.writeValueAsBytes(job);
     if (encoded.length > MAX_RECORD_BYTES)
       throw new IllegalStateException("Review job capacity exceeded");
