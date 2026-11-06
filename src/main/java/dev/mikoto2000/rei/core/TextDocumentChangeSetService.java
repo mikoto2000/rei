@@ -27,6 +27,8 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public final class TextDocumentChangeSetService {
+  private final TextDiff.PageCache diffPages = new TextDiff.PageCache();
+
   /**
    * 共通の実行基盤で受け渡す操作を表す。
    *
@@ -642,7 +644,13 @@ public final class TextDocumentChangeSetService {
       AgentRunContext owner, String id, String sha, int offset, int maxBytes) throws IOException {
     var row = owned(owner, id);
     exact(row, sha);
-    return TextDiff.page(row.saved().changes(), offset, maxBytes);
+    return diffPages.preview(diffScope(row), row.saved().changes(), offset, maxBytes).page();
+  }
+
+  private static TextDiff.Scope diffScope(Row row) {
+    var saved = row.saved();
+    return new TextDiff.Scope(
+        saved.project(), saved.root(), saved.session(), saved.id(), row.sha());
   }
 
   private View view(Row row) throws IOException {
@@ -652,7 +660,10 @@ public final class TextDocumentChangeSetService {
   private View view(Row row, boolean preview) throws IOException {
     var files = new ArrayList<FileView>();
     var diff =
-        preview ? TextDiff.preview(row.saved().changes(), 0, TextWriteLimits.diffBytes()) : null;
+        preview
+            ? diffPages.preview(
+                diffScope(row), row.saved().changes(), 0, TextWriteLimits.diffBytes())
+            : null;
     var page = diff == null ? null : diff.page();
     var summaries = diff == null ? TextDiff.summaries(row.saved().changes()) : diff.summaries();
     Path root = Path.of(row.saved().root());
