@@ -26,11 +26,12 @@ public final class GuardedMicrophoneCapture implements MicrophoneCaptureService 
   public FrameSource open(AudioDevice device) throws Exception {
     var binding = monitor.bind(device);
     var source = capture.open(device);
+    boolean verified = false;
     try {
       monitor.check(binding);
-    } catch (RuntimeException failure) {
-      source.close();
-      throw failure;
+      verified = true;
+    } finally {
+      if (!verified) source.close();
     }
     return new FrameSource() {
       /** 必要な内容を参照できるよう、観測単位を読み取る。 */
