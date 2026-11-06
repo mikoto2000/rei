@@ -232,22 +232,22 @@ public final class SelfPatchReviewService {
       initial = tester.test(root, request.testCommand(), remaining(deadline, seconds));
       RunCancellation.propagate(null);
       if (!passed(initial))
-        return result(root, "INITIAL_TEST_FAILED", first, current, initial, review, last, warnings);
+        return result(root, "INITIAL_TEST_FAILED", first, current, initial, null, null, warnings);
       current = capture.capture(root, deadline);
       warnings.addAll(current.warnings());
       if (!same(first, current))
-        return result(root, "PATCH_CHANGED", first, current, initial, review, last, warnings);
+        return result(root, "PATCH_CHANGED", first, current, initial, null, null, warnings);
       review = reviewer.review(root, current, deadline);
       RunCancellation.propagate(null);
       warnings.addAll(review.warnings());
       if (!review.complete())
-        return result(root, "REVIEW_INCOMPLETE", first, current, initial, review, last, warnings);
+        return result(root, "REVIEW_INCOMPLETE", first, current, initial, review, null, warnings);
       if (!review.findings().isEmpty())
-        return result(root, "FIX_REQUIRED", first, current, initial, review, last, warnings);
+        return result(root, "FIX_REQUIRED", first, current, initial, review, null, warnings);
       current = capture.capture(root, deadline);
       warnings.addAll(current.warnings());
       if (!same(first, current))
-        return result(root, "PATCH_CHANGED", first, current, initial, review, last, warnings);
+        return result(root, "PATCH_CHANGED", first, current, initial, review, null, warnings);
       last = tester.test(root, request.testCommand(), remaining(deadline, seconds));
       RunCancellation.propagate(null);
       if (!passed(last))
