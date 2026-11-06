@@ -78,13 +78,13 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
     ExecutorService executor = Executors.newSingleThreadExecutor();
     Future<String> future =
         executor.submit(
-            () ->
-                modelProvider
-                    .chatModel(LlmFeature.INTEREST_DISCOVERY)
-                    .call(prompt)
-                    .getResult()
-                    .getOutput()
-                    .getText());
+            () -> {
+              var response = modelProvider.chatModel(LlmFeature.INTEREST_DISCOVERY).call(prompt);
+              var generation = response == null ? null : response.getResult();
+              var output = generation == null ? null : generation.getOutput();
+              if (output == null) throw new IllegalStateException("Missing interest extraction output");
+              return output.getText();
+            });
     try {
       return future.get(EXTRACT_TIMEOUT_SECONDS, TimeUnit.SECONDS);
     } catch (TimeoutException e) {

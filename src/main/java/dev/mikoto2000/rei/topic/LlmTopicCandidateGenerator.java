@@ -44,7 +44,8 @@ public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
     if (!properties.isEnabled()) return List.of();
     try {
       ChatResponse response = chatModel.call(new Prompt(prompt(context)));
-      AssistantMessage output = response.getResult().getOutput();
+      var generation = response == null ? null : response.getResult();
+      AssistantMessage output = generation == null ? null : generation.getOutput();
       return parser.parse(output == null ? "" : output.getText(), properties.getMaxCandidates());
     } catch (Exception e) {
       log.warn("Topic candidate generation failed");

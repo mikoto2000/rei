@@ -38,15 +38,16 @@ public class OpenAiImageGenerationClient implements ImageGenerationClient {
     ImageModel imageModel = imageModelProvider.imageModel();
     ImagePrompt prompt = buildPrompt(request);
     ImageResponse response = imageModel.call(prompt);
-    if (response == null || response.getResult() == null) {
+    ImageGeneration generation = response == null ? null : response.getResult();
+    if (generation == null) {
       throw new IllegalStateException("画像生成レスポンスが空です");
     }
-    ImageGeneration generation = response.getResult();
     Image image = generation.getOutput();
-    if (image == null || image.getB64Json() == null || image.getB64Json().isBlank()) {
+    var data = image == null ? null : image.getB64Json();
+    if (data == null || data.isBlank()) {
       throw new IllegalStateException("画像データがレスポンスに含まれていません");
     }
-    return image.getB64Json();
+    return data;
   }
 
   /** 利用先に渡せるよう、プロンプトを組み立てる。 */
