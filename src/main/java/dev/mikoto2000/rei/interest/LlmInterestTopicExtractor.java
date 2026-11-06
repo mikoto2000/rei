@@ -34,6 +34,10 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
   private final LlmModelProvider modelProvider;
 
   /** モデル保持先サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the model selection shared by commands and the API.")
   private final ModelHolderService modelHolderService;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */

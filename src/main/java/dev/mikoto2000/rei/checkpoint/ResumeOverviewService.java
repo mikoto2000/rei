@@ -25,6 +25,10 @@ public class ResumeOverviewService {
   private String preferredZone = "";
 
   /** 保存と検索の窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared repository for checkpoint state and lease coordination.")
   private final PersistentCheckpointRepository repository;
 
   /** プロジェクト一覧。 */

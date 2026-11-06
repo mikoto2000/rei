@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.application.session.ShellConversationService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Parameters;
@@ -11,6 +13,10 @@ import picocli.CommandLine.Spec;
 @Command(name = "new", description = "新しい Session を作成して選択します", mixinStandardHelpOptions = true)
 public final class NewConversationCommand implements java.util.concurrent.Callable<Integer> {
   /** 会話一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Shares the shell session and routes operations for its selected conversation.")
   private final ShellConversationService conversations;
 
   /** 仕様。 */

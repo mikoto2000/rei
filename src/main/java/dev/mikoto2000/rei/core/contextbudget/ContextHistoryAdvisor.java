@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.core.contextbudget;
 
 import dev.mikoto2000.rei.conversation.ConversationTurnStore;
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -31,6 +33,10 @@ public class ContextHistoryAdvisor implements BaseChatMemoryAdvisor {
   static final String LEGACY_HISTORY = "rei.legacyHistory";
 
   /** やり取り一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared persistent turn store for history and run lookups.")
   private final ConversationTurnStore turns;
 
   /** 記憶。 */

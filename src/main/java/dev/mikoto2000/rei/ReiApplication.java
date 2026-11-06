@@ -87,6 +87,10 @@ public class ReiApplication {
   private final CommandLine.IFactory factory;
 
   /** 現在モデル保持先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the model selection shared by commands and the API.")
   private final ModelHolderService currentModelHolder;
 
   /** escキャンセル排他制御。 */

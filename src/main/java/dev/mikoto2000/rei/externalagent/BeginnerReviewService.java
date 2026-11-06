@@ -210,6 +210,10 @@ public class BeginnerReviewService {
   private final LlmModelProvider models;
 
   /** 権限一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common guard for the current tool authorization policy.")
   private final ToolPermissionGuard permissions;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */

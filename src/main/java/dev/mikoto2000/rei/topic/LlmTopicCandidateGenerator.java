@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.topic;
 
 import dev.mikoto2000.rei.core.service.ModelHolderService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -18,6 +20,10 @@ public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
   private final ChatModel chatModel;
 
   /** モデル保持先サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the model selection shared by commands and the API.")
   private final ModelHolderService modelHolderService;
 
   /** 入力の解釈。 */

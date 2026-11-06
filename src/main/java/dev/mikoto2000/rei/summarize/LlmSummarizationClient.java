@@ -24,6 +24,10 @@ public class LlmSummarizationClient implements SummarizationClient {
   private final LlmModelProvider modelProvider;
 
   /** モデル保持先サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the model selection shared by commands and the API.")
   private final ModelHolderService modelHolderService;
 
   /** 指定された値や利用先を使って、LlmSummarizationClientを初期化する。 */

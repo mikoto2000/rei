@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.core.service.ModelHolderService;
 import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelUnloadService;
 import dev.mikoto2000.rei.core.service.OpenAiCompatibleModelsService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -28,6 +30,10 @@ public class ModelController {
   private final OpenAiCompatibleModelsService models;
 
   /** 保持先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the model selection shared by commands and the API.")
   private final ModelHolderService holder;
 
   /** 使用を終えたモデルの解放を依頼する窓口。 */

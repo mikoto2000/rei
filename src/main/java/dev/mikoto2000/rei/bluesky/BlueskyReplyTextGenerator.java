@@ -7,6 +7,8 @@ import dev.mikoto2000.rei.llm.FixedLlmModelProvider;
 import dev.mikoto2000.rei.llm.LlmChatClientProvider;
 import dev.mikoto2000.rei.llm.LlmFeature;
 import dev.mikoto2000.rei.llm.LlmModelProvider;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.List;
 import java.util.regex.Matcher;
@@ -44,6 +46,10 @@ public class BlueskyReplyTextGenerator {
   private final LlmChatClientProvider chatClientProvider;
 
   /** モデル保持先サービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the model selection shared by commands and the API.")
   private final ModelHolderService modelHolderService;
 
   /** モデル提供元。 */

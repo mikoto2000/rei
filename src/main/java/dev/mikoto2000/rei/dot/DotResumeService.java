@@ -12,6 +12,8 @@ import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.chat.ChatExecutionResult;
 import dev.mikoto2000.rei.temporal.AgentSchedulerProperties;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Clock;
@@ -41,12 +43,20 @@ public final class DotResumeService {
   private final DotDelegationService delegation;
 
   /** 再開用の記録一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared repository for checkpoint state and lease coordination.")
   private final PersistentCheckpointRepository checkpoints;
 
   /** 再開用の記録サービス。 */
   private final PersistentCheckpointService checkpointService;
 
   /** 予約されたエージェント実行を管理する窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared persistent schedule and claim state.")
   private final PersistentAgentScheduler schedules;
 
   /** 実行一覧。 */

@@ -24,6 +24,8 @@ import dev.mikoto2000.rei.event.ToolCompletedPayload;
 import dev.mikoto2000.rei.event.ToolFailedPayload;
 import dev.mikoto2000.rei.event.ToolStartedPayload;
 import dev.mikoto2000.rei.event.UserInterventionPayload;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -52,6 +54,10 @@ import org.springframework.stereotype.Service;
 @Service
 public class PersistentCheckpointService implements AutoCloseable {
   /** 保存と検索の窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared repository for checkpoint state and lease coordination.")
   private final PersistentCheckpointRepository repository;
 
   /** 再開時の記録と現在の状態を照合する窓口。 */

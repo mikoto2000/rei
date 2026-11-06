@@ -6,6 +6,8 @@ import dev.mikoto2000.rei.core.contextbudget.TokenEstimator;
 import dev.mikoto2000.rei.memory.configuration.MemoryProperties;
 import dev.mikoto2000.rei.memory.model.LongTermMemory;
 import dev.mikoto2000.rei.memory.model.MemoryCandidate;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashSet;
@@ -31,6 +33,10 @@ public class SleepService {
   private final MemoryRepository repository;
 
   /** やり取り一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared persistent turn store for history and run lookups.")
   private final ConversationTurnStore turns;
 
   /** 情報の抽出。 */

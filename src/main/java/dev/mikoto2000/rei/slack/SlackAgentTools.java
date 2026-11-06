@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.slack;
 
 import dev.mikoto2000.rei.core.policy.ToolPermissionGuard;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Arrays;
 import java.util.Objects;
 import org.springframework.ai.chat.model.ToolContext;
@@ -32,6 +34,10 @@ public final class SlackAgentTools {
   private final SlackAgentRepository repository;
 
   /** 権限一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common guard for the current tool authorization policy.")
   private final ToolPermissionGuard permissions;
 
   /** 登録済み。 */

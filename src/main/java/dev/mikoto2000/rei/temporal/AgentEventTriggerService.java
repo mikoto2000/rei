@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.temporal;
 
 import dev.mikoto2000.rei.event.AgentEventBus;
 import dev.mikoto2000.rei.event.ProjectAgentEventStore;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
@@ -13,6 +15,10 @@ import org.springframework.stereotype.Component;
 @Component
 public final class AgentEventTriggerService implements AutoCloseable {
   /** 予約されたエージェント実行を管理する窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared persistent schedule and claim state.")
   private final PersistentAgentScheduler schedules;
 
   /** 保存先。 */

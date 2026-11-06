@@ -13,6 +13,8 @@ import dev.mikoto2000.rei.goal.GoalRepository;
 import dev.mikoto2000.rei.temporal.PersistentAgentScheduler;
 import dev.mikoto2000.rei.workcontext.WorkContext;
 import dev.mikoto2000.rei.workcontext.WorkContextRepository;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
@@ -228,9 +230,17 @@ public final class DailyPlanningService implements dev.mikoto2000.rei.secretary.
   private final PersistentDependencyRepository dependencies;
 
   /** 予約されたエージェント実行を管理する窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared persistent schedule and claim state.")
   private final PersistentAgentScheduler schedules;
 
   /** 再開用の記録一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared repository for checkpoint state and lease coordination.")
   private final PersistentCheckpointRepository checkpoints;
 
   /** 作業状況。 */

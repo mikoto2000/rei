@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.ui.shell;
 
 import dev.mikoto2000.rei.application.session.ShellConversationService;
 import dev.mikoto2000.rei.core.chat.ResponseStyle;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import org.springframework.stereotype.Component;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Model.CommandSpec;
@@ -16,6 +18,10 @@ import picocli.CommandLine.Spec;
     mixinStandardHelpOptions = true)
 public final class ConversationModeCommand implements java.util.concurrent.Callable<Integer> {
   /** シェル。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Shares the shell session and routes operations for its selected conversation.")
   private final ShellConversationService shell;
 
   /** 仕様。 */

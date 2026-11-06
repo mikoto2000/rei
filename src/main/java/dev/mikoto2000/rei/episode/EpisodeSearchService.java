@@ -9,6 +9,8 @@ import dev.mikoto2000.rei.conversation.HistorySearchScope;
 import dev.mikoto2000.rei.memory.service.MemoryRepository;
 import dev.mikoto2000.rei.vectorstore.ReciprocalRankFusion;
 import dev.mikoto2000.rei.workcontext.WorkContextService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -47,6 +49,10 @@ public class EpisodeSearchService {
   private final ConversationHistorySearchService history;
 
   /** やり取り一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared persistent turn store for history and run lookups.")
   private final ConversationTurnStore turns;
 
   /** 作業。 */

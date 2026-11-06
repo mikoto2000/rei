@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.web;
 import dev.mikoto2000.rei.application.state.OperationConflictException;
 import dev.mikoto2000.rei.core.dependency.DependencyObservationService;
 import dev.mikoto2000.rei.core.dependency.PersistentDependencyRepository;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -33,6 +35,10 @@ public class DependencyController {
   private final dev.mikoto2000.rei.core.project.ProjectRegistry projects;
 
   /** 利用条件の確認。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the common guard for the current tool authorization policy.")
   private final dev.mikoto2000.rei.core.policy.ToolPermissionGuard guard;
 
   /** Web APIによる操作を利用するため、指定を補って共通の初期化へ引き渡す。 */

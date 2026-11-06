@@ -53,6 +53,10 @@ public final class TaskControlService {
   private final PersistentDependencyRepository dependencies;
 
   /** 予約されたエージェント実行を管理する窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared persistent schedule and claim state.")
   private final PersistentAgentScheduler schedules;
 
   /** 指定された値や利用先を使って、TaskControlServiceを初期化する。 */

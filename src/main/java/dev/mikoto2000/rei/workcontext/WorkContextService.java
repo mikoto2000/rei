@@ -55,6 +55,10 @@ public class WorkContextService {
   private final ProjectService projects;
 
   /** やり取り一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared persistent turn store for history and run lookups.")
   private final ConversationTurnStore turns;
 
   /** イベント一覧。 */
