@@ -59,7 +59,9 @@ final class AppServerProcessSession implements PlanAppServerRpc.Session {
                     line.reset();
                   } else line.write(value);
                 }
-                if (line.size() > 0) lines.offer(line.toString(StandardCharsets.UTF_8));
+                if (line.size() > 0
+                    && !lines.offer(line.toString(StandardCharsets.UTF_8), 1, TimeUnit.SECONDS))
+                  throw new IOException();
               } catch (Exception ignored) {
                 process.destroyForcibly();
               } finally {

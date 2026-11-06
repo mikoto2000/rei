@@ -62,7 +62,14 @@ public final class StorageMaintenance {
   /** データ保存の共通処理で用いるpragmaを返す。 */
   private static long pragma(Connection db, String name) throws Exception {
     try (var query = db.createStatement();
-        var rows = query.executeQuery("PRAGMA " + name)) {
+        var rows =
+            switch (name) {
+              case "page_size" -> query.executeQuery("PRAGMA page_size");
+              case "page_count" -> query.executeQuery("PRAGMA page_count");
+              case "freelist_count" -> query.executeQuery("PRAGMA freelist_count");
+              case "auto_vacuum" -> query.executeQuery("PRAGMA auto_vacuum");
+              default -> throw new IllegalArgumentException("Unknown storage pragma");
+            }) {
       rows.next();
       return rows.getLong(1);
     }
