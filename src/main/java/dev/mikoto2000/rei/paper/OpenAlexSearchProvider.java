@@ -109,7 +109,9 @@ public class OpenAlexSearchProvider implements AcademicSearchProvider {
         if (result.size() >= q.limit()) break;
       }
       return result;
-    } catch (PaperException | java.util.concurrent.CancellationException e) {
+    } catch (PaperException e) {
+      throw e;
+    } catch (java.util.concurrent.CancellationException e) {
       throw e;
     } catch (RuntimeException e) {
       throw new PaperException(PaperException.Code.SEARCH_FAILED, "OpenAlex レスポンス不正", e);

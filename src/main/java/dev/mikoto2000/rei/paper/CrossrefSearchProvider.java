@@ -68,7 +68,9 @@ public class CrossrefSearchProvider implements AcademicSearchProvider {
     try {
       return PaperJson.MAPPER.readTree(
           http.get(URI.create(url), "application/json", config.getMaxResponseBytes(), op));
-    } catch (PaperException | java.util.concurrent.CancellationException e) {
+    } catch (PaperException e) {
+      throw e;
+    } catch (java.util.concurrent.CancellationException e) {
       throw e;
     } catch (RuntimeException e) {
       throw new PaperException(PaperException.Code.SEARCH_FAILED, "Crossref レスポンス不正", e);

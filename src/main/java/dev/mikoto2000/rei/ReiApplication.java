@@ -679,10 +679,14 @@ public class ReiApplication {
                           : "[cancel] 停止対象の実行がないか、既に停止を要求済みです。");
               cmd.getErr().flush();
             });
-      } catch (UserInterruptException | EndOfFileException exit) {
+      } catch (UserInterruptException interrupted) {
         commandCancellationService.cancel();
         future.cancel(true);
-        throw exit;
+        throw interrupted;
+      } catch (EndOfFileException closed) {
+        commandCancellationService.cancel();
+        future.cancel(true);
+        throw closed;
       }
     } finally {
       terminal.setAttributes(originalAttributes);
