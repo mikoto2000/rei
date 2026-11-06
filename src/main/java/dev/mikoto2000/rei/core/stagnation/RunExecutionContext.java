@@ -1218,7 +1218,7 @@ public class RunExecutionContext {
   private java.util.function.Consumer<String> interventionApplied = text -> {};
 
   /** 実行の停滞への対処で使用する追加入力一覧を設定する。 */
-  public void setInterventions(
+  public synchronized void setInterventions(
       dev.mikoto2000.rei.core.chat.UserInterventionQueue queue,
       java.util.function.Consumer<String> applied) {
     this.interventions = queue;
@@ -1229,11 +1229,12 @@ public class RunExecutionContext {
   public synchronized List<org.springframework.ai.chat.messages.Message> applyInterventions() {
     if (cancelled) return List.of();
     if (interventions == null) return List.of();
+    var onApplied = interventionApplied;
     return interventions.drainEntries().stream()
         .map(
             entry -> {
-              userRequest = entry.text();
-              interventionApplied.accept(entry.text());
+              setUserRequest(entry.text());
+              onApplied.accept(entry.text());
               publisher.publish(
                   factory
                       .intervention(runId, entry.id(), entry.text(), true)
@@ -1339,7 +1340,7 @@ public class RunExecutionContext {
   }
 
   /** 実行の停滞への対処で用いる進捗の更新番号を返す。 */
-  public long progressVersion() {
+  public synchronized long progressVersion() {
     return progressVersion;
   }
 

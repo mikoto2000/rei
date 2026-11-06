@@ -35,7 +35,7 @@ public class EventAgentMessagePublisher implements AgentMessagePublisher {
 
   /** 話題の管理に関する作業習慣履歴を処理する。 */
   @org.springframework.beans.factory.annotation.Autowired
-  void behaviorHistory(BehaviorConversationHistoryAppender history) {
+  synchronized void behaviorHistory(BehaviorConversationHistoryAppender history) {
     this.behaviorHistory = history;
   }
 

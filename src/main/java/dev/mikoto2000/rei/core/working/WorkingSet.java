@@ -102,7 +102,7 @@ public class WorkingSet {
                   .ADJUST_DATES_TO_CONTEXT_TIME_ZONE);
 
   /** 作業中の情報管理に関する有効化Persistenceを処理する。 */
-  public void enablePersistence(Path path) {
+  public synchronized void enablePersistence(Path path) {
     this.storagePath = path;
     if (java.nio.file.Files.exists(path)) {
       try {

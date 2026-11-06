@@ -44,7 +44,7 @@ public class AgentScheduleDispatcher {
 
   /** 時刻と期間の解釈に関する設定状態表示Resumesを処理する。 */
   @Autowired(required = false)
-  public void configureDotResumes(dev.mikoto2000.rei.dot.DotResumeService service) {
+  public synchronized void configureDotResumes(dev.mikoto2000.rei.dot.DotResumeService service) {
     dotResumes = service;
   }
 
@@ -91,7 +91,7 @@ public class AgentScheduleDispatcher {
 
   /** 時刻と期間の解釈に関する設定目標待機一覧を処理する。 */
   @Autowired(required = false)
-  public void configureGoalWaits(dev.mikoto2000.rei.goal.GoalWaitService service) {
+  public synchronized void configureGoalWaits(dev.mikoto2000.rei.goal.GoalWaitService service) {
     goalWaits = service;
   }
 

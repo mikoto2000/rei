@@ -24,18 +24,24 @@ public final class RunRegistry implements AutoCloseable {
 
   /** 実行の受付と状態管理で使用する受付台帳を設定する。 */
   @org.springframework.beans.factory.annotation.Autowired(required = false)
-  public void setAdmissions(dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions) {
+  public synchronized void setAdmissions(dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissions) {
     this.admissions = admissions;
   }
 
   /** 実行と cleanup 中の終端イベントは RunService が一度だけ確定する。 */
   public void beginExecution(String runId) {
-    if (admissions != null) admissions.deferTerminalEvents(runId, true);
+    var store = admissionStore();
+    if (store != null) store.deferTerminalEvents(runId, true);
   }
 
   /** 実行所有者による終端確定後、通常のイベント購読へ戻す。 */
   public void endExecution(String runId) {
-    if (admissions != null) admissions.deferTerminalEvents(runId, false);
+    var store = admissionStore();
+    if (store != null) store.deferTerminalEvents(runId, false);
+  }
+
+  private synchronized dev.mikoto2000.rei.conversation.ConversationAdmissionStore admissionStore() {
+    return admissions;
   }
 
   /** 終了後の実行記録を保持する期間。 */
