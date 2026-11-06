@@ -90,7 +90,7 @@ public record FetchOperation(Runnable cancellationCheck, long deadlineNanos) {
   }
 
   /** 得られた情報を分類し、後続の判断で扱い分けられるようにする。 */
-  public static RuntimeException classify(Throwable failure) {
+  public static HttpFetchException classify(Throwable failure) {
     propagateControls(failure);
     for (Throwable cause = failure; cause != null; cause = cause.getCause()) {
       if (cause instanceof HttpFetchException safe) return safe;

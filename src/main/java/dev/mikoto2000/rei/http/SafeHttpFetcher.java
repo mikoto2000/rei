@@ -115,16 +115,12 @@ public class SafeHttpFetcher {
     } catch (RuntimeException failed) {
       FetchOperation.propagateControls(failed);
       var safe = FetchOperation.classify(failed);
-      if (safe instanceof HttpFetchException http) observer.failure(http.code());
+      observer.failure(safe.code());
       throw safe;
     }
   }
 
   /** POST uses the existing bounded transport without redirects or automatic retries. */
-  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      justification =
-          "Preserve classified HTTP failures and cancellation controls, as in the existing exchange method.")
   public Response fetch(
       URI uri,
       String method,
@@ -151,7 +147,7 @@ public class SafeHttpFetcher {
     } catch (RuntimeException failed) {
       FetchOperation.propagateControls(failed);
       var safe = FetchOperation.classify(failed);
-      if (safe instanceof HttpFetchException http) observer.failure(http.code());
+      observer.failure(safe.code());
       throw safe;
     }
   }
@@ -185,10 +181,6 @@ public class SafeHttpFetcher {
   }
 
   /** Execute one bounded exchange without redirect or automatic transport retries. */
-  @edu.umd.cs.findbugs.annotations.SuppressFBWarnings(
-      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
-      justification =
-          "Classified HTTP failures and cancellation controls must propagate without losing their type.")
   public Response exchange(
       URI uri,
       String method,
