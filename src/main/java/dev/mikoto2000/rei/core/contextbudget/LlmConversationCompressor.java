@@ -98,8 +98,11 @@ public class LlmConversationCompressor implements ConversationCompressor {
       if (baseOptions.getMaxCompletionTokens() != null)
         optionsBuilder.maxCompletionTokens(null).maxTokens(null).maxCompletionTokens(maxTokens);
       else optionsBuilder.maxTokens(maxTokens);
-      var toolContext = new LinkedHashMap<>(
-          dev.mikoto2000.rei.core.chat.ToolLoopSupport.toolContext(owner));
+      var toolContext = new LinkedHashMap<String, Object>();
+      if (ownerOptions instanceof org.springframework.ai.model.tool.ToolCallingChatOptions original) {
+        var context = original.getToolContext();
+        if (context != null) toolContext.putAll(context);
+      }
       toolContext.put("rei.modelCallPurpose", "context-summary");
       optionsBuilder.toolContext(toolContext);
       var options = optionsBuilder.build();
