@@ -402,7 +402,7 @@ public class SubAgentCommand implements Callable<Integer> {
             Path directory = command.registry.directory();
             Files.createDirectories(directory);
             Path target = directory.resolve(id + ".yaml").normalize();
-            if (!target.getParent().equals(directory))
+            if (!directory.equals(target.getParent()))
               throw new IllegalArgumentException("id: invalid path");
             Files.writeString(
                 target,

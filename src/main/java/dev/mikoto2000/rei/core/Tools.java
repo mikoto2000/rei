@@ -2449,12 +2449,9 @@ public class Tools {
     var snapshot = newSnapshots().get(root, resolveProjectPath(requested, root));
     byte[] bytes = snapshot.bytes();
     String text;
-    if (snapshot
-        .path()
-        .getFileName()
-        .toString()
-        .toLowerCase(java.util.Locale.ROOT)
-        .endsWith(".pdf")) {
+    var fileName = snapshot.path().getFileName();
+    if (fileName == null) throw new IOException("Snapshot file name required");
+    if (fileName.toString().toLowerCase(java.util.Locale.ROOT).endsWith(".pdf")) {
       try (var pdf = org.apache.pdfbox.Loader.loadPDF(bytes)) {
         var parts = new java.util.ArrayList<String>();
         var stripper = new org.apache.pdfbox.text.PDFTextStripper();

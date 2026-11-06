@@ -94,7 +94,8 @@ public class ProjectAgentEventStore implements AgentEventListener {
             event.projectId());
     Path file = file(event.projectId());
     try {
-      Files.createDirectories(file.getParent());
+      var parent = file.getParent();
+      if (parent != null) Files.createDirectories(parent);
       String line = mapper.writeValueAsString(stored);
       // Separate an interrupted final line before appending a new complete record.
       String separator = "";

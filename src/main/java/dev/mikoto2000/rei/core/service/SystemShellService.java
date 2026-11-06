@@ -60,6 +60,8 @@ public class SystemShellService {
 
   /** 対話から使う共通操作で用いるシェル名前を返す。 */
   private String shellName(String shell) {
-    return Paths.get(shell).getFileName().toString().toLowerCase(Locale.ROOT);
+    var name = Paths.get(shell).getFileName();
+    if (name == null) throw new IllegalArgumentException("Shell executable name required");
+    return name.toString().toLowerCase(Locale.ROOT);
   }
 }

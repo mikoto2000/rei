@@ -262,7 +262,11 @@ public final class IsolatedImplementationService {
     String baseline = clean(root, deadline, cancelled);
     Files.createDirectories(storage);
     try (var files = Files.list(storage)) {
-      if (files.filter(p -> p.getFileName().toString().endsWith(".json")).limit(17).count() >= 16)
+      if (files.map(Path::getFileName)
+              .filter(name -> name != null && name.toString().endsWith(".json"))
+              .limit(17)
+              .count()
+          >= 16)
         throw new IllegalArgumentException(
             "Implementation receipt quota reached; explicit cleanup required");
     }
