@@ -1914,7 +1914,6 @@ dev.mikoto2000.rei.paper.PaperCommandExecutor -> dev.mikoto2000.rei.core.chat.Ag
 dev.mikoto2000.rei.paper.PaperCommandExecutor -> dev.mikoto2000.rei.core.chat.AgentRunContext$RequestSource
 dev.mikoto2000.rei.paper.PaperCommandExecutor -> dev.mikoto2000.rei.core.chat.RunCancellation
 dev.mikoto2000.rei.paper.PaperCommandExecutor -> dev.mikoto2000.rei.core.command.UserInputParser
-dev.mikoto2000.rei.paper.PaperCommandExecutor -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
 dev.mikoto2000.rei.paper.PaperCommandExecutor -> dev.mikoto2000.rei.event.FailureMessages
 dev.mikoto2000.rei.paper.PaperOperation -> dev.mikoto2000.rei.core.chat.AgentRunContext
 dev.mikoto2000.rei.paper.PaperOperation -> dev.mikoto2000.rei.core.chat.AgentRunScope
