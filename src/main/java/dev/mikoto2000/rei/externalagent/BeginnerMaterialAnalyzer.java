@@ -179,7 +179,8 @@ public final class BeginnerMaterialAnalyzer {
       throws IOException {
     dev.mikoto2000.rei.core.chat.RunCancellation.propagate(null);
     Path root = directory.toRealPath();
-    if (root.getFileName() == null || ExternalAgentSourceSnapshot.excluded(root.getFileName()))
+    Path rootName = root.getFileName();
+    if (rootName == null || ExternalAgentSourceSnapshot.excluded(rootName))
       throw new IllegalArgumentException("Material root is excluded");
     if (!Files.isDirectory(root))
       throw new IllegalArgumentException("Material root must be a directory");
@@ -370,8 +371,12 @@ public final class BeginnerMaterialAnalyzer {
       Path path = parent.resolve(name).toAbsolutePath().normalize();
       if (!path.startsWith(root)) throw new IllegalArgumentException("Path outside material root");
       Path ancestor = path;
-      while (!Files.exists(ancestor, LinkOption.NOFOLLOW_LINKS)) ancestor = ancestor.getParent();
-      if (!ancestor.toRealPath().equals(ancestor))
+      while (ancestor != null
+          && ancestor.startsWith(root)
+          && !Files.exists(ancestor, LinkOption.NOFOLLOW_LINKS)) {
+        ancestor = ancestor.getParent();
+      }
+      if (ancestor == null || !ancestor.startsWith(root) || !ancestor.toRealPath().equals(ancestor))
         throw new IllegalArgumentException("Linked material path");
       return path;
     } catch (IOException | InvalidPathException error) {
@@ -381,7 +386,9 @@ public final class BeginnerMaterialAnalyzer {
 
   /** 外部エージェントへの委譲において、Markdownに該当するか判定する。 */
   private static boolean markdown(Path file) {
-    String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
+    Path fileName = file.getFileName();
+    if (fileName == null) return false;
+    String name = fileName.toString().toLowerCase(Locale.ROOT);
     return name.endsWith(".md") || name.endsWith(".mdx");
   }
 

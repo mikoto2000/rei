@@ -1360,7 +1360,8 @@ public class Tools {
   /** 共通の実行基盤で用いるmatching検索語句件数を返す。 */
   private int matchingKeywordCount(String path, List<String> keywords) {
     String fileName =
-        java.nio.file.Path.of(path).getFileName().toString().toLowerCase(java.util.Locale.ROOT);
+        java.util.Objects.toString(java.nio.file.Path.of(path).getFileName(), "")
+            .toLowerCase(java.util.Locale.ROOT);
     return (int) keywords.stream().filter(fileName::contains).count();
   }
 

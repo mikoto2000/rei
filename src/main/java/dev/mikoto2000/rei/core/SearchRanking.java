@@ -97,7 +97,7 @@ final class SearchRanking {
       RepositoryMapService.File metadata,
       boolean limited) {
     String lower = path.replace('\\', '/').toLowerCase(Locale.ROOT),
-        name = Path.of(path).getFileName().toString().toLowerCase(Locale.ROOT);
+        name = HeuristicSourceIndex.fileName(path).toLowerCase(Locale.ROOT);
     int dot = name.lastIndexOf('.');
     String stem = dot < 0 ? name : name.substring(0, dot);
     int points = 0;
