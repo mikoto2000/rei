@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.dot;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.output.CommandOutput;
 import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
@@ -173,7 +174,7 @@ public final class DotCommand implements java.util.concurrent.Callable<Integer> 
           };
       out.println(dev.mikoto2000.rei.storage.StorageDatabase.JSON.writeValueAsString(result));
       return 0;
-    } catch (Exception e) {
+    } catch (JsonProcessingException | RuntimeException e) {
       out.println(
           "[error] "
               + (e instanceof DotException dot ? dot.code : "INVALID_ARGUMENT")

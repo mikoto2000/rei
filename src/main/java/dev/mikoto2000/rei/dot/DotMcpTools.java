@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.dot;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import dev.mikoto2000.rei.storage.StorageDatabase;
 import io.modelcontextprotocol.spec.McpSchema;
 import java.nio.charset.StandardCharsets;
@@ -171,7 +172,7 @@ public final class DotMcpTools {
               default -> throw new DotException("INVALID_ARGUMENT");
             };
       }
-    } catch (Exception failure) {
+    } catch (JsonProcessingException | RuntimeException failure) {
       String code =
           failure instanceof DotException e
               ? e.code

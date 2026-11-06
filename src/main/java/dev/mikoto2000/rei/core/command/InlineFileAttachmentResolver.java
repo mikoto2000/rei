@@ -7,6 +7,7 @@ import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.Transferable;
 import java.awt.image.BufferedImage;
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -219,7 +220,7 @@ public class InlineFileAttachmentResolver {
           }
           return new String(output, StandardCharsets.UTF_8).trim();
         }
-      } catch (Exception e) {
+      } catch (IOException | InterruptedException | RuntimeException e) {
         return null;
       }
     }

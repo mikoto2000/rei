@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.computeruse;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Base64;
@@ -96,7 +97,7 @@ final class WindowsFocusProbe implements Supplier<String> {
       throw new java.util.concurrent.CancellationException();
     } catch (java.util.concurrent.CancellationException e) {
       throw e;
-    } catch (Exception e) {
+    } catch (IOException | RuntimeException e) {
       return unknown("probe_exception", e.getClass().getSimpleName() + ": " + e.getMessage());
     } finally {
       if (process != null && process.isAlive()) process.destroyForcibly();
