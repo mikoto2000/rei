@@ -12,6 +12,8 @@ import dev.mikoto2000.rei.image.ImageGenerationService;
 import dev.mikoto2000.rei.image.ImageProperties;
 import dev.mikoto2000.rei.image.ImageSize;
 import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import java.util.UUID;
 import java.util.function.Function;
@@ -24,6 +26,11 @@ import java.util.function.Function;
  */
 public final class BackgroundRunSubmitService {
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project registry; consumers must resolve against the same registered projects.")
   private final ProjectRegistry projects;
 
   /** 登録台帳。 */

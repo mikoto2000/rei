@@ -18,6 +18,8 @@ import dev.mikoto2000.rei.tooldelivery.ReadingDelivery;
 import dev.mikoto2000.rei.tooldelivery.ReadingMetrics;
 import dev.mikoto2000.rei.tooldelivery.ReadingProblem;
 import dev.mikoto2000.rei.tooldelivery.ReadingStateStore;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -716,6 +718,11 @@ public class Tools {
   private static final Charset CP932 = Charset.forName("windows-31j");
 
   /** プロジェクトサービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
   private final ProjectService projectService;
 
   /** システムシェルサービス。 */

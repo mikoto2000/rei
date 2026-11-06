@@ -11,6 +11,8 @@ import dev.mikoto2000.rei.reflection.ReflectionLessonService;
 import dev.mikoto2000.rei.reflection.RunReflectionRepository;
 import dev.mikoto2000.rei.reflection.RunReflectionService;
 import dev.mikoto2000.rei.reflection.VerifiedReflectionMemoryService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -41,6 +43,11 @@ public final class ReflectionController {
   private final GoalReflectionService service;
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project registry; consumers must resolve against the same registered projects.")
   private final ProjectRegistry projects;
 
   /** 会話一覧。 */

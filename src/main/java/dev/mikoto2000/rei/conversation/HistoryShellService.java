@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.conversation;
 import dev.mikoto2000.rei.core.project.ProjectContext;
 import dev.mikoto2000.rei.core.project.ProjectService;
 import dev.mikoto2000.rei.llm.ConversationIds;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.function.Consumer;
 import org.springframework.stereotype.Service;
 
@@ -17,6 +19,11 @@ public class HistoryShellService {
   public static final int DEFAULT_LAST = 50, DEFAULT_LIST_LIMIT = 50, DEFAULT_SEARCH_LIMIT = 10;
 
   /** プロジェクト一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification =
+          "Intentional shared project service; consumers must observe the same client-scoped project selection.")
   private final ProjectService projects;
 
   /** 保存先。 */
