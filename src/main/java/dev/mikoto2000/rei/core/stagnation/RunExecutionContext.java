@@ -1268,17 +1268,12 @@ public class RunExecutionContext {
     return new OutputLimitRunBudget.LlmCallReservation() {
       /** 実行の停滞への対処で判断に用いる試行予約の条件を確認する。 */
       public boolean tryReserve() {
-        synchronized (RunExecutionContext.this) {
-          checkActive();
-          return budget.tryConsumeLlmCall();
-        }
+        return reserveSharedLlmCall();
       }
 
       /** 実行の停滞への対処で用いる残量を返す。 */
       public int remaining() {
-        synchronized (RunExecutionContext.this) {
-          return budget.remainingLlmCalls();
-        }
+        return remainingSharedLlmCalls();
       }
 
       /** トークン数による実行予算の制限が有効かどうかを返す。 */
@@ -1291,6 +1286,15 @@ public class RunExecutionContext {
         RunExecutionContext.this.recordTotalTokens(tokens);
       }
     };
+  }
+
+  private synchronized boolean reserveSharedLlmCall() {
+    checkActive();
+    return budget.tryConsumeLlmCall();
+  }
+
+  private synchronized int remainingSharedLlmCalls() {
+    return budget.remainingLlmCalls();
   }
 
   /** 実行の停滞への対処で用いるモデル呼び出し予算を返す。 */
