@@ -3,7 +3,6 @@ package dev.mikoto2000.rei.core.checkpoint;
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
 import java.time.Clock;
-import java.time.OffsetDateTime;
 import java.util.Optional;
 
 /**
@@ -12,9 +11,6 @@ import java.util.Optional;
  * <p>Task State / Working Set 等の完全コピーではなく、再開に必要な最小情報を保持する。
  */
 public class CheckpointStore {
-
-  /** 期限や記録日時の判定に使う時刻の取得元。 */
-  private final Clock clock;
 
   /** イベント一覧。 */
   private final AgentEventFactory events;
@@ -46,7 +42,6 @@ public class CheckpointStore {
   /** 指定された値や利用先を使って、CheckpointStoreを初期化する。 */
   public CheckpointStore(
       Clock clock, AgentEventFactory events, AgentEventPublisher eventPublisher) {
-    this.clock = clock;
     this.events = events;
     this.eventPublisher = eventPublisher;
   }
@@ -79,10 +74,5 @@ public class CheckpointStore {
       return "";
     }
     return latest.renderForPrompt();
-  }
-
-  /** 実行状態の引き継ぎで用いる現在日時を返す。 */
-  private OffsetDateTime now() {
-    return OffsetDateTime.now(clock);
   }
 }
