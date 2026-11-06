@@ -21,6 +21,10 @@ import java.util.UUID;
  * <p>Bounded metadata planning and durable approvals. This class never moves or deletes a body.
  */
 public final class RetentionPlanner {
+  private static final String USAGE_SQL =
+      "SELECT kind,count(*),COALESCE(sum(CASE WHEN status='DELETED' THEN 0 ELSE size END),0)"
+          + " FROM stored_objects";
+
   /**
    * データ保存の共通処理で受け渡す判断基準を表す。
    *
@@ -434,13 +438,11 @@ public final class RetentionPlanner {
   private Status statusScope(String scope) {
     return registry.database.read(
         db -> {
-          String filter = scope == null ? "" : " WHERE scope=?";
           var usages = new ArrayList<ObjectUsage>();
           try (var query =
-              db.prepareStatement(
-                  "SELECT kind,count(*),COALESCE(sum(CASE WHEN status='DELETED' THEN 0 ELSE size END),0) FROM stored_objects"
-                      + filter
-                      + " GROUP BY kind")) {
+              scope == null
+                  ? db.prepareStatement(USAGE_SQL + " GROUP BY kind")
+                  : db.prepareStatement(USAGE_SQL + " WHERE scope=? GROUP BY kind")) {
             if (scope != null) query.setString(1, scope);
             try (var rows = query.executeQuery()) {
               while (rows.next())
@@ -450,8 +452,10 @@ public final class RetentionPlanner {
           var reasons = new TreeMap<String, Long>();
           boolean limited = false;
           try (var query =
-              db.prepareStatement(
-                  "SELECT * FROM stored_objects" + filter + " ORDER BY id LIMIT 1001")) {
+              scope == null
+                  ? db.prepareStatement("SELECT * FROM stored_objects ORDER BY id LIMIT 1001")
+                  : db.prepareStatement(
+                      "SELECT * FROM stored_objects WHERE scope=? ORDER BY id LIMIT 1001")) {
             if (scope != null) query.setString(1, scope);
             try (var rows = query.executeQuery()) {
               int count = 0;

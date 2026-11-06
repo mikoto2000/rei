@@ -573,8 +573,13 @@ public final class StorageObjectRegistry {
     database.transaction(
         db -> {
           try (var query =
-              db.prepareStatement(
-                  "UPDATE stored_objects SET " + column + "=?,revision=revision+1 WHERE id=?")) {
+              switch (column) {
+                case "pinned" -> db.prepareStatement(
+                    "UPDATE stored_objects SET pinned=?,revision=revision+1 WHERE id=?");
+                case "legal_hold" -> db.prepareStatement(
+                    "UPDATE stored_objects SET legal_hold=?,revision=revision+1 WHERE id=?");
+                default -> throw new IllegalArgumentException("Unknown storage flag");
+              }) {
             query.setBoolean(1, value);
             query.setString(2, id);
             if (query.executeUpdate() != 1) throw new IllegalArgumentException("Unknown object");
