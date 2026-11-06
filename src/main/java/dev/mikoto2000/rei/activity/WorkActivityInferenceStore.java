@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.activity;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import dev.mikoto2000.rei.jdbc.SqlConnectionFactory;
 import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -18,7 +19,7 @@ import javax.sql.DataSource;
  */
 public class WorkActivityInferenceStore {
   /** データベースへの接続元。 */
-  private final DataSource ds;
+  private final SqlConnectionFactory connections;
 
   /** 初期化済み。 */
   private boolean initialized;
@@ -28,13 +29,13 @@ public class WorkActivityInferenceStore {
 
   /** 指定された値や利用先を使って、WorkActivityInferenceStoreを初期化する。 */
   public WorkActivityInferenceStore(DataSource ds) {
-    this.ds = ds;
+    connections = ds::getConnection;
   }
 
   /** 作業状況の把握に関する初期化を処理する。 */
   private synchronized void initialize() throws SQLException {
     if (initialized) return;
-    try (var c = ds.getConnection();
+    try (var c = connections.open();
         var s = c.createStatement()) {
       s.execute(
           "CREATE TABLE IF NOT EXISTS activity_work_inferences(id TEXT PRIMARY KEY, window_end INTEGER NOT NULL, payload TEXT NOT NULL)");
@@ -52,7 +53,7 @@ public class WorkActivityInferenceStore {
       // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
       if (payload.length() > 65536)
         throw new IllegalArgumentException("Inference payload too large");
-      try (var c = ds.getConnection();
+      try (var c = connections.open();
           var s =
               c.prepareStatement(
                   "INSERT INTO activity_work_inferences VALUES(?,?,?) ON CONFLICT(id) DO UPDATE SET payload=excluded.payload")) {
@@ -70,7 +71,7 @@ public class WorkActivityInferenceStore {
   public synchronized Optional<WorkActivityInference> latest() {
     try {
       initialize();
-      try (var c = ds.getConnection();
+      try (var c = connections.open();
           var s = c.createStatement();
           var r =
               s.executeQuery(
@@ -95,7 +96,7 @@ public class WorkActivityInferenceStore {
     try {
       initialize();
       var result = new ArrayList<WorkActivityInference>();
-      try (var c = ds.getConnection();
+      try (var c = connections.open();
           var s =
               c.prepareStatement(
                   "SELECT payload FROM activity_work_inferences WHERE window_end>=? AND window_end<? ORDER BY window_end DESC,id DESC LIMIT ?")) {

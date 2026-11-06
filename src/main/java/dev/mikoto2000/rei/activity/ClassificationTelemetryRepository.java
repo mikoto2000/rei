@@ -3,6 +3,7 @@ package dev.mikoto2000.rei.activity;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import dev.mikoto2000.rei.jdbc.SqlConnectionFactory;
 import java.sql.SQLException;
 import java.time.Duration;
 import java.time.Instant;
@@ -141,7 +142,7 @@ public final class ClassificationTelemetryRepository {
   }
 
   /** データベースへの接続元。 */
-  private final DataSource ds;
+  private final SqlConnectionFactory connections;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
   private final ObjectMapper json = new ObjectMapper().registerModule(new JavaTimeModule());
@@ -151,13 +152,13 @@ public final class ClassificationTelemetryRepository {
 
   /** 指定された値や利用先を使って、ClassificationTelemetryRepositoryを初期化する。 */
   public ClassificationTelemetryRepository(DataSource ds) {
-    this.ds = ds;
+    connections = ds::getConnection;
   }
 
   /** 作業状況の把握に関する初期化を処理する。 */
   private void initialize() throws SQLException {
     if (initialized) return;
-    try (var c = ds.getConnection();
+    try (var c = connections.open();
         var s = c.createStatement()) {
       s.execute(
           "CREATE TABLE IF NOT EXISTS activity_classification_telemetry (id TEXT PRIMARY KEY, at INTEGER NOT NULL, unknown_key TEXT, uncertain_key TEXT, payload TEXT NOT NULL)");
@@ -186,7 +187,7 @@ public final class ClassificationTelemetryRepository {
                 && settings.getEntertainmentRegistry().isEnabled()
             ? key(row, true)
             : null;
-    try (var c = ds.getConnection()) {
+    try (var c = connections.open()) {
       c.setAutoCommit(false);
       try {
         var dirty = new LinkedHashMap<String, Set<String>>();
@@ -322,7 +323,7 @@ public final class ClassificationTelemetryRepository {
   /** 作業状況の把握で用いる行一覧を返す。 */
   public synchronized List<Row> rows(Instant since) throws SQLException, JsonProcessingException {
     initialize();
-    try (var c = ds.getConnection();
+    try (var c = connections.open();
         var s =
             c.prepareStatement(
                 "SELECT payload FROM activity_classification_telemetry WHERE at>=? ORDER BY at,id")) {
@@ -342,7 +343,7 @@ public final class ClassificationTelemetryRepository {
       throw new IllegalArgumentException("Unknown registry");
     initialize();
     var result = new ArrayList<Candidate>();
-    try (var c = ds.getConnection();
+    try (var c = connections.open();
         var s =
             c.prepareStatement(
                 "SELECT payload FROM activity_classification_candidates WHERE kind=? AND last_at>=?")) {

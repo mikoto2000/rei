@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.skills;
 
 import dev.mikoto2000.rei.core.chat.RunCancellation;
+import dev.mikoto2000.rei.jdbc.SqlConnectionFactory;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -13,7 +14,6 @@ import java.util.HexFormat;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import javax.sql.DataSource;
 
 /**
@@ -24,11 +24,11 @@ import javax.sql.DataSource;
  */
 public final class SqliteSkillEmbeddingIndex implements SkillEmbeddingIndex {
   /** データ。 */
-  private final DataSource data;
+  private final SqlConnectionFactory connections;
 
   /** 指定された値や利用先を使って、SqliteSkillEmbeddingIndexを初期化する。 */
   public SqliteSkillEmbeddingIndex(DataSource data) {
-    this.data = Objects.requireNonNull(data);
+    connections = data::getConnection;
   }
 
   /** 保存された情報を読み込み、現在の処理で使える形にする。 */
@@ -45,7 +45,7 @@ public final class SqliteSkillEmbeddingIndex implements SkillEmbeddingIndex {
     }
     if (requested.isEmpty()) return Map.of();
     RunCancellation.propagate(null);
-    try (var connection = data.getConnection()) {
+    try (var connection = connections.open()) {
       initialize(connection);
       try (var statement =
           connection.prepareStatement(
@@ -116,7 +116,7 @@ public final class SqliteSkillEmbeddingIndex implements SkillEmbeddingIndex {
               hash(blob)));
     }
     RunCancellation.propagate(null);
-    try (var connection = data.getConnection()) {
+    try (var connection = connections.open()) {
       initialize(connection);
       connection.setAutoCommit(false);
       try {
@@ -157,7 +157,7 @@ public final class SqliteSkillEmbeddingIndex implements SkillEmbeddingIndex {
   public void invalidate(String namespace) {
     validateNamespace(namespace);
     RunCancellation.propagate(null);
-    try (var connection = data.getConnection()) {
+    try (var connection = connections.open()) {
       initialize(connection);
       try (var statement =
           connection.prepareStatement("DELETE FROM skill_embedding_index WHERE namespace=?")) {
