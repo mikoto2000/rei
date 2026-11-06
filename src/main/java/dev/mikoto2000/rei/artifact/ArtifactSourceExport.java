@@ -43,9 +43,17 @@ public final class ArtifactSourceExport {
   private final SessionLifecycle sessions;
 
   /** 変更一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Operates on the shared change proposal lifecycle and its receipts.")
   private final TextChangeSetService changes;
 
   /** 論文一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Exports the current contents of the shared paper library.")
   private final PaperLibraryService papers;
 
   /** 指定された値や利用先を使って、ArtifactSourceExportを初期化する。 */

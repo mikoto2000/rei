@@ -93,6 +93,10 @@ public final class ReviewTools {
       implements dev.mikoto2000.rei.tooldelivery.ToolResultMetadata.ReceiptValue {}
 
   /** 記録台帳。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads and records transitions in the shared review ledger.")
   private final ReviewCoverageLedger ledger;
 
   /** 元の。 */

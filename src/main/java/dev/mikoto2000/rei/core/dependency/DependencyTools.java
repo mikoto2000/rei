@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.core.dependency;
 
 import dev.mikoto2000.rei.core.chat.AgentRunScope;
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.List;
 import java.util.Locale;
@@ -20,6 +22,10 @@ public class DependencyTools {
   private final DependencyObservationService service;
 
   /** 取得元。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads dependency baselines through the configured source probe.")
   private final DependencySourceProbe source;
 
   /** HTTP通信Awaiter。 */

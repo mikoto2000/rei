@@ -90,6 +90,10 @@ public final class SubAgentDagService {
   private final SubAgentRegistry registry;
 
   /** 並列。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Delegates child runs through the shared subagent coordinator.")
   private final ParallelSubAgentDelegator parallel;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */

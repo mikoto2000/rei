@@ -70,6 +70,10 @@ public final class McpTools {
   private final RunService runs;
 
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Operates on the shared request, run and checkpoint state.")
   private final McpRequestStore store;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */

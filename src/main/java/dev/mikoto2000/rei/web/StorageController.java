@@ -30,6 +30,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/storage")
 public final class StorageController {
   /** 保存。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Runs storage operations against the shared storage command and its services.")
   private final StorageCommand storage;
 
   /** プロジェクト一覧。 */

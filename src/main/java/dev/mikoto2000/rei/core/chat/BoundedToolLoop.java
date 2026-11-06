@@ -4,6 +4,8 @@ import com.openai.errors.OpenAIIoException;
 import com.openai.errors.OpenAIRetryableException;
 import com.openai.errors.OpenAIServiceException;
 import dev.mikoto2000.rei.llm.OutputLimitDetector;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -34,6 +36,10 @@ public final class BoundedToolLoop {
   private final ToolLoopSupport tools = new ToolLoopSupport();
 
   /** 文脈の組み立て。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the configured assembler for consistent context budgeting and tool result delivery.")
   private final dev.mikoto2000.rei.core.contextbudget.ContextAssembler assembler;
 
   /** 会話の実行を利用するため、指定を補って共通の初期化へ引き渡す。 */

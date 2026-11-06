@@ -48,6 +48,10 @@ public final class BehaviorService {
   private final ActivityStore timeline;
 
   /** 状態の保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads and writes the same behavior state and event history.")
   private final BehaviorStateStore persistence;
 
   /** 評価の判断。 */

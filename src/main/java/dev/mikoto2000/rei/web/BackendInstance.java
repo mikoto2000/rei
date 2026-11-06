@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.web;
 
 import dev.mikoto2000.rei.launcher.BackendEndpoint;
 import dev.mikoto2000.rei.launcher.BackendEndpointStore;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.util.UUID;
 
@@ -12,6 +14,10 @@ import java.util.UUID;
  */
 public final class BackendInstance implements AutoCloseable {
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Publishes and removes the endpoint through the same registration store.")
   private final BackendEndpointStore store;
 
   /** 起動単位の識別子識別子。 */

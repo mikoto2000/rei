@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Clock;
 
 /**
@@ -12,6 +14,10 @@ public final class PeriodCoachingService {
   private final ActivityTimeline timeline;
 
   /** 保存先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads and updates the same durable coaching settings and reservations.")
   private final PeriodCoachingStore store;
 
   /** 期限や記録日時の判定に使う時刻の取得元。 */

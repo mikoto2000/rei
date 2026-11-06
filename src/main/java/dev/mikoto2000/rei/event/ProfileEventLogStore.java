@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.event;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -37,6 +39,10 @@ public class ProfileEventLogStore implements AgentEventListener {
   private final Object writeLock = new Object();
 
   /** 管理対象。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads and appends events through the same managed log.")
   private dev.mikoto2000.rei.storage.ManagedActivityLog managed;
 
   /** 実行状況の通知で使用する管理対象作業状況ログを設定する。 */

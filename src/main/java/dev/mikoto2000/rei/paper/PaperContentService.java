@@ -23,6 +23,10 @@ public class PaperContentService {
   private final PaperHttpClient http;
 
   /** 論文から本文を抽出する窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Extracts content using the configured paper extraction service.")
   private final PaperExtractionService extraction;
 
   /** 設定。 */

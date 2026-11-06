@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.memory.service;
 
 import dev.mikoto2000.rei.core.chat.AgentRunContext;
 import dev.mikoto2000.rei.core.chat.RunCancellation;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.ArrayList;
 import java.util.Map;
 import org.springframework.ai.chat.client.ChatClientRequest;
@@ -23,6 +25,10 @@ import org.springframework.stereotype.Component;
 @Component
 public class MemoryContextAdvisor implements BaseAdvisor {
   /** 関連する記憶を検索する窓口。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Retrieves current memories through the configured retriever.")
   private final MemoryRetriever retriever;
 
   /** 指定された値や利用先を使って、MemoryContextAdvisorを初期化する。 */

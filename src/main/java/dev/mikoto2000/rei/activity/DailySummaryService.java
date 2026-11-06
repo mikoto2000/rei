@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -12,6 +14,10 @@ public final class DailySummaryService {
   private final Supplier<SummaryThemeConfiguration> configuration;
 
   /** 書き込み先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Retains the configured writer callback used to generate each summary.")
   private final DailySummaryWriter writer;
 
   /** 処理状況と問題の調査に使うログの出力先。 */

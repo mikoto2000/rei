@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.core.configuration;
 
 import dev.mikoto2000.rei.config.ExternalConfigFileService;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -20,6 +22,10 @@ public class SystemPromptService {
   private final ResourceLoader resourceLoader;
 
   /** 外部設定ファイルサービス。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Resolves or initializes the application's current external configuration files.")
   private final ExternalConfigFileService externalConfigFileService;
 
   /** 指定された値や利用先を使って、SystemPromptServiceを初期化する。 */

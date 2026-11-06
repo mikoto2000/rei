@@ -57,6 +57,10 @@ public class BlueskyReplyTextGenerator {
   private final ModelHolderService modelHolderService;
 
   /** モデル提供元。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the application model provider for current chat options.")
   private final LlmModelProvider modelProvider;
 
   /** この機能の動作設定。 */

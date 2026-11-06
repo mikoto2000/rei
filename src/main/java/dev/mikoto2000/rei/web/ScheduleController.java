@@ -34,6 +34,10 @@ public class ScheduleController {
   private final PersistentAgentScheduler repository;
 
   /** 実行先の振り分け。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reconciles durable schedules through the shared dispatcher.")
   private final AgentScheduleDispatcher dispatcher;
 
   /** 指定された値や利用先を使って、ScheduleControllerを初期化する。 */
