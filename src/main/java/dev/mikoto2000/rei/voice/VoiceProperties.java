@@ -17,10 +17,10 @@ public class VoiceProperties {
   private String deviceId;
 
   /** 確認。 */
-  private boolean confirmation;
+  private volatile boolean confirmation;
 
   /** 自動開始。 */
-  private boolean autoStart;
+  private volatile boolean autoStart;
 
   /** 設定。 */
   private volatile VoiceSettings settings = VoiceSettings.defaults();

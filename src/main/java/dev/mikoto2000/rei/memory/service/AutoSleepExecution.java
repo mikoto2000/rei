@@ -34,7 +34,7 @@ public final class AutoSleepExecution implements ModelCallBudget {
   private volatile boolean expired;
 
   /** 進捗保存済み。 */
-  private boolean progressSaved;
+  private volatile boolean progressSaved;
 
   /** 長期記憶の保存と検索に関する進捗保存済みを処理する。 */
   public void progressSaved() {
