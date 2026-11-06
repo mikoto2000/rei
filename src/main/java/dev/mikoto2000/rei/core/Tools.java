@@ -1271,12 +1271,6 @@ public class Tools {
     return backgroundProcessManager.kill(processId);
   }
 
-  /** 共通の実行基盤で用いるrollDiceを返す。 */
-  int rollDice(int x) {
-    IO.println(String.format("%d 面サイコロをひとつ振るよ", x));
-    return (int) (Math.random() * x) + 1;
-  }
-
   /** 共通の実行基盤で用いる今日を返す。 */
   @Tool(name = "today", description = "今日の日付を yyyy-MM-dd 形式で取得します")
   String today() {
