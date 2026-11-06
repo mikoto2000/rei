@@ -155,12 +155,19 @@ class WriteDiffResultTest {
         IllegalArgumentException.class,
         () -> service.diffPage(owner, proposal.id(), "wrong-sha", 0, 256));
 
-    org.springframework.jdbc.core.simple.JdbcClient.create(source)
-        .sql("UPDATE text_document_change_sets SET payload='{}' WHERE id=?")
+    var db = org.springframework.jdbc.core.simple.JdbcClient.create(source);
+    db.sql("UPDATE text_document_change_sets SET payload='{}' WHERE id=?")
         .param(proposal.id())
         .update();
     assertThrows(
         IllegalStateException.class,
+        () -> service.diffPage(owner, proposal.id(), proposal.proposalSha256(), 0, 256));
+
+    db.sql("UPDATE text_document_change_sets SET session=? WHERE id=?")
+        .params(otherSession.conversationId(), proposal.id())
+        .update();
+    assertThrows(
+        IllegalArgumentException.class,
         () -> service.diffPage(owner, proposal.id(), proposal.proposalSha256(), 0, 256));
   }
 }

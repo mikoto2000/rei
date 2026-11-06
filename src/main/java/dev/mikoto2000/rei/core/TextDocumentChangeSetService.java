@@ -29,6 +29,8 @@ import org.springframework.stereotype.Service;
 public final class TextDocumentChangeSetService {
   private final TextDiff.PageCache diffPages = new TextDiff.PageCache();
 
+  private final TextChangeSetRepository repository;
+
   /**
    * 共通の実行基盤で受け渡す操作を表す。
    *
@@ -229,6 +231,7 @@ public final class TextDocumentChangeSetService {
   /** 指定された値や利用先を使って、TextDocumentChangeSetServiceを初期化する。 */
   public TextDocumentChangeSetService(
       TextChangeSetRepository repository, Clock clock, TextDocumentTransaction.Move move) {
+    this.repository = repository;
     db = repository.documentsDb();
     this.clock = clock;
     this.move = move;
@@ -586,9 +589,13 @@ public final class TextDocumentChangeSetService {
   /** 共通の実行基盤で用いる自分が所有する対象を返す。 */
   private Row owned(AgentRunContext owner, String id) throws IOException {
     Path root = owner(owner, false);
+    requireId(id);
+    return ownedRow(owner.projectId(), root.toString(), owner.conversationId(), id);
+  }
+
+  private static void requireId(String id) {
     if (id == null || !id.matches("[a-f0-9-]{36}"))
       throw new IllegalArgumentException("Exact document ID required");
-    return ownedRow(owner.projectId(), root.toString(), owner.conversationId(), id);
   }
 
   /** 共通の実行基盤で用いる自分が所有する対象行を返す。 */
@@ -642,9 +649,16 @@ public final class TextDocumentChangeSetService {
   /** 共通の実行基盤で用いる表示内容を返す。 */
   public TextDiff.Page diffPage(
       AgentRunContext owner, String id, String sha, int offset, int maxBytes) throws IOException {
-    var row = owned(owner, id);
+    var root = owner(owner, false);
+    requireId(id);
+    var scope =
+        new TextDiff.Scope(owner.projectId(), root.toString(), owner.conversationId(), id, sha);
+    var cached =
+        diffPages.verifiedPage(scope, offset, maxBytes, () -> repository.verifyDocumentDiff(scope));
+    if (cached.isPresent()) return cached.get();
+    var row = ownedRow(scope.project(), scope.root(), scope.session(), id);
     exact(row, sha);
-    return diffPages.preview(diffScope(row), row.saved().changes(), offset, maxBytes).page();
+    return diffPages.preview(scope, row.saved().changes(), offset, maxBytes).page();
   }
 
   private static TextDiff.Scope diffScope(Row row) {

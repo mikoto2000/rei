@@ -1,10 +1,16 @@
 package dev.mikoto2000.rei.core;
 
+import java.sql.SQLException;
 import java.time.Instant;
+import java.util.Objects;
 import javax.sql.DataSource;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.jdbc.core.ConnectionCallback;
+import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.simple.JdbcClient;
 import org.springframework.stereotype.Repository;
+import org.sqlite.Function;
+import org.sqlite.SQLiteConnection;
 
 /**
  * テキスト変更集合を保存・検索するための窓口。
@@ -44,12 +50,15 @@ public class TextChangeSetRepository {
   /** データベースへのアクセス。 */
   private final JdbcClient db;
 
+  private final JdbcTemplate jdbc;
+
   /** 利用権一覧。 */
   private final PersistedReceiptLease leases;
 
   /** 指定された値や利用先を使って、TextChangeSetRepositoryを初期化する。 */
   public TextChangeSetRepository(@Qualifier("memoryConsolidationDataSource") DataSource source) {
-    db = JdbcClient.create(source);
+    jdbc = new JdbcTemplate(source);
+    db = JdbcClient.create(jdbc);
     db.sql(
             "CREATE TABLE IF NOT EXISTS text_change_sets(id TEXT PRIMARY KEY,project_id TEXT NOT NULL,root TEXT NOT NULL,path TEXT NOT NULL,baseline TEXT NOT NULL,proposed TEXT NOT NULL,baseline_hash TEXT NOT NULL,proposed_hash TEXT NOT NULL,proposal_hash TEXT NOT NULL,status TEXT NOT NULL,created_at TEXT NOT NULL)")
         .update();
@@ -68,6 +77,49 @@ public class TextChangeSetRepository {
   /** 共通の実行基盤で用いる保存済み文書データベースを返す。 */
   org.springframework.jdbc.core.simple.JdbcClient documentsDb() {
     return db;
+  }
+
+  /** Verify the current payload in the same scoped SELECT without returning its JSON. */
+  void verifyDocumentDiff(TextDiff.Scope scope) {
+    jdbc.execute(
+        (ConnectionCallback<Void>)
+            connection -> {
+              var sqlite = connection.unwrap(SQLiteConnection.class);
+              String function = "rei_document_payload_sha256";
+              Function.create(
+                  sqlite,
+                  function,
+                  new Function() {
+                    @Override
+                    protected void xFunc() throws SQLException {
+                      result(TextDocumentTransaction.hash(value_text(0)));
+                    }
+                  },
+                  1,
+                  Function.FLAG_DETERMINISTIC);
+              try (var query =
+                  connection.prepareStatement(
+                      "SELECT sha, rei_document_payload_sha256(payload) FROM text_document_change_sets WHERE id=? AND project=? AND root=? AND session=?")) {
+                query.setString(1, scope.id());
+                query.setString(2, scope.project());
+                query.setString(3, scope.root());
+                query.setString(4, scope.session());
+                try (var row = query.executeQuery()) {
+                  if (!row.next())
+                    throw new IllegalArgumentException(
+                        "Document set not found in this Project/root/session");
+                  String sha = row.getString(1);
+                  if (!Objects.equals(sha, row.getString(2)))
+                    throw new IllegalStateException("Document proposal payload changed");
+                  if (!Objects.equals(scope.sha(), sha))
+                    throw new IllegalArgumentException(
+                        "Exact reviewed whole Change Set SHA required");
+                }
+              } finally {
+                Function.destroy(sqlite, function, 1);
+              }
+              return null;
+            });
   }
 
   /** 共通の実行基盤に関する保護診断済みを処理する。 */
