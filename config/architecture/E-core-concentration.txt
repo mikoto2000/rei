@@ -548,7 +548,6 @@ business: dev.mikoto2000.rei.paper.PaperCommandExecutor -> dev.mikoto2000.rei.co
 business: dev.mikoto2000.rei.paper.PaperCommandExecutor -> dev.mikoto2000.rei.core.chat.AgentRunContext$RequestSource
 business: dev.mikoto2000.rei.paper.PaperCommandExecutor -> dev.mikoto2000.rei.core.chat.RunCancellation
 business: dev.mikoto2000.rei.paper.PaperCommandExecutor -> dev.mikoto2000.rei.core.command.UserInputParser
-business: dev.mikoto2000.rei.paper.PaperCommandExecutor -> dev.mikoto2000.rei.core.stagnation.RunExecutionContext
 business: dev.mikoto2000.rei.paper.PaperOperation -> dev.mikoto2000.rei.core.chat.AgentRunContext
 business: dev.mikoto2000.rei.paper.PaperOperation -> dev.mikoto2000.rei.core.chat.AgentRunScope
 business: dev.mikoto2000.rei.paper.PaperOperation -> dev.mikoto2000.rei.core.chat.RunCancellation
