@@ -406,17 +406,21 @@ public class SubAgentCommand implements Callable<Integer> {
               throw new IllegalArgumentException("id: invalid path");
             Files.writeString(
                 target,
-                """
-          id: %s
-          name: %s
+                "id: "
+                    + id
+                    + "\nname: "
+                    + id
+                    + """
+
           description: TODO
           systemPrompt: |
             TODO
           tools: []
           maxSteps: 10
-          timeout: %s
+          timeout:\s\
           """
-                    .formatted(id, id, id.equals("reviewer") ? "30m" : "120s"),
+                    + (id.equals("reviewer") ? "30m" : "120s")
+                    + "\n",
                 StandardOpenOption.CREATE_NEW);
             command.out("Created: " + target + " (edit, validate, then reload)");
           });

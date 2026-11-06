@@ -260,22 +260,27 @@ public class SearchCommand implements Runnable {
         - Web 由来の記述には、可能な範囲で URL を文中または末尾に示してください。
 
         質問:
-        %s
+        """
+        + query
+        + """
+
 
         ベクトルストア検索結果:
-        %s
+        """
+        + formatVectorResults(vectorResults)
+        + """
+
 
         Web 一次情報:
-        %s
+        """
+        + formatWebResults(webContext.primaryResults())
+        + """
+
 
         Web 補足情報:
-        %s
         """
-        .formatted(
-            query,
-            formatVectorResults(vectorResults),
-            formatWebResults(webContext.primaryResults()),
-            formatWebResults(webContext.secondaryResults()));
+        + formatWebResults(webContext.secondaryResults())
+        + "\n";
   }
 
   /** 内容を表示・参照しやすくするため、ベクトル結果一覧を整形する。 */

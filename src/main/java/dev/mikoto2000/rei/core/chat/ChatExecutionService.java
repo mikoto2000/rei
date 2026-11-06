@@ -1474,15 +1474,21 @@ public class ChatExecutionService {
     元のユーザー要求に対する最終回答を作成してください。
 
     元のユーザー要求:
-    %s
+    """
+        + originalUserRequest
+        + """
+
 
     統合ゴール:
-    %s
+    """
+        + finalGoal
+        + """
+
 
     サブゴール結果:
-    %s
     """
-        .formatted(originalUserRequest, finalGoal, subgoalResults);
+        + subgoalResults
+        + "\n";
   }
 
   /** 利用者が要点を把握できるよう、対象ログを要約する。 */

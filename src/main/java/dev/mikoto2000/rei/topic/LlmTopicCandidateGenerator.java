@@ -81,24 +81,30 @@ public class LlmTopicCandidateGenerator implements TopicCandidateGenerator {
 
         Output must be a JSON object only:
         {"candidates":[{"topic":"スクリプトの実行・テスト状況を確認する","reason":"最近の会話では実行結果がまだ確認できていないため","type":"unfinished_work","source":"working_set","priority":0.8,"freshness":0.9,"usefulness":0.8,"intrusiveness":0.2,"confidence":0.9}]}
-        Max candidates: %d
-        Model hint: %s
+        Max candidates:\s\
+        """
+        + String.format("%d", properties.getMaxCandidates())
+        + "\nModel hint: "
+        + model
+        + """
+
 
         Recent conversation:
-        %s
+        """
+        + renderConversation(context)
+        + """
+
 
         Working Set:
-        %s
+        """
+        + renderWorkingSet(context)
+        + """
+
 
         Recent topics to avoid:
-        %s
         """
-        .formatted(
-            properties.getMaxCandidates(),
-            model,
-            renderConversation(context),
-            renderWorkingSet(context),
-            String.join("\n", context.recentTopics()));
+        + String.join("\n", context.recentTopics())
+        + "\n";
   }
 
   /** 利用者が内容を確認できるよう、会話を表示する。 */

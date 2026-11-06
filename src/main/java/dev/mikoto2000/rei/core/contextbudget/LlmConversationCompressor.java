@@ -129,9 +129,10 @@ public class LlmConversationCompressor implements ConversationCompressor {
         Preserve exact API/class/method/file/branch names, IDs, URLs, error codes, numbers, implemented versus
         unimplemented status, and concrete facts likely needed next. Keep explicit user decisions and requirements.
         Omit greetings, repetition, resolved trial-and-error and redundant logs. Do not invent facts or completion.
-        Working Set is managed separately: do not replace or reinterpret it. Stay within %d output tokens.
-          """
-                          .formatted(maxTokens)),
+        Working Set is managed separately: do not replace or reinterpret it. Stay within\s\
+        """
+                          + String.format("%d", maxTokens)
+                          + " output tokens.\n"),
                   new UserMessage(data.toString())),
               options);
       // The parent subscription runs this on an interruptible worker. Disposing it interrupts

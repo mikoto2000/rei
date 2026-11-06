@@ -62,16 +62,18 @@ public class StagnationAdvisor implements BaseAdvisor {
 
         現在の方針では進展していません。
         同じ操作を繰り返さず、原因を見直し、別の手順へ再計画してください。
-        No-progress iterations: %d. Stagnation replan: %d/%d.
-        Recent attempted actions (tool name and argument digest): %s
-        Last failure: %s
+        No-progress iterations:\s\
         """
-        .formatted(
-            stagnationDetector.stagnationCount(),
-            stagnationDetector.replanCount() + 1,
-            stagnationDetector.maxReplans(),
-            recentActions,
-            lastError);
+        + String.format("%d", stagnationDetector.stagnationCount())
+        + ". Stagnation replan: "
+        + String.format("%d", stagnationDetector.replanCount() + 1)
+        + "/"
+        + String.format("%d", stagnationDetector.maxReplans())
+        + ".\nRecent attempted actions (tool name and argument digest): "
+        + recentActions
+        + "\nLast failure: "
+        + lastError
+        + "\n";
   }
 
   /** 実行の停滞への対処の実行結果を受け取り、後続の処理へ反映する。 */

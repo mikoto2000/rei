@@ -126,20 +126,21 @@ public class SearchTools {
     IO.println(String.format("知識検索を実行するよ。vectorTopK=%s、webTopK=%s", vectorTopK, webTopK));
     SearchKnowledgeResult result =
         searchKnowledgeService.search(query, vectorTopK, webTopK, threshold, source);
-    return """
-        質問:
-        %s
+    return "質問:\n"
+        + result.query()
+        + """
+
 
         ベクトルストア検索結果:
-        %s
+        """
+        + formatVectorResults(result.vectorResults())
+        + """
+
 
         Web 一次情報 / Web 補足情報（検索順位順）:
-        %s
         """
-        .formatted(
-            result.query(),
-            formatVectorResults(result.vectorResults()),
-            formatWebResults(result.webContext()));
+        + formatWebResults(result.webContext())
+        + "\n";
   }
 
   /** 内容を表示・参照しやすくするため、ベクトル結果一覧を整形する。 */
