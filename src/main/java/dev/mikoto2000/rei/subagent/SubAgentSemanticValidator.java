@@ -101,10 +101,11 @@ final class SubAgentSemanticValidator {
           // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
           if (input.length() > 131072)
             return Mono.error(invalid("Semantic input exceeds bounded limit"));
-          ToolLoopSupport.requireNoRawTools(original.getOptions());
+          if (!(original.getOptions() instanceof ToolCallingChatOptions originalOptions))
+            return Mono.error(invalid("Missing tool options for semantic validation"));
+          ToolLoopSupport.requireNoRawTools(originalOptions);
           var builder =
-              ((ToolCallingChatOptions) original.getOptions())
-                  .mutate()
+              originalOptions.mutate()
                   .toolCallbacks(List.of())
                   // Builders merge maps; discard parent context before assigning validator
                   // ownership.

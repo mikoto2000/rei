@@ -382,7 +382,8 @@ public class VectorDocumentService {
 
   /** 検索対象文書の管理で用いる文書評価値を返す。 */
   private double documentScore(Document document) {
-    return document.getScore() == null ? Double.NEGATIVE_INFINITY : document.getScore();
+    var score = document.getScore();
+    return score == null ? Double.NEGATIVE_INFINITY : score;
   }
 
   /** 後続の処理が参照できるよう、文字列表現として扱う。 */

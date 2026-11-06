@@ -45,8 +45,8 @@ public final class RunAwareToolCallingAdvisor extends ToolCallingAdvisor {
 
   /** 用途に応じたモデル利用において、アプリケーションOwnsツール一覧に該当するか判定する。 */
   private boolean applicationOwnsTools(ChatClientRequest request) {
-    return request.prompt().getOptions() instanceof ToolCallingChatOptions options
-        && options.getToolContext() != null
-        && options.getToolContext().get(RunExecutionContext.KEY) instanceof RunExecutionContext;
+    if (!(request.prompt().getOptions() instanceof ToolCallingChatOptions options)) return false;
+    var values = options.getToolContext();
+    return values != null && values.get(RunExecutionContext.KEY) instanceof RunExecutionContext;
   }
 }

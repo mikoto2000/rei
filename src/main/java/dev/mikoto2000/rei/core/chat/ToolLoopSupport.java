@@ -181,8 +181,11 @@ public final class ToolLoopSupport {
       Prompt prompt,
       ChatResponse response,
       dev.mikoto2000.rei.core.stagnation.RunExecutionContext context) {
+    var generation = response.getResult();
+    var output = generation == null ? null : generation.getOutput();
+    if (output == null) throw new IllegalArgumentException("Missing generation for tool calls");
     if (!context.hasApprovalContinuation()
-        && response.getResult().getOutput().getToolCalls().stream()
+        && output.getToolCalls().stream()
             .noneMatch(
                 call ->
                     context.supportsArgumentCorrection(call.name(), schema(prompt, call.name()))))
@@ -190,7 +193,6 @@ public final class ToolLoopSupport {
     if (response.getResults().size() != 1)
       throw new IllegalArgumentException(
           "Approval continuation requires a single selected generation");
-    var output = response.getResult().getOutput();
     return executePending(
         prompt,
         new RunContinuation.PendingTools(

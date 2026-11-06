@@ -140,9 +140,11 @@ public class SqlitePaperRepository implements PaperRepository {
               }
             }
             Paper p = merge(old, incoming, d, a);
-            if (jdbc.queryForObject(
-                    "SELECT count(*) FROM papers WHERE id=? AND removed=2", Integer.class, p.id())
-                > 0)
+            Integer pendingDeletion = jdbc.queryForObject(
+                "SELECT count(*) FROM papers WHERE id=? AND removed=2", Integer.class, p.id());
+            if (pendingDeletion == null)
+              throw new IllegalStateException("Missing paper deletion count");
+            if (pendingDeletion > 0)
               throw new PaperException(
                   PaperException.Code.LIBRARY_STORAGE_FAILED, "完全削除が保留中です。先に purge を再実行してください");
             String search =

@@ -274,20 +274,20 @@ public final class BoundedToolLoop {
                       checkActive.run();
                       if (retries.reserve()) {
                         var delay = Mono.delay(java.time.Duration.ofMillis(100));
-                        if (trace != null
-                            && prompt.getOptions() instanceof ToolCallingChatOptions options
-                            && options.getToolContext() != null) {
+                        var values =
+                            trace != null && prompt.getOptions() instanceof ToolCallingChatOptions options
+                                ? options.getToolContext()
+                                : null;
+                        if (trace != null && values != null) {
                           var captured =
-                              options
-                                  .getToolContext()
-                                  .get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY);
+                              values.get(dev.mikoto2000.rei.core.stagnation.RunExecutionContext.KEY);
                           AgentRunContext owner =
                               captured
                                       instanceof
                                       dev.mikoto2000.rei.core.stagnation.RunExecutionContext
                                           execution
                                   ? execution.runContext()
-                                  : options.getToolContext().get(AgentRunContext.class.getName())
+                                  : values.get(AgentRunContext.class.getName())
                                           instanceof AgentRunContext context
                                       ? context
                                       : null;

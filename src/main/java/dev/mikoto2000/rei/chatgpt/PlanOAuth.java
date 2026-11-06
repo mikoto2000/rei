@@ -85,14 +85,18 @@ public final class PlanOAuth {
     public Identity verify(String raw, String client, String nonce) {
       try {
         var jwt = decoder.decode(raw);
-        if (!jwt.getAudience().contains(client)
+        var audience = jwt.getAudience();
+        var subject = jwt.getSubject();
+        var issuedAt = jwt.getIssuedAt();
+        if (audience == null
+            || !audience.contains(client)
             || !Objects.equals(nonce, jwt.getClaimAsString("nonce"))
-            || jwt.getSubject() == null
-            || jwt.getSubject().isBlank()
-            || jwt.getIssuedAt() == null
-            || jwt.getIssuedAt().isAfter(Instant.now().plusSeconds(5))
+            || subject == null
+            || subject.isBlank()
+            || issuedAt == null
+            || issuedAt.isAfter(Instant.now().plusSeconds(5))
             || jwt.getExpiresAt() == null) throw new IllegalArgumentException();
-        return new Identity(jwt.getSubject(), jwt.getClaimAsString("email"));
+        return new Identity(subject, jwt.getClaimAsString("email"));
       } catch (Exception e) {
         throw ChatGptException.of(AUTH_INVALID);
       }

@@ -164,10 +164,7 @@ public final class SqliteVectorStore
   /** 関連文書の検索で用いる語句による検索を返す。 */
   @Override
   public List<Document> lexicalSearch(SearchRequest request) {
-    FilterCriteria criteria =
-        request.hasFilterExpression()
-            ? parseFilter(request.getFilterExpression())
-            : FilterCriteria.empty();
+    FilterCriteria criteria = filterCriteria(request);
     return lexicalOnlySearch(request, criteria, lexicalQueryTerms(request.getQuery()));
   }
 
@@ -178,10 +175,7 @@ public final class SqliteVectorStore
     checkCancellation();
     if (request.getTopK() < 1 || request.getTopK() > 256)
       throw new IllegalArgumentException("BM25 topK must be 1..256");
-    FilterCriteria criteria =
-        request.hasFilterExpression()
-            ? parseFilter(request.getFilterExpression())
-            : FilterCriteria.empty();
+    FilterCriteria criteria = filterCriteria(request);
     // 扱える量を超える要求を検出し、上限に応じた扱いを選ぶ。
     if (request.getQuery() != null && request.getQuery().length() > 4096)
       throw new IllegalArgumentException("BM25 query limit exceeded");
@@ -256,10 +250,7 @@ public final class SqliteVectorStore
   private List<Document> rankedSearch(SearchRequest request, boolean denseOnly) {
     float[] queryEmbedding =
         normalizeEmbedding(embeddingModel.embed(new Document(request.getQuery())));
-    FilterCriteria criteria =
-        request.hasFilterExpression()
-            ? parseFilter(request.getFilterExpression())
-            : FilterCriteria.empty();
+    FilterCriteria criteria = filterCriteria(request);
     List<String> queryTerms = denseOnly ? List.of() : lexicalQueryTerms(request.getQuery());
     if (isZeroEmbedding(queryEmbedding)) {
       return denseOnly ? List.of() : lexicalOnlySearch(request, criteria, queryTerms);
@@ -555,6 +546,11 @@ public final class SqliteVectorStore
   }
 
   /** 入力を機能内で扱えるよう、絞り込み条件を解釈する。 */
+  private FilterCriteria filterCriteria(SearchRequest request) {
+    var expression = request.getFilterExpression();
+    return expression == null ? FilterCriteria.empty() : parseFilter(expression);
+  }
+
   private FilterCriteria parseFilter(Filter.Expression expression) {
     return switch (expression.type()) {
       case EQ -> eqCriteria(expression);

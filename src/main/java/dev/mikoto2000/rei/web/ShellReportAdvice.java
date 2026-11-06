@@ -72,8 +72,11 @@ public final class ShellReportAdvice implements ResponseBodyAdvice<Object> {
       ServerHttpRequest request,
       ServerHttpResponse response) {
     if (!"true".equals(request.getHeaders().getFirst("X-Rei-Shell-Output"))) return body;
+    var handler = method.getMethod();
+    if (handler == null) return body;
+    String name = handler.getName();
     if (method.getContainingClass() == DependencyController.class
-        && java.util.Set.of("list", "show", "history").contains(method.getMethod().getName())
+        && java.util.Set.of("list", "show", "history").contains(name)
         && dependencyFacts != null) dependencyFacts.flushFacts();
     if (body instanceof Text || body instanceof CheckpointController.Text) return body;
     if (body
@@ -82,7 +85,7 @@ public final class ShellReportAdvice implements ResponseBodyAdvice<Object> {
           dev.mikoto2000.rei.event.CredentialRedactor.redact(result.toString()),
           result.runId(),
           result.sessionId());
-    String name = method.getMethod().getName(), text;
+    String text;
     if (method.getContainingClass() == CheckpointController.class
         && name.equals("save")
         && body instanceof dev.mikoto2000.rei.checkpoint.PersistentCheckpoint state)
