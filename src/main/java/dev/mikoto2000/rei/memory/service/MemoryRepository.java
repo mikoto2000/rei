@@ -40,8 +40,8 @@ public class MemoryRepository {
       @Qualifier("memoryConsolidationDataSource") DataSource source, MemoryService legacy) {
     db = JdbcClient.create(source);
     transactions = new TransactionTemplate(new DataSourceTransactionManager(source));
-    transaction(
-        () -> {
+    transactions.executeWithoutResult(
+        status -> {
           column("memories", "project_id", "TEXT");
           column("memories", "summary", "TEXT");
           column("memories", "importance", "REAL NOT NULL DEFAULT 0.5");
@@ -91,7 +91,6 @@ public class MemoryRepository {
           db.sql(
                   "CREATE TABLE IF NOT EXISTS verified_reflection_memories(project_id TEXT NOT NULL,reflection_id TEXT NOT NULL,goal_id TEXT NOT NULL,session_id TEXT NOT NULL,memory_id TEXT NOT NULL UNIQUE,criteria_sha256 TEXT NOT NULL,verified_at TEXT NOT NULL,PRIMARY KEY(project_id,reflection_id))")
               .update();
-          return null;
         });
   }
 

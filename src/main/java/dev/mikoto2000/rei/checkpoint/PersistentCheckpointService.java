@@ -346,6 +346,10 @@ public class PersistentCheckpointService implements AutoCloseable {
 
   /** 終了時に必要な状態を反映し、処理を完了させる。 */
   public void finish(AgentRunContext context, String status) {
+    finishCheckpoint(context, status);
+  }
+
+  private void finishCheckpoint(AgentRunContext context, String status) {
     var state = active.get(context.runId());
     if (state == null) return;
     try {
@@ -803,7 +807,7 @@ public class PersistentCheckpointService implements AutoCloseable {
     if (event.runId() == null || !active.containsKey(event.runId())) return;
     if (event.type() == AgentEventType.AGENT_RUN_CANCELLED && !executing.contains(event.runId())) {
       var state = active.get(event.runId());
-      finish(
+      finishCheckpoint(
           new AgentRunContext(
               state.runId(), state.sessionId(), Path.of(state.projectRoot()), state.projectId()),
           "CANCELLED");
