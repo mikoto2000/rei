@@ -198,7 +198,7 @@ public final class ClassificationToolkit {
           r.duplicate(),
           r.continuityId(),
           updated);
-    } catch (Exception e) {
+    } catch (RuntimeException e) {
       log.warn("Activity classification diagnostics unavailable");
       return r;
     }

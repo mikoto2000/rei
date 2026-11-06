@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.voice;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.core.StreamReadFeature;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -134,7 +135,7 @@ public final class VoiceCorrectionValidator {
           || Math.abs(text.codePointCount(0, text.length()) - count) > Math.max(4, count / 4))
         return fallback(raw, "excessive_change");
       return new Decision(text, "corrected", false);
-    } catch (Exception invalid) {
+    } catch (JsonProcessingException | RuntimeException invalid) {
       return fallback(raw, "invalid_output");
     }
   }

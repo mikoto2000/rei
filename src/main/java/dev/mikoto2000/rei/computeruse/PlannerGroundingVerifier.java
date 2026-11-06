@@ -108,7 +108,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
     com.fasterxml.jackson.databind.JsonNode element;
     try {
       element = json.readTree(state);
-    } catch (Exception e) {
+    } catch (JsonProcessingException | RuntimeException e) {
       element = json.readTree(WindowsFocusProbe.UNKNOWN);
     }
     if (element == null) element = json.createObjectNode().put("status", "unknown");
@@ -421,7 +421,7 @@ final class PlannerGroundingVerifier implements GroundingVerifier {
         throw new InvalidComputerDecision("Grounding rejected by " + stage);
     } catch (InvalidComputerDecision error) {
       throw error;
-    } catch (Exception error) {
+    } catch (JsonProcessingException | RuntimeException error) {
       throw new InvalidComputerDecision("Malformed " + stage + " verdict");
     }
   }

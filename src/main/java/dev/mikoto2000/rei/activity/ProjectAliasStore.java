@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.activity;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
@@ -87,7 +88,7 @@ public final class ProjectAliasStore implements java.util.function.Supplier<Proj
           Files.exists(file),
           names.aliasCount(),
           current.groups().groups());
-    } catch (Exception error) {
+    } catch (IOException | RuntimeException error) {
       log.warn("Daily summary configuration unavailable; last valid alias/group snapshot retained");
     }
     return current;

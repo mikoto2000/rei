@@ -6,6 +6,7 @@ import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.core.datasource.ReiDataDirectory;
 import dev.mikoto2000.rei.core.project.ProjectStorage;
 import dev.mikoto2000.rei.event.CredentialRedactor;
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
 import java.nio.file.Path;
@@ -152,7 +153,7 @@ public final class VoiceCorrectionContext {
                 safe(item.path("description").asText(""), 160)));
         if (result.size() >= max) break;
       }
-    } catch (Exception ignored) {
+    } catch (IOException | RuntimeException ignored) {
       return List.of();
     } // Fixed diagnostics in the caller; no filenames or contents in logs.
     return List.copyOf(result);
