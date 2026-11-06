@@ -16,6 +16,7 @@ import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HexFormat;
 import java.util.List;
@@ -55,7 +56,16 @@ public final class DocumentRendererService {
    * @param png PNG画像
    * @param rendererIdentity 表示への変換識別情報
    */
-  public record Rendered(int exitCode, boolean parseError, byte[] png, String rendererIdentity) {}
+  public record Rendered(int exitCode, boolean parseError, byte[] png, String rendererIdentity) {
+    public Rendered {
+      png = png == null ? null : png.clone();
+    }
+
+    @Override
+    public byte[] png() {
+      return png == null ? null : png.clone();
+    }
+  }
 
   /** 共通の実行基盤に必要な表示への変換を扱う。 */
   @FunctionalInterface
@@ -90,7 +100,11 @@ public final class DocumentRendererService {
       String outputSha256,
       Artifact artifact,
       Instant createdAt,
-      List<String> warnings) {}
+      List<String> warnings) {
+    public Receipt {
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+    }
+  }
 
   /**
    * 共通の実行基盤で受け渡す行を表す。
@@ -227,16 +241,17 @@ public final class DocumentRendererService {
             || output.rendererIdentity() == null
             || output.rendererIdentity().length() > 256)
           throw new IOException("Invalid renderer identity");
-        boolean valid = output.exitCode() == 0 && !output.parseError() && validPng(output.png());
+        byte[] png = output.png();
+        boolean valid = output.exitCode() == 0 && !output.parseError() && validPng(png);
         Artifact artifact = null;
         var warnings = new ArrayList<String>();
-        String sha = valid ? hash(output.png()) : null;
+        String sha = valid ? hash(png) : null;
         if (valid) {
           if (artifacts == null) warnings.add("ARTIFACT_DELIVERY_DISABLED");
           else
             artifact =
                 artifacts.publish(
-                    owner, "renderer:" + id, "image/png", "diagram.png", output.png());
+                    owner, "renderer:" + id, "image/png", "diagram.png", png);
         }
         return save(
             new Receipt(
@@ -246,7 +261,7 @@ public final class DocumentRendererService {
                 output.rendererIdentity(),
                 output.exitCode(),
                 output.parseError(),
-                valid ? output.png().length : 0,
+                valid ? png.length : 0,
                 sha,
                 artifact,
                 clock.instant(),

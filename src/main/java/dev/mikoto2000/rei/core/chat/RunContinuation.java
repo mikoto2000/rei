@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.core.chat;
 
 import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import dev.mikoto2000.rei.llm.OutputLimitRunBudget;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Set;
 import org.springframework.ai.chat.messages.Message;
@@ -55,6 +57,10 @@ public interface RunContinuation {
       List<Message> messages,
       OutputLimitRunBudget.Snapshot budget,
       PendingTools pendingTools) {
+    public Saved {
+      messages = messages == null ? null : Collections.unmodifiableList(new ArrayList<>(messages));
+    }
+
     /** 会話の実行を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Saved(String request, List<Message> messages, OutputLimitRunBudget.Snapshot budget) {
       this(request, messages, budget, null);

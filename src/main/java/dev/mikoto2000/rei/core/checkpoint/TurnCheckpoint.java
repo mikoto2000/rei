@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.core.checkpoint;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -31,6 +33,21 @@ public record TurnCheckpoint(
     String resumeHint,
     String reason,
     String createdAt) {
+  public TurnCheckpoint {
+    completedSummary =
+        completedSummary == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(completedSummary));
+    pendingSummary =
+        pendingSummary == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(pendingSummary));
+    workingFiles =
+        workingFiles == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(workingFiles));
+  }
+
 
   /** LLM コンテキストに渡す簡潔な表現を組み立てる。 */
   public String renderForPrompt() {

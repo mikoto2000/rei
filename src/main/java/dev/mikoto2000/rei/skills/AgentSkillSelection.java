@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.skills;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -24,6 +26,15 @@ public record AgentSkillSelection(
 
   /** 受け取った情報からAgentSkillSelectionを作成する。 */
   public AgentSkillSelection {
+    explicitSkills =
+        explicitSkills == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(explicitSkills));
+    implicitSkills =
+        implicitSkills == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(implicitSkills));
+    warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
     candidates = candidates == null ? List.of() : List.copyOf(candidates);
   }
 

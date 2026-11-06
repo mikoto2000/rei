@@ -5,6 +5,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.HexFormat;
@@ -124,7 +125,11 @@ public final class OperationalRules {
    * @param rules 規則一覧
    * @param loadedAt 読み込み済みの内容日時
    */
-  public record Snapshot(List<Rule> rules, Instant loadedAt) {}
+  public record Snapshot(List<Rule> rules, Instant loadedAt) {
+    public Snapshot {
+      rules = rules == null ? null : Collections.unmodifiableList(new ArrayList<>(rules));
+    }
+  }
 
   /**
    * 作業状況の把握で受け渡す娯楽を表す。

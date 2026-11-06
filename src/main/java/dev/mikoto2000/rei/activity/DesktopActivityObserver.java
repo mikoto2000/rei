@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.activity;
 
 import dev.mikoto2000.rei.computeruse.CapturedScreen;
+import java.util.ArrayList;
+import java.util.Collections;
 
 /** デスクトップ作業状況の状況を観測し、記録や判断に必要な情報を提供する。 */
 public interface DesktopActivityObserver {
@@ -71,6 +73,14 @@ public interface DesktopActivityObserver {
       java.util.List<ActivityEvidence.VisibleWindow> visibleWindows,
       boolean complete,
       java.util.List<MonitorIdentity> monitors) {
+    public Metadata {
+      visibleWindows =
+          visibleWindows == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(visibleWindows));
+      monitors = monitors == null ? null : Collections.unmodifiableList(new ArrayList<>(monitors));
+    }
+
     /** 作業状況の把握を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Metadata(
         ForegroundWindow foreground,

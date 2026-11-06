@@ -7,6 +7,8 @@ import dev.mikoto2000.rei.externalagent.BeginnerReviewRequest;
 import dev.mikoto2000.rei.externalagent.ExternalAgentCommandRequest;
 import dev.mikoto2000.rei.paper.PaperCommandRequest;
 import java.net.URI;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
@@ -36,7 +38,14 @@ public final class ResearchOperationsController {
    * @param arguments 引数
    */
   public record Arguments(String projectId, String sessionId, List<String> arguments)
-      implements StrictApiRequest {}
+      implements StrictApiRequest {
+    public Arguments {
+      arguments =
+          arguments == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(arguments));
+    }
+  }
 
   /**
    * Web APIによる操作で受け渡すエージェントを表す。

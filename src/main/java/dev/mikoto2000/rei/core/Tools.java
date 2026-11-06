@@ -36,6 +36,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -2036,6 +2037,14 @@ public class Tools {
       boolean truncated,
       ReadFileRequest nextRead,
       int omittedErrors) {
+    public GrepQueryResult {
+      matches = matches == null ? null : Collections.unmodifiableList(new ArrayList<>(matches));
+      fileErrors =
+          fileErrors == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(fileErrors));
+    }
+
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public GrepQueryResult(
         int queryIndex,
@@ -2578,7 +2587,11 @@ public class Tools {
    * @param content 内容
    * @param truncated 省略の有無
    */
-  public record ReadSection(int startLine, int endLine, List<String> content, boolean truncated) {}
+  public record ReadSection(int startLine, int endLine, List<String> content, boolean truncated) {
+    public ReadSection {
+      content = content == null ? null : Collections.unmodifiableList(new ArrayList<>(content));
+    }
+  }
 
   /**
    * 1 ファイルの検索と読み込み結果。
@@ -2892,7 +2905,11 @@ public class Tools {
    * @param files ファイル一覧
    * @param totalLines 合計行一覧
    */
-  public record FileLineCounts(List<FileLineCount> files, long totalLines) {}
+  public record FileLineCounts(List<FileLineCount> files, long totalLines) {
+    public FileLineCounts {
+      files = files == null ? null : Collections.unmodifiableList(new ArrayList<>(files));
+    }
+  }
 
   /** 必要な内容を参照できるよう、複数ファイルを読み取る。 */
   List<ReadFileResult> readMultiFile(

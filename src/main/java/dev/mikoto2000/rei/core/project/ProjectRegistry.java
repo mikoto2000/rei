@@ -8,6 +8,7 @@ import java.nio.file.NoSuchFileException;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -73,7 +74,11 @@ public final class ProjectRegistry {
    *
    * @param projects プロジェクト一覧
    */
-  public record Document(List<Entry> projects) {}
+  public record Document(List<Entry> projects) {
+    public Document {
+      projects = projects == null ? null : Collections.unmodifiableList(new ArrayList<>(projects));
+    }
+  }
 
   /** 指定や設定を照合し、実際に利用する対象を確定する。 */
   public synchronized ProjectContext resolve(Path path) {
