@@ -13,6 +13,7 @@ import dev.mikoto2000.rei.externalagent.CodexProperties;
 import dev.mikoto2000.rei.llm.LlmProperties;
 import dev.mikoto2000.rei.voice.VoiceModelManifest;
 import dev.mikoto2000.rei.voice.VoiceProperties;
+import java.io.IOException;
 import java.net.URI;
 import java.nio.file.Files;
 import java.nio.file.LinkOption;
@@ -347,7 +348,7 @@ public class DoctorService {
   }
 
   /** 実行環境の診断で用いるまとまりを返す。 */
-  private DoctorResult bundle(boolean details) throws Exception {
+  private DoctorResult bundle(boolean details) throws IOException {
     if (!present(voice.getBundleDirectory()))
       return configured(
           "voice.bundle",

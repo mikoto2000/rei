@@ -22,7 +22,7 @@ import java.util.UUID;
  */
 final class ReferenceMigration {
   /** 指定された内容を、現在の対象へ反映する。 */
-  static void apply(Connection db, Path root) throws Exception {
+  static void apply(Connection db, Path root) throws IOException, SQLException, NoSuchAlgorithmException {
     try (var sql = db.createStatement()) {
       sql.execute(
           "CREATE TABLE stored_objects(id TEXT PRIMARY KEY,kind TEXT NOT NULL,scope TEXT NOT NULL,conversation_key TEXT,run_id TEXT,relative_path TEXT NOT NULL UNIQUE,size INTEGER NOT NULL,sha256 TEXT NOT NULL,created TEXT,origin_verified INTEGER NOT NULL,status TEXT NOT NULL DEFAULT 'AVAILABLE',pinned INTEGER NOT NULL DEFAULT 0,legal_hold INTEGER NOT NULL DEFAULT 0,revision INTEGER NOT NULL DEFAULT 1)");
@@ -110,7 +110,7 @@ final class ReferenceMigration {
 
   /** データ保存の共通処理に関する取り込み元のを処理する。 */
   private static void importRaw(Connection db, Path root, Path directory, String scope)
-      throws Exception {
+      throws IOException {
     StorageBackup.requireSafePath(directory);
     if (Files.notExists(directory)) return;
     final long[] count = {0};

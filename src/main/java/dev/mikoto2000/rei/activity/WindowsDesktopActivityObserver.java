@@ -6,6 +6,7 @@ import dev.mikoto2000.rei.computeruse.DisplayCapture;
 import dev.mikoto2000.rei.computeruse.RobotScreenCapture;
 import dev.mikoto2000.rei.computeruse.ScreenCapture;
 import dev.mikoto2000.rei.computeruse.ScreenGeometry;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -128,7 +129,7 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
   }
 
   /** 作業状況の把握で用いる付随情報を返す。 */
-  private Metadata readMetadata() throws Exception {
+  private Metadata readMetadata() throws IOException, InterruptedException {
     var node = probe("metadata.ps1", 1048576);
     if (node == null) return null;
     var mapper = new com.fasterxml.jackson.databind.ObjectMapper();
@@ -138,7 +139,7 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
   }
 
   /** 作業状況の把握で用いる前面を返す。 */
-  private ForegroundWindow readForeground() throws Exception {
+  private ForegroundWindow readForeground() throws IOException, InterruptedException {
     var node = probe("foreground.ps1", 32768);
     if (node == null
         || !node.path("processName").isTextual()
@@ -151,7 +152,7 @@ public final class WindowsDesktopActivityObserver implements DesktopActivityObse
 
   /** 作業状況の把握で用いる利用可否の確認を返す。 */
   private com.fasterxml.jackson.databind.JsonNode probe(String resource, long maxBytes)
-      throws Exception {
+      throws IOException, InterruptedException {
     if (!System.getProperty("os.name", "").startsWith("Windows")) return null;
     String script;
     try (var in = getClass().getResourceAsStream("/activity/" + resource)) {

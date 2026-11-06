@@ -10,6 +10,7 @@ import dev.mikoto2000.rei.search.SearchKnowledgeResult;
 import dev.mikoto2000.rei.search.SearchKnowledgeService;
 import dev.mikoto2000.rei.skills.AgentSkill;
 import dev.mikoto2000.rei.skills.AgentSkillRepository;
+import java.io.IOException;
 import java.util.List;
 import org.springframework.stereotype.Service;
 
@@ -69,7 +70,8 @@ public record ReadQueryService(
 
   /** 指定された検索条件に合う情報を探し、候補を返す。 */
   public SearchKnowledgeResult search(
-      String query, Integer vectorTopK, Integer webTopK, Double threshold) throws Exception {
+      String query, Integer vectorTopK, Integer webTopK, Double threshold)
+      throws IOException, InterruptedException {
     if (query == null
         || query.isBlank()
         || query.length() > 2000
