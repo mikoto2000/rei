@@ -27,6 +27,10 @@ public class EpisodeProcessor {
   private final dev.mikoto2000.rei.conversation.ConversationTurnStore store;
 
   /** イベント一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the common event store for persisted project history.")
   private dev.mikoto2000.rei.event.ProjectAgentEventStore events;
 
   /** 過去の経験の活用で使用するイベント一覧を設定する。 */

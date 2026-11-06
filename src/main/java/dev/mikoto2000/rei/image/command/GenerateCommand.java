@@ -6,6 +6,8 @@ import dev.mikoto2000.rei.image.ImageGenerationResult;
 import dev.mikoto2000.rei.image.ImageGenerationService;
 import dev.mikoto2000.rei.image.ImageProperties;
 import dev.mikoto2000.rei.image.ImageSize;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.concurrent.Callable;
@@ -40,6 +42,10 @@ public class GenerateCommand implements Callable<Integer> {
   private final CommandCancellationService cancellationService;
 
   /** バックグラウンド。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared background command dispatcher and its current results.")
   private dev.mikoto2000.rei.core.execution.BackgroundCommands background;
 
   /** 画像の生成で使用するバックグラウンドコマンド一覧を設定する。 */

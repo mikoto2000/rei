@@ -26,6 +26,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/api/v1/projects/{projectId}/memory")
 public final class SleepController {
   /** 実行一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Submits memory operations through the shared run service.")
   private final MemoryRunSubmitService runs;
 
   /** 補助。 */

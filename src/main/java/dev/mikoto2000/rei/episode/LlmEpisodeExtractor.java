@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.episode;
 import dev.mikoto2000.rei.conversation.ConversationTurnStore.Turn;
 import dev.mikoto2000.rei.llm.ModelCallBudget;
 import dev.mikoto2000.rei.memory.service.LlmMemoryProcessor;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -15,6 +17,10 @@ public class LlmEpisodeExtractor implements EpisodeExtractor {
   private final LlmMemoryProcessor model;
 
   /** イベント一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Reads the common event store for persisted project history.")
   private dev.mikoto2000.rei.event.ProjectAgentEventStore events;
 
   /** 過去の経験の活用で使用するイベント一覧を設定する。 */

@@ -79,6 +79,10 @@ public final class ExternalAgentReviewAdvisor implements BaseAdvisor {
   private final ExternalAgentDelegationService service;
 
   /** 記憶。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared conversation memory for the current history.")
   private final org.springframework.ai.chat.memory.ChatMemory memory;
 
   /** 外部エージェントへの委譲を利用するため、指定を補って共通の初期化へ引き渡す。 */

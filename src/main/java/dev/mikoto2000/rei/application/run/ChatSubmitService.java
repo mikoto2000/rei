@@ -56,6 +56,10 @@ public final class ChatSubmitService {
   }
 
   /** 取得記録一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the same capture lifecycle across request admission and completion.")
   private dev.mikoto2000.rei.llm.capture.CaptureStore captures;
 
   /** 実行の受付と状態管理で使用する取得記録一覧を設定する。 */

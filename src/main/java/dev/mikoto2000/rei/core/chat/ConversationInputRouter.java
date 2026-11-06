@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.core.execution.ActiveExecution;
 import dev.mikoto2000.rei.core.execution.ExecutionScope;
 import dev.mikoto2000.rei.core.execution.ExecutionType;
 import dev.mikoto2000.rei.core.project.ProjectContext;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -56,6 +58,10 @@ public final class ConversationInputRouter {
   }
 
   /** 要求取得記録一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the same capture lifecycle across request admission and completion.")
   private dev.mikoto2000.rei.llm.capture.CaptureStore requestCaptures;
 
   /** 受付台帳。 */

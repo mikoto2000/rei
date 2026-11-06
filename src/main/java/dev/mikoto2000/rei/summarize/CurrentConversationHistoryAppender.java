@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.summarize;
 
 import dev.mikoto2000.rei.conversation.ConversationLogStore;
 import dev.mikoto2000.rei.llm.ConversationIds;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.ai.chat.memory.ChatMemory;
@@ -14,6 +16,10 @@ import org.springframework.stereotype.Component;
 public class CurrentConversationHistoryAppender implements ConversationHistoryAppender {
 
   /** チャット記憶。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared conversation memory for the current history.")
   private final ChatMemory chatMemory;
 
   /** 会話ログ保存先。 */

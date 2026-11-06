@@ -80,6 +80,10 @@ public final class BackgroundRunSubmitService {
   private dev.mikoto2000.rei.core.project.ProjectRunStateStore states;
 
   /** バックグラウンド。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared background command dispatcher and its current results.")
   private dev.mikoto2000.rei.core.execution.BackgroundCommands background;
 
   /** 実行の受付と状態管理で使用するシェル状態を設定する。 */

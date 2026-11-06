@@ -13,6 +13,8 @@ import dev.mikoto2000.rei.event.ExecutionProgressPayload;
 import dev.mikoto2000.rei.event.GoalLifecyclePayload;
 import dev.mikoto2000.rei.event.ToolFailedPayload;
 import dev.mikoto2000.rei.temporal.MonotonicTimeSource;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import java.time.Clock;
@@ -97,6 +99,10 @@ public class AttentionService implements dev.mikoto2000.rei.secretary.SecretaryN
   private AgentEventBus.Subscription subscription;
 
   /** 承認一覧。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared approval state for requests and decisions.")
   private dev.mikoto2000.rei.core.policy.ToolApprovalRepository approvals;
 
   /** 注意の管理で使用する承認一覧を設定する。 */

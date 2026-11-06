@@ -5,6 +5,8 @@ import dev.mikoto2000.rei.summarize.SummarizationException;
 import dev.mikoto2000.rei.summarize.SummaryResult;
 import dev.mikoto2000.rei.summarize.WebPageSummarizerService;
 import dev.mikoto2000.rei.ui.shell.sound.ChatResponseNarrator;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.net.URI;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
@@ -28,6 +30,10 @@ public class SummarizeCommand implements java.util.concurrent.Callable<Integer> 
   private ChatResponseNarrator chatResponseNarrator;
 
   /** バックグラウンド。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Uses the shared background command dispatcher and its current results.")
   private dev.mikoto2000.rei.core.execution.BackgroundCommands background;
 
   /** ターミナルへの表示先。 */
