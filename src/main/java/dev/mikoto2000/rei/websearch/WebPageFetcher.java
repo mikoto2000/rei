@@ -40,11 +40,14 @@ public class WebPageFetcher {
   public WebSearchPage fetch(WebSearchResult result) throws IOException, InterruptedException {
     var response = fetcher.fetch(result.url(), properties.fetchPolicy());
     if (!response.success()) {
-      dev.mikoto2000.rei.http.HttpFetchException.Code code;
-      try {
-        code = dev.mikoto2000.rei.http.HttpFetchException.Code.valueOf(response.errorType());
-      } catch (IllegalArgumentException | NullPointerException unknown) {
-        code = dev.mikoto2000.rei.http.HttpFetchException.Code.NETWORK_ERROR;
+      var code = dev.mikoto2000.rei.http.HttpFetchException.Code.NETWORK_ERROR;
+      var errorType = response.errorType();
+      if (errorType != null) {
+        try {
+          code = dev.mikoto2000.rei.http.HttpFetchException.Code.valueOf(errorType);
+        } catch (IllegalArgumentException unknown) {
+          // Unrecognized fetch errors use the default network error.
+        }
       }
       throw new dev.mikoto2000.rei.http.HttpFetchException(code);
     }
