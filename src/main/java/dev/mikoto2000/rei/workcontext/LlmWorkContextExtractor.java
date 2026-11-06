@@ -100,13 +100,10 @@ public class LlmWorkContextExtractor implements WorkContextExtractor {
           properties.maxInputTokens());
     var model = models.memoryChatModel();
     ToolLoopSupport.requireNoDefaultTools(model);
-    var options =
-        models
-            .chatOptions(LlmFeature.MEMORY, null)
-            .mutate()
-            .toolCallbacks(List.of())
-            .toolChoice("none")
-            .build();
+    var optionsBuilder = models.chatOptions(LlmFeature.MEMORY, null).mutate();
+    optionsBuilder.toolCallbacks(List.of());
+    optionsBuilder.toolChoice("none");
+    var options = optionsBuilder.build();
     ToolLoopSupport.requireNoRawTools(options);
     var result = new StringBuilder();
     try {

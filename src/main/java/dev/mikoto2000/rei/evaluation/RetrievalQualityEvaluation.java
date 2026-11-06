@@ -99,7 +99,11 @@ public final class RetrievalQualityEvaluation {
    * @param metrics 計測値
    */
   public record Run(
-      String fixtureId, Mode mode, boolean reranked, List<String> ranking, Metrics metrics) {}
+      String fixtureId, Mode mode, boolean reranked, List<String> ranking, Metrics metrics) {
+    public Run {
+      ranking = ranking == null ? null : Collections.unmodifiableList(new ArrayList<>(ranking));
+    }
+  }
 
   /**
    * 成果の評価で受け渡す平均を表す。
@@ -121,7 +125,15 @@ public final class RetrievalQualityEvaluation {
    * @param truthVerified 確定情報確認済み
    */
   public record Comparison(
-      String provider, List<Run> runs, Map<String, Average> aggregate, boolean truthVerified) {}
+      String provider, List<Run> runs, Map<String, Average> aggregate, boolean truthVerified) {
+    public Comparison {
+      runs = runs == null ? null : Collections.unmodifiableList(new ArrayList<>(runs));
+      aggregate =
+          aggregate == null
+              ? null
+              : Collections.unmodifiableMap(new LinkedHashMap<>(aggregate));
+    }
+  }
 
   /** 成果の評価に必要なRetrieverを扱う。 */
   @FunctionalInterface

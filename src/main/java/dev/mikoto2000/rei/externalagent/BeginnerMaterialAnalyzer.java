@@ -13,6 +13,7 @@ import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.HashMap;
@@ -99,7 +100,45 @@ public final class BeginnerMaterialAnalyzer {
       List<FileReference> files,
       List<Evidence> environment,
       Set<String> knowledgeBefore,
-      Set<String> knowledgeAfter) {}
+      Set<String> knowledgeAfter) {
+    public Chapter {
+      explained =
+          explained == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(explained));
+      required = required == null ? null : Collections.unmodifiableList(new ArrayList<>(required));
+      implicitPrerequisites =
+          implicitPrerequisites == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(implicitPrerequisites));
+      goals = goals == null ? null : Collections.unmodifiableList(new ArrayList<>(goals));
+      exercises =
+          exercises == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(exercises));
+      questions =
+          questions == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(questions));
+      expectedResults =
+          expectedResults == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(expectedResults));
+      files = files == null ? null : Collections.unmodifiableList(new ArrayList<>(files));
+      environment =
+          environment == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(environment));
+      knowledgeBefore =
+          knowledgeBefore == null
+              ? null
+              : Collections.unmodifiableSet(new LinkedHashSet<>(knowledgeBefore));
+      knowledgeAfter =
+          knowledgeAfter == null
+              ? null
+              : Collections.unmodifiableSet(new LinkedHashSet<>(knowledgeAfter));
+    }
+  }
 
   /**
    * 外部エージェントへの委譲で受け渡す分析を表す。
@@ -110,7 +149,16 @@ public final class BeginnerMaterialAnalyzer {
    * @param complete 完了
    */
   public record Analysis(
-      List<Chapter> chapters, List<String> unreadFiles, List<String> warnings, boolean complete) {}
+      List<Chapter> chapters, List<String> unreadFiles, List<String> warnings, boolean complete) {
+    public Analysis {
+      chapters = chapters == null ? null : Collections.unmodifiableList(new ArrayList<>(chapters));
+      unreadFiles =
+          unreadFiles == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(unreadFiles));
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+    }
+  }
 
   /** 最大ファイル一覧。 */
   private static final int MAX_FILES = 512;

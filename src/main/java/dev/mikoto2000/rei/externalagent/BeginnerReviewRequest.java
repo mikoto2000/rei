@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.externalagent;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import picocli.CommandLine;
@@ -35,6 +37,14 @@ public record BeginnerReviewRequest(
     String shell,
     Mode mode,
     Format format) {
+  public BeginnerReviewRequest {
+    order = order == null ? null : Collections.unmodifiableList(new ArrayList<>(order));
+    prerequisites =
+        prerequisites == null
+            ? null
+            : Collections.unmodifiableSet(new LinkedHashSet<>(prerequisites));
+  }
+
   /** 外部エージェントへの委譲における動作モードの選択肢。 */
   public enum Mode {
     /** 固定の定義を利用する方式。 */

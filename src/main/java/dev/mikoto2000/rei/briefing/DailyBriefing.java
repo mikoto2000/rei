@@ -4,6 +4,8 @@ import dev.mikoto2000.rei.feed.FeedBriefingItem;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarEventSummary;
 import dev.mikoto2000.rei.task.Task;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -30,4 +32,30 @@ public record DailyBriefing(
     List<String> interestUpdates,
     String overview,
     List<String> cautionPoints,
-    List<String> nextActions) {}
+    List<String> nextActions) {
+  public DailyBriefing {
+    events = events == null ? null : Collections.unmodifiableList(new ArrayList<>(events));
+    openTasks = openTasks == null ? null : Collections.unmodifiableList(new ArrayList<>(openTasks));
+    overdueTasks =
+        overdueTasks == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(overdueTasks));
+    relatedDocuments =
+        relatedDocuments == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(relatedDocuments));
+    feedItems = feedItems == null ? null : Collections.unmodifiableList(new ArrayList<>(feedItems));
+    interestUpdates =
+        interestUpdates == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(interestUpdates));
+    cautionPoints =
+        cautionPoints == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(cautionPoints));
+    nextActions =
+        nextActions == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(nextActions));
+  }
+}

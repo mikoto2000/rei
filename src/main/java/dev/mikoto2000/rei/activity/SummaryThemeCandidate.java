@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -44,6 +46,19 @@ public record SummaryThemeCandidate(
     double groupCoverage,
     double score,
     String label) {
+  public SummaryThemeCandidate {
+    groupIds = groupIds == null ? null : Collections.unmodifiableList(new ArrayList<>(groupIds));
+    memberProjects =
+        memberProjects == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(memberProjects));
+    activities =
+        activities == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(activities));
+    themes = themes == null ? null : Collections.unmodifiableList(new ArrayList<>(themes));
+  }
+
   /** 作業状況の把握における表示取得元の選択肢。 */
   public enum DisplaySource {
     /** プロジェクト。 */

@@ -9,6 +9,8 @@ import dev.mikoto2000.rei.core.stagnation.RunExecutionContext;
 import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -55,7 +57,19 @@ public class ImplementationRequestService {
       List<String> unresolvedRequirements,
       boolean approvalRequired,
       List<String> warnings,
-      String nextAction) {}
+      String nextAction) {
+    public Prepared {
+      allowedPaths =
+          allowedPaths == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(allowedPaths));
+      unresolvedRequirements =
+          unresolvedRequirements == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(unresolvedRequirements));
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+    }
+  }
 
   /**
    * 外部エージェントへの委譲で受け渡す最終結果を表す。
@@ -91,7 +105,23 @@ public class ImplementationRequestService {
       List<String> warnings,
       List<String> unmetRequirements,
       boolean mergePerformed,
-      boolean pushPerformed) {}
+      boolean pushPerformed) {
+    public Outcome {
+      changedFiles =
+          changedFiles == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(changedFiles));
+      acceptanceResults =
+          acceptanceResults == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(acceptanceResults));
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+      unmetRequirements =
+          unmetRequirements == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(unmetRequirements));
+    }
+  }
 
   /** 要求一覧。 */
   private final ImplementationRequestRepository requests;

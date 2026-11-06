@@ -17,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -82,7 +83,12 @@ public class BeginnerReviewService {
    * @param before 変更前
    * @param after 変更後
    */
-  public record LearningState(String file, Set<String> before, Set<String> after) {}
+  public record LearningState(String file, Set<String> before, Set<String> after) {
+    public LearningState {
+      before = before == null ? null : Collections.unmodifiableSet(new LinkedHashSet<>(before));
+      after = after == null ? null : Collections.unmodifiableSet(new LinkedHashSet<>(after));
+    }
+  }
 
   /**
    * 外部エージェントへの委譲で受け渡すレポートを表す。
@@ -103,6 +109,19 @@ public class BeginnerReviewService {
       List<LearningState> learningState,
       List<String> warnings,
       boolean complete) {
+    public Report {
+      findings = findings == null ? null : Collections.unmodifiableList(new ArrayList<>(findings));
+      reviewedFiles =
+          reviewedFiles == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(reviewedFiles));
+      learningState =
+          learningState == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(learningState));
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+    }
+
     /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
     public String render() {
       var out = new StringBuilder("# 初学者教材レビュー（静的レビュー・コマンド実行なし）\n");
@@ -323,14 +342,11 @@ public class BeginnerReviewService {
             ToolLoopSupport.requireNoDefaultTools(model);
             var defaults = models.chatOptions(LlmFeature.CHAT, null);
             var options = defaults == null ? OpenAiChatOptions.builder() : defaults.mutate();
-            var toolOptions =
-                options
-                    .toolCallbacks(List.of())
-                    .toolChoice("none")
-                    .toolContext(
-                        Map.of(
-                            RunExecutionContext.KEY, run, AgentRunContext.class.getName(), owner))
-                    .build();
+            options.toolCallbacks(List.of());
+            options.toolChoice("none");
+            options.toolContext(
+                Map.of(RunExecutionContext.KEY, run, AgentRunContext.class.getName(), owner));
+            var toolOptions = options.build();
             String input =
                 JSON.writeValueAsString(
                     Map.of(

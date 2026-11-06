@@ -1,5 +1,8 @@
 package dev.mikoto2000.rei.paper;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -30,6 +33,12 @@ public record PaperTranslation(
     Map<String, String> glossary,
     List<Chunk> chunks,
     List<String> warnings) {
+  public PaperTranslation {
+    glossary = glossary == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(glossary));
+    chunks = chunks == null ? null : Collections.unmodifiableList(new ArrayList<>(chunks));
+    warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+  }
+
   /** 指定された論文識別子を反映した情報を作成する。 */
   public PaperTranslation withPaperId(String id) {
     return new PaperTranslation(

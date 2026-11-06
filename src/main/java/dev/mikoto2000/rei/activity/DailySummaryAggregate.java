@@ -1,6 +1,7 @@
 package dev.mikoto2000.rei.activity;
 
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -55,6 +56,50 @@ public record DailySummaryAggregate(
     boolean frequentProjectSwitches,
     double unknownRatio,
     int sourceSegmentCount) {
+  public DailySummaryAggregate {
+    categorySeconds =
+        categorySeconds == null
+            ? null
+            : Collections.unmodifiableMap(new LinkedHashMap<>(categorySeconds));
+    entertainmentSeconds =
+        entertainmentSeconds == null
+            ? null
+            : Collections.unmodifiableMap(new LinkedHashMap<>(entertainmentSeconds));
+    topProjects =
+        topProjects == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(topProjects));
+    services = services == null ? null : Collections.unmodifiableList(new ArrayList<>(services));
+    timeOfDay =
+        timeOfDay == null
+            ? null
+            : Collections.unmodifiableMap(new LinkedHashMap<>(timeOfDay));
+    projectThemeStats =
+        projectThemeStats == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(projectThemeStats));
+    mainWorkThemeCandidates =
+        mainWorkThemeCandidates == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(mainWorkThemeCandidates));
+    dominantThemes =
+        dominantThemes == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(dominantThemes));
+    leisureActivities =
+        leisureActivities == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(leisureActivities));
+    majorWorkBlocks =
+        majorWorkBlocks == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(majorWorkBlocks));
+    majorLeisureBlocks =
+        majorLeisureBlocks == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(majorLeisureBlocks));
+  }
+
   /**
    * 作業状況の把握で受け渡すWeightedを表す。
    *
@@ -89,7 +134,26 @@ public record DailySummaryAggregate(
       double score,
       String label,
       List<ProjectThemeAssociation> strongAssociations,
-      @com.fasterxml.jackson.annotation.JsonIgnore Map<String, Long> categorySeconds) {}
+      @com.fasterxml.jackson.annotation.JsonIgnore Map<String, Long> categorySeconds) {
+    public ProjectThemeStat {
+      categories =
+          categories == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(categories));
+      themeCandidates =
+          themeCandidates == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(themeCandidates));
+      strongAssociations =
+          strongAssociations == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(strongAssociations));
+      categorySeconds =
+          categorySeconds == null
+              ? null
+              : Collections.unmodifiableMap(new LinkedHashMap<>(categorySeconds));
+    }
+  }
 
   /**
    * 作業状況の把握で受け渡す集計区分を表す。
@@ -115,7 +179,43 @@ public record DailySummaryAggregate(
       List<String> dominantProjects,
       List<String> secondaryThemes,
       List<ProjectThemeAssociation> strongAssociations,
-      List<SummaryThemeCandidate> timeOfDayThemeCandidates) {}
+      List<SummaryThemeCandidate> timeOfDayThemeCandidates) {
+    public Bucket {
+      categorySeconds =
+          categorySeconds == null
+              ? null
+              : Collections.unmodifiableMap(new LinkedHashMap<>(categorySeconds));
+      dominant = dominant == null ? null : Collections.unmodifiableList(new ArrayList<>(dominant));
+      secondary =
+          secondary == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(secondary));
+      background =
+          background == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(background));
+      workThemes =
+          workThemes == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(workThemes));
+      dominantProjects =
+          dominantProjects == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(dominantProjects));
+      secondaryThemes =
+          secondaryThemes == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(secondaryThemes));
+      strongAssociations =
+          strongAssociations == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(strongAssociations));
+      timeOfDayThemeCandidates =
+          timeOfDayThemeCandidates == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(timeOfDayThemeCandidates));
+    }
+  }
 
   /**
    * 作業状況の把握で受け渡すまとまりを表す。

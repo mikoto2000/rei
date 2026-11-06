@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.evaluation;
 
 import dev.mikoto2000.rei.core.chat.RunCancellation;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
@@ -123,7 +125,15 @@ public final class GoalCompletionEvaluation {
       boolean verifiedCompletion,
       boolean falseCompletion,
       boolean endedWithUnmet,
-      List<String> unmet) {}
+      List<String> unmet) {
+    public Result {
+      conditions =
+          conditions == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(conditions));
+      unmet = unmet == null ? null : Collections.unmodifiableList(new ArrayList<>(unmet));
+    }
+  }
 
   /**
    * 成果の評価で受け渡すレポートを表す。

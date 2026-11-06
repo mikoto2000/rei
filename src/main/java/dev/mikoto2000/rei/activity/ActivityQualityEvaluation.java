@@ -7,6 +7,7 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -151,7 +152,15 @@ public final class ActivityQualityEvaluation {
       boolean advice,
       String reason,
       List<Fact> facts,
-      List<String> violations) {}
+      List<String> violations) {
+    public Row {
+      facts = facts == null ? null : Collections.unmodifiableList(new ArrayList<>(facts));
+      violations =
+          violations == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(violations));
+    }
+  }
 
   /**
    * 作業状況の把握で受け渡すレポートを表す。
@@ -169,7 +178,11 @@ public final class ActivityQualityEvaluation {
       double projectAccuracy,
       double themeAccuracy,
       int structuralFailures,
-      boolean truthVerified) {}
+      boolean truthVerified) {
+    public Report {
+      rows = rows == null ? null : Collections.unmodifiableList(new ArrayList<>(rows));
+    }
+  }
 
   /** 対象を判断基準に照らして評価する。 */
   public static Report evaluate(List<Case> fixtures) {
@@ -313,7 +326,11 @@ public final class ActivityQualityEvaluation {
    * @param truthVerified 確定情報確認済み
    * @param limitation 制約
    */
-  public record DesktopReport(List<DesktopRow> rows, boolean truthVerified, String limitation) {}
+  public record DesktopReport(List<DesktopRow> rows, boolean truthVerified, String limitation) {
+    public DesktopReport {
+      rows = rows == null ? null : Collections.unmodifiableList(new ArrayList<>(rows));
+    }
+  }
 
   /**
    * 作業状況の把握で用いる比較デスクトップを返す。

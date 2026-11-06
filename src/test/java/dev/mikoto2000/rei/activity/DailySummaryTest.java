@@ -8,6 +8,8 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -29,6 +31,28 @@ class DailySummaryTest {
           Map.of(
               "sensevoice-input",
               List.of("sensevoiceinput", "sensevoice", "sensorvoice-input", "sansvoice-input")));
+
+  @Test
+  void summaryBucketSnapshotsCollectionsAndPreservesOrder() {
+    var seconds = new LinkedHashMap<String, Long>();
+    seconds.put("research", 12L);
+    seconds.put("coding", 8L);
+    var dominant = new ArrayList<>(List.of("review"));
+    var bucket =
+        new DailySummaryAggregate.Bucket(
+            20, seconds, dominant, List.of(), List.of(), List.of(), List.of(), List.of(),
+            List.of(), List.of());
+
+    seconds.clear();
+    dominant.clear();
+
+    assertThat(bucket.categorySeconds().keySet()).containsExactly("research", "coding");
+    assertThat(bucket.dominant()).containsExactly("review");
+    assertThatThrownBy(() -> bucket.categorySeconds().clear())
+        .isInstanceOf(UnsupportedOperationException.class);
+    assertThatThrownBy(() -> bucket.dominant().clear())
+        .isInstanceOf(UnsupportedOperationException.class);
+  }
 
   /** {@code segment} の条件を再現するための補助情報を返す。 */
   static SummarySegment segment(

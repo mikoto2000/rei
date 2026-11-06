@@ -3,6 +3,8 @@ package dev.mikoto2000.rei.briefing;
 import dev.mikoto2000.rei.googlecalendar.GoogleCalendarEventSummary;
 import dev.mikoto2000.rei.task.Task;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -19,4 +21,17 @@ public record BriefingContext(
     List<GoogleCalendarEventSummary> events,
     List<Task> openTasks,
     List<Task> overdueTasks,
-    List<String> relatedDocuments) {}
+    List<String> relatedDocuments) {
+  public BriefingContext {
+    events = events == null ? null : Collections.unmodifiableList(new ArrayList<>(events));
+    openTasks = openTasks == null ? null : Collections.unmodifiableList(new ArrayList<>(openTasks));
+    overdueTasks =
+        overdueTasks == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(overdueTasks));
+    relatedDocuments =
+        relatedDocuments == null
+            ? null
+            : Collections.unmodifiableList(new ArrayList<>(relatedDocuments));
+  }
+}

@@ -5,6 +5,7 @@ import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -102,7 +103,15 @@ public final class ClassificationTelemetryRepository {
       String visionFailure,
       EntertainmentDisposition disposition,
       double entertainmentConfidence,
-      String entertainmentRule) {}
+      String entertainmentRule) {
+    public Candidate {
+      outcomes =
+          outcomes == null
+              ? null
+              : Collections.unmodifiableMap(new LinkedHashMap<>(outcomes));
+      reasons = reasons == null ? null : Collections.unmodifiableList(new ArrayList<>(reasons));
+    }
+  }
 
   /** データベースへの接続元。 */
   private final DataSource ds;
