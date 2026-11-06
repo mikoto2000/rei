@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -15,6 +17,10 @@ public class EscCancellationMonitor {
   private static final int ESC = 27;
 
   /** 必要な状態が整ってから先へ進むため、Escキャンセル排他制御を待つ。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Propagates the original failure from the command future to its caller.")
   public int await(Future<Integer> future, EscapeReader escapeReader, Runnable cancelAction)
       throws IOException {
     boolean cancelled = false;

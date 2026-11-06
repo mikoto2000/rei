@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.goal;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.Files;
@@ -80,6 +82,10 @@ public class FileGoalVerifier {
   }
 
   /** 要求された条件を満たすことを確認する。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Records timing status and preserves the underlying verification failure.")
   public Verification verify(GoalRepository.Goal goal) {
     if (timing == null || !timing.enabled() || goal.currentRunId() == null)
       return verifyObserved(goal);

@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.llm;
 
 import dev.mikoto2000.rei.core.chat.RunCancellation;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.List;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.embedding.BatchingStrategy;
@@ -27,6 +29,10 @@ public final class BudgetedEmbeddingModel implements EmbeddingModel {
   }
 
   /** 用途に応じたモデル利用の要求を実行し、呼び出し元へ結果を返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Records unresolved usage and preserves the delegated embedding model failure.")
   public EmbeddingResponse call(EmbeddingRequest request) {
     var budget = ModelCallBudgetScope.current();
     if (budget == null) return delegate.call(request);

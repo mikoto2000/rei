@@ -2,6 +2,8 @@ package dev.mikoto2000.rei.llm;
 
 import dev.mikoto2000.rei.event.AgentEventFactory;
 import dev.mikoto2000.rei.event.AgentEventPublisher;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.ai.chat.model.ChatModel;
@@ -62,6 +64,10 @@ final class AgentEventChatModel implements ChatModel, dev.mikoto2000.rei.timing.
 
   /** 用途に応じたモデル利用の要求を実行し、呼び出し元へ結果を返す。 */
   @Override
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Records the failure event and preserves the delegated chat model failure.")
   public ChatResponse call(Prompt prompt) {
     // Activity polling must not produce Shell or Web API notifications.
     if (LlmFeature.ACTIVITY.equals(feature)) return delegate.call(prompt);

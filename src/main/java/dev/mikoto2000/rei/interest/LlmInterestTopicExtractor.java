@@ -84,6 +84,10 @@ public class LlmInterestTopicExtractor implements InterestTopicExtractor {
   }
 
   /** 関心の管理で用いる呼び出し付きタイムアウトを返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the original unchecked failure from the model future.")
   private String callWithTimeout(Prompt prompt) {
     ExecutorService executor = Executors.newSingleThreadExecutor();
     Future<String> future =

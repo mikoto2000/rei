@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.event;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.time.Duration;
 import java.util.UUID;
 import java.util.function.Supplier;
@@ -94,6 +96,10 @@ public class ToolEventCallbackDecorator
   }
 
   /** 実行状況の通知で用いる通知および呼び出しを返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_RUNTIMEEXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the failure reported by the decorated tool callback after recording it.")
   private String emitAndCall(String toolInput, ToolContext toolContext, Supplier<String> caller) {
     var owner = dev.mikoto2000.rei.core.chat.AgentRunScope.current();
     if (toolContext != null
