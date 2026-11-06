@@ -1,6 +1,8 @@
 package dev.mikoto2000.rei.websearch;
 
 import dev.mikoto2000.rei.websearch.WebSearchProperties.ProviderProperties;
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLDecoder;
@@ -32,6 +34,10 @@ public class WebSearchService {
   private final WebSearchProperties properties;
 
   /** 保存や受け渡しに用いるデータ形式の変換。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Jackson 3 mappers retain their configuration after construction.")
   private final JsonMapper objectMapper;
 
   /** 情報の取得元。 */

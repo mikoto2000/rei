@@ -16,17 +16,8 @@ import tools.jackson.databind.json.JsonMapper;
 public class LazySqliteVectorStore
     implements VectorStore, VectorDocumentRepository, RetrievalCandidates {
 
-  /** データ取得元。 */
-  private final DataSource dataSource;
-
-  /** 埋め込み表現モデル。 */
-  private final EmbeddingModel embeddingModel;
-
-  /** 保存や受け渡しに用いるデータ形式の変換。 */
-  private final JsonMapper objectMapper;
-
-  /** bm25有効状態。 */
-  private final boolean bm25Enabled;
+  /** 必要になった時点で保存先を作る操作。 */
+  private final java.util.function.Supplier<SqliteVectorStore> createDelegate;
 
   /** 委譲先。 */
   private volatile SqliteVectorStore delegate;
@@ -43,10 +34,7 @@ public class LazySqliteVectorStore
       EmbeddingModel embeddingModel,
       JsonMapper objectMapper,
       boolean bm25Enabled) {
-    this.dataSource = dataSource;
-    this.embeddingModel = embeddingModel;
-    this.objectMapper = objectMapper;
-    this.bm25Enabled = bm25Enabled;
+    createDelegate = () -> new SqliteVectorStore(dataSource, embeddingModel, objectMapper, bm25Enabled);
   }
 
   /** 新たな対象を登録し、後から利用できるようにする。 */
@@ -130,7 +118,7 @@ public class LazySqliteVectorStore
     }
     synchronized (this) {
       if (delegate == null) {
-        delegate = new SqliteVectorStore(dataSource, embeddingModel, objectMapper, bm25Enabled);
+        delegate = createDelegate.get();
       }
       return delegate;
     }

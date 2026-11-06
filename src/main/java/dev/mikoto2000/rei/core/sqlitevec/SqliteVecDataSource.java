@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.core.sqlitevec;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.PrintWriter;
 import java.sql.Connection;
 import java.sql.SQLException;
@@ -11,6 +13,10 @@ import javax.sql.DataSource;
 public class SqliteVecDataSource implements DataSource {
 
   /** 委譲先。 */
+  @SuppressFBWarnings(
+      value = "EI_EXPOSE_REP2",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Delegates the DataSource API to the configured source and loads the extension on its connections.")
   private final DataSource delegate;
 
   /** 拡張子読み込みの窓口。 */
