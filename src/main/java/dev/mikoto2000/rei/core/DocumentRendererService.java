@@ -73,6 +73,10 @@ public final class DocumentRendererService {
   @FunctionalInterface
   public interface Renderer {
     /** 利用者が内容を確認できるよう、表示形式へ変換する。 */
+    @SuppressFBWarnings(
+        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
+        matchType = SuppressMatchType.EXACT,
+        justification = "The renderer boundary accepts checked failures from the selected rendering implementation.")
     Rendered render(String source) throws Exception;
   }
 
