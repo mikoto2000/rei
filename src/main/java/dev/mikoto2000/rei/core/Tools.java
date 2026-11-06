@@ -39,6 +39,7 @@ import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -1135,7 +1136,7 @@ public class Tools {
     String status = result.timedOut() || result.exitCode() != 0 ? "failed" : "completed";
     return new RunCommandResult(
         status,
-        request.mode().name().toLowerCase(),
+        request.mode().name().toLowerCase(Locale.ROOT),
         "foreground",
         result.exitCode(),
         result.stdout(),
@@ -1154,7 +1155,7 @@ public class Tools {
     if (snapshot.status() == BackgroundProcessStatus.FAILED) {
       return new RunCommandResult(
           "failed",
-          request.mode().name().toLowerCase(),
+          request.mode().name().toLowerCase(Locale.ROOT),
           "background",
           snapshot.exitCode(),
           joinLines(snapshot.stdout()),
@@ -1166,7 +1167,7 @@ public class Tools {
     }
     return new RunCommandResult(
         "running",
-        request.mode().name().toLowerCase(),
+        request.mode().name().toLowerCase(Locale.ROOT),
         "background",
         null,
         joinLines(snapshot.stdout()),

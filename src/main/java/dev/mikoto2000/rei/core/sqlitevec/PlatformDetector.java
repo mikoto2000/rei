@@ -1,5 +1,6 @@
 package dev.mikoto2000.rei.core.sqlitevec;
 
+import java.util.Locale;
 import org.springframework.stereotype.Component;
 
 /** 文書検索用の保存基盤に必要な実行環境検出の窓口を扱う。 */
@@ -13,7 +14,7 @@ public class PlatformDetector {
 
   /** 文書検索用の保存基盤で用いる検出を返す。 */
   SqliteVecPlatform detect(String osName, String osArch) {
-    String normalizedOs = osName == null ? "" : osName.toLowerCase();
+    String normalizedOs = osName == null ? "" : osName.toLowerCase(Locale.ROOT);
     String normalizedArch = normalizeArch(osArch);
 
     if (normalizedOs.contains("linux")) {
@@ -44,10 +45,10 @@ public class PlatformDetector {
     if (osArch == null) {
       return "";
     }
-    return switch (osArch.toLowerCase()) {
+    return switch (osArch.toLowerCase(Locale.ROOT)) {
       case "amd64", "x86_64" -> "x86_64";
       case "arm64", "aarch64" -> "aarch64";
-      default -> osArch.toLowerCase();
+      default -> osArch.toLowerCase(Locale.ROOT);
     };
   }
 

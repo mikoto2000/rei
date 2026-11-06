@@ -23,6 +23,7 @@ import java.io.PrintStream;
 import java.io.PrintWriter;
 import java.time.LocalTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.jline.keymap.KeyMap;
@@ -869,7 +870,7 @@ public class ReiApplication {
     try {
       String answer = confirmationReader.read("終了しますか? [y/N] ");
       if (answer != null) {
-        String normalized = answer.trim().toLowerCase();
+        String normalized = answer.trim().toLowerCase(Locale.ROOT);
         if (normalized.equals("y") || normalized.equals("yes")) {
           return true;
         }

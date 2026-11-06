@@ -4,6 +4,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Paths;
 import java.util.Base64;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.springframework.stereotype.Component;
 
@@ -17,7 +18,7 @@ public class SystemShellService {
     if (shell != null && !shell.isBlank()) {
       return shell;
     }
-    String normalizedOsName = osName == null ? "" : osName.toLowerCase();
+    String normalizedOsName = osName == null ? "" : osName.toLowerCase(Locale.ROOT);
     if (normalizedOsName.contains("win")) {
       return "powershell";
     }
@@ -59,6 +60,6 @@ public class SystemShellService {
 
   /** 対話から使う共通操作で用いるシェル名前を返す。 */
   private String shellName(String shell) {
-    return Paths.get(shell).getFileName().toString().toLowerCase();
+    return Paths.get(shell).getFileName().toString().toLowerCase(Locale.ROOT);
   }
 }

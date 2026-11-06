@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.function.DoubleSupplier;
 import java.util.regex.Matcher;
@@ -252,7 +253,7 @@ public class BlueskyReplyService {
         || properties.getHandle().isBlank()) {
       return false;
     }
-    String handle = properties.getHandle().toLowerCase();
+    String handle = properties.getHandle().toLowerCase(Locale.ROOT);
     String shortHandle = handle.contains(".") ? handle.substring(0, handle.indexOf('.')) : handle;
     String patternText =
         "(?i)(?<![\\p{Alnum}_])@("

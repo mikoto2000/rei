@@ -9,6 +9,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
 import org.springframework.ai.document.Document;
@@ -264,9 +265,9 @@ public class VectorDocumentService {
   /** 検索対象文書の管理で用いる抜粋開始を返す。 */
   private int snippetStart(String query, String normalizedText, int maxLength) {
     String normalizedQuery =
-        query == null ? "" : query.replaceAll("\\s+", " ").trim().toLowerCase();
+        query == null ? "" : query.replaceAll("\\s+", " ").trim().toLowerCase(Locale.ROOT);
     if (!normalizedQuery.isEmpty()) {
-      int queryIndex = normalizedText.toLowerCase().indexOf(normalizedQuery);
+      int queryIndex = normalizedText.toLowerCase(Locale.ROOT).indexOf(normalizedQuery);
       if (queryIndex >= 0) {
         return Math.max(0, queryIndex - 24);
       }
@@ -275,7 +276,7 @@ public class VectorDocumentService {
         if (token.isBlank()) {
           continue;
         }
-        int tokenIndex = normalizedText.toLowerCase().indexOf(token);
+        int tokenIndex = normalizedText.toLowerCase(Locale.ROOT).indexOf(token);
         if (tokenIndex >= 0) {
           return Math.max(0, tokenIndex - 24);
         }
@@ -296,11 +297,11 @@ public class VectorDocumentService {
   /** 検索対象文書の管理で用いる文語句による評価値を返す。 */
   private double sentenceLexicalScore(String query, String sentence) {
     String normalizedQuery =
-        query == null ? "" : query.replaceAll("\\s+", " ").trim().toLowerCase();
+        query == null ? "" : query.replaceAll("\\s+", " ").trim().toLowerCase(Locale.ROOT);
     if (normalizedQuery.isBlank()) {
       return 0.0d;
     }
-    String lowerSentence = sentence.toLowerCase();
+    String lowerSentence = sentence.toLowerCase(Locale.ROOT);
     if (lowerSentence.contains(normalizedQuery)) {
       return 10.0d;
     }
@@ -344,11 +345,11 @@ public class VectorDocumentService {
   /** 検索対象文書の管理で用いる語句による対象範囲を返す。 */
   private double lexicalCoverage(String query, String text) {
     String normalizedQuery =
-        query == null ? "" : query.replaceAll("\\s+", " ").trim().toLowerCase();
+        query == null ? "" : query.replaceAll("\\s+", " ").trim().toLowerCase(Locale.ROOT);
     if (normalizedQuery.isBlank() || text == null || text.isBlank()) {
       return 0.0d;
     }
-    String lowerText = text.toLowerCase();
+    String lowerText = text.toLowerCase(Locale.ROOT);
     List<String> tokens =
         java.util.Arrays.stream(normalizedQuery.split(" "))
             .filter(token -> !token.isBlank())
@@ -479,7 +480,7 @@ public class VectorDocumentService {
     if (dot < 0 || dot == fileName.length() - 1) {
       return "unknown";
     }
-    return fileName.substring(dot + 1).toLowerCase();
+    return fileName.substring(dot + 1).toLowerCase(Locale.ROOT);
   }
 
   /** 検索対象文書の管理で用いるタイトルを返す。 */
