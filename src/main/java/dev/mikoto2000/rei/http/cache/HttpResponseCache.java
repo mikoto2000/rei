@@ -586,9 +586,6 @@ public final class HttpResponseCache implements AutoCloseable {
 
   /** 取得した情報の再利用に必要な読み込みタスクを扱う。 */
   private final class LoadTask extends FutureTask<Void> {
-    /** 共有している取得処理の状態。 */
-    final Flight flight;
-
     /** 受付から終了までの管理。 */
     final AtomicInteger lifecycle = new AtomicInteger();
 
@@ -599,7 +596,6 @@ public final class HttpResponseCache implements AutoCloseable {
             load(flight);
             return null;
           });
-      this.flight = flight;
     }
 
     /** 取得した情報の再利用の操作を実行する。 */

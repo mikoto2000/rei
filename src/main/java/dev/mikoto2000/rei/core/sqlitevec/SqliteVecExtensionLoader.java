@@ -11,9 +11,6 @@ import org.springframework.stereotype.Component;
 @Component
 public class SqliteVecExtensionLoader {
 
-  /** この機能の動作設定。 */
-  private final SqliteVecProperties properties;
-
   /** 拡張子パス対象の解決。 */
   private final ExtensionPathResolver extensionPathResolver;
 
@@ -26,7 +23,6 @@ public class SqliteVecExtensionLoader {
   /** 指定された値や利用先を使って、SqliteVecExtensionLoaderを初期化する。 */
   SqliteVecExtensionLoader(
       SqliteVecProperties properties, ExtensionPathResolver extensionPathResolver) {
-    this.properties = properties;
     this.extensionPathResolver = extensionPathResolver;
   }
 

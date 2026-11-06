@@ -253,9 +253,6 @@ public class AiConfiguration {
     this.subAgentTools = tools;
   }
 
-  /** core設定。 */
-  private final CoreProperties coreProperties;
-
   /** システムへの指示サービス。 */
   private final SystemPromptService systemPromptService;
 

@@ -223,13 +223,13 @@ class EmbedCommandTest {
   private CommandLine newCommand(
       VectorDocumentService service, AsyncVectorDocumentService asyncService) {
     return new CommandLine(
-        new EmbedCommand(service, asyncService),
+        new EmbedCommand(asyncService),
         new CommandLine.IFactory() {
           /** 指定された条件を再現するための検証対象や入力情報を作成する。 */
           @Override
           public <K> K create(Class<K> cls) throws Exception {
             if (cls == EmbedCommand.class) {
-              return cls.cast(new EmbedCommand(service, asyncService));
+              return cls.cast(new EmbedCommand(asyncService));
             }
             if (cls == EmbedCommand.AddCommand.class) {
               return cls.cast(new EmbedCommand.AddCommand(asyncService));

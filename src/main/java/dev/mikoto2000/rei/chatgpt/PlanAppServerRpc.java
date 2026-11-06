@@ -111,12 +111,6 @@ public final class PlanAppServerRpc {
   /** 上限。 */
   private int limit;
 
-  /** 最大Reads。 */
-  private int maxReads;
-
-  /** 通知時使用状況。 */
-  private java.util.function.IntConsumer onUsage;
-
   /** 待機中Refusal。 */
   private Object pendingRefusal;
 
@@ -161,8 +155,6 @@ public final class PlanAppServerRpc {
       Function<String, String> reader,
       int maxReads,
       java.util.function.IntConsumer onUsage) {
-    this.maxReads = maxReads;
-    this.onUsage = onUsage;
     session = channel;
     stop = cancelled;
     limit = receiveLimit;

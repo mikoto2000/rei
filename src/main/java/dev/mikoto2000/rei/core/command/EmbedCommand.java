@@ -71,9 +71,6 @@ public class EmbedCommand implements Runnable {
     return report(command);
   }
 
-  /** ベクトル文書サービス。 */
-  private final VectorDocumentService vectorDocumentService;
-
   /** 非同期ベクトル文書サービス。 */
   private final AsyncVectorDocumentService asyncVectorDocumentService;
 

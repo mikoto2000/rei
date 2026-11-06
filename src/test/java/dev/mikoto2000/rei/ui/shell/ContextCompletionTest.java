@@ -139,7 +139,7 @@ class ContextCompletionTest {
             .addSubcommand(
                 "import-opml", new dev.mikoto2000.rei.feed.command.FeedCommand.ImportOpmlCommand());
     var cmd =
-        command().addSubcommand("feed", feed).addSubcommand("embed", new EmbedCommand(null, null));
+        command().addSubcommand("feed", feed).addSubcommand("embed", new EmbedCommand(null));
     assertThat(values(cmd, "/feed import-opml rep")).containsExactly("report.opml");
     assertThat(values(cmd, "/embed rep"))
         .containsExactly("report.opml", "reports" + java.io.File.separator);

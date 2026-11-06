@@ -128,7 +128,6 @@ class AiConfigurationTest {
   /** {@code subAgentConfiguration} の条件を再現するための補助情報を返す。 */
   private AiConfiguration subAgentConfiguration() {
     return new AiConfiguration(
-        new CoreProperties("system prompt", 100),
         systemPromptService(),
         Mockito.mock(ChatModel.class),
         Mockito.mock(ChatMemory.class),
@@ -186,7 +185,6 @@ class AiConfigurationTest {
 
     AiConfiguration configuration =
         new AiConfiguration(
-            new CoreProperties("system prompt", 100),
             systemPromptService(),
             Mockito.mock(ChatModel.class),
             Mockito.mock(ChatMemory.class),
@@ -278,7 +276,6 @@ class AiConfigurationTest {
 
     AiConfiguration configuration =
         new AiConfiguration(
-            new CoreProperties("system prompt", 100),
             systemPromptService(),
             Mockito.mock(ChatModel.class),
             Mockito.mock(ChatMemory.class),
@@ -325,7 +322,6 @@ class AiConfigurationTest {
 
     AiConfiguration configuration =
         new AiConfiguration(
-            new CoreProperties("system prompt", 100),
             systemPromptService(),
             Mockito.mock(ChatModel.class),
             Mockito.mock(ChatMemory.class),
@@ -389,7 +385,6 @@ class AiConfigurationTest {
 
     AiConfiguration configuration =
         new AiConfiguration(
-            new CoreProperties("system prompt", 100),
             systemPromptService(),
             model,
             Mockito.mock(ChatMemory.class),
