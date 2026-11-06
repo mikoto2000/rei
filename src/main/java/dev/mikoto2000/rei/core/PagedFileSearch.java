@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.TreeMap;
@@ -459,7 +460,7 @@ final class PagedFileSearch {
   }
 
   private List<Stamp> inventory(List<Prepared> queries, Path root)
-      throws IOException, InterruptedException {
+      throws IOException, InterruptedException, ExecutionException {
     var stamps = new TreeMap<String, Stamp>();
     var inventories = new java.util.HashMap<Path, List<String>>();
     for (var query : queries) {
@@ -479,48 +480,69 @@ final class PagedFileSearch {
         }
       }
       if (listed.size() <= 20000) inventories.putIfAbsent(base, List.copyOf(listed));
-      for (String path : listed) {
-        if (stamps.containsKey(path) || !applies(query, path, root)) continue;
-        Path resolved;
-        try {
-          resolved = FileSnapshots.resolve(root, Path.of(path));
-        } catch (IOException excluded) {
-          // Sensitive and linked paths are never enumerated.
-          continue;
-        }
-        var attrs =
-            Files.readAttributes(resolved, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
-        if (!attrs.isRegularFile()) throw ReadingProblem.fail("FILE_CHANGED");
-        stamps.put(path, stamp(path, attrs));
-      }
+      var matching = new LinkedHashSet<String>();
+      for (String path : listed)
+        if (!stamps.containsKey(path) && applies(query, path, root)) matching.add(path);
+      var candidates = List.copyOf(matching);
+      var accepted = new Stamp[candidates.size()];
+      checkRanges(
+          candidates.size(),
+          (from, to) -> {
+            for (int i = from; i < to; i++) accepted[i] = candidateStamp(root, candidates.get(i));
+          });
+      for (var entry : accepted) if (entry != null) stamps.put(entry.path(), entry);
       if (stamps.size() > 20000) throw ReadingProblem.fail("FILE_ENUMERATION_LIMIT");
     }
     return List.copyOf(stamps.values());
   }
 
+  private static Stamp candidateStamp(Path root, String path) throws IOException {
+    if (Thread.currentThread().isInterrupted()) Tools.checkReadingCancellation(null);
+    Path resolved;
+    try {
+      resolved = FileSnapshots.resolve(root, Path.of(path));
+    } catch (IOException excluded) {
+      // Sensitive and linked paths are never enumerated.
+      return null;
+    }
+    var attrs =
+        Files.readAttributes(resolved, BasicFileAttributes.class, LinkOption.NOFOLLOW_LINKS);
+    if (!attrs.isRegularFile()) throw ReadingProblem.fail("FILE_CHANGED");
+    return stamp(path, attrs);
+  }
+
   private void verifyInventory(Path root, List<Stamp> inventory)
       throws IOException, InterruptedException, ExecutionException {
-    int workers = Math.min(verificationParallelism, inventory.size());
+    checkRanges(inventory.size(), (from, to) -> verifyRange(root, inventory.subList(from, to)));
+  }
+
+  @FunctionalInterface
+  private interface RangeCheck {
+    void check(int from, int to) throws IOException;
+  }
+
+  private void checkRanges(int size, RangeCheck check)
+      throws IOException, InterruptedException, ExecutionException {
+    int workers = Math.min(verificationParallelism, size);
     if (workers <= 1) {
-      verifyRange(root, inventory);
+      check.check(0, size);
       return;
     }
     try (var executor = Executors.newFixedThreadPool(workers)) {
       try {
         var tasks = new ArrayList<Future<Void>>(workers);
         for (int worker = 0; worker < workers; worker++) {
-          var range =
-              inventory.subList(
-                  worker * inventory.size() / workers, (worker + 1) * inventory.size() / workers);
+          int from = (int) ((long) worker * size / workers);
+          int to = (int) ((long) (worker + 1) * size / workers);
           tasks.add(
               executor.submit(
                   Tools.captureReadingScope(
                       () -> {
-                        verifyRange(root, range);
+                        check.check(from, to);
                         return null;
                       })));
         }
-        // Contiguous ranges joined in manifest order preserve the first failing candidate.
+        // Contiguous ranges joined in input order preserve the first failing candidate.
         for (var task : tasks) task.get();
       } catch (ExecutionException error) {
         if (error.getCause() instanceof Error failure) throw failure;
