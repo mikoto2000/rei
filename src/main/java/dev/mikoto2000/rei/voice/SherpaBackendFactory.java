@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.voice;
 
+import edu.umd.cs.findbugs.annotations.SuppressFBWarnings;
+import edu.umd.cs.findbugs.annotations.SuppressMatchType;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.lang.reflect.InvocationTargetException;
@@ -319,6 +321,10 @@ public final class SherpaBackendFactory implements VoiceBackendFactory, AutoClos
   }
 
   /** 音声による対話で用いるrethrowを返す。 */
+  @SuppressFBWarnings(
+      value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
+      matchType = SuppressMatchType.EXACT,
+      justification = "Preserves the checked cause unwrapped from a reflective invocation.")
   private static Object rethrow(Throwable cause) throws Exception {
     if (cause instanceof Exception e) throw e;
     if (cause instanceof Error e) throw e;

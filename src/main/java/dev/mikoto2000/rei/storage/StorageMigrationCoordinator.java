@@ -51,6 +51,10 @@ public final class StorageMigrationCoordinator implements AutoCloseable {
   @FunctionalInterface
   interface Checkpoint {
     /** データ保存の共通処理に関するreachedを処理する。 */
+    @SuppressFBWarnings(
+        value = "THROWS_METHOD_THROWS_CLAUSE_BASIC_EXCEPTION",
+        matchType = SuppressMatchType.EXACT,
+        justification = "A checkpoint callback can abort migration with an arbitrary checked failure so rollback can preserve its cause.")
     void reached(Stage stage, Path backup) throws Exception;
   }
 
