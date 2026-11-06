@@ -16,6 +16,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.HexFormat;
 import java.util.List;
@@ -55,7 +56,11 @@ public final class TextDocumentTransaction {
    * @param status 状態
    * @param warnings 注意事項
    */
-  public record Outcome(String status, List<String> warnings) {}
+  public record Outcome(String status, List<String> warnings) {
+    public Outcome {
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+    }
+  }
 
   /**
    * 共通の実行基盤で受け渡す要求内容の照合値を表す。

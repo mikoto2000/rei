@@ -9,6 +9,7 @@ import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -61,7 +62,11 @@ public final class TestReportCollectionDiagnosisService {
       boolean partial,
       TestReportDiagnosisService.Counts reported,
       TestReportDiagnosisService.Counts observed,
-      List<String> warnings) {}
+      List<String> warnings) {
+    public Summary {
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+    }
+  }
 
   /**
    * 共通の実行基盤で受け渡す根拠を表す。
@@ -107,7 +112,28 @@ public final class TestReportCollectionDiagnosisService {
       List<Evidence> failedTests,
       List<Unavailable> unavailable,
       List<String> nextActions,
-      List<String> warnings) {}
+      List<String> warnings) {
+    public Result {
+      discoveredPaths =
+          discoveredPaths == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(discoveredPaths));
+      reports = reports == null ? null : Collections.unmodifiableList(new ArrayList<>(reports));
+      failedTests =
+          failedTests == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(failedTests));
+      unavailable =
+          unavailable == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(unavailable));
+      nextActions =
+          nextActions == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(nextActions));
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+    }
+  }
 
   /** 共通の実行基盤における種類の選択肢。 */
   private enum Kind {

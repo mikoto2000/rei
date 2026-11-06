@@ -23,6 +23,7 @@ import java.time.Instant;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -123,6 +124,11 @@ public final class RepositoryMapService {
       List<String> imports,
       String language,
       String analysisMode) {
+    public File {
+      symbols = symbols == null ? null : Collections.unmodifiableList(new ArrayList<>(symbols));
+      imports = imports == null ? null : Collections.unmodifiableList(new ArrayList<>(imports));
+    }
+
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public File(
         String path,
@@ -210,6 +216,15 @@ public final class RepositoryMapService {
       int testNameCandidates,
       boolean partial,
       int heuristicFiles) {
+    public Summary {
+      modules = modules == null ? null : Collections.unmodifiableList(new ArrayList<>(modules));
+      packages = packages == null ? null : Collections.unmodifiableList(new ArrayList<>(packages));
+      entryPoints =
+          entryPoints == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(entryPoints));
+    }
+
     /** 共通の実行基盤を利用するため、指定を補って共通の初期化へ引き渡す。 */
     public Summary(
         int files,
@@ -259,7 +274,16 @@ public final class RepositoryMapService {
       List<String> warnings,
       List<File> items,
       List<Relation> relations,
-      Summary summary) {}
+      Summary summary) {
+    public View {
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+      items = items == null ? null : Collections.unmodifiableList(new ArrayList<>(items));
+      relations =
+          relations == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(relations));
+    }
+  }
 
   /**
    * 共通の実行基盤で受け渡す解釈済みを表す。

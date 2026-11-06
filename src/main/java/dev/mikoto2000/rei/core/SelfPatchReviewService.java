@@ -8,6 +8,8 @@ import dev.mikoto2000.rei.externalagent.ExternalAgentResult;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
@@ -115,7 +117,19 @@ public final class SelfPatchReviewService {
       Review review,
       TestObservation finalTest,
       List<String> nextActions,
-      List<String> warnings) {}
+      List<String> warnings) {
+    public Result {
+      changedFiles =
+          changedFiles == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(changedFiles));
+      nextActions =
+          nextActions == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(nextActions));
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+    }
+  }
 
   /** 共通の実行基盤に必要な取得記録を扱う。 */
   @FunctionalInterface

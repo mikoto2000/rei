@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.regex.Matcher;
@@ -243,5 +244,10 @@ public class InlineFileAttachmentResolver {
    * @param media メディア
    * @param warnings 注意事項
    */
-  public record ResolvedPrompt(String prompt, List<Media> media, List<String> warnings) {}
+  public record ResolvedPrompt(String prompt, List<Media> media, List<String> warnings) {
+    public ResolvedPrompt {
+      media = media == null ? null : Collections.unmodifiableList(new ArrayList<>(media));
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+    }
+  }
 }

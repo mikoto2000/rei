@@ -14,8 +14,10 @@ import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.HexFormat;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -148,7 +150,16 @@ public final class SemanticPatchReviewService {
       String patchVersion,
       String diff,
       Map<String, String> sources,
-      List<TestFact> tests) {}
+      List<TestFact> tests) {
+    public Input {
+      requirements =
+          requirements == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(requirements));
+      sources = sources == null ? null : Collections.unmodifiableMap(new LinkedHashMap<>(sources));
+      tests = tests == null ? null : Collections.unmodifiableList(new ArrayList<>(tests));
+    }
+  }
 
   /**
    * 共通の実行基盤で受け渡す詳細を表す。
@@ -184,7 +195,18 @@ public final class SemanticPatchReviewService {
       SelfPatchReviewService.Result verification,
       Verdict semantic,
       boolean truthVerified,
-      List<String> warnings) {}
+      List<String> warnings) {
+    public Detail {
+      requirements =
+          requirements == null
+              ? null
+              : Collections.unmodifiableList(new ArrayList<>(requirements));
+      files = files == null ? null : Collections.unmodifiableList(new ArrayList<>(files));
+      tests = tests == null ? null : Collections.unmodifiableList(new ArrayList<>(tests));
+      checks = checks == null ? null : Collections.unmodifiableList(new ArrayList<>(checks));
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+    }
+  }
 
   /**
    * 共通の実行基盤で受け渡す受付記録を表す。
@@ -214,7 +236,11 @@ public final class SemanticPatchReviewService {
       boolean completed,
       long pid,
       Instant heartbeat,
-      List<String> warnings) {}
+      List<String> warnings) {
+    public Inspection {
+      warnings = warnings == null ? null : Collections.unmodifiableList(new ArrayList<>(warnings));
+    }
+  }
 
   /** 共通の実行基盤に必要な教材読み取り元を扱う。 */
   @FunctionalInterface

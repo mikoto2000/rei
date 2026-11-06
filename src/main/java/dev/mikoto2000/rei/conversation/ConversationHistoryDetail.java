@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.conversation;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -19,6 +21,10 @@ public record ConversationHistoryDetail(
     String sourceProjectId,
     String sourceProjectName,
     String contextBoundary) {
+  public ConversationHistoryDetail {
+    messages = messages == null ? null : Collections.unmodifiableList(new ArrayList<>(messages));
+  }
+
   /** 会話履歴と受付記録の管理を利用するため、指定を補って共通の初期化へ引き渡す。 */
   public ConversationHistoryDetail(
       String conversationId, String scope, List<ConversationHistoryMessage> messages) {

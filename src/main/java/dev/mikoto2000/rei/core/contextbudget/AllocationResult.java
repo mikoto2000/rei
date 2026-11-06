@@ -1,5 +1,7 @@
 package dev.mikoto2000.rei.core.contextbudget;
 
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -9,4 +11,9 @@ import java.util.List;
  * @param dropped 削除されたセクション名
  * @param totalTokens 採用された合計トークン概算
  */
-public record AllocationResult(List<String> included, List<String> dropped, int totalTokens) {}
+public record AllocationResult(List<String> included, List<String> dropped, int totalTokens) {
+  public AllocationResult {
+    included = included == null ? null : Collections.unmodifiableList(new ArrayList<>(included));
+    dropped = dropped == null ? null : Collections.unmodifiableList(new ArrayList<>(dropped));
+  }
+}
